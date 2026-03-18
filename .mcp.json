@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "methodology-agent": {
+      "command": "python3",
+      "args": ["-m", "mcp_server"],
+      "cwd": "/Users/cdeust/Developments/jarvis"
+    }
+  }
+}

@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S. — Payment Validation Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #161922;
+    --surface-2: #1c2030;
+    --surface-3: #232738;
+    --border: rgba(148,163,184,0.10);
+    --border-active: rgba(99,102,241,0.5);
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-muted: #475569;
+    --blue: #3b82f6;
+    --green: #22c55e;
+    --indigo: #6366f1;
+    --amber: #f59e0b;
+    --purple: #a855f7;
+    --red: #ef4444;
+    --cyan: #06b6d4;
+    --pink: #ec4899;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; overflow-x:hidden; }
+
+  /* ═══ Header ═══ */
+  #header {
+    position:sticky; top:0; z-index:100;
+    height:48px; background:rgba(15,17,23,0.95);
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; padding:0 24px; gap:12px;
+  }
+  .h-dot { width:8px; height:8px; border-radius:2px; background:var(--blue); box-shadow:0 0 8px rgba(59,130,246,0.4); }
+  .h-title { font-size:13px; font-weight:600; }
+  .h-sep { color:var(--text-muted); }
+  .h-sub { font-size:11px; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
+
+  /* ═══ Layout: two columns ═══ */
+  .container { display:grid; grid-template-columns:420px 1fr; min-height:calc(100vh - 48px); }
+
+  /* ═══ LEFT: Payment Form Visual ═══ */
+  .form-panel {
+    padding:32px 28px;
+    border-right:1px solid var(--border);
+    display:flex; flex-direction:column; gap:24px;
+  }
+  .form-title { font-size:11px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px; }
+
+  /* Card visual */
+  .card-visual {
+    width:360px; height:210px;
+    background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #1e293b 100%);
+    border-radius:14px; padding:24px;
+    position:relative; overflow:hidden;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .card-visual::before {
+    content:''; position:absolute; top:0; right:0;
+    width:200px; height:200px; border-radius:50%;
+    background:radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%);
+  }
+  .card-chip {
+    width:40px; height:30px; border-radius:5px;
+    background:linear-gradient(135deg, #d4a853 0%, #c09a3e 50%, #d4a853 100%);
+    margin-bottom:20px;
+    position:relative;
+  }
+  .card-chip::after {
+    content:''; position:absolute; inset:4px;
+    border:1px solid rgba(0,0,0,0.15); border-radius:3px;
+  }
+  .card-number {
+    font-family:'JetBrains Mono',monospace;
+    font-size:20px; letter-spacing:3px;
+    color:#e2e8f0; margin-bottom:20px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .card-bottom { display:flex; justify-content:space-between; align-items:flex-end; }
+  .card-name { font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#94a3b8; }
+  .card-expiry { font-family:'JetBrains Mono',monospace; font-size:13px; color:#94a3b8; }
+  .card-type-badge {
+    position:absolute; top:20px; right:24px;
+    font-size:16px; font-weight:700; color:rgba(255,255,255,0.25);
+    letter-spacing:2px;
+  }
+
+  /* Form fields */
+  .form-fields { display:flex; flex-direction:column; gap:14px; }
+  .field-group { position:relative; }
+  .field-label {
+    font-size:10px; font-weight:500; letter-spacing:0.5px;
+    color:var(--text-dim); margin-bottom:5px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .field-input {
+    width:100%; padding:10px 12px;
+    background:var(--surface-2); border:1px solid var(--border);
+    border-radius:6px; color:var(--text);
+    font-family:'JetBrains Mono',monospace; font-size:13px;
+    outline:none; transition:border-color 0.2s;
+  }
+  .field-input:focus { border-color:var(--border-active); }
+  .field-input.valid { border-color:rgba(34,197,94,0.4); }
+  .field-input.invalid { border-color:rgba(239,68,68,0.4); }
+  .field-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .field-status {
+    position:absolute; right:10px; top:28px;
+    font-size:14px;
+  }
+  .field-error {
+    font-size:10px; color:var(--red); margin-top:4px;
+    min-height:14px;
+  }
+  .field-check { font-size:9px; color:var(--text-muted); margin-top:3px; display:flex; align-items:center; gap:4px; }
+  .check-icon { width:12px; height:12px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:8px; }
+  .check-pass { background:rgba(34,197,94,0.15); color:var(--green); }
+  .check-fail { background:rgba(239,68,68,0.15); color:var(--red); }
+  .check-idle { background:var(--surface-3); color:var(--text-muted); }
+
+  /* Submit */
+  .submit-btn {
+    width:100%; padding:12px;
+    background:var(--indigo); border:none; border-radius:6px;
+    color:white; font-family:'Inter',sans-serif;
+    font-size:13px; font-weight:600; cursor:pointer;
+    transition:all 0.15s;
+  }
+  .submit-btn:hover { background:#4f46e5; }
+  .submit-btn:disabled { opacity:0.4; cursor:default; }
+
+  /* Result */
+  .result-box {
+    padding:14px; border-radius:6px;
+    font-size:11px; line-height:1.7;
+    font-family:'JetBrains Mono',monospace;
+    display:none;
+  }
+  .result-box.success { display:block; background:rgba(34,197,94,0.06); border:1px solid rgba(34,197,94,0.15); color:var(--green); }
+  .result-box.error { display:block; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.15); color:var(--red); }
+
+  /* ═══ RIGHT: Workflow Diagram ═══ */
+  .workflow-panel { padding:32px; overflow-y:auto; }
+  .wf-title { font-size:11px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:20px; }
+
+  /* Pipeline stages — vertical flow */
+  .pipeline { display:flex; flex-direction:column; gap:0; }
+  .stage {
+    display:grid; grid-template-columns:48px 1fr; gap:16px;
+    position:relative;
+  }
+  .stage-line {
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .stage-dot {
+    width:32px; height:32px; border-radius:6px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:700; color:white;
+    flex-shrink:0; position:relative; z-index:1;
+  }
+  .stage-connector {
+    width:2px; flex:1; min-height:20px;
+    background:var(--border);
+  }
+  .stage-content {
+    padding-bottom:24px;
+  }
+  .stage-header {
+    font-size:13px; font-weight:600; color:var(--text);
+    margin-bottom:6px; display:flex; align-items:center; gap:8px;
+  }
+  .stage-desc { font-size:11px; color:var(--text-dim); line-height:1.6; margin-bottom:10px; }
+
+  /* Rule cards inside stages */
+  .rule-grid { display:flex; flex-wrap:wrap; gap:6px; }
+  .rule-chip {
+    padding:4px 10px; border-radius:4px;
+    font-size:10px; font-weight:500;
+    border:1px solid;
+    cursor:default; transition:all 0.15s;
+  }
+  .rule-chip:hover { transform:translateY(-1px); }
+  .rule-chip.active { box-shadow:0 0 8px rgba(99,102,241,0.3); }
+
+  /* Data flow arrows between stages */
+  .flow-arrow {
+    font-size:9px; color:var(--cyan);
+    padding:2px 8px; text-align:center;
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  /* Risk sidebar */
+  .risk-section { margin-top:32px; }
+  .risk-card {
+    padding:12px; border-radius:6px; margin-bottom:8px;
+    border:1px solid;
+  }
+  .risk-card.high { background:rgba(239,68,68,0.04); border-color:rgba(239,68,68,0.15); }
+  .risk-card.medium { background:rgba(245,158,11,0.04); border-color:rgba(245,158,11,0.15); }
+  .risk-card.low { background:rgba(100,116,139,0.04); border-color:rgba(100,116,139,0.15); }
+  .risk-sev { font-size:9px; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-bottom:4px; }
+  .risk-sev.high { color:var(--red); }
+  .risk-sev.medium { color:var(--amber); }
+  .risk-sev.low { color:var(--text-dim); }
+  .risk-name { font-size:12px; font-weight:500; color:var(--text); margin-bottom:4px; }
+  .risk-desc { font-size:10px; color:var(--text-dim); line-height:1.5; margin-bottom:6px; }
+  .risk-fix {
+    font-size:10px; color:var(--blue); padding:6px 8px;
+    background:rgba(59,130,246,0.06); border-left:2px solid var(--blue); border-radius:0 4px 4px 0;
+  }
+
+  /* Security badges */
+  .sec-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:24px; }
+  .sec-badge {
+    padding:10px 12px; border-radius:6px;
+    background:var(--surface-2); border:1px solid var(--border);
+  }
+  .sec-icon { font-size:16px; margin-bottom:4px; }
+  .sec-label { font-size:9px; color:var(--text-muted); letter-spacing:0.5px; text-transform:uppercase; margin-bottom:2px; }
+  .sec-val { font-size:11px; color:var(--purple); font-weight:500; }
+
+  /* Sequence diagram */
+  .seq-section { margin-top:32px; }
+  .seq-diagram {
+    background:var(--surface-2); border:1px solid var(--border);
+    border-radius:8px; padding:24px; overflow-x:auto;
+  }
+  .seq-diagram svg { display:block; margin:0 auto; }
+  .seq-actor { font-family:'Inter',sans-serif; font-size:11px; font-weight:600; fill:var(--text); }
+  .seq-actor-box { fill:var(--surface-3); stroke:var(--border); stroke-width:1; rx:4; }
+  .seq-lifeline { stroke:var(--border); stroke-width:1; stroke-dasharray:4,4; }
+  .seq-arrow { stroke:var(--text-dim); stroke-width:1.2; fill:none; marker-end:url(#arrowhead); }
+  .seq-arrow-return { stroke:var(--text-muted); stroke-width:1; fill:none; stroke-dasharray:4,3; marker-end:url(#arrowhead-dim); }
+  .seq-label { font-family:'JetBrains Mono',monospace; font-size:9px; fill:var(--text-dim); }
+  .seq-label-return { font-family:'JetBrains Mono',monospace; font-size:9px; fill:var(--text-muted); }
+  .seq-activation { fill:rgba(99,102,241,0.12); stroke:rgba(99,102,241,0.3); stroke-width:1; rx:2; }
+  .seq-note { fill:var(--surface-3); stroke:var(--border); stroke-width:1; rx:3; }
+  .seq-note-text { font-family:'JetBrains Mono',monospace; font-size:8px; fill:var(--amber); }
+  .seq-divider { stroke:var(--border); stroke-width:1; }
+  .seq-divider-label { font-family:'Inter',sans-serif; font-size:9px; font-weight:600; fill:var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="h-dot"></div>
+  <span class="h-title">Payment Validation Pipeline</span>
+  <span class="h-sep">&middot;</span>
+  <span class="h-sub">Interactive Form + Workflow</span>
+</div>
+
+<div class="container">
+  <!-- ═══ LEFT: Live Payment Form ═══ -->
+  <div class="form-panel">
+    <div>
+      <div class="form-title">Card Preview</div>
+      <div class="card-visual">
+        <div class="card-type-badge" id="card-type-display">VISA</div>
+        <div class="card-chip"></div>
+        <div class="card-number" id="card-display">•••• •••• •••• ••••</div>
+        <div class="card-bottom">
+          <div>
+            <div style="font-size:7px;letter-spacing:1px;color:#64748b;margin-bottom:2px">CARDHOLDER</div>
+            <div class="card-name" id="name-display">YOUR NAME</div>
+          </div>
+          <div>
+            <div style="font-size:7px;letter-spacing:1px;color:#64748b;margin-bottom:2px">EXPIRES</div>
+            <div class="card-expiry" id="expiry-display">MM/YY</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="form-title">Card Details</div>
+      <div class="form-fields">
+        <div class="field-group">
+          <div class="field-label">Card Number</div>
+          <input class="field-input" id="f-card" placeholder="4242 4242 4242 4242" maxlength="23" autocomplete="off">
+          <div class="field-error" id="e-card"></div>
+          <div class="field-check" id="c-card"></div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <div class="field-label">Expiry</div>
+            <input class="field-input" id="f-expiry" placeholder="MM / YY" maxlength="7">
+            <div class="field-error" id="e-expiry"></div>
+          </div>
+          <div class="field-group">
+            <div class="field-label">CVV</div>
+            <input class="field-input" id="f-cvv" placeholder="123" maxlength="4" autocomplete="off">
+            <div class="field-error" id="e-cvv"></div>
+          </div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">Cardholder Name</div>
+          <input class="field-input" id="f-name" placeholder="John Doe">
+          <div class="field-error" id="e-name"></div>
+        </div>
+        <button class="submit-btn" id="btn-submit">Validate Payment</button>
+        <div class="result-box" id="result-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ RIGHT: Validation Workflow ═══ -->
+  <div class="workflow-panel">
+    <div class="wf-title">Validation Pipeline</div>
+
+    <div class="pipeline">
+      <!-- Stage 1: Raw Input -->
+      <div class="stage">
+        <div class="stage-line">
+          <div class="stage-dot" style="background:var(--green)">1</div>
+          <div class="stage-connector"></div>
+        </div>
+        <div class="stage-content">
+          <div class="stage-header">Raw Input <span style="font-size:10px;color:var(--green)">entry</span></div>
+          <div class="stage-desc">User enters card number, expiry, CVV, and name. Input may contain spaces, dashes, formatting characters.</div>
+          <div class="rule-grid">
+            <div class="rule-chip" style="background:rgba(34,197,94,0.06);border-color:rgba(34,197,94,0.15);color:var(--green)" id="r-pan">PAN</div>
+            <div class="rule-chip" style="background:rgba(34,197,94,0.06);border-color:rgba(34,197,94,0.15);color:var(--green)" id="r-exp">Expiry</div>
+            <div class="rule-chip" style="background:rgba(34,197,94,0.06);border-color:rgba(34,197,94,0.15);color:var(--green)" id="r-cvv">CVV</div>
+            <div class="rule-chip" style="background:rgba(34,197,94,0.06);border-color:rgba(34,197,94,0.15);color:var(--green)" id="r-name">Name</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 2: Sanitization -->
+      <div class="stage">
+        <div class="stage-line">
+          <div class="stage-dot" style="background:var(--cyan)">2</div>
+          <div class="stage-connector"></div>
+        </div>
+        <div class="stage-content">
+          <div class="stage-header">Sanitization <span style="font-size:10px;color:var(--cyan)">clean</span></div>
+          <div class="stage-desc">Strip non-digits from PAN, normalize expiry format, trim whitespace from all fields.</div>
+          <div class="rule-grid">
+            <div class="rule-chip" style="background:rgba(6,182,212,0.06);border-color:rgba(6,182,212,0.15);color:var(--cyan)">Strip /\D/g</div>
+            <div class="rule-chip" style="background:rgba(6,182,212,0.06);border-color:rgba(6,182,212,0.15);color:var(--cyan)">Normalize MM/YY</div>
+            <div class="rule-chip" style="background:rgba(6,182,212,0.06);border-color:rgba(6,182,212,0.15);color:var(--cyan)">Trim whitespace</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 3: Field Validation -->
+      <div class="stage">
+        <div class="stage-line">
+          <div class="stage-dot" style="background:var(--indigo)">3</div>
+          <div class="stage-connector"></div>
+        </div>
+        <div class="stage-content">
+          <div class="stage-header">Field Validation <span style="font-size:10px;color:var(--indigo)">verify</span></div>
+          <div class="stage-desc">Each field validated independently. Errors accumulate — not fail-fast.</div>
+          <div class="rule-grid" id="validation-rules">
+            <div class="rule-chip" style="background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15);color:var(--indigo)" id="v-luhn">Luhn mod-10</div>
+            <div class="rule-chip" style="background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15);color:var(--indigo)" id="v-bin">BIN detect</div>
+            <div class="rule-chip" style="background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15);color:var(--indigo)" id="v-len">Length check</div>
+            <div class="rule-chip" style="background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15);color:var(--indigo)" id="v-month">Month 01-12</div>
+            <div class="rule-chip" style="background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15);color:var(--indigo)" id="v-past">Not expired</div>
+            <div class="rule-chip" style="background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15);color:var(--indigo)" id="v-cvvd">CVV digits</div>
+            <div class="rule-chip" style="background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15);color:var(--indigo)" id="v-cvvl">CVV length</div>
+            <div class="rule-chip" style="background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.15);color:var(--indigo)" id="v-name">Name valid</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 4: Cross-Validation -->
+      <div class="stage">
+        <div class="stage-line">
+          <div class="stage-dot" style="background:var(--amber)">4</div>
+          <div class="stage-connector"></div>
+        </div>
+        <div class="stage-content">
+          <div class="stage-header">Cross-Validation <span style="font-size:10px;color:var(--amber)">correlate</span></div>
+          <div class="stage-desc">Card type determines CVV length: Amex → 4 digits, others → 3. All errors collected.</div>
+          <div class="rule-grid">
+            <div class="rule-chip" style="background:rgba(245,158,11,0.06);border-color:rgba(245,158,11,0.15);color:var(--amber)" id="x-cvv">CVV ↔ Card Type</div>
+            <div class="rule-chip" style="background:rgba(245,158,11,0.06);border-color:rgba(245,158,11,0.15);color:var(--amber)" id="x-acc">Accumulate all</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 5: Security -->
+      <div class="stage">
+        <div class="stage-line">
+          <div class="stage-dot" style="background:var(--purple)">5</div>
+          <div class="stage-connector"></div>
+        </div>
+        <div class="stage-content">
+          <div class="stage-header">Security Layer <span style="font-size:10px;color:var(--purple)">protect</span></div>
+          <div class="stage-desc">PAN never stored. Output masked. No network calls. Pure local validation.</div>
+          <div class="sec-grid">
+            <div class="sec-badge"><div class="sec-icon">&#x1f512;</div><div class="sec-label">PAN Storage</div><div class="sec-val">Never stored</div></div>
+            <div class="sec-badge"><div class="sec-icon">&#x1f6e1;</div><div class="sec-label">Output</div><div class="sec-val">Masked only</div></div>
+            <div class="sec-badge"><div class="sec-icon">&#x26a0;</div><div class="sec-label">Network</div><div class="sec-val">Zero calls</div></div>
+            <div class="sec-badge"><div class="sec-icon">&#x2714;</div><div class="sec-label">PCI DSS</div><div class="sec-val">SAQ A-EP</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 6: Result -->
+      <div class="stage">
+        <div class="stage-line">
+          <div class="stage-dot" style="background:var(--blue)">6</div>
+        </div>
+        <div class="stage-content">
+          <div class="stage-header">Result Assembly <span style="font-size:10px;color:var(--blue)">output</span></div>
+          <div class="stage-desc">Returns { valid, fields, errors[], card }. Masked number + last4 only. Safe to log.</div>
+          <div class="rule-grid">
+            <div class="rule-chip" style="background:rgba(59,130,246,0.06);border-color:rgba(59,130,246,0.15);color:var(--blue)">PaymentFormResult</div>
+            <div class="rule-chip" style="background:rgba(59,130,246,0.06);border-color:rgba(59,130,246,0.15);color:var(--blue)">Per-field results</div>
+            <div class="rule-chip" style="background:rgba(59,130,246,0.06);border-color:rgba(59,130,246,0.15);color:var(--blue)">•••• 4242</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sequence Diagram -->
+    <div class="seq-section">
+      <div class="wf-title">Sequence Diagram</div>
+      <div class="seq-diagram">
+        <svg width="720" height="620" viewBox="0 0 720 620">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#64748b"/>
+            </marker>
+            <marker id="arrowhead-dim" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#475569"/>
+            </marker>
+          </defs>
+
+          <!-- Actors -->
+          <rect class="seq-actor-box" x="30" y="8" width="90" height="28"/>
+          <text class="seq-actor" x="75" y="27" text-anchor="middle">Client</text>
+          <rect class="seq-actor-box" x="195" y="8" width="110" height="28"/>
+          <text class="seq-actor" x="250" y="27" text-anchor="middle">PaymentForm</text>
+          <rect class="seq-actor-box" x="395" y="8" width="110" height="28"/>
+          <text class="seq-actor" x="450" y="27" text-anchor="middle">CardValidator</text>
+          <rect class="seq-actor-box" x="595" y="8" width="90" height="28"/>
+          <text class="seq-actor" x="640" y="27" text-anchor="middle">Result</text>
+
+          <!-- Lifelines -->
+          <line class="seq-lifeline" x1="75" y1="36" x2="75" y2="600"/>
+          <line class="seq-lifeline" x1="250" y1="36" x2="250" y2="600"/>
+          <line class="seq-lifeline" x1="450" y1="36" x2="450" y2="600"/>
+          <line class="seq-lifeline" x1="640" y1="36" x2="640" y2="600"/>
+
+          <!-- 1. Submit -->
+          <line class="seq-arrow" x1="75" y1="65" x2="242" y2="65"/>
+          <text class="seq-label" x="120" y="58">submitPayment({ card, expiry, cvv, name })</text>
+
+          <!-- Activation: PaymentForm -->
+          <rect class="seq-activation" x="244" y="65" width="12" height="480"/>
+
+          <!-- 2. sanitizeCardNumber -->
+          <line class="seq-arrow" x1="256" y1="95" x2="442" y2="95"/>
+          <text class="seq-label" x="290" y="88">sanitizeCardNumber(raw)</text>
+          <rect class="seq-activation" x="444" y="95" width="12" height="25"/>
+          <line class="seq-arrow-return" x1="444" y1="118" x2="256" y2="118"/>
+          <text class="seq-label-return" x="300" y="113">"4242424242424242"</text>
+
+          <!-- 3. luhnCheck -->
+          <line class="seq-arrow" x1="256" y1="148" x2="442" y2="148"/>
+          <text class="seq-label" x="310" y="141">luhnCheck(digits)</text>
+          <rect class="seq-activation" x="444" y="148" width="12" height="25"/>
+          <line class="seq-arrow-return" x1="444" y1="171" x2="256" y2="171"/>
+          <text class="seq-label-return" x="340" y="166">true</text>
+
+          <!-- 4. detectCardType -->
+          <line class="seq-arrow" x1="256" y1="196" x2="442" y2="196"/>
+          <text class="seq-label" x="295" y="189">detectCardType(digits)</text>
+          <rect class="seq-activation" x="444" y="196" width="12" height="25"/>
+          <line class="seq-arrow-return" x1="444" y1="219" x2="256" y2="219"/>
+          <text class="seq-label-return" x="280" y="214">{ visa, cvvLen: 3, lengths: [16] }</text>
+
+          <!-- Note: Cross-validation -->
+          <rect class="seq-note" x="470" y="195" width="140" height="32"/>
+          <text class="seq-note-text" x="480" y="209">IIN/BIN prefix</text>
+          <text class="seq-note-text" x="480" y="220">detection (first 6)</text>
+
+          <!-- 5. validateExpiry -->
+          <line class="seq-arrow" x1="256" y1="252" x2="442" y2="252"/>
+          <text class="seq-label" x="290" y="245">validateExpiry("12/28")</text>
+          <rect class="seq-activation" x="444" y="252" width="12" height="25"/>
+          <line class="seq-arrow-return" x1="444" y1="275" x2="256" y2="275"/>
+          <text class="seq-label-return" x="290" y="270">{ valid: true, month: 12, year: 2028 }</text>
+
+          <!-- Divider: cross-validation -->
+          <line class="seq-divider" x1="20" y1="300" x2="700" y2="300"/>
+          <rect fill="var(--bg)" x="280" y="292" width="160" height="16"/>
+          <text class="seq-divider-label" x="360" y="303" text-anchor="middle">CROSS-VALIDATION</text>
+
+          <!-- 6. validateCVV with card type -->
+          <line class="seq-arrow" x1="256" y1="328" x2="442" y2="328"/>
+          <text class="seq-label" x="272" y="321">validateCVV("123", cardType.cvvLen=3)</text>
+          <rect class="seq-activation" x="444" y="328" width="12" height="25"/>
+          <line class="seq-arrow-return" x1="444" y1="351" x2="256" y2="351"/>
+          <text class="seq-label-return" x="310" y="346">{ valid: true }</text>
+
+          <!-- Note: CVV cross-check -->
+          <rect class="seq-note" x="470" y="318" width="140" height="32"/>
+          <text class="seq-note-text" x="480" y="332">Amex → 4 digits</text>
+          <text class="seq-note-text" x="480" y="343">Others → 3 digits</text>
+
+          <!-- 7. validateCardholderName -->
+          <line class="seq-arrow" x1="256" y1="380" x2="442" y2="380"/>
+          <text class="seq-label" x="280" y="373">validateCardholderName("John Doe")</text>
+          <rect class="seq-activation" x="444" y="380" width="12" height="25"/>
+          <line class="seq-arrow-return" x1="444" y1="403" x2="256" y2="403"/>
+          <text class="seq-label-return" x="310" y="398">{ valid: true }</text>
+
+          <!-- Divider: assembly -->
+          <line class="seq-divider" x1="20" y1="428" x2="700" y2="428"/>
+          <rect fill="var(--bg)" x="290" y="420" width="140" height="16"/>
+          <text class="seq-divider-label" x="360" y="431" text-anchor="middle">RESULT ASSEMBLY</text>
+
+          <!-- 8. errors.length === 0 → maskCard -->
+          <line class="seq-arrow" x1="256" y1="458" x2="442" y2="458"/>
+          <text class="seq-label" x="290" y="451">maskCardNumber(sanitized)</text>
+          <rect class="seq-activation" x="444" y="458" width="12" height="25"/>
+          <line class="seq-arrow-return" x1="444" y1="481" x2="256" y2="481"/>
+          <text class="seq-label-return" x="290" y="476">"•••• •••• •••• 4242"</text>
+
+          <!-- 9. Build result → Result -->
+          <line class="seq-arrow" x1="256" y1="510" x2="632" y2="510"/>
+          <text class="seq-label" x="330" y="503">{ valid, fields, errors, card }</text>
+          <rect class="seq-activation" x="634" y="510" width="12" height="25"/>
+
+          <!-- 10. Return to client -->
+          <line class="seq-arrow-return" x1="244" y1="545" x2="83" y2="545"/>
+          <text class="seq-label-return" x="90" y="540">PaymentFormResult</text>
+
+          <!-- Bottom actors -->
+          <rect class="seq-actor-box" x="30" y="572" width="90" height="28"/>
+          <text class="seq-actor" x="75" y="591" text-anchor="middle">Client</text>
+          <rect class="seq-actor-box" x="195" y="572" width="110" height="28"/>
+          <text class="seq-actor" x="250" y="591" text-anchor="middle">PaymentForm</text>
+          <rect class="seq-actor-box" x="395" y="572" width="110" height="28"/>
+          <text class="seq-actor" x="450" y="591" text-anchor="middle">CardValidator</text>
+          <rect class="seq-actor-box" x="595" y="572" width="90" height="28"/>
+          <text class="seq-actor" x="640" y="591" text-anchor="middle">Result</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Risk Vectors -->
+    <div class="risk-section">
+      <div class="wf-title">Risk Vectors</div>
+      <div id="risk-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══ Load graph data for risks ═══ */
+fetch('http://localhost:3456/graph').then(r => r.json()).then(data => {
+  const risks = data.blindSpotRegions || [];
+  const el = document.getElementById('risk-list');
+  el.innerHTML = risks.map(r => `
+    <div class="risk-card ${r.severity}">
+      <div class="risk-sev ${r.severity}">${r.severity}</div>
+      <div class="risk-name">${r.value}</div>
+      <div class="risk-desc">${r.description}</div>
+      <div class="risk-fix">${r.suggestion}</div>
+    </div>
+  `).join('');
+}).catch(() => {});
+
+/* ═══ Live form interaction ═══ */
+const fCard = document.getElementById('f-card');
+const fExpiry = document.getElementById('f-expiry');
+const fCvv = document.getElementById('f-cvv');
+const fName = document.getElementById('f-name');
+
+/* Format card number with spaces */
+fCard.addEventListener('input', () => {
+  let v = fCard.value.replace(/\D/g, '').substring(0, 16);
+  fCard.value = v.replace(/(.{4})/g, '$1 ').trim();
+  updateCardPreview();
+  validateLive();
+});
+
+/* Format expiry */
+fExpiry.addEventListener('input', () => {
+  let v = fExpiry.value.replace(/\D/g, '').substring(0, 4);
+  if (v.length >= 3) v = v.substring(0,2) + ' / ' + v.substring(2);
+  fExpiry.value = v;
+  document.getElementById('expiry-display').textContent = v || 'MM/YY';
+  validateLive();
+});
+
+fCvv.addEventListener('input', () => { validateLive(); });
+fName.addEventListener('input', () => {
+  document.getElementById('name-display').textContent = fName.value.toUpperCase() || 'YOUR NAME';
+  validateLive();
+});
+
+function updateCardPreview() {
+  const digits = fCard.value.replace(/\D/g, '');
+  let display = '';
+  for (let i = 0; i < 16; i++) {
+    if (i > 0 && i % 4 === 0) display += ' ';
+    display += i < digits.length ? digits[i] : '•';
+  }
+  document.getElementById('card-display').textContent = display;
+
+  // Detect type for preview
+  const types = {
+    '4': 'VISA', '51': 'MC', '52': 'MC', '53': 'MC', '54': 'MC', '55': 'MC',
+    '34': 'AMEX', '37': 'AMEX', '60': 'DISCOVER', '65': 'DISCOVER',
+    '35': 'JCB', '36': 'DINERS',
+  };
+  let detected = '';
+  if (digits.length >= 2) detected = types[digits.substring(0,2)] || '';
+  if (!detected && digits.length >= 1) detected = types[digits[0]] || '';
+  document.getElementById('card-type-display').textContent = detected || 'CARD';
+}
+
+/* ═══ Live validation — highlight pipeline stages ═══ */
+function validateLive() {
+  const digits = fCard.value.replace(/\D/g, '');
+  const checks = [];
+
+  // Luhn
+  let luhnOk = false;
+  if (digits.length >= 13) {
+    let sum = 0, alt = false;
+    for (let i = digits.length - 1; i >= 0; i--) {
+      let n = parseInt(digits[i]);
+      if (alt) { n *= 2; if (n > 9) n -= 9; }
+      sum += n; alt = !alt;
+    }
+    luhnOk = sum % 10 === 0;
+  }
+  setChip('v-luhn', digits.length >= 13 ? luhnOk : null);
+
+  // BIN
+  const hasBin = digits.length >= 4;
+  setChip('v-bin', hasBin ? !!document.getElementById('card-type-display').textContent : null);
+
+  // Length
+  setChip('v-len', digits.length >= 13 ? (digits.length >= 13 && digits.length <= 19) : null);
+
+  // Expiry
+  const expDigits = fExpiry.value.replace(/\D/g, '');
+  if (expDigits.length >= 4) {
+    const m = parseInt(expDigits.substring(0,2));
+    const y = parseInt('20' + expDigits.substring(2,4));
+    setChip('v-month', m >= 1 && m <= 12);
+    const exp = new Date(y, m, 0);
+    setChip('v-past', exp >= new Date());
+  } else {
+    setChip('v-month', null);
+    setChip('v-past', null);
+  }
+
+  // CVV
+  const cvvClean = fCvv.value.trim();
+  setChip('v-cvvd', cvvClean.length > 0 ? /^\d+$/.test(cvvClean) : null);
+  const expectLen = document.getElementById('card-type-display').textContent === 'AMEX' ? 4 : 3;
+  setChip('v-cvvl', cvvClean.length > 0 ? cvvClean.length === expectLen : null);
+
+  // Cross: CVV ↔ type
+  setChip('x-cvv', cvvClean.length > 0 && digits.length >= 4 ? cvvClean.length === expectLen : null);
+
+  // Name
+  const name = fName.value.trim();
+  setChip('v-name', name.length > 0 ? (name.length >= 2 && !/\d/.test(name)) : null);
+
+  // Accumulate
+  const allChecked = [luhnOk, digits.length >= 13].every(Boolean);
+  setChip('x-acc', digits.length >= 13 ? true : null);
+
+  // Update card number checks display
+  const checksEl = document.getElementById('c-card');
+  if (digits.length >= 13) {
+    checksEl.innerHTML = `
+      <span class="check-icon ${luhnOk ? 'check-pass' : 'check-fail'}">${luhnOk ? '✓' : '✗'}</span> Luhn
+      &nbsp;&nbsp;
+      <span class="check-icon ${hasBin ? 'check-pass' : 'check-fail'}">${hasBin ? '✓' : '✗'}</span> BIN
+    `;
+  } else {
+    checksEl.innerHTML = '';
+  }
+}
+
+function setChip(id, state) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (state === null) {
+    el.style.opacity = '0.4';
+    el.classList.remove('active');
+  } else if (state) {
+    el.style.opacity = '1';
+    el.style.borderColor = 'rgba(34,197,94,0.4)';
+    el.style.color = 'var(--green)';
+    el.style.background = 'rgba(34,197,94,0.08)';
+    el.classList.add('active');
+  } else {
+    el.style.opacity = '1';
+    el.style.borderColor = 'rgba(239,68,68,0.4)';
+    el.style.color = 'var(--red)';
+    el.style.background = 'rgba(239,68,68,0.08)';
+    el.classList.add('active');
+  }
+}
+
+/* ═══ Submit ═══ */
+document.getElementById('btn-submit').addEventListener('click', () => {
+  const card = fCard.value;
+  const expiry = fExpiry.value.replace(' / ', '/');
+  const cvv = fCvv.value;
+  const name = fName.value;
+  const box = document.getElementById('result-box');
+
+  // Quick inline validation for display
+  const digits = card.replace(/\D/g, '');
+  const errors = [];
+
+  // Luhn
+  let sum = 0, alt = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let n = parseInt(digits[i]);
+    if (alt) { n *= 2; if (n > 9) n -= 9; }
+    sum += n; alt = !alt;
+  }
+  if (digits.length < 13 || sum % 10 !== 0) errors.push('Card: fails Luhn checksum');
+  if (digits.length < 13 || digits.length > 19) errors.push('Card: invalid length');
+
+  const expMatch = expiry.match(/^(\d{1,2})\/(\d{2,4})$/);
+  if (!expMatch) { errors.push('Expiry: invalid format'); }
+  else {
+    const m = parseInt(expMatch[1]), y = parseInt(expMatch[2]) + (expMatch[2].length === 2 ? 2000 : 0);
+    if (m < 1 || m > 12) errors.push('Expiry: month must be 01-12');
+    if (new Date(y, m, 0) < new Date()) errors.push('Expiry: card has expired');
+  }
+
+  if (!/^\d{3,4}$/.test(cvv.trim())) errors.push('CVV: must be 3-4 digits');
+  if (!name.trim() || name.trim().length < 2) errors.push('Name: required (2+ chars)');
+  if (/\d/.test(name.trim())) errors.push('Name: must not contain digits');
+
+  if (errors.length === 0) {
+    const masked = digits.replace(/./g, (c, i) => i < digits.length - 4 ? '•' : c);
+    box.className = 'result-box success';
+    box.innerHTML = `✓ Valid — ${document.getElementById('card-type-display').textContent} ····${digits.slice(-4)}<br>Masked: ${masked}<br>Ready for tokenization`;
+  } else {
+    box.className = 'result-box error';
+    box.innerHTML = errors.map(e => `✗ ${e}`).join('<br>');
+  }
+});
+</script>
+</body>
+</html>

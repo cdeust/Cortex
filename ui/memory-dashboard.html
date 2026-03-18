@@ -1,0 +1,2060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>J.A.R.V.I.S. — Memory Cortex</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#000; overflow:hidden; width:100vw; height:100vh; font-family:'SF Mono','Fira Code',monospace; }
+canvas { display:block; position:absolute; top:0; left:0; }
+
+/* ── Top bar ────────────────────────────────────────────────────── */
+#topbar {
+  position:fixed; top:0; left:0; right:0; height:42px;
+  background:rgba(0,0,0,0.82); border-bottom:1px solid rgba(255,255,255,0.06);
+  backdrop-filter:blur(12px);
+  display:flex; align-items:center; gap:6px; padding:0 14px;
+  z-index:200;
+}
+
+#back {
+  background:transparent; border:1px solid rgba(255,255,255,0.1);
+  border-radius:3px; padding:4px 11px;
+  color:rgba(255,255,255,0.35); font-size:9px; letter-spacing:2px;
+  text-transform:uppercase; cursor:pointer; transition:all .2s; text-decoration:none;
+  flex-shrink:0;
+}
+#back:hover { color:rgba(255,255,255,0.75); border-color:rgba(255,255,255,0.25); }
+
+#search-brain {
+  background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08);
+  border-radius:3px; padding:4px 10px; color:rgba(255,255,255,0.6);
+  font-family:inherit; font-size:10px; width:150px; outline:none;
+  transition:border-color .2s;
+}
+#search-brain::placeholder { color:rgba(255,255,255,0.2); }
+#search-brain:focus { border-color:rgba(255,255,255,0.2); }
+
+.filter-bar { display:flex; gap:2px; flex-wrap:nowrap; overflow-x:auto; }
+.filter-bar::-webkit-scrollbar { display:none; }
+
+.fbtn {
+  background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.07);
+  border-radius:3px; padding:3px 9px; color:rgba(255,255,255,0.3);
+  font-family:inherit; font-size:9px; letter-spacing:.5px; text-transform:uppercase;
+  cursor:pointer; transition:all .2s; white-space:nowrap;
+}
+.fbtn:hover  { color:rgba(255,255,255,0.6); border-color:rgba(255,255,255,0.18); }
+.fbtn.active { color:rgba(255,255,255,0.85); border-color:rgba(255,255,255,0.4); background:rgba(255,255,255,0.08); }
+
+#stats-brain {
+  margin-left:auto; flex-shrink:0;
+  font-size:9px; color:rgba(255,255,255,0.2); letter-spacing:.5px;
+  white-space:nowrap;
+}
+#stats-brain span { color:rgba(255,255,255,0.5); }
+
+#conv-toggle-brain {
+  flex-shrink:0;
+  background:transparent; border:1px solid rgba(255,255,255,0.07);
+  border-radius:3px; padding:3px 10px; color:rgba(255,255,255,0.25);
+  font-family:inherit; font-size:9px; letter-spacing:.5px; text-transform:uppercase;
+  cursor:pointer; transition:all .2s;
+}
+#conv-toggle-brain:hover { color:rgba(255,255,255,0.5); border-color:rgba(255,255,255,0.2); }
+#conv-toggle-brain.active { color:rgba(255,255,255,0.7); border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.06); }
+
+#layout-toggle-brain {
+  flex-shrink:0;
+  background:transparent; border:1px solid rgba(255,255,255,0.07);
+  border-radius:3px; padding:3px 10px; color:rgba(255,255,255,0.25);
+  font-family:inherit; font-size:9px; letter-spacing:.5px; text-transform:uppercase;
+  cursor:pointer; transition:all .2s;
+}
+#layout-toggle-brain:hover { color:rgba(255,255,255,0.5); border-color:rgba(255,255,255,0.2); }
+#layout-toggle-brain.active { color:rgba(255,255,255,0.7); border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.06); }
+
+#analytics-toggle-brain {
+  flex-shrink:0;
+  background:transparent; border:1px solid rgba(255,255,255,0.07);
+  border-radius:3px; padding:3px 10px; color:rgba(255,255,255,0.25);
+  font-family:inherit; font-size:9px; letter-spacing:.5px; text-transform:uppercase;
+  cursor:pointer; transition:all .2s;
+}
+#analytics-toggle-brain:hover { color:rgba(255,255,255,0.5); border-color:rgba(255,255,255,0.2); }
+#analytics-toggle-brain.active { color:rgba(255,255,255,0.7); border-color:rgba(255,255,255,0.3); background:rgba(255,255,255,0.06); }
+
+/* ── Filter row 2 ───────────────────────────────────────────────── */
+#filter-row-2-brain {
+  position:fixed; top:42px; left:0; right:0;
+  display:flex; align-items:center; gap:8px; padding:3px 14px;
+  background:rgba(0,0,0,0.72); border-bottom:1px solid rgba(255,255,255,0.04);
+  backdrop-filter:blur(10px);
+  z-index:199; height:28px;
+}
+.cat-bar-brain { display:flex; gap:2px; flex-wrap:nowrap; overflow-x:auto; }
+.cat-bar-brain::-webkit-scrollbar { display:none; }
+.cbtn {
+  background:transparent; border:1px solid transparent;
+  border-radius:3px; padding:2px 8px; color:rgba(255,255,255,0.2);
+  font-family:inherit; font-size:8px; letter-spacing:.5px; text-transform:uppercase;
+  cursor:pointer; transition:all .2s; white-space:nowrap;
+}
+.cbtn:hover { color:rgba(255,255,255,0.5); }
+.cbtn.active { color:rgba(255,255,255,0.75); border-color:rgba(255,255,255,0.25); background:rgba(255,255,255,0.05); }
+
+#thread-select-brain {
+  background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);
+  border-radius:3px; color:rgba(255,255,255,0.35); font-family:inherit; font-size:9px;
+  padding:2px 6px; outline:none;
+}
+.status-bar-brain { display:flex; gap:2px; margin-left:auto; }
+.sbtn {
+  background:transparent; border:1px solid transparent;
+  border-radius:3px; padding:2px 8px; color:rgba(255,255,255,0.2);
+  font-family:inherit; font-size:8px; letter-spacing:.5px; text-transform:uppercase;
+  cursor:pointer; transition:all .2s;
+}
+.sbtn:hover { color:rgba(255,255,255,0.5); }
+.sbtn.active { color:rgba(255,255,255,0.75); border-color:rgba(255,255,255,0.25); background:rgba(255,255,255,0.05); }
+
+/* ── Detail Panel ───────────────────────────────────────────────── */
+#panel {
+  position:fixed; top:70px; right:-400px; width:360px; height:calc(100vh - 70px);
+  background:rgba(0,0,0,0.94); border-left:1px solid rgba(255,255,255,0.08);
+  padding:18px 16px 40px; overflow-y:auto; transition:right .3s ease;
+  z-index:300;
+}
+#panel.open { right:0; box-shadow:-20px 0 60px rgba(0,0,0,0.6); }
+#panel-close {
+  position:absolute; top:12px; right:14px;
+  color:rgba(255,255,255,0.25); cursor:pointer; font-size:16px;
+  transition:color .2s;
+}
+#panel-close:hover { color:rgba(255,255,255,0.7); }
+#panel-type {
+  font-size:8px; letter-spacing:3px; text-transform:uppercase;
+  color:rgba(255,255,255,0.3); margin-bottom:6px; margin-top:8px;
+}
+#panel-name {
+  font-size:14px; color:#fff; font-weight:600; line-height:1.4;
+  margin-bottom:4px; word-break:break-word;
+}
+#panel-proj {
+  font-size:9px; color:rgba(255,255,255,0.25); margin-bottom:14px;
+}
+#panel-desc {
+  font-size:10px; color:rgba(255,255,255,0.5); line-height:1.6;
+  margin-bottom:14px; word-break:break-word;
+}
+.panel-section { margin-bottom:14px; }
+.panel-label {
+  font-size:8px; letter-spacing:2px; text-transform:uppercase;
+  color:rgba(255,255,255,0.2); margin-bottom:6px;
+}
+.panel-body {
+  font-size:10px; color:rgba(255,255,255,0.45); line-height:1.7;
+  word-break:break-word; white-space:pre-wrap;
+  border-left:1px solid rgba(255,255,255,0.08); padding-left:10px;
+}
+.panel-stat {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05);
+  font-size:9px;
+}
+.panel-stat .k { color:rgba(255,255,255,0.25); }
+.panel-stat .v { color:rgba(255,255,255,0.65); }
+.msg-entry {
+  font-size:9px; color:rgba(255,255,255,0.35); line-height:1.5;
+  padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.msg-entry .role { color:rgba(255,255,255,0.2); letter-spacing:1px; text-transform:uppercase; font-size:8px; }
+.msg-entry.user { border-left:2px solid rgba(255,255,255,0.12); padding-left:6px; }
+.msg-entry.assistant { border-left:2px solid rgba(255,255,255,0.05); padding-left:6px; }
+.meta-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:3px 12px;
+  font-size:9px; padding:8px; margin:6px 0;
+  background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); border-radius:3px;
+}
+.meta-grid .ml { color:rgba(255,255,255,0.2); text-transform:uppercase; font-size:8px; letter-spacing:.5px; }
+.meta-grid .mv { color:rgba(255,255,255,0.5); }
+.todo-item {
+  display:flex; gap:6px; padding:3px 0; font-size:9px;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+}
+
+/* ── Analytics Panel ────────────────────────────────────────────── */
+#analytics-brain {
+  position:fixed; top:0; left:0; width:300px; height:100vh;
+  background:rgba(0,0,0,0.95); border-right:1px solid rgba(255,255,255,0.08);
+  transform:translateX(-100%); transition:transform .4s cubic-bezier(.16,1,.3,1);
+  z-index:250; overflow-y:auto; padding:78px 14px 30px;
+  /* padding-top: topbar(42) + filter-row-2(28) + extra(8) */
+}
+#analytics-brain.open { transform:translateX(0); }
+.a-title {
+  font-size:8px; font-weight:600; color:rgba(255,255,255,0.4);
+  letter-spacing:2px; text-transform:uppercase; margin-bottom:8px;
+}
+.a-card {
+  margin-bottom:18px; padding-bottom:16px;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  overflow:visible;
+}
+.a-card:last-child { border-bottom:none; }
+.kpi-strip { display:flex; gap:4px; margin-bottom:0; }
+.kpi-box { flex:1; text-align:center; padding:8px 4px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:3px; }
+.kpi-v { font-size:18px; font-weight:700; color:rgba(255,255,255,0.85); line-height:1.2; }
+.kpi-l { font-size:7px; color:rgba(255,255,255,0.25); letter-spacing:.5px; text-transform:uppercase; margin-top:2px; }
+.a-card canvas { display:block; position:relative; top:auto; left:auto; }
+
+/* ── Tooltip ────────────────────────────────────────────────────── */
+#tooltip-brain {
+  position:fixed; display:none; pointer-events:none; z-index:500;
+  background:rgba(0,0,0,0.9); border:1px solid rgba(255,255,255,0.1);
+  border-radius:4px; padding:8px 12px; max-width:280px;
+  backdrop-filter:blur(12px);
+}
+#tooltip-brain .tt-name { font-size:11px; color:#fff; font-weight:600; margin-bottom:2px; }
+#tooltip-brain .tt-type { font-size:8px; color:rgba(255,255,255,0.3); letter-spacing:2px; text-transform:uppercase; }
+#tooltip-brain .tt-proj { font-size:9px; color:rgba(255,255,255,0.2); margin-top:2px; }
+
+/* ── Chart tooltip ──────────────────────────────────────────────── */
+#chart-tooltip-brain {
+  position:fixed; display:none; pointer-events:none; z-index:600;
+  background:rgba(0,0,0,0.95); border:1px solid rgba(255,255,255,0.15);
+  border-radius:3px; padding:5px 9px; font-size:9px; color:rgba(255,255,255,0.7);
+  backdrop-filter:blur(10px); max-width:200px;
+}
+
+/* ── Timeline Table ────────────────────────────────────────────── */
+#timeline-table {
+  display:none;
+  position:fixed; top:42px; left:0; right:0; bottom:0;
+  background:#0a0a0f;
+  z-index:50;
+  overflow-y:auto;
+  padding:16px 24px 40px;
+}
+#timeline-table table {
+  width:100%; border-collapse:collapse;
+  font-size:11px; color:rgba(255,255,255,0.6);
+}
+#timeline-table thead th {
+  position:sticky; top:0;
+  background:#0a0a0f;
+  text-align:left; padding:8px 10px;
+  font-size:9px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase;
+  color:rgba(255,255,255,0.3);
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+#timeline-table tbody tr {
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  transition:background .15s;
+  cursor:default;
+}
+#timeline-table tbody tr:hover {
+  background:rgba(255,255,255,0.03);
+}
+#timeline-table td {
+  padding:7px 10px;
+  vertical-align:top;
+  line-height:1.5;
+}
+#timeline-table .tl-dot {
+  display:inline-block; width:8px; height:8px; border-radius:50%;
+  margin-right:6px; vertical-align:middle;
+  flex-shrink:0;
+}
+#timeline-table .tl-type {
+  font-size:9px; letter-spacing:0.5px; text-transform:uppercase;
+  font-weight:600;
+}
+#timeline-table .tl-name {
+  color:rgba(255,255,255,0.75);
+  word-break:break-word;
+}
+#timeline-table .tl-domain {
+  color:rgba(255,255,255,0.25);
+  font-size:10px;
+}
+#timeline-table .tl-heat {
+  font-variant-numeric:tabular-nums;
+}
+#timeline-table .tl-tags span {
+  display:inline-block; padding:1px 6px; margin:1px 2px;
+  background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06);
+  border-radius:3px; font-size:9px; color:rgba(255,255,255,0.3);
+}
+.tl-type-episodic { color:#26de81; }
+.tl-type-semantic { color:#d946ef; }
+.tl-type-entity   { color:#00d2ff; }
+.tl-dot-episodic  { background:#26de81; box-shadow:0 0 6px rgba(38,222,129,0.4); }
+.tl-dot-semantic  { background:#d946ef; box-shadow:0 0 6px rgba(217,70,239,0.4); }
+.tl-dot-entity    { background:#00d2ff; box-shadow:0 0 6px rgba(0,210,255,0.4); }
+
+/* ── Legend ─────────────────────────────────────────────────────── */
+#legend-brain {
+  position:fixed; bottom:14px; left:14px;
+  background:rgba(0,0,0,0.88); border:1px solid rgba(0,210,255,0.12);
+  border-radius:6px; padding:12px 16px; backdrop-filter:blur(16px);
+  font-size:10px; color:rgba(180,200,220,0.8); z-index:100;
+}
+.leg-row { display:flex; align-items:center; gap:5px; padding:1px 0; }
+.leg-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+
+/* ── HUD ────────────────────────────────────────────────────────── */
+#hud {
+  position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+  font-size:8px; color:rgba(255,255,255,0.18); letter-spacing:3px;
+  text-transform:uppercase; pointer-events:none; white-space:nowrap;
+}
+#hint {
+  position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+  font-size:8px; color:rgba(255,255,255,0.12); letter-spacing:2px;
+  pointer-events:none;
+}
+
+::-webkit-scrollbar { width:3px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:2px; }
+
+/* ── Panel enhancements ─────────────────────────────────────────── */
+#panel-type {
+  display:inline-block; font-size:8px; letter-spacing:2px; text-transform:uppercase;
+  border:1px solid; border-radius:2px; padding:2px 7px;
+  margin-bottom:4px; margin-top:8px;
+}
+#panel-cat {
+  display:none; font-size:8px; letter-spacing:1px; text-transform:uppercase;
+  border:1px solid; border-radius:2px; padding:2px 6px; margin-bottom:4px; margin-left:4px;
+}
+#panel-status { font-size:8px; color:rgba(255,255,255,0.25); margin-bottom:6px; letter-spacing:.3px; }
+#panel-tags { display:flex; flex-wrap:wrap; gap:3px; margin-bottom:6px; min-height:0; }
+.tag-pill {
+  font-size:8px; padding:2px 6px; border-radius:2px;
+  background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.35); letter-spacing:.3px;
+}
+#panel-meta { font-size:8px; color:rgba(255,255,255,0.2); margin-bottom:10px; letter-spacing:.3px; line-height:1.5; }
+.msg-bubble {
+  margin-bottom:7px; padding:6px 9px;
+  border-radius:3px; border:1px solid rgba(255,255,255,0.04);
+}
+.msg-bubble.user      { background:rgba(255,255,255,0.03); border-left:2px solid rgba(255,255,255,0.14); }
+.msg-bubble.assistant { background:rgba(0,0,0,0.15);       border-left:2px solid rgba(0,200,255,0.2); }
+.msg-role { font-size:8px; color:rgba(255,255,255,0.28); letter-spacing:1px; text-transform:uppercase; margin-bottom:3px; }
+.msg-meta { font-size:8px; color:rgba(255,255,255,0.15); margin-top:4px; letter-spacing:.3px; }
+.tool-list { list-style:none; margin:4px 0 0; padding:0; }
+.tool-item { font-size:8px; color:rgba(255,255,255,0.25); padding:1px 0; }
+.tool-name  { color:rgba(0,210,255,0.65); margin-right:4px; }
+.tool-input { color:rgba(255,255,255,0.18); font-family:inherit; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div style="font-size:12px;font-weight:700;color:#00d2ff;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 15px rgba(0,210,255,0.4)">JARVIS MEMORY</div>
+  <input id="search-brain" type="text" placeholder="Search memories…">
+  <div class="filter-bar">
+    <button class="fbtn active" data-type="all">All</button>
+    <button class="fbtn" data-type="episodic" style="--btn-color:#26de81">Episodic</button>
+    <button class="fbtn" data-type="semantic" style="--btn-color:#d946ef">Semantic</button>
+    <button class="fbtn" data-type="entity" style="--btn-color:#00d2ff">Entities</button>
+  </div>
+  <button id="layout-toggle-brain">Cluster</button>
+  <button id="analytics-toggle-brain">Analytics</button>
+  <div id="stats-brain"></div>
+</div>
+
+<!-- Filter row 2 (hidden — not applicable for memory dashboard) -->
+<div id="filter-row-2-brain" style="display:none">
+</div>
+
+<!-- Detail panel -->
+<div id="panel">
+  <span id="panel-close">✕</span>
+  <div id="panel-type"></div>
+  <div id="panel-cat"></div>
+  <div id="panel-name"></div>
+  <div id="panel-proj"></div>
+  <div id="panel-status"></div>
+  <div id="panel-tags"></div>
+  <div id="panel-meta"></div>
+  <div id="panel-desc"></div>
+  <div id="panel-content"></div>
+</div>
+
+<!-- Analytics panel -->
+<div id="analytics-brain">
+  <div class="a-card">
+    <div class="a-title">Overview</div>
+    <div class="kpi-strip">
+      <div class="kpi-box"><div class="kpi-v" id="kpi-b-sessions">0</div><div class="kpi-l">Sessions</div></div>
+      <div class="kpi-box"><div class="kpi-v" id="kpi-b-messages">0</div><div class="kpi-l">Messages</div></div>
+      <div class="kpi-box"><div class="kpi-v" id="kpi-b-hours">0</div><div class="kpi-l">Hours</div></div>
+      <div class="kpi-box"><div class="kpi-v" id="kpi-b-mb">0</div><div class="kpi-l">MB</div></div>
+    </div>
+  </div>
+  <div class="a-card">
+    <div class="a-title">Activity Heatmap</div>
+    <canvas id="a-chart-heatmap"></canvas>
+  </div>
+  <div class="a-card">
+    <div class="a-title">Sessions Over Time</div>
+    <canvas id="a-chart-timeline"></canvas>
+  </div>
+  <div class="a-card">
+    <div class="a-title">Category Breakdown</div>
+    <canvas id="a-chart-categories"></canvas>
+  </div>
+  <div class="a-card">
+    <div class="a-title">Top Tools</div>
+    <canvas id="a-chart-tools"></canvas>
+  </div>
+  <div class="a-card">
+    <div class="a-title">Session Duration</div>
+    <canvas id="a-chart-quality"></canvas>
+  </div>
+  <div class="a-card">
+    <div class="a-title">Consolidation Pipeline</div>
+    <canvas id="a-chart-consolidation"></canvas>
+  </div>
+  <div class="a-card">
+    <div class="a-title">Memory Store</div>
+    <canvas id="a-chart-stores"></canvas>
+  </div>
+  <div class="a-card">
+    <div class="a-title">Project Coverage</div>
+    <canvas id="a-chart-projects"></canvas>
+  </div>
+</div>
+
+<!-- Timeline table view -->
+<div id="timeline-table"></div>
+
+<!-- Tooltip -->
+<div id="tooltip-brain">
+  <div class="tt-name"></div>
+  <div class="tt-type"></div>
+  <div class="tt-proj"></div>
+</div>
+
+<!-- Chart tooltip -->
+<div id="chart-tooltip-brain"></div>
+
+<!-- Legend -->
+<div id="legend-brain">
+  <div style="font-size:9px;color:#5a7a9a;margin-bottom:6px;letter-spacing:0.05em">MEMORY CORTEX</div>
+  <div class="leg-row"><div class="leg-dot" style="background:#00d2ff;box-shadow:0 0 8px #00d2ff"></div>Entity</div>
+  <div class="leg-row"><div class="leg-dot" style="background:#26de81;box-shadow:0 0 6px #26de81"></div>Episodic</div>
+  <div class="leg-row"><div class="leg-dot" style="background:#d946ef;box-shadow:0 0 6px #d946ef"></div>Semantic</div>
+  <div style="font-size:9px;color:#5a7a9a;margin:6px 0 4px;letter-spacing:0.05em">CONNECTIONS</div>
+  <div class="leg-row"><div class="leg-dot" style="background:#ff4444"></div>Causal</div>
+  <div class="leg-row"><div class="leg-dot" style="background:#4a6a8a"></div>Related</div>
+  <div class="leg-row"><div class="leg-dot" style="background:#334455"></div>Context</div>
+</div>
+
+<div id="hud"></div>
+<div id="hint">Click a neuron to inspect · Drag to rotate · Scroll to zoom · A = Analytics</div>
+
+<script src="https://unpkg.com/three@0.137.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/ShaderPass.js"></script>
+
+<script>
+/*__GRAPH_DATA__*/
+
+(async function() {
+try {
+
+// ── Load from JARVIS memory API and transform to brain.html format ──
+async function loadJarvisData() {
+  const res = await fetch('/api/dashboard');
+  const raw = await res.json();
+  const nodes = [];
+  const edges = [];
+
+  // Entities → nodes
+  (raw.entities || []).forEach(e => {
+    nodes.push({
+      id: 'e_' + e.id,
+      name: e.name || 'Entity',
+      nodeType: 'memory',
+      type: e.type || 'reference',
+      project: e.domain || 'jarvis',
+      path: '',
+      heat: e.heat || 0,
+      connections: 0,
+    });
+  });
+
+  // Memories → nodes
+  (raw.hot_memories || []).forEach(m => {
+    const storeType = m.store_type || 'episodic';
+    const memType = storeType === 'episodic' ? 'user' : storeType === 'semantic' ? 'project' : 'reference';
+    nodes.push({
+      id: 'm_' + m.id,
+      name: (m.content || '').slice(0, 80),
+      nodeType: 'memory',
+      type: memType,
+      project: m.domain || 'jarvis',
+      path: '',
+      heat: m.heat || 0,
+      importance: m.importance || 0.5,
+      tags: m.tags || [],
+      created_at: m.created_at || '',
+      source: m.source || '',
+      access_count: m.access_count || 0,
+      store_type: storeType,
+      connections: 0,
+      // Neuroscience evolution fields
+      consolidation_stage: m.consolidation_stage || 'labile',
+      schema_match_score: m.schema_match_score || 0,
+      interference_score: m.interference_score || 0,
+      hippocampal_dependency: m.hippocampal_dependency || 1.0,
+      theta_phase: m.theta_phase || 0,
+    });
+  });
+
+  // Relationships → edges
+  (raw.relationships || []).forEach(r => {
+    edges.push({
+      source: 'e_' + r.source,
+      target: 'e_' + r.target,
+      type: r.is_causal ? 'causal' : (r.type || 'related'),
+      weight: r.weight || 0.5,
+    });
+  });
+
+  // Virtual edges: memories → best-matching entity
+  const entityNodes = nodes.filter(n => n.id.startsWith('e_'));
+  const memNodes = nodes.filter(n => n.id.startsWith('m_'));
+  memNodes.forEach(mem => {
+    const memDomain = (mem.project || '').toLowerCase();
+    const memContent = (mem.name + ' ' + (mem.tags || []).join(' ')).toLowerCase();
+    let bestId = null, bestScore = 0;
+    entityNodes.forEach(ent => {
+      const entName = (ent.name || '').toLowerCase();
+      const entDomain = (ent.project || '').toLowerCase();
+      let score = 0;
+      if (memDomain && entDomain && memDomain === entDomain) score += 0.5;
+      if (entName.length > 2 && memContent.indexOf(entName) >= 0) score += 0.4;
+      if (score > bestScore) { bestScore = score; bestId = ent.id; }
+    });
+    if (!bestId && entityNodes.length > 0) {
+      bestId = entityNodes[Math.floor(Math.random() * entityNodes.length)].id;
+    }
+    if (bestId) {
+      edges.push({ source: mem.id, target: bestId, type: 'context', weight: Math.min(bestScore || 0.1, 0.6) });
+    }
+  });
+
+  return { nodes, edges, stats: raw.stats };
+}
+
+let data;
+if (window.__GRAPH_DATA_URL__) {
+  const resp = await fetch(window.__GRAPH_DATA_URL__);
+  data = await resp.json();
+} else if (window.__GRAPH_DATA__) {
+  data = window.__GRAPH_DATA__;
+} else {
+  data = await loadJarvisData();
+}
+const { nodes, edges } = data;
+const W = window.innerWidth, H = window.innerHeight;
+
+// ── Helpers ────────────────────────────────────────────────────────
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function cleanProject(raw) {
+  if (!raw) return 'unknown';
+  let p = raw.replace(/^-Users-[^-]+-/,'').replace(/-/g,'/');
+  p = p.replace(/^Developments\//,'').replace(/\/worktrees\/.*$/,'');
+  p = p.replace(/\/+/g,'/').replace(/\/$/,'');
+  const segs = p.split('/').filter(Boolean);
+  return segs.length > 3 ? segs.slice(-3).join('/') : (p || 'unknown');
+}
+
+const CATEGORY_COLORS = {
+  'bug-fix':'#ff4444','feature':'#44ff44','refactor':'#44aaff',
+  'research':'#ffaa00','config':'#888','docs':'#aaddff',
+  'debug':'#ff8800','architecture':'#aa44ff','deployment':'#00ddaa',
+  'testing':'#ffdd00','general':'#666'
+};
+
+// ── Scene ──────────────────────────────────────────────────────────
+const _brainScale = Math.max(1.0, Math.sqrt(nodes.length / 100));
+const scene    = new THREE.Scene();
+const camera   = new THREE.PerspectiveCamera(50, W/H, 0.5, 3000 * _brainScale);
+camera.position.set(0, 40 * _brainScale, 560 * _brainScale);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping   = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping   = true;
+controls.dampingFactor   = 0.04;
+controls.autoRotate      = true;
+controls.autoRotateSpeed = 0.25;
+controls.minDistance     = 60 * _brainScale;
+controls.maxDistance     = 1400 * _brainScale;
+
+// Post — subtle bloom only on bright neurons
+const composer = new THREE.EffectComposer(renderer);
+composer.addPass(new THREE.RenderPass(scene, camera));
+// Scale bloom based on edge count
+// Bloom tuned for glass brain: enhance emissive neurons + fiber tracts
+const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(W, H), 0.15, 0.6, 0.6);
+composer.addPass(bloom);
+// Vignette
+composer.addPass(new THREE.ShaderPass({
+  uniforms: { tDiffuse: { value: null } },
+  vertexShader:  `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader:`uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse,vUv);
+      vec2 uv=(vUv-.5)*2.;
+      gl_FragColor = vec4(c.rgb*clamp(1.-dot(uv,uv)*.42,0.,1.),c.a);
+    }`,
+}));
+
+// ── Consolidation stage colors ───────────────────────────────────
+const STAGE_COLORS = {
+  labile:          '#ff4444',  // red — fragile, needs stabilization
+  early_ltp:       '#ffaa00',  // orange — tagged but not stable
+  late_ltp:        '#26de81',  // green — protein synthesis complete
+  consolidated:    '#00d2ff',  // cyan — cortically integrated
+  reconsolidating: '#d946ef',  // magenta — temporarily labile again
+};
+
+function stageColor(stage) {
+  return new THREE.Color(STAGE_COLORS[stage] || STAGE_COLORS.labile);
+}
+
+// ── Node colors by type ───────────────────────────────────────────
+function nodeColor(n) {
+  // JARVIS memory types — blend store_type color with consolidation stage
+  if (n.store_type === 'episodic' || n.store_type === 'semantic') {
+    var base = n.store_type === 'episodic'
+      ? new THREE.Color('#26de81')   // green
+      : new THREE.Color('#d946ef');  // magenta
+    // Blend 30% stage color for visual indicator of consolidation progress
+    if (n.consolidation_stage && STAGE_COLORS[n.consolidation_stage]) {
+      var sc = stageColor(n.consolidation_stage);
+      base.lerp(sc, 0.3);
+    }
+    return base;
+  }
+  // Entity nodes (id starts with e_)
+  if (n.id && n.id.startsWith('e_')) return new THREE.Color('#00d2ff'); // cyan
+  // Fallback to original brain.html types
+  if (n.nodeType === 'global-instruction') return new THREE.Color('#ffffff');
+  if (n.nodeType === 'settings')           return new THREE.Color('#d0d0d0');
+  if (n.nodeType === 'project-hub')        return new THREE.Color('#f5a623');
+  if (n.nodeType === 'memory-index')       return new THREE.Color('#00c8ff');
+  if (n.nodeType === 'project-file')       return new THREE.Color('#80cbc4');
+  if (n.nodeType === 'plan')               return new THREE.Color('#ab47bc');
+  if (n.nodeType === 'mcp-tool')           return new THREE.Color('#69f0ae');
+  if (n.nodeType === 'plugin')             return new THREE.Color('#7c4dff');
+  if (n.nodeType === 'todo')               return new THREE.Color('#ffca28');
+  if (n.nodeType === 'conversation')       return new THREE.Color('#ef9a9a');
+  if (n.nodeType === 'memory') {
+    if (n.type === 'user')      return new THREE.Color('#26de81');
+    if (n.type === 'feedback')  return new THREE.Color('#ff7043');
+    if (n.type === 'project')   return new THREE.Color('#ffd740');
+    if (n.type === 'reference') return new THREE.Color('#f06292');
+    return new THREE.Color('#4fc3f7');
+  }
+  return new THREE.Color('#888888');
+}
+
+// ── Brain volume ───────────────────────────────────────────────────
+const HX=38*_brainScale, RX=162*_brainScale, RY=118*_brainScale, RZ=140*_brainScale;
+function inBrain(x,y,z) {
+  if (y>118*_brainScale||y<-108*_brainScale) return false;
+  const tp = y<-42*_brainScale ? Math.max(0.28,1-(-y-42*_brainScale)/(80*_brainScale)*0.65) : 1;
+  const d1 = ((x+HX)/(RX*tp))**2+(y/RY)**2+(z/(RZ*tp))**2;
+  const d2 = ((x-HX)/(RX*tp))**2+(y/RY)**2+(z/(RZ*tp))**2;
+  return Math.min(d1,d2)<=1;
+}
+function clamp(x,y,z) {
+  if (inBrain(x,y,z)) return [x,y,z];
+  let s=0.9; while (!inBrain(x*s,y*s,z*s)&&s>0.05) s-=0.04;
+  return [x*s,y*s,z*s];
+}
+
+// ── Node sizing ────────────────────────────────────────────────────
+function neuronR(n) {
+  // JARVIS memory types — entities bigger, memories scaled by importance
+  if (n.id && n.id.startsWith('e_')) return 4.5 + Math.min(n.connections||0, 15) * 0.15;
+  if (n.store_type === 'episodic')   return 2.5 + (n.importance||0.5) * 1.5;
+  if (n.store_type === 'semantic')   return 2.8 + (n.importance||0.5) * 1.5;
+  // Fallback to original brain.html sizing
+  if (n.nodeType==='global-instruction') return 8;
+  if (n.nodeType==='settings')           return 6.5;
+  if (n.nodeType==='project-hub')        return 5.5+Math.min(n.connections||0,12)*.12;
+  if (n.nodeType==='memory-index')       return 4;
+  if (n.nodeType==='memory')             return 3;
+  if (n.nodeType==='plan')               return 2.6;
+  if (n.nodeType==='project-file')       return 2.4;
+  if (n.nodeType==='mcp-tool')           return 2.1;
+  if (n.nodeType==='plugin')             return 2.5;
+  if (n.nodeType==='todo')               return 1.9;
+  if (n.nodeType==='conversation')       return 2.5;
+  return 1.8;
+}
+
+// ── Node layout inside brain ───────────────────────────────────────
+const GOLDEN = 2.399963229;
+const nodeMap = {};
+nodes.forEach(n => { nodeMap[n.id]=n; });
+
+// count connections
+edges.forEach(e => {
+  if (nodeMap[e.source]) nodeMap[e.source].connections = (nodeMap[e.source].connections||0)+1;
+  if (nodeMap[e.target]) nodeMap[e.target].connections = (nodeMap[e.target].connections||0)+1;
+});
+
+const hubNs       = nodes.filter(n=>n.nodeType==='project-hub');
+const convNs      = nodes.filter(n=>n.nodeType==='conversation');
+const globalNs    = nodes.filter(n=>n.project==='__global__'&&n.nodeType!=='plan'&&n.nodeType!=='todo'&&n.nodeType!=='plugin');
+const planNs      = nodes.filter(n=>n.nodeType==='plan');
+const pluginNs    = nodes.filter(n=>n.nodeType==='plugin');
+const todoNs      = nodes.filter(n=>n.nodeType==='todo');
+
+function fibPlace(arr, cx, cy, cz, r, ry, phase) {
+  const N=arr.length;
+  arr.forEach((n,i)=>{
+    const t=(i+.5)/Math.max(N,1);
+    const inc=Math.acos(1-2*t), az=phase+i*GOLDEN;
+    const rr=r*(0.82+(i%3)*.12);
+    ;[n.bx,n.by,n.bz]=clamp(cx+Math.sin(inc)*Math.cos(az)*rr, cy+Math.cos(inc)*ry, cz+Math.sin(inc)*Math.sin(az)*rr);
+  });
+}
+
+// Cluster layout (default)
+function computeClusterLayout() {
+  // Core
+  const S=_brainScale;
+  globalNs.forEach((n,i)=>{ const a=i*GOLDEN; [n.bx,n.by,n.bz]=clamp(Math.cos(a)*12*S,-18*S+i*8*S,Math.sin(a)*12*S); });
+  fibPlace(planNs,   0, 25*S, 50*S, 70*S, 46*S, 0);
+  fibPlace(pluginNs, 0, 8*S, -20*S, 46*S, 30*S, Math.PI);
+  fibPlace(todoNs,   0, 12*S,  0, 88*S, 58*S, GOLDEN*4);
+
+  // Hubs on cortical sphere
+  const N_HUBS=hubNs.length;
+  hubNs.forEach((hub,hi)=>{
+    const t=(hi+.5)/Math.max(N_HUBS,1);
+    const inc=Math.acos(1-2*t), az=hi*GOLDEN;
+    ;[hub.bx,hub.by,hub.bz]=clamp(Math.sin(inc)*Math.cos(az)*95*S,Math.cos(inc)*74*S,Math.sin(inc)*Math.sin(az)*93*S);
+
+    // Structural children near hub
+    const children=nodes.filter(n=>n.project===hub.project&&
+      (n.nodeType==='memory'||n.nodeType==='memory-index'||n.nodeType==='project-file'||n.nodeType==='mcp-tool'));
+    children.forEach((c,ci)=>{
+      const ct=(ci+.5)/Math.max(children.length,1);
+      const cinc=Math.acos(1-2*ct), caz=az+ci*GOLDEN, dr=(34+(ci%3)*8)*S;
+      ;[c.bx,c.by,c.bz]=clamp(hub.bx+Math.sin(cinc)*Math.cos(caz)*dr, hub.by+Math.cos(cinc)*dr*.5, hub.bz+Math.sin(cinc)*Math.sin(caz)*dr);
+    });
+
+    // Conversations: inner sphere in same angular sector as hub (avoids clamp flattening)
+    const hubConvs=convNs.filter(c=>c.project===hub.project);
+    if (hubConvs.length) {
+      // Place cluster centre at ~48% of hub's distance from origin → well inside brain
+      const cx2=Math.sin(inc)*Math.cos(az)*48*S, cy2=Math.cos(inc)*38*S, cz2=Math.sin(inc)*Math.sin(az)*48*S;
+      hubConvs.forEach((c,ci)=>{
+        const ct=(ci+.5)/Math.max(hubConvs.length,1);
+        const cinc2=Math.acos(1-2*ct), caz2=az+ci*GOLDEN;
+        const dr=(22+(ci%5)*7)*S;
+        ;[c.bx,c.by,c.bz]=clamp(
+          cx2+Math.sin(cinc2)*Math.cos(caz2)*dr,
+          cy2+Math.cos(cinc2)*dr,
+          cz2+Math.sin(cinc2)*Math.sin(caz2)*dr
+        );
+      });
+    }
+  });
+
+  // Orphan fallback
+  nodes.forEach((n,ni)=>{
+    if (n.bx!==undefined) return;
+    const t=(ni+.5)/nodes.length, inc=Math.acos(1-2*t), az=ni*GOLDEN;
+    ;[n.bx,n.by,n.bz]=clamp(Math.sin(inc)*Math.cos(az)*75*S,Math.cos(inc)*55*S,Math.sin(inc)*Math.sin(az)*75*S);
+  });
+}
+
+// Timeline layout
+function computeTimelineLayout() {
+  let minTime=Infinity, maxTime=-Infinity;
+  nodes.forEach(n=>{
+    const ts=n.startedAt||n.modifiedAt;
+    if (ts){ const t=new Date(ts).getTime(); if(t<minTime)minTime=t; if(t>maxTime)maxTime=t; }
+  });
+  const projects={};
+  nodes.forEach(n=>{ if(!projects[n.project])projects[n.project]=[]; projects[n.project].push(n); });
+  const projKeys=Object.keys(projects).sort();
+  const timeRange=maxTime-minTime||1;
+
+  projKeys.forEach((proj,pi)=>{
+    const bandZ=(pi-projKeys.length/2)*55*_brainScale;
+    projects[proj].forEach(n=>{
+      const ts=n.startedAt||n.modifiedAt;
+      const t=ts?new Date(ts).getTime():(minTime+maxTime)/2;
+      const x=((t-minTime)/timeRange-0.5)*260*_brainScale;
+      const y=(Math.random()-.5)*18*_brainScale;
+      ;[n.bx,n.by,n.bz]=clamp(x,y,bandZ+(Math.random()-.5)*22*_brainScale);
+    });
+  });
+}
+
+computeClusterLayout();
+
+// ── Glass brain shell with cortical folds (Perlin noise displacement) ──
+function makeGlowTex(size) {
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const ctx=c.getContext('2d'), h=size/2;
+  const g=ctx.createRadialGradient(h,h,0,h,h,h);
+  g.addColorStop(0,'rgba(255,255,255,1)');
+  g.addColorStop(0.2,'rgba(255,255,255,0.8)');
+  g.addColorStop(0.5,'rgba(255,255,255,0.25)');
+  g.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,size,size);
+  return new THREE.CanvasTexture(c);
+}
+const GLOW_TEX = makeGlowTex(64);
+
+// Simple 3D noise for cortical folds (no external dependency)
+function noise3D(x,y,z){
+  const X=Math.floor(x)&255, Y=Math.floor(y)&255, Z=Math.floor(z)&255;
+  const xf=x-Math.floor(x), yf=y-Math.floor(y), zf=z-Math.floor(z);
+  const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf), w=zf*zf*(3-2*zf);
+  function h(i,j,k){ return Math.sin(i*127.1+j*311.7+k*74.7)*43758.5453 % 1; }
+  const a=h(X,Y,Z), b=h(X+1,Y,Z), c=h(X,Y+1,Z), d=h(X+1,Y+1,Z);
+  const e=h(X,Y,Z+1), f=h(X+1,Y,Z+1), g2=h(X,Y+1,Z+1), i=h(X+1,Y+1,Z+1);
+  const x1=a+(b-a)*u, x2=c+(d-c)*u, x3=e+(f-e)*u, x4=g2+(i-g2)*u;
+  return (x1+(x2-x1)*v)+((x3+(x4-x3)*v)-(x1+(x2-x1)*v))*w;
+}
+
+// Build anatomical brain shell — single mesh with cortical fold displacement
+{
+  // Base: icosahedron for smooth sphere, high subdivision for detail
+  const brainGeo = new THREE.IcosahedronGeometry(1, 5);
+  const pos = brainGeo.attributes.position;
+  const brainR = Math.max(RX,RY,RZ) * 0.92;
+
+  for (let i=0; i<pos.count; i++) {
+    let x=pos.getX(i), y=pos.getY(i), z=pos.getZ(i);
+    // Normalize to unit sphere
+    const len=Math.sqrt(x*x+y*y+z*z)||1;
+    x/=len; y/=len; z/=len;
+
+    // Brain shape: oblate with two hemispheres and central fissure
+    const sx = RX, sy = RY*0.85, sz = RZ*0.9;
+    // Central longitudinal fissure — indent along X=0 plane
+    const fissure = 1.0 - 0.12 * Math.exp(-x*x*18);
+    // Temporal lobe bulge at lower sides
+    const temporal = 1.0 + 0.08 * Math.max(0, -y*0.7) * (1-Math.abs(x)*0.3);
+    // Frontal lobe forward extension
+    const frontal = 1.0 + 0.06 * Math.max(0, z*0.8) * (1-Math.abs(y)*0.5);
+    // Cerebellum: slight bump at back-bottom
+    const cerebellum = 1.0 + 0.1 * Math.max(0, -z*0.8) * Math.max(0, -y*0.6);
+
+    // Cortical folds: multi-octave noise displacement
+    const freq1=3.5, freq2=7.0, freq3=14.0;
+    const n = noise3D(x*freq1,y*freq1,z*freq1)*0.06
+            + noise3D(x*freq2,y*freq2,z*freq2)*0.03
+            + noise3D(x*freq3,y*freq3,z*freq3)*0.015;
+
+    const shape = fissure * temporal * frontal * cerebellum;
+    const r = (1.0 + n) * shape;
+    pos.setXYZ(i, x*sx*r, y*sy*r, z*sz*r);
+  }
+  brainGeo.computeVertexNormals();
+
+  // Glass shell — translucent with Fresnel-like edge glow via shader
+  const shellMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    uniforms: { uColor: { value: new THREE.Color(0x88bbdd) }, uTime: { value: 0 } },
+    vertexShader: `
+      varying vec3 vNormal; varying vec3 vViewDir;
+      void main(){
+        vNormal = normalize(normalMatrix * normal);
+        vec4 mvPos = modelViewMatrix * vec4(position,1.);
+        vViewDir = normalize(-mvPos.xyz);
+        gl_Position = projectionMatrix * mvPos;
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor; uniform float uTime;
+      varying vec3 vNormal; varying vec3 vViewDir;
+      void main(){
+        // Fresnel: edges glow brighter, center see-through
+        float fresnel = 1.0 - abs(dot(vNormal, vViewDir));
+        float edge = pow(fresnel, 2.5);
+        float alpha = edge * 0.12 + 0.015; // very transparent center, visible edges
+        vec3 col = uColor * (0.6 + edge * 0.8);
+        // Subtle pulsing
+        col += uColor * 0.05 * sin(gl_FragCoord.x*0.01 + gl_FragCoord.y*0.01 + uTime*0.5);
+        gl_FragColor = vec4(col, alpha);
+      }`,
+  });
+  const brainShell = new THREE.Mesh(brainGeo, shellMat);
+  brainShell.name = 'brainShell';
+  scene.add(brainShell);
+
+  // Store for animation update
+  window._brainShellMat = shellMat;
+}
+
+// Tissue particles removed — glass brain shell provides spatial context
+
+// ── Neuron meshes ──────────────────────────────────────────────────
+const neuronGroup  = new THREE.Group();
+const neuronMeshes = {};
+const geoCache     = {};
+function sphereGeo(r){ const k=r.toFixed(1); if(!geoCache[k]) geoCache[k]=new THREE.SphereGeometry(r,10,8); return geoCache[k]; }
+
+nodes.forEach(n=>{
+  const col = nodeColor(n);
+  const r   = neuronR(n);
+  const isHub  = n.nodeType==='project-hub';
+  const isGlob = n.nodeType==='global-instruction'||n.nodeType==='settings';
+  const isConv = n.nodeType==='conversation';
+  // Emissive intensity — entities brighter, memories moderate
+  const isEntity = n.id && n.id.startsWith('e_');
+  const ei  = isGlob?1.0:isHub?0.8:isConv?0.3:isEntity?0.4:0.35;
+
+  const mat=new THREE.MeshStandardMaterial({
+    color:            col.clone().multiplyScalar(0.25),
+    emissive:         col,
+    emissiveIntensity:ei,
+    transparent:true, opacity: isConv?0.85:0.95,
+    roughness:0.3, metalness:0.1,
+  });
+  const mesh=new THREE.Mesh(sphereGeo(r),mat);
+  mesh.position.set(n.bx,n.by,n.bz);
+  mesh.userData.node=n;
+  neuronGroup.add(mesh);
+  neuronMeshes[n.id]=mesh;
+  n._mesh=mesh; n._baseEmit=ei;
+});
+scene.add(neuronGroup);
+
+// Dendrite stubs on hub nodes
+hubNs.forEach((hub,hi)=>{
+  const s=neuronR(hub);
+  for (let i=0;i<6;i++) {
+    const t=(i+.5)/6, inc=Math.acos(1-2*t), az=hi*GOLDEN+i*GOLDEN;
+    const len=s*(2.5+Math.random()*2);
+    const dx=Math.sin(inc)*Math.cos(az), dy=Math.cos(inc)*.55, dz=Math.sin(inc)*Math.sin(az);
+    const pts=[new THREE.Vector3(0,0,0),new THREE.Vector3(dx*len*.45,dy*len*.45,dz*len*.45),new THREE.Vector3(dx*len,dy*len,dz*len)];
+    neuronMeshes[hub.id].add(new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),5,.1,4,false),
+      new THREE.MeshBasicMaterial({color:new THREE.Color(.7,.7,.7),transparent:true,opacity:.25,blending:THREE.AdditiveBlending,depthWrite:false})
+    ));
+  }
+});
+
+// ── Fiber tract connections (curved tubes for strong, lines for weak) ──
+const allDrawEdges = edges.filter(e=>{
+  const a=nodeMap[e.source],b=nodeMap[e.target];
+  return a&&b&&a.bx!==undefined&&b.bx!==undefined&&(e.weight||0)>=0.05;
+});
+
+// Sort by weight descending; top 15% become tubes, rest are thin lines
+const sortedEdges = [...allDrawEdges].sort((a,b)=>(b.weight||0)-(a.weight||0));
+const tubeCount = Math.min(Math.max(Math.floor(sortedEdges.length * 0.15), 20), 800);
+const tubeEdges = sortedEdges.slice(0, tubeCount);
+const lineEdges = sortedEdges.slice(tubeCount);
+const drawEdges = allDrawEdges; // keep reference for AP system
+
+// Curved tube tracts (fiber-tract style with CatmullRomCurve3)
+const tractGroup = new THREE.Group();
+tubeEdges.forEach(e => {
+  try {
+    const a=nodeMap[e.source], b=nodeMap[e.target];
+    if (!a||!b||a.bx===undefined||b.bx===undefined) return;
+    const ax=a.bx,ay=a.by,az=a.bz, bx=b.bx,by=b.by,bz=b.bz;
+    // Curved midpoint pulled toward brain center for organic fiber-tract look
+    const mx=(ax+bx)/2, my=(ay+by)/2, mz=(az+bz)/2;
+    const dist=Math.sqrt((bx-ax)**2+(by-ay)**2+(bz-az)**2);
+    if (dist < 0.1) return; // skip zero-length
+    const sag=dist*0.15;
+    const norm=Math.sqrt(mx*mx+my*my+mz*mz)||1;
+    const mid = new THREE.Vector3(mx-mx/norm*sag, my-my/norm*sag, mz-mz/norm*sag);
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(ax,ay,az), mid, new THREE.Vector3(bx,by,bz)
+    ]);
+    const w = e.weight||0.3;
+    const radius = (0.01 + w * 0.025) * _brainScale;
+    const tubeGeo = new THREE.TubeGeometry(curve, 12, radius, 3, false);
+    const col = nodeColor(a);
+    // Emissive tube material — fiber tracts glow like DTI tractography
+    const tubeMat = new THREE.MeshStandardMaterial({
+      color: col.clone().multiplyScalar(0.15),
+      emissive: col,
+      emissiveIntensity: 0.15 + w * 0.25,
+      transparent: true,
+      opacity: 0.12 + w * 0.18,
+      roughness: 0.2,
+      metalness: 0.0,
+      depthWrite: false,
+    });
+    tractGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+  } catch(_) {} // skip malformed edges
+});
+scene.add(tractGroup);
+
+// Thin lines for remaining weaker connections
+const _lineEdges = lineEdges.length > 0 ? lineEdges : [];
+const ePosArr=new Float32Array(Math.max(_lineEdges.length,1)*6);
+const eColArr=new Float32Array(Math.max(_lineEdges.length,1)*6);
+_lineEdges.forEach((e,i)=>{
+  const a=nodeMap[e.source],b=nodeMap[e.target];
+  if (!a||!b) return;
+  ePosArr.set([a.bx,a.by,a.bz,b.bx,b.by,b.bz],i*6);
+  const col = nodeColor(a);
+  const w = 0.08 + (e.weight||0.1)*0.12;
+  eColArr.set([col.r*w, col.g*w, col.b*w, col.r*w, col.g*w, col.b*w],i*6);
+});
+const eGeo=new THREE.BufferGeometry();
+eGeo.setAttribute('position',new THREE.BufferAttribute(ePosArr,3));
+eGeo.setAttribute('color',   new THREE.BufferAttribute(eColArr,3));
+scene.add(new THREE.LineSegments(eGeo,new THREE.LineBasicMaterial({
+  vertexColors:true, transparent:true, opacity:0.15,
+  blending:THREE.NormalBlending, depthWrite:false
+})));
+
+// ── Electric signal impulses along real fiber tracts ───────────────
+// Signals follow the same CatmullRomCurve3 paths as the tubes.
+// Visual: small bright core + trailing glow = electric impulse, not a blob.
+const AP_POOL = [];
+const AP_CURVES = []; // precomputed curves matching tubeEdges
+
+// Build curves for each tube edge (same logic as tube creation)
+tubeEdges.forEach(e => {
+  const a=nodeMap[e.source], b=nodeMap[e.target];
+  if (!a||!b||a.bx===undefined||b.bx===undefined) { AP_CURVES.push(null); return; }
+  const ax=a.bx,ay=a.by,az=a.bz, bx=b.bx,by=b.by,bz=b.bz;
+  const dist=Math.sqrt((bx-ax)**2+(by-ay)**2+(bz-az)**2);
+  if (dist < 0.1) { AP_CURVES.push(null); return; }
+  const mx=(ax+bx)/2, my=(ay+by)/2, mz=(az+bz)/2;
+  const sag=dist*0.15;
+  const norm=Math.sqrt(mx*mx+my*my+mz*mz)||1;
+  const mid = new THREE.Vector3(mx-mx/norm*sag, my-my/norm*sag, mz-mz/norm*sag);
+  AP_CURVES.push(new THREE.CatmullRomCurve3([
+    new THREE.Vector3(ax,ay,az), mid, new THREE.Vector3(bx,by,bz)
+  ]));
+});
+const AP_VALID = AP_CURVES.map((c,i) => c ? i : -1).filter(i => i >= 0);
+
+// Electric impulse geometry — small bright point
+const AP_GEO = new THREE.SphereGeometry(0.4*_brainScale, 6, 4);
+// Trail geometry — elongated along direction
+const AP_TRAIL_GEO = new THREE.CylinderGeometry(0.15*_brainScale, 0.02*_brainScale, 3*_brainScale, 4, 1);
+AP_TRAIL_GEO.rotateX(Math.PI/2); // align with Z axis for lookAt
+
+let lastAP=0;
+
+function fireAP() {
+  if (AP_POOL.length>=80||!AP_VALID.length) return;
+  const ci = AP_VALID[Math.floor(Math.random()*AP_VALID.length)];
+  const curve = AP_CURVES[ci];
+  const e = tubeEdges[ci];
+  const src=nodeMap[e.source], tgt=nodeMap[e.target];
+  if (!src||!tgt||!curve) return;
+
+  const srcCol = nodeColor(src);
+  const w = Math.min(e.weight||0.5, 1);
+
+  // Bright core
+  const coreMat = new THREE.MeshBasicMaterial({
+    color: srcCol.clone().lerp(new THREE.Color(1,1,1), 0.5),
+    transparent: true, opacity: 0.6,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const core = new THREE.Mesh(AP_GEO, coreMat);
+  core.scale.setScalar(0.3 + w * 0.3);
+
+  // Colored trail
+  const trailMat = new THREE.MeshBasicMaterial({
+    color: srcCol.clone().lerp(new THREE.Color(1,1,1), 0.15),
+    transparent: true, opacity: 0.4,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const trail = new THREE.Mesh(AP_TRAIL_GEO, trailMat);
+
+  const group = new THREE.Group();
+  group.add(core);
+  group.add(trail);
+  scene.add(group);
+
+  const speed = (0.008 + Math.random()*0.015) * (0.8 + w*0.4);
+  AP_POOL.push({ group, core, trail, curve, src, tgt, t: 0, speed, w });
+}
+
+// ── Lights ────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x111111,0.4));
+const pl=new THREE.PointLight(0xffffff,0.25,600*_brainScale); pl.position.set(0,0,0); scene.add(pl);
+
+// ── Filter State ──────────────────────────────────────────────────
+let activeFilter  = 'all';
+let searchQuery   = '';
+let showConvs     = true;
+let activeCategory= 'all';
+let activeThread  = '';
+let activeStatus  = 'all';
+let layoutMode    = 'cluster';
+
+// Conversations hidden by default (showConvs controls this);
+
+// Build node→connection index using separate tube and line maps
+// tubeEdges[i] → tractGroup.children[i] (tubes can skip due to try/catch, so map by edge identity)
+const tubeEdgeSet = new Set(tubeEdges);
+const lineEdgeSet = new Set(_lineEdges);
+
+// Map edge objects to their tube mesh index or line buffer index
+const edgeToTubeIdx = new Map();
+let tubeIdx = 0;
+tubeEdges.forEach(e => {
+  // Only count edges that actually created a mesh (dist > 0.1, valid nodes)
+  const a=nodeMap[e.source], b=nodeMap[e.target];
+  if (a && b && a.bx!==undefined && b.bx!==undefined) {
+    const dist=Math.sqrt((b.bx-a.bx)**2+(b.by-a.by)**2+(b.bz-a.bz)**2);
+    if (dist >= 0.1 && tubeIdx < tractGroup.children.length) {
+      edgeToTubeIdx.set(e, tubeIdx);
+      tubeIdx++;
+    }
+  }
+});
+
+const edgeToLineIdx = new Map();
+_lineEdges.forEach((e, i) => { edgeToLineIdx.set(e, i); });
+
+// Build node→edge map
+const nodeEdgeMap = {};
+allDrawEdges.forEach(e => {
+  const entry = { edge: e, other: e.target, isTube: tubeEdgeSet.has(e) };
+  if (!nodeEdgeMap[e.source]) nodeEdgeMap[e.source] = [];
+  nodeEdgeMap[e.source].push(entry);
+  // Reverse direction
+  const entry2 = { edge: e, other: e.source, isTube: tubeEdgeSet.has(e) };
+  if (!nodeEdgeMap[e.target]) nodeEdgeMap[e.target] = [];
+  nodeEdgeMap[e.target].push(entry2);
+});
+
+// Shared edge color buffer (for thin line edges)
+const eColBuf = eGeo.attributes.color;
+
+// Connection highlight state
+let _highlightedTubes = [];
+let _highlightedLines = [];
+let _connectedNodeIds = new Set();
+
+function highlightConnections(nodeId) {
+  clearConnectionHighlights();
+  const conns = nodeEdgeMap[nodeId];
+  if (!conns) return;
+
+  conns.forEach(c => {
+    _connectedNodeIds.add(c.other);
+    const e = c.edge;
+    const w = e.weight || 0.3;
+
+    if (c.isTube) {
+      // Highlight tube tract
+      const ti = edgeToTubeIdx.get(e);
+      if (ti !== undefined && tractGroup.children[ti]) {
+        const tube = tractGroup.children[ti];
+        tube._origOpacity = tube.material.opacity;
+        tube._origEmissive = tube.material.emissiveIntensity;
+        tube.material.opacity = 0.95;
+        tube.material.emissiveIntensity = 1.0 + w * 1.0;
+        _highlightedTubes.push(tube);
+      }
+    } else {
+      // Highlight thin line edge
+      const li = edgeToLineIdx.get(e);
+      if (li !== undefined) {
+        const srcNode = nodeMap[e.source];
+        const col = srcNode ? nodeColor(srcNode) : new THREE.Color(1,1,1);
+        const brightness = 0.7 + w * 0.3;
+        eColBuf.setXYZ(li*2,   col.r*brightness, col.g*brightness, col.b*brightness);
+        eColBuf.setXYZ(li*2+1, col.r*brightness, col.g*brightness, col.b*brightness);
+        _highlightedLines.push(li);
+      }
+    }
+  });
+  eColBuf.needsUpdate = true;
+
+  // Brighten connected neurons
+  _connectedNodeIds.forEach(id => {
+    const mesh = neuronMeshes[id];
+    if (mesh) {
+      mesh._preHighlightEmit = mesh.material.emissiveIntensity;
+      mesh.material.emissiveIntensity = mesh.material.emissiveIntensity * 1.8;
+    }
+  });
+}
+
+function clearConnectionHighlights() {
+  // Restore tubes
+  _highlightedTubes.forEach(tube => {
+    if (tube._origOpacity !== undefined) tube.material.opacity = tube._origOpacity;
+    if (tube._origEmissive !== undefined) tube.material.emissiveIntensity = tube._origEmissive;
+  });
+  _highlightedTubes = [];
+
+  // Restore line edges (will be fixed by next applyFilters call)
+  _highlightedLines = [];
+
+  // Restore connected neurons
+  _connectedNodeIds.forEach(id => {
+    const mesh = neuronMeshes[id];
+    if (mesh && mesh._preHighlightEmit !== undefined) {
+      mesh.material.emissiveIntensity = mesh._preHighlightEmit;
+      delete mesh._preHighlightEmit;
+    }
+  });
+  _connectedNodeIds = new Set();
+  applyFilters(); // rebuild edge colors to default
+}
+
+function applyFilters() {
+  const q = searchQuery.toLowerCase();
+
+  nodes.forEach(n => {
+    const mesh = neuronMeshes[n.id];
+    if (!mesh) return;
+
+    let vis = true;
+
+    // Type filter — JARVIS memory types
+    if (vis && activeFilter !== 'all') {
+      if (activeFilter === 'episodic') {
+        vis = n.store_type === 'episodic';
+      } else if (activeFilter === 'semantic') {
+        vis = n.store_type === 'semantic';
+      } else if (activeFilter === 'entity') {
+        vis = n.id && n.id.startsWith('e_');
+      } else {
+        vis = n.type === activeFilter || n.nodeType === activeFilter;
+      }
+    }
+
+    // Search
+    if (vis && q) {
+      const haystack = ((n.name||'') + ' ' + (n.description||'') + ' ' + (n.body||'')).toLowerCase();
+      vis = haystack.includes(q);
+    }
+
+    mesh.visible = vis;
+    n._vis = vis;
+  });
+
+  // Rebuild edge colors — tinted by source node color
+  drawEdges.forEach((e, i) => {
+    const a = nodeMap[e.source], b = nodeMap[e.target];
+    const aVis = a?._vis !== false;
+    const bVis = b?._vis !== false;
+    if (!aVis || !bVis) {
+      eColBuf.setXYZ(i*2,   0, 0, 0);
+      eColBuf.setXYZ(i*2+1, 0, 0, 0);
+    } else {
+      const col = a ? nodeColor(a) : new THREE.Color(0x4488aa);
+      const isContext = e.type === 'context';
+      const w = isContext ? 0.03 + (e.weight||0.1)*0.05 : 0.05 + (e.weight||0.3)*0.08;
+      eColBuf.setXYZ(i*2,   col.r*w, col.g*w, col.b*w);
+      eColBuf.setXYZ(i*2+1, col.r*w, col.g*w, col.b*w);
+    }
+  });
+  eColBuf.needsUpdate = true;
+
+  updateStats();
+
+  // Re-build timeline table if in timeline mode
+  if (layoutMode === 'timeline' && typeof buildTimelineTable === 'function') {
+    buildTimelineTable();
+  }
+}
+
+function updateStats() {
+  const vis = nodes.filter(n => n._vis !== false);
+  const ents = vis.filter(n => n.id && n.id.startsWith('e_')).length;
+  const mems = vis.filter(n => n.id && n.id.startsWith('m_')).length;
+  const edges_vis = drawEdges.filter(e => nodeMap[e.source]?._vis !== false && nodeMap[e.target]?._vis !== false).length;
+  document.getElementById('stats-brain').innerHTML =
+    `<span>${ents}</span> entities · <span>${mems}</span> memories · <span>${edges_vis}</span> synapses`;
+}
+
+// Wire filter buttons
+document.querySelectorAll('.fbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.type;
+    applyFilters();
+  });
+});
+
+// Search
+document.getElementById('search-brain').addEventListener('input', e => {
+  searchQuery = e.target.value;
+  applyFilters();
+});
+
+// Conversation toggle (not applicable for memory dashboard)
+const convToggleBtn = document.getElementById('conv-toggle-brain');
+if (convToggleBtn) {
+  convToggleBtn.addEventListener('click', () => {
+    showConvs = !showConvs;
+    convToggleBtn.textContent = showConvs ? 'Hide chatlogs' : 'Show chatlogs';
+    convToggleBtn.classList.toggle('active', showConvs);
+    applyFilters();
+  });
+}
+
+// Category bar (not used in memory dashboard)
+function buildCategoryBar() {
+  const bar = document.getElementById('cat-bar-brain');
+  if (!bar) return;
+  const cats = new Set();
+  nodes.forEach(n => { if (n.category) cats.add(n.category); });
+  cats.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.className = 'cbtn'; btn.dataset.cat = cat; btn.textContent = cat;
+    bar.appendChild(btn);
+  });
+}
+buildCategoryBar();
+
+const catBar = document.getElementById('cat-bar-brain');
+if (catBar) catBar.addEventListener('click', e => {
+  const btn = e.target.closest('.cbtn');
+  if (!btn) return;
+  document.querySelectorAll('.cbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeCategory = btn.dataset.cat;
+  applyFilters();
+});
+
+// Thread select (not used in memory dashboard)
+function buildThreadSelect() {
+  const sel = document.getElementById('thread-select-brain');
+  if (!sel) return;
+  const threads = new Set();
+  nodes.forEach(n => { if (n.threadId) threads.add(n.threadId); });
+  threads.forEach(tid => {
+    const opt = document.createElement('option');
+    opt.value = tid; opt.textContent = tid;
+    sel.appendChild(opt);
+  });
+}
+buildThreadSelect();
+
+const threadSel = document.getElementById('thread-select-brain');
+if (threadSel) threadSel.addEventListener('change', e => {
+  activeThread = e.target.value;
+  applyFilters();
+});
+
+// Status bar
+document.querySelectorAll('.sbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sbtn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeStatus = btn.dataset.status;
+    applyFilters();
+  });
+});
+
+// Layout toggle — switches between 3D brain and timeline table
+const layoutBtn = document.getElementById('layout-toggle-brain');
+const timelineTableEl = document.getElementById('timeline-table');
+
+function buildTimelineTable() {
+  // Collect visible items (respects active filter + search)
+  const items = [];
+  nodes.filter(n => n._vis !== false).forEach(n => {
+    let kind, kindClass;
+    if (n.id && n.id.startsWith('e_')) {
+      kind = 'Entity'; kindClass = 'entity';
+    } else if (n.store_type === 'episodic') {
+      kind = 'Episodic'; kindClass = 'episodic';
+    } else if (n.store_type === 'semantic') {
+      kind = 'Semantic'; kindClass = 'semantic';
+    } else {
+      kind = 'Memory'; kindClass = 'episodic';
+    }
+    items.push({
+      kind, kindClass,
+      name: n.name || '(unnamed)',
+      domain: cleanProject(n.project),
+      heat: (n.heat || 0).toFixed(2),
+      importance: n.importance !== undefined ? (n.importance).toFixed(2) : '—',
+      tags: n.tags || [],
+      created: n.created_at || '',
+      connections: n.connections || 0,
+      stage: n.consolidation_stage || '—',
+      hippo_dep: n.hippocampal_dependency !== undefined ? (n.hippocampal_dependency).toFixed(2) : '—',
+    });
+  });
+  // Sort: entities first, then by heat descending
+  items.sort((a, b) => {
+    const order = { entity: 0, semantic: 1, episodic: 2 };
+    const oa = order[a.kindClass] ?? 3, ob = order[b.kindClass] ?? 3;
+    if (oa !== ob) return oa - ob;
+    return parseFloat(b.heat) - parseFloat(a.heat);
+  });
+
+  let html = '<table><thead><tr>';
+  html += '<th>Type</th><th>Name</th><th>Domain</th><th>Heat</th><th>Imp</th><th>Stage</th><th>H\u2192C</th><th>Tags</th>';
+  html += '</tr></thead><tbody>';
+  items.forEach(it => {
+    html += '<tr>';
+    html += '<td><span class="tl-dot tl-dot-' + it.kindClass + '"></span><span class="tl-type tl-type-' + it.kindClass + '">' + escHtml(it.kind) + '</span></td>';
+    html += '<td class="tl-name">' + escHtml(it.name) + '</td>';
+    html += '<td class="tl-domain">' + escHtml(it.domain) + '</td>';
+    html += '<td class="tl-heat">' + it.heat + '</td>';
+    html += '<td class="tl-heat">' + it.importance + '</td>';
+    html += '<td style="font-size:7px;color:' + (STAGE_COLORS[it.stage] || '#666') + '">' + escHtml(it.stage) + '</td>';
+    html += '<td class="tl-heat">' + it.hippo_dep + '</td>';
+    html += '<td class="tl-tags">' + (it.tags.length ? it.tags.map(t => '<span>' + escHtml(t) + '</span>').join('') : '<span style="color:rgba(255,255,255,0.12)">—</span>') + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  timelineTableEl.innerHTML = html;
+}
+
+function showTimelineView() {
+  timelineTableEl.style.display = 'block';
+  renderer.domElement.style.display = 'none';
+  // Hide 3D-only UI
+  document.getElementById('legend-brain').style.display = 'none';
+  document.getElementById('hint').style.display = 'none';
+  document.getElementById('hud').style.display = 'none';
+  buildTimelineTable();
+}
+
+function showBrainView() {
+  timelineTableEl.style.display = 'none';
+  renderer.domElement.style.display = 'block';
+  document.getElementById('legend-brain').style.display = '';
+  document.getElementById('hint').style.display = '';
+  document.getElementById('hud').style.display = '';
+}
+
+layoutBtn.addEventListener('click', () => {
+  layoutMode = layoutMode === 'cluster' ? 'timeline' : 'cluster';
+  layoutBtn.textContent = layoutMode === 'cluster' ? 'Cluster' : 'Timeline';
+  layoutBtn.classList.toggle('active', layoutMode === 'timeline');
+
+  if (layoutMode === 'timeline') {
+    showTimelineView();
+  } else {
+    showBrainView();
+  }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  if (e.key==='a'||e.key==='A') toggleAnalytics();
+  if (e.key==='t'||e.key==='T') layoutBtn.click();
+  if (e.key==='Escape') { closePanel(); closeAnalytics(); }
+});
+
+// ── Detail panel ──────────────────────────────────────────────────
+const panelEl   = document.getElementById('panel');
+const panelClose= document.getElementById('panel-close');
+let selectedNode = null;
+
+panelClose.addEventListener('click', closePanel);
+
+function closePanel() {
+  panelEl.classList.remove('open');
+  if (selectedNode) {
+    selectedNode._mesh.material.emissiveIntensity = selectedNode._baseEmit;
+    selectedNode = null;
+  }
+  clearConnectionHighlights();
+}
+
+function formatDuration(start, end) {
+  if (!start || !end) return '—';
+  const ms = new Date(end) - new Date(start);
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return '<1 min';
+  if (m < 60) return m + ' min';
+  const h = Math.floor(m / 60), rm = m % 60;
+  return h + 'h' + (rm ? ' ' + rm + 'm' : '');
+}
+
+function openPanel(n) {
+  if (selectedNode) selectedNode._mesh.material.emissiveIntensity = selectedNode._baseEmit;
+  selectedNode = n;
+  n._mesh.material.emissiveIntensity = n._baseEmit * 2;
+  highlightConnections(n.id);
+
+  const hexCol = '#' + nodeColor(n).getHexString();
+
+  // Type badge — colored to match the node
+  const typeMap = {
+    'memory-index':'MEM INDEX','project-file':'CLAUDE.MD','project-hub':'PROJECT HUB',
+    'settings':'SETTINGS','global-instruction':'GLOBAL','plan':'PLAN',
+    'mcp-tool':'MCP TOOL','plugin':'PLUGIN','todo':'TODO','conversation':'CHATLOG',
+    'memory':(n.type||'memory').toUpperCase(),
+  };
+  const typeEl = document.getElementById('panel-type');
+  typeEl.textContent = typeMap[n.nodeType] || (n.nodeType||'').toUpperCase().replace(/-/g,' ');
+  typeEl.style.color = hexCol;
+  typeEl.style.borderColor = hexCol + '55';
+
+  // Category badge
+  const catEl = document.getElementById('panel-cat');
+  if (n.category && CATEGORY_COLORS[n.category]) {
+    const cc = CATEGORY_COLORS[n.category];
+    catEl.textContent = n.category;
+    catEl.style.cssText = `display:inline-block;color:${cc};background:${cc}22;border-color:${cc}44`;
+  } else { catEl.style.display='none'; catEl.textContent=''; }
+
+  document.getElementById('panel-name').textContent = n.name || n.id;
+  document.getElementById('panel-proj').textContent = cleanProject(n.project);
+
+  // Status
+  const statusColors = { active:'#26de81', archived:'rgba(255,255,255,0.25)', pinned:'#ffca28' };
+  const status = n.status || 'active';
+  document.getElementById('panel-status').innerHTML =
+    `<span style="color:${statusColors[status]||'#666'}">●</span> ${status}`;
+
+  // Tags
+  const tagsEl = document.getElementById('panel-tags');
+  tagsEl.innerHTML = '';
+  (n.tags||[]).forEach(t=>{ const p=document.createElement('span'); p.className='tag-pill'; p.textContent=t; tagsEl.appendChild(p); });
+
+  // Meta line
+  const metaEl = document.getElementById('panel-meta');
+  if (n.nodeType === 'conversation') {
+    const parts = [];
+    if (n.startedAt) parts.push(new Date(n.startedAt).toLocaleString());
+    if (n.startedAt && n.endedAt) parts.push(formatDuration(n.startedAt, n.endedAt));
+    metaEl.textContent = parts.join(' · ');
+  } else {
+    const parts = [];
+    if (n.modifiedAt) parts.push(new Date(n.modifiedAt).toLocaleDateString());
+    if (n.file) parts.push(n.file.split('/').slice(-2).join('/'));
+    metaEl.textContent = parts.join(' · ');
+  }
+
+  document.getElementById('panel-desc').textContent = n.description || '';
+
+  const content = document.getElementById('panel-content');
+  content.innerHTML = '';
+
+  // ── Type-specific content ─────────────────────────────────────────
+
+  if (n.nodeType === 'conversation') {
+    // Metadata grid
+    const grid = document.createElement('div'); grid.className = 'meta-grid';
+    const row = (l,v) => { grid.innerHTML+=`<div class="ml">${l}</div><div class="mv">${escHtml(String(v))}</div>`; };
+    if (n.messageCount) { const u=Math.round(n.messageCount/2); row('Messages',`${n.messageCount} (${u} user, ${n.messageCount-u} asst)`); }
+    row('Duration', formatDuration(n.startedAt, n.endedAt));
+    if (n.turnCount)        row('Turns',    n.turnCount);
+    if (n.fileSize)         row('Size',     (n.fileSize/1048576).toFixed(1)+' MB');
+    if (n.gitBranch)        row('Branch',   n.gitBranch);
+    if (n.toolsUsed?.length) row('Tools',   n.toolsUsed.join(', '));
+    if (n.cwd)              row('CWD',      n.cwd.replace(/^\/Users\/[^/]+\//,'~/'));
+    content.appendChild(grid);
+
+    // Messages from API
+    const sec=document.createElement('div'); sec.className='panel-section';
+    sec.innerHTML='<div class="panel-label">Messages</div><div id="panel-msgs" style="font-size:9px;color:rgba(255,255,255,.2)">Loading…</div>';
+    content.appendChild(sec);
+    fetch(`/api/detail?id=${encodeURIComponent(n.sessionId||n.id)}`)
+      .then(r=>{ if (!r.ok) throw new Error('no detail api'); return r.json(); }).then(data=>{
+        const msgs=data.messages||[], el=document.getElementById('panel-msgs');
+        if (!el) return;
+        if (!msgs.length){ el.textContent='No messages.'; return; }
+        const uM=msgs.filter(m=>m.role==='user'), aM=msgs.filter(m=>m.role==='assistant');
+        let html='';
+        if (data.summary) html+=`<div style="font-size:9px;color:rgba(255,255,255,0.4);line-height:1.6;border-left:2px solid rgba(255,255,255,0.1);padding-left:8px;margin-bottom:10px">${escHtml(data.summary.slice(0,300))}</div>`;
+        html+=`<div style="font-size:8px;color:rgba(255,255,255,0.2);margin-bottom:8px">${uM.length} prompts · ${aM.length} responses</div>`;
+        msgs.slice(0,30).forEach(m=>{
+          const isU=m.role==='user';
+          const label=isU?'▶ You':'◀ Claude'+(m.model?' ('+m.model.split('-').slice(0,3).join('-')+')':'');
+          html+=`<div class="msg-bubble ${m.role}">`;
+          html+=`<div class="msg-role">${label}</div>`;
+          if (m.content) html+=`<div style="font-size:9px;color:rgba(255,255,255,0.45);line-height:1.5">${escHtml(m.content.slice(0,220))}${m.content.length>220?'…':''}</div>`;
+          if (m.tools?.length){
+            html+=`<ul class="tool-list">`;
+            m.tools.forEach(t=>{ html+=`<li class="tool-item"><span class="tool-name">${escHtml(t.tool)}</span>${t.input?`<span class="tool-input">${escHtml(t.input.slice(0,70))}${t.input.length>70?'…':''}</span>`:''}</li>`; });
+            html+=`</ul>`;
+          }
+          const mp=[];
+          if (m.timestamp) mp.push(new Date(m.timestamp).toLocaleTimeString());
+          if (m.gitBranch&&m.gitBranch!=='HEAD') mp.push('⎇ '+m.gitBranch);
+          if (m.inputTokens||m.outputTokens){
+            const tp=[];
+            if(m.inputTokens) tp.push('↑'+(m.inputTokens>1000?(m.inputTokens/1000).toFixed(1)+'K':m.inputTokens));
+            if(m.outputTokens) tp.push('↓'+(m.outputTokens>1000?(m.outputTokens/1000).toFixed(1)+'K':m.outputTokens));
+            mp.push(tp.join(' ')+' tok');
+          }
+          if (mp.length) html+=`<div class="msg-meta">${mp.join(' · ')}</div>`;
+          html+=`</div>`;
+        });
+        if (msgs.length>30) html+=`<div style="font-size:8px;color:rgba(255,255,255,.12);padding:4px 0">+ ${msgs.length-30} more</div>`;
+        el.innerHTML=html;
+      }).catch(()=>{ const el=document.getElementById('panel-msgs'); if(el) el.textContent='—'; });
+
+  } else if (n.nodeType === 'project-hub') {
+    const members=nodes.filter(x=>x.project===n.project&&x.nodeType!=='project-hub');
+    const counts={}; members.forEach(x=>{ counts[x.nodeType]=(counts[x.nodeType]||0)+1; });
+    const grid=document.createElement('div'); grid.className='meta-grid';
+    Object.entries(counts).sort((a,b)=>b[1]-a[1]).forEach(([type,count])=>{
+      const col='#'+nodeColor({nodeType:type,type:type}).getHexString();
+      grid.innerHTML+=`<div class="ml" style="color:${col}">${type.replace(/-/g,' ')}</div><div class="mv">${count}</div>`;
+    });
+    content.appendChild(grid);
+
+  } else if (n.nodeType === 'plan') {
+    if (n.sections?.length){
+      const sec=document.createElement('div'); sec.className='panel-section';
+      sec.innerHTML='<div class="panel-label">Sections</div>'+n.sections.map(s=>`<div style="font-size:9px;color:rgba(255,255,255,0.55);padding:2px 0">§ ${escHtml(s)}</div>`).join('');
+      content.appendChild(sec);
+    }
+    if (n.body){
+      const sec=document.createElement('div'); sec.className='panel-section';
+      sec.innerHTML=`<div class="panel-label">Content</div><div class="panel-body">${escHtml(n.body.slice(0,1000))}${n.body.length>1000?'\n…':''}</div>`;
+      content.appendChild(sec);
+    }
+
+  } else if (n.nodeType === 'mcp-tool') {
+    const grid=document.createElement('div'); grid.className='meta-grid';
+    const row=(l,v)=>{ grid.innerHTML+=`<div class="ml">${l}</div><div class="mv">${escHtml(String(v))}</div>`; };
+    if(n.command)                   row('Command', n.command);
+    if(n.args?.length)              row('Args',    n.args.join(' '));
+    if(n.cwd)                       row('Project', n.cwd.replace(/^\/Users\/[^/]+\//,'~/'));
+    if(n.env&&Object.keys(n.env).length) row('Env', Object.keys(n.env).join(', '));
+    content.appendChild(grid);
+    if(n.body){
+      const sec=document.createElement('div'); sec.className='panel-section';
+      sec.innerHTML=`<div class="panel-label">Config</div><div class="panel-body" style="font-family:monospace;font-size:9px">${escHtml(n.body.slice(0,500))}</div>`;
+      content.appendChild(sec);
+    }
+
+  } else if (n.nodeType === 'plugin') {
+    const grid=document.createElement('div'); grid.className='meta-grid';
+    const row=(l,v)=>{ grid.innerHTML+=`<div class="ml">${l}</div><div class="mv">${escHtml(String(v))}</div>`; };
+    row('Plugin ID', n.pluginId||n.name||'—');
+    row('Version',   n.version||'?');
+    row('Scope',     n.scope||'user');
+    if(n.installedAt) row('Installed', new Date(n.installedAt).toLocaleDateString());
+    content.appendChild(grid);
+
+  } else if (n.nodeType === 'todo') {
+    const sec=document.createElement('div'); sec.className='panel-section';
+    const items=n.items||[];
+    sec.innerHTML='<div class="panel-label">Items</div>'+(items.map(item=>{
+      const icon=item.status==='completed'?'✓':item.status==='in_progress'?'◎':'○';
+      const col =item.status==='completed'?'#26de81':item.status==='in_progress'?'#ffca28':'rgba(255,255,255,0.3)';
+      return `<div class="todo-item"><span style="color:${col};flex-shrink:0">${icon}</span><span style="color:rgba(255,255,255,0.45)">${escHtml(item.content||'')}</span></div>`;
+    }).join('')||'<div style="font-size:9px;color:rgba(255,255,255,0.2)">No items</div>');
+    content.appendChild(sec);
+
+  } else if (n.nodeType === 'settings' && n.body) {
+    const sec=document.createElement('div'); sec.className='panel-section';
+    let bodyHtml='';
+    try {
+      const parsed=JSON.parse(n.body);
+      if(parsed.enabledPlugins){ bodyHtml+='<div style="font-size:8px;color:rgba(255,255,255,0.3);margin-bottom:3px">Enabled plugins:</div>'; Object.keys(parsed.enabledPlugins).forEach(p=>{ bodyHtml+=`<div style="font-size:9px;color:rgba(255,255,255,0.5);padding:1px 0">▸ ${escHtml(p)}</div>`; }); }
+      if(parsed.skipDangerousModePermissionPrompt) bodyHtml+='<div style="font-size:9px;color:rgba(255,100,50,0.8);margin-top:4px">⚠ Dangerous mode enabled</div>';
+    } catch(_){ bodyHtml=`<div class="panel-body">${escHtml((n.body||'').slice(0,400))}</div>`; }
+    sec.innerHTML='<div class="panel-label">Configuration</div>'+bodyHtml;
+    content.appendChild(sec);
+
+  } else if (n.nodeType === 'memory' && n.id && n.id.startsWith('m_')) {
+    // JARVIS memory detail panel with neuroscience fields
+    const grid=document.createElement('div'); grid.className='meta-grid';
+    const row=(l,v,c)=>{ grid.innerHTML+=`<div class="ml">${l}</div><div class="mv"${c?' style="color:'+c+'"':''}>${escHtml(String(v))}</div>`; };
+    row('Heat', (n.heat||0).toFixed(3));
+    row('Importance', (n.importance||0.5).toFixed(3));
+    row('Store', n.store_type || '—');
+    row('Stage', n.consolidation_stage || 'labile', STAGE_COLORS[n.consolidation_stage]||'#666');
+    row('H\u2192C Dep.', (n.hippocampal_dependency||1).toFixed(2));
+    if (n.schema_match_score > 0) row('Schema', (n.schema_match_score).toFixed(2));
+    if (n.interference_score > 0) row('Interference', (n.interference_score).toFixed(3), '#ff4444');
+    if (n.theta_phase > 0) row('\u03B8 Phase', (n.theta_phase).toFixed(3));
+    row('Source', n.source || '—');
+    row('Accesses', n.access_count || 0);
+    content.appendChild(grid);
+    if (n.name) {
+      const sec=document.createElement('div'); sec.className='panel-section';
+      sec.innerHTML=`<div class="panel-label">Content</div><div class="panel-body">${escHtml((n.name||'').slice(0,600))}${(n.name||'').length>600?'\n\u2026':''}</div>`;
+      content.appendChild(sec);
+    }
+  } else if (n.body) {
+    const sec=document.createElement('div'); sec.className='panel-section';
+    sec.innerHTML=`<div class="panel-label">Content</div><div class="panel-body">${escHtml(n.body.slice(0,800))}${n.body.length>800?'\n…':''}</div>`;
+    content.appendChild(sec);
+  }
+
+  // Connected neurons
+  const connIds=edges.filter(e=>e.source===n.id||e.target===n.id)
+    .map(e=>e.source===n.id?e.target:e.source)
+    .filter(id=>{ const x=nodeMap[id]; return x&&x.nodeType!=='conversation'; })
+    .slice(0,8);
+  if (connIds.length){
+    const sec=document.createElement('div'); sec.className='panel-section';
+    sec.innerHTML='<div class="panel-label">Connected</div>'+
+      connIds.map(id=>{ const x=nodeMap[id]; const c='#'+nodeColor(x).getHexString(); return `<div class="panel-stat"><span class="k" style="color:${c}">${(x.nodeType||'').replace(/-/g,' ')}</span><span class="v">${escHtml(x.name||id)}</span></div>`; }).join('');
+    content.appendChild(sec);
+  }
+
+  panelEl.classList.add('open');
+}
+
+// ── Tooltip ───────────────────────────────────────────────────────
+const tooltipEl = document.getElementById('tooltip-brain');
+
+function showTooltip(n, x, y) {
+  tooltipEl.querySelector('.tt-name').textContent = n.name || n.id;
+  tooltipEl.querySelector('.tt-type').textContent = (n.nodeType||'').toUpperCase().replace(/-/g,' ');
+  tooltipEl.querySelector('.tt-proj').textContent = cleanProject(n.project);
+  tooltipEl.style.display = 'block';
+  const tx = Math.min(x+14, window.innerWidth-300);
+  const ty = Math.min(y-10, window.innerHeight-80);
+  tooltipEl.style.left = tx + 'px';
+  tooltipEl.style.top  = ty + 'px';
+}
+
+function hideTooltip() {
+  tooltipEl.style.display = 'none';
+}
+
+// ── Raycasting ────────────────────────────────────────────────────
+const ray   = new THREE.Raycaster();
+const mouse = new THREE.Vector2(-9,-9);
+let hoveredNode = null;
+let mouseScreen = {x:0, y:0};
+
+window.addEventListener('mousemove', e=>{
+  mouse.x = (e.clientX/W)*2-1;
+  mouse.y = -(e.clientY/H)*2+1;
+  mouseScreen = {x:e.clientX, y:e.clientY};
+  renderer.domElement.style.cursor = 'default';
+});
+
+window.addEventListener('click', e=>{
+  if (e.target.closest('#panel') || e.target.closest('#topbar') || e.target.closest('#filter-row-2-brain') || e.target.closest('#analytics-brain')) return;
+  ray.setFromCamera(mouse, camera);
+  const hits=ray.intersectObjects(neuronGroup.children.filter(m=>m.visible), false);
+  if (hits.length) {
+    const nd=hits[0].object.userData.node;
+    if (nd) { openPanel(nd); controls.autoRotate=false; }
+  } else if (!e.target.closest('#panel')) {
+    closePanel();
+  }
+});
+
+// ── Analytics ─────────────────────────────────────────────────────
+let analyticsOpen = false;
+let activeChartFilter = null;
+const _bindState = {};
+
+const chartTooltipEl = document.getElementById('chart-tooltip-brain');
+function showChartTip(e,html){chartTooltipEl.innerHTML=html;chartTooltipEl.style.display='block';chartTooltipEl.style.left=Math.min(e.clientX+12,window.innerWidth-230)+'px';chartTooltipEl.style.top=Math.min(e.clientY-10,window.innerHeight-60)+'px';}
+function hideChartTip(){chartTooltipEl.style.display='none';}
+
+const CHART_W = 264;
+
+function setupCanvas(id, height) {
+  const canvas = document.getElementById(id); if (!canvas) return null;
+  const dpr=window.devicePixelRatio||1, w=CHART_W;
+  canvas.style.width=w+'px'; canvas.style.height=height+'px';
+  canvas.width=w*dpr; canvas.height=height*dpr;
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  return {ctx,w,h:height};
+}
+
+function lerpColor(t){const r=Math.round(10+(0-10)*t),g=Math.round(15+(210-15)*t),b=Math.round(20+(255-20)*t);return `rgb(${r},${g},${b})`;}
+
+function computeAnalytics() {
+  let totalMessages=0,totalMs=0,totalBytes=0,sessionCount=0;
+  const heatmap=Array.from({length:7},()=>new Array(24).fill(0));
+  const now=Date.now(),weeklyMap={},categories={},tools={};
+  const buckets={'<1m':0,'1-5m':0,'5-30m':0,'30m-2h':0,'>2h':0},projects={};
+  nodes.forEach(n=>{
+    if(n.nodeType!=='conversation')return;
+    sessionCount++; totalMessages+=n.messageCount||0; totalBytes+=n.fileSize||0;
+    if(n.startedAt&&n.endedAt){
+      const ms=new Date(n.endedAt)-new Date(n.startedAt); totalMs+=ms;
+      const mins=ms/60000;
+      if(mins<1)buckets['<1m']++;else if(mins<5)buckets['1-5m']++;else if(mins<30)buckets['5-30m']++;else if(mins<120)buckets['30m-2h']++;else buckets['>2h']++;
+    }
+    if(n.startedAt){
+      const d=new Date(n.startedAt);
+      heatmap[d.getDay()][d.getHours()]++;
+      if(now-d.getTime()<=90*86400000){
+        const ws=new Date(d);ws.setDate(d.getDate()-d.getDay());
+        const key=ws.toISOString().slice(0,10);weeklyMap[key]=(weeklyMap[key]||0)+1;
+      }
+    }
+    categories[n.category||'general']=(categories[n.category||'general']||0)+1;
+    (n.toolsUsed||[]).forEach(t=>{tools[t]=(tools[t]||0)+1;});
+    const proj=cleanProject(n.project);projects[proj]=(projects[proj]||0)+1;
+  });
+  const weeklyTrend=Object.entries(weeklyMap).sort((a,b)=>a[0].localeCompare(b[0]));
+  const topProjects=Object.entries(projects).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  return{sessions:sessionCount,totalMessages,totalHours:totalMs/3600000,totalMB:totalBytes/1048576,heatmap,weeklyTrend,categories,tools,buckets,topProjects};
+}
+
+function drawHeatmap(data) {
+  const r=setupCanvas('a-chart-heatmap',120);if(!r)return;
+  const{ctx,w,h}=r;
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const labelW=30,cellW=(w-labelW)/24,cellH=h/7;
+  let maxVal=1;data.heatmap.forEach(row=>row.forEach(v=>{if(v>maxVal)maxVal=v;}));
+  ctx.font='8px SF Mono,monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+  for(let d=0;d<7;d++){
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.fillText(days[d],labelW-4,d*cellH+cellH/2);
+    for(let hr=0;hr<24;hr++){
+      const t=data.heatmap[d][hr]/maxVal;ctx.fillStyle=lerpColor(t);
+      ctx.fillRect(labelW+hr*cellW+1,d*cellH+1,cellW-2,cellH-2);
+      if(data.heatmap[d][hr]>0){
+        ctx.fillStyle=t>0.5?'#000':'rgba(255,255,255,0.7)';
+        ctx.textAlign='center';ctx.font='7px SF Mono,monospace';
+        ctx.fillText(data.heatmap[d][hr],labelW+hr*cellW+cellW/2,d*cellH+cellH/2);
+        ctx.textAlign='right';ctx.font='8px SF Mono,monospace';
+      }
+    }
+  }
+  ctx.fillStyle='rgba(255,255,255,0.2)';ctx.textAlign='center';ctx.font='7px SF Mono,monospace';
+  for(let hr=0;hr<24;hr+=3)ctx.fillText(hr+'',labelW+hr*cellW+cellW/2,h-2);
+  const canvas=document.getElementById('a-chart-heatmap');canvas._heatData=data.heatmap;
+  if(!_bindState['a-chart-heatmap']){
+    _bindState['a-chart-heatmap']=true;
+    const dFull=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const dAbbr=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    function getCell(e){const rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;const cW=(rect.width-labelW)/24,cH=120/7;const day=Math.floor(my/cH),hr=Math.floor((mx-labelW)/cW);if(day>=0&&day<7&&hr>=0&&hr<24&&mx>=labelW)return{day,hr};return null;}
+    canvas.addEventListener('mousemove',function(e){const c=getCell(e);if(c){const v=(canvas._heatData||[])[c.day]?.[c.hr]||0;canvas.style.cursor=v>0?'pointer':'default';showChartTip(e,`<strong>${dFull[c.day]} ${c.hr}:00</strong><br>${v} sessions`);}else{canvas.style.cursor='default';hideChartTip();}});
+    canvas.addEventListener('mouseleave',()=>{canvas.style.cursor='default';hideChartTip();});
+  }
+}
+
+function drawTimeline(data) {
+  const r=setupCanvas('a-chart-timeline',100);if(!r)return;
+  const{ctx,w,h}=r;
+  if(data.weeklyTrend.length<2){ctx.fillStyle='rgba(255,255,255,0.2)';ctx.font='10px SF Mono,monospace';ctx.textAlign='center';ctx.fillText('Not enough data',w/2,h/2);return;}
+  const maxVal=Math.max(...data.weeklyTrend.map(d=>d[1]),1);
+  const pad={l:28,r:8,t:8,b:16},pw=w-pad.l-pad.r,ph=h-pad.t-pad.b;
+  ctx.beginPath();ctx.moveTo(pad.l,pad.t+ph);
+  data.weeklyTrend.forEach(([,v],i)=>{const x=pad.l+(i/(data.weeklyTrend.length-1))*pw,y=pad.t+ph-(v/maxVal)*ph;ctx.lineTo(x,y);});
+  ctx.lineTo(pad.l+pw,pad.t+ph);ctx.closePath();
+  const grad=ctx.createLinearGradient(0,pad.t,0,pad.t+ph);grad.addColorStop(0,'rgba(0,210,255,0.25)');grad.addColorStop(1,'rgba(0,210,255,0.02)');ctx.fillStyle=grad;ctx.fill();
+  ctx.beginPath();data.weeklyTrend.forEach(([,v],i)=>{const x=pad.l+(i/(data.weeklyTrend.length-1))*pw,y=pad.t+ph-(v/maxVal)*ph;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});
+  ctx.strokeStyle='rgba(0,210,255,0.85)';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,0.25)';ctx.font='8px SF Mono,monospace';ctx.textAlign='right';ctx.fillText(maxVal,pad.l-4,pad.t+8);ctx.fillText('0',pad.l-4,pad.t+ph);
+  ctx.textAlign='center';const step=Math.max(1,Math.floor(data.weeklyTrend.length/4));
+  for(let i=0;i<data.weeklyTrend.length;i+=step){const x=pad.l+(i/(data.weeklyTrend.length-1))*pw;ctx.fillText(data.weeklyTrend[i][0].slice(5),x,h-2);}
+}
+
+function smartTrunc(s,n){if(s.length<=n)return s;const h=Math.floor((n-1)/2);return s.slice(0,h)+'…'+s.slice(-(n-h-1));}
+
+function drawHorizontalBars(canvasId, entries, height, colorFn, chartType) {
+  const r=setupCanvas(canvasId,height);if(!r||!entries.length)return;
+  const{ctx,w,h}=r;
+  const maxVal=Math.max(...entries.map(e=>e[1]),1);
+  const total=entries.reduce((s,e)=>s+e[1],0);
+  const barH=Math.min(16,(h-4)/entries.length);
+  ctx.font='9px SF Mono,monospace';
+  const labelW=Math.min(ctx.measureText('W'.repeat(14)).width+8,w*0.45);
+  const countW=32,barW=w-labelW-countW-8;
+  const canvas=document.getElementById(canvasId);
+  const hovIdx=canvas._hoveredIndex!==undefined?canvas._hoveredIndex:-1;
+  entries.forEach(([label,val],i)=>{
+    const y=i*barH+2,isH=i===hovIdx;
+    ctx.fillStyle=isH?'rgba(255,255,255,0.9)':'rgba(255,255,255,0.4)';ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(smartTrunc(label,18),labelW-4,y+barH/2);
+    const bw=(val/maxVal)*barW;ctx.globalAlpha=isH?1:0.85;
+    ctx.fillStyle=typeof colorFn==='function'?colorFn(label):(colorFn||'rgba(255,255,255,0.3)');ctx.fillRect(labelW,y+2,bw,barH-4);
+    if(isH){ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(labelW,y+2,bw,barH-4);}
+    ctx.globalAlpha=1;ctx.fillStyle=isH?'rgba(255,255,255,0.9)':'rgba(255,255,255,0.35)';ctx.textAlign='left';ctx.fillText(val,labelW+bw+4,y+barH/2);
+  });
+  canvas._hitRegions=entries.map(([label,val],i)=>({y:i*barH+2,h:barH,label,val}));
+  canvas._chartType=chartType;canvas._total=total;
+  if(!_bindState[canvasId]){
+    _bindState[canvasId]=true;canvas._hoveredIndex=-1;
+    canvas.addEventListener('click',function(e){const rect=canvas.getBoundingClientRect(),my=e.clientY-rect.top;const hit=(canvas._hitRegions||[]).find(r=>my>=r.y&&my<r.y+r.h);if(hit&&canvas._chartType){activeChartFilter=(activeChartFilter?.type===canvas._chartType&&activeChartFilter?.label===hit.label)?null:{type:canvas._chartType,label:hit.label};applyFilters();}});
+    canvas.addEventListener('mousemove',function(e){const rect=canvas.getBoundingClientRect(),my=e.clientY-rect.top;const regions=canvas._hitRegions||[];const idx=regions.findIndex(r=>my>=r.y&&my<r.y+r.h);canvas.style.cursor=idx>=0?'pointer':'default';if(idx>=0){const hit=regions[idx];const pct=((hit.val/(canvas._total||1))*100).toFixed(1);showChartTip(e,`<strong style="color:#fff">${hit.label}</strong>: ${hit.val} (${pct}%)`);}else hideChartTip();if(idx!==canvas._hoveredIndex){canvas._hoveredIndex=idx;renderAnalytics();}});
+    canvas.addEventListener('mouseleave',function(){canvas.style.cursor='default';canvas._hoveredIndex=-1;hideChartTip();renderAnalytics();});
+  }
+}
+
+function drawHistogram(data) {
+  const r=setupCanvas('a-chart-quality',100);if(!r)return;
+  const{ctx,w,h}=r;
+  const entries=Object.entries(data.buckets),maxVal=Math.max(...entries.map(e=>e[1]),1);
+  const pad={l:8,r:8,t:8,b:20},pw=w-pad.l-pad.r,ph=h-pad.t-pad.b,bw=pw/entries.length;
+  const colors=['#ff4444','#ff8800','rgba(0,210,255,0.8)','#26de81','#a55eea'];
+  entries.forEach(([label,val],i)=>{
+    const bh=(val/maxVal)*ph,x=pad.l+i*bw+4,y=pad.t+ph-bh;
+    ctx.fillStyle=colors[i]||'rgba(255,255,255,0.4)';ctx.globalAlpha=0.65;ctx.fillRect(x,y,bw-8,bh);ctx.globalAlpha=1;
+    ctx.fillStyle='rgba(255,255,255,0.55)';ctx.font='9px SF Mono,monospace';ctx.textAlign='center';
+    if(val>0)ctx.fillText(val,x+(bw-8)/2,y-4);
+    ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='8px SF Mono,monospace';ctx.fillText(label,x+(bw-8)/2,h-4);
+  });
+}
+
+function renderAnalytics() {
+  const d=computeAnalytics();
+  document.getElementById('kpi-b-sessions').textContent=d.sessions.toLocaleString();
+  document.getElementById('kpi-b-messages').textContent=d.totalMessages>999?(d.totalMessages/1000).toFixed(1)+'K':d.totalMessages;
+  document.getElementById('kpi-b-hours').textContent=d.totalHours.toFixed(1);
+  document.getElementById('kpi-b-mb').textContent=d.totalMB.toFixed(1);
+  drawHeatmap(d);
+  drawTimeline(d);
+  const catEntries=Object.entries(d.categories).sort((a,b)=>b[1]-a[1]);
+  drawHorizontalBars('a-chart-categories',catEntries,Math.max(catEntries.length,1)*16+4,lbl=>(CATEGORY_COLORS[lbl]||'#666')+'aa','categories');
+  const toolEntries=Object.entries(d.tools).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  drawHorizontalBars('a-chart-tools',toolEntries,Math.max(toolEntries.length,1)*16+4,'rgba(165,94,234,0.65)','tools');
+  drawHistogram(d);
+  drawHorizontalBars('a-chart-projects',d.topProjects,Math.max(d.topProjects.length,1)*16+4,'rgba(0,210,255,0.45)','projects');
+
+  // Consolidation stage distribution (from memory node data)
+  const stageData = {};
+  const storeData = {hippocampal:0, transitional:0, cortical:0};
+  nodes.filter(n=>n.id&&n.id.startsWith('m_')).forEach(n=>{
+    const s=n.consolidation_stage||'labile';
+    stageData[s]=(stageData[s]||0)+1;
+    const dep=n.hippocampal_dependency||1;
+    if(dep>0.7) storeData.hippocampal++;
+    else if(dep>0.15) storeData.transitional++;
+    else storeData.cortical++;
+  });
+  const stageColors={labile:'#ff4444',early_ltp:'#ffaa00',late_ltp:'#26de81',consolidated:'#00d2ff',reconsolidating:'#d946ef'};
+  const stageEntries=Object.entries(stageData).sort((a,b)=>b[1]-a[1]);
+  drawHorizontalBars('a-chart-consolidation',stageEntries,Math.max(stageEntries.length,1)*16+4,lbl=>(stageColors[lbl]||'#666')+'cc','stages');
+  const storeColors={hippocampal:'#ff6b35',transitional:'#ffaa00',cortical:'#00d2ff'};
+  const storeEntries=Object.entries(storeData).filter(e=>e[1]>0);
+  drawHorizontalBars('a-chart-stores',storeEntries,Math.max(storeEntries.length,1)*16+4,lbl=>(storeColors[lbl]||'#666')+'cc','stores');
+}
+
+function toggleAnalytics() {
+  analyticsOpen=!analyticsOpen;
+  document.getElementById('analytics-brain').classList.toggle('open',analyticsOpen);
+  document.getElementById('analytics-toggle-brain').classList.toggle('active',analyticsOpen);
+  if(analyticsOpen)setTimeout(renderAnalytics,420);
+}
+
+function closeAnalytics() {
+  analyticsOpen=false;
+  document.getElementById('analytics-brain').classList.remove('open');
+  document.getElementById('analytics-toggle-brain').classList.remove('active');
+}
+
+document.getElementById('analytics-toggle-brain').addEventListener('click',toggleAnalytics);
+
+
+// HUD
+document.getElementById('hud').textContent =
+  `${nodes.length} neurons · ${drawEdges.length} synapses · ${tubeCount} fiber tracts`;
+
+// Initial state
+applyFilters();
+
+// ── Animate ────────────────────────────────────────────────────────
+let frame=0;
+(function animate(){
+  requestAnimationFrame(animate);
+  frame++;
+  const t=frame*.016;
+
+  // Brain shell breathe + neuron pulse
+  if (window._brainShellMat) window._brainShellMat.uniforms.uTime.value = t;
+  const br=1+Math.sin(t*.34)*.012;
+  neuronGroup.scale.setScalar(br);
+
+  // Hover: tooltip + highlight
+  ray.setFromCamera(mouse, camera);
+  const hits=ray.intersectObjects(neuronGroup.children.filter(m=>m.visible),false);
+  const newHov = hits.length ? hits[0].object.userData.node : null;
+  if (newHov!==hoveredNode) {
+    if (hoveredNode && hoveredNode!==selectedNode)
+      hoveredNode._mesh.material.emissiveIntensity = hoveredNode._baseEmit;
+    if (newHov && newHov!==selectedNode)
+      newHov._mesh.material.emissiveIntensity = newHov._baseEmit*1.5;
+    hoveredNode=newHov;
+    renderer.domElement.style.cursor = newHov?'pointer':'default';
+    if (newHov) showTooltip(newHov, mouseScreen.x, mouseScreen.y);
+    else hideTooltip();
+  } else if (newHov) {
+    // Keep tooltip position updated
+    showTooltip(newHov, mouseScreen.x, mouseScreen.y);
+  }
+
+  // Neuron subtle pulse
+  nodes.forEach(n=>{
+    if (!n._mesh||n===selectedNode) return;
+    const phase=(n.bx+n.by*.7+n.bz*.5)*.02;
+    n._mesh.material.emissiveIntensity = n._baseEmit + Math.sin(t*1.1+phase)*.15*n._baseEmit;
+  });
+
+  // Action potentials — fire bursts like real neural activity
+  if (frame-lastAP>2+Math.floor(Math.random()*4)){
+    fireAP(); fireAP(); // fire pairs for visible activity
+    if (Math.random()<0.5) fireAP(); // burst of 3
+    lastAP=frame;
+  }
+  for (let i=AP_POOL.length-1;i>=0;i--){
+    const ap=AP_POOL[i]; ap.t+=ap.speed;
+    if (ap.t>=1){
+      scene.remove(ap.group);
+      ap.core.material.dispose(); ap.trail.material.dispose();
+      AP_POOL.splice(i,1);
+      // Flash target neuron on arrival
+      const tm=neuronMeshes[ap.tgt.id];
+      if (tm){ const b=ap.tgt._baseEmit; tm.material.emissiveIntensity=b*2.0; setTimeout(()=>{ if(tm.material) tm.material.emissiveIntensity=b; },160); }
+    } else {
+      // Follow the curve path
+      const pos = ap.curve.getPointAt(Math.min(ap.t, 1));
+      ap.group.position.copy(pos).multiplyScalar(br);
+      // Orient trail along curve tangent
+      const tangent = ap.curve.getTangentAt(Math.min(ap.t, 1));
+      ap.trail.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), tangent.normalize());
+      // Fade trail as it approaches target
+      ap.trail.material.opacity = 0.7 * (1 - ap.t * 0.5);
+      ap.core.material.opacity = 0.8 + 0.2 * Math.sin(ap.t * 20); // electric flicker
+    }
+  }
+
+  controls.update();
+  composer.render();
+})();
+
+window.addEventListener('resize',()=>{
+  const W2=window.innerWidth,H2=window.innerHeight;
+  camera.aspect=W2/H2; camera.updateProjectionMatrix();
+  renderer.setSize(W2,H2); composer.setSize(W2,H2);
+});
+} catch(err) {
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:rgba(255,0,0,0.95);color:#fff;padding:16px;z-index:9999;font:12px monospace;white-space:pre-wrap';
+  d.textContent = 'BRAIN ERROR: ' + err.message + '\n' + err.stack;
+  document.body.appendChild(d);
+  console.error(err);
+}
+})();
+</script>
+</body>
+</html>

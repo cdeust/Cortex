@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S. — Neural Graph</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/theme.css">
+</head>
+<body>
+
+<div id="loading">
+  <div class="loader-ring"></div>
+  <div class="loader-title">J.A.R.V.I.S.</div>
+  <div class="loader-sub">Initializing neural map</div>
+</div>
+
+<div id="scanlines"></div>
+<div id="vignette"></div>
+<div id="graph-container"></div>
+
+<div id="info-panel" class="hud-panel">
+  <div class="panel-header">
+    <div class="reactor-dot"></div>
+    <div>
+      <div class="panel-title">J.A.R.V.I.S.</div>
+      <div class="panel-subtitle">Neural Graph</div>
+    </div>
+  </div>
+  <div class="stat-row"><span>Domains</span><span class="val" id="s-dom">--</span></div>
+  <div class="stat-row"><span>Memories</span><span class="val" id="s-mem">--</span></div>
+  <div class="stat-row"><span>Entities</span><span class="val" id="s-ent">--</span></div>
+  <div class="stat-row"><span>Nodes</span><span class="val" id="s-nodes">--</span></div>
+  <div class="stat-row"><span>Synapses</span><span class="val" id="s-edge">--</span></div>
+  <div class="stat-row"><span>Clusters</span><span class="val" id="s-cluster">--</span></div>
+</div>
+
+<div id="filter-bar">
+  <button class="filter-btn" id="glossary-toggle" title="Glossary (?)">?</button>
+  <span class="filter-sep"></span>
+  <button class="filter-btn active" data-filter="all">All</button>
+  <button class="filter-btn" data-filter="methodology">Methodology</button>
+  <button class="filter-btn" data-filter="memories">Memories</button>
+  <button class="filter-btn" data-filter="knowledge">Knowledge</button>
+  <span class="filter-sep"></span>
+  <button class="filter-btn" data-filter="emotional">Emotional</button>
+  <button class="filter-btn" data-filter="protected">Protected</button>
+  <button class="filter-btn" data-filter="hot">Hot</button>
+  <span class="filter-sep"></span>
+  <select id="domain-select" class="filter-select"><option value="">All Domains</option></select>
+  <select id="emotion-select" class="filter-select">
+    <option value="">All Emotions</option>
+    <option value="urgency">Urgency</option>
+    <option value="frustration">Frustration</option>
+    <option value="satisfaction">Satisfaction</option>
+    <option value="discovery">Discovery</option>
+    <option value="confusion">Confusion</option>
+  </select>
+  <input type="text" id="search-box" placeholder="Search...">
+</div>
+
+<div id="status-bar" class="hud-panel">
+  <div class="status-dot"></div>
+  <span id="status-text">Initializing</span>
+  <span style="color:var(--cyan-dim)">|</span>
+  <span id="status-zoom">L0</span>
+  <span style="color:var(--cyan-dim)">|</span>
+  <span id="status-time"></span>
+</div>
+
+<button id="reset-btn">Reset</button>
+<button id="monitor-toggle">Log <span id="monitor-badge">0</span></button>
+
+<div id="monitor-panel">
+  <div class="mon-header">
+    <div class="mon-title">Monitoring Log</div>
+    <button class="close-btn" id="monitor-close">&#x2715;</button>
+  </div>
+  <div class="mon-tabs">
+    <button class="mon-tab active" data-type="all">All <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="domain">Domain <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="entry-point">Entry <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="recurring-pattern">Pattern <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="tool-preference">Tool <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="behavioral-feature">Feature <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="memory">Memory <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="entity">Entity <span class="mon-count">0</span></button>
+  </div>
+  <div class="mon-tabs mon-tabs-bio">
+    <span class="mon-tabs-label">Bio:</span>
+    <button class="mon-tab" data-bio="emotional">Emotional <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="urgency">Urgency <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="frustration">Frustration <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="satisfaction">Satisfaction <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="discovery">Discovery <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="confusion">Confusion <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="protected">Protected <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="high-heat">Hot <span class="mon-count">0</span></button>
+  </div>
+  <div id="monitor-log"></div>
+</div>
+
+<div id="detail-panel">
+  <button class="close-btn" id="close-detail">&#x2715;</button>
+  <div id="detail-content"></div>
+</div>
+
+<div id="tooltip">
+  <div class="tt-label" id="tt-label"></div>
+  <div class="tt-type" id="tt-type"></div>
+  <div class="tt-meta" id="tt-meta"></div>
+</div>
+
+<div id="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:#6366f1;box-shadow:0 0 6px #6366f1"></div>Domain</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#00d4ff;box-shadow:0 0 6px #00d4ff"></div>Entry</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#10b981;box-shadow:0 0 6px #10b981"></div>Pattern</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#f59e0b;box-shadow:0 0 6px #f59e0b"></div>Tool</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#26de81;box-shadow:0 0 6px #26de81"></div>Memory</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#00d2ff;box-shadow:0 0 6px #00d2ff"></div>Entity</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#FF00FF;box-shadow:0 0 6px #FF00FF"></div>Bridge</div>
+</div>
+
+<div id="glossary-panel">
+  <button class="close-btn" id="glossary-close">&#x2715;</button>
+  <div class="gloss-title">Graph Glossary</div>
+  <div class="gloss-subtitle">What each element represents</div>
+
+  <div class="gloss-section">Nodes</div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#6366f1"></span><span class="gloss-name">Domain</span></div>
+    <div class="gloss-desc">A project or knowledge area you work in (e.g. "frontend", "devops"). Domains are the large hub nodes — everything else orbits around them. Size reflects how many sessions you've had in that domain.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#00d4ff"></span><span class="gloss-name">Entry Point</span></div>
+    <div class="gloss-desc">The typical way you start working in a domain — recurring first-message patterns clustered from your session history. For example, "fix bug in auth" or "add API endpoint" are entry points if you frequently begin sessions that way.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#10b981"></span><span class="gloss-name">Pattern</span></div>
+    <div class="gloss-desc">A recurring behavioral pattern detected across your sessions — keyword sequences that appear repeatedly. These reveal your habitual workflows, e.g. "read → grep → edit → test" or specific technical terms you consistently use together.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#f59e0b"></span><span class="gloss-name">Tool</span></div>
+    <div class="gloss-desc">A Claude Code tool you frequently use in this domain (Read, Edit, Grep, Bash, etc.). Size reflects usage ratio — larger means you use it more often. Shows your preferred workflow style per domain.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#a855f7"></span><span class="gloss-name">Feature</span></div>
+    <div class="gloss-desc">A behavioral feature learned by sparse dictionary analysis of your session patterns. These are abstract dimensions like "exploration depth" or "refactoring tendency" — computed from 27 behavioral signals, not named by you.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#26de81"></span><span class="gloss-name">Memory</span></div>
+    <div class="gloss-desc">A piece of information stored by JARVIS — decisions, facts, errors, or context you asked it to remember. Memories have heat (how recently/frequently accessed) and importance. They cool over time and compress from full text to summaries.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#00d2ff"></span><span class="gloss-name">Entity</span></div>
+    <div class="gloss-desc">A named thing extracted from memories — functions, files, dependencies, technologies, errors, or decisions. Entities form the nodes of the knowledge graph, connected by typed relationships like "imports", "calls", or "resolved_by".</div>
+  </div>
+
+  <div class="gloss-section">Edges</div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:#FF00FF"></span><span class="gloss-name">Bridge</span></div>
+    <div class="gloss-desc">A cross-domain connection — shared patterns, vocabulary, or structural links between two different domains. Bridges show how your knowledge transfers across projects.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:#d946ef"></span><span class="gloss-name">Co-occurrence</span></div>
+    <div class="gloss-desc">Two entities that frequently appear together in the same memories. The more often they co-occur, the stronger (brighter) the connection.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:#ff4444"></span><span class="gloss-name">Causal (caused_by / resolved_by)</span></div>
+    <div class="gloss-desc">A cause-effect relationship between entities — e.g. an error caused by a dependency, or a bug resolved by a fix. Red edges indicate causal chains.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:#3b82f6"></span><span class="gloss-name">Imports / Calls</span></div>
+    <div class="gloss-desc">Code-level relationships — one module importing another, or one function calling another. Extracted from memory content automatically.</div>
+  </div>
+
+  <div class="gloss-section">Biological Mechanisms</div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#ff3366"></span><span class="gloss-name">Emotional Tagging</span></div>
+    <div class="gloss-desc">Memories with emotional charge get colored by their dominant emotion: <b style="color:#ff3366">red = urgency</b>, <b style="color:#ef4444">dark red = frustration</b>, <b style="color:#22c55e">green = satisfaction</b>, <b style="color:#f59e0b">amber = discovery</b>, <b style="color:#8b5cf6">purple = confusion</b>. Emotional memories have pulsing rings — faster pulse = higher arousal. Based on amygdala-hippocampal coupling (Wang & Bhatt 2024).</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#f59e0b"></span><span class="gloss-name">Neuromodulation</span></div>
+    <div class="gloss-desc">Four chemical channels modulate how strongly memories are encoded: <b>Dopamine</b> (reward from fixing errors/passing tests), <b>Norepinephrine</b> (arousal from error density), <b>Acetylcholine</b> (novelty enhancement), <b>Serotonin</b> (exploration vs exploitation balance). These affect node size and glow intensity.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#00d2ff"></span><span class="gloss-name">Synaptic Plasticity</span></div>
+    <div class="gloss-desc"><b>LTP</b>: entity edges strengthen when both entities co-appear in memories (Hebbian learning). <b>LTD</b>: inactive edges weaken over time. <b>STDP</b>: when entity A consistently appears before B, the A→B direction strengthens — learning causal structure from temporal ordering.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#90a4ae"></span><span class="gloss-name">Microglial Pruning</span></div>
+    <div class="gloss-desc">During consolidation, weak edges (low weight + stale + cold endpoints) get eliminated, and orphaned entities get archived. Like brain microglia that prune unused synapses to keep the network efficient.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#d946ef"></span><span class="gloss-name">Synaptic Tagging</span></div>
+    <div class="gloss-desc">When a strong (important) memory is stored, older weak memories that share entities with it get retroactively promoted — their importance and heat are boosted. Like protein synthesis tags in biology (Frey & Morris 1997).</div>
+  </div>
+
+  <div class="gloss-section">Visual Encoding</div>
+
+  <div class="gloss-entry">
+    <div class="gloss-desc"><b>Node size</b> — reflects importance: session count for domains, frequency for patterns, heat+importance×emotional boost for memories, usage ratio for tools.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-desc"><b>Node glow</b> — intensity reflects heat (recency). Hot nodes glow brighter, cold nodes are dim.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-desc"><b>Edge brightness</b> — reflects relationship weight/strength. Stronger connections are brighter.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-desc"><b>Flow particles</b> — animated dots traveling along edges, representing active information flow between connected nodes.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-desc"><b>Cluster shells</b> — translucent spheres grouping nodes by domain. Visible when zoomed out (L1/L2 zoom levels).</div>
+  </div>
+
+  <div class="gloss-section">Controls</div>
+
+  <div class="gloss-entry">
+    <div class="gloss-desc"><b>Click node</b> — select it, see details + connections, camera flies to it<br>
+    <b>Click background</b> — deselect<br>
+    <b>Scroll</b> — zoom in/out (zoom level changes: Neural → Constellation → Galaxy)<br>
+    <b>Drag</b> — orbit camera<br>
+    <b>M</b> — toggle monitoring log<br>
+    <b>R</b> — reset camera<br>
+    <b>Esc</b> — close panels</div>
+  </div>
+</div>
+
+<!-- Three.js + addons -->
+<script src="https://unpkg.com/three@0.137.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://unpkg.com/three@0.137.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+
+<!-- JARVIS Unified Graph modules (order matters) -->
+<script src="/js/config.js"></script>
+<script src="/js/state.js"></script>
+<script src="/js/scene.js"></script>
+<script src="/js/nodes.js"></script>
+<script src="/js/edges.js"></script>
+<script src="/js/clusters.js"></script>
+<script src="/js/layout.js"></script>
+<script src="/js/graph.js"></script>
+<script src="/js/interaction.js"></script>
+<script src="/js/zoom.js"></script>
+<script src="/js/controls.js"></script>
+<script src="/js/effects.js"></script>
+<script src="/js/monitor.js"></script>
+<script src="/js/polling.js"></script>
+
+</body>
+</html>

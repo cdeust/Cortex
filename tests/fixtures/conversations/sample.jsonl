@@ -1,0 +1,5 @@
+{"sessionId":"test-session-001","type":"summary","timestamp":"2025-01-15T09:00:00.000Z","slug":"test-conversation","cwd":"/home/user/project"}
+{"type":"user","timestamp":"2025-01-15T09:00:01.000Z","message":{"role":"user","content":"Can you help me refactor the utils module?"}}
+{"type":"assistant","timestamp":"2025-01-15T09:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Sure, let me look at the code."},{"type":"tool_use","name":"Read","input":{"file_path":"utils.js"}}]}}
+{"type":"user","timestamp":"2025-01-15T09:01:00.000Z","message":{"role":"user","content":"Looks good, please proceed."}}
+{"type":"assistant","timestamp":"2025-01-15T09:01:10.000Z","message":{"role":"assistant","content":[{"type":"text","text":"I'll split it into separate modules."},{"type":"tool_use","name":"Edit","input":{"file_path":"utils.js"}}]}}

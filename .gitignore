@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.python-version
+.DS_Store
+mcp-server_old/
+
+# Large benchmark datasets (download instructions in README)
+benchmarks/longmemeval/longmemeval_s.json
+benchmarks/longmemeval/longmemeval_oracle.json

@@ -1,0 +1,171 @@
+"""Handler: remember — store a memory through the hierarchical predictive coding gate.
+
+Composition root: wires core modules + infrastructure storage + embeddings.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from mcp_server.core import thermodynamics
+from mcp_server.core import write_gate
+from mcp_server.core.domain_detector import detect_domain
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.infrastructure.profile_store import load_profiles
+
+from mcp_server.handlers.remember_helpers import (
+    evaluate_gate,
+    apply_modulations,
+    try_curation,
+    insert_and_post_process,
+)
+from mcp_server.handlers.remember_response import build_merge_response
+
+schema = {
+    "description": "Store a memory through the predictive coding write gate.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "content": {"type": "string", "description": "The memory content to store"},
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional tags",
+            },
+            "directory": {
+                "type": "string",
+                "description": "Directory context (defaults to cwd)",
+            },
+            "domain": {
+                "type": "string",
+                "description": "Domain override (auto-detected if omitted)",
+            },
+            "source": {
+                "type": "string",
+                "description": "Memory source: session, tool, user, consolidation",
+            },
+            "force": {
+                "type": "boolean",
+                "description": "Bypass write gate (always store)",
+            },
+        },
+        "required": ["content"],
+    },
+}
+
+_store: MemoryStore | None = None
+_embeddings: EmbeddingEngine | None = None
+
+
+def _get_store() -> MemoryStore:
+    global _store
+    if _store is None:
+        s = get_memory_settings()
+        _store = MemoryStore(s.DB_PATH, s.EMBEDDING_DIM)
+    return _store
+
+
+def _get_embeddings() -> EmbeddingEngine:
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = EmbeddingEngine(dim=get_memory_settings().EMBEDDING_DIM)
+    return _embeddings
+
+
+def _resolve_domain(directory: str, domain: str) -> str:
+    if not domain and directory:
+        profiles = load_profiles()
+        detection = detect_domain({"cwd": directory}, profiles)
+        domain = detection.get("domain", "") or ""
+    return domain
+
+
+def _enrich_mod_with_gate(mod: dict, gate: dict) -> None:
+    """Copy gate signals into the modulation dict for response building."""
+    mod.update(
+        {
+            "gate_reason": gate["gate_reason"],
+            "emb_nov": gate["emb_nov"],
+            "ent_nov": gate["ent_nov"],
+            "temp_nov": gate["temp_nov"],
+            "struct_nov": gate["struct_nov"],
+        }
+    )
+
+
+def _parse_args(args: dict[str, Any]) -> tuple[str, list, str, str, bool]:
+    """Extract and default handler arguments."""
+    return (
+        args["content"],
+        args.get("tags", []),
+        args.get("directory", ""),
+        args.get("source", "user"),
+        args.get("force", False),
+    )
+
+
+async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Store a memory with thermodynamic properties and predictive coding gate."""
+    if not args or not args.get("content"):
+        return {"stored": False, "reason": "no_content"}
+
+    content, tags, directory, source, force = _parse_args(args)
+    store, emb_engine = _get_store(), _get_embeddings()
+    domain = _resolve_domain(directory, args.get("domain", ""))
+    embedding = emb_engine.encode(content)
+    valence = thermodynamics.compute_valence(content)
+
+    gate = evaluate_gate(content, tags, embedding, force, store, emb_engine)
+    if not gate["should_store"]:
+        return write_gate.build_rejection_response(
+            gate["emb_nov"],
+            gate["ent_nov"],
+            gate["temp_nov"],
+            gate["struct_nov"],
+            gate["score"],
+            gate["gate_reason"],
+            gate["importance"],
+        )
+
+    heat = thermodynamics.apply_surprise_boost(
+        1.0, gate["score"], get_memory_settings().SURPRISE_BOOST
+    )
+    mod = apply_modulations(
+        content,
+        tags,
+        heat,
+        gate["importance"],
+        valence,
+        domain,
+        gate["ent_names"],
+        gate["known"],
+        store,
+    )
+    _enrich_mod_with_gate(mod, gate)
+
+    action, mid = try_curation(
+        content, embedding, force, store, emb_engine, tags, mod["heat"]
+    )
+    if action == "merge":
+        return build_merge_response(mid, domain, mod, gate)
+
+    return insert_and_post_process(
+        content,
+        embedding,
+        tags,
+        source,
+        domain,
+        directory,
+        action,
+        mid,
+        gate["sims"],
+        gate["vec_hits"],
+        gate["ent_names"],
+        gate["extracted"],
+        mod,
+        gate["score"],
+        store,
+        emb_engine,
+    )

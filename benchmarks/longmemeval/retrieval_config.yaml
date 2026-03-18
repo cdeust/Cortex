@@ -1,0 +1,381 @@
+wrrf_k: 60
+query_expansions:
+  favorite:
+  - like
+  - love
+  - prefer
+  - enjoy
+  - best
+  - fond
+  - into
+  - favourite
+  prefer:
+  - favorite
+  - like
+  - love
+  - choice
+  - go-to
+  - preferred
+  - rather
+  recommend:
+  - suggest
+  - suggestion
+  - advice
+  - try
+  - check
+  - favorite
+  - prefer
+  - like
+  hobby:
+  - hobbies
+  - pastime
+  - interest
+  - enjoy
+  - free time
+  - leisure
+  - weekends
+  allergic:
+  - allergy
+  - allergies
+  - intolerant
+  - intolerance
+  - reaction
+  - sensitive
+  like:
+  - enjoy
+  - love
+  - prefer
+  - fan
+  - fond
+  - into
+  enjoy:
+  - like
+  - love
+  - prefer
+  - fan
+  - fond
+  - into
+  - fun
+  job:
+  - work
+  - career
+  - occupation
+  - profession
+  - role
+  - position
+  - company
+  - employer
+  live:
+  - living
+  - reside
+  - home
+  - address
+  - house
+  - apartment
+  - moved
+  - relocate
+  - place
+  name:
+  - called
+  - named
+  - goes
+  pet:
+  - dog
+  - cat
+  - animal
+  - puppy
+  - kitten
+  - fish
+  - bird
+  - hamster
+  born:
+  - birthday
+  - birth
+  - age
+  - years old
+  degree:
+  - graduated
+  - graduation
+  - university
+  - college
+  - school
+  - major
+  - studied
+  - bachelor
+  - master
+  - phd
+  commute:
+  - drive
+  - driving
+  - travel
+  - train
+  - bus
+  - subway
+  - walk
+  - bike
+  - ride
+  - miles
+  - minutes
+  married:
+  - wife
+  - husband
+  - spouse
+  - partner
+  - wedding
+  - engaged
+  - fiance
+  children:
+  - kids
+  - son
+  - daughter
+  - child
+  - baby
+  - toddler
+  sibling:
+  - brother
+  - sister
+  - siblings
+  parent:
+  - mother
+  - father
+  - mom
+  - dad
+  - parents
+  playlist:
+  - music
+  - songs
+  - spotify
+  - listen
+  - band
+  - artist
+  - album
+  - genre
+  recipe:
+  - cook
+  - cooking
+  - bake
+  - baking
+  - dish
+  - meal
+  - ingredient
+  - kitchen
+  book:
+  - reading
+  - read
+  - novel
+  - author
+  - story
+  - literature
+  - genre
+  movie:
+  - film
+  - watch
+  - watched
+  - cinema
+  - theater
+  - show
+  - series
+  - tv
+  restaurant:
+  - eat
+  - dining
+  - dine
+  - food
+  - cuisine
+  - cafe
+  - place
+  game:
+  - gaming
+  - play
+  - playing
+  - video game
+  - board game
+  - console
+  sport:
+  - sports
+  - team
+  - playing
+  - exercise
+  - workout
+  - gym
+  - running
+  - swimming
+  travel:
+  - trip
+  - vacation
+  - holiday
+  - visit
+  - visited
+  - flew
+  - flight
+  - destination
+  buy:
+  - bought
+  - purchased
+  - ordered
+  - got
+  - picked
+  bought:
+  - buy
+  - purchased
+  - ordered
+  - got
+  - picked
+  wear:
+  - wearing
+  - wore
+  - outfit
+  - clothes
+  - shirt
+  - dress
+  car:
+  - vehicle
+  - drive
+  - driving
+  - auto
+  - truck
+  learn:
+  - learning
+  - study
+  - studying
+  - course
+  - tutorial
+  - class
+  - lesson
+  - practice
+  resource:
+  - tutorial
+  - course
+  - guide
+  - documentation
+  - book
+  - video
+  - lesson
+  - workshop
+  class:
+  - course
+  - lesson
+  - lecture
+  - seminar
+  - workshop
+  - training
+  doctor:
+  - appointment
+  - medical
+  - health
+  - clinic
+  - hospital
+  - checkup
+  exercise:
+  - workout
+  - gym
+  - fitness
+  - running
+  - yoga
+  - training
+  diet:
+  - eating
+  - food
+  - nutrition
+  - meal
+  - healthy
+  - weight
+  currently:
+  - now
+  - recent
+  - latest
+  - present
+  - today
+  recently:
+  - lately
+  - just
+  - new
+  - recent
+  - last
+  new:
+  - recently
+  - just
+  - latest
+  - current
+  - switched
+  changed:
+  - switched
+  - moved
+  - updated
+  - new
+  - different
+intent_patterns:
+  knowledge_update: \b(currently|right now|at the moment|these days|nowadays|present|latest|most
+    recent)\b
+  temporal: \b(last (week|month|year|saturday|sunday|monday|tuesday|wednesday|thursday|friday)|ago|\d+
+    (days?|weeks?|months?) ago|yesterday|recently)\b
+  preference: \b(favorite|favourite|prefer|recommend|suggest|go-to|best|like most|fond
+    of|into|should i|any tips|any advice|any suggestion|what .* good|ideas for|help
+    me (pick|choose|decide|find)|what do you think|would .* be good|looking for .*
+    recommendation|taste|hobby|hobbies|enjoy|love doing|passion)\b
+  personal_fact: \b(my |what (is|are|was|were) my|do i (have|own|like|prefer)|am i|did
+    i|have i|i (mentioned|told|said|shared|talked))\b
+weights:
+  general:
+    bm25: 1.0
+    tfidf: 0.4
+    heat: 0.25
+    temporal: 0.1
+    ngram: 0.6
+    user_bm25: 0.5
+    user_ngram: 0.3
+    entity_density: 0.3
+    semantic: 1.0
+  knowledge_update:
+    bm25: 0.8
+    tfidf: 0.3
+    heat: 1.2
+    temporal: 0.8
+    ngram: 0.5
+    user_bm25: 0.3
+    user_ngram: 0.3
+    entity_density: 0.2
+    semantic: 0.6
+  preference:
+    bm25: 0.5
+    tfidf: 0.3
+    heat: 0.1
+    temporal: 0.05
+    ngram: 0.5
+    user_bm25: 0.7
+    user_ngram: 0.6
+    entity_density: 0.3
+    semantic: 1.5
+  personal_fact:
+    bm25: 0.8
+    tfidf: 0.3
+    heat: 0.1
+    temporal: 0.05
+    ngram: 0.6
+    user_bm25: 0.6
+    user_ngram: 0.5
+    entity_density: 0.4
+    semantic: 1.2
+  temporal:
+    bm25: 0.7
+    tfidf: 0.3
+    heat: 0.8
+    temporal: 1.0
+    ngram: 0.5
+    user_bm25: 0.3
+    user_ngram: 0.3
+    entity_density: 0.2
+    semantic: 0.5
+bm25:
+  k1: 1.5
+  b: 0.75
+heat_decay:
+  fast_factor: 0.995
+  fast_hours: 168
+  slow_factor: 0.999
+ngram:
+  trigram_weight: 0.4
+  bigram_weight: 0.35
+  content_word_weight: 0.25
+rerank_depth: 20
+rerank_alpha: 0.4

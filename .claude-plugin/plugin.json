@@ -1,0 +1,67 @@
+{
+  "name": "jarvis",
+  "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, and cognitive profiling that learns how you work",
+  "version": "2.1.0",
+  "author": {
+    "name": "Clement Deust",
+    "email": "admin@ai-architect.tools"
+  },
+  "homepage": "https://github.com/cdeust/jarvis",
+  "repository": "https://github.com/cdeust/jarvis",
+  "license": "MIT",
+  "keywords": ["memory", "cognitive-profiling", "mcp", "claude-code", "neuroscience"],
+  "mcpServers": {
+    "jarvis": {
+      "command": "python3",
+      "args": ["-m", "mcp_server"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+    }
+  },
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m mcp_server.hooks.session_lifecycle",
+            "cwd": "${CLAUDE_PLUGIN_ROOT}"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m mcp_server.hooks.session_start",
+            "cwd": "${CLAUDE_PLUGIN_ROOT}"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m mcp_server.hooks.post_tool_capture",
+            "cwd": "${CLAUDE_PLUGIN_ROOT}"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "compaction",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m mcp_server.hooks.compaction_checkpoint",
+            "cwd": "${CLAUDE_PLUGIN_ROOT}"
+          }
+        ]
+      }
+    ]
+  }
+}
