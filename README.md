@@ -28,7 +28,7 @@ No LLM in the retrieval loop. Pure local inference.
 ## Highlights
 
 - **97.0% Recall@10** on LongMemEval (ICLR 2025) — beats the paper's best by +18.6pp
-- **0.527 MRR** on BEAM (ICLR 2026) — +60% over LIGHT baseline across 10 memory abilities
+- **0.517 MRR** on BEAM (ICLR 2026) — +57% over LIGHT baseline across 10 memory abilities
 - **Test-time learning** — surprise momentum (Titans, NeurIPS 2025), adaptive decay, Hebbian co-activation (Dragon Hatchling, Pathway 2025)
 - **PostgreSQL + pgvector** — all retrieval via PL/pgSQL stored procedures, HNSW vector search, FTS, trigram similarity
 - **23 biological mechanisms** — LTP/LTD, STDP, microglial pruning, oscillatory gating, neuromodulation, emotional tagging, surprise momentum
@@ -103,7 +103,7 @@ Each recall computes retrieval surprise and updates memory heat via momentum. Su
 | Metric | Cortex | Best in paper | Delta |
 |---|---|---|---|
 | **Recall@10** | **97.0%** | 78.4% | **+18.6pp** |
-| **MRR** | **0.858** | -- | -- |
+| **MRR** | **0.855** | -- | -- |
 
 <details>
 <summary>Per-category breakdown</summary>
@@ -114,8 +114,8 @@ Each recall computes retrieval surprise and updates memory heat via momentum. Su
 | Single-session (assistant) | 0.930 | 98.2% |
 | Single-session (preference) | 0.654 | 93.3% |
 | Multi-session reasoning | 0.896 | 99.2% |
-| Temporal reasoning | 0.851 | 97.7% |
-| Knowledge updates | 0.894 | 97.4% |
+| Temporal reasoning | 0.846 | 97.7% |
+| Knowledge updates | 0.887 | 97.4% |
 
 </details>
 
@@ -123,19 +123,19 @@ Each recall computes retrieval surprise and updates memory heat via momentum. Su
 
 | Metric | Cortex |
 |---|---|
-| **Recall@10** | **84.5%** |
-| **MRR** | **0.598** |
+| **Recall@10** | **84.4%** |
+| **MRR** | **0.599** |
 
 <details>
 <summary>Per-category breakdown</summary>
 
 | Category | MRR | R@5 | R@10 |
 |---|---|---|---|
-| single_hop | 0.621 | 80.9% | 92.6% |
-| multi_hop | 0.693 | 83.8% | 90.0% |
-| temporal | 0.405 | 51.1% | 71.7% |
-| open_domain | 0.585 | 71.1% | 82.4% |
-| adversarial | 0.582 | 70.9% | 82.1% |
+| single_hop | 0.620 | 80.9% | 92.2% |
+| multi_hop | 0.692 | 83.5% | 89.4% |
+| temporal | 0.408 | 52.2% | 73.9% |
+| open_domain | 0.584 | 70.4% | 82.5% |
+| adversarial | 0.586 | 70.4% | 81.4% |
 
 </details>
 
@@ -143,23 +143,23 @@ Each recall computes retrieval surprise and updates memory heat via momentum. Su
 
 | Metric | Cortex | LIGHT (best in paper) | Delta |
 |---|---|---|---|
-| **Overall MRR** | **0.527** | 0.329 | **+60%** |
+| **Overall MRR** | **0.517** | 0.329 | **+57%** |
 
 <details>
 <summary>Per-ability breakdown (retrieval-only MRR)</summary>
 
 | Ability | Cortex | LIGHT | Delta |
 |---|---|---|---|
-| contradiction_resolution | **0.858** | 0.050 | **+1616%** |
-| temporal_reasoning | **0.826** | 0.075 | **+1001%** |
+| contradiction_resolution | **0.846** | 0.050 | **+1592%** |
+| temporal_reasoning | **0.814** | 0.075 | **+985%** |
 | knowledge_update | **0.800** | 0.375 | **+113%** |
 | multi_session_reasoning | **0.755** | 0.000 | -- |
-| information_extraction | **0.510** | 0.375 | **+36%** |
-| event_ordering | **0.412** | 0.266 | **+55%** |
-| preference_following | **0.413** | 0.483 | -14% |
-| summarization | **0.307** | 0.277 | +11% |
-| instruction_following | 0.264 | **0.500** | -47% |
-| abstention | 0.125 | **0.750** | -83% |
+| information_extraction | **0.403** | 0.375 | **+7%** |
+| event_ordering | **0.407** | 0.266 | **+53%** |
+| preference_following | **0.407** | 0.483 | -16% |
+| summarization | **0.332** | 0.277 | **+20%** |
+| instruction_following | 0.256 | **0.500** | -49% |
+| abstention | 0.150 | **0.750** | -80% |
 
 Note: LIGHT scores are full QA (LLM-as-judge). Cortex scores are retrieval-only — not directly comparable but show retrieval quality that feeds downstream QA.
 </details>
