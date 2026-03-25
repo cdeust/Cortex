@@ -28,6 +28,7 @@ No LLM in the retrieval loop. Pure local inference.
 ## Highlights
 
 - **97.0% Recall@10** on LongMemEval (ICLR 2025) — beats the paper's best by +18.6pp
+- **0.527 MRR** on BEAM (ICLR 2026) — +60% over LIGHT baseline across 10 memory abilities
 - **Test-time learning** — surprise momentum (Titans, NeurIPS 2025), adaptive decay, Hebbian co-activation (Dragon Hatchling, Pathway 2025)
 - **PostgreSQL + pgvector** — all retrieval via PL/pgSQL stored procedures, HNSW vector search, FTS, trigram similarity
 - **23 biological mechanisms** — LTP/LTD, STDP, microglial pruning, oscillatory gating, neuromodulation, emotional tagging, surprise momentum
@@ -138,28 +139,29 @@ Each recall computes retrieval surprise and updates memory heat via momentum. Su
 
 </details>
 
-### BEAM (ICLR 2026) — 355 questions, 100K-token conversations, 10 memory abilities
+### BEAM (ICLR 2026) — 395 questions, 100K-token conversations, 10 memory abilities
 
-| Metric | Cortex | LIGHT (best in paper) |
-|---|---|---|
-| **Overall** | **0.353** | 0.329 |
+| Metric | Cortex | LIGHT (best in paper) | Delta |
+|---|---|---|---|
+| **Overall MRR** | **0.527** | 0.329 | **+60%** |
 
 <details>
 <summary>Per-ability breakdown (retrieval-only MRR)</summary>
 
-| Ability | Cortex | LIGHT |
-|---|---|---|
-| multi_session_reasoning | **0.765** | 0.000 |
-| information_extraction | **0.639** | 0.375 |
-| preference_following | **0.491** | 0.483 |
-| event_ordering | **0.389** | 0.266 |
-| summarization | **0.329** | 0.277 |
-| knowledge_update | 0.308 | 0.375 |
-| instruction_following | 0.257 | 0.500 |
-| temporal_reasoning | 0.000 | 0.075 |
-| contradiction_resolution | 0.000 | 0.050 |
+| Ability | Cortex | LIGHT | Delta |
+|---|---|---|---|
+| contradiction_resolution | **0.858** | 0.050 | **+1616%** |
+| temporal_reasoning | **0.826** | 0.075 | **+1001%** |
+| knowledge_update | **0.800** | 0.375 | **+113%** |
+| multi_session_reasoning | **0.755** | 0.000 | -- |
+| information_extraction | **0.510** | 0.375 | **+36%** |
+| event_ordering | **0.412** | 0.266 | **+55%** |
+| preference_following | **0.413** | 0.483 | -14% |
+| summarization | **0.307** | 0.277 | +11% |
+| instruction_following | 0.264 | **0.500** | -47% |
+| abstention | 0.125 | **0.750** | -83% |
 
-Note: LIGHT scores are full QA (LLM-as-judge). Cortex scores are retrieval-only.
+Note: LIGHT scores are full QA (LLM-as-judge). Cortex scores are retrieval-only — not directly comparable but show retrieval quality that feeds downstream QA.
 </details>
 
 **Reproduce all benchmarks:**
