@@ -55,8 +55,8 @@ class PgMemoryStore(
     def __init__(self, database_url: str | None = None) -> None:
         url = database_url or _get_database_url()
         self._conn = psycopg.connect(url, row_factory=dict_row, autocommit=False)
-        register_vector(self._conn)
         self._init_schema()
+        register_vector(self._conn)
 
     def _init_schema(self) -> None:
         """Create all tables, indexes, and stored procedures."""
