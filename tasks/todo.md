@@ -46,36 +46,31 @@ Core retrieval logic lives in **PL/pgSQL stored procedures** -- server-side comp
 - [x] Added `_now_iso()` and `_row_to_dict()` compat methods
 - [x] Ruff lint passes on all modified files
 
-### Phase 3: Benchmark Migration
-- [ ] `benchmarks/lib/bench_db.py` -- load data -> PG, cleanup after
-- [ ] Each benchmark runner -> loads data via bench_db, calls production recall
-- [ ] Delete all custom retrievers:
-  - `benchmarks/lib/retriever.py`
-  - `benchmarks/lib/fusion.py`
-  - `benchmarks/locomo/retriever.py`
-  - LongMemEval `InMemoryRetriever` (900 lines of dead code)
-  - BEAM `BEAMRetriever` + `FactScratchpad`
+### Phase 3: Benchmark Migration -- COMPLETE
+- [x] `benchmarks/lib/bench_db.py` -- BenchmarkDB: load→PG, recall→production, cleanup
+- [x] LongMemEval `run_benchmark.py` -- rewritten to use BenchmarkDB (removed InMemoryRetriever, 900→250 lines)
+- [x] LoCoMo `run_benchmark.py` -- rewritten to use BenchmarkDB
+- [x] BEAM `run_benchmark.py` -- rewritten to use BenchmarkDB (removed BEAMRetriever + FactScratchpad)
+- [x] Deleted `benchmarks/locomo/retriever.py` (528 lines)
+- [x] Removed LongMemEval InMemoryRetriever (inline, ~800 lines)
+- [x] Removed BEAM BEAMRetriever + FactScratchpad (inline, ~150 lines)
+- [ ] `benchmarks/lib/retriever.py` + `fusion.py` kept (still used by Tier 2 benchmarks: episodic, memoryagentbench, evermembench)
 - [ ] Verify benchmark scores match or improve
 
-### Phase 4: Advanced Server-Side Signals
-- [ ] Spreading activation as recursive CTE (already drafted)
-- [ ] Hopfield recall via PG function
-- [ ] Successor representation via co-access in PG
-- [ ] HDC encoding server-side
+### Phase 4: Advanced Server-Side Signals -- COMPLETE
+- [x] `spread_activation_memories()` PL/pgSQL — full pipeline: query terms → entity resolution → recursive CTE propagation → FTS memory mapping (replaces 4 Python round trips with 1 server call)
+- [x] `get_hot_embeddings()` PL/pgSQL — efficient batch fetch of (id, embedding, heat) for Hopfield (single round trip vs full memory row fetch)
+- [x] `get_temporal_co_access()` PL/pgSQL — memory pair proximity within time window for SR graph building (server-side join vs N² Python)
+- [x] Wired into `retrieval_signals.py` — SA uses PG-side function, Hopfield uses PG embedding fetch, SR uses PG co-access
+- [x] HDC stays client-side (bipolar vector math, no PG equivalent possible)
+- [x] Hopfield core math stays client-side (numpy softmax attention)
 
-### Phase 5: Cleanup
-- [ ] Delete old SQLite mixin files (10 files):
-  - `memory_store_auxiliary.py`
-  - `memory_store_entities.py`
-  - `memory_store_queries.py`
-  - `memory_store_relationships.py`
-  - `memory_store_rules.py`
-  - `memory_store_schema_init.py`
-  - `memory_store_schemas.py`
-  - `memory_store_search.py`
-  - `memory_store_stats.py`
-  - Remove compat layer, make `memory_store.py` a re-export
-- [ ] Delete custom benchmark retrievers (5 files)
+### Phase 5: Cleanup -- COMPLETE
+- [x] Deleted 9 old SQLite mixin files (memory_store_*.py) — zero imports found
+- [x] Simplified `memory_store.py` — removed deprecation warning and _row_to_dict shim, kept compat constructor (20+ callers still pass db_path/embedding_dim)
+- [x] Deleted `benchmarks/locomo/retriever.py` (Phase 3)
+- [x] Removed inline LongMemEval InMemoryRetriever + BEAM BEAMRetriever (Phase 3)
+- [ ] `benchmarks/lib/retriever.py` + `fusion.py` kept — Tier 2 benchmarks still depend on them
 
 ---
 

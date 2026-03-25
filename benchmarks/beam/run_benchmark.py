@@ -1,7 +1,8 @@
-"""BEAM benchmark for JARVIS memory system.
+"""BEAM benchmark for Cortex memory system.
 
 Runs the BEAM benchmark (Tavakoli et al., ICLR 2026) — "Beyond a Million Tokens:
 Benchmarking and Enhancing Long-Term Memory in LLMs."
+Uses the production PostgreSQL + pgvector retrieval pipeline.
 
 10 memory abilities tested:
   1. Abstention — withhold answers when evidence is missing
@@ -15,22 +16,14 @@ Benchmarking and Enhancing Long-Term Memory in LLMs."
   9. Summarization — abstract and compress dialogue content
   10. Temporal Reasoning — reason about time relations
 
-Evaluation:
-  - Retrieval-only mode: MRR and Recall@K for each ability
-  - Full QA mode: LLM-as-judge nugget scoring (requires ANTHROPIC_API_KEY)
-  - Event ordering: Kendall tau-b correlation
-
-Dataset: HuggingFace "Mohammadta/BEAM" (100K split for fast testing)
-
 Run:
-    python3 benchmarks/beam/run_benchmark.py [--split 100K] [--limit N] [--qa]
+    python3 benchmarks/beam/run_benchmark.py [--split 100K] [--limit N]
 """
 
 from __future__ import annotations
 
 import argparse
 import os
-import re
 import sys
 import time
 from collections import defaultdict
@@ -49,177 +42,19 @@ from benchmarks.beam.data import (
     parse_probing_questions,
     turns_to_memories,
 )
-
-
-# ── Retrieval Engine ──────────────────────────────────────────────────────
-
-
-class FactScratchpad:
-    """Per-conversation entity-attribute-value tracker (LIGHT-inspired).
-
-    Tracks the latest value for each (entity, attribute) pair.
-    When a knowledge update query is detected, prepends current facts
-    to boost retrieval of the most recent information.
-    """
-
-    def __init__(self):
-        self._facts: dict[
-            tuple[str, str], dict
-        ] = {}  # (entity, attr) -> {value, memory_idx, turn_order}
-
-    def clear(self):
-        self._facts.clear()
-
-    def ingest(self, memories: list[dict]):
-        """Extract entity-attribute-value triples from conversation memories."""
-        for idx, mem in enumerate(memories):
-            content = mem.get("content", "")
-            triples = self._extract_triples(content)
-            for entity, attr, value in triples:
-                key = (entity.lower(), attr.lower())
-                existing = self._facts.get(key)
-                # Supersede if this is a later memory (higher idx = later in conversation)
-                if existing is None or idx >= existing["turn_order"]:
-                    self._facts[key] = {
-                        "value": value,
-                        "memory_idx": idx,
-                        "turn_order": idx,
-                        "entity": entity,
-                        "attribute": attr,
-                    }
-
-    def get_relevant_indices(self, query: str) -> list[int]:
-        """Return memory indices containing the latest facts relevant to query."""
-        query_lower = query.lower()
-        relevant = set()
-        for (entity, attr), fact in self._facts.items():
-            if entity in query_lower or attr in query_lower:
-                relevant.add(fact["memory_idx"])
-        return list(relevant)
-
-    def _extract_triples(self, content: str) -> list[tuple[str, str, str]]:
-        """Simple entity-attribute-value extraction from content."""
-        triples = []
-        # Pattern: "X is/are Y", "X was/were Y", "X has/have Y"
-        patterns = [
-            re.compile(
-                r"(?:my|the|our)\s+(\w+(?:\s+\w+)?)\s+(?:is|are|was|were)\s+(.+?)(?:\.|,|$)",
-                re.I,
-            ),
-            re.compile(
-                r"(\w+(?:\s+\w+)?)\s+(?:changed|moved|switched|updated)\s+(?:to|from)\s+(.+?)(?:\.|,|$)",
-                re.I,
-            ),
-            re.compile(
-                r"(?:I|we)\s+(?:now|recently)\s+(?:use|prefer|like|have)\s+(.+?)(?:\.|,|$)",
-                re.I,
-            ),
-        ]
-        for pat in patterns:
-            for m in pat.finditer(content):
-                groups = m.groups()
-                if len(groups) >= 2:
-                    triples.append(
-                        (groups[0].strip(), "state", groups[1].strip()[:100])
-                    )
-        return triples
-
-
-class BEAMRetriever:
-    """Enhanced retriever with fact scratchpad + 3-tier dispatch for BEAM."""
-
-    _KNOWLEDGE_UPDATE_RE = re.compile(
-        r"\b(latest|current|now|recently|updated|changed|new|"
-        r"most recent|anymore|still|switched|moved|replaced|"
-        r"what is|what are)\b",
-        re.IGNORECASE,
-    )
-
-    _MULTI_HOP_RE = re.compile(
-        r"\b(both|and also|as well as|together|between|compare|"
-        r"relationship|how does.*relate|connect)\b",
-        re.IGNORECASE,
-    )
-
-    def __init__(self):
-        from benchmarks.lib.retriever import BenchmarkRetriever
-
-        self._retriever = BenchmarkRetriever()
-        self._scratchpad = FactScratchpad()
-        self.memories: list[dict] = []
-
-    def clear(self):
-        self.memories = []
-        self._retriever.clear()
-        self._scratchpad.clear()
-
-    def add_memories(self, memories: list[dict]):
-        self.memories = memories
-        self._retriever.add_documents(memories)
-        self._scratchpad.ingest(memories)
-
-    def retrieve(self, query: str, top_k: int = 10) -> list[dict]:
-        is_update = bool(self._KNOWLEDGE_UPDATE_RE.search(query))
-        is_multihop = bool(self._MULTI_HOP_RE.search(query))
-
-        if is_multihop:
-            results = self._retriever.retrieve_multihop(query, top_k=top_k)
-        else:
-            results = self._retriever.retrieve(query, top_k=top_k)
-
-        # For knowledge update queries, boost results from fact scratchpad
-        if is_update:
-            scratchpad_indices = self._scratchpad.get_relevant_indices(query)
-            results = self._boost_scratchpad_results(results, scratchpad_indices, top_k)
-
-        return [
-            {"memory_idx": r["_idx"], "content": r["content"], "score": r["score"]}
-            for r in results
-        ]
-
-    def _boost_scratchpad_results(
-        self, results: list[dict], scratchpad_indices: list[int], top_k: int
-    ) -> list[dict]:
-        """Boost results that contain the latest facts from scratchpad."""
-        if not scratchpad_indices:
-            return results
-
-        result_set = {r["_idx"] for r in results}
-        boosted = []
-        for r in results:
-            score = r["score"]
-            if r["_idx"] in scratchpad_indices:
-                score *= 1.3  # 30% boost for latest-fact results
-            boosted.append(dict(r, score=score))
-
-        # Add scratchpad results not already present
-        for idx in scratchpad_indices:
-            if idx not in result_set and idx < len(self.memories):
-                boosted.append(
-                    {
-                        "_idx": idx,
-                        "content": self.memories[idx]["content"],
-                        "score": 0.5,  # baseline score for scratchpad injection
-                    }
-                )
-
-        boosted.sort(key=lambda x: x["score"], reverse=True)
-        return boosted[:top_k]
+from benchmarks.lib.bench_db import BenchmarkDB
 
 
 # ── Evaluation ───────────────────────────────────────────────────────────
 
 
 def evaluate_retrieval(
-    retriever: BEAMRetriever,
+    db: BenchmarkDB,
     questions: dict,
     conversation_turns: list[dict],
+    mem_ids: list[int],
 ) -> dict[str, dict]:
-    """Evaluate retrieval quality per ability.
-
-    For each probing question, retrieve top-K memories and check if
-    the source turns (where the answer lives) are retrieved.
-    """
+    """Evaluate retrieval quality per ability."""
     results: dict[str, list[dict]] = defaultdict(list)
 
     for ability, qs in questions.items():
@@ -235,12 +70,8 @@ def evaluate_retrieval(
             if not query or not source_ids:
                 continue
 
-            # Retrieve
-            retrieved = retriever.retrieve(query, top_k=10)
+            retrieved = db.recall(query, top_k=10, domain="beam")
 
-            # Check if retrieved results contain evidence for the answer
-            # Strategy: check if the answer text appears in retrieved content,
-            # OR if source turn content appears in retrieved content
             answer = q.get("answer", "")
 
             # Build source content set from turn IDs
@@ -252,12 +83,11 @@ def evaluate_retrieval(
                     if text and len(text) > 10:
                         source_contents.add(text[:80].lower())
 
-            # Find rank of first hit (answer-in-retrieved OR source-turn-in-retrieved)
+            # Find rank of first hit
             hit_rank = None
             answer_lower = answer.lower().strip() if answer else ""
             for rank, r in enumerate(retrieved):
                 content_lower = r["content"].lower()
-                # Check 1: answer text appears in retrieved content
                 if (
                     answer_lower
                     and len(answer_lower) > 2
@@ -265,7 +95,6 @@ def evaluate_retrieval(
                 ):
                     hit_rank = rank + 1
                     break
-                # Check 2: source turn content appears in retrieved content
                 for src in source_contents:
                     if src and src in content_lower:
                         hit_rank = rank + 1
@@ -313,75 +142,71 @@ def evaluate_retrieval(
 
 
 def run_benchmark(split: str = "100K", limit: int | None = None, verbose: bool = False):
-    """Run BEAM retrieval benchmark."""
+    """Run BEAM retrieval benchmark using production PG retrieval."""
     print(f"Loading BEAM dataset (split={split})...")
     ds = load_beam_dataset(split)
 
     if limit:
         ds = ds.select(range(min(limit, len(ds))))
 
-    print(f"Running benchmark on {len(ds)} conversations...")
-    retriever = BEAMRetriever()
+    print(f"Running benchmark on {len(ds)} conversations (PostgreSQL backend)...")
 
     all_metrics: dict[str, list[dict]] = defaultdict(list)
     total_start = time.time()
 
-    for conv_idx, conversation in enumerate(ds):
-        conv_start = time.time()
+    with BenchmarkDB() as db:
+        for conv_idx, conversation in enumerate(ds):
+            conv_start = time.time()
 
-        # Extract turns and memories
-        chat = conversation.get("chat", "")
-        turns = extract_conversation_turns(chat)
-        memories = turns_to_memories(turns)
+            chat = conversation.get("chat", "")
+            turns = extract_conversation_turns(chat)
+            memories = turns_to_memories(turns)
 
-        if not memories:
-            continue
+            if not memories:
+                continue
 
-        # Parse probing questions
-        raw_pq = conversation.get("probing_questions", "{}")
-        questions = parse_probing_questions(raw_pq)
+            raw_pq = conversation.get("probing_questions", "{}")
+            questions = parse_probing_questions(raw_pq)
 
-        if not questions:
-            continue
+            if not questions:
+                continue
 
-        # Set up retriever
-        retriever.clear()
-        retriever.add_memories(memories)
+            # Clean up previous, load new
+            db.clear()
+            mem_ids = db.load_memories(memories, domain="beam")
 
-        # Evaluate
-        metrics = evaluate_retrieval(retriever, questions, turns)
+            metrics = evaluate_retrieval(db, questions, turns, mem_ids)
 
-        for ability, m in metrics.items():
-            all_metrics[ability].append(m)
+            for ability, m in metrics.items():
+                all_metrics[ability].append(m)
 
-        elapsed = time.time() - conv_start
-        if (conv_idx + 1) % 5 == 0 or conv_idx == 0:
-            total_q = sum(
-                m["total_questions"] for ms in all_metrics.values() for m in ms
-            )
-            avg_mrr = 0.0
-            if all_metrics:
-                ability_mrrs = []
-                for ability, ms in all_metrics.items():
-                    if ms:
-                        ability_mrrs.append(sum(m["mrr"] for m in ms) / len(ms))
-                if ability_mrrs:
-                    avg_mrr = sum(ability_mrrs) / len(ability_mrrs)
-            print(
-                f"  [{conv_idx + 1}/{len(ds)}] avg_MRR={avg_mrr:.3f} "
-                f"questions={total_q} ({elapsed:.1f}s/conv)"
-            )
+            elapsed = time.time() - conv_start
+            if (conv_idx + 1) % 5 == 0 or conv_idx == 0:
+                total_q = sum(
+                    m["total_questions"] for ms in all_metrics.values() for m in ms
+                )
+                avg_mrr = 0.0
+                if all_metrics:
+                    ability_mrrs = []
+                    for ms in all_metrics.values():
+                        if ms:
+                            ability_mrrs.append(sum(m["mrr"] for m in ms) / len(ms))
+                    if ability_mrrs:
+                        avg_mrr = sum(ability_mrrs) / len(ability_mrrs)
+                print(
+                    f"  [{conv_idx + 1}/{len(ds)}] avg_MRR={avg_mrr:.3f} "
+                    f"questions={total_q} ({elapsed:.1f}s/conv)"
+                )
 
     total_time = time.time() - total_start
 
-    # Aggregate results
+    # Report
     print()
     print("=" * 72)
-    print("BEAM Benchmark Results — Cortex (Retrieval-Only)")
+    print("BEAM Benchmark Results — Cortex (PostgreSQL)")
     print("=" * 72)
     print()
 
-    # LIGHT reference scores (best published baseline from BEAM paper)
     light_scores = {
         "abstention": 0.750,
         "contradiction_resolution": 0.050,
@@ -446,7 +271,7 @@ def run_benchmark(split: str = "100K", limit: int | None = None, verbose: bool =
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="BEAM benchmark for JARVIS")
+    parser = argparse.ArgumentParser(description="BEAM benchmark for Cortex")
     parser.add_argument(
         "--split",
         default="100K",

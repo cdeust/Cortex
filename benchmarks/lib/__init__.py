@@ -1,5 +1,6 @@
-"""Shared benchmark library — retrieval and fusion utilities."""
+"""Shared benchmark library — retrieval, fusion, and PG database helpers."""
 
+from benchmarks.lib.bench_db import BenchmarkDB
 from benchmarks.lib.fusion import (
     wrrf_fuse,
     QualityZone,
@@ -9,6 +10,7 @@ from benchmarks.lib.fusion import (
 from benchmarks.lib.retriever import BenchmarkRetriever
 
 __all__ = [
+    "BenchmarkDB",
     "BenchmarkRetriever",
     "wrrf_fuse",
     "QualityZone",

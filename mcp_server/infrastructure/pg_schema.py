@@ -406,6 +406,150 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 """
 
+# ── PL/pgSQL: spread_activation_memories ────────────────────────────────
+# Full pipeline: query terms → entity resolution → propagation → memory IDs.
+# Replaces 4 Python-side round trips with 1 server-side call.
+
+SPREAD_ACTIVATION_MEMORIES_FN = """
+CREATE OR REPLACE FUNCTION spread_activation_memories(
+    p_query_terms   TEXT[],
+    p_decay         REAL DEFAULT 0.65,
+    p_threshold     REAL DEFAULT 0.1,
+    p_max_depth     INT DEFAULT 3,
+    p_max_results   INT DEFAULT 50,
+    p_min_heat      REAL DEFAULT 0.05
+) RETURNS TABLE (
+    memory_id   INT,
+    activation  REAL
+) AS $$
+BEGIN
+    RETURN QUERY
+    WITH
+    -- Step 1: Resolve query terms to entity IDs (case-insensitive)
+    seed_entities AS (
+        SELECT DISTINCT e.id AS eid
+        FROM entities e, unnest(p_query_terms) AS t(term)
+        WHERE LOWER(e.name) = LOWER(t.term)
+          AND e.heat >= p_min_heat
+          AND NOT e.archived
+    ),
+    seed_ids AS (
+        SELECT ARRAY_AGG(eid) AS ids FROM seed_entities
+    ),
+    -- Step 2: Spread activation via recursive CTE
+    spread AS (
+        SELECT se.eid, 1.0::REAL AS act, 0 AS depth
+        FROM seed_entities se
+        UNION ALL
+        SELECT
+            CASE
+                WHEN r.source_entity_id = s.eid THEN r.target_entity_id
+                ELSE r.source_entity_id
+            END AS eid,
+            (s.act * p_decay * r.weight * r.confidence)::REAL AS act,
+            s.depth + 1 AS depth
+        FROM spread s
+        JOIN relationships r
+            ON r.source_entity_id = s.eid OR r.target_entity_id = s.eid
+        WHERE s.depth < p_max_depth
+          AND s.act * p_decay * r.weight * r.confidence >= p_threshold
+    ),
+    -- Aggregate activations per entity (max, not sum — prevents over-boost)
+    entity_acts AS (
+        SELECT s.eid, MAX(s.act)::REAL AS act
+        FROM spread s
+        JOIN entities e ON e.id = s.eid
+        WHERE e.heat >= p_min_heat AND NOT e.archived
+        GROUP BY s.eid
+    ),
+    -- Step 3: Map entity activations to memories via FTS + ILIKE
+    entity_memories AS (
+        SELECT DISTINCT m.id AS mid, ea.act
+        FROM entity_acts ea
+        JOIN entities e ON e.id = ea.eid
+        JOIN memories m
+            ON m.content_tsv @@ phraseto_tsquery('english', e.name)
+        WHERE m.heat >= p_min_heat AND NOT m.is_stale
+    )
+    -- Return max activation per memory (entity with strongest path wins)
+    SELECT em.mid, MAX(em.act)::REAL
+    FROM entity_memories em
+    GROUP BY em.mid
+    ORDER BY MAX(em.act) DESC
+    LIMIT p_max_results;
+END;
+$$ LANGUAGE plpgsql STABLE;
+"""
+
+# ── PL/pgSQL: get_hot_embeddings ────────────────────────────────────────
+# Efficient batch fetch of memory IDs + embeddings for Hopfield/HDC.
+# Avoids loading full memory rows — only id + embedding bytes.
+
+GET_HOT_EMBEDDINGS_FN = """
+CREATE OR REPLACE FUNCTION get_hot_embeddings(
+    p_min_heat    REAL DEFAULT 0.05,
+    p_domain      TEXT DEFAULT NULL,
+    p_limit       INT DEFAULT 500
+) RETURNS TABLE (
+    memory_id   INT,
+    embedding   vector(384),
+    heat        REAL
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT m.id, m.embedding, m.heat
+    FROM memories m
+    WHERE m.heat >= p_min_heat
+      AND NOT m.is_stale
+      AND m.embedding IS NOT NULL
+      AND (p_domain IS NULL OR m.domain = p_domain)
+    ORDER BY m.heat DESC
+    LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql STABLE;
+"""
+
+# ── PL/pgSQL: get_temporal_co_access ────────────────────────────────────
+# Returns memory pairs accessed within a time window (for SR graph building).
+# Computes proximity weight: 1.0 - (gap_seconds / window_seconds).
+
+GET_TEMPORAL_CO_ACCESS_FN = """
+CREATE OR REPLACE FUNCTION get_temporal_co_access(
+    p_window_hours  REAL DEFAULT 2.0,
+    p_min_access    INT DEFAULT 1,
+    p_limit         INT DEFAULT 100
+) RETURNS TABLE (
+    mem_a       INT,
+    mem_b       INT,
+    proximity   REAL
+) AS $$
+DECLARE
+    v_window INTERVAL := (p_window_hours || ' hours')::INTERVAL;
+BEGIN
+    RETURN QUERY
+    WITH recent AS (
+        SELECT id, last_accessed
+        FROM memories
+        WHERE access_count >= p_min_access
+          AND NOT is_stale
+          AND last_accessed IS NOT NULL
+        ORDER BY last_accessed DESC
+        LIMIT p_limit
+    )
+    SELECT
+        a.id AS mem_a,
+        b.id AS mem_b,
+        (1.0 - EXTRACT(EPOCH FROM (b.last_accessed - a.last_accessed))
+             / EXTRACT(EPOCH FROM v_window))::REAL AS proximity
+    FROM recent a
+    JOIN recent b
+        ON b.id > a.id
+        AND b.last_accessed BETWEEN a.last_accessed AND a.last_accessed + v_window
+    ORDER BY proximity DESC;
+END;
+$$ LANGUAGE plpgsql STABLE;
+"""
+
 
 # ── Schema initialization ────────────────────────────────────────────────
 
@@ -422,4 +566,7 @@ def get_all_ddl() -> list[str]:
         RECALL_MEMORIES_FN,
         DECAY_MEMORIES_FN,
         SPREAD_ACTIVATION_FN,
+        SPREAD_ACTIVATION_MEMORIES_FN,
+        GET_HOT_EMBEDDINGS_FN,
+        GET_TEMPORAL_CO_ACCESS_FN,
     ]

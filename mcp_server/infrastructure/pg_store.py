@@ -323,6 +323,64 @@ class PgMemoryStore(
                 d[field] = d[field].isoformat()
         return d
 
+    # ── Advanced server-side signals ──────────────────────────────────
+
+    def spread_activation_memories(
+        self,
+        query_terms: list[str],
+        decay: float = 0.65,
+        threshold: float = 0.1,
+        max_depth: int = 3,
+        max_results: int = 50,
+        min_heat: float = 0.05,
+    ) -> list[tuple[int, float]]:
+        """Run spread_activation_memories PL/pgSQL: query→entities→memories.
+
+        Single server-side call replacing 4 Python round trips.
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM spread_activation_memories("
+            "  %s::TEXT[], %s::REAL, %s::REAL, %s::INT, %s::INT, %s::REAL"
+            ")",
+            (query_terms, decay, threshold, max_depth, max_results, min_heat),
+        ).fetchall()
+        return [(r["memory_id"], r["activation"]) for r in rows]
+
+    def get_hot_embeddings(
+        self,
+        min_heat: float = 0.05,
+        domain: str | None = None,
+        limit: int = 500,
+    ) -> list[tuple[int, Any, float]]:
+        """Fetch (memory_id, embedding, heat) for Hopfield/HDC.
+
+        Returns raw pgvector embeddings — caller converts to numpy.
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM get_hot_embeddings(%s::REAL, %s::TEXT, %s::INT)",
+            (min_heat, domain, limit),
+        ).fetchall()
+        return [
+            (r["memory_id"], self._vector_to_bytes(r["embedding"]), r["heat"])
+            for r in rows
+        ]
+
+    def get_temporal_co_access(
+        self,
+        window_hours: float = 2.0,
+        min_access: int = 1,
+        limit: int = 100,
+    ) -> list[tuple[int, int, float]]:
+        """Fetch memory pairs accessed within time window (for SR graph).
+
+        Returns (mem_a, mem_b, proximity_weight) tuples.
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM get_temporal_co_access(%s::REAL, %s::INT, %s::INT)",
+            (window_hours, min_access, limit),
+        ).fetchall()
+        return [(r["mem_a"], r["mem_b"], r["proximity"]) for r in rows]
+
     # ── Lifecycle ─────────────────────────────────────────────────────
 
     def close(self) -> None:

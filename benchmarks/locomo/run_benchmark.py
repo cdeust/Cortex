@@ -1,6 +1,7 @@
-"""LoCoMo benchmark runner for JARVIS memory system.
+"""LoCoMo benchmark runner for Cortex memory system.
 
 LoCoMo (Maharana et al., ACL 2024): 10 conversations, 1,986 QA pairs, 5 categories.
+Uses the production PostgreSQL + pgvector retrieval pipeline.
 
 Run:
     python3 benchmarks/locomo/run_benchmark.py [--limit N] [--verbose]
@@ -22,23 +23,28 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from benchmarks.lib.bench_db import BenchmarkDB
 from benchmarks.locomo.data import (
     CATEGORY_NAMES,
     extract_sessions,
     load_locomo,
     parse_evidence_refs,
 )
-from benchmarks.locomo.retriever import LoCoMoRetriever
 
 
 # ── Evaluation ───────────────────────────────────────────────────────────
 
 
 def evaluate_conversation(
-    retriever: LoCoMoRetriever,
+    db: BenchmarkDB,
+    sessions: list[dict],
+    mem_ids: list[int],
     qa_pairs: list[dict],
 ) -> dict[str, list[dict]]:
     """Evaluate retrieval for all QA pairs in one conversation."""
+    # Map memory_id → session_idx
+    mid_to_sidx = {mid: sessions[i]["session_idx"] for i, mid in enumerate(mem_ids)}
+
     results: dict[str, list[dict]] = defaultdict(list)
 
     for qa in qa_pairs:
@@ -52,11 +58,12 @@ def evaluate_conversation(
         if not target_sessions:
             continue
 
-        retrieved = retriever.retrieve(question, top_k=10)
+        retrieved = db.recall(question, top_k=10, domain="locomo")
 
         hit_rank = None
         for rank, r in enumerate(retrieved):
-            if r["session_idx"] in target_sessions:
+            sidx = mid_to_sidx.get(r["memory_id"])
+            if sidx in target_sessions:
                 hit_rank = rank + 1
                 break
 
@@ -81,7 +88,7 @@ def print_results(
 ):
     print()
     print("=" * 72)
-    print("LoCoMo Benchmark Results — Cortex (Retrieval-Only)")
+    print("LoCoMo Benchmark Results — Cortex (PostgreSQL)")
     print("=" * 72)
     print()
     print(f"{'Category':<20} {'MRR':>6} {'R@5':>6} {'R@10':>6} {'Qs':>5}")
@@ -124,26 +131,39 @@ def run_benchmark(data_path: str, limit: int | None = None, verbose: bool = Fals
 
     print(
         f"Running benchmark on {len(data)} conversations, "
-        f"{sum(len(c['qa']) for c in data)} QA pairs..."
+        f"{sum(len(c['qa']) for c in data)} QA pairs (PostgreSQL backend)..."
     )
 
-    retriever = LoCoMoRetriever()
     all_results: dict[str, list[dict]] = defaultdict(list)
     total_start = time.time()
 
-    for conv_idx, conv in enumerate(data):
-        sessions = extract_sessions(conv["conversation"])
-        retriever.clear()
-        retriever.add_sessions(sessions)
+    with BenchmarkDB() as db:
+        for conv_idx, conv in enumerate(data):
+            sessions = extract_sessions(conv["conversation"])
 
-        conv_results = evaluate_conversation(retriever, conv["qa"])
-        for cat, rs in conv_results.items():
-            all_results[cat].extend(rs)
+            # Clean up previous conversation, load new sessions
+            db.clear()
+            memories = [
+                {
+                    "content": s["content"],
+                    "user_content": s.get("user_content", ""),
+                    "created_at": s.get("date", ""),
+                    "source": f"session_{s['session_idx']}",
+                    "tags": ["locomo"],
+                }
+                for s in sessions
+            ]
+            mem_ids = db.load_memories(memories, domain="locomo")
 
-        total_q = sum(len(rs) for rs in all_results.values())
-        print(
-            f"  [{conv_idx + 1}/{len(data)}] questions={total_q} ({time.time() - total_start:.1f}s)"
-        )
+            conv_results = evaluate_conversation(db, sessions, mem_ids, conv["qa"])
+            for cat, rs in conv_results.items():
+                all_results[cat].extend(rs)
+
+            total_q = sum(len(rs) for rs in all_results.values())
+            print(
+                f"  [{conv_idx + 1}/{len(data)}] questions={total_q} "
+                f"({time.time() - total_start:.1f}s)"
+            )
 
     print_results(all_results, time.time() - total_start, len(data))
 
@@ -155,7 +175,7 @@ def run_benchmark(data_path: str, limit: int | None = None, verbose: bool = Fals
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LoCoMo benchmark for JARVIS")
+    parser = argparse.ArgumentParser(description="LoCoMo benchmark for Cortex")
     parser.add_argument("--limit", type=int, help="Limit conversations")
     parser.add_argument("--verbose", action="store_true", help="Show misses")
     args = parser.parse_args()
