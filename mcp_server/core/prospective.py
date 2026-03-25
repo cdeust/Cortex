@@ -40,6 +40,22 @@ _PROSPECTIVE_PATTERNS = [
     (re.compile(r"later\s+(.+?)(?:\.|$)", re.IGNORECASE), "keyword_match"),
     (re.compile(r"eventually\s+(.+?)(?:\.|$)", re.IGNORECASE), "keyword_match"),
     (re.compile(r"should also\s+(.+?)(?:\.|$)", re.IGNORECASE), "keyword_match"),
+    # Standing instructions: "Always X when I ask about Y"
+    (
+        re.compile(
+            r"always\s+(.+?)\s+when\s+(?:i|you)\s+(?:ask|mention|discuss|talk)\b.+",
+            re.IGNORECASE,
+        ),
+        "keyword_match",
+    ),
+    # Preference constraints: "Prefer X over Y", "Use X instead of Y"
+    (
+        re.compile(
+            r"(?:always|prefer)\s+(?:use|prefer)\s+(.+?)(?:\.|$)", re.IGNORECASE
+        ),
+        "keyword_match",
+    ),
+    (re.compile(r"make sure (?:to\s+)?(.+?)(?:\.|$)", re.IGNORECASE), "keyword_match"),
 ]
 
 _TIME_HOUR_RE = re.compile(r"^(\d{1,2}):(\d{2})$")

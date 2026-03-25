@@ -126,7 +126,7 @@ def turns_to_memories(turns: list[dict]) -> list[dict]:
             memories.append(
                 {
                     "content": content.strip(),
-                    "time_anchor": time_anchor,
+                    "created_at": time_anchor if time_anchor else "",
                     "user_content": user_content,
                 }
             )

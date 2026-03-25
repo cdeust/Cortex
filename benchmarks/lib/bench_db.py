@@ -93,10 +93,7 @@ class BenchmarkDB:
         ids = []
         for mem, emb in zip(memories, embeddings):
             created = (
-                mem.get("created_at")
-                or mem.get("date")
-                or mem.get("date_iso")
-                or mem.get("time_anchor", "")
+                mem.get("created_at") or mem.get("date") or mem.get("date_iso", "")
             )
             mid = self._store.insert_memory(
                 {
@@ -122,12 +119,7 @@ class BenchmarkDB:
         texts = []
         for m in memories:
             prefix = ""
-            date = (
-                m.get("date")
-                or m.get("created_at")
-                or m.get("date_iso")
-                or m.get("time_anchor", "")
-            )
+            date = m.get("date") or m.get("created_at") or m.get("date_iso", "")
             if date:
                 prefix = f"[Date: {date}] "
             user = m.get("user_content", "")

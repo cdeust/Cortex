@@ -26,6 +26,7 @@ from mcp_server.handlers.recall_helpers import (
     collect_signals,
     build_result,
     build_enhancements,
+    inject_triggered_memories,
 )
 
 schema = {
@@ -240,6 +241,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     )
 
     results = _fetch_and_boost(fused, store, intent, settings, max_results)
+    # Prospective memory: inject triggered standing instructions
+    results = inject_triggered_memories(results, query, store)
     # Titans test-time learning: surprise momentum updates heat in PG
     q_emb = emb.encode(query[:500]) if emb else None
     _apply_surprise_momentum(results, q_emb, store, settings, domain)

@@ -10,6 +10,7 @@ from typing import Any
 
 from mcp_server.core import thermodynamics
 from mcp_server.core.enrichment import build_expanded_query
+from mcp_server.core.prospective import check_trigger
 from mcp_server.core.query_intent import QueryIntent
 from mcp_server.core.retrieval_signals import (
     compute_hopfield_hdc,
@@ -158,6 +159,54 @@ def build_result(mem: dict, score: float, intent: str, settings: Any) -> dict:
         "surprise": mem.get("surprise_score", 0.0),
         "recency_boost": round(boost, 4),
     }
+
+
+def inject_triggered_memories(
+    results: list[dict],
+    query: str,
+    store: Any,
+) -> list[dict]:
+    """Inject prospective memories whose triggers match the query.
+
+    Standing instructions like "Always X when I ask about Y" are stored
+    as prospective memories. When a query matches their trigger, the
+    associated memory is injected into results even if WRRF didn't find it.
+    """
+    try:
+        triggers = store.get_active_prospective_memories()
+    except Exception:
+        return results
+    if not triggers:
+        return results
+    existing_ids = {r["memory_id"] for r in results}
+    injected = []
+    for t in triggers:
+        if not check_trigger(t, content=query):
+            continue
+        matches = store.search_fts(t.get("content", ""), limit=3)
+        for mid, _score in matches:
+            if mid in existing_ids:
+                continue
+            mem = store.get_memory(mid)
+            if not mem:
+                continue
+            injected.append(
+                {
+                    "memory_id": mid,
+                    "content": mem["content"],
+                    "score": 0.9,
+                    "heat": mem.get("heat", 1.0),
+                    "domain": mem.get("domain", ""),
+                    "tags": parse_tags(mem.get("tags", [])),
+                    "store_type": mem.get("store_type", "episodic"),
+                    "created_at": mem.get("created_at", ""),
+                    "importance": mem.get("importance", 0.5),
+                    "surprise": mem.get("surprise_score", 0.0),
+                    "recency_boost": 0.0,
+                }
+            )
+            existing_ids.add(mid)
+    return injected + results if injected else results
 
 
 def build_enhancements(query: str, intent: str, tier: str, settings: Any) -> dict:
