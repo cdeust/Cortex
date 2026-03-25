@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Cluster Visualization
+// Cortex Neural Graph — Cluster Visualization
 (function() {
   var clusterMeshes = [];
 

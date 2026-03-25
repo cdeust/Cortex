@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Categories View
+// Cortex Memory Dashboard — Categories View
 // Groups memories by category with expandable cards.
 
 (function() {

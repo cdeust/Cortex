@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Reactive State
+// Cortex Neural Graph — Reactive State
 (function() {
   var listeners = {};
 

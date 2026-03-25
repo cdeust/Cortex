@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — UI Controls
+// Cortex Neural Graph — UI Controls
 (function() {
   document.addEventListener('DOMContentLoaded', function() {
     // ── Filter buttons (source type) ──

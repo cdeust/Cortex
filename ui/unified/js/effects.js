@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Ambient Effects
+// Cortex Neural Graph — Ambient Effects
 (function() {
   // Dust particles
   var DUST_COUNT = 120;

@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Configuration & Constants
+// Cortex Memory Dashboard — Configuration & Constants
 // Single source of truth for colors, sizes, and type definitions.
 
 (function() {

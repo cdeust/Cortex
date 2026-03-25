@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Visual Effects
+// Cortex Memory Dashboard — Visual Effects
 // Ambient dust particles only. Clean, minimal.
 
 (function() {

@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Three.js Scene
+// Cortex Memory Dashboard — Three.js Scene
 // Scene, camera, renderer, selective bloom post-processing.
 
 (function() {

@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Semantic Zoom
+// Cortex Neural Graph — Semantic Zoom
 (function() {
   var currentLevel = 'L0';
 

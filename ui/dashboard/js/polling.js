@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Data Polling
+// Cortex Memory Dashboard — Data Polling
 // Fetches /api/dashboard every 3s, updates state on change.
 
 (function() {

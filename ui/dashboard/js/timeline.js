@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Timeline View
+// Cortex Memory Dashboard — Timeline View
 // Chronological memory display grouped by time windows.
 
 (function() {

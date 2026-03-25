@@ -1,8 +1,8 @@
 /**
  * Builds a neural knowledge graph for the payment form validation pipeline.
- * Output artifact — NOT part of JARVIS core engine.
+ * Output artifact — NOT part of Cortex core engine.
  *
- * Node mapping to JARVIS viz color scheme:
+ * Node mapping to Cortex viz color scheme:
  * - domain (cyan)           → System layers
  * - entry-point (green)     → Input fields & raw data
  * - recurring-pattern (blue) → Validation rules & algorithms

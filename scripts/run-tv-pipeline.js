@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Direct invocation of JARVIS run_pipeline handler.
+ * Direct invocation of Cortex run_pipeline handler.
  * Usage: node scripts/run-tv-pipeline.js
  */
 "use strict";
@@ -31,25 +31,25 @@ async function main() {
     max_findings: 5,
   };
 
-  process.stderr.write(`[jarvis] Pipeline start: ${JSON.stringify(args, null, 2)}\n`);
+  process.stderr.write(`[cortex] Pipeline start: ${JSON.stringify(args, null, 2)}\n`);
 
   try {
     const result = await runPipeline.handler(args);
     process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 
     if (result.status === "error") {
-      process.stderr.write(`\n[jarvis] FAILED at stage "${result.failed_stage}": ${result.error}\n`);
+      process.stderr.write(`\n[cortex] FAILED at stage "${result.failed_stage}": ${result.error}\n`);
       process.exit(1);
     }
 
-    process.stderr.write(`\n[jarvis] DELIVERED — PR: ${result.pr}\n`);
+    process.stderr.write(`\n[cortex] DELIVERED — PR: ${result.pr}\n`);
     process.stderr.write(`  Branch: ${result.branch}\n`);
     process.stderr.write(`  Files: ${result.implemented_files} source, ${result.prd_files} PRD\n`);
     process.stderr.write(`  HOR: ${result.hor}\n`);
     process.stderr.write(`  Audit: ${result.audit?.rules} rules, ${result.audit?.flags} flags\n`);
     process.stderr.write(`  Tool calls: ${result.tool_calls}\n`);
   } catch (err) {
-    process.stderr.write(`\n[jarvis] FATAL: ${err.message}\n${err.stack}\n`);
+    process.stderr.write(`\n[cortex] FATAL: ${err.message}\n${err.stack}\n`);
     process.exit(2);
   }
 }

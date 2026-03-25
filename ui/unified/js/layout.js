@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Force-Directed Layout Engine
+// Cortex Neural Graph — Force-Directed Layout Engine
 (function() {
   var layoutNodes = [];
   var layoutEdges = [];

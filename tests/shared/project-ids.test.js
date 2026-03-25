@@ -8,7 +8,7 @@ const {
 
 describe("cwdToProjectId", () => {
   it("converts a normal path to project ID", () => {
-    assert.equal(cwdToProjectId("/Users/dev/jarvis"), "-Users-dev-jarvis");
+    assert.equal(cwdToProjectId("/Users/dev/cortex"), "-Users-dev-cortex");
   });
 
   it("replaces all slashes with dashes", () => {
@@ -33,8 +33,8 @@ describe("cwdToProjectId", () => {
 
 describe("projectIdToLabel", () => {
   it("strips Users prefix and returns project name", () => {
-    const label = projectIdToLabel("-Users-dev-Developments-jarvis");
-    assert.equal(label, "jarvis");
+    const label = projectIdToLabel("-Users-dev-Developments-cortex");
+    assert.equal(label, "cortex");
   });
 
   it("strips Users and Documents prefix", () => {

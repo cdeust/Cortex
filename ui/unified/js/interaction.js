@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Interaction
+// Cortex Neural Graph — Interaction
 (function() {
   var raycaster = new THREE.Raycaster();
   var mouse = new THREE.Vector2();

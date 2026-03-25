@@ -3,7 +3,7 @@
  * @description Builds a neural knowledge graph for medical domain analysis.
  *
  * Encodes the pollen → antihistamine → desensitization domain as a
- * force-directed graph compatible with the JARVIS visualization system.
+ * force-directed graph compatible with the Cortex visualization system.
  *
  * Node types map to the existing viz color scheme:
  * - domain          → System hubs (cyan)

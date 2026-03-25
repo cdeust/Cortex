@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Monitoring Log
+// Cortex Neural Graph — Monitoring Log
 (function() {
   var logEntries = [];
   var activeTypeFilter = 'all';

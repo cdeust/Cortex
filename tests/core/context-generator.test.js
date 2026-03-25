@@ -8,7 +8,7 @@ const { generateContext, generateShortContext } = require("../../mcp-server/core
 
 function makeProfile(overrides = {}) {
   return {
-    label: "Jarvis",
+    label: "Cortex",
     entryPoints: [{ pattern: "fix / api / auth", frequency: 5, confidence: 0.8 }],
     recurringPatterns: [
       { pattern: "read before edit", frequency: 4, confidence: 0.6 },
@@ -41,9 +41,9 @@ function makeProfile(overrides = {}) {
 
 describe("generateContext", () => {
   it("includes all sections when profile is fully populated", () => {
-    const ctx = generateContext("jarvis", makeProfile());
+    const ctx = generateContext("cortex", makeProfile());
 
-    assert.ok(ctx.includes("You're working in Jarvis"), "should include domain label");
+    assert.ok(ctx.includes("You're working in Cortex"), "should include domain label");
     assert.ok(ctx.includes("You typically fix / api / auth"), "should include top entry point");
     assert.ok(ctx.includes("read before edit"), "should include first recurring pattern");
     assert.ok(ctx.includes("grep then fix"), "should include second recurring pattern");
@@ -58,7 +58,7 @@ describe("generateContext", () => {
   });
 
   it("returns default message when profile is null", () => {
-    const ctx = generateContext("jarvis", null);
+    const ctx = generateContext("cortex", null);
     assert.equal(ctx, "No cognitive profile yet. Building one as we go.");
   });
 
@@ -68,8 +68,8 @@ describe("generateContext", () => {
   });
 
   it("uses domain id as label when label is missing", () => {
-    const ctx = generateContext("jarvis", makeProfile({ label: null }));
-    assert.ok(ctx.includes("You're working in jarvis"));
+    const ctx = generateContext("cortex", makeProfile({ label: null }));
+    assert.ok(ctx.includes("You're working in cortex"));
   });
 
   it("handles profile with no entry points", () => {
@@ -125,8 +125,8 @@ describe("generateContext", () => {
 
 describe("generateShortContext", () => {
   it("produces label + style + mode format", () => {
-    const short = generateShortContext("jarvis", makeProfile());
-    assert.equal(short, "Jarvis · depth-first · top-down · burst");
+    const short = generateShortContext("cortex", makeProfile());
+    assert.equal(short, "Cortex · depth-first · top-down · burst");
   });
 
   it("returns null when profile is null", () => {
@@ -154,6 +154,6 @@ describe("generateShortContext", () => {
 
   it("returns just the label when no metacognitive and no sessionShape", () => {
     const short = generateShortContext("d", makeProfile({ metacognitive: null, sessionShape: null }));
-    assert.equal(short, "Jarvis");
+    assert.equal(short, "Cortex");
   });
 });

@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Graph Orchestrator
+// Cortex Memory Dashboard — Graph Orchestrator
 // DNA double-helix layout: two interleaved helical strands with cross-rungs.
 // Entities form the backbone spheres, memories branch off as side chains.
 
@@ -69,7 +69,7 @@
     // Fit camera to show everything immediately
     fitCameraImmediate();
 
-    console.log('[jarvis] Graph: ' + JMD.allNodes.length + ' nodes, DNA helix');
+    console.log('[cortex] Graph: ' + JMD.allNodes.length + ' nodes, DNA helix');
 
     if (!animating) { animating = true; animate(); }
   }

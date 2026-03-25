@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Graph Orchestrator
+// Cortex Neural Graph — Graph Orchestrator
 (function() {
   var frame = 0;
   var animating = false;
@@ -365,7 +365,7 @@
     // Log to monitor
     if (JUG.logNodes) JUG.logNodes(filteredNodes);
 
-    console.log('[jarvis] +' + filteredNodes.length + ' nodes → ' + JUG.allNodes.length + ' total');
+    console.log('[cortex] +' + filteredNodes.length + ' nodes → ' + JUG.allNodes.length + ' total');
   }
 
   JUG.buildGraph = buildGraph;

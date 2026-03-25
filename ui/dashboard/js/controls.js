@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — UI Controls
+// Cortex Memory Dashboard — UI Controls
 // Sidebar navigation, filter buttons, search, reset camera, analytics.
 
 (function() {

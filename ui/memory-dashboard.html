@@ -355,7 +355,7 @@ canvas { display:block; position:absolute; top:0; left:0; }
 
 <!-- Top bar -->
 <div id="topbar">
-  <div style="font-size:12px;font-weight:700;color:#00d2ff;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 15px rgba(0,210,255,0.4)">JARVIS MEMORY</div>
+  <div style="font-size:12px;font-weight:700;color:#00d2ff;letter-spacing:3px;text-transform:uppercase;text-shadow:0 0 15px rgba(0,210,255,0.4)">CORTEX MEMORY</div>
   <input id="search-brain" type="text" placeholder="Search memories…">
   <div class="filter-bar">
     <button class="fbtn active" data-type="all">All</button>
@@ -474,8 +474,8 @@ canvas { display:block; position:absolute; top:0; left:0; }
 (async function() {
 try {
 
-// ── Load from JARVIS memory API and transform to brain.html format ──
-async function loadJarvisData() {
+// ── Load from Cortex memory API and transform to brain.html format ──
+async function loadCortexData() {
   const res = await fetch('/api/dashboard');
   const raw = await res.json();
   const nodes = [];
@@ -488,7 +488,7 @@ async function loadJarvisData() {
       name: e.name || 'Entity',
       nodeType: 'memory',
       type: e.type || 'reference',
-      project: e.domain || 'jarvis',
+      project: e.domain || 'cortex',
       path: '',
       heat: e.heat || 0,
       connections: 0,
@@ -504,7 +504,7 @@ async function loadJarvisData() {
       name: (m.content || '').slice(0, 80),
       nodeType: 'memory',
       type: memType,
-      project: m.domain || 'jarvis',
+      project: m.domain || 'cortex',
       path: '',
       heat: m.heat || 0,
       importance: m.importance || 0.5,
@@ -566,7 +566,7 @@ if (window.__GRAPH_DATA_URL__) {
 } else if (window.__GRAPH_DATA__) {
   data = window.__GRAPH_DATA__;
 } else {
-  data = await loadJarvisData();
+  data = await loadCortexData();
 }
 const { nodes, edges } = data;
 const W = window.innerWidth, H = window.innerHeight;
@@ -645,7 +645,7 @@ function stageColor(stage) {
 
 // ── Node colors by type ───────────────────────────────────────────
 function nodeColor(n) {
-  // JARVIS memory types — blend store_type color with consolidation stage
+  // Cortex memory types — blend store_type color with consolidation stage
   if (n.store_type === 'episodic' || n.store_type === 'semantic') {
     var base = n.store_type === 'episodic'
       ? new THREE.Color('#26de81')   // green
@@ -697,7 +697,7 @@ function clamp(x,y,z) {
 
 // ── Node sizing ────────────────────────────────────────────────────
 function neuronR(n) {
-  // JARVIS memory types — entities bigger, memories scaled by importance
+  // Cortex memory types — entities bigger, memories scaled by importance
   if (n.id && n.id.startsWith('e_')) return 4.5 + Math.min(n.connections||0, 15) * 0.15;
   if (n.store_type === 'episodic')   return 2.5 + (n.importance||0.5) * 1.5;
   if (n.store_type === 'semantic')   return 2.8 + (n.importance||0.5) * 1.5;
@@ -1240,7 +1240,7 @@ function applyFilters() {
 
     let vis = true;
 
-    // Type filter — JARVIS memory types
+    // Type filter — Cortex memory types
     if (vis && activeFilter !== 'all') {
       if (activeFilter === 'episodic') {
         vis = n.store_type === 'episodic';
@@ -1684,7 +1684,7 @@ function openPanel(n) {
     content.appendChild(sec);
 
   } else if (n.nodeType === 'memory' && n.id && n.id.startsWith('m_')) {
-    // JARVIS memory detail panel with neuroscience fields
+    // Cortex memory detail panel with neuroscience fields
     const grid=document.createElement('div'); grid.className='meta-grid';
     const row=(l,v,c)=>{ grid.innerHTML+=`<div class="ml">${l}</div><div class="mv"${c?' style="color:'+c+'"':''}>${escHtml(String(v))}</div>`; };
     row('Heat', (n.heat||0).toFixed(3));

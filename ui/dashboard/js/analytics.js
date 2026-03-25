@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Analytics Panel
+// Cortex Memory Dashboard — Analytics Panel
 // KPI strip + bar charts for types, heat, domains, tags.
 // Clickable bars filter the graph view.
 

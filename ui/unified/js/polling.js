@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Async Progressive Batch Streaming
+// Cortex Neural Graph — Async Progressive Batch Streaming
 (function() {
   var BATCH_SIZE = 150;
   var BATCH_DELAY_INITIAL = 1500; // ms for first 3 batches (layout needs to settle)
@@ -35,7 +35,7 @@
       })
       .catch(function(err) {
         if (err.name === 'AbortError') return;
-        console.warn('[jarvis] Graph fetch error:', err.message);
+        console.warn('[cortex] Graph fetch error:', err.message);
         useFallback();
       });
   }
@@ -72,7 +72,7 @@
       })
       .catch(function(err) {
         if (err.name === 'AbortError') return;
-        console.warn('[jarvis] Batch ' + batchNum + ' failed:', err.message);
+        console.warn('[cortex] Batch ' + batchNum + ' failed:', err.message);
         var delay = batchNum <= 3 ? BATCH_DELAY_INITIAL : BATCH_DELAY_NORMAL;
         setTimeout(function() {
           streamBatches(batchNum + 1, totalBatches, signal);

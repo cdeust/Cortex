@@ -52,19 +52,19 @@ describe("detectDomain", () => {
     // project match gives 0.5 weight * 1.0 = 0.5, plus we need content or category
     // to push over 0.6. Use project + matching keywords.
     const profiles = makeProfiles({
-      jarvis: makeDomain({
-        projects: ["-Users-dev-jarvis"],
+      cortex: makeDomain({
+        projects: ["-Users-dev-cortex"],
         topKeywords: ["scanner", "cognitive", "profiling"],
         categoryDistribution: { "architecture": 0.5, "feature": 0.5 },
       }),
     });
 
     const result = detectDomain(
-      { cwd: "/Users/dev/jarvis", first_message: "fix the scanner cognitive profiling module" },
+      { cwd: "/Users/dev/cortex", first_message: "fix the scanner cognitive profiling module" },
       profiles
     );
     assert.equal(result.coldStart, false);
-    assert.equal(result.domain, "jarvis");
+    assert.equal(result.domain, "cortex");
     assert.ok(result.confidence >= 0.6, `confidence ${result.confidence} should be >= 0.6`);
     assert.equal(result.isNew, false);
   });
@@ -92,8 +92,8 @@ describe("detectDomain", () => {
 
   it("new domain — no match below tentative threshold", () => {
     const profiles = makeProfiles({
-      jarvis: makeDomain({
-        projects: ["-Users-dev-jarvis"],
+      cortex: makeDomain({
+        projects: ["-Users-dev-cortex"],
         topKeywords: ["scanner", "cognitive"],
         categoryDistribution: {},
       }),
@@ -190,16 +190,16 @@ describe("detectDomain", () => {
 describe("mapProjectToDomain", () => {
   it("finds domain that owns the project", () => {
     const profiles = makeProfiles({
-      jarvis: makeDomain({ projects: ["-Users-dev-jarvis", "-Users-dev-jarvis2"] }),
+      cortex: makeDomain({ projects: ["-Users-dev-cortex", "-Users-dev-cortex2"] }),
       other: makeDomain({ projects: ["-Users-dev-other"] }),
     });
-    assert.equal(mapProjectToDomain("-Users-dev-jarvis", profiles), "jarvis");
+    assert.equal(mapProjectToDomain("-Users-dev-cortex", profiles), "cortex");
     assert.equal(mapProjectToDomain("-Users-dev-other", profiles), "other");
   });
 
   it("returns null when project not found", () => {
     const profiles = makeProfiles({
-      jarvis: makeDomain({ projects: ["-Users-dev-jarvis"] }),
+      cortex: makeDomain({ projects: ["-Users-dev-cortex"] }),
     });
     assert.equal(mapProjectToDomain("-Users-dev-unknown", profiles), null);
   });

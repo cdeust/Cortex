@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — State Management
+// Cortex Memory Dashboard — State Management
 // Centralized reactive state with observer pattern.
 
 (function() {

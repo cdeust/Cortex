@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Node Factories
+// Cortex Neural Graph — Node Factories
 (function() {
   var GEOM_MAP = {
     'domain': JUG.icoGeo,

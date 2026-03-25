@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Edge Rendering
+// Cortex Memory Dashboard — Edge Rendering
 // Relationship lines, fiber tracts for strong connections, flow particles.
 
 (function() {

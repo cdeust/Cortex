@@ -595,7 +595,7 @@ async function loadData() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
   } catch (e) {
-    console.warn('[jarvis] Fallback sample data:', e.message);
+    console.warn('[cortex] Fallback sample data:', e.message);
     return SAMPLE;
   }
 }

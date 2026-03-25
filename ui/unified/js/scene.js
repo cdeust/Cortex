@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Three.js Scene
+// Cortex Neural Graph — Three.js Scene
 (function() {
   var W = 800, H = 600;
 

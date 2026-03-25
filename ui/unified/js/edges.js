@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Edge Rendering
+// Cortex Neural Graph — Edge Rendering
 (function() {
   var MAX_EDGES = 3000;
   var NUM_PARTICLES = 400;

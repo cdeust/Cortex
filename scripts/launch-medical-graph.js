@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Launch the pollen-allergy desensitization neural graph in the JARVIS 3D visualizer.
+ * Launch the pollen-allergy desensitization neural graph in the Cortex 3D visualizer.
  *
  * Usage: node scripts/launch-medical-graph.js
  */

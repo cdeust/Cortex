@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Node Builder
+// Cortex Memory Dashboard — Node Builder
 // Glowing neural nodes: spheres for memories, octahedrons for entities.
 // Strong bloom + halo for DNA-helix visual.
 

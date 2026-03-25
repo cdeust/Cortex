@@ -1,4 +1,4 @@
-// JARVIS Unified Graph — Configuration
+// Cortex Neural Graph — Configuration
 var JUG = window.JUG || {};
 window.JUG = JUG;
 

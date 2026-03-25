@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Stats Bar + Connection Status
+// Cortex Memory Dashboard — Stats Bar + Connection Status
 // Updates bottom bar stats, KPI strip, status indicator.
 
 (function() {

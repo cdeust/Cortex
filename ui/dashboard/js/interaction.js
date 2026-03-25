@@ -1,4 +1,4 @@
-// JARVIS Memory Dashboard — Interaction Layer
+// Cortex Memory Dashboard — Interaction Layer
 // Detail panel and tooltip — raycasting handled by graph.js.
 
 (function() {

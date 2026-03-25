@@ -47,7 +47,7 @@ describe("buildDomainProfiles", () => {
       conversations: convs,
       memories: {},
       brainIndex: { memories: {}, conversations: {} },
-      byProject: makeByProject("-Users-dev-jarvis", convs),
+      byProject: makeByProject("-Users-dev-cortex", convs),
     });
 
     assert.ok(result.domains, "should have domains");
@@ -58,7 +58,7 @@ describe("buildDomainProfiles", () => {
     assert.equal(domain.sessionCount, 3);
     assert.ok(domain.label, "should have a label");
     assert.ok(Array.isArray(domain.projects));
-    assert.ok(domain.projects.includes("-Users-dev-jarvis"));
+    assert.ok(domain.projects.includes("-Users-dev-cortex"));
     assert.ok(Array.isArray(domain.entryPoints));
     assert.ok(domain.toolPreferences, "should have tool preferences");
     assert.ok(domain.sessionShape, "should have session shape");
@@ -143,7 +143,7 @@ describe("buildDomainProfiles", () => {
     const existing = makeEmptyProfiles();
 
     // Pre-seed domains so targetDomain works
-    existing.domains["jarvis"] = { projects: ["-Users-dev-jarvis"], sessionCount: 0 };
+    existing.domains["cortex"] = { projects: ["-Users-dev-cortex"], sessionCount: 0 };
     existing.domains["other"] = { projects: ["-Users-dev-other"], sessionCount: 0 };
 
     const result = buildDomainProfiles({
@@ -152,14 +152,14 @@ describe("buildDomainProfiles", () => {
       memories: {},
       brainIndex: { memories: {}, conversations: {} },
       byProject: {
-        "-Users-dev-jarvis": convsA,
+        "-Users-dev-cortex": convsA,
         "-Users-dev-other": convsB,
       },
-      targetDomain: "jarvis",
+      targetDomain: "cortex",
     });
 
-    // "jarvis" should be rebuilt (sessionCount=1), "other" should remain at 0
-    assert.equal(result.domains.jarvis.sessionCount, 1);
+    // "cortex" should be rebuilt (sessionCount=1), "other" should remain at 0
+    assert.equal(result.domains.cortex.sessionCount, 1);
     assert.equal(result.domains.other.sessionCount, 0);
   });
 
