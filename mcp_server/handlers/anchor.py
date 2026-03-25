@@ -103,8 +103,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     content = _build_anchor_content(mem.get("content", ""), reason)
 
     store._conn.execute(
-        "UPDATE memories SET heat = 1.0, is_protected = 1, importance = 1.0, "
-        "tags = ?, content = ? WHERE id = ?",
+        "UPDATE memories SET heat = 1.0, is_protected = TRUE, importance = 1.0, "
+        "tags = %s::jsonb, content = %s WHERE id = %s",
         (_json.dumps(tags), content, memory_id),
     )
     store._conn.commit()

@@ -56,11 +56,11 @@ def ensure_backfill_log(store: MemoryStore) -> None:
     """Create the backfill_log table if it doesn't exist."""
     store._conn.execute(
         """CREATE TABLE IF NOT EXISTS backfill_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             file_path TEXT NOT NULL UNIQUE,
             file_hash TEXT NOT NULL,
             memories_imported INTEGER DEFAULT 0,
-            processed_at TEXT NOT NULL
+            processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )"""
     )
     store._conn.commit()
@@ -77,7 +77,7 @@ def file_hash(path: Path) -> str:
 def is_already_backfilled(store: MemoryStore, path: Path, current_hash: str) -> bool:
     """Check whether a file has already been backfilled with this hash."""
     row = store._conn.execute(
-        "SELECT file_hash FROM backfill_log WHERE file_path = ?",
+        "SELECT file_hash FROM backfill_log WHERE file_path = %s",
         (str(path),),
     ).fetchone()
     if row is None:
@@ -87,16 +87,15 @@ def is_already_backfilled(store: MemoryStore, path: Path, current_hash: str) -> 
 
 def mark_backfilled(store: MemoryStore, path: Path, fhash: str, count: int) -> None:
     """Record that a file has been backfilled."""
-    now = store._now_iso()
     store._conn.execute(
         """INSERT INTO backfill_log (file_path, file_hash, memories_imported, processed_at)
-           VALUES (?, ?, ?, ?)
+           VALUES (%s, %s, %s, NOW())
            ON CONFLICT(file_path) DO UPDATE SET
-             file_hash = excluded.file_hash,
-             memories_imported = excluded.memories_imported,
-             processed_at = excluded.processed_at
+             file_hash = EXCLUDED.file_hash,
+             memories_imported = EXCLUDED.memories_imported,
+             processed_at = NOW()
         """,
-        (str(path), fhash, count, now),
+        (str(path), fhash, count),
     )
     store._conn.commit()
 

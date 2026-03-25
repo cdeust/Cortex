@@ -49,9 +49,12 @@ def _apply_dream_replay(
         try:
             new_content = upd["enriched_content"]
             new_emb = embeddings.encode(new_content)
+            from mcp_server.infrastructure.pg_store import PgMemoryStore
+
+            emb_vec = PgMemoryStore._bytes_to_vector(new_emb)
             store._conn.execute(
-                "UPDATE memories SET content = ?, embedding = ? WHERE id = ?",
-                (new_content, new_emb, upd["memory_id"]),
+                "UPDATE memories SET content = %s, embedding = %s WHERE id = %s",
+                (new_content, emb_vec, upd["memory_id"]),
             )
             count += 1
         except Exception:
@@ -78,9 +81,12 @@ def _fix_stale_embeddings(
                 continue
             new_emb = embeddings.encode(content)
             if new_emb:
+                from mcp_server.infrastructure.pg_store import PgMemoryStore
+
+                emb_vec = PgMemoryStore._bytes_to_vector(new_emb)
                 store._conn.execute(
-                    "UPDATE memories SET embedding = ? WHERE id = ?",
-                    (new_emb, item["memory_id"]),
+                    "UPDATE memories SET embedding = %s WHERE id = %s",
+                    (emb_vec, item["memory_id"]),
                 )
                 count += 1
         except Exception:

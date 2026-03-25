@@ -107,7 +107,7 @@ async def _store_discoveries(
             if mid:
                 memory_ids.append(mid)
                 store._conn.execute(
-                    "UPDATE memories SET heat = ? WHERE id = ?",
+                    "UPDATE memories SET heat = %s WHERE id = %s",
                     (initial_heat, mid),
                 )
         else:

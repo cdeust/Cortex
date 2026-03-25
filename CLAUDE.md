@@ -63,7 +63,7 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 - `sparse.py` — Sparse vector operations (dict-based, topK, conversions)
 - `memory_types.py` — Runtime validation types for the memory subsystem
 
-**core/** — Pure business logic, zero I/O (60 modules)
+**core/** — Pure business logic, zero I/O (63 modules)
 
 *Cognitive Profiling:*
 - `domain_detector.py` — 3-signal weighted domain classification
@@ -117,8 +117,13 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 - `microglial_pruning.py` — Complement-dependent edge elimination + orphan archival (Wang et al. 2020)
 
 *Retrieval & Navigation:*
-- `query_router.py` — Intent classification (temporal/causal/semantic/entity) + 7-signal WRRF fusion
-- `spreading_activation.py` — Collins & Loftus 1975 semantic priming over entity graph (WRRF signal #7)
+- `query_intent.py` — Intent classification (temporal/causal/semantic/entity/knowledge_update/multi_hop) + weight profiles
+- `query_decomposition.py` — Multi-entity query splitting + entity extraction
+- `retrieval_dispatch.py` — 3-tier dispatch (simple/mixed/deep) + WRRF weight computation
+- `reranker.py` — FlashRank ONNX cross-encoder reranking (client-side post-PG)
+- `scoring.py` — BM25, n-gram, keyword scoring (reference; PG does this server-side)
+- `temporal.py` — Date parsing, distance decay, recency boost (reference; PG does this server-side)
+- `spreading_activation.py` — Collins & Loftus 1975 semantic priming over entity graph
 - `hdc_encoder.py` — 1024D bipolar HDC (bind/bundle/permute/similarity)
 - `cognitive_map.py` — Successor Representation co-access graph + 2D projection
 - `hopfield.py` — Hopfield network for content-addressable recall
@@ -144,9 +149,10 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 - `scanner.py` — Discovers memories + conversations from ~/.claude/
 - `mcp_client.py` — Async MCP client over stdio (JSON-RPC 2.0, version negotiation)
 - `mcp_client_pool.py` — Singleton connection pool (lazy connect, reuse, idle timeout)
-- `memory_store.py` — SQLite + FTS5 persistence layer
-- `memory_config.py` — Runtime configuration (env vars with JARVIS_MEMORY_ prefix)
-- `embedding_engine.py` — Vector embeddings (64-dim default, configurable)
+- `pg_store.py` — PostgreSQL + pgvector persistence (MANDATORY — replaces SQLite)
+- `pg_schema.py` — DDL, extensions, PL/pgSQL stored procedures, migrations
+- `memory_config.py` — Runtime configuration (DATABASE_URL, env vars with JARVIS_MEMORY_ prefix)
+- `embedding_engine.py` — Vector embeddings (384-dim, sentence-transformers)
 
 **handlers/** — Composition roots (34 tools + helpers, one per tool)
 
@@ -225,14 +231,15 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 
 1. **Gate**: 4-signal novelty filter (embedding distance, entity overlap, temporal proximity, structural similarity)
 2. **Curate**: Active curation — merge with similar, link to related, or create new
-3. **Store**: SQLite + FTS5 with entity extraction → knowledge graph + engram competition
+3. **Store**: PostgreSQL + pgvector with auto tsvector indexing → entity extraction → knowledge graph
 
 ### Memory Read Path
 
-1. **Route**: Intent classification (temporal/causal/semantic/entity)
+1. **Route**: Intent classification (temporal/causal/semantic/entity/knowledge_update/multi_hop)
 2. **Enrich**: Doc2Query expansion + concept synonyms
-3. **Fuse**: 6-signal WRRF (vector + FTS5 + heat + Hopfield + HDC + SR)
-4. **Filter**: Neuro-symbolic rules → ranked results
+3. **Fuse**: PL/pgSQL `recall_memories()` — WRRF fusion of vector + FTS + trigram + heat + recency (server-side)
+4. **Rerank**: FlashRank cross-encoder (client-side, top-3x candidates)
+5. **Filter**: Neuro-symbolic rules → ranked results
 
 ### Cognitive Profile Pipeline
 
@@ -317,4 +324,16 @@ See `docs/adr/` for Architecture Decision Records:
 
 ## Technology Stack
 
-Python 3.10+ with three dependencies: `fastmcp>=2.0.0`, `pydantic>=2.0.0`, `numpy>=1.24.0`. Uses built-in `sqlite3` for persistence. Pre-computed profiles stored at `~/.claude/methodology/profiles.json`, memory database at `~/.claude/memory/cortex.db`.
+**Runtime:** Python 3.10+ with `fastmcp>=2.0.0`, `pydantic>=2.0.0`, `numpy>=1.24.0`.
+
+**Storage (MANDATORY):** PostgreSQL 15+ with pgvector and pg_trgm extensions. No SQLite. No in-memory fallbacks.
+- `psycopg[binary]>=3.1` — PostgreSQL driver
+- `pgvector>=0.3` — Vector similarity search (HNSW index)
+- `pg_trgm` — Trigram similarity for n-gram signal
+- Connection via `DATABASE_URL` env var: `postgresql://cortex:password@localhost:5432/cortex`
+
+**Retrieval engine:** PL/pgSQL stored procedures. WRRF fusion, vector search, FTS, trigram similarity, heat filtering — all server-side. Client-side: intent classification (regex), FlashRank reranking (ONNX), embedding generation (sentence-transformers).
+
+**Benchmarks use the production database.** No custom retrievers. Load data → call `recall_memories()` → measure. Same code path as production.
+
+Pre-computed profiles stored at `~/.claude/methodology/profiles.json`.

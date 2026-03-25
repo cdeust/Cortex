@@ -65,7 +65,7 @@ def _decay_entities(
     )
     for eid, new_heat in entity_updates:
         store._conn.execute(
-            "UPDATE entities SET heat = ? WHERE id = ?",
+            "UPDATE entities SET heat = %s WHERE id = %s",
             (new_heat, eid),
         )
     if entity_updates:

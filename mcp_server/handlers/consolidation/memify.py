@@ -53,7 +53,7 @@ def _strengthen_memories(store: MemoryStore, memories: list[dict]) -> int:
     for mid, new_importance in strengthen_list:
         try:
             store._conn.execute(
-                "UPDATE memories SET importance = ? WHERE id = ?",
+                "UPDATE memories SET importance = %s WHERE id = %s",
                 (new_importance, mid),
             )
             count += 1
@@ -79,7 +79,7 @@ def _reweight_relationships(store: MemoryStore) -> int:
         count = 0
         for rid, new_weight in reweights:
             store._conn.execute(
-                "UPDATE relationships SET weight = ? WHERE id = ?",
+                "UPDATE relationships SET weight = %s WHERE id = %s",
                 (new_weight, rid),
             )
             count += 1

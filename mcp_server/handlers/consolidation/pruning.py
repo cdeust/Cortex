@@ -73,7 +73,7 @@ def _prune_edges(store: MemoryStore, prunable: list[dict]) -> int:
     for edge in prunable:
         try:
             store._conn.execute(
-                "DELETE FROM relationships WHERE id = ?",
+                "DELETE FROM relationships WHERE id = %s",
                 (edge["id"],),
             )
             count += 1
@@ -108,7 +108,7 @@ def _archive_orphans(
     for orphan in orphans:
         try:
             store._conn.execute(
-                "UPDATE entities SET heat = 0 WHERE id = ?",
+                "UPDATE entities SET heat = 0 WHERE id = %s",
                 (orphan["id"],),
             )
             count += 1

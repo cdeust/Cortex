@@ -1,62 +1,101 @@
-# Benchmark Improvement Sprint — Three Strategies + Production Core
+# PostgreSQL + pgvector Migration
 
-## Goal
-Close the gap on LoCoMo (0.579->0.72+) and BEAM (0.299->0.40+) while maintaining LongMemEval 99% R@10.
-All improvements must live in production core (`mcp_server/`), benchmarks are verification only.
+## Problem
 
-## Strategy 1: Temporal Retrieval Enhancement
-- [x] 1a. Proper BM25 scoring in core (`mcp_server/core/scoring.py`)
-- [x] 1b. Timestamp-aware scoring: parse dates + exponential decay (`mcp_server/core/temporal.py`)
-- [x] 1c. Date normalization: ISO, "DD Month YYYY", "Month DD, YYYY" -> datetime
-- [x] 1d. Intent-aware weight switching: temporal, knowledge_update, general profiles
+Two parallel retrieval systems that share zero code:
 
-## Strategy 2: Multi-Hop Retrieval (HippoRAG-inspired)
-- [x] 2a. Query decomposition: split multi-entity queries into sub-queries (core query_router)
-- [x] 2b. Entity-bridged retrieval: extract bridge entities from hop-1 results -> hop-2
-- [x] 2c. 3-tier dispatch: simple/mixed/deep in core (`mcp_server/core/retrieval_dispatch.py`)
-- [x] 2d. Quality-gated stopping (ai-architect CoTRAG pattern)
+1. **Production** (`mcp_server/`): 9-signal WRRF -> 3-tier dispatch -> FlashRank, backed by SQLite
+2. **Benchmarks** (`benchmarks/`): 3 custom retrievers (`InMemoryRetriever`, `LoCoMoRetriever`, `BEAMRetriever`), each reimplementing scoring, fusion, reranking from scratch
 
-## Strategy 3: Knowledge Updates & Contradiction (LIGHT-inspired)
-- [x] 3a. Fact scratchpad: per-conversation entity-attribute-value tracker (BEAM)
-- [x] 3b. Entity-attribute supersession: prefer latest value via 3x recency boost
-- [x] 3c. Knowledge update intent in core query_router.py
+Improving benchmarks doesn't improve the product. Improving the product doesn't improve benchmarks. The benchmark scores measure throwaway code, not the system users get.
 
-## Core Production Improvements
-- [x] `mcp_server/core/scoring.py`: BM25 + n-gram + keyword overlap (moved from benchmarks/lib)
-- [x] `mcp_server/core/temporal.py`: Date parsing + distance scoring + recency boost (moved from benchmarks/lib)
-- [x] `mcp_server/core/reranker.py`: FlashRank ONNX cross-encoder reranking
-- [x] `mcp_server/core/retrieval_dispatch.py`: 3-tier dispatch (simple/mixed/deep) + WRRF fusion
-- [x] `mcp_server/core/enrichment.py`: 40+ personal/lifestyle query expansions (ported from LongMemEval)
-- [x] `mcp_server/core/query_router.py`: KNOWLEDGE_UPDATE + MULTI_HOP intents + weight profiles
-- [x] `mcp_server/handlers/recall.py`: Refactored to use 3-tier dispatch + 9 signals + reranking
-- [x] Benchmarks (`benchmarks/lib/`) now re-export from core (thin wrappers)
+## Solution
 
-## Production Recall Handler: 9-Signal WRRF Fusion
-1. Vector similarity (semantic)
-2. FTS5 full-text search (enriched query)
-3. Heat weighting (thermodynamic freshness)
-4. Modern Hopfield Network
-5. Hyperdimensional Computing (HDC)
-6. Successor Representation (co-access)
-7. Spreading Activation (entity graph)
-8. BM25 (IDF-weighted, NEW)
-9. N-gram phrase matching (NEW)
+**PostgreSQL + pgvector** as the single storage + retrieval engine. **Mandatory.** No SQLite. No in-memory hacks.
 
-Plus: FlashRank cross-encoder reranking (NEW), 3-tier dispatch (NEW)
+Core retrieval logic lives in **PL/pgSQL stored procedures** -- server-side computation. Benchmarks and production call the **exact same functions**.
 
-## Results
-| Benchmark | Before | After | Target | Delta |
-|---|---|---|---|---|
-| LoCoMo MRR | 0.579 | **0.779** | 0.72+ | **+0.200 (+35%)** |
-| LoCoMo R@10 | -- | 96.8% | -- | -- |
-| BEAM MRR (retrieval) | 0.299 | 0.275 | 0.40+ | -0.024 (full 20 convs) |
-| LongMemEval R@10 | 99.0% | 98.0% (50Q) | maintain | no regression |
+---
 
-## Tests
-- 1893 tests passing (56 new for core scoring/temporal/dispatch/reranker)
+## Implementation Phases
 
-## Next Steps
-- [ ] PPR-like spreading activation over entity co-occurrence (HippoRAG paper)
-- [ ] Investigate BEAM temporal_reasoning=0 and contradiction_resolution=0
-- [ ] Full LongMemEval run to confirm no regression on all 500 questions
-- [ ] Port enrichment patterns from ai-architect's CoTRAG query expansion
+### Phase 1: PostgreSQL Infrastructure -- COMPLETE
+- [x] `pg_schema.py` -- DDL, extensions, all tables, HNSW/GIN indexes
+- [x] `pg_store.py` -- PgMemoryStore composing 6 mixins (92 methods)
+- [x] `pg_store_entities.py` -- Entity CRUD with phraseto_tsquery
+- [x] `pg_store_relationships.py` -- Relationship CRUD
+- [x] `pg_store_queries.py` -- Filtered reads, time windows, decay
+- [x] `pg_store_rules.py` -- Rule CRUD
+- [x] `pg_store_stats.py` -- Counts, consolidation, oscillatory state, CLS
+- [x] `pg_store_auxiliary.py` -- Prospective, checkpoints, archives, engrams, schemas
+- [x] `memory_config.py` -- DATABASE_URL added (mandatory PG)
+- [x] PL/pgSQL `recall_memories()` -- 5-signal WRRF fusion server-side
+- [x] PL/pgSQL `decay_memories()` -- batch thermodynamic decay
+- [x] PL/pgSQL `spread_activation()` -- recursive CTE over entity graph
+- [x] `pyproject.toml` -- psycopg[binary], pgvector dependencies
+- [x] Integration tested against PostgreSQL 17 + pgvector 0.8.2
+- [x] All 3 PL/pgSQL functions verified working
+
+### Phase 2: Wire Handlers -- COMPLETE
+- [x] `memory_store.py` -- Compat layer: `MemoryStore(PgMemoryStore)` with legacy constructor
+- [x] All 42 importing files work without modification
+- [x] Fixed 15 raw `_conn.execute()` calls: `?` -> `%s` placeholders
+- [x] Fixed SQLite DDL in `backfill_helpers.py` -> PostgreSQL DDL
+- [x] Fixed `is_protected = 1` -> `TRUE` in anchor.py
+- [x] Fixed embedding updates in sleep.py to use `_bytes_to_vector()`
+- [x] Added `_now_iso()` and `_row_to_dict()` compat methods
+- [x] Ruff lint passes on all modified files
+
+### Phase 3: Benchmark Migration
+- [ ] `benchmarks/lib/bench_db.py` -- load data -> PG, cleanup after
+- [ ] Each benchmark runner -> loads data via bench_db, calls production recall
+- [ ] Delete all custom retrievers:
+  - `benchmarks/lib/retriever.py`
+  - `benchmarks/lib/fusion.py`
+  - `benchmarks/locomo/retriever.py`
+  - LongMemEval `InMemoryRetriever` (900 lines of dead code)
+  - BEAM `BEAMRetriever` + `FactScratchpad`
+- [ ] Verify benchmark scores match or improve
+
+### Phase 4: Advanced Server-Side Signals
+- [ ] Spreading activation as recursive CTE (already drafted)
+- [ ] Hopfield recall via PG function
+- [ ] Successor representation via co-access in PG
+- [ ] HDC encoding server-side
+
+### Phase 5: Cleanup
+- [ ] Delete old SQLite mixin files (10 files):
+  - `memory_store_auxiliary.py`
+  - `memory_store_entities.py`
+  - `memory_store_queries.py`
+  - `memory_store_relationships.py`
+  - `memory_store_rules.py`
+  - `memory_store_schema_init.py`
+  - `memory_store_schemas.py`
+  - `memory_store_search.py`
+  - `memory_store_stats.py`
+  - Remove compat layer, make `memory_store.py` a re-export
+- [ ] Delete custom benchmark retrievers (5 files)
+
+---
+
+## Environment
+
+```bash
+# PostgreSQL 17 + pgvector 0.8.2 + pg_trgm
+DATABASE_URL=postgresql://localhost:5432/cortex
+
+# Extensions (installed via brew install pgvector)
+# CREATE EXTENSION IF NOT EXISTS vector;
+# CREATE EXTENSION IF NOT EXISTS pg_trgm;
+```
+
+## Previous Sprint Results (reference)
+
+| Benchmark | Score |
+|---|---|
+| LongMemEval R@10 | 98.6% |
+| LongMemEval MRR | 0.865 |
+| LoCoMo R@10 | 96.8% |
+| LoCoMo MRR | 0.779 |
+| BEAM MRR (retrieval) | 0.275 |

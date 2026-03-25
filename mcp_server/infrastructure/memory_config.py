@@ -28,8 +28,9 @@ class MemorySettings(BaseSettings):
       - Embedding: model and dimensions
     """
 
-    # ── Storage ───────────────────────────────────────────────────────────
-    DB_PATH: str = str(METHODOLOGY_DIR / "memory.db")
+    # ── Storage (PostgreSQL mandatory) ────────────────────────────────────
+    DATABASE_URL: str = "postgresql://localhost:5432/cortex"
+    DB_PATH: str = str(METHODOLOGY_DIR / "memory.db")  # deprecated, kept for migration
     SESSION_LOG_ROLLING_LIMIT: int = 1000
 
     # ── Thermodynamics ────────────────────────────────────────────────────

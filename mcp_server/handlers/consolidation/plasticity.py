@@ -111,7 +111,7 @@ def _apply_updates(
         if r["action"] == "none":
             continue
         store._conn.execute(
-            "UPDATE relationships SET weight = ? WHERE id = ?",
+            "UPDATE relationships SET weight = %s WHERE id = %s",
             (r["weight"], r["id"]),
         )
         if r["action"] == "ltp":
