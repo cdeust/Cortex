@@ -8,14 +8,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![MCP Server](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-1893_passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-1888_passing-brightgreen.svg)](#development)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/cdeust/Cortex/pulls)
 
 **Cortex gives Claude Code a brain that survives between sessions.**
 
-Thermodynamic memory with heat/decay. Predictive coding write gates. Causal graphs. Intent-aware 9-signal retrieval with cross-encoder reranking. 20+ neuroscience-inspired plasticity mechanisms. Cognitive profiling that learns how you work.
+Thermodynamic memory on PostgreSQL + pgvector. Test-time learning with surprise momentum. Predictive coding write gates. Causal graphs. Intent-aware retrieval with PL/pgSQL WRRF fusion and FlashRank reranking. 23 neuroscience-inspired plasticity mechanisms. Cognitive profiling that learns how you work.
 
-No LLM in the retrieval loop. Pure local inference. 3 dependencies.
+No LLM in the retrieval loop. Pure local inference.
 
 [Getting Started](#quick-start) | [Benchmarks](#benchmarks) | [How It Works](#how-memory-works) | [Tools](#tools) | [Architecture](#architecture)
 
@@ -27,17 +27,31 @@ No LLM in the retrieval loop. Pure local inference. 3 dependencies.
 
 ## Highlights
 
-- **98.6% Recall@10** on LongMemEval (ICLR 2025) — beats the paper's best by +20.2pp
-- **20+ biological mechanisms** — LTP/LTD, STDP, microglial pruning, oscillatory gating, neuromodulation, emotional tagging
-- **9-signal retrieval fusion** — BM25 + embeddings + heat + temporal + n-gram + entity density + spreading activation
-- **FlashRank cross-encoder reranking** — ONNX, no GPU, 823ms/query
-- **Intent-aware weight switching** — temporal, causal, preference, personal fact intents each get tuned signal weights
-- **Smart dispatch** — complexity scoring routes simple queries inline, complex multi-entity queries to multi-hop bridging
+- **97.0% Recall@10** on LongMemEval (ICLR 2025) — beats the paper's best by +18.6pp
+- **Test-time learning** — surprise momentum (Titans, NeurIPS 2025), adaptive decay, Hebbian co-activation (Dragon Hatchling, Pathway 2025)
+- **PostgreSQL + pgvector** — all retrieval via PL/pgSQL stored procedures, HNSW vector search, FTS, trigram similarity
+- **23 biological mechanisms** — LTP/LTD, STDP, microglial pruning, oscillatory gating, neuromodulation, emotional tagging, surprise momentum
+- **5-signal server-side WRRF** — vector + FTS + trigram + heat + recency fused in PL/pgSQL, FlashRank cross-encoder reranking client-side
+- **Intent-aware weight switching** — temporal, causal, knowledge_update, entity, multi_hop intents each get tuned signal weights
+- **3-tier dispatch** — simple queries go inline, multi-hop does entity bridging, deep does BM25-primary
 - **34 MCP tools** — remember, recall, consolidate, navigate, trigger, narrate, and more
-- **Clean Architecture** — 103 pure-logic core modules, zero I/O in business logic, 1893 tests
-- **3 dependencies** — `fastmcp`, `pydantic`, `numpy`. That's it.
+- **Clean Architecture** — 103 pure-logic core modules, zero I/O in business logic, 1888 tests
+- **Benchmarks use production code** — same `recall_memories()` stored procedure, same FlashRank reranking
 
 ## Quick Start
+
+### Prerequisites
+
+PostgreSQL 15+ with pgvector and pg_trgm extensions:
+
+```bash
+# macOS
+brew install postgresql@17 pgvector
+brew services start postgresql@17
+createdb cortex
+psql -d cortex -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+export DATABASE_URL=postgresql://localhost:5432/cortex
+```
 
 ### Option 1: Claude Code Plugin (recommended)
 
@@ -54,22 +68,7 @@ Installs Cortex with its MCP server and session hooks automatically.
 claude mcp add cortex -- uvx neuro-cortex-memory
 ```
 
-### Option 3: Project `.mcp.json`
-
-```json
-{
-  "mcpServers": {
-    "cortex": {
-      "command": "uvx",
-      "args": ["cortex-memory"]
-    }
-  }
-}
-```
-
-Commit this file — your whole team gets Cortex automatically.
-
-### Option 4: From Source
+### Option 3: From Source
 
 ```bash
 git clone https://github.com/cdeust/Cortex.git
@@ -86,60 +85,56 @@ claude mcp add cortex -- python -m mcp_server
 > "Remember that we decided to use PostgreSQL instead of MongoDB for the auth service"
 
 **Recall with intent-aware search:**
-> "Why did we switch databases?" — Cortex detects causal intent, boosts causal graph + spreading activation signals
+> "Why did we switch databases?" — Cortex detects causal intent, boosts spreading activation + entity graph signals
 
 **Get proactive context at session start:**
 Cortex automatically surfaces hot memories, fired triggers, and your cognitive profile when you start a new session.
 
-**Auto-consolidate with biological plasticity:**
-Memories cool over time. Decisions decay slowly (1.5x lifespan). Error details decay fast (0.7x). Emotional memories resist decay. Knowledge graph edges strengthen via LTP when co-activated, weaken via LTD when unused, and get pruned by microglial elimination when stale.
+**Learn at test time (Titans-inspired):**
+Each recall computes retrieval surprise and updates memory heat via momentum. Surprising results get reinforced; redundant results fade. The system gets smarter with every query.
 
 ## Benchmarks
 
-6 benchmarks spanning 2024-2026, testing long-term memory from personal recall to million-token dialogues. No LLM in the retrieval loop — pure local inference.
+6 benchmarks spanning 2024-2026, testing long-term memory from personal recall to million-token dialogues. All benchmarks run on the **production PostgreSQL backend** — same `recall_memories()` stored procedure, same FlashRank reranking. No custom retrievers.
 
 ### LongMemEval (ICLR 2025) — 500 questions, ~115k tokens
 
 | Metric | Cortex | Best in paper | Delta |
 |---|---|---|---|
-| **Recall@10** | **98.6%** | 78.4% | **+20.2pp** |
-| **MRR** | **0.865** | -- | -- |
-
-The right memory is almost always in the candidate pool — **+20.2pp** above the paper's best R@10.
+| **Recall@10** | **97.0%** | 78.4% | **+18.6pp** |
+| **MRR** | **0.858** | -- | -- |
 
 <details>
 <summary>Per-category breakdown</summary>
 
 | Category | MRR | R@10 |
 |---|---|---|
-| Single-session (user) | 0.851 | 97.1% |
-| Single-session (assistant) | 0.979 | 100.0% |
-| Single-session (preference) | 0.768 | 96.7% |
-| Multi-session reasoning | 0.879 | 100.0% |
-| Temporal reasoning | 0.797 | 97.7% |
-| Knowledge updates | 0.923 | 98.7% |
+| Single-session (user) | 0.788 | 91.4% |
+| Single-session (assistant) | 0.930 | 98.2% |
+| Single-session (preference) | 0.654 | 93.3% |
+| Multi-session reasoning | 0.896 | 99.2% |
+| Temporal reasoning | 0.851 | 97.7% |
+| Knowledge updates | 0.894 | 97.4% |
 
 </details>
 
-### LoCoMo (ACL 2024) — 1,986 questions, 10 conversations
+### LoCoMo (ACL 2024) — 1,982 questions, 10 conversations
 
 | Metric | Cortex |
 |---|---|
-| **Recall@10** | **94.8%** |
-| **MRR** | **0.710** |
-
-94.8% R@10 — the right session is in the top 10 for nearly all questions across 1,986 QA pairs.
+| **Recall@10** | **84.5%** |
+| **MRR** | **0.598** |
 
 <details>
 <summary>Per-category breakdown</summary>
 
-| Category | MRR | R@10 |
-|---|---|---|
-| single_hop | 0.638 | 96.1% |
-| multi_hop | 0.734 | 96.3% |
-| temporal | 0.475 | 83.7% |
-| open_domain | 0.721 | 93.7% |
-| adversarial | 0.766 | 97.1% |
+| Category | MRR | R@5 | R@10 |
+|---|---|---|---|
+| single_hop | 0.621 | 80.9% | 92.6% |
+| multi_hop | 0.693 | 83.8% | 90.0% |
+| temporal | 0.405 | 51.1% | 71.7% |
+| open_domain | 0.585 | 71.1% | 82.4% |
+| adversarial | 0.582 | 70.9% | 82.1% |
 
 </details>
 
@@ -167,89 +162,24 @@ The right memory is almost always in the candidate pool — **+20.2pp** above th
 Note: LIGHT scores are full QA (LLM-as-judge). Cortex scores are retrieval-only.
 </details>
 
-### MemoryAgentBench (ICLR 2026) — 146 rows, 4 memory competencies
-
-Evaluates retrieval, test-time learning, long-range understanding, and conflict resolution (Hu et al., ICLR 2026).
-
-| Metric | Cortex | Description |
-|---|---|---|
-| **Substring EM** | **0.560** | Answer found in retrieved context |
-| **F1** | 0.001 | Token-level F1 (low because retrieval returns full chunks, not extracted answers) |
-
-Substring EM of 56% means the correct answer text appears in the top-5 retrieved chunks for over half of questions — without any LLM reader.
-
-### EverMemBench (2026) — 2,400 QA, multi-party collaborative dialogues, 1M+ tokens
-
-Tests memory across 5 projects, 170 employees, 365 simulated days (Hu et al., 2026).
-
-| Dimension | Cortex | Best Published (MemOS) |
-|---|---|---|
-| **Memory Awareness** | **100.0%** | 42.6% |
-| **Profile Understanding** | **100.0%** | -- |
-| Fine-grained Recall | 10.9% | -- |
-| **Overall** | **71.5%** | 42.6% |
-
-<details>
-<summary>Per-category breakdown</summary>
-
-| Category | Accuracy | Questions |
-|---|---|---|
-| memory_awareness/constraint | 100.0% | 86 |
-| memory_awareness/proactivity | 100.0% | 84 |
-| memory_awareness/update | 100.0% | 54 |
-| profile_understanding/title | 100.0% | 39 |
-| profile_understanding/skill | 100.0% | 35 |
-| profile_understanding/style | 100.0% | 37 |
-| fine_grained_recall/single_hop | 32.6% | 43 |
-| fine_grained_recall/multi_hop | 0.0% | 50 |
-| fine_grained_recall/temporal | 0.0% | 60 |
-
-</details>
-
-### Episodic Memories Benchmark (ICLR 2025) — spatio-temporal episodic recall
-
-Tests recall of events (date, location, entity, content) from synthetic narratives (Huet et al., ICLR 2025).
-
-| Metric | Cortex | Gemini 2.5 Pro | Claude 3.5 Sonnet |
-|---|---|---|---|
-| **Simple Recall Score** | **0.875** | 0.968 | ~0.85 |
-
-<details>
-<summary>Per-bin breakdown</summary>
-
-| Bin (events to recall) | Mean F1 |
-|---|---|
-| bin_0 (hallucination test) | 0.500 |
-| bin_1 (single event) | 1.000 |
-| bin_2 (two events) | 1.000 |
-| bin_3-5 (multi event) | 1.000 |
-
-Note: Running on synthetic events (20 chapters). Full evaluation requires pre-generated data from figshare.
-</details>
-
 **Reproduce all benchmarks:**
 
 ```bash
 pip install sentence-transformers flashrank datasets
 
-# LongMemEval (~8 min)
+# LongMemEval (~19 min)
 curl -sL -o benchmarks/longmemeval/longmemeval_s.json \
   "https://huggingface.co/datasets/xiaowu0162/LongMemEval/resolve/main/longmemeval_s"
-python3 benchmarks/longmemeval/run_benchmark.py --variant s
+DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/longmemeval/run_benchmark.py --variant s
 
-# LoCoMo (~17 min)
+# LoCoMo (~24 min)
 curl -sL -o benchmarks/locomo/locomo10.json \
   "https://huggingface.co/datasets/Percena/locomo-mc10/resolve/main/raw/locomo10.json"
-python3 benchmarks/locomo/run_benchmark.py
+DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/locomo/run_benchmark.py
 
 # BEAM (~5 min, auto-downloads from HuggingFace)
-python3 benchmarks/beam/run_benchmark.py --split 100K
-
-# Quick suite (~3 min, scoped subsets)
-bash benchmarks/quick_test.sh
+DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/beam/run_benchmark.py --split 100K
 ```
-
-Full results: [`tasks/longmemeval-results.md`](tasks/longmemeval-results.md) | [`tasks/benchmark-improvement-plan.md`](tasks/benchmark-improvement-plan.md)
 
 ## Tools
 
@@ -261,7 +191,7 @@ Cortex exposes 34 MCP tools across three tiers:
 |---|---|
 | `query_methodology` | Load cognitive profile + hot memories at session start |
 | `remember` | Store a memory (4-signal write gate + neuromodulation + emotional tagging) |
-| `recall` | Retrieve memories via 9-signal WRRF fusion + cross-encoder reranking |
+| `recall` | Retrieve memories via 5-signal PG WRRF fusion + FlashRank reranking + surprise momentum |
 | `consolidate` | Run maintenance: decay, LTP/LTD plasticity, microglial pruning, compression, CLS, sleep compute |
 | `checkpoint` | Save/restore working state across context compaction |
 | `narrative` | Generate project story from stored memories |
@@ -320,7 +250,7 @@ flowchart TD
     C -->|similar exists| D[Merge]
     C -->|related| E[Link]
     C -->|new| F[Create]
-    D --> G[(SQLite + FTS5)]
+    D --> G[(PostgreSQL + pgvector)]
     E --> G
     F --> G
     F --> H[Extract Entities]
@@ -341,50 +271,49 @@ flowchart TD
     style CS fill:#22c55e,color:#000
 ```
 
-The write path applies **oscillatory phase check** (encoding vs retrieval gating) -> **neuromodulation** (4-channel cascade: dopamine reward, norepinephrine arousal, acetylcholine novelty, serotonin exploration) -> **4-signal write gate** (embedding distance, entity overlap, temporal proximity, structural similarity) -> **emotional tagging** (amygdala-inspired: urgency, frustration, satisfaction, discovery boost encoding up to 2x) -> **synaptic tagging** (retroactively promotes older weak memories that share entities with the new strong memory) -> **consolidation cascade** (memory enters LABILE stage, advances through EARLY_LTP -> LATE_LTP -> CONSOLIDATED).
-
-### Read Path
+### Read Path (with Test-Time Learning)
 
 ```mermaid
 flowchart TD
     Q[recall query] --> R[Intent Classification]
-    R -->|classify| S{Intent Type}
-    S -->|temporal| W1[Temporal Weights]
-    S -->|causal| W2[Causal Weights]
-    S -->|preference| W3[Preference Weights]
-    S -->|personal_fact| W4[Personal Weights]
-    S -->|general| W5[General Weights]
+    R -->|temporal/causal/entity/multi_hop/knowledge_update| WS[Intent-Aware Weights]
+    WS --> PG[PL/pgSQL recall_memories]
 
-    W1 & W2 & W3 & W4 & W5 --> QE[Query Expansion]
-    QE --> WRRF[9-Signal WRRF Fusion]
+    subgraph PG_SIGNALS["Server-Side WRRF (PostgreSQL)"]
+        direction LR
+        S1["Vector (HNSW)"] ~~~ S2["FTS (tsvector)"]
+        S3["Trigram (pg_trgm)"] ~~~ S4[Heat]
+        S5[Recency]
+    end
 
-    WRRF --> V1[BM25]
-    WRRF --> V2[TF-IDF Cosine]
-    WRRF --> V3[Heat Decay]
-    WRRF --> V4[Temporal Proximity]
-    WRRF --> V5[N-gram Match]
-    WRRF --> V6[User BM25]
-    WRRF --> V7[User N-gram]
-    WRRF --> V8[Semantic Embedding]
-    WRRF --> V9[Entity Density]
-
-    V1 & V2 & V3 & V4 & V5 & V6 & V7 & V8 & V9 --> TOP[Top 25 Candidates]
-    TOP --> CE[Cross-Encoder Reranking]
-    CE --> RULES[Neuro-symbolic Rules]
+    PG --> PG_SIGNALS
+    PG_SIGNALS --> FUSED[WRRF K=60 Fusion]
+    FUSED --> FR[FlashRank Reranking]
+    FR --> SM[Surprise Momentum]
+    SM -->|boost surprising| HU[Update Heat in PG]
+    SM -->|suppress redundant| HU
+    HU --> CA[Co-Activation]
+    CA -->|Hebbian| KG[Strengthen Entity Edges]
+    CA --> RULES[Neuro-symbolic Rules]
     RULES --> RES[Top 10 Results]
 
     style R fill:#d946ef,color:#fff
-    style WRRF fill:#06b6d4,color:#000
-    style CE fill:#22c55e,color:#000
-    style V8 fill:#3b82f6,color:#fff
+    style PG fill:#06b6d4,color:#000
+    style FR fill:#22c55e,color:#000
+    style SM fill:#f59e0b,color:#000
+    style CA fill:#8b5cf6,color:#fff
     style RES fill:#3b82f6,color:#fff
+    style HU fill:#f97316,color:#000
 ```
+
+The read path applies **intent classification** -> **PL/pgSQL 5-signal WRRF fusion** (vector HNSW, full-text search, trigram similarity, thermodynamic heat, recency) -> **FlashRank cross-encoder reranking** (ms-marco-MiniLM-L-12-v2, alpha=0.55) -> **surprise momentum** (Titans NeurIPS 2025: compute retrieval surprise, update heat via EMA momentum) -> **co-activation graph strengthening** (Dragon Hatchling: Hebbian reinforcement of entity edges) -> **neuro-symbolic rule filtering**.
 
 ### Consolidation (Background)
 
 ```mermaid
 flowchart LR
-    A[Session End / consolidate] --> B[Heat Decay]
+    A[Session End / consolidate] --> B[Adaptive Decay]
+    B -->|per-memory rate| AD[Useful: slow decay<br/>Redundant: fast decay]
     B --> TS[Tripartite Synapse]
     TS -->|metabolic rate| D[Category-aware decay]
 
@@ -416,6 +345,7 @@ flowchart LR
     SL --> DR[Dream replay + interference resolution]
 
     style A fill:#f59e0b,color:#000
+    style AD fill:#f97316,color:#000
     style LTP fill:#22c55e,color:#000
     style STDP fill:#f59e0b,color:#000
     style MG fill:#ef4444,color:#fff
@@ -423,137 +353,55 @@ flowchart LR
     style SL fill:#1e40af,color:#fff
 ```
 
-## Retrieval Architecture
-
-Three-stage pipeline: complexity dispatch, multi-signal fusion, cross-encoder reranking.
-
-```mermaid
-flowchart TD
-    Q[Query] --> CS[Complexity Scorer]
-    CS -->|simple ≤0.5| INLINE[Inline Path]
-    CS -->|complex >0.5| MULTI[Multi-Hop Path]
-
-    subgraph INLINE[Inline: Fast Single-Pass]
-        IC[Intent Classification] --> WS[Weight Selection]
-        WS --> QE[Query Expansion]
-        QE --> WRRF
-
-        subgraph WRRF[WRRF Fusion K=60]
-            direction LR
-            S1[Vector] ~~~ S2[Keyword Overlap]
-            S3[N-gram Phrase] ~~~ S4[Temporal Proximity]
-        end
-    end
-
-    subgraph MULTI[Multi-Hop: Entity Bridging]
-        E1[Extract Entities] --> R1[Retrieve per Entity]
-        R1 --> MERGE[Merge + Boost Overlaps]
-        MERGE --> R2[Bridge Entity 2nd Hop]
-    end
-
-    INLINE --> FR
-    MULTI --> FR
-
-    subgraph FR[FlashRank ONNX Reranking]
-        CR[ms-marco-MiniLM-L-12-v2]
-        AB[0.55 CE + 0.45 WRRF]
-    end
-
-    FR --> QZ{Quality Zone Check}
-    QZ -->|optimal ≤10| RES[Top K Results]
-    QZ -->|degraded >15| TRIM[Trim to Safe Limit]
-    TRIM --> RES
-
-    style Q fill:#f59e0b,color:#000
-    style CS fill:#d946ef,color:#fff
-    style WRRF fill:#06b6d4,color:#000
-    style MULTI fill:#8b5cf6,color:#fff
-    style FR fill:#22c55e,color:#000
-    style QZ fill:#f97316,color:#000
-    style RES fill:#3b82f6,color:#fff
-```
-
 ## Why Cortex Scores High
 
-Each benchmark gap drove a specific engineering decision. Here's what makes the difference:
+### 1. Test-Time Learning (Titans + Dragon Hatchling)
 
-### 1. Multi-Signal Fusion (WRRF) beats single-signal retrieval
+The biggest innovation: the retrieval system **learns from its own queries**. After each recall:
 
-Most memory systems use vector similarity alone. Cortex fuses **9 parallel signals** — BM25, TF-IDF, heat decay, temporal proximity, n-gram matching, user-content BM25, semantic embeddings, entity density, and query expansion. Each signal catches what others miss:
+- **Surprise momentum** (Titans, NeurIPS 2025): computes `surprise = 1 - mean(cosine_sim(query, results))`. Surprising results get a heat boost; redundant ones get suppressed. An EMA momentum term amplifies the effect when recent queries are consistently surprising. This improved LongMemEval R@10 from 90.4% to **97.0%** (+6.6pp).
+- **Co-activation strengthening** (Dragon Hatchling, Pathway 2025): when memories A and B are co-retrieved, their entity edges get Hebbian reinforcement: `weight += learning_rate * score_product`. This makes the knowledge graph learn from usage patterns.
+- **Adaptive decay** (Titans): per-memory decay rates computed from `access_count`, `useful_count`, and `surprise_score`. Useful memories decay slower (0.999/hr); redundant ones faster (0.90/hr).
 
-- **BM25** finds exact keyword matches that embeddings miss ("PostgreSQL" vs "database")
-- **Entity density** boosts memories mentioning query entities without requiring semantic similarity
-- **Heat decay** naturally surfaces recent context without explicit recency hacking
-- **User-content BM25** finds preferences that live in user turns, not assistant turns
+### 2. Server-Side WRRF Fusion (PostgreSQL)
 
-This is why R@10 is 99.0% on LongMemEval — the right memory is *always* in the candidate pool.
+All retrieval runs in a single PL/pgSQL stored procedure (`recall_memories()`). Five signals fused server-side:
 
-### 2. FlashRank ONNX Reranking (alpha=0.55)
+- **Vector**: pgvector HNSW cosine similarity (384-dim, sentence-transformers)
+- **FTS**: `tsvector` full-text search with `ts_rank_cd`
+- **Trigram**: `pg_trgm` similarity for fuzzy matching
+- **Heat**: thermodynamic recency (surprise-momentum-modulated)
+- **Recency**: newest-first ranking
 
-First-stage retrieval casts a wide net; the cross-encoder sharpens it. FlashRank (ms-marco-MiniLM-L-12-v2, ONNX runtime) is:
-- **Fast** — 823ms/question, no GPU required
-- **Reliable** — ONNX avoids PyTorch version issues that break sentence-transformers CrossEncoder
-- **Effective** — alpha-blended with WRRF scores, it bridges semantic gaps that BM25+embedding cannot
+Each signal produces a ranked list; WRRF fusion: `score += weight / (K + rank)`.
 
-This is the difference between 0.895 MRR (no reranker) and 0.944 MRR (with FlashRank).
+### 3. FlashRank Cross-Encoder Reranking
 
-### 3. Intent-Aware Weight Switching
+Client-side ms-marco-MiniLM-L-12-v2 (ONNX, no GPU) reranks PG candidates with alpha-blended scoring: `0.55 * cross_encoder + 0.45 * wrrf`.
 
-Not all queries are the same. "When did we deploy v2?" needs temporal signals boosted; "Why did we switch databases?" needs causal graph signals. Cortex classifies queries into 5 intents and adjusts all 9 signal weights accordingly:
+### 4. Intent-Aware Weight Switching
 
-| Intent | Boosted Signals | Reduced Signals |
+Cortex classifies queries into 6 intents and adjusts signal weights:
+
+| Intent | Boosted Signals | Key Use Case |
 |---|---|---|
-| temporal | heat, temporal proximity | vector, spreading activation |
-| causal | causal graph, entity, spreading | heat |
-| preference | semantic, user BM25/n-gram | temporal |
-| personal_fact | FTS, entity, user signals | temporal |
+| temporal | heat, recency | "When did we deploy v2?" |
+| causal | spreading activation, entity | "Why did we switch databases?" |
+| knowledge_update | recency (3x), heat | "What's the latest on the auth service?" |
+| entity | BM25, FTS | "What do we know about PostgreSQL?" |
+| multi_hop | spreading activation | "How does the auth service relate to the payment API?" |
 
-### 4. Complexity-Based Smart Dispatch
+### 5. Biological Memory Lifecycle
 
-Not every query needs the same retrieval strategy. Simple factual lookups are fast with inline keyword+vector. Complex multi-entity questions need entity-bridged multi-hop. Cortex scores query complexity and routes accordingly:
-
-| Complexity | Strategy | Best For |
-|---|---|---|
-| Simple (score ≤0.5) | Inline: keyword + vector + n-gram + temporal | Single-hop recall, temporal, adversarial |
-| Complex (score >0.5) | Multi-hop: entity bridging + merged retrieval | Cross-session reasoning, multi-entity |
-
-Complexity signals: named entity count, multi-hop keywords ("both", "relationship", "compare"), conjunction density, query length.
-
-### 5. Date-Aware Retrieval
-
-For temporal queries (LoCoMo temporal MRR: 0.475):
-- **Date prefix injection**: `[Date: 7 May 2023]` prepended at index time — visible to both embedding and keyword search
-- **Temporal proximity scoring**: date-hint matching against session dates with graduated scoring (exact=1.0, month=0.7, partial=0.4)
-- **N-gram phrase matching**: trigram+bigram capture date strings that embeddings encode poorly
-
-### 6. Critical Mass Quality Zones
-
-Research shows retrieval quality collapses past 15 chunks (Liu et al. 2024, Anthropic 2024). Cortex enforces hard limits:
-
-| Zone | Chunks | Action |
-|---|---|---|
-| Optimal | 5-10 | Full quality |
-| Acceptable | 11-15 | Warning |
-| Degraded | 16-20 | Quality loss, stop multi-hop |
-| Critical | 21-25 | Hard cap enforced |
-
-### 7. Query Expansion + Concept Enrichment
-
-Doc2Query expansion generates related terms for broader FTS recall. 40+ category expansions loaded from `retrieval_config.json`. "favorite restaurant" expands to "like, love, prefer, enjoy, go-to, fond".
-
-### 8. Neuroscience-Inspired Memory Lifecycle
-
-Memories aren't static documents — they have a lifecycle:
+Memories aren't static — they have a lifecycle with 23 mechanisms:
 - **Encoding**: oscillatory phase check + neuromodulation + predictive coding gate + emotional tagging
 - **Consolidation**: LABILE -> EARLY_LTP -> LATE_LTP -> CONSOLIDATED with protein synthesis gating
-- **Plasticity**: LTP/LTD + STDP on knowledge graph edges + stochastic transmission + microglial pruning
-- **Homeostasis**: synaptic scaling prevents runaway potentiation or global depression
-
-This means the system naturally surfaces important, recently accessed, emotionally tagged memories while gracefully forgetting noise.
+- **Plasticity**: LTP/LTD + STDP + stochastic transmission + microglial pruning + Hebbian co-activation
+- **Homeostasis**: synaptic scaling prevents runaway potentiation; adaptive decay manages forgetting
 
 ## Biological Mechanisms
 
-Cortex implements 20+ neuroscience-inspired subsystems organized into four functional stages:
+Cortex implements 23 neuroscience-inspired subsystems organized into five functional stages:
 
 ```mermaid
 graph LR
@@ -574,10 +422,11 @@ graph LR
         TS --> CLS
     end
 
-    subgraph Retrieval["Retrieval"]
+    subgraph Retrieval["Retrieval & Test-Time Learning"]
         HOP[Hopfield Network<br/>Associative Recall] --> SA[Spreading Activation<br/>Entity Graph Priming]
-        SA --> HDC[HDC Encoding<br/>Hyperdimensional]
-        HDC --> SR[Successor Rep<br/>Co-Access Navigation]
+        SA --> SM[Surprise Momentum<br/>Titans NeurIPS 2025]
+        SM --> CoA[Co-Activation<br/>Dragon Hatchling 2025]
+        HDC[HDC Encoding<br/>Hyperdimensional] --> SR[Successor Rep<br/>Co-Access Navigation]
     end
 
     subgraph Plasticity["Plasticity & Pruning"]
@@ -586,6 +435,7 @@ graph LR
         MG --> SC[Sleep Compute<br/>Dream Replay]
         IF[Interference Mgmt<br/>Pro/Retroactive] --> SC
         TSM[Two-Stage Model<br/>Hippocampal-Cortical] --> SC
+        AD[Adaptive Decay<br/>Titans NeurIPS 2025] --> SC
     end
 
     Encoding --> Storage
@@ -608,6 +458,8 @@ graph LR
     style DC fill:#06b6d4,color:#000
     style HOP fill:#06b6d4,color:#000
     style SA fill:#3b82f6,color:#fff
+    style SM fill:#f97316,color:#000
+    style CoA fill:#d946ef,color:#fff
     style HDC fill:#8b5cf6,color:#fff
     style SR fill:#d946ef,color:#fff
     style LTP fill:#22c55e,color:#000
@@ -616,45 +468,46 @@ graph LR
     style SC fill:#1e40af,color:#fff
     style IF fill:#f97316,color:#000
     style TSM fill:#d946ef,color:#fff
+    style AD fill:#f97316,color:#000
 ```
 
 <details>
-<summary>Full mechanism reference (25 mechanisms with paper citations)</summary>
+<summary>Full mechanism reference (25+ mechanisms with paper citations)</summary>
 
 | Mechanism | Module | Paper | What it does |
 |---|---|---|---|
-| Hierarchical Predictive Coding | `hierarchical_predictive_coding.py` | Friston 2005, Bastos 2012 | 3-level free energy gate (sensory/entity/schema) -- precision-weighted prediction errors drive storage |
-| Coupled Neuromodulation | `coupled_neuromodulation.py` | Doya 2002, Schultz 1997 | DA/NE/ACh/5-HT coupled cascade -- DA gates LTP, NE modulates precision, ACh tracks theta, 5-HT controls exploration |
-| Oscillatory Clock | `oscillatory_clock.py` | Hasselmo 2005, Buzsaki 2015 | Theta/gamma/SWR phase gating -- encoding vs retrieval phases, gamma binding capacity, SWR replay windows |
-| Consolidation Cascade | `cascade.py` | Kandel 2001, Dudai 2012 | LABILE -> EARLY_LTP -> LATE_LTP -> CONSOLIDATED stages with protein synthesis gating |
-| Pattern Separation | `pattern_separation.py` | Leutgeb 2007, Yassa & Stark 2011 | DG orthogonalization of similar memories + neurogenesis analog for temporal separation |
-| Schema Engine | `schema_engine.py` | Tse 2007, Gilboa & Marlatte 2017 | Cortical knowledge structures -- schema-consistent memories consolidate 2.5x faster |
-| Tripartite Synapse | `tripartite_synapse.py` | Perea 2009, De Pitta 2012 | Astrocyte calcium dynamics, D-serine LTP facilitation, heterosynaptic depression, metabolic gating |
-| Interference Management | `interference.py` | Wixted 2004 | Proactive/retroactive interference detection + sleep-dependent orthogonalization |
-| Homeostatic Plasticity | `homeostatic_plasticity.py` | Turrigiano 2008, Abraham & Bear 1996 | Synaptic scaling + BCM sliding threshold -- prevents runaway potentiation or collapse |
-| Dendritic Clusters | `dendritic_clusters.py` | Kastellakis 2015 | Branch-specific nonlinear integration -- sublinear below threshold, supralinear NMDA spike above |
-| Two-Stage Model | `two_stage_model.py` | McClelland 1995, Kumaran 2016 | Hippocampal fast-bind -> cortical slow-integrate transfer via interleaved replay |
-| Emotional Tagging | `emotional_tagging.py` | Wang & Bhatt 2024 | Amygdala-inspired: urgency/frustration/satisfaction/discovery boost importance, resist decay |
-| Synaptic Tagging | `synaptic_tagging.py` | Frey & Morris 1997 | Strong memories retroactively promote weak memories sharing entities |
-| Engram Competition | `engram.py` | Josselyn & Tonegawa 2020 | CREB-like excitability slots -- temporally linked memories |
+| Surprise Momentum | `thermodynamics.py` | Behrouz et al. 2025 (Titans) | Test-time learning: retrieval surprise → heat modulation via EMA momentum |
+| Adaptive Decay | `decay_cycle.py` | Behrouz et al. 2025 (Titans) | Per-memory decay rates from access/useful/surprise signals |
+| Co-Activation | `pg_store_relationships.py` | Kosowski et al. 2025 (Dragon Hatchling) | Hebbian reinforcement of entity edges from co-retrieval patterns |
+| Hierarchical Predictive Coding | `hierarchical_predictive_coding.py` | Friston 2005, Bastos 2012 | 3-level free energy gate (sensory/entity/schema) |
+| Coupled Neuromodulation | `coupled_neuromodulation.py` | Doya 2002, Schultz 1997 | DA/NE/ACh/5-HT coupled cascade |
+| Oscillatory Clock | `oscillatory_clock.py` | Hasselmo 2005, Buzsaki 2015 | Theta/gamma/SWR phase gating |
+| Consolidation Cascade | `cascade.py` | Kandel 2001, Dudai 2012 | LABILE -> EARLY_LTP -> LATE_LTP -> CONSOLIDATED |
+| Pattern Separation | `pattern_separation.py` | Leutgeb 2007, Yassa & Stark 2011 | DG orthogonalization + neurogenesis analog |
+| Schema Engine | `schema_engine.py` | Tse 2007, Gilboa & Marlatte 2017 | Cortical knowledge structures with Piaget accommodation |
+| Tripartite Synapse | `tripartite_synapse.py` | Perea 2009, De Pitta 2012 | Astrocyte calcium dynamics, D-serine LTP facilitation |
+| Interference Management | `interference.py` | Wixted 2004 | Proactive/retroactive detection + sleep orthogonalization |
+| Homeostatic Plasticity | `homeostatic_plasticity.py` | Turrigiano 2008, Abraham & Bear 1996 | Synaptic scaling + BCM sliding threshold |
+| Dendritic Clusters | `dendritic_clusters.py` | Kastellakis 2015 | Branch-specific nonlinear integration |
+| Two-Stage Model | `two_stage_model.py` | McClelland 1995, Kumaran 2016 | Hippocampal fast-bind -> cortical slow-integrate |
+| Emotional Tagging | `emotional_tagging.py` | Wang & Bhatt 2024 | Amygdala-inspired priority encoding with Yerkes-Dodson |
+| Synaptic Tagging | `synaptic_tagging.py` | Frey & Morris 1997 | Retroactive promotion of weak memories sharing entities |
+| Engram Competition | `engram.py` | Josselyn & Tonegawa 2020 | CREB-like excitability slots |
 | Thermodynamics | `thermodynamics.py` | Ebbinghaus 1885 | Heat/decay, surprise, importance, valence, metamemory |
-| CLS | `dual_store_cls.py` | McClelland 1995 | Episodic -> semantic consolidation (hippocampus -> cortex) |
+| CLS | `dual_store_cls.py` | McClelland 1995 | Episodic -> semantic consolidation |
 | Hopfield Network | `hopfield.py` | Ramsauer 2021 | Modern continuous Hopfield for content-addressable recall |
-| Spreading Activation | `spreading_activation.py` | Collins & Loftus 1975 | Entity graph priming with convergent activation boost |
-| HDC Encoding | `hdc_encoder.py` | Kanerva 2009 | 1024-dim bipolar hypervectors for structural similarity |
+| Spreading Activation | `spreading_activation.py` | Collins & Loftus 1975 | Entity graph priming via recursive CTE in PL/pgSQL |
+| HDC Encoding | `hdc_encoder.py` | Kanerva 2009 | 1024-dim bipolar hypervectors |
 | Successor Rep. | `cognitive_map.py` | Stachenfeld 2017 | Hippocampal place cell-like co-access navigation |
-| LTP/LTD + STDP | `synaptic_plasticity.py` | Hebb 1949, Bi & Poo 1998, Markram 1998 | Knowledge graph edges strengthen/weaken from co-activation and temporal ordering + stochastic transmission with facilitation/depression + phase-gated plasticity |
-| SWR Replay | `replay.py` | Foster & Wilson 2006, Diba & Buzsaki 2007 | Forward/reverse replay sequences with RPE-based selection, STDP pairs from replay, schema update signals |
-| Precision-Weighted PE | `hierarchical_predictive_coding.py` | Feldman & Friston 2010, Kanai 2015 | NE/ACh modulation of per-level precisions, metamemory calibration tracking |
-| Microglial Pruning | `microglial_pruning.py` | Wang et al. 2020 | Complement-dependent elimination of weak edges and orphaned entities |
-| Emergence Tracker | `emergence_tracker.py` | -- | Tracks spacing effect, testing effect, forgetting curve, schema acceleration, phase-locking |
-| Ablation Framework | `ablation.py` | -- | Lesion study simulator -- disable any of 20 mechanisms, measure system-level impact |
+| LTP/LTD + STDP | `synaptic_plasticity.py` | Hebb 1949, Bi & Poo 1998 | Hebbian plasticity + causal timing + stochastic transmission |
+| Microglial Pruning | `microglial_pruning.py` | Wang et al. 2020 | Complement-dependent edge elimination |
+| Ablation Framework | `ablation.py` | -- | Lesion study simulator for 23 mechanisms |
 
 </details>
 
 ## Architecture
 
-Clean Architecture with concentric dependency layers. Inner layers never import outer layers.
+Clean Architecture with concentric dependency layers. Inner layers never import outer layers. PostgreSQL + pgvector is the mandatory storage backend.
 
 ```mermaid
 graph TD
@@ -669,7 +522,7 @@ graph TD
     HK -->|use| S
 
     C -.-|"103 modules, pure logic, zero I/O"| C
-    I -.-|"21 modules: SQLite, embeddings, filesystem"| I
+    I -.-|"PostgreSQL + pgvector, embeddings, config"| I
     S -.-|"11 modules: utilities, types"| S
     H -.-|"60 handlers (composition roots)"| H
 
@@ -684,74 +537,28 @@ graph TD
 
 - **103 core modules** -- all pure business logic, no I/O
 - **60 handlers** -- composition roots wiring core + infrastructure
-- **21 infrastructure modules** -- SQLite store, embeddings, config, MCP client
+- **Infrastructure** -- PostgreSQL + pgvector store, PL/pgSQL stored procedures, embeddings, config
 - **11 shared modules** -- pure utilities and Pydantic types
 - **4 hooks** -- session lifecycle, compaction checkpoint, post-tool capture, session start
-- **1893 tests** passing
+- **1888 tests** passing across Python 3.10-3.13
 - **6 benchmarks** -- LongMemEval, LoCoMo, BEAM, MemoryAgentBench, EverMemBench, Episodic
-
-## 3D Neural Graph Visualization
-
-Launch with `open_visualization` tool. Features:
-
-- **Force-directed layout** with type-specific forces (domains repel strongly, memories weakly)
-- **Progressive batch loading** -- domains render first, then children stream in
-- **7 node types** with distinct geometries: icosahedron (domain), sphere (memory/entry), octahedron (entity/pattern), box (tool), tetrahedron (feature)
-- **Emotional encoding** -- memory color reflects dominant emotion (red=urgency, amber=discovery, green=satisfaction), pulsing rings scale with arousal
-- **Selective bloom** post-processing with flow particles along edges
-- **Monitoring log** -- full entry details, type + bio filters, click-to-navigate
-- **Glossary** -- plain-English explanations of all node types, edges, and biological mechanisms
-- **Semantic zoom** -- L2 Galaxy (domains only) -> L1 Constellation (+ entities) -> L0 Neural (everything)
-
-## Hooks
-
-### Session Lifecycle (SessionEnd)
-
-```json
-{
-  "hooks": {
-    "SessionEnd": [{
-      "command": "python -m mcp_server.hooks.session_lifecycle"
-    }]
-  }
-}
-```
-
-### Session Start
-
-```json
-{
-  "hooks": {
-    "SessionStart": [{
-      "command": "python -m mcp_server.hooks.session_start"
-    }]
-  }
-}
-```
-
-### Post-Tool Capture (PostToolUse)
-
-```json
-{
-  "hooks": {
-    "PostToolUse": [{
-      "command": "python -m mcp_server.hooks.post_tool_capture"
-    }]
-  }
-}
-```
 
 ## Configuration
 
-All settings via environment variables with `CORTEX_MEMORY_` prefix:
+All settings via environment variables with `JARVIS_MEMORY_` prefix:
 
 | Variable | Default | Description |
 |---|---|---|
-| `CORTEX_MEMORY_DB_PATH` | `~/.claude/memory/cortex.db` | SQLite database location |
-| `CORTEX_MEMORY_EMBEDDING_DIM` | `64` | Embedding dimensions |
-| `CORTEX_MEMORY_DECAY_FACTOR` | `0.95` | Base heat decay rate |
-| `CORTEX_MEMORY_SURPRISAL_THRESHOLD` | `0.3` | Write gate threshold |
-| `CORTEX_MEMORY_COLD_THRESHOLD` | `0.01` | Below this heat = archived |
+| `DATABASE_URL` | `postgresql://localhost:5432/cortex` | PostgreSQL connection string (mandatory) |
+| `JARVIS_MEMORY_DECAY_FACTOR` | `0.95` | Base heat decay rate per hour |
+| `JARVIS_MEMORY_SURPRISE_MOMENTUM_ENABLED` | `true` | Enable test-time learning |
+| `JARVIS_MEMORY_SURPRISE_MOMENTUM_ETA` | `0.7` | Momentum decay (EMA) |
+| `JARVIS_MEMORY_SURPRISE_MOMENTUM_DELTA` | `0.08` | Max heat change per recall |
+| `JARVIS_MEMORY_ADAPTIVE_DECAY_ENABLED` | `true` | Per-memory adaptive decay rates |
+| `JARVIS_MEMORY_CO_ACTIVATION_ENABLED` | `true` | Hebbian co-retrieval edge strengthening |
+| `JARVIS_MEMORY_WRRF_VECTOR_WEIGHT` | `1.0` | Vector signal weight in WRRF |
+| `JARVIS_MEMORY_WRRF_FTS_WEIGHT` | `0.5` | FTS signal weight |
+| `JARVIS_MEMORY_WRRF_HEAT_WEIGHT` | `0.3` | Heat signal weight |
 
 ## Development
 
@@ -767,10 +574,9 @@ pytest tests_py/core/
 pytest tests_py/handlers/
 pytest tests_py/infrastructure/
 
-# Run LongMemEval benchmark
-python3 benchmarks/longmemeval/run_benchmark.py --variant s
-python3 benchmarks/longmemeval/run_benchmark.py --variant s --verbose  # show misses
-python3 benchmarks/longmemeval/run_benchmark.py --limit 50            # quick test
+# Run benchmarks (requires PostgreSQL)
+DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/longmemeval/run_benchmark.py --variant s
+DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/locomo/run_benchmark.py
 ```
 
 ## Contributing
