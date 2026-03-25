@@ -54,7 +54,7 @@ class PgMemoryStore(
 
     def __init__(self, database_url: str | None = None) -> None:
         url = database_url or _get_database_url()
-        self._conn = psycopg.connect(url, row_factory=dict_row, autocommit=False)
+        self._conn = psycopg.connect(url, row_factory=dict_row, autocommit=True)
         self._init_schema()
         register_vector(self._conn)
 
