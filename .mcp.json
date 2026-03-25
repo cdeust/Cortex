@@ -1,9 +1,13 @@
 {
   "mcpServers": {
-    "methodology-agent": {
+    "cortex": {
       "command": "python3",
       "args": ["-m", "mcp_server"],
-      "cwd": "/Users/cdeust/Developments/jarvis"
+      "cwd": "${CLAUDE_PLUGIN_ROOT}",
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}"
+      }
     }
   }
 }

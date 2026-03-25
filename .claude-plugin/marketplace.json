@@ -1,27 +1,27 @@
 {
-  "name": "jarvis-plugins",
+  "name": "cortex-plugins",
   "owner": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"
   },
   "metadata": {
     "description": "Persistent memory and cognitive profiling plugins for Claude Code",
-    "version": "2.0.0"
+    "version": "2.1.0"
   },
   "plugins": [
     {
-      "name": "jarvis",
+      "name": "cortex",
       "source": "./",
       "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory, intent-aware retrieval, causal graphs, and cognitive profiling that learns how you work",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
       },
-      "homepage": "https://github.com/cdeust/jarvis",
-      "repository": "https://github.com/cdeust/jarvis",
+      "homepage": "https://github.com/cdeust/Cortex",
+      "repository": "https://github.com/cdeust/Cortex",
       "license": "MIT",
-      "keywords": ["memory", "cognitive-profiling", "mcp", "claude-code", "jarvis"],
+      "keywords": ["memory", "cognitive-profiling", "mcp", "claude-code", "cortex"],
       "category": "productivity"
     }
   ]

@@ -1,40 +1,48 @@
 {
-  "name": "jarvis",
+  "name": "cortex",
   "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, and cognitive profiling that learns how you work",
   "version": "2.1.0",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"
   },
-  "homepage": "https://github.com/cdeust/jarvis",
-  "repository": "https://github.com/cdeust/jarvis",
+  "homepage": "https://github.com/cdeust/Cortex",
+  "repository": "https://github.com/cdeust/Cortex",
   "license": "MIT",
   "keywords": ["memory", "cognitive-profiling", "mcp", "claude-code", "neuroscience"],
   "mcpServers": {
-    "jarvis": {
+    "cortex": {
       "command": "python3",
       "args": ["-m", "mcp_server"],
-      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+      "cwd": "${CLAUDE_PLUGIN_ROOT}",
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}"
+      }
     }
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "diff -q \"${CLAUDE_PLUGIN_ROOT}/pyproject.toml\" \"${CLAUDE_PLUGIN_DATA}/pyproject.toml\" >/dev/null 2>&1 || (cp \"${CLAUDE_PLUGIN_ROOT}/pyproject.toml\" \"${CLAUDE_PLUGIN_DATA}/\" && pip install -e \"${CLAUDE_PLUGIN_ROOT}\") || rm -f \"${CLAUDE_PLUGIN_DATA}/pyproject.toml\""
+          },
+          {
+            "type": "command",
+            "command": "python3 -m mcp_server.hooks.session_start",
+            "cwd": "${CLAUDE_PLUGIN_ROOT}"
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "python3 -m mcp_server.hooks.session_lifecycle",
-            "cwd": "${CLAUDE_PLUGIN_ROOT}"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 -m mcp_server.hooks.session_start",
             "cwd": "${CLAUDE_PLUGIN_ROOT}"
           }
         ]
