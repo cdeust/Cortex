@@ -30,12 +30,44 @@ def _hours_since_access(mem: dict, now: datetime) -> float | None:
         return None
 
 
+def _compute_adaptive_rate(
+    mem: dict,
+    base_rate: float,
+    min_rate: float = 0.90,
+    max_rate: float = 0.999,
+) -> float:
+    """Titans-inspired adaptive decay rate from usage patterns.
+
+    Frequently useful memories decay slower; redundant ones decay faster.
+    Falls back to base_rate when insufficient data (access_count < 3).
+    """
+    access = mem.get("access_count", 0)
+    if access < 3:
+        return base_rate
+    useful = mem.get("useful_count", 0)
+    surprise = mem.get("surprise_score", 0.0)
+    usefulness = useful / max(access, 1)
+    # Novelty resistance: surprising memories decay slower
+    novelty_resist = surprise * 0.02
+    # Usefulness resistance: useful memories decay slower
+    usefulness_resist = usefulness * 0.01
+    # Redundancy penalty: frequently accessed but not useful/surprising
+    penalty = 0.02 if (access > 5 and surprise < 0.2 and usefulness < 0.3) else 0.0
+    return max(
+        min_rate,
+        min(max_rate, base_rate + novelty_resist + usefulness_resist - penalty),
+    )
+
+
 def _compute_single_decay(
     mem: dict,
     now: datetime,
     decay_factor: float,
     importance_decay_factor: float,
     emotional_decay_resistance: float,
+    adaptive_decay: bool = False,
+    adaptive_min: float = 0.90,
+    adaptive_max: float = 0.999,
 ) -> tuple[int, float] | None:
     """Compute decay for a single memory. Returns (id, new_heat) or None."""
     current_heat = mem.get("heat", 0.0)
@@ -43,14 +75,22 @@ def _compute_single_decay(
     if hours is None:
         return None
 
+    df = decay_factor
+    idf = importance_decay_factor
+    if adaptive_decay:
+        df = _compute_adaptive_rate(mem, decay_factor, adaptive_min, adaptive_max)
+        idf = _compute_adaptive_rate(
+            mem, importance_decay_factor, adaptive_min, adaptive_max
+        )
+
     new_heat = compute_decay(
         current_heat,
         hours,
         importance=mem.get("importance", 0.5),
         valence=mem.get("emotional_valence", 0.0),
         confidence=mem.get("confidence", 1.0),
-        decay_factor=decay_factor,
-        importance_decay_factor=importance_decay_factor,
+        decay_factor=df,
+        importance_decay_factor=idf,
         emotional_decay_resistance=emotional_decay_resistance,
     )
 
@@ -67,11 +107,15 @@ def compute_decay_updates(
     importance_decay_factor: float = 0.998,
     emotional_decay_resistance: float = 0.5,
     cold_threshold: float = 0.05,
+    adaptive_decay: bool = False,
+    adaptive_min: float = 0.90,
+    adaptive_max: float = 0.999,
 ) -> list[tuple[int, float]]:
     """Compute new heat values for all memories.
 
     Returns list of (memory_id, new_heat) tuples for memories that changed.
     Skips protected memories and already-cold memories.
+    When adaptive_decay=True, uses per-memory rates from Titans (NeurIPS 2025).
     """
     if now is None:
         now = datetime.now(timezone.utc)
@@ -86,6 +130,9 @@ def compute_decay_updates(
             decay_factor,
             importance_decay_factor,
             emotional_decay_resistance,
+            adaptive_decay=adaptive_decay,
+            adaptive_min=adaptive_min,
+            adaptive_max=adaptive_max,
         )
         if result is not None:
             updates.append(result)

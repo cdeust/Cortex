@@ -25,6 +25,9 @@ def plan_full_ablation_study(
     """
     exclude = exclude or set()
     order = [
+        Mechanism.SURPRISE_MOMENTUM,
+        Mechanism.CO_ACTIVATION,
+        Mechanism.ADAPTIVE_DECAY,
         Mechanism.SPREADING_ACTIVATION,
         Mechanism.HDC,
         Mechanism.HOPFIELD,

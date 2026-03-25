@@ -206,6 +206,8 @@ CREATE INDEX IF NOT EXISTS idx_prospective_active
     ON prospective_memories (is_active);
 CREATE INDEX IF NOT EXISTS idx_schemas_domain
     ON schemas (domain);
+CREATE INDEX IF NOT EXISTS idx_rel_pair_type
+    ON relationships (source_entity_id, target_entity_id, relationship_type);
 """
 
 # ── PL/pgSQL: recall_memories ─────────────────────────────────────────────

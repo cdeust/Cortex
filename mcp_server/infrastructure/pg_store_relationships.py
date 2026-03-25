@@ -91,3 +91,57 @@ class PgRelationshipMixin:
             "JOIN entities e2 ON r.target_entity_id = e2.id"
         ).fetchall()
         return {(row["source_name"], row["target_name"]) for row in rows}
+
+    def reinforce_or_create_relationship(
+        self,
+        source_name: str,
+        target_name: str,
+        delta_weight: float = 0.1,
+        rel_type: str = "co_retrieval",
+    ) -> None:
+        """Dragon Hatchling Hebbian update: co-activation strengthens edges.
+
+        If relationship exists, reinforce weight + facilitation.
+        If not, resolve entity IDs and create new relationship.
+        """
+        # Resolve entity IDs
+        src = self._conn.execute(
+            "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1",
+            (source_name,),
+        ).fetchone()
+        tgt = self._conn.execute(
+            "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1",
+            (target_name,),
+        ).fetchone()
+        if not src or not tgt:
+            return
+        sid, tid = src["id"], tgt["id"]
+        # Try to reinforce existing relationship
+        updated = self._conn.execute(
+            "UPDATE relationships SET "
+            "weight = LEAST(2.0, weight + %s), "
+            "facilitation = LEAST(1.0, facilitation + 0.05), "
+            "last_reinforced = NOW() "
+            "WHERE source_entity_id = %s AND target_entity_id = %s "
+            "AND relationship_type = %s",
+            (delta_weight, sid, tid, rel_type),
+        ).rowcount
+        if not updated:
+            # Also check reverse direction
+            updated = self._conn.execute(
+                "UPDATE relationships SET "
+                "weight = LEAST(2.0, weight + %s), "
+                "facilitation = LEAST(1.0, facilitation + 0.05), "
+                "last_reinforced = NOW() "
+                "WHERE source_entity_id = %s AND target_entity_id = %s "
+                "AND relationship_type = %s",
+                (delta_weight, tid, sid, rel_type),
+            ).rowcount
+        if not updated:
+            # Create new relationship
+            self._conn.execute(
+                "INSERT INTO relationships "
+                "(source_entity_id, target_entity_id, relationship_type, weight) "
+                "VALUES (%s, %s, %s, %s)",
+                (sid, tid, rel_type, delta_weight),
+            )

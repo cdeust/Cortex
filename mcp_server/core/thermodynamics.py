@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
+import numpy as np
+
 # ── Keyword sets for heuristic scoring ────────────────────────────────────
 
 _ERROR_KW = re.compile(
@@ -176,3 +178,54 @@ def is_error_content(content: str) -> bool:
 def is_decision_content(content: str) -> bool:
     """Check if content contains decision keywords."""
     return bool(_DECISION_KW.search(content))
+
+
+# ── Test-time learning (Titans, NeurIPS 2025) ─────────────────────────
+
+
+def compute_retrieval_surprise(
+    query_emb: bytes | None, result_embs: list[bytes | None]
+) -> float:
+    """Surprise = 1 - mean(cosine_sim(query, results)).
+
+    High surprise means results are far from the query embedding —
+    the system found unexpected content (Titans: ∇ℓ(M; x) is large).
+    Returns 0.5 when embeddings are unavailable.
+    """
+    if not query_emb or not result_embs:
+        return 0.5
+    q = np.frombuffer(query_emb, dtype=np.float32)
+    q_norm = np.linalg.norm(q)
+    if q_norm == 0:
+        return 0.5
+    sims = []
+    for emb in result_embs:
+        if emb is None:
+            continue
+        r = np.frombuffer(emb, dtype=np.float32)
+        r_norm = np.linalg.norm(r)
+        if r_norm > 0 and len(r) == len(q):
+            sims.append(float(np.dot(q, r) / (q_norm * r_norm)))
+    if not sims:
+        return 0.5
+    return max(0.0, min(1.0, 1.0 - sum(sims) / len(sims)))
+
+
+def compute_heat_adjustment(
+    surprise: float,
+    momentum: float,
+    delta: float = 0.08,
+) -> float:
+    """Titans-inspired heat delta: Sₜ = η·Sₜ₋₁ - θ·∇ℓ.
+
+    Surprising results (>0.5) get heat boost; unsurprising (<0.3) get suppressed.
+    Momentum amplifies the effect when recent recalls were consistently surprising.
+
+    Returns a heat delta in [-delta, +delta].
+    """
+    amplification = 1.0 + momentum * 0.5
+    if surprise > 0.5:
+        return delta * (surprise - 0.5) * 2.0 * amplification
+    elif surprise < 0.3:
+        return -delta * (0.3 - surprise) * amplification
+    return 0.0

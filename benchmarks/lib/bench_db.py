@@ -17,6 +17,10 @@ from typing import Any
 
 from mcp_server.core.query_intent import classify_query_intent, QueryIntent
 from mcp_server.core.reranker import rerank_results
+from mcp_server.core.thermodynamics import (
+    compute_retrieval_surprise,
+    compute_heat_adjustment,
+)
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.pg_store import PgMemoryStore
 
@@ -37,6 +41,7 @@ class BenchmarkDB:
         self._embeddings: EmbeddingEngine | None = None
         self._memory_ids: list[int] = []
         self._content_lookup: dict[int, str] = {}
+        self._momentum: float = 0.5  # Titans surprise momentum
 
     # ── Lifecycle ─────────────────────────────────────────────────
 
@@ -178,7 +183,34 @@ class BenchmarkDB:
                     c["score"] = score
                     candidates.append(c)
 
+        # Titans test-time learning: surprise momentum updates heat in PG
+        self._apply_surprise_momentum(q_emb, candidates[:top_k])
+
         return candidates[:top_k]
+
+    def _apply_surprise_momentum(
+        self, q_emb: bytes | None, results: list[dict[str, Any]]
+    ) -> None:
+        """Update heat of retrieved memories based on retrieval surprise."""
+        if not q_emb or not results or not self._store:
+            return
+        result_embs = []
+        for r in results[:10]:
+            mem = self._store.get_memory(r["memory_id"])
+            if mem and mem.get("embedding"):
+                result_embs.append(mem["embedding"])
+        if not result_embs:
+            return
+        surprise = compute_retrieval_surprise(q_emb, result_embs)
+        self._momentum = 0.7 * self._momentum + 0.3 * surprise
+        adj = compute_heat_adjustment(surprise, self._momentum, delta=0.08)
+        if abs(adj) < 0.001:
+            return
+        for r in results:
+            old_heat = r.get("heat", 0.5)
+            new_heat = max(0.0, min(1.0, old_heat + adj))
+            if abs(new_heat - old_heat) > 0.001:
+                self._store.update_memory_heat(r["memory_id"], new_heat)
 
     def _intent_weights(
         self, intent: QueryIntent, core_weights: dict

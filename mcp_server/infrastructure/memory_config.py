@@ -101,6 +101,21 @@ class MemorySettings(BaseSettings):
     STRATEGIC_TOP_FRACTION: float = 0.3  # Top 30% at start
     STRATEGIC_BOTTOM_FRACTION: float = 0.2  # Bottom 20% at end
 
+    # ── Test-Time Learning (Titans, NeurIPS 2025) ─────────────────────────
+    SURPRISE_MOMENTUM_ENABLED: bool = True
+    SURPRISE_MOMENTUM_ETA: float = 0.7  # momentum decay (EMA)
+    SURPRISE_MOMENTUM_DELTA: float = 0.08  # max heat change per recall
+
+    # ── Adaptive Decay (Titans, NeurIPS 2025) ────────────────────────────
+    ADAPTIVE_DECAY_ENABLED: bool = True
+    ADAPTIVE_DECAY_MIN_RATE: float = 0.90
+    ADAPTIVE_DECAY_MAX_RATE: float = 0.999
+
+    # ── Co-Activation (Dragon Hatchling, Pathway 2025) ───────────────────
+    CO_ACTIVATION_ENABLED: bool = True
+    CO_ACTIVATION_LEARNING_RATE: float = 0.1
+    CO_ACTIVATION_MIN_SCORE: float = 0.3
+
     # ── Embedding ─────────────────────────────────────────────────────────
     EMBEDDING_DIM: int = 384
 

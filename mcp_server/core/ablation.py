@@ -42,6 +42,9 @@ class Mechanism(Enum):
     TWO_STAGE_MODEL = "two_stage_model"
     HOPFIELD = "hopfield_network"
     HDC = "hyperdimensional_computing"
+    SURPRISE_MOMENTUM = "surprise_momentum"
+    ADAPTIVE_DECAY = "adaptive_decay"
+    CO_ACTIVATION = "co_activation"
 
 
 @dataclass
