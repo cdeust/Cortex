@@ -1,4 +1,4 @@
-"""Episodic Memories Benchmark for JARVIS memory system.
+"""Episodic Memories Benchmark for Cortex memory system.
 
 Tests episodic memory recall on synthetic book-like narratives
 (Huet et al., ICLR 2025). Each event is a 5-tuple (date, location, entity,
@@ -362,7 +362,7 @@ def run_benchmark(
     # Compute Simple Recall Score
     print()
     print("=" * 72)
-    print("Episodic Memory Benchmark Results — JARVIS (Retrieval-Only)")
+    print("Episodic Memory Benchmark Results — Cortex (Retrieval-Only)")
     print("=" * 72)
     print()
 
@@ -393,7 +393,7 @@ def run_benchmark(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Episodic Memory Benchmark for JARVIS")
+    parser = argparse.ArgumentParser(description="Episodic Memory Benchmark for Cortex")
     parser.add_argument("--data-dir", help="Path to pre-generated data directory")
     parser.add_argument(
         "--events", type=int, default=20, help="Number of events (default: 20)"

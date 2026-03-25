@@ -1,1 +1,1 @@
-"""Jarvis Methodology Agent — Cognitive profiling system for Claude Code."""
+"""Cortex Methodology Agent — Cognitive profiling system for Claude Code."""

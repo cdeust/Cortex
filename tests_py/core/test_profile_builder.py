@@ -49,7 +49,7 @@ class TestBuildDomainProfiles:
             conversations=convs,
             memories={},
             brain_index={"memories": {}, "conversations": {}},
-            by_project=_by_project("-Users-dev-jarvis", convs),
+            by_project=_by_project("-Users-dev-cortex", convs),
         )
         assert result.get("domains")
         domain_ids = list(result["domains"].keys())
@@ -59,7 +59,7 @@ class TestBuildDomainProfiles:
         assert domain["sessionCount"] == 3
         assert domain.get("label")
         assert isinstance(domain["projects"], list)
-        assert "-Users-dev-jarvis" in domain["projects"]
+        assert "-Users-dev-cortex" in domain["projects"]
         assert isinstance(domain["entryPoints"], list)
         assert domain.get("toolPreferences") is not None
         assert domain.get("sessionShape") is not None
@@ -133,8 +133,8 @@ class TestBuildDomainProfiles:
         convs_a = [_make_conversation()]
         convs_b = [_make_conversation()]
         existing = _empty_profiles()
-        existing["domains"]["jarvis"] = {
-            "projects": ["-Users-dev-jarvis"],
+        existing["domains"]["cortex"] = {
+            "projects": ["-Users-dev-cortex"],
             "sessionCount": 0,
         }
         existing["domains"]["other"] = {
@@ -147,10 +147,10 @@ class TestBuildDomainProfiles:
             conversations=[*convs_a, *convs_b],
             memories={},
             brain_index={"memories": {}, "conversations": {}},
-            by_project={"-Users-dev-jarvis": convs_a, "-Users-dev-other": convs_b},
-            target_domain="jarvis",
+            by_project={"-Users-dev-cortex": convs_a, "-Users-dev-other": convs_b},
+            target_domain="cortex",
         )
-        assert result["domains"]["jarvis"]["sessionCount"] == 1
+        assert result["domains"]["cortex"]["sessionCount"] == 1
         assert result["domains"]["other"]["sessionCount"] == 0
 
     def test_empty_by_project(self):

@@ -39,7 +39,7 @@ def _reset_memory_idle_timer() -> None:
                 _memory_server["server"].shutdown()
                 _memory_server = None
                 print(
-                    "[jarvis] Memory dashboard stopped (idle timeout)",
+                    "[cortex] Memory dashboard stopped (idle timeout)",
                     file=sys.stderr,
                 )
 
@@ -125,7 +125,7 @@ def _bind_and_start(handler_cls, preferred_port: int) -> str:
             thread.start()
             _reset_memory_idle_timer()
             print(
-                f"[jarvis] Memory dashboard started at {url}",
+                f"[cortex] Memory dashboard started at {url}",
                 file=sys.stderr,
             )
             return url

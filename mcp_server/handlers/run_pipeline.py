@@ -1,7 +1,7 @@
 """Composition root for the 11-stage ai-architect pipeline.
 
 Each stage is a function receiving (client, ctx) where ctx accumulates
-stage outputs. JARVIS injects cognitive context from its own profiles.
+stage outputs. Cortex injects cognitive context from its own profiles.
 
 Stage implementations live in mcp_server.handlers.pipeline.* modules.
 This file is the thin orchestrator: schema + handler + backward-compat aliases.

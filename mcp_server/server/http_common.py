@@ -65,7 +65,7 @@ class ServerManager:
                     self._server_state["server"].shutdown()
                     self._server_state = None
                     print(
-                        f"[jarvis] {self.label} stopped (idle timeout)",
+                        f"[cortex] {self.label} stopped (idle timeout)",
                         file=sys.stderr,
                     )
 
@@ -106,7 +106,7 @@ class ServerManager:
                 thread.start()
                 self.reset_idle_timer()
                 print(
-                    f"[jarvis] {self.label} started at {url}",
+                    f"[cortex] {self.label} started at {url}",
                     file=sys.stderr,
                 )
                 return url

@@ -19,7 +19,7 @@ from mcp_server.handlers.import_sessions import (
 def tmp_claude_dir(tmp_path):
     """Create a temporary .claude/projects structure with sample JSONL files."""
     projects_dir = tmp_path / "projects"
-    proj = projects_dir / "-Users-dev-Developments-jarvis"
+    proj = projects_dir / "-Users-dev-Developments-cortex"
     proj.mkdir(parents=True)
 
     # Create a sample JSONL file
@@ -31,7 +31,7 @@ def tmp_claude_dir(tmp_path):
             },
             "timestamp": "2026-01-01T10:00:00Z",
             "sessionId": "session-001",
-            "cwd": "/Users/dev/Developments/jarvis",
+            "cwd": "/Users/dev/Developments/cortex",
         },
         {
             "type": "assistant",
@@ -51,7 +51,7 @@ def tmp_claude_dir(tmp_path):
             },
             "timestamp": "2026-01-01T10:05:00Z",
             "sessionId": "session-001",
-            "cwd": "/Users/dev/Developments/jarvis",
+            "cwd": "/Users/dev/Developments/cortex",
         },
     ]
 
@@ -98,7 +98,7 @@ def _patch_remember(stored=True):
 
 class TestDetectDomainFromPath:
     def test_standard_path(self):
-        assert _detect_domain_from_path("/Users/dev/Developments/jarvis") == "jarvis"
+        assert _detect_domain_from_path("/Users/dev/Developments/cortex") == "cortex"
 
     def test_nested_path(self):
         assert _detect_domain_from_path("/Users/dev/projects/myapp/src") == "myapp"
@@ -121,9 +121,9 @@ class TestDiscoverJsonlFiles:
 
     def test_filters_by_project(self, tmp_claude_dir):
         with _patch_claude_dir(tmp_claude_dir):
-            files = _discover_jsonl_files("-Users-dev-Developments-jarvis")
+            files = _discover_jsonl_files("-Users-dev-Developments-cortex")
             assert len(files) == 1
-            assert files[0][1] == "-Users-dev-Developments-jarvis"
+            assert files[0][1] == "-Users-dev-Developments-cortex"
 
     def test_empty_when_no_match(self, tmp_claude_dir):
         with _patch_claude_dir(tmp_claude_dir):
@@ -140,7 +140,7 @@ class TestHandlerDryRun:
         with _patch_claude_dir(tmp_claude_dir):
             result = await handler(
                 {
-                    "project": "-Users-dev-Developments-jarvis",
+                    "project": "-Users-dev-Developments-cortex",
                     "dry_run": True,
                     "min_importance": 0.3,
                 }
@@ -155,7 +155,7 @@ class TestHandlerDryRun:
         with _patch_claude_dir(tmp_claude_dir), _patch_remember() as mock_store:
             await handler(
                 {
-                    "project": "-Users-dev-Developments-jarvis",
+                    "project": "-Users-dev-Developments-cortex",
                     "dry_run": True,
                 }
             )
@@ -174,7 +174,7 @@ class TestHandlerImport:
         ):
             result = await handler(
                 {
-                    "project": "-Users-dev-Developments-jarvis",
+                    "project": "-Users-dev-Developments-cortex",
                     "min_importance": 0.3,
                 }
             )
@@ -186,7 +186,7 @@ class TestHandlerImport:
         with _patch_claude_dir(tmp_claude_dir), _patch_remember(stored=False):
             result = await handler(
                 {
-                    "project": "-Users-dev-Developments-jarvis",
+                    "project": "-Users-dev-Developments-cortex",
                     "min_importance": 0.3,
                 }
             )

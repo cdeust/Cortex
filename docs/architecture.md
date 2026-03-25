@@ -1,4 +1,4 @@
-# JARVIS — Architecture
+# Cortex — Architecture
 
 ## Layer Diagram
 
@@ -164,7 +164,7 @@ Handlers sit at the center as **composition roots**: they wire infrastructure (I
 | `mcp_client.py` | Async MCP client over stdio (JSON-RPC 2.0, version negotiation) |
 | `mcp_client_pool.py` | Singleton connection pool (lazy connect, reuse, idle timeout) |
 | `memory_store.py` | SQLite + FTS5 persistence layer for thermodynamic memories |
-| `memory_config.py` | Runtime configuration (env vars with JARVIS_MEMORY_ prefix) |
+| `memory_config.py` | Runtime configuration (env vars with CORTEX_MEMORY_ prefix) |
 | `embedding_engine.py` | Vector embeddings (64-dim default, configurable) |
 
 ### `validation/` — Input validation

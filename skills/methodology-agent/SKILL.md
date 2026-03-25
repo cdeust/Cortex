@@ -1,26 +1,26 @@
 ---
-name: jarvis
+name: cortex
 description: Persistent memory and cognitive profiling for Claude Code
 tools:
-  - jarvis:query_methodology
-  - jarvis:remember
-  - jarvis:recall
-  - jarvis:consolidate
-  - jarvis:checkpoint
-  - jarvis:narrative
-  - jarvis:memory_stats
-  - jarvis:detect_domain
-  - jarvis:rebuild_profiles
-  - jarvis:list_domains
-  - jarvis:record_session_end
-  - jarvis:get_methodology_graph
-  - jarvis:open_visualization
-  - jarvis:explore_features
-  - jarvis:run_pipeline
-  - jarvis:open_memory_dashboard
+  - cortex:query_methodology
+  - cortex:remember
+  - cortex:recall
+  - cortex:consolidate
+  - cortex:checkpoint
+  - cortex:narrative
+  - cortex:memory_stats
+  - cortex:detect_domain
+  - cortex:rebuild_profiles
+  - cortex:list_domains
+  - cortex:record_session_end
+  - cortex:get_methodology_graph
+  - cortex:open_visualization
+  - cortex:explore_features
+  - cortex:run_pipeline
+  - cortex:open_memory_dashboard
 ---
 
-# JARVIS
+# Cortex
 
 Persistent memory and cognitive profiling for Claude Code.
 
@@ -54,4 +54,4 @@ Persistent memory and cognitive profiling for Claude Code.
 
 ## Usage
 
-Call `query_methodology` at session start — JARVIS surfaces hot memories, fired triggers, and your cognitive profile. Use `remember` to store important decisions, patterns, and context. Use `recall` to retrieve relevant memories. Everything else (decay, consolidation, critique) happens automatically via hooks.
+Call `query_methodology` at session start — Cortex surfaces hot memories, fired triggers, and your cognitive profile. Use `remember` to store important decisions, patterns, and context. Use `recall` to retrieve relevant memories. Everything else (decay, consolidation, critique) happens automatically via hooks.

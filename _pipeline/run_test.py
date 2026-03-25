@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Standalone runner for the JARVIS run_pipeline handler — test with real LLM calls."""
+"""Standalone runner for the Cortex run_pipeline handler — test with real LLM calls."""
 
 import asyncio
 import json

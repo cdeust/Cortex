@@ -547,20 +547,20 @@ graph TD
 
 ## Configuration
 
-All settings via environment variables with `JARVIS_MEMORY_` prefix:
+All settings via environment variables with `CORTEX_MEMORY_` prefix:
 
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | `postgresql://localhost:5432/cortex` | PostgreSQL connection string (mandatory) |
-| `JARVIS_MEMORY_DECAY_FACTOR` | `0.95` | Base heat decay rate per hour |
-| `JARVIS_MEMORY_SURPRISE_MOMENTUM_ENABLED` | `true` | Enable test-time learning |
-| `JARVIS_MEMORY_SURPRISE_MOMENTUM_ETA` | `0.7` | Momentum decay (EMA) |
-| `JARVIS_MEMORY_SURPRISE_MOMENTUM_DELTA` | `0.08` | Max heat change per recall |
-| `JARVIS_MEMORY_ADAPTIVE_DECAY_ENABLED` | `true` | Per-memory adaptive decay rates |
-| `JARVIS_MEMORY_CO_ACTIVATION_ENABLED` | `true` | Hebbian co-retrieval edge strengthening |
-| `JARVIS_MEMORY_WRRF_VECTOR_WEIGHT` | `1.0` | Vector signal weight in WRRF |
-| `JARVIS_MEMORY_WRRF_FTS_WEIGHT` | `0.5` | FTS signal weight |
-| `JARVIS_MEMORY_WRRF_HEAT_WEIGHT` | `0.3` | Heat signal weight |
+| `CORTEX_MEMORY_DECAY_FACTOR` | `0.95` | Base heat decay rate per hour |
+| `CORTEX_MEMORY_SURPRISE_MOMENTUM_ENABLED` | `true` | Enable test-time learning |
+| `CORTEX_MEMORY_SURPRISE_MOMENTUM_ETA` | `0.7` | Momentum decay (EMA) |
+| `CORTEX_MEMORY_SURPRISE_MOMENTUM_DELTA` | `0.08` | Max heat change per recall |
+| `CORTEX_MEMORY_ADAPTIVE_DECAY_ENABLED` | `true` | Per-memory adaptive decay rates |
+| `CORTEX_MEMORY_CO_ACTIVATION_ENABLED` | `true` | Hebbian co-retrieval edge strengthening |
+| `CORTEX_MEMORY_WRRF_VECTOR_WEIGHT` | `1.0` | Vector signal weight in WRRF |
+| `CORTEX_MEMORY_WRRF_FTS_WEIGHT` | `0.5` | FTS signal weight |
+| `CORTEX_MEMORY_WRRF_HEAT_WEIGHT` | `0.3` | Heat signal weight |
 
 ## Development
 

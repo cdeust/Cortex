@@ -4,7 +4,7 @@ Reads hot memories for the current project directory, extracts key insights
 (decisions, patterns, conventions), and appends or updates a
 '## Memory Insights' section in CLAUDE.md.
 
-This closes the loop between JARVIS's thermodynamic memory and the Claude
+This closes the loop between Cortex's thermodynamic memory and the Claude
 Code instruction file that is loaded at the start of every session.
 """
 
@@ -60,8 +60,11 @@ def _get_store() -> MemoryStore:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-_SECTION_START = "<!-- jarvis:memory-insights:start -->"
-_SECTION_END = "<!-- jarvis:memory-insights:end -->"
+_SECTION_START = "<!-- cortex:memory-insights:start -->"
+_SECTION_END = "<!-- cortex:memory-insights:end -->"
+# Backward compat: also match old cortex markers
+_LEGACY_START = "<!-- cortex:memory-insights:start -->"
+_LEGACY_END = "<!-- cortex:memory-insights:end -->"
 
 _DECISION_RE = re.compile(
     r"\b(decided|chose|switching|migrated|using|adopted|went with|replaced)\b",
@@ -101,7 +104,7 @@ def _build_section(insights: list[str]) -> str:
         _SECTION_START,
         "## Memory Insights",
         "",
-        "Auto-synced from JARVIS memory. Do not edit manually.",
+        "Auto-synced from Cortex memory. Do not edit manually.",
         "",
     ]
     for bullet in insights:
@@ -124,11 +127,18 @@ def _update_claude_md(
 
     start_idx = original.find(_SECTION_START)
     end_idx = original.find(_SECTION_END)
+    end_len = len(_SECTION_END)
+    # Backward compat: detect legacy cortex markers
+    if start_idx == -1:
+        start_idx = original.find(_LEGACY_START)
+    if end_idx == -1:
+        end_idx = original.find(_LEGACY_END)
+        end_len = len(_LEGACY_END)
 
     if start_idx != -1 and end_idx != -1:
-        # Replace existing section
+        # Replace existing section (uses new cortex markers)
         before = original[:start_idx]
-        after = original[end_idx + len(_SECTION_END) :]
+        after = original[end_idx + end_len :]
         updated = before + section + after
         action = "updated"
     else:

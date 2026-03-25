@@ -12,7 +12,7 @@ from mcp_server.handlers.remember import handler as remember_handler
 
 def _patch_memory_env(tmp_dir: str):
     db_path = os.path.join(tmp_dir, "test.db")
-    return patch.dict(os.environ, {"JARVIS_MEMORY_DB_PATH": db_path})
+    return patch.dict(os.environ, {"CORTEX_MEMORY_DB_PATH": db_path})
 
 
 def _clean_db():

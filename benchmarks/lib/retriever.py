@@ -183,14 +183,14 @@ class BenchmarkRetriever:
     def retrieve(self, query: str, top_k: int = 10) -> list[dict]:
         """Multi-signal retrieval with RRF fusion and reranking.
 
-        Uses core JARVIS query_router for intent classification — same
+        Uses core Cortex query_router for intent classification — same
         logic as production recall handler.
         """
         self._ensure_embeddings()
         if not self.documents:
             return []
 
-        # Use core JARVIS intent classification
+        # Use core Cortex intent classification
         intent_info = classify_query_intent(query)
         intent = intent_info["intent"]
 

@@ -1,4 +1,4 @@
-"""EverMemBench benchmark for JARVIS memory system.
+"""EverMemBench benchmark for Cortex memory system.
 
 Tests long-horizon memory for multi-party collaborative dialogues
 (Hu et al., 2026). 5 projects, 170 employees, 365 simulated days,
@@ -289,7 +289,7 @@ def run_benchmark(limit: int | None = None, topic_filter: str | None = None):
     # Aggregate
     print()
     print("=" * 72)
-    print("EverMemBench Results — JARVIS (Retrieval-Only)")
+    print("EverMemBench Results — Cortex (Retrieval-Only)")
     print("=" * 72)
     print()
 
@@ -332,7 +332,7 @@ def run_benchmark(limit: int | None = None, topic_filter: str | None = None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="EverMemBench for JARVIS")
+    parser = argparse.ArgumentParser(description="EverMemBench for Cortex")
     parser.add_argument("--limit", type=int, help="Limit messages per topic")
     parser.add_argument("--topic", help="Single topic ID to run (01-05)")
     args = parser.parse_args()

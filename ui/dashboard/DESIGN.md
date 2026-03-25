@@ -1,4 +1,4 @@
-# JARVIS Memory Dashboard - Design System
+# Cortex Memory Dashboard - Design System
 
 ## Design Reference: Cyber Obsidian
 
@@ -11,7 +11,7 @@ A professional neural graph dashboard inspired by Stitch-generated reference des
 ```
 +--[SIDEBAR 200px]--+--[MAIN AREA]--------------------------------------+
 |                    | [TOP NAV BAR - tabs + search + status]            |
-| JARVIS             |                                                   |
+| Cortex             |                                                   |
 | v4.0               | [KPI STRIP - 4 metric cards]                     |
 |                    |                                                   |
 | > Home             |                                                   |

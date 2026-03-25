@@ -1,4 +1,4 @@
-# JARVIS — Data Flow
+# Cortex — Data Flow
 
 ## Memory Write Path (`remember`)
 
@@ -40,7 +40,7 @@ flowchart TD
 | Temporal | `thermodynamics.py` | Time gap from most recent memory in same domain |
 | Structural | `curation.py` | Tag and domain overlap with existing memories |
 
-The gate uses `JARVIS_MEMORY_SURPRISAL_THRESHOLD` (default 0.3) as the minimum combined novelty score. `force=True` bypasses the gate entirely.
+The gate uses `CORTEX_MEMORY_SURPRISAL_THRESHOLD` (default 0.3) as the minimum combined novelty score. `force=True` bypasses the gate entirely.
 
 ## Memory Read Path (`recall`)
 

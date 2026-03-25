@@ -1,10 +1,10 @@
-"""Embedding engine for JARVIS memory system.
+"""Embedding engine for Cortex memory system.
 
 Provides text → vector encoding for semantic similarity search.
 
 Strategy (in priority order):
   1. sentence-transformers (if installed) — best quality, 384D
-  2. Fallback: TF-IDF-like sparse-to-dense via JARVIS's own text utilities
+  2. Fallback: TF-IDF-like sparse-to-dense via Cortex's own text utilities
 
 The engine is lazy-loading: no model initialization until first encode() call.
 """

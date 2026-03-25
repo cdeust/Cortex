@@ -87,7 +87,7 @@ def _build_finding_report(
             ],
             "",
             "---",
-            f"*JARVIS pipeline * {tool_calls} tool calls*",
+            f"*Cortex pipeline * {tool_calls} tool calls*",
         ]
     )
     return "\n".join(lines)

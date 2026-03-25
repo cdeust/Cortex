@@ -5,7 +5,7 @@ retroactively promoted to a strong memory (late-phase LTP) when a subsequent
 high-importance event shares entities with it. The biological mechanism
 involves protein synthesis tags that mark synapses for later consolidation.
 
-In JARVIS: when a new high-importance memory is stored, we scan for older
+In Cortex: when a new high-importance memory is stored, we scan for older
 weak memories that share entities. Those weak memories get "tagged" — their
 importance and heat are boosted, making them resist compression and decay.
 

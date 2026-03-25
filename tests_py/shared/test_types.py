@@ -29,10 +29,10 @@ class TestProfilesV2:
                 sessionCount=50,
             ),
             domains={
-                "jarvis": DomainProfile(
-                    id="jarvis",
-                    label="Jarvis",
-                    projects=["-Users-dev-jarvis"],
+                "cortex": DomainProfile(
+                    id="cortex",
+                    label="Cortex",
+                    projects=["-Users-dev-cortex"],
                     categories={"feature": 0.6, "bug-fix": 0.4},
                     topKeywords=["api", "authentication"],
                     sessionCount=10,
@@ -43,8 +43,8 @@ class TestProfilesV2:
         data = json.loads(p.model_dump_json(by_alias=True))
         p2 = ProfilesV2.model_validate(data)
         assert p2.version == 2
-        assert "jarvis" in p2.domains
-        assert p2.domains["jarvis"].session_count == 10
+        assert "cortex" in p2.domains
+        assert p2.domains["cortex"].session_count == 10
 
     def test_loads_js_format_json(self):
         """Can parse JSON in the format the JS server writes."""

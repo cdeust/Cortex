@@ -75,7 +75,7 @@ def _build_pr_body(client, ctx: dict) -> str:
             ]
         )
 
-    sections.extend(["", "---", f"*JARVIS pipeline * {client.tool_calls} tool calls*"])
+    sections.extend(["", "---", f"*Cortex pipeline * {client.tool_calls} tool calls*"])
     return "\n".join(sections)
 
 

@@ -1,4 +1,4 @@
-# JARVIS Biological Mechanisms — Ablation Benchmark Report
+# Cortex Biological Mechanisms — Ablation Benchmark Report
 
 Each benchmark disables or isolates a mechanism and measures the delta.
 Numbers prove whether each mechanism contributes measurable value.

@@ -47,8 +47,8 @@ class TestDetectDomain:
     def test_confident_match(self):
         profiles = _make_profiles(
             {
-                "jarvis": _make_domain(
-                    projects=["-Users-dev-jarvis"],
+                "cortex": _make_domain(
+                    projects=["-Users-dev-cortex"],
                     topKeywords=["scanner", "cognitive", "profiling"],
                     categoryDistribution={"architecture": 0.5, "feature": 0.5},
                 ),
@@ -56,13 +56,13 @@ class TestDetectDomain:
         )
         result = detect_domain(
             {
-                "cwd": "/Users/dev/jarvis",
+                "cwd": "/Users/dev/cortex",
                 "first_message": "fix the scanner cognitive profiling module",
             },
             profiles,
         )
         assert result["coldStart"] is False
-        assert result["domain"] == "jarvis"
+        assert result["domain"] == "cortex"
         assert result["confidence"] >= 0.6
         assert result["isNew"] is False
 
@@ -87,8 +87,8 @@ class TestDetectDomain:
     def test_new_domain_no_match(self):
         profiles = _make_profiles(
             {
-                "jarvis": _make_domain(
-                    projects=["-Users-dev-jarvis"],
+                "cortex": _make_domain(
+                    projects=["-Users-dev-cortex"],
                     topKeywords=["scanner", "cognitive"],
                     categoryDistribution={},
                 ),
@@ -175,19 +175,19 @@ class TestMapProjectToDomain:
     def test_finds_domain(self):
         profiles = _make_profiles(
             {
-                "jarvis": _make_domain(
-                    projects=["-Users-dev-jarvis", "-Users-dev-jarvis2"]
+                "cortex": _make_domain(
+                    projects=["-Users-dev-cortex", "-Users-dev-cortex2"]
                 ),
                 "other": _make_domain(projects=["-Users-dev-other"]),
             }
         )
-        assert map_project_to_domain("-Users-dev-jarvis", profiles) == "jarvis"
+        assert map_project_to_domain("-Users-dev-cortex", profiles) == "cortex"
         assert map_project_to_domain("-Users-dev-other", profiles) == "other"
 
     def test_not_found(self):
         profiles = _make_profiles(
             {
-                "jarvis": _make_domain(projects=["-Users-dev-jarvis"]),
+                "cortex": _make_domain(projects=["-Users-dev-cortex"]),
             }
         )
         assert map_project_to_domain("-Users-dev-unknown", profiles) is None

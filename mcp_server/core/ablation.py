@@ -1,7 +1,7 @@
-"""Ablation framework -- lesion study simulator for JARVIS mechanisms.
+"""Ablation framework -- lesion study simulator for Cortex mechanisms.
 
 In neuroscience, ablation studies remove or disable brain regions to measure
-their contribution. This module applies the same methodology to JARVIS:
+their contribution. This module applies the same methodology to Cortex:
 disable individual neuroscience mechanisms and measure the impact on
 system-level behavior.
 
@@ -20,7 +20,7 @@ from enum import Enum
 
 
 class Mechanism(Enum):
-    """Enumeration of all ablatable JARVIS mechanisms."""
+    """Enumeration of all ablatable Cortex mechanisms."""
 
     OSCILLATORY_CLOCK = "oscillatory_clock"
     CASCADE = "consolidation_cascade"

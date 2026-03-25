@@ -30,7 +30,7 @@ mcp = FastMCP(
     name="methodology-agent",
     version="1.0.0",
     instructions=(
-        "JARVIS cognitive profiling system for Claude Code. "
+        "Cortex cognitive profiling system for Claude Code. "
         "Extracts reasoning signatures from session history and pre-loads them at session start. "
         "Call query_methodology at the beginning of every session. "
         "Use remember/recall for persistent thermodynamic memory across sessions."

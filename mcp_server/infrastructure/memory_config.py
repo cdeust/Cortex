@@ -1,6 +1,6 @@
-"""Memory system configuration — extends JARVIS config with thermodynamic memory settings.
+"""Memory system configuration — extends Cortex config with thermodynamic memory settings.
 
-All settings are overridable via JARVIS_MEMORY_ env prefix.
+All settings are overridable via CORTEX_MEMORY_ env prefix.
 Defaults tuned from production parameters.
 """
 
@@ -119,7 +119,7 @@ class MemorySettings(BaseSettings):
     # ── Embedding ─────────────────────────────────────────────────────────
     EMBEDDING_DIM: int = 384
 
-    model_config = {"env_prefix": "JARVIS_MEMORY_"}
+    model_config = {"env_prefix": "CORTEX_MEMORY_"}
 
     @property
     def db_path_resolved(self) -> Path:

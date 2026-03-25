@@ -9,7 +9,7 @@ from mcp_server.shared.project_ids import (
 
 class TestCwdToProjectId:
     def test_converts_normal_path(self):
-        assert cwd_to_project_id("/Users/dev/jarvis") == "-Users-dev-jarvis"
+        assert cwd_to_project_id("/Users/dev/cortex") == "-Users-dev-cortex"
 
     def test_replaces_all_slashes(self):
         assert (
@@ -26,7 +26,7 @@ class TestCwdToProjectId:
 
 class TestProjectIdToLabel:
     def test_strips_users_prefix(self):
-        assert project_id_to_label("-Users-dev-Developments-jarvis") == "jarvis"
+        assert project_id_to_label("-Users-dev-Developments-cortex") == "cortex"
 
     def test_strips_documents_prefix(self):
         assert project_id_to_label("-Users-dev-Documents-myproject") == "myproject"

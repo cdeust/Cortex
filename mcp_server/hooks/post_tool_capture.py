@@ -50,7 +50,7 @@ import json
 import sys
 from typing import Any
 
-_LOG_PREFIX = "[jarvis-post-tool-capture]"
+_LOG_PREFIX = "[cortex-post-tool-capture]"
 
 # Tools whose outputs are worth capturing
 _HIGH_VALUE_TOOLS = {

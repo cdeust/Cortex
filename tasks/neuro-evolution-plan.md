@@ -1,7 +1,7 @@
-# JARVIS Neuroscience Evolution Plan
+# Cortex Neuroscience Evolution Plan
 
 ## Status: ACTIVE — 13/14 core modules DONE, Phase 2+4 COMPLETE, handlers wired, dashboard visualizing
-## Goal: Evolve JARVIS from cognitive-science-with-neuroscience-vocabulary into a computationally rigorous neuroscience-inspired memory system that can itself contribute novel insights to memory research.
+## Goal: Evolve Cortex from cognitive-science-with-neuroscience-vocabulary into a computationally rigorous neuroscience-inspired memory system that can itself contribute novel insights to memory research.
 
 ---
 
@@ -283,13 +283,13 @@ class Schema:
 ### Tier 4: Research-Grade Capabilities (For neuroscience contribution)
 
 #### 4.1 Simulation Mode (`core/simulation.py`) -- NEW
-**Purpose**: Allow JARVIS to run "what-if" scenarios on its own memory system.
+**Purpose**: Allow Cortex to run "what-if" scenarios on its own memory system.
 **Implementation**:
 - Snapshot current state -> run hypothetical sequences -> compare outcomes
 - Example: "What if I hadn't consolidated yesterday? Which memories would be lost?"
 - Example: "What if dopamine was 2x during that error? Would the fix have consolidated faster?"
 - Parameter sweep: vary one mechanism parameter, measure system-level effect
-- This turns JARVIS into an experimental platform, not just a memory store
+- This turns Cortex into an experimental platform, not just a memory store
 
 #### 4.2 Emergent Metric Tracking (`core/emergence_tracker.py`) -- NEW
 **Purpose**: Track system-level properties that emerge from mechanism interactions.
@@ -313,7 +313,7 @@ class Schema:
 - Produces ablation reports that read like neuroscience papers
 
 #### 4.4 Hypothesis Generator (`core/hypothesis_generator.py`) -- NEW
-**Purpose**: JARVIS observes its own dynamics and generates testable neuroscience hypotheses.
+**Purpose**: Cortex observes its own dynamics and generates testable neuroscience hypotheses.
 **Implementation**:
 - Detect unexpected correlations in emergence_tracker data
 - Example: "Memories consolidated during high-ACh periods show 2.3x better retrieval after 30 days, suggesting acetylcholine-dependent encoding creates more durable traces"
@@ -460,14 +460,14 @@ All new modules go in `core/` -- pure logic, zero I/O. State persistence handled
 
 ## Success Criteria
 
-### For JARVIS as a memory system:
+### For Cortex as a memory system:
 1. Memories encoded during "encoding phase" survive 2x longer than random-phase encoding
 2. Schema-consistent memories consolidate 3x faster than schema-inconsistent
 3. Pattern separation reduces interference by >50% for similar memories
 4. Replay sequences correlate with improved next-day retrieval
 5. Homeostatic plasticity prevents heat distribution from collapsing to bimodal (all hot or all cold)
 
-### For JARVIS as a research tool:
+### For Cortex as a research tool:
 1. Ablation studies produce interpretable, non-obvious results
 2. Hypothesis generator produces at least one non-trivial prediction per 100 memories
 3. Simulation mode can predict consolidation outcomes with >70% accuracy

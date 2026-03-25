@@ -22,7 +22,7 @@ def _clean_checkpoints():
 @pytest.fixture(autouse=True)
 def _isolated_db(tmp_path):
     db_path = str(tmp_path / "test_checkpoint.db")
-    with patch.dict(os.environ, {"JARVIS_MEMORY_DB_PATH": db_path}):
+    with patch.dict(os.environ, {"CORTEX_MEMORY_DB_PATH": db_path}):
         get_memory_settings.cache_clear()
         import mcp_server.handlers.checkpoint as mod
 

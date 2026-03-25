@@ -151,7 +151,7 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 - `mcp_client_pool.py` — Singleton connection pool (lazy connect, reuse, idle timeout)
 - `pg_store.py` — PostgreSQL + pgvector persistence (MANDATORY — replaces SQLite)
 - `pg_schema.py` — DDL, extensions, PL/pgSQL stored procedures, migrations
-- `memory_config.py` — Runtime configuration (DATABASE_URL, env vars with JARVIS_MEMORY_ prefix)
+- `memory_config.py` — Runtime configuration (DATABASE_URL, env vars with CORTEX_MEMORY_ prefix)
 - `embedding_engine.py` — Vector embeddings (384-dim, sentence-transformers)
 
 **handlers/** — Composition roots (34 tools + helpers, one per tool)

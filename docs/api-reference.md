@@ -1,6 +1,6 @@
 # API Reference — MCP Tool Schemas
 
-This document describes the input schemas, response formats, and error codes for all 34 MCP tools exposed by JARVIS.
+This document describes the input schemas, response formats, and error codes for all 34 MCP tools exposed by Cortex.
 
 ## Protocol
 

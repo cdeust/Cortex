@@ -1,4 +1,4 @@
-"""MemoryAgentBench benchmark for JARVIS memory system.
+"""MemoryAgentBench benchmark for Cortex memory system.
 
 Tests 4 core memory competencies (Hu et al., ICLR 2026):
   1. Accurate Retrieval — recall facts from injected context
@@ -209,7 +209,7 @@ def run_benchmark(splits: list[str] | None = None, limit: int | None = None):
     # Print results
     print()
     print("=" * 72)
-    print("MemoryAgentBench Results — JARVIS (Retrieval-Only)")
+    print("MemoryAgentBench Results — Cortex (Retrieval-Only)")
     print("=" * 72)
     print()
     print(f"{'Split':<28} {'F1':>6} {'EM':>6} {'Sub_EM':>6} {'Qs':>5}")
@@ -234,7 +234,7 @@ def run_benchmark(splits: list[str] | None = None, limit: int | None = None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="MemoryAgentBench for JARVIS")
+    parser = argparse.ArgumentParser(description="MemoryAgentBench for Cortex")
     parser.add_argument("--split", choices=SPLITS, help="Single split to run")
     parser.add_argument("--limit", type=int, help="Limit rows per split")
     args = parser.parse_args()

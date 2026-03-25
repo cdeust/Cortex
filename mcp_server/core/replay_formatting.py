@@ -82,7 +82,7 @@ def format_restoration(
     directory: str = "",
 ) -> str:
     """Format restoration data as injectable markdown for context reconstruction."""
-    lines: list[str] = ["# JARVIS Context Restoration (Hippocampal Replay)", ""]
+    lines: list[str] = ["# Cortex Context Restoration (Hippocampal Replay)", ""]
 
     if checkpoint:
         _format_checkpoint(lines, checkpoint)

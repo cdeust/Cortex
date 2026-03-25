@@ -2,7 +2,7 @@
 
 Tracks properties that EMERGE from the interaction of individual mechanisms,
 not from any single module. These are the phenomena that validate whether
-JARVIS's neuroscience model produces biologically realistic behavior:
+Cortex's neuroscience model produces biologically realistic behavior:
 
 - Spacing effect: spaced repetitions improve retention vs massed practice
 - Testing effect: retrieval practice strengthens memory more than re-encoding

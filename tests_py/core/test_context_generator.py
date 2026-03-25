@@ -5,7 +5,7 @@ from mcp_server.core.context_generator import generate_context, generate_short_c
 
 def _make_profile(**overrides):
     base = {
-        "label": "Jarvis",
+        "label": "Cortex",
         "entryPoints": [
             {"pattern": "fix / api / auth", "frequency": 5, "confidence": 0.8}
         ],
@@ -53,8 +53,8 @@ def _make_profile(**overrides):
 
 class TestGenerateContext:
     def test_includes_all_sections(self):
-        ctx = generate_context("jarvis", _make_profile())
-        assert "You're working in Jarvis" in ctx
+        ctx = generate_context("cortex", _make_profile())
+        assert "You're working in Cortex" in ctx
         assert "You typically fix / api / auth" in ctx
         assert "read before edit" in ctx
         assert "grep then fix" in ctx
@@ -69,7 +69,7 @@ class TestGenerateContext:
 
     def test_null_profile(self):
         assert (
-            generate_context("jarvis", None)
+            generate_context("cortex", None)
             == "No cognitive profile yet. Building one as we go."
         )
 
@@ -80,8 +80,8 @@ class TestGenerateContext:
         )
 
     def test_missing_label_uses_domain_id(self):
-        ctx = generate_context("jarvis", _make_profile(label=None))
-        assert "You're working in jarvis" in ctx
+        ctx = generate_context("cortex", _make_profile(label=None))
+        assert "You're working in cortex" in ctx
 
     def test_no_entry_points(self):
         ctx = generate_context("d", _make_profile(entryPoints=[]))
@@ -209,8 +209,8 @@ class TestGenerateContext:
 
 class TestGenerateShortContext:
     def test_full_format(self):
-        short = generate_short_context("jarvis", _make_profile())
-        assert short == "Jarvis · depth-first · top-down · burst"
+        short = generate_short_context("cortex", _make_profile())
+        assert short == "Cortex · depth-first · top-down · burst"
 
     def test_null_profile(self):
         assert generate_short_context("d", None) is None
@@ -234,7 +234,7 @@ class TestGenerateShortContext:
         short = generate_short_context(
             "d", _make_profile(metacognitive=None, sessionShape=None)
         )
-        assert short == "Jarvis"
+        assert short == "Cortex"
 
     def test_metacognitive_only_exploration(self):
         short = generate_short_context(
@@ -251,4 +251,4 @@ class TestGenerateShortContext:
             "d",
             _make_profile(metacognitive=None, sessionShape={"avgDuration": 300000}),
         )
-        assert short == "Jarvis"
+        assert short == "Cortex"

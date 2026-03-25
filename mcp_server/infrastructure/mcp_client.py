@@ -13,7 +13,7 @@ from typing import Any
 
 from mcp_server.errors import McpConnectionError
 
-CLIENT_INFO = {"name": "jarvis", "version": "1.0.0"}
+CLIENT_INFO = {"name": "cortex", "version": "1.0.0"}
 PROTOCOL_VERSION = "2025-11-25"
 
 

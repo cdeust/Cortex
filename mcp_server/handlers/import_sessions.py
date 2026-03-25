@@ -39,7 +39,7 @@ schema = {
             "project": {
                 "type": "string",
                 "description": (
-                    "Project directory name filter (e.g. '-Users-cdeust-Developments-jarvis'). "
+                    "Project directory name filter (e.g. '-Users-cdeust-Developments-cortex'). "
                     "If omitted, imports from all projects."
                 ),
             },

@@ -258,11 +258,11 @@ class TestExtractSessionSummary:
             {
                 "type": "user",
                 "message": {
-                    "content": "Build the import_sessions MCP tool for JARVIS memory system"
+                    "content": "Build the import_sessions MCP tool for Cortex memory system"
                 },
                 "timestamp": "2026-01-01T10:00:00Z",
                 "sessionId": "s123",
-                "cwd": "/Users/dev/Developments/jarvis",
+                "cwd": "/Users/dev/Developments/cortex",
             },
             {
                 "type": "assistant",
@@ -278,7 +278,7 @@ class TestExtractSessionSummary:
         ]
         summary = extract_session_summary(records)
         assert summary["session_id"] == "s123"
-        assert "jarvis" in summary["cwd"]
+        assert "cortex" in summary["cwd"]
         assert "import_sessions" in summary["first_message"]
         assert "Read" in summary["tools_used"]
 

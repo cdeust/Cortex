@@ -44,7 +44,7 @@ def _reset_unified_idle_timer() -> None:
                 _unified_server["server"].shutdown()
                 _unified_server = None
                 print(
-                    "[jarvis] Unified viz stopped (idle timeout)",
+                    "[cortex] Unified viz stopped (idle timeout)",
                     file=sys.stderr,
                 )
 
@@ -173,7 +173,7 @@ def _bind_and_start(handler_cls, preferred_port: int) -> str:
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             _reset_unified_idle_timer()
-            print(f"[jarvis] Unified viz started at {url}", file=sys.stderr)
+            print(f"[cortex] Unified viz started at {url}", file=sys.stderr)
             return url
         except OSError:
             if port != 0:

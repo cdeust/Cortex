@@ -6,7 +6,7 @@
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"
   },
-  "homepage": "https://github.com/cdeust/jarvis",
+  "homepage": "https://github.com/cdeust/cortex",
   "mcpServers": "./.mcp.json",
   "scripts": {
     "test": "node --test tests/**/*.test.js",

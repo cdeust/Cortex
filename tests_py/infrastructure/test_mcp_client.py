@@ -1196,7 +1196,7 @@ class TestIdleLoop:
 
 class TestModuleConstants:
     def test_client_info(self):
-        assert CLIENT_INFO == {"name": "jarvis", "version": "1.0.0"}
+        assert CLIENT_INFO == {"name": "cortex", "version": "1.0.0"}
 
     def test_protocol_version(self):
         assert PROTOCOL_VERSION == "2025-11-25"

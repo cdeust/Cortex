@@ -17,7 +17,7 @@ _LEADING_TRAILING_DASH_RE = re.compile(r"^-|-$")
 def cwd_to_project_id(cwd: str | None) -> str | None:
     """Convert a working directory path to a Claude project ID.
 
-    /Users/dev/jarvis -> -Users-dev-jarvis
+    /Users/dev/cortex -> -Users-dev-cortex
     """
     if not cwd:
         return None

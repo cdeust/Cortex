@@ -16,7 +16,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 def _isolated_db(tmp_path):
     """Create isolated DB for all handlers sharing the same store."""
     db_path = str(tmp_path / "integration.db")
-    with patch.dict(os.environ, {"JARVIS_MEMORY_DB_PATH": db_path}):
+    with patch.dict(os.environ, {"CORTEX_MEMORY_DB_PATH": db_path}):
         get_memory_settings.cache_clear()
 
         # Reset all handler singletons

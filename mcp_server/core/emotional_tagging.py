@@ -4,7 +4,7 @@ Based on Wang & Bhatt (Nature Human Behaviour, 2024) and the emotional
 tagging hypothesis: high-frequency activity in the amygdala during encoding
 of emotional events strengthens hippocampal memory traces.
 
-In JARVIS: detect emotional markers in content (frustration from errors,
+In Cortex: detect emotional markers in content (frustration from errors,
 satisfaction from fixes, confusion from debugging), multiply importance
 and reduce decay rate. Emotionally tagged memories resist compression.
 

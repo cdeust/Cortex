@@ -4,7 +4,7 @@ Based on Wang et al. (Science, 2020): microglia mediate forgetting via
 complement-dependent synaptic elimination. The brain actively removes
 unused synapses to optimize memory storage and retrieval.
 
-In JARVIS: during consolidation, identify knowledge graph edges and entities
+In Cortex: during consolidation, identify knowledge graph edges and entities
 that are inactive and prune them. Uses "eat-me" / "don't-eat-me" signals
 mapped to access patterns and protection status.
 

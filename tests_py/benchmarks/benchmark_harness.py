@@ -1,7 +1,7 @@
 """Benchmark harness — generates realistic workloads and measures mechanism impact.
 
 This is NOT a unit test. It's an ablation study engine that produces real numbers
-showing whether each biological mechanism contributes measurable value to JARVIS.
+showing whether each biological mechanism contributes measurable value to Cortex.
 
 Run:
     python -m tests_py.benchmarks.benchmark_harness
@@ -1064,7 +1064,7 @@ def _table(headers: list[str], rows: list[list]) -> str:
 def run_all_benchmarks() -> str:
     """Run all benchmarks and produce a comprehensive markdown report."""
     sections = []
-    sections.append("# JARVIS Biological Mechanisms — Ablation Benchmark Report")
+    sections.append("# Cortex Biological Mechanisms — Ablation Benchmark Report")
     sections.append("")
     sections.append(
         "Each benchmark disables or isolates a mechanism and measures the delta."

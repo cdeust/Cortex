@@ -110,7 +110,7 @@ def compute_forgetting_curve(
     """Fit a forgetting curve to memory age vs heat data.
 
     Biology shows power-law forgetting: R(t) = a * t^(-b).
-    If JARVIS's mechanisms produce a similar curve, the system is
+    If Cortex's mechanisms produce a similar curve, the system is
     behaving realistically.
 
     Args:

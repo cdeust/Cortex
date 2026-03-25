@@ -42,12 +42,12 @@ from pathlib import Path
 # ── Config (mirrors memory_config defaults) ────────────────────────────────────
 
 _DB_PATH = os.environ.get(
-    "JARVIS_MEMORY_DB_PATH",
+    "CORTEX_MEMORY_DB_PATH",
     str(Path.home() / ".claude" / "methodology" / "memory.db"),
 )
-_HOT_LIMIT = int(os.environ.get("JARVIS_SESSION_START_LIMIT", "8"))
-_MIN_HEAT = float(os.environ.get("JARVIS_SESSION_START_MIN_HEAT", "0.4"))
-_ANCHOR_LIMIT = int(os.environ.get("JARVIS_SESSION_START_ANCHOR_LIMIT", "5"))
+_HOT_LIMIT = int(os.environ.get("CORTEX_SESSION_START_LIMIT", "8"))
+_MIN_HEAT = float(os.environ.get("CORTEX_SESSION_START_MIN_HEAT", "0.4"))
+_ANCHOR_LIMIT = int(os.environ.get("CORTEX_SESSION_START_ANCHOR_LIMIT", "5"))
 
 
 def _log(msg: str) -> None:
@@ -192,7 +192,7 @@ def _build_context(
     if not anchors and not hot and not checkpoint:
         return ""
 
-    lines = ["## 🧠 JARVIS Memory Context\n"]
+    lines = ["## 🧠 Cortex Memory Context\n"]
 
     if checkpoint and checkpoint.get("current_task"):
         lines.extend(_format_checkpoint_section(checkpoint))
@@ -217,7 +217,7 @@ def _build_context(
     return "\n".join(lines)
 
 
-_AUTO_BACKFILL_THRESHOLD = int(os.environ.get("JARVIS_AUTO_BACKFILL_THRESHOLD", "20"))
+_AUTO_BACKFILL_THRESHOLD = int(os.environ.get("CORTEX_AUTO_BACKFILL_THRESHOLD", "20"))
 
 
 def _count_memories(db_path: str) -> int:
