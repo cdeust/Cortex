@@ -124,7 +124,7 @@ class PgMemoryStore(
                 "source": data.get("source", ""),
                 "domain": data.get("domain", ""),
                 "directory_context": data.get("directory_context", ""),
-                "created_at": data.get("created_at", now),
+                "created_at": data.get("created_at") or now,
                 "last_accessed": now,
                 "heat": data.get("heat", 1.0),
                 "surprise_score": data.get("surprise_score", 0.0),

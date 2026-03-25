@@ -93,7 +93,10 @@ class BenchmarkDB:
         ids = []
         for mem, emb in zip(memories, embeddings):
             created = (
-                mem.get("created_at") or mem.get("date") or mem.get("date_iso", "")
+                mem.get("created_at")
+                or mem.get("date")
+                or mem.get("date_iso")
+                or mem.get("time_anchor", "")
             )
             mid = self._store.insert_memory(
                 {
@@ -102,7 +105,7 @@ class BenchmarkDB:
                     "domain": domain,
                     "source": mem.get("source", "benchmark"),
                     "tags": mem.get("tags", []),
-                    "created_at": created if created else None,
+                    "created_at": created if created and created.strip() else None,
                     "heat": mem.get("heat", 1.0),
                     "importance": mem.get("importance", 0.5),
                     "store_type": mem.get("store_type", "episodic"),
@@ -119,7 +122,12 @@ class BenchmarkDB:
         texts = []
         for m in memories:
             prefix = ""
-            date = m.get("date") or m.get("created_at") or m.get("date_iso", "")
+            date = (
+                m.get("date")
+                or m.get("created_at")
+                or m.get("date_iso")
+                or m.get("time_anchor", "")
+            )
             if date:
                 prefix = f"[Date: {date}] "
             user = m.get("user_content", "")

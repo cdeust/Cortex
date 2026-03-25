@@ -66,8 +66,23 @@ def evaluate_retrieval(
                 continue
 
             query = q.get("question", "")
-            source_ids = q.get("source_chat_ids", [])
-            if not query or not source_ids:
+            if not query:
+                continue
+
+            # Flatten source_ids: may be list[int] or dict of lists
+            raw_ids = q.get("source_chat_ids", [])
+            if isinstance(raw_ids, dict):
+                source_ids = []
+                for v in raw_ids.values():
+                    if isinstance(v, list):
+                        source_ids.extend(v)
+                    elif isinstance(v, int):
+                        source_ids.append(v)
+            else:
+                source_ids = raw_ids if isinstance(raw_ids, list) else []
+
+            # Abstention: no source_ids by design — still evaluate
+            if not source_ids and ability != "abstention":
                 continue
 
             retrieved = db.recall(query, top_k=10, domain="beam")
@@ -86,21 +101,28 @@ def evaluate_retrieval(
             # Find rank of first hit
             hit_rank = None
             answer_lower = answer.lower().strip() if answer else ""
-            for rank, r in enumerate(retrieved):
-                content_lower = r["content"].lower()
-                if (
-                    answer_lower
-                    and len(answer_lower) > 2
-                    and answer_lower in content_lower
-                ):
-                    hit_rank = rank + 1
-                    break
-                for src in source_contents:
-                    if src and src in content_lower:
+
+            if ability == "abstention":
+                # Abstention: success = no relevant evidence found
+                # Score as rank 1 if retrieval returns nothing or low-confidence
+                if not retrieved or retrieved[0].get("score", 0) < 0.3:
+                    hit_rank = 1
+            else:
+                for rank, r in enumerate(retrieved):
+                    content_lower = r["content"].lower()
+                    if (
+                        answer_lower
+                        and len(answer_lower) > 2
+                        and answer_lower in content_lower
+                    ):
                         hit_rank = rank + 1
                         break
-                if hit_rank:
-                    break
+                    for src in source_contents:
+                        if src and src in content_lower:
+                            hit_rank = rank + 1
+                            break
+                    if hit_rank:
+                        break
 
             results[ability].append(
                 {
