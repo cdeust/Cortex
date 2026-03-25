@@ -15,14 +15,32 @@ def _patch_memory_env(tmp_dir: str):
     return patch.dict(os.environ, {"JARVIS_MEMORY_DB_PATH": db_path})
 
 
+def _clean_db():
+    """Delete all test data from the shared PG database."""
+    from mcp_server.infrastructure.memory_store import MemoryStore
+
+    store = MemoryStore()
+    store._conn.execute("DELETE FROM relationships")
+    store._conn.execute("DELETE FROM entities")
+    store._conn.execute("DELETE FROM prospective_memories")
+    store._conn.execute("DELETE FROM checkpoints")
+    store._conn.execute("DELETE FROM engram_slots")
+    store._conn.execute("DELETE FROM memories")
+    store._conn.commit()
+    store.close()
+
+
 def _reset_singletons():
     import mcp_server.handlers.recall as recall_mod
     import mcp_server.handlers.remember as remember_mod
+    import mcp_server.handlers.consolidate as consolidate_mod
 
     recall_mod._store = None
     recall_mod._embeddings = None
     remember_mod._store = None
     remember_mod._embeddings = None
+    consolidate_mod._store = None
+    consolidate_mod._embeddings = None
     from mcp_server.infrastructure.memory_config import get_memory_settings
 
     get_memory_settings.cache_clear()

@@ -22,11 +22,29 @@ def _reset_singletons():
     get_memory_settings.cache_clear()
 
 
+def _clean_db():
+    """Delete all test data from the shared PG database."""
+    from mcp_server.infrastructure.memory_store import MemoryStore
+
+    store = MemoryStore()
+    store._conn.execute("DELETE FROM relationships")
+    store._conn.execute("DELETE FROM entities")
+    store._conn.execute("DELETE FROM memory_archives")
+    store._conn.execute("DELETE FROM consolidation_log")
+    store._conn.execute("DELETE FROM prospective_memories")
+    store._conn.execute("DELETE FROM checkpoints")
+    store._conn.execute("DELETE FROM engram_slots")
+    store._conn.execute("DELETE FROM memories")
+    store._conn.commit()
+    store.close()
+
+
 class TestMemoryStatsHandler:
     def test_empty_store(self):
         with tempfile.TemporaryDirectory() as tmp:
             with _patch_memory_env(tmp):
                 _reset_singletons()
+                _clean_db()
                 result = asyncio.run(handler())
                 assert result["total_memories"] == 0
                 assert result["avg_heat"] == 0.0
@@ -41,11 +59,11 @@ class TestMemoryStatsHandler:
         with tempfile.TemporaryDirectory() as tmp:
             with _patch_memory_env(tmp):
                 _reset_singletons()
+                _clean_db()
                 # Store some memories directly via store
                 from mcp_server.infrastructure.memory_store import MemoryStore
 
-                db_path = os.path.join(tmp, "test.db")
-                store = MemoryStore(db_path)
+                store = MemoryStore()
                 store.insert_memory(
                     {"content": "a", "store_type": "episodic", "heat": 0.8}
                 )
@@ -69,6 +87,7 @@ class TestMemoryStatsHandler:
                 assert result["total_entities"] == 1
                 assert result["active_triggers"] == 1
                 assert result["avg_heat"] > 0
+                _clean_db()
                 _reset_singletons()
 
     def test_response_shape(self):
