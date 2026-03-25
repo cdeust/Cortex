@@ -37,9 +37,7 @@ def compute_hopfield_hdc(
     if q_emb:
         try:
             # Use PG-side batch embedding fetch (single round trip)
-            pairs = store.get_hot_embeddings(
-                min_heat=min_heat, limit=pool * 2
-            )
+            pairs = store.get_hot_embeddings(min_heat=min_heat, limit=pool * 2)
             emb_pairs = [(mid, emb) for mid, emb, _ in pairs if emb]
             if emb_pairs:
                 mat, ids = hopfield.build_pattern_matrix(
@@ -92,9 +90,7 @@ def _compute_sr(
         if not vec_results:
             return []
         # Use PG-side co-access query (single round trip)
-        pairs = store.get_temporal_co_access(
-            window_hours=2.0, min_access=1, limit=100
-        )
+        pairs = store.get_temporal_co_access(window_hours=2.0, min_access=1, limit=100)
         if not pairs:
             return []
         # Build SR graph from PG co-access pairs

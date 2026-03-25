@@ -45,15 +45,19 @@ class PgRuleMixin:
 
     def get_all_active_rules(self) -> list[dict[str, Any]]:
         rows = self._conn.execute(
-            "SELECT * FROM memory_rules WHERE is_active "
-            "ORDER BY scope, priority DESC"
+            "SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC"
         ).fetchall()
         return [dict(r) for r in rows]
 
     def update_rule(self, rule_id: int, updates: dict[str, Any]) -> None:
         allowed = {
-            "rule_type", "scope", "scope_value",
-            "condition", "action", "priority", "is_active",
+            "rule_type",
+            "scope",
+            "scope_value",
+            "condition",
+            "action",
+            "priority",
+            "is_active",
         }
         sets = []
         vals: list[Any] = []

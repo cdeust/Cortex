@@ -33,6 +33,7 @@ def _get_database_url() -> str:
     url = os.environ.get("DATABASE_URL", "")
     if not url:
         from mcp_server.infrastructure.memory_config import get_memory_settings
+
         url = get_memory_settings().DATABASE_URL
     return url
 
@@ -185,9 +186,7 @@ class PgMemoryStore(
         self._conn.commit()
 
     def delete_memory(self, memory_id: int) -> bool:
-        cur = self._conn.execute(
-            "DELETE FROM memories WHERE id = %s", (memory_id,)
-        )
+        cur = self._conn.execute("DELETE FROM memories WHERE id = %s", (memory_id,))
         self._conn.commit()
         return cur.rowcount > 0
 

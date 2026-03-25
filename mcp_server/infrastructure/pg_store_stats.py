@@ -137,7 +137,9 @@ class PgStatsMixin:
         return [dict(r) for r in rows]
 
     def update_memory_interference(
-        self, memory_id: int, interference_score: float,
+        self,
+        memory_id: int,
+        interference_score: float,
         separation_index: float | None = None,
     ) -> None:
         if separation_index is not None:

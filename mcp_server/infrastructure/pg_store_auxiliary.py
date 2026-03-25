@@ -87,15 +87,12 @@ class PgAuxiliaryMixin:
 
     def get_active_checkpoint(self) -> dict[str, Any] | None:
         row = self._conn.execute(
-            "SELECT * FROM checkpoints WHERE is_active "
-            "ORDER BY created_at DESC LIMIT 1"
+            "SELECT * FROM checkpoints WHERE is_active ORDER BY created_at DESC LIMIT 1"
         ).fetchone()
         return self._normalize_memory_row(row) if row else None
 
     def get_current_epoch(self) -> int:
-        row = self._conn.execute(
-            "SELECT MAX(epoch) AS e FROM checkpoints"
-        ).fetchone()
+        row = self._conn.execute("SELECT MAX(epoch) AS e FROM checkpoints").fetchone()
         return (row["e"] or 0) if row else 0
 
     def increment_epoch(self) -> int:
@@ -145,9 +142,7 @@ class PgAuxiliaryMixin:
     # ── Engram Slots ──────────────────────────────────────────────────
 
     def init_engram_slots(self, num_slots: int) -> None:
-        row = self._conn.execute(
-            "SELECT COUNT(*) AS c FROM engram_slots"
-        ).fetchone()
+        row = self._conn.execute("SELECT COUNT(*) AS c FROM engram_slots").fetchone()
         existing = row["c"] if row else 0
         if existing >= num_slots:
             return

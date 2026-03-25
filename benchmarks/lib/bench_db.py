@@ -87,7 +87,9 @@ class BenchmarkDB:
 
         ids = []
         for mem, emb in zip(memories, embeddings):
-            created = mem.get("created_at") or mem.get("date") or mem.get("date_iso", "")
+            created = (
+                mem.get("created_at") or mem.get("date") or mem.get("date_iso", "")
+            )
             mid = self._store.insert_memory(
                 {
                     "content": mem["content"],
@@ -162,9 +164,7 @@ class BenchmarkDB:
 
         # Client-side FlashRank reranking (same as production)
         if rerank and len(candidates) > 1:
-            ranked_pairs = [
-                (c["memory_id"], c.get("score", 0.0)) for c in candidates
-            ]
+            ranked_pairs = [(c["memory_id"], c.get("score", 0.0)) for c in candidates]
             content_map = {c["memory_id"]: c["content"] for c in candidates}
             reranked = rerank_results(
                 query, ranked_pairs, content_map, alpha=rerank_alpha

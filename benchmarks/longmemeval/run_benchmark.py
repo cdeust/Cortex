@@ -191,9 +191,7 @@ def run_benchmark(data_path: str, limit: int = 0, verbose: bool = False) -> dict
 
             # Run production retrieval
             results = db.recall(question, top_k=10, domain="longmemeval")
-            retrieved_sids = [
-                mid_to_sid.get(r["memory_id"], "") for r in results
-            ]
+            retrieved_sids = [mid_to_sid.get(r["memory_id"], "") for r in results]
 
             # Compute metrics
             mrr = compute_mrr(retrieved_sids, answer_sids)
