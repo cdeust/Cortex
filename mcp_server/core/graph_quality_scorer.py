@@ -47,9 +47,7 @@ def _count_connections(
     return counts
 
 
-def _score_node(
-    node: dict[str, Any], conns: int, total: int
-) -> tuple[float, str]:
+def _score_node(node: dict[str, Any], conns: int, total: int) -> tuple[float, str]:
     """Compute quality score and label for a single node."""
     ntype = node.get("type", "")
     scorers = {

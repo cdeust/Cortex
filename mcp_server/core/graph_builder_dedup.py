@@ -52,11 +52,7 @@ def aggregate_domains(all_domains: dict) -> dict[str, dict]:
         merged[gk] = _merge_profiles(gk, members)
 
     # Drop trivial domains (< 2 sessions) to reduce noise
-    merged = {
-        k: v
-        for k, v in merged.items()
-        if (v.get("sessionCount") or 0) >= 2
-    }
+    merged = {k: v for k, v in merged.items() if (v.get("sessionCount") or 0) >= 2}
     return merged
 
 
