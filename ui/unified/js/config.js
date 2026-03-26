@@ -20,6 +20,8 @@ JUG.NODE_COLORS = {
   'entity-file': '#6366f1',
   'entity-variable': '#06b6d4',
   'entity-default': '#00d2ff',
+  'benchmark': '#00d2ff',
+  'benchmark-ability': '#ffaa00',
 };
 
 JUG.EDGE_COLORS = {
@@ -39,6 +41,8 @@ JUG.EDGE_COLORS = {
   'memory-entity': '#556677',
   'domain-entity': '#4488aa',
   'default': '#90a4ae',
+  'benchmark': '#00d2ff',
+  'ability': '#ffaa00',
 };
 
 JUG.NODE_LABELS = {
@@ -49,6 +53,8 @@ JUG.NODE_LABELS = {
   'behavioral-feature': 'Feature',
   'memory': 'Memory',
   'entity': 'Entity',
+  'benchmark': 'Benchmark',
+  'benchmark-ability': 'Ability',
 };
 
 JUG.ZOOM_LEVELS = {
@@ -63,6 +69,10 @@ JUG.getNodeColor = function(node) {
   }
   if (node.type === 'entity') {
     return JUG.NODE_COLORS['entity-' + (node.entityType || 'default')] || '#00d2ff';
+  }
+  if (node.type === 'benchmark-ability') {
+    var s = node.mrr || node.heat || 0;
+    return s > 0.7 ? '#26de81' : s > 0.4 ? '#ffaa00' : '#ff4444';
   }
   return node.color || JUG.NODE_COLORS[node.type] || '#00d2ff';
 };

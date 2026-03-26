@@ -8,6 +8,8 @@
     'behavioral-feature': JUG.tetraGeo,
     'memory': JUG.sphereGeo,
     'entity': JUG.octaGeo,
+    'benchmark': JUG.icoGeo,
+    'benchmark-ability': JUG.octaGeo,
   };
 
   function createLabel(text, color) {

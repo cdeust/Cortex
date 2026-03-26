@@ -187,7 +187,84 @@ def _populate_graph(
         domain_hub_ids,
         entity_id_map,
     )
+    _add_benchmark_nodes(next_id, nodes, edges)
     return nodes, edges, domain_hub_ids
+
+
+def _add_benchmark_nodes(next_id: Any, nodes: list, edges: list) -> None:
+    """Add benchmark result nodes to the graph.
+
+    Three hub nodes (LongMemEval, LoCoMo, BEAM) plus BEAM ability satellites.
+    These render as a distinct cluster in the visualization.
+    """
+    benchmarks = [
+        {
+            "name": "LongMemEval",
+            "recall_10": 97.0,
+            "mrr": 0.855,
+            "qs": 500,
+            "paper": 78.4,
+        },
+        {"name": "LoCoMo", "recall_10": 84.4, "mrr": 0.599, "qs": 1982, "paper": 50.0},
+        {"name": "BEAM", "recall_10": 67.5, "mrr": 0.517, "qs": 395, "paper": 32.9},
+    ]
+    beam_abilities = {
+        "Temporal": 0.814,
+        "Contradiction": 0.846,
+        "Knowledge": 0.800,
+        "Multi-hop": 0.755,
+        "Events": 0.407,
+        "Extraction": 0.403,
+        "Preference": 0.407,
+        "Summary": 0.332,
+        "Instruction": 0.256,
+        "Abstention": 0.150,
+    }
+
+    hub_ids = []
+    for b in benchmarks:
+        nid = f"bench_{b['name'].lower()}"
+        nodes.append(
+            {
+                "id": nid,
+                "type": "benchmark",
+                "label": b["name"],
+                "domain": "benchmarks",
+                "size": 4 + b["recall_10"] / 100 * 6,
+                "heat": b["mrr"],
+                "recall_10": b["recall_10"],
+                "mrr": b["mrr"],
+                "questions": b["qs"],
+                "paper_best": b["paper"],
+            }
+        )
+        hub_ids.append(nid)
+
+    # Connect benchmark hubs to each other
+    for i, src in enumerate(hub_ids):
+        for tgt in hub_ids[i + 1 :]:
+            edges.append(
+                {"source": src, "target": tgt, "type": "benchmark", "weight": 0.3}
+            )
+
+    # BEAM ability satellites
+    beam_id = hub_ids[2]
+    for ability, score in beam_abilities.items():
+        aid = f"beam_{ability.lower().replace('-', '_')}"
+        nodes.append(
+            {
+                "id": aid,
+                "type": "benchmark-ability",
+                "label": ability,
+                "domain": "benchmarks",
+                "size": 1.5 + score * 3,
+                "heat": score,
+                "mrr": score,
+            }
+        )
+        edges.append(
+            {"source": beam_id, "target": aid, "type": "ability", "weight": score}
+        )
 
 
 def _build_and_paginate(
