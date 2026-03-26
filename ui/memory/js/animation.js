@@ -84,6 +84,7 @@
       CMD.buildBrainShell();
       CMD.buildNeurons();
       CMD.buildFibers();
+      CMD.buildBenchmarks();
       CMD.buildConnectionIndex();
       CMD.initPanelClose();
       CMD.initControls();

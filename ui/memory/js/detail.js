@@ -17,6 +17,9 @@
   function makeSec(label, body) { var s = document.createElement('div'); s.className = 'panel-section'; s.innerHTML = '<div class="panel-label">' + label + '</div>' + body; return s; }
 
   CMD.openPanel = function(n) {
+    // Benchmark nodes have their own renderer
+    if (CMD.openPanelBenchmark && CMD.openPanelBenchmark(n)) return;
+
     if (CMD.selectedNode) CMD.selectedNode._mesh.material.emissiveIntensity = CMD.selectedNode._baseEmit;
     CMD.selectedNode = n;
     n._mesh.material.emissiveIntensity = n._baseEmit * 2;
