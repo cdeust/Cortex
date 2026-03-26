@@ -62,6 +62,22 @@ class TestClassifyQueryIntent:
         result = classify_query_intent("how did this break?")
         assert result["scores"][QueryIntent.CAUSAL] > 0
 
+    def test_instruction_query_how_should(self):
+        result = classify_query_intent("how should I format my responses?")
+        assert result["intent"] == QueryIntent.INSTRUCTION
+
+    def test_instruction_query_what_rule(self):
+        result = classify_query_intent("what rule applies to formatting?")
+        assert result["scores"][QueryIntent.INSTRUCTION] > 0
+
+    def test_instruction_query_constraint(self):
+        result = classify_query_intent("what constraint did the user set?")
+        assert result["scores"][QueryIntent.INSTRUCTION] > 0
+
+    def test_instruction_query_always_never(self):
+        result = classify_query_intent("should I always use bullet points?")
+        assert result["scores"][QueryIntent.INSTRUCTION] > 0
+
     def test_multiple_signals_highest_wins(self):
         result = classify_query_intent(
             "why did this happen yesterday and what caused it?"
@@ -92,6 +108,16 @@ class TestComputeRetrievalWeights:
         w = compute_retrieval_weights(QueryIntent.ENTITY, {})
         assert w["entity"] == 1.0
         assert w["fts"] > 0.5
+
+    def test_instruction_weights_boost_fts(self):
+        w = compute_retrieval_weights(QueryIntent.INSTRUCTION, {})
+        general_w = compute_retrieval_weights(QueryIntent.GENERAL, {})
+        assert w["fts"] > general_w["fts"]
+
+    def test_instruction_weights_reduce_vector(self):
+        w = compute_retrieval_weights(QueryIntent.INSTRUCTION, {})
+        general_w = compute_retrieval_weights(QueryIntent.GENERAL, {})
+        assert w["vector"] < general_w["vector"]
 
     def test_general_uses_base_weights(self):
         w = compute_retrieval_weights(QueryIntent.GENERAL, {})

@@ -33,6 +33,12 @@ _DECISION_RE = re.compile(
     r"\b(always|never|prefer|standard|must|should|convention|rule)\b",
     re.IGNORECASE,
 )
+_INSTRUCTION_RE = re.compile(
+    r"\b(from now on|going forward|remember to|please always|"
+    r"i want you to|make sure to|do not ever|whenever you|"
+    r"every time you|respond in|use only|stick to)\b",
+    re.IGNORECASE,
+)
 _ARCHITECTURE_RE = re.compile(
     r"\b(pattern|design|principle|paradigm|architecture|layer|module)\b",
     re.IGNORECASE,
@@ -68,7 +74,8 @@ def classify_memory(
 
     has_decision = bool(_DECISION_RE.search(content))
     has_architecture = bool(_ARCHITECTURE_RE.search(content))
-    if has_decision or has_architecture:
+    has_instruction = bool(_INSTRUCTION_RE.search(content))
+    if has_decision or has_architecture or has_instruction:
         return "semantic"
 
     return "episodic"

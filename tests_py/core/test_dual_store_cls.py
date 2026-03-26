@@ -42,6 +42,14 @@ class TestClassifyMemory:
         result = classify_memory("Always check line 42 in foo.py:42")
         assert result == "episodic"  # Specificity wins
 
+    def test_instruction_patterns_are_semantic(self):
+        assert classify_memory("From now on, use bullet points") == "semantic"
+        assert classify_memory("Please always respond in formal tone") == "semantic"
+        assert classify_memory("I want you to use metric units") == "semantic"
+        assert classify_memory("Going forward, include timestamps") == "semantic"
+        assert classify_memory("Remember to check tests before committing") == "semantic"
+        assert classify_memory("Whenever you write code, add type hints") == "semantic"
+
     def test_generic_content_is_episodic(self):
         assert classify_memory("The weather is nice today") == "episodic"
         assert classify_memory("I wrote some code") == "episodic"

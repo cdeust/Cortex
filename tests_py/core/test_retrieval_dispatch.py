@@ -26,6 +26,9 @@ class TestClassifyTier:
     def test_entity_is_deep(self):
         assert classify_tier(QueryIntent.ENTITY) == "deep"
 
+    def test_instruction_is_deep(self):
+        assert classify_tier(QueryIntent.INSTRUCTION) == "deep"
+
 
 class TestWRRFFuse:
     def test_single_signal(self):
@@ -72,6 +75,20 @@ class TestComputeSignalWeights:
         simple_w = compute_signal_weights("simple", {"spreading": 1.0, "fts": 1.0})
         deep_w = compute_signal_weights("deep", {"spreading": 1.0, "fts": 1.0})
         assert deep_w["sa"] > simple_w["sa"]
+
+    def test_instruction_intent_boosts_bm25_over_deep(self):
+        deep_w = compute_signal_weights("deep", {"fts": 1.0})
+        instr_w = compute_signal_weights(
+            "deep", {"fts": 1.0}, intent=QueryIntent.INSTRUCTION
+        )
+        assert instr_w["bm25"] > deep_w["bm25"]
+
+    def test_instruction_intent_reduces_vector(self):
+        simple_w = compute_signal_weights("simple", {"vector": 1.0})
+        instr_w = compute_signal_weights(
+            "deep", {"vector": 1.0}, intent=QueryIntent.INSTRUCTION
+        )
+        assert instr_w["vector"] < simple_w["vector"]
 
 
 class TestMergeMultihopResults:

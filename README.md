@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![MCP Server](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-1888_passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-1906_passing-brightgreen.svg)](#development)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/cdeust/Cortex/pulls)
 
 **Cortex gives Claude Code a brain that survives between sessions.**
@@ -27,8 +27,8 @@ No LLM in the retrieval loop. Pure local inference.
 
 ## Highlights
 
-- **97.0% Recall@10** on LongMemEval (ICLR 2025) — beats the paper's best by +18.6pp
-- **0.517 MRR** on BEAM (ICLR 2026) — +57% over LIGHT baseline across 10 memory abilities
+- **96.8% Recall@10** on LongMemEval (ICLR 2025) — beats the paper's best by +18.4pp
+- **0.523 MRR** on BEAM (ICLR 2026) — +59% over LIGHT baseline across 10 memory abilities
 - **Test-time learning** — surprise momentum (Titans, NeurIPS 2025), adaptive decay, Hebbian co-activation (Dragon Hatchling, Pathway 2025)
 - **PostgreSQL + pgvector** — all retrieval via PL/pgSQL stored procedures, HNSW vector search, FTS, trigram similarity
 - **23 biological mechanisms** — LTP/LTD, STDP, microglial pruning, oscillatory gating, neuromodulation, emotional tagging, surprise momentum
@@ -102,8 +102,8 @@ Each recall computes retrieval surprise and updates memory heat via momentum. Su
 
 | Metric | Cortex | Best in paper | Delta |
 |---|---|---|---|
-| **Recall@10** | **97.0%** | 78.4% | **+18.6pp** |
-| **MRR** | **0.855** | -- | -- |
+| **Recall@10** | **96.8%** | 78.4% | **+18.4pp** |
+| **MRR** | **0.858** | -- | -- |
 
 <details>
 <summary>Per-category breakdown</summary>
@@ -114,8 +114,8 @@ Each recall computes retrieval surprise and updates memory heat via momentum. Su
 | Single-session (assistant) | 0.930 | 98.2% |
 | Single-session (preference) | 0.654 | 93.3% |
 | Multi-session reasoning | 0.896 | 99.2% |
-| Temporal reasoning | 0.846 | 97.7% |
-| Knowledge updates | 0.887 | 97.4% |
+| Temporal reasoning | 0.851 | 97.0% |
+| Knowledge updates | 0.894 | 97.4% |
 
 </details>
 
@@ -123,19 +123,19 @@ Each recall computes retrieval surprise and updates memory heat via momentum. Su
 
 | Metric | Cortex |
 |---|---|
-| **Recall@10** | **84.4%** |
-| **MRR** | **0.599** |
+| **Recall@10** | **84.1%** |
+| **MRR** | **0.596** |
 
 <details>
 <summary>Per-category breakdown</summary>
 
 | Category | MRR | R@5 | R@10 |
 |---|---|---|---|
-| single_hop | 0.620 | 80.9% | 92.2% |
-| multi_hop | 0.692 | 83.5% | 89.4% |
-| temporal | 0.408 | 52.2% | 73.9% |
-| open_domain | 0.584 | 70.4% | 82.5% |
-| adversarial | 0.586 | 70.4% | 81.4% |
+| single_hop | 0.621 | 80.9% | 93.3% |
+| multi_hop | 0.687 | 82.2% | 90.0% |
+| temporal | 0.394 | 52.2% | 68.5% |
+| open_domain | 0.581 | 70.0% | 81.6% |
+| adversarial | 0.586 | 71.1% | 81.8% |
 
 </details>
 
@@ -143,23 +143,23 @@ Each recall computes retrieval surprise and updates memory heat via momentum. Su
 
 | Metric | Cortex | LIGHT (best in paper) | Delta |
 |---|---|---|---|
-| **Overall MRR** | **0.517** | 0.329 | **+57%** |
+| **Overall MRR** | **0.523** | 0.329 | **+59%** |
 
 <details>
 <summary>Per-ability breakdown (retrieval-only MRR)</summary>
 
 | Ability | Cortex | LIGHT | Delta |
 |---|---|---|---|
-| contradiction_resolution | **0.846** | 0.050 | **+1592%** |
-| temporal_reasoning | **0.814** | 0.075 | **+985%** |
+| contradiction_resolution | **0.858** | 0.050 | **+1616%** |
+| temporal_reasoning | **0.822** | 0.075 | **+996%** |
 | knowledge_update | **0.800** | 0.375 | **+113%** |
 | multi_session_reasoning | **0.755** | 0.000 | -- |
-| information_extraction | **0.403** | 0.375 | **+7%** |
-| event_ordering | **0.407** | 0.266 | **+53%** |
-| preference_following | **0.407** | 0.483 | -16% |
-| summarization | **0.332** | 0.277 | **+20%** |
-| instruction_following | 0.256 | **0.500** | -49% |
-| abstention | 0.150 | **0.750** | -80% |
+| information_extraction | **0.489** | 0.375 | **+30%** |
+| event_ordering | **0.428** | 0.266 | **+61%** |
+| preference_following | 0.386 | **0.483** | -20% |
+| summarization | **0.312** | 0.277 | **+13%** |
+| instruction_following | 0.259 | **0.500** | -48% |
+| abstention | 0.125 | **0.750** | -83% |
 
 Note: LIGHT scores are full QA (LLM-as-judge). Cortex scores are retrieval-only — not directly comparable but show retrieval quality that feeds downstream QA.
 </details>

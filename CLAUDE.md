@@ -285,11 +285,11 @@ python3 benchmarks/episodic/run_benchmark.py --events 20           # Episodic Me
 **Current benchmark scores:**
 | Benchmark | Cortex | Best in paper |
 |---|---|---|
-| LongMemEval R@10 | **98.6%** | 78.4% |
-| LongMemEval MRR | **0.865** | -- |
-| LoCoMo R@10 | **94.8%** | -- |
-| LoCoMo MRR | **0.710** | -- |
-| BEAM Overall | **0.353** | 0.329 |
+| LongMemEval R@10 | **96.8%** | 78.4% |
+| LongMemEval MRR | **0.858** | -- |
+| LoCoMo R@10 | **84.1%** | -- |
+| LoCoMo MRR | **0.596** | -- |
+| BEAM Overall | **0.523** | 0.329 |
 
 ## Research-Driven Improvement Workflow
 

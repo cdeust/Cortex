@@ -26,7 +26,7 @@ SIMPLE_INTENTS = {
     QueryIntent.KNOWLEDGE_UPDATE,
 }
 MIXED_INTENTS = {QueryIntent.MULTI_HOP}
-DEEP_INTENTS = {QueryIntent.ENTITY}
+DEEP_INTENTS = {QueryIntent.ENTITY, QueryIntent.INSTRUCTION}
 
 
 def classify_tier(intent: str) -> str:
@@ -116,18 +116,41 @@ def _mixed_weights(v: float, f: float, h: float, sa: float) -> dict[str, float]:
     }
 
 
+def _instruction_weights(v: float, f: float, h: float, sa: float) -> dict[str, float]:
+    """BM25+FTS-primary weights for instruction/directive queries.
+
+    Instructions have distinctive lexical patterns ("always", "never", "must").
+    BM25 IDF weighting surfaces rare directive keywords that vector similarity
+    misses. Reduced vector weight avoids dilution by topic-adjacent content.
+    """
+    return {
+        "vector": v * 0.5,
+        "fts": f * 1.5,
+        "heat": h * 0.5,
+        "hopfield": v * 0.2,
+        "hdc": v * 0.2,
+        "sr": h * 0.3,
+        "sa": sa * 0.5,
+        "bm25": f * 2.0,
+        "ngram": f * 1.2,
+    }
+
+
 def compute_signal_weights(
     tier: str,
     intent_weights: dict[str, float],
     base_vector: float = 1.0,
     base_fts: float = 0.5,
     base_heat: float = 0.3,
+    intent: str | None = None,
 ) -> dict[str, float]:
     """Compute per-signal WRRF weights based on tier and intent."""
     v = base_vector * intent_weights.get("vector", 1.0)
     f = base_fts * intent_weights.get("fts", 1.0)
     h = base_heat * intent_weights.get("heat", 1.0)
     sa = f * 0.5 * intent_weights.get("spreading", 1.0)
+    if intent == QueryIntent.INSTRUCTION:
+        return _instruction_weights(v, f, h, sa)
     if tier == "deep":
         return _deep_weights(v, f, h, sa)
     if tier == "mixed":
@@ -191,6 +214,7 @@ def dispatch_retrieval(
         base_vector_w,
         base_fts_w,
         base_heat_w,
+        intent=intent,
     )
     signal_lists = [signals.get(n, []) for n in _SIGNAL_NAMES]
     weight_list = [weights.get(n, 0.0) for n in _SIGNAL_NAMES]

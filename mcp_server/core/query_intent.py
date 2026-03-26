@@ -51,11 +51,23 @@ _MULTI_HOP_RE = re.compile(
     re.IGNORECASE,
 )
 
+_INSTRUCTION_RE = re.compile(
+    r"\b(instruction|guideline|requirement|constraint|"
+    r"supposed to|expected to|should i|must i)\b|"
+    r"what (?:rule|format|style|tone|constraint)|"
+    r"how should (?:i|you|we)",
+    re.IGNORECASE,
+)
+
 # Question words that boost certain intents
 _QUESTION_WHY = re.compile(r"^\s*why\b", re.IGNORECASE)
 _QUESTION_WHEN = re.compile(r"^\s*when\b", re.IGNORECASE)
 _QUESTION_WHAT = re.compile(r"^\s*(what|who)\b", re.IGNORECASE)
 _QUESTION_HOW = re.compile(r"^\s*how\b", re.IGNORECASE)
+_QUESTION_INSTRUCTION = re.compile(
+    r"^\s*(how should|what (?:format|rule|constraint|style|tone))\b",
+    re.IGNORECASE,
+)
 
 
 # ── Intent Classification ─────────────────────────────────────────────────
@@ -68,6 +80,7 @@ class QueryIntent:
     ENTITY = "entity"
     KNOWLEDGE_UPDATE = "knowledge_update"
     MULTI_HOP = "multi_hop"
+    INSTRUCTION = "instruction"
     GENERAL = "general"
 
 
@@ -80,6 +93,7 @@ def _score_patterns(query: str) -> dict[str, float]:
         QueryIntent.ENTITY: 0.0,
         QueryIntent.KNOWLEDGE_UPDATE: 0.0,
         QueryIntent.MULTI_HOP: 0.0,
+        QueryIntent.INSTRUCTION: 0.0,
     }
 
     if _TEMPORAL_RE.search(query):
@@ -96,6 +110,8 @@ def _score_patterns(query: str) -> dict[str, float]:
             scores[QueryIntent.KNOWLEDGE_UPDATE] += 0.5
     if _MULTI_HOP_RE.search(query):
         scores[QueryIntent.MULTI_HOP] += 1.0
+    if _INSTRUCTION_RE.search(query):
+        scores[QueryIntent.INSTRUCTION] += 1.0
 
     # Multi-entity detection boosts multi-hop
     named_entities = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", query)
@@ -116,6 +132,8 @@ def _apply_question_boosters(query: str, scores: dict[str, float]) -> None:
         scores[QueryIntent.SEMANTIC] += 0.2
     if _QUESTION_HOW.search(query):
         scores[QueryIntent.CAUSAL] += 0.3
+    if _QUESTION_INSTRUCTION.search(query):
+        scores[QueryIntent.INSTRUCTION] += 0.8
 
 
 def classify_query_intent(query: str) -> dict[str, Any]:
@@ -200,6 +218,13 @@ _INTENT_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
         "spreading": 1.0,
         "heat": 0.3,
         "causal": 0.5,
+    },
+    QueryIntent.INSTRUCTION: {
+        "fts": 1.0,
+        "vector": 0.5,
+        "heat": 0.3,
+        "entity": 0.3,
+        "spreading": 0.3,
     },
 }
 
