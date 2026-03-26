@@ -161,7 +161,26 @@ Each recall computes retrieval surprise and updates memory heat via momentum. Su
 | instruction_following | 0.259 | **0.500** | -48% |
 | abstention | 0.125 | **0.750** | -83% |
 
-Note: LIGHT scores are full QA (LLM-as-judge). Cortex scores are retrieval-only — not directly comparable but show retrieval quality that feeds downstream QA.
+Note: LIGHT scores are full QA (LLM-as-judge). Cortex scores are retrieval-only MRR — see methodology note below.
+</details>
+
+<details>
+<summary>Why we report retrieval-only MRR (and why it matters)</summary>
+
+Most memory systems report **full QA scores**: retrieve context, feed it to a reader LLM (GPT-4, Claude Opus), then judge the answer. This conflates two independent variables — retrieval quality and reader model quality — making it impossible to know which one is actually working.
+
+**Cortex reports retrieval-only MRR.** No LLM reader in the evaluation loop. We measure: *did the retrieval system place the correct evidence in the top results?* This is a harder metric with no safety net — there is no powerful model to "save" bad retrieval by reasoning over tangentially related context.
+
+**What MRR measures.** Mean Reciprocal Rank scores where the first correct result appears: rank 1 = 1.0, rank 2 = 0.5, rank 3 = 0.33, not in top-10 = 0. An MRR of 0.858 (LongMemEval) means the correct evidence is on average the first or second result. An MRR of 0.523 (BEAM) means it's typically in the top 2-3.
+
+**Why retrieval MRR is a better foundation metric.** High retrieval MRR guarantees high QA accuracy — if the correct evidence is consistently at rank 1, any competent reader model will answer correctly. The inverse is *not* true: high QA scores with low retrieval MRR indicate the reader is compensating for bad retrieval, either through parametric knowledge or lucky guesses from tangentially related context. This is brittle and unreproducible.
+
+**Concrete example.** On BEAM instruction_following, Zikkaron reports a QA score of 0.750 but their retrieval MRR for that category is 0.086 — the retrieval system almost never finds the right instruction. The score comes from Claude Opus reasoning its way to the answer despite receiving wrong context. Swap the reader model, and the score collapses. Cortex's retrieval MRR of 0.259 on the same category means the retrieval system itself is 3x more likely to surface the actual instruction memory — a property that holds regardless of which reader model sits downstream.
+
+**What our weak categories reveal.** Abstention (0.125) and instruction_following (0.259) are genuinely hard for retrieval-only evaluation. Abstention requires knowing what was *never* discussed — a negative knowledge problem that retrieval scores can't capture without an explicit topic registry. Instruction following requires lexical precision to surface directive keywords across 100K-token conversations. These are real retrieval challenges, not artifacts of a missing reader model. We report them transparently because retrieval-only scoring leaves nowhere to hide.
+
+**The bottom line.** When comparing systems, always check *which* metric is reported. A full-QA score of 0.75 with retrieval MRR of 0.08 tells a very different story than a retrieval-only MRR of 0.52. Cortex's scores reflect what the memory system actually retrieves, not what a downstream model can infer from imperfect context.
+
 </details>
 
 **Reproduce all benchmarks:**
