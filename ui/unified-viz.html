@@ -3,15 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>J.A.R.V.I.S. — Neural Graph</title>
+<title>Cortex — Neural Graph</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/theme.css">
+<link rel="stylesheet" href="/css/panels.css">
 </head>
 <body>
 
 <div id="loading">
   <div class="loader-ring"></div>
-  <div class="loader-title">J.A.R.V.I.S.</div>
+  <div class="loader-title">CORTEX</div>
   <div class="loader-sub">Initializing neural map</div>
 </div>
 
@@ -23,7 +24,7 @@
   <div class="panel-header">
     <div class="reactor-dot"></div>
     <div>
-      <div class="panel-title">J.A.R.V.I.S.</div>
+      <div class="panel-title">CORTEX</div>
       <div class="panel-subtitle">Neural Graph</div>
     </div>
   </div>
@@ -33,6 +34,12 @@
   <div class="stat-row"><span>Nodes</span><span class="val" id="s-nodes">--</span></div>
   <div class="stat-row"><span>Synapses</span><span class="val" id="s-edge">--</span></div>
   <div class="stat-row"><span>Clusters</span><span class="val" id="s-cluster">--</span></div>
+  <div id="benchmark-summary" style="margin-top:10px;border-top:1px solid #ffffff10;padding-top:8px;display:none">
+    <div style="font-size:7px;text-transform:uppercase;letter-spacing:0.5px;color:var(--cyan-dim,#508090);margin-bottom:6px">System Benchmarks</div>
+    <div class="stat-row"><span>LongMemEval</span><span class="val" id="b-lme" style="color:#40D870">--</span></div>
+    <div class="stat-row"><span>LoCoMo</span><span class="val" id="b-loc" style="color:#40D870">--</span></div>
+    <div class="stat-row"><span>BEAM</span><span class="val" id="b-beam" style="color:#E0B040">--</span></div>
+  </div>
 </div>
 
 <div id="filter-bar">
@@ -112,13 +119,18 @@
 </div>
 
 <div id="legend">
-  <div class="leg-item"><div class="leg-dot" style="background:#6366f1;box-shadow:0 0 6px #6366f1"></div>Domain</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#00d4ff;box-shadow:0 0 6px #00d4ff"></div>Entry</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#10b981;box-shadow:0 0 6px #10b981"></div>Pattern</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#f59e0b;box-shadow:0 0 6px #f59e0b"></div>Tool</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#26de81;box-shadow:0 0 6px #26de81"></div>Memory</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#00d2ff;box-shadow:0 0 6px #00d2ff"></div>Entity</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#FF00FF;box-shadow:0 0 6px #FF00FF"></div>Bridge</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#E8B840;box-shadow:0 0 6px #E8B84060"></div>Domain</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#60D8F0;box-shadow:0 0 6px #60D8F060"></div>Entry</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#70D880;box-shadow:0 0 6px #70D88060"></div>Pattern</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#E0A840;box-shadow:0 0 6px #E0A84060"></div>Tool</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#58D888;box-shadow:0 0 6px #58D88860"></div>Memory</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#50C8E0;box-shadow:0 0 6px #50C8E060"></div>Entity</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#C080D0;box-shadow:0 0 6px #C080D060"></div>Bridge</div>
+  <div class="leg-item" style="margin-top:4px;border-top:1px solid #ffffff10;padding-top:4px">
+    <div class="leg-dot" style="background:#40D870;box-shadow:0 0 6px #40D87060"></div>Quality ≥60%
+  </div>
+  <div class="leg-item"><div class="leg-dot" style="background:#E0B040;box-shadow:0 0 6px #E0B04060"></div>Quality ≥30%</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#E05050;box-shadow:0 0 6px #E0505060"></div>Quality &lt;30%</div>
 </div>
 
 <div id="glossary-panel">
@@ -135,137 +147,121 @@
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#00d4ff"></span><span class="gloss-name">Entry Point</span></div>
-    <div class="gloss-desc">The typical way you start working in a domain — recurring first-message patterns clustered from your session history. For example, "fix bug in auth" or "add API endpoint" are entry points if you frequently begin sessions that way.</div>
+    <div class="gloss-desc">The typical way you start working in a domain — recurring first-message patterns clustered from your session history.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#10b981"></span><span class="gloss-name">Pattern</span></div>
-    <div class="gloss-desc">A recurring behavioral pattern detected across your sessions — keyword sequences that appear repeatedly. These reveal your habitual workflows, e.g. "read → grep → edit → test" or specific technical terms you consistently use together.</div>
+    <div class="gloss-desc">A recurring behavioral pattern detected across your sessions — keyword sequences that appear repeatedly.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#f59e0b"></span><span class="gloss-name">Tool</span></div>
-    <div class="gloss-desc">A Claude Code tool you frequently use in this domain (Read, Edit, Grep, Bash, etc.). Size reflects usage ratio — larger means you use it more often. Shows your preferred workflow style per domain.</div>
+    <div class="gloss-desc">A Claude Code tool you frequently use in this domain (Read, Edit, Grep, Bash, etc.). Size reflects usage ratio.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#a855f7"></span><span class="gloss-name">Feature</span></div>
-    <div class="gloss-desc">A behavioral feature learned by sparse dictionary analysis of your session patterns. These are abstract dimensions like "exploration depth" or "refactoring tendency" — computed from 27 behavioral signals, not named by you.</div>
+    <div class="gloss-desc">A behavioral feature learned by sparse dictionary analysis of your session patterns.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#26de81"></span><span class="gloss-name">Memory</span></div>
-    <div class="gloss-desc">A piece of information stored by Cortex — decisions, facts, errors, or context you asked it to remember. Memories have heat (how recently/frequently accessed) and importance. They cool over time and compress from full text to summaries.</div>
+    <div class="gloss-desc">A piece of information stored by Cortex — decisions, facts, errors, or context. Memories have heat and importance.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#00d2ff"></span><span class="gloss-name">Entity</span></div>
-    <div class="gloss-desc">A named thing extracted from memories — functions, files, dependencies, technologies, errors, or decisions. Entities form the nodes of the knowledge graph, connected by typed relationships like "imports", "calls", or "resolved_by".</div>
+    <div class="gloss-desc">A named thing extracted from memories — functions, files, dependencies, technologies, errors, or decisions.</div>
   </div>
 
   <div class="gloss-section">Edges</div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-line" style="background:#FF00FF"></span><span class="gloss-name">Bridge</span></div>
-    <div class="gloss-desc">A cross-domain connection — shared patterns, vocabulary, or structural links between two different domains. Bridges show how your knowledge transfers across projects.</div>
+    <div class="gloss-desc">A cross-domain connection — shared patterns, vocabulary, or structural links between two different domains.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-line" style="background:#d946ef"></span><span class="gloss-name">Co-occurrence</span></div>
-    <div class="gloss-desc">Two entities that frequently appear together in the same memories. The more often they co-occur, the stronger (brighter) the connection.</div>
+    <div class="gloss-desc">Two entities that frequently appear together in the same memories.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-line" style="background:#ff4444"></span><span class="gloss-name">Causal (caused_by / resolved_by)</span></div>
-    <div class="gloss-desc">A cause-effect relationship between entities — e.g. an error caused by a dependency, or a bug resolved by a fix. Red edges indicate causal chains.</div>
+    <div class="gloss-desc">A cause-effect relationship between entities.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-line" style="background:#3b82f6"></span><span class="gloss-name">Imports / Calls</span></div>
-    <div class="gloss-desc">Code-level relationships — one module importing another, or one function calling another. Extracted from memory content automatically.</div>
+    <div class="gloss-desc">Code-level relationships — one module importing another, or one function calling another.</div>
   </div>
 
   <div class="gloss-section">Biological Mechanisms</div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#ff3366"></span><span class="gloss-name">Emotional Tagging</span></div>
-    <div class="gloss-desc">Memories with emotional charge get colored by their dominant emotion: <b style="color:#ff3366">red = urgency</b>, <b style="color:#ef4444">dark red = frustration</b>, <b style="color:#22c55e">green = satisfaction</b>, <b style="color:#f59e0b">amber = discovery</b>, <b style="color:#8b5cf6">purple = confusion</b>. Emotional memories have pulsing rings — faster pulse = higher arousal. Based on amygdala-hippocampal coupling (Wang & Bhatt 2024).</div>
+    <div class="gloss-desc">Memories with emotional charge get colored by their dominant emotion. Emotional memories have pulsing rings.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#f59e0b"></span><span class="gloss-name">Neuromodulation</span></div>
-    <div class="gloss-desc">Four chemical channels modulate how strongly memories are encoded: <b>Dopamine</b> (reward from fixing errors/passing tests), <b>Norepinephrine</b> (arousal from error density), <b>Acetylcholine</b> (novelty enhancement), <b>Serotonin</b> (exploration vs exploitation balance). These affect node size and glow intensity.</div>
+    <div class="gloss-desc">Four chemical channels modulate how strongly memories are encoded: DA, NE, ACh, 5-HT.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#00d2ff"></span><span class="gloss-name">Synaptic Plasticity</span></div>
-    <div class="gloss-desc"><b>LTP</b>: entity edges strengthen when both entities co-appear in memories (Hebbian learning). <b>LTD</b>: inactive edges weaken over time. <b>STDP</b>: when entity A consistently appears before B, the A→B direction strengthens — learning causal structure from temporal ordering.</div>
+    <div class="gloss-desc">LTP: edges strengthen on co-appearance. LTD: inactive edges weaken. STDP: temporal ordering builds causal direction.</div>
+  </div>
+
+  <div class="gloss-section">Quality Assessment</div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#40D870"></span><span class="gloss-name">Quality Ring</span></div>
+    <div class="gloss-desc">Every node has a quality score (0–100%) based on its type-specific signals. The arc ring around each node shows quality: <b style="color:#40D870">green ≥60%</b> (strong signal), <b style="color:#E0B040">amber ≥30%</b> (moderate), <b style="color:#E05050">red &lt;30%</b> (likely noise). Arc length is proportional to the score.</div>
   </div>
 
   <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#90a4ae"></span><span class="gloss-name">Microglial Pruning</span></div>
-    <div class="gloss-desc">During consolidation, weak edges (low weight + stale + cold endpoints) get eliminated, and orphaned entities get archived. Like brain microglia that prune unused synapses to keep the network efficient.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#d946ef"></span><span class="gloss-name">Synaptic Tagging</span></div>
-    <div class="gloss-desc">When a strong (important) memory is stored, older weak memories that share entities with it get retroactively promoted — their importance and heat are boosted. Like protein synthesis tags in biology (Frey & Morris 1997).</div>
+    <div class="gloss-desc">
+      <b>Domains</b> — scored by session count, confidence, connections.<br>
+      <b>Entries/Patterns</b> — scored by frequency, confidence.<br>
+      <b>Tools</b> — scored by usage ratio, average per session.<br>
+      <b>Features</b> — scored by activation magnitude.<br>
+      <b>Memories</b> — scored by heat, importance, access count, recall rank.<br>
+      <b>Entities</b> — scored by heat, connection count.
+    </div>
   </div>
 
   <div class="gloss-section">Visual Encoding</div>
 
   <div class="gloss-entry">
-    <div class="gloss-desc"><b>Node size</b> — reflects importance: session count for domains, frequency for patterns, heat+importance×emotional boost for memories, usage ratio for tools.</div>
-  </div>
-  <div class="gloss-entry">
-    <div class="gloss-desc"><b>Node glow</b> — intensity reflects heat (recency). Hot nodes glow brighter, cold nodes are dim.</div>
-  </div>
-  <div class="gloss-entry">
-    <div class="gloss-desc"><b>Edge brightness</b> — reflects relationship weight/strength. Stronger connections are brighter.</div>
-  </div>
-  <div class="gloss-entry">
-    <div class="gloss-desc"><b>Flow particles</b> — animated dots traveling along edges, representing active information flow between connected nodes.</div>
-  </div>
-  <div class="gloss-entry">
-    <div class="gloss-desc"><b>Cluster shells</b> — translucent spheres grouping nodes by domain. Visible when zoomed out (L1/L2 zoom levels).</div>
+    <div class="gloss-desc"><b>Node size</b> — reflects importance. <b>Node glow</b> — intensity reflects heat. <b>Quality arc</b> — colored ring shows quality score. <b>Edge brightness</b> — reflects weight. <b>Flow particles</b> — animated dots along edges.</div>
   </div>
 
   <div class="gloss-section">Controls</div>
 
   <div class="gloss-entry">
-    <div class="gloss-desc"><b>Click node</b> — select it, see details + connections, camera flies to it<br>
+    <div class="gloss-desc"><b>Click node</b> — select + details<br>
     <b>Click background</b> — deselect<br>
-    <b>Scroll</b> — zoom in/out (zoom level changes: Neural → Constellation → Galaxy)<br>
-    <b>Drag</b> — orbit camera<br>
-    <b>M</b> — toggle monitoring log<br>
-    <b>R</b> — reset camera<br>
+    <b>Scroll</b> — zoom<br>
+    <b>Drag</b> — pan<br>
+    <b>M</b> — toggle monitor<br>
+    <b>R</b> — reset view<br>
     <b>Esc</b> — close panels</div>
   </div>
 </div>
 
-<!-- Three.js + addons -->
-<script src="https://unpkg.com/three@0.137.0/build/three.min.js"></script>
-<script src="https://unpkg.com/three@0.137.0/examples/js/controls/OrbitControls.js"></script>
-<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/EffectComposer.js"></script>
-<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/RenderPass.js"></script>
-<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-<script src="https://unpkg.com/three@0.137.0/examples/js/postprocessing/ShaderPass.js"></script>
-<script src="https://unpkg.com/three@0.137.0/examples/js/shaders/CopyShader.js"></script>
-<script src="https://unpkg.com/three@0.137.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<!-- Force-graph 2D -->
+<script src="https://unpkg.com/force-graph"></script>
 
 <!-- Cortex Neural Graph modules (order matters) -->
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
-<script src="/js/scene.js"></script>
-<script src="/js/nodes.js"></script>
-<script src="/js/edges.js"></script>
-<script src="/js/clusters.js"></script>
-<script src="/js/layout.js"></script>
+<script src="/js/draw.js"></script>
+<script src="/js/renderer.js"></script>
 <script src="/js/graph.js"></script>
-<script src="/js/interaction.js"></script>
-<script src="/js/zoom.js"></script>
+<script src="/js/detail_panel.js"></script>
 <script src="/js/controls.js"></script>
-<script src="/js/effects.js"></script>
 <script src="/js/monitor.js"></script>
 <script src="/js/polling.js"></script>
 

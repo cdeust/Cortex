@@ -1,8 +1,5 @@
 // Cortex Neural Graph — Async Progressive Batch Streaming
 (function() {
-  var BATCH_SIZE = 150;
-  var BATCH_DELAY_INITIAL = 1500; // ms for first 3 batches (layout needs to settle)
-  var BATCH_DELAY_NORMAL = 600;   // ms for subsequent batches
   var abortController = null;
 
   function fetchGraph() {
@@ -10,8 +7,8 @@
     abortController = new AbortController();
     var signal = abortController.signal;
 
-    // Step 1: fetch skeleton (domains + inter-domain edges)
-    fetch(JUG.API_URL + '?batch=0&batch_size=' + BATCH_SIZE, { signal: signal })
+    // Single fetch — no batching. Domain dedup keeps node count manageable.
+    fetch(JUG.API_URL, { signal: signal })
       .then(function(res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
@@ -22,101 +19,16 @@
         JUG.state.lastData = data;
         JUG.buildGraph(data);
         updateStats(data.meta || {});
-
         hideLoading();
 
-        var totalBatches = (data.meta || {}).total_batches || 1;
-        if (totalBatches > 1) {
-          updateStatus('Streaming ' + (data.meta || {}).node_count + ' nodes...');
-          streamBatches(1, totalBatches, signal);
-        } else {
-          updateStatus('Online');
-        }
+        var count = (data.meta || {}).node_count || (data.nodes || []).length;
+        updateStatus('Online (' + count + ' nodes)');
       })
       .catch(function(err) {
         if (err.name === 'AbortError') return;
         console.warn('[cortex] Graph fetch error:', err.message);
         useFallback();
       });
-  }
-
-  function streamBatches(batchNum, totalBatches, signal) {
-    if (signal.aborted || batchNum > totalBatches) {
-      if (!signal.aborted) {
-        updateStatus('Online (' + (JUG.allNodes || []).length + ' nodes)');
-        // Rebuild clusters after a short settle
-        setTimeout(rebuildClusters, 800);
-      }
-      return;
-    }
-
-    updateStatus('Loading ' + batchNum + '/' + totalBatches +
-      ' (' + (JUG.allNodes || []).length + ' nodes)');
-
-    fetch(JUG.API_URL + '?batch=' + batchNum + '&batch_size=' + BATCH_SIZE, { signal: signal })
-      .then(function(res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(function(batchData) {
-        if (signal.aborted) return;
-
-        JUG.addBatchToGraph(batchData);
-        updateStats(batchData.meta || {});
-
-        // Wait for layout to settle before next batch
-        var delay = batchNum <= 3 ? BATCH_DELAY_INITIAL : BATCH_DELAY_NORMAL;
-        setTimeout(function() {
-          streamBatches(batchNum + 1, totalBatches, signal);
-        }, delay);
-      })
-      .catch(function(err) {
-        if (err.name === 'AbortError') return;
-        console.warn('[cortex] Batch ' + batchNum + ' failed:', err.message);
-        var delay = batchNum <= 3 ? BATCH_DELAY_INITIAL : BATCH_DELAY_NORMAL;
-        setTimeout(function() {
-          streamBatches(batchNum + 1, totalBatches, signal);
-        }, delay);
-      });
-  }
-
-  function rebuildClusters() {
-    var allNodes = JUG.allNodes || [];
-    if (allNodes.length === 0) return;
-
-    var domainGroups = {};
-    allNodes.forEach(function(n) {
-      var domain = (n.data || {}).domain || '_ungrouped';
-      if (!domainGroups[domain]) domainGroups[domain] = [];
-      domainGroups[domain].push(n.data.id);
-    });
-
-    var clusters = [];
-    Object.keys(domainGroups).forEach(function(domain) {
-      var ids = domainGroups[domain];
-      if (ids.length < 3) return;
-
-      var color = '#6366f1';
-      for (var i = 0; i < allNodes.length; i++) {
-        if (allNodes[i].data.type === 'domain' && allNodes[i].data.domain === domain) {
-          color = JUG.getNodeColor(allNodes[i].data);
-          break;
-        }
-      }
-
-      clusters.push({
-        id: 'cluster_' + domain,
-        level: 'l1',
-        member_ids: ids,
-        domain: domain,
-        color: color,
-        label: domain,
-      });
-    });
-
-    JUG.clearClusters();
-    JUG.buildClusters(clusters, allNodes);
-    if (JUG.checkZoomLevel) JUG.checkZoomLevel();
   }
 
   function updateStats(meta) {
@@ -126,6 +38,16 @@
     setText('s-edge', meta.edge_count || 0);
     setText('s-cluster', meta.cluster_count || 0);
     setText('s-nodes', meta.node_count || 0);
+
+    // Benchmark summary
+    var bm = meta.benchmarks;
+    if (bm) {
+      var el = document.getElementById('benchmark-summary');
+      if (el) el.style.display = 'block';
+      if (bm.LongMemEval) setText('b-lme', 'R@10 ' + Math.round(bm.LongMemEval.recall_10) + '%');
+      if (bm.LoCoMo) setText('b-loc', 'R@10 ' + Math.round(bm.LoCoMo.recall_10) + '%');
+      if (bm.BEAM) setText('b-beam', 'R@10 ' + Math.round(bm.BEAM.recall_10) + '%');
+    }
   }
 
   function setText(id, val) {
@@ -176,10 +98,10 @@
   // Boot — delay initial fetch to let Three.js scene fully initialize
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(fetchGraph, 2000);
+      setTimeout(fetchGraph, 500);
     });
   } else {
-    setTimeout(fetchGraph, 2000);
+    setTimeout(fetchGraph, 500);
   }
 
   // No auto-refresh — user triggers manually via Reset button or page reload

@@ -5,44 +5,40 @@ window.JUG = JUG;
 JUG.API_URL = '/api/graph';
 
 JUG.NODE_COLORS = {
-  'domain': '#6366f1',
-  'entry-point': '#00d4ff',
-  'recurring-pattern': '#10b981',
-  'tool-preference': '#f59e0b',
-  'behavioral-feature': '#a855f7',
-  'memory-episodic': '#26de81',
-  'memory-semantic': '#d946ef',
-  'entity-function': '#00d2ff',
-  'entity-dependency': '#3b82f6',
-  'entity-error': '#ff4444',
-  'entity-decision': '#ffaa00',
-  'entity-technology': '#8b5cf6',
-  'entity-file': '#6366f1',
-  'entity-variable': '#06b6d4',
-  'entity-default': '#00d2ff',
-  'benchmark': '#00d2ff',
-  'benchmark-ability': '#ffaa00',
+  'domain': '#E8B840',
+  'entry-point': '#60D8F0',
+  'recurring-pattern': '#70D880',
+  'tool-preference': '#E0A840',
+  'behavioral-feature': '#B088E0',
+  'memory-episodic': '#58D888',
+  'memory-semantic': '#C070D0',
+  'entity-function': '#50D0E8',
+  'entity-dependency': '#60A0E0',
+  'entity-error': '#E07070',
+  'entity-decision': '#E0C050',
+  'entity-technology': '#9080D0',
+  'entity-file': '#7088D0',
+  'entity-variable': '#50B8D0',
+  'entity-default': '#50C8E0',
 };
 
 JUG.EDGE_COLORS = {
-  'bridge': '#FF00FF',
-  'persistent-feature': '#ec4899',
-  'co_occurrence': '#d946ef',
-  'imports': '#3b82f6',
-  'calls': '#22d3ee',
-  'caused_by': '#ff4444',
-  'resolved_by': '#22c55e',
-  'decided_to_use': '#f59e0b',
-  'debugged_with': '#ef4444',
-  'has-entry': '#00d4ff',
-  'has-pattern': '#10b981',
-  'uses-tool': '#f59e0b',
-  'has-feature': '#a855f7',
-  'memory-entity': '#556677',
-  'domain-entity': '#4488aa',
-  'default': '#90a4ae',
-  'benchmark': '#00d2ff',
-  'ability': '#ffaa00',
+  'bridge': '#C080D0',
+  'persistent-feature': '#B070B8',
+  'co_occurrence': '#9080C0',
+  'imports': '#60A0D0',
+  'calls': '#60C0D0',
+  'caused_by': '#D07070',
+  'resolved_by': '#60C080',
+  'decided_to_use': '#D0B060',
+  'debugged_with': '#D07060',
+  'has-entry': '#50C8E0',
+  'has-pattern': '#60C890',
+  'uses-tool': '#D0B060',
+  'has-feature': '#A080C0',
+  'memory-entity': '#40A0B8',
+  'domain-entity': '#50B0C8',
+  'default': '#40B0C8',
 };
 
 JUG.NODE_LABELS = {
@@ -53,8 +49,6 @@ JUG.NODE_LABELS = {
   'behavioral-feature': 'Feature',
   'memory': 'Memory',
   'entity': 'Entity',
-  'benchmark': 'Benchmark',
-  'benchmark-ability': 'Ability',
 };
 
 JUG.ZOOM_LEVELS = {
@@ -69,10 +63,6 @@ JUG.getNodeColor = function(node) {
   }
   if (node.type === 'entity') {
     return JUG.NODE_COLORS['entity-' + (node.entityType || 'default')] || '#00d2ff';
-  }
-  if (node.type === 'benchmark-ability') {
-    var s = node.mrr || node.heat || 0;
-    return s > 0.7 ? '#26de81' : s > 0.4 ? '#ffaa00' : '#ff4444';
   }
   return node.color || JUG.NODE_COLORS[node.type] || '#00d2ff';
 };

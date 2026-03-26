@@ -10,28 +10,28 @@ from __future__ import annotations
 
 from typing import Any
 
-DOMAIN_COLOR = "#6366f1"
-ENTRY_COLOR = "#00d4ff"
-PATTERN_COLOR = "#10b981"
-TOOL_COLOR = "#f59e0b"
-FEATURE_COLOR = "#a855f7"
-MEMORY_COLORS = {"episodic": "#26de81", "semantic": "#d946ef"}
+DOMAIN_COLOR = "#E8B840"
+ENTRY_COLOR = "#60D8F0"
+PATTERN_COLOR = "#70D880"
+TOOL_COLOR = "#E0A840"
+FEATURE_COLOR = "#B088E0"
+MEMORY_COLORS = {"episodic": "#58D888", "semantic": "#C070D0"}
 ENTITY_COLORS = {
-    "function": "#00d2ff",
-    "dependency": "#3b82f6",
-    "error": "#ff4444",
-    "decision": "#ffaa00",
-    "technology": "#8b5cf6",
-    "file": "#6366f1",
-    "variable": "#06b6d4",
+    "function": "#50D0E8",
+    "dependency": "#60A0E0",
+    "error": "#E07070",
+    "decision": "#E0C050",
+    "technology": "#9080D0",
+    "file": "#7088D0",
+    "variable": "#50B8D0",
 }
 EDGE_COLORS = {
-    "has-entry": "#00d4ff",
-    "has-pattern": "#10b981",
-    "uses-tool": "#f59e0b",
-    "has-feature": "#a855f7",
-    "memory-entity": "#556677",
-    "domain-entity": "#4488aa",
+    "has-entry": "#50C8E0",
+    "has-pattern": "#60C890",
+    "uses-tool": "#D0B060",
+    "has-feature": "#A080C0",
+    "memory-entity": "#40A0B8",
+    "domain-entity": "#50B0C8",
 }
 
 Node = dict[str, Any]

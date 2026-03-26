@@ -3,7 +3,6 @@
 
 (function() {
   var scene = JMD.scene;
-  var TYPE_COLORS = JMD.TYPE_COLORS;
 
   // ─── Edge line segments ───────────────────────────────────────────
   var MAX_EDGES = 2000;
@@ -70,6 +69,9 @@
   scene.add(flowPoints);
 
   // ─── Clear all edge visuals ──────────────────────────────────────
+  var activeEdges = [];
+  var edgeNodeMap = {};
+
   function clearEdges() {
     activeEdges = [];
     edgeNodeMap = {};
@@ -92,9 +94,6 @@
   }
 
   // ─── Build edges from data ────────────────────────────────────────
-  var activeEdges = [];
-  var edgeNodeMap = {};  // nodeIdx → [edgeIndices]
-
   function buildEdges(data) {
     var rels = data.relationships || [];
     var entities = data.entities || [];
@@ -136,7 +135,6 @@
     });
 
     // Build virtual edges: memory→entity (domain match + content/name overlap)
-    // This anchors disconnected memories into the force graph
     var entityNodes = [];
     allNodes.forEach(function(n, idx) {
       if (n.isEntity) entityNodes.push({ node: n, idx: idx });
@@ -154,19 +152,13 @@
         var entDomain = (ent.node.data.domain || '').toLowerCase();
         var score = 0;
 
-        // Domain match
         if (memDomain && entDomain && memDomain === entDomain) score += 0.5;
-
-        // Name appears in memory content
         if (entName.length > 2 && memContent.indexOf(entName) >= 0) score += 0.4;
-
-        // Tag overlap
         if (ent.node.data.type && memContent.indexOf(ent.node.data.type.toLowerCase()) >= 0) score += 0.2;
 
         if (score > bestScore) { bestScore = score; bestMatch = ent.idx; }
       });
 
-      // Connect to best matching entity (or random entity if no match)
       if (bestMatch < 0 && entityNodes.length > 0) {
         bestMatch = entityNodes[memIdx % entityNodes.length].idx;
         bestScore = 0.1;
@@ -238,7 +230,6 @@
     }
     if (activeEdges.length < 2) return;
 
-    // Only top 5 strongest edges get fiber tracts (not 15%)
     var sorted = activeEdges.slice().sort(function(a,b) { return b.weight - a.weight; });
     var topCount = Math.min(5, sorted.length);
 
@@ -270,96 +261,20 @@
     }
   }
 
-  // ─── Update edge positions each frame ─────────────────────────────
-  function updateEdgePositions() {
-    var allNodes = JMD.allNodes || [];
-    var pos = edgeGeo.attributes.position.array;
+  // Export shared state for edge_fx.js
+  JMD._edgeState = {
+    get activeEdges() { return activeEdges; },
+    get edgeNodeMap() { return edgeNodeMap; },
+    edgeGeo: edgeGeo,
+    edgeColors: edgeColors,
+    flowGeo: flowGeo,
+    flowData: flowData,
+    MAX_EDGES: MAX_EDGES,
+    NUM_PARTICLES: NUM_PARTICLES,
+  };
 
-    for (var i = 0; i < activeEdges.length && i < MAX_EDGES; i++) {
-      var e = activeEdges[i];
-      var a = allNodes[e.srcIdx], b = allNodes[e.tgtIdx];
-      if (!a || !b) {
-        pos[i*6]=9999; pos[i*6+1]=9999; pos[i*6+2]=9999;
-        pos[i*6+3]=9999; pos[i*6+4]=9999; pos[i*6+5]=9999;
-        continue;
-      }
-      var ap = a.group.position, bp = b.group.position;
-      pos[i*6]=ap.x; pos[i*6+1]=ap.y; pos[i*6+2]=ap.z;
-      pos[i*6+3]=bp.x; pos[i*6+4]=bp.y; pos[i*6+5]=bp.z;
-    }
-    edgeGeo.attributes.position.needsUpdate = true;
-  }
-
-  // ─── Update flow particles each frame ─────────────────────────────
-  function updateFlowParticles() {
-    if (activeEdges.length === 0) return;
-    var allNodes = JMD.allNodes || [];
-    var pos = flowGeo.attributes.position.array;
-
-    for (var i = 0; i < NUM_PARTICLES; i++) {
-      var p = flowData[i];
-      p.progress += p.speed;
-      if (p.progress > 1) {
-        p.edgeIdx = Math.floor(Math.random() * activeEdges.length);
-        p.progress = 0;
-      }
-      var e = activeEdges[p.edgeIdx];
-      if (!e) continue;
-      var a = allNodes[e.srcIdx], b = allNodes[e.tgtIdx];
-      if (!a || !b) { pos[i*3]=9999; continue; }
-      var ap = a.group.position, bp = b.group.position;
-      var t = p.progress;
-      pos[i*3]   = ap.x + (bp.x - ap.x) * t;
-      pos[i*3+1] = ap.y + (bp.y - ap.y) * t;
-      pos[i*3+2] = ap.z + (bp.z - ap.z) * t;
-    }
-    flowGeo.attributes.position.needsUpdate = true;
-  }
-
-  // ─── Highlight edges connected to a node ──────────────────────────
-  function highlightNodeEdges(nodeIdx) {
-    var connected = edgeNodeMap[nodeIdx] || [];
-    activeEdges.forEach(function(e, i) {
-      if (i >= MAX_EDGES) return;
-      var isConnected = connected.indexOf(i) >= 0;
-      var bright = isConnected ? 0.9 : 0.06;
-      var color = isConnected ? new THREE.Color(0xf59e0b) : (e.isCausal ? new THREE.Color(0xff4444) : new THREE.Color(0x90a4ae));
-      edgeColors[i*6]   = color.r * bright;
-      edgeColors[i*6+1] = color.g * bright;
-      edgeColors[i*6+2] = color.b * bright;
-      edgeColors[i*6+3] = color.r * bright;
-      edgeColors[i*6+4] = color.g * bright;
-      edgeColors[i*6+5] = color.b * bright;
-    });
-    edgeGeo.attributes.color.needsUpdate = true;
-  }
-
-  function resetEdgeHighlight() {
-    var causalColor = new THREE.Color(0xff4444);
-    var defaultColor = new THREE.Color(0x90a4ae);
-    var coOccColor = new THREE.Color(0xd946ef);
-
-    activeEdges.forEach(function(e, i) {
-      if (i >= MAX_EDGES) return;
-      var color = e.isVirtual ? new THREE.Color(0x556677) : (e.isCausal ? causalColor : (e.type === 'co_occurrence' ? coOccColor : defaultColor));
-      var dim = e.isVirtual ? 0.06 + e.weight * 0.12 : 0.15 + e.weight * 0.35;
-      edgeColors[i*6]   = color.r * dim;
-      edgeColors[i*6+1] = color.g * dim;
-      edgeColors[i*6+2] = color.b * dim;
-      edgeColors[i*6+3] = color.r * dim;
-      edgeColors[i*6+4] = color.g * dim;
-      edgeColors[i*6+5] = color.b * dim;
-    });
-    edgeGeo.attributes.color.needsUpdate = true;
-  }
-
-  // Export
   JMD.clearEdges = clearEdges;
   JMD.buildEdges = buildEdges;
-  JMD.updateEdgePositions = updateEdgePositions;
-  JMD.updateFlowParticles = updateFlowParticles;
-  JMD.highlightNodeEdges = highlightNodeEdges;
-  JMD.resetEdgeHighlight = resetEdgeHighlight;
   JMD.edgeNodeMap = edgeNodeMap;
   JMD.getActiveEdges = function() { return activeEdges; };
 })();

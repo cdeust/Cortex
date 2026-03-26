@@ -1,0 +1,138 @@
+/* Cortex Memory Dashboard — Views (tooltip, timeline, legend, HUD, benchmarks) */
+
+/* ── Tooltip ────────────────────────────────────────────────────── */
+#tooltip-brain {
+  position:fixed; display:none; pointer-events:none; z-index:500;
+  background:rgba(0,0,0,0.9); border:1px solid rgba(255,255,255,0.1);
+  border-radius:4px; padding:8px 12px; max-width:280px;
+  backdrop-filter:blur(12px);
+}
+#tooltip-brain .tt-name { font-size:11px; color:#fff; font-weight:600; margin-bottom:2px; }
+#tooltip-brain .tt-type { font-size:8px; color:rgba(255,255,255,0.3); letter-spacing:2px; text-transform:uppercase; }
+#tooltip-brain .tt-proj { font-size:9px; color:rgba(255,255,255,0.2); margin-top:2px; }
+
+/* ── Chart tooltip ──────────────────────────────────────────────── */
+#chart-tooltip-brain {
+  position:fixed; display:none; pointer-events:none; z-index:600;
+  background:rgba(0,0,0,0.95); border:1px solid rgba(255,255,255,0.15);
+  border-radius:3px; padding:5px 9px; font-size:9px; color:rgba(255,255,255,0.7);
+  backdrop-filter:blur(10px); max-width:200px;
+}
+
+/* ── Timeline Table ────────────────────────────────────────────── */
+#timeline-table {
+  display:none;
+  position:fixed; top:42px; left:0; right:0; bottom:0;
+  background:#0a0a0f;
+  z-index:50;
+  overflow-y:auto;
+  padding:16px 24px 40px;
+}
+#timeline-table table {
+  width:100%; border-collapse:collapse;
+  font-size:11px; color:rgba(255,255,255,0.6);
+}
+#timeline-table thead th {
+  position:sticky; top:0;
+  background:#0a0a0f;
+  text-align:left; padding:8px 10px;
+  font-size:9px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase;
+  color:rgba(255,255,255,0.3);
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+#timeline-table tbody tr {
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  transition:background .15s;
+  cursor:default;
+}
+#timeline-table tbody tr:hover {
+  background:rgba(255,255,255,0.03);
+}
+#timeline-table td {
+  padding:7px 10px;
+  vertical-align:top;
+  line-height:1.5;
+}
+#timeline-table .tl-dot {
+  display:inline-block; width:8px; height:8px; border-radius:50%;
+  margin-right:6px; vertical-align:middle;
+  flex-shrink:0;
+}
+#timeline-table .tl-type {
+  font-size:9px; letter-spacing:0.5px; text-transform:uppercase;
+  font-weight:600;
+}
+#timeline-table .tl-name {
+  color:rgba(255,255,255,0.75);
+  word-break:break-word;
+}
+#timeline-table .tl-domain {
+  color:rgba(255,255,255,0.25);
+  font-size:10px;
+}
+#timeline-table .tl-heat {
+  font-variant-numeric:tabular-nums;
+}
+#timeline-table .tl-tags span {
+  display:inline-block; padding:1px 6px; margin:1px 2px;
+  background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06);
+  border-radius:3px; font-size:9px; color:rgba(255,255,255,0.3);
+}
+.tl-type-episodic { color:#26de81; }
+.tl-type-semantic { color:#d946ef; }
+.tl-type-entity   { color:#00d2ff; }
+.tl-dot-episodic  { background:#26de81; box-shadow:0 0 6px rgba(38,222,129,0.4); }
+.tl-dot-semantic  { background:#d946ef; box-shadow:0 0 6px rgba(217,70,239,0.4); }
+.tl-dot-entity    { background:#00d2ff; box-shadow:0 0 6px rgba(0,210,255,0.4); }
+
+/* ── Legend ─────────────────────────────────────────────────────── */
+#legend-brain {
+  position:fixed; bottom:14px; left:14px;
+  background:rgba(0,0,0,0.88); border:1px solid rgba(0,210,255,0.12);
+  border-radius:6px; padding:12px 16px; backdrop-filter:blur(16px);
+  font-size:10px; color:rgba(180,200,220,0.8); z-index:100;
+}
+.leg-row { display:flex; align-items:center; gap:5px; padding:1px 0; }
+.leg-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+
+/* ── HUD ────────────────────────────────────────────────────────── */
+#hud {
+  position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+  font-size:8px; color:rgba(255,255,255,0.18); letter-spacing:3px;
+  text-transform:uppercase; pointer-events:none; white-space:nowrap;
+}
+#hint {
+  position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+  font-size:8px; color:rgba(255,255,255,0.12); letter-spacing:2px;
+  pointer-events:none;
+}
+
+::-webkit-scrollbar { width:3px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:2px; }
+
+/* ── Benchmark score cards ─────────────────────────────────────── */
+.bench-card {
+  margin-bottom:12px; padding:8px 10px;
+  background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);
+  border-radius:4px;
+}
+.bench-card-title {
+  font-size:9px; font-weight:600; color:rgba(255,255,255,0.5);
+  letter-spacing:1px; text-transform:uppercase; margin-bottom:6px;
+}
+.bench-row {
+  display:flex; align-items:center; gap:6px; margin-bottom:4px;
+  font-size:9px;
+}
+.bench-label { color:rgba(255,255,255,0.3); width:60px; flex-shrink:0; }
+.bench-bar-bg {
+  flex:1; height:10px; background:rgba(255,255,255,0.04);
+  border-radius:2px; overflow:hidden; position:relative;
+}
+.bench-bar {
+  height:100%; border-radius:2px; transition:width .4s ease;
+}
+.bench-bar.cortex { background:rgba(0,210,255,0.7); }
+.bench-bar.baseline { background:rgba(255,68,68,0.4); position:absolute; top:0; }
+.bench-val { color:rgba(255,255,255,0.6); width:40px; text-align:right; font-variant-numeric:tabular-nums; }
