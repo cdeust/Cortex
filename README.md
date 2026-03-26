@@ -23,7 +23,7 @@ No LLM in the retrieval loop. Pure local inference.
 
 ---
 
-![Cortex Neural Graph — 3D force-directed visualization with monitoring log, domain clusters, and flow particles](docs/neural-graph.png)
+![Cortex Neural Graph — 2D force-directed visualization with per-node quality scoring, domain clusters, and benchmark summary](docs/neural-graph-v2.png)
 
 ## Highlights
 
