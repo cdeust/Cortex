@@ -61,17 +61,18 @@ def start_memory_dashboard_server(store_getter) -> str:
     html_path = ui_root / "memory-dashboard.html"
     js_dir = ui_root / "dashboard" / "js"
     css_dir = ui_root / "dashboard"
+    memory_dir = ui_root / "memory"
     html_content = read_html_file(html_path, "dashboard UI file")
     cached_html = html_content.encode("utf-8")
 
     handler_cls = _build_dashboard_handler(
-        store_getter, html_path, cached_html, js_dir, css_dir
+        store_getter, html_path, cached_html, js_dir, css_dir, memory_dir
     )
     return _bind_and_start(handler_cls, 3457)
 
 
 def _build_dashboard_handler(
-    store_getter, html_path, cached_html, js_dir, css_dir
+    store_getter, html_path, cached_html, js_dir, css_dir, memory_dir
 ) -> type:
     """Build the DashboardHandler class with bound context."""
 
@@ -83,6 +84,12 @@ def _build_dashboard_handler(
             _reset_memory_idle_timer()
             if self.path == "/api/dashboard":
                 self._serve_api()
+            elif self.path.startswith("/memory/js/") and self.path.endswith(".js"):
+                serve_static_file(
+                    self, memory_dir / "js", self.path[11:], "application/javascript"
+                )
+            elif self.path.startswith("/memory/css/") and self.path.endswith(".css"):
+                serve_static_file(self, memory_dir / "css", self.path[12:], "text/css")
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
                 serve_static_file(self, js_dir, self.path[4:], "application/javascript")
             elif self.path.startswith("/css/") and self.path.endswith(".css"):

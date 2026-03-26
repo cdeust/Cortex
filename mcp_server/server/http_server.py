@@ -83,6 +83,9 @@ def _read_html(html_path: Path) -> str:
 def _build_handler_class(server_state: dict) -> type:
     """Build the BaseHTTPRequestHandler subclass for the UI server."""
 
+    ui_root = Path(__file__).parent.parent.parent / "ui"
+    meth_dir = ui_root / "methodology"
+
     class Handler(BaseHTTPRequestHandler):
         def do_OPTIONS(self):
             self.send_response(204)
@@ -95,6 +98,14 @@ def _build_handler_class(server_state: dict) -> type:
             self.send_header_cors()
             if self.path == "/graph":
                 _serve_graph_json(self, server_state)
+            elif self.path.startswith("/methodology/js/") and self.path.endswith(".js"):
+                _serve_static(
+                    self, meth_dir / "js", self.path[16:], "application/javascript"
+                )
+            elif self.path.startswith("/methodology/css/") and self.path.endswith(
+                ".css"
+            ):
+                _serve_static(self, meth_dir / "css", self.path[17:], "text/css")
             else:
                 _serve_html_page(self, server_state)
 
@@ -115,6 +126,21 @@ def _serve_graph_json(handler, server_state: dict) -> None:
     handler.send_header("Cache-Control", "no-cache")
     handler.end_headers()
     handler.wfile.write(body)
+
+
+def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> None:
+    """Serve a static file from the given directory."""
+    try:
+        file_path = base_dir / filename
+        body = file_path.read_bytes()
+        handler.send_response(200)
+        handler.send_header("Content-Type", content_type)
+        handler.send_header("Cache-Control", "no-cache")
+        handler.end_headers()
+        handler.wfile.write(body)
+    except FileNotFoundError:
+        handler.send_response(404)
+        handler.end_headers()
 
 
 def _serve_html_page(handler, server_state: dict) -> None:
