@@ -281,11 +281,6 @@ Each agent uses `agent_topic` scoping — a **soft boost** that promotes topic-r
 # cortex:open_memory_dashboard — Memory heatmap at localhost:3457
 ```
 
-<p align="center">
-<img src="docs/neural-graph-overview.png" width="49%" alt="Full neural graph with 718 nodes across 10 domains" />
-<img src="docs/neural-graph-detail.png" width="49%" alt="Memory detail panel showing quality, biological state, and entity connections" />
-</p>
-
 The graph organizes everything into a 6-level hierarchy — from broad categories down to individual memories and entities. Node size reflects importance, glow reflects heat (recency), and colored arcs show quality scores. Auto-shuts down after 10 minutes idle.
 
 <details>
