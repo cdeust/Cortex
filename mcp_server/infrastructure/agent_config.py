@@ -1,7 +1,12 @@
-"""Agent registry — defines functional agents and their tool ownership.
+"""Agent registry — defines the team of functional agents and their Cortex memory usage.
 
-Each agent belongs to a project and owns a set of MCP tools. Used by the
-graph builder to create agent nodes in the hierarchical visualization.
+Each agent is a Claude Code subagent defined in .claude/agents/*.md. They use
+Cortex's MCP tools (recall, remember, etc.) as their knowledge base. The
+registry maps each agent to the tools it uses, enabling the graph builder to
+show agent nodes and tool ownership in the visualization.
+
+Key principle: recall before working, remember the why after — never remember
+what's already in the code or git history.
 
 Pure configuration — no I/O.
 """
@@ -9,83 +14,168 @@ Pure configuration — no I/O.
 from __future__ import annotations
 
 AGENT_REGISTRY: list[dict] = [
-    # ── cortex agents ──────────────────────────────────────────────
+    # ── orchestrator ───────────────────────────────────────────────
     {
-        "name": "Memory Agent",
+        "name": "Orchestrator",
         "project": "cortex",
-        "description": "Persistent memory with thermodynamic heat/decay",
-        "tools": [
-            "remember",
+        "agent_file": "orchestrator.md",
+        "description": "Decomposes tasks, spawns specialized agents in parallel worktrees, coordinates and merges",
+        "recalls": [
             "recall",
             "recall_hierarchical",
-            "consolidate",
-            "forget",
-            "checkpoint",
-            "anchor",
-            "rate_memory",
-            "validate_memory",
-            "memory_stats",
-            "backfill_memories",
-            "import_sessions",
-        ],
-    },
-    {
-        "name": "Navigation Agent",
-        "project": "cortex",
-        "description": "Memory exploration and knowledge traversal",
-        "tools": [
-            "drill_down",
-            "navigate_memory",
             "get_causal_chain",
+            "memory_stats",
             "detect_gaps",
-            "narrative",
             "get_project_story",
-            "assess_coverage",
+        ],
+        "remembers": ["remember", "anchor", "checkpoint", "consolidate", "narrative"],
+        "tools": [
+            "recall",
+            "recall_hierarchical",
+            "get_causal_chain",
+            "memory_stats",
+            "detect_gaps",
+            "get_project_story",
+            "remember",
+            "anchor",
+            "checkpoint",
+            "consolidate",
+            "narrative",
         ],
     },
+    # ── engineer ───────────────────────────────────────────────────
     {
-        "name": "Profiling Agent",
+        "name": "Engineer",
         "project": "cortex",
-        "description": "Cognitive profiling and methodology extraction",
+        "agent_file": "engineer.md",
+        "description": "Clean Architecture, SOLID, root-cause problem solving — adapts to any language",
+        "recalls": ["recall", "get_causal_chain", "get_rules", "recall_hierarchical"],
+        "remembers": ["remember"],
         "tools": [
-            "query_methodology",
-            "detect_domain",
-            "rebuild_profiles",
-            "list_domains",
-            "record_session_end",
-            "explore_features",
-            "get_methodology_graph",
-        ],
-    },
-    {
-        "name": "Automation Agent",
-        "project": "cortex",
-        "description": "Rules, triggers, and instruction sync",
-        "tools": [
-            "sync_instructions",
-            "create_trigger",
-            "add_rule",
+            "recall",
+            "get_causal_chain",
             "get_rules",
-            "seed_project",
+            "recall_hierarchical",
+            "remember",
         ],
     },
+    # ── tester ─────────────────────────────────────────────────────
     {
-        "name": "Visualization Agent",
+        "name": "Tester",
         "project": "cortex",
-        "description": "Interactive graph and dashboard visualization",
+        "agent_file": "tester.md",
+        "description": "Test strategy, coverage analysis, fragile module detection",
+        "recalls": ["recall", "detect_gaps", "get_rules"],
+        "remembers": ["remember"],
+        "tools": ["recall", "detect_gaps", "get_rules", "remember"],
+    },
+    # ── reviewer ───────────────────────────────────────────────────
+    {
+        "name": "Reviewer",
+        "project": "cortex",
+        "agent_file": "reviewer.md",
+        "description": "Code review, ADR enforcement, accepted trade-off tracking",
+        "recalls": ["recall", "get_rules", "recall_hierarchical"],
+        "remembers": ["remember", "add_rule"],
+        "tools": ["recall", "get_rules", "recall_hierarchical", "remember", "add_rule"],
+    },
+    # ── ux ─────────────────────────────────────────────────────────
+    {
+        "name": "UX",
+        "project": "cortex",
+        "agent_file": "ux.md",
+        "description": "UX decisions, accessibility, design rationale, user constraints",
+        "recalls": ["recall", "recall_hierarchical"],
+        "remembers": ["remember"],
+        "tools": ["recall", "recall_hierarchical", "remember"],
+    },
+    # ── frontend ───────────────────────────────────────────────────
+    {
+        "name": "Frontend",
+        "project": "cortex",
+        "agent_file": "frontend.md",
+        "description": "Component architecture, UX integration, frontend patterns",
+        "recalls": ["recall", "get_rules", "recall_hierarchical"],
+        "remembers": ["remember"],
+        "tools": ["recall", "get_rules", "recall_hierarchical", "remember"],
+    },
+    # ── security ───────────────────────────────────────────────────
+    {
+        "name": "Security",
+        "project": "cortex",
+        "agent_file": "security.md",
+        "description": "Threat models, accepted risks, dependency audits, data flow analysis",
+        "recalls": ["recall", "get_causal_chain", "detect_gaps"],
+        "remembers": ["remember", "add_rule"],
+        "tools": ["recall", "get_causal_chain", "detect_gaps", "remember", "add_rule"],
+    },
+    # ── researcher ─────────────────────────────────────────────────
+    {
+        "name": "Researcher",
+        "project": "cortex",
+        "agent_file": "researcher.md",
+        "description": "Paper reviews, benchmark analysis, competitive intelligence, negative results",
+        "recalls": ["recall", "recall_hierarchical", "detect_gaps", "assess_coverage"],
+        "remembers": ["remember"],
         "tools": [
-            "open_visualization",
-            "open_memory_dashboard",
+            "recall",
+            "recall_hierarchical",
+            "detect_gaps",
+            "assess_coverage",
+            "remember",
         ],
     },
-    # ── ai-architect agents ────────────────────────────────────────
+    # ── dba ────────────────────────────────────────────────────────
     {
-        "name": "Pipeline Agent",
-        "project": "ai architect",
-        "description": "End-to-end PRD and architecture pipeline",
-        "tools": [
-            "run_pipeline",
+        "name": "DBA",
+        "project": "cortex",
+        "agent_file": "dba.md",
+        "description": "Schema decisions, query optimization, migration lessons",
+        "recalls": ["recall", "get_causal_chain", "get_rules"],
+        "remembers": ["remember"],
+        "tools": ["recall", "get_causal_chain", "get_rules", "remember"],
+    },
+    # ── devops ─────────────────────────────────────────────────────
+    {
+        "name": "DevOps",
+        "project": "cortex",
+        "agent_file": "devops.md",
+        "description": "Infrastructure decisions, incident postmortems, env parity",
+        "recalls": ["recall", "get_causal_chain", "recall_hierarchical"],
+        "remembers": ["remember"],
+        "tools": ["recall", "get_causal_chain", "recall_hierarchical", "remember"],
+    },
+    # ── architect ──────────────────────────────────────────────────
+    {
+        "name": "Architect",
+        "project": "cortex",
+        "agent_file": "architect.md",
+        "description": "ADRs, decomposition plans, refactoring strategy, project story",
+        "recalls": [
+            "recall",
+            "recall_hierarchical",
+            "get_project_story",
+            "get_causal_chain",
         ],
+        "remembers": ["remember", "anchor"],
+        "tools": [
+            "recall",
+            "recall_hierarchical",
+            "get_project_story",
+            "get_causal_chain",
+            "remember",
+            "anchor",
+        ],
+    },
+    # ── pipeline (ai-architect integration) ────────────────────────
+    {
+        "name": "Pipeline",
+        "project": "ai architect",
+        "agent_file": None,
+        "description": "End-to-end PRD and architecture pipeline",
+        "recalls": [],
+        "remembers": [],
+        "tools": ["run_pipeline"],
     },
 ]
 

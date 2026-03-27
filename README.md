@@ -212,13 +212,32 @@ DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/locomo/run_be
 DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/beam/run_benchmark.py --split 100K
 ```
 
-## Agents & Tools
+## Agents
 
-Cortex organizes its 34 MCP tools into 6 functional agents. Each agent owns a focused set of tools and appears as a node in the neural graph visualization.
+Cortex runs as a team of 11 specialized agents, each defined in `.claude/agents/`. Every agent uses Cortex's memory system as its knowledge base — recalling context before working and remembering insights after. The orchestrator decomposes tasks and spawns specialists in parallel worktrees.
 
-### Memory Agent
+Key principle: **recall before working, remember the why after** — never remember what's already in the code or git history.
 
-Persistent memory with thermodynamic heat/decay. Handles the full write/read lifecycle.
+| Agent | Role | Recalls Before | Remembers After |
+|---|---|---|---|
+| **Orchestrator** | Decomposes tasks, spawns agents, merges results | Prior work, project story, entity chains, gaps | Orchestration decisions, outcomes, follow-ups |
+| **Engineer** | Clean Architecture, SOLID, root-cause fixes | Past implementations, causal chains, rules | Design decisions, root cause analyses |
+| **Tester** | Test strategy, coverage, fragile module detection | Past failures, wiring gaps, test rules | Fragile modules, non-obvious test strategies |
+| **Reviewer** | Code review, ADR enforcement, trade-offs | Past review feedback, ADRs, rules | Violations to watch, accepted trade-offs |
+| **UX** | Design rationale, accessibility, user constraints | Prior UX decisions, accessibility issues | Design rationale, user constraints, patterns |
+| **Frontend** | Component architecture, integration patterns | Existing components, UX decisions, rules | Component reasoning, integration patterns |
+| **Security** | Threat models, risk acceptance, audits | Prior findings, accepted risks, data flows | Threat models, accepted risks, dependency audits |
+| **Researcher** | Paper reviews, benchmarks, competitive analysis | Papers reviewed, benchmark history, gaps | Paper reviews, negative results, competitive analysis |
+| **DBA** | Schema design, query optimization, migrations | Schema decisions, past perf issues, rules | Optimization findings, migration lessons |
+| **DevOps** | Infrastructure, incidents, env parity | Infra decisions, incidents, env configs | Decision rationale, postmortems, env parity issues |
+| **Architect** | ADRs, decomposition, refactoring strategy | ADRs, decomposition plans, project story | ADR content, decomposition rationale, refactoring plans |
+
+## Tools
+
+The agents use 34 MCP tools exposed by Cortex:
+
+<details>
+<summary>Full tool list</summary>
 
 | Tool | What it does |
 |---|---|
@@ -234,13 +253,6 @@ Persistent memory with thermodynamic heat/decay. Handles the full write/read lif
 | `memory_stats` | Memory system diagnostics |
 | `backfill_memories` | Auto-import prior Claude Code conversations |
 | `import_sessions` | Import conversation history into the memory store |
-
-### Navigation Agent
-
-Memory exploration and knowledge traversal. Finds connections, traces causality, identifies gaps.
-
-| Tool | What it does |
-|---|---|
 | `drill_down` | Navigate into a fractal cluster (L2 -> L1 -> memories) |
 | `navigate_memory` | Successor Representation co-access BFS traversal |
 | `get_causal_chain` | Trace entity relationships through the knowledge graph |
@@ -248,13 +260,6 @@ Memory exploration and knowledge traversal. Finds connections, traces causality,
 | `narrative` | Generate project story from stored memories |
 | `get_project_story` | Period-based autobiographical narrative |
 | `assess_coverage` | Knowledge coverage score (0-100) + recommendations |
-
-### Profiling Agent
-
-Cognitive profiling and methodology extraction. Learns how you work across domains.
-
-| Tool | What it does |
-|---|---|
 | `query_methodology` | Load cognitive profile + hot memories at session start |
 | `detect_domain` | Classify current domain from cwd/project |
 | `rebuild_profiles` | Full rescan of session history |
@@ -262,35 +267,16 @@ Cognitive profiling and methodology extraction. Learns how you work across domai
 | `record_session_end` | Incremental profile update + session critique |
 | `explore_features` | Interpretability: features, attribution, persona, crosscoder |
 | `get_methodology_graph` | Graph data for visualization |
-
-### Automation Agent
-
-Rules, triggers, and instruction sync. Automates memory behavior.
-
-| Tool | What it does |
-|---|---|
 | `sync_instructions` | Push top memory insights into CLAUDE.md |
 | `create_trigger` | Prospective memory triggers (keyword/time/file/domain) |
 | `add_rule` | Add neuro-symbolic hard/soft/tag rules |
 | `get_rules` | List active rules by scope/type |
 | `seed_project` | Bootstrap memory from an existing codebase |
-
-### Visualization Agent
-
-Interactive graph and dashboard. Opens in browser, auto-shuts down after 10 min.
-
-| Tool | What it does |
-|---|---|
 | `open_visualization` | Launch unified neural graph in browser |
 | `open_memory_dashboard` | Launch real-time memory heatmap dashboard |
-
-### Pipeline Agent
-
-End-to-end PRD and architecture pipeline (ai-architect integration).
-
-| Tool | What it does |
-|---|---|
 | `run_pipeline` | Drive ai-architect pipeline end-to-end (11 stages -> PR) |
+
+</details>
 
 ## Visualization
 
