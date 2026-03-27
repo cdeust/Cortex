@@ -116,7 +116,7 @@ async def _import_file(
     from mcp_server.core.session_extractor import extract_session_summary
 
     try:
-        records = read_head_tail(path, head=200, tail=200)
+        records = read_head_tail(path)
     except Exception:
         return 0, 0
 
@@ -150,7 +150,7 @@ def _build_dry_run_preview(
 ) -> dict | None:
     """Build a preview entry for dry-run mode. Returns None on error."""
     try:
-        records = read_head_tail(path, head=100, tail=100)
+        records = read_head_tail(path)
         items = extract_memorable_items(records, min_importance=min_importance)
         return {
             "file": path.name,

@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Persistent memory and cognitive profiling plugins for Claude Code",
-    "version": "2.1.0"
+    "version": "2.2.0"
   },
   "plugins": [
     {
       "name": "cortex",
       "source": "./",
-      "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory, intent-aware retrieval, causal graphs, and cognitive profiling that learns how you work",
-      "version": "2.1.0",
+      "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory, intent-aware retrieval, knowledge graphs, and cognitive profiling that learns how you work",
+      "version": "2.2.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
@@ -21,7 +21,7 @@
       "homepage": "https://github.com/cdeust/Cortex",
       "repository": "https://github.com/cdeust/Cortex",
       "license": "MIT",
-      "keywords": ["memory", "cognitive-profiling", "mcp", "claude-code", "cortex"],
+      "keywords": ["memory", "cognitive-profiling", "mcp", "claude-code", "cortex", "knowledge-graph"],
       "category": "productivity"
     }
   ]
