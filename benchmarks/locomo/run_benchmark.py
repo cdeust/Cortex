@@ -39,11 +39,18 @@ def evaluate_conversation(
     db: BenchmarkDB,
     sessions: list[dict],
     mem_ids: list[int],
+    source_map: dict[int, str],
     qa_pairs: list[dict],
 ) -> dict[str, list[dict]]:
     """Evaluate retrieval for all QA pairs in one conversation."""
-    # Map memory_id → session_idx
-    mid_to_sidx = {mid: sessions[i]["session_idx"] for i, mid in enumerate(mem_ids)}
+    # Map memory_id → session_idx via source provenance from ingestion
+    mid_to_sidx: dict[int, int] = {}
+    for mid, src in source_map.items():
+        if src.startswith("session_"):
+            try:
+                mid_to_sidx[mid] = int(src.split("_", 1)[1])
+            except (ValueError, IndexError):
+                pass
 
     results: dict[str, list[dict]] = defaultdict(list)
 
@@ -153,9 +160,11 @@ def run_benchmark(data_path: str, limit: int | None = None, verbose: bool = Fals
                 }
                 for s in sessions
             ]
-            mem_ids = db.load_memories(memories, domain="locomo")
+            mem_ids, source_map = db.load_memories(memories, domain="locomo")
 
-            conv_results = evaluate_conversation(db, sessions, mem_ids, conv["qa"])
+            conv_results = evaluate_conversation(
+                db, sessions, mem_ids, source_map, conv["qa"]
+            )
             for cat, rs in conv_results.items():
                 all_results[cat].extend(rs)
 

@@ -38,6 +38,7 @@ _BASE_PG_WEIGHTS: dict[str, float] = {
 _PG_INTENT_OVERRIDES: dict[str, dict[str, float]] = {
     QueryIntent.TEMPORAL: {
         "heat": 0.6,
+        "recency": 0.2,
     },
     QueryIntent.KNOWLEDGE_UPDATE: {
         "recency": 0.5,

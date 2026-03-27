@@ -1,8 +1,8 @@
 """Benchmark database helpers — load data into PG, retrieve, cleanup.
 
-Pure passthrough to the production codebase. Retrieval delegates to
-mcp_server.core.pg_recall.recall() — the same function used by the
-production recall handler.
+Pure passthrough to the production codebase. Ingestion uses
+mcp_server.core.memory_ingest, retrieval uses mcp_server.core.pg_recall.
+bench_db holds zero business logic.
 
 Usage:
     with BenchmarkDB() as db:
@@ -15,13 +15,14 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from mcp_server.core.memory_ingest import ingest_memories_batch
 from mcp_server.core.pg_recall import recall as pg_recall
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.pg_store import PgMemoryStore
 
 
 class BenchmarkDB:
-    """Thin passthrough to the production PG recall pipeline."""
+    """Thin passthrough to the production PG pipeline."""
 
     def __init__(self, database_url: str | None = None) -> None:
         self._url = database_url or os.environ.get(
@@ -53,7 +54,7 @@ class BenchmarkDB:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    # ── Data loading ──────────────────────────────────────────────
+    # ── Data loading (delegates to codebase) ──────────────────────
 
     def load_memories(
         self,
@@ -61,52 +62,23 @@ class BenchmarkDB:
         *,
         domain: str = "benchmark",
         batch_embed: bool = True,
-    ) -> list[int]:
-        """Insert memories into PG and return their IDs."""
+        decompose: bool = True,
+    ) -> tuple[list[int], dict[int, str]]:
+        """Delegate to mcp_server.core.memory_ingest.ingest_memories_batch().
+
+        Returns (ids, source_map) where source_map maps memory_id → source string.
+        """
         assert self._store is not None, "Call open() first"
-
-        if batch_embed and self._embeddings and self._embeddings.available:
-            texts = self._build_embedding_texts(memories)
-            embeddings = self._embeddings.encode_batch(texts)
-        else:
-            embeddings = [None] * len(memories)
-
-        ids = []
-        for mem, emb in zip(memories, embeddings):
-            created = (
-                mem.get("created_at") or mem.get("date") or mem.get("date_iso", "")
-            )
-            mid = self._store.insert_memory(
-                {
-                    "content": mem["content"],
-                    "embedding": emb,
-                    "domain": domain,
-                    "source": mem.get("source", "benchmark"),
-                    "tags": mem.get("tags", []),
-                    "created_at": created if created and created.strip() else None,
-                    "heat": mem.get("heat", 1.0),
-                    "importance": mem.get("importance", 0.5),
-                    "store_type": mem.get("store_type", "episodic"),
-                }
-            )
-            ids.append(mid)
-            self._content_lookup[mid] = mem["content"]
-
+        ids, source_map = ingest_memories_batch(
+            memories,
+            self._store,
+            self._embeddings if batch_embed else None,
+            domain=domain,
+            decompose=decompose,
+            is_benchmark=True,
+        )
         self._memory_ids.extend(ids)
-        return ids
-
-    def _build_embedding_texts(self, memories: list[dict]) -> list[str]:
-        """Build text for embedding — prefer user_content, add date prefix."""
-        texts = []
-        for m in memories:
-            prefix = ""
-            date = m.get("date") or m.get("created_at") or m.get("date_iso", "")
-            if date:
-                prefix = f"[Date: {date}] "
-            user = m.get("user_content", "")
-            full = m.get("content", "")[:2000]
-            texts.append(prefix + (user[:1500] if user else full))
-        return texts
+        return ids, source_map
 
     # ── Retrieval (delegates to codebase) ─────────────────────────
 

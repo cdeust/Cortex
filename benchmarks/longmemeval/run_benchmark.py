@@ -184,14 +184,11 @@ def run_benchmark(data_path: str, limit: int = 0, verbose: bool = False) -> dict
                     }
                 )
 
-            mem_ids = db.load_memories(memories, domain="longmemeval")
-
-            # Build memory_id → session_id mapping
-            mid_to_sid = {mid: haystack_sids[i] for i, mid in enumerate(mem_ids)}
+            mem_ids, source_map = db.load_memories(memories, domain="longmemeval")
 
             # Run production retrieval
             results = db.recall(question, top_k=10, domain="longmemeval")
-            retrieved_sids = [mid_to_sid.get(r["memory_id"], "") for r in results]
+            retrieved_sids = [source_map.get(r["memory_id"], "") for r in results]
 
             # Compute metrics
             mrr = compute_mrr(retrieved_sids, answer_sids)

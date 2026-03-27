@@ -195,7 +195,7 @@ def run_benchmark(split: str = "100K", limit: int | None = None, verbose: bool =
 
             # Clean up previous, load new
             db.clear()
-            mem_ids = db.load_memories(memories, domain="beam")
+            mem_ids, _source_map = db.load_memories(memories, domain="beam")
 
             metrics = evaluate_retrieval(db, questions, turns, mem_ids)
 
