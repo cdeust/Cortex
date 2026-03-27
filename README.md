@@ -137,25 +137,25 @@ claude mcp add cortex -- python -m mcp_server
 
 ```mermaid
 flowchart LR
-    CC(["🖥️ Claude Code"])
+    CC(["Claude Code"])
 
-    subgraph Plugin [" Cortex Plugin "]
-        MCP["MCP Server · 34 tools"]
-        H1["SessionStart — inject context"]
-        H2["PostToolUse — auto-capture"]
-        H3["SessionEnd — update profile"]
-        H4["Compaction — checkpoint"]
+    subgraph Plugin ["Cortex Plugin"]
+        MCP["MCP Server - 34 tools"]
+        H1["SessionStart - inject context"]
+        H2["PostToolUse - auto-capture"]
+        H3["SessionEnd - update profile"]
+        H4["Compaction - checkpoint"]
     end
 
-    subgraph Skills [" 10 Skills "]
+    subgraph Skills ["10 Skills"]
         S1["/cortex-remember"]
         S2["/cortex-recall"]
         S3["/cortex-profile"]
         S4["/cortex-visualize"]
-        S5["… 6 more"]
+        S5["+ 6 more"]
     end
 
-    subgraph Storage [" PostgreSQL + pgvector "]
+    subgraph Storage ["PostgreSQL + pgvector"]
         M["Memories"]
         E["Entity Graph"]
         P["WRRF Stored Procedures"]
@@ -211,7 +211,7 @@ flowchart TD
     R --> W[Intent-Aware Weights]
     W --> PG["PL/pgSQL recall_memories()"]
 
-    subgraph WRRF [" Server-Side Fusion "]
+    subgraph WRRF ["Server-Side Fusion"]
         direction LR
         V[Vector HNSW]
         F[Full-Text FTS]
@@ -221,7 +221,7 @@ flowchart TD
     end
 
     PG --> WRRF
-    WRRF --> FUSED["WRRF Fusion  ·  score = weight / K + rank"]
+    WRRF --> FUSED["WRRF Fusion - score = weight / K + rank"]
     FUSED --> FR[FlashRank Reranking]
     FR --> SM[Surprise Momentum]
     SM --> RES([Top 10 Results])
@@ -243,7 +243,7 @@ Memories aren't static. They heat up when accessed, cool down over time, compres
 
 ```mermaid
 flowchart LR
-    A([New · heat=1.0]) --> B[Active]
+    A(["New - heat=1.0"]) --> B[Active]
     B --> C[Cooling]
     C --> D[Compressed]
     D --> E([Consolidated])
@@ -263,13 +263,12 @@ Cortex builds a profile of how you work — from your Claude Code session histor
 
 ```mermaid
 flowchart TD
-    S(["Session History
-    ~/.claude/projects/"]) --> P[Pattern Extraction]
-    P --> CS[Cognitive Style · Felder-Silverman 4D]
+    S(["Session History"]) --> P[Pattern Extraction]
+    P --> CS["Cognitive Style - Felder-Silverman 4D"]
     P --> EP[Entry Patterns]
     P --> BP[Blind Spots]
     P --> CB[Cross-Domain Bridges]
-    CS --> PR([Cognitive Profile · injected at session start])
+    CS --> PR(["Cognitive Profile - injected at session start"])
     EP --> PR
     BP --> PR
     CB --> PR
@@ -558,7 +557,7 @@ Intent classification adjusts signal weights per query: temporal queries boost r
 
 ```mermaid
 flowchart LR
-    subgraph Encoding [" 🧠 Encoding "]
+    subgraph Encoding ["Encoding"]
         OC[Oscillatory Clock]
         PC[Predictive Coding]
         NM[Neuromodulation]
@@ -566,22 +565,22 @@ flowchart LR
         PS[Pattern Separation]
     end
 
-    subgraph Maintenance [" 💾 Storage & Maintenance "]
+    subgraph Maintenance ["Storage and Maintenance"]
         EG[Engram Competition]
         TH[Thermodynamics]
         HP[Homeostatic Plasticity]
         CS[Consolidation Cascade]
     end
 
-    subgraph Retrieval [" 🔍 Retrieval "]
+    subgraph Retrieval ["Retrieval"]
         HOP[Hopfield Network]
         SA[Spreading Activation]
         SM[Surprise Momentum]
         CoA[Co-Activation]
     end
 
-    subgraph Plasticity [" ✂️ Plasticity & Pruning "]
-        LTP[LTP / LTD + STDP]
+    subgraph Plasticity ["Plasticity and Pruning"]
+        LTP["LTP/LTD + STDP"]
         MG[Microglial Pruning]
         SC[Sleep Compute]
         IF[Interference Mgmt]
