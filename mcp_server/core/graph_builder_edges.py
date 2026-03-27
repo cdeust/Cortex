@@ -66,7 +66,11 @@ def add_persistent_feature_edges(
     domain_hub_ids: dict[str, str],
     edges: list[Edge],
 ) -> None:
-    """Add edges for behavioral features that persist across domains."""
+    """Add edges for behavioral features that persist across domains.
+
+    Deduplicates: one edge per domain pair with aggregated weight and count.
+    """
+    pair_data: dict[tuple[str, str], dict] = {}
     for pf in profiles.get("persistentFeatures") or []:
         pf_domains = pf.get("domains") or []
         for i in range(len(pf_domains)):
@@ -74,16 +78,26 @@ def add_persistent_feature_edges(
                 src = domain_hub_ids.get(pf_domains[i])
                 tgt = domain_hub_ids.get(pf_domains[j])
                 if src and tgt:
-                    edges.append(
-                        {
-                            "source": src,
-                            "target": tgt,
-                            "type": "persistent-feature",
-                            "weight": pf.get("persistence", 0),
-                            "color": PERSISTENT_COLOR,
-                            "label": pf.get("label"),
-                        }
-                    )
+                    key = (min(src, tgt), max(src, tgt))
+                    if key not in pair_data:
+                        pair_data[key] = {"weight": 0, "count": 0, "labels": []}
+                    pair_data[key]["weight"] += pf.get("persistence", 0)
+                    pair_data[key]["count"] += 1
+                    label = pf.get("label", "")
+                    if label and len(pair_data[key]["labels"]) < 3:
+                        pair_data[key]["labels"].append(label)
+
+    for (src, tgt), info in pair_data.items():
+        edges.append(
+            {
+                "source": src,
+                "target": tgt,
+                "type": "persistent-feature",
+                "weight": min(info["weight"] / max(info["count"], 1), 1.0),
+                "color": PERSISTENT_COLOR,
+                "label": f"{info['count']} shared features",
+            }
+        )
 
 
 # ── Knowledge graph relationships ─────────────────────────────────────────
