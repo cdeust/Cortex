@@ -40,10 +40,10 @@
       .linkDirectionalParticleWidth(1.5)
       .linkDirectionalParticleColor(function() { return '#F0D870'; })
       .linkDirectionalParticleSpeed(0.006)
-      .d3AlphaDecay(0.006)
-      .d3VelocityDecay(0.5)
-      .warmupTicks(400)
-      .cooldownTicks(800)
+      .d3AlphaDecay(0.012)
+      .d3VelocityDecay(0.45)
+      .warmupTicks(300)
+      .cooldownTicks(500)
       .onNodeHover(handleHover)
       .onNodeClick(handleClick)
       .onBackgroundClick(handleBgClick);
@@ -76,29 +76,29 @@
   function configureForces() {
     graph.d3Force('charge').strength(function(n) {
       return {
-        'root': -500, 'category': -200, 'domain': -120,
-        'agent': -60, 'type-group': -30,
-        'entry-point': -25, 'recurring-pattern': -12,
-        'tool-preference': -25, 'behavioral-feature': -15,
-        'memory': -20, 'entity': -15
-      }[n.type] || -15;
-    }).distanceMax(400);
+        'root': -300, 'category': -150, 'domain': -100,
+        'agent': -50, 'type-group': -20,
+        'entry-point': -15, 'recurring-pattern': -10,
+        'tool-preference': -15, 'behavioral-feature': -12,
+        'memory': -15, 'entity': -12
+      }[n.type] || -12;
+    }).distanceMax(300);
 
     graph.d3Force('link')
       .distance(function(e) {
         return {
-          'has-category': 150, 'has-project': 100,
-          'has-agent': 50, 'has-group': 30, 'groups': 20,
-          'bridge': 120, 'persistent-feature': 100,
-          'memory-entity': 35, 'domain-entity': 40
-        }[e.type || 'default'] || 25;
+          'has-category': 80, 'has-project': 60,
+          'has-agent': 35, 'has-group': 22, 'groups': 15,
+          'bridge': 80, 'persistent-feature': 70,
+          'memory-entity': 25, 'domain-entity': 30
+        }[e.type || 'default'] || 18;
       })
       .strength(function(e) {
         return {
-          'has-category': 0.8, 'has-project': 0.7,
-          'has-agent': 0.6, 'has-group': 0.6, 'groups': 0.5,
-          'bridge': 0.2, 'persistent-feature': 0.2
-        }[e.type] || 0.4;
+          'has-category': 0.7, 'has-project': 0.6,
+          'has-agent': 0.5, 'has-group': 0.5, 'groups': 0.4,
+          'bridge': 0.15, 'persistent-feature': 0.15
+        }[e.type] || 0.35;
       });
   }
 
@@ -213,7 +213,7 @@
     if (!graph) return;
     JUG._currentEdges = links;
     graph.graphData({ nodes: nodes, links: links });
-    setTimeout(function() { graph.zoomToFit(600, 60); }, 1200);
+    setTimeout(function() { graph.zoomToFit(800, 80); }, 2500);
   }
 
   function resetView() {
