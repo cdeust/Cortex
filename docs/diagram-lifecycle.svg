@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 120" font-family="Inter, -apple-system, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#64748b"/>
+    </marker>
+    <marker id="arr-up" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <rect width="750" height="120" rx="12" fill="#0f172a"/>
+
+  <!-- New -->
+  <rect x="20" y="35" width="120" height="42" rx="21" fill="#1e293b" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="80" y="55" text-anchor="middle" fill="#fca5a5" font-size="12" font-weight="600">New</text>
+  <text x="80" y="70" text-anchor="middle" fill="#a3a3a3" font-size="9">heat = 1.0</text>
+
+  <line x1="140" y1="56" x2="170" y2="56" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Active -->
+  <rect x="175" y="35" width="110" height="42" rx="6" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="230" y="61" text-anchor="middle" fill="#fbbf24" font-size="12" font-weight="600">Active</text>
+
+  <line x1="285" y1="56" x2="320" y2="56" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Cooling -->
+  <rect x="325" y="35" width="110" height="42" rx="6" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+  <text x="380" y="61" text-anchor="middle" fill="#94a3b8" font-size="12" font-weight="600">Cooling</text>
+
+  <line x1="435" y1="56" x2="470" y2="56" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Compressed -->
+  <rect x="475" y="35" width="120" height="42" rx="6" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="535" y="61" text-anchor="middle" fill="#93c5fd" font-size="12" font-weight="600">Compressed</text>
+
+  <line x1="595" y1="56" x2="625" y2="56" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Consolidated -->
+  <rect x="630" y="35" width="110" height="42" rx="21" fill="#1e293b" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="685" y="61" text-anchor="middle" fill="#86efac" font-size="12" font-weight="600">Consolidated</text>
+
+  <!-- Recalled loops -->
+  <path d="M230,35 Q230,10 305,10 Q380,10 380,35" fill="none" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-up)"/>
+  <text x="305" y="8" text-anchor="middle" fill="#f59e0b" font-size="9">recalled</text>
+
+  <path d="M380,77 Q380,105 305,105 Q230,105 230,77" fill="none" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr-up)"/>
+  <text x="305" y="115" text-anchor="middle" fill="#f59e0b" font-size="9">recalled</text>
+</svg>

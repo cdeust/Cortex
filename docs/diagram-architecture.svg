@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 340" font-family="Inter, -apple-system, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="500" height="340" rx="12" fill="#0f172a"/>
+
+  <!-- server/ -->
+  <rect x="185" y="16" width="130" height="36" rx="4" fill="#1e293b" stroke="#94a3b8" stroke-width="1"/>
+  <text x="250" y="39" text-anchor="middle" fill="#94a3b8" font-size="12" font-weight="500">server/</text>
+
+  <line x1="250" y1="52" x2="250" y2="72" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="268" y="65" fill="#64748b" font-size="8">dispatch</text>
+
+  <!-- handlers/ -->
+  <rect x="165" y="76" width="170" height="40" rx="4" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="250" y="101" text-anchor="middle" fill="#fbbf24" font-size="13" font-weight="600">handlers/</text>
+
+  <!-- Two arrows from handlers -->
+  <line x1="210" y1="116" x2="140" y2="155" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="155" y="138" fill="#64748b" font-size="8">compose</text>
+
+  <line x1="290" y1="116" x2="360" y2="155" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="310" y="138" fill="#64748b" font-size="8">wire</text>
+
+  <!-- core/ -->
+  <rect x="55" y="158" width="170" height="40" rx="4" fill="#1e293b" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="140" y="183" text-anchor="middle" fill="#86efac" font-size="13" font-weight="600">core/</text>
+
+  <!-- infrastructure/ -->
+  <rect x="275" y="158" width="170" height="40" rx="4" fill="#1e293b" stroke="#06b6d4" stroke-width="1.5"/>
+  <text x="360" y="183" text-anchor="middle" fill="#67e8f9" font-size="13" font-weight="600">infrastructure/</text>
+
+  <!-- Both point to shared/ -->
+  <line x1="140" y1="198" x2="220" y2="245" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="158" y="228" fill="#64748b" font-size="8">import</text>
+
+  <line x1="360" y1="198" x2="280" y2="245" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="332" y="228" fill="#64748b" font-size="8">import</text>
+
+  <!-- shared/ -->
+  <rect x="175" y="248" width="150" height="36" rx="4" fill="#1e293b" stroke="#64748b" stroke-width="1"/>
+  <text x="250" y="271" text-anchor="middle" fill="#94a3b8" font-size="12" font-weight="500">shared/</text>
+
+  <!-- hooks/ (separate) -->
+  <rect x="16" y="248" width="120" height="36" rx="4" fill="#1e293b" stroke="#ec4899" stroke-width="1.2"/>
+  <text x="76" y="271" text-anchor="middle" fill="#f9a8d4" font-size="12" font-weight="500">hooks/</text>
+
+  <line x1="76" y1="248" x2="100" y2="198" stroke="#ec4899" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <line x1="76" y1="248" x2="325" y2="198" stroke="#ec4899" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+  <!-- Annotations -->
+  <text x="140" y="310" text-anchor="middle" fill="#22c55e" font-size="9">108 modules</text>
+  <text x="140" y="322" text-anchor="middle" fill="#64748b" font-size="8">pure logic, zero I/O</text>
+
+  <text x="360" y="310" text-anchor="middle" fill="#06b6d4" font-size="9">21 modules</text>
+  <text x="360" y="322" text-anchor="middle" fill="#64748b" font-size="8">PostgreSQL, embeddings</text>
+
+  <text x="250" y="298" text-anchor="middle" fill="#94a3b8" font-size="9">11 modules</text>
+</svg>

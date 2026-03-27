@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 400" font-family="Inter, -apple-system, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="750" height="400" rx="12" fill="#0f172a"/>
+
+  <!-- Query input -->
+  <rect x="290" y="14" width="160" height="36" rx="18" fill="#1e293b" stroke="#94a3b8" stroke-width="1"/>
+  <text x="370" y="37" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="500">recall query</text>
+
+  <line x1="370" y1="50" x2="370" y2="68" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Intent Classification -->
+  <rect x="270" y="72" width="200" height="36" rx="6" fill="#1e293b" stroke="#d946ef" stroke-width="1.5"/>
+  <text x="370" y="95" text-anchor="middle" fill="#e879f9" font-size="12" font-weight="500">Intent Classification</text>
+
+  <line x1="370" y1="108" x2="370" y2="126" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Intent-Aware Weights -->
+  <rect x="270" y="130" width="200" height="32" rx="4" fill="#292524" stroke="#44403c" stroke-width="0.5"/>
+  <text x="370" y="151" text-anchor="middle" fill="#d4d4d8" font-size="11">Intent-Aware Weights</text>
+
+  <line x1="370" y1="162" x2="370" y2="180" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- PL/pgSQL -->
+  <rect x="245" y="184" width="250" height="36" rx="6" fill="#1e293b" stroke="#06b6d4" stroke-width="1.5"/>
+  <text x="370" y="207" text-anchor="middle" fill="#67e8f9" font-size="12" font-weight="500">PL/pgSQL recall_memories()</text>
+
+  <line x1="370" y1="220" x2="370" y2="238" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Server-Side Fusion box -->
+  <rect x="60" y="242" width="620" height="52" rx="6" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+  <text x="370" y="258" text-anchor="middle" fill="#94a3b8" font-size="9" font-weight="600" letter-spacing="1">SERVER-SIDE FUSION</text>
+
+  <!-- 5 signal pills -->
+  <rect x="80" y="264" width="100" height="24" rx="4" fill="#292524" stroke="#44403c" stroke-width="0.5"/>
+  <text x="130" y="280" text-anchor="middle" fill="#67e8f9" font-size="10">Vector HNSW</text>
+
+  <rect x="195" y="264" width="100" height="24" rx="4" fill="#292524" stroke="#44403c" stroke-width="0.5"/>
+  <text x="245" y="280" text-anchor="middle" fill="#67e8f9" font-size="10">Full-Text FTS</text>
+
+  <rect x="310" y="264" width="110" height="24" rx="4" fill="#292524" stroke="#44403c" stroke-width="0.5"/>
+  <text x="365" y="280" text-anchor="middle" fill="#67e8f9" font-size="10">Trigram pg_trgm</text>
+
+  <rect x="435" y="264" width="70" height="24" rx="4" fill="#292524" stroke="#44403c" stroke-width="0.5"/>
+  <text x="470" y="280" text-anchor="middle" fill="#67e8f9" font-size="10">Heat</text>
+
+  <rect x="520" y="264" width="80" height="24" rx="4" fill="#292524" stroke="#44403c" stroke-width="0.5"/>
+  <text x="560" y="280" text-anchor="middle" fill="#67e8f9" font-size="10">Recency</text>
+
+  <line x1="370" y1="294" x2="370" y2="310" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- WRRF Fusion -->
+  <rect x="220" y="314" width="300" height="32" rx="4" fill="#292524" stroke="#44403c" stroke-width="0.5"/>
+  <text x="370" y="335" text-anchor="middle" fill="#fbbf24" font-size="11">WRRF Fusion  score = weight / (K + rank)</text>
+
+  <line x1="370" y1="346" x2="370" y2="360" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Bottom row: FlashRank -> Surprise -> Results -->
+  <rect x="80" y="362" width="170" height="30" rx="4" fill="#1e293b" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="165" y="382" text-anchor="middle" fill="#86efac" font-size="11">FlashRank Reranking</text>
+
+  <line x1="250" y1="377" x2="290" y2="377" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <rect x="295" y="362" width="180" height="30" rx="4" fill="#1e293b" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="385" y="382" text-anchor="middle" fill="#fbbf24" font-size="11">Surprise Momentum</text>
+
+  <line x1="475" y1="377" x2="515" y2="377" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+
+  <rect x="520" y="362" width="140" height="30" rx="18" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="590" y="382" text-anchor="middle" fill="#93c5fd" font-size="12" font-weight="500">Top 10 Results</text>
+
+  <!-- Vertical connector from WRRF to FlashRank -->
+  <path d="M370,346 L370,355 L165,355 L165,360" fill="none" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+</svg>

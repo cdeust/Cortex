@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 420" font-family="Inter, -apple-system, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#64748b"/>
+    </marker>
+    <marker id="arr-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#22c55e"/>
+    </marker>
+    <marker id="arr-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <rect width="700" height="420" rx="12" fill="#0f172a"/>
+
+  <!-- remember input -->
+  <rect x="270" y="16" width="160" height="36" rx="18" fill="#1e293b" stroke="#94a3b8" stroke-width="1"/>
+  <text x="350" y="39" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="500">remember</text>
+
+  <!-- Arrow down -->
+  <line x1="350" y1="52" x2="350" y2="72" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Predictive Coding Gate -->
+  <polygon points="350,78 460,115 350,152 240,115" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="350" y="112" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="600">Predictive Coding Gate</text>
+  <text x="350" y="126" text-anchor="middle" fill="#a3a3a3" font-size="9">Is this novel?</text>
+
+  <!-- Novel branch (left) -->
+  <line x1="295" y1="138" x2="220" y2="170" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arr-green)"/>
+  <text x="240" y="158" fill="#22c55e" font-size="10" font-weight="500">novel</text>
+
+  <!-- Redundant branch (right) -->
+  <line x1="405" y1="138" x2="520" y2="170" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arr-red)"/>
+  <text x="455" y="158" fill="#ef4444" font-size="10" font-weight="500">redundant</text>
+
+  <!-- Rejected -->
+  <rect x="490" y="175" width="120" height="32" rx="16" fill="#1e293b" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="550" y="196" text-anchor="middle" fill="#fca5a5" font-size="12">Rejected</text>
+
+  <!-- Emotional Tagging -->
+  <rect x="130" y="175" width="180" height="36" rx="6" fill="#1e293b" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="220" y="198" text-anchor="middle" fill="#f9a8d4" font-size="12">Emotional Tagging</text>
+
+  <!-- Arrow down -->
+  <line x1="220" y1="211" x2="220" y2="235" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Active Curation -->
+  <polygon points="220,240 340,270 220,300 100,270" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="220" y="274" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="600">Active Curation</text>
+
+  <!-- Three branches -->
+  <line x1="140" y1="285" x2="80" y2="320" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="86" y="310" fill="#94a3b8" font-size="9">similar</text>
+  <line x1="220" y1="300" x2="220" y2="325" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="238" y="316" fill="#94a3b8" font-size="9">related</text>
+  <line x1="300" y1="285" x2="360" y2="320" stroke="#64748b" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="345" y="310" fill="#94a3b8" font-size="9">new</text>
+
+  <!-- Merge -->
+  <rect x="20" y="328" width="130" height="30" rx="4" fill="#292524" stroke="#44403c" stroke-width="0.5"/>
+  <text x="85" y="348" text-anchor="middle" fill="#d4d4d8" font-size="11">Merge existing</text>
+
+  <!-- Link -->
+  <rect x="160" y="328" width="120" height="30" rx="4" fill="#292524" stroke="#44403c" stroke-width="0.5"/>
+  <text x="220" y="348" text-anchor="middle" fill="#d4d4d8" font-size="11">Link related</text>
+
+  <!-- Create -->
+  <rect x="300" y="328" width="130" height="30" rx="4" fill="#1e293b" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="365" y="348" text-anchor="middle" fill="#86efac" font-size="11">Create new</text>
+
+  <!-- All converge to PostgreSQL -->
+  <line x1="85" y1="358" x2="500" y2="390" stroke="#64748b" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="220" y1="358" x2="500" y2="390" stroke="#64748b" stroke-width="1" marker-end="url(#arr)"/>
+  <line x1="365" y1="358" x2="500" y2="390" stroke="#64748b" stroke-width="1" marker-end="url(#arr)"/>
+
+  <!-- PostgreSQL -->
+  <rect x="490" y="375" width="190" height="34" rx="6" fill="#1e293b" stroke="#06b6d4" stroke-width="1.5"/>
+  <text x="585" y="397" text-anchor="middle" fill="#67e8f9" font-size="12" font-weight="500">PostgreSQL + pgvector</text>
+
+  <!-- Entity extraction arrow from Create -->
+  <line x1="430" y1="343" x2="490" y2="343" stroke="#64748b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+  <rect x="490" y="328" width="170" height="30" rx="4" fill="#292524" stroke="#44403c" stroke-width="0.5"/>
+  <text x="575" y="348" text-anchor="middle" fill="#a3a3a3" font-size="10">Extract Entities to KG</text>
+</svg>

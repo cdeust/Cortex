@@ -135,69 +135,17 @@ claude mcp add cortex -- python -m mcp_server
 
 ### The big picture
 
-```mermaid
-flowchart LR
-    CC(["Claude Code"])
-
-    subgraph Plugin ["Cortex Plugin"]
-        MCP["MCP Server - 34 tools"]
-        H1["SessionStart - inject context"]
-        H2["PostToolUse - auto-capture"]
-        H3["SessionEnd - update profile"]
-        H4["Compaction - checkpoint"]
-    end
-
-    subgraph Skills ["10 Skills"]
-        S1["/cortex-remember"]
-        S2["/cortex-recall"]
-        S3["/cortex-profile"]
-        S4["/cortex-visualize"]
-        S5["+ 6 more"]
-    end
-
-    subgraph Storage ["PostgreSQL + pgvector"]
-        M["Memories"]
-        E["Entity Graph"]
-        P["WRRF Stored Procedures"]
-    end
-
-    CC --> Plugin
-    CC --> Skills
-    Plugin --> Storage
-    Skills --> Plugin
-
-    style CC fill:#3b82f6,color:#fff,stroke:#2563eb
-    style Plugin fill:#fef3c7,stroke:#f59e0b,color:#1c1917
-    style Skills fill:#dcfce7,stroke:#22c55e,color:#1c1917
-    style Storage fill:#cffafe,stroke:#06b6d4,color:#1c1917
-```
+<p align="center">
+<img src="docs/diagram-big-picture.svg" alt="Cortex big picture: Claude Code connects to the Cortex Plugin (MCP Server with 34 tools and 4 lifecycle hooks) and 10 Skills, backed by PostgreSQL + pgvector" width="100%"/>
+</p>
 
 ### Memory write path
 
 When you say "remember this" or the auto-capture hook fires:
 
-```mermaid
-flowchart TD
-    A([remember]) --> B{Predictive Coding Gate}
-    B -->|novel| C[Emotional Tagging]
-    B -->|redundant| X([Rejected])
-    C --> D{Active Curation}
-    D -->|similar exists| E[Merge into existing]
-    D -->|related| F[Link to related]
-    D -->|new| G[Create new memory]
-    E --> H[(PostgreSQL + pgvector)]
-    F --> H
-    G --> H
-    G --> I[Extract Entities to Knowledge Graph]
-
-    style A fill:#f8fafc,stroke:#94a3b8
-    style B fill:#fef3c7,stroke:#f59e0b,color:#1c1917
-    style X fill:#fee2e2,stroke:#ef4444,color:#991b1b
-    style C fill:#fce7f3,stroke:#ec4899,color:#1c1917
-    style H fill:#cffafe,stroke:#06b6d4,color:#1c1917
-    style G fill:#dcfce7,stroke:#22c55e,color:#1c1917
-    style D fill:#fef3c7,stroke:#f59e0b,color:#1c1917
-```
+<p align="center">
+<img src="docs/diagram-write-path.svg" alt="Memory write path: remember -> Predictive Coding Gate (novel/redundant) -> Emotional Tagging -> Active Curation (merge/link/create) -> PostgreSQL" width="100%"/>
+</p>
 
 The 4-signal write gate compares embedding distance, entity overlap, temporal proximity, and structural similarity against existing memories. Only genuinely novel content passes through.
 
@@ -205,35 +153,9 @@ The 4-signal write gate compares embedding distance, entity overlap, temporal pr
 
 When you ask a question or the session-start hook fires:
 
-```mermaid
-flowchart TD
-    Q([recall query]) --> R[Intent Classification]
-    R --> W[Intent-Aware Weights]
-    W --> PG["PL/pgSQL recall_memories()"]
-
-    subgraph WRRF ["Server-Side Fusion"]
-        direction LR
-        V[Vector HNSW]
-        F[Full-Text FTS]
-        T[Trigram pg_trgm]
-        HT[Heat]
-        RC[Recency]
-    end
-
-    PG --> WRRF
-    WRRF --> FUSED["WRRF Fusion - score = weight / K + rank"]
-    FUSED --> FR[FlashRank Reranking]
-    FR --> SM[Surprise Momentum]
-    SM --> RES([Top 10 Results])
-
-    style Q fill:#f8fafc,stroke:#94a3b8
-    style R fill:#f3e8ff,stroke:#d946ef,color:#1c1917
-    style PG fill:#cffafe,stroke:#06b6d4,color:#1c1917
-    style WRRF fill:#f8fafc,stroke:#cbd5e1
-    style FR fill:#dcfce7,stroke:#22c55e,color:#1c1917
-    style SM fill:#fef3c7,stroke:#f59e0b,color:#1c1917
-    style RES fill:#dbeafe,stroke:#3b82f6,color:#1c1917
-```
+<p align="center">
+<img src="docs/diagram-read-path.svg" alt="Memory read path: recall query -> Intent Classification -> PL/pgSQL recall_memories() -> 5-signal WRRF fusion -> FlashRank Reranking -> Surprise Momentum -> Top 10 Results" width="100%"/>
+</p>
 
 The system classifies your query intent first, then adjusts which signals matter most. A "when did we..." question boosts recency; a "why did we..." question boosts causal graph traversal.
 
@@ -241,42 +163,17 @@ The system classifies your query intent first, then adjusts which signals matter
 
 Memories aren't static. They heat up when accessed, cool down over time, compress when old, and consolidate from episodic (specific events) into semantic (general knowledge):
 
-```mermaid
-flowchart LR
-    A(["New - heat=1.0"]) --> B[Active]
-    B --> C[Cooling]
-    C --> D[Compressed]
-    D --> E([Consolidated])
-    B -->|recalled| B
-    C -->|recalled| B
-
-    style A fill:#fee2e2,stroke:#ef4444,color:#991b1b
-    style B fill:#fef3c7,stroke:#f59e0b,color:#1c1917
-    style C fill:#f1f5f9,stroke:#64748b,color:#475569
-    style D fill:#dbeafe,stroke:#3b82f6,color:#1c1917
-    style E fill:#dcfce7,stroke:#22c55e,color:#1c1917
-```
+<p align="center">
+<img src="docs/diagram-lifecycle.svg" alt="Memory lifecycle: New (heat=1.0) -> Active -> Cooling -> Compressed -> Consolidated, with recall loops back to Active" width="100%"/>
+</p>
 
 ### Cognitive profiling
 
 Cortex builds a profile of how you work — from your Claude Code session history:
 
-```mermaid
-flowchart TD
-    S(["Session History"]) --> P[Pattern Extraction]
-    P --> CS["Cognitive Style - Felder-Silverman 4D"]
-    P --> EP[Entry Patterns]
-    P --> BP[Blind Spots]
-    P --> CB[Cross-Domain Bridges]
-    CS --> PR(["Cognitive Profile - injected at session start"])
-    EP --> PR
-    BP --> PR
-    CB --> PR
-
-    style S fill:#f1f5f9,stroke:#64748b,color:#475569
-    style P fill:#f8fafc,stroke:#94a3b8,color:#1c1917
-    style PR fill:#fef3c7,stroke:#f59e0b,color:#1c1917
-```
+<p align="center">
+<img src="docs/diagram-profiling.svg" alt="Cognitive profiling: Session History -> Pattern Extraction -> Cognitive Style, Entry Patterns, Blind Spots, Cross-Domain Bridges -> Cognitive Profile" width="100%"/>
+</p>
 
 ---
 
@@ -555,54 +452,9 @@ Intent classification adjusts signal weights per query: temporal queries boost r
 
 ### Biological mechanisms
 
-```mermaid
-flowchart LR
-    subgraph Encoding ["Encoding"]
-        OC[Oscillatory Clock]
-        PC[Predictive Coding]
-        NM[Neuromodulation]
-        ET[Emotional Tagging]
-        PS[Pattern Separation]
-    end
-
-    subgraph Maintenance ["Storage and Maintenance"]
-        EG[Engram Competition]
-        TH[Thermodynamics]
-        HP[Homeostatic Plasticity]
-        CS[Consolidation Cascade]
-    end
-
-    subgraph Retrieval ["Retrieval"]
-        HOP[Hopfield Network]
-        SA[Spreading Activation]
-        SM[Surprise Momentum]
-        CoA[Co-Activation]
-    end
-
-    subgraph Plasticity ["Plasticity and Pruning"]
-        LTP["LTP/LTD + STDP"]
-        MG[Microglial Pruning]
-        SC[Sleep Compute]
-        IF[Interference Mgmt]
-    end
-
-    Encoding --> Maintenance
-    Maintenance --> Retrieval
-    Retrieval --> Plasticity
-    Plasticity -->|strengthen / weaken| Maintenance
-
-    style Encoding fill:#fef3c7,stroke:#f59e0b
-    style Maintenance fill:#cffafe,stroke:#06b6d4
-    style Retrieval fill:#dcfce7,stroke:#22c55e
-    style Plasticity fill:#f3e8ff,stroke:#a855f7
-    style PC fill:#fef3c7,stroke:#f59e0b,color:#1c1917
-    style NM fill:#f3e8ff,stroke:#8b5cf6,color:#1c1917
-    style ET fill:#fee2e2,stroke:#ef4444,color:#991b1b
-    style SM fill:#ffedd5,stroke:#f97316,color:#1c1917
-    style LTP fill:#dcfce7,stroke:#22c55e,color:#1c1917
-    style MG fill:#fee2e2,stroke:#ef4444,color:#991b1b
-    style SC fill:#dbeafe,stroke:#1e40af,color:#1c1917
-```
+<p align="center">
+<img src="docs/diagram-mechanisms.svg" alt="23 biological mechanisms organized into Encoding, Storage, Retrieval, and Plasticity stages with feedback loop" width="100%"/>
+</p>
 
 <details>
 <summary>Full mechanism reference with paper citations</summary>
@@ -658,23 +510,9 @@ This is not theoretical. On BEAM, one comparable system reports full-QA instruct
 
 Clean Architecture with concentric dependency layers. Inner layers never import outer layers.
 
-```mermaid
-flowchart TD
-    SV[server/] -->|dispatch| H[handlers/]
-    H -->|compose| C[core/]
-    H -->|wire| I[infrastructure/]
-    C -->|import| S[shared/]
-    I -->|import| S
-    HK[hooks/] -->|use| I
-    HK -->|use| C
-
-    style SV fill:#f1f5f9,stroke:#94a3b8,color:#1c1917
-    style C fill:#dcfce7,stroke:#22c55e,color:#1c1917
-    style I fill:#cffafe,stroke:#06b6d4,color:#1c1917
-    style S fill:#f1f5f9,stroke:#64748b,color:#475569
-    style H fill:#fef3c7,stroke:#f59e0b,color:#1c1917
-    style HK fill:#fce7f3,stroke:#ec4899,color:#1c1917
-```
+<p align="center">
+<img src="docs/diagram-architecture.svg" alt="Clean Architecture: server -> handlers -> core (108 modules) + infrastructure (21 modules) -> shared (11 modules), with hooks using core and infrastructure" width="100%"/>
+</p>
 
 | Component | Count | Description |
 |---|---|---|
