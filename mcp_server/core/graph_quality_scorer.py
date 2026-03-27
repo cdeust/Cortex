@@ -51,6 +51,10 @@ def _score_node(node: dict[str, Any], conns: int, total: int) -> tuple[float, st
     """Compute quality score and label for a single node."""
     ntype = node.get("type", "")
     scorers = {
+        "root": _score_structural,
+        "category": _score_structural,
+        "agent": _score_agent,
+        "type-group": _score_structural,
         "domain": _score_domain,
         "entry-point": _score_entry,
         "recurring-pattern": _score_pattern,
@@ -206,6 +210,17 @@ def _score_entity(n: dict, conns: int, total: int) -> tuple[float, str]:
         q = 0.15
         label = "isolated entity — may be noise"
     return min(q, 1.0), label
+
+
+def _score_structural(n: dict, conns: int, total: int) -> tuple[float, str]:
+    """Root, category, and type-group nodes are structural — always full quality."""
+    return 1.0, f"{n.get('type', 'structural')} node ({conns} connections)"
+
+
+def _score_agent(n: dict, conns: int, total: int) -> tuple[float, str]:
+    tool_count = n.get("toolCount", 0)
+    q = min(0.5 + tool_count * 0.05, 1.0)
+    return q, f"agent with {tool_count} tools, {conns} connections"
 
 
 def _score_default(n: dict, conns: int, total: int) -> tuple[float, str]:

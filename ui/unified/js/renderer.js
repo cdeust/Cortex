@@ -76,23 +76,29 @@
   function configureForces() {
     graph.d3Force('charge').strength(function(n) {
       return {
-        'domain': -120, 'entry-point': -25,
-        'recurring-pattern': -12, 'tool-preference': -25,
-        'behavioral-feature': -15, 'memory': -20,
-        'entity': -15
+        'root': -500, 'category': -200, 'domain': -120,
+        'agent': -60, 'type-group': -30,
+        'entry-point': -25, 'recurring-pattern': -12,
+        'tool-preference': -25, 'behavioral-feature': -15,
+        'memory': -20, 'entity': -15
       }[n.type] || -15;
-    }).distanceMax(250);
+    }).distanceMax(400);
 
     graph.d3Force('link')
       .distance(function(e) {
         return {
-          'bridge': 100, 'persistent-feature': 80,
-          'has-entry': 25, 'has-pattern': 20, 'uses-tool': 25,
-          'has-feature': 22, 'memory-entity': 35, 'domain-entity': 40
-        }[e.type || 'default'] || 22;
+          'has-category': 150, 'has-project': 100,
+          'has-agent': 50, 'has-group': 30, 'groups': 20,
+          'bridge': 120, 'persistent-feature': 100,
+          'memory-entity': 35, 'domain-entity': 40
+        }[e.type || 'default'] || 25;
       })
       .strength(function(e) {
-        return { 'bridge': 0.2, 'persistent-feature': 0.2 }[e.type] || 0.5;
+        return {
+          'has-category': 0.8, 'has-project': 0.7,
+          'has-agent': 0.6, 'has-group': 0.6, 'groups': 0.5,
+          'bridge': 0.2, 'persistent-feature': 0.2
+        }[e.type] || 0.4;
       });
   }
 

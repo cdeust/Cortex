@@ -1,13 +1,10 @@
 """Memory and entity node construction for the unified graph builder.
 
 Handles memory nodes (with emotional tagging) and entity nodes.
-Pure business logic -- no I/O.
+Links them into the hierarchy via type-group nodes when available,
+falling back to domain hubs, then entity text matching.
 
-Domain resolution strategy:
-  1. Entity/memory domain matches a profile hub exactly → use it
-  2. Entity/memory domain fuzzy-matches a hub (substring) → use it
-  3. Memory mentions an entity that is already linked to a hub → follow that edge
-  4. No match → node is left unlinked (no forced fallback)
+Pure business logic -- no I/O.
 """
 
 from __future__ import annotations
@@ -43,20 +40,17 @@ def _resolve_hub(
     return None
 
 
-def _build_entity_hub_map(
-    sorted_entities: list[dict],
+def _resolve_type_group(
+    domain: str,
+    group_label: str,
     domain_hub_ids: dict[str, str],
-) -> dict[int, str]:
-    """Pre-compute entity DB id → resolved hub key for all entities."""
-    mapping: dict[int, str] = {}
-    for ent in sorted_entities:
-        db_id = ent.get("id")
-        if db_id is None:
-            continue
-        hub = _resolve_hub(ent.get("domain", ""), domain_hub_ids)
-        if hub is not None:
-            mapping[db_id] = hub
-    return mapping
+    type_group_map: dict[str, dict[str, str]],
+) -> str | None:
+    """Resolve a domain + group label to a type-group node id."""
+    hub_key = _resolve_hub(domain, domain_hub_ids)
+    if hub_key and hub_key in type_group_map:
+        return type_group_map[hub_key].get(group_label)
+    return None
 
 
 # ── Entity nodes ────────────────────────────────────────────────────────
@@ -87,10 +81,9 @@ def add_entity_nodes(
     edges: list[Edge],
     domain_hub_ids: dict[str, str],
     entity_id_map: dict[int, str],
+    type_group_map: dict[str, dict[str, str]],
 ) -> None:
-    """Add entity nodes with domain-entity edges via resolved hub mapping."""
-    entity_hub_map = _build_entity_hub_map(sorted_entities, domain_hub_ids)
-
+    """Add entity nodes linked to the hierarchy via type-groups or hubs."""
     for ent in sorted_entities:
         nid = next_id("ent")
         db_id = ent.get("id")
@@ -98,9 +91,28 @@ def add_entity_nodes(
             entity_id_map[db_id] = nid
         nodes.append(_build_entity_node(ent, nid))
 
+        ent_domain = ent.get("domain", "")
         heat = ent.get("heat", 0)
-        hub_key = entity_hub_map.get(db_id) if db_id is not None else None
-        if hub_key is not None:
+
+        # Try linking to a type-group "Memories" (entities relate to memories)
+        tg_id = _resolve_type_group(
+            ent_domain, "Memories", domain_hub_ids, type_group_map
+        )
+        if tg_id:
+            edges.append(
+                {
+                    "source": tg_id,
+                    "target": nid,
+                    "type": "groups",
+                    "weight": 0.3 + heat * 0.4,
+                    "color": EDGE_COLORS["groups"],
+                }
+            )
+            continue
+
+        # Fallback: link to domain hub directly
+        hub_key = _resolve_hub(ent_domain, domain_hub_ids)
+        if hub_key:
             edges.append(
                 {
                     "source": domain_hub_ids[hub_key],
@@ -187,37 +199,108 @@ def _find_best_entity_match(
     return best_match, best_score
 
 
-def _find_hub_via_entity(
-    entity_nid: str,
+def _link_memory(
+    nid: str,
+    mem: dict,
+    mem_domain: str,
+    entity_names: dict[str, str],
+    nodes: list[Node],
     edges: list[Edge],
     domain_hub_ids: dict[str, str],
-) -> str | None:
-    """Given an entity node id, find which hub it's connected to."""
-    hub_id_to_key = {hid: key for key, hid in domain_hub_ids.items()}
-    for e in edges:
-        if e.get("type") != "domain-entity":
-            continue
-        if e["target"] == entity_nid and e["source"] in hub_id_to_key:
-            return hub_id_to_key[e["source"]]
-        if e["source"] == entity_nid and e["target"] in hub_id_to_key:
-            return hub_id_to_key[e["target"]]
-    return None
+    type_group_map: dict[str, dict[str, str]],
+    next_id: IdAllocator,
+    inline_entities: dict[str, str],
+) -> None:
+    """Link a memory node into the hierarchy.
+
+    Resolution chain:
+      1. Existing entity match → memory-entity edge
+      2. Type-group "Memories" in resolved domain → groups edge
+      3. Domain hub fallback → domain-entity edge
+      4. Extract entities from content → create inline entity bridge nodes
+      5. No match → unlinked
+    """
+    # Strategy 1: match against existing entity nodes
+    best_match, best_score = _find_best_entity_match(
+        mem, mem_domain, entity_names, nodes
+    )
+    if best_match and best_score > 0.2:
+        edges.append(
+            {
+                "source": nid,
+                "target": best_match,
+                "type": "memory-entity",
+                "weight": min(best_score, 0.7),
+                "color": EDGE_COLORS["memory-entity"],
+            }
+        )
+        return
+
+    # Strategy 2: link to type-group "Memories"
+    tg_id = _resolve_type_group(mem_domain, "Memories", domain_hub_ids, type_group_map)
+    if tg_id:
+        edges.append(
+            {
+                "source": tg_id,
+                "target": nid,
+                "type": "groups",
+                "weight": 0.3,
+                "color": EDGE_COLORS["groups"],
+            }
+        )
+        return
+
+    # Strategy 3: domain hub fallback
+    hub_key = _resolve_hub(mem_domain, domain_hub_ids)
+    if hub_key:
+        edges.append(
+            {
+                "source": domain_hub_ids[hub_key],
+                "target": nid,
+                "type": "domain-entity",
+                "weight": 0.2,
+                "color": EDGE_COLORS["domain-entity"],
+            }
+        )
+        return
+
+    # Strategy 4: extract entities from content as bridges
+    content = mem.get("content", "")
+    extracted = extract_entities(content)
+    if extracted:
+        for ent in extracted[:3]:
+            ent_nid = _get_or_create_inline_entity(
+                ent["name"],
+                ent["type"],
+                next_id,
+                nodes,
+                edges,
+                domain_hub_ids,
+                type_group_map,
+                inline_entities,
+            )
+            edges.append(
+                {
+                    "source": nid,
+                    "target": ent_nid,
+                    "type": "memory-entity",
+                    "weight": 0.5,
+                    "color": EDGE_COLORS["memory-entity"],
+                }
+            )
 
 
-def _get_or_create_entity_node(
+def _get_or_create_inline_entity(
     name: str,
     ent_type: str,
     next_id: IdAllocator,
     nodes: list[Node],
     edges: list[Edge],
     domain_hub_ids: dict[str, str],
+    type_group_map: dict[str, dict[str, str]],
     inline_entities: dict[str, str],
 ) -> str:
-    """Return node id for an inline entity, creating if needed.
-
-    Inline entities are extracted at graph build time from memory content.
-    They act as bridge nodes between memories and domain hubs.
-    """
+    """Get or create an inline entity node for bridging."""
     key = name.lower()
     if key in inline_entities:
         return inline_entities[key]
@@ -239,12 +322,26 @@ def _get_or_create_entity_node(
     )
     inline_entities[key] = nid
 
-    # Link to the first domain hub — entities are global connectors
+    # Link to first available Memories type-group, or first hub
+    for tg_map in type_group_map.values():
+        tg_id = tg_map.get("Memories")
+        if tg_id:
+            edges.append(
+                {
+                    "source": tg_id,
+                    "target": nid,
+                    "type": "groups",
+                    "weight": 0.15,
+                    "color": EDGE_COLORS["groups"],
+                }
+            )
+            return nid
+
     if domain_hub_ids:
-        hub_key = next(iter(domain_hub_ids))
+        hub_id = next(iter(domain_hub_ids.values()))
         edges.append(
             {
-                "source": domain_hub_ids[hub_key],
+                "source": hub_id,
                 "target": nid,
                 "type": "domain-entity",
                 "weight": 0.15,
@@ -254,83 +351,6 @@ def _get_or_create_entity_node(
     return nid
 
 
-def _link_memory(
-    nid: str,
-    mem: dict,
-    mem_domain: str,
-    entity_names: dict[str, str],
-    nodes: list[Node],
-    edges: list[Edge],
-    domain_hub_ids: dict[str, str],
-    next_id: IdAllocator,
-    inline_entities: dict[str, str],
-) -> None:
-    """Link a memory node via the best available strategy.
-
-    Resolution chain:
-      1. Existing DB entity match (text overlap) → memory-entity edge
-      2. Memory domain matches a hub → domain-entity edge
-      3. Extract entities from content → create inline entity nodes as bridges
-      4. No entities found → unlinked (accurate representation)
-    """
-    # Strategy 1: match against existing entity nodes
-    best_match, best_score = _find_best_entity_match(
-        mem, mem_domain, entity_names, nodes
-    )
-    if best_match and best_score > 0.2:
-        edges.append(
-            {
-                "source": nid,
-                "target": best_match,
-                "type": "memory-entity",
-                "weight": min(best_score, 0.7),
-                "color": EDGE_COLORS["memory-entity"],
-            }
-        )
-        return
-
-    # Strategy 2: resolve domain directly
-    hub_key = _resolve_hub(mem_domain, domain_hub_ids)
-    if hub_key is not None:
-        edges.append(
-            {
-                "source": domain_hub_ids[hub_key],
-                "target": nid,
-                "type": "domain-entity",
-                "weight": 0.2,
-                "color": EDGE_COLORS["domain-entity"],
-            }
-        )
-        return
-
-    # Strategy 3: extract entities from content and create bridge nodes
-    content = mem.get("content", "")
-    extracted = extract_entities(content)
-    if extracted:
-        for ent in extracted[:3]:  # Cap at 3 entities per memory
-            ent_nid = _get_or_create_entity_node(
-                ent["name"],
-                ent["type"],
-                next_id,
-                nodes,
-                edges,
-                domain_hub_ids,
-                inline_entities,
-            )
-            edges.append(
-                {
-                    "source": nid,
-                    "target": ent_nid,
-                    "type": "memory-entity",
-                    "weight": 0.5,
-                    "color": EDGE_COLORS["memory-entity"],
-                }
-            )
-        return
-
-    # Strategy 4: no entities found — memory stays unlinked
-
-
 def add_memory_nodes(
     sorted_memories: list[dict],
     next_id: IdAllocator,
@@ -338,8 +358,9 @@ def add_memory_nodes(
     edges: list[Edge],
     domain_hub_ids: dict[str, str],
     entity_names: dict[str, str],
+    type_group_map: dict[str, dict[str, str]],
 ) -> None:
-    """Add memory nodes with emotional tagging and entity/domain edges."""
+    """Add memory nodes with emotional tagging and hierarchical linking."""
     inline_entities: dict[str, str] = {}
 
     for mem in sorted_memories:
@@ -358,6 +379,7 @@ def add_memory_nodes(
             nodes,
             edges,
             domain_hub_ids,
+            type_group_map,
             next_id,
             inline_entities,
         )

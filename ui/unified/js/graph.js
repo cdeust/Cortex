@@ -11,14 +11,16 @@
     var filter = JUG.state.activeFilter;
     var query = (JUG.state.searchQuery || '').toLowerCase();
 
-    // Filter nodes
+    // Filter nodes — structural nodes always pass
     var filteredNodes = nodes.filter(function(n) {
+      var isStructural = JUG.STRUCTURAL_TYPES && JUG.STRUCTURAL_TYPES[n.type];
+      if (isStructural) return true;
       if (filter === 'methodology' && (n.type === 'memory' || n.type === 'entity')) return false;
-      if (filter === 'memories' && n.type !== 'memory' && n.type !== 'domain') return false;
-      if (filter === 'knowledge' && n.type !== 'entity' && n.type !== 'domain') return false;
-      if (filter === 'emotional' && !(n.type === 'memory' && n.emotion && n.emotion !== 'neutral') && n.type !== 'domain') return false;
-      if (filter === 'protected' && !n.isProtected && n.type !== 'domain') return false;
-      if (filter === 'hot' && (n.heat === undefined || n.heat < 0.5) && n.type !== 'domain') return false;
+      if (filter === 'memories' && n.type !== 'memory') return false;
+      if (filter === 'knowledge' && n.type !== 'entity') return false;
+      if (filter === 'emotional' && !(n.type === 'memory' && n.emotion && n.emotion !== 'neutral')) return false;
+      if (filter === 'protected' && !n.isProtected) return false;
+      if (filter === 'hot' && (n.heat === undefined || n.heat < 0.5)) return false;
       if (query && (n.label || '').toLowerCase().indexOf(query) < 0 &&
           (n.domain || '').toLowerCase().indexOf(query) < 0 &&
           (n.content || '').toLowerCase().indexOf(query) < 0) return false;

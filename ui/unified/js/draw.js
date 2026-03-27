@@ -7,10 +7,14 @@
   JUG._draw = {};
   JUG._draw.animFrame = function() { return animFrame; };
 
-  // ── Node sizing — large visible circles ──
+  // ── Node sizing — hierarchy-aware ──
   JUG._draw.nodeRadius = function(n) {
     var base = n.size || 3;
-    if (n.type === 'domain') return Math.max(6, base * 0.9);
+    if (n.type === 'root') return 12;
+    if (n.type === 'category') return Math.max(6, base * 0.5);
+    if (n.type === 'domain') return Math.max(5, base * 0.9);
+    if (n.type === 'agent') return 4;
+    if (n.type === 'type-group') return 2.5;
     return Math.max(2.2, base * 0.45);
   };
 
@@ -117,12 +121,14 @@
   };
 
   function drawLabel(ctx, node, x, y, r, scale, isHighlit) {
-    var isDomain = node.type === 'domain';
-    var show = isDomain || isHighlit || scale > 1.2;
+    var isStructural = JUG.STRUCTURAL_TYPES && JUG.STRUCTURAL_TYPES[node.type];
+    var isTop = node.type === 'root' || node.type === 'category' || node.type === 'domain';
+    var show = isTop || isHighlit || (node.type === 'agent' && scale > 0.8)
+      || (node.type === 'type-group' && scale > 1.5) || scale > 1.2;
     if (!show) return;
 
-    var fs = isDomain ? Math.max(4, r * 0.5) : Math.max(2.8, 3.2 / Math.max(scale * 0.3, 0.6));
-    var weight = isDomain ? '700 ' : '500 ';
+    var fs = isTop ? Math.max(4, r * 0.5) : Math.max(2.8, 3.2 / Math.max(scale * 0.3, 0.6));
+    var weight = isTop ? '700 ' : (isStructural ? '600 ' : '500 ');
     ctx.font = weight + fs + 'px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';

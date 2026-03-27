@@ -5,7 +5,11 @@ window.JUG = JUG;
 JUG.API_URL = '/api/graph';
 
 JUG.NODE_COLORS = {
+  'root': '#FFFFFF',
+  'category': '#8B5CF6',
   'domain': '#E8B840',
+  'agent': '#2DD4BF',
+  'type-group': '#64748B',
   'entry-point': '#60D8F0',
   'recurring-pattern': '#70D880',
   'tool-preference': '#E0A840',
@@ -23,6 +27,11 @@ JUG.NODE_COLORS = {
 };
 
 JUG.EDGE_COLORS = {
+  'has-category': '#FFFFFF30',
+  'has-project': '#8B5CF640',
+  'has-agent': '#2DD4BF40',
+  'has-group': '#64748B40',
+  'groups': '#50C8E030',
   'bridge': '#C080D0',
   'persistent-feature': '#B070B8',
   'co_occurrence': '#9080C0',
@@ -32,17 +41,17 @@ JUG.EDGE_COLORS = {
   'resolved_by': '#60C080',
   'decided_to_use': '#D0B060',
   'debugged_with': '#D07060',
-  'has-entry': '#50C8E0',
-  'has-pattern': '#60C890',
-  'uses-tool': '#D0B060',
-  'has-feature': '#A080C0',
   'memory-entity': '#40A0B8',
   'domain-entity': '#50B0C8',
   'default': '#40B0C8',
 };
 
 JUG.NODE_LABELS = {
-  'domain': 'Domain',
+  'root': 'Cortex',
+  'category': 'Category',
+  'domain': 'Project',
+  'agent': 'Agent',
+  'type-group': 'Group',
   'entry-point': 'Entry Point',
   'recurring-pattern': 'Pattern',
   'tool-preference': 'Tool',
@@ -52,10 +61,14 @@ JUG.NODE_LABELS = {
 };
 
 JUG.ZOOM_LEVELS = {
-  L2: { minDist: 800, label: 'Galaxy' },
+  L3: { minDist: 1200, label: 'Universe' },
+  L2: { minDist: 600, label: 'Galaxy' },
   L1: { minDist: 200, label: 'Constellation' },
   L0: { minDist: 0, label: 'Neural' },
 };
+
+// Structural types that form the tree skeleton
+JUG.STRUCTURAL_TYPES = { 'root': true, 'category': true, 'domain': true, 'agent': true, 'type-group': true };
 
 JUG.getNodeColor = function(node) {
   if (node.type === 'memory') {

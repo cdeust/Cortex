@@ -167,8 +167,9 @@ def apply_batch_pagination(
     if batch_size <= 0 or len(nodes) == 0:
         return nodes, edges, clusters, 1
 
-    skeleton_nodes = [n for n in nodes if n["type"] == "domain"]
-    child_nodes = [n for n in nodes if n["type"] != "domain"]
+    _SKELETON_TYPES = {"root", "category", "domain", "agent", "type-group"}
+    skeleton_nodes = [n for n in nodes if n["type"] in _SKELETON_TYPES]
+    child_nodes = [n for n in nodes if n["type"] not in _SKELETON_TYPES]
     skeleton_ids = {n["id"] for n in skeleton_nodes}
     total_batches = max(1, -(-len(child_nodes) // batch_size))
 

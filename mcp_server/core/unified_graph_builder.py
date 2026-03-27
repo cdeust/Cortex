@@ -1,4 +1,7 @@
-"""Unified graph builder — merges methodology profiles + memory + knowledge graph.
+"""Unified graph builder — hierarchical tree visualization.
+
+Builds a 6-level hierarchy:
+  Root → Category → Project → Agent → Type-Group → Leaf
 
 Thin orchestrator that composes node and edge builders into a single graph
 payload for the unified 2D visualization. Pure business logic — no I/O.
@@ -21,13 +24,19 @@ from mcp_server.core.graph_builder_memory import (
     add_memory_nodes,
 )
 from mcp_server.core.graph_builder_nodes import (
+    add_agent_node,
     add_behavioral_features,
+    add_category_node,
+    add_domain_hub,
     add_entry_points,
     add_recurring_patterns,
+    add_root_node,
     add_tool_preferences,
-    add_domain_hub,
+    add_type_group_nodes,
+    classify_tech_category,
 )
 from mcp_server.core.graph_quality_scorer import score_all_nodes
+from mcp_server.infrastructure.agent_config import get_agents_for_project
 
 
 def _filter_and_sort(
@@ -71,6 +80,8 @@ def _build_meta(
         "domain_count": type_counts.get("domain", 0),
         "memory_count": type_counts.get("memory", 0),
         "entity_count": type_counts.get("entity", 0),
+        "agent_count": type_counts.get("agent", 0),
+        "category_count": type_counts.get("category", 0),
         "edge_count": total_edges,
         "cluster_count": len(clusters),
         "node_count": total_nodes,
@@ -89,22 +100,26 @@ def _count_types(nodes: list[dict[str, Any]]) -> dict[str, int]:
     return counts
 
 
-def _add_domain_profiles(
+# ── Hierarchy builder ────────────────────────────────────────────────
+
+
+def _build_hierarchy(
     profiles: dict,
     filter_domain: str | None,
-    next_id,
+    next_id: Any,
     nodes: list,
     edges: list,
     domain_hub_ids: dict[str, str],
-) -> list[str]:
-    """Process all domain profiles, returning the list of domain keys."""
-    all_domains = profiles.get("domains") or {}
+) -> dict[str, dict[str, str]]:
+    """Build the full 6-level tree. Returns type_group_map for memory linking.
 
-    # Aggregate similar domains to prevent duplication
+    Returns:
+        type_group_map: {domain_key: {"Memories": tg_id, "Tools": tg_id, ...}}
+    """
+    all_domains = profiles.get("domains") or {}
     aggregated = aggregate_domains(all_domains)
 
     if filter_domain:
-        # Find the group key that contains this domain
         for gk, dp in aggregated.items():
             orig_keys = dp.get("_orig_keys", [gk])
             if filter_domain in orig_keys or filter_domain == gk:
@@ -113,30 +128,112 @@ def _add_domain_profiles(
         else:
             aggregated = {}
 
-    domain_keys = list(aggregated.keys())
+    # Level 0: Root
+    root_id = add_root_node(next_id, nodes)
 
+    # Classify domains into categories
+    category_members: dict[str, list[tuple[str, dict]]] = {}
     for domain_key, dp in aggregated.items():
         if not dp:
             continue
-        hub_id = add_domain_hub(dp, domain_key, next_id, nodes)
-        domain_hub_ids[domain_key] = hub_id
+        cat = classify_tech_category(dp)
+        category_members.setdefault(cat, []).append((domain_key, dp))
 
-        # Also map original keys to this hub for edge lookups
-        for orig in dp.get("_orig_keys", []):
-            domain_hub_ids[orig] = hub_id
+    # Level 1: Categories
+    category_ids: dict[str, str] = {}
+    for cat_name in category_members:
+        category_ids[cat_name] = add_category_node(
+            cat_name, root_id, next_id, nodes, edges
+        )
 
-        add_entry_points(dp, domain_key, hub_id, next_id, nodes, edges)
-        add_recurring_patterns(dp, domain_key, hub_id, next_id, nodes, edges)
-        add_tool_preferences(dp, domain_key, hub_id, next_id, nodes, edges)
-        add_behavioral_features(dp, domain_key, hub_id, next_id, nodes, edges)
-        add_bridge_edges(dp, hub_id, domain_keys, domain_hub_ids, edges)
+    # Level 2-4: Projects → Agents → Type-Groups → Leaves
+    type_group_map: dict[str, dict[str, str]] = {}
+
+    for cat_name, members in category_members.items():
+        cat_id = category_ids[cat_name]
+
+        for domain_key, dp in members:
+            # Level 2: Project
+            hub_id = add_domain_hub(dp, domain_key, cat_id, next_id, nodes, edges)
+            domain_hub_ids[domain_key] = hub_id
+            for orig in dp.get("_orig_keys", []):
+                domain_hub_ids[orig] = hub_id
+
+            # Level 3: Agents for this project
+            agents = get_agents_for_project(domain_key)
+            if agents:
+                # Each agent gets its own type-groups
+                all_tg: dict[str, str] = {}
+                for agent_def in agents:
+                    agent_id = add_agent_node(
+                        agent_def, domain_key, hub_id, next_id, nodes, edges
+                    )
+                    tg = add_type_group_nodes(
+                        agent_id, domain_key, next_id, nodes, edges
+                    )
+                    # Merge — first agent's type-group wins for shared keys
+                    for label, tg_id in tg.items():
+                        if label not in all_tg:
+                            all_tg[label] = tg_id
+                type_group_map[domain_key] = all_tg
+            else:
+                # No agents defined: create type-groups directly under project
+                tg = add_type_group_nodes(hub_id, domain_key, next_id, nodes, edges)
+                type_group_map[domain_key] = tg
+
+            # Level 5: Leaf nodes into type-groups
+            tg_map = type_group_map[domain_key]
+            add_entry_points(
+                dp,
+                domain_key,
+                tg_map.get("Entry Points", hub_id),
+                next_id,
+                nodes,
+                edges,
+            )
+            add_recurring_patterns(
+                dp,
+                domain_key,
+                tg_map.get("Patterns", hub_id),
+                next_id,
+                nodes,
+                edges,
+            )
+            add_tool_preferences(
+                dp,
+                domain_key,
+                tg_map.get("Tools", hub_id),
+                next_id,
+                nodes,
+                edges,
+            )
+            add_behavioral_features(
+                dp,
+                domain_key,
+                tg_map.get("Features", hub_id),
+                next_id,
+                nodes,
+                edges,
+            )
+
+            # Cross-domain edges
+            add_bridge_edges(
+                dp,
+                hub_id,
+                list(aggregated.keys()),
+                domain_hub_ids,
+                edges,
+            )
 
     add_persistent_feature_edges(profiles, domain_hub_ids, edges)
-    return domain_keys
+    return type_group_map
+
+
+# ── ID allocator ─────────────────────────────────────────────────────
 
 
 def _make_id_allocator() -> tuple[Any, ...]:
-    """Create a node ID allocator. Returns (next_id_fn, nodes, edges, hub_ids, ent_map)."""
+    """Create a node ID allocator."""
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     domain_hub_ids: dict[str, str] = {}
@@ -148,6 +245,9 @@ def _make_id_allocator() -> tuple[Any, ...]:
         return f"{prefix}_{counter[0]}"
 
     return next_id, nodes, edges, domain_hub_ids, entity_id_map
+
+
+# ── Memory and entity nodes ─────────────────────────────────────────
 
 
 def _add_memory_and_entity_nodes(
@@ -162,18 +262,34 @@ def _add_memory_and_entity_nodes(
     edges: list,
     domain_hub_ids: dict[str, str],
     entity_id_map: dict[int, str],
+    type_group_map: dict[str, dict[str, str]],
 ) -> None:
     """Add entity and memory nodes to the graph."""
     sorted_entities = _filter_and_sort(entities, filter_domain, max_entities)
     add_entity_nodes(
-        sorted_entities, next_id, nodes, edges, domain_hub_ids, entity_id_map
+        sorted_entities,
+        next_id,
+        nodes,
+        edges,
+        domain_hub_ids,
+        entity_id_map,
+        type_group_map,
     )
     add_relationship_edges(relationships, entity_id_map, edges)
     sorted_memories = _filter_and_sort(memories, filter_domain, max_memories)
     entity_names = _build_entity_name_lookup(sorted_entities, entity_id_map)
     add_memory_nodes(
-        sorted_memories, next_id, nodes, edges, domain_hub_ids, entity_names
+        sorted_memories,
+        next_id,
+        nodes,
+        edges,
+        domain_hub_ids,
+        entity_names,
+        type_group_map,
     )
+
+
+# ── Graph population ─────────────────────────────────────────────────
 
 
 def _populate_graph(
@@ -188,7 +304,9 @@ def _populate_graph(
     """Populate nodes and edges from all data sources."""
     next_id, nodes, edges, domain_hub_ids, entity_id_map = _make_id_allocator()
 
-    _add_domain_profiles(profiles, filter_domain, next_id, nodes, edges, domain_hub_ids)
+    type_group_map = _build_hierarchy(
+        profiles, filter_domain, next_id, nodes, edges, domain_hub_ids
+    )
     _add_memory_and_entity_nodes(
         entities,
         memories,
@@ -201,9 +319,13 @@ def _populate_graph(
         edges,
         domain_hub_ids,
         entity_id_map,
+        type_group_map,
     )
     score_all_nodes(nodes, edges)
     return nodes, edges, domain_hub_ids
+
+
+# ── Final assembly ───────────────────────────────────────────────────
 
 
 def _build_and_paginate(
@@ -253,7 +375,7 @@ def build_unified_graph(
     batch: int = 0,
     batch_size: int = 0,
 ) -> dict[str, Any]:
-    """Build a unified graph combining all data sources."""
+    """Build a unified hierarchical graph combining all data sources."""
     profiles = profiles or {}
     nodes, edges, domain_hub_ids = _populate_graph(
         profiles,
