@@ -212,48 +212,60 @@ DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/locomo/run_be
 DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/beam/run_benchmark.py --split 100K
 ```
 
-## Tools
+## Agents & Tools
 
-Cortex exposes 34 MCP tools across three tiers:
+Cortex organizes its 34 MCP tools into 6 functional agents. Each agent owns a focused set of tools and appears as a node in the neural graph visualization.
 
-### Tier 1 — Core Memory & Profiling
+### Memory Agent
+
+Persistent memory with thermodynamic heat/decay. Handles the full write/read lifecycle.
 
 | Tool | What it does |
 |---|---|
-| `query_methodology` | Load cognitive profile + hot memories at session start |
 | `remember` | Store a memory (4-signal write gate + neuromodulation + emotional tagging) |
-| `recall` | Retrieve memories via 5-signal PG WRRF fusion + FlashRank reranking + surprise momentum |
-| `consolidate` | Run maintenance: decay, LTP/LTD plasticity, microglial pruning, compression, CLS, sleep compute |
+| `recall` | Retrieve via PG WRRF fusion + FlashRank reranking + surprise momentum |
+| `recall_hierarchical` | Fractal L0/L1/L2 hierarchy with adaptive level weighting |
+| `consolidate` | Decay, LTP/LTD plasticity, microglial pruning, compression, CLS, sleep compute |
 | `checkpoint` | Save/restore working state across context compaction |
-| `narrative` | Generate project story from stored memories |
-| `memory_stats` | Memory system diagnostics |
-| `detect_domain` | Classify current domain from cwd/project |
-| `rebuild_profiles` | Full rescan of session history |
-| `list_domains` | Overview of all cognitive domains |
-| `record_session_end` | Incremental profile update + session critique |
-| `get_methodology_graph` | Graph data for visualization |
-| `open_visualization` | Launch unified 3D neural graph in browser |
-| `explore_features` | Interpretability: features, attribution, persona, crosscoder |
-| `open_memory_dashboard` | Launch real-time memory visualization dashboard |
-| `import_sessions` | Import conversation history into the memory store |
-| `forget` | Hard/soft delete a memory (respects `is_protected` guard) |
-| `validate_memory` | Validate memories against current filesystem state |
+| `forget` | Hard/soft delete (respects `is_protected` guard) |
+| `anchor` | Mark as compaction-resistant (heat=1.0, is_protected) |
 | `rate_memory` | Useful/not-useful feedback -> metamemory confidence |
-| `seed_project` | Bootstrap memory from an existing codebase |
-| `anchor` | Mark a memory as compaction-resistant (heat=1.0, is_protected) |
+| `validate_memory` | Validate memories against current filesystem state |
+| `memory_stats` | Memory system diagnostics |
 | `backfill_memories` | Auto-import prior Claude Code conversations |
+| `import_sessions` | Import conversation history into the memory store |
 
-### Tier 2 — Navigation & Exploration
+### Navigation Agent
+
+Memory exploration and knowledge traversal. Finds connections, traces causality, identifies gaps.
 
 | Tool | What it does |
 |---|---|
-| `recall_hierarchical` | Fractal L0/L1/L2 hierarchy with adaptive level weighting |
 | `drill_down` | Navigate into a fractal cluster (L2 -> L1 -> memories) |
 | `navigate_memory` | Successor Representation co-access BFS traversal |
 | `get_causal_chain` | Trace entity relationships through the knowledge graph |
 | `detect_gaps` | Identify isolated entities, sparse domains, temporal drift |
+| `narrative` | Generate project story from stored memories |
+| `get_project_story` | Period-based autobiographical narrative |
+| `assess_coverage` | Knowledge coverage score (0-100) + recommendations |
 
-### Tier 3 — Automation & Intelligence
+### Profiling Agent
+
+Cognitive profiling and methodology extraction. Learns how you work across domains.
+
+| Tool | What it does |
+|---|---|
+| `query_methodology` | Load cognitive profile + hot memories at session start |
+| `detect_domain` | Classify current domain from cwd/project |
+| `rebuild_profiles` | Full rescan of session history |
+| `list_domains` | Overview of all cognitive domains |
+| `record_session_end` | Incremental profile update + session critique |
+| `explore_features` | Interpretability: features, attribution, persona, crosscoder |
+| `get_methodology_graph` | Graph data for visualization |
+
+### Automation Agent
+
+Rules, triggers, and instruction sync. Automates memory behavior.
 
 | Tool | What it does |
 |---|---|
@@ -261,8 +273,23 @@ Cortex exposes 34 MCP tools across three tiers:
 | `create_trigger` | Prospective memory triggers (keyword/time/file/domain) |
 | `add_rule` | Add neuro-symbolic hard/soft/tag rules |
 | `get_rules` | List active rules by scope/type |
-| `get_project_story` | Period-based autobiographical narrative |
-| `assess_coverage` | Knowledge coverage score (0-100) + recommendations |
+| `seed_project` | Bootstrap memory from an existing codebase |
+
+### Visualization Agent
+
+Interactive graph and dashboard. Opens in browser, auto-shuts down after 10 min.
+
+| Tool | What it does |
+|---|---|
+| `open_visualization` | Launch unified neural graph in browser |
+| `open_memory_dashboard` | Launch real-time memory heatmap dashboard |
+
+### Pipeline Agent
+
+End-to-end PRD and architecture pipeline (ai-architect integration).
+
+| Tool | What it does |
+|---|---|
 | `run_pipeline` | Drive ai-architect pipeline end-to-end (11 stages -> PR) |
 
 ## Visualization
