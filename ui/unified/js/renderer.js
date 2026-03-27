@@ -40,10 +40,10 @@
       .linkDirectionalParticleWidth(1.5)
       .linkDirectionalParticleColor(function() { return '#F0D870'; })
       .linkDirectionalParticleSpeed(0.006)
-      .d3AlphaDecay(0.012)
-      .d3VelocityDecay(0.45)
-      .warmupTicks(300)
-      .cooldownTicks(500)
+      .d3AlphaDecay(0.02)
+      .d3VelocityDecay(0.4)
+      .warmupTicks(50)
+      .cooldownTicks(300)
       .onNodeHover(handleHover)
       .onNodeClick(handleClick)
       .onBackgroundClick(handleBgClick);
@@ -213,7 +213,7 @@
     if (!graph) return;
     JUG._currentEdges = links;
     graph.graphData({ nodes: nodes, links: links });
-    setTimeout(function() { graph.zoomToFit(800, 80); }, 2500);
+    setTimeout(function() { graph.zoomToFit(600, 60); }, 1500);
   }
 
   function resetView() {

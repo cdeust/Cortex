@@ -77,7 +77,7 @@ def add_persistent_feature_edges(
             for j in range(i + 1, len(pf_domains)):
                 src = domain_hub_ids.get(pf_domains[i])
                 tgt = domain_hub_ids.get(pf_domains[j])
-                if src and tgt:
+                if src and tgt and src != tgt:
                     key = (min(src, tgt), max(src, tgt))
                     if key not in pair_data:
                         pair_data[key] = {"weight": 0, "count": 0, "labels": []}
