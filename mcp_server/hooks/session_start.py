@@ -24,7 +24,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 # ── Config ────────────────────────────────────────────────────────────────
 
 _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")

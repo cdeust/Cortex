@@ -187,8 +187,18 @@ def _normalize_output(raw_output: Any) -> str:
 
 def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> None:
     """Store a memory via the remember handler."""
-    import asyncio
-    from mcp_server.handlers.remember import handler as remember_handler
+    try:
+        import asyncio
+
+        from mcp_server.handlers.remember import handler as remember_handler
+    except ImportError as exc:
+        missing = str(exc).replace("No module named ", "").strip("'")
+        print(
+            f"Cortex hook: missing dependency '{missing}'. "
+            f'Run: pip install -e "$(dirname $0)/../.."',
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     result = asyncio.run(
         remember_handler(

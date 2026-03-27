@@ -35,7 +35,6 @@ import json
 import sys
 from typing import Any
 
-
 _LOG_PREFIX = "[methodology-compaction-hook]"
 
 
@@ -51,6 +50,7 @@ def process_event(event: dict[str, Any] | None) -> None:
     """
     try:
         import asyncio
+
         from mcp_server.handlers.checkpoint import handler as checkpoint_handler
         from mcp_server.infrastructure.memory_config import get_memory_settings
         from mcp_server.infrastructure.memory_store import MemoryStore
@@ -71,9 +71,8 @@ def process_event(event: dict[str, Any] | None) -> None:
                 }
             )
         )
-        _log(
-            f"Auto-checkpoint saved: id={result.get('checkpoint_id')}, epoch={new_epoch}"
-        )
+        cp_id = result.get("checkpoint_id")
+        _log(f"Auto-checkpoint saved: id={cp_id}, epoch={new_epoch}")
     except Exception as exc:
         _log(f"Auto-checkpoint failed (non-fatal): {exc}")
 

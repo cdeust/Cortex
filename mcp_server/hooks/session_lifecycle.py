@@ -38,15 +38,27 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
-from mcp_server.infrastructure.profile_store import load_profiles, save_profiles
-from mcp_server.infrastructure.session_store import load_session_log, save_session_log
-from mcp_server.core.profile_builder import apply_session_update
-from mcp_server.shared.project_ids import (
-    cwd_to_project_id,
-    project_id_to_label,
-    domain_id_from_label,
-)
-from mcp_server.shared.categorizer import categorize
+try:
+    from mcp_server.core.profile_builder import apply_session_update
+    from mcp_server.infrastructure.profile_store import load_profiles, save_profiles
+    from mcp_server.infrastructure.session_store import (
+        load_session_log,
+        save_session_log,
+    )
+    from mcp_server.shared.categorizer import categorize
+    from mcp_server.shared.project_ids import (
+        cwd_to_project_id,
+        domain_id_from_label,
+        project_id_to_label,
+    )
+except ImportError as _imp_exc:
+    _missing = str(_imp_exc).replace("No module named ", "").strip("'")
+    print(
+        f"[methodology-hook] Missing dependency '{_missing}'. "
+        f"Run: python3 -m pip install -e /path/to/Cortex",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 _LOG_PREFIX = "[methodology-hook]"
 
@@ -92,6 +104,7 @@ def _run_consolidation() -> None:
     """
     try:
         import asyncio
+
         from mcp_server.handlers.consolidate import handler as consolidate_handler
 
         result = asyncio.run(consolidate_handler({"decay": True, "compress": True}))

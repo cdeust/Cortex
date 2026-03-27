@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "diff -q \"${CLAUDE_PLUGIN_ROOT}/pyproject.toml\" \"${CLAUDE_PLUGIN_DATA}/pyproject.toml\" >/dev/null 2>&1 || (cp \"${CLAUDE_PLUGIN_ROOT}/pyproject.toml\" \"${CLAUDE_PLUGIN_DATA}/\" && pip install -e \"${CLAUDE_PLUGIN_ROOT}\") || rm -f \"${CLAUDE_PLUGIN_DATA}/pyproject.toml\""
+            "command": "diff -q \"${CLAUDE_PLUGIN_ROOT}/pyproject.toml\" \"${CLAUDE_PLUGIN_DATA}/pyproject.toml\" >/dev/null 2>&1 || (cp \"${CLAUDE_PLUGIN_ROOT}/pyproject.toml\" \"${CLAUDE_PLUGIN_DATA}/\" && python3 -m pip install -q -e \"${CLAUDE_PLUGIN_ROOT}\") || rm -f \"${CLAUDE_PLUGIN_DATA}/pyproject.toml\""
           },
           {
             "type": "command",
