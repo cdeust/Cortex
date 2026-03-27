@@ -265,6 +265,80 @@ Cortex exposes 34 MCP tools across three tiers:
 | `assess_coverage` | Knowledge coverage score (0-100) + recommendations |
 | `run_pipeline` | Drive ai-architect pipeline end-to-end (11 stages -> PR) |
 
+## Visualization
+
+Cortex includes an interactive neural graph that visualizes your cognitive profile, memories, and knowledge graph as a force-directed network.
+
+### Launch
+
+```bash
+# From any Claude Code session:
+/open_visualization        # Neural graph
+/open_memory_dashboard     # Real-time memory heatmap
+```
+
+The visualization opens in your browser at `localhost:3458` and auto-shuts down after 10 minutes of inactivity.
+
+### What you see
+
+The graph organizes everything into a 6-level hierarchy:
+
+```
+Root (Cortex)
+ └─ Categories (Backend, Frontend, AI/Research, DevOps)
+     └─ Domains (your projects)
+         └─ Agents (Memory, Navigation, Profiling)
+             └─ Type Groups (Memories, Entities, Tools, Patterns)
+                 └─ Leaf Nodes (individual memories, entities, tools)
+```
+
+### Node types
+
+| Node | Color | What it represents |
+|------|-------|--------------------|
+| Domain | Gold | A project you work in |
+| Memory (episodic) | Mint green | A specific event or conversation |
+| Memory (semantic) | Magenta | Abstracted knowledge — facts, decisions, rules |
+| Entity | Cyan/Blue/Red | Extracted element — function, dependency, error, decision |
+| Entry point | Cyan | How you typically start work in a domain |
+| Recurring pattern | Green | Behavioral pattern detected across sessions |
+| Tool preference | Amber | Tools you frequently use |
+| Behavioral feature | Purple | Learned feature from sparse dictionary analysis |
+
+### Visual encoding
+
+- **Node size** = importance (session volume, access frequency, heat)
+- **Glow intensity** = thermodynamic heat (bright = recently accessed, dim = cold)
+- **Quality arc** = colored ring showing reliability — green (>60%), amber (30-60%), red (<30%)
+- **Pulsing ring** = emotional arousal (memories tagged with urgency, discovery, frustration)
+- **Edge width** = relationship strength
+- **Edge particles** = animated golden dots on selected node's connections
+
+### Interactions
+
+| Action | Effect |
+|--------|--------|
+| Click node | Select — shows detail panel, highlights neighbors, animates edges |
+| Hover | Tooltip with metadata |
+| Scroll | Zoom through 4 fractal levels (Neural → Constellation → Galaxy → Universe) |
+| Filter buttons | All, Methodology, Memories, Knowledge, Emotional, Protected, Hot |
+| Search bar | Full-text search across labels, domains, content |
+| `M` key | Toggle activity monitor (real-time event feed) |
+| `R` key | Reset view |
+| `?` key | Open built-in glossary |
+
+### Edge types
+
+| Edge | Color | Meaning |
+|------|-------|---------|
+| Hierarchical | Gray | Tree structure (domain → agent → group → leaf) |
+| Bridge | Magenta | Shared pattern between domains |
+| co_occurrence | Purple | Entities frequently appearing together |
+| imports/calls | Blue/Cyan | Code dependency relationships |
+| caused_by | Red | Causal chain (error → root cause) |
+| resolved_by | Green | Resolution link (bug → fix) |
+| decided_to_use | Amber | Technology choice |
+
 ## How Memory Works
 
 ### Write Path
