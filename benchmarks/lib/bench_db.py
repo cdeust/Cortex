@@ -1,8 +1,8 @@
 """Benchmark database helpers — load data into PG, retrieve, cleanup.
 
-All benchmarks use the production PostgreSQL + pgvector code path.
-No in-memory retrievers. No custom scoring. Same recall_memories()
-stored procedure that production uses.
+Pure passthrough to the production codebase. Retrieval delegates to
+mcp_server.core.pg_recall.recall() — the same function used by the
+production recall handler.
 
 Usage:
     with BenchmarkDB() as db:
@@ -15,23 +15,13 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from mcp_server.core.query_intent import classify_query_intent, QueryIntent
-from mcp_server.core.reranker import rerank_results
-from mcp_server.core.thermodynamics import (
-    compute_retrieval_surprise,
-    compute_heat_adjustment,
-)
+from mcp_server.core.pg_recall import recall as pg_recall
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.pg_store import PgMemoryStore
 
 
 class BenchmarkDB:
-    """Thin wrapper over PgMemoryStore for benchmark use.
-
-    Loads benchmark data into PG, runs production recall, cleans up.
-    Each instance tags memories with a unique run_id so parallel
-    benchmarks don't collide and cleanup is surgical.
-    """
+    """Thin passthrough to the production PG recall pipeline."""
 
     def __init__(self, database_url: str | None = None) -> None:
         self._url = database_url or os.environ.get(
@@ -41,7 +31,7 @@ class BenchmarkDB:
         self._embeddings: EmbeddingEngine | None = None
         self._memory_ids: list[int] = []
         self._content_lookup: dict[int, str] = {}
-        self._momentum: float = 0.5  # Titans surprise momentum
+        self._momentum_state: dict = {"momentum": 0.5}
 
     # ── Lifecycle ─────────────────────────────────────────────────
 
@@ -72,18 +62,9 @@ class BenchmarkDB:
         domain: str = "benchmark",
         batch_embed: bool = True,
     ) -> list[int]:
-        """Insert memories into PG and return their IDs.
-
-        Each memory dict must have 'content'. Optional keys:
-          - date / created_at: ISO timestamp
-          - heat: thermodynamic heat (default 1.0)
-          - tags: list of tags
-          - user_content: user-only text (used for embedding)
-          - source: source identifier
-        """
+        """Insert memories into PG and return their IDs."""
         assert self._store is not None, "Call open() first"
 
-        # Batch-encode embeddings for efficiency
         if batch_embed and self._embeddings and self._embeddings.available:
             texts = self._build_embedding_texts(memories)
             embeddings = self._embeddings.encode_batch(texts)
@@ -127,7 +108,7 @@ class BenchmarkDB:
             texts.append(prefix + (user[:1500] if user else full))
         return texts
 
-    # ── Retrieval (production code path) ──────────────────────────
+    # ── Retrieval (delegates to codebase) ─────────────────────────
 
     def recall(
         self,
@@ -138,99 +119,19 @@ class BenchmarkDB:
         rerank: bool = True,
         rerank_alpha: float = 0.55,
     ) -> list[dict[str, Any]]:
-        """Run production recall_memories() + optional FlashRank reranking.
-
-        Same code path as the recall MCP tool handler.
-        """
+        """Delegate to mcp_server.core.pg_recall.recall()."""
         assert self._store is not None, "Call open() first"
-
-        # Intent classification (same as production)
-        intent_info = classify_query_intent(query)
-        intent = intent_info["intent"]
-        weights = self._intent_weights(intent, intent_info.get("weights", {}))
-
-        # Encode query
-        q_emb = self._embeddings.encode(query[:500]) if self._embeddings else None
-
-        # Call PL/pgSQL recall_memories (production stored procedure)
-        candidates = self._store.recall_memories(
-            query_text=query,
-            query_embedding=q_emb,
-            intent=str(intent.value) if hasattr(intent, "value") else str(intent),
+        return pg_recall(
+            query=query,
+            store=self._store,
+            embeddings=self._embeddings,
+            top_k=top_k,
             domain=domain,
             min_heat=min_heat,
-            max_results=top_k,
-            wrrf_k=60,
-            weights=weights,
+            rerank=rerank,
+            rerank_alpha=rerank_alpha,
+            momentum_state=self._momentum_state,
         )
-
-        if not candidates:
-            return []
-
-        # Client-side FlashRank reranking (same as production)
-        if rerank and len(candidates) > 1:
-            ranked_pairs = [(c["memory_id"], c.get("score", 0.0)) for c in candidates]
-            content_map = {c["memory_id"]: c["content"] for c in candidates}
-            reranked = rerank_results(
-                query, ranked_pairs, content_map, alpha=rerank_alpha
-            )
-            # Rebuild ordered results
-            cand_map = {c["memory_id"]: c for c in candidates}
-            candidates = []
-            for mid, score in reranked:
-                if mid in cand_map:
-                    c = dict(cand_map[mid])
-                    c["score"] = score
-                    candidates.append(c)
-
-        # Titans test-time learning: surprise momentum updates heat in PG
-        self._apply_surprise_momentum(q_emb, candidates[:top_k])
-
-        return candidates[:top_k]
-
-    def _apply_surprise_momentum(
-        self, q_emb: bytes | None, results: list[dict[str, Any]]
-    ) -> None:
-        """Update heat of retrieved memories based on retrieval surprise."""
-        if not q_emb or not results or not self._store:
-            return
-        result_embs = []
-        for r in results[:10]:
-            mem = self._store.get_memory(r["memory_id"])
-            if mem and mem.get("embedding"):
-                result_embs.append(mem["embedding"])
-        if not result_embs:
-            return
-        surprise = compute_retrieval_surprise(q_emb, result_embs)
-        self._momentum = 0.7 * self._momentum + 0.3 * surprise
-        adj = compute_heat_adjustment(surprise, self._momentum, delta=0.08)
-        if abs(adj) < 0.001:
-            return
-        for r in results:
-            old_heat = r.get("heat", 0.5)
-            new_heat = max(0.0, min(1.0, old_heat + adj))
-            if abs(new_heat - old_heat) > 0.001:
-                self._store.update_memory_heat(r["memory_id"], new_heat)
-
-    def _intent_weights(
-        self, intent: QueryIntent, core_weights: dict
-    ) -> dict[str, float]:
-        """Map intent to PG recall signal weights."""
-        base = {
-            "vector": core_weights.get("vector", 1.0),
-            "fts": core_weights.get("fts", 0.5),
-            "bm25": core_weights.get("fts", 0.5) * 0.8,
-            "heat": core_weights.get("heat", 0.3),
-            "ngram": core_weights.get("fts", 0.5) * 0.6,
-            "recency": 0.0,
-        }
-        if intent == QueryIntent.TEMPORAL:
-            base["recency"] = 0.0
-            base["heat"] = 0.6
-        elif intent == QueryIntent.KNOWLEDGE_UPDATE:
-            base["recency"] = 0.5
-            base["heat"] = 0.5
-        return base
 
     # ── Cleanup ───────────────────────────────────────────────────
 
@@ -238,7 +139,6 @@ class BenchmarkDB:
         """Remove all memories inserted by this benchmark run."""
         if not self._store or not self._memory_ids:
             return
-        # Delete in batches to avoid huge transactions
         batch_size = 500
         for i in range(0, len(self._memory_ids), batch_size):
             batch = self._memory_ids[i : i + batch_size]
@@ -251,5 +151,5 @@ class BenchmarkDB:
         self._content_lookup.clear()
 
     def clear(self) -> None:
-        """Alias for cleanup — matches existing benchmark retriever API."""
+        """Alias for cleanup."""
         self.cleanup()

@@ -141,9 +141,7 @@ class TestRecallHandler:
                 assert isinstance(result["results"], list)
                 assert isinstance(result["total"], int)
                 assert "signals" in result
-                assert "vector" in result["signals"]
-                assert "fts" in result["signals"]
-                assert "heat" in result["signals"]
+                assert isinstance(result["signals"], dict)
                 assert "dispatch_tier" in result
                 _reset_singletons()
 

@@ -1,7 +1,10 @@
-"""Handler: recall -- 3-tier dispatch + 9-signal WRRF fusion.
+"""Handler: recall -- PG recall + production enrichments.
 
 Composition root wiring infrastructure to core retrieval logic.
-Tiers: simple (general), mixed (multi-hop), deep (entity/factual).
+
+Base retrieval uses pg_recall (intent-adaptive PG WRRF + FlashRank reranking).
+Production enrichments layer on top: prospective memory injection,
+co-activation Hebbian learning, neuro-symbolic rules, strategic ordering.
 """
 
 from __future__ import annotations
@@ -10,27 +13,19 @@ from typing import Any
 
 from mcp_server.core import memory_rules
 from mcp_server.core.knowledge_graph import extract_entities
+from mcp_server.core.pg_recall import recall as pg_recall
 from mcp_server.core.query_intent import classify_query_intent, QueryIntent
-from mcp_server.core.retrieval_dispatch import dispatch_retrieval, wrrf_fuse
-from mcp_server.core.thermodynamics import (
-    compute_retrieval_surprise,
-    compute_heat_adjustment,
-)
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 
 from mcp_server.handlers.recall_helpers import (
-    compute_vector_fts,
-    get_hot_pool,
-    collect_signals,
-    build_result,
     build_enhancements,
     inject_triggered_memories,
 )
 
 schema = {
-    "description": "Retrieve memories using 3-tier dispatch with 9-signal WRRF fusion.",
+    "description": "Retrieve memories using intent-adaptive PG recall with production enrichments.",
     "inputSchema": {
         "type": "object",
         "properties": {
@@ -55,7 +50,7 @@ schema = {
 
 _store: MemoryStore | None = None
 _embeddings: EmbeddingEngine | None = None
-_momentum: dict[str, float] = {}  # domain -> momentum (Titans test-time learning)
+_momentum_state: dict = {"momentum": 0.5}
 
 
 def _get_store() -> MemoryStore:
@@ -89,62 +84,6 @@ def _apply_strategic_ordering(
     return results[:top_n] + results[n - bottom_n :] + results[top_n : n - bottom_n]
 
 
-def _fetch_and_boost(
-    fused: list[tuple[int, float]],
-    store: MemoryStore,
-    intent: str,
-    settings: Any,
-    max_results: int,
-) -> list[dict]:
-    """Fetch full memories and apply recency boost."""
-    results = []
-    for mem_id, score in fused[: max_results * 2]:
-        mem = store.get_memory(mem_id)
-        if mem is None:
-            continue
-        store.update_memory_access(mem_id)
-        results.append(build_result(mem, score, intent, settings))
-    results.sort(key=lambda r: r["score"], reverse=True)
-    return results
-
-
-def _apply_surprise_momentum(
-    results: list[dict],
-    q_emb: Any,
-    store: MemoryStore,
-    settings: Any,
-    domain: str | None,
-) -> None:
-    """Titans-inspired test-time learning: update heat based on retrieval surprise."""
-    if not settings.SURPRISE_MOMENTUM_ENABLED or not results or not q_emb:
-        return
-    result_embs = [r.get("embedding") for r in results if r.get("embedding")]
-    if not result_embs:
-        # Fetch embeddings for surprise computation
-        result_embs = []
-        for r in results[:10]:
-            mem = store.get_memory(r["memory_id"])
-            if mem and mem.get("embedding"):
-                result_embs.append(mem["embedding"])
-    surprise = compute_retrieval_surprise(q_emb, result_embs)
-    key = domain or "_global"
-    prev = _momentum.get(key, 0.5)
-    _momentum[key] = (
-        settings.SURPRISE_MOMENTUM_ETA * prev
-        + (1 - settings.SURPRISE_MOMENTUM_ETA) * surprise
-    )
-    adj = compute_heat_adjustment(
-        surprise, _momentum[key], settings.SURPRISE_MOMENTUM_DELTA
-    )
-    if abs(adj) < 0.001:
-        return
-    for r in results:
-        new_heat = max(0.0, min(1.0, r["heat"] + adj))
-        if abs(new_heat - r["heat"]) > 0.001:
-            store.update_memory_heat(r["memory_id"], new_heat)
-            r["heat"] = new_heat
-
-
 def _apply_co_activation(
     results: list[dict], store: MemoryStore, settings: Any
 ) -> None:
@@ -153,14 +92,12 @@ def _apply_co_activation(
         return
     min_score = settings.CO_ACTIVATION_MIN_SCORE
     lr = settings.CO_ACTIVATION_LEARNING_RATE
-    # Extract entities from top-5 results above min_score
     entity_sets: list[set[str]] = []
     for r in results[:5]:
         if r.get("score", 0) < min_score:
             continue
         ents = extract_entities(r.get("content", ""))
         entity_sets.append({e["name"] for e in ents})
-    # Reinforce cross-memory entity pairs
     try:
         for i, ents_a in enumerate(entity_sets):
             for ents_b in entity_sets[i + 1 :]:
@@ -190,24 +127,8 @@ def _apply_rules_and_order(
     return results
 
 
-def _make_hop_fn(
-    store: MemoryStore, emb: EmbeddingEngine, settings: Any, pool: int, min_heat: float
-):
-    """Create multi-hop sub-query function for dispatch."""
-
-    def _hop(sq: str) -> list[tuple[int, float]]:
-        sv, sf, _ = compute_vector_fts(sq, store, emb, pool // 2, min_heat)
-        return wrrf_fuse(
-            [sv, sf],
-            [settings.WRRF_VECTOR_WEIGHT, settings.WRRF_FTS_WEIGHT],
-            k=settings.WRRF_K,
-        )
-
-    return _hop
-
-
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Retrieve memories using 3-tier dispatch + 9-signal WRRF fusion."""
+    """Retrieve memories: pg_recall base + production enrichments."""
     if not args or not args.get("query"):
         return {"results": [], "total": 0}
 
@@ -217,43 +138,32 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     min_heat = args.get("min_heat", 0.05)
     settings = get_memory_settings()
     store, emb = _get_store(), _get_embeddings()
-    pool = max_results * settings.WRRF_CANDIDATE_MULTIPLIER
-    intent_info = classify_query_intent(query)
-    intent = intent_info.get("intent", QueryIntent.GENERAL)
 
-    signals = collect_signals(
-        query, store, emb, settings, pool, min_heat, domain, directory
-    )
-    hot = get_hot_pool(store, domain, directory, min_heat, pool)
-    content = {m["id"]: m.get("content", "") for m in hot} if hot else {}
-
-    fused, tier = dispatch_retrieval(
+    # Base retrieval: pg_recall (intent → PG weights → recall_memories → rerank)
+    results = pg_recall(
         query=query,
-        signals=signals,
-        intent_info=intent_info,
-        content_lookup=content,
+        store=store,
+        embeddings=emb,
+        top_k=max_results,
+        domain=domain,
+        directory=directory,
+        min_heat=min_heat,
         wrrf_k=settings.WRRF_K,
-        base_vector_w=settings.WRRF_VECTOR_WEIGHT,
-        base_fts_w=settings.WRRF_FTS_WEIGHT,
-        base_heat_w=settings.WRRF_HEAT_WEIGHT,
-        max_results=max_results,
-        hop_fn=_make_hop_fn(store, emb, settings, pool, min_heat),
+        momentum_state=_momentum_state,
     )
 
-    results = _fetch_and_boost(fused, store, intent, settings, max_results)
-    # Prospective memory: inject triggered standing instructions
+    # Production enrichments on top of base retrieval
     results = inject_triggered_memories(results, query, store)
-    # Titans test-time learning: surprise momentum updates heat in PG
-    q_emb = emb.encode(query[:500]) if emb else None
-    _apply_surprise_momentum(results, q_emb, store, settings, domain)
-    # Dragon Hatchling Hebbian: co-retrieved entities strengthen graph edges
     _apply_co_activation(results, store, settings)
     results = _apply_rules_and_order(results, store, settings, max_results)
+
+    intent_info = classify_query_intent(query)
+    intent = intent_info.get("intent", QueryIntent.GENERAL)
     return {
         "results": results,
         "total": len(results),
         "query_intent": intent,
-        "dispatch_tier": tier,
-        "signals": {n: len(signals.get(n, [])) for n in signals},
-        "enhancements": build_enhancements(query, intent, tier, settings),
+        "dispatch_tier": "pg",
+        "signals": {},
+        "enhancements": build_enhancements(query, intent, "pg", settings),
     }
