@@ -47,7 +47,9 @@ class TestClassifyMemory:
         assert classify_memory("Please always respond in formal tone") == "semantic"
         assert classify_memory("I want you to use metric units") == "semantic"
         assert classify_memory("Going forward, include timestamps") == "semantic"
-        assert classify_memory("Remember to check tests before committing") == "semantic"
+        assert (
+            classify_memory("Remember to check tests before committing") == "semantic"
+        )
         assert classify_memory("Whenever you write code, add type hints") == "semantic"
 
     def test_generic_content_is_episodic(self):

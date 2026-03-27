@@ -46,7 +46,9 @@ _PG_INTENT_OVERRIDES: dict[str, dict[str, float]] = {
 }
 
 
-def compute_pg_weights(intent: str, core_weights: dict | None = None) -> dict[str, float]:
+def compute_pg_weights(
+    intent: str, core_weights: dict | None = None
+) -> dict[str, float]:
     """Compute PG recall_memories() signal weights for a given intent.
 
     Derives base weights from core_weights (from query_intent) when available,
@@ -136,9 +138,7 @@ def recall(
     if rerank and len(candidates) > 1:
         ranked_pairs = [(c["memory_id"], c.get("score", 0.0)) for c in candidates]
         content_map = {c["memory_id"]: c["content"] for c in candidates}
-        reranked = rerank_results(
-            query, ranked_pairs, content_map, alpha=rerank_alpha
-        )
+        reranked = rerank_results(query, ranked_pairs, content_map, alpha=rerank_alpha)
         cand_map = {c["memory_id"]: c for c in candidates}
         candidates = []
         for mid, score in reranked:
