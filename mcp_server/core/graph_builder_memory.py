@@ -54,10 +54,20 @@ def add_entity_nodes(
 
         ent_domain = ent.get("domain", "")
         heat = ent.get("heat", 0)
+
+        # Resolve hub: exact match, fuzzy match, or first available
+        hub_key = None
         if ent_domain and ent_domain in domain_hub_ids:
+            hub_key = ent_domain
+        elif ent_domain:
+            hub_key = _find_closest_domain(ent_domain, domain_hub_ids)
+        if hub_key is None and domain_hub_ids:
+            hub_key = next(iter(domain_hub_ids))
+
+        if hub_key is not None:
             edges.append(
                 {
-                    "source": domain_hub_ids[ent_domain],
+                    "source": domain_hub_ids[hub_key],
                     "target": nid,
                     "type": "domain-entity",
                     "weight": 0.3 + heat * 0.4,
