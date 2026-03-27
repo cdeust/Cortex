@@ -11,10 +11,10 @@ import json
 import os
 import subprocess
 import sys
-from io import StringIO
-from unittest.mock import patch, MagicMock
 
 import pytest
+
+_IS_CI = os.environ.get("CI", "").lower() in ("true", "1")
 
 
 # ── Session Start Hook Tests ─────────────────────────────────────────────
@@ -265,6 +265,9 @@ class TestSetupScript:
         )
         assert os.path.exists(os.path.abspath(script))
 
+    @pytest.mark.skipif(
+        _IS_CI, reason="setup_db.py uses psql/createdb without CI credentials"
+    )
     def test_setup_reports_ready_for_existing_db(self):
         """When test DB exists, setup should report ready."""
         script = os.path.join(
