@@ -44,6 +44,10 @@
 
   // ── Node rendering — large solid glowing circles ──
   JUG._draw.node = function(node, ctx, globalScale, hoveredId, selectedId, neighbors) {
+    try { _drawNodeInner(node, ctx, globalScale, hoveredId, selectedId, neighbors); }
+    catch(e) { if (!JUG._drawErr) { JUG._drawErr = true; console.error('[draw] Error rendering node:', node.id, node.type, e); } }
+  };
+  function _drawNodeInner(node, ctx, globalScale, hoveredId, selectedId, neighbors) {
     var x = node.x, y = node.y;
     if (x === undefined || y === undefined) return;
     var r = JUG._draw.nodeRadius(node);
@@ -118,7 +122,7 @@
     if (!isDimmed) drawLabel(ctx, node, x, y, r, globalScale, isHighlit);
 
     ctx.globalAlpha = 1.0;
-  };
+  }
 
   function drawLabel(ctx, node, x, y, r, scale, isHighlit) {
     var isStructural = JUG.STRUCTURAL_TYPES && JUG.STRUCTURAL_TYPES[node.type];
@@ -143,7 +147,7 @@
     ctx.strokeText(text, x, ty);
 
     // Fill with brighter colors
-    ctx.fillStyle = isDomain ? rgba('#E0F4FF', 0.95) : rgba('#C0D8E8', isHighlit ? 0.95 : 0.85);
+    ctx.fillStyle = isTop ? rgba('#E0F4FF', 0.95) : rgba('#C0D8E8', isHighlit ? 0.95 : 0.85);
     ctx.fillText(text, x, ty);
   }
 
