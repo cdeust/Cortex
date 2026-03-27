@@ -261,7 +261,6 @@ BEGIN
           AND m.embedding IS NOT NULL
           AND (p_domain IS NULL OR m.domain = p_domain)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
-          AND (p_agent_topic IS NULL OR m.agent_context = p_agent_topic)
         ORDER BY m.embedding <=> p_query_emb
         LIMIT v_pool
     ),
@@ -277,7 +276,6 @@ BEGIN
           AND NOT m.is_stale
           AND (p_domain IS NULL OR m.domain = p_domain)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
-          AND (p_agent_topic IS NULL OR m.agent_context = p_agent_topic)
         ORDER BY ts_rank_cd(m.content_tsv, v_tsq) DESC
         LIMIT v_pool
     ),
@@ -292,7 +290,6 @@ BEGIN
           AND NOT m.is_stale
           AND (p_domain IS NULL OR m.domain = p_domain)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
-          AND (p_agent_topic IS NULL OR m.agent_context = p_agent_topic)
           AND similarity(m.content, p_query_text) > 0.1
         ORDER BY similarity(m.content, p_query_text) DESC
         LIMIT v_pool
@@ -306,7 +303,6 @@ BEGIN
           AND NOT m.is_stale
           AND (p_domain IS NULL OR m.domain = p_domain)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
-          AND (p_agent_topic IS NULL OR m.agent_context = p_agent_topic)
         ORDER BY m.heat DESC
         LIMIT v_pool
     ),
@@ -319,7 +315,6 @@ BEGIN
           AND NOT m.is_stale
           AND (p_domain IS NULL OR m.domain = p_domain)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
-          AND (p_agent_topic IS NULL OR m.agent_context = p_agent_topic)
         ORDER BY m.created_at DESC
         LIMIT v_pool
     ),
@@ -339,13 +334,24 @@ BEGIN
             WHERE p_w_recency > 0
         ) signals
         GROUP BY id
+    ),
+    -- Signal 6: Agent topic boost (soft — boosts matching memories, never excludes)
+    agent_boosted AS (
+        SELECT f.id,
+               CASE WHEN p_agent_topic IS NOT NULL
+                         AND m.agent_context = p_agent_topic
+                    THEN f.fused_score + 0.3 * (p_w_vector / p_wrrf_k)
+                    ELSE f.fused_score
+               END AS boosted_score
+        FROM fused f
+        JOIN memories m ON m.id = f.id
     )
-    SELECT f.id, m.content, f.fused_score::REAL, m.heat,
+    SELECT ab.id, m.content, ab.boosted_score::REAL, m.heat,
            m.domain, m.created_at, m.store_type,
            m.tags, m.importance, m.surprise_score
-    FROM fused f
-    JOIN memories m ON m.id = f.id
-    ORDER BY f.fused_score DESC
+    FROM agent_boosted ab
+    JOIN memories m ON m.id = ab.id
+    ORDER BY ab.boosted_score DESC
     LIMIT p_max_results * 3;
 END;
 $$ LANGUAGE plpgsql STABLE;
