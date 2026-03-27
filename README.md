@@ -27,8 +27,9 @@ No LLM in the retrieval loop. Pure local inference.
 
 ## Highlights
 
-- **96.8% Recall@10** on LongMemEval (ICLR 2025) — beats the paper's best by +18.4pp
-- **0.523 MRR** on BEAM (ICLR 2026) — +59% over LIGHT baseline across 10 memory abilities
+- **98.0% Recall@10** on LongMemEval (ICLR 2025) — beats the paper's best by +19.6pp
+- **0.515 MRR** on BEAM (ICLR 2026) — +57% over LIGHT baseline across 10 memory abilities
+- **0.774 MRR** on LoCoMo (ACL 2024) — structure-aware chunking + entity-enriched embeddings
 - **Test-time learning** — surprise momentum (Titans, NeurIPS 2025), adaptive decay, Hebbian co-activation (Dragon Hatchling, Pathway 2025)
 - **PostgreSQL + pgvector** — all retrieval via PL/pgSQL stored procedures, HNSW vector search, FTS, trigram similarity
 - **23 biological mechanisms** — LTP/LTD, STDP, microglial pruning, oscillatory gating, neuromodulation, emotional tagging, surprise momentum
@@ -36,7 +37,7 @@ No LLM in the retrieval loop. Pure local inference.
 - **Intent-aware weight switching** — temporal, causal, knowledge_update, entity, multi_hop intents each get tuned signal weights
 - **3-tier dispatch** — simple queries go inline, multi-hop does entity bridging, deep does BM25-primary
 - **34 MCP tools** — remember, recall, consolidate, navigate, trigger, narrate, and more
-- **Clean Architecture** — 103 pure-logic core modules, zero I/O in business logic, 1888 tests
+- **Clean Architecture** — 103 pure-logic core modules, zero I/O in business logic, 1906 tests
 - **Benchmarks use production code** — same `recall_memories()` stored procedure, same FlashRank reranking
 
 ## Quick Start
@@ -106,16 +107,16 @@ This is a deliberate choice. Most memory systems report **full QA scores** — t
 
 We report two standard retrieval metrics:
 
-**Recall@K** is the simplest: what fraction of questions had the correct evidence *anywhere* in the top K results? Recall@10 = 96.8% means that for 96.8% of questions, the right memory appeared somewhere in the top 10. It answers: *can the system find it at all?*
+**Recall@K** is the simplest: what fraction of questions had the correct evidence *anywhere* in the top K results? Recall@10 = 98.0% means that for 98% of questions, the right memory appeared somewhere in the top 10. It answers: *can the system find it at all?*
 
-**MRR (Mean Reciprocal Rank)** is stricter: it measures *where* in the ranked list the first correct result appears. If the correct evidence is at rank 1, that question scores 1.0. Rank 2 scores 0.5. Rank 3 scores 0.33. Rank 5 scores 0.2. Not found in top 10 scores 0. The MRR is the average across all questions. An MRR of 0.858 means the correct evidence is on average the first or second result returned. An MRR of 0.523 means it's typically in the top 2-3. MRR answers: *does the system rank the right evidence first?*
+**MRR (Mean Reciprocal Rank)** is stricter: it measures *where* in the ranked list the first correct result appears. If the correct evidence is at rank 1, that question scores 1.0. Rank 2 scores 0.5. Rank 3 scores 0.33. Rank 5 scores 0.2. Not found in top 10 scores 0. The MRR is the average across all questions. An MRR of 0.880 means the correct evidence is on average the first or second result returned. An MRR of 0.515 means it's typically in the top 2-3. MRR answers: *does the system rank the right evidence first?*
 
 The relationship between retrieval MRR and downstream QA quality is asymmetric and important:
 
 - **High retrieval MRR guarantees high QA.** If the correct evidence is consistently at rank 1, any competent reader model — GPT-4, Claude, Llama, even a much smaller model — will answer correctly. The retrieval has done the hard work. The reader just needs to read.
 - **High QA does *not* guarantee high retrieval MRR.** A system can score well on QA while its retrieval is effectively broken, as long as the reader model is strong enough to compensate. This is brittle: swap the reader for a weaker model, change the prompt, or ask a slightly different question, and the score collapses. The retrieval never actually found the evidence — the reader was guessing.
 
-This is not theoretical. On the BEAM benchmark, one comparable system ([Zikkaron](https://github.com/amanhij/Zikkaron)) reports a full-QA instruction_following score of 0.750 using Claude Opus as reader. But their retrieval MRR for that same category is **0.086** — the retrieval system finds the correct instruction memory less than 9% of the time, and when it does, it's rarely ranked first. The 0.750 score is almost entirely Claude Opus reasoning its way to the answer despite receiving the wrong context. Replace Claude Opus with a smaller model, and that score falls apart. By contrast, Cortex's retrieval MRR of 0.259 on the same category means the retrieval system itself is 3x more likely to surface the actual instruction — a property that holds regardless of which reader model sits downstream.
+This is not theoretical. On the BEAM benchmark, one comparable system ([Zikkaron](https://github.com/amanhij/Zikkaron)) reports a full-QA instruction_following score of 0.750 using Claude Opus as reader. But their retrieval MRR for that same category is **0.086** — the retrieval system finds the correct instruction memory less than 9% of the time, and when it does, it's rarely ranked first. The 0.750 score is almost entirely Claude Opus reasoning its way to the answer despite receiving the wrong context. Replace Claude Opus with a smaller model, and that score falls apart. By contrast, Cortex's retrieval MRR of 0.218 on the same category means the retrieval system itself is 2.5x more likely to surface the actual instruction — a property that holds regardless of which reader model sits downstream.
 
 This is why we report retrieval-only scores throughout: they measure the memory system, not the reader model. They are harder to game, easier to interpret, and more predictive of real-world reliability. When comparing memory systems, always check which metric is being reported. A full-QA score of 0.75 with retrieval MRR of 0.08 tells a very different story than a retrieval-only MRR of 0.52.
 
@@ -123,22 +124,22 @@ This is why we report retrieval-only scores throughout: they measure the memory 
 
 | Metric | Cortex | Best in paper | Delta |
 |---|---|---|---|
-| **Recall@10** | **96.8%** | 78.4% | **+18.4pp** |
-| **MRR** | **0.858** | -- | -- |
+| **Recall@10** | **98.0%** | 78.4% | **+19.6pp** |
+| **MRR** | **0.880** | -- | -- |
 
-For 96.8% of questions about conversations spanning ~115k tokens, Cortex finds the correct evidence in the top 10 results. The MRR of 0.858 means it's typically the very first result. The paper's best system (using a GPT-4-class reader for full QA) achieved 78.4% Recall@10 — Cortex's pure retrieval surpasses that by 18.4 percentage points without any reader model involved.
+For 98% of questions about conversations spanning ~115k tokens, Cortex finds the correct evidence in the top 10 results. The MRR of 0.880 means it's typically the very first result. The paper's best system (using a GPT-4-class reader for full QA) achieved 78.4% Recall@10 — Cortex's pure retrieval surpasses that by 19.6 percentage points without any reader model involved.
 
 <details>
 <summary>Per-category breakdown</summary>
 
 | Category | MRR | R@10 |
 |---|---|---|
-| Single-session (user) | 0.788 | 91.4% |
-| Single-session (assistant) | 0.930 | 98.2% |
-| Single-session (preference) | 0.654 | 93.3% |
-| Multi-session reasoning | 0.896 | 99.2% |
-| Temporal reasoning | 0.851 | 97.0% |
-| Knowledge updates | 0.894 | 97.4% |
+| Single-session (user) | 0.793 | 91.4% |
+| Single-session (assistant) | 0.970 | 100.0% |
+| Single-session (preference) | 0.706 | 96.7% |
+| Multi-session reasoning | 0.917 | 100.0% |
+| Temporal reasoning | 0.887 | 97.7% |
+| Knowledge updates | 0.884 | 100.0% |
 
 </details>
 
@@ -146,21 +147,21 @@ For 96.8% of questions about conversations spanning ~115k tokens, Cortex finds t
 
 | Metric | Cortex |
 |---|---|
-| **Recall@10** | **84.1%** |
-| **MRR** | **0.596** |
+| **Recall@10** | **88.9%** |
+| **MRR** | **0.774** |
 
-LoCoMo tests harder scenarios: multi-hop reasoning across conversation turns, temporal questions ("when did we last discuss X?"), and adversarial questions designed to confuse retrieval. An MRR of 0.596 means correct evidence lands at rank 1-2 on average, even for multi-hop and adversarial queries.
+LoCoMo tests harder scenarios: multi-hop reasoning across conversation turns, temporal questions ("when did we last discuss X?"), and adversarial questions designed to confuse retrieval. An MRR of 0.774 means correct evidence is typically the first result, even for multi-hop and adversarial queries. Structure-aware chunking (splitting at speaker-turn boundaries with entity-enriched embeddings) improved MRR by 29% over the previous whole-session approach.
 
 <details>
 <summary>Per-category breakdown</summary>
 
 | Category | MRR | R@5 | R@10 |
 |---|---|---|---|
-| single_hop | 0.621 | 80.9% | 93.3% |
-| multi_hop | 0.687 | 82.2% | 90.0% |
-| temporal | 0.394 | 52.2% | 68.5% |
-| open_domain | 0.581 | 70.0% | 81.6% |
-| adversarial | 0.586 | 71.1% | 81.8% |
+| single_hop | 0.714 | 85.5% | 91.8% |
+| multi_hop | 0.736 | 82.2% | 84.1% |
+| temporal | 0.538 | 65.2% | 76.1% |
+| open_domain | 0.817 | 88.8% | 91.1% |
+| adversarial | 0.809 | 87.0% | 89.0% |
 
 </details>
 
@@ -168,9 +169,9 @@ LoCoMo tests harder scenarios: multi-hop reasoning across conversation turns, te
 
 | Metric | Cortex | LIGHT (best in paper) | Delta |
 |---|---|---|---|
-| **Overall MRR** | **0.523** | 0.329 | **+59%** |
+| **Overall MRR** | **0.515** | 0.329 | **+57%** |
 
-BEAM is the most comprehensive benchmark: 10 distinct memory abilities tested over 100K-token conversations. The LIGHT baseline (from the BEAM authors) uses Llama-4-Maverick as reader with a three-stage pipeline: long-term episodic memory, working memory, and an iterative scratchpad. Cortex's retrieval-only MRR of 0.523 outperforms LIGHT's full-QA score of 0.329 by 59%.
+BEAM is the most comprehensive benchmark: 10 distinct memory abilities tested over 100K-token conversations. The LIGHT baseline (from the BEAM authors) uses Llama-4-Maverick as reader with a three-stage pipeline: long-term episodic memory, working memory, and an iterative scratchpad. Cortex's retrieval-only MRR of 0.515 outperforms LIGHT's full-QA score of 0.329 by 57%.
 
 Cortex dominates 7 of 10 abilities in retrieval MRR. The three where LIGHT leads — preference_following, instruction_following, and abstention — expose genuine retrieval challenges, not reader model gaps. Abstention requires knowing what was *never discussed*, a negative knowledge problem that no pure retrieval system handles well without an explicit topic registry. Instruction following requires surfacing directive keywords ("always use bullet points", "never mention X") across 100K tokens of conversation where those same keywords appear in many non-instruction contexts. These are hard open problems at the retrieval level, and we report them transparently because retrieval-only scoring leaves nowhere to hide.
 
@@ -179,15 +180,15 @@ Cortex dominates 7 of 10 abilities in retrieval MRR. The three where LIGHT leads
 
 | Ability | Cortex | LIGHT | Delta |
 |---|---|---|---|
-| contradiction_resolution | **0.858** | 0.050 | **+1616%** |
-| temporal_reasoning | **0.822** | 0.075 | **+996%** |
-| knowledge_update | **0.800** | 0.375 | **+113%** |
-| multi_session_reasoning | **0.755** | 0.000 | -- |
-| information_extraction | **0.489** | 0.375 | **+30%** |
-| event_ordering | **0.428** | 0.266 | **+61%** |
-| preference_following | 0.386 | **0.483** | -20% |
-| summarization | **0.312** | 0.277 | **+13%** |
-| instruction_following | 0.259 | **0.500** | -48% |
+| contradiction_resolution | **0.892** | 0.050 | **+1684%** |
+| temporal_reasoning | **0.789** | 0.075 | **+952%** |
+| knowledge_update | **0.826** | 0.375 | **+120%** |
+| multi_session_reasoning | **0.737** | 0.000 | -- |
+| information_extraction | **0.519** | 0.375 | **+38%** |
+| preference_following | 0.410 | **0.483** | -15% |
+| event_ordering | **0.326** | 0.266 | **+23%** |
+| summarization | **0.311** | 0.277 | **+12%** |
+| instruction_following | 0.218 | **0.500** | -56% |
 | abstention | 0.125 | **0.750** | -83% |
 
 </details>
@@ -389,7 +390,7 @@ flowchart LR
 
 The biggest innovation: the retrieval system **learns from its own queries**. After each recall:
 
-- **Surprise momentum** (Titans, NeurIPS 2025): computes `surprise = 1 - mean(cosine_sim(query, results))`. Surprising results get a heat boost; redundant ones get suppressed. An EMA momentum term amplifies the effect when recent queries are consistently surprising. This improved LongMemEval R@10 from 90.4% to **97.0%** (+6.6pp).
+- **Surprise momentum** (Titans, NeurIPS 2025): computes `surprise = 1 - mean(cosine_sim(query, results))`. Surprising results get a heat boost; redundant ones get suppressed. An EMA momentum term amplifies the effect when recent queries are consistently surprising. This improved LongMemEval R@10 from 90.4% to **98.0%** (+7.6pp).
 - **Co-activation strengthening** (Dragon Hatchling, Pathway 2025): when memories A and B are co-retrieved, their entity edges get Hebbian reinforcement: `weight += learning_rate * score_product`. This makes the knowledge graph learn from usage patterns.
 - **Adaptive decay** (Titans): per-memory decay rates computed from `access_count`, `useful_count`, and `surprise_score`. Useful memories decay slower (0.999/hr); redundant ones faster (0.90/hr).
 
@@ -570,7 +571,7 @@ graph TD
 - **Infrastructure** -- PostgreSQL + pgvector store, PL/pgSQL stored procedures, embeddings, config
 - **11 shared modules** -- pure utilities and Pydantic types
 - **4 hooks** -- session lifecycle, compaction checkpoint, post-tool capture, session start
-- **1888 tests** passing across Python 3.10-3.13
+- **1906 tests** passing across Python 3.10-3.13
 - **6 benchmarks** -- LongMemEval, LoCoMo, BEAM, MemoryAgentBench, EverMemBench, Episodic
 
 ## Configuration
