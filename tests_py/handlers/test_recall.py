@@ -1,49 +1,10 @@
 """Tests for mcp_server.handlers.recall — memory retrieval handler."""
 
 import asyncio
-import tempfile
-import os
-from unittest.mock import patch
 
 from mcp_server.handlers.recall import handler as recall_handler
 from mcp_server.core.retrieval_dispatch import wrrf_fuse as _wrrf_fuse
 from mcp_server.handlers.remember import handler as remember_handler
-
-
-def _patch_memory_env(tmp_dir: str):
-    db_path = os.path.join(tmp_dir, "test.db")
-    return patch.dict(os.environ, {"CORTEX_MEMORY_DB_PATH": db_path})
-
-
-def _clean_db():
-    """Delete all test data from the shared PG database."""
-    from mcp_server.infrastructure.memory_store import MemoryStore
-
-    store = MemoryStore()
-    store._conn.execute("DELETE FROM relationships")
-    store._conn.execute("DELETE FROM entities")
-    store._conn.execute("DELETE FROM prospective_memories")
-    store._conn.execute("DELETE FROM checkpoints")
-    store._conn.execute("DELETE FROM engram_slots")
-    store._conn.execute("DELETE FROM memories")
-    store._conn.commit()
-    store.close()
-
-
-def _reset_singletons():
-    import mcp_server.handlers.recall as recall_mod
-    import mcp_server.handlers.remember as remember_mod
-    import mcp_server.handlers.consolidate as consolidate_mod
-
-    recall_mod._store = None
-    recall_mod._embeddings = None
-    remember_mod._store = None
-    remember_mod._embeddings = None
-    consolidate_mod._store = None
-    consolidate_mod._embeddings = None
-    from mcp_server.infrastructure.memory_config import get_memory_settings
-
-    get_memory_settings.cache_clear()
 
 
 class TestWRRFFuse:
@@ -95,86 +56,74 @@ class TestRecallHandler:
         assert result["results"] == []
 
     def test_recall_stored_memory(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with _patch_memory_env(tmp):
-                _reset_singletons()
-                # Store a memory first
-                asyncio.run(
-                    remember_handler(
-                        {
-                            "content": "Python asyncio event loop best practices",
-                            "force": True,
-                            "tags": ["python", "async"],
-                        }
-                    )
-                )
-                # Recall it
-                result = asyncio.run(
-                    recall_handler(
-                        {
-                            "query": "Python asyncio",
-                            "max_results": 5,
-                        }
-                    )
-                )
-                assert result["total"] >= 1
-                assert "signals" in result
-                first = result["results"][0]
-                assert "content" in first
-                assert "score" in first
-                assert "heat" in first
-                _reset_singletons()
+        # Store a memory first
+        asyncio.run(
+            remember_handler(
+                {
+                    "content": "Python asyncio event loop best practices",
+                    "force": True,
+                    "tags": ["python", "async"],
+                }
+            )
+        )
+        # Recall it
+        result = asyncio.run(
+            recall_handler(
+                {
+                    "query": "Python asyncio",
+                    "max_results": 5,
+                }
+            )
+        )
+        assert result["total"] >= 1
+        assert "signals" in result
+        first = result["results"][0]
+        assert "content" in first
+        assert "score" in first
+        assert "heat" in first
 
     def test_recall_response_shape(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with _patch_memory_env(tmp):
-                _reset_singletons()
-                asyncio.run(
-                    remember_handler(
-                        {
-                            "content": "Response shape test memory",
-                            "force": True,
-                        }
-                    )
-                )
-                result = asyncio.run(recall_handler({"query": "shape test"}))
-                assert isinstance(result["results"], list)
-                assert isinstance(result["total"], int)
-                assert "signals" in result
-                assert isinstance(result["signals"], dict)
-                assert "dispatch_tier" in result
-                _reset_singletons()
+        asyncio.run(
+            remember_handler(
+                {
+                    "content": "Response shape test memory",
+                    "force": True,
+                }
+            )
+        )
+        result = asyncio.run(recall_handler({"query": "shape test"}))
+        assert isinstance(result["results"], list)
+        assert isinstance(result["total"], int)
+        assert "signals" in result
+        assert isinstance(result["signals"], dict)
+        assert "dispatch_tier" in result
 
     def test_domain_scoped_recall(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with _patch_memory_env(tmp):
-                _reset_singletons()
-                asyncio.run(
-                    remember_handler(
-                        {
-                            "content": "Domain specific memory for alpha domain",
-                            "domain": "alpha",
-                            "force": True,
-                        }
-                    )
-                )
-                asyncio.run(
-                    remember_handler(
-                        {
-                            "content": "Different domain memory for beta",
-                            "domain": "beta",
-                            "force": True,
-                        }
-                    )
-                )
-                result = asyncio.run(
-                    recall_handler(
-                        {
-                            "query": "domain memory",
-                            "domain": "alpha",
-                        }
-                    )
-                )
-                # Should include results (may include both via FTS, but domain-scoped heat signal favors alpha)
-                assert result["total"] >= 1
-                _reset_singletons()
+        asyncio.run(
+            remember_handler(
+                {
+                    "content": "Domain specific memory for alpha domain",
+                    "domain": "alpha",
+                    "force": True,
+                }
+            )
+        )
+        asyncio.run(
+            remember_handler(
+                {
+                    "content": "Different domain memory for beta",
+                    "domain": "beta",
+                    "force": True,
+                }
+            )
+        )
+        result = asyncio.run(
+            recall_handler(
+                {
+                    "query": "domain memory",
+                    "domain": "alpha",
+                }
+            )
+        )
+        # Should include results (may include both via FTS, but domain-scoped heat signal favors alpha)
+        assert result["total"] >= 1

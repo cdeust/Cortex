@@ -5,8 +5,6 @@ Registers cognitive profiling, domain detection, and visualization tools.
 
 from __future__ import annotations
 
-import json
-
 from fastmcp import FastMCP
 
 from mcp_server.handlers import (
@@ -20,6 +18,7 @@ from mcp_server.handlers import (
     explore_features,
     run_pipeline,
 )
+from mcp_server.tool_error_handler import safe_handler
 
 
 def register(mcp: FastMCP) -> None:
@@ -46,10 +45,9 @@ def _register_query_methodology(mcp: FastMCP) -> None:
         first_message: str | None = None,
     ) -> str:
         """Returns cognitive profile for the current domain."""
-        result = await query_methodology.handler(
-            {"cwd": cwd, "project": project, "first_message": first_message}
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(query_methodology.handler, {
+            "cwd": cwd, "project": project, "first_message": first_message,
+        })
 
 
 def _register_detect_domain(mcp: FastMCP) -> None:
@@ -63,10 +61,9 @@ def _register_detect_domain(mcp: FastMCP) -> None:
         first_message: str | None = None,
     ) -> str:
         """Lightweight domain classification."""
-        result = await detect_domain_handler.handler(
-            {"cwd": cwd, "project": project, "first_message": first_message}
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(detect_domain_handler.handler, {
+            "cwd": cwd, "project": project, "first_message": first_message,
+        })
 
 
 def _register_rebuild_profiles(mcp: FastMCP) -> None:
@@ -79,8 +76,9 @@ def _register_rebuild_profiles(mcp: FastMCP) -> None:
         force: bool = False,
     ) -> str:
         """Full rescan of all session data to rebuild methodology profiles."""
-        result = await rebuild_profiles.handler({"domain": domain, "force": force})
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(rebuild_profiles.handler, {
+            "domain": domain, "force": force,
+        })
 
 
 def _register_list_domains(mcp: FastMCP) -> None:
@@ -90,8 +88,7 @@ def _register_list_domains(mcp: FastMCP) -> None:
     )
     async def tool_list_domains() -> str:
         """Overview of all detected cognitive domains."""
-        result = await list_domains.handler()
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(list_domains.handler, {})
 
 
 def _register_record_session_end(mcp: FastMCP) -> None:
@@ -110,19 +107,16 @@ def _register_record_session_end(mcp: FastMCP) -> None:
         project: str | None = None,
     ) -> str:
         """Incremental profile update after a session ends."""
-        result = await record_session_end.handler(
-            {
-                "session_id": session_id,
-                "domain": domain,
-                "tools_used": tools_used,
-                "duration": duration,
-                "turn_count": turn_count,
-                "keywords": keywords,
-                "cwd": cwd,
-                "project": project,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(record_session_end.handler, {
+            "session_id": session_id,
+            "domain": domain,
+            "tools_used": tools_used,
+            "duration": duration,
+            "turn_count": turn_count,
+            "keywords": keywords,
+            "cwd": cwd,
+            "project": project,
+        })
 
 
 def _register_get_methodology_graph(mcp: FastMCP) -> None:
@@ -134,8 +128,7 @@ def _register_get_methodology_graph(mcp: FastMCP) -> None:
         domain: str | None = None,
     ) -> str:
         """Returns methodology map as graph data for 3D visualization."""
-        result = await get_methodology_graph.handler({"domain": domain})
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(get_methodology_graph.handler, {"domain": domain})
 
 
 def _register_open_visualization(mcp: FastMCP) -> None:
@@ -147,8 +140,7 @@ def _register_open_visualization(mcp: FastMCP) -> None:
         domain: str | None = None,
     ) -> str:
         """Launch the 3D methodology constellation map in the browser."""
-        result = await open_visualization.handler({"domain": domain})
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(open_visualization.handler, {"domain": domain})
 
 
 def _register_explore_features(mcp: FastMCP) -> None:
@@ -162,10 +154,9 @@ def _register_explore_features(mcp: FastMCP) -> None:
         compare_domain: str | None = None,
     ) -> str:
         """Explore interpretability features."""
-        result = await explore_features.handler(
-            {"mode": mode, "domain": domain, "compare_domain": compare_domain}
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(explore_features.handler, {
+            "mode": mode, "domain": domain, "compare_domain": compare_domain,
+        })
 
 
 def _register_run_pipeline(mcp: FastMCP) -> None:
@@ -182,14 +173,11 @@ def _register_run_pipeline(mcp: FastMCP) -> None:
         max_findings: int = 5,
     ) -> str:
         """Drive the ai-architect pipeline end-to-end."""
-        result = await run_pipeline.handler(
-            {
-                "codebase_path": codebase_path,
-                "task_path": task_path,
-                "context_path": context_path,
-                "github_repo": github_repo,
-                "server": server,
-                "max_findings": max_findings,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(run_pipeline.handler, {
+            "codebase_path": codebase_path,
+            "task_path": task_path,
+            "context_path": context_path,
+            "github_repo": github_repo,
+            "server": server,
+            "max_findings": max_findings,
+        })

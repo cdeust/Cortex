@@ -5,8 +5,6 @@ Registers forget, validate, rate, seed, anchor, and backfill tools.
 
 from __future__ import annotations
 
-import json
-
 from fastmcp import FastMCP
 
 from mcp_server.handlers import (
@@ -17,6 +15,7 @@ from mcp_server.handlers import (
     anchor,
     backfill_memories,
 )
+from mcp_server.tool_error_handler import safe_handler
 
 
 def register(mcp: FastMCP) -> None:
@@ -40,10 +39,9 @@ def _register_forget(mcp: FastMCP) -> None:
         force: bool = False,
     ) -> str:
         """Delete or soft-delete a memory by ID."""
-        result = await forget.handler(
-            {"memory_id": memory_id, "soft": soft, "force": force}
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(forget.handler, {
+            "memory_id": memory_id, "soft": soft, "force": force,
+        })
 
 
 def _register_validate_memory(mcp: FastMCP) -> None:
@@ -60,17 +58,14 @@ def _register_validate_memory(mcp: FastMCP) -> None:
         dry_run: bool = False,
     ) -> str:
         """Validate memories against current filesystem state."""
-        result = await validate_memory.handler(
-            {
-                "memory_id": memory_id,
-                "domain": domain,
-                "directory": directory,
-                "base_dir": base_dir or "",
-                "staleness_threshold": staleness_threshold,
-                "dry_run": dry_run,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(validate_memory.handler, {
+            "memory_id": memory_id,
+            "domain": domain,
+            "directory": directory,
+            "base_dir": base_dir or "",
+            "staleness_threshold": staleness_threshold,
+            "dry_run": dry_run,
+        })
 
 
 def _register_rate_memory(mcp: FastMCP) -> None:
@@ -83,8 +78,9 @@ def _register_rate_memory(mcp: FastMCP) -> None:
         useful: bool,
     ) -> str:
         """Rate a memory as useful or not to update metamemory confidence."""
-        result = await rate_memory.handler({"memory_id": memory_id, "useful": useful})
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(rate_memory.handler, {
+            "memory_id": memory_id, "useful": useful,
+        })
 
 
 def _register_seed_project(mcp: FastMCP) -> None:
@@ -99,15 +95,12 @@ def _register_seed_project(mcp: FastMCP) -> None:
         dry_run: bool = False,
     ) -> str:
         """Bootstrap memory from an existing codebase."""
-        result = await seed_project.handler(
-            {
-                "directory": directory or "",
-                "domain": domain or "",
-                "max_file_size_kb": max_file_size_kb,
-                "dry_run": dry_run,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(seed_project.handler, {
+            "directory": directory or "",
+            "domain": domain or "",
+            "max_file_size_kb": max_file_size_kb,
+            "dry_run": dry_run,
+        })
 
 
 def _register_anchor(mcp: FastMCP) -> None:
@@ -120,8 +113,9 @@ def _register_anchor(mcp: FastMCP) -> None:
         reason: str | None = None,
     ) -> str:
         """Mark a memory as compaction-resistant (heat=1.0)."""
-        result = await anchor.handler({"memory_id": memory_id, "reason": reason or ""})
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(anchor.handler, {
+            "memory_id": memory_id, "reason": reason or "",
+        })
 
 
 def _register_backfill_memories(mcp: FastMCP) -> None:
@@ -137,13 +131,10 @@ def _register_backfill_memories(mcp: FastMCP) -> None:
         force_reprocess: bool = False,
     ) -> str:
         """Auto-import prior Claude Code conversations into memory."""
-        result = await backfill_memories.handler(
-            {
-                "project": project or "",
-                "max_files": max_files,
-                "min_importance": min_importance,
-                "dry_run": dry_run,
-                "force_reprocess": force_reprocess,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(backfill_memories.handler, {
+            "project": project or "",
+            "max_files": max_files,
+            "min_importance": min_importance,
+            "dry_run": dry_run,
+            "force_reprocess": force_reprocess,
+        })

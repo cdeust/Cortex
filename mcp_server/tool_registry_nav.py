@@ -6,8 +6,6 @@ Tier 3 advanced tools are in tool_registry_advanced.py.
 
 from __future__ import annotations
 
-import json
-
 from fastmcp import FastMCP
 
 from mcp_server.handlers import (
@@ -17,6 +15,7 @@ from mcp_server.handlers import (
     get_causal_chain,
     detect_gaps,
 )
+from mcp_server.tool_error_handler import safe_handler
 
 
 def register(mcp: FastMCP) -> None:
@@ -41,16 +40,13 @@ def _register_recall_hierarchical(mcp: FastMCP) -> None:
         cluster_threshold: float = 0.6,
     ) -> str:
         """Retrieve memories using fractal hierarchy."""
-        result = await recall_hierarchical.handler(
-            {
-                "query": query,
-                "domain": domain,
-                "max_results": max_results,
-                "min_heat": min_heat,
-                "cluster_threshold": cluster_threshold,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(recall_hierarchical.handler, {
+            "query": query,
+            "domain": domain,
+            "max_results": max_results,
+            "min_heat": min_heat,
+            "cluster_threshold": cluster_threshold,
+        })
 
 
 def _register_drill_down(mcp: FastMCP) -> None:
@@ -64,14 +60,11 @@ def _register_drill_down(mcp: FastMCP) -> None:
         min_heat: float = 0.05,
     ) -> str:
         """Navigate into a fractal memory cluster."""
-        result = await drill_down.handler(
-            {
-                "cluster_id": cluster_id,
-                "domain": domain,
-                "min_heat": min_heat,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(drill_down.handler, {
+            "cluster_id": cluster_id,
+            "domain": domain,
+            "min_heat": min_heat,
+        })
 
 
 def _register_navigate_memory(mcp: FastMCP) -> None:
@@ -86,15 +79,12 @@ def _register_navigate_memory(mcp: FastMCP) -> None:
         window_hours: float = 2.0,
     ) -> str:
         """Navigate memory space using Successor Representation."""
-        result = await navigate_memory.handler(
-            {
-                "memory_id": memory_id,
-                "max_depth": max_depth,
-                "include_2d_map": include_2d_map,
-                "window_hours": window_hours,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(navigate_memory.handler, {
+            "memory_id": memory_id,
+            "max_depth": max_depth,
+            "include_2d_map": include_2d_map,
+            "window_hours": window_hours,
+        })
 
 
 def _register_get_causal_chain(mcp: FastMCP) -> None:
@@ -110,16 +100,13 @@ def _register_get_causal_chain(mcp: FastMCP) -> None:
         direction: str = "both",
     ) -> str:
         """Trace entity relationships through the knowledge graph."""
-        result = await get_causal_chain.handler(
-            {
-                "entity_name": entity_name,
-                "memory_id": memory_id,
-                "relationship_types": relationship_types,
-                "max_depth": max_depth,
-                "direction": direction,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(get_causal_chain.handler, {
+            "entity_name": entity_name,
+            "memory_id": memory_id,
+            "relationship_types": relationship_types,
+            "max_depth": max_depth,
+            "direction": direction,
+        })
 
 
 def _register_detect_gaps(mcp: FastMCP) -> None:
@@ -135,13 +122,10 @@ def _register_detect_gaps(mcp: FastMCP) -> None:
         stale_threshold_days: int = 30,
     ) -> str:
         """Identify knowledge gaps in the memory store."""
-        result = await detect_gaps.handler(
-            {
-                "domain": domain,
-                "include_entity_gaps": include_entity_gaps,
-                "include_domain_gaps": include_domain_gaps,
-                "include_temporal_gaps": include_temporal_gaps,
-                "stale_threshold_days": stale_threshold_days,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(detect_gaps.handler, {
+            "domain": domain,
+            "include_entity_gaps": include_entity_gaps,
+            "include_domain_gaps": include_domain_gaps,
+            "include_temporal_gaps": include_temporal_gaps,
+            "stale_threshold_days": stale_threshold_days,
+        })

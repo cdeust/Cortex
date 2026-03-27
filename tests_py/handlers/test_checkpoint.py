@@ -1,37 +1,6 @@
 """Tests for mcp_server.handlers.checkpoint — hippocampal replay."""
 
-import os
-from unittest.mock import patch
-
 import pytest
-
-from mcp_server.infrastructure.memory_config import get_memory_settings
-
-
-def _clean_checkpoints():
-    """Delete all checkpoints from the shared PG database."""
-    from mcp_server.infrastructure.memory_store import MemoryStore
-
-    store = MemoryStore()
-    store._conn.execute("DELETE FROM checkpoints")
-    store._conn.execute("DELETE FROM memories")
-    store._conn.commit()
-    store.close()
-
-
-@pytest.fixture(autouse=True)
-def _isolated_db(tmp_path):
-    db_path = str(tmp_path / "test_checkpoint.db")
-    with patch.dict(os.environ, {"CORTEX_MEMORY_DB_PATH": db_path}):
-        get_memory_settings.cache_clear()
-        import mcp_server.handlers.checkpoint as mod
-
-        mod._store = None
-        _clean_checkpoints()
-        yield db_path
-        mod._store = None
-        _clean_checkpoints()
-    get_memory_settings.cache_clear()
 
 
 class TestCheckpointSave:

@@ -5,8 +5,6 @@ Registers automation, rules, narrative, and coverage tools.
 
 from __future__ import annotations
 
-import json
-
 from fastmcp import FastMCP
 
 from mcp_server.handlers import (
@@ -17,6 +15,7 @@ from mcp_server.handlers import (
     get_project_story,
     assess_coverage,
 )
+from mcp_server.tool_error_handler import safe_handler
 
 
 def register(mcp: FastMCP) -> None:
@@ -41,15 +40,12 @@ def _register_sync_instructions(mcp: FastMCP) -> None:
         dry_run: bool = False,
     ) -> str:
         """Push top memory insights into CLAUDE.md."""
-        result = await sync_instructions.handler(
-            {
-                "directory": directory or "",
-                "max_insights": max_insights,
-                "min_heat": min_heat,
-                "dry_run": dry_run,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(sync_instructions.handler, {
+            "directory": directory or "",
+            "max_insights": max_insights,
+            "min_heat": min_heat,
+            "dry_run": dry_run,
+        })
 
 
 def _register_create_trigger(mcp: FastMCP) -> None:
@@ -64,15 +60,12 @@ def _register_create_trigger(mcp: FastMCP) -> None:
         target_directory: str | None = None,
     ) -> str:
         """Create a prospective memory trigger."""
-        result = await create_trigger.handler(
-            {
-                "content": content,
-                "trigger_condition": trigger_condition,
-                "trigger_type": trigger_type,
-                "target_directory": target_directory,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(create_trigger.handler, {
+            "content": content,
+            "trigger_condition": trigger_condition,
+            "trigger_type": trigger_type,
+            "target_directory": target_directory,
+        })
 
 
 def _register_add_rule(mcp: FastMCP) -> None:
@@ -89,17 +82,14 @@ def _register_add_rule(mcp: FastMCP) -> None:
         priority: int = 0,
     ) -> str:
         """Add a neuro-symbolic rule to the memory store."""
-        result = await add_rule.handler(
-            {
-                "condition": condition,
-                "action": action,
-                "rule_type": rule_type,
-                "scope": scope,
-                "scope_value": scope_value,
-                "priority": priority,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(add_rule.handler, {
+            "condition": condition,
+            "action": action,
+            "rule_type": rule_type,
+            "scope": scope,
+            "scope_value": scope_value,
+            "priority": priority,
+        })
 
 
 def _register_get_rules(mcp: FastMCP) -> None:
@@ -113,14 +103,11 @@ def _register_get_rules(mcp: FastMCP) -> None:
         include_inactive: bool = False,
     ) -> str:
         """List active neuro-symbolic rules."""
-        result = await get_rules.handler(
-            {
-                "scope": scope,
-                "rule_type": rule_type,
-                "include_inactive": include_inactive,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(get_rules.handler, {
+            "scope": scope,
+            "rule_type": rule_type,
+            "include_inactive": include_inactive,
+        })
 
 
 def _register_get_project_story(mcp: FastMCP) -> None:
@@ -135,15 +122,12 @@ def _register_get_project_story(mcp: FastMCP) -> None:
         max_chapters: int = 5,
     ) -> str:
         """Generate a period-based autobiographical narrative."""
-        result = await get_project_story.handler(
-            {
-                "directory": directory,
-                "domain": domain,
-                "period": period,
-                "max_chapters": max_chapters,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(get_project_story.handler, {
+            "directory": directory,
+            "domain": domain,
+            "period": period,
+            "max_chapters": max_chapters,
+        })
 
 
 def _register_assess_coverage(mcp: FastMCP) -> None:
@@ -157,11 +141,8 @@ def _register_assess_coverage(mcp: FastMCP) -> None:
         stale_days: int = 14,
     ) -> str:
         """Evaluate knowledge coverage completeness."""
-        result = await assess_coverage.handler(
-            {
-                "directory": directory or "",
-                "domain": domain or "",
-                "stale_days": stale_days,
-            }
-        )
-        return json.dumps(result, indent=2, default=str)
+        return await safe_handler(assess_coverage.handler, {
+            "directory": directory or "",
+            "domain": domain or "",
+            "stale_days": stale_days,
+        })

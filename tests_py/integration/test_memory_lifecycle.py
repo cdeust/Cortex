@@ -1,51 +1,10 @@
 """Integration tests: full memory session lifecycle.
 
 Tests the end-to-end flow:
-  store → recall → checkpoint → restore → consolidate → decay
+  store -> recall -> checkpoint -> restore -> consolidate -> decay
 """
 
-import os
-from unittest.mock import patch
-
 import pytest
-
-from mcp_server.infrastructure.memory_config import get_memory_settings
-
-
-@pytest.fixture(autouse=True)
-def _isolated_db(tmp_path):
-    """Create isolated DB for all handlers sharing the same store."""
-    db_path = str(tmp_path / "integration.db")
-    with patch.dict(os.environ, {"CORTEX_MEMORY_DB_PATH": db_path}):
-        get_memory_settings.cache_clear()
-
-        # Reset all handler singletons
-        import mcp_server.handlers.remember as rem_mod
-        import mcp_server.handlers.recall as rec_mod
-        import mcp_server.handlers.checkpoint as cp_mod
-        import mcp_server.handlers.consolidate as con_mod
-        import mcp_server.handlers.memory_stats as ms_mod
-
-        rem_mod._store = None
-        rem_mod._embeddings = None
-        rec_mod._store = None
-        rec_mod._embeddings = None
-        cp_mod._store = None
-        con_mod._store = None
-        con_mod._embeddings = None
-        ms_mod._store = None
-
-        yield db_path
-
-        rem_mod._store = None
-        rem_mod._embeddings = None
-        rec_mod._store = None
-        rec_mod._embeddings = None
-        cp_mod._store = None
-        con_mod._store = None
-        con_mod._embeddings = None
-        ms_mod._store = None
-    get_memory_settings.cache_clear()
 
 
 class TestFullLifecycle:
@@ -167,9 +126,10 @@ class TestFullLifecycle:
         from mcp_server.handlers.remember import handler as remember
         from mcp_server.handlers.memory_stats import handler as stats
 
-        # Empty stats
+        # Empty stats (tables cleaned by conftest)
         s0 = await stats()
         initial_count = s0.get("total_memories", 0)
+        assert initial_count == 0
 
         # Store
         await remember(

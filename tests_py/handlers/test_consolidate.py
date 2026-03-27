@@ -1,26 +1,8 @@
 """Tests for mcp_server.handlers.consolidate — maintenance cycles."""
 
-import os
-from unittest.mock import patch
-
 import pytest
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
-
-
-@pytest.fixture(autouse=True)
-def _isolated_db(tmp_path):
-    db_path = str(tmp_path / "test_consolidate.db")
-    with patch.dict(os.environ, {"CORTEX_MEMORY_DB_PATH": db_path}):
-        get_memory_settings.cache_clear()
-        import mcp_server.handlers.consolidate as mod
-
-        mod._store = None
-        mod._embeddings = None
-        yield db_path
-        mod._store = None
-        mod._embeddings = None
-    get_memory_settings.cache_clear()
 
 
 class TestConsolidateHandler:
@@ -61,7 +43,7 @@ class TestConsolidateHandler:
         assert "compression" not in result
 
     @pytest.mark.asyncio
-    async def test_with_memories(self, _isolated_db):
+    async def test_with_memories(self):
         """Insert memories and run consolidation."""
         from mcp_server.handlers.consolidate import handler, _get_store
         from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
@@ -99,7 +81,7 @@ class TestConsolidateHandler:
         assert result["decay"]["memories_decayed"] >= 0
 
     @pytest.mark.asyncio
-    async def test_protected_memories_skip_compression(self, _isolated_db):
+    async def test_protected_memories_skip_compression(self):
         """Protected memories should not be compressed."""
         from mcp_server.handlers.consolidate import handler, _get_store
         from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
