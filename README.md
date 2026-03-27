@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![MCP Server](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-1906_passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-1826+_passing-brightgreen.svg)](#development)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/cdeust/Cortex/pulls)
 
 **Claude Code forgets everything between sessions. Cortex fixes that.**
@@ -18,6 +18,11 @@ Install the plugin. Start talking. Cortex remembers your decisions, learns your 
 [Install in 2 minutes](#install) | [What you can do](#what-you-can-do) | [How it works](#how-it-works) | [Benchmarks](#benchmarks) | [Science](#the-science)
 
 </div>
+
+<p align="center">
+<img src="docs/neural-graph-overview.png" width="49%" alt="Cortex Neural Graph — full view with domain clusters, entity connections, and benchmark scores" />
+<img src="docs/neural-graph-detail.png" width="49%" alt="Cortex Neural Graph — memory detail panel with quality assessment, biological state, and entity connections" />
+</p>
 
 ---
 
@@ -132,41 +137,39 @@ claude mcp add cortex -- python -m mcp_server
 
 ```mermaid
 flowchart LR
-    subgraph Plugin["Cortex Plugin"]
-        direction TB
-        MCP["MCP Server<br/>34 tools"]
-        H1["SessionStart<br/>inject context"]
-        H2["PostToolUse<br/>auto-capture"]
-        H3["SessionEnd<br/>update profile"]
-        H4["Compaction<br/>checkpoint"]
+    CC(["🖥️ Claude Code"])
+
+    subgraph Plugin [" Cortex Plugin "]
+        MCP["MCP Server · 34 tools"]
+        H1["SessionStart — inject context"]
+        H2["PostToolUse — auto-capture"]
+        H3["SessionEnd — update profile"]
+        H4["Compaction — checkpoint"]
     end
 
-    subgraph Skills["10 Skills"]
-        direction TB
+    subgraph Skills [" 10 Skills "]
         S1["/cortex-remember"]
         S2["/cortex-recall"]
-        S3["/cortex-explore-memory"]
-        S4["/cortex-profile"]
-        S5["... 6 more"]
+        S3["/cortex-profile"]
+        S4["/cortex-visualize"]
+        S5["… 6 more"]
     end
 
-    subgraph Storage["PostgreSQL + pgvector"]
-        direction TB
-        M["Memories<br/>embeddings + metadata"]
-        E["Entities<br/>knowledge graph"]
-        R["Relationships<br/>causal + semantic"]
-        P["Stored Procedures<br/>WRRF fusion"]
+    subgraph Storage [" PostgreSQL + pgvector "]
+        M["Memories"]
+        E["Entity Graph"]
+        P["WRRF Stored Procedures"]
     end
 
-    CC["Claude Code<br/>Cowork / VS Code"] --> Plugin
+    CC --> Plugin
     CC --> Skills
     Plugin --> Storage
     Skills --> Plugin
 
-    style CC fill:#3b82f6,color:#fff
-    style Plugin fill:#f59e0b,color:#000
-    style Skills fill:#22c55e,color:#000
-    style Storage fill:#06b6d4,color:#000
+    style CC fill:#3b82f6,color:#fff,stroke:#2563eb
+    style Plugin fill:#fef3c7,stroke:#f59e0b,color:#1c1917
+    style Skills fill:#dcfce7,stroke:#22c55e,color:#1c1917
+    style Storage fill:#cffafe,stroke:#06b6d4,color:#1c1917
 ```
 
 ### Memory write path
@@ -175,21 +178,25 @@ When you say "remember this" or the auto-capture hook fires:
 
 ```mermaid
 flowchart TD
-    A["remember"] --> B{"Predictive Coding Gate<br/>Is this novel?"}
-    B -->|novel| C["Emotional Tagging<br/>urgency / discovery / frustration"]
-    B -->|redundant| X["Rejected<br/>(too similar to existing memory)"]
-    C --> D{"Active Curation"}
-    D -->|similar exists| E["Merge into existing"]
-    D -->|related| F["Link to related"]
-    D -->|new| G["Create new memory"]
-    E --> H[("PostgreSQL<br/>+ pgvector")]
+    A([remember]) --> B{Predictive Coding Gate}
+    B -->|novel| C[Emotional Tagging]
+    B -->|redundant| X([Rejected])
+    C --> D{Active Curation}
+    D -->|similar exists| E[Merge into existing]
+    D -->|related| F[Link to related]
+    D -->|new| G[Create new memory]
+    E --> H[(PostgreSQL + pgvector)]
     F --> H
     G --> H
-    G --> I["Extract Entities<br/>-> Knowledge Graph"]
+    G --> I[Extract Entities to Knowledge Graph]
 
-    style B fill:#f59e0b,color:#000
-    style H fill:#06b6d4,color:#000
-    style X fill:#ef4444,color:#fff
+    style A fill:#f8fafc,stroke:#94a3b8
+    style B fill:#fef3c7,stroke:#f59e0b,color:#1c1917
+    style X fill:#fee2e2,stroke:#ef4444,color:#991b1b
+    style C fill:#fce7f3,stroke:#ec4899,color:#1c1917
+    style H fill:#cffafe,stroke:#06b6d4,color:#1c1917
+    style G fill:#dcfce7,stroke:#22c55e,color:#1c1917
+    style D fill:#fef3c7,stroke:#f59e0b,color:#1c1917
 ```
 
 The 4-signal write gate compares embedding distance, entity overlap, temporal proximity, and structural similarity against existing memories. Only genuinely novel content passes through.
@@ -200,30 +207,32 @@ When you ask a question or the session-start hook fires:
 
 ```mermaid
 flowchart TD
-    Q["recall query"] --> R["Intent Classification<br/>temporal / causal / entity / multi-hop"]
-    R --> W["Intent-Aware Weights"]
+    Q([recall query]) --> R[Intent Classification]
+    R --> W[Intent-Aware Weights]
     W --> PG["PL/pgSQL recall_memories()"]
 
-    subgraph WRRF["Server-Side Fusion"]
+    subgraph WRRF [" Server-Side Fusion "]
         direction LR
-        V["Vector<br/>(HNSW)"]
-        F["Full-Text<br/>(tsvector)"]
-        T["Trigram<br/>(pg_trgm)"]
-        HT["Heat"]
-        RC["Recency"]
+        V[Vector HNSW]
+        F[Full-Text FTS]
+        T[Trigram pg_trgm]
+        HT[Heat]
+        RC[Recency]
     end
 
     PG --> WRRF
-    WRRF --> FUSED["WRRF Fusion<br/>score = weight / (K + rank)"]
-    FUSED --> FR["FlashRank Reranking<br/>(cross-encoder, client-side)"]
-    FR --> SM["Surprise Momentum<br/>boost surprising, suppress redundant"]
-    SM --> RES["Top 10 Results"]
+    WRRF --> FUSED["WRRF Fusion  ·  score = weight / K + rank"]
+    FUSED --> FR[FlashRank Reranking]
+    FR --> SM[Surprise Momentum]
+    SM --> RES([Top 10 Results])
 
-    style R fill:#d946ef,color:#fff
-    style PG fill:#06b6d4,color:#000
-    style FR fill:#22c55e,color:#000
-    style SM fill:#f59e0b,color:#000
-    style RES fill:#3b82f6,color:#fff
+    style Q fill:#f8fafc,stroke:#94a3b8
+    style R fill:#f3e8ff,stroke:#d946ef,color:#1c1917
+    style PG fill:#cffafe,stroke:#06b6d4,color:#1c1917
+    style WRRF fill:#f8fafc,stroke:#cbd5e1
+    style FR fill:#dcfce7,stroke:#22c55e,color:#1c1917
+    style SM fill:#fef3c7,stroke:#f59e0b,color:#1c1917
+    style RES fill:#dbeafe,stroke:#3b82f6,color:#1c1917
 ```
 
 The system classifies your query intent first, then adjusts which signals matter most. A "when did we..." question boosts recency; a "why did we..." question boosts causal graph traversal.
@@ -234,18 +243,18 @@ Memories aren't static. They heat up when accessed, cool down over time, compres
 
 ```mermaid
 flowchart LR
-    A["New Memory<br/>heat = 1.0"] --> B["Active<br/>accessed often"]
-    B --> C["Cooling<br/>not accessed"]
-    C --> D["Compressed<br/>full text -> gist -> tags"]
-    D --> E["Consolidated<br/>episodic -> semantic"]
-    B -->|"recalled"| B
-    C -->|"recalled"| B
+    A([New · heat=1.0]) --> B[Active]
+    B --> C[Cooling]
+    C --> D[Compressed]
+    D --> E([Consolidated])
+    B -->|recalled| B
+    C -->|recalled| B
 
-    style A fill:#ef4444,color:#fff
-    style B fill:#f59e0b,color:#000
-    style C fill:#64748b,color:#fff
-    style D fill:#3b82f6,color:#fff
-    style E fill:#22c55e,color:#000
+    style A fill:#fee2e2,stroke:#ef4444,color:#991b1b
+    style B fill:#fef3c7,stroke:#f59e0b,color:#1c1917
+    style C fill:#f1f5f9,stroke:#64748b,color:#475569
+    style D fill:#dbeafe,stroke:#3b82f6,color:#1c1917
+    style E fill:#dcfce7,stroke:#22c55e,color:#1c1917
 ```
 
 ### Cognitive profiling
@@ -254,18 +263,20 @@ Cortex builds a profile of how you work — from your Claude Code session histor
 
 ```mermaid
 flowchart TD
-    S["Session History<br/>~/.claude/projects/"] --> P["Pattern Extraction<br/>tools, keywords, timing"]
-    P --> CS["Cognitive Style<br/>Felder-Silverman 4D"]
-    P --> EP["Entry Patterns<br/>how you start work"]
-    P --> BP["Blind Spots<br/>what you miss"]
-    P --> CB["Cross-Domain Bridges<br/>shared patterns across projects"]
-    CS --> PR["Cognitive Profile<br/>injected at session start"]
+    S(["Session History
+    ~/.claude/projects/"]) --> P[Pattern Extraction]
+    P --> CS[Cognitive Style · Felder-Silverman 4D]
+    P --> EP[Entry Patterns]
+    P --> BP[Blind Spots]
+    P --> CB[Cross-Domain Bridges]
+    CS --> PR([Cognitive Profile · injected at session start])
     EP --> PR
     BP --> PR
     CB --> PR
 
-    style S fill:#64748b,color:#fff
-    style PR fill:#f59e0b,color:#000
+    style S fill:#f1f5f9,stroke:#64748b,color:#475569
+    style P fill:#f8fafc,stroke:#94a3b8,color:#1c1917
+    style PR fill:#fef3c7,stroke:#f59e0b,color:#1c1917
 ```
 
 ---
@@ -374,7 +385,10 @@ Each agent uses `agent_topic` scoping — a **soft boost** that promotes topic-r
 # cortex:open_memory_dashboard — Memory heatmap at localhost:3457
 ```
 
-![Cortex Neural Graph — 2D force-directed visualization with per-node quality scoring, domain clusters, and benchmark summary](docs/neural-graph-v2.png)
+<p align="center">
+<img src="docs/neural-graph-overview.png" width="49%" alt="Full neural graph with 718 nodes across 10 domains" />
+<img src="docs/neural-graph-detail.png" width="49%" alt="Memory detail panel showing quality, biological state, and entity connections" />
+</p>
 
 The graph organizes everything into a 6-level hierarchy — from broad categories down to individual memories and entities. Node size reflects importance, glow reflects heat (recency), and colored arcs show quality scores. Auto-shuts down after 10 minutes idle.
 
@@ -543,49 +557,52 @@ Intent classification adjusts signal weights per query: temporal queries boost r
 ### Biological mechanisms
 
 ```mermaid
-graph LR
-    subgraph Encoding["Encoding"]
-        OC["Oscillatory Clock<br/><sub>Hasselmo 2005, Buzsaki 2015</sub>"]
-        PC["Predictive Coding<br/><sub>Friston 2005, Bastos 2012</sub>"]
-        NM["Neuromodulation<br/><sub>Doya 2002, Schultz 1997</sub>"]
-        ET["Emotional Tagging<br/><sub>Wang & Bhatt 2024</sub>"]
-        PS["Pattern Separation<br/><sub>Leutgeb 2007, Yassa 2011</sub>"]
+flowchart LR
+    subgraph Encoding [" 🧠 Encoding "]
+        OC[Oscillatory Clock]
+        PC[Predictive Coding]
+        NM[Neuromodulation]
+        ET[Emotional Tagging]
+        PS[Pattern Separation]
     end
 
-    subgraph Maintenance["Storage & Maintenance"]
-        EG["Engram Competition<br/><sub>Josselyn & Tonegawa 2020</sub>"]
-        TH["Thermodynamics<br/><sub>Ebbinghaus 1885</sub>"]
-        TS["Tripartite Synapse<br/><sub>Perea 2009</sub>"]
-        HP["Homeostatic Plasticity<br/><sub>Turrigiano 2008</sub>"]
-        CS["Consolidation Cascade<br/><sub>Kandel 2001</sub>"]
+    subgraph Maintenance [" 💾 Storage & Maintenance "]
+        EG[Engram Competition]
+        TH[Thermodynamics]
+        HP[Homeostatic Plasticity]
+        CS[Consolidation Cascade]
     end
 
-    subgraph Retrieval["Retrieval"]
-        HOP["Hopfield Network<br/><sub>Ramsauer 2021</sub>"]
-        SA["Spreading Activation<br/><sub>Collins & Loftus 1975</sub>"]
-        SM["Surprise Momentum<br/><sub>Behrouz 2025 (Titans)</sub>"]
-        CoA["Co-Activation<br/><sub>Kosowski 2025</sub>"]
+    subgraph Retrieval [" 🔍 Retrieval "]
+        HOP[Hopfield Network]
+        SA[Spreading Activation]
+        SM[Surprise Momentum]
+        CoA[Co-Activation]
     end
 
-    subgraph Plasticity["Plasticity & Pruning"]
-        LTP["LTP/LTD + STDP<br/><sub>Hebb 1949, Bi & Poo 1998</sub>"]
-        MG["Microglial Pruning<br/><sub>Wang et al. 2020</sub>"]
-        SC["Sleep Compute<br/><sub>McClelland 1995</sub>"]
-        IF["Interference Mgmt<br/><sub>Wixted 2004</sub>"]
+    subgraph Plasticity [" ✂️ Plasticity & Pruning "]
+        LTP[LTP / LTD + STDP]
+        MG[Microglial Pruning]
+        SC[Sleep Compute]
+        IF[Interference Mgmt]
     end
 
     Encoding --> Maintenance
     Maintenance --> Retrieval
     Retrieval --> Plasticity
-    Plasticity -->|"strengthen / weaken"| Maintenance
+    Plasticity -->|strengthen / weaken| Maintenance
 
-    style PC fill:#f59e0b,color:#000
-    style NM fill:#8b5cf6,color:#fff
-    style ET fill:#ef4444,color:#fff
-    style SM fill:#f97316,color:#000
-    style LTP fill:#22c55e,color:#000
-    style MG fill:#ef4444,color:#fff
-    style SC fill:#1e40af,color:#fff
+    style Encoding fill:#fef3c7,stroke:#f59e0b
+    style Maintenance fill:#cffafe,stroke:#06b6d4
+    style Retrieval fill:#dcfce7,stroke:#22c55e
+    style Plasticity fill:#f3e8ff,stroke:#a855f7
+    style PC fill:#fef3c7,stroke:#f59e0b,color:#1c1917
+    style NM fill:#f3e8ff,stroke:#8b5cf6,color:#1c1917
+    style ET fill:#fee2e2,stroke:#ef4444,color:#991b1b
+    style SM fill:#ffedd5,stroke:#f97316,color:#1c1917
+    style LTP fill:#dcfce7,stroke:#22c55e,color:#1c1917
+    style MG fill:#fee2e2,stroke:#ef4444,color:#991b1b
+    style SC fill:#dbeafe,stroke:#1e40af,color:#1c1917
 ```
 
 <details>
@@ -643,36 +660,31 @@ This is not theoretical. On BEAM, one comparable system reports full-QA instruct
 Clean Architecture with concentric dependency layers. Inner layers never import outer layers.
 
 ```mermaid
-graph TD
-    T["transport/"] -->|wire| SV["server/"]
-    SV -->|dispatch| H["handlers/"]
-    H -->|compose| C["core/"]
-    H -->|wire| I["infrastructure/"]
-    C -->|import| S["shared/"]
+flowchart TD
+    SV[server/] -->|dispatch| H[handlers/]
+    H -->|compose| C[core/]
+    H -->|wire| I[infrastructure/]
+    C -->|import| S[shared/]
     I -->|import| S
-    HK["hooks/"] -->|use| I
+    HK[hooks/] -->|use| I
     HK -->|use| C
 
-    C -.-|"103 modules, pure logic, zero I/O"| C
-    I -.-|"PostgreSQL + pgvector, embeddings, config"| I
-    S -.-|"11 utility modules"| S
-    H -.-|"60 handlers (composition roots)"| H
-
-    style C fill:#22c55e,color:#000
-    style I fill:#06b6d4,color:#000
-    style S fill:#64748b,color:#fff
-    style H fill:#f59e0b,color:#000
-    style HK fill:#ec4899,color:#fff
+    style SV fill:#f1f5f9,stroke:#94a3b8,color:#1c1917
+    style C fill:#dcfce7,stroke:#22c55e,color:#1c1917
+    style I fill:#cffafe,stroke:#06b6d4,color:#1c1917
+    style S fill:#f1f5f9,stroke:#64748b,color:#475569
+    style H fill:#fef3c7,stroke:#f59e0b,color:#1c1917
+    style HK fill:#fce7f3,stroke:#ec4899,color:#1c1917
 ```
 
 | Component | Count | Description |
 |---|---|---|
-| Core modules | 103 | Pure business logic, zero I/O |
+| Core modules | 108 | Pure business logic, zero I/O |
 | Handlers | 60 | Composition roots wiring core + infrastructure |
-| Infrastructure | 11 | PostgreSQL + pgvector, embeddings, file I/O |
+| Infrastructure | 21 | PostgreSQL + pgvector, embeddings, file I/O |
 | Shared | 11 | Pure utilities and Pydantic types |
 | Hooks | 4 | Session lifecycle, compaction, auto-capture |
-| Tests | 1906 | Passing across Python 3.10-3.13 |
+| Tests | 1826+ | Passing across Python 3.10-3.13 |
 | Benchmarks | 6 | LongMemEval, LoCoMo, BEAM, and 3 more |
 
 ---

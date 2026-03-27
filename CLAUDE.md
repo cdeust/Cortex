@@ -28,9 +28,9 @@ When implementing neuroscience-inspired mechanisms, always consult primary resea
 Clean Architecture with concentric layers. Inner layers never import outer layers.
 
 ```
-TRANSPORT → SERVER → HANDLERS → CORE ← SHARED
-                                  ↓
-                            INFRASTRUCTURE → SHARED
+SERVER → HANDLERS → CORE ← SHARED
+                      ↓
+                INFRASTRUCTURE → SHARED
 ```
 
 Handlers are the **composition roots**: they wire infrastructure (I/O) to core (logic) and are the only layer allowed to import both.
@@ -39,19 +39,18 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 
 | Layer | May Import | Must NOT Import |
 |---|---|---|
-| **shared/** | Python stdlib only | core, infrastructure, handlers, server, transport |
-| **core/** | shared/ only | infrastructure, handlers, server, transport, os/pathlib |
-| **infrastructure/** | shared/, Python stdlib | core, handlers, server, transport |
+| **shared/** | Python stdlib only | core, infrastructure, handlers, server |
+| **core/** | shared/ only | infrastructure, handlers, server, os/pathlib |
+| **infrastructure/** | shared/, Python stdlib | core, handlers, server |
 | **validation/** | shared/, errors/ | core, infrastructure, handlers |
 | **errors/** | nothing | everything |
-| **handlers/** | core, infrastructure, shared, validation, errors | server, transport |
+| **handlers/** | core, infrastructure, shared, validation, errors | server |
 | **server/** | handlers, errors | core, infrastructure (except via handlers) |
-| **transport/** | server | everything else |
-| **hooks/** | infrastructure, core, shared | server, transport |
+| **hooks/** | infrastructure, core, shared | server |
 
 ### Module Inventory
 
-**shared/** — Pure utility functions (10 modules)
+**shared/** — Pure utility functions (11 modules)
 - `text.py` — Keyword extraction with stopword filtering
 - `categorizer.py` — 10-category work classification
 - `similarity.py` — Jaccard similarity coefficient
@@ -59,24 +58,37 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 - `project_ids.py` — Path ↔ project ID ↔ label ↔ domain ID conversion
 - `yaml_parser.py` — Lightweight YAML frontmatter parser
 - `types.py` — Pydantic models (ProfilesV2, DomainProfile, CognitiveStyle, etc.)
+- `types_profiles.py` — Profile-specific Pydantic models
 - `linear_algebra.py` — Dense vector math via numpy (dot, norm, cosine, project, clamp)
 - `sparse.py` — Sparse vector operations (dict-based, topK, conversions)
 - `memory_types.py` — Runtime validation types for the memory subsystem
 
-**core/** — Pure business logic, zero I/O (63 modules)
+**core/** — Pure business logic, zero I/O (108 modules)
 
 *Cognitive Profiling:*
 - `domain_detector.py` — 3-signal weighted domain classification
 - `context_generator.py` — Human-readable profile text generation
 - `pattern_extractor.py` — Entry points, recurring patterns, tool preferences, session shape
 - `style_classifier.py` — Felder-Silverman cognitive style classification + EMA update
+- `style_classifier_ema.py` — EMA update logic for style classification
 - `bridge_finder.py` — Cross-domain connection detection (structural + analogical)
 - `blindspot_detector.py` — Category, tool, and pattern gap analysis
 - `profile_builder.py` — Profile orchestration (assembles all core modules)
+- `profile_assembler.py` — Profile assembly from extracted components
+- `blindspot_patterns.py` — Blind spot pattern definitions
+- `session_shape.py` — Session shape analysis
 - `graph_builder.py` — Graph node/edge construction for visualization
+- `graph_builder_nodes.py` — Node construction for graph
+- `graph_builder_edges.py` — Edge construction for graph
+- `graph_builder_memory.py` — Memory node construction
+- `graph_builder_dedup.py` — Graph deduplication logic
+- `graph_quality_scorer.py` — Per-node quality scoring
+- `unified_graph_builder.py` — Unified graph construction orchestrator
 
 *Behavioral Interpretability:*
 - `sparse_dictionary.py` — Behavioral feature dictionary learning (OMP sparse coding, K-SVD)
+- `sparse_dictionary_learning.py` — Dictionary learning algorithms
+- `sparse_dictionary_activation.py` — Activation computation
 - `persona_vector.py` — 12D persona vector with drift detection and context steering
 - `behavioral_crosscoder.py` — Cross-domain behavioral feature persistence detection
 - `attribution_tracer.py` — Pipeline attribution graph via perturbation-based tracing
@@ -84,42 +96,73 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 *Memory Thermodynamics:*
 - `thermodynamics.py` — Heat, surprise, importance, valence, metamemory
 - `hierarchical_predictive_coding.py` — 3-level Friston free energy gate (sensory/entity/schema) replacing flat 4-signal
+- `predictive_coding_flat.py` — Flat predictive coding fallback
+- `predictive_coding_gate.py` — Gate decision logic
+- `predictive_coding_signals.py` — Signal computation for predictive coding
 - `coupled_neuromodulation.py` — DA/NE/ACh/5-HT coupled cascade with cross-channel effects (Doya 2002, Schultz 1997)
+- `neuromodulation_channels.py` — Individual neuromodulator channel definitions
 - `emotional_tagging.py` — Amygdala-inspired priority encoding with Yerkes-Dodson curve (Wang & Bhatt 2024)
 - `synaptic_tagging.py` — Retroactive promotion of weak memories sharing entities (Frey & Morris 1997)
 - `curation.py` — Active curation logic (merge, link, create decisions)
 - `engram.py` — Memory trace structure (Josselyn & Tonegawa 2020)
 - `decay_cycle.py` — Thermodynamic cooling with stage-dependent rates
 - `tripartite_synapse.py` — Astrocyte calcium dynamics, D-serine LTP facilitation, metabolic gating (Perea 2009)
+- `tripartite_calcium.py` — Calcium dynamics computation for tripartite synapse
+- `write_gate.py` — Write gate decision logic
+- `write_post_store.py` — Post-store processing after memory write
+- `memory_ingest.py` — Memory ingestion pipeline
+- `memory_decomposer.py` — Decompose complex memories into atomic units
 - `compression.py` — Full-text → gist → tag compression
 - `staleness.py` — File-reference staleness scoring
 
 *Oscillatory & Cascade:*
 - `oscillatory_clock.py` — Theta/gamma/SWR phase gating (Hasselmo 2005, Buzsaki 2015)
+- `oscillatory_phases.py` — Phase definitions and gating logic
 - `cascade.py` — Consolidation stages: LABILE → EARLY_LTP → LATE_LTP → CONSOLIDATED (Kandel 2001)
+- `cascade_stages.py` — Stage definitions and transitions
+- `cascade_advancement.py` — Stage advancement logic
 - `pattern_separation.py` — DG orthogonalization + neurogenesis analog (Leutgeb 2007, Yassa & Stark 2011)
+- `separation_core.py` — Core orthogonalization algorithms
+- `neurogenesis.py` — Neurogenesis analog for pattern separation
 - `schema_engine.py` — Cortical knowledge structures with Piaget accommodation (Tse 2007, Gilboa & Marlatte 2017)
+- `schema_extraction.py` — Schema extraction from memories
 - `interference.py` — Proactive/retroactive interference detection + sleep orthogonalization
+- `interference_detection.py` — Interference detection algorithms
 - `homeostatic_plasticity.py` — Synaptic scaling + BCM threshold (Turrigiano 2008, Abraham & Bear 1996)
+- `homeostatic_health.py` — Homeostatic health metrics
 - `dendritic_clusters.py` — Branch-specific nonlinear integration + priming (Kastellakis 2015)
+- `dendritic_computation.py` — Branch-specific computation logic
 - `two_stage_model.py` — Hippocampal-cortical transfer protocol (McClelland 1995)
+- `two_stage_transfer.py` — Transfer protocol execution
 - `emergence_tracker.py` — System-level metrics: forgetting curve, spacing effect, schema acceleration
-- `ablation.py` — Lesion study framework for 20 ablatable mechanisms
+- `emergence_metrics.py` — Emergence metric definitions
+- `ablation.py` — Lesion study framework for 23 ablatable mechanisms
+- `ablation_report.py` — Ablation report generation
 
 *Consolidation:*
 - `consolidation_engine.py` — Orchestrates decay, compression, CLS, causal discovery
 - `dual_store_cls.py` — Episodic → semantic memory consolidation (CLS)
+- `dual_store_cls_abstraction.py` — CLS abstraction extraction
 - `causal_graph.py` — PC Algorithm for causal discovery
 - `reconsolidation.py` — Memory updating on access
 - `replay.py` — Hippocampal replay for memory consolidation
+- `replay_types.py` — Replay type definitions
+- `replay_selection.py` — Replay candidate selection
+- `replay_execution.py` — Replay execution logic
+- `replay_formatting.py` — Replay result formatting
 - `sleep_compute.py` — Dream replay, cluster summarization, re-embedding, auto-narration
 - `synaptic_plasticity.py` — LTP/LTD Hebbian learning + STDP causal direction + stochastic transmission + phase-gated plasticity (Hebb 1949, BCM 1982, Bi & Poo 1998, Markram 1998)
+- `synaptic_plasticity_hebbian.py` — Hebbian learning algorithms
+- `synaptic_plasticity_stochastic.py` — Stochastic transmission
 - `microglial_pruning.py` — Complement-dependent edge elimination + orphan archival (Wang et al. 2020)
 
 *Retrieval & Navigation:*
 - `query_intent.py` — Intent classification (temporal/causal/semantic/entity/knowledge_update/multi_hop) + weight profiles
 - `query_decomposition.py` — Multi-entity query splitting + entity extraction
 - `retrieval_dispatch.py` — 3-tier dispatch (simple/mixed/deep) + WRRF weight computation
+- `retrieval_signals.py` — Retrieval signal definitions and computation
+- `query_router.py` — Query routing to appropriate retrieval tier
+- `pg_recall.py` — PostgreSQL recall orchestration
 - `reranker.py` — FlashRank ONNX cross-encoder reranking (client-side post-PG)
 - `scoring.py` — BM25, n-gram, keyword scoring (reference; PG does this server-side)
 - `temporal.py` — Date parsing, distance decay, recency boost (reference; PG does this server-side)
@@ -128,7 +171,9 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 - `cognitive_map.py` — Successor Representation co-access graph + 2D projection
 - `hopfield.py` — Hopfield network for content-addressable recall
 - `fractal.py` — Hierarchical clustering (L0/L1/L2 levels)
+- `fractal_clustering.py` — Clustering algorithm implementation
 - `enrichment.py` — Doc2Query synthetic queries + concept synonym expansion
+- `concept_vocabulary.py` — Concept vocabulary for synonym expansion
 - `sensory_buffer.py` — Bounded pre-consolidation ring buffer
 - `knowledge_graph.py` — Entity and relationship extraction
 - `prospective.py` — Trigger-based proactive recall (keyword, time, file, domain)
@@ -137,22 +182,33 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 *Analysis & Narrative:*
 - `narrative.py` — Story generation from memories
 - `metacognition.py` — Self-reflection on memory system performance
+- `metacognition_analysis.py` — Metacognition analysis algorithms
 - `session_critique.py` — Post-session analysis and improvement suggestions
+- `session_critique_format.py` — Session critique output formatting
 - `session_extractor.py` — Extracts memories from session transcripts
 
-**infrastructure/** — All I/O (11 modules)
+**infrastructure/** — All I/O (21 modules)
 - `config.py` — Centralized path constants via pathlib
 - `file_io.py` — Generic JSON/text read/write operations
 - `profile_store.py` — profiles.json persistence
 - `session_store.py` — session-log.json persistence
 - `brain_index_store.py` — brain-index.json reader
 - `scanner.py` — Discovers memories + conversations from ~/.claude/
+- `scanner_parse.py` — JSONL conversation parsing
 - `mcp_client.py` — Async MCP client over stdio (JSON-RPC 2.0, version negotiation)
 - `mcp_client_pool.py` — Singleton connection pool (lazy connect, reuse, idle timeout)
-- `pg_store.py` — PostgreSQL + pgvector persistence (MANDATORY — replaces SQLite)
+- `pg_store.py` — PostgreSQL + pgvector persistence (MANDATORY)
+- `pg_store_entities.py` — Entity storage and retrieval
+- `pg_store_relationships.py` — Relationship storage, co-activation strengthening
+- `pg_store_queries.py` — Query execution helpers
+- `pg_store_auxiliary.py` — Auxiliary storage operations
+- `pg_store_rules.py` — Rule storage and retrieval
+- `pg_store_stats.py` — Statistics and diagnostics queries
 - `pg_schema.py` — DDL, extensions, PL/pgSQL stored procedures, migrations
 - `memory_config.py` — Runtime configuration (DATABASE_URL, env vars with CORTEX_MEMORY_ prefix)
+- `memory_store.py` — Memory store abstraction
 - `embedding_engine.py` — Vector embeddings (384-dim, sentence-transformers)
+- `agent_config.py` — Agent configuration and topic scoping
 
 **handlers/** — Composition roots (34 tools + helpers, one per tool)
 
@@ -160,9 +216,12 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 
 **errors/** — `__init__.py` — MethodologyError, ValidationError, StorageError, AnalysisError, McpConnectionError
 
-**server/** — `mcp_router.py` (MCP JSON-RPC dispatch), `http_server.py` (visualization + dashboard server)
-
-**transport/** — `stdio.py` — Async newline-delimited JSON-RPC 2.0 over stdin/stdout
+**server/** — HTTP servers and visualization (5 modules)
+- `http_server.py` — Visualization HTTP server
+- `http_viz_server.py` — 3D neural graph visualization server
+- `http_dashboard_server.py` — Memory dashboard server
+- `http_dashboard_data.py` — Dashboard data aggregation
+- `http_common.py` — Shared HTTP utilities
 
 **hooks/** — Session lifecycle automation
 - `session_lifecycle.py` — SessionEnd hook for automatic profile updates
@@ -257,14 +316,14 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 ## Testing
 
 ```bash
-pytest                                      # All tests (1893 passing)
+pytest                                      # All tests (1826+ passing)
 pytest --cov=mcp_server --cov-report=term-missing  # With coverage
 pytest tests_py/core/                       # Core layer only
 pytest tests_py/shared/                     # Shared layer only
 pytest tests_py/handlers/                   # Handler layer only
 ```
 
-**Coverage targets**: shared 95%+, core 90%+, infrastructure 85%+, handlers 85%+, validation/errors 95%+, server/transport 80%+, hooks 90%+.
+**Coverage targets**: shared 95%+, core 90%+, infrastructure 85%+, handlers 85%+, validation/errors 95%+, server 80%+, hooks 90%+.
 
 ## Benchmarks
 
