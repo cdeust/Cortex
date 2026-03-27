@@ -68,6 +68,42 @@ def add_domain_hub(
     return hub_id
 
 
+def _is_readable_pattern(pattern: str) -> bool:
+    """Filter out nonsensical n-gram patterns (hashes, random word combos)."""
+    import re
+
+    if not pattern or len(pattern) < 3:
+        return False
+    parts = [p.strip() for p in pattern.replace("/", " ").split()]
+    # Reject if any token looks like a hex hash (>8 hex chars)
+    for p in parts:
+        if len(p) > 8 and re.fullmatch(r"[0-9a-f]+", p):
+            return False
+    # Reject generic stopword-only patterns
+    stopwords = {
+        "json",
+        "general",
+        "against",
+        "through",
+        "already",
+        "instead",
+        "context",
+        "updates",
+        "meaning",
+        "continue",
+        "connect",
+        "acceptable",
+        "violating",
+        "interactive",
+        "verified",
+        "updated",
+        "internal",
+        "background",
+    }
+    meaningful = [p for p in parts if len(p) > 2 and p.lower() not in stopwords]
+    return len(meaningful) >= 1
+
+
 def add_entry_points(
     dp: dict,
     domain_key: str,
@@ -78,20 +114,25 @@ def add_entry_points(
 ) -> None:
     """Add entry-point nodes linked to the domain hub."""
     for ep in dp.get("entryPoints") or []:
+        pattern = ep.get("pattern", "")
+        if not _is_readable_pattern(pattern):
+            continue
+        # Clean up " / " separated n-grams into readable labels
+        label = pattern.replace(" / ", ", ")
         nid = next_id("entry")
         freq = ep.get("frequency") or 0
         nodes.append(
             {
                 "id": nid,
                 "type": "entry-point",
-                "label": ep.get("pattern", ""),
+                "label": label,
                 "domain": domain_key,
                 "color": ENTRY_COLOR,
                 "size": max(3, min(12, (freq or 1) * 1.5)),
                 "group": domain_key,
                 "confidence": ep.get("confidence") or 0,
                 "frequency": freq,
-                "content": ep.get("pattern", ""),
+                "content": pattern,
             }
         )
         edges.append(

@@ -117,13 +117,28 @@
   };
 
   function drawLabel(ctx, node, x, y, r, scale, isHighlit) {
-    var show = node.type === 'domain' || isHighlit || scale > 2.0;
+    var isDomain = node.type === 'domain';
+    var show = isDomain || isHighlit || scale > 1.2;
     if (!show) return;
-    var fs = node.type === 'domain' ? Math.max(3, r * 0.45) : Math.max(1.8, 2.2);
-    ctx.font = (node.type === 'domain' ? '600 ' : '400 ') + fs + 'px "JetBrains Mono", monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.fillStyle = node.type === 'domain' ? rgba('#C0E8FF', 0.9) : rgba('#90B0C8', 0.7);
-    ctx.fillText((node.label || '').slice(0, 24), x, y + r + 1.5);
+
+    var fs = isDomain ? Math.max(4, r * 0.5) : Math.max(2.8, 3.2 / Math.max(scale * 0.3, 0.6));
+    var weight = isDomain ? '700 ' : '500 ';
+    ctx.font = weight + fs + 'px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    var text = (node.label || '').slice(0, 28);
+    var ty = y + r + fs * 0.5;
+
+    // Dark outline for contrast against any background
+    ctx.strokeStyle = 'rgba(8, 8, 16, 0.85)';
+    ctx.lineWidth = fs * 0.35;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(text, x, ty);
+
+    // Fill with brighter colors
+    ctx.fillStyle = isDomain ? rgba('#E0F4FF', 0.95) : rgba('#C0D8E8', isHighlit ? 0.95 : 0.85);
+    ctx.fillText(text, x, ty);
   }
 
 })();

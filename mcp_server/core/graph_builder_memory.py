@@ -138,6 +138,20 @@ def _find_best_entity_match(
     return best_match, best_score
 
 
+def _find_closest_domain(
+    mem_domain: str,
+    domain_hub_ids: dict[str, str],
+) -> str | None:
+    """Fuzzy-match a memory domain to the closest domain hub key."""
+    if not mem_domain:
+        return None
+    low = mem_domain.lower()
+    for key in domain_hub_ids:
+        if low in key.lower() or key.lower() in low:
+            return key
+    return None
+
+
 def _add_memory_edge(
     nid: str,
     best_match: str | None,
@@ -157,10 +171,21 @@ def _add_memory_edge(
                 "color": EDGE_COLORS["memory-entity"],
             }
         )
-    elif mem_domain and mem_domain in domain_hub_ids:
+        return
+
+    # Try exact domain match, then fuzzy match, then first available hub
+    hub_key = None
+    if mem_domain and mem_domain in domain_hub_ids:
+        hub_key = mem_domain
+    elif mem_domain:
+        hub_key = _find_closest_domain(mem_domain, domain_hub_ids)
+    if hub_key is None and domain_hub_ids:
+        hub_key = next(iter(domain_hub_ids))
+
+    if hub_key is not None:
         edges.append(
             {
-                "source": domain_hub_ids[mem_domain],
+                "source": domain_hub_ids[hub_key],
                 "target": nid,
                 "type": "domain-entity",
                 "weight": 0.2,
