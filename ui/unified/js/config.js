@@ -27,11 +27,11 @@ JUG.NODE_COLORS = {
 };
 
 JUG.EDGE_COLORS = {
-  'has-category': '#FFFFFF30',
-  'has-project': '#8B5CF640',
-  'has-agent': '#2DD4BF40',
-  'has-group': '#64748B40',
-  'groups': '#50C8E030',
+  'has-category': '#B0B0B0',
+  'has-project': '#8B5CF6',
+  'has-agent': '#2DD4BF',
+  'has-group': '#64748B',
+  'groups': '#50C8E0',
   'bridge': '#C080D0',
   'persistent-feature': '#B070B8',
   'co_occurrence': '#9080C0',

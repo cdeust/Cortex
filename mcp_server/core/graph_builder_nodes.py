@@ -41,11 +41,11 @@ ENTITY_COLORS = {
 }
 
 EDGE_COLORS = {
-    "has-category": "#FFFFFF30",
-    "has-project": "#8B5CF640",
-    "has-agent": "#2DD4BF40",
-    "has-group": "#64748B40",
-    "groups": "#50C8E030",
+    "has-category": "#B0B0B0",
+    "has-project": "#8B5CF6",
+    "has-agent": "#2DD4BF",
+    "has-group": "#64748B",
+    "groups": "#50C8E0",
     "bridge": "#FF00FF",
     "persistent-feature": "#ec4899",
     "memory-entity": "#40A0B8",
