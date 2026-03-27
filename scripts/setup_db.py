@@ -60,7 +60,8 @@ def _pg_is_running(host: str, port: str) -> bool:
     try:
         r = subprocess.run(
             [pg_isready, "-h", host, "-p", port],
-            capture_output=True, timeout=5,
+            capture_output=True,
+            timeout=5,
         )
         return r.returncode == 0
     except Exception:
@@ -74,9 +75,20 @@ def _db_exists(host: str, port: str, dbname: str) -> bool:
         return False
     try:
         r = subprocess.run(
-            [psql, "-h", host, "-p", port, "-d", "postgres",
-             "-tAc", f"SELECT 1 FROM pg_database WHERE datname = '{dbname}'"],
-            capture_output=True, timeout=5, text=True,
+            [
+                psql,
+                "-h",
+                host,
+                "-p",
+                port,
+                "-d",
+                "postgres",
+                "-tAc",
+                f"SELECT 1 FROM pg_database WHERE datname = '{dbname}'",
+            ],
+            capture_output=True,
+            timeout=5,
+            text=True,
         )
         return "1" in r.stdout
     except Exception:
@@ -91,7 +103,9 @@ def _create_db(host: str, port: str, dbname: str) -> bool:
     try:
         r = subprocess.run(
             [createdb, "-h", host, "-p", port, dbname],
-            capture_output=True, timeout=10, text=True,
+            capture_output=True,
+            timeout=10,
+            text=True,
         )
         return r.returncode == 0
     except Exception:
@@ -105,9 +119,20 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
         return False, "psql not found"
     try:
         r = subprocess.run(
-            [psql, "-h", host, "-p", port, "-d", dbname,
-             "-c", "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"],
-            capture_output=True, timeout=10, text=True,
+            [
+                psql,
+                "-h",
+                host,
+                "-p",
+                port,
+                "-d",
+                dbname,
+                "-c",
+                "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;",
+            ],
+            capture_output=True,
+            timeout=10,
+            text=True,
         )
         if r.returncode != 0:
             return False, r.stderr.strip()
@@ -139,6 +164,7 @@ def _count_memories(database_url: str) -> int:
     """Count existing memories in the database."""
     try:
         import psycopg
+
         conn = psycopg.connect(database_url, autocommit=True)
         row = conn.execute("SELECT COUNT(*) as c FROM memories").fetchone()
         conn.close()
@@ -150,6 +176,7 @@ def _count_memories(database_url: str) -> int:
 def _count_session_files() -> int:
     """Count JSONL session files in ~/.claude/projects/."""
     from pathlib import Path
+
     projects_dir = Path.home() / ".claude" / "projects"
     if not projects_dir.exists():
         return 0
@@ -170,37 +197,44 @@ def main() -> None:
 
     # Step 1: Is PostgreSQL running?
     if not _pg_is_running(host, port):
-        _result("needs_install", (
-            "PostgreSQL is not running. To set up Cortex:\n"
-            "\n"
-            "  # macOS\n"
-            "  brew install postgresql@17 pgvector\n"
-            "  brew services start postgresql@17\n"
-            "\n"
-            "  # Ubuntu/Debian\n"
-            "  sudo apt install postgresql postgresql-server-dev-all\n"
-            "  sudo systemctl start postgresql\n"
-            "  # Install pgvector: https://github.com/pgvector/pgvector#installation\n"
-            "\n"
-            "Then restart Claude Code."
-        ))
+        _result(
+            "needs_install",
+            (
+                "PostgreSQL is not running. To set up Cortex:\n"
+                "\n"
+                "  # macOS\n"
+                "  brew install postgresql@17 pgvector\n"
+                "  brew services start postgresql@17\n"
+                "\n"
+                "  # Ubuntu/Debian\n"
+                "  sudo apt install postgresql postgresql-server-dev-all\n"
+                "  sudo systemctl start postgresql\n"
+                "  # Install pgvector: https://github.com/pgvector/pgvector#installation\n"
+                "\n"
+                "Then restart Claude Code."
+            ),
+        )
 
     # Step 2: Does the database exist?
     if not _db_exists(host, port, dbname):
         _log(f"Database '{dbname}' not found, creating...")
         if not _create_db(host, port, dbname):
-            _result("create_failed",
-                     f"Could not create database '{dbname}'. "
-                     f"Try manually: createdb {dbname}")
+            _result(
+                "create_failed",
+                f"Could not create database '{dbname}'. "
+                f"Try manually: createdb {dbname}",
+            )
         _log(f"Database '{dbname}' created")
 
     # Step 3: Create extensions
     ok, err = _create_extensions(host, port, dbname)
     if not ok:
-        _result("create_failed",
-                 f"Could not create extensions (pgvector/pg_trgm): {err}\n"
-                 f"Install pgvector: brew install pgvector (macOS) or "
-                 f"see https://github.com/pgvector/pgvector#installation")
+        _result(
+            "create_failed",
+            f"Could not create extensions (pgvector/pg_trgm): {err}\n"
+            f"Install pgvector: brew install pgvector (macOS) or "
+            f"see https://github.com/pgvector/pgvector#installation",
+        )
 
     _log("Extensions ready (pgvector, pg_trgm)")
 
@@ -215,12 +249,16 @@ def main() -> None:
     memory_count = _count_memories(url)
     session_count = _count_session_files()
 
-    _result("ready", "Database ready", **{
-        "database": dbname,
-        "memories": memory_count,
-        "session_files": session_count,
-        "needs_backfill": memory_count == 0 and session_count > 0,
-    })
+    _result(
+        "ready",
+        "Database ready",
+        **{
+            "database": dbname,
+            "memories": memory_count,
+            "session_files": session_count,
+            "needs_backfill": memory_count == 0 and session_count > 0,
+        },
+    )
 
 
 if __name__ == "__main__":

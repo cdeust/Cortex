@@ -45,9 +45,14 @@ def _register_query_methodology(mcp: FastMCP) -> None:
         first_message: str | None = None,
     ) -> str:
         """Returns cognitive profile for the current domain."""
-        return await safe_handler(query_methodology.handler, {
-            "cwd": cwd, "project": project, "first_message": first_message,
-        })
+        return await safe_handler(
+            query_methodology.handler,
+            {
+                "cwd": cwd,
+                "project": project,
+                "first_message": first_message,
+            },
+        )
 
 
 def _register_detect_domain(mcp: FastMCP) -> None:
@@ -61,9 +66,14 @@ def _register_detect_domain(mcp: FastMCP) -> None:
         first_message: str | None = None,
     ) -> str:
         """Lightweight domain classification."""
-        return await safe_handler(detect_domain_handler.handler, {
-            "cwd": cwd, "project": project, "first_message": first_message,
-        })
+        return await safe_handler(
+            detect_domain_handler.handler,
+            {
+                "cwd": cwd,
+                "project": project,
+                "first_message": first_message,
+            },
+        )
 
 
 def _register_rebuild_profiles(mcp: FastMCP) -> None:
@@ -76,9 +86,13 @@ def _register_rebuild_profiles(mcp: FastMCP) -> None:
         force: bool = False,
     ) -> str:
         """Full rescan of all session data to rebuild methodology profiles."""
-        return await safe_handler(rebuild_profiles.handler, {
-            "domain": domain, "force": force,
-        })
+        return await safe_handler(
+            rebuild_profiles.handler,
+            {
+                "domain": domain,
+                "force": force,
+            },
+        )
 
 
 def _register_list_domains(mcp: FastMCP) -> None:
@@ -107,16 +121,19 @@ def _register_record_session_end(mcp: FastMCP) -> None:
         project: str | None = None,
     ) -> str:
         """Incremental profile update after a session ends."""
-        return await safe_handler(record_session_end.handler, {
-            "session_id": session_id,
-            "domain": domain,
-            "tools_used": tools_used,
-            "duration": duration,
-            "turn_count": turn_count,
-            "keywords": keywords,
-            "cwd": cwd,
-            "project": project,
-        })
+        return await safe_handler(
+            record_session_end.handler,
+            {
+                "session_id": session_id,
+                "domain": domain,
+                "tools_used": tools_used,
+                "duration": duration,
+                "turn_count": turn_count,
+                "keywords": keywords,
+                "cwd": cwd,
+                "project": project,
+            },
+        )
 
 
 def _register_get_methodology_graph(mcp: FastMCP) -> None:
@@ -154,9 +171,14 @@ def _register_explore_features(mcp: FastMCP) -> None:
         compare_domain: str | None = None,
     ) -> str:
         """Explore interpretability features."""
-        return await safe_handler(explore_features.handler, {
-            "mode": mode, "domain": domain, "compare_domain": compare_domain,
-        })
+        return await safe_handler(
+            explore_features.handler,
+            {
+                "mode": mode,
+                "domain": domain,
+                "compare_domain": compare_domain,
+            },
+        )
 
 
 def _register_run_pipeline(mcp: FastMCP) -> None:
@@ -173,11 +195,14 @@ def _register_run_pipeline(mcp: FastMCP) -> None:
         max_findings: int = 5,
     ) -> str:
         """Drive the ai-architect pipeline end-to-end."""
-        return await safe_handler(run_pipeline.handler, {
-            "codebase_path": codebase_path,
-            "task_path": task_path,
-            "context_path": context_path,
-            "github_repo": github_repo,
-            "server": server,
-            "max_findings": max_findings,
-        })
+        return await safe_handler(
+            run_pipeline.handler,
+            {
+                "codebase_path": codebase_path,
+                "task_path": task_path,
+                "context_path": context_path,
+                "github_repo": github_repo,
+                "server": server,
+                "max_findings": max_findings,
+            },
+        )

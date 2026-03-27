@@ -26,13 +26,20 @@ class TestSessionStartHook:
     def _run_hook(self, env_overrides: dict | None = None) -> str:
         """Run session_start.py as subprocess and capture stdout."""
         hook_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "mcp_server", "hooks", "session_start.py"
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "mcp_server",
+            "hooks",
+            "session_start.py",
         )
         hook_path = os.path.abspath(hook_path)
         env = {**os.environ, **(env_overrides or {})}
         result = subprocess.run(
             [sys.executable, hook_path],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
             env=env,
         )
         return result.stdout.strip()
@@ -43,13 +50,18 @@ class TestSessionStartHook:
         import asyncio
 
         # Store a test memory
-        asyncio.run(remember({
-            "content": "Critical architecture: use PostgreSQL for all storage",
-            "force": True,
-            "tags": ["_anchor", "architecture"],
-        }))
+        asyncio.run(
+            remember(
+                {
+                    "content": "Critical architecture: use PostgreSQL for all storage",
+                    "force": True,
+                    "tags": ["_anchor", "architecture"],
+                }
+            )
+        )
         # Mark it as protected/anchored
         from mcp_server.infrastructure.memory_store import MemoryStore
+
         store = MemoryStore()
         store._conn.execute(
             "UPDATE memories SET is_protected = TRUE, heat = 1.0 "
@@ -128,7 +140,12 @@ class TestSessionStartHook:
             {"id": 1, "content": "Always use UTC timestamps", "domain": "backend"},
         ]
         hot = [
-            {"id": 2, "content": "Fixed the auth bug", "domain": "backend", "heat": 0.9},
+            {
+                "id": 2,
+                "content": "Fixed the auth bug",
+                "domain": "backend",
+                "heat": 0.9,
+            },
             {"id": 3, "content": "Migrated to PG", "domain": "infra", "heat": 0.7},
         ]
         checkpoint = {
@@ -249,21 +266,27 @@ class TestSetupScript:
         assert os.path.exists(os.path.abspath(script))
 
     def test_setup_reports_ready_for_existing_db(self):
-        """When cortex_test DB exists, setup should report ready."""
+        """When test DB exists, setup should report ready."""
         script = os.path.join(
             os.path.dirname(__file__), "..", "..", "scripts", "setup_db.py"
         )
         script = os.path.abspath(script)
 
+        # Use the same DATABASE_URL that tests are configured with
+        db_url = os.environ.get(
+            "DATABASE_URL", "postgresql://localhost:5432/cortex_test"
+        )
+
         result = subprocess.run(
             [sys.executable, script],
-            capture_output=True, text=True, timeout=15,
-            env={**os.environ, "DATABASE_URL": "postgresql://localhost:5432/cortex_test"},
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env={**os.environ, "DATABASE_URL": db_url},
         )
 
         parsed = json.loads(result.stdout.strip())
         assert parsed["status"] == "ready"
-        assert parsed["database"] == "cortex_test"
         assert isinstance(parsed["memories"], int)
         assert isinstance(parsed["session_files"], int)
 
@@ -315,11 +338,13 @@ class TestBackfillConsent:
         """Cold start message must ask, not tell."""
         from mcp_server.hooks.session_start import _build_cold_start_message
 
-        msg = _build_cold_start_message({
-            "status": "ready",
-            "memories": 0,
-            "session_files": 500,
-        })
+        msg = _build_cold_start_message(
+            {
+                "status": "ready",
+                "memories": 0,
+                "session_files": 500,
+            }
+        )
 
         # Must contain a question/request for consent
         assert "?" in msg or "Would you" in msg or "like me to" in msg

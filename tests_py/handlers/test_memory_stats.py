@@ -20,12 +20,8 @@ class TestMemoryStatsHandler:
         from mcp_server.infrastructure.memory_store import MemoryStore
 
         store = MemoryStore()
-        store.insert_memory(
-            {"content": "a", "store_type": "episodic", "heat": 0.8}
-        )
-        store.insert_memory(
-            {"content": "b", "store_type": "semantic", "heat": 0.4}
-        )
+        store.insert_memory({"content": "a", "store_type": "episodic", "heat": 0.8})
+        store.insert_memory({"content": "b", "store_type": "semantic", "heat": 0.4})
         store.insert_entity({"name": "X", "type": "t"})
         store.insert_prospective_memory(
             {

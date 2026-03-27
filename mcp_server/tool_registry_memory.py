@@ -47,15 +47,18 @@ def _register_remember(mcp: FastMCP) -> None:
         agent_topic: str | None = None,
     ) -> str:
         """Store a memory through the predictive coding write gate."""
-        return await safe_handler(remember.handler, {
-            "content": content,
-            "tags": tags or [],
-            "directory": directory or "",
-            "domain": domain or "",
-            "source": source or "user",
-            "force": force,
-            "agent_topic": agent_topic or "",
-        })
+        return await safe_handler(
+            remember.handler,
+            {
+                "content": content,
+                "tags": tags or [],
+                "directory": directory or "",
+                "domain": domain or "",
+                "source": source or "user",
+                "force": force,
+                "agent_topic": agent_topic or "",
+            },
+        )
 
 
 def _register_recall(mcp: FastMCP) -> None:
@@ -72,14 +75,17 @@ def _register_recall(mcp: FastMCP) -> None:
         agent_topic: str | None = None,
     ) -> str:
         """Retrieve memories using multi-signal fusion."""
-        return await safe_handler(recall.handler, {
-            "query": query,
-            "domain": domain,
-            "directory": directory,
-            "max_results": max_results,
-            "min_heat": min_heat,
-            "agent_topic": agent_topic,
-        })
+        return await safe_handler(
+            recall.handler,
+            {
+                "query": query,
+                "domain": domain,
+                "directory": directory,
+                "max_results": max_results,
+                "min_heat": min_heat,
+                "agent_topic": agent_topic,
+            },
+        )
 
 
 def _register_memory_stats(mcp: FastMCP) -> None:
@@ -110,18 +116,21 @@ def _register_checkpoint(mcp: FastMCP) -> None:
         session_id: str | None = None,
     ) -> str:
         """Save or restore working state for hippocampal replay."""
-        return await safe_handler(checkpoint.handler, {
-            "action": action,
-            "directory": directory or "",
-            "current_task": current_task or "",
-            "files_being_edited": files_being_edited or [],
-            "key_decisions": key_decisions or [],
-            "open_questions": open_questions or [],
-            "next_steps": next_steps or [],
-            "active_errors": active_errors or [],
-            "custom_context": custom_context or "",
-            "session_id": session_id or "default",
-        })
+        return await safe_handler(
+            checkpoint.handler,
+            {
+                "action": action,
+                "directory": directory or "",
+                "current_task": current_task or "",
+                "files_being_edited": files_being_edited or [],
+                "key_decisions": key_decisions or [],
+                "open_questions": open_questions or [],
+                "next_steps": next_steps or [],
+                "active_errors": active_errors or [],
+                "custom_context": custom_context or "",
+                "session_id": session_id or "default",
+            },
+        )
 
 
 def _register_narrative(mcp: FastMCP) -> None:
@@ -135,11 +144,14 @@ def _register_narrative(mcp: FastMCP) -> None:
         brief: bool = False,
     ) -> str:
         """Generate project narrative from stored memories."""
-        return await safe_handler(narrative.handler, {
-            "directory": directory,
-            "domain": domain,
-            "brief": brief,
-        })
+        return await safe_handler(
+            narrative.handler,
+            {
+                "directory": directory,
+                "domain": domain,
+                "brief": brief,
+            },
+        )
 
 
 def _register_consolidate(mcp: FastMCP) -> None:
@@ -155,13 +167,16 @@ def _register_consolidate(mcp: FastMCP) -> None:
         deep: bool = False,
     ) -> str:
         """Run memory maintenance: decay, compression, CLS, memify."""
-        return await safe_handler(consolidate.handler, {
-            "decay": decay,
-            "compress": compress,
-            "cls": cls,
-            "memify": memify,
-            "deep": deep,
-        })
+        return await safe_handler(
+            consolidate.handler,
+            {
+                "decay": decay,
+                "compress": compress,
+                "cls": cls,
+                "memify": memify,
+                "deep": deep,
+            },
+        )
 
 
 def _register_open_memory_dashboard(mcp: FastMCP) -> None:
@@ -188,11 +203,14 @@ def _register_import_sessions(mcp: FastMCP) -> None:
         full_read: bool = False,
     ) -> str:
         """Import conversation history into the memory store."""
-        return await safe_handler(import_sessions.handler, {
-            "project": project or "",
-            "domain": domain or "",
-            "min_importance": min_importance,
-            "max_sessions": max_sessions,
-            "dry_run": dry_run,
-            "full_read": full_read,
-        })
+        return await safe_handler(
+            import_sessions.handler,
+            {
+                "project": project or "",
+                "domain": domain or "",
+                "min_importance": min_importance,
+                "max_sessions": max_sessions,
+                "dry_run": dry_run,
+                "full_read": full_read,
+            },
+        )

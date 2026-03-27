@@ -48,7 +48,9 @@ def _short(text: str, max_len: int = 120) -> str:
 
 def _try_setup_db() -> dict | None:
     """Run setup_db.py and return its result, or None on failure."""
-    setup_script = Path(__file__).resolve().parent.parent.parent / "scripts" / "setup_db.py"
+    setup_script = (
+        Path(__file__).resolve().parent.parent.parent / "scripts" / "setup_db.py"
+    )
     if not setup_script.exists():
         # Try relative to CLAUDE_PLUGIN_ROOT
         if _PLUGIN_ROOT:
@@ -58,7 +60,9 @@ def _try_setup_db() -> dict | None:
     try:
         r = subprocess.run(
             [sys.executable, str(setup_script)],
-            capture_output=True, timeout=15, text=True,
+            capture_output=True,
+            timeout=15,
+            text=True,
             env={**os.environ, "DATABASE_URL": _DATABASE_URL},
         )
         if r.stdout.strip():
@@ -74,6 +78,7 @@ def _connect_pg():
     try:
         import psycopg
         from psycopg.rows import dict_row
+
         conn = psycopg.connect(_DATABASE_URL, row_factory=dict_row, autocommit=True)
         return conn
     except Exception as exc:
@@ -107,11 +112,13 @@ def _fetch_anchors(conn) -> list[dict]:
         if "_anchor" in tags or any(
             isinstance(t, str) and t.startswith("_anchor:") for t in tags
         ):
-            anchors.append({
-                "id": r["id"],
-                "content": r.get("content", ""),
-                "domain": r.get("domain", ""),
-            })
+            anchors.append(
+                {
+                    "id": r["id"],
+                    "content": r.get("content", ""),
+                    "domain": r.get("domain", ""),
+                }
+            )
     return anchors
 
 
@@ -130,12 +137,14 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
     hot = []
     for r in rows:
         if r["id"] not in exclude_ids:
-            hot.append({
-                "id": r["id"],
-                "content": r.get("content", ""),
-                "domain": r.get("domain", ""),
-                "heat": r.get("heat", 0.0),
-            })
+            hot.append(
+                {
+                    "id": r["id"],
+                    "content": r.get("content", ""),
+                    "domain": r.get("domain", ""),
+                    "heat": r.get("heat", 0.0),
+                }
+            )
     return hot[:_HOT_LIMIT]
 
 
@@ -260,8 +269,9 @@ def _build_cold_start_message(setup_result: dict | None) -> str:
     lines = ["## Cortex — First Run\n"]
 
     if setup_result and setup_result.get("status") == "needs_install":
-        lines.append("Cortex needs PostgreSQL to store memories. "
-                      "Here's how to set it up:\n")
+        lines.append(
+            "Cortex needs PostgreSQL to store memories. Here's how to set it up:\n"
+        )
         lines.append("```bash")
         lines.append("# macOS")
         lines.append("brew install postgresql@17 pgvector")
@@ -275,8 +285,10 @@ def _build_cold_start_message(setup_result: dict | None) -> str:
     if setup_result and setup_result.get("status") != "ready":
         msg = setup_result.get("message", "Unknown setup error")
         lines.append(f"Setup issue: {msg}\n")
-        lines.append("Check the [Cortex README](https://github.com/cdeust/Cortex) "
-                      "for installation help.")
+        lines.append(
+            "Check the [Cortex README](https://github.com/cdeust/Cortex) "
+            "for installation help."
+        )
         return "\n".join(lines)
 
     # DB is ready but empty — offer backfill
@@ -306,10 +318,12 @@ def _build_cold_start_message(setup_result: dict | None) -> str:
         lines.append(
             "Start working normally — Cortex will automatically remember "
             "important decisions, fixes, and patterns as you go. "
-            "You can also explicitly say \"remember this\" at any time.\n"
+            'You can also explicitly say "remember this" at any time.\n'
         )
-        lines.append("Use `/cortex-remember` to store something, "
-                      "`/cortex-recall` to search your memory.")
+        lines.append(
+            "Use `/cortex-remember` to store something, "
+            "`/cortex-recall` to search your memory."
+        )
         return "\n".join(lines)
 
     return ""
