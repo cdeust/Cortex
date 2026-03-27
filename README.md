@@ -232,6 +232,26 @@ Key principle: **recall before working, remember the why after** — never remem
 | **DevOps** | Infrastructure, incidents, env parity | Infra decisions, incidents, env configs | Decision rationale, postmortems, env parity issues |
 | **Architect** | ADRs, decomposition, refactoring strategy | ADRs, decomposition plans, project story | ADR content, decomposition rationale, refactoring plans |
 
+### Agent-scoped memory: validated, not assumed
+
+Each agent has a `topic` that scopes its memory. When the engineer calls `remember(content, agent_topic="engineer")`, that memory is tagged. When the engineer later calls `recall(query, agent_topic="engineer")`, memories from the engineer's knowledge space get a retrieval boost.
+
+This is a **soft boost**, not a hard filter. Memories from other agents remain visible — scoped recall promotes topic-relevant memories without excluding anything. We validated this empirically before shipping:
+
+| Approach | MRR Delta vs unscoped | Verdict |
+|---|---|---|
+| **Hard filter** (WHERE agent_context = topic) | **-0.101** | Breaks retrieval — excludes cross-topic memories |
+| **Soft boost** (WRRF score uplift for matching topic) | **-0.001** | Neutral — doesn't hurt, slight positive on some categories |
+
+We tested both approaches on the LoCoMo benchmark (495 questions, 3 conversations) with content-classified topics (relationships, career, hobbies, health). Hard filtering destroyed precision because conversations naturally span multiple topics. Soft boosting preserves the full retrieval pool while giving topic-relevant memories a ranking advantage.
+
+The validation benchmark is reproducible:
+```bash
+python3 benchmarks/locomo/run_benchmark_agents.py [--limit N]
+```
+
+The agent_topic feature exists to improve production usage where agents build genuine knowledge spaces over time — not to inflate benchmark numbers. When an agent_topic is omitted, retrieval works exactly as before (backward compatible, no filtering, no boost).
+
 ## Tools
 
 The agents use 34 MCP tools exposed by Cortex:
