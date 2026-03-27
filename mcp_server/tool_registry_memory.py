@@ -45,6 +45,7 @@ def _register_remember(mcp: FastMCP) -> None:
         domain: str | None = None,
         source: str | None = None,
         force: bool = False,
+        agent_topic: str | None = None,
     ) -> str:
         """Store a memory through the predictive coding write gate."""
         result = await remember.handler(
@@ -55,6 +56,7 @@ def _register_remember(mcp: FastMCP) -> None:
                 "domain": domain or "",
                 "source": source or "user",
                 "force": force,
+                "agent_topic": agent_topic or "",
             }
         )
         return json.dumps(result, indent=2, default=str)
@@ -71,6 +73,7 @@ def _register_recall(mcp: FastMCP) -> None:
         directory: str | None = None,
         max_results: int = 10,
         min_heat: float = 0.05,
+        agent_topic: str | None = None,
     ) -> str:
         """Retrieve memories using multi-signal fusion."""
         result = await recall.handler(
@@ -80,6 +83,7 @@ def _register_recall(mcp: FastMCP) -> None:
                 "directory": directory,
                 "max_results": max_results,
                 "min_heat": min_heat,
+                "agent_topic": agent_topic,
             }
         )
         return json.dumps(result, indent=2, default=str)

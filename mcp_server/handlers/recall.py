@@ -43,6 +43,10 @@ schema = {
                 "type": "number",
                 "description": "Minimum heat threshold (default 0.05)",
             },
+            "agent_topic": {
+                "type": "string",
+                "description": "Restrict to specific agent context (e.g., 'engineer', 'researcher')",
+            },
         },
         "required": ["query"],
     },
@@ -134,6 +138,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     query = args["query"]
     domain, directory = args.get("domain"), args.get("directory")
+    agent_topic = args.get("agent_topic")
     max_results = args.get("max_results", 10)
     min_heat = args.get("min_heat", 0.05)
     settings = get_memory_settings()
@@ -147,6 +152,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         top_k=max_results,
         domain=domain,
         directory=directory,
+        agent_topic=agent_topic,
         min_heat=min_heat,
         wrrf_k=settings.WRRF_K,
         momentum_state=_momentum_state,

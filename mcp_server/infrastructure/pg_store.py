@@ -111,7 +111,7 @@ class PgMemoryStore(
                 theta_phase_at_encoding, encoding_strength,
                 separation_index, interference_score,
                 schema_match_score, schema_id,
-                hippocampal_dependency, is_benchmark
+                hippocampal_dependency, is_benchmark, agent_context
             ) VALUES (
                 %(content)s, %(embedding)s, %(tags)s::jsonb, %(source)s, %(domain)s,
                 %(directory_context)s, %(created_at)s, %(last_accessed)s,
@@ -121,7 +121,7 @@ class PgMemoryStore(
                 %(theta_phase)s, %(encoding_strength)s,
                 %(separation_index)s, %(interference_score)s,
                 %(schema_match_score)s, %(schema_id)s,
-                %(hippocampal_dependency)s, %(is_benchmark)s
+                %(hippocampal_dependency)s, %(is_benchmark)s, %(agent_context)s
             ) RETURNING id""",
             {
                 "content": data["content"],
@@ -148,6 +148,7 @@ class PgMemoryStore(
                 "schema_id": data.get("schema_id"),
                 "hippocampal_dependency": data.get("hippocampal_dependency", 1.0),
                 "is_benchmark": data.get("is_benchmark", False),
+                "agent_context": data.get("agent_context", ""),
             },
         ).fetchone()
         self._conn.commit()
@@ -219,6 +220,7 @@ class PgMemoryStore(
         intent: str = "general",
         domain: str | None = None,
         directory: str | None = None,
+        agent_topic: str | None = None,
         min_heat: float = 0.05,
         max_results: int = 10,
         wrrf_k: int = 60,
@@ -233,7 +235,7 @@ class PgMemoryStore(
         emb = self._bytes_to_vector(query_embedding)
         rows = self._conn.execute(
             "SELECT * FROM recall_memories("
-            "  %s::TEXT, %s::vector, %s::TEXT, %s::TEXT, %s::TEXT,"
+            "  %s::TEXT, %s::vector, %s::TEXT, %s::TEXT, %s::TEXT, %s::TEXT,"
             "  %s::REAL, %s::INT, %s::INT,"
             "  %s::REAL, %s::REAL, %s::REAL, %s::REAL, %s::REAL, %s::REAL"
             ")",
@@ -243,6 +245,7 @@ class PgMemoryStore(
                 intent,
                 domain,
                 directory,
+                agent_topic,
                 min_heat,
                 max_results,
                 wrrf_k,

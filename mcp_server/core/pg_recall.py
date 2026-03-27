@@ -85,6 +85,7 @@ def recall(
     top_k: int = 10,
     domain: str | None = None,
     directory: str | None = None,
+    agent_topic: str | None = None,
     min_heat: float = 0.01,
     rerank: bool = True,
     rerank_alpha: float = 0.55,
@@ -100,6 +101,7 @@ def recall(
         top_k: Max results to return.
         domain: Optional domain filter.
         directory: Optional directory filter.
+        agent_topic: Optional agent context filter (e.g., "engineer", "researcher").
         min_heat: Minimum heat threshold.
         rerank: Whether to apply FlashRank reranking.
         rerank_alpha: Blend weight for cross-encoder scores.
@@ -126,6 +128,7 @@ def recall(
         intent=str(intent.value) if hasattr(intent, "value") else str(intent),
         domain=domain,
         directory=directory,
+        agent_topic=agent_topic,
         min_heat=min_heat,
         max_results=top_k,
         wrrf_k=wrrf_k,

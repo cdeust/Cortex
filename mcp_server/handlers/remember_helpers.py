@@ -295,6 +295,7 @@ def insert_and_post_process(
     novelty_score: float,
     store: MemoryStore,
     emb_engine: EmbeddingEngine,
+    agent_context: str = "",
 ) -> dict[str, Any]:
     """Separate, store, and run post-storage operations."""
     is_dec = thermodynamics.is_decision_content(content)
@@ -320,6 +321,7 @@ def insert_and_post_process(
         sep,
         interf,
     )
+    record["agent_context"] = agent_context
     mem_id = store.insert_memory(record)
     _link_if_needed(action, merged_id, mem_id, store)
     tids, tagged, slot = _run_post_store(

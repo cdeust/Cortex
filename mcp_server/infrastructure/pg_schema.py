@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS memories (
     schema_match_score REAL DEFAULT 0.0,
     schema_id       TEXT,
     hippocampal_dependency REAL DEFAULT 1.0,
-    is_benchmark BOOLEAN DEFAULT FALSE
+    is_benchmark BOOLEAN DEFAULT FALSE,
+    agent_context TEXT DEFAULT ''
 );
 """
 
@@ -209,6 +210,8 @@ CREATE INDEX IF NOT EXISTS idx_schemas_domain
     ON schemas (domain);
 CREATE INDEX IF NOT EXISTS idx_rel_pair_type
     ON relationships (source_entity_id, target_entity_id, relationship_type);
+CREATE INDEX IF NOT EXISTS idx_memories_agent_context
+    ON memories (agent_context);
 """
 
 # ── PL/pgSQL: recall_memories ─────────────────────────────────────────────
@@ -220,6 +223,7 @@ CREATE OR REPLACE FUNCTION recall_memories(
     p_intent        TEXT DEFAULT 'general',
     p_domain        TEXT DEFAULT NULL,
     p_directory     TEXT DEFAULT NULL,
+    p_agent_topic   TEXT DEFAULT NULL,
     p_min_heat      REAL DEFAULT 0.05,
     p_max_results   INT DEFAULT 10,
     p_wrrf_k        INT DEFAULT 60,
@@ -257,6 +261,7 @@ BEGIN
           AND m.embedding IS NOT NULL
           AND (p_domain IS NULL OR m.domain = p_domain)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
+          AND (p_agent_topic IS NULL OR m.agent_context = p_agent_topic)
         ORDER BY m.embedding <=> p_query_emb
         LIMIT v_pool
     ),
@@ -272,6 +277,7 @@ BEGIN
           AND NOT m.is_stale
           AND (p_domain IS NULL OR m.domain = p_domain)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
+          AND (p_agent_topic IS NULL OR m.agent_context = p_agent_topic)
         ORDER BY ts_rank_cd(m.content_tsv, v_tsq) DESC
         LIMIT v_pool
     ),
@@ -286,6 +292,7 @@ BEGIN
           AND NOT m.is_stale
           AND (p_domain IS NULL OR m.domain = p_domain)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
+          AND (p_agent_topic IS NULL OR m.agent_context = p_agent_topic)
           AND similarity(m.content, p_query_text) > 0.1
         ORDER BY similarity(m.content, p_query_text) DESC
         LIMIT v_pool
@@ -299,6 +306,7 @@ BEGIN
           AND NOT m.is_stale
           AND (p_domain IS NULL OR m.domain = p_domain)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
+          AND (p_agent_topic IS NULL OR m.agent_context = p_agent_topic)
         ORDER BY m.heat DESC
         LIMIT v_pool
     ),
@@ -311,6 +319,7 @@ BEGIN
           AND NOT m.is_stale
           AND (p_domain IS NULL OR m.domain = p_domain)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
+          AND (p_agent_topic IS NULL OR m.agent_context = p_agent_topic)
         ORDER BY m.created_at DESC
         LIMIT v_pool
     ),
@@ -588,6 +597,17 @@ WHERE is_benchmark = FALSE
 -- Partial index for fast non-benchmark queries
 CREATE INDEX IF NOT EXISTS idx_memories_not_benchmark
     ON memories (heat DESC) WHERE NOT is_benchmark;
+
+-- Migration: add agent_context column for agent-scoped memory
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'agent_context'
+    ) THEN
+        ALTER TABLE memories ADD COLUMN agent_context TEXT DEFAULT '';
+    END IF;
+END $$;
 """
 
 # ── Schema initialization ────────────────────────────────────────────────

@@ -21,6 +21,8 @@ All principles below are **language-agnostic**. Apply them using the idioms of w
 
 ## Cortex Memory Integration
 
+**Your memory topic is `engineer`.** Use `agent_topic="engineer"` on all `recall` and `remember` calls to scope your knowledge space. Omit `agent_topic` when you need cross-agent context.
+
 You operate inside a project with a full MCP-based memory and RAG system. Use it as your knowledge base.
 
 ### Before Coding

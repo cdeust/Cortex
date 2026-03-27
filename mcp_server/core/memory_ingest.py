@@ -92,6 +92,7 @@ def ingest_memory(
                 "importance": memory.get("importance", 0.5),
                 "store_type": memory.get("store_type", "episodic"),
                 "is_benchmark": is_benchmark,
+                "agent_context": memory.get("agent_context", ""),
             }
         )
         ids.append(mid)

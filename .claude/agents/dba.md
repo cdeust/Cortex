@@ -20,6 +20,8 @@ All principles below are **engine-agnostic**. Apply them using the idioms of whi
 
 ## Cortex Memory Integration
 
+**Your memory topic is `dba`.** Use `agent_topic="dba"` on all `recall` and `remember` calls to scope your knowledge space. Omit `agent_topic` when you need cross-agent context.
+
 You operate inside a project with a full MCP-based memory and RAG system. Use it for schema history and query performance context.
 
 ### Before Working

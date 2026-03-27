@@ -19,6 +19,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "Orchestrator",
         "project": "cortex",
         "agent_file": "orchestrator.md",
+        "topic": "orchestrator",
         "description": "Decomposes tasks, spawns specialized agents in parallel worktrees, coordinates and merges",
         "recalls": [
             "recall",
@@ -48,6 +49,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "Engineer",
         "project": "cortex",
         "agent_file": "engineer.md",
+        "topic": "engineer",
         "description": "Clean Architecture, SOLID, root-cause problem solving — adapts to any language",
         "recalls": ["recall", "get_causal_chain", "get_rules", "recall_hierarchical"],
         "remembers": ["remember"],
@@ -64,6 +66,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "Tester",
         "project": "cortex",
         "agent_file": "tester.md",
+        "topic": "tester",
         "description": "Test strategy, coverage analysis, fragile module detection",
         "recalls": ["recall", "detect_gaps", "get_rules"],
         "remembers": ["remember"],
@@ -74,6 +77,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "Reviewer",
         "project": "cortex",
         "agent_file": "reviewer.md",
+        "topic": "reviewer",
         "description": "Code review, ADR enforcement, accepted trade-off tracking",
         "recalls": ["recall", "get_rules", "recall_hierarchical"],
         "remembers": ["remember", "add_rule"],
@@ -84,6 +88,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "UX",
         "project": "cortex",
         "agent_file": "ux.md",
+        "topic": "ux",
         "description": "UX decisions, accessibility, design rationale, user constraints",
         "recalls": ["recall", "recall_hierarchical"],
         "remembers": ["remember"],
@@ -94,6 +99,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "Frontend",
         "project": "cortex",
         "agent_file": "frontend.md",
+        "topic": "frontend",
         "description": "Component architecture, UX integration, frontend patterns",
         "recalls": ["recall", "get_rules", "recall_hierarchical"],
         "remembers": ["remember"],
@@ -104,6 +110,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "Security",
         "project": "cortex",
         "agent_file": "security.md",
+        "topic": "security",
         "description": "Threat models, accepted risks, dependency audits, data flow analysis",
         "recalls": ["recall", "get_causal_chain", "detect_gaps"],
         "remembers": ["remember", "add_rule"],
@@ -114,6 +121,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "Researcher",
         "project": "cortex",
         "agent_file": "researcher.md",
+        "topic": "researcher",
         "description": "Paper reviews, benchmark analysis, competitive intelligence, negative results",
         "recalls": ["recall", "recall_hierarchical", "detect_gaps", "assess_coverage"],
         "remembers": ["remember"],
@@ -130,6 +138,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "DBA",
         "project": "cortex",
         "agent_file": "dba.md",
+        "topic": "dba",
         "description": "Schema decisions, query optimization, migration lessons",
         "recalls": ["recall", "get_causal_chain", "get_rules"],
         "remembers": ["remember"],
@@ -140,6 +149,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "DevOps",
         "project": "cortex",
         "agent_file": "devops.md",
+        "topic": "devops",
         "description": "Infrastructure decisions, incident postmortems, env parity",
         "recalls": ["recall", "get_causal_chain", "recall_hierarchical"],
         "remembers": ["remember"],
@@ -150,6 +160,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "Architect",
         "project": "cortex",
         "agent_file": "architect.md",
+        "topic": "architect",
         "description": "ADRs, decomposition plans, refactoring strategy, project story",
         "recalls": [
             "recall",
@@ -172,6 +183,7 @@ AGENT_REGISTRY: list[dict] = [
         "name": "Pipeline",
         "project": "ai architect",
         "agent_file": None,
+        "topic": "pipeline",
         "description": "End-to-end PRD and architecture pipeline",
         "recalls": [],
         "remembers": [],
@@ -199,3 +211,12 @@ def get_all_tool_names() -> set[str]:
     for agent in AGENT_REGISTRY:
         tools.update(agent["tools"])
     return tools
+
+
+def get_agent_topic(agent_name: str) -> str:
+    """Return the memory topic for an agent (case-insensitive)."""
+    low = agent_name.lower()
+    for a in AGENT_REGISTRY:
+        if a["name"].lower() == low:
+            return a.get("topic", low)
+    return low
