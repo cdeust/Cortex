@@ -13,6 +13,25 @@ jobs:
   test:
     name: Test before release
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: cortex
+          POSTGRES_PASSWORD: cortex
+          POSTGRES_DB: cortex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cortex"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://cortex:cortex@localhost:5432/cortex
+
     steps:
       - uses: actions/checkout@v4
 
@@ -20,6 +39,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Enable pg_trgm extension
+        run: PGPASSWORD=cortex psql -h localhost -U cortex -d cortex -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 
       - name: Install dependencies
         run: pip install -e ".[dev]"
