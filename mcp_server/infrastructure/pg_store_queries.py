@@ -38,12 +38,23 @@ class PgQueryMixin:
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_hot_memories(
-        self, min_heat: float = 0.7, limit: int = 20
+        self,
+        min_heat: float = 0.7,
+        limit: int = 20,
+        include_benchmarks: bool = False,
     ) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            "SELECT * FROM memories WHERE heat >= %s ORDER BY heat DESC LIMIT %s",
-            (min_heat, limit),
-        ).fetchall()
+        if include_benchmarks:
+            rows = self._conn.execute(
+                "SELECT * FROM memories WHERE heat >= %s ORDER BY heat DESC LIMIT %s",
+                (min_heat, limit),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM memories WHERE heat >= %s "
+                "AND NOT coalesce(is_benchmark, FALSE) "
+                "ORDER BY heat DESC LIMIT %s",
+                (min_heat, limit),
+            ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_all_memories_with_embeddings(self) -> list[dict[str, Any]]:

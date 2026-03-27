@@ -95,6 +95,12 @@ class PgMemoryStore(
         """Insert a memory and return its ID."""
         now = _now_iso()
         embedding = self._bytes_to_vector(data.get("embedding"))
+        # Normalize free-form dates to ISO 8601 for proper recency ranking
+        raw_created = data.get("created_at")
+        if raw_created and isinstance(raw_created, str) and "T" not in raw_created:
+            from mcp_server.core.temporal import normalize_date_to_iso
+
+            raw_created = normalize_date_to_iso(raw_created) or raw_created
         row = self._conn.execute(
             """INSERT INTO memories (
                 content, embedding, tags, source, domain,
@@ -105,7 +111,7 @@ class PgMemoryStore(
                 theta_phase_at_encoding, encoding_strength,
                 separation_index, interference_score,
                 schema_match_score, schema_id,
-                hippocampal_dependency
+                hippocampal_dependency, is_benchmark
             ) VALUES (
                 %(content)s, %(embedding)s, %(tags)s::jsonb, %(source)s, %(domain)s,
                 %(directory_context)s, %(created_at)s, %(last_accessed)s,
@@ -115,7 +121,7 @@ class PgMemoryStore(
                 %(theta_phase)s, %(encoding_strength)s,
                 %(separation_index)s, %(interference_score)s,
                 %(schema_match_score)s, %(schema_id)s,
-                %(hippocampal_dependency)s
+                %(hippocampal_dependency)s, %(is_benchmark)s
             ) RETURNING id""",
             {
                 "content": data["content"],
@@ -124,7 +130,7 @@ class PgMemoryStore(
                 "source": data.get("source", ""),
                 "domain": data.get("domain", ""),
                 "directory_context": data.get("directory_context", ""),
-                "created_at": data.get("created_at") or now,
+                "created_at": raw_created or now,
                 "last_accessed": now,
                 "heat": data.get("heat", 1.0),
                 "surprise_score": data.get("surprise_score", 0.0),
@@ -141,6 +147,7 @@ class PgMemoryStore(
                 "schema_match_score": data.get("schema_match_score", 0.0),
                 "schema_id": data.get("schema_id"),
                 "hippocampal_dependency": data.get("hippocampal_dependency", 1.0),
+                "is_benchmark": data.get("is_benchmark", False),
             },
         ).fetchone()
         self._conn.commit()

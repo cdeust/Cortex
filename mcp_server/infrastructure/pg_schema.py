@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS memories (
     interference_score REAL DEFAULT 0.0,
     schema_match_score REAL DEFAULT 0.0,
     schema_id       TEXT,
-    hippocampal_dependency REAL DEFAULT 1.0
+    hippocampal_dependency REAL DEFAULT 1.0,
+    is_benchmark BOOLEAN DEFAULT FALSE
 );
 """
 
@@ -553,6 +554,42 @@ $$ LANGUAGE plpgsql STABLE;
 """
 
 
+# ── Migrations ───────────────────────────────────────────────────────────
+
+MIGRATIONS_DDL = """
+-- Add is_benchmark column (idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'is_benchmark'
+    ) THEN
+        ALTER TABLE memories ADD COLUMN is_benchmark BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
+
+-- Backfill: mark benchmark and test-artifact memories
+UPDATE memories SET is_benchmark = TRUE
+WHERE is_benchmark = FALSE
+  AND (
+    domain IN ('beam', 'locomo', 'longmemeval', 'memoryagentbench',
+               'evermembench', 'episodic', 'unknown', 'alpha', 'beta')
+    OR source = 'cls-consolidation'
+    OR content LIKE 'Recurring pattern across %% observations:%%'
+    OR content LIKE 'Session test-%%'
+    OR content LIKE 'Shape test content%%'
+    OR content LIKE 'Force stored memory%%'
+    OR content LIKE 'Response shape test%%'
+    OR content = 'protected memory content'
+    OR content = 'Something mildly interesting happened today'
+    OR content = 'test memory for consolidation'
+  );
+
+-- Partial index for fast non-benchmark queries
+CREATE INDEX IF NOT EXISTS idx_memories_not_benchmark
+    ON memories (heat DESC) WHERE NOT is_benchmark;
+"""
+
 # ── Schema initialization ────────────────────────────────────────────────
 
 
@@ -565,6 +602,7 @@ def get_all_ddl() -> list[str]:
         RELATIONSHIPS_DDL,
         SUPPORT_TABLES_DDL,
         INDEXES_DDL,
+        MIGRATIONS_DDL,
         RECALL_MEMORIES_FN,
         DECAY_MEMORIES_FN,
         SPREAD_ACTIVATION_FN,
