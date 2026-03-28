@@ -42,7 +42,9 @@ class MemoryStore:
 
         settings = get_memory_settings()
         backend = settings.STORE_BACKEND
-        url = database_url or os.environ.get("DATABASE_URL", "") or settings.DATABASE_URL
+        url = (
+            database_url or os.environ.get("DATABASE_URL", "") or settings.DATABASE_URL
+        )
 
         # Explicit backend selection
         if backend == "sqlite":

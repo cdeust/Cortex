@@ -44,8 +44,7 @@ class SqliteQueryMixin:
     ) -> list[dict[str, Any]]:
         if include_benchmarks:
             rows = self._conn.execute(
-                "SELECT * FROM memories WHERE heat >= ? "
-                "ORDER BY heat DESC LIMIT ?",
+                "SELECT * FROM memories WHERE heat >= ? ORDER BY heat DESC LIMIT ?",
                 (min_heat, limit),
             ).fetchall()
         else:
@@ -59,9 +58,7 @@ class SqliteQueryMixin:
 
     def get_all_memories_with_embeddings(self) -> list[dict[str, Any]]:
         """Return memories that have embeddings in the vec table."""
-        rows = self._conn.execute(
-            "SELECT id, heat FROM memories"
-        ).fetchall()
+        rows = self._conn.execute("SELECT id, heat FROM memories").fetchall()
         results = []
         for r in rows:
             d = dict(r)
@@ -119,13 +116,13 @@ class SqliteQueryMixin:
 
         SQLite lacks jsonb operators — filter in Python then delete by ID.
         """
-        rows = self._conn.execute(
-            "SELECT id, tags FROM memories"
-        ).fetchall()
+        rows = self._conn.execute("SELECT id, tags FROM memories").fetchall()
         ids_to_delete: list[int] = []
         for r in rows:
             try:
-                tags = json.loads(r["tags"]) if isinstance(r["tags"], str) else r["tags"]
+                tags = (
+                    json.loads(r["tags"]) if isinstance(r["tags"], str) else r["tags"]
+                )
                 if tag in tags:
                     ids_to_delete.append(r["id"])
             except (json.JSONDecodeError, TypeError):

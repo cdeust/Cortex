@@ -35,6 +35,7 @@ def is_available() -> bool:
     """Check if tree-sitter is installed."""
     try:
         from tree_sitter_language_pack import get_parser  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -48,6 +49,7 @@ def _get_extractor_and_tree(language: str, content: bytes) -> tuple | None:
     if not extractor:
         return None
     from tree_sitter_language_pack import get_parser
+
     tree = get_parser(language).parse(content)
     return extractor, tree
 
@@ -69,6 +71,7 @@ def parse_file_ast(path: str, content: bytes) -> FileAnalysis:
     result = _get_extractor_and_tree(language, content)
     if not result:
         from mcp_server.core.codebase_parser import parse_file
+
         return parse_file(path, text)
 
     extractor, tree = result
@@ -76,19 +79,25 @@ def parse_file_ast(path: str, content: bytes) -> FileAnalysis:
     docstring = _extract_module_doc(tree.root_node, language, content)
 
     return FileAnalysis(
-        path=path, language=language, content_hash=content_hash,
-        imports=imports, definitions=definitions,
-        docstring=docstring, line_count=text.count("\n") + 1,
+        path=path,
+        language=language,
+        content_hash=content_hash,
+        imports=imports,
+        definitions=definitions,
+        docstring=docstring,
+        line_count=text.count("\n") + 1,
     )
 
 
 def _node_text(node: Node, source: bytes) -> str:
     """Extract text content of a tree-sitter node."""
-    return source[node.start_byte:node.end_byte].decode(errors="replace")
+    return source[node.start_byte : node.end_byte].decode(errors="replace")
 
 
 def _extract_module_doc(
-    root: Node, language: str, source: bytes,
+    root: Node,
+    language: str,
+    source: bytes,
 ) -> str:
     """Extract the module-level docstring."""
     if not root.children:
@@ -111,7 +120,8 @@ def _extract_module_doc(
 
 
 def _extract_python(
-    root: Node, source: bytes,
+    root: Node,
+    source: bytes,
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract Python imports, definitions, and call sites."""
     from mcp_server.core.ast_extractors import (
@@ -119,6 +129,7 @@ def _extract_python(
         extract_python_definitions,
         extract_calls_generic,
     )
+
     imports = extract_python_imports(root, source)
     definitions = extract_python_definitions(root, source)
     calls = extract_calls_generic(root, source)
@@ -129,7 +140,8 @@ def _extract_python(
 
 
 def _extract_js(
-    root: Node, source: bytes,
+    root: Node,
+    source: bytes,
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract JavaScript/TypeScript imports, definitions, and calls."""
     from mcp_server.core.ast_extractors import (
@@ -137,6 +149,7 @@ def _extract_js(
         extract_js_definitions,
         extract_calls_generic,
     )
+
     imports = extract_js_imports(root, source)
     definitions = extract_js_definitions(root, source)
     calls = extract_calls_generic(root, source)
@@ -147,30 +160,57 @@ def _extract_js(
 
 
 def _extract_go(
-    root: Node, source: bytes,
+    root: Node,
+    source: bytes,
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract Go imports, definitions, and calls."""
     from mcp_server.core.ast_extractors import extract_calls_generic
-    from mcp_server.core.ast_extractors_extra import extract_go_imports, extract_go_definitions
-    return extract_go_imports(root, source), extract_go_definitions(root, source), extract_calls_generic(root, source)
+    from mcp_server.core.ast_extractors_extra import (
+        extract_go_imports,
+        extract_go_definitions,
+    )
+
+    return (
+        extract_go_imports(root, source),
+        extract_go_definitions(root, source),
+        extract_calls_generic(root, source),
+    )
 
 
 def _extract_swift(
-    root: Node, source: bytes,
+    root: Node,
+    source: bytes,
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract Swift imports, definitions, and calls."""
     from mcp_server.core.ast_extractors import extract_calls_generic
-    from mcp_server.core.ast_extractors_extra import extract_swift_imports, extract_swift_definitions
-    return extract_swift_imports(root, source), extract_swift_definitions(root, source), extract_calls_generic(root, source)
+    from mcp_server.core.ast_extractors_extra import (
+        extract_swift_imports,
+        extract_swift_definitions,
+    )
+
+    return (
+        extract_swift_imports(root, source),
+        extract_swift_definitions(root, source),
+        extract_calls_generic(root, source),
+    )
 
 
 def _extract_rust(
-    root: Node, source: bytes,
+    root: Node,
+    source: bytes,
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract Rust imports, definitions, and calls."""
     from mcp_server.core.ast_extractors import extract_calls_generic
-    from mcp_server.core.ast_extractors_extra import extract_rust_imports, extract_rust_definitions
-    return extract_rust_imports(root, source), extract_rust_definitions(root, source), extract_calls_generic(root, source)
+    from mcp_server.core.ast_extractors_extra import (
+        extract_rust_imports,
+        extract_rust_definitions,
+    )
+
+    return (
+        extract_rust_imports(root, source),
+        extract_rust_definitions(root, source),
+        extract_calls_generic(root, source),
+    )
 
 
 _EXTRACTORS = {

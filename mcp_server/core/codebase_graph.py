@@ -46,7 +46,9 @@ def resolve_import_to_file(
 
 
 def _build_candidates(
-    module: str, importing_file: str, is_relative: bool,
+    module: str,
+    importing_file: str,
+    is_relative: bool,
 ) -> list[str]:
     """Build candidate file paths for a module name."""
     candidates: list[str] = []
@@ -176,6 +178,7 @@ def _build_dependency_graph(
 ) -> object:
     """Build a networkx graph from file and call edges."""
     import networkx as nx
+
     g = nx.Graph()
     for src, tgt in file_edges:
         g.add_edge(src, tgt, weight=1.0)

@@ -48,16 +48,24 @@ class SqliteSearchMixin:
         self._signal_vector(scores, query_embedding, w_vector, wrrf_k, pool)
         self._signal_fts(scores, query_text, w_fts, wrrf_k, pool)
         self._signal_heat(scores, w_heat, wrrf_k, pool, min_heat, domain, directory)
-        self._signal_recency(scores, w_recency, wrrf_k, pool, min_heat, domain, directory)
+        self._signal_recency(
+            scores, w_recency, wrrf_k, pool, min_heat, domain, directory
+        )
         self._apply_agent_boost(scores, agent_topic, w_vector, wrrf_k)
 
         if not scores:
             return []
-        return self._fetch_ranked_results(scores, max_results, min_heat, domain, directory)
+        return self._fetch_ranked_results(
+            scores, max_results, min_heat, domain, directory
+        )
 
     def _signal_vector(
-        self, scores: dict[int, float], query_embedding: bytes | None,
-        weight: float, k: int, pool: int,
+        self,
+        scores: dict[int, float],
+        query_embedding: bytes | None,
+        weight: float,
+        k: int,
+        pool: int,
     ) -> None:
         if not self._has_vec or query_embedding is None or weight <= 0:
             return
@@ -76,8 +84,12 @@ class SqliteSearchMixin:
             pass
 
     def _signal_fts(
-        self, scores: dict[int, float], query_text: str,
-        weight: float, k: int, pool: int,
+        self,
+        scores: dict[int, float],
+        query_text: str,
+        weight: float,
+        k: int,
+        pool: int,
     ) -> None:
         if not query_text or weight <= 0:
             return
@@ -93,8 +105,14 @@ class SqliteSearchMixin:
             pass
 
     def _signal_heat(
-        self, scores: dict[int, float], weight: float, k: int, pool: int,
-        min_heat: float, domain: str | None, directory: str | None,
+        self,
+        scores: dict[int, float],
+        weight: float,
+        k: int,
+        pool: int,
+        min_heat: float,
+        domain: str | None,
+        directory: str | None,
     ) -> None:
         if weight <= 0:
             return
@@ -109,8 +127,14 @@ class SqliteSearchMixin:
             scores[r["id"]] = scores.get(r["id"], 0) + weight / (k + rank)
 
     def _signal_recency(
-        self, scores: dict[int, float], weight: float, k: int, pool: int,
-        min_heat: float, domain: str | None, directory: str | None,
+        self,
+        scores: dict[int, float],
+        weight: float,
+        k: int,
+        pool: int,
+        min_heat: float,
+        domain: str | None,
+        directory: str | None,
     ) -> None:
         if weight <= 0:
             return
@@ -126,7 +150,9 @@ class SqliteSearchMixin:
 
     @staticmethod
     def _build_filter(
-        min_heat: float, domain: str | None, directory: str | None,
+        min_heat: float,
+        domain: str | None,
+        directory: str | None,
     ) -> tuple[list[str], list[Any]]:
         conds = ["heat >= ?", "NOT is_stale"]
         params: list[Any] = [min_heat]
@@ -139,8 +165,11 @@ class SqliteSearchMixin:
         return conds, params
 
     def _apply_agent_boost(
-        self, scores: dict[int, float], agent_topic: str | None,
-        w_vector: float, wrrf_k: int,
+        self,
+        scores: dict[int, float],
+        agent_topic: str | None,
+        w_vector: float,
+        wrrf_k: int,
     ) -> None:
         if not agent_topic or not scores:
             return
@@ -156,8 +185,12 @@ class SqliteSearchMixin:
             scores[r["id"]] += boost
 
     def _fetch_ranked_results(
-        self, scores: dict[int, float], max_results: int,
-        min_heat: float, domain: str | None, directory: str | None,
+        self,
+        scores: dict[int, float],
+        max_results: int,
+        min_heat: float,
+        domain: str | None,
+        directory: str | None,
     ) -> list[dict[str, Any]]:
         top_ids = sorted(scores, key=scores.get, reverse=True)[: max_results * 3]  # type: ignore[arg-type]
         placeholders = ",".join("?" * len(top_ids))
@@ -178,18 +211,20 @@ class SqliteSearchMixin:
                 continue
             if directory and row["directory_context"] != directory:
                 continue
-            results.append({
-                "memory_id": mid,
-                "content": row["content"],
-                "score": scores[mid],
-                "heat": row["heat"],
-                "domain": row["domain"],
-                "created_at": row["created_at"],
-                "store_type": row["store_type"],
-                "tags": row["tags"],
-                "importance": row["importance"],
-                "surprise_score": row["surprise_score"],
-            })
+            results.append(
+                {
+                    "memory_id": mid,
+                    "content": row["content"],
+                    "score": scores[mid],
+                    "heat": row["heat"],
+                    "domain": row["domain"],
+                    "created_at": row["created_at"],
+                    "store_type": row["store_type"],
+                    "tags": row["tags"],
+                    "importance": row["importance"],
+                    "surprise_score": row["surprise_score"],
+                }
+            )
         return results
 
     def search_fts(self, query: str, limit: int = 20) -> list[tuple[int, float]]:
@@ -236,7 +271,9 @@ class SqliteSearchMixin:
         seed_entities = self._resolve_seed_entities(query_terms, min_heat)
         if not seed_entities:
             return []
-        activated = self._propagate_activation(seed_entities, decay, threshold, max_depth)
+        activated = self._propagate_activation(
+            seed_entities, decay, threshold, max_depth
+        )
         return self._map_entities_to_memories(activated, min_heat, max_results)
 
     def _resolve_seed_entities(
@@ -254,8 +291,11 @@ class SqliteSearchMixin:
         return seeds
 
     def _propagate_activation(
-        self, seeds: dict[int, float], decay: float,
-        threshold: float, max_depth: int,
+        self,
+        seeds: dict[int, float],
+        decay: float,
+        threshold: float,
+        max_depth: int,
     ) -> dict[int, float]:
         activated = dict(seeds)
         frontier = dict(seeds)
@@ -285,7 +325,10 @@ class SqliteSearchMixin:
         return activated
 
     def _map_entities_to_memories(
-        self, activated: dict[int, float], min_heat: float, max_results: int,
+        self,
+        activated: dict[int, float],
+        min_heat: float,
+        max_results: int,
     ) -> list[tuple[int, float]]:
         memory_acts: dict[int, float] = {}
         for eid, act in activated.items():

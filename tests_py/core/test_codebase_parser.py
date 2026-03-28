@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from mcp_server.core.codebase_parser import (
-    FileAnalysis,
     build_memory_content,
     detect_language,
     parse_file,
@@ -93,7 +92,7 @@ async def refresh_token(user_id: str) -> dict:
 
 
 class TestParseTypeScript:
-    SAMPLE = '''import { Request, Response } from 'express';
+    SAMPLE = """import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 
 export interface AuthConfig {
@@ -113,7 +112,7 @@ export class AuthService {
 export async function verifyToken(token: string): Promise<TokenPayload> {
   return jwt.verify(token, config.secret);
 }
-'''
+"""
 
     def test_imports(self) -> None:
         result = parse_file("auth/service.ts", self.SAMPLE)
@@ -143,7 +142,7 @@ export async function verifyToken(token: string): Promise<TokenPayload> {
 
 
 class TestParseGo:
-    SAMPLE = '''package auth
+    SAMPLE = """package auth
 
 import (
     "context"
@@ -166,7 +165,7 @@ func NewAuthService(secret string) *AuthService {
 func (s *AuthService) Validate(ctx context.Context, token string) error {
     return nil
 }
-'''
+"""
 
     def test_imports(self) -> None:
         result = parse_file("auth/service.go", self.SAMPLE)

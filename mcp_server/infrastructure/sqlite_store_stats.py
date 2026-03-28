@@ -111,8 +111,7 @@ class SqliteStatsMixin:
 
     def save_oscillatory_state(self, state_json: str) -> None:
         self._conn.execute(
-            "INSERT OR REPLACE INTO oscillatory_state (id, state_json) "
-            "VALUES (1, ?)",
+            "INSERT OR REPLACE INTO oscillatory_state (id, state_json) VALUES (1, ?)",
             (state_json,),
         )
         self._conn.commit()
@@ -172,8 +171,7 @@ class SqliteStatsMixin:
         params.append(limit)
         where = " AND ".join(conditions)
         rows = self._conn.execute(
-            f"SELECT * FROM memories WHERE {where} "
-            f"ORDER BY created_at DESC LIMIT ?",
+            f"SELECT * FROM memories WHERE {where} ORDER BY created_at DESC LIMIT ?",
             params,
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
@@ -222,8 +220,7 @@ class SqliteStatsMixin:
 
     def get_last_consolidation(self) -> str | None:
         row = self._conn.execute(
-            "SELECT timestamp FROM consolidation_log "
-            "ORDER BY timestamp DESC LIMIT 1"
+            "SELECT timestamp FROM consolidation_log ORDER BY timestamp DESC LIMIT 1"
         ).fetchone()
         return row["timestamp"] if row else None
 

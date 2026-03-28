@@ -40,12 +40,28 @@ schema = {
     "inputSchema": {
         "type": "object",
         "properties": {
-            "directory": {"type": "string", "description": "Root directory (defaults to cwd)"},
-            "languages": {"type": "array", "items": {"type": "string"}, "description": "Language filter"},
+            "directory": {
+                "type": "string",
+                "description": "Root directory (defaults to cwd)",
+            },
+            "languages": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Language filter",
+            },
             "max_files": {"type": "integer", "description": "Max files (default 500)"},
-            "max_file_size_kb": {"type": "integer", "description": "Max file size KB (default 100)"},
-            "incremental": {"type": "boolean", "description": "Only changed files (default true)"},
-            "dry_run": {"type": "boolean", "description": "Report only (default false)"},
+            "max_file_size_kb": {
+                "type": "integer",
+                "description": "Max file size KB (default 100)",
+            },
+            "incremental": {
+                "type": "boolean",
+                "description": "Only changed files (default true)",
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": "Report only (default false)",
+            },
             "domain": {"type": "string", "description": "Domain tag"},
         },
         "required": [],
@@ -113,22 +129,28 @@ def _set_memory_metadata(store: MemoryStore, memory_id: int) -> None:
 
 
 async def _store_file(
-    root: Path, rel_path: str, analysis: Any, domain: str, store: MemoryStore,
+    root: Path,
+    rel_path: str,
+    analysis: Any,
+    domain: str,
+    store: MemoryStore,
 ) -> tuple[int | None, int, int]:
     """Store a single file as a memory with entities.
 
     Returns:
         Tuple of (memory_id, entities, relationships).
     """
-    result = await remember_handler({
-        "content": build_memory_content(analysis),
-        "tags": _build_tags(rel_path, analysis),
-        "directory": str(root),
-        "domain": domain,
-        "source": CODEBASE_SOURCE,
-        "force": True,
-        "agent_topic": CODEBASE_AGENT_CONTEXT,
-    })
+    result = await remember_handler(
+        {
+            "content": build_memory_content(analysis),
+            "tags": _build_tags(rel_path, analysis),
+            "directory": str(root),
+            "domain": domain,
+            "source": CODEBASE_SOURCE,
+            "force": True,
+            "agent_topic": CODEBASE_AGENT_CONTEXT,
+        }
+    )
     memory_id = result.get("memory_id")
     if not result.get("stored") or not memory_id:
         return None, 0, 0
@@ -141,6 +163,7 @@ async def _store_file(
 def _parse_one_file(path: str, content: str) -> Any:
     """Parse a file with tree-sitter AST or regex fallback."""
     from mcp_server.core.ast_parser import is_available, parse_file_ast
+
     if is_available():
         return parse_file_ast(path, content.encode(errors="replace"))
     return parse_file(path, content)
@@ -183,13 +206,23 @@ async def _process_files(
         updated_count += 1 if rel_path in existing else 0
         new_count += 0 if rel_path in existing else 1
 
-    return (new_count, updated_count, unchanged_count, total_entities,
-            total_relationships, seen_paths, all_analyses, file_contents)
+    return (
+        new_count,
+        updated_count,
+        unchanged_count,
+        total_entities,
+        total_relationships,
+        seen_paths,
+        all_analyses,
+        file_contents,
+    )
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Analyze a codebase and store its structure as Cortex memories."""
-    root, languages, max_files, max_bytes, incremental, dry_run, domain = _parse_args(args)
+    root, languages, max_files, max_bytes, incremental, dry_run, domain = _parse_args(
+        args
+    )
 
     if not root.exists() or not root.is_dir():
         return {"analyzed": False, "reason": f"directory not found: {root}"}
@@ -200,8 +233,13 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     if dry_run:
         langs = list({EXT_TO_LANG.get(f.suffix.lower(), "?") for f in source_files})
-        return {"analyzed": False, "dry_run": True, "directory": str(root),
-                "source_files": len(source_files), "languages": langs}
+        return {
+            "analyzed": False,
+            "dry_run": True,
+            "directory": str(root),
+            "source_files": len(source_files),
+            "languages": langs,
+        }
 
     store = _get_store()
     existing = load_existing_hashes(store) if incremental else {}
@@ -209,7 +247,12 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         _log(f"loaded {len(existing)} existing file hashes")
 
     new_c, upd_c, unch_c, ents, rels, seen, analyses, contents = await _process_files(
-        source_files, root, existing, incremental, domain, store,
+        source_files,
+        root,
+        existing,
+        incremental,
+        domain,
+        store,
     )
     stale = _mark_deleted(existing, seen, store, incremental)
 
@@ -219,11 +262,19 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     _log(f"done: {new_c} new, {upd_c} updated, {unch_c} unchanged, {stale} stale")
     _log(f"graph: {graph_stats}")
     return {
-        "analyzed": True, "directory": str(root), "source_files": len(source_files),
-        "new": new_c, "updated": upd_c, "unchanged": unch_c,
-        "stale_marked": stale, "entities": ents, "relationships": rels,
+        "analyzed": True,
+        "directory": str(root),
+        "source_files": len(source_files),
+        "new": new_c,
+        "updated": upd_c,
+        "unchanged": unch_c,
+        "stale_marked": stale,
+        "entities": ents,
+        "relationships": rels,
         "graph": graph_stats,
-        "languages": list({EXT_TO_LANG.get(f.suffix.lower(), "?") for f in source_files}),
+        "languages": list(
+            {EXT_TO_LANG.get(f.suffix.lower(), "?") for f in source_files}
+        ),
     }
 
 

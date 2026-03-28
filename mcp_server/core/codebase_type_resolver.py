@@ -14,18 +14,66 @@ import re
 from mcp_server.core.codebase_parser import FileAnalysis
 
 # Types too generic to be meaningful cross-file references
-_NOISE_TYPES = frozenset({
-    "Self", "self", "Any", "String", "Int", "Bool", "Double", "Float",
-    "Array", "Dictionary", "Set", "Optional", "Result", "Error", "Void",
-    "View", "Body", "some", "Type", "Data", "URL", "Date", "UUID",
-    "True", "False", "None", "nil", "List", "Dict", "Tuple",
-    "object", "str", "int", "float", "bool", "bytes", "dict", "list",
-    "tuple", "set", "type", "cls", "args", "kwargs",
-})
+_NOISE_TYPES = frozenset(
+    {
+        "Self",
+        "self",
+        "Any",
+        "String",
+        "Int",
+        "Bool",
+        "Double",
+        "Float",
+        "Array",
+        "Dictionary",
+        "Set",
+        "Optional",
+        "Result",
+        "Error",
+        "Void",
+        "View",
+        "Body",
+        "some",
+        "Type",
+        "Data",
+        "URL",
+        "Date",
+        "UUID",
+        "True",
+        "False",
+        "None",
+        "nil",
+        "List",
+        "Dict",
+        "Tuple",
+        "object",
+        "str",
+        "int",
+        "float",
+        "bool",
+        "bytes",
+        "dict",
+        "list",
+        "tuple",
+        "set",
+        "type",
+        "cls",
+        "args",
+        "kwargs",
+    }
+)
 
-_TYPE_KINDS = frozenset({
-    "class", "protocol", "enum", "interface", "trait", "struct", "type",
-})
+_TYPE_KINDS = frozenset(
+    {
+        "class",
+        "protocol",
+        "enum",
+        "interface",
+        "trait",
+        "struct",
+        "type",
+    }
+)
 
 MIN_TYPE_NAME_LENGTH = 3
 

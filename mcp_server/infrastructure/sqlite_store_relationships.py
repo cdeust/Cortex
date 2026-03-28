@@ -31,9 +31,7 @@ class SqliteRelationshipMixin:
         return cur.lastrowid  # type: ignore[return-value]
 
     def count_relationships(self) -> int:
-        row = self._conn.execute(
-            "SELECT COUNT(*) AS c FROM relationships"
-        ).fetchone()
+        row = self._conn.execute("SELECT COUNT(*) AS c FROM relationships").fetchone()
         return row["c"] if row else 0
 
     def get_relationships_for_entity(

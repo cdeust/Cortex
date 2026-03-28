@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
 
 from mcp_server.core.codebase_parser import EXT_TO_LANG, FileAnalysis
 from mcp_server.handlers.seed_project_constants import IGNORE_DIRS
@@ -70,8 +69,7 @@ def load_existing_hashes(store: MemoryStore) -> dict[str, tuple[int, str]]:
     hashes: dict[str, tuple[int, str]] = {}
     try:
         rows = store._conn.execute(
-            "SELECT id, tags FROM memories "
-            "WHERE agent_context = %s AND NOT is_stale",
+            "SELECT id, tags FROM memories WHERE agent_context = %s AND NOT is_stale",
             (CODEBASE_AGENT_CONTEXT,),
         ).fetchall()
         for row in rows:
@@ -91,9 +89,9 @@ def _extract_file_hash(tags: list) -> tuple[str, str]:
     for tag in tags:
         if isinstance(tag, str):
             if tag.startswith(FILE_TAG_PREFIX):
-                file_path = tag[len(FILE_TAG_PREFIX):]
+                file_path = tag[len(FILE_TAG_PREFIX) :]
             elif tag.startswith(HASH_TAG_PREFIX):
-                content_hash = tag[len(HASH_TAG_PREFIX):]
+                content_hash = tag[len(HASH_TAG_PREFIX) :]
     return file_path, content_hash
 
 
@@ -118,7 +116,10 @@ def mark_stale(store: MemoryStore, memory_ids: list[int]) -> int:
 
 
 def _get_or_create_entity(
-    store: MemoryStore, name: str, entity_type: str, domain: str,
+    store: MemoryStore,
+    name: str,
+    entity_type: str,
+    domain: str,
 ) -> int:
     """Find existing entity by name or create a new one. Returns entity ID."""
     existing = store.get_entity_by_name(name)
@@ -128,45 +129,68 @@ def _get_or_create_entity(
 
 
 def _persist_symbol_entities(
-    store: MemoryStore, analysis: FileAnalysis, file_eid: int, domain: str,
+    store: MemoryStore,
+    analysis: FileAnalysis,
+    file_eid: int,
+    domain: str,
 ) -> tuple[int, int]:
     """Persist symbol definitions as entities with 'defines' relationships."""
     entities, relationships = 0, 0
-    valid_kinds = {"function", "class", "interface", "type", "enum", "trait", "protocol", "constant", "struct"}
+    valid_kinds = {
+        "function",
+        "class",
+        "interface",
+        "type",
+        "enum",
+        "trait",
+        "protocol",
+        "constant",
+        "struct",
+    }
     for sym in analysis.definitions:
         kind = sym.kind if sym.kind in valid_kinds else "function"
         sym_eid = _get_or_create_entity(store, sym.name, kind, domain)
         entities += 1
-        store.insert_relationship({
-            "source_entity_id": file_eid,
-            "target_entity_id": sym_eid,
-            "relationship_type": "defines",
-            "weight": 1.0,
-        })
+        store.insert_relationship(
+            {
+                "source_entity_id": file_eid,
+                "target_entity_id": sym_eid,
+                "relationship_type": "defines",
+                "weight": 1.0,
+            }
+        )
         relationships += 1
     return entities, relationships
 
 
 def _persist_import_entities(
-    store: MemoryStore, analysis: FileAnalysis, file_eid: int, domain: str,
+    store: MemoryStore,
+    analysis: FileAnalysis,
+    file_eid: int,
+    domain: str,
 ) -> tuple[int, int]:
     """Persist import targets as dependency entities with 'imports' edges."""
     entities, relationships = 0, 0
     for imp in analysis.imports:
         dep_eid = _get_or_create_entity(store, imp.module, "dependency", domain)
         entities += 1
-        store.insert_relationship({
-            "source_entity_id": file_eid,
-            "target_entity_id": dep_eid,
-            "relationship_type": "imports",
-            "weight": 1.0,
-        })
+        store.insert_relationship(
+            {
+                "source_entity_id": file_eid,
+                "target_entity_id": dep_eid,
+                "relationship_type": "imports",
+                "weight": 1.0,
+            }
+        )
         relationships += 1
     return entities, relationships
 
 
 def persist_entities(
-    store: MemoryStore, analysis: FileAnalysis, memory_id: int, domain: str,
+    store: MemoryStore,
+    analysis: FileAnalysis,
+    memory_id: int,
+    domain: str,
 ) -> tuple[int, int]:
     """Persist file entity, symbols, and imports to knowledge graph.
 
@@ -195,7 +219,9 @@ def persist_entities(
 
 
 def persist_file_edge(
-    store: MemoryStore, edges: list[tuple[str, str]], domain: str,
+    store: MemoryStore,
+    edges: list[tuple[str, str]],
+    domain: str,
 ) -> int:
     """Store resolved file->file import edges as relationships."""
     count = 0
@@ -203,12 +229,14 @@ def persist_file_edge(
         try:
             src_eid = _get_or_create_entity(store, src_path, "file", domain)
             tgt_eid = _get_or_create_entity(store, tgt_path, "file", domain)
-            store.insert_relationship({
-                "source_entity_id": src_eid,
-                "target_entity_id": tgt_eid,
-                "relationship_type": "imports",
-                "weight": 1.0,
-            })
+            store.insert_relationship(
+                {
+                    "source_entity_id": src_eid,
+                    "target_entity_id": tgt_eid,
+                    "relationship_type": "imports",
+                    "weight": 1.0,
+                }
+            )
             count += 1
         except Exception:
             pass
@@ -216,7 +244,9 @@ def persist_file_edge(
 
 
 def persist_inheritance_edge(
-    store: MemoryStore, edges: list[tuple[str, str]], domain: str,
+    store: MemoryStore,
+    edges: list[tuple[str, str]],
+    domain: str,
 ) -> int:
     """Store class->parent inheritance edges as relationships."""
     count = 0
@@ -224,12 +254,14 @@ def persist_inheritance_edge(
         try:
             child_eid = _get_or_create_entity(store, child, "class", domain)
             parent_eid = _get_or_create_entity(store, parent, "class", domain)
-            store.insert_relationship({
-                "source_entity_id": child_eid,
-                "target_entity_id": parent_eid,
-                "relationship_type": "extends",
-                "weight": 1.0,
-            })
+            store.insert_relationship(
+                {
+                    "source_entity_id": child_eid,
+                    "target_entity_id": parent_eid,
+                    "relationship_type": "extends",
+                    "weight": 1.0,
+                }
+            )
             count += 1
         except Exception:
             pass
@@ -237,7 +269,8 @@ def persist_inheritance_edge(
 
 
 def persist_community_tags(
-    store: MemoryStore, communities: dict[str, int],
+    store: MemoryStore,
+    communities: dict[str, int],
 ) -> None:
     """Tag codebase memories with their community cluster ID."""
     for file_path, cluster_id in communities.items():

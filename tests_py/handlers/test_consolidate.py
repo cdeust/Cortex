@@ -72,9 +72,7 @@ class TestConsolidateHandler:
         )
 
         # Manually set last_accessed to old time to trigger decay
-        store._conn.execute(
-            "UPDATE memories SET last_accessed = %s", (old_time,)
-        )
+        store._conn.execute("UPDATE memories SET last_accessed = %s", (old_time,))
         store._conn.commit()
 
         result = await handler({"decay": True, "compress": True})

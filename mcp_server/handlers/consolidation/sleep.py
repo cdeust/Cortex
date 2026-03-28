@@ -50,7 +50,9 @@ def _apply_dream_replay(
             new_content = upd["enriched_content"]
             new_emb = embeddings.encode(new_content)
             store.update_memory_compression(
-                upd["memory_id"], new_content, new_emb,
+                upd["memory_id"],
+                new_content,
+                new_emb,
                 compression_level=0,
             )
             count += 1

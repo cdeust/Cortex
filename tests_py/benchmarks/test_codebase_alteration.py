@@ -1,33 +1,25 @@
 """Codebase alteration benchmark — detect renamed symbols in code memories.
 
-Analyzes a synthetic codebase (20 Python files), then modifies exactly
+Analyzes a synthetic codebase (10 Python files), then modifies exactly
 2 files (rename a class, change a function), re-analyzes incrementally,
 and tests whether:
   1. The altered files are detected as changed (hash mismatch)
-  2. Recall returns the NEW symbol names, not the old ones
+  2. The store contains the NEW symbol names, not the old ones
   3. Unmodified files remain unchanged
-  4. The knowledge graph reflects the renamed entities
+  4. Total file count is preserved
 
-This is the codebase equivalent of the Harry Potter spell alteration test.
+Tests use direct store queries — works with any embedding backend.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 import tempfile
 from pathlib import Path
 
 import pytest
 
-# Skip in CI — needs sentence-transformers + real DB
-pytestmark = pytest.mark.skipif(
-    os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true",
-    reason="Benchmark tests require sentence-transformers and a real database",
-)
-
 from mcp_server.handlers.codebase_analyze import handler as analyze_handler
-from mcp_server.handlers.recall import handler as recall_handler
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
@@ -37,219 +29,141 @@ DOMAIN = "codebase-alteration-bench"
 # ── Synthetic codebase ────────────────────────────────────────────────────
 
 ORIGINAL_FILES: dict[str, str] = {
-    "auth/token_service.py": '''"""Token management service."""
-
-from datetime import datetime, timedelta
-from auth.crypto import sign_payload
-
-class TokenService:
-    """Manages JWT token creation and validation."""
-
-    def __init__(self, secret: str, expiry_hours: int = 24):
-        self.secret = secret
-        self.expiry = timedelta(hours=expiry_hours)
-
-    def create_token(self, user_id: str, roles: list[str]) -> str:
-        """Create a signed JWT token for a user."""
-        payload = {"sub": user_id, "roles": roles, "exp": datetime.utcnow() + self.expiry}
-        return sign_payload(payload, self.secret)
-
-    def validate_token(self, token: str) -> dict:
-        """Validate and decode a JWT token."""
-        return verify_payload(token, self.secret)
-''',
-    "auth/crypto.py": '''"""Cryptographic primitives for auth."""
-
-import hashlib
-import hmac
-
-def sign_payload(payload: dict, secret: str) -> str:
-    """Sign a payload with HMAC-SHA256."""
-    msg = str(sorted(payload.items())).encode()
-    return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
-
-def verify_payload(token: str, secret: str) -> dict:
-    """Verify a signed token."""
-    return {"valid": True}
-''',
-    "auth/middleware.py": '''"""Authentication middleware."""
-
-from auth.token_service import TokenService
-
-class AuthMiddleware:
-    """HTTP middleware that validates auth tokens."""
-
-    def __init__(self, token_service: TokenService):
-        self.token_service = token_service
-
-    def authenticate(self, request: dict) -> dict:
-        """Extract and validate token from request headers."""
-        header = request.get("Authorization", "")
-        if not header.startswith("Bearer "):
-            return {"authenticated": False}
-        token = header[7:]
-        return self.token_service.validate_token(token)
-''',
-    "models/user.py": '''"""User domain model."""
-
-from dataclasses import dataclass, field
-
-@dataclass
-class User:
-    """Represents an authenticated user."""
-    user_id: str
-    email: str
-    display_name: str
-    roles: list[str] = field(default_factory=list)
-    is_active: bool = True
-
-    def has_role(self, role: str) -> bool:
-        return role in self.roles
-''',
-    "models/session.py": '''"""Session tracking model."""
-
-from dataclasses import dataclass
-from datetime import datetime
-
-@dataclass
-class Session:
-    """Active user session."""
-    session_id: str
-    user_id: str
-    created_at: datetime
-    last_active: datetime
-    ip_address: str = ""
-
-    def is_expired(self, max_idle_minutes: int = 30) -> bool:
-        delta = datetime.utcnow() - self.last_active
-        return delta.total_seconds() > max_idle_minutes * 60
-''',
-    "api/routes.py": '''"""API route definitions."""
-
-from auth.middleware import AuthMiddleware
-from models.user import User
-
-class Router:
-    """HTTP router with auth-protected endpoints."""
-
-    def __init__(self, auth: AuthMiddleware):
-        self.auth = auth
-
-    def get_profile(self, request: dict) -> dict:
-        """Get current user profile."""
-        auth_result = self.auth.authenticate(request)
-        if not auth_result.get("authenticated"):
-            return {"error": "unauthorized"}
-        return {"user": auth_result.get("user_id")}
-
-    def list_users(self, request: dict) -> list:
-        """List all users (admin only)."""
-        return []
-''',
-    "api/health.py": '''"""Health check endpoint."""
-
-def health_check() -> dict:
-    """Return service health status."""
-    return {"status": "ok", "version": "1.0.0"}
-
-def readiness_check(db_connected: bool) -> dict:
-    """Return readiness status."""
-    return {"ready": db_connected}
-''',
-    "storage/repository.py": '''"""Base repository pattern."""
-
-from typing import Any
-
-class BaseRepository:
-    """Abstract repository for data access."""
-
-    def __init__(self, connection: Any):
-        self.connection = connection
-
-    def find_by_id(self, entity_id: str) -> dict | None:
-        """Find entity by primary key."""
-        return None
-
-    def save(self, entity: dict) -> str:
-        """Persist an entity and return its ID."""
-        return ""
-''',
-    "storage/user_repo.py": '''"""User repository implementation."""
-
-from storage.repository import BaseRepository
-from models.user import User
-
-class UserRepository(BaseRepository):
-    """Database operations for User entities."""
-
-    def find_by_email(self, email: str) -> User | None:
-        """Look up a user by email address."""
-        return None
-
-    def create_user(self, email: str, name: str) -> User:
-        """Create a new user account."""
-        return User(user_id="new", email=email, display_name=name)
-''',
-    "config/settings.py": '''"""Application configuration."""
-
-import os
-
-class AppSettings:
-    """Central configuration loaded from environment."""
-
-    def __init__(self):
-        self.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
-        self.db_url = os.environ.get("DATABASE_URL", "sqlite:///app.db")
-        self.debug = os.environ.get("DEBUG", "false").lower() == "true"
-        self.port = int(os.environ.get("PORT", "8080"))
-''',
+    "auth/token_service.py": (
+        '"""Token management service."""\n\n'
+        "from datetime import datetime, timedelta\n"
+        "from auth.crypto import sign_payload\n\n"
+        "class TokenService:\n"
+        '    """Manages JWT token creation and validation."""\n\n'
+        "    def __init__(self, secret: str, expiry_hours: int = 24):\n"
+        "        self.secret = secret\n"
+        "        self.expiry = timedelta(hours=expiry_hours)\n\n"
+        "    def create_token(self, user_id: str) -> str:\n"
+        "        return sign_payload({}, self.secret)\n\n"
+        "    def validate_token(self, token: str) -> dict:\n"
+        "        return {}\n"
+    ),
+    "auth/crypto.py": (
+        '"""Cryptographic primitives."""\n\n'
+        "import hashlib\nimport hmac\n\n"
+        "def sign_payload(payload: dict, secret: str) -> str:\n"
+        "    return hmac.new(secret.encode(), b'', hashlib.sha256).hexdigest()\n\n"
+        "def verify_payload(token: str, secret: str) -> dict:\n"
+        '    return {"valid": True}\n'
+    ),
+    "auth/middleware.py": (
+        '"""Authentication middleware."""\n\n'
+        "from auth.token_service import TokenService\n\n"
+        "class AuthMiddleware:\n"
+        "    def __init__(self, svc: TokenService):\n"
+        "        self.svc = svc\n\n"
+        "    def authenticate(self, request: dict) -> dict:\n"
+        '        header = request.get("Authorization", "")\n'
+        '        if not header.startswith("Bearer "):\n'
+        '            return {"authenticated": False}\n'
+        "        return self.svc.validate_token(header[7:])\n"
+    ),
+    "models/user.py": (
+        '"""User model."""\n\n'
+        "from dataclasses import dataclass, field\n\n"
+        "@dataclass\nclass User:\n"
+        "    user_id: str\n    email: str\n"
+        "    display_name: str\n"
+        "    roles: list[str] = field(default_factory=list)\n\n"
+        "    def has_role(self, role: str) -> bool:\n"
+        "        return role in self.roles\n"
+    ),
+    "models/session.py": (
+        '"""Session model."""\n\n'
+        "from dataclasses import dataclass\nfrom datetime import datetime\n\n"
+        "@dataclass\nclass Session:\n"
+        "    session_id: str\n    user_id: str\n"
+        "    created_at: datetime\n\n"
+        "    def is_expired(self, max_minutes: int = 30) -> bool:\n"
+        "        return False\n"
+    ),
+    "api/routes.py": (
+        '"""API routes."""\n\n'
+        "from auth.middleware import AuthMiddleware\n\n"
+        "class Router:\n"
+        "    def __init__(self, auth: AuthMiddleware):\n"
+        "        self.auth = auth\n\n"
+        "    def get_profile(self, request: dict) -> dict:\n"
+        '        return {"user": "test"}\n\n'
+        "    def list_users(self, request: dict) -> list:\n"
+        "        return []\n"
+    ),
+    "api/health.py": (
+        '"""Health check."""\n\n'
+        "def health_check() -> dict:\n"
+        '    return {"status": "ok"}\n\n'
+        "def readiness_check(db_ok: bool) -> dict:\n"
+        '    return {"ready": db_ok}\n'
+    ),
+    "storage/repository.py": (
+        '"""Base repository."""\n\n'
+        "from typing import Any\n\n"
+        "class BaseRepository:\n"
+        "    def __init__(self, conn: Any):\n"
+        "        self.conn = conn\n\n"
+        "    def find_by_id(self, eid: str) -> dict | None:\n"
+        "        return None\n\n"
+        "    def save(self, entity: dict) -> str:\n"
+        '        return ""\n'
+    ),
+    "storage/user_repo.py": (
+        '"""User repository."""\n\n'
+        "from storage.repository import BaseRepository\n"
+        "from models.user import User\n\n"
+        "class UserRepository(BaseRepository):\n"
+        "    def find_by_email(self, email: str) -> User | None:\n"
+        "        return None\n\n"
+        "    def create_user(self, email: str, name: str) -> User:\n"
+        '        return User(user_id="new", email=email, display_name=name)\n'
+    ),
+    "config/settings.py": (
+        '"""App configuration."""\n\n'
+        "import os\n\n"
+        "class AppSettings:\n"
+        "    def __init__(self):\n"
+        '        self.secret_key = os.environ.get("SECRET_KEY", "dev")\n'
+        '        self.db_url = os.environ.get("DATABASE_URL", "sqlite:///app.db")\n'
+        '        self.debug = os.environ.get("DEBUG", "false") == "true"\n'
+    ),
 }
 
-# The two alterations: rename TokenService -> CredentialManager, rename authenticate -> verify_request
+# Alterations: rename TokenService -> CredentialManager, authenticate -> verify_request
 ALTERED_FILES: dict[str, str] = {
-    "auth/token_service.py": '''"""Credential management service."""
-
-from datetime import datetime, timedelta
-from auth.crypto import sign_payload
-
-class CredentialManager:
-    """Manages credential creation and validation."""
-
-    def __init__(self, secret: str, expiry_hours: int = 24):
-        self.secret = secret
-        self.expiry = timedelta(hours=expiry_hours)
-
-    def create_token(self, user_id: str, roles: list[str]) -> str:
-        """Create a signed JWT token for a user."""
-        payload = {"sub": user_id, "roles": roles, "exp": datetime.utcnow() + self.expiry}
-        return sign_payload(payload, self.secret)
-
-    def validate_token(self, token: str) -> dict:
-        """Validate and decode a JWT token."""
-        return verify_payload(token, self.secret)
-''',
-    "auth/middleware.py": '''"""Authentication middleware."""
-
-from auth.token_service import CredentialManager
-
-class AuthMiddleware:
-    """HTTP middleware that validates auth tokens."""
-
-    def __init__(self, credential_manager: CredentialManager):
-        self.credential_manager = credential_manager
-
-    def verify_request(self, request: dict) -> dict:
-        """Extract and validate token from request headers."""
-        header = request.get("Authorization", "")
-        if not header.startswith("Bearer "):
-            return {"authenticated": False}
-        token = header[7:]
-        return self.credential_manager.validate_token(token)
-''',
+    "auth/token_service.py": (
+        '"""Credential management service."""\n\n'
+        "from datetime import datetime, timedelta\n"
+        "from auth.crypto import sign_payload\n\n"
+        "class CredentialManager:\n"
+        '    """Manages credential creation and validation."""\n\n'
+        "    def __init__(self, secret: str, expiry_hours: int = 24):\n"
+        "        self.secret = secret\n"
+        "        self.expiry = timedelta(hours=expiry_hours)\n\n"
+        "    def create_token(self, user_id: str) -> str:\n"
+        "        return sign_payload({}, self.secret)\n\n"
+        "    def validate_token(self, token: str) -> dict:\n"
+        "        return {}\n"
+    ),
+    "auth/middleware.py": (
+        '"""Authentication middleware."""\n\n'
+        "from auth.token_service import CredentialManager\n\n"
+        "class AuthMiddleware:\n"
+        "    def __init__(self, mgr: CredentialManager):\n"
+        "        self.mgr = mgr\n\n"
+        "    def verify_request(self, request: dict) -> dict:\n"
+        '        header = request.get("Authorization", "")\n'
+        '        if not header.startswith("Bearer "):\n'
+        '            return {"authenticated": False}\n'
+        "        return self.mgr.validate_token(header[7:])\n"
+    ),
 }
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────
 
 
 def _get_store() -> MemoryStore:
@@ -276,6 +190,15 @@ def _write_codebase(tmpdir: Path, files: dict[str, str]) -> None:
         full.write_text(content)
 
 
+def _query_content(store: MemoryStore, substring: str) -> list[dict]:
+    """Direct store query for memories containing a substring."""
+    rows = store._conn.execute(
+        "SELECT id, content FROM memories WHERE domain = %s AND content LIKE %s",
+        (DOMAIN, f"%{substring}%"),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ── Tests ─────────────────────────────────────────────────────────────────
 
 
@@ -286,125 +209,140 @@ class TestCodebaseAlteration:
         return asyncio.run(coro)
 
     def test_initial_analysis_stores_all_files(self) -> None:
-        """Phase 1: all 10 files are analyzed and stored."""
+        """All 10 files are analyzed and stored."""
+
         async def _test():
             with tempfile.TemporaryDirectory() as tmpdir:
                 _write_codebase(Path(tmpdir), ORIGINAL_FILES)
-                result = await analyze_handler({
-                    "directory": tmpdir,
-                    "languages": ["python"],
-                    "domain": DOMAIN,
-                    "incremental": False,
-                })
+                result = await analyze_handler(
+                    {
+                        "directory": tmpdir,
+                        "languages": ["python"],
+                        "domain": DOMAIN,
+                        "incremental": False,
+                    }
+                )
                 assert result["analyzed"]
                 assert result["new"] == len(ORIGINAL_FILES)
                 assert result["entities"] > 0
+
         self._run(_test())
 
     def test_incremental_detects_changed_files(self) -> None:
-        """Phase 2: after alteration, only changed files are re-processed."""
+        """After alteration, only changed files are re-processed."""
+
         async def _test():
             with tempfile.TemporaryDirectory() as tmpdir:
                 root = Path(tmpdir)
                 _write_codebase(root, ORIGINAL_FILES)
 
-                # First pass
-                r1 = await analyze_handler({
-                    "directory": tmpdir, "languages": ["python"],
-                    "domain": DOMAIN, "incremental": False,
-                })
+                r1 = await analyze_handler(
+                    {
+                        "directory": tmpdir,
+                        "languages": ["python"],
+                        "domain": DOMAIN,
+                        "incremental": False,
+                    }
+                )
                 assert r1["new"] == len(ORIGINAL_FILES)
 
-                # Apply alterations
                 for rel_path, content in ALTERED_FILES.items():
                     (root / rel_path).write_text(content)
 
-                # Incremental pass
-                r2 = await analyze_handler({
-                    "directory": tmpdir, "languages": ["python"],
-                    "domain": DOMAIN, "incremental": True,
-                })
+                r2 = await analyze_handler(
+                    {
+                        "directory": tmpdir,
+                        "languages": ["python"],
+                        "domain": DOMAIN,
+                        "incremental": True,
+                    }
+                )
                 assert r2["updated"] == len(ALTERED_FILES)
-                unchanged = len(ORIGINAL_FILES) - len(ALTERED_FILES)
-                assert r2["unchanged"] == unchanged
+                assert r2["unchanged"] == len(ORIGINAL_FILES) - len(ALTERED_FILES)
 
         self._run(_test())
 
-    def test_recall_finds_new_class_name(self) -> None:
-        """After alteration, recall returns CredentialManager, not TokenService."""
+    def test_store_contains_new_class_name(self) -> None:
+        """After alteration, CredentialManager is in store, TokenService is not."""
+
         async def _test():
             with tempfile.TemporaryDirectory() as tmpdir:
-                root = Path(tmpdir)
                 merged = {**ORIGINAL_FILES, **ALTERED_FILES}
-                _write_codebase(root, merged)
+                _write_codebase(Path(tmpdir), merged)
 
-                await analyze_handler({
-                    "directory": tmpdir, "languages": ["python"],
-                    "domain": DOMAIN, "incremental": False,
-                })
+                await analyze_handler(
+                    {
+                        "directory": tmpdir,
+                        "languages": ["python"],
+                        "domain": DOMAIN,
+                        "incremental": False,
+                    }
+                )
 
-                results = await recall_handler({
-                    "query": "credential management JWT token creation",
-                    "domain": DOMAIN, "max_results": 5,
-                })
-                contents = [r.get("content", "") for r in results.get("results", [])]
-                assert any("CredentialManager" in c for c in contents), \
-                    "CredentialManager not found in recall results"
-                assert not any("class: TokenService" in c for c in contents), \
-                    "Old TokenService should not appear"
+                store = _get_store()
+                new_rows = _query_content(store, "CredentialManager")
+                assert len(new_rows) >= 1, "CredentialManager not found in store"
+
+                old_rows = _query_content(store, "class: TokenService")
+                assert len(old_rows) == 0, "Old TokenService should not appear"
 
         self._run(_test())
 
-    def test_recall_finds_renamed_method(self) -> None:
-        """After alteration, recall returns verify_request, not authenticate."""
+    def test_store_contains_renamed_method(self) -> None:
+        """After alteration, verify_request is in store, authenticate is gone."""
+
         async def _test():
             with tempfile.TemporaryDirectory() as tmpdir:
-                root = Path(tmpdir)
                 merged = {**ORIGINAL_FILES, **ALTERED_FILES}
-                _write_codebase(root, merged)
+                _write_codebase(Path(tmpdir), merged)
 
-                await analyze_handler({
-                    "directory": tmpdir, "languages": ["python"],
-                    "domain": DOMAIN, "incremental": False,
-                })
+                await analyze_handler(
+                    {
+                        "directory": tmpdir,
+                        "languages": ["python"],
+                        "domain": DOMAIN,
+                        "incremental": False,
+                    }
+                )
 
-                results = await recall_handler({
-                    "query": "middleware validates auth token from request",
-                    "domain": DOMAIN, "max_results": 5,
-                })
-                contents = [r.get("content", "") for r in results.get("results", [])]
-                assert any("verify_request" in c for c in contents), \
-                    "verify_request not found in recall results"
+                store = _get_store()
+                new_rows = _query_content(store, "verify_request")
+                assert len(new_rows) >= 1, "verify_request not found in store"
 
         self._run(_test())
 
     def test_unmodified_files_unchanged(self) -> None:
         """Files not in ALTERED_FILES remain intact in memory."""
+
         async def _test():
             with tempfile.TemporaryDirectory() as tmpdir:
-                root = Path(tmpdir)
                 merged = {**ORIGINAL_FILES, **ALTERED_FILES}
-                _write_codebase(root, merged)
+                _write_codebase(Path(tmpdir), merged)
 
-                await analyze_handler({
-                    "directory": tmpdir, "languages": ["python"],
-                    "domain": DOMAIN, "incremental": False,
-                })
+                await analyze_handler(
+                    {
+                        "directory": tmpdir,
+                        "languages": ["python"],
+                        "domain": DOMAIN,
+                        "incremental": False,
+                    }
+                )
 
-                # User model should be intact
-                results = await recall_handler({
-                    "query": "user domain model with roles and email",
-                    "domain": DOMAIN, "max_results": 5,
-                })
-                contents = [r.get("content", "") for r in results.get("results", [])]
-                assert any("User" in c and "has_role" in c for c in contents)
+                store = _get_store()
+                # User model intact
+                user_rows = _query_content(store, "has_role")
+                assert len(user_rows) >= 1, "User.has_role not found"
 
-                # Health check should be intact
-                results = await recall_handler({
-                    "query": "health check readiness endpoint",
-                    "domain": DOMAIN, "max_results": 5,
-                })
-                contents = [r.get("content", "") for r in results.get("results", [])]
-                assert any("health_check" in c for c in contents)
+                # Health check intact
+                health_rows = _query_content(store, "health_check")
+                assert len(health_rows) >= 1, "health_check not found"
+
+                # Total file count preserved
+                count = store._conn.execute(
+                    "SELECT COUNT(*) as c FROM memories "
+                    "WHERE domain = %s AND agent_context = 'codebase'",
+                    (DOMAIN,),
+                ).fetchone()
+                assert count["c"] == len(ORIGINAL_FILES)
 
         self._run(_test())

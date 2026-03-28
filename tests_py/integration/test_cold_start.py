@@ -286,7 +286,9 @@ class TestSetupScript:
         # Ensure subprocess can find psycopg and mcp_server
         env = {**os.environ, "DATABASE_URL": db_url}
         existing_pp = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = f"{plugin_root}:{existing_pp}" if existing_pp else plugin_root
+        env["PYTHONPATH"] = (
+            f"{plugin_root}:{existing_pp}" if existing_pp else plugin_root
+        )
 
         result = subprocess.run(
             [sys.executable, script],

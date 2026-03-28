@@ -14,7 +14,7 @@ class TestPythonExtractors:
         from mcp_server.core.ast_extractors import extract_python_definitions
         from tree_sitter_language_pack import get_parser
 
-        code = b'''
+        code = b"""
 @app.route("/api")
 def handle_request(req):
     pass
@@ -22,7 +22,7 @@ def handle_request(req):
 @staticmethod
 def helper():
     pass
-'''
+"""
         tree = get_parser("python").parse(code)
         defs = extract_python_definitions(tree.root_node, code)
         names = [d.name for d in defs]
@@ -33,14 +33,14 @@ def helper():
         from mcp_server.core.ast_extractors import extract_python_definitions
         from tree_sitter_language_pack import get_parser
 
-        code = b'''
+        code = b"""
 class Outer:
     def method_a(self):
         pass
 
     def method_b(self, x):
         pass
-'''
+"""
         tree = get_parser("python").parse(code)
         defs = extract_python_definitions(tree.root_node, code)
         names = [d.name for d in defs]
@@ -63,7 +63,7 @@ class TestJSExtractors:
         from mcp_server.core.ast_extractors import extract_js_definitions
         from tree_sitter_language_pack import get_parser
 
-        code = b'''
+        code = b"""
 export class Router {
   get(path) {
     return this;
@@ -72,7 +72,7 @@ export class Router {
     return this;
   }
 }
-'''
+"""
         tree = get_parser("javascript").parse(code)
         defs = extract_js_definitions(tree.root_node, code)
         names = [d.name for d in defs]
@@ -84,10 +84,10 @@ export class Router {
         from mcp_server.core.ast_extractors import extract_js_definitions
         from tree_sitter_language_pack import get_parser
 
-        code = b'''
+        code = b"""
 export interface Config { key: string; }
 export type Options = { verbose: boolean; };
-'''
+"""
         tree = get_parser("typescript").parse(code)
         defs = extract_js_definitions(tree.root_node, code)
         kinds = {d.name: d.kind for d in defs}
@@ -100,11 +100,11 @@ class TestCallExtraction:
         from mcp_server.core.ast_extractors import extract_calls_generic
         from tree_sitter_language_pack import get_parser
 
-        code = b'''
+        code = b"""
 result = process(data)
 x = helper(1, 2)
 obj.method()
-'''
+"""
         tree = get_parser("python").parse(code)
         calls = extract_calls_generic(tree.root_node, code)
         assert "process" in calls
@@ -114,10 +114,10 @@ obj.method()
         from mcp_server.core.ast_extractors import extract_calls_generic
         from tree_sitter_language_pack import get_parser
 
-        code = b'''
+        code = b"""
 const x = fetchData(url);
 console.log("hello");
-'''
+"""
         tree = get_parser("javascript").parse(code)
         calls = extract_calls_generic(tree.root_node, code)
         assert any("fetchData" in c for c in calls)
@@ -128,7 +128,7 @@ class TestGoExtractors:
         from mcp_server.core.ast_extractors_extra import extract_go_definitions
         from tree_sitter_language_pack import get_parser
 
-        code = b'''
+        code = b"""
 package main
 
 type Server struct {
@@ -142,7 +142,7 @@ func (s *Server) Start() error {
 func NewServer(port int) *Server {
     return &Server{port: port}
 }
-'''
+"""
         tree = get_parser("go").parse(code)
         defs = extract_go_definitions(tree.root_node, code)
         names = [d.name for d in defs]

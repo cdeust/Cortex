@@ -82,7 +82,7 @@ def standalone_func(x: int) -> str:
 
 
 class TestParseFileTypeScript:
-    SAMPLE = b'''import { Request } from 'express';
+    SAMPLE = b"""import { Request } from 'express';
 import jwt from 'jsonwebtoken';
 
 export interface AuthConfig {
@@ -98,7 +98,7 @@ export class AuthService {
 export function createAuth(config: AuthConfig): AuthService {
   return new AuthService();
 }
-'''
+"""
 
     def test_imports(self) -> None:
         r = parse_file_ast("auth/service.ts", self.SAMPLE)

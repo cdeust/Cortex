@@ -37,9 +37,13 @@ def extract_go_definitions(root: Node, source: bytes) -> list[SymbolDef]:
             params = node.child_by_field_name("parameters")
             if name:
                 sig = _text(params, source)[:120] if params else ""
-                defs.append(SymbolDef(
-                    name=_text(name, source), kind="function", signature=sig,
-                ))
+                defs.append(
+                    SymbolDef(
+                        name=_text(name, source),
+                        kind="function",
+                        signature=sig,
+                    )
+                )
         elif node.type == "method_declaration":
             name = node.child_by_field_name("name")
             receiver = node.child_by_field_name("receiver")
@@ -52,9 +56,16 @@ def extract_go_definitions(root: Node, source: bytes) -> list[SymbolDef]:
                 n = spec.child_by_field_name("name")
                 t = spec.child_by_field_name("type")
                 if n:
-                    kind = t.type.replace("_type", "") if t and t.type in (
-                        "struct_type", "interface_type",
-                    ) else "type"
+                    kind = (
+                        t.type.replace("_type", "")
+                        if t
+                        and t.type
+                        in (
+                            "struct_type",
+                            "interface_type",
+                        )
+                        else "type"
+                    )
                     defs.append(SymbolDef(name=_text(n, source), kind=kind))
     return defs
 
@@ -95,7 +106,10 @@ _SWIFT_KIND_MAP = {
 
 
 def _extract_swift_node(
-    node: Node, source: bytes, defs: list[SymbolDef], parent: str,
+    node: Node,
+    source: bytes,
+    defs: list[SymbolDef],
+    parent: str,
 ) -> None:
     """Recursively extract Swift definitions."""
     if node.type == "function_declaration":
@@ -138,7 +152,9 @@ def extract_rust_definitions(root: Node, source: bytes) -> list[SymbolDef]:
 
 
 def _extract_rust_node(
-    node: Node, source: bytes, defs: list[SymbolDef],
+    node: Node,
+    source: bytes,
+    defs: list[SymbolDef],
 ) -> None:
     """Extract a single Rust top-level item."""
     if node.type == "function_item":
@@ -162,7 +178,9 @@ def _extract_rust_node(
 
 
 def _extract_rust_impl(
-    node: Node, source: bytes, defs: list[SymbolDef],
+    node: Node,
+    source: bytes,
+    defs: list[SymbolDef],
 ) -> None:
     """Extract methods from a Rust impl block."""
     type_node = node.child_by_field_name("type")

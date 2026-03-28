@@ -16,9 +16,7 @@ from mcp_server.core.codebase_parser import ImportInfo, SymbolDef
 # ── Import patterns ───────────────────────────────────────────────────────
 
 _PY_IMPORT = re.compile(r"^import\s+([\w.]+)", re.MULTILINE)
-_PY_FROM_IMPORT = re.compile(
-    r"^from\s+([\w.]+)\s+import\s+(.+?)$", re.MULTILINE
-)
+_PY_FROM_IMPORT = re.compile(r"^from\s+([\w.]+)\s+import\s+(.+?)$", re.MULTILINE)
 _JS_IMPORT = re.compile(
     r"""^import\s+(?:\{[^}]*\}|[\w*]+(?:\s+as\s+\w+)?)\s+from\s+['"]([^'"]+)['"]""",
     re.MULTILINE,
@@ -62,15 +60,11 @@ _SWIFT_FUNC = re.compile(
 _SWIFT_CLASS = re.compile(
     r"^\s*(?:public\s+|private\s+|open\s+|final\s+)*class\s+(\w+)", re.MULTILINE
 )
-_SWIFT_STRUCT = re.compile(
-    r"^\s*(?:public\s+|private\s+)*struct\s+(\w+)", re.MULTILINE
-)
+_SWIFT_STRUCT = re.compile(r"^\s*(?:public\s+|private\s+)*struct\s+(\w+)", re.MULTILINE)
 _SWIFT_PROTOCOL = re.compile(
     r"^\s*(?:public\s+|private\s+)*protocol\s+(\w+)", re.MULTILINE
 )
-_SWIFT_ENUM = re.compile(
-    r"^\s*(?:public\s+|private\s+)*enum\s+(\w+)", re.MULTILINE
-)
+_SWIFT_ENUM = re.compile(r"^\s*(?:public\s+|private\s+)*enum\s+(\w+)", re.MULTILINE)
 
 # ── Docstring patterns ────────────────────────────────────────────────────
 
@@ -89,7 +83,9 @@ def extract_imports_python(content: str) -> list[ImportInfo]:
     for m in _PY_FROM_IMPORT.finditer(content):
         module = m.group(1)
         names = [n.strip() for n in m.group(2).split(",")]
-        imports.append(ImportInfo(module=module, names=names, is_relative=module.startswith(".")))
+        imports.append(
+            ImportInfo(module=module, names=names, is_relative=module.startswith("."))
+        )
     return imports
 
 
@@ -133,9 +129,13 @@ def extract_symbols_python(content: str) -> list[SymbolDef]:
     """Extract Python def and class definitions."""
     defs: list[SymbolDef] = []
     for m in _PY_DEF.finditer(content):
-        defs.append(SymbolDef(name=m.group(1), kind="function", signature=m.group(2)[:120]))
+        defs.append(
+            SymbolDef(name=m.group(1), kind="function", signature=m.group(2)[:120])
+        )
     for m in _PY_CLASS.finditer(content):
-        defs.append(SymbolDef(name=m.group(1), kind="class", signature=m.group(2) or ""))
+        defs.append(
+            SymbolDef(name=m.group(1), kind="class", signature=m.group(2) or "")
+        )
     return defs
 
 
@@ -143,9 +143,13 @@ def extract_symbols_js(content: str) -> list[SymbolDef]:
     """Extract JS/TS function, class, interface, and type definitions."""
     defs: list[SymbolDef] = []
     for m in _JS_FUNC.finditer(content):
-        defs.append(SymbolDef(name=m.group(1), kind="function", signature=m.group(2)[:120]))
+        defs.append(
+            SymbolDef(name=m.group(1), kind="function", signature=m.group(2)[:120])
+        )
     for m in _JS_CLASS.finditer(content):
-        defs.append(SymbolDef(name=m.group(1), kind="class", signature=m.group(2) or ""))
+        defs.append(
+            SymbolDef(name=m.group(1), kind="class", signature=m.group(2) or "")
+        )
     for m in _JS_INTERFACE.finditer(content):
         defs.append(SymbolDef(name=m.group(1), kind="interface"))
     for m in _JS_TYPE.finditer(content):
@@ -157,7 +161,9 @@ def extract_symbols_go(content: str) -> list[SymbolDef]:
     """Extract Go func and type definitions."""
     defs: list[SymbolDef] = []
     for m in _GO_FUNC.finditer(content):
-        defs.append(SymbolDef(name=m.group(1), kind="function", signature=m.group(2)[:120]))
+        defs.append(
+            SymbolDef(name=m.group(1), kind="function", signature=m.group(2)[:120])
+        )
     for m in _GO_TYPE.finditer(content):
         defs.append(SymbolDef(name=m.group(1), kind=m.group(2)))
     return defs
@@ -167,7 +173,9 @@ def extract_symbols_rust(content: str) -> list[SymbolDef]:
     """Extract Rust fn, struct, enum, and trait definitions."""
     defs: list[SymbolDef] = []
     for m in _RUST_FN.finditer(content):
-        defs.append(SymbolDef(name=m.group(1), kind="function", signature=m.group(2)[:120]))
+        defs.append(
+            SymbolDef(name=m.group(1), kind="function", signature=m.group(2)[:120])
+        )
     for m in _RUST_STRUCT.finditer(content):
         defs.append(SymbolDef(name=m.group(1), kind="class"))
     for m in _RUST_ENUM.finditer(content):
@@ -181,7 +189,9 @@ def extract_symbols_swift(content: str) -> list[SymbolDef]:
     """Extract Swift func, class, struct, protocol, and enum definitions."""
     defs: list[SymbolDef] = []
     for m in _SWIFT_FUNC.finditer(content):
-        defs.append(SymbolDef(name=m.group(1), kind="function", signature=m.group(2)[:120]))
+        defs.append(
+            SymbolDef(name=m.group(1), kind="function", signature=m.group(2)[:120])
+        )
     for m in _SWIFT_CLASS.finditer(content):
         defs.append(SymbolDef(name=m.group(1), kind="class"))
     for m in _SWIFT_STRUCT.finditer(content):

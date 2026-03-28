@@ -12,10 +12,17 @@ def store():
     yield s
     # Clean up all test data
     tables = [
-        "memory_rules", "consolidation_log", "memory_archives",
-        "relationships", "entities", "prospective_memories",
-        "checkpoints", "engram_slots", "oscillatory_state",
-        "schemas", "memories",
+        "memory_rules",
+        "consolidation_log",
+        "memory_archives",
+        "relationships",
+        "entities",
+        "prospective_memories",
+        "checkpoints",
+        "engram_slots",
+        "oscillatory_state",
+        "schemas",
+        "memories",
     ]
     for table in tables:
         try:

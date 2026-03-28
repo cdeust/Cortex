@@ -40,8 +40,7 @@ class SqliteRuleMixin:
 
     def get_all_active_rules(self) -> list[dict[str, Any]]:
         rows = self._conn.execute(
-            "SELECT * FROM memory_rules WHERE is_active "
-            "ORDER BY scope, priority DESC"
+            "SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC"
         ).fetchall()
         return [dict(r) for r in rows]
 

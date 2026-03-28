@@ -89,9 +89,7 @@ class SqliteMemoryStore(
         """Add columns that may be missing from older databases."""
         for table, column, col_def in MIGRATIONS:
             try:
-                self._conn.execute(
-                    f"ALTER TABLE {table} ADD COLUMN {column} {col_def}"
-                )
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
             except sqlite3.OperationalError:
                 pass
 
@@ -142,6 +140,7 @@ class SqliteMemoryStore(
         if raw_created and isinstance(raw_created, str) and "T" not in raw_created:
             try:
                 from mcp_server.core.temporal import normalize_date_to_iso
+
                 raw_created = normalize_date_to_iso(raw_created) or raw_created
             except ImportError:
                 pass
@@ -244,9 +243,7 @@ class SqliteMemoryStore(
         self._conn.commit()
 
     def delete_memory(self, memory_id: int) -> bool:
-        self._conn.execute(
-            "DELETE FROM memories_fts WHERE rowid = ?", (memory_id,)
-        )
+        self._conn.execute("DELETE FROM memories_fts WHERE rowid = ?", (memory_id,))
         if self._has_vec:
             try:
                 self._conn.execute(
@@ -254,9 +251,7 @@ class SqliteMemoryStore(
                 )
             except Exception:
                 pass
-        cur = self._conn.execute(
-            "DELETE FROM memories WHERE id = ?", (memory_id,)
-        )
+        cur = self._conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         self._conn.commit()
         return cur.rowcount > 0
 
@@ -298,9 +293,7 @@ class SqliteMemoryStore(
                 (content, compression_level, memory_id),
             )
         # Update FTS
-        self._conn.execute(
-            "DELETE FROM memories_fts WHERE rowid = ?", (memory_id,)
-        )
+        self._conn.execute("DELETE FROM memories_fts WHERE rowid = ?", (memory_id,))
         self._conn.execute(
             "INSERT INTO memories_fts(rowid, content) VALUES (?, ?)",
             (memory_id, content),
@@ -332,17 +325,29 @@ class SqliteMemoryStore(
             except (json.JSONDecodeError, TypeError):
                 d["tags"] = []
         for field in (
-            "files_being_edited", "key_decisions", "open_questions",
-            "next_steps", "active_errors", "entity_signature",
-            "relationship_types", "tag_signature",
+            "files_being_edited",
+            "key_decisions",
+            "open_questions",
+            "next_steps",
+            "active_errors",
+            "entity_signature",
+            "relationship_types",
+            "tag_signature",
         ):
             if isinstance(d.get(field), str):
                 try:
                     d[field] = json.loads(d[field])
                 except (json.JSONDecodeError, TypeError):
                     pass
-        for field in ("is_protected", "is_stale", "compressed", "is_benchmark",
-                       "is_active", "is_causal", "archived"):
+        for field in (
+            "is_protected",
+            "is_stale",
+            "compressed",
+            "is_benchmark",
+            "is_active",
+            "is_causal",
+            "archived",
+        ):
             if field in d and isinstance(d[field], int):
                 d[field] = bool(d[field])
         return d

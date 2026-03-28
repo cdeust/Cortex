@@ -66,8 +66,11 @@ class _CompatCursor:
     """Wraps a sqlite3.Cursor to mimic psycopg result access."""
 
     def __init__(
-        self, cursor: sqlite3.Cursor, lastrowid: int,
-        *, had_returning: bool = False,
+        self,
+        cursor: sqlite3.Cursor,
+        lastrowid: int,
+        *,
+        had_returning: bool = False,
     ) -> None:
         self._cursor = cursor
         self.lastrowid = lastrowid
@@ -99,19 +102,21 @@ class PsycopgCompatConnection:
         self._real = conn
 
     def execute(
-        self, sql: str, params: Any = None,
+        self,
+        sql: str,
+        params: Any = None,
     ) -> _CompatCursor:
         """Execute with automatic SQL translation."""
-        had_returning = bool(
-            re.search(r"\bRETURNING\s+\w+\b", sql, re.IGNORECASE)
-        )
+        had_returning = bool(re.search(r"\bRETURNING\s+\w+\b", sql, re.IGNORECASE))
         translated = _translate_sql(sql)
         if params:
             cur = self._real.execute(translated, params)
         else:
             cur = self._real.execute(translated)
         return _CompatCursor(
-            cur, cur.lastrowid, had_returning=had_returning,
+            cur,
+            cur.lastrowid,
+            had_returning=had_returning,
         )
 
     def executescript(self, sql: str) -> None:

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 def _text(node: Node, source: bytes) -> str:
     """Get node text."""
-    return source[node.start_byte:node.end_byte].decode(errors="replace")
+    return source[node.start_byte : node.end_byte].decode(errors="replace")
 
 
 def _find_children(node: Node, *types: str) -> list[Node]:
@@ -60,7 +60,9 @@ def extract_python_imports(root: Node, source: bytes) -> list[ImportInfo]:
 
 
 def extract_python_definitions(
-    root: Node, source: bytes, parent_class: str = "",
+    root: Node,
+    source: bytes,
+    parent_class: str = "",
 ) -> list[SymbolDef]:
     """Extract Python def/class with class-method binding."""
     defs: list[SymbolDef] = []
@@ -75,7 +77,10 @@ def extract_python_definitions(
 
 
 def _extract_python_func(
-    node: Node, source: bytes, defs: list[SymbolDef], parent: str,
+    node: Node,
+    source: bytes,
+    defs: list[SymbolDef],
+    parent: str,
 ) -> None:
     """Extract a single Python function definition."""
     name_node = node.child_by_field_name("name")
@@ -88,7 +93,10 @@ def _extract_python_func(
 
 
 def _extract_python_decorated(
-    node: Node, source: bytes, defs: list[SymbolDef], parent: str,
+    node: Node,
+    source: bytes,
+    defs: list[SymbolDef],
+    parent: str,
 ) -> None:
     """Extract definitions from decorated blocks."""
     for child in node.children:
@@ -98,7 +106,9 @@ def _extract_python_decorated(
 
 
 def _extract_python_class(
-    node: Node, source: bytes, defs: list[SymbolDef],
+    node: Node,
+    source: bytes,
+    defs: list[SymbolDef],
 ) -> None:
     """Extract a class and recurse into its body for methods."""
     name_node = node.child_by_field_name("name")
@@ -134,7 +144,10 @@ def extract_js_definitions(root: Node, source: bytes) -> list[SymbolDef]:
 
 
 def _extract_js_node(
-    node: Node, source: bytes, defs: list[SymbolDef], parent: str,
+    node: Node,
+    source: bytes,
+    defs: list[SymbolDef],
+    parent: str,
 ) -> None:
     """Recursively extract JS definitions with scope tracking."""
     if node.type in ("function_declaration", "function"):
@@ -160,7 +173,10 @@ def _extract_js_node(
 
 
 def _extract_js_func(
-    node: Node, source: bytes, defs: list[SymbolDef], parent: str,
+    node: Node,
+    source: bytes,
+    defs: list[SymbolDef],
+    parent: str,
 ) -> None:
     """Extract a JS function declaration."""
     name_node = node.child_by_field_name("name")
@@ -173,7 +189,9 @@ def _extract_js_func(
 
 
 def _extract_js_class(
-    node: Node, source: bytes, defs: list[SymbolDef],
+    node: Node,
+    source: bytes,
+    defs: list[SymbolDef],
 ) -> None:
     """Extract a JS class and recurse for methods."""
     name_node = node.child_by_field_name("name")

@@ -45,14 +45,19 @@ class TestResolveImportToFile:
     def test_relative_import(self) -> None:
         known = {"auth/tokens.py", "auth/middleware.py"}
         result = resolve_import_to_file(
-            ".tokens", "auth/middleware.py", known, is_relative=True,
+            ".tokens",
+            "auth/middleware.py",
+            known,
+            is_relative=True,
         )
         assert result == "auth/tokens.py"
 
     def test_strip_package_prefix(self) -> None:
         known = {"_adapters/ports.py", "server.py"}
         result = resolve_import_to_file(
-            "mypackage._adapters.ports", "server.py", known,
+            "mypackage._adapters.ports",
+            "server.py",
+            known,
         )
         assert result == "_adapters/ports.py"
 
@@ -95,18 +100,24 @@ class TestResolveAllImports:
 class TestExtractInheritance:
     def test_single_parent(self) -> None:
         analyses = [
-            _make_analysis("a.py", definitions=[
-                SymbolDef(name="Child", kind="class", signature="(Parent)"),
-            ]),
+            _make_analysis(
+                "a.py",
+                definitions=[
+                    SymbolDef(name="Child", kind="class", signature="(Parent)"),
+                ],
+            ),
         ]
         edges = extract_inheritance(analyses)
         assert ("Child", "Parent") in edges
 
     def test_multiple_parents(self) -> None:
         analyses = [
-            _make_analysis("a.py", definitions=[
-                SymbolDef(name="MyClass", kind="class", signature="(Base, Mixin)"),
-            ]),
+            _make_analysis(
+                "a.py",
+                definitions=[
+                    SymbolDef(name="MyClass", kind="class", signature="(Base, Mixin)"),
+                ],
+            ),
         ]
         edges = extract_inheritance(analyses)
         assert ("MyClass", "Base") in edges
@@ -114,27 +125,36 @@ class TestExtractInheritance:
 
     def test_object_excluded(self) -> None:
         analyses = [
-            _make_analysis("a.py", definitions=[
-                SymbolDef(name="Foo", kind="class", signature="(object)"),
-            ]),
+            _make_analysis(
+                "a.py",
+                definitions=[
+                    SymbolDef(name="Foo", kind="class", signature="(object)"),
+                ],
+            ),
         ]
         edges = extract_inheritance(analyses)
         assert len(edges) == 0
 
     def test_no_signature_no_edges(self) -> None:
         analyses = [
-            _make_analysis("a.py", definitions=[
-                SymbolDef(name="Foo", kind="class", signature=""),
-            ]),
+            _make_analysis(
+                "a.py",
+                definitions=[
+                    SymbolDef(name="Foo", kind="class", signature=""),
+                ],
+            ),
         ]
         edges = extract_inheritance(analyses)
         assert len(edges) == 0
 
     def test_functions_ignored(self) -> None:
         analyses = [
-            _make_analysis("a.py", definitions=[
-                SymbolDef(name="foo", kind="function", signature="(x, y)"),
-            ]),
+            _make_analysis(
+                "a.py",
+                definitions=[
+                    SymbolDef(name="foo", kind="function", signature="(x, y)"),
+                ],
+            ),
         ]
         edges = extract_inheritance(analyses)
         assert len(edges) == 0
@@ -143,20 +163,28 @@ class TestExtractInheritance:
 class TestBuildCallEdges:
     def test_cross_file_call(self) -> None:
         analyses = [
-            _make_analysis("a.py", definitions=[
-                SymbolDef(name="helper", kind="function"),
-            ]),
+            _make_analysis(
+                "a.py",
+                definitions=[
+                    SymbolDef(name="helper", kind="function"),
+                ],
+            ),
             _make_analysis("b.py"),
         ]
         call_sites = {"b.py": ["helper"]}
         edges = build_call_edges(analyses, call_sites)
-        assert any(e[0] == "b.py" and e[1] == "helper" and e[2] == "a.py" for e in edges)
+        assert any(
+            e[0] == "b.py" and e[1] == "helper" and e[2] == "a.py" for e in edges
+        )
 
     def test_same_file_excluded(self) -> None:
         analyses = [
-            _make_analysis("a.py", definitions=[
-                SymbolDef(name="foo", kind="function"),
-            ]),
+            _make_analysis(
+                "a.py",
+                definitions=[
+                    SymbolDef(name="foo", kind="function"),
+                ],
+            ),
         ]
         call_sites = {"a.py": ["foo"]}
         edges = build_call_edges(analyses, call_sites)
@@ -166,9 +194,12 @@ class TestBuildCallEdges:
 class TestTypeReferenceResolution:
     def test_swift_cross_file_type_usage(self) -> None:
         analyses = [
-            _make_analysis("Models/PRDDocument.swift", definitions=[
-                SymbolDef(name="PRDDocument", kind="class"),
-            ]),
+            _make_analysis(
+                "Models/PRDDocument.swift",
+                definitions=[
+                    SymbolDef(name="PRDDocument", kind="class"),
+                ],
+            ),
             _make_analysis("Views/DocumentView.swift"),
         ]
         contents = {
@@ -180,9 +211,12 @@ class TestTypeReferenceResolution:
 
     def test_no_self_reference(self) -> None:
         analyses = [
-            _make_analysis("a.swift", definitions=[
-                SymbolDef(name="Foo", kind="class"),
-            ]),
+            _make_analysis(
+                "a.swift",
+                definitions=[
+                    SymbolDef(name="Foo", kind="class"),
+                ],
+            ),
         ]
         contents = {"a.swift": "class Foo { func bar() -> Foo { return self } }"}
         edges = resolve_type_references(analyses, contents)
@@ -190,20 +224,29 @@ class TestTypeReferenceResolution:
 
     def test_noise_types_filtered(self) -> None:
         analyses = [
-            _make_analysis("a.swift", definitions=[
-                SymbolDef(name="String", kind="type"),
-            ]),
+            _make_analysis(
+                "a.swift",
+                definitions=[
+                    SymbolDef(name="String", kind="type"),
+                ],
+            ),
             _make_analysis("b.swift"),
         ]
-        contents = {"a.swift": "typealias X = String", "b.swift": "let s: String = \"hi\""}
+        contents = {
+            "a.swift": "typealias X = String",
+            "b.swift": 'let s: String = "hi"',
+        }
         edges = resolve_type_references(analyses, contents)
         assert len(edges) == 0
 
     def test_short_names_filtered(self) -> None:
         analyses = [
-            _make_analysis("a.swift", definitions=[
-                SymbolDef(name="ID", kind="type"),
-            ]),
+            _make_analysis(
+                "a.swift",
+                definitions=[
+                    SymbolDef(name="ID", kind="type"),
+                ],
+            ),
             _make_analysis("b.swift"),
         ]
         contents = {"a.swift": "typealias ID = Int", "b.swift": "let x: ID = 1"}
@@ -212,10 +255,13 @@ class TestTypeReferenceResolution:
 
     def test_multiple_references(self) -> None:
         analyses = [
-            _make_analysis("models.swift", definitions=[
-                SymbolDef(name="UserProfile", kind="class"),
-                SymbolDef(name="AuthToken", kind="class"),
-            ]),
+            _make_analysis(
+                "models.swift",
+                definitions=[
+                    SymbolDef(name="UserProfile", kind="class"),
+                    SymbolDef(name="AuthToken", kind="class"),
+                ],
+            ),
             _make_analysis("service.swift"),
             _make_analysis("view.swift"),
         ]

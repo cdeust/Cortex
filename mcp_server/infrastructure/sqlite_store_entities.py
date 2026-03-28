@@ -31,16 +31,12 @@ class SqliteEntityMixin:
         return cur.lastrowid  # type: ignore[return-value]
 
     def get_entity_by_name(self, name: str) -> dict[str, Any] | None:
-        cur = self._conn.execute(
-            "SELECT * FROM entities WHERE name = ?", (name,)
-        )
+        cur = self._conn.execute("SELECT * FROM entities WHERE name = ?", (name,))
         row = cur.fetchone()
         return dict(row) if row else None
 
     def get_entity_by_id(self, entity_id: int) -> dict[str, Any] | None:
-        cur = self._conn.execute(
-            "SELECT * FROM entities WHERE id = ?", (entity_id,)
-        )
+        cur = self._conn.execute("SELECT * FROM entities WHERE id = ?", (entity_id,))
         row = cur.fetchone()
         return dict(row) if row else None
 

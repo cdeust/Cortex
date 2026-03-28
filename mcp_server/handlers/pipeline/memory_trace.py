@@ -44,13 +44,15 @@ async def trace(
         if tags:
             base_tags.extend(tags)
 
-        await remember_handler({
-            "content": content,
-            "tags": base_tags,
-            "directory": ctx.get("codebasePath", ""),
-            "source": "tool",
-            "agent_topic": "pipeline",
-        })
+        await remember_handler(
+            {
+                "content": content,
+                "tags": base_tags,
+                "directory": ctx.get("codebasePath", ""),
+                "source": "tool",
+                "agent_topic": "pipeline",
+            }
+        )
     except Exception as exc:
         _log(f"memory trace failed ({event}): {exc}")
 
@@ -86,7 +88,9 @@ async def trace_strategy(ctx: dict[str, Any], strategy_name: str) -> None:
     )
 
 
-async def trace_prd(ctx: dict[str, Any], section_count: int, manifest_count: int) -> None:
+async def trace_prd(
+    ctx: dict[str, Any], section_count: int, manifest_count: int
+) -> None:
     """Trace PRD generation result."""
     await trace(
         ctx,

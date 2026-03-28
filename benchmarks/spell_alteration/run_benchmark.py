@@ -38,11 +38,28 @@ DOMAIN_ORIGINAL = "hp-original"
 DOMAIN_ALTERED = "hp-altered"
 
 KNOWN_REAL_SPELLS = [
-    "Accio", "Expecto Patronum", "Expelliarmus", "Stupefy", "Lumos",
-    "Riddikulus", "Crucio", "Imperio", "Avada Kedavra", "Protego",
-    "Impedimenta", "Sectumsempra", "Muffliato", "Reparo",
-    "Petrificus Totalus", "Reducto", "Alohomora", "Silencio",
-    "Wingardium Leviosa", "Obliviate", "Incendio", "Diffindo",
+    "Accio",
+    "Expecto Patronum",
+    "Expelliarmus",
+    "Stupefy",
+    "Lumos",
+    "Riddikulus",
+    "Crucio",
+    "Imperio",
+    "Avada Kedavra",
+    "Protego",
+    "Impedimenta",
+    "Sectumsempra",
+    "Muffliato",
+    "Reparo",
+    "Petrificus Totalus",
+    "Reducto",
+    "Alohomora",
+    "Silencio",
+    "Wingardium Leviosa",
+    "Obliviate",
+    "Incendio",
+    "Diffindo",
 ]
 
 FAKE_NAMES = ["Veritanox", "Crepusculum"]
@@ -54,6 +71,7 @@ FAKE_NAMES = ["Veritanox", "Crepusculum"]
 def extract_text(pdf_path: str) -> str:
     """Extract full text from PDF."""
     import pymupdf
+
     doc = pymupdf.open(pdf_path)
     return "".join(page.get_text() for page in doc)
 
@@ -78,7 +96,9 @@ def chunk_text(text: str) -> list[str]:
 
 
 def replace_spells(
-    text: str, targets: list[str], fakes: list[str],
+    text: str,
+    targets: list[str],
+    fakes: list[str],
 ) -> tuple[str, dict[str, str]]:
     """Replace target spell names with fakes. Returns (text, map)."""
     mapping: dict[str, str] = {}
@@ -92,7 +112,8 @@ def find_spells_in_text(text: str, spells: list[str]) -> dict[str, int]:
     """Count each spell's occurrences."""
     return {
         s: len(re.findall(re.escape(s), text, re.IGNORECASE))
-        for s in spells if re.search(re.escape(s), text, re.IGNORECASE)
+        for s in spells
+        if re.search(re.escape(s), text, re.IGNORECASE)
     }
 
 
@@ -185,7 +206,8 @@ def _match_context_to_fake(
 
 
 def test_b_compare_versions(
-    db: BenchmarkDB, mapping: dict[str, str],
+    db: BenchmarkDB,
+    mapping: dict[str, str],
 ) -> dict:
     """Both versions stored. Identify which originals map to which fakes."""
     print("\n" + "=" * 60)
@@ -211,13 +233,9 @@ def test_b_compare_versions(
             altered_spells[spell] = count
 
     # Step 3: Diff — spells in original but not altered = replaced
-    missing_from_altered = [
-        s for s in original_spells if s not in altered_spells
-    ]
+    missing_from_altered = [s for s in original_spells if s not in altered_spells]
     # New in altered = the fakes
-    new_in_altered = [
-        s for s in altered_spells if s not in original_spells
-    ]
+    new_in_altered = [s for s in altered_spells if s not in original_spells]
 
     print(f"  Original spells found:  {len(original_spells)}")
     print(f"  Altered spells found:   {len(altered_spells)}")
@@ -247,21 +265,23 @@ def test_b_compare_versions(
 
         # Search altered corpus with this context
         best_fake = _match_context_to_fake(
-            db, context_query, new_in_altered, claimed_fakes,
+            db,
+            context_query,
+            new_in_altered,
+            claimed_fakes,
         )
         if best_fake:
             detected_mapping[orig] = best_fake
             claimed_fakes.add(best_fake)
 
-    print(f"\n  Detected mapping:")
+    print("\n  Detected mapping:")
     for orig, fake in detected_mapping.items():
         correct = mapping.get(orig) == fake
         print(f"    {orig} -> {fake} {'CORRECT' if correct else 'WRONG'}")
 
     # Score
     correct_pairs = sum(
-        1 for orig, fake in detected_mapping.items()
-        if mapping.get(orig) == fake
+        1 for orig, fake in detected_mapping.items() if mapping.get(orig) == fake
     )
     identified_missing = set(missing_from_altered) == set(mapping.keys())
     identified_fakes = set(new_in_altered) >= set(mapping.values())
@@ -272,7 +292,9 @@ def test_b_compare_versions(
 
     print(f"\n  Identified removed spells: {'PASS' if t_b1 else 'FAIL'}")
     print(f"  Identified fake spells:    {'PASS' if t_b2 else 'FAIL'}")
-    print(f"  Correct pairings:          {correct_pairs}/{len(mapping)} {'PASS' if t_b3 else 'FAIL'}")
+    print(
+        f"  Correct pairings:          {correct_pairs}/{len(mapping)} {'PASS' if t_b3 else 'FAIL'}"
+    )
 
     return {
         "identified_missing": t_b1,
@@ -294,7 +316,8 @@ def run_benchmark(pdf_path: str, seed: int = 42) -> dict:
     # Pick 2 spells to replace
     rng = random.Random(seed)
     eligible = [
-        s for s in KNOWN_REAL_SPELLS
+        s
+        for s in KNOWN_REAL_SPELLS
         if len(re.findall(re.escape(s), full_text, re.IGNORECASE)) >= 10
     ]
     targets = rng.sample(eligible, 2)
