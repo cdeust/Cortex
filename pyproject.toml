@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neuro-cortex-memory"
-version = "2.1.0"
+version = "2.3.0"
 description = "Persistent memory and cognitive profiling for Claude Code"
 readme = "README.md"
 license = "MIT"
@@ -25,8 +25,6 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "numpy>=1.24.0",
-    "psycopg[binary]>=3.1",
-    "pgvector>=0.3",
 ]
 
 [project.urls]
@@ -37,6 +35,13 @@ Repository = "https://github.com/cdeust/Cortex"
 neuro-cortex-memory = "mcp_server.__main__:main"
 
 [project.optional-dependencies]
+postgresql = [
+    "psycopg[binary]>=3.1",
+    "pgvector>=0.3",
+]
+sqlite = [
+    "sqlite-vec>=0.1.1",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
