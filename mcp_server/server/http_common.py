@@ -116,6 +116,26 @@ class ServerManager:
                 raise
 
 
+def get_ui_root() -> Path:
+    """Return the path to the bundled ui/ directory.
+
+    Works both in development (ui/ at project root) and when installed
+    as a package (ui/ inside the mcp_server package directory).
+    """
+    # Installed layout: mcp_server/ui/
+    pkg_ui = Path(__file__).parent.parent / "ui"
+    if pkg_ui.is_dir():
+        return pkg_ui
+    # Development layout: project_root/ui/
+    dev_ui = Path(__file__).parent.parent.parent / "ui"
+    if dev_ui.is_dir():
+        return dev_ui
+    raise RuntimeError(
+        "UI files not found. Ensure the 'ui/' directory is present "
+        "either in the package or at the project root."
+    )
+
+
 def read_html_file(path: Path, error_label: str) -> str:
     """Read an HTML file, raising RuntimeError with a clear message on failure."""
     try:

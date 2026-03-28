@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neuro-cortex-memory"
-version = "2.3.0"
+version = "2.4.0"
 description = "Persistent memory and cognitive profiling for Claude Code"
 readme = "README.md"
 license = "MIT"
@@ -58,6 +58,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["mcp_server"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"ui" = "mcp_server/ui"
 
 [tool.pytest.ini_options]
 testpaths = ["tests_py"]

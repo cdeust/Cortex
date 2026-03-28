@@ -275,23 +275,28 @@ class TestTypeReferenceResolution:
         assert ("view.swift", "models.swift") in edges
 
 
-@pytest.mark.skipif(not _has_networkx, reason="networkx not installed")
 class TestDetectCommunities:
     def test_two_clusters(self) -> None:
-        # Two disconnected groups
         file_edges = [
             ("a.py", "b.py"),
             ("c.py", "d.py"),
         ]
         communities = detect_communities(file_edges, [])
-        # a and b should be in same community, c and d in another
-        assert communities.get("a.py") == communities.get("b.py")
-        assert communities.get("c.py") == communities.get("d.py")
-        assert communities.get("a.py") != communities.get("c.py")
+        if _has_networkx:
+            # With networkx: a and b in same community, c and d in another
+            assert communities.get("a.py") == communities.get("b.py")
+            assert communities.get("c.py") == communities.get("d.py")
+            assert communities.get("a.py") != communities.get("c.py")
+        else:
+            # Without networkx: graceful fallback returns empty dict
+            assert communities == {}
 
     def test_single_node(self) -> None:
         communities = detect_communities([("a.py", "a.py")], [])
-        assert "a.py" in communities
+        if _has_networkx:
+            assert "a.py" in communities
+        else:
+            assert communities == {}
 
     def test_empty_graph(self) -> None:
         communities = detect_communities([], [])

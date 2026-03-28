@@ -13,6 +13,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any
 
+from mcp_server.server.http_common import get_ui_root
+
 # ── UI Server (methodology constellation map) ─────────────────────────
 
 _active_server: dict | None = None
@@ -69,7 +71,7 @@ def _resolve_html_path(html_file: str | None) -> Path:
     """Resolve the HTML file path for the UI server."""
     if html_file:
         return Path(html_file)
-    return Path(__file__).parent.parent.parent / "ui" / "methodology-viz.html"
+    return get_ui_root() / "methodology-viz.html"
 
 
 def _read_html(html_path: Path) -> str:
@@ -83,7 +85,7 @@ def _read_html(html_path: Path) -> str:
 def _build_handler_class(server_state: dict) -> type:
     """Build the BaseHTTPRequestHandler subclass for the UI server."""
 
-    ui_root = Path(__file__).parent.parent.parent / "ui"
+    ui_root = get_ui_root()
     meth_dir = ui_root / "methodology"
 
     class Handler(BaseHTTPRequestHandler):

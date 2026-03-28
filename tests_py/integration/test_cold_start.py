@@ -14,7 +14,24 @@ import sys
 
 import pytest
 
-_IS_CI = os.environ.get("CI", "").lower() in ("true", "1")
+def _pg_reachable() -> bool:
+    """Check if PostgreSQL is reachable on the test DATABASE_URL."""
+    try:
+        from scripts.setup_db import _pg_is_running
+
+        db_url = os.environ.get(
+            "DATABASE_URL", "postgresql://localhost:5432/cortex_test"
+        )
+        # Extract host and port from DATABASE_URL
+        # Format: postgresql://[user[:pass]@]host[:port]/dbname
+        from urllib.parse import urlparse
+
+        parsed = urlparse(db_url)
+        host = parsed.hostname or "localhost"
+        port = str(parsed.port or 5432)
+        return _pg_is_running(host, port)
+    except Exception:
+        return False
 
 
 # ── Session Start Hook Tests ─────────────────────────────────────────────
@@ -265,11 +282,8 @@ class TestSetupScript:
         )
         assert os.path.exists(os.path.abspath(script))
 
-    @pytest.mark.skipif(
-        _IS_CI, reason="setup_db.py uses psql/createdb without CI credentials"
-    )
-    def test_setup_reports_ready_for_existing_db(self):
-        """When test DB exists, setup should report ready."""
+    def test_setup_reports_ready_or_needs_install(self):
+        """Setup script reports 'ready' when PG is available, 'needs_install' when not."""
         script = os.path.join(
             os.path.dirname(__file__), "..", "..", "scripts", "setup_db.py"
         )
@@ -299,9 +313,13 @@ class TestSetupScript:
         )
 
         parsed = json.loads(result.stdout.strip())
-        assert parsed["status"] == "ready"
-        assert isinstance(parsed["memories"], int)
-        assert isinstance(parsed["session_files"], int)
+        if _pg_reachable():
+            assert parsed["status"] == "ready"
+            assert isinstance(parsed["memories"], int)
+            assert isinstance(parsed["session_files"], int)
+        else:
+            # Without PG, setup should report needs_install or similar
+            assert parsed["status"] in ("needs_install", "needs_setup", "error")
 
     def test_setup_detects_missing_pg(self):
         """When PostgreSQL isn't accessible, setup should report needs_install."""

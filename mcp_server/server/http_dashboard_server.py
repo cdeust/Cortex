@@ -12,6 +12,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
 from mcp_server.server.http_common import (
+    get_ui_root,
     read_html_file,
     send_json_response,
     send_error_response,
@@ -57,7 +58,7 @@ def start_memory_dashboard_server(store_getter) -> str:
             _reset_memory_idle_timer()
             return _memory_server["url"]
 
-    ui_root = Path(__file__).parent.parent.parent / "ui"
+    ui_root = get_ui_root()
     html_path = ui_root / "memory-dashboard.html"
     js_dir = ui_root / "dashboard" / "js"
     css_dir = ui_root / "dashboard"
