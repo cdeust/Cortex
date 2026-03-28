@@ -58,7 +58,7 @@ jobs:
             ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,postgresql]"
 
       - name: Run tests
         run: pytest --tb=short -q
