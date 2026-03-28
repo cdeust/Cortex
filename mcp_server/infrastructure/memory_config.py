@@ -28,9 +28,11 @@ class MemorySettings(BaseSettings):
       - Embedding: model and dimensions
     """
 
-    # ── Storage (PostgreSQL mandatory) ────────────────────────────────────
+    # ── Storage ──────────────────────────────────────────────────────────
     DATABASE_URL: str = "postgresql://localhost:5432/cortex"
     DB_PATH: str = str(METHODOLOGY_DIR / "memory.db")  # deprecated, kept for migration
+    SQLITE_FALLBACK_PATH: str = str(METHODOLOGY_DIR / "memory.db")
+    STORE_BACKEND: str = "auto"  # "auto" | "postgresql" | "sqlite"
     SESSION_LOG_ROLLING_LIMIT: int = 1000
 
     # ── Thermodynamics ────────────────────────────────────────────────────

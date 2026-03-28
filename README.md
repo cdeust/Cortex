@@ -46,7 +46,7 @@ That's it. Cortex registers its MCP server, installs 4 lifecycle hooks, and acti
 | **SessionEnd hook** | Updates your cognitive profile after each session | Yes |
 | **PostToolUse hook** | Auto-captures important tool outputs as memories | Yes |
 | **Compaction hook** | Saves checkpoint before context window compaction | Yes |
-| **10 Skills** | Workflow guides for every tool (invoke via `/cortex:*`) | Yes |
+| **10 Skills** | Workflow guides for every tool (invoke via `/cortex-*`) | Yes |
 
 ### Database setup
 
@@ -90,20 +90,20 @@ claude mcp add cortex -- python -m mcp_server
 
 ## What You Can Do
 
-### 10 skills — invoke any with `/cortex:skill-name`
+### 10 skills — invoke any with `/cortex-*`
 
 | Skill | What it does | Example |
 |---|---|---|
-| `/cortex:cortex-remember` | Store decisions, fixes, patterns, lessons | *"Remember we chose JWT over sessions for auth"* |
-| `/cortex:cortex-recall` | Search memories with intent-aware retrieval | *"Why did we switch databases?"* |
-| `/cortex:cortex-explore-memory` | Check memory health, find gaps, assess coverage | *"What do we know about the payment module?"* |
-| `/cortex:cortex-consolidate` | Run maintenance: decay, compress, merge | *"Clean up old memories"* |
-| `/cortex:cortex-profile` | View cognitive style, patterns, blind spots | *"Show my work patterns"* |
-| `/cortex:cortex-navigate-knowledge` | Trace relationships, explore causal chains | *"How does auth relate to billing?"* |
-| `/cortex:cortex-setup-project` | Bootstrap memory from code or import history | *"Set up Cortex for this project"* |
-| `/cortex:cortex-visualize` | Launch 3D neural graph or memory dashboard | *"Show me the memory map"* |
-| `/cortex:cortex-automate` | Create triggers, rules, sync to CLAUDE.md | *"Remind me about X when I open that file"* |
-| `/cortex:cortex-debug-memory` | Fix bad memories, rate quality, restore checkpoints | *"That memory is wrong, delete it"* |
+| `/cortex-remember` | Store decisions, fixes, patterns, lessons | *"Remember we chose JWT over sessions for auth"* |
+| `/cortex-recall` | Search memories with intent-aware retrieval | *"Why did we switch databases?"* |
+| `/cortex-explore-memory` | Check memory health, find gaps, assess coverage | *"What do we know about the payment module?"* |
+| `/cortex-consolidate` | Run maintenance: decay, compress, merge | *"Clean up old memories"* |
+| `/cortex-profile` | View cognitive style, patterns, blind spots | *"Show my work patterns"* |
+| `/cortex-navigate-knowledge` | Trace relationships, explore causal chains | *"How does auth relate to billing?"* |
+| `/cortex-setup-project` | Bootstrap memory from code or import history | *"Set up Cortex for this project"* |
+| `/cortex-visualize` | Launch 3D neural graph or memory dashboard | *"Show me the memory map"* |
+| `/cortex-automate` | Create triggers, rules, sync to CLAUDE.md | *"Remind me about X when I open that file"* |
+| `/cortex-debug-memory` | Fix bad memories, rate quality, restore checkpoints | *"That memory is wrong, delete it"* |
 
 ### What happens automatically (no skill needed)
 
@@ -127,7 +127,7 @@ claude mcp add cortex -- python -m mcp_server
 > Start a session in a project you haven't touched in 2 weeks — Cortex surfaces what you were working on, what decisions were pending, and what patterns it noticed
 
 **Import your history:**
-> `/cortex:cortex-setup-project` — backfill memories from all your past Claude Code conversations across every project
+> `/cortex-setup-project` — backfill memories from all your past Claude Code conversations across every project
 
 ---
 
@@ -276,7 +276,7 @@ Each agent uses `agent_topic` scoping — a **soft boost** that promotes topic-r
 
 ```bash
 # From any Claude Code session:
-/cortex:cortex-visualize    # or directly:
+/cortex-visualize    # or directly:
 # cortex:open_visualization    — 3D neural graph at localhost:3458
 # cortex:open_memory_dashboard — Memory heatmap at localhost:3457
 ```
