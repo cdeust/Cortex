@@ -54,27 +54,16 @@ _CORE_CONCEPTS = {
 
 def ensure_backfill_log(store: MemoryStore) -> None:
     """Create the backfill_log table if it doesn't exist."""
-    from mcp_server.infrastructure.sql_compat import execute, commit, is_sqlite
-
-    if is_sqlite(store._conn):
-        execute(store._conn,
-            """CREATE TABLE IF NOT EXISTS backfill_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_path TEXT NOT NULL UNIQUE,
-                file_hash TEXT NOT NULL,
-                memories_imported INTEGER DEFAULT 0,
-                processed_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )""")
-    else:
-        execute(store._conn,
-            """CREATE TABLE IF NOT EXISTS backfill_log (
-                id SERIAL PRIMARY KEY,
-                file_path TEXT NOT NULL UNIQUE,
-                file_hash TEXT NOT NULL,
-                memories_imported INTEGER DEFAULT 0,
-                processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )""")
-    commit(store._conn)
+    store._conn.execute(
+        """CREATE TABLE IF NOT EXISTS backfill_log (
+            id SERIAL PRIMARY KEY,
+            file_path TEXT NOT NULL UNIQUE,
+            file_hash TEXT NOT NULL,
+            memories_imported INTEGER DEFAULT 0,
+            processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )"""
+    )
+    store._conn.commit()
 
 
 def file_hash(path: Path) -> str:
@@ -87,12 +76,10 @@ def file_hash(path: Path) -> str:
 
 def is_already_backfilled(store: MemoryStore, path: Path, current_hash: str) -> bool:
     """Check whether a file has already been backfilled with this hash."""
-    from mcp_server.infrastructure.sql_compat import fetchone
-
-    row = fetchone(store._conn,
+    row = store._conn.execute(
         "SELECT file_hash FROM backfill_log WHERE file_path = %s",
         (str(path),),
-    )
+    ).fetchone()
     if row is None:
         return False
     return row["file_hash"] == current_hash
@@ -100,9 +87,7 @@ def is_already_backfilled(store: MemoryStore, path: Path, current_hash: str) -> 
 
 def mark_backfilled(store: MemoryStore, path: Path, fhash: str, count: int) -> None:
     """Record that a file has been backfilled."""
-    from mcp_server.infrastructure.sql_compat import execute
-
-    execute(store._conn,
+    store._conn.execute(
         """INSERT INTO backfill_log (file_path, file_hash, memories_imported, processed_at)
            VALUES (%s, %s, %s, NOW())
            ON CONFLICT(file_path) DO UPDATE SET

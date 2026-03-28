@@ -68,11 +68,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     # Include inactive if requested
     if include_inactive and not scope_filter:
-        from mcp_server.infrastructure.sql_compat import fetchall
-
-        rules = fetchall(store._conn,
+        rows = store._conn.execute(
             "SELECT * FROM memory_rules ORDER BY scope, priority DESC"
-        )
+        ).fetchall()
+        rules = [dict(r) for r in rows]
 
     # Filter by rule_type if requested
     if type_filter:

@@ -72,16 +72,9 @@ class TestConsolidateHandler:
         )
 
         # Manually set last_accessed to old time to trigger decay
-        import sqlite3
-
-        if isinstance(store._conn, sqlite3.Connection):
-            store._conn.execute(
-                "UPDATE memories SET last_accessed = ?", (old_time,)
-            )
-        else:
-            store._conn.execute(
-                "UPDATE memories SET last_accessed = %s", (old_time,)
-            )
+        store._conn.execute(
+            "UPDATE memories SET last_accessed = %s", (old_time,)
+        )
         store._conn.commit()
 
         result = await handler({"decay": True, "compress": True})

@@ -105,14 +105,12 @@ def _apply_updates(
     results: list[dict],
 ) -> tuple[int, int]:
     """Apply Hebbian weight updates to the store."""
-    from mcp_server.infrastructure.sql_compat import execute, commit
-
     ltp_count = 0
     ltd_count = 0
     for r in results:
         if r["action"] == "none":
             continue
-        execute(store._conn,
+        store._conn.execute(
             "UPDATE relationships SET weight = %s WHERE id = %s",
             (r["weight"], r["id"]),
         )
@@ -121,5 +119,5 @@ def _apply_updates(
         else:
             ltd_count += 1
     if ltp_count + ltd_count > 0:
-        commit(store._conn)
+        store._conn.commit()
     return ltp_count, ltd_count

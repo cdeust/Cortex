@@ -31,6 +31,7 @@ from mcp_server.infrastructure.sqlite_store_relationships import (
 )
 from mcp_server.infrastructure.sqlite_store_rules import SqliteRuleMixin
 from mcp_server.infrastructure.sqlite_store_search import SqliteSearchMixin
+from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.infrastructure.sqlite_store_stats import SqliteStatsMixin
 
 logger = logging.getLogger(__name__)
@@ -57,10 +58,12 @@ class SqliteMemoryStore(
         path = db_path or ":memory:"
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA foreign_keys=ON")
+        raw = sqlite3.connect(path, check_same_thread=False)
+        raw.row_factory = sqlite3.Row
+        raw.execute("PRAGMA journal_mode=WAL")
+        raw.execute("PRAGMA foreign_keys=ON")
+        self._raw_conn = raw
+        self._conn = PsycopgCompatConnection(raw)
         self._init_schema()
 
     def _init_schema(self) -> None:
@@ -97,9 +100,9 @@ class SqliteMemoryStore(
         try:
             import sqlite_vec  # noqa: F401
 
-            self._conn.enable_load_extension(True)
-            sqlite_vec.load(self._conn)
-            self._conn.enable_load_extension(False)
+            self._raw_conn.enable_load_extension(True)
+            sqlite_vec.load(self._raw_conn)
+            self._raw_conn.enable_load_extension(False)
             self._conn.execute(MEMORIES_VEC_DDL)
             self._conn.commit()
             self._has_vec = True

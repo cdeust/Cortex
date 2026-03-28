@@ -102,14 +102,12 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     tags = _build_anchor_tags(mem, reason)
     content = _build_anchor_content(mem.get("content", ""), reason)
 
-    from mcp_server.infrastructure.sql_compat import execute, commit
-
-    execute(store._conn,
+    store._conn.execute(
         "UPDATE memories SET heat = 1.0, is_protected = TRUE, importance = 1.0, "
-        "tags = %s, content = %s WHERE id = %s",
+        "tags = %s::jsonb, content = %s WHERE id = %s",
         (_json.dumps(tags), content, memory_id),
     )
-    commit(store._conn)
+    store._conn.commit()
 
     return {
         "anchored": True,

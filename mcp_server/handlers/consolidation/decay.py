@@ -63,15 +63,13 @@ def _decay_entities(
         decay_factor=0.98,
         cold_threshold=settings.COLD_THRESHOLD,
     )
-    from mcp_server.infrastructure.sql_compat import execute, commit
-
     for eid, new_heat in entity_updates:
-        execute(store._conn,
+        store._conn.execute(
             "UPDATE entities SET heat = %s WHERE id = %s",
             (new_heat, eid),
         )
     if entity_updates:
-        commit(store._conn)
+        store._conn.commit()
     return entity_updates
 
 

@@ -69,12 +69,10 @@ def _format_edges(relationships: list[dict]) -> list[dict]:
 
 def _prune_edges(store: MemoryStore, prunable: list[dict]) -> int:
     """Delete prunable edges from the store."""
-    from mcp_server.infrastructure.sql_compat import execute, commit
-
     count = 0
     for edge in prunable:
         try:
-            execute(store._conn,
+            store._conn.execute(
                 "DELETE FROM relationships WHERE id = %s",
                 (edge["id"],),
             )
@@ -82,7 +80,7 @@ def _prune_edges(store: MemoryStore, prunable: list[dict]) -> int:
         except Exception:
             pass
     if count:
-        commit(store._conn)
+        store._conn.commit()
     return count
 
 
@@ -106,12 +104,10 @@ def _archive_orphans(
         memory_entity_ids,
     )
 
-    from mcp_server.infrastructure.sql_compat import execute, commit
-
     count = 0
     for orphan in orphans:
         try:
-            execute(store._conn,
+            store._conn.execute(
                 "UPDATE entities SET heat = 0 WHERE id = %s",
                 (orphan["id"],),
             )
@@ -119,7 +115,7 @@ def _archive_orphans(
         except Exception:
             pass
     if count:
-        commit(store._conn)
+        store._conn.commit()
     return count
 
 
