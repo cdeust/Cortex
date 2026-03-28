@@ -1,8 +1,4 @@
-"""Helpers for codebase_analyze — file walking, hashing, entity persistence.
-
-Extracted from codebase_analyze.py to keep each file under 300 lines
-and each function under 40 lines.
-"""
+"""Helpers for codebase_analyze — file walking, hashing, entity persistence."""
 
 from __future__ import annotations
 
@@ -60,12 +56,22 @@ def collect_source_files(
 # ── Hash-based change detection ───────────────────────────────────────────
 
 
-def load_existing_hashes(store: MemoryStore) -> dict[str, tuple[int, str]]:
-    """Load existing codebase memory hashes.
+def _parse_tags(raw: object) -> list:
+    """Parse tags from a list (PG) or JSON string (SQLite)."""
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str):
+        import json
 
-    Returns:
-        Dict mapping file_path to (memory_id, content_hash).
-    """
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            return []
+    return []
+
+
+def load_existing_hashes(store: MemoryStore) -> dict[str, tuple[int, str]]:
+    """Load existing codebase memory hashes: {path: (id, hash)}."""
     hashes: dict[str, tuple[int, str]] = {}
     try:
         rows = store._conn.execute(
@@ -74,7 +80,7 @@ def load_existing_hashes(store: MemoryStore) -> dict[str, tuple[int, str]]:
         ).fetchall()
         for row in rows:
             mem_id = row["id"]
-            tags = row["tags"] if isinstance(row["tags"], list) else []
+            tags = _parse_tags(row["tags"])
             file_path, content_hash = _extract_file_hash(tags)
             if file_path and content_hash:
                 hashes[file_path] = (mem_id, content_hash)
@@ -192,11 +198,7 @@ def persist_entities(
     memory_id: int,
     domain: str,
 ) -> tuple[int, int]:
-    """Persist file entity, symbols, and imports to knowledge graph.
-
-    Returns:
-        Tuple of (entities_created, relationships_created).
-    """
+    """Persist file entity, symbols, and imports. Returns (entities, rels)."""
     entities, relationships = 0, 0
     try:
         file_eid = _get_or_create_entity(store, analysis.path, "file", domain)
@@ -273,17 +275,25 @@ def persist_community_tags(
     communities: dict[str, int],
 ) -> None:
     """Tag codebase memories with their community cluster ID."""
+    import json
+
     for file_path, cluster_id in communities.items():
         try:
-            store._conn.execute(
-                "UPDATE memories SET tags = tags || %s::jsonb "
-                "WHERE agent_context = 'codebase' "
-                "AND tags @> %s::jsonb AND NOT is_stale",
-                (
-                    f'["cluster:{cluster_id}"]',
-                    f'["file:{file_path}"]',
-                ),
-            )
+            rows = store._conn.execute(
+                "SELECT id, tags FROM memories "
+                "WHERE agent_context = 'codebase' AND NOT is_stale "
+                "AND content LIKE %s",
+                (f"%{file_path}%",),
+            ).fetchall()
+            for row in rows:
+                tags = _parse_tags(row["tags"])
+                tag = f"cluster:{cluster_id}"
+                if tag not in tags:
+                    tags.append(tag)
+                    store._conn.execute(
+                        "UPDATE memories SET tags = %s WHERE id = %s",
+                        (json.dumps(tags), row["id"]),
+                    )
         except Exception:
             pass
     if communities:
