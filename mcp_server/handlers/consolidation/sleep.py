@@ -45,16 +45,15 @@ def _apply_dream_replay(
 ) -> int:
     """Update enriched content for replayed memories."""
     count = 0
+    from mcp_server.infrastructure.sql_compat import execute, commit
+
     for upd in replay_updates:
         try:
             new_content = upd["enriched_content"]
             new_emb = embeddings.encode(new_content)
-            from mcp_server.infrastructure.pg_store import PgMemoryStore
-
-            emb_vec = PgMemoryStore._bytes_to_vector(new_emb)
-            store._conn.execute(
-                "UPDATE memories SET content = %s, embedding = %s WHERE id = %s",
-                (new_content, emb_vec, upd["memory_id"]),
+            store.update_memory_compression(
+                upd["memory_id"], new_content, new_emb,
+                compression_level=0,
             )
             count += 1
         except Exception:
@@ -62,8 +61,6 @@ def _apply_dream_replay(
                 "Dream replay failed for memory %s",
                 upd.get("memory_id"),
             )
-    if count:
-        store._conn.commit()
     return count
 
 
@@ -73,6 +70,8 @@ def _fix_stale_embeddings(
     stale_items: list[dict],
 ) -> int:
     """Re-embed memories with stale or missing embeddings."""
+    from mcp_server.infrastructure.sql_compat import execute, commit
+
     count = 0
     for item in stale_items:
         try:
@@ -81,12 +80,9 @@ def _fix_stale_embeddings(
                 continue
             new_emb = embeddings.encode(content)
             if new_emb:
-                from mcp_server.infrastructure.pg_store import PgMemoryStore
-
-                emb_vec = PgMemoryStore._bytes_to_vector(new_emb)
-                store._conn.execute(
+                execute(store._conn,
                     "UPDATE memories SET embedding = %s WHERE id = %s",
-                    (emb_vec, item["memory_id"]),
+                    (new_emb, item["memory_id"]),
                 )
                 count += 1
         except Exception:
@@ -95,7 +91,7 @@ def _fix_stale_embeddings(
                 item.get("memory_id"),
             )
     if count:
-        store._conn.commit()
+        commit(store._conn)
     return count
 
 

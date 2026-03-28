@@ -1,31 +1,53 @@
 """Global test configuration — isolate tests on cortex_test database.
 
-All handler/integration tests hit PostgreSQL. This conftest ensures they
-use the `cortex_test` database (not production `cortex`) and cleans state
-between tests.
+Handler/integration tests hit PostgreSQL when available. When PG is not
+available (CI without PG, sandboxed environments), falls back to SQLite
+with per-test isolation via temporary DB files.
 """
 
+import importlib
 import os
+import tempfile
+
 import pytest
 
 # ── Resolve test database URL ─────────────────────────────────────────────
-# In CI, DATABASE_URL is already set with credentials (cortex:cortex@...).
-# Locally, redirect from production DB to cortex_test for safety.
 
 _CURRENT_URL = os.environ.get("DATABASE_URL", "")
 _IS_CI = os.environ.get("CI", "").lower() in ("true", "1")
 
 if _IS_CI:
-    # CI: use the DATABASE_URL already configured (has credentials + cortex DB)
     _TEST_DB_URL = _CURRENT_URL or "postgresql://cortex:cortex@localhost:5432/cortex"
 else:
-    # Local: override to cortex_test to avoid polluting production DB
     _TEST_DB_URL = os.environ.get(
         "CORTEX_TEST_DATABASE_URL",
         "postgresql://localhost:5432/cortex_test",
     )
 
 os.environ["DATABASE_URL"] = _TEST_DB_URL
+
+
+def _pg_available() -> bool:
+    """Check if PostgreSQL is reachable."""
+    try:
+        import psycopg
+
+        conn = psycopg.connect(_TEST_DB_URL, autocommit=True, connect_timeout=3)
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
+_USE_PG = _pg_available()
+
+# When PG isn't available, force SQLite backend with a temp dir
+if not _USE_PG:
+    _SQLITE_TEST_DIR = tempfile.mkdtemp(prefix="cortex_test_")
+    os.environ["CORTEX_MEMORY_STORE_BACKEND"] = "sqlite"
+    os.environ["CORTEX_MEMORY_SQLITE_FALLBACK_PATH"] = os.path.join(
+        _SQLITE_TEST_DIR, "test.db"
+    )
 
 
 # ── Tables to clean between tests (order matters for FK constraints) ─────
@@ -47,6 +69,8 @@ _TABLES_TO_CLEAN = [
 
 def _get_raw_connection():
     """Get a raw psycopg connection to the test database."""
+    if not _USE_PG:
+        return None
     try:
         import psycopg
 
@@ -56,11 +80,42 @@ def _get_raw_connection():
 
 
 def _clean_all_tables(conn) -> None:
-    """Delete all data from test tables."""
+    """Delete all data from test tables (PostgreSQL)."""
     for table in _TABLES_TO_CLEAN:
         try:
             conn.execute(f"DELETE FROM {table}")
         except Exception:
+            pass
+
+
+def _clean_sqlite_store() -> None:
+    """Clean SQLite tables by finding and wiping the active store."""
+    import sqlite3
+
+    for mod_name in (
+        "mcp_server.handlers.recall",
+        "mcp_server.handlers.remember",
+        "mcp_server.handlers.consolidate",
+        "mcp_server.handlers.checkpoint",
+        "mcp_server.handlers.memory_stats",
+    ):
+        try:
+            mod = importlib.import_module(mod_name)
+            store = getattr(mod, "_store", None)
+            if store is not None and hasattr(store, "_conn"):
+                if isinstance(store._conn, sqlite3.Connection):
+                    for table in _TABLES_TO_CLEAN:
+                        try:
+                            store._conn.execute(f"DELETE FROM {table}")
+                        except Exception:
+                            pass
+                    try:
+                        store._conn.execute("DELETE FROM memories_fts")
+                    except Exception:
+                        pass
+                    store._conn.commit()
+                    return
+        except (ImportError, AttributeError):
             pass
 
 
@@ -73,7 +128,6 @@ def _reset_all_singletons() -> None:
         ("mcp_server.handlers.checkpoint", ["_store"]),
         ("mcp_server.handlers.memory_stats", ["_store"]),
     ]
-    import importlib
 
     for mod_name, attrs in modules_and_attrs:
         try:
@@ -93,23 +147,24 @@ def _reset_all_singletons() -> None:
 
 
 @pytest.fixture(autouse=True)
-def _pg_test_isolation():
+def _test_isolation():
     """Clean test database and reset singletons between EVERY test.
 
     This ensures:
     1. Each test starts with empty tables
-    2. Handler singletons reconnect fresh to cortex_test
-    3. Failed transactions are rolled back
+    2. Handler singletons reconnect fresh
+    3. Works with both PostgreSQL and SQLite backends
     """
     conn = _get_raw_connection()
     if conn:
         _clean_all_tables(conn)
+    elif not _USE_PG:
+        _clean_sqlite_store()
 
     _reset_all_singletons()
 
     yield
 
-    # After each test: reset singletons and roll back poisoned transactions
     _reset_all_singletons()
 
     if conn:

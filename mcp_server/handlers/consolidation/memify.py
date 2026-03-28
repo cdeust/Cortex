@@ -52,39 +52,35 @@ def _strengthen_memories(store: MemoryStore, memories: list[dict]) -> int:
     count = 0
     for mid, new_importance in strengthen_list:
         try:
-            store._conn.execute(
-                "UPDATE memories SET importance = %s WHERE id = %s",
-                (new_importance, mid),
-            )
+            store.update_memory_importance(mid, new_importance)
             count += 1
         except Exception:
             pass
-    if count:
-        store._conn.commit()
     return count
 
 
 def _reweight_relationships(store: MemoryStore) -> int:
     """Adjust relationship weights based on entity heat."""
+    from mcp_server.infrastructure.sql_compat import execute, commit, fetchall
+
     try:
         entities = store.get_all_entities(min_heat=0.0)
         entity_heats = {e["id"]: e.get("heat", 0.5) for e in entities}
 
-        rows = store._conn.execute(
+        rels = fetchall(store._conn,
             "SELECT id, source_entity_id, target_entity_id, weight FROM relationships",
-        ).fetchall()
-        rels = [dict(r) for r in rows]
+        )
         reweights = compute_relationship_reweights(rels, entity_heats)
 
         count = 0
         for rid, new_weight in reweights:
-            store._conn.execute(
+            execute(store._conn,
                 "UPDATE relationships SET weight = %s WHERE id = %s",
                 (new_weight, rid),
             )
             count += 1
         if count:
-            store._conn.commit()
+            commit(store._conn)
         return count
     except Exception:
         return 0

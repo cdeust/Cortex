@@ -106,15 +106,9 @@ async def _store_discoveries(
             mid = result.get("memory_id")
             if mid:
                 memory_ids.append(mid)
-                store._conn.execute(
-                    "UPDATE memories SET heat = %s WHERE id = %s",
-                    (initial_heat, mid),
-                )
+                store.update_memory_heat(mid, initial_heat)
         else:
             skipped += 1
-
-    if stored:
-        store._conn.commit()
 
     return stored, skipped, memory_ids
 
