@@ -13,6 +13,7 @@ from mcp_server.handlers.pipeline.helpers import (
     trunc,
     try_parse_json,
 )
+from mcp_server.handlers.pipeline.memory_trace import trace_prd
 
 
 PRD_SECTION_DEFS = [
@@ -227,6 +228,7 @@ async def stage_prd(client, ctx: dict) -> None:
             "codebaseContextStr": codebase_context_str,
         }
     )
+    await trace_prd(ctx, len(prd_sections), len(file_manifest))
     ctx["stages"][4] = {
         "status": "ok",
         "sections": len(prd_sections),

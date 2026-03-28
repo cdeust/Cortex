@@ -274,18 +274,26 @@ class TestSetupScript:
             os.path.dirname(__file__), "..", "..", "scripts", "setup_db.py"
         )
         script = os.path.abspath(script)
+        plugin_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..")
+        )
 
         # Use the same DATABASE_URL that tests are configured with
         db_url = os.environ.get(
             "DATABASE_URL", "postgresql://localhost:5432/cortex_test"
         )
 
+        # Ensure subprocess can find psycopg and mcp_server
+        env = {**os.environ, "DATABASE_URL": db_url}
+        existing_pp = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{plugin_root}:{existing_pp}" if existing_pp else plugin_root
+
         result = subprocess.run(
             [sys.executable, script],
             capture_output=True,
             text=True,
             timeout=15,
-            env={**os.environ, "DATABASE_URL": db_url},
+            env=env,
         )
 
         parsed = json.loads(result.stdout.strip())

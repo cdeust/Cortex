@@ -11,6 +11,11 @@ from mcp_server.handlers.pipeline.helpers import (
     log,
     trunc,
 )
+from mcp_server.handlers.pipeline.memory_trace import (
+    trace_hor,
+    trace_impact,
+    trace_strategy,
+)
 
 
 async def stage_init(client, ctx: dict) -> None:
@@ -115,6 +120,7 @@ async def stage_impact(client, ctx: dict) -> None:
     await _save_impact_artifact(client, ctx, top_finding, impact_text, propagation)
 
     ctx["impactText"] = impact_text
+    await trace_impact(ctx, impact_text)
     if len(impact_text) < 50:
         raise AnalysisError(
             "Impact analysis returned empty or trivial result",
@@ -150,6 +156,7 @@ async def stage_strategy(client, ctx: dict) -> None:
             "Strategy selection returned no strategy",
             {"stage": 3, "raw": strategy},
         )
+    await trace_strategy(ctx, ctx["stratName"])
     ctx["stages"][3] = {"status": "ok", "strategy": ctx["stratName"]}
     log(f"  strategy: {ctx['stratName']}")
 
@@ -220,5 +227,6 @@ async def stage_hor(client, ctx: dict) -> None:
     total = len(hor.get("results", [])) if isinstance(hor, dict) else 64
 
     ctx.update({"horPassed": passed, "horTotal": total})
+    await trace_hor(ctx, passed, total)
     ctx["stages"][7] = {"status": "ok", "passed": passed, "total": total}
     log(f"  HOR: {passed}/{total} passed")

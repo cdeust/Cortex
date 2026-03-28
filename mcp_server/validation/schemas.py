@@ -85,6 +85,18 @@ SCHEMAS: dict[str, dict] = {
         },
         "required": ["codebase_path", "task_path"],
     },
+    "codebase_analyze": {
+        "properties": {
+            "directory": {"type": "string"},
+            "languages": {"type": "array"},
+            "max_files": {"type": "number"},
+            "max_file_size_kb": {"type": "number"},
+            "incremental": {"type": "boolean"},
+            "dry_run": {"type": "boolean"},
+            "domain": {"type": "string"},
+        },
+        "required": [],
+    },
 }
 
 _TYPE_CHECKS: dict[str, type | tuple[type, ...]] = {

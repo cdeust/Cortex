@@ -17,9 +17,9 @@ class TestMemoryStatsHandler:
         assert isinstance(result["has_vector_search"], bool)
 
     def test_with_stored_memories(self):
-        from mcp_server.infrastructure.memory_store import MemoryStore
+        from mcp_server.handlers.memory_stats import _get_store
 
-        store = MemoryStore()
+        store = _get_store()
         store.insert_memory({"content": "a", "store_type": "episodic", "heat": 0.8})
         store.insert_memory({"content": "b", "store_type": "semantic", "heat": 0.4})
         store.insert_entity({"name": "X", "type": "t"})
@@ -30,7 +30,7 @@ class TestMemoryStatsHandler:
                 "trigger_type": "keyword_match",
             }
         )
-        store.close()
+        store._conn.commit()
 
         result = asyncio.run(handler())
         assert result["total_memories"] == 2

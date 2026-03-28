@@ -16,6 +16,7 @@ from mcp_server.handlers.pipeline.discovery_scoring import (
     score_findings,
     validate_top_findings,
 )
+from mcp_server.handlers.pipeline.memory_trace import trace_discovery
 
 SOURCE_EXTS = re.compile(
     r"\.(swift|js|ts|py|go|rs|java|kt|rb|cs|c|cpp|h|m)$", re.IGNORECASE
@@ -274,4 +275,5 @@ async def stage_discovery(client, ctx: dict) -> None:
         top_findings,
         finding_id,
     )
+    await trace_discovery(ctx, scored)
     log(f"  scored {len(scored)} findings, top {len(top_findings)}")

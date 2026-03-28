@@ -14,6 +14,7 @@ from mcp_server.handlers import (
     seed_project,
     anchor,
     backfill_memories,
+    codebase_analyze,
 )
 from mcp_server.tool_error_handler import safe_handler
 
@@ -26,6 +27,7 @@ def register(mcp: FastMCP) -> None:
     _register_seed_project(mcp)
     _register_anchor(mcp)
     _register_backfill_memories(mcp)
+    _register_codebase_analyze(mcp)
 
 
 def _register_forget(mcp: FastMCP) -> None:
@@ -158,5 +160,34 @@ def _register_backfill_memories(mcp: FastMCP) -> None:
                 "min_importance": min_importance,
                 "dry_run": dry_run,
                 "force_reprocess": force_reprocess,
+            },
+        )
+
+
+def _register_codebase_analyze(mcp: FastMCP) -> None:
+    @mcp.tool(
+        name="codebase_analyze",
+        description=codebase_analyze.schema["description"],
+    )
+    async def tool_codebase_analyze(
+        directory: str | None = None,
+        languages: list[str] | None = None,
+        max_files: int = 500,
+        max_file_size_kb: int = 100,
+        incremental: bool = True,
+        dry_run: bool = False,
+        domain: str | None = None,
+    ) -> str:
+        """Analyze codebase and store structure as memories."""
+        return await safe_handler(
+            codebase_analyze.handler,
+            {
+                "directory": directory or "",
+                "languages": languages,
+                "max_files": max_files,
+                "max_file_size_kb": max_file_size_kb,
+                "incremental": incremental,
+                "dry_run": dry_run,
+                "domain": domain or "",
             },
         )

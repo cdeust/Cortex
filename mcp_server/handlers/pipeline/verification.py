@@ -6,6 +6,7 @@ from typing import Any
 
 from mcp_server.errors import AnalysisError
 from mcp_server.handlers.pipeline.helpers import log, trunc
+from mcp_server.handlers.pipeline.memory_trace import trace_verification
 
 
 async def _decompose_and_verify(client, top_finding: dict) -> tuple[int, dict]:
@@ -143,6 +144,7 @@ async def stage_verification(client, ctx: dict) -> None:
 
     v_score = verify.get("score", 0.75) if isinstance(verify, dict) else 0.75
     verdict = verify.get("verdict") if isinstance(verify, dict) else None
+    await trace_verification(ctx, str(verdict), v_score, claim_count)
 
     ctx.update(
         {"verify": verify, "debate": debate, "consensus": consensus, "fusion": fusion}

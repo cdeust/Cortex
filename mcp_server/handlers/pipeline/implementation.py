@@ -6,6 +6,7 @@ import os
 
 from mcp_server.errors import AnalysisError
 from mcp_server.handlers.pipeline.helpers import extract_text, log, trunc
+from mcp_server.handlers.pipeline.memory_trace import trace_implementation
 from mcp_server.handlers.pipeline.implementation_artifacts import (
     write_pipeline_artifacts,
     write_prd_files,
@@ -180,6 +181,7 @@ async def stage_implementation(client, ctx: dict) -> None:
             "implementedFiles": implemented_files,
         }
     )
+    await trace_implementation(ctx, len(implemented_files), implemented_files)
     ctx["stages"][6] = {
         "status": "ok",
         "files": len(implemented_files),

@@ -26,6 +26,10 @@ VALID_REL_TYPES = frozenset(
         "resolved_by",
         "preceded_by",
         "derived_from",
+        "defines",
+        "extends",
+        "implements",
+        "contains",
     }
 )
 
@@ -39,6 +43,15 @@ ENTITY_TYPES = frozenset(
         "technology",
         "file",
         "variable",
+        "class",
+        "interface",
+        "type",
+        "enum",
+        "trait",
+        "protocol",
+        "constant",
+        "module",
+        "struct",
     }
 )
 

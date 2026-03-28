@@ -13,6 +13,7 @@ from typing import Any
 
 from mcp_server.infrastructure.mcp_client_pool import get_client
 from mcp_server.handlers.pipeline.helpers import log as _log
+from mcp_server.handlers.pipeline.memory_trace import trace_pipeline_complete
 from mcp_server.handlers.pipeline.audit import stage_audit
 from mcp_server.handlers.pipeline.discovery import stage_discovery
 from mcp_server.handlers.pipeline.implementation import stage_implementation
@@ -162,4 +163,6 @@ async def handler(args: dict) -> dict:
                 "tool_calls": client.tool_calls,
             }
 
-    return _build_success_result(client, ctx)
+    result = _build_success_result(client, ctx)
+    await trace_pipeline_complete(ctx, result)
+    return result

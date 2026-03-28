@@ -42,6 +42,14 @@ postgresql = [
 sqlite = [
     "sqlite-vec>=0.1.1",
 ]
+codebase = [
+    "tree-sitter>=0.24.0",
+    "tree-sitter-language-pack>=0.24.0",
+    "networkx>=3.0",
+]
+benchmarks = [
+    "pymupdf>=1.24.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",

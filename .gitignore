@@ -14,3 +14,5 @@ mcp-server_old/
 # Large benchmark datasets (download instructions in README)
 benchmarks/longmemeval/longmemeval_s.json
 benchmarks/longmemeval/longmemeval_oracle.json
+benchmarks/spell_alteration/*.pdf
+*.pdf
