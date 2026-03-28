@@ -30,8 +30,8 @@ _SWIFT_IMPORT = re.compile(r"^import\s+(\w+)", re.MULTILINE)
 
 # ── Symbol patterns ───────────────────────────────────────────────────────
 
-_PY_DEF = re.compile(r"^(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)", re.MULTILINE)
-_PY_CLASS = re.compile(r"^class\s+(\w+)(?:\(([^)]*)\))?", re.MULTILINE)
+_PY_DEF = re.compile(r"^\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)", re.MULTILINE)
+_PY_CLASS = re.compile(r"^\s*class\s+(\w+)(?:\(([^)]*)\))?", re.MULTILINE)
 
 _JS_FUNC = re.compile(
     r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)", re.MULTILINE
