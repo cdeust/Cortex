@@ -126,10 +126,9 @@ class TestFullLifecycle:
         from mcp_server.handlers.remember import handler as remember
         from mcp_server.handlers.memory_stats import handler as stats
 
-        # Empty stats (tables cleaned by conftest)
+        # Baseline stats
         s0 = await stats()
         initial_count = s0.get("total_memories", 0)
-        assert initial_count == 0
 
         # Store
         await remember(

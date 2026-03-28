@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from mcp_server.core.codebase_parser import FileAnalysis, ImportInfo, SymbolDef
 from mcp_server.core.codebase_graph import (

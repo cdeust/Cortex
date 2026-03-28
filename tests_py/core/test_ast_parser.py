@@ -52,9 +52,7 @@ def standalone_func(x: int) -> str:
         r = parse_file_ast("auth/middleware.py", self.SAMPLE)
         if _HAS_TREE_SITTER:
             flask = next(i for i in r.imports if i.module == "flask")
-            assert "request" in flask.names or any(
-                "request" in n for n in flask.names
-            )
+            assert "request" in flask.names or any("request" in n for n in flask.names)
 
     def test_class_detected(self) -> None:
         r = parse_file_ast("auth/middleware.py", self.SAMPLE)
