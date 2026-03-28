@@ -88,35 +88,30 @@ def _clean_all_tables(conn) -> None:
             pass
 
 
+_SQLITE_DB_PATH = os.environ.get("CORTEX_MEMORY_SQLITE_FALLBACK_PATH", "")
+
+
 def _clean_sqlite_store() -> None:
-    """Clean SQLite tables by finding and wiping the active store."""
+    """Clean SQLite tables by connecting directly to the test DB file."""
+    if not _SQLITE_DB_PATH or not os.path.exists(_SQLITE_DB_PATH):
+        return
     import sqlite3
 
-    for mod_name in (
-        "mcp_server.handlers.recall",
-        "mcp_server.handlers.remember",
-        "mcp_server.handlers.consolidate",
-        "mcp_server.handlers.checkpoint",
-        "mcp_server.handlers.memory_stats",
-    ):
+    try:
+        conn = sqlite3.connect(_SQLITE_DB_PATH)
+        for table in _TABLES_TO_CLEAN:
+            try:
+                conn.execute(f"DELETE FROM {table}")
+            except Exception:
+                pass
         try:
-            mod = importlib.import_module(mod_name)
-            store = getattr(mod, "_store", None)
-            if store is not None and hasattr(store, "_conn"):
-                if isinstance(store._conn, sqlite3.Connection):
-                    for table in _TABLES_TO_CLEAN:
-                        try:
-                            store._conn.execute(f"DELETE FROM {table}")
-                        except Exception:
-                            pass
-                    try:
-                        store._conn.execute("DELETE FROM memories_fts")
-                    except Exception:
-                        pass
-                    store._conn.commit()
-                    return
-        except (ImportError, AttributeError):
+            conn.execute("DELETE FROM memories_fts")
+        except Exception:
             pass
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 
 def _reset_all_singletons() -> None:
