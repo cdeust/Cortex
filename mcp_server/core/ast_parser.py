@@ -48,7 +48,10 @@ def _get_extractor_and_tree(language: str, content: bytes) -> tuple | None:
     extractor = _EXTRACTORS.get(language)
     if not extractor:
         return None
-    from tree_sitter_language_pack import get_parser
+    try:
+        from tree_sitter_language_pack import get_parser
+    except ImportError:
+        return None
 
     tree = get_parser(language).parse(content)
     return extractor, tree

@@ -9,7 +9,6 @@ from __future__ import annotations
 import sys
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from pathlib import Path
 
 from mcp_server.server.http_common import (
     get_ui_root,
