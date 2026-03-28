@@ -1,7 +1,7 @@
 {
   "name": "cortex",
   "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, and cognitive profiling that learns how you work. 34 MCP tools across memory storage, recall, knowledge graph navigation, cognitive profiling, visualization, and automation.",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"

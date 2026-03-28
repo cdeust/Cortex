@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Persistent memory and cognitive profiling plugins for Claude Code",
-    "version": "2.2.0"
+    "version": "2.3.1"
   },
   "plugins": [
     {
       "name": "cortex",
       "source": "./",
       "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory, intent-aware retrieval, knowledge graphs, and cognitive profiling that learns how you work",
-      "version": "2.2.0",
+      "version": "2.3.1",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
