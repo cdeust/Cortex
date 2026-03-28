@@ -61,10 +61,11 @@ _HIGH_VALUE_TOOLS = {
 }
 
 # Tools that may have value depending on content
+# Note: Read, Glob, Grep are excluded — they are read-only tools whose
+# output is just existing file contents. Capturing them wastes 8-25s on
+# embedding model load + DB write with no memory value, and causes
+# timeout errors in Claude Code's hook runner.
 _CONDITIONAL_TOOLS = {
-    "Read",
-    "Glob",
-    "Grep",
     "WebFetch",
     "WebSearch",
 }

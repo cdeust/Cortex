@@ -57,11 +57,37 @@ class EmbeddingEngine:
         if self._model is not None or self._unavailable:
             return
         try:
-            from sentence_transformers import SentenceTransformer
+            import os
 
-            self._model = SentenceTransformer(
-                self._model_name, trust_remote_code=True, device="cpu"
-            )
+            # Set offline mode BEFORE importing sentence_transformers to prevent
+            # unauthenticated HF Hub requests. The import itself initializes
+            # huggingface_hub which checks this env var at module load time.
+            had_offline = os.environ.get("HF_HUB_OFFLINE")
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            try:
+                from sentence_transformers import SentenceTransformer
+
+                self._model = SentenceTransformer(
+                    self._model_name, trust_remote_code=True, device="cpu"
+                )
+            except OSError:
+                # Model not in local cache — need to download it once
+                if had_offline is None:
+                    del os.environ["HF_HUB_OFFLINE"]
+                else:
+                    os.environ["HF_HUB_OFFLINE"] = had_offline
+                logger.info("Downloading embedding model: %s", self._model_name)
+                from sentence_transformers import SentenceTransformer
+
+                self._model = SentenceTransformer(
+                    self._model_name, trust_remote_code=True, device="cpu"
+                )
+            finally:
+                if had_offline is None:
+                    os.environ.pop("HF_HUB_OFFLINE", None)
+                else:
+                    os.environ["HF_HUB_OFFLINE"] = had_offline
+
             actual_dim = self._model.get_sentence_embedding_dimension()
             if actual_dim != self._dim:
                 self._dim = actual_dim
