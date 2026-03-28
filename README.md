@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![MCP Server](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-1826+_passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-2000+_passing-brightgreen.svg)](#development)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/cdeust/Cortex/pulls)
 
 **Claude Code forgets everything between sessions. Cortex fixes that.**
@@ -41,7 +41,7 @@ That's it. Cortex registers its MCP server, installs 4 lifecycle hooks, and acti
 
 | Component | What it does | Automatic? |
 |---|---|---|
-| **MCP Server** | 34 tools for memory, retrieval, profiling, navigation | Yes |
+| **MCP Server** | 35 tools for memory, retrieval, profiling, codebase analysis | Yes |
 | **SessionStart hook** | Injects hot memories + cognitive profile at session start | Yes |
 | **SessionEnd hook** | Updates your cognitive profile after each session | Yes |
 | **PostToolUse hook** | Auto-captures important tool outputs as memories | Yes |
@@ -104,6 +104,28 @@ claude mcp add cortex -- python -m mcp_server
 | `/cortex-visualize` | Launch 3D neural graph or memory dashboard | *"Show me the memory map"* |
 | `/cortex-automate` | Create triggers, rules, sync to CLAUDE.md | *"Remind me about X when I open that file"* |
 | `/cortex-debug-memory` | Fix bad memories, rate quality, restore checkpoints | *"That memory is wrong, delete it"* |
+
+### Codebase analysis
+
+Cortex can index your codebase directly into memory — replacing external tools like GitNexus.
+
+```bash
+# From any Claude Code session:
+codebase_analyze(directory="/path/to/project")
+```
+
+| Feature | What it does |
+|---|---|
+| **Tree-sitter AST parsing** | Extracts imports, classes, functions, methods for Python, TypeScript, Go, Swift, Rust (regex fallback for others) |
+| **Cross-file import resolution** | `from auth.tokens import verify_jwt` resolves to the actual file defining it |
+| **Type-reference resolution** | For Swift/Go where files reference types without explicit imports |
+| **Class-method binding** | Methods scoped to parent class (`AuthService.validate`, not just `validate`) |
+| **Inheritance tracking** | `class Child(Parent)` creates "extends" edges in the knowledge graph |
+| **Community detection** | Louvain clustering groups functionally related files |
+| **Impact analysis** | Upstream/downstream BFS — "what breaks if I change this file?" |
+| **Incremental** | SHA-256 hash per file, only re-processes changed files |
+
+Every file becomes a semantic memory. Every symbol becomes an entity. Every import and type reference becomes a relationship edge. All queryable via `recall("how does authentication work")`.
 
 ### What happens automatically (no skill needed)
 
@@ -177,7 +199,7 @@ Cortex builds a profile of how you work — from your Claude Code session histor
 
 ---
 
-## 34 MCP Tools
+## 35 MCP Tools
 
 <details>
 <summary>Full tool reference</summary>
@@ -215,6 +237,7 @@ Cortex builds a profile of how you work — from your Claude Code session histor
 | `validate_memory` | Check memories against current filesystem state |
 | `backfill_memories` | Auto-import prior Claude Code conversations |
 | `seed_project` | Bootstrap memory from codebase structure |
+| `codebase_analyze` | Tree-sitter AST analysis with cross-file resolution |
 
 ### Profiling (8 tools)
 
@@ -321,7 +344,7 @@ The graph organizes everything into a 6-level hierarchy — from broad categorie
 
 ## Benchmarks
 
-6 benchmarks spanning 2024-2026, all running on the **production PostgreSQL backend** — same `recall_memories()` stored procedure, same FlashRank reranking. No custom retrievers.
+7 benchmarks spanning 2024-2026, all running on the **production PostgreSQL backend** — same `recall_memories()` stored procedure, same FlashRank reranking. No custom retrievers.
 
 ### Results
 
@@ -332,6 +355,7 @@ The graph organizes everything into a 6-level hierarchy — from broad categorie
 | **LoCoMo R@10** (ACL 2024) | **88.9%** | -- | -- |
 | **LoCoMo MRR** | **0.774** | -- | -- |
 | **BEAM Overall MRR** (ICLR 2026) | **0.515** | 0.329 | **+57%** |
+| **Spell Alteration** (1.5M token haystack) | **5/5 PASS** | -- | -- |
 
 ### Why retrieval-only metrics?
 
@@ -392,6 +416,29 @@ Cortex dominates 7/10 abilities. The three where LIGHT leads (preference, instru
 
 </details>
 
+<details>
+<summary>Spell Alteration benchmark</summary>
+
+Needle-in-a-haystack memory fidelity test. Ingests a complete 1.5M-token novel as 3000+ memories, replaces 2 specific terms with fakes throughout the entire corpus, then tests recall precision.
+
+**Test A (Easy):** Ingest altered story. Can the system find the 2 fake terms among 3372 memories and confirm the originals are absent?
+
+**Test B (Hard):** Ingest BOTH the original and altered versions (6744 total memories, ~3.1M tokens). Compare them from memory alone: identify which terms were removed, which fakes were added, and correctly pair each original to its replacement.
+
+| Test | Result | What it proves |
+|---|---|---|
+| A1 — Fake terms retrievable | **PASS** | Both fakes found in 3372-memory haystack |
+| A2 — Original terms absent | **PASS** | Both originals confirmed gone from corpus |
+| B1 — Identified removed terms | **PASS** | Correctly identified which 2 terms disappeared |
+| B2 — Identified fake terms | **PASS** | Correctly identified which 2 new terms appeared |
+| B3 — Correct original-to-fake pairing | **PASS** | Matched each original to its replacement via context overlap |
+
+Haystack: 6744 memories (~3.1M tokens). Total time: ~208s on Apple Silicon.
+
+**Note:** The benchmark requires a user-provided PDF (not included for copyright reasons). See [Reproduce](#reproduce) for instructions.
+
+</details>
+
 ### Reproduce
 
 ```bash
@@ -409,6 +456,11 @@ DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/locomo/run_be
 
 # BEAM (~5 min, auto-downloads)
 DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/beam/run_benchmark.py --split 100K
+
+# Spell Alteration (~4 min, requires user-provided PDF)
+# Provide any long-form PDF (1M+ tokens recommended)
+pip install pymupdf
+DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/spell_alteration/run_benchmark.py --pdf /path/to/your/book.pdf
 ```
 
 ---
@@ -516,8 +568,8 @@ Clean Architecture with concentric dependency layers. Inner layers never import 
 | Infrastructure | 21 | PostgreSQL + pgvector, embeddings, file I/O |
 | Shared | 11 | Pure utilities and Pydantic types |
 | Hooks | 4 | Session lifecycle, compaction, auto-capture |
-| Tests | 1826+ | Passing across Python 3.10-3.13 |
-| Benchmarks | 6 | LongMemEval, LoCoMo, BEAM, and 3 more |
+| Tests | 2000+ | Passing across Python 3.10-3.13 |
+| Benchmarks | 7 | LongMemEval, LoCoMo, BEAM, Spell Alteration, and 3 more |
 
 ---
 
