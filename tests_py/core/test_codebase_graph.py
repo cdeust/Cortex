@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from mcp_server.core.codebase_parser import FileAnalysis, ImportInfo, SymbolDef
 from mcp_server.core.codebase_graph import (
     resolve_import_to_file,
@@ -12,6 +14,12 @@ from mcp_server.core.codebase_graph import (
     build_call_edges,
 )
 from mcp_server.core.codebase_type_resolver import resolve_type_references
+
+_has_networkx = True
+try:
+    import networkx  # noqa: F401
+except ImportError:
+    _has_networkx = False
 
 
 def _make_analysis(
@@ -221,6 +229,7 @@ class TestTypeReferenceResolution:
         assert ("view.swift", "models.swift") in edges
 
 
+@pytest.mark.skipif(not _has_networkx, reason="networkx not installed")
 class TestDetectCommunities:
     def test_two_clusters(self) -> None:
         # Two disconnected groups

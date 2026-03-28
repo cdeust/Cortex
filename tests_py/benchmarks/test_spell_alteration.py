@@ -15,9 +15,16 @@ so the system must rely on exact content matching, not just vibes.
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 
 import pytest
+
+# Skip in CI — these benchmarks need sentence-transformers + real DB
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true",
+    reason="Benchmark tests require sentence-transformers and a real database",
+)
 
 from mcp_server.handlers.remember import handler as remember_handler
 from mcp_server.handlers.recall import handler as recall_handler

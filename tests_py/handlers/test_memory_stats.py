@@ -2,7 +2,7 @@
 
 import asyncio
 
-from mcp_server.handlers.memory_stats import handler
+from mcp_server.handlers.memory_stats import handler, _get_store
 
 
 class TestMemoryStatsHandler:
@@ -17,8 +17,6 @@ class TestMemoryStatsHandler:
         assert isinstance(result["has_vector_search"], bool)
 
     def test_with_stored_memories(self):
-        from mcp_server.handlers.memory_stats import _get_store
-
         store = _get_store()
         store.insert_memory({"content": "a", "store_type": "episodic", "heat": 0.8})
         store.insert_memory({"content": "b", "store_type": "semantic", "heat": 0.4})

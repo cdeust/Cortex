@@ -14,10 +14,17 @@ This is the codebase equivalent of the Harry Potter spell alteration test.
 from __future__ import annotations
 
 import asyncio
+import os
 import tempfile
 from pathlib import Path
 
 import pytest
+
+# Skip in CI — needs sentence-transformers + real DB
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true",
+    reason="Benchmark tests require sentence-transformers and a real database",
+)
 
 from mcp_server.handlers.codebase_analyze import handler as analyze_handler
 from mcp_server.handlers.recall import handler as recall_handler

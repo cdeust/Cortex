@@ -154,16 +154,26 @@ def _test_isolation():
     1. Each test starts with empty tables
     2. Handler singletons reconnect fresh
     3. Works with both PostgreSQL and SQLite backends
+
+    Order matters: clean SQLite BEFORE resetting singletons (the store
+    reference is needed for cleanup), then reset so next test gets fresh
+    connections.
     """
+    # Pre-test: clean with existing connections, then reset
+    if not _USE_PG:
+        _clean_sqlite_store()
+
     conn = _get_raw_connection()
     if conn:
         _clean_all_tables(conn)
-    elif not _USE_PG:
-        _clean_sqlite_store()
 
     _reset_all_singletons()
 
     yield
+
+    # Post-test: clean again, then reset
+    if not _USE_PG:
+        _clean_sqlite_store()
 
     _reset_all_singletons()
 
