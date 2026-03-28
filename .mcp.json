@@ -6,7 +6,7 @@
       "cwd": "${CLAUDE_PLUGIN_ROOT}",
       "env": {
         "DATABASE_URL": "${DATABASE_URL}",
-        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}"
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps"
       }
     }
   }
