@@ -39,6 +39,15 @@ claude plugin install cortex
 
 That's it. Cortex registers its MCP server, installs 4 lifecycle hooks, and activates 10 skills. Restart Claude Code and you're running.
 
+### Updating
+
+Claude Code caches plugin versions and [doesn't always pick up updates](https://github.com/anthropics/claude-code/issues/29074). To force-update to the latest version:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/cdeust/Cortex/main/scripts/update-plugin.sh | bash
+claude plugin install cortex
+```
+
 ### What gets installed
 
 | Component | What it does | Automatic? |
