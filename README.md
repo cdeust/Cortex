@@ -22,8 +22,8 @@ Install the plugin. Start talking. Cortex remembers your decisions, learns your 
 </div>
 
 <p align="center">
-<img src="docs/neural-graph-overview.png" width="49%" alt="Cortex Neural Graph — full view with domain clusters, entity connections, and benchmark scores" />
-<img src="docs/neural-graph-detail.png" width="49%" alt="Cortex Neural Graph — memory detail panel with quality assessment, biological state, and entity connections" />
+<img src="docs/neural-graph-overview.png" width="49%" alt="Cortex Neural Graph — unified 2D view with domain separation, memories, entities, and benchmark scores" />
+<img src="docs/neural-graph-detail.png" width="49%" alt="Cortex Neural Graph — global memory filter with detail panel showing quality, biological state, and connections" />
 </p>
 
 ---
