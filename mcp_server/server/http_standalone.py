@@ -266,9 +266,7 @@ def _bind_server(handler_cls: type, preferred_port: int) -> HTTPServer:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Cortex standalone HTTP server")
-    parser.add_argument(
-        "--type", required=True, choices=["unified", "methodology"]
-    )
+    parser.add_argument("--type", required=True, choices=["unified", "methodology"])
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
 
