@@ -9,9 +9,12 @@
 #   docker build -t cortex-runtime -f docker/Dockerfile .
 #   docker run -it \
 #     -v /path/to/project:/workspace \
+#     -v cortex-pgdata:/var/lib/postgresql/17/data \
 #     -v ~/.claude:/home/cortex/.claude-host:ro \
 #     -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
 #     cortex-runtime
+#
+# The cortex-pgdata volume persists memories across container restarts.
 
 # ── Builder ───────────────────────────────────────────────────────────────
 
@@ -103,6 +106,7 @@ COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 VOLUME /workspace
+VOLUME /var/lib/postgresql/17/data
 WORKDIR /workspace
 
 ENV DATABASE_URL=postgresql://cortex:cortex@localhost:5432/cortex
