@@ -69,21 +69,34 @@ def _get_store() -> MemoryStore:
 def _resolve_existing_paths(refs: list[str], base_dir: str) -> set[str]:
     """Return the subset of refs that exist on the filesystem.
 
-    Tries each ref as-is and relative to base_dir.
+    Tries each ref as-is, relative to base_dir, and with progressive
+    path stripping to handle sandbox/host path mismatches.
     """
     existing: set[str] = set()
     base = Path(base_dir).expanduser() if base_dir else Path.cwd()
 
     for ref in refs:
-        p = Path(ref)
-        if p.is_absolute() and p.exists():
-            existing.add(ref)
-            continue
-        candidate = base / p
-        if candidate.exists():
+        if _path_exists(ref, base):
             existing.add(ref)
 
     return existing
+
+
+def _path_exists(ref: str, base: Path) -> bool:
+    """Check if a path ref exists via multiple resolution strategies."""
+    p = Path(ref)
+    # Exact absolute match
+    if p.is_absolute() and p.exists():
+        return True
+    # Relative to base_dir
+    if (base / p).exists():
+        return True
+    # Progressive stripping (e.g. /sandbox/project/src/a.py -> src/a.py)
+    parts = p.parts
+    for i in range(1, len(parts)):
+        if (base / Path(*parts[i:])).exists():
+            return True
+    return False
 
 
 # ── Memory selection ─────────────────────────────────────────────────────
