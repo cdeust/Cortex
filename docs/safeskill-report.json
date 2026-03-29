@@ -1,0 +1,208 @@
+{
+  "packageName": "neuro-cortex-memory",
+  "packageVersion": "2.4.1",
+  "scanId": "bWrS83FjaYuBcPoLylGid",
+  "timestamp": 1774787345549,
+  "duration": 1881,
+  "overallScore": 94,
+  "codeScore": 97,
+  "contentScore": 88,
+  "scoreBreakdown": {
+    "dataFlowRisks": 25,
+    "promptInjectionRisks": 20,
+    "dangerousApis": 15,
+    "descriptionMismatch": 10,
+    "networkBehavior": 8.545688311688311,
+    "dependencyHealth": 8,
+    "transparency": 2.8,
+    "codeQuality": 5
+  },
+  "codeFindings": [
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/dashboard/js/polling.js",
+        "line": 15,
+        "column": 22
+      },
+      "description": "Makes HTTP request via fetch",
+      "codeSnippet": "var res = await fetch('/api/dashboard');",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/memory/js/detail.js",
+        "line": 88,
+        "column": 4
+      },
+      "description": "Makes HTTP request via fetch",
+      "codeSnippet": "fetch('/api/detail?id=' + encodeURIComponent(n.sessionId || n.id)).then(function(r) { if (!r.ok) throw new Error(); r...",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/memory/js/data.js",
+        "line": 6,
+        "column": 20
+      },
+      "description": "Makes HTTP request via fetch",
+      "codeSnippet": "var res = await fetch('/api/dashboard');",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/memory/js/data.js",
+        "line": 91,
+        "column": 23
+      },
+      "description": "Makes HTTP request via fetch",
+      "codeSnippet": "var resp = await fetch(window.__GRAPH_DATA_URL__);",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/methodology/js/data.js",
+        "line": 10,
+        "column": 20
+      },
+      "description": "Makes HTTP request via fetch",
+      "codeSnippet": "var res = await fetch(CMV.SERVER_URL, { signal: AbortSignal.timeout(4000) });",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/unified/js/polling.js",
+        "line": 11,
+        "column": 4
+      },
+      "description": "Makes HTTP request via fetch",
+      "codeSnippet": "fetch(JUG.API_URL, { signal: signal })",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/dashboard/js/polling.js",
+        "line": 15,
+        "column": 23
+      },
+      "description": "Makes HTTP request via fetch()",
+      "codeSnippet": "fetch('/api/dashboard')",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/memory/js/data.js",
+        "line": 6,
+        "column": 21
+      },
+      "description": "Makes HTTP request via fetch()",
+      "codeSnippet": "fetch('/api/dashboard')",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/memory/js/data.js",
+        "line": 91,
+        "column": 24
+      },
+      "description": "Makes HTTP request via fetch()",
+      "codeSnippet": "fetch(window.__GRAPH_DATA_URL__)",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/memory/js/detail.js",
+        "line": 88,
+        "column": 5
+      },
+      "description": "Makes HTTP request via fetch()",
+      "codeSnippet": "fetch('/api/detail?id=' + encodeURIComponent(n.sessionId || n.id))",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/methodology/js/data.js",
+        "line": 10,
+        "column": 21
+      },
+      "description": "Makes HTTP request via fetch()",
+      "codeSnippet": "fetch(CMV.SERVER_URL, { signal: AbortSignal.timeout(4000) })",
+      "confidence": 0.8
+    },
+    {
+      "category": "network-access",
+      "severity": "medium",
+      "location": {
+        "file": "ui/unified/js/polling.js",
+        "line": 11,
+        "column": 5
+      },
+      "description": "Makes HTTP request via fetch()",
+      "codeSnippet": "fetch(JUG.API_URL, { signal: signal })",
+      "confidence": 0.8
+    }
+  ],
+  "promptFindings": [],
+  "taintFlows": [],
+  "mismatches": [],
+  "permissions": {
+    "filesystem": {
+      "read": [],
+      "write": [],
+      "delete": []
+    },
+    "network": {
+      "outbound": [
+        "Makes HTTP request via fetch",
+        "Makes HTTP request via fetch()"
+      ],
+      "inbound": false,
+      "domains": []
+    },
+    "environment": {
+      "variables": [],
+      "bulkAccess": false
+    },
+    "process": {
+      "spawn": false,
+      "commands": []
+    },
+    "system": {
+      "crypto": false,
+      "nativeModules": false,
+      "installScripts": []
+    },
+    "dataFlows": [],
+    "promptRisks": {
+      "injectionAttempts": [],
+      "hiddenContent": [],
+      "descriptionMismatches": [],
+      "manipulationPatterns": []
+    }
+  },
+  "filesScanned": 65,
+  "contentFilesScanned": 42,
+  "dependencyCount": 0,
+  "hasInstallScripts": false
+}
