@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neuro-cortex-memory"
-version = "2.4.0"
+version = "2.4.1"
 description = "Persistent memory and cognitive profiling for Claude Code"
 readme = "README.md"
 license = "MIT"
