@@ -39,6 +39,10 @@ schema = {
                 "type": "integer",
                 "description": "Maximum BFS depth (default 3)",
             },
+            "max_edges": {
+                "type": "integer",
+                "description": "Maximum edges to return (default 200)",
+            },
             "direction": {
                 "type": "string",
                 "enum": ["outgoing", "incoming", "both"],
@@ -93,6 +97,7 @@ def _bfs_entity_graph(
     start_entity_id: int,
     store: MemoryStore,
     max_depth: int,
+    max_edges: int,
     direction: str,
     rel_filter: set[str] | None,
 ) -> list[dict[str, Any]]:
@@ -102,6 +107,8 @@ def _bfs_entity_graph(
     edges: list[dict[str, Any]] = []
 
     while queue:
+        if len(edges) >= max_edges:
+            break
         entity_id, depth = queue.popleft()
         if depth >= max_depth:
             continue
@@ -110,6 +117,8 @@ def _bfs_entity_graph(
             entity_id, direction=direction, limit=20
         )
         for rel in rels:
+            if len(edges) >= max_edges:
+                break
             if rel_filter and rel.get("relationship_type") not in rel_filter:
                 continue
 
@@ -201,6 +210,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         return _build_empty_result("provide entity_name or memory_id")
 
     max_depth = min(int(args.get("max_depth", 3)), 5)
+    max_edges = min(int(args.get("max_edges", 200)), 500)
     direction = args.get("direction", "both")
     rel_types = args.get("relationship_types")
     rel_filter = set(rel_types) if rel_types else None
@@ -214,6 +224,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         start_entity_id=start_entity["id"],
         store=store,
         max_depth=max_depth,
+        max_edges=max_edges,
         direction=direction,
         rel_filter=rel_filter,
     )

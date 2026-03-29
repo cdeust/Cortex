@@ -162,6 +162,11 @@ def stage_entry_points(root: Path, max_bytes: int) -> list[dict]:
     for p in root.rglob("*"):
         if any(d in p.parts for d in IGNORE_DIRS):
             continue
+        # Skip symlinks and anything inside dist-info/egg-info
+        if p.is_symlink():
+            continue
+        if any(part.endswith((".dist-info", ".egg-info")) for part in p.parts):
+            continue
         if p.name in ENTRY_POINT_NAMES and p.is_file():
             content = _safe_read(p, max_bytes)
             if content.strip():

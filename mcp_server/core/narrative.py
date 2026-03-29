@@ -266,5 +266,18 @@ def generate_brief_summary(
 
     summary = ". ".join(parts)
     if len(summary) > max_chars:
-        summary = summary[: max_chars - 3] + "..."
+        truncated = summary[: max_chars - 3]
+        last_end = max(
+            truncated.rfind(". "),
+            truncated.rfind("! "),
+            truncated.rfind("? "),
+        )
+        if last_end > max_chars // 3:
+            summary = truncated[: last_end + 1]
+        else:
+            last_space = truncated.rfind(" ")
+            if last_space > max_chars // 3:
+                summary = truncated[:last_space] + "..."
+            else:
+                summary = truncated + "..."
     return summary

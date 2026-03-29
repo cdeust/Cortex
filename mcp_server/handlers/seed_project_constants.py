@@ -92,6 +92,9 @@ IGNORE_DIRS = {
     "coverage",
     ".coverage",
     "htmlcov",
+    "site-packages",
+    ".tox",
+    ".nox",
 }
 
 EXT_MAP = {

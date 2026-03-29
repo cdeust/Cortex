@@ -161,8 +161,16 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if not query_embedding:
         return {"results": [], "total": 0, "error": "embedding_unavailable"}
 
+    # Filter memories that have embeddings (newly stored may lack them)
+    memories_with_emb = [m for m in memories if m.get("embedding")]
+    if len(memories_with_emb) < 3:
+        # Too few embeddings for clustering — fall back to flat vector search
+        from mcp_server.handlers.recall import handler as flat_recall
+
+        return await flat_recall(args)
+
     raw_results, hierarchy = _score_memories_against_hierarchy(
-        memories,
+        memories_with_emb,
         query_embedding,
         query,
         embeddings,
