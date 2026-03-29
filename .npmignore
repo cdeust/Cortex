@@ -1,0 +1,21 @@
+# Exclude heavy/irrelevant content — this is a Python package
+# npm publish is only used for SafeSkill security scanning
+.venv/
+.git/
+.github/
+.claude/
+_pipeline/
+jarvis/
+docker/
+docs/*.png
+docs/*.svg
+benchmarks/
+tests_py/
+mcp-server_old/
+commands/
+dist/
+*.whl
+*.tar.gz
+*.egg-info/
+__pycache__/
+*.pyc
