@@ -11,10 +11,21 @@ log() { echo "[cortex] $*"; }
 
 # ── Step 1: Start PostgreSQL ──────────────────────────────────────────────
 
+PGDATA="/var/lib/postgresql/17/data"
+
+# Initialize PG data dir if empty (first run with mounted volume)
+if [[ ! -f "$PGDATA/PG_VERSION" ]]; then
+    log "Initializing PostgreSQL data directory..."
+    chown postgres:postgres "$PGDATA"
+    su postgres -c "/usr/lib/postgresql/17/bin/initdb -D $PGDATA"
+    echo "host all all 0.0.0.0/0 trust" >> "$PGDATA/pg_hba.conf"
+    echo "listen_addresses = 'localhost'" >> "$PGDATA/postgresql.conf"
+fi
+
 log "Starting PostgreSQL..."
-chown -R postgres:postgres /run/postgresql /var/log/postgresql 2>/dev/null || true
+chown -R postgres:postgres /run/postgresql /var/log/postgresql "$PGDATA" 2>/dev/null || true
 su postgres -c "/usr/lib/postgresql/17/bin/pg_ctl \
-  -D /var/lib/postgresql/17/data \
+  -D $PGDATA \
   -l /var/log/postgresql/postgresql.log \
   start -w -o '-k /run/postgresql'"
 

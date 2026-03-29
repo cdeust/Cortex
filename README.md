@@ -71,9 +71,10 @@ Everything pre-installed: PostgreSQL 17 + pgvector, Python deps, sentence-transf
 # Build once
 docker build -t cortex-runtime -f docker/Dockerfile .
 
-# Run
+# Run (cortex-pgdata volume persists memories across restarts)
 docker run -it \
   -v /path/to/project:/workspace \
+  -v cortex-pgdata:/var/lib/postgresql/17/data \
   -v ~/.claude:/home/cortex/.claude-host:ro \
   -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
   cortex-runtime
@@ -84,11 +85,12 @@ Or with an OAuth token:
 ```bash
 docker run -it \
   -v /path/to/project:/workspace \
+  -v cortex-pgdata:/var/lib/postgresql/17/data \
   -e CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
   cortex-runtime
 ```
 
-The container starts PostgreSQL, initializes the schema, configures the Cortex MCP server, and launches Claude Code with `--dangerously-skip-permissions` as a non-root user. Host credentials are mounted read-only — never modified.
+The `cortex-pgdata` named volume persists PostgreSQL data (memories, entities, knowledge graph) across container restarts. First run initializes the database automatically. Host credentials are mounted read-only — never modified.
 
 ### Alternative install methods
 
@@ -643,9 +645,10 @@ DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/longmemeval/r
 # Build image (~5 min first time, cached after)
 docker build -t cortex-runtime -f docker/Dockerfile .
 
-# Interactive shell inside container
+# Interactive shell inside container (with persistent memory)
 docker run -it \
   -v $(pwd):/workspace \
+  -v cortex-pgdata:/var/lib/postgresql/17/data \
   -v ~/.claude:/home/cortex/.claude-host:ro \
   -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
   cortex-runtime shell
@@ -653,12 +656,13 @@ docker run -it \
 # Run a single prompt
 docker run --rm \
   -v /path/to/project:/workspace \
+  -v cortex-pgdata:/var/lib/postgresql/17/data \
   -v ~/.claude:/home/cortex/.claude-host:ro \
   -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
   cortex-runtime -p "recall what we decided about the database"
 ```
 
-Image includes: PostgreSQL 17 + pgvector, Python 3.12, all deps, sentence-transformers model (4.9GB total, CPU-only PyTorch).
+Image includes: PostgreSQL 17 + pgvector, Python 3.12, all deps, sentence-transformers model (4.9GB total, CPU-only PyTorch). The `cortex-pgdata` volume persists all memories across runs.
 
 ## Contributing
 
