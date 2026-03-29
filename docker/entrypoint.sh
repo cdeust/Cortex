@@ -45,17 +45,26 @@ log "PostgreSQL ready"
 mkdir -p "$CLAUDE_HOME/debug" "$CLAUDE_HOME/todos" "$CLAUDE_HOME/plugins"
 
 if [[ -d "$CLAUDE_MOUNT" ]]; then
-    log "Setting up Claude config from host mount..."
-    for f in settings.json stats-cache.json .credentials.json; do
-        [[ -f "$CLAUDE_MOUNT/$f" ]] && cp "$CLAUDE_MOUNT/$f" "$CLAUDE_HOME/$f"
-    done
-    [[ -d "$CLAUDE_MOUNT/skills" ]] && cp -r "$CLAUDE_MOUNT/skills" "$CLAUDE_HOME/skills"
+    # Only copy credentials — NOT settings.json (contains host-specific hooks/paths)
+    if [[ -f "$CLAUDE_MOUNT/.credentials.json" ]]; then
+        log "Copying credentials from host mount..."
+        cp "$CLAUDE_MOUNT/.credentials.json" "$CLAUDE_HOME/.credentials.json"
+        chmod 600 "$CLAUDE_HOME/.credentials.json"
+    fi
 fi
 
-# Copy ~/.claude.json (account config)
+# Copy ~/.claude.json — strip host MCP servers, hooks, and project configs
 if [[ -f "$CLAUDE_JSON_MOUNT" && ! -f "$CLAUDE_JSON_HOME" ]]; then
-    log "Copying .claude.json from host mount..."
-    cp "$CLAUDE_JSON_MOUNT" "$CLAUDE_JSON_HOME"
+    log "Copying .claude.json from host (stripping host MCP/hooks/projects)..."
+    python3 << PYEOF
+import json
+with open("${CLAUDE_JSON_MOUNT}") as f:
+    d = json.load(f)
+for key in ("mcpServers", "hooks", "projects"):
+    d.pop(key, None)
+with open("${CLAUDE_JSON_HOME}", "w") as f:
+    json.dump(d, f)
+PYEOF
     chmod 600 "$CLAUDE_JSON_HOME"
 fi
 
@@ -84,23 +93,33 @@ if [[ ! -f "$CLAUDE_HOME/.credentials.json" && -z "${ANTHROPIC_API_KEY:-}" && -z
     log "WARNING: No Claude credentials. Set CLAUDE_CODE_OAUTH_TOKEN or mount ~/.claude"
 fi
 
-# ── Step 3: Configure Cortex MCP server ───────────────────────────────────
+# ── Step 3: Register Cortex MCP server in .claude.json ────────────────────
 
-cat > "$CLAUDE_HOME/mcp.json" <<'MCP'
-{
-  "mcpServers": {
+python3 << 'PYEOF'
+import json, os
+
+config_path = "/home/cortex/.claude.json"
+try:
+    with open(config_path) as f:
+        config = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    config = {}
+
+config["mcpServers"] = {
     "cortex": {
-      "command": "python3",
-      "args": ["-m", "mcp_server"],
-      "cwd": "/opt/cortex",
-      "env": {
-        "DATABASE_URL": "postgresql://cortex:cortex@localhost:5432/cortex",
-        "PYTHONPATH": "/opt/cortex"
-      }
+        "command": "python3",
+        "args": ["-m", "mcp_server"],
+        "cwd": "/opt/cortex",
+        "env": {
+            "DATABASE_URL": "postgresql://cortex:cortex@localhost:5432/cortex",
+            "PYTHONPATH": "/opt/cortex"
+        }
     }
-  }
 }
-MCP
+
+with open(config_path, "w") as f:
+    json.dump(config, f, indent=2)
+PYEOF
 
 log "MCP server configured"
 
