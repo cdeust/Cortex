@@ -10,6 +10,7 @@ Requires: psycopg[binary]>=3.1, pgvector>=0.3
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -26,6 +27,8 @@ from mcp_server.infrastructure.pg_store_queries import PgQueryMixin
 from mcp_server.infrastructure.pg_store_rules import PgRuleMixin
 from mcp_server.infrastructure.pg_store_stats import PgStatsMixin
 from mcp_server.infrastructure.pg_store_auxiliary import PgAuxiliaryMixin
+
+logger = logging.getLogger(__name__)
 
 
 def _get_database_url() -> str:
@@ -68,7 +71,9 @@ class PgMemoryStore(
             try:
                 self._conn.execute(ddl)
             except Exception as exc:
-                logger.warning("Schema statement failed: %s — %s", ddl.split("\n")[0][:50], exc)
+                logger.warning(
+                    "Schema statement failed: %s — %s", ddl.split("\n")[0][:50], exc
+                )
         self._conn.commit()
 
     @property

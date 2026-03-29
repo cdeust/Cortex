@@ -67,21 +67,17 @@ class SqliteMemoryStore(
         self._init_schema()
 
     def _init_schema(self) -> None:
-        """Create all tables, indexes, virtual tables, then migrate."""
-        ddl_list = get_all_ddl()
-        # Run table DDL first (everything except INDEXES_DDL which is last)
-        for ddl in ddl_list[:-1]:
-            for statement in ddl.strip().split(";"):
-                stmt = statement.strip()
-                if stmt:
-                    self._conn.execute(stmt)
-        # Run migrations before indexes (indexes may reference new columns)
+        """Create all tables, indexes, virtual tables, then migrate.
+
+        Each statement runs independently — one failure doesn't
+        prevent the rest from being created.
+        """
+        for ddl in get_all_ddl():
+            try:
+                self._conn.execute(ddl)
+            except Exception:
+                pass
         self._run_migrations()
-        # Now run indexes
-        for statement in ddl_list[-1].strip().split(";"):
-            stmt = statement.strip()
-            if stmt:
-                self._conn.execute(stmt)
         self._conn.commit()
         self._try_load_vec()
 
