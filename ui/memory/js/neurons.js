@@ -20,7 +20,8 @@
       var isGlob = n.nodeType === 'global-instruction' || n.nodeType === 'settings';
       var isConv = n.nodeType === 'conversation';
       var isEntity = n.id && n.id.startsWith('e_');
-      var ei = isGlob ? 1.0 : isHub ? 0.8 : isConv ? 0.3 : isEntity ? 0.4 : 0.35;
+      var isGlobalMem = !!(n.is_global || n.isGlobal);
+      var ei = isGlob ? 1.0 : isHub ? 0.8 : isGlobalMem ? 0.7 : isConv ? 0.3 : isEntity ? 0.4 : 0.35;
 
       var mat = new THREE.MeshStandardMaterial({
         color: col.clone().multiplyScalar(0.25),

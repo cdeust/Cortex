@@ -166,6 +166,7 @@
 
     // Badges
     var badges = [];
+    if (data.isGlobal) badges.push('<span class="detail-badge" style="color:#FF4081;border-color:#FF408140;background:#FF408110">\ud83c\udf10 GLOBAL</span>');
     if (data.isProtected) badges.push('<span class="detail-badge badge-anchor">ANCHORED</span>');
     if (data.storeType) badges.push('<span class="detail-badge badge-store">' + data.storeType.toUpperCase() + '</span>');
     if (data.entityType) badges.push('<span class="detail-badge badge-entity">' + data.entityType.toUpperCase() + '</span>');

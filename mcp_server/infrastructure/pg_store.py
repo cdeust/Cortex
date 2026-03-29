@@ -59,9 +59,16 @@ class PgMemoryStore(
         register_vector(self._conn)
 
     def _init_schema(self) -> None:
-        """Create all tables, indexes, and stored procedures."""
+        """Create all tables, indexes, and stored procedures.
+
+        Each statement runs independently — one failure doesn't
+        prevent the rest from being created.
+        """
         for ddl in get_all_ddl():
-            self._conn.execute(ddl)
+            try:
+                self._conn.execute(ddl)
+            except Exception as exc:
+                logger.warning("Schema statement failed: %s — %s", ddl.split("\n")[0][:50], exc)
         self._conn.commit()
 
     @property
@@ -111,7 +118,8 @@ class PgMemoryStore(
                 theta_phase_at_encoding, encoding_strength,
                 separation_index, interference_score,
                 schema_match_score, schema_id,
-                hippocampal_dependency, is_benchmark, agent_context
+                hippocampal_dependency, is_benchmark, agent_context,
+                is_global
             ) VALUES (
                 %(content)s, %(embedding)s, %(tags)s::jsonb, %(source)s, %(domain)s,
                 %(directory_context)s, %(created_at)s, %(last_accessed)s,
@@ -121,7 +129,8 @@ class PgMemoryStore(
                 %(theta_phase)s, %(encoding_strength)s,
                 %(separation_index)s, %(interference_score)s,
                 %(schema_match_score)s, %(schema_id)s,
-                %(hippocampal_dependency)s, %(is_benchmark)s, %(agent_context)s
+                %(hippocampal_dependency)s, %(is_benchmark)s, %(agent_context)s,
+                %(is_global)s
             ) RETURNING id""",
             {
                 "content": data["content"],
@@ -149,6 +158,7 @@ class PgMemoryStore(
                 "hippocampal_dependency": data.get("hippocampal_dependency", 1.0),
                 "is_benchmark": data.get("is_benchmark", False),
                 "agent_context": data.get("agent_context", ""),
+                "is_global": data.get("is_global", False),
             },
         ).fetchone()
         self._conn.commit()

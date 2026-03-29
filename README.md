@@ -10,7 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![MCP Server](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-2000+_passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-2037_passing-brightgreen.svg)](#development)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/cdeust/Cortex/pulls)
 
 **Claude Code forgets everything between sessions. Cortex fixes that.**
@@ -168,6 +168,8 @@ Every file becomes a semantic memory. Every symbol becomes an entity. Every impo
 
 **On context compaction** — A checkpoint saves your working state so nothing is lost when the context window compresses.
 
+**Global memory auto-detection** — When you store architecture rules, infrastructure facts, coding conventions, or security policies, Cortex automatically marks them as **global** — visible across all your projects. No manual tagging needed. A weighted signal detector scores content across 6 categories (architecture, convention, infrastructure, security, cross-project, knowledge) and promotes memories that transcend any single codebase.
+
 ### Quick examples
 
 **Remember a decision:**
@@ -181,6 +183,9 @@ Every file becomes a semantic memory. Every symbol becomes an entity. Every impo
 
 **Import your history:**
 > `/cortex-setup-project` — backfill memories from all your past Claude Code conversations across every project
+
+**Share knowledge across projects:**
+> "Remember that we always use clean architecture with dependency injection" — auto-detected as global, visible in every project you work on
 
 ---
 
@@ -239,7 +244,7 @@ Cortex builds a profile of how you work — from your Claude Code session histor
 
 | Tool | What it does |
 |---|---|
-| `remember` | Store a memory through the predictive coding write gate |
+| `remember` | Store a memory through the predictive coding write gate (auto-detects global) |
 | `recall` | Retrieve via 5-signal WRRF fusion + FlashRank reranking |
 | `consolidate` | Run decay, compression, CLS consolidation, sleep compute |
 | `checkpoint` | Save/restore working state across context compaction |
@@ -383,9 +388,9 @@ The graph organizes everything into a 6-level hierarchy — from broad categorie
 |---|---|---|---|
 | **LongMemEval R@10** (ICLR 2025) | **98.0%** | 78.4% | **+19.6pp** |
 | **LongMemEval MRR** | **0.880** | -- | -- |
-| **LoCoMo R@10** (ACL 2024) | **88.9%** | -- | -- |
-| **LoCoMo MRR** | **0.774** | -- | -- |
-| **BEAM Overall MRR** (ICLR 2026) | **0.515** | 0.329 | **+57%** |
+| **LoCoMo R@10** (ACL 2024) | **97.7%** | -- | -- |
+| **LoCoMo MRR** | **0.840** | -- | -- |
+| **BEAM Overall MRR** (ICLR 2026) | **0.627** | 0.329 | **+91%** |
 | **Spell Alteration** (1.5M token haystack) | **5/5 PASS** | -- | -- |
 
 ### Why retrieval-only metrics?

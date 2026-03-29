@@ -97,6 +97,20 @@
       ctx.stroke();
     }
 
+    // Global indicator — golden double ring
+    if (node.isGlobal && !isDimmed) {
+      ctx.strokeStyle = rgba('#FF4081', 0.7);
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 1.8, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.strokeStyle = rgba('#FF4081', 0.35);
+      ctx.lineWidth = 0.4;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 3.2, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+
     // Protected indicator
     if (node.isProtected && !isDimmed) {
       ctx.strokeStyle = rgba('#D4A040', 0.6);

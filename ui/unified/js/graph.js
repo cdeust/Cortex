@@ -21,6 +21,7 @@
       if (filter === 'emotional' && !(n.type === 'memory' && n.emotion && n.emotion !== 'neutral')) return false;
       if (filter === 'protected' && !n.isProtected) return false;
       if (filter === 'hot' && (n.heat === undefined || n.heat < 0.5)) return false;
+      if (filter === 'global' && !n.isGlobal) return false;
       if (query && (n.label || '').toLowerCase().indexOf(query) < 0 &&
           (n.domain || '').toLowerCase().indexOf(query) < 0 &&
           (n.content || '').toLowerCase().indexOf(query) < 0) return false;

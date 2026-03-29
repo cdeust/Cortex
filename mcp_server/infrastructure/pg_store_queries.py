@@ -21,8 +21,8 @@ class PgQueryMixin:
         self, domain: str, min_heat: float = 0.05, limit: int = 50
     ) -> list[dict[str, Any]]:
         rows = self._conn.execute(
-            "SELECT * FROM memories WHERE domain = %s AND heat >= %s "
-            "ORDER BY heat DESC LIMIT %s",
+            "SELECT * FROM memories WHERE (domain = %s OR is_global = TRUE) "
+            "AND heat >= %s ORDER BY heat DESC LIMIT %s",
             (domain, min_heat, limit),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
@@ -31,7 +31,7 @@ class PgQueryMixin:
         self, directory: str, min_heat: float = 0.05
     ) -> list[dict[str, Any]]:
         rows = self._conn.execute(
-            "SELECT * FROM memories WHERE directory_context = %s "
+            "SELECT * FROM memories WHERE (directory_context = %s OR is_global = TRUE) "
             "AND heat >= %s ORDER BY heat DESC",
             (directory, min_heat),
         ).fetchall()

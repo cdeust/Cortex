@@ -127,3 +127,35 @@ class TestRecallHandler:
         )
         # Should include results (may include both via FTS, but domain-scoped heat signal favors alpha)
         assert result["total"] >= 1
+
+    def test_global_memory_visible_across_domains(self):
+        """Global memories should appear in domain-scoped recall."""
+        # Store a global memory in domain "infra"
+        store_result = asyncio.run(
+            remember_handler(
+                {
+                    "content": "Global: PostgreSQL server at db.internal:5432",
+                    "domain": "infra",
+                    "force": True,
+                    "is_global": True,
+                    "tags": ["infrastructure", "postgres"],
+                }
+            )
+        )
+        assert store_result["stored"] is True
+
+        # Recall from a different domain — global memory should still appear
+        result = asyncio.run(
+            recall_handler(
+                {
+                    "query": "PostgreSQL server connection",
+                    "domain": "frontend",
+                    "max_results": 10,
+                    "min_heat": 0.0,
+                }
+            )
+        )
+        contents = [r.get("content", "") for r in result["results"]]
+        assert any("PostgreSQL server" in c for c in contents), (
+            "Global memory should be visible from a different domain"
+        )

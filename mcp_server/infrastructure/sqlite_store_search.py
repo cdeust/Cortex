@@ -157,10 +157,10 @@ class SqliteSearchMixin:
         conds = ["heat >= ?", "NOT is_stale"]
         params: list[Any] = [min_heat]
         if domain:
-            conds.append("domain = ?")
+            conds.append("(domain = ? OR is_global = 1)")
             params.append(domain)
         if directory:
-            conds.append("directory_context = ?")
+            conds.append("(directory_context = ? OR is_global = 1)")
             params.append(directory)
         return conds, params
 

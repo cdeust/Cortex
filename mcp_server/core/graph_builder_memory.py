@@ -53,6 +53,43 @@ def _resolve_type_group(
     return None
 
 
+# ── Global memory linking ──────────────────────────────────────────────
+
+
+def _link_global_to_all_domains(
+    nid: str,
+    edges: list[Edge],
+    domain_hub_ids: dict[str, str],
+    type_group_map: dict[str, dict[str, str]],
+) -> None:
+    """Connect a global memory to every domain hub via type-groups or direct edges."""
+    for hub_key, hub_id in domain_hub_ids.items():
+        # Prefer the "Memories" type-group if it exists
+        tg_id = None
+        if hub_key in type_group_map:
+            tg_id = type_group_map[hub_key].get("Memories")
+        if tg_id:
+            edges.append(
+                {
+                    "source": tg_id,
+                    "target": nid,
+                    "type": "groups",
+                    "weight": 0.25,
+                    "color": EDGE_COLORS["groups"],
+                }
+            )
+        else:
+            edges.append(
+                {
+                    "source": hub_id,
+                    "target": nid,
+                    "type": "domain-entity",
+                    "weight": 0.2,
+                    "color": EDGE_COLORS["domain-entity"],
+                }
+            )
+
+
 # ── Entity nodes ────────────────────────────────────────────────────────
 
 
@@ -174,6 +211,7 @@ def _build_memory_node(mem: dict, nid: str, emo: dict, color: str) -> Node:
         "valence": round(valence, 4),
         "emotionalBoost": round(emo["importance_boost"], 4),
         "decayResistance": round(emo["decay_resistance"], 4),
+        "isGlobal": bool(mem.get("is_global", False)),
     }
 
 
@@ -214,12 +252,21 @@ def _link_memory(
     """Link a memory node into the hierarchy.
 
     Resolution chain:
+      0. Global memories → edges to ALL domain hubs (cross-project)
       1. Existing entity match → memory-entity edge
       2. Type-group "Memories" in resolved domain → groups edge
       3. Domain hub fallback → domain-entity edge
       4. Extract entities from content → create inline entity bridge nodes
       5. No match → unlinked
     """
+    # Strategy 0: global memories link to ALL domain hubs
+    is_global = bool(mem.get("is_global", False))
+    if is_global and domain_hub_ids:
+        _link_global_to_all_domains(
+            nid, edges, domain_hub_ids, type_group_map
+        )
+        return
+
     # Strategy 1: match against existing entity nodes
     best_match, best_score = _find_best_entity_match(
         mem, mem_domain, entity_names, nodes

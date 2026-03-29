@@ -92,6 +92,29 @@ class TestRememberHandler:
         # domain may be empty if no profile exists, but shouldn't error
         assert "domain" in result
 
+    def test_store_global_memory(self):
+        result = asyncio.run(
+            handler(
+                {
+                    "content": "Global infra: Postgres at 10.0.1.50:5432 user cortex",
+                    "force": True,
+                    "tags": ["infrastructure"],
+                    "is_global": True,
+                }
+            )
+        )
+        assert result["stored"] is True
+        mem_id = result["memory_id"]
+
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+        from mcp_server.infrastructure.memory_store import MemoryStore
+
+        s = get_memory_settings()
+        store = MemoryStore(s.DB_PATH, s.EMBEDDING_DIM)
+        mem = store.get_memory(mem_id)
+        assert mem is not None
+        assert mem.get("is_global") is True or mem.get("is_global") == 1
+
     def test_response_shape(self):
         result = asyncio.run(
             handler(

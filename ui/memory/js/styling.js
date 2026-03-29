@@ -7,6 +7,15 @@
   };
 
   CMD.nodeColor = function(n) {
+    // Global memories get a distinctive golden color
+    if (n.is_global || n.isGlobal) {
+      var base = new THREE.Color('#FF4081');
+      if (n.consolidation_stage && CMD.STAGE_COLORS[n.consolidation_stage]) {
+        var sc = CMD.stageColor(n.consolidation_stage);
+        base.lerp(sc, 0.15);
+      }
+      return base;
+    }
     // Cortex memory types — blend store_type color with consolidation stage
     if (n.store_type === 'episodic' || n.store_type === 'semantic') {
       var base = n.store_type === 'episodic'
@@ -23,7 +32,7 @@
     // Fallback to original brain.html types
     if (n.nodeType === 'global-instruction') return new THREE.Color('#ffffff');
     if (n.nodeType === 'settings')           return new THREE.Color('#d0d0d0');
-    if (n.nodeType === 'project-hub')        return new THREE.Color('#f5a623');
+    if (n.nodeType === 'project-hub')        return new THREE.Color('#FF4081');
     if (n.nodeType === 'memory-index')       return new THREE.Color('#00c8ff');
     if (n.nodeType === 'project-file')       return new THREE.Color('#80cbc4');
     if (n.nodeType === 'plan')               return new THREE.Color('#ab47bc');
