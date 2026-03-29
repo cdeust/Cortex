@@ -1,6 +1,6 @@
 {
   "name": "neuro-cortex-memory",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "description": "Persistent memory and cognitive profiling for Claude Code",
   "repository": {
     "type": "git",
