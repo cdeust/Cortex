@@ -7,6 +7,7 @@ patterns across UI, dashboard, and unified visualization servers.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -119,9 +120,22 @@ class ServerManager:
 def get_ui_root() -> Path:
     """Return the path to the bundled ui/ directory.
 
-    Works both in development (ui/ at project root) and when installed
-    as a package (ui/ inside the mcp_server package directory).
+    Resolution order:
+    1. CLAUDE_PLUGIN_ROOT/ui/ — plugin layout (code in uv cache, assets in plugin root)
+    2. cwd/ui/ — fallback for plugin layout when cwd is set to plugin root
+    3. mcp_server/ui/ — installed layout (ui/ inside the package)
+    4. project_root/ui/ — development layout
     """
+    # Plugin layout: CLAUDE_PLUGIN_ROOT env var set by plugin.json
+    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if plugin_root:
+        plugin_ui = Path(plugin_root) / "ui"
+        if plugin_ui.is_dir():
+            return plugin_ui
+    # Plugin layout fallback: cwd (MCP config sets cwd to plugin root)
+    cwd_ui = Path.cwd() / "ui"
+    if cwd_ui.is_dir():
+        return cwd_ui
     # Installed layout: mcp_server/ui/
     pkg_ui = Path(__file__).parent.parent / "ui"
     if pkg_ui.is_dir():
@@ -131,8 +145,10 @@ def get_ui_root() -> Path:
     if dev_ui.is_dir():
         return dev_ui
     raise RuntimeError(
-        "UI files not found. Ensure the 'ui/' directory is present "
-        "either in the package or at the project root."
+        "UI files not found. Checked: "
+        f"CLAUDE_PLUGIN_ROOT={plugin_root}, "
+        f"cwd={Path.cwd()}, "
+        f"package={Path(__file__).parent.parent}"
     )
 
 
