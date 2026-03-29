@@ -2,6 +2,9 @@
 #
 # Multi-stage build: Python 3.12 + PostgreSQL 17 + pgvector + Claude Code CLI
 #
+# Claude Code runs INSIDE the container with Cortex MCP pre-configured via
+# stdio. No HTTP bridge needed — same architecture as ai-architect-feedback-loop.
+#
 # Usage:
 #   docker build -t cortex-runtime -f docker/Dockerfile .
 #   docker run -it \

@@ -135,6 +135,7 @@ case "$COMMAND" in
         exec gosu cortex claude --dangerously-skip-permissions
         ;;
     *)
+        log "Starting Claude Code..."
         exec gosu cortex claude --dangerously-skip-permissions "$@"
         ;;
 esac
