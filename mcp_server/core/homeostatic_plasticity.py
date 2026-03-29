@@ -28,7 +28,6 @@ Pure business logic — no I/O.
 
 from __future__ import annotations
 
-
 # ── Configuration ─────────────────────────────────────────────────────────
 
 _TARGET_HEAT = 0.4

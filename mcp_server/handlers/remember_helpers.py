@@ -7,10 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core import thermodynamics
-from mcp_server.core import curation
-from mcp_server.core import write_gate
-from mcp_server.core import write_post_store
+from mcp_server.core import curation, thermodynamics, write_gate, write_post_store
+from mcp_server.core.dual_store_cls import classify_memory
 from mcp_server.core.predictive_coding_flat import (
     compute_embedding_novelty,
     compute_entity_novelty,
@@ -18,12 +16,10 @@ from mcp_server.core.predictive_coding_flat import (
     compute_structural_novelty,
 )
 from mcp_server.core.predictive_coding_gate import gate_decision
-from mcp_server.core.dual_store_cls import classify_memory
+from mcp_server.handlers.remember_response import build_response
+from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
-
-from mcp_server.handlers.remember_response import build_response
 
 
 def compute_similarities(

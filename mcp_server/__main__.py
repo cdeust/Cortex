@@ -14,15 +14,16 @@ import sys
 
 from fastmcp import FastMCP
 
+from mcp_server import (
+    tool_registry_advanced,
+    tool_registry_core,
+    tool_registry_manage,
+    tool_registry_memory,
+    tool_registry_nav,
+)
 from mcp_server.infrastructure.mcp_client_pool import close_all
 from mcp_server.server.http_server import shutdown_server
-from mcp_server.server.http_dashboard_server import shutdown_memory_dashboard_server
 from mcp_server.server.http_viz_server import shutdown_unified_viz_server
-from mcp_server import tool_registry_core
-from mcp_server import tool_registry_memory
-from mcp_server import tool_registry_manage
-from mcp_server import tool_registry_nav
-from mcp_server import tool_registry_advanced
 
 # ── Server Instance ────────────────────────────────────────────────────────
 
@@ -51,7 +52,6 @@ tool_registry_advanced.register(mcp)
 def _shutdown(sig=None, frame=None) -> None:
     close_all()
     shutdown_server()
-    shutdown_memory_dashboard_server()
     shutdown_unified_viz_server()
     sys.exit(0)
 

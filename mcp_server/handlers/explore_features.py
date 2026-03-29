@@ -5,18 +5,18 @@ Modes: features, attribution, persona, crosscoder.
 
 from __future__ import annotations
 
-from mcp_server.infrastructure.profile_store import load_profiles
-from mcp_server.core.sparse_dictionary import build_seed_dictionary
-from mcp_server.core.persona_vector import (
-    build_persona_vector,
-    compose_personas,
-    PERSONA_DIMENSIONS,
-)
 from mcp_server.core.attribution_tracer import trace_attribution
 from mcp_server.core.behavioral_crosscoder import (
-    detect_persistent_features,
     compare_feature_profiles,
+    detect_persistent_features,
 )
+from mcp_server.core.persona_vector import (
+    PERSONA_DIMENSIONS,
+    build_persona_vector,
+    compose_personas,
+)
+from mcp_server.core.sparse_dictionary import build_seed_dictionary
+from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
     "description": "Explore interpretability features: dictionary features, attribution graphs, persona vectors, and cross-domain behavioral persistence. Inspired by Anthropic's mechanistic interpretability research.",

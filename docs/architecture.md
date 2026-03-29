@@ -193,7 +193,6 @@ Handlers sit at the center as **composition roots**: they wire infrastructure (I
 | `get_methodology_graph.py` | Graph data for 3D visualization |
 | `open_visualization.py` | Launches 3D visualization in browser |
 | `explore_features.py` | 4-mode interpretability exploration |
-| `open_memory_dashboard.py` | Launches real-time memory dashboard |
 
 #### Core Memory
 
@@ -240,7 +239,7 @@ Handlers sit at the center as **composition roots**: they wire infrastructure (I
 | Module | Purpose |
 |---|---|
 | `mcp_router.py` | MCP JSON-RPC dispatch with version negotiation and error boundary |
-| `http_server.py` | Singleton HTTP server for visualization + memory dashboard with idle timeout |
+| `http_server.py` | Singleton HTTP server for visualization with idle timeout |
 
 ### `transport/` — I/O framing
 

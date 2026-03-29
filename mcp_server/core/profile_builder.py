@@ -9,9 +9,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from mcp_server.core.style_classifier_ema import update_style_ema
 from mcp_server.core.persona_vector import build_persona_vector
-
+from mcp_server.core.style_classifier_ema import update_style_ema
 
 # ---------------------------------------------------------------------------
 # Incremental session update

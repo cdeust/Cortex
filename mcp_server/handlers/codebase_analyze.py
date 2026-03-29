@@ -286,15 +286,15 @@ def _run_graph_analysis(
 ) -> dict[str, int]:
     """Run cross-file resolution, type references, and communities."""
     from mcp_server.core.codebase_graph import (
-        resolve_all_imports,
-        extract_inheritance,
         detect_communities,
+        extract_inheritance,
+        resolve_all_imports,
     )
     from mcp_server.core.codebase_type_resolver import resolve_type_references
     from mcp_server.handlers.codebase_analyze_helpers import (
+        persist_community_tags,
         persist_file_edge,
         persist_inheritance_edge,
-        persist_community_tags,
     )
 
     import_edges = resolve_all_imports(analyses)

@@ -9,13 +9,13 @@ import logging
 from typing import Any
 
 from mcp_server.core.decay_cycle import compute_decay_updates, compute_entity_decay
-from mcp_server.core.tripartite_synapse import (
-    AstrocyteTerritory,
-    update_territory,
-)
 from mcp_server.core.tripartite_calcium import (
     apply_metabolic_modulation,
     compute_heterosynaptic_depression,
+)
+from mcp_server.core.tripartite_synapse import (
+    AstrocyteTerritory,
+    update_territory,
 )
 from mcp_server.infrastructure.memory_store import MemoryStore
 

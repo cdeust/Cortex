@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.core.domain_detector import detect_domain
+from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
     "description": "Lightweight domain classification from cwd, project, or first message. <20ms.",

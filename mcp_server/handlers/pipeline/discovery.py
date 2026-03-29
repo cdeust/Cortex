@@ -8,15 +8,15 @@ import re
 from pathlib import Path
 from typing import Any
 
-from mcp_server.shared.text import extract_keywords
-from mcp_server.handlers.pipeline.helpers import log, trunc
 from mcp_server.handlers.pipeline.discovery_scoring import (
     build_codebase_ctx,
     save_discovery_artifact,
     score_findings,
     validate_top_findings,
 )
+from mcp_server.handlers.pipeline.helpers import log, trunc
 from mcp_server.handlers.pipeline.memory_trace import trace_discovery
+from mcp_server.shared.text import extract_keywords
 
 SOURCE_EXTS = re.compile(
     r"\.(swift|js|ts|py|go|rs|java|kt|rb|cs|c|cpp|h|m)$", re.IGNORECASE

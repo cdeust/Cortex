@@ -13,13 +13,13 @@ from mcp_server.core.enrichment import build_expanded_query
 from mcp_server.core.prospective import check_trigger
 from mcp_server.core.query_intent import QueryIntent
 from mcp_server.core.retrieval_signals import (
-    compute_hopfield_hdc,
     compute_graph_signals,
+    compute_hopfield_hdc,
 )
 from mcp_server.core.scoring import compute_bm25_scores, compute_ngram_score
 from mcp_server.core.temporal import compute_recency_boost
-from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.infrastructure.memory_store import MemoryStore
 
 
 def compute_vector_fts(

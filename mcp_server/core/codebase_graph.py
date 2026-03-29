@@ -16,7 +16,6 @@ from pathlib import PurePosixPath
 
 from mcp_server.core.codebase_parser import FileAnalysis
 
-
 # ── Import resolution ─────────────────────────────────────────────────────
 
 

@@ -5,14 +5,14 @@ from __future__ import annotations
 import time
 from datetime import datetime, timezone
 
-from mcp_server.infrastructure.profile_store import load_profiles, save_profiles
+from mcp_server.core.profile_assembler import build_domain_profiles
 from mcp_server.infrastructure.brain_index_store import load_brain_index
+from mcp_server.infrastructure.profile_store import load_profiles, save_profiles
 from mcp_server.infrastructure.scanner import (
     discover_all_memories,
     discover_conversations,
     group_by_project,
 )
-from mcp_server.core.profile_assembler import build_domain_profiles
 
 schema = {
     "description": "Full rescan of all session data to rebuild methodology profiles. <10s.",

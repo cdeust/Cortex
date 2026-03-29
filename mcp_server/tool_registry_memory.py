@@ -8,14 +8,13 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 from mcp_server.handlers import (
-    remember,
-    recall,
-    memory_stats,
     checkpoint,
     consolidate,
-    narrative,
-    open_memory_dashboard,
     import_sessions,
+    memory_stats,
+    narrative,
+    recall,
+    remember,
 )
 from mcp_server.tool_error_handler import safe_handler
 
@@ -28,7 +27,6 @@ def register(mcp: FastMCP) -> None:
     _register_checkpoint(mcp)
     _register_narrative(mcp)
     _register_consolidate(mcp)
-    _register_open_memory_dashboard(mcp)
     _register_import_sessions(mcp)
 
 
@@ -177,16 +175,6 @@ def _register_consolidate(mcp: FastMCP) -> None:
                 "deep": deep,
             },
         )
-
-
-def _register_open_memory_dashboard(mcp: FastMCP) -> None:
-    @mcp.tool(
-        name="open_memory_dashboard",
-        description=open_memory_dashboard.schema["description"],
-    )
-    async def tool_open_memory_dashboard() -> str:
-        """Launch the real-time memory dashboard in the browser."""
-        return await safe_handler(open_memory_dashboard.handler, {})
 
 
 def _register_import_sessions(mcp: FastMCP) -> None:

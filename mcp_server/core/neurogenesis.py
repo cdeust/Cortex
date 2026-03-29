@@ -24,7 +24,6 @@ from mcp_server.shared.linear_algebra import (
     scale,
 )
 
-
 # ── Configuration ─────────────────────────────────────────────────────────
 
 _NEUROGENESIS_BOOST = 0.3

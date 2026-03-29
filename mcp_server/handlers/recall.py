@@ -14,15 +14,14 @@ from typing import Any
 from mcp_server.core import memory_rules
 from mcp_server.core.knowledge_graph import extract_entities
 from mcp_server.core.pg_recall import recall as pg_recall
-from mcp_server.core.query_intent import classify_query_intent, QueryIntent
-from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
-
+from mcp_server.core.query_intent import QueryIntent, classify_query_intent
 from mcp_server.handlers.recall_helpers import (
     build_enhancements,
     inject_triggered_memories,
 )
+from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": "Retrieve memories using intent-adaptive PG recall with production enrichments.",

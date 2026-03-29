@@ -9,13 +9,13 @@ Pure business logic -- no I/O.
 
 from __future__ import annotations
 
-from mcp_server.shared.linear_algebra import zeros
 from mcp_server.core.style_classifier import (
     ABSTRACT_KEYWORDS,
     CONCRETE_KEYWORDS,
     PLANNING_KEYWORDS,
     TRIAL_KEYWORDS,
 )
+from mcp_server.shared.linear_algebra import zeros
 
 # ---------------------------------------------------------------------------
 # Signal names -- ordered dimensions of the activation space

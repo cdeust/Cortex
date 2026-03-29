@@ -8,7 +8,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-
 # ── Coverage Assessment ───────────────────────────────────────────────────
 
 _DENSITY_THRESHOLDS = [(6, 0.9), (3, 0.6), (1, 0.3)]

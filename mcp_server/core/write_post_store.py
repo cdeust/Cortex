@@ -8,9 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from mcp_server.core import knowledge_graph
-from mcp_server.core import prospective
-from mcp_server.core import engram
+from mcp_server.core import engram, knowledge_graph, prospective
 from mcp_server.core.synaptic_tagging import apply_synaptic_tags as _apply_tags
 
 

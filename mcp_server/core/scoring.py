@@ -12,7 +12,6 @@ import math
 import re
 from collections import Counter
 
-
 _STOPWORDS = frozenset(
     {
         "the",

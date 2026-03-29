@@ -9,15 +9,15 @@ from __future__ import annotations
 
 import sys
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from mcp_server.server.http_common import (
     get_ui_root,
     read_html_file,
-    send_json_response,
+    send_cors_options,
     send_error_response,
     send_html_response,
-    send_cors_options,
+    send_json_response,
     serve_static_file,
 )
 from mcp_server.server.http_dashboard_data import (

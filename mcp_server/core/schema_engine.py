@@ -20,9 +20,8 @@ Pure business logic — no I/O.
 
 from __future__ import annotations
 
-from mcp_server.shared.similarity import jaccard_similarity
-
 from mcp_server.core.schema_extraction import Schema, generate_label
+from mcp_server.shared.similarity import jaccard_similarity
 
 # ── Configuration ─────────────────────────────────────────────────────────
 

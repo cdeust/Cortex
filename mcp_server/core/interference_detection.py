@@ -15,7 +15,6 @@ from __future__ import annotations
 from mcp_server.shared.linear_algebra import cosine_similarity
 from mcp_server.shared.similarity import jaccard_similarity
 
-
 # ── Configuration ─────────────────────────────────────────────────────────
 
 _INTERFERENCE_THRESHOLD = 0.7

@@ -6,11 +6,11 @@ import os
 
 from mcp_server.errors import AnalysisError
 from mcp_server.handlers.pipeline.helpers import extract_text, log, trunc
-from mcp_server.handlers.pipeline.memory_trace import trace_implementation
 from mcp_server.handlers.pipeline.implementation_artifacts import (
     write_pipeline_artifacts,
     write_prd_files,
 )
+from mcp_server.handlers.pipeline.memory_trace import trace_implementation
 
 
 async def _setup_branch(client, ctx: dict) -> tuple[str, str | None, dict]:

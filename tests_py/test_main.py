@@ -49,10 +49,9 @@ class TestMain:
         assert "checkpoint" in tool_names
         assert "consolidate" in tool_names
         assert "narrative" in tool_names
-        assert "open_memory_dashboard" in tool_names
         assert "import_sessions" in tool_names
         assert "codebase_analyze" in tool_names
-        assert len(tool_names) == 35
+        assert len(tool_names) == 34
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"

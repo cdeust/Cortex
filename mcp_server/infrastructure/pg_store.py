@@ -21,12 +21,12 @@ from pgvector.psycopg import register_vector
 from psycopg.rows import dict_row
 
 from mcp_server.infrastructure.pg_schema import get_all_ddl
+from mcp_server.infrastructure.pg_store_auxiliary import PgAuxiliaryMixin
 from mcp_server.infrastructure.pg_store_entities import PgEntityMixin
-from mcp_server.infrastructure.pg_store_relationships import PgRelationshipMixin
 from mcp_server.infrastructure.pg_store_queries import PgQueryMixin
+from mcp_server.infrastructure.pg_store_relationships import PgRelationshipMixin
 from mcp_server.infrastructure.pg_store_rules import PgRuleMixin
 from mcp_server.infrastructure.pg_store_stats import PgStatsMixin
-from mcp_server.infrastructure.pg_store_auxiliary import PgAuxiliaryMixin
 
 logger = logging.getLogger(__name__)
 

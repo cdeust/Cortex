@@ -210,16 +210,15 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 - `embedding_engine.py` — Vector embeddings (384-dim, sentence-transformers)
 - `agent_config.py` — Agent configuration and topic scoping
 
-**handlers/** — Composition roots (34 tools + helpers, one per tool)
+**handlers/** — Composition roots (33 tools + helpers, one per tool)
 
 **validation/** — `schemas.py` — Per-tool argument validation
 
 **errors/** — `__init__.py` — MethodologyError, ValidationError, StorageError, AnalysisError, McpConnectionError
 
-**server/** — HTTP servers and visualization (5 modules)
+**server/** — HTTP servers and visualization (4 modules)
 - `http_server.py` — Visualization HTTP server
-- `http_viz_server.py` — 3D neural graph visualization server
-- `http_dashboard_server.py` — Memory dashboard server
+- `http_viz_server.py` — Unified neural graph visualization server
 - `http_dashboard_data.py` — Dashboard data aggregation
 - `http_common.py` — Shared HTTP utilities
 
@@ -231,7 +230,7 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 
 ## MCP Tools
 
-### Tier 1 — Core Memory & Profiling (22 tools)
+### Tier 1 — Core Memory & Profiling (21 tools)
 
 | Tool | Purpose | Target Latency |
 |---|---|---|
@@ -243,7 +242,6 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 | `get_methodology_graph` | Graph data for 3D visualization | <100ms |
 | `open_visualization` | Launch 3D methodology map in browser | — |
 | `explore_features` | Interpretability exploration (features, attribution, persona, crosscoder) | <100ms |
-| `open_memory_dashboard` | Launch real-time memory dashboard in browser | — |
 | `remember` | Store a memory through the 4-signal predictive coding gate | <100ms |
 | `recall` | Retrieve memories via 6-signal WRRF fusion | <200ms |
 | `consolidate` | Run maintenance: decay, compression, CLS, sleep compute | <5s |

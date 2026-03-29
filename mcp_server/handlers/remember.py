@@ -7,22 +7,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core import thermodynamics
-from mcp_server.core import write_gate
+from mcp_server.core import thermodynamics, write_gate
 from mcp_server.core.domain_detector import detect_domain
 from mcp_server.core.global_detector import detect_global
-from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
-from mcp_server.infrastructure.profile_store import load_profiles
-
 from mcp_server.handlers.remember_helpers import (
-    evaluate_gate,
     apply_modulations,
-    try_curation,
+    evaluate_gate,
     insert_and_post_process,
+    try_curation,
 )
 from mcp_server.handlers.remember_response import build_merge_response
+from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
     "description": "Store a memory through the predictive coding write gate.",

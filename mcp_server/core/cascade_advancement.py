@@ -16,10 +16,9 @@ Pure business logic — no I/O.
 from __future__ import annotations
 
 from mcp_server.core.cascade_stages import (
-    ConsolidationStage,
     _STAGE_PROPERTIES,
+    ConsolidationStage,
 )
-
 
 # ── Stage Transitions ─────────────────────────────────────────────────────
 

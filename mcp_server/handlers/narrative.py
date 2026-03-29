@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core.narrative import generate_narrative, generate_brief_summary
+from mcp_server.core.narrative import generate_brief_summary, generate_narrative
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 

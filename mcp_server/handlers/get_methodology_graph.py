@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.core.graph_builder import build_graph
+from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
     "description": "Returns methodology map as graph data for 3D visualization. <100ms.",

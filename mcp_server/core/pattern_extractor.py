@@ -10,13 +10,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from mcp_server.shared.similarity import jaccard_similarity
-from mcp_server.shared.text import STOPWORDS, extract_keywords
-
 from mcp_server.core.session_shape import (
     extract_session_shape,
     extract_tool_preferences,
 )
+from mcp_server.shared.similarity import jaccard_similarity
+from mcp_server.shared.text import STOPWORDS, extract_keywords
 
 _SPLIT_RE = re.compile(r"\W+")
 

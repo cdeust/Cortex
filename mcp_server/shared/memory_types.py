@@ -11,7 +11,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # ─── Core Memory Models ──────────────────────────────────────────────────────
 
 

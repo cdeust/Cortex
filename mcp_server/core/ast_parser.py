@@ -128,9 +128,9 @@ def _extract_python(
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract Python imports, definitions, and call sites."""
     from mcp_server.core.ast_extractors import (
-        extract_python_imports,
-        extract_python_definitions,
         extract_calls_generic,
+        extract_python_definitions,
+        extract_python_imports,
     )
 
     imports = extract_python_imports(root, source)
@@ -148,9 +148,9 @@ def _extract_js(
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract JavaScript/TypeScript imports, definitions, and calls."""
     from mcp_server.core.ast_extractors import (
-        extract_js_imports,
-        extract_js_definitions,
         extract_calls_generic,
+        extract_js_definitions,
+        extract_js_imports,
     )
 
     imports = extract_js_imports(root, source)
@@ -169,8 +169,8 @@ def _extract_go(
     """Extract Go imports, definitions, and calls."""
     from mcp_server.core.ast_extractors import extract_calls_generic
     from mcp_server.core.ast_extractors_extra import (
-        extract_go_imports,
         extract_go_definitions,
+        extract_go_imports,
     )
 
     return (
@@ -187,8 +187,8 @@ def _extract_swift(
     """Extract Swift imports, definitions, and calls."""
     from mcp_server.core.ast_extractors import extract_calls_generic
     from mcp_server.core.ast_extractors_extra import (
-        extract_swift_imports,
         extract_swift_definitions,
+        extract_swift_imports,
     )
 
     return (
@@ -205,8 +205,8 @@ def _extract_rust(
     """Extract Rust imports, definitions, and calls."""
     from mcp_server.core.ast_extractors import extract_calls_generic
     from mcp_server.core.ast_extractors_extra import (
-        extract_rust_imports,
         extract_rust_definitions,
+        extract_rust_imports,
     )
 
     return (
