@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS memories (
     schema_id               TEXT,
     hippocampal_dependency  REAL DEFAULT 1.0,
     is_benchmark            INTEGER DEFAULT 0,
-    agent_context           TEXT DEFAULT ''
+    agent_context           TEXT DEFAULT '',
+    is_global               INTEGER DEFAULT 0
 );
 """
 

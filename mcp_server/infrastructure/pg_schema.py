@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS memories (
     schema_id       TEXT,
     hippocampal_dependency REAL DEFAULT 1.0,
     is_benchmark BOOLEAN DEFAULT FALSE,
-    agent_context TEXT DEFAULT ''
+    agent_context TEXT DEFAULT '',
+    is_global BOOLEAN DEFAULT FALSE
 );
 """
 
@@ -212,6 +213,8 @@ CREATE INDEX IF NOT EXISTS idx_rel_pair_type
     ON relationships (source_entity_id, target_entity_id, relationship_type);
 CREATE INDEX IF NOT EXISTS idx_memories_agent_context
     ON memories (agent_context);
+CREATE INDEX IF NOT EXISTS idx_memories_is_global
+    ON memories (is_global) WHERE is_global = TRUE;
 """
 
 # ── PL/pgSQL: recall_memories ─────────────────────────────────────────────
@@ -259,7 +262,7 @@ BEGIN
         WHERE m.heat >= p_min_heat
           AND NOT m.is_stale
           AND m.embedding IS NOT NULL
-          AND (p_domain IS NULL OR m.domain = p_domain)
+          AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
         ORDER BY m.embedding <=> p_query_emb
         LIMIT v_pool
@@ -274,7 +277,7 @@ BEGIN
         WHERE m.content_tsv @@ v_tsq
           AND m.heat >= p_min_heat
           AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain)
+          AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
         ORDER BY ts_rank_cd(m.content_tsv, v_tsq) DESC
         LIMIT v_pool
@@ -288,7 +291,7 @@ BEGIN
         FROM memories m
         WHERE m.heat >= p_min_heat
           AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain)
+          AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
           AND similarity(m.content, p_query_text) > 0.1
         ORDER BY similarity(m.content, p_query_text) DESC
@@ -301,7 +304,7 @@ BEGIN
         FROM memories m
         WHERE m.heat >= p_min_heat
           AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain)
+          AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
         ORDER BY m.heat DESC
         LIMIT v_pool
@@ -313,7 +316,7 @@ BEGIN
         FROM memories m
         WHERE m.heat >= p_min_heat
           AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain)
+          AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
           AND (p_directory IS NULL OR m.directory_context = p_directory)
         ORDER BY m.created_at DESC
         LIMIT v_pool
@@ -520,7 +523,7 @@ BEGIN
     WHERE m.heat >= p_min_heat
       AND NOT m.is_stale
       AND m.embedding IS NOT NULL
-      AND (p_domain IS NULL OR m.domain = p_domain)
+      AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
     ORDER BY m.heat DESC
     LIMIT p_limit;
 END;
@@ -612,6 +615,17 @@ BEGIN
         WHERE table_name = 'memories' AND column_name = 'agent_context'
     ) THEN
         ALTER TABLE memories ADD COLUMN agent_context TEXT DEFAULT '';
+    END IF;
+END $$;
+
+-- Migration: add is_global column for cross-project memory sharing
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'is_global'
+    ) THEN
+        ALTER TABLE memories ADD COLUMN is_global BOOLEAN DEFAULT FALSE;
     END IF;
 END $$;
 """
