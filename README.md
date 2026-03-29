@@ -2,7 +2,7 @@
 
 # Cortex
 
-[![SafeSkill](https://safeskill.dev/api/badge/neuro-cortex-memory)](https://safeskill.dev/scan/neuro-cortex-memory)
+[![SafeSkill 93/100](https://img.shields.io/badge/SafeSkill-93%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/neuro-cortex-memory)
 
 ### Persistent memory for Claude Code
 
