@@ -82,6 +82,7 @@
       CMD.initScene();
       CMD.computeClusterLayout();
       CMD.buildBrainShell();
+      CMD.updateBrainPositions();
       CMD.buildNeurons();
       CMD.buildFibers();
       CMD.buildBenchmarks();
@@ -91,8 +92,10 @@
       CMD.initInteraction();
 
       // HUD
+      var hubCount = (CMD.hubNs || []).length;
       document.getElementById('hud').textContent =
-        CMD.nodes.length + ' neurons \xb7 ' + CMD.drawEdges.length + ' synapses \xb7 ' + CMD.tubeCount + ' fiber tracts';
+        (hubCount ? hubCount + ' projects \xb7 ' : '') +
+        CMD.nodes.length + ' neurons \xb7 ' + CMD.drawEdges.length + ' synapses';
 
       CMD.applyFilters();
       CMD.startAnimation();

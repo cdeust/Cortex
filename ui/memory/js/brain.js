@@ -1,8 +1,19 @@
-// Cortex Memory Dashboard — Brain Geometry
+// Cortex Memory Dashboard — Brain Geometry (per-project shells)
 (function() {
   var CMD = window.CMD;
 
-  // Brain volume dimensions
+  // Domain-specific colors for brain shells
+  var DOMAIN_COLORS = [
+    0x88bbdd, // default cyan-blue
+    0xdd88aa, // rose
+    0x88ddaa, // mint
+    0xddbb88, // amber
+    0xaa88dd, // violet
+    0x88dddd, // teal
+    0xdd8888, // coral
+    0xbbdd88, // lime
+  ];
+
   CMD.brainDims = function() {
     var S = CMD.brainScale;
     return {
@@ -52,36 +63,33 @@
     return new THREE.CanvasTexture(c);
   };
 
-  CMD.buildBrainShell = function() {
-    var d = CMD.brainDims();
-    var brainGeo = new THREE.IcosahedronGeometry(1, 5);
-    var pos = brainGeo.attributes.position;
+  function _makeBrainGeo(scale) {
+    var geo = new THREE.IcosahedronGeometry(1, 4);
+    var pos = geo.attributes.position;
+    var rx = 162 * scale, ry = 118 * scale * 0.85, rz = 140 * scale * 0.9;
+    var hx = 38 * scale;
 
     for (var i = 0; i < pos.count; i++) {
       var x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
       var len = Math.sqrt(x * x + y * y + z * z) || 1;
       x /= len; y /= len; z /= len;
 
-      var sx = d.RX, sy = d.RY * 0.85, sz = d.RZ * 0.9;
       var fissure = 1.0 - 0.12 * Math.exp(-x * x * 18);
       var temporal = 1.0 + 0.08 * Math.max(0, -y * 0.7) * (1 - Math.abs(x) * 0.3);
       var frontal = 1.0 + 0.06 * Math.max(0, z * 0.8) * (1 - Math.abs(y) * 0.5);
-      var cerebellum = 1.0 + 0.1 * Math.max(0, -z * 0.8) * Math.max(0, -y * 0.6);
-
-      var freq1 = 3.5, freq2 = 7.0, freq3 = 14.0;
-      var n = CMD.noise3D(x * freq1, y * freq1, z * freq1) * 0.06
-            + CMD.noise3D(x * freq2, y * freq2, z * freq2) * 0.03
-            + CMD.noise3D(x * freq3, y * freq3, z * freq3) * 0.015;
-
-      var shape = fissure * temporal * frontal * cerebellum;
-      var r = (1.0 + n) * shape;
-      pos.setXYZ(i, x * sx * r, y * sy * r, z * sz * r);
+      var n = CMD.noise3D(x * 3.5, y * 3.5, z * 3.5) * 0.06
+            + CMD.noise3D(x * 7, y * 7, z * 7) * 0.03;
+      var r = (1.0 + n) * fissure * temporal * frontal;
+      pos.setXYZ(i, x * rx * r, y * ry * r, z * rz * r);
     }
-    brainGeo.computeVertexNormals();
+    geo.computeVertexNormals();
+    return geo;
+  }
 
-    var shellMat = new THREE.ShaderMaterial({
+  function _makeShellMat(color) {
+    return new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uColor: { value: new THREE.Color(0x88bbdd) }, uTime: { value: 0 } },
+      uniforms: { uColor: { value: new THREE.Color(color) }, uTime: { value: 0 } },
       vertexShader:
         'varying vec3 vNormal; varying vec3 vViewDir;' +
         'void main(){' +
@@ -96,17 +104,91 @@
         'void main(){' +
         '  float fresnel = 1.0 - abs(dot(vNormal, vViewDir));' +
         '  float edge = pow(fresnel, 2.5);' +
-        '  float alpha = edge * 0.12 + 0.015;' +
+        '  float alpha = edge * 0.14 + 0.02;' +
         '  vec3 col = uColor * (0.6 + edge * 0.8);' +
         '  col += uColor * 0.05 * sin(gl_FragCoord.x*0.01 + gl_FragCoord.y*0.01 + uTime*0.5);' +
         '  gl_FragColor = vec4(col, alpha);' +
         '}',
     });
-    var brainShell = new THREE.Mesh(brainGeo, shellMat);
-    brainShell.name = 'brainShell';
-    CMD.scene.add(brainShell);
+  }
 
-    window._brainShellMat = shellMat;
+  function _makeDomainLabel(name, color) {
+    var canvas = document.createElement('canvas');
+    canvas.width = 512; canvas.height = 64;
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 512, 64);
+    ctx.font = '700 28px Orbitron, "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#' + new THREE.Color(color).getHexString();
+    ctx.fillText(name.toUpperCase(), 256, 32);
+    var tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    var sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, transparent: true, opacity: 0.85,
+      depthWrite: false, sizeAttenuation: true,
+    }));
+    sprite.scale.set(80, 10, 1);
+    return sprite;
+  }
+
+  CMD.buildBrainShell = function() {
     CMD.GLOW_TEX = CMD.makeGlowTex(64);
+    CMD.brainShells = {};
+
+    var hubs = CMD.hubNs || [];
+    if (hubs.length === 0) {
+      // Fallback: single brain shell (no project hubs)
+      var geo = _makeBrainGeo(CMD.brainScale);
+      var mat = _makeShellMat(DOMAIN_COLORS[0]);
+      var shell = new THREE.Mesh(geo, mat);
+      shell.name = 'brainShell';
+      CMD.scene.add(shell);
+      window._brainShellMat = mat;
+      return;
+    }
+
+    // One brain per project hub
+    hubs.forEach(function(hub, hi) {
+      var color = DOMAIN_COLORS[hi % DOMAIN_COLORS.length];
+      var nodeCount = hub.connections || 10;
+      // Scale brain size by node count (min 0.3, max 1.0)
+      var scale = CMD.brainScale * Math.min(1.0, Math.max(0.3, nodeCount / 200));
+
+      var geo = _makeBrainGeo(scale);
+      var mat = _makeShellMat(color);
+      var shell = new THREE.Mesh(geo, mat);
+      shell.name = 'brainShell_' + hub.project;
+
+      // Position at hub location (set by layout)
+      if (hub.bx !== undefined) {
+        shell.position.set(hub.bx, hub.by, hub.bz);
+      }
+
+      CMD.scene.add(shell);
+      CMD.brainShells[hub.project] = { mesh: shell, mat: mat, color: color };
+
+      // Domain label above the brain
+      var label = _makeDomainLabel(hub.name, color);
+      label.position.set(0, 130 * scale, 0);
+      shell.add(label);
+    });
+
+    // Use first shell mat for time animation
+    var firstKey = Object.keys(CMD.brainShells)[0];
+    if (firstKey) window._brainShellMat = CMD.brainShells[firstKey].mat;
+  };
+
+  // Update brain positions after layout runs
+  CMD.updateBrainPositions = function() {
+    if (!CMD.brainShells) return;
+    (CMD.hubNs || []).forEach(function(hub) {
+      var shell = CMD.brainShells[hub.project];
+      if (shell && hub.bx !== undefined) {
+        shell.mesh.position.set(hub.bx, hub.by, hub.bz);
+      }
+    });
   };
 })();
