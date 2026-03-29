@@ -68,6 +68,7 @@ jobs:
 
       - name: Pre-download embedding model
         run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"
+        continue-on-error: true
 
       - name: Run tests
         run: pytest --tb=short -q
