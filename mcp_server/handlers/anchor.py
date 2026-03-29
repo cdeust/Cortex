@@ -33,6 +33,10 @@ schema = {
                 "type": "string",
                 "description": "Why this memory is being anchored (stored as contextual prefix)",
             },
+            "is_global": {
+                "type": "boolean",
+                "description": "Mark as global memory visible to all projects",
+            },
         },
     },
 }
@@ -101,11 +105,12 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     tags = _build_anchor_tags(mem, reason)
     content = _build_anchor_content(mem.get("content", ""), reason)
+    is_global = args.get("is_global", False)
 
     store._conn.execute(
         "UPDATE memories SET heat = 1.0, is_protected = TRUE, importance = 1.0, "
-        "tags = %s::jsonb, content = %s WHERE id = %s",
-        (_json.dumps(tags), content, memory_id),
+        "tags = %s::jsonb, content = %s, is_global = %s WHERE id = %s",
+        (_json.dumps(tags), content, is_global, memory_id),
     )
     store._conn.commit()
 
@@ -113,6 +118,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "anchored": True,
         "memory_id": memory_id,
         "reason": reason or "no reason given",
+        "is_global": is_global,
         "tags": tags,
         "content_preview": content[:120],
     }

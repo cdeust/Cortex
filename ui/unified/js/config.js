@@ -71,6 +71,7 @@ JUG.ZOOM_LEVELS = {
 JUG.STRUCTURAL_TYPES = { 'root': true, 'category': true, 'domain': true, 'agent': true, 'type-group': true };
 
 JUG.getNodeColor = function(node) {
+  if (node.isGlobal) return '#FF4081';
   if (node.type === 'memory') {
     return JUG.NODE_COLORS['memory-' + (node.storeType || 'episodic')] || '#26de81';
   }

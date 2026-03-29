@@ -155,10 +155,11 @@ class SqliteMemoryStore(
                 theta_phase_at_encoding, encoding_strength,
                 separation_index, interference_score,
                 schema_match_score, schema_id,
-                hippocampal_dependency, is_benchmark, agent_context
+                hippocampal_dependency, is_benchmark, agent_context,
+                is_global
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )""",
             (
                 content,
@@ -185,6 +186,7 @@ class SqliteMemoryStore(
                 data.get("hippocampal_dependency", 1.0),
                 int(data.get("is_benchmark", False)),
                 data.get("agent_context", ""),
+                int(data.get("is_global", False)),
             ),
         )
         memory_id = cur.lastrowid
@@ -344,6 +346,7 @@ class SqliteMemoryStore(
             "is_stale",
             "compressed",
             "is_benchmark",
+            "is_global",
             "is_active",
             "is_causal",
             "archived",

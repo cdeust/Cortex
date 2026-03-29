@@ -46,6 +46,7 @@
         interference_score: m.interference_score || 0,
         hippocampal_dependency: m.hippocampal_dependency || 1.0,
         theta_phase: m.theta_phase || 0,
+        is_global: !!m.is_global,
       });
     });
 

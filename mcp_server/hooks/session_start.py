@@ -92,7 +92,7 @@ def _fetch_anchors(conn) -> list[dict]:
     """Fetch anchored memories (is_protected with _anchor tag)."""
     try:
         rows = conn.execute(
-            "SELECT id, content, tags, domain FROM memories "
+            "SELECT id, content, tags, domain, is_global FROM memories "
             "WHERE is_protected = TRUE "
             "ORDER BY heat DESC LIMIT %s",
             (int(_ANCHOR_LIMIT),),
@@ -116,6 +116,7 @@ def _fetch_anchors(conn) -> list[dict]:
                     "id": r["id"],
                     "content": r.get("content", ""),
                     "domain": r.get("domain", ""),
+                    "is_global": bool(r.get("is_global", False)),
                 }
             )
     return anchors
@@ -125,7 +126,7 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
     """Fetch high-heat memories, excluding anchors."""
     try:
         rows = conn.execute(
-            "SELECT id, content, domain, heat, tags FROM memories "
+            "SELECT id, content, domain, heat, tags, is_global FROM memories "
             "WHERE heat >= %s "
             "ORDER BY heat DESC LIMIT %s",
             (float(_MIN_HEAT), int(_HOT_LIMIT + len(exclude_ids))),
@@ -142,6 +143,7 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
                     "content": r.get("content", ""),
                     "domain": r.get("domain", ""),
                     "heat": r.get("heat", 0.0),
+                    "is_global": bool(r.get("is_global", False)),
                 }
             )
     return hot[:_HOT_LIMIT]

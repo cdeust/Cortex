@@ -259,4 +259,5 @@ def get_all_ddl() -> list[str]:
 MIGRATIONS: list[tuple[str, str, str]] = [
     ("memories", "is_benchmark", "INTEGER DEFAULT 0"),
     ("memories", "agent_context", "TEXT DEFAULT ''"),
+    ("memories", "is_global", "INTEGER DEFAULT 0"),
 ]

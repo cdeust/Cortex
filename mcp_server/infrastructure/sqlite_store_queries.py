@@ -20,8 +20,8 @@ class SqliteQueryMixin:
         self, domain: str, min_heat: float = 0.05, limit: int = 50
     ) -> list[dict[str, Any]]:
         rows = self._conn.execute(
-            "SELECT * FROM memories WHERE domain = ? AND heat >= ? "
-            "ORDER BY heat DESC LIMIT ?",
+            "SELECT * FROM memories WHERE (domain = ? OR is_global = 1) "
+            "AND heat >= ? ORDER BY heat DESC LIMIT ?",
             (domain, min_heat, limit),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
@@ -30,7 +30,7 @@ class SqliteQueryMixin:
         self, directory: str, min_heat: float = 0.05
     ) -> list[dict[str, Any]]:
         rows = self._conn.execute(
-            "SELECT * FROM memories WHERE directory_context = ? "
+            "SELECT * FROM memories WHERE (directory_context = ? OR is_global = 1) "
             "AND heat >= ? ORDER BY heat DESC",
             (directory, min_heat),
         ).fetchall()

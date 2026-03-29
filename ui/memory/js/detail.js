@@ -152,9 +152,14 @@
   }
 
   function renderMemory(n, ct) {
+    // Global badge
+    if (n.is_global || n.isGlobal) {
+      ct.appendChild(makeSec('', '<div style="display:inline-block;font-size:8px;font-weight:700;color:#FF4081;background:rgba(245,166,35,0.12);border:1px solid rgba(245,166,35,0.3);border-radius:3px;padding:2px 8px;letter-spacing:1px">\ud83c\udf10 GLOBAL</div>'));
+    }
     var g = makeGrid();
     addRow(g, 'Heat', (n.heat || 0).toFixed(3)); addRow(g, 'Importance', (n.importance || 0.5).toFixed(3));
     addRow(g, 'Store', n.store_type || '\u2014'); addRow(g, 'Stage', n.consolidation_stage || 'labile', CMD.STAGE_COLORS[n.consolidation_stage] || '#666');
+    if (n.is_global || n.isGlobal) addRow(g, 'Scope', 'Global (all projects)', '#FF4081');
     addRow(g, 'H\u2192C Dep.', (n.hippocampal_dependency || 1).toFixed(2));
     if (n.schema_match_score > 0) addRow(g, 'Schema', (n.schema_match_score).toFixed(2));
     if (n.interference_score > 0) addRow(g, 'Interference', (n.interference_score).toFixed(3), '#ff4444');

@@ -58,6 +58,7 @@ class Memory(BaseModel):
     # Protection
     is_protected: bool = False
     is_stale: bool = False
+    is_global: bool = False  # Visible to all projects when True
 
     # Engram allocation
     slot_index: int | None = None

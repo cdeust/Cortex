@@ -110,6 +110,8 @@
           vis = n.store_type === 'semantic';
         } else if (CMD.activeFilter === 'entity') {
           vis = n.id && n.id.startsWith('e_');
+        } else if (CMD.activeFilter === 'global') {
+          vis = !!(n.is_global || n.isGlobal);
         } else {
           vis = n.type === CMD.activeFilter || n.nodeType === CMD.activeFilter;
         }
@@ -152,11 +154,13 @@
     var vis = CMD.nodes.filter(function(n) { return n._vis !== false; });
     var ents = vis.filter(function(n) { return n.id && n.id.startsWith('e_'); }).length;
     var mems = vis.filter(function(n) { return n.id && n.id.startsWith('m_'); }).length;
+    var globals = vis.filter(function(n) { return n.is_global || n.isGlobal; }).length;
     var edges_vis = CMD.drawEdges.filter(function(e) {
       var s = CMD.nodeMap[e.source], t = CMD.nodeMap[e.target];
       return (s ? s._vis !== false : true) && (t ? t._vis !== false : true);
     }).length;
-    document.getElementById('stats-brain').innerHTML =
-      '<span>' + ents + '</span> entities \xb7 <span>' + mems + '</span> memories \xb7 <span>' + edges_vis + '</span> synapses';
+    var statsHtml = '<span>' + ents + '</span> entities \xb7 <span>' + mems + '</span> memories \xb7 <span>' + edges_vis + '</span> synapses';
+    if (globals > 0) statsHtml += ' \xb7 <span style="color:#FF4081">' + globals + '</span> global';
+    document.getElementById('stats-brain').innerHTML = statsHtml;
   };
 })();

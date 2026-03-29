@@ -112,6 +112,7 @@ def format_memory(m: dict, content_limit: int) -> dict:
         "slot_index": m.get("slot_index"),
         "source": m.get("source", ""),
         "agent_context": m.get("agent_context", ""),
+        "is_global": bool(m.get("is_global", False)),
         "access_count": m.get("access_count", 0),
         "consolidation_stage": m.get("consolidation_stage", "labile"),
         "schema_match_score": round(m.get("schema_match_score", 0), 4),
