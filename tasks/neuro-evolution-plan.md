@@ -460,7 +460,7 @@ All new modules go in `core/` -- pure logic, zero I/O. State persistence handled
 
 ## Success Criteria
 
-### For Cortex as a memory system:
+### For Cortex as a memory engine:
 1. Memories encoded during "encoding phase" survive 2x longer than random-phase encoding
 2. Schema-consistent memories consolidate 3x faster than schema-inconsistent
 3. Pattern separation reduces interference by >50% for similar memories
