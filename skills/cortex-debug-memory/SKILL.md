@@ -38,7 +38,7 @@ Protected memories require `"force": true` to delete.
 
 ### Rate Memory Quality
 
-Provide feedback to train the metamemory system:
+Provide feedback to train the metamemory confidence model:
 
 ```
 cortex:rate_memory({

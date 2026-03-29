@@ -85,8 +85,39 @@
     canvas._hitRegions = entries.map(function(pair, i) { return { y: i * barH + 2, h: barH, label: pair[0], val: pair[1] }; });
     canvas._chartType = chartType; canvas._total = total;
     if (!CMD._bindState[canvasId]) { CMD._bindState[canvasId] = true; canvas._hoveredIndex = -1;
-      canvas.addEventListener('click', function(e) { var rect = canvas.getBoundingClientRect(), my = e.clientY - rect.top; var hit = (canvas._hitRegions || []).find(function(r) { return my >= r.y && my < r.y + r.h; }); if (hit && canvas._chartType) { CMD.activeChartFilter = (CMD.activeChartFilter && CMD.activeChartFilter.type === canvas._chartType && CMD.activeChartFilter.label === hit.label) ? null : { type: canvas._chartType, label: hit.label }; CMD.applyFilters(); } });
-      canvas.addEventListener('mousemove', function(e) { var rect = canvas.getBoundingClientRect(), my = e.clientY - rect.top; var regions = canvas._hitRegions || []; var idx = regions.findIndex(function(r) { return my >= r.y && my < r.y + r.h; }); canvas.style.cursor = idx >= 0 ? 'pointer' : 'default'; if (idx >= 0) { var hit = regions[idx]; CMD.showChartTip(e, '<strong style="color:#fff">' + hit.label + '</strong>: ' + hit.val + ' (' + ((hit.val / (canvas._total || 1)) * 100).toFixed(1) + '%)'); } else CMD.hideChartTip(); if (idx !== canvas._hoveredIndex) { canvas._hoveredIndex = idx; CMD.renderAnalytics(); } });
+      canvas.addEventListener('click', function(e) {
+        var rect = canvas.getBoundingClientRect(), my = e.clientY - rect.top;
+        var hit = (canvas._hitRegions || []).find(function(r) {
+          return my >= r.y && my < r.y + r.h;
+        });
+        if (hit && canvas._chartType) {
+          CMD.activeChartFilter = (CMD.activeChartFilter
+            && CMD.activeChartFilter.type === canvas._chartType
+            && CMD.activeChartFilter.label === hit.label)
+            ? null : { type: canvas._chartType, label: hit.label };
+          CMD.applyFilters();
+        }
+      });
+      canvas.addEventListener('mousemove', function(e) {
+        var rect = canvas.getBoundingClientRect(), my = e.clientY - rect.top;
+        var regions = canvas._hitRegions || [];
+        var idx = regions.findIndex(function(r) {
+          return my >= r.y && my < r.y + r.h;
+        });
+        canvas.style.cursor = idx >= 0 ? 'pointer' : 'default';
+        if (idx >= 0) {
+          var hit = regions[idx];
+          CMD.showChartTip(e, '<strong style="color:#fff">' + hit.label
+            + '</strong>: ' + hit.val + ' ('
+            + ((hit.val / (canvas._total || 1)) * 100).toFixed(1) + '%)');
+        } else {
+          CMD.hideChartTip();
+        }
+        if (idx !== canvas._hoveredIndex) {
+          canvas._hoveredIndex = idx;
+          CMD.renderAnalytics();
+        }
+      });
       canvas.addEventListener('mouseleave', function() { canvas.style.cursor = 'default'; canvas._hoveredIndex = -1; CMD.hideChartTip(); CMD.renderAnalytics(); }); }
   };
 
