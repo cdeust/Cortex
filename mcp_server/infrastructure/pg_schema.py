@@ -213,8 +213,6 @@ CREATE INDEX IF NOT EXISTS idx_rel_pair_type
     ON relationships (source_entity_id, target_entity_id, relationship_type);
 CREATE INDEX IF NOT EXISTS idx_memories_agent_context
     ON memories (agent_context);
-CREATE INDEX IF NOT EXISTS idx_memories_is_global
-    ON memories (is_global) WHERE is_global = TRUE;
 """
 
 # ── PL/pgSQL: recall_memories ─────────────────────────────────────────────
@@ -628,14 +626,39 @@ BEGIN
         ALTER TABLE memories ADD COLUMN is_global BOOLEAN DEFAULT FALSE;
     END IF;
 END $$;
+
+CREATE INDEX IF NOT EXISTS idx_memories_is_global
+    ON memories (is_global) WHERE is_global = TRUE;
 """
 
 # ── Schema initialization ────────────────────────────────────────────────
 
 
+def _split_statements(ddl: str) -> list[str]:
+    """Split a multi-statement DDL string into individual statements.
+
+    Handles CREATE FUNCTION blocks that contain semicolons in the
+    body by detecting $$ delimiters.
+    """
+    if "$$" in ddl:
+        # PL/pgSQL function — return as single block
+        return [ddl.strip()] if ddl.strip() else []
+    statements = []
+    for part in ddl.split(";"):
+        stmt = part.strip()
+        if stmt:
+            statements.append(stmt + ";")
+    return statements
+
+
 def get_all_ddl() -> list[str]:
-    """Return all DDL statements in execution order."""
-    return [
+    """Return all DDL as individual statements for safe per-statement execution.
+
+    Each statement can be executed independently — if one fails, the
+    rest still run. This prevents a single column type error from
+    silently skipping 7 subsequent table creations.
+    """
+    blocks = [
         EXTENSIONS_DDL,
         MEMORIES_DDL,
         ENTITIES_DDL,
@@ -650,3 +673,7 @@ def get_all_ddl() -> list[str]:
         GET_HOT_EMBEDDINGS_FN,
         GET_TEMPORAL_CO_ACCESS_FN,
     ]
+    result: list[str] = []
+    for block in blocks:
+        result.extend(_split_statements(block))
+    return result
