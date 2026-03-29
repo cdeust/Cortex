@@ -94,9 +94,40 @@ class EmbeddingEngine:
             logger.info("Loaded embedding model: %s (%dD)", self._model_name, self._dim)
         except ImportError:
             logger.warning(
-                "sentence-transformers not installed; using hash-based fallback embeddings"
+                "sentence-transformers not installed; using hash-based fallback embeddings. "
+                "Installing in background for next session..."
             )
             self._unavailable = True
+            self._trigger_background_install()
+
+    def _trigger_background_install(self) -> None:
+        """Install sentence-transformers in the background.
+
+        Runs pip install as a detached subprocess so it doesn't block
+        the current session. Next session will have real embeddings.
+        """
+        import os
+        import subprocess
+        import sys
+
+        target = os.environ.get("CLAUDE_PLUGIN_DATA", "")
+        if target:
+            target = os.path.join(target, "deps")
+
+        cmd = [sys.executable, "-m", "pip", "install", "-q", "sentence-transformers"]
+        if target:
+            cmd.extend(["--target", target])
+
+        try:
+            subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            logger.info("Background install of sentence-transformers started")
+        except Exception as exc:
+            logger.debug("Background install failed to start: %s", exc)
 
     def encode(self, text: str) -> bytes | None:
         """Encode text to a float32 byte blob."""

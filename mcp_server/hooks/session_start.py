@@ -37,6 +37,16 @@ def _log(msg: str) -> None:
     print(f"[session-start-hook] {msg}", file=sys.stderr)
 
 
+def _has_sentence_transformers() -> bool:
+    """Check if sentence-transformers is importable."""
+    try:
+        import sentence_transformers  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 def _short(text: str, max_len: int = 120) -> str:
     text = text.strip().replace("\n", " ")
     return text if len(text) <= max_len else text[: max_len - 1] + "..."
@@ -262,6 +272,16 @@ def _build_context(
         "*Use `recall` to retrieve full memories. "
         "Use `anchor` to protect critical facts.*"
     )
+
+    # Warn if semantic search is degraded
+    if not _has_sentence_transformers():
+        lines.append("")
+        lines.append(
+            "*Note: sentence-transformers is installing in the background. "
+            "Semantic search will improve next session. "
+            "Run `pip install sentence-transformers` to install immediately.*"
+        )
+
     return "\n".join(lines)
 
 

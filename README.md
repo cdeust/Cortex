@@ -65,13 +65,22 @@ export DATABASE_URL=postgresql://localhost:5432/cortex
 
 ### Docker (zero setup, includes PostgreSQL)
 
-Everything pre-installed: PostgreSQL 17 + pgvector, Python deps, sentence-transformers model cached, Claude Code CLI. Just mount your project and credentials.
+Everything pre-installed: PostgreSQL 17 + pgvector, Python deps, sentence-transformers model cached, Claude Code CLI. One command:
 
 ```bash
-# Build once
+# Clone, build, and run (first time)
+git clone https://github.com/cdeust/Cortex.git && cd Cortex
+./docker/run.sh /path/to/your/project
+```
+
+The `run.sh` script auto-extracts credentials from macOS keychain, builds the image on first run, and mounts a persistent volume for memories.
+
+<details>
+<summary>Manual Docker commands</summary>
+
+```bash
 docker build -t cortex-runtime -f docker/Dockerfile .
 
-# Run (cortex-pgdata volume persists memories across restarts)
 docker run -it \
   -v /path/to/project:/workspace \
   -v cortex-pgdata:/var/lib/postgresql/17/data \
@@ -90,7 +99,9 @@ docker run -it \
   cortex-runtime
 ```
 
-The `cortex-pgdata` named volume persists PostgreSQL data (memories, entities, knowledge graph) across container restarts. First run initializes the database automatically. Host credentials are mounted read-only — never modified.
+</details>
+
+The `cortex-pgdata` named volume persists memories across container restarts. Host credentials are mounted read-only — never modified.
 
 ### Alternative install methods
 
