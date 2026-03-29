@@ -2,7 +2,7 @@
 
 # Cortex
 
-![SafeSkill 94/100](https://img.shields.io/badge/SafeSkill-94%2F100_Verified%20Safe-brightgreen)
+[![SafeSkill 94/100](https://img.shields.io/badge/SafeSkill-94%2F100_Verified%20Safe-brightgreen)](docs/safeskill-report.json)
 
 ### Persistent memory for Claude Code
 
