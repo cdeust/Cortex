@@ -262,9 +262,7 @@ def _link_memory(
     # Strategy 0: global memories link to ALL domain hubs
     is_global = bool(mem.get("is_global", False))
     if is_global and domain_hub_ids:
-        _link_global_to_all_domains(
-            nid, edges, domain_hub_ids, type_group_map
-        )
+        _link_global_to_all_domains(nid, edges, domain_hub_ids, type_group_map)
         return
 
     # Strategy 1: match against existing entity nodes

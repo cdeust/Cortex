@@ -157,7 +157,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     _enrich_mod_with_gate(mod, gate)
 
     # Auto-detect global when not explicitly set
-    explicit_global = is_global
     if not is_global:
         is_global, _global_score, global_reason = detect_global(content, tags)
     else:

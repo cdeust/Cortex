@@ -232,9 +232,9 @@ def detect_global(
     tag_overlap = global_tags & {t.lower() for t in (tags or [])}
     if tag_overlap:
         score += 1.5 * len(tag_overlap)
-        category_scores["cross_project"] = (
-            category_scores.get("cross_project", 0) + 1.5 * len(tag_overlap)
-        )
+        category_scores["cross_project"] = category_scores.get(
+            "cross_project", 0
+        ) + 1.5 * len(tag_overlap)
 
     # Penalize project-specific anchors (but not zero — infra can have paths)
     anchor_count = len(_PROJECT_ANCHORS.findall(content))
