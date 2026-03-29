@@ -1,6 +1,6 @@
 {
   "name": "cortex",
-  "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, and cognitive profiling that learns how you work. 34 MCP tools across memory storage, recall, knowledge graph navigation, cognitive profiling, visualization, and automation.",
+  "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence, and cognitive profiling. 35 MCP tools. Docker image available with PostgreSQL + pgvector pre-configured.",
   "version": "2.4.0",
   "author": {
     "name": "Clement Deust",

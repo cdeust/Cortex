@@ -61,6 +61,33 @@ psql -d cortex -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NO
 export DATABASE_URL=postgresql://localhost:5432/cortex
 ```
 
+### Docker (zero setup, includes PostgreSQL)
+
+Everything pre-installed: PostgreSQL 17 + pgvector, Python deps, sentence-transformers model cached, Claude Code CLI. Just mount your project and credentials.
+
+```bash
+# Build once
+docker build -t cortex-runtime -f docker/Dockerfile .
+
+# Run
+docker run -it \
+  -v /path/to/project:/workspace \
+  -v ~/.claude:/home/cortex/.claude-host:ro \
+  -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
+  cortex-runtime
+```
+
+Or with an OAuth token:
+
+```bash
+docker run -it \
+  -v /path/to/project:/workspace \
+  -e CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+  cortex-runtime
+```
+
+The container starts PostgreSQL, initializes the schema, configures the Cortex MCP server, and launches Claude Code with `--dangerously-skip-permissions` as a non-root user. Host credentials are mounted read-only — never modified.
+
 ### Alternative install methods
 
 <details>
@@ -80,7 +107,7 @@ This registers the MCP server only. No hooks, no skills, no auto-capture.
 ```bash
 git clone https://github.com/cdeust/Cortex.git
 cd Cortex
-pip install -e ".[dev]"
+pip install -e ".[dev,postgresql]"
 claude mcp add cortex -- python -m mcp_server
 ```
 
@@ -607,6 +634,29 @@ pytest tests_py/handlers/
 # Run benchmarks (requires PostgreSQL)
 DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/longmemeval/run_benchmark.py --variant s
 ```
+
+### Docker development
+
+```bash
+# Build image (~5 min first time, cached after)
+docker build -t cortex-runtime -f docker/Dockerfile .
+
+# Interactive shell inside container
+docker run -it \
+  -v $(pwd):/workspace \
+  -v ~/.claude:/home/cortex/.claude-host:ro \
+  -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
+  cortex-runtime shell
+
+# Run a single prompt
+docker run --rm \
+  -v /path/to/project:/workspace \
+  -v ~/.claude:/home/cortex/.claude-host:ro \
+  -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
+  cortex-runtime -p "recall what we decided about the database"
+```
+
+Image includes: PostgreSQL 17 + pgvector, Python 3.12, all deps, sentence-transformers model (4.9GB total, CPU-only PyTorch).
 
 ## Contributing
 

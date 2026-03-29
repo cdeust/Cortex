@@ -12,7 +12,7 @@
     {
       "name": "cortex",
       "source": "./",
-      "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory, intent-aware retrieval, knowledge graphs, and cognitive profiling that learns how you work",
+      "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory, intent-aware retrieval, codebase intelligence, knowledge graphs, and cognitive profiling. Docker image available.",
       "version": "2.4.0",
       "author": {
         "name": "Clement Deust",
@@ -21,7 +21,7 @@
       "homepage": "https://github.com/cdeust/Cortex",
       "repository": "https://github.com/cdeust/Cortex",
       "license": "MIT",
-      "keywords": ["memory", "cognitive-profiling", "mcp", "claude-code", "cortex", "knowledge-graph"],
+      "keywords": ["memory", "cognitive-profiling", "mcp", "claude-code", "cortex", "knowledge-graph", "codebase-analysis", "docker"],
       "category": "productivity"
     }
   ]
