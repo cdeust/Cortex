@@ -142,17 +142,30 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
 
 
 def _init_schema(database_url: str) -> tuple[bool, str]:
-    """Run full schema initialization via psycopg."""
+    """Run full schema initialization via psycopg.
+
+    Executes each DDL statement independently so a single failure
+    (e.g. extension missing, column type mismatch) doesn't prevent
+    the remaining tables and functions from being created.
+    """
     try:
         import psycopg
         from psycopg.rows import dict_row
         from mcp_server.infrastructure.pg_schema import get_all_ddl
 
         conn = psycopg.connect(database_url, row_factory=dict_row, autocommit=True)
+        errors: list[str] = []
         for ddl in get_all_ddl():
-            conn.execute(ddl)
-        conn.commit()
+            try:
+                conn.execute(ddl)
+            except Exception as stmt_err:
+                first_line = ddl.strip().split("\n")[0][:60]
+                errors.append(f"{first_line}: {stmt_err}")
         conn.close()
+        if errors:
+            _log(f"Schema warnings ({len(errors)} statements had issues):")
+            for e in errors[:5]:
+                _log(f"  {e}")
         return True, ""
     except ImportError:
         return False, "psycopg not installed (run: pip install psycopg[binary])"
