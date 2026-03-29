@@ -53,6 +53,7 @@ body { background: var(--void); color: var(--text); font-family: 'JetBrains Mono
 .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 9px; color: var(--text-dim); letter-spacing: 1.5px; text-transform: uppercase; }
 .stat-row + .stat-row { border-top: 1px solid rgba(0,255,255,0.04); }
 .stat-row .val { font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 600; color: var(--cyan); text-shadow: 0 0 8px var(--cyan-glow); }
+.stat-row .bench-val { font-size: 9px; font-weight: 500; letter-spacing: 0.5px; }
 
 /* Filter bar */
 #filter-bar {

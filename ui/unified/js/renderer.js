@@ -128,7 +128,7 @@
   function handleHover(node) {
     hoveredNode = node;
     document.body.style.cursor = node ? 'pointer' : 'default';
-    node ? showTooltip(node) : hideTooltip();
+    node ? JUG._tooltip.show(node) : JUG._tooltip.hide();
   }
 
   function handleClick(node) {
@@ -144,7 +144,6 @@
     buildNeighborSet(node.id);
     JUG.state.selectedId = node.id;
     JUG.emit('graph:selectNode', node);
-    // Force re-render to update link colors/particles
     if (graph) graph.linkColor(graph.linkColor());
   }
 
@@ -154,59 +153,6 @@
     JUG.state.selectedId = null;
     JUG.emit('graph:deselectNode');
     if (graph) graph.linkColor(graph.linkColor());
-  }
-
-  // ── Tooltip ──
-  function buildMeta(d) {
-    var m = [];
-    if (d.quality !== undefined) {
-      var q = d.quality;
-      var ql = q >= 0.6 ? 'Strong' : q >= 0.3 ? 'Moderate' : 'Weak';
-      m.push('Quality: ' + (q * 100).toFixed(0) + '% (' + ql + ')');
-    }
-    if (d.domain) m.push('Domain: ' + d.domain);
-    if (d.heat !== undefined) m.push('Heat: ' + d.heat);
-    if (d.importance !== undefined) m.push('Imp: ' + d.importance);
-    if (d.sessionCount !== undefined) m.push('Sessions: ' + d.sessionCount);
-    if (d.confidence !== undefined) m.push('Conf: ' + Math.round(d.confidence * 100) + '%');
-    if (d.frequency !== undefined) m.push('Freq: ' + d.frequency);
-    if (d.ratio !== undefined) m.push('Usage: ' + Math.round(d.ratio * 100) + '%');
-    if (d.entityType) m.push('Type: ' + d.entityType);
-    if (d.emotion && d.emotion !== 'neutral') m.push('Emotion: ' + d.emotion);
-    return m.join('\n');
-  }
-
-  function showTooltip(data) {
-    var tip = document.getElementById('tooltip');
-    if (!tip) return;
-    var el = document.getElementById('tt-label');
-    var ty = document.getElementById('tt-type');
-    var me = document.getElementById('tt-meta');
-    if (el) el.textContent = data.label || '';
-    if (ty) {
-      ty.textContent = JUG.NODE_LABELS[data.type] || data.type;
-      ty.style.color = JUG.getNodeColor(data);
-    }
-    if (me) me.textContent = buildMeta(data);
-    tip.classList.add('visible');
-    var handler = function(e) {
-      var tx = e.clientX + 16, tty = e.clientY + 16;
-      if (tx + 260 > innerWidth) tx = e.clientX - 276;
-      if (tty + 120 > innerHeight) tty = e.clientY - 136;
-      tip.style.left = tx + 'px'; tip.style.top = tty + 'px';
-    };
-    window.addEventListener('mousemove', handler);
-    tip._moveHandler = handler;
-  }
-
-  function hideTooltip() {
-    var tip = document.getElementById('tooltip');
-    if (!tip) return;
-    tip.classList.remove('visible');
-    if (tip._moveHandler) {
-      window.removeEventListener('mousemove', tip._moveHandler);
-      tip._moveHandler = null;
-    }
   }
 
   // ── Public API ──

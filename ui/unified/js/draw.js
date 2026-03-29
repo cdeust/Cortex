@@ -151,7 +151,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
-    var text = (node.label || '').slice(0, 28);
+    var text = JUG._bestNodeLabel(node).slice(0, 28);
     var ty = y + r + fs * 0.5;
 
     // Dark outline for contrast against any background

@@ -1,15 +1,7 @@
 """Standalone HTTP server — runs as a detached process, survives MCP shutdown.
 
-Invoked as a subprocess by visualization handlers. Starts the appropriate
-HTTP server (dashboard, unified viz, or methodology), writes the bound URL
-to stdout, then serves until idle timeout (10 min with no requests).
-
-Usage:
-    python -m mcp_server.server.http_standalone --type dashboard --port 3457
-    python -m mcp_server.server.http_standalone --type unified --port 3458
-    python -m mcp_server.server.http_standalone --type methodology --port 3456
-
-The process self-terminates after IDLE_TIMEOUT seconds of inactivity.
+Starts the unified viz or methodology server, writes the bound URL to stdout,
+then serves until idle timeout (10 min with no requests).
 """
 
 from __future__ import annotations
@@ -120,6 +112,8 @@ def _build_unified_handler(ui_root: Path, store) -> type:
             _touch()
             if self.path == "/api/graph" or self.path.startswith("/api/graph?"):
                 self._serve_graph()
+            elif self.path.startswith("/api/file-diff?"):
+                _serve_file_diff(self)
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
                 _serve_static(self, js_dir, self.path[4:], "application/javascript")
             elif self.path.startswith("/css/") and self.path.endswith(".css"):
@@ -251,6 +245,12 @@ def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> 
     handler.send_header("Cache-Control", "no-cache")
     handler.end_headers()
     handler.wfile.write(body)
+
+
+def _serve_file_diff(handler) -> None:
+    """Serve git diff for a file entity — delegates to http_file_diff."""
+    from mcp_server.server.http_file_diff import serve_file_diff
+    serve_file_diff(handler)
 
 
 def _bind_server(handler_cls: type, preferred_port: int) -> HTTPServer:

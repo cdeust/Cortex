@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/theme.css">
 <link rel="stylesheet" href="/css/panels.css">
+<link rel="stylesheet" href="/css/detail.css">
 </head>
 <body>
 
@@ -36,9 +37,9 @@
 
   <div id="benchmark-summary" style="margin-top:10px;border-top:1px solid #ffffff10;padding-top:8px;display:none">
     <div style="font-size:7px;text-transform:uppercase;letter-spacing:0.5px;color:var(--cyan-dim,#508090);margin-bottom:6px">System Benchmarks</div>
-    <div class="stat-row"><span>LongMemEval</span><span class="val" id="b-lme" style="color:#40D870">--</span></div>
-    <div class="stat-row"><span>LoCoMo</span><span class="val" id="b-loc" style="color:#40D870">--</span></div>
-    <div class="stat-row"><span>BEAM</span><span class="val" id="b-beam" style="color:#E0B040">--</span></div>
+    <div class="stat-row"><span>LongMemEval</span><span class="val bench-val" id="b-lme" style="color:#40D870">--</span></div>
+    <div class="stat-row"><span>LoCoMo</span><span class="val bench-val" id="b-loc" style="color:#40D870">--</span></div>
+    <div class="stat-row"><span>BEAM</span><span class="val bench-val" id="b-beam" style="color:#E0B040">--</span></div>
   </div>
 </div>
 
@@ -113,10 +114,17 @@
   <div id="detail-content"></div>
 </div>
 
-<div id="tooltip">
-  <div class="tt-label" id="tt-label"></div>
-  <div class="tt-type" id="tt-type"></div>
-  <div class="tt-meta" id="tt-meta"></div>
+<div id="tooltip"></div>
+
+<div id="diff-modal">
+  <div class="diff-modal-backdrop"></div>
+  <div class="diff-modal-panel">
+    <div class="diff-modal-header">
+      <div><span class="diff-modal-filename"></span><span class="diff-modal-subtitle"></span></div>
+      <button class="diff-modal-close">&#x2715;</button>
+    </div>
+    <div class="diff-modal-body"></div>
+  </div>
 </div>
 
 <div id="legend">
@@ -263,8 +271,12 @@
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
 <script src="/js/draw.js"></script>
+<script src="/js/tooltip.js"></script>
 <script src="/js/renderer.js"></script>
 <script src="/js/graph.js"></script>
+<script src="/js/detail_tools.js"></script>
+<script src="/js/detail_format.js"></script>
+<script src="/js/detail_diff.js"></script>
 <script src="/js/detail_panel.js"></script>
 <script src="/js/controls.js"></script>
 <script src="/js/monitor.js"></script>

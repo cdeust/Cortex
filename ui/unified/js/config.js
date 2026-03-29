@@ -84,3 +84,63 @@ JUG.getNodeColor = function(node) {
 JUG.getEdgeColor = function(edge) {
   return edge.color || JUG.EDGE_COLORS[edge.type] || JUG.EDGE_COLORS['default'];
 };
+
+// Clean markdown + tool captures from labels for display
+JUG.cleanText = function(raw) {
+  if (!raw) return '';
+  var s = raw.replace(/^#+\s*/g, '').replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1').replace(/\s+/g, ' ').trim();
+  return JUG._cleanToolLabel(s);
+};
+
+JUG._cleanToolLabel = function(s) {
+  // Extract file path — stop before Output:/Command: or JSON
+  var fp = JUG._extractFilePath(s);
+  // "Tool: Edit File: /long/path/to/file.py ..." → "Edit file.py"
+  if (/^Tool:\s*Edit/i.test(s) && fp) return 'Edit ' + JUG._shortFile(fp);
+  // "Tool: Write File: /path ..." → "Write file.py"
+  if (/^Tool:\s*Write/i.test(s) && fp) return 'Write ' + JUG._shortFile(fp);
+  // "Tool: Read ..." → "Read file.py"
+  if (/^Tool:\s*Read/i.test(s) && fp) return 'Read ' + JUG._shortFile(fp);
+  // "Tool: Bash Command: cmd" → just the command (short)
+  var bashMatch = s.match(/^Tool:\s*Bash\s+Command:\s*(.+?)(?:\s+Output:|$)/i);
+  if (bashMatch) { var c = bashMatch[1]; return c.length > 36 ? c.substring(0, 33) + '...' : c; }
+  // "Tool: WebSearch ..." → "Web search"
+  if (/^Tool:\s*Web/i.test(s)) return 'Web search';
+  // "Tool: Grep ..." → "Search files"
+  if (/^Tool:\s*Grep/i.test(s)) return 'Search files';
+  // "File: path" → short filename
+  if (/^File:\s/i.test(s) && fp) return JUG._shortFile(fp);
+  return s;
+};
+
+JUG._extractFilePath = function(s) {
+  // Match absolute path: /foo/bar or C:\foo\bar
+  var m = s.match(/["']?(\/[^\s"'{}]+|[A-Za-z]:\\[^\s"'{}]+)/);
+  if (m) return m[1].replace(/["']$/g, '');
+  // Match relative path with extension: foo/bar.py, src/thing.ts
+  var rel = s.match(/(?:File:\s*)?([\w./-]+\/[\w./-]+\.\w{1,10})/);
+  if (rel) return rel[1];
+  return '';
+};
+
+// Best label for canvas — uses content for tool captures (label is often truncated)
+JUG._bestNodeLabel = function(node) {
+  var label = JUG.cleanText(node.label || '');
+  // If cleanText produced a good short label, use it
+  if (label && !label.endsWith('...') && label.length > 3) return label;
+  // Try content field (has full text for tool captures)
+  if (node.content) {
+    var fromContent = JUG.cleanText(node.content);
+    if (fromContent && fromContent.length > 3) return fromContent;
+  }
+  return label || node.id || '';
+};
+
+JUG._shortFile = function(path) {
+  if (!path) return '';
+  var clean = path.replace(/^["']|["']$/g, '').trim();
+  var parts = clean.split('/').filter(function(p) { return p; });
+  if (parts.length <= 1) return clean;
+  return parts[parts.length - 1];
+};

@@ -39,15 +39,22 @@
 
     setText('s-nodes', meta.node_count || 0);
 
-    // Benchmark summary
+    // Benchmark summary — R@10 + MRR side by side
     var bm = meta.benchmarks;
     if (bm) {
       var el = document.getElementById('benchmark-summary');
       if (el) el.style.display = 'block';
-      if (bm.LongMemEval) setText('b-lme', 'R@10 ' + Math.round(bm.LongMemEval.recall_10) + '%');
-      if (bm.LoCoMo) setText('b-loc', 'R@10 ' + Math.round(bm.LoCoMo.recall_10) + '%');
-      if (bm.BEAM) setText('b-beam', 'R@10 ' + Math.round(bm.BEAM.recall_10) + '%');
+      if (bm.LongMemEval) setText('b-lme', fmtBench(bm.LongMemEval));
+      if (bm.LoCoMo) setText('b-loc', fmtBench(bm.LoCoMo));
+      if (bm.BEAM) setText('b-beam', fmtBench(bm.BEAM));
     }
+  }
+
+  function fmtBench(bm) {
+    var parts = [];
+    if (bm.recall_10 !== undefined) parts.push('R@10 ' + Math.round(bm.recall_10) + '%');
+    if (bm.mrr !== undefined) parts.push('MRR .' + Math.round(bm.mrr * 1000));
+    return parts.join(' | ') || '--';
   }
 
   function setText(id, val) {

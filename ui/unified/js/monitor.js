@@ -122,7 +122,7 @@
         time: new Date(),
         type: n.type || 'unknown',
         id: n.id || '',
-        label: n.label || '',
+        label: JUG.cleanText(n.label || ''),
         domain: n.domain || '',
         group: n.group || '',
         color: n.color || '#00FFFF',
