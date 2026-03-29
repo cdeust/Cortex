@@ -31,15 +31,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mcp_server.core.neuromodulation_channels import (
+    ACH_ALPHA,
     DA_ALPHA,
     NE_ALPHA,
-    ACH_ALPHA,
     apply_cross_coupling,
     compute_dopamine_rpe,
     compute_norepinephrine_arousal,
     compute_serotonin_exploration,
 )
-
 
 # ── Neuromodulatory State ────────────────────────────────────────────────
 

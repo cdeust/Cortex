@@ -36,7 +36,7 @@
     setText('s-mem', meta.memory_count || 0);
     setText('s-ent', meta.entity_count || 0);
     setText('s-edge', meta.edge_count || 0);
-    setText('s-cluster', meta.cluster_count || 0);
+
     setText('s-nodes', meta.node_count || 0);
 
     // Benchmark summary

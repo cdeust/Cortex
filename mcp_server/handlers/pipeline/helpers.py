@@ -7,9 +7,9 @@ import re
 import sys
 from typing import Any
 
-from mcp_server.infrastructure.profile_store import load_profiles
-from mcp_server.core.domain_detector import detect_domain
 from mcp_server.core.context_generator import generate_context
+from mcp_server.core.domain_detector import detect_domain
+from mcp_server.infrastructure.profile_store import load_profiles
 
 
 def log(msg: str) -> None:

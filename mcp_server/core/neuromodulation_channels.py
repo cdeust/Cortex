@@ -29,7 +29,6 @@ Pure business logic — no I/O.
 
 from __future__ import annotations
 
-
 # ── EMA rates for each channel ──────────────────────────────────────────
 
 DA_ALPHA = 0.3  # DA responds quickly to RPE

@@ -17,7 +17,6 @@ from mcp_server.core.query_intent import (
     classify_query_intent,
 )
 
-
 # ── Routing Decisions ─────────────────────────────────────────────────────
 
 _INTENT_TO_HANDLERS: dict[str, list[str]] = {

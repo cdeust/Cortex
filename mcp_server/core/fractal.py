@@ -24,7 +24,6 @@ from mcp_server.core.fractal_clustering import (
     compute_centroid,
 )
 
-
 __all__ = [
     "UnionFind",
     "agglomerative_cluster",

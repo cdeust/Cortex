@@ -16,13 +16,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core.query_intent import classify_query_intent, QueryIntent
+from mcp_server.core.query_intent import QueryIntent, classify_query_intent
 from mcp_server.core.reranker import rerank_results
 from mcp_server.core.thermodynamics import (
-    compute_retrieval_surprise,
     compute_heat_adjustment,
+    compute_retrieval_surprise,
 )
-
 
 # ── PG weight profiles ──────────────────────────────────────────────────
 

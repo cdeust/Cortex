@@ -20,7 +20,6 @@ from mcp_server.core.graph_builder_nodes import (
 )
 from mcp_server.core.knowledge_graph import extract_entities
 
-
 # ── Domain resolution ──────────────────────────────────────────────────
 
 
@@ -62,8 +61,14 @@ def _link_global_to_all_domains(
     domain_hub_ids: dict[str, str],
     type_group_map: dict[str, dict[str, str]],
 ) -> None:
-    """Connect a global memory to every domain hub via type-groups or direct edges."""
+    """Connect a global memory to every unique domain hub via type-groups or direct edges."""
+    # Deduplicate: many keys can map to the same hub_id
+    seen_hubs: set[str] = set()
     for hub_key, hub_id in domain_hub_ids.items():
+        if hub_id in seen_hubs:
+            continue
+        seen_hubs.add(hub_id)
+
         # Prefer the "Memories" type-group if it exists
         tg_id = None
         if hub_key in type_group_map:

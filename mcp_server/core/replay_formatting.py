@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import re
 
-
 # ── Micro-checkpoint Detection ───────────────────────────────────────────
 
 _MICRO_ERROR_RE = re.compile(

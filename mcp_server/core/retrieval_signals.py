@@ -11,8 +11,8 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.core import hopfield
-from mcp_server.core.hdc_encoder import compute_hdc_scores
 from mcp_server.core.cognitive_map import compute_sr_scores
+from mcp_server.core.hdc_encoder import compute_hdc_scores
 from mcp_server.core.query_decomposition import extract_query_entities
 
 

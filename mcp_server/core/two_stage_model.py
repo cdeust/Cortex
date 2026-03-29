@@ -58,7 +58,6 @@ from mcp_server.core.two_stage_transfer import (
     update_hippocampal_dependency,
 )
 
-
 __all__ = [
     "compute_transfer_delta",
     "update_hippocampal_dependency",

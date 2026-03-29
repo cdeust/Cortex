@@ -16,14 +16,13 @@ Pure business logic — no I/O.
 from __future__ import annotations
 
 from mcp_server.shared.linear_algebra import (
+    add,
     cosine_similarity,
     dot,
     norm,
-    subtract,
     scale,
-    add,
+    subtract,
 )
-
 
 # ── Configuration ─────────────────────────────────────────────────────────
 

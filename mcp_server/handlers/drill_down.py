@@ -12,9 +12,9 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.core import fractal
+from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 
 # ── Schema ────────────────────────────────────────────────────────────────
 

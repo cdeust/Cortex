@@ -8,12 +8,12 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 from mcp_server.handlers import (
-    sync_instructions,
-    create_trigger,
     add_rule,
-    get_rules,
-    get_project_story,
     assess_coverage,
+    create_trigger,
+    get_project_story,
+    get_rules,
+    sync_instructions,
 )
 from mcp_server.tool_error_handler import safe_handler
 

@@ -11,12 +11,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.infrastructure.mcp_client_pool import get_client
-from mcp_server.handlers.pipeline.helpers import log as _log
-from mcp_server.handlers.pipeline.memory_trace import trace_pipeline_complete
 from mcp_server.handlers.pipeline.audit import stage_audit
 from mcp_server.handlers.pipeline.discovery import stage_discovery
+from mcp_server.handlers.pipeline.helpers import log as _log
 from mcp_server.handlers.pipeline.implementation import stage_implementation
+from mcp_server.handlers.pipeline.memory_trace import trace_pipeline_complete
 from mcp_server.handlers.pipeline.prd import stage_prd
 from mcp_server.handlers.pipeline.push import stage_push_and_pr
 from mcp_server.handlers.pipeline.stages import (
@@ -27,6 +26,7 @@ from mcp_server.handlers.pipeline.stages import (
     stage_strategy,
 )
 from mcp_server.handlers.pipeline.verification import stage_verification
+from mcp_server.infrastructure.mcp_client_pool import get_client
 
 # ── Schema ─────────────────────────────────────────────────────────────────
 

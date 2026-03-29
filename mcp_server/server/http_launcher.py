@@ -17,7 +17,6 @@ from pathlib import Path
 # Port assignments — one per server type
 PORTS = {
     "methodology": 3456,
-    "dashboard": 3457,
     "unified": 3458,
 }
 

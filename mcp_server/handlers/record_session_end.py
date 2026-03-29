@@ -10,16 +10,16 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from mcp_server.core.profile_builder import apply_session_update
+from mcp_server.core.session_critique import generate_critique
 from mcp_server.infrastructure.profile_store import load_profiles, save_profiles
 from mcp_server.infrastructure.session_store import load_session_log, save_session_log
-from mcp_server.core.profile_builder import apply_session_update
+from mcp_server.shared.categorizer import categorize
 from mcp_server.shared.project_ids import (
     cwd_to_project_id,
-    project_id_to_label,
     domain_id_from_label,
+    project_id_to_label,
 )
-from mcp_server.shared.categorizer import categorize
-from mcp_server.core.session_critique import generate_critique
 
 logger = logging.getLogger(__name__)
 

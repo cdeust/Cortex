@@ -19,7 +19,6 @@ from mcp_server.core.enrichment import (
     build_enriched_content,
 )
 
-
 # ── Dream Replay ──────────────────────────────────────────────────────────────
 
 

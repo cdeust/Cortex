@@ -11,10 +11,10 @@ import re
 import sys
 from typing import Any
 
-from mcp_server.infrastructure.mcp_client import MCPClient
+from mcp_server.errors import McpConnectionError
 from mcp_server.infrastructure.config import MCP_CONNECTIONS_PATH
 from mcp_server.infrastructure.file_io import read_json
-from mcp_server.errors import McpConnectionError
+from mcp_server.infrastructure.mcp_client import MCPClient
 
 _pool: dict[str, MCPClient] = {}
 

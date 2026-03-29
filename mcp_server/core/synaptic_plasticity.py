@@ -199,8 +199,8 @@ def phase_modulate_plasticity(
 from mcp_server.core.synaptic_plasticity_hebbian import (  # noqa: E402
     apply_hebbian_update,
     apply_stdp_batch,
-    compute_ltp,
     compute_ltd,
+    compute_ltp,
     compute_stdp_update,
     update_bcm_threshold,
 )

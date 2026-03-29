@@ -10,9 +10,9 @@ handled by the caller.
 from __future__ import annotations
 
 from mcp_server.core.oscillatory_phases import (
-    OscillatoryState,
     SWR_BURST_STEPS,
     SWR_REFRACTORY_STEPS,
+    OscillatoryState,
     SWRState,
     compute_ach_from_phase,
     compute_encoding_strength,

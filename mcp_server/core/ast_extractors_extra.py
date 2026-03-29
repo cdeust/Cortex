@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from mcp_server.core.ast_extractors import _find_children, _text, _walk_type
 from mcp_server.core.codebase_parser import ImportInfo, SymbolDef
-from mcp_server.core.ast_extractors import _text, _walk_type, _find_children
 
 if TYPE_CHECKING:
     from tree_sitter import Node

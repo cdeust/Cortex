@@ -23,11 +23,10 @@ from dataclasses import dataclass, field
 from mcp_server.core.predictive_coding_flat import (
     _CODE_BLOCK_RE,
     _FILE_PATH_RE,
-    _URL_RE,
     _HEADING_RE,
     _LIST_RE,
+    _URL_RE,
 )
-
 
 # -- Data classes -------------------------------------------------------------
 

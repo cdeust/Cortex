@@ -8,15 +8,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core.pattern_extractor import extract_patterns
-from mcp_server.core.style_classifier import classify_style
-from mcp_server.core.bridge_finder import find_bridges
-from mcp_server.core.blindspot_detector import detect_blind_spots
-from mcp_server.core.sparse_dictionary import learn_dictionary, encode_session
-from mcp_server.core.persona_vector import build_persona_vector
 from mcp_server.core.behavioral_crosscoder import detect_persistent_features
-from mcp_server.shared.project_ids import project_id_to_label, domain_id_from_label
+from mcp_server.core.blindspot_detector import detect_blind_spots
+from mcp_server.core.bridge_finder import find_bridges
+from mcp_server.core.pattern_extractor import extract_patterns
+from mcp_server.core.persona_vector import build_persona_vector
+from mcp_server.core.sparse_dictionary import encode_session, learn_dictionary
+from mcp_server.core.style_classifier import classify_style
 from mcp_server.shared.categorizer import categorize_with_scores
+from mcp_server.shared.project_ids import domain_id_from_label, project_id_to_label
 
 
 def _build_project_domain_map(

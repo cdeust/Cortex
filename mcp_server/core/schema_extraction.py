@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 
 from mcp_server.shared.similarity import jaccard_similarity
 
-
 # ── Configuration ─────────────────────────────────────────────────────────
 
 _MIN_FORMATION_COUNT = 5

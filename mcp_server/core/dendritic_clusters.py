@@ -26,14 +26,16 @@ Pure business logic — no I/O.
 
 from __future__ import annotations
 
-from mcp_server.shared.similarity import jaccard_similarity
-
 from mcp_server.core.dendritic_computation import (
     BRANCH_ADMISSION_THRESHOLD as _BRANCH_ADMISSION_THRESHOLD,
-    DendriticBranch,
+)
+from mcp_server.core.dendritic_computation import (
     MAX_BRANCH_SIZE as _MAX_BRANCH_SIZE,
 )
-
+from mcp_server.core.dendritic_computation import (
+    DendriticBranch,
+)
+from mcp_server.shared.similarity import jaccard_similarity
 
 # ── Branch Assignment ────────────────────────────────────────────────────
 

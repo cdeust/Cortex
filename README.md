@@ -152,7 +152,7 @@ claude mcp add cortex -- python -m mcp_server
 | `/cortex-profile` | View cognitive style, patterns, blind spots | *"Show my work patterns"* |
 | `/cortex-navigate-knowledge` | Trace relationships, explore causal chains | *"How does auth relate to billing?"* |
 | `/cortex-setup-project` | Bootstrap memory from code or import history | *"Set up Cortex for this project"* |
-| `/cortex-visualize` | Launch 3D neural graph or memory dashboard | *"Show me the memory map"* |
+| `/cortex-visualize` | Launch unified neural graph visualization | *"Show me the memory map"* |
 | `/cortex-automate` | Create triggers, rules, sync to CLAUDE.md | *"Remind me about X when I open that file"* |
 | `/cortex-debug-memory` | Fix bad memories, rate quality, restore checkpoints | *"That memory is wrong, delete it"* |
 
@@ -271,7 +271,6 @@ Cortex builds a profile of how you work — from your Claude Code session histor
 | `memory_stats` | Memory system diagnostics |
 | `narrative` | Generate project story from stored memories |
 | `import_sessions` | Import conversation history into memory |
-| `open_memory_dashboard` | Launch real-time memory heatmap dashboard |
 
 ### Navigation (5 tools)
 
@@ -356,8 +355,7 @@ Each agent uses `agent_topic` scoping — a **soft boost** that promotes topic-r
 ```bash
 # From any Claude Code session:
 /cortex-visualize    # or directly:
-# cortex:open_visualization    — 3D neural graph at localhost:3458
-# cortex:open_memory_dashboard — Memory heatmap at localhost:3457
+# cortex:open_visualization    — Unified neural graph at localhost:3458
 ```
 
 The graph organizes everything into a 6-level hierarchy — from broad categories down to individual memories and entities. Node size reflects importance, glow reflects heat (recency), and colored arcs show quality scores. Auto-shuts down after 10 minutes idle.

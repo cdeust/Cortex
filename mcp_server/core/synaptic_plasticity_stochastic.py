@@ -15,20 +15,20 @@ import random
 from typing import Any
 
 from mcp_server.core.synaptic_plasticity import (
-    SynapticState,
     _BASE_RELEASE_PROB,
     _MAX_WEIGHT,
     _MIN_WEIGHT,
+    SynapticState,
     compute_noisy_weight_update,
     phase_modulate_plasticity,
     stochastic_transmit,
     update_short_term_dynamics,
 )
 from mcp_server.core.synaptic_plasticity_hebbian import (
-    _LTP_RATE,
     _LTD_RATE,
-    compute_ltp,
+    _LTP_RATE,
     compute_ltd,
+    compute_ltp,
 )
 
 

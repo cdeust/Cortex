@@ -20,6 +20,12 @@ from __future__ import annotations
 
 import math
 
+from mcp_server.core.predictive_coding_flat import (
+    compute_embedding_novelty,
+    compute_entity_novelty,
+    compute_structural_novelty,
+    compute_temporal_novelty,
+)
 from mcp_server.core.predictive_coding_gate import (
     PrecisionState,
     neuromodulate_precisions,
@@ -32,13 +38,6 @@ from mcp_server.core.predictive_coding_signals import (
     compute_sensory_errors,
     compute_sensory_prediction,
 )
-from mcp_server.core.predictive_coding_flat import (
-    compute_embedding_novelty,
-    compute_entity_novelty,
-    compute_structural_novelty,
-    compute_temporal_novelty,
-)
-
 
 __all__ = [
     "PredictionLevel",

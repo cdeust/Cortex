@@ -31,17 +31,13 @@ Global memories are included in results regardless of the current project domain
 
 ### Step 2: Filter to Global Only
 
-To see only global cross-project knowledge, use the memory dashboard:
-
-```
-cortex:open_memory_dashboard()
-```
-
-Click the **Global** filter button (pink) to isolate all global memories. Or use the unified graph:
+To see only global cross-project knowledge, use the unified neural graph:
 
 ```
 cortex:open_visualization()
 ```
+
+Click the **Global** filter button (pink) to isolate all global memories.
 
 Click the **Global** filter — global memories appear as pink nodes connected to all project domains.
 

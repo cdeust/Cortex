@@ -9,17 +9,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.shared.linear_algebra import norm, normalize, zeros
 from mcp_server.core.sparse_dictionary_activation import (
     SIGNAL_NAMES,
     D,
     extract_session_activation,
 )
 from mcp_server.core.sparse_dictionary_learning import (
-    omp,
     initialize_atoms as _initialize_atoms,
+)
+from mcp_server.core.sparse_dictionary_learning import (
+    omp,
+)
+from mcp_server.core.sparse_dictionary_learning import (
     update_dictionary as _update_dictionary,
 )
+from mcp_server.shared.linear_algebra import norm, normalize, zeros
 
 # ---------------------------------------------------------------------------
 # Static seed dictionary for cold start (<10 sessions)

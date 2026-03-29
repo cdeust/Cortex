@@ -32,7 +32,6 @@ from mcp_server.core.tripartite_calcium import (
     compute_metabolic_rate,
 )
 
-
 __all__ = [
     "AstrocyteTerritory",
     "classify_calcium_regime",

@@ -16,12 +16,11 @@ from typing import Any
 
 from mcp_server.core.dual_store_cls import classify_memory
 from mcp_server.core.dual_store_cls_abstraction import (
+    abstract_to_schema,
+    check_consistency,
     cluster_by_similarity,
     filter_recurring_patterns,
-    check_consistency,
-    abstract_to_schema,
 )
-
 
 # ── Consolidation Actions ─────────────────────────────────────────────────
 

@@ -19,7 +19,7 @@ import json
 import sys
 import threading
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 IDLE_TIMEOUT = 600.0  # 10 minutes
@@ -72,73 +72,6 @@ def _get_store():
 
     settings = get_memory_settings()
     return MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
-
-
-def _build_dashboard_handler(ui_root: Path, store) -> type:
-    """Build dashboard HTTP handler."""
-    from mcp_server.server.http_dashboard_data import build_dashboard_data
-
-    html_path = ui_root / "memory-dashboard.html"
-    html_bytes = html_path.read_bytes()
-    js_dir = ui_root / "dashboard" / "js"
-    css_dir = ui_root / "dashboard"
-    memory_dir = ui_root / "memory"
-
-    class Handler(BaseHTTPRequestHandler):
-        def do_OPTIONS(self):
-            _touch()
-            self.send_response(204)
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-            self.end_headers()
-
-        def do_GET(self):
-            _touch()
-            if self.path == "/api/dashboard":
-                self._serve_api()
-            elif self.path.startswith("/memory/js/") and self.path.endswith(".js"):
-                _serve_static(
-                    self, memory_dir / "js", self.path[11:], "application/javascript"
-                )
-            elif self.path.startswith("/memory/css/") and self.path.endswith(".css"):
-                _serve_static(self, memory_dir / "css", self.path[12:], "text/css")
-            elif self.path.startswith("/js/") and self.path.endswith(".js"):
-                _serve_static(self, js_dir, self.path[4:], "application/javascript")
-            elif self.path.startswith("/css/") and self.path.endswith(".css"):
-                _serve_static(self, css_dir, self.path[5:], "text/css")
-            else:
-                self._serve_html()
-
-        def _serve_html(self):
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            try:
-                self.wfile.write(html_path.read_bytes())
-            except Exception:
-                self.wfile.write(html_bytes)
-
-        def _serve_api(self):
-            try:
-                data = build_dashboard_data(store)
-                body = json.dumps(data, default=str).encode()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                self.wfile.write(body)
-            except Exception as e:
-                self.send_response(500)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode())
-
-        def log_message(self, format, *args):
-            pass
-
-    return Handler
 
 
 def _build_unified_handler(ui_root: Path, store) -> type:
@@ -242,8 +175,8 @@ def _build_unified_handler(ui_root: Path, store) -> type:
 
 def _build_methodology_handler(ui_root: Path) -> type:
     """Build methodology viz HTTP handler."""
-    from mcp_server.infrastructure.profile_store import load_profiles
     from mcp_server.core.graph_builder import build_methodology_graph
+    from mcp_server.infrastructure.profile_store import load_profiles
 
     html_path = ui_root / "methodology-viz.html"
     html_bytes = html_path.read_bytes()
@@ -334,17 +267,14 @@ def _bind_server(handler_cls: type, preferred_port: int) -> HTTPServer:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Cortex standalone HTTP server")
     parser.add_argument(
-        "--type", required=True, choices=["dashboard", "unified", "methodology"]
+        "--type", required=True, choices=["unified", "methodology"]
     )
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
 
     ui_root = _get_ui_root()
 
-    if args.type == "dashboard":
-        store = _get_store()
-        handler_cls = _build_dashboard_handler(ui_root, store)
-    elif args.type == "unified":
+    if args.type == "unified":
         store = _get_store()
         handler_cls = _build_unified_handler(ui_root, store)
     else:

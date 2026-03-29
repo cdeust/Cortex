@@ -21,10 +21,9 @@ from mcp_server.shared.linear_algebra import (
     cosine_similarity,
     dot,
     norm,
-    subtract,
     scale,
+    subtract,
 )
-
 
 # ── Configuration ─────────────────────────────────────────────────────────
 

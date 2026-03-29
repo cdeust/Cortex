@@ -12,7 +12,6 @@ import math
 import re
 from datetime import datetime, timezone
 
-
 _MONTH_NAMES = {
     "january": 1,
     "february": 2,

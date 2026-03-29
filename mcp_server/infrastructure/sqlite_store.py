@@ -18,6 +18,7 @@ from typing import Any
 
 import numpy as np
 
+from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.infrastructure.sqlite_schema import (
     MEMORIES_VEC_DDL,
     MIGRATIONS,
@@ -31,7 +32,6 @@ from mcp_server.infrastructure.sqlite_store_relationships import (
 )
 from mcp_server.infrastructure.sqlite_store_rules import SqliteRuleMixin
 from mcp_server.infrastructure.sqlite_store_search import SqliteSearchMixin
-from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.infrastructure.sqlite_store_stats import SqliteStatsMixin
 
 logger = logging.getLogger(__name__)

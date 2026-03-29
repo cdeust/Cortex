@@ -16,6 +16,7 @@ def _try_pg(database_url: str):
     """Try connecting to PostgreSQL. Returns PgMemoryStore or None."""
     try:
         import psycopg  # noqa: F401
+
         from mcp_server.infrastructure.pg_store import PgMemoryStore
 
         return PgMemoryStore(database_url=database_url)

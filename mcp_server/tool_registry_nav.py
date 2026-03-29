@@ -9,11 +9,11 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 from mcp_server.handlers import (
-    recall_hierarchical,
-    drill_down,
-    navigate_memory,
-    get_causal_chain,
     detect_gaps,
+    drill_down,
+    get_causal_chain,
+    navigate_memory,
+    recall_hierarchical,
 )
 from mcp_server.tool_error_handler import safe_handler
 

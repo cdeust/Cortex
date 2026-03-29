@@ -8,13 +8,13 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 from mcp_server.handlers import (
-    forget,
-    validate_memory,
-    rate_memory,
-    seed_project,
     anchor,
     backfill_memories,
     codebase_analyze,
+    forget,
+    rate_memory,
+    seed_project,
+    validate_memory,
 )
 from mcp_server.tool_error_handler import safe_handler
 

@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Coroutine
 
-
 _DB_SETUP_GUIDE = (
     "Cortex could not connect to PostgreSQL. "
     "This usually means the database is not set up yet.\n\n"

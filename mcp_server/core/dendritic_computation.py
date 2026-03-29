@@ -16,7 +16,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-
 # ── Configuration ─────────────────────────────────────────────────────────
 
 BRANCH_ADMISSION_THRESHOLD = 0.3

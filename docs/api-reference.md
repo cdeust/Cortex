@@ -140,12 +140,6 @@ Interpretability exploration across four modes.
 
 ---
 
-### `open_memory_dashboard`
-
-Launches the real-time memory dashboard in the default browser. Shows heat map, entity graph, and activity feed.
-
-**Input Schema:** *(no parameters)*
-
 ---
 
 ### `remember`

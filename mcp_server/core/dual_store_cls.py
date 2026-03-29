@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import re
 
-
 # -- Classification -----------------------------------------------------------
 
 _SEMANTIC_TAGS = frozenset(

@@ -15,7 +15,6 @@ from mcp_server.handlers.pipeline.helpers import (
 )
 from mcp_server.handlers.pipeline.memory_trace import trace_prd
 
-
 PRD_SECTION_DEFS = [
     (
         "overview",

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import math
 
-
 # ── Configuration ─────────────────────────────────────────────────────────
 
 # Replay effectiveness: how much each SWR replay reduces hippocampal dependency

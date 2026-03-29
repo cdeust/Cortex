@@ -9,25 +9,35 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from mcp_server.core import knowledge_graph
+from mcp_server.core import coupled_neuromodulation as coupled_nm
+from mcp_server.core import (
+    knowledge_graph,
+    oscillatory_clock,
+    schema_engine,
+    thermodynamics,
+)
+from mcp_server.core.emotional_tagging import tag_memory_emotions
+from mcp_server.core.neurogenesis import compute_interference_score
 from mcp_server.core.predictive_coding_flat import (
     compute_embedding_novelty as _compute_embedding_novelty,
+)
+from mcp_server.core.predictive_coding_flat import (
     compute_entity_novelty as _compute_entity_novelty,
+)
+from mcp_server.core.predictive_coding_flat import (
     compute_structural_novelty as _compute_structural_novelty,
+)
+from mcp_server.core.predictive_coding_flat import (
     compute_temporal_novelty as _compute_temporal_novelty,
+)
+from mcp_server.core.predictive_coding_flat import (
     describe_signals as _describe_signals,
 )
-from mcp_server.core import thermodynamics
-from mcp_server.core import oscillatory_clock
+from mcp_server.core.schema_extraction import schema_from_dict as _schema_from_dict
 from mcp_server.core.separation_core import (
     detect_interference_risk,
     orthogonalize_embedding,
 )
-from mcp_server.core.neurogenesis import compute_interference_score
-from mcp_server.core import schema_engine
-from mcp_server.core.schema_extraction import schema_from_dict as _schema_from_dict
-from mcp_server.core import coupled_neuromodulation as coupled_nm
-from mcp_server.core.emotional_tagging import tag_memory_emotions
 
 _SUCCESS_KW = re.compile(
     r"\b(fixed|resolved|succeeded|passed|completed|done)\b", re.IGNORECASE

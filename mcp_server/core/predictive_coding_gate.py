@@ -25,7 +25,6 @@ from mcp_server.core.predictive_coding_signals import (
     HierarchicalPrediction,
 )
 
-
 # -- Precision state -----------------------------------------------------------
 
 

@@ -15,7 +15,6 @@ from mcp_server.core.sparse_dictionary_activation import (
 )
 from mcp_server.shared.linear_algebra import norm, subtract
 
-
 # ---------------------------------------------------------------------------
 # Node construction helpers
 # ---------------------------------------------------------------------------

@@ -11,7 +11,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 # ── Intent Patterns ───────────────────────────────────────────────────────
 
 _TEMPORAL_RE = re.compile(

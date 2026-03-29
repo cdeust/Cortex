@@ -6,9 +6,9 @@ import os
 from typing import Any
 
 from mcp_server.errors import AnalysisError
-from mcp_server.shared.text import extract_keywords
-from mcp_server.shared.similarity import jaccard_similarity
 from mcp_server.handlers.pipeline.helpers import trunc
+from mcp_server.shared.similarity import jaccard_similarity
+from mcp_server.shared.text import extract_keywords
 
 
 async def score_findings(

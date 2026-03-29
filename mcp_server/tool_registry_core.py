@@ -8,14 +8,16 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 from mcp_server.handlers import (
-    query_methodology,
     detect_domain as detect_domain_handler,
-    rebuild_profiles,
-    list_domains,
-    record_session_end,
-    get_methodology_graph,
-    open_visualization,
+)
+from mcp_server.handlers import (
     explore_features,
+    get_methodology_graph,
+    list_domains,
+    open_visualization,
+    query_methodology,
+    rebuild_profiles,
+    record_session_end,
     run_pipeline,
 )
 from mcp_server.tool_error_handler import safe_handler
