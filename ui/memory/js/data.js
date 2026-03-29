@@ -60,7 +60,36 @@
       });
     });
 
-    // Virtual edges: memories -> best-matching entity
+    // Build project hubs — one per domain for spatial grouping
+    var domainCounts = {};
+    nodes.forEach(function(n) {
+      var d = n.project || '';
+      if (d && d !== '__global__') domainCounts[d] = (domainCounts[d] || 0) + 1;
+    });
+    Object.keys(domainCounts).forEach(function(domain) {
+      var hub = {
+        id: 'hub_' + domain,
+        name: domain,
+        nodeType: 'project-hub',
+        type: 'hub',
+        project: domain,
+        path: '',
+        heat: 1.0,
+        connections: domainCounts[domain],
+      };
+      nodes.push(hub);
+    });
+
+    // Connect each node to its domain hub
+    nodes.forEach(function(n) {
+      if (n.nodeType === 'project-hub') return;
+      var d = n.project || '';
+      if (d && d !== '__global__' && domainCounts[d]) {
+        edges.push({ source: n.id, target: 'hub_' + d, type: 'domain-member', weight: 0.2 });
+      }
+    });
+
+    // Virtual edges: memories -> best-matching entity (same domain only)
     var entityNodes = nodes.filter(function(n) { return n.id.startsWith('e_'); });
     var memNodes = nodes.filter(function(n) { return n.id.startsWith('m_'); });
     memNodes.forEach(function(mem) {
@@ -75,9 +104,6 @@
         if (entName.length > 2 && memContent.indexOf(entName) >= 0) score += 0.4;
         if (score > bestScore) { bestScore = score; bestId = ent.id; }
       });
-      if (!bestId && entityNodes.length > 0) {
-        bestId = entityNodes[Math.floor(Math.random() * entityNodes.length)].id;
-      }
       if (bestId) {
         edges.push({ source: mem.id, target: bestId, type: 'context', weight: Math.min(bestScore || 0.1, 0.6) });
       }

@@ -100,6 +100,54 @@
           'bridge': 0.15, 'persistent-feature': 0.15
         }[e.type] || 0.35;
       });
+
+    // Domain clustering — pull same-domain nodes together
+    graph.d3Force('cluster', domainClusterForce());
+  }
+
+  // Custom d3 force: assigns each domain a center point on a circle,
+  // then applies a gentle pull toward that center. Creates visible
+  // spatial separation between projects.
+  function domainClusterForce() {
+    var nodes;
+    var strength = 0.15;
+    var centers = {};
+
+    function force(alpha) {
+      if (!nodes || !nodes.length) return;
+
+      // Compute centers lazily
+      if (Object.keys(centers).length === 0) {
+        var domainSet = {};
+        nodes.forEach(function(n) {
+          var d = n.domain || n.group || '';
+          if (d) domainSet[d] = (domainSet[d] || 0) + 1;
+        });
+        var domains = Object.keys(domainSet).sort(function(a, b) {
+          return domainSet[b] - domainSet[a];
+        });
+        var radius = 120 + domains.length * 30;
+        domains.forEach(function(d, i) {
+          var angle = (i / Math.max(domains.length, 1)) * Math.PI * 2;
+          centers[d] = {
+            x: Math.cos(angle) * radius,
+            y: Math.sin(angle) * radius
+          };
+        });
+      }
+
+      // Apply cluster gravity
+      nodes.forEach(function(n) {
+        var d = n.domain || n.group || '';
+        var c = centers[d];
+        if (!c) return;
+        n.vx += (c.x - n.x) * strength * alpha;
+        n.vy += (c.y - n.y) * strength * alpha;
+      });
+    }
+
+    force.initialize = function(_nodes) { nodes = _nodes; centers = {}; };
+    return force;
   }
 
   // ── Node drawing delegates to draw.js ──
