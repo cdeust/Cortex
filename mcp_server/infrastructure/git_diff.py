@@ -93,9 +93,7 @@ def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
         return _build_result(filepath, "staged", raw, max_lines)
 
     # 3. Most recent commit that touched this file
-    raw = _git_cmd(
-        ["git", "log", "-1", "-p", "--format=", "--", filepath], git_root
-    )
+    raw = _git_cmd(["git", "log", "-1", "-p", "--format=", "--", filepath], git_root)
     if raw:
         return _build_result(filepath, "last_commit", raw, max_lines)
 

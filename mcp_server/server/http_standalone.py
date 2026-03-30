@@ -250,6 +250,7 @@ def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> 
 def _serve_file_diff(handler) -> None:
     """Serve git diff for a file entity — delegates to http_file_diff."""
     from mcp_server.server.http_file_diff import serve_file_diff
+
     serve_file_diff(handler)
 
 
