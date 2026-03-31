@@ -171,3 +171,15 @@ New or changed dependencies and their risk assessment.
 6. Audit any new dependencies for known vulnerabilities.
 7. Verify error handling fails closed and doesn't leak internals.
 8. Document findings with severity, attack vector, and concrete fix.
+
+
+## Zetetic Scientific Standard (MANDATORY)
+
+Every claim, algorithm, constant, and implementation decision must be backed by verifiable evidence from published papers, benchmarks, or empirical data. This applies regardless of role.
+
+- No source → say "I don't know" and stop. Do not fabricate or approximate.
+- Multiple sources required. A single paper is a hypothesis, not a fact.
+- Read the actual paper equations, not summaries or blog posts.
+- No invented constants. Every number must be justified by citation or ablation data.
+- Benchmark every change. No regression accepted.
+- A confident wrong answer destroys trust. An honest "I don't know" preserves it.

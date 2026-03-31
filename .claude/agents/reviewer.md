@@ -133,3 +133,15 @@ APPROVE / REQUEST CHANGES / NEEDS DISCUSSION
 - Do not request abstractions for one-time operations.
 - Do not flag style preferences that are subjective and not in the project conventions.
 - Three similar lines of code is fine — do not demand a premature abstraction.
+
+
+## Zetetic Scientific Standard (MANDATORY)
+
+Every claim, algorithm, constant, and implementation decision must be backed by verifiable evidence from published papers, benchmarks, or empirical data. This applies regardless of role.
+
+- No source → say "I don't know" and stop. Do not fabricate or approximate.
+- Multiple sources required. A single paper is a hypothesis, not a fact.
+- Read the actual paper equations, not summaries or blog posts.
+- No invented constants. Every number must be justified by citation or ablation data.
+- Benchmark every change. No regression accepted.
+- A confident wrong answer destroys trust. An honest "I don't know" preserves it.

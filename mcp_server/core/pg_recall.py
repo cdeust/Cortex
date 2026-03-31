@@ -18,10 +18,18 @@ from typing import Any
 
 from mcp_server.core.query_intent import QueryIntent, classify_query_intent
 from mcp_server.core.reranker import rerank_results
-from mcp_server.core.thermodynamics import (
-    compute_heat_adjustment,
-    compute_retrieval_surprise,
-)
+from mcp_server.core.titans_memory import TitansMemory
+
+# Singleton Titans memory module (persists across recalls within a session)
+_titans: TitansMemory | None = None
+
+
+def _get_titans() -> TitansMemory:
+    global _titans
+    if _titans is None:
+        _titans = TitansMemory()
+    return _titans
+
 
 # ── PG weight profiles ──────────────────────────────────────────────────
 
@@ -152,37 +160,19 @@ def recall(
                 c["score"] = score
                 candidates.append(c)
 
-    # 6. Titans surprise momentum
+    # 6. Titans test-time learning (Behrouz et al., NeurIPS 2025)
+    # Update the neural associative memory M and surprise momentum S
+    # using the exact equations from the paper:
+    #   S_t = eta * S_{t-1} - theta * grad_l(M_{t-1}; x_t)
+    #   M_t = M_{t-1} - S_t
     if momentum_state is not None:
-        _apply_surprise_momentum(q_emb, candidates[:top_k], store, momentum_state)
+        titans = _get_titans()
+        result_embs = []
+        for r in candidates[:10]:
+            mem = store.get_memory(r["memory_id"])
+            if mem and mem.get("embedding"):
+                result_embs.append(mem["embedding"])
+        surprise = titans.update(q_emb, result_embs)
+        momentum_state["momentum"] = surprise  # Track for diagnostics
 
     return candidates[:top_k]
-
-
-def _apply_surprise_momentum(
-    q_emb: bytes | None,
-    results: list[dict[str, Any]],
-    store: Any,
-    state: dict,
-) -> None:
-    """Update heat of retrieved memories based on retrieval surprise."""
-    if not q_emb or not results:
-        return
-    result_embs = []
-    for r in results[:10]:
-        mem = store.get_memory(r["memory_id"])
-        if mem and mem.get("embedding"):
-            result_embs.append(mem["embedding"])
-    if not result_embs:
-        return
-    surprise = compute_retrieval_surprise(q_emb, result_embs)
-    prev = state.get("momentum", 0.5)
-    state["momentum"] = 0.7 * prev + 0.3 * surprise
-    adj = compute_heat_adjustment(surprise, state["momentum"], delta=0.08)
-    if abs(adj) < 0.001:
-        return
-    for r in results:
-        old_heat = r.get("heat", 0.5)
-        new_heat = max(0.0, min(1.0, old_heat + adj))
-        if abs(new_heat - old_heat) > 0.001:
-            store.update_memory_heat(r["memory_id"], new_heat)

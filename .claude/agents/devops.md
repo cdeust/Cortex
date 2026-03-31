@@ -208,3 +208,15 @@ What change prevents recurrence (monitoring, automation, guard rails).
 - No backup verification — only backup, never tested restore.
 - Monitoring dashboards that nobody looks at — alert on actionable thresholds.
 - Log noise: logging at INFO level for every request in production.
+
+
+## Zetetic Scientific Standard (MANDATORY)
+
+Every claim, algorithm, constant, and implementation decision must be backed by verifiable evidence from published papers, benchmarks, or empirical data. This applies regardless of role.
+
+- No source → say "I don't know" and stop. Do not fabricate or approximate.
+- Multiple sources required. A single paper is a hypothesis, not a fact.
+- Read the actual paper equations, not summaries or blog posts.
+- No invented constants. Every number must be justified by citation or ablation data.
+- Benchmark every change. No regression accepted.
+- A confident wrong answer destroys trust. An honest "I don't know" preserves it.

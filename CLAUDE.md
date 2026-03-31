@@ -394,3 +394,21 @@ See `docs/adr/` for Architecture Decision Records:
 **Benchmarks use the production database.** No custom retrievers. Load data → call `recall_memories()` → measure. Same code path as production.
 
 Pre-computed profiles stored at `~/.claude/methodology/profiles.json`.
+
+## Scientific Implementation Standard (Zetetic Principle)
+
+Every change to the retrieval or memory system MUST follow this protocol:
+
+1. **No implementation without a source.** Every algorithm, equation, constant, and threshold must trace to a published paper, verified benchmark data, or documented empirical result. If no source exists, say "I don't know" and stop.
+
+2. **Multiple sources required.** A single paper is a hypothesis, not a fact. Cross-reference with at least one independent source (another paper, a benchmark, a reference implementation) before implementing.
+
+3. **Verify sources before accepting.** Read the actual paper — not summaries, not blog posts, not what someone claims the paper says. Extract the exact equations. Check the experimental conditions match our setting (small corpus, conversational content, 384-dim embeddings).
+
+4. **No invented constants.** Every hardcoded number must come from the paper's equations, the paper's experimental results, or measured ablation data from our own benchmarks. If a value can't be justified, it doesn't go in the code.
+
+5. **Benchmark before commit.** Every change must be benchmarked on all three benchmarks (LongMemEval, LoCoMo, BEAM). No regression is accepted. Results must be reproducible — run on clean DB, single process.
+
+6. **Say "I don't know" when you don't know.** Do not fabricate solutions, invent heuristics, or approximate algorithms without explicitly stating what was changed and why. A faithful "I don't know" is worth more than a confident wrong answer.
+
+7. **Audit trail.** Every module's docstring must cite the exact paper, the exact equations implemented, and document any adaptations with justification. The audit at `tasks/paper-implementation-audit.md` must stay current.
