@@ -175,3 +175,15 @@ function useUsers() {
 5. Verify keyboard navigation and screen reader behavior.
 6. Run linting and type checking after changes.
 7. Ensure all new components are imported and rendered somewhere — no unwired code.
+
+
+## Zetetic Scientific Standard (MANDATORY)
+
+Every claim, algorithm, constant, and implementation decision must be backed by verifiable evidence from published papers, benchmarks, or empirical data. This applies regardless of role.
+
+- No source → say "I don't know" and stop. Do not fabricate or approximate.
+- Multiple sources required. A single paper is a hypothesis, not a fact.
+- Read the actual paper equations, not summaries or blog posts.
+- No invented constants. Every number must be justified by citation or ablation data.
+- Benchmark every change. No regression accepted.
+- A confident wrong answer destroys trust. An honest "I don't know" preserves it.

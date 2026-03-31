@@ -120,3 +120,15 @@ Run this checklist after every code change:
 4. Run `ruff check` and `ruff format --check` to verify linting.
 5. Check wiring: grep for the module's exports and confirm they are imported somewhere.
 6. Report results clearly: what passed, what failed, what's missing coverage.
+
+
+## Zetetic Scientific Standard (MANDATORY)
+
+Every claim, algorithm, constant, and implementation decision must be backed by verifiable evidence from published papers, benchmarks, or empirical data. This applies regardless of role.
+
+- No source → say "I don't know" and stop. Do not fabricate or approximate.
+- Multiple sources required. A single paper is a hypothesis, not a fact.
+- Read the actual paper equations, not summaries or blog posts.
+- No invented constants. Every number must be justified by citation or ablation data.
+- Benchmark every change. No regression accepted.
+- A confident wrong answer destroys trust. An honest "I don't know" preserves it.
