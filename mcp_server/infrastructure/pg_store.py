@@ -240,6 +240,7 @@ class PgMemoryStore(
         max_results: int = 10,
         wrrf_k: int = 60,
         weights: dict[str, float] | None = None,
+        include_globals: bool = True,
     ) -> list[dict[str, Any]]:
         """Call the PL/pgSQL recall_memories function.
 
@@ -252,7 +253,8 @@ class PgMemoryStore(
             "SELECT * FROM recall_memories("
             "  %s::TEXT, %s::vector, %s::TEXT, %s::TEXT, %s::TEXT, %s::TEXT,"
             "  %s::REAL, %s::INT, %s::INT,"
-            "  %s::REAL, %s::REAL, %s::REAL, %s::REAL, %s::REAL, %s::REAL"
+            "  %s::REAL, %s::REAL, %s::REAL, %s::REAL, %s::REAL, %s::REAL,"
+            "  %s::BOOLEAN"
             ")",
             (
                 query_text,
@@ -270,6 +272,7 @@ class PgMemoryStore(
                 w.get("heat", 0.3),
                 w.get("ngram", 0.3),
                 w.get("recency", 0.0),
+                include_globals,
             ),
         ).fetchall()
         return [dict(r) for r in rows]

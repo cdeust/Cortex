@@ -38,9 +38,16 @@ class BenchmarkDB:
 
     def open(self) -> BenchmarkDB:
         self._store = PgMemoryStore(database_url=self._url)
+        self._purge_stale_benchmark_data()
         if self._embeddings is None:
             self._embeddings = EmbeddingEngine()
         return self
+
+    def _purge_stale_benchmark_data(self) -> None:
+        """Remove orphaned benchmark memories from crashed/killed runs."""
+        assert self._store is not None
+        self._store._conn.execute("DELETE FROM memories WHERE is_benchmark = TRUE")
+        self._store._conn.commit()
 
     def close(self) -> None:
         self.cleanup()
@@ -105,6 +112,7 @@ class BenchmarkDB:
             rerank=rerank,
             rerank_alpha=rerank_alpha,
             momentum_state=self._momentum_state,
+            include_globals=False,
         )
 
     # ── Cleanup ───────────────────────────────────────────────────

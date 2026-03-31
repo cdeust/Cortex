@@ -90,6 +90,7 @@ def recall(
     rerank_alpha: float = 0.55,
     wrrf_k: int = 60,
     momentum_state: dict | None = None,
+    include_globals: bool = True,
 ) -> list[dict[str, Any]]:
     """Full PG-path retrieval: intent → weights → recall_memories → rerank.
 
@@ -132,6 +133,7 @@ def recall(
         max_results=top_k,
         wrrf_k=wrrf_k,
         weights=weights,
+        include_globals=include_globals,
     )
 
     if not candidates:

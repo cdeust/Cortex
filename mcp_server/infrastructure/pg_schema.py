@@ -233,7 +233,8 @@ CREATE OR REPLACE FUNCTION recall_memories(
     p_w_bm25        REAL DEFAULT 0.4,
     p_w_heat        REAL DEFAULT 0.3,
     p_w_ngram       REAL DEFAULT 0.3,
-    p_w_recency     REAL DEFAULT 0.0
+    p_w_recency     REAL DEFAULT 0.0,
+    p_include_globals BOOLEAN DEFAULT TRUE
 ) RETURNS TABLE (
     memory_id       INT,
     content         TEXT,
@@ -248,90 +249,114 @@ CREATE OR REPLACE FUNCTION recall_memories(
 ) AS $$
 DECLARE
     v_pool INT := p_max_results * 10;
-    v_tsq  tsquery := plainto_tsquery('english', p_query_text);
+    v_words TEXT[] := regexp_split_to_array(
+        regexp_replace(lower(p_query_text), '[^a-z0-9 ]', ' ', 'g'),
+        '\\s+'
+    );
+    v_or_expr TEXT := array_to_string(
+        ARRAY(SELECT w FROM unnest(v_words) w WHERE length(w) > 1),
+        ' | '
+    );
+    v_tsq  tsquery := CASE WHEN v_or_expr = '' THEN plainto_tsquery('english', p_query_text)
+                            ELSE to_tsquery('english', v_or_expr) END;
 BEGIN
     RETURN QUERY
     WITH
-    -- Signal 1: Vector cosine similarity (pgvector HNSW)
+    -- Signal 1: Vector cosine similarity (pgvector)
+    -- Raw score: 1 - cosine_distance. Theoretical min = -1 (Bruch TMM)
     vec AS (
         SELECT m.id,
-               ROW_NUMBER() OVER (ORDER BY m.embedding <=> p_query_emb) AS rank
+               (1.0 - (m.embedding <=> p_query_emb))::REAL AS raw_score
         FROM memories m
         WHERE m.heat >= p_min_heat
           AND NOT m.is_stale
           AND m.embedding IS NOT NULL
-          AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
+          AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
           AND (p_directory IS NULL OR m.directory_context = p_directory)
         ORDER BY m.embedding <=> p_query_emb
         LIMIT v_pool
     ),
-    -- Signal 2: Full-text search (tsvector + ts_rank_cd)
+    -- Signal 2: Full-text search (ts_rank_cd). Theoretical min = 0
     fts AS (
         SELECT m.id,
-               ROW_NUMBER() OVER (
-                   ORDER BY ts_rank_cd(m.content_tsv, v_tsq) DESC
-               ) AS rank
+               ts_rank_cd(m.content_tsv, v_tsq)::REAL AS raw_score
         FROM memories m
         WHERE m.content_tsv @@ v_tsq
           AND m.heat >= p_min_heat
           AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
+          AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
           AND (p_directory IS NULL OR m.directory_context = p_directory)
         ORDER BY ts_rank_cd(m.content_tsv, v_tsq) DESC
         LIMIT v_pool
     ),
-    -- Signal 3: Trigram similarity (pg_trgm)
+    -- Signal 3: Trigram similarity (pg_trgm). Theoretical min = 0
     ngram AS (
         SELECT m.id,
-               ROW_NUMBER() OVER (
-                   ORDER BY similarity(m.content, p_query_text) DESC
-               ) AS rank
+               similarity(m.content, p_query_text)::REAL AS raw_score
         FROM memories m
         WHERE m.heat >= p_min_heat
           AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
+          AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
           AND (p_directory IS NULL OR m.directory_context = p_directory)
           AND similarity(m.content, p_query_text) > 0.1
         ORDER BY similarity(m.content, p_query_text) DESC
         LIMIT v_pool
     ),
-    -- Signal 4: Heat (thermodynamic relevance)
+    -- Signal 4: Heat. Theoretical min = 0
     hot AS (
         SELECT m.id,
-               ROW_NUMBER() OVER (ORDER BY m.heat DESC) AS rank
+               m.heat::REAL AS raw_score
         FROM memories m
         WHERE m.heat >= p_min_heat
           AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
+          AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
           AND (p_directory IS NULL OR m.directory_context = p_directory)
         ORDER BY m.heat DESC
         LIMIT v_pool
     ),
-    -- Signal 5: Recency (newest first)
+    -- Signal 5: Recency via exponential decay. Theoretical min = 0
     recency AS (
         SELECT m.id,
-               ROW_NUMBER() OVER (ORDER BY m.created_at DESC) AS rank
+               EXP(-0.01 * EXTRACT(EPOCH FROM (NOW() - m.created_at)) / 86400.0)::REAL AS raw_score
         FROM memories m
         WHERE m.heat >= p_min_heat
           AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
+          AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
           AND (p_directory IS NULL OR m.directory_context = p_directory)
         ORDER BY m.created_at DESC
         LIMIT v_pool
     ),
-    -- WRRF Fusion: weight / (k + rank) for each signal
+    -- Per-signal observed max (for TMM normalization per Bruch 2023)
+    vec_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM vec),
+    fts_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM fts),
+    ng_max   AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM ngram),
+    hot_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM hot),
+    rec_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM recency),
+    -- Convex combination with TMM normalization (Bruch et al., ACM TOIS 2023)
+    -- TMM(s) = (s - m_theoretical) / (M_query - m_theoretical)
+    -- Theoretical mins: vector=-1, fts=0, ngram=0, heat=0, recency=0
     fused AS (
         SELECT id, SUM(contribution) AS fused_score
         FROM (
-            SELECT id, p_w_vector / (p_wrrf_k + rank) AS contribution FROM vec
+            SELECT v.id,
+                   p_w_vector * (v.raw_score - (-1.0)) / GREATEST(b.hi - (-1.0), 0.001) AS contribution
+            FROM vec v, vec_max b
             UNION ALL
-            SELECT id, p_w_fts / (p_wrrf_k + rank) FROM fts
+            SELECT f.id,
+                   p_w_fts * f.raw_score / GREATEST(b.hi, 0.001)
+            FROM fts f, fts_max b
             UNION ALL
-            SELECT id, p_w_ngram / (p_wrrf_k + rank) FROM ngram
+            SELECT n.id,
+                   p_w_ngram * n.raw_score / GREATEST(b.hi, 0.001)
+            FROM ngram n, ng_max b
             UNION ALL
-            SELECT id, p_w_heat / (p_wrrf_k + rank) FROM hot
+            SELECT h.id,
+                   p_w_heat * h.raw_score / GREATEST(b.hi, 0.001)
+            FROM hot h, hot_max b
             UNION ALL
-            SELECT id, p_w_recency / (p_wrrf_k + rank) FROM recency
+            SELECT r.id,
+                   p_w_recency * r.raw_score / GREATEST(b.hi, 0.001)
+            FROM recency r, rec_max b
             WHERE p_w_recency > 0
         ) signals
         GROUP BY id
@@ -521,7 +546,7 @@ BEGIN
     WHERE m.heat >= p_min_heat
       AND NOT m.is_stale
       AND m.embedding IS NOT NULL
-      AND (p_domain IS NULL OR m.domain = p_domain OR m.is_global = TRUE)
+      AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
     ORDER BY m.heat DESC
     LIMIT p_limit;
 END;

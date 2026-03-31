@@ -35,6 +35,7 @@ class SqliteSearchMixin:
         max_results: int = 10,
         wrrf_k: int = 60,
         weights: dict[str, float] | None = None,
+        include_globals: bool = True,
     ) -> list[dict[str, Any]]:
         """Client-side WRRF fusion: vector + FTS5 + heat + recency."""
         w = weights or {}
