@@ -1,25 +1,26 @@
-"""Dendritic memory clusters — branch-specific nonlinear integration.
+"""Dendritic memory clusters — semantic-similarity-based memory grouping.
 
-Memories aren't stored at single synapses — they're distributed across
-dendritic branches. Related synapses cluster on the same branch, enabling
-nonlinear amplification (dendritic spikes). This module models:
+Groups memories onto "branches" based on entity/tag Jaccard similarity.
+Co-clustered memories benefit from nonlinear amplification during retrieval
+(see dendritic_computation.py).
 
-1. **Cluster formation**: Memories are assigned to dendritic branches based
-   on entity/tag similarity to existing branch members.
+What Kastellakis (2015) describes:
+  Related synapses physically co-localize on the same dendritic branch.
+  When co-activated, NMDA-dependent nonlinear events (dendritic spikes)
+  amplify the signal supralinearly. Clustering is driven by spatiotemporal
+  coincidence of synaptic inputs, not semantic similarity.
 
-2. **Nonlinear amplification**: When enough synapses on a branch are
-   activated simultaneously (co-retrieved), a dendritic spike occurs.
+What this code does:
+  Assigns memories to branches via Jaccard similarity of entity/tag sets
+  (0.7 entity + 0.3 tag weighting). This is a semantic grouping heuristic
+  that uses dendritic terminology metaphorically. The branch admission
+  threshold (0.3), max branch size (15), and entity/tag weights are all
+  hand-tuned engineering choices.
 
-3. **Branch-specific plasticity**: LTP in one branch doesn't spread to others.
-
-4. **Cluster retrieval boost**: Retrieving one memory from a cluster partially
-   activates the whole cluster, providing associative priming.
-
-References:
-    Kastellakis G et al. (2015) Synaptic clustering within dendrites:
-        an emerging theory of memory formation. Neuron 87:1144-1158
-    Limbacher T, Legenstein R (2020) Emergence of stable synaptic clusters
-        on dendrites. Front Comp Neurosci 14:57
+The metaphor is useful: grouping related memories enables the nonlinear
+retrieval boost in dendritic_computation.py (which more closely follows
+Poirazi 2003's two-layer neuron model). But the assignment mechanism is
+not the biological one.
 
 Pure business logic — no I/O.
 """
@@ -45,9 +46,10 @@ def compute_branch_affinity(
     memory_tags: set[str],
     branch: DendriticBranch,
 ) -> float:
-    """Compute how well a memory fits an existing branch.
+    """Weighted Jaccard similarity (0.7 entity + 0.3 tag). Heuristic — no paper.
 
-    Uses Jaccard similarity of entity and tag sets, weighted toward entities.
+    In biology, dendritic clustering is driven by spatiotemporal coincidence,
+    not semantic similarity. This is a practical engineering proxy.
 
     Returns:
         Affinity score [0, 1].

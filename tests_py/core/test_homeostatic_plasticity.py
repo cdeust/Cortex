@@ -12,7 +12,7 @@ from mcp_server.core.homeostatic_health import compute_distribution_health
 
 
 class TestSynapticScaling:
-    def test_neutral_within_dead_zone(self):
+    def test_neutral_at_target(self):
         factor = compute_scaling_factor(0.4, target_heat=0.4)
         assert factor == 1.0
 

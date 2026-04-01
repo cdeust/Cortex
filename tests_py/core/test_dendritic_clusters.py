@@ -9,6 +9,8 @@ from mcp_server.core.dendritic_clusters import (
 )
 from mcp_server.core.dendritic_computation import (
     DendriticBranch,
+    branch_subunit,
+    soma_output,
     compute_dendritic_integration,
     compute_cluster_priming,
     update_branch_plasticity,
@@ -71,17 +73,107 @@ class TestBranchCreation:
         assert b2.avg_heat == pytest.approx(0.7, abs=0.01)
 
 
+class TestBranchSubunit:
+    """Verify branch_subunit matches Poirazi (2003) Eq:
+    s(n) = 1/(1+exp((3.6-n)/2)) + 0.30*n + 0.0114*n^2
+    """
+
+    def test_zero_synapses(self):
+        assert branch_subunit(0) == 0.0
+
+    def test_at_half_activation(self):
+        """At n=3.6, sigmoid = 0.5, linear = 1.08, quadratic = 0.1478."""
+        s = branch_subunit(3.6)
+        expected = 0.5 + 0.30 * 3.6 + 0.0114 * 3.6 * 3.6
+        assert s == pytest.approx(expected, abs=1e-6)
+
+    def test_one_synapse(self):
+        """s(1) = 1/(1+exp(2.6/2)) + 0.30 + 0.0114."""
+        import math
+        sigmoid = 1.0 / (1.0 + math.exp(2.6 / 2.0))
+        expected = sigmoid + 0.30 + 0.0114
+        assert branch_subunit(1) == pytest.approx(expected, abs=1e-6)
+
+    def test_ten_synapses(self):
+        """s(10) = 1/(1+exp(-6.4/2)) + 3.0 + 1.14."""
+        import math
+        sigmoid = 1.0 / (1.0 + math.exp(-6.4 / 2.0))
+        expected = sigmoid + 3.0 + 1.14
+        assert branch_subunit(10) == pytest.approx(expected, abs=1e-6)
+
+    def test_monotonically_increasing(self):
+        values = [branch_subunit(n) for n in range(1, 16)]
+        for i in range(1, len(values)):
+            assert values[i] > values[i - 1]
+
+
+class TestSomaOutput:
+    """Verify soma_output matches Poirazi (2003) Eq:
+    g(x) = 0.96 * x / (1 + 1509 * exp(-0.26 * x))
+    """
+
+    def test_zero_input(self):
+        assert soma_output(0.0) == 0.0
+
+    def test_small_input_suppressed(self):
+        """For small x, the 1509*exp(-0.26*x) term dominates → output near 0."""
+        assert soma_output(1.0) < 0.01
+
+    def test_large_input_approaches_linear(self):
+        """For large x, exp term vanishes → g(x) ≈ 0.96*x."""
+        x = 100.0
+        assert soma_output(x) == pytest.approx(0.96 * x, rel=0.01)
+
+    def test_threshold_region(self):
+        """Around x=28, the function transitions from suppressed to linear."""
+        low = soma_output(10.0)
+        mid = soma_output(28.0)
+        high = soma_output(50.0)
+        assert low < mid < high
+        # Mid should be a substantial fraction of 0.96*28
+        assert mid > 0.1 * 0.96 * 28
+
+    def test_monotonically_increasing(self):
+        values = [soma_output(x) for x in range(1, 60)]
+        for i in range(1, len(values)):
+            assert values[i] > values[i - 1]
+
+
 class TestNonlinearIntegration:
-    def test_sublinear_below_threshold(self):
+    """Tests for the Poirazi (2003) two-layer neuron model.
+
+    Layer 1: s(n) = 1/(1+exp((3.6-n)/2)) + 0.30*n + 0.0114*n^2
+    Layer 2: g(x) = 0.96 * x / (1 + 1509 * exp(-0.26 * x))
+    """
+
+    def test_few_active_synapses_below_half_activation(self):
+        """With n=1, sigmoid < 0.5 so no spike. Output is small because
+        soma nonlinearity suppresses low inputs (1509 in denominator)."""
         score, spiked = compute_dendritic_integration(1, 5, [0.5])
         assert spiked is False
-        assert score == pytest.approx(0.5, abs=0.1)
+        assert score >= 0.0
+        assert score < 0.01  # Soma suppresses weak branch input
 
-    def test_supralinear_above_threshold(self):
-        scores = [0.5, 0.6, 0.7]
-        score, spiked = compute_dendritic_integration(3, 5, scores, spike_threshold=0.4)
+    def test_many_active_synapses_above_half_activation(self):
+        """With n=5 (> 3.6 half-activation), sigmoid > 0.5 → spike.
+        Branch subunit: s(5) = sigmoid + 1.5 + 0.285 ≈ 2.74.
+        Weighted by mean score, then through soma."""
+        scores = [0.5, 0.6, 0.7, 0.8, 0.9]
+        score, spiked = compute_dendritic_integration(5, 10, scores)
         assert spiked is True
-        assert score > sum(scores)  # Supralinear
+        assert score > 0.0
+
+    def test_at_half_activation_spikes(self):
+        """At n=4 (> 3.6), sigmoid just crosses 0.5 → spike."""
+        scores = [0.6, 0.7, 0.8, 0.9]
+        score, spiked = compute_dendritic_integration(4, 8, scores)
+        assert spiked is True
+
+    def test_three_synapses_no_spike(self):
+        """At n=3 (< 3.6 half-activation), sigmoid < 0.5 → no spike."""
+        scores = [0.5, 0.6, 0.7]
+        score, spiked = compute_dendritic_integration(3, 5, scores)
+        assert spiked is False
 
     def test_single_item_no_spike(self):
         score, spiked = compute_dendritic_integration(1, 10, [0.8])
@@ -91,6 +183,20 @@ class TestNonlinearIntegration:
         score, spiked = compute_dendritic_integration(0, 0, [])
         assert score == 0.0
         assert spiked is False
+
+    def test_output_increases_with_active_count(self):
+        """More co-active synapses → higher subunit → higher soma output."""
+        _, _ = compute_dendritic_integration(1, 10, [0.8])
+        s1, _ = compute_dendritic_integration(1, 10, [0.8])
+        s3, _ = compute_dendritic_integration(3, 10, [0.8, 0.8, 0.8])
+        s6, _ = compute_dendritic_integration(6, 10, [0.8] * 6)
+        assert s1 < s3 < s6
+
+    def test_higher_scores_produce_higher_output(self):
+        """Higher retrieval quality scores weight the branch output up."""
+        low, _ = compute_dendritic_integration(3, 5, [0.2, 0.2, 0.2])
+        high, _ = compute_dendritic_integration(3, 5, [0.9, 0.9, 0.9])
+        assert low < high
 
 
 class TestClusterPriming:

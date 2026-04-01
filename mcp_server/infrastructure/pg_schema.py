@@ -393,15 +393,44 @@ CREATE OR REPLACE FUNCTION decay_memories(
 DECLARE
     v_count INTEGER;
 BEGIN
+    -- Stage-adjusted decay: consolidated memories decay slower (Kandel 2001)
+    -- LABILE: factor^2.0, EARLY_LTP: factor^1.2, LATE_LTP: factor^0.8,
+    -- CONSOLIDATED: factor^0.5, RECONSOLIDATING: factor^1.5
     UPDATE memories
-    SET heat = heat * p_factor
+    SET heat = GREATEST(
+        -- Permastore floor by stage (Bahrick 1984, Benna & Fusi 2016):
+        -- CONSOLIDATED >= 0.10, LATE_LTP >= 0.05, others >= 0.0
+        CASE consolidation_stage
+            WHEN 'consolidated' THEN 0.10
+            WHEN 'late_ltp' THEN 0.05
+            WHEN 'reconsolidating' THEN 0.05
+            ELSE 0.0
+        END,
+        heat * POWER(p_factor,
+            CASE consolidation_stage
+                WHEN 'labile' THEN 2.0
+                WHEN 'early_ltp' THEN 1.2
+                WHEN 'late_ltp' THEN 0.8
+                WHEN 'consolidated' THEN 0.5
+                WHEN 'reconsolidating' THEN 1.5
+                ELSE 1.0
+            END
+        )
+    )
     WHERE NOT is_protected AND NOT is_stale AND heat >= p_threshold;
 
     GET DIAGNOSTICS v_count = ROW_COUNT;
 
+    -- Only mark LABILE and EARLY_LTP memories as stale.
+    -- LATE_LTP, CONSOLIDATED, and RECONSOLIDATING have structural support
+    -- and must never be permanently removed (Kandel 2001).
     UPDATE memories
     SET is_stale = TRUE
-    WHERE heat < p_threshold AND NOT is_protected AND NOT is_stale;
+    WHERE heat < p_threshold
+      AND NOT is_protected
+      AND NOT is_stale
+      AND (consolidation_stage IS NULL
+           OR consolidation_stage IN ('labile', 'early_ltp'));
 
     RETURN v_count;
 END;

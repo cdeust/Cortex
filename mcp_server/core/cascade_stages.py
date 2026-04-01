@@ -57,6 +57,9 @@ class StageProperties:
         plasticity: How modifiable the memory is [0, 1].
         min_dwell_hours: Minimum time in this stage before advancement.
         max_dwell_hours: Maximum time before forced transition (or decay).
+        heat_floor: Minimum heat for this stage. Consolidated memories never
+            decay below this floor. Based on Bahrick (1984) permastore effect
+            and Benna & Fusi (2016) cascade retention floors.
     """
 
     decay_multiplier: float
@@ -64,43 +67,62 @@ class StageProperties:
     plasticity: float
     min_dwell_hours: float
     max_dwell_hours: float
+    heat_floor: float
 
 
 _STAGE_PROPERTIES: dict[ConsolidationStage, StageProperties] = {
+    # LABILE: No structural substrate yet. Fully vulnerable to decay.
+    # Biological: post-translational modifications only (minutes).
     ConsolidationStage.LABILE: StageProperties(
         decay_multiplier=2.0,
         interference_vulnerability=0.9,
         plasticity=1.0,
         min_dwell_hours=0.0,
         max_dwell_hours=1.0,
+        heat_floor=0.0,  # Can decay to zero — no structural support
     ),
+    # EARLY_LTP: Synaptic tag set but protein synthesis not yet complete.
+    # Biological: PKA/CaMKII activation (1-6h). Reversible.
     ConsolidationStage.EARLY_LTP: StageProperties(
         decay_multiplier=1.2,
         interference_vulnerability=0.5,
         plasticity=0.7,
         min_dwell_hours=1.0,
         max_dwell_hours=6.0,
+        heat_floor=0.0,  # Still reversible — no guaranteed retention
     ),
+    # LATE_LTP: CREB-dependent protein synthesis complete. Structural changes
+    # beginning. Blocked by anisomycin only if applied within first 1-3h window.
+    # Biological: new protein synthesis, initial synapse growth (6-24h).
     ConsolidationStage.LATE_LTP: StageProperties(
         decay_multiplier=0.8,
         interference_vulnerability=0.2,
         plasticity=0.3,
         min_dwell_hours=6.0,
         max_dwell_hours=24.0,
+        heat_floor=0.05,  # Partial structural support — won't fully vanish
     ),
+    # CONSOLIDATED: Structural consolidation complete (Kandel 2001: at 72h,
+    # blocking protein synthesis has NO effect — synaptic changes are permanent).
+    # Bahrick (1984): permastore — retained for 30+ years without rehearsal.
+    # Benna & Fusi (2016): deepest cascade levels provide irreversible storage.
     ConsolidationStage.CONSOLIDATED: StageProperties(
         decay_multiplier=0.5,
         interference_vulnerability=0.05,
         plasticity=0.1,
         min_dwell_hours=24.0,
         max_dwell_hours=float("inf"),
+        heat_floor=0.10,  # Permastore: always retrievable (Bahrick 1984)
     ),
+    # RECONSOLIDATING: Retrieved memory becomes labile again (Nader 2000).
+    # Needs re-stabilization via protein synthesis.
     ConsolidationStage.RECONSOLIDATING: StageProperties(
         decay_multiplier=1.5,
         interference_vulnerability=0.8,
         plasticity=0.9,
         min_dwell_hours=0.0,
         max_dwell_hours=6.0,
+        heat_floor=0.05,  # Was consolidated — retains partial structural support
     ),
 }
 
@@ -117,6 +139,17 @@ def get_stage_properties_by_name(stage_name: str) -> StageProperties:
         return _STAGE_PROPERTIES[stage]
     except (ValueError, KeyError):
         return _STAGE_PROPERTIES[ConsolidationStage.LABILE]
+
+
+def get_heat_floor(stage_name: str) -> float:
+    """Get minimum heat for a consolidation stage (Bahrick 1984 permastore).
+
+    Consolidated memories never decay below this floor. The structural
+    substrate (new synapses, enlarged spines — Kandel 2001) persists
+    even without rehearsal.
+    """
+    props = get_stage_properties_by_name(stage_name)
+    return props.heat_floor
 
 
 # ── Decay Integration ─────────────────────────────────────────────────────

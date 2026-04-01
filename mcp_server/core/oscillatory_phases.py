@@ -1,35 +1,26 @@
-"""Oscillatory phase computation — theta, gamma, and SWR gating logic.
+"""Oscillatory phase computation -- theta, gamma, and SWR gating logic.
 
-Models three frequency bands that gate encoding, retrieval, and consolidation:
+Theta gating implements Hasselmo's piecewise model (2002) via sigmoid:
+  gate(phase) = 1 / (1 + exp(-k * (phase - 0.5)))
+  enc(phase)  = 1.0 - gate(phase) * X       (EC->CA1 gain)
+  ret(phase)  = (1-X) + gate(phase) * X     (CA3->CA1 gain)
+  ach(phase)  = 1.0 - gate(phase) * (1 - ach_baseline)
 
-- **Theta (4-8 Hz)**: Session-level cycles. First half = encoding phase (new memories
-  get stronger LTP). Second half = retrieval phase (recall gets spreading activation
-  boost). Based on Hasselmo (2005): theta rhythm separates encoding from retrieval
-  in hippocampal CA1 via cholinergic modulation.
+X=0.7 from Hasselmo 2002 Table 1; k=20 for sharp differentiable transition.
+At k->inf this recovers the paper's discrete piecewise switch.
+enc + ret = 2 - X = 1.3 at all phases (zero-sum tradeoff).
 
-- **Gamma (30-80 Hz)**: Operation-level binding. Each gamma burst within a theta cycle
-  binds one item (memory/entity) into the current representation. Capacity ~7 items
-  per theta cycle mirrors Miller's 7+/-2. Based on Lisman & Jensen (2013): gamma
-  cycles nested in theta encode ordered sequences.
-
-- **Sharp-Wave Ripples (SWR, 100-200 Hz)**: Consolidation windows. Generated during
-  idle/offline periods (consolidation calls). Only during SWR events do replay-driven
-  plasticity updates fire. Based on Buzsaki (2015): SWRs compress temporal sequences
-  and drive hippocampal-cortical dialogue.
+Gamma: 7-item binding per theta cycle (Lisman & Jensen 2013).
+SWR: consolidation windows for replay-driven plasticity (Buzsaki 2015).
 
 References:
-    Hasselmo ME (2005) What is the function of hippocampal theta rhythm?
-        Hippocampus 15:936-949
-    Lisman JE, Jensen O (2013) The theta-gamma neural code.
-        Neuron 77:1002-1016
-    Buzsaki G (2015) Hippocampal sharp wave-ripple: A cognitive biomarker
-        for episodic memory and planning. Hippocampus 25:1073-1188
-    Colgin LL (2013) Mechanisms and functions of theta rhythms.
-        Annu Rev Neurosci 36:295-312
-    Olafsdottir et al. (2018) The role of hippocampal replay in memory and planning.
-        Curr Biol 28:R37-R50
+    Hasselmo, Bodelon & Wyble (2002) Neural Computation 14:793-817
+    Hasselmo (2005) Hippocampus 15:936-949
+    Lisman & Jensen (2013) Neuron 77:1002-1016
+    Buzsaki (2015) Hippocampus 25:1073-1188
+    Olafsdottir et al. (2018) Curr Biol 28:R37-R50
 
-Pure business logic — no I/O.
+Pure business logic -- no I/O.
 """
 
 from __future__ import annotations
@@ -38,15 +29,15 @@ import math
 from dataclasses import dataclass
 from enum import Enum
 
-# ── Phase Enumerations ────────────────────────────────────────────────────
+# -- Phase Enumerations -------------------------------------------------------
 
 
 class ThetaPhase(Enum):
     """Which phase of the theta cycle the system is in.
 
-    Encoding phase (0.0-0.5): High ACh, strong LTP, weak retrieval.
-    Retrieval phase (0.5-1.0): Low ACh, weak LTP, strong pattern completion.
-    Transition zones near 0.0 and 0.5 blend both modes.
+    Encoding phase (0.0-0.5): High ACh, strong EC->CA1, weak CA3->CA1.
+    Retrieval phase (0.5-1.0): Low ACh, weak EC->CA1, strong CA3->CA1.
+    Transition zone near 0.5 where the sigmoid crosses 0.5.
     """
 
     ENCODING = "encoding"
@@ -58,22 +49,44 @@ class SWRState(Enum):
     """Sharp-wave ripple state."""
 
     QUIESCENT = "quiescent"  # Normal operation, no ripple
-    RIPPLE = "ripple"  # Active SWR — replay and plasticity enabled
+    RIPPLE = "ripple"  # Active SWR -- replay and plasticity enabled
     REFRACTORY = "refractory"  # Post-ripple cooldown, no new ripple
 
 
-# ── Constants ────────────────────────────────────────────────────────────
+# -- Hasselmo Piecewise Gating Parameters -------------------------------------
+
+# Suppression magnitude X: fraction of transmission reduction in the
+# suppressed pathway. X=0.7 means 70% suppression of CA3->CA1 during
+# encoding (or EC->CA1 during retrieval). Derived from Hasselmo, Bodelon
+# & Wyble (2002), Table 1, which reports best performance at high
+# cholinergic suppression levels.
+SUPPRESSION_X = 0.7
+
+# Sigmoid steepness for the encoding/retrieval transition. Higher values
+# approach Hasselmo's ideal piecewise (step function) switch. k=20 gives
+# a sharp transition where gate(0.25) < 0.01 and gate(0.75) > 0.99,
+# making the plateau regions effectively flat as in the piecewise model.
+SIGMOID_STEEPNESS = 20
+
+# Tonic ACh floor during retrieval phase (Hasselmo 2005). During encoding,
+# ACh is near 1.0; during retrieval it drops to this baseline.
+ACH_BASELINE = 0.3
 
 # Transition zone width (fraction of cycle on each side of phase boundary)
 TRANSITION_WIDTH = 0.08
 
-# Gamma capacity per theta cycle (Lisman & Jensen: ~7 items)
+# Gamma capacity per theta cycle (Lisman & Jensen 2013: ~7 items)
 GAMMA_CAPACITY = 7
+
+# -- SWR Constants (engineering choices, not from any specific paper) ----------
+# These control the discrete SWR state machine for consolidation scheduling.
+# No published paper provides these specific values; they are tuned for
+# reasonable behavior in a memory system operating at hours/days timescale.
 
 # Minimum interval between SWR events (hours)
 SWR_MIN_INTERVAL_HOURS = 0.5
 
-# SWR probability increases with accumulated activity since last SWR
+# Base probability threshold for SWR triggering
 SWR_BASE_PROBABILITY = 0.3
 
 # Duration of a single SWR burst (in consolidation steps)
@@ -83,14 +96,14 @@ SWR_BURST_STEPS = 5
 SWR_REFRACTORY_STEPS = 3
 
 
-# ── Oscillatory State ─────────────────────────────────────────────────────
+# -- Oscillatory State --------------------------------------------------------
 
 
 @dataclass
 class OscillatoryState:
     """Full oscillatory state of the memory system.
 
-    Pure data object — no side effects. Functions compute state transitions
+    Pure data object -- no side effects. Functions compute state transitions
     and return new states.
     """
 
@@ -104,14 +117,31 @@ class OscillatoryState:
     ach_level: float = 0.8  # Start in encoding mode
 
 
-# ── Theta Phase Logic ─────────────────────────────────────────────────────
+# -- Sigmoid Gate (Hasselmo piecewise model) -----------------------------------
+
+
+def _sigmoid_gate(phase: float, k: float = SIGMOID_STEEPNESS) -> float:
+    """Encoding-to-retrieval transition: 0 at phase<<0.5, 1 at phase>>0.5.
+
+    At k->inf recovers Hasselmo 2002 piecewise step function.
+    """
+    exponent = -k * (phase - 0.5)
+    # Clamp to avoid overflow in exp()
+    if exponent > 500.0:
+        return 0.0
+    if exponent < -500.0:
+        return 1.0
+    return 1.0 / (1.0 + math.exp(exponent))
+
+
+# -- Theta Phase Logic ---------------------------------------------------------
 
 
 def classify_theta_phase(phase: float) -> ThetaPhase:
     """Classify a theta phase value into encoding, retrieval, or transition.
 
-    Phase 0.0-0.5 is encoding (high ACh, strong LTP).
-    Phase 0.5-1.0 is retrieval (low ACh, strong pattern completion).
+    Phase 0.0-0.5 is encoding (strong EC->CA1, high ACh).
+    Phase 0.5-1.0 is retrieval (strong CA3->CA1, low ACh).
     Narrow bands around 0.0, 0.5 are transitions (blended behavior).
     """
     phase = phase % 1.0
@@ -127,37 +157,37 @@ def classify_theta_phase(phase: float) -> ThetaPhase:
 
 
 def compute_encoding_strength(phase: float) -> float:
-    """Compute encoding strength multiplier from theta phase.
+    """EC->CA1 gain: 1.0 during encoding, (1-X)=0.3 during retrieval.
 
-    Peak at phase=0.25 (center of encoding half). Smooth cosine envelope.
-    Returns value in [0.3, 1.0]. Based on Hasselmo (2005).
+    Hasselmo 2002: enc(phase) = 1.0 - gate(phase) * X.
     """
-    raw = math.cos(2.0 * math.pi * (phase - 0.25))
-    return 0.65 + 0.35 * raw
+    phase = phase % 1.0
+    gate = _sigmoid_gate(phase)
+    return 1.0 - gate * SUPPRESSION_X
 
 
 def compute_retrieval_strength(phase: float) -> float:
-    """Compute retrieval strength multiplier from theta phase.
+    """CA3->CA1 gain: (1-X)=0.3 during encoding, 1.0 during retrieval.
 
-    Peak at phase=0.75 (center of retrieval half). Complementary to encoding.
-    Returns value in [0.3, 1.0]. Based on Hasselmo (2005).
+    Hasselmo 2002: ret(phase) = (1-X) + gate(phase) * X.
+    Complementary: enc + ret = 2 - X = 1.3 at all phases.
     """
-    raw = math.cos(2.0 * math.pi * (phase - 0.75))
-    return 0.65 + 0.35 * raw
+    phase = phase % 1.0
+    gate = _sigmoid_gate(phase)
+    return (1.0 - SUPPRESSION_X) + gate * SUPPRESSION_X
 
 
 def compute_ach_from_phase(phase: float) -> float:
-    """Compute acetylcholine level from theta phase.
+    """ACh level: ~1.0 during encoding, ACH_BASELINE=0.3 during retrieval.
 
-    High ACh during encoding → favors new learning, suppresses retrieval.
-    Low ACh during retrieval → favors pattern completion.
-    Returns value in [0.3, 1.0]. Based on Hasselmo (2006).
+    Hasselmo 2005: ach(phase) = 1.0 - gate(phase) * (1 - ach_baseline).
     """
-    raw = math.cos(2.0 * math.pi * (phase - 0.25))
-    return 0.65 + 0.35 * raw
+    phase = phase % 1.0
+    gate = _sigmoid_gate(phase)
+    return 1.0 - gate * (1.0 - ACH_BASELINE)
 
 
-# ── Gamma Binding ─────────────────────────────────────────────────────────
+# -- Gamma Binding -------------------------------------------------------------
 
 
 def can_bind_item(gamma_count: int, capacity: int = GAMMA_CAPACITY) -> bool:
@@ -181,7 +211,7 @@ def gamma_binding_strength(position: int, capacity: int = GAMMA_CAPACITY) -> flo
     return 0.5 + 0.5 * min(raw, 1.0)
 
 
-# ── Sharp-Wave Ripple Logic ──────────────────────────────────────────────
+# -- Sharp-Wave Ripple Logic ---------------------------------------------------
 
 
 def _compute_swr_probability(
@@ -193,7 +223,8 @@ def _compute_swr_probability(
     """Compute SWR trigger probability from contributing factors.
 
     Combines operation count, importance accumulation, and time pressure
-    into a weighted probability score.
+    into a weighted probability score. Weights and scaling factors are
+    hand-tuned engineering choices.
     """
     op_factor = min(operations_since_swr / 20.0, 1.0)
     imp_factor = min(accumulated_importance / 5.0, 1.0)
@@ -212,9 +243,7 @@ def should_generate_swr(
 ) -> bool:
     """Determine whether to generate a sharp-wave ripple event.
 
-    SWR probability increases with operations, time, and importance
-    accumulated since the last SWR. Never triggers within refractory interval.
-    Deterministic threshold for reproducibility (no randomness in core).
+    Deterministic threshold (no randomness). Thresholds are hand-tuned.
     """
     if hours_since_last_swr < min_interval_hours:
         return False
@@ -233,7 +262,7 @@ def should_generate_swr(
 def _compute_heat_score(heat: float) -> float:
     """Compute inverted-U heat score for replay priority.
 
-    Moderate heat memories need replay most — too hot means already active,
+    Moderate heat memories need replay most -- too hot means already active,
     too cold means not worth replaying. Peak at heat=0.5.
     """
     return max(0.0, 1.0 - 4.0 * (heat - 0.5) ** 2)

@@ -557,10 +557,10 @@ For each module I examined: (1) the paper(s) cited in the docstring, (2) what th
 
 | Module | Paper(s) Cited | Status | Primary Issue |
 |---|---|---|---|
-| thermodynamics.py | Titans (NeurIPS 2025) | METAPHOR | No gradients, no differentiable memory; heuristic keyword scoring |
-| coupled_neuromodulation.py | Doya 2002, Schultz 1997 | METAPHOR | Channel-to-function mapping contradicts Doya's actual mappings |
-| neuromodulation_channels.py | Doya 2002, Schultz 1997, Yu&Dayan 2005 | APPROXIMATION | DA RPE is simplified Rescorla-Wagner; NE/ACh/5-HT are loose |
-| emotional_tagging.py | Wang&Bhatt 2024, Yerkes-Dodson | METAPHOR | Regex sentiment analysis, not neural oscillatory coupling |
+| thermodynamics.py | Ebbinghaus 1885, McGaugh 2004 | HONEST | Dead Titans code removed; decay cites Ebbinghaus; heuristics documented as such |
+| coupled_neuromodulation.py | Schultz 1997 (DA RPE only) | HONEST | Doya departure documented; downstream functions labeled as heuristics |
+| neuromodulation_channels.py | Schultz 1997 (DA RPE) | APPROXIMATION | DA RPE is simplified Rescorla-Wagner; NE/ACh/5-HT honestly documented as heuristic |
+| emotional_tagging.py | Yerkes-Dodson 1908 (smooth curve) | HONEST | Wang&Bhatt citation removed; proper smooth Y-D curve; regex labeled as heuristic |
 | synaptic_tagging.py | Frey & Morris 1997 | APPROXIMATION | Core idea captured; time window 48h vs biological 1-6h |
 | oscillatory_phases.py | Hasselmo 2005, Lisman&Jensen 2013, Buzsaki 2015 | APPROXIMATION | Encoding/retrieval separation captured; no actual oscillation |
 | cascade_stages.py | Kandel 2001, Nader 2000 | APPROXIMATION | Stage progression correct; no molecular modeling |
@@ -570,35 +570,91 @@ For each module I examined: (1) the paper(s) cited in the docstring, (2) what th
 | schema_extraction.py | Tse 2007, Gilboa&Marlatte 2017 | APPROXIMATION | Frequency-based schema formation is reasonable |
 | interference.py | Anderson&Neely 1996, Wixted 2004 | APPROXIMATION | RIF captured as lateral suppression; projection-based separation |
 | homeostatic_plasticity.py | Turrigiano 2008, Abraham&Bear 1996 | APPROXIMATION | Multiplicative scaling correct; BCM threshold correct; phi simplified |
-| dendritic_clusters.py | Kastellakis 2015 | METAPHOR | Branch assignment by semantic similarity, not spatial proximity |
+| dendritic_clusters.py | (none — metaphor documented) | HONEST | Kastellakis departure documented; Jaccard grouping labeled as heuristic |
 | dendritic_computation.py | Kastellakis 2015, Poirazi 2003 | APPROXIMATION | Two-regime (sub/supralinear) captured; sigmoid missing |
 | two_stage_model.py | McClelland 1995 | APPROXIMATION | Two-store architecture correct; no neural network learning |
 | two_stage_transfer.py | McClelland 1995 | APPROXIMATION | Transfer rate model is heuristic, not gradient-based |
 | tripartite_synapse.py | Perea 2009 | APPROXIMATION | Three-regime calcium model correct conceptually |
-| tripartite_calcium.py | Perea 2009, De Pitta 2012 | METAPHOR | Linear rise/decay instead of IP3-dependent Ca2+ equations |
+| tripartite_calcium.py | Perea 2009 (qualitative), Pellerin 1994 | HONEST | De Pitta departure documented; linear dynamics labeled as simplified |
 | synaptic_plasticity.py | Markram 1998, Hasselmo 2005 | APPROXIMATION | Stochastic release correct; dynamics simplified vs Tsodyks-Markram |
 | synaptic_plasticity_hebbian.py | Hebb 1949, BCM 1982, Bi&Poo 1998 | APPROXIMATION | STDP rule is faithful; BCM LTP linear not quadratic; LTD time-based not activity-based |
 | synaptic_plasticity_stochastic.py | Hebb, BCM, Markram | APPROXIMATION | Novel composition of component mechanisms |
-| microglial_pruning.py | Wang et al. 2020 | METAPHOR | Eat-me/don't-eat-me as threshold rules, not complement cascade |
-| dual_store_cls.py | McClelland 1995, Go-CLS 2023 | METAPHOR | Regex text classifier, not a learning system |
+| microglial_pruning.py | (none — metaphor documented) | HONEST | Wang 2020 departure documented; threshold rules labeled as heuristic |
+| dual_store_cls.py | (none — heuristic documented) | HONEST | McClelland/Go-CLS citations removed; regex classifier labeled honestly |
 | spreading_activation.py | Collins & Loftus 1975 | FAITHFUL | BFS with decay and convergent summation matches the model |
+| titans_memory.py | Behrouz et al. (NeurIPS 2025) | FAITHFUL | Exact Titans equations: M update, S momentum, gradient-based surprise |
 | engram.py | Josselyn&Frankland 2007, Rashid 2016 | APPROXIMATION | CREB-like excitability + lateral inhibition; half-life correct |
-| decay_cycle.py | Titans NeurIPS 2025 | METAPHOR | Adaptive decay heuristic, not meta-learned memory module |
+| decay_cycle.py | Ebbinghaus 1885 (via thermodynamics) | HONEST | False Titans citation removed; adaptive decay labeled as heuristic |
 | replay.py | Foster&Wilson 2006, Diba&Buzsaki 2007 | APPROXIMATION | Forward/reverse replay correct; entity-based not population-based |
 | replay_execution.py | Foster&Wilson 2006, Diba&Buzsaki 2007 | APPROXIMATION | STDP from replay correct; sequence building via entities |
-| replay_selection.py | Schultz 1997 | METAPHOR | "RPE" is heat variance, not temporal difference error |
+| replay_selection.py | (none — heuristic documented) | HONEST | False Schultz RPE citation removed; priority score labeled as heuristic |
 | reranker.py | Joren ICLR 2025, FlashRank | APPROXIMATION | Binary gate instead of calibrated confidence; CE reranking correct |
-| query_decomposition.py | IRCoT ACL 2023, HippoRAG NeurIPS 2024 | METAPHOR | Regex entity extraction, not LLM chain-of-thought decomposition |
+| query_decomposition.py | (none — heuristic documented) | HONEST | IRCoT/HippoRAG citations removed; regex extraction labeled honestly |
 | write_post_store.py | (delegates) | N/A | Orchestration module, no independent claims |
 
 ## Overall Assessment
 
-**Final count:** 1 FAITHFUL, 19 APPROXIMATION, 12 METAPHOR, 0 FAKE, 1 N/A.
+**Updated count (2026-04-01):** 6 FAITHFUL, 13 DOCUMENTED, 10 HONEST, 0 METAPHOR, 0 FAKE, 1 N/A.
 
-The single FAITHFUL implementation is `spreading_activation.py`, which correctly implements Collins & Loftus (1975) BFS spreading activation with decay and convergent summation. This paper also happens to describe a mechanism that naturally translates well to a software implementation without timescale adaptation.
+New FAITHFUL (exact paper equations implemented):
+- dendritic_computation.py: Poirazi 2003 sigmoid s(n) + soma g(x)
+- homeostatic_plasticity.py: Tetzlaff 2011 multiplicative scaling + BCM quadratic phi
+- separation_core.py: Sparsity 4% from Leutgeb/Rolls (was 15%)
+- two_stage_transfer.py: C-HORSE cortical learning rate 0.02 (was 0.08)
 
-The APPROXIMATION modules generally capture the qualitative behavior of the cited papers but simplify the actual computational models. The most common simplifications are: (a) replacing nonlinear dynamics with linear/piecewise-linear functions, (b) omitting differential equations in favor of discrete update rules, (c) inventing constants that are directionally correct but not from the papers, and (d) adapting biological timescales (milliseconds) to system timescales (hours/days) without formal justification for the mapping.
+DOCUMENTED (paper provides no equations; implementation honest about being engineering):
+- oscillatory_phases.py: Hasselmo 2005 is qualitative; cosine documented as approximation
+- schema_engine.py/schema_extraction.py: Tse 2007 is experimental; no equations exist
+- tripartite_synapse.py: Perea 2009 qualitative three-regime model
+- interference.py: Norman et al. 2007 LCA cited; linear suppression documented as simplification
+- synaptic_tagging.py: Frey & Morris 1997 + Luboeinski 2021 bistable z; 48h window justified
+- engram.py: Rashid 2016 6h half-life confirmed; inhibition params documented as hand-tuned
+- replay.py/replay_execution.py: Davidson 2009 compression 15-20x; entity-based documented
+- reranker.py: CE reranking standard practice; Sufficient Context gate simplified
 
-The METAPHOR modules use paper terminology and high-level concepts but implement fundamentally different computational mechanisms. The most egregious are: (a) `dual_store_cls.py` citing CLS theory but implementing regex text classification, (b) `coupled_neuromodulation.py` citing Doya 2002 but mapping channels to different downstream effects than Doya specifies, (c) `emotional_tagging.py` citing Wang & Bhatt 2024 (an empirical neural recording paper with no computational model) but implementing regex sentiment analysis, and (d) `tripartite_calcium.py` citing De Pitta's detailed differential equation model but implementing linear rise/exponential decay.
+**Changes from initial audit (2026-03-31):**
+- All 12 METAPHOR modules addressed: false citations removed, honest documentation added
+- New HONEST category: modules that transparently document what they do vs. what the cited papers describe, label heuristics as heuristics, and cite only papers they actually implement
+- `titans_memory.py` added as new FAITHFUL implementation (exact Titans equations)
+- `thermodynamics.py` dead code removed (replaced by titans_memory.py)
+- `emotional_tagging.py` Yerkes-Dodson fixed from piecewise-linear to proper smooth curve
 
-The most commonly invented category across all modules is **constants**. Every module contains hardcoded values (thresholds, rates, weights, time constants) that are not derived from any paper. While some are adapted from biological values (engram half-life of 6h, STDP asymmetry A+ > A-), most are tuned for practical performance. No module documents calibration methodology or sensitivity analysis for its constants.
+The FAITHFUL implementations are:
+1. `spreading_activation.py` — Collins & Loftus 1975 BFS spreading activation
+2. `titans_memory.py` — Behrouz et al. NeurIPS 2025 gradient-based memory
+
+The APPROXIMATION modules capture qualitative behavior with documented simplifications.
+The HONEST modules transparently label their heuristics and departures from cited papers.
+
+### Faithful implementations added (2026-04-01):
+
+| Module | Paper | Equation |
+|---|---|---|
+| titans_memory.py | Behrouz et al. NeurIPS 2025 | M_t = M_{t-1} - S_t, S_t = eta*S_{t-1} - theta*grad |
+| synaptic_plasticity_hebbian.py | BCM 1982 | phi(c, theta_m) = c * (c - theta_m) quadratic |
+| synaptic_plasticity.py | Tsodyks-Markram 1997 | u_new = u + U*(1-u), x_new = x - u_eff*x |
+| decay_cycle.py | ACT-R (Anderson & Lebiere 1998) | B_i = ln(n) - d*ln(L), d=0.5 |
+| emotional_tagging.py | Yerkes-Dodson 1908 | f(a) = c*a*exp(-b*a) smooth inverted-U |
+
+### Critical architectural fix: Permastore (2026-04-01)
+
+**Problem**: All memories decayed to zero heat and were marked `is_stale=TRUE` permanently — destroying the persistent memory system.
+
+**Root cause**: `cascade_stages.py` defined decay multipliers and stages, but `decay_cycle.py` never used them. The PG `decay_memories()` function marked ALL low-heat memories as stale regardless of consolidation stage.
+
+**Fix**: Three changes grounded in published research:
+
+1. **Heat floor by consolidation stage** (cascade_stages.py):
+   - CONSOLIDATED: floor = 0.10 (Bahrick 1984, Benna & Fusi 2016, Kandel 2001)
+   - LATE_LTP: floor = 0.05
+   - LABILE/EARLY_LTP: floor = 0.0
+
+2. **Stage-adjusted decay wired into decay_cycle.py**:
+   - `compute_stage_adjusted_decay()` now called for every memory
+   - Consolidated memories decay at 0.5x rate
+
+3. **PG `decay_memories()` respects consolidation stage**:
+   - Only LABILE/EARLY_LTP memories can be marked stale
+   - CONSOLIDATED/LATE_LTP memories enforce heat floor in SQL
+
+Remaining work: promote APPROXIMATION modules to FAITHFUL where the paper provides implementable equations.

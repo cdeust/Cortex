@@ -1,12 +1,10 @@
-"""Stochastic Hebbian LTP/LTD with release probability gating and phase modulation.
+"""Stochastic Hebbian LTP/LTD with Tsodyks-Markram gating and phase modulation.
 
-Combines stochastic vesicle release, additive noise, and theta-phase gating
-with standard Hebbian LTP/LTD rules.
+Combines Tsodyks-Markram stochastic release (Tsodyks & Markram 1997), BCM
+Hebbian LTP/LTD (Bienenstock, Cooper & Munro 1982), additive noise, and
+theta-phase gating (Hasselmo 2005).
 
-References:
-    Hebb (1949), BCM (1982), Markram (1998).
-
-Pure business logic -- no I/O.
+Pure business logic — no I/O.
 """
 
 from __future__ import annotations
@@ -15,7 +13,6 @@ import random
 from typing import Any
 
 from mcp_server.core.synaptic_plasticity import (
-    _BASE_RELEASE_PROB,
     _MAX_WEIGHT,
     _MIN_WEIGHT,
     SynapticState,
@@ -81,9 +78,8 @@ def _stochastic_ltd(
 def _build_synaptic_state(edge: dict[str, Any], hours: float) -> SynapticState:
     """Build a SynapticState from edge metadata."""
     return SynapticState(
-        release_probability=edge.get("release_probability", _BASE_RELEASE_PROB),
-        facilitation=edge.get("facilitation", 0.0),
-        depression=edge.get("depression", 0.0),
+        u=edge.get("u", 0.0),
+        x=edge.get("x", 1.0),
         access_count=edge.get("access_count", 0),
         hours_since_last_access=edge.get("hours_since_last_access", hours),
     )
@@ -100,40 +96,44 @@ def _stochastic_single(
     ltd_rate: float,
     rng: random.Random | None,
 ) -> dict[str, Any]:
-    """Process a single edge for stochastic Hebbian update."""
+    """Process a single edge for stochastic Hebbian update.
+
+    Tsodyks-Markram order of operations at a spike:
+      1. Recover u and x between spikes (continuous dynamics)
+      2. Compute u_eff and check stochastic release (pre-spike state)
+      3. Apply spike update (facilitation boost + vesicle depletion)
+    """
     src, tgt = edge["source_entity_id"], edge["target_entity_id"]
     w = edge.get("weight", 1.0)
     pair = (min(src, tgt), max(src, tgt))
     is_co = pair in co_accessed_pairs
 
-    syn = update_short_term_dynamics(
-        _build_synaptic_state(edge, hours), hours, is_access=is_co
+    # 1. Recover between spikes (but don't apply spike yet)
+    pre_spike = update_short_term_dynamics(
+        _build_synaptic_state(edge, hours), hours, is_access=False
     )
 
     if is_co:
+        # 2. Check transmission using pre-spike state
         new_w, action = _stochastic_ltp(
-            w,
-            syn,
-            src,
-            tgt,
-            entity_activities,
-            entity_thresholds,
-            theta_phase,
-            ltp_rate,
-            rng,
+            w, pre_spike, src, tgt,
+            entity_activities, entity_thresholds,
+            theta_phase, ltp_rate, rng,
         )
+        # 3. Apply spike update after transmission check
+        post_spike = update_short_term_dynamics(pre_spike, 0.0, is_access=True)
     else:
         new_w, action = _stochastic_ltd(w, hours, theta_phase, ltd_rate)
+        post_spike = pre_spike
 
     return {
         **edge,
         "weight": round(new_w, 6),
         "delta": round(new_w - w, 6),
         "action": action,
-        "release_probability": syn.release_probability,
-        "facilitation": syn.facilitation,
-        "depression": syn.depression,
-        "access_count": syn.access_count,
+        "u": post_spike.u,
+        "x": post_spike.x,
+        "access_count": post_spike.access_count,
     }
 
 
@@ -148,18 +148,13 @@ def apply_stochastic_hebbian_update(
     ltd_rate: float = _LTD_RATE,
     rng: random.Random | None = None,
 ) -> list[dict[str, Any]]:
-    """Hebbian LTP/LTD with stochastic gating, noise, and phase modulation."""
+    """Hebbian LTP/LTD with Tsodyks-Markram stochastic gating + phase modulation."""
     return [
         _stochastic_single(
-            edge,
-            co_accessed_pairs,
-            entity_activities,
-            entity_thresholds,
-            hours_since_last_update,
-            theta_phase,
-            ltp_rate,
-            ltd_rate,
-            rng,
+            edge, co_accessed_pairs,
+            entity_activities, entity_thresholds,
+            hours_since_last_update, theta_phase,
+            ltp_rate, ltd_rate, rng,
         )
         for edge in edges
     ]

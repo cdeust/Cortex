@@ -7,21 +7,37 @@ homeostatic mechanisms that maintain target activity levels.
 
 This module implements three homeostatic mechanisms:
 
-1. **Synaptic Scaling (Turrigiano 2008)**
-   If a domain's average heat deviates from target, ALL memories in that domain
-   get multiplicatively scaled toward the target.
+1. **Synaptic Scaling (Turrigiano 2008; Tetzlaff et al. 2011)**
+   Multiplicative scaling: delta_w = alpha * w * (r_target - r_actual).
+   All weights scale proportionally, preserving relative ordering —
+   Turrigiano's key experimental finding. The update is proportional to
+   the weight itself (multiplicative, not additive).
+
+   Equation from: Tetzlaff C, Kolbe C, Dasgupta S, Bhatt DK (2011)
+   "Time scales of memory, learning, and plasticity."
+   Frontiers in Computational Neuroscience 5:47, Eq. 3.
+
+   Also: Houweling AR, Bazhenov M, Timofeev I, Steriade M, Bhatt DK (2005)
+   "Homeostatic synaptic plasticity can explain post-traumatic epileptogenesis."
+   Cerebral Cortex 15:834-845:  delta_G = epsilon * (f_target - f_actual) * G
 
 2. **Metaplasticity / BCM Threshold (Abraham & Bear 1996)**
-   The sliding modification threshold adjusts based on recent activity.
+   Sliding modification threshold: theta_M = E[c^2].
+   BCM phi function: phi(c, theta_m) = c * (c - theta_m).
+   Bienenstock, Cooper & Munro (1982), J Neuroscience 2:32-48.
 
 3. **Intrinsic Excitability Regulation**
-   Engram slot excitability is bounded by global statistics.
-
-Distribution health metrics are in homeostatic_health.py.
+   Engineering heuristic (no paper source). Adjusts global excitability
+   toward a target active fraction. Hand-tuned gain of 0.1.
 
 References:
     Turrigiano GG (2008) The self-tuning neuron. Cell 135:422-435
+    Tetzlaff C et al. (2011) Time scales of memory, learning, and plasticity.
+        Frontiers in Computational Neuroscience 5:47
+    Houweling AR et al. (2005) Cerebral Cortex 15:834-845
     Abraham WC, Bear MF (1996) Metaplasticity. Trends Neurosci 19:126-130
+    Bienenstock EL, Cooper LN, Munro PW (1982) Theory for the development
+        of neuron selectivity. J Neuroscience 2:32-48
 
 Pure business logic — no I/O.
 """
@@ -30,51 +46,56 @@ from __future__ import annotations
 
 # ── Configuration ─────────────────────────────────────────────────────────
 
+# Target mean heat for synaptic scaling.  Hand-tuned for Cortex memory system.
 _TARGET_HEAT = 0.4
+
+# Scaling rate alpha in delta_w = alpha * w * (r_target - r_actual).
+# Hand-tuned: 0.05 gives gentle convergence (~20 cycles to halve a deviation).
 _SCALING_RATE = 0.05
-_SCALING_DEAD_ZONE = 0.1
-_TARGET_EDGE_WEIGHT = 0.5
+
+# BCM threshold EMA decay.  Hand-tuned: 0.95 gives ~20-step memory.
 _BCM_THETA_DECAY = 0.95
+
+# Excitability bounds.  Hand-tuned engineering heuristic.
 _MIN_GLOBAL_EXCITABILITY = 0.1
 _MAX_GLOBAL_EXCITABILITY = 0.9
+
+# Target fraction of engram slots that should be "active" (excitability >= 0.5).
+# Hand-tuned engineering heuristic.
 _TARGET_ACTIVE_FRACTION = 0.3
 
 
-# ── Synaptic Scaling ──────────────────────────────────────────────────────
+# ── Synaptic Scaling (Turrigiano 2008; Tetzlaff et al. 2011) ─────────────
 
 
 def compute_scaling_factor(
     current_avg_heat: float,
     target_heat: float = _TARGET_HEAT,
     scaling_rate: float = _SCALING_RATE,
-    dead_zone: float = _SCALING_DEAD_ZONE,
 ) -> float:
-    """Compute multiplicative scaling factor for synaptic scaling.
+    """Compute multiplicative scaling factor from Turrigiano synaptic scaling.
 
-    If avg heat is above target + dead_zone: scale DOWN (factor < 1).
-    If avg heat is below target - dead_zone: scale UP (factor > 1).
-    Within dead zone: factor = 1.0 (no change).
+    Implements: delta_w = alpha * w * (r_target - r_actual)
+    (Tetzlaff et al. 2011, Frontiers in Computational Neuroscience 5:47, Eq. 3)
+
+    Since delta_w = alpha * w * (r_target - r_actual), the new weight is:
+        w_new = w + delta_w = w * (1 + alpha * (r_target - r_actual))
+
+    So the multiplicative factor applied to every weight is:
+        factor = 1 + alpha * (r_target - r_actual)
+
+    This is continuous (no dead zone) — Turrigiano scaling is always active,
+    and naturally produces no change when r_actual == r_target.
 
     Args:
-        current_avg_heat: Current average heat across the domain.
-        target_heat: Target average heat.
-        scaling_rate: Maximum adjustment per cycle.
-        dead_zone: Width of the no-adjustment band.
+        current_avg_heat: Current domain-average heat (r_actual).
+        target_heat: Target average heat (r_target).
+        scaling_rate: Rate constant alpha. Controls convergence speed.
 
     Returns:
         Multiplicative scaling factor. Apply to all heats in domain.
     """
-    deviation = current_avg_heat - target_heat
-
-    if abs(deviation) <= dead_zone:
-        return 1.0
-
-    excess = abs(deviation) - dead_zone
-    correction = min(excess * scaling_rate / max(current_avg_heat, 0.01), scaling_rate)
-
-    if deviation > 0:
-        return 1.0 - correction
-    return 1.0 + correction
+    return 1.0 + scaling_rate * (target_heat - current_avg_heat)
 
 
 def apply_synaptic_scaling(
@@ -83,24 +104,9 @@ def apply_synaptic_scaling(
 ) -> list[float]:
     """Apply multiplicative scaling to a list of heat values.
 
-    Preserves relative ordering and clamps to [0, 1].
+    Preserves relative ordering (Turrigiano's key finding) and clamps to [0, 1].
     """
     return [max(0.0, min(1.0, h * scaling_factor)) for h in heats]
-
-
-def compute_edge_scaling_factor(
-    current_avg_weight: float,
-    target_weight: float = _TARGET_EDGE_WEIGHT,
-    scaling_rate: float = _SCALING_RATE,
-    dead_zone: float = _SCALING_DEAD_ZONE,
-) -> float:
-    """Compute scaling factor for relationship edge weights.
-
-    Same logic as heat scaling but applied to the knowledge graph.
-    """
-    return compute_scaling_factor(
-        current_avg_weight, target_weight, scaling_rate, dead_zone
-    )
 
 
 # ── Metaplasticity (BCM Threshold) ────────────────────────────────────────
@@ -113,7 +119,10 @@ def compute_bcm_threshold(
 ) -> float:
     """Compute the sliding BCM modification threshold.
 
-    The BCM threshold tracks the square of recent activity levels via EMA.
+    BCM theory (Bienenstock, Cooper & Munro 1982):
+        theta_M = E[c^2]
+
+    Updated via EMA: theta_new = decay * theta_old + (1 - decay) * E[c^2].
     High activity -> high threshold -> LTP harder (prevents saturation).
     Low activity -> low threshold -> LTP easier (prevents collapse).
 
@@ -138,22 +147,30 @@ def compute_ltp_ltd_modulation(
     memory_heat: float,
     bcm_threshold: float,
 ) -> tuple[float, float]:
-    """Compute LTP/LTD rate modulation based on BCM threshold.
+    """Compute LTP/LTD rate modulation using the BCM phi function.
 
-    Memory activity above threshold -> LTP. Below -> LTD.
-    Distance from threshold modulates strength.
+    BCM phi (Bienenstock, Cooper & Munro 1982, Eq. 3):
+        phi(c, theta_m) = c * (c - theta_m)
+
+    When c > theta_m: phi > 0 -> LTP.
+    When 0 < c < theta_m: phi < 0 -> LTD.
+
+    We convert phi into (ltp_multiplier, ltd_multiplier) pair, both in [0, 2]:
+    - phi > 0: ltp_mult = 1 + phi (clamped to 2), ltd_mult = max(0, 1 - phi)
+    - phi < 0: ltd_mult = 1 + |phi| (clamped to 2), ltp_mult = max(0, 1 - |phi|)
 
     Returns:
         (ltp_multiplier, ltd_multiplier). Both in [0, 2].
     """
-    delta = memory_heat - bcm_threshold
+    phi = memory_heat * (memory_heat - bcm_threshold)
 
-    if delta > 0:
-        ltp_mult = 1.0 + min(delta * 2.0, 1.0)
-        ltd_mult = max(0.2, 1.0 - delta * 2.0)
+    if phi >= 0:
+        ltp_mult = min(2.0, 1.0 + phi)
+        ltd_mult = max(0.0, 1.0 - phi)
     else:
-        ltd_mult = 1.0 + min(abs(delta) * 2.0, 1.0)
-        ltp_mult = max(0.2, 1.0 - abs(delta) * 2.0)
+        abs_phi = abs(phi)
+        ltd_mult = min(2.0, 1.0 + abs_phi)
+        ltp_mult = max(0.0, 1.0 - abs_phi)
 
     return ltp_mult, ltd_mult
 
@@ -169,8 +186,9 @@ def compute_excitability_adjustment(
 ) -> float:
     """Compute global excitability adjustment for engram slots.
 
-    If too many slots are highly excitable, global excitability should be
-    dampened. If too few, boost it.
+    Engineering heuristic (no paper source). If too many slots are highly
+    excitable, global excitability is dampened. If too few, boost it.
+    The gain of 0.1 is hand-tuned for gentle convergence.
 
     Returns:
         Additive adjustment. Positive = boost, negative = dampen.
@@ -188,7 +206,11 @@ def apply_excitability_bounds(
     excitability: float,
     adjustment: float = 0.0,
 ) -> float:
-    """Apply global adjustment and clamp excitability to safe bounds."""
+    """Apply global adjustment and clamp excitability to safe bounds.
+
+    Bounds [0.1, 0.9] are hand-tuned to prevent complete silencing or
+    runaway excitation.
+    """
     return max(
         _MIN_GLOBAL_EXCITABILITY,
         min(_MAX_GLOBAL_EXCITABILITY, excitability + adjustment),

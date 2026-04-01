@@ -9,11 +9,25 @@ Orchestrates the schema lifecycle after formation:
 Re-exports formation/merging/serialization from schema_extraction for
 backward compatibility.
 
-References:
-    Tse D et al. (2007) Schemas and memory consolidation. Science 316:76-82
-    van Kesteren MTR et al. (2012) How schema and novelty augment
-        memory formation. Trends Neurosci 35:211-219
-    Piaget J (1952) The Origins of Intelligence in Children.
+Theoretical basis (all qualitative — no published equations):
+    Tse D et al. (2007) — Experimental demonstration that prior schemas
+        accelerate consolidation ~15x in rats. Purely behavioral data;
+        no mathematical model or equations are provided.
+    van Kesteren MTR et al. (2012) — Conceptual framework: mPFC-mediated
+        schema congruency vs MTL-mediated novelty encoding (dual pathway).
+        Descriptive model with no computational specification.
+    Piaget J (1952) — Assimilation (fit into existing schema) and
+        accommodation (modify schema on mismatch) are qualitative
+        developmental theory, not a computational model.
+
+Engineering implementation:
+    Schema matching uses Jaccard similarity between entity/tag sets —
+    an engineering choice to operationalize qualitative "congruency."
+    Accommodation uses EMA updates — a standard signal processing
+    technique, not derived from any schema paper.
+    All thresholds are hand-tuned:
+      _HIGH_MATCH=0.7, _MEDIUM_MATCH=0.3, _MAX_VIOLATIONS=10,
+      _SCHEMA_EMA_ALPHA=0.1
 
 Pure business logic — no I/O.
 """

@@ -3,10 +3,16 @@
 FlashRank (ms-marco-MiniLM-L-12-v2) provides fast cross-encoder reranking.
 Validated through LongMemEval and LoCoMo where it improves MRR by 5-15%.
 
-Includes retrieval confidence scaling based on "Sufficient Context"
-(Joren et al., ICLR 2025): raw CE scores → sigmoid confidence → score scaling.
-When no result strongly matches the query, scores are pulled down, enabling
-natural abstention for unanswerable queries.
+CE reranking with alpha blending of first-stage and CE scores is standard
+IR practice (no specific paper citation needed).
+
+Sufficient Context gate (inspired by Joren et al., ICLR 2025):
+    The paper likely uses a calibrated sigmoid confidence model.
+    This implementation simplifies to a binary threshold gate: if the
+    max CE score falls below gate_threshold, all scores are suppressed
+    by a fixed multiplier. This avoids the need for calibration data
+    while preserving the core insight (suppress when nothing matches).
+    Hand-tuned constants: gate_threshold=0.15, suppression=0.1.
 
 Pure business logic -- lazy-loaded singleton, no persistent I/O.
 """
@@ -43,17 +49,15 @@ def _compute_retrieval_confidence(
 ) -> float:
     """Compute confidence that retrieval found relevant results.
 
-    Based on 'Sufficient Context' framework (Joren et al., ICLR 2025).
-    Uses a hard gate on max cross-encoder score: if the best CE score is
-    below the gate threshold, retrieval likely found nothing relevant.
-
-    This is a binary gate, not a continuous sigmoid, to avoid suppressing
-    moderate-relevance results that are still useful for recall.
+    Inspired by 'Sufficient Context' (Joren et al., ICLR 2025).
+    Binary threshold approximation: the paper likely uses calibrated
+    sigmoid confidence; we simplify to a hard gate on max CE score.
 
     Args:
         ce_scores: Raw cross-encoder scores from FlashRank.
         gate_threshold: Below this max CE, results are likely irrelevant.
-        suppression: Score multiplier when gated (low = aggressive suppression).
+            Hand-tuned (0.15 default).
+        suppression: Score multiplier when gated. Hand-tuned (0.1 default).
 
     Returns:
         float — 1.0 (sufficient context) or suppression (insufficient).

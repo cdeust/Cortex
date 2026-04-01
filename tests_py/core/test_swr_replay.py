@@ -12,7 +12,7 @@ from mcp_server.core.replay import (
     # SWR replay functions
     build_temporal_sequence,
     build_causal_sequence,
-    compute_sequence_rpe,
+    compute_sequence_priority,
     select_replay_sequences,
     compute_replay_stdp_pairs,
     run_swr_replay,
@@ -127,72 +127,72 @@ class TestCausalSequence:
         assert len(events) == 2
 
 
-# ── Sequence RPE ─────────────────────────────────────────────────────────
+# ── Sequence Priority ────────────────────────────────────────────────────
 
 
-class TestSequenceRPE:
-    def test_high_heat_variance_high_rpe(self):
+class TestSequencePriority:
+    def test_high_heat_variance_high_priority(self):
         events = [
             ReplayEvent(memory_id=1, content="", heat=0.1),
             ReplayEvent(memory_id=2, content="", heat=0.9),
             ReplayEvent(memory_id=3, content="", heat=0.2),
         ]
-        rpe = compute_sequence_rpe(events)
-        assert rpe > 0.2  # Significant variance
+        score = compute_sequence_priority(events)
+        assert score > 0.2  # Significant variance
 
-    def test_uniform_low_heat_low_rpe(self):
+    def test_uniform_low_heat_low_priority(self):
         events = [
             ReplayEvent(memory_id=1, content="", heat=0.1),
             ReplayEvent(memory_id=2, content="", heat=0.1),
         ]
-        rpe = compute_sequence_rpe(events)
-        assert rpe < 0.2
+        score = compute_sequence_priority(events)
+        assert score < 0.2
 
-    def test_dopamine_amplifies_rpe(self):
+    def test_dopamine_amplifies_priority(self):
         events = [
             ReplayEvent(memory_id=1, content="", heat=0.5),
             ReplayEvent(memory_id=2, content="", heat=0.8),
         ]
-        rpe_low_da = compute_sequence_rpe(events, dopamine_level=0.5)
-        rpe_high_da = compute_sequence_rpe(events, dopamine_level=1.5)
-        assert rpe_high_da > rpe_low_da
+        score_low_da = compute_sequence_priority(events, dopamine_level=0.5)
+        score_high_da = compute_sequence_priority(events, dopamine_level=1.5)
+        assert score_high_da > score_low_da
 
     def test_single_event_returns_zero(self):
         events = [ReplayEvent(memory_id=1, content="", heat=0.9)]
-        assert compute_sequence_rpe(events) == 0.0
+        assert compute_sequence_priority(events) == 0.0
 
     def test_bounded_zero_to_one(self):
         events = [
             ReplayEvent(memory_id=1, content="", heat=1.0),
             ReplayEvent(memory_id=2, content="", heat=0.0),
         ]
-        rpe = compute_sequence_rpe(events, dopamine_level=2.0)
-        assert 0.0 <= rpe <= 1.0
+        score = compute_sequence_priority(events, dopamine_level=2.0)
+        assert 0.0 <= score <= 1.0
 
 
 # ── Sequence Selection ───────────────────────────────────────────────────
 
 
 class TestSelectReplaySequences:
-    def _seq(self, rpe, direction=ReplayDirection.FORWARD):
+    def _seq(self, priority, direction=ReplayDirection.FORWARD):
         return ReplaySequence(
             events=[
                 ReplayEvent(memory_id=1, content=""),
                 ReplayEvent(memory_id=2, content=""),
             ],
             direction=direction,
-            rpe_score=rpe,
+            priority_score=priority,
         )
 
-    def test_selects_top_by_rpe(self):
+    def test_selects_top_by_priority(self):
         candidates = [self._seq(0.9), self._seq(0.1), self._seq(0.5)]
         selected = select_replay_sequences(candidates, max_sequences=2)
         assert len(selected) == 2
-        assert selected[0].rpe_score == 0.9
+        assert selected[0].priority_score == 0.9
 
     def test_filters_by_threshold(self):
         candidates = [self._seq(0.1), self._seq(0.2)]
-        selected = select_replay_sequences(candidates, rpe_threshold=0.5)
+        selected = select_replay_sequences(candidates, priority_threshold=0.5)
         # Falls back to top candidates
         assert len(selected) > 0
 
@@ -310,7 +310,7 @@ class TestRunSWRReplay:
             forward_count=2,
             reverse_count=1,
             stdp_updates=[(1, 2, 0.5)],
-            schema_signals=[{"rpe": 0.6}],
+            schema_signals=[{"priority": 0.6}],
         )
         desc = describe_replay_result(result)
         assert desc["sequences_generated"] == 3
