@@ -89,7 +89,14 @@ def evaluate_retrieval(
 
             answer = q.get("answer", "")
 
-            # Build source content set from turn IDs
+            # Build source content set from turn IDs.
+            # Match strategy: 80-char prefix of source turns compared against
+            # retrieved content. This is an engineering heuristic — BEAM paper
+            # evaluates via LLM-as-judge on full QA, not retrieval matching.
+            # We use prefix matching as a proxy for retrieval quality since we
+            # evaluate retrieval only (no LLM judge). The 80-char threshold
+            # balances specificity (longer = fewer false positives) against
+            # robustness (shorter = tolerates prefix variations).
             source_contents = set()
             for turn in conversation_turns:
                 turn_id = turn.get("id", -1)
@@ -103,8 +110,12 @@ def evaluate_retrieval(
             answer_lower = answer.lower().strip() if answer else ""
 
             if ability == "abstention":
-                # Abstention: success = no relevant evidence found
-                # Score as rank 1 if retrieval returns nothing or low-confidence
+                # Abstention: success = retrieval returns no confident match.
+                # Threshold 0.3 is an engineering heuristic — BEAM paper uses
+                # LLM-as-judge to evaluate abstention quality. We approximate
+                # by checking if top retrieval score is low (indicating the
+                # system correctly found nothing relevant). Needs calibration
+                # against actual abstention accuracy.
                 if not retrieved or retrieved[0].get("score", 0) < 0.3:
                     hit_rank = 1
             else:
@@ -229,6 +240,9 @@ def run_benchmark(split: str = "100K", limit: int | None = None, verbose: bool =
     print("=" * 72)
     print()
 
+    # LIGHT (LLM-as-judge QA) scores from Tavakoli et al., ICLR 2026
+    # Table 2, "LIGHT" column, 100K split. These are full QA scores
+    # (not retrieval-only) shown for reference comparison only.
     light_scores = {
         "abstention": 0.750,
         "contradiction_resolution": 0.050,

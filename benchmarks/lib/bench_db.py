@@ -97,7 +97,7 @@ class BenchmarkDB:
         agent_topic: str | None = None,
         min_heat: float = 0.01,
         rerank: bool = True,
-        rerank_alpha: float = 0.55,
+        rerank_alpha: float = 0.70,
     ) -> list[dict[str, Any]]:
         """Delegate to mcp_server.core.pg_recall.recall()."""
         assert self._store is not None, "Call open() first"

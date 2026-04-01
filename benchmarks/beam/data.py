@@ -93,30 +93,56 @@ def extract_conversation_turns(chat_data) -> list[dict]:
 
 
 def turns_to_memories(turns: list[dict]) -> list[dict]:
-    """Convert conversation turns to memory units (user-assistant pairs)."""
+    """Convert conversation turns to memory units (user-assistant pairs).
+
+    BEAM conversations have 3 time_anchors marking session boundaries.
+    Propagate each time_anchor forward to subsequent turns in the same
+    session — if a session starts on March-15-2024, all turns in that
+    session are from March-15-2024.  This gives the temporal/recency
+    retrieval signals meaningful values instead of defaulting to NOW().
+    """
     memories = []
+    # Track the most recent time_anchor seen — propagate forward
+    last_anchor = ""
     i = 0
     while i < len(turns):
         user_content = ""
         assistant_content = ""
-        time_anchor = ""
 
         if turns[i]["role"] == "user":
             user_content = turns[i]["content"]
-            time_anchor = turns[i].get("time_anchor", "")
+            turn_anchor = turns[i].get("time_anchor", "")
+            if turn_anchor:
+                last_anchor = turn_anchor
             if i + 1 < len(turns) and turns[i + 1]["role"] == "assistant":
                 assistant_content = turns[i + 1]["content"]
+                # Check assistant turn for anchor too
+                asst_anchor = turns[i + 1].get("time_anchor", "")
+                if asst_anchor:
+                    last_anchor = asst_anchor
                 i += 2
             else:
                 i += 1
         else:
             assistant_content = turns[i]["content"]
-            time_anchor = turns[i].get("time_anchor", "")
+            turn_anchor = turns[i].get("time_anchor", "")
+            if turn_anchor:
+                last_anchor = turn_anchor
             i += 1
 
+        # Only include [Date:] in content if this turn pair originally had
+        # a time_anchor — avoids diluting embeddings with repeated dates.
+        # The propagated `last_anchor` still feeds `created_at` for recency.
+        display_anchor = ""
+        pair_start = max(0, i - 2 if user_content and assistant_content else i - 1)
+        for ti in range(pair_start, min(pair_start + 2, len(turns))):
+            if turns[ti].get("time_anchor", ""):
+                display_anchor = turns[ti]["time_anchor"]
+                break
+
         content = ""
-        if time_anchor:
-            content += f"[Date: {time_anchor}] "
+        if display_anchor:
+            content += f"[Date: {display_anchor}] "
         if user_content:
             content += f"[user]: {user_content}"
         if assistant_content:
@@ -126,7 +152,7 @@ def turns_to_memories(turns: list[dict]) -> list[dict]:
             memories.append(
                 {
                     "content": content.strip(),
-                    "created_at": time_anchor if time_anchor else "",
+                    "created_at": last_anchor if last_anchor else "",
                     "user_content": user_content,
                 }
             )

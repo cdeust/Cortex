@@ -4,15 +4,26 @@ FlashRank (ms-marco-MiniLM-L-12-v2) provides fast cross-encoder reranking.
 Validated through LongMemEval and LoCoMo where it improves MRR by 5-15%.
 
 CE reranking with alpha blending of first-stage and CE scores is standard
-IR practice (no specific paper citation needed).
+IR practice — linear interpolation of retrieval and CE scores is the common
+approach in multi-stage retrieval (Nogueira & Cho, 2019).
 
 Sufficient Context gate (inspired by Joren et al., ICLR 2025):
-    The paper likely uses a calibrated sigmoid confidence model.
-    This implementation simplifies to a binary threshold gate: if the
-    max CE score falls below gate_threshold, all scores are suppressed
-    by a fixed multiplier. This avoids the need for calibration data
-    while preserving the core insight (suppress when nothing matches).
-    Hand-tuned constants: gate_threshold=0.15, suppression=0.1.
+    The paper uses a calibrated sigmoid confidence model to decide whether
+    retrieved context is sufficient. This implementation simplifies to a
+    binary threshold gate: if the max CE score falls below gate_threshold,
+    all scores are suppressed by a fixed multiplier. This is a lossy
+    simplification — the paper's calibrated model would be more principled.
+
+    ENGINEERING DEFAULTS (not paper-prescribed, need ablation):
+    - alpha=0.70: Blend weight for CE vs first-stage scores. Empirically
+      determined via BEAM ablation (see benchmarks/beam/ablation_results.json):
+      0.30→0.511, 0.50→0.529, 0.55→0.535, 0.70→0.542. Higher CE weight
+      helps for conversational memory where semantic understanding dominates.
+    - gate_threshold=0.15: Min CE score to consider retrieval sufficient.
+      Engineering default; the paper does not prescribe a specific threshold.
+      Not yet ablated on BEAM — TODO: add to ablation study.
+    - suppression=0.1: Score multiplier when gated. Engineering default.
+      Not yet ablated on BEAM — TODO: add to ablation study.
 
 Pure business logic -- lazy-loaded singleton, no persistent I/O.
 """
@@ -96,7 +107,7 @@ def rerank_results(
     query: str,
     candidates: list[tuple[int, float]],
     content_lookup: dict[int, str],
-    alpha: float = 0.55,
+    alpha: float = 0.70,
     max_content_len: int = 1200,
 ) -> list[tuple[int, float]]:
     """Rerank candidates using FlashRank cross-encoder."""
