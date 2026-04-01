@@ -83,10 +83,6 @@ def ablation_rerank_alpha():
 
     with BenchmarkDB() as db:
         for alpha in alphas:
-            # Monkey-patch the recall default
-            import mcp_server.core.pg_recall as pgr
-
-            original_default = pgr.recall.__defaults__
             start = time.time()
 
             # Run with this alpha by passing it through bench_db

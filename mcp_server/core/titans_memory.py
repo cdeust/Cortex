@@ -31,7 +31,6 @@ Pure business logic — stateful (maintains M and S across calls).
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import numpy as np
 
