@@ -39,10 +39,10 @@ def _get_titans() -> TitansMemory:
 # justification from the BEAM ablation study.
 
 _BASE_PG_WEIGHTS: dict[str, float] = {
-    "vector": 1.0,   # Primary signal — always full strength
-    "fts": 0.5,      # Engineering default — needs ablation
-    "heat": 0.3,     # Engineering default — needs ablation
-    "ngram": 0.3,    # Engineering default — needs ablation
+    "vector": 1.0,  # Primary signal — always full strength
+    "fts": 0.5,  # Engineering default — needs ablation
+    "heat": 0.3,  # Engineering default — needs ablation
+    "ngram": 0.3,  # Engineering default — needs ablation
     "recency": 0.0,  # Disabled by default; enabled for temporal intents
 }
 

@@ -85,6 +85,7 @@ def ablation_rerank_alpha():
         for alpha in alphas:
             # Monkey-patch the recall default
             import mcp_server.core.pg_recall as pgr
+
             original_default = pgr.recall.__defaults__
             start = time.time()
 
@@ -103,9 +104,7 @@ def ablation_rerank_alpha():
                 db.clear()
                 db.load_memories(memories, domain="beam")
                 # Recall with specific alpha
-                metrics = evaluate_retrieval_with_alpha(
-                    db, questions, turns, alpha
-                )
+                metrics = evaluate_retrieval_with_alpha(db, questions, turns, alpha)
                 for ability, m in metrics.items():
                     all_metrics[ability].append(m)
 
@@ -124,6 +123,7 @@ def ablation_rerank_alpha():
 def evaluate_retrieval_with_alpha(db, questions, turns, alpha):
     """Evaluate with a specific rerank_alpha."""
     from collections import defaultdict
+
     results_data: dict[str, list[dict]] = defaultdict(list)
 
     for ability, qs in questions.items():
@@ -184,12 +184,14 @@ def evaluate_retrieval_with_alpha(db, questions, turns, alpha):
                     if hit_rank:
                         break
 
-            results_data[ability].append({
-                "query": query,
-                "hit_rank": hit_rank,
-                "retrieved_count": len(retrieved),
-                "source_ids": source_ids,
-            })
+            results_data[ability].append(
+                {
+                    "query": query,
+                    "hit_rank": hit_rank,
+                    "retrieved_count": len(retrieved),
+                    "source_ids": source_ids,
+                }
+            )
 
     metrics: dict[str, dict] = {}
     for ability, ability_results in results_data.items():
@@ -217,9 +219,11 @@ def evaluate_retrieval_with_alpha(db, questions, turns, alpha):
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="BEAM ablation study")
     parser.add_argument(
-        "--test", default="alpha",
+        "--test",
+        default="alpha",
         choices=["alpha"],
         help="Which ablation to run",
     )
@@ -234,5 +238,7 @@ if __name__ == "__main__":
         # Save results
         out_path = Path(__file__).parent / "ablation_results.json"
         with open(out_path, "w") as f:
-            json.dump({"rerank_alpha": {str(k): v for k, v in results.items()}}, f, indent=2)
+            json.dump(
+                {"rerank_alpha": {str(k): v for k, v in results.items()}}, f, indent=2
+            )
         print(f"Results saved to {out_path}")

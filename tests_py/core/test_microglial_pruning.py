@@ -219,7 +219,11 @@ class TestPrunableEdges:
         heat = {i: 0.01 for i in range(1, 9)}
         protected = {}
         result = identify_prunable_edges(edges, heat, protected)
-        stale_edges = [e for e in result if (e["source_entity_id"], e["target_entity_id"]) == (1, 5)]
+        stale_edges = [
+            e
+            for e in result
+            if (e["source_entity_id"], e["target_entity_id"]) == (1, 5)
+        ]
         assert len(stale_edges) == 1
         assert "stale" in stale_edges[0]["prune_reason"]
         assert "disparity_insignificant" in stale_edges[0]["prune_reason"]
@@ -241,7 +245,11 @@ class TestPrunableEdges:
         heat = {i: 0.01 for i in range(1, 9)}
         protected = {}
         result = identify_prunable_edges(edges, heat, protected)
-        pruned_15 = [e for e in result if (e["source_entity_id"], e["target_entity_id"]) == (1, 5)]
+        pruned_15 = [
+            e
+            for e in result
+            if (e["source_entity_id"], e["target_entity_id"]) == (1, 5)
+        ]
         assert len(pruned_15) == 1
         assert "cold_endpoints" in pruned_15[0]["prune_reason"]
 

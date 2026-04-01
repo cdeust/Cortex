@@ -76,8 +76,8 @@ from __future__ import annotations
 # ── EMA rates for each channel ──────────────────────────────────────────
 # Ordered by biological response speed. See module docstring for rationale.
 
-DA_ALPHA = 0.3   # DA phasic RPE bursts (~100ms in biology)
-NE_ALPHA = 0.2   # LC phasic responses (~seconds in biology)
+DA_ALPHA = 0.3  # DA phasic RPE bursts (~100ms in biology)
+NE_ALPHA = 0.2  # LC phasic responses (~seconds in biology)
 ACH_ALPHA = 0.4  # ACh tracks theta oscillations (~200ms cycle)
 SER_ALPHA = 0.15  # 5-HT tonic modulation (minutes/hours in biology)
 
@@ -85,9 +85,9 @@ SER_ALPHA = 0.15  # 5-HT tonic modulation (minutes/hours in biology)
 # Engineering heuristic. Directions are qualitatively plausible but specific
 # values are hand-tuned. No paper provides these coupling equations.
 
-_DA_NE_COUPLING = -0.15   # High DA dampens NE (success reduces arousal)
-_NE_ACH_COUPLING = 0.2    # High NE boosts ACh (arousal enhances encoding)
-_SER_DA_COUPLING = -0.1   # High 5-HT dampens DA (inhibition reduces reward sensitivity)
+_DA_NE_COUPLING = -0.15  # High DA dampens NE (success reduces arousal)
+_NE_ACH_COUPLING = 0.2  # High NE boosts ACh (arousal enhances encoding)
+_SER_DA_COUPLING = -0.1  # High 5-HT dampens DA (inhibition reduces reward sensitivity)
 _ACH_SER_COUPLING = -0.15  # High ACh dampens 5-HT (encoding reduces exploration)
 
 # ── Habituation constants ──────────────────────────────────────────────

@@ -118,12 +118,32 @@ _BOOSTERS: dict[str, float] = {
 
 # ── Negation words (H4) ───────────────────────────────────────────────────
 
-_NEGATIONS = frozenset({
-    "not", "no", "never", "neither", "nobody", "nothing",
-    "nowhere", "nor", "cannot", "can't", "couldn't", "shouldn't",
-    "wouldn't", "won't", "don't", "doesn't", "didn't", "isn't",
-    "aren't", "wasn't", "weren't", "without",
-})
+_NEGATIONS = frozenset(
+    {
+        "not",
+        "no",
+        "never",
+        "neither",
+        "nobody",
+        "nothing",
+        "nowhere",
+        "nor",
+        "cannot",
+        "can't",
+        "couldn't",
+        "shouldn't",
+        "wouldn't",
+        "won't",
+        "don't",
+        "doesn't",
+        "didn't",
+        "isn't",
+        "aren't",
+        "wasn't",
+        "weren't",
+        "without",
+    }
+)
 
 _WORD_RE = re.compile(r"[a-z]+(?:'t)?", re.IGNORECASE)
 
