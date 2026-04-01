@@ -2,426 +2,217 @@
 
 # Cortex
 
-[![SafeSkill 93/100](https://img.shields.io/badge/SafeSkill-93%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/neuro-cortex-memory)
-
-### Persistent memory for Claude Code
+### A scientifically-grounded memory system built on published neuroscience and information retrieval research
 
 [![CI](https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg)](https://github.com/cdeust/Cortex/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![MCP Server](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
-[![Tests](https://img.shields.io/badge/tests-2037_passing-brightgreen.svg)](#development)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/cdeust/Cortex/pulls)
+[![Tests](https://img.shields.io/badge/tests-2068_passing-brightgreen.svg)](#development)
 
-**Claude Code forgets everything between sessions. Cortex fixes that.**
+Every algorithm, constant, and threshold in this codebase traces to a published paper or measured ablation data. Nothing is guessed. Where engineering defaults exist, they are explicitly documented as such.
 
-Install the plugin. Start talking. Cortex remembers your decisions, learns your patterns, and brings the right context back when you need it. No configuration required.
-
-[Install in 2 minutes](#install) | [What you can do](#what-you-can-do) | [How it works](#how-it-works) | [Benchmarks](#benchmarks) | [Science](#the-science)
+[Scientific Foundation](#scientific-foundation) | [Paper Index](#paper-index) | [Architecture](#architecture) | [Benchmarks](#benchmarks) | [References](#references)
 
 </div>
 
 <p align="center">
-<img src="docs/neural-graph-overview.png" width="49%" alt="Cortex Neural Graph — unified 2D view with domain separation, memories, entities, and benchmark scores" />
-<img src="docs/neural-graph-detail.png" width="49%" alt="Cortex Neural Graph — global memory filter with detail panel showing quality, biological state, and connections" />
+<img src="docs/neural-graph-overview.png" width="49%" alt="Cortex Neural Graph — unified view with domain separation, memories, entities, and connections" />
+<img src="docs/neural-graph-detail.png" width="49%" alt="Cortex Neural Graph — detail panel showing biological state, consolidation stage, and connections" />
 </p>
 
 ---
 
-## Install
+## Scientific Foundation
 
-### One-command setup (Claude Code, Cowork, VS Code)
+Cortex implements 23 computational neuroscience mechanisms and 5 information retrieval techniques. Each is a faithful translation of published equations into working code — not a metaphor, not an analogy, not a "bio-inspired heuristic."
+
+### The Zetetic Standard
+
+Every module follows a strict evidence protocol:
+
+1. **No source, no implementation.** Every algorithm must trace to a published paper with exact equations.
+2. **Multiple sources required.** A single paper is a hypothesis. Cross-reference before accepting.
+3. **Read the actual paper.** Not blog posts, not summaries. The equations.
+4. **No invented constants.** Every hardcoded number comes from paper equations, paper experiments, or measured ablation data.
+5. **Benchmark before commit.** Every change is measured. No regression accepted.
+6. **Say "I don't know."** A confident wrong answer destroys trust.
+
+Where engineering defaults exist (signal weights, blend parameters), they are explicitly labeled in the code and accompanied by ablation data where available (see `benchmarks/beam/ablation_results.json`). They are never falsely attributed to a paper.
+
+### How to audit this codebase
+
+Every module's docstring cites its source paper and the exact equations implemented:
 
 ```bash
-claude plugin marketplace add cdeust/Cortex
-claude plugin install cortex
+grep -r "et al\." mcp_server/core/ --include="*.py" -l    # All paper citations
+cat tasks/paper-implementation-audit.md                     # Full audit trail
 ```
 
-That's it. Cortex registers its MCP server, installs 4 lifecycle hooks, and activates 10 skills. Restart Claude Code and you're running.
+---
 
-### Updating
+## Paper Index
 
-Claude Code caches plugin versions and [doesn't always pick up updates](https://github.com/anthropics/claude-code/issues/29074). To force-update to the latest version:
+### Information Retrieval
 
-```bash
-curl -sSL https://raw.githubusercontent.com/cdeust/Cortex/main/scripts/update-plugin.sh | bash
-claude plugin install cortex
-```
+| Paper | Year | Venue | Implementation | Module |
+|---|---|---|---|---|
+| **Bruch et al.** "An Analysis of Fusion Functions for Hybrid Retrieval" | 2023 | ACM TOIS | TMM normalization for multi-signal fusion: `TMM(s) = (s - m_theoretical) / (M_query - m_theoretical)` | `pg_schema.py` |
+| **Nogueira & Cho** "Passage Re-ranking with BERT" | 2019 | arXiv | Linear interpolation of first-stage and cross-encoder scores. Alpha=0.70 from BEAM ablation. | `reranker.py` |
+| **Joren et al.** "Sufficient Context" | 2025 | ICLR | Binary confidence gate on cross-encoder output. Simplified from calibrated sigmoid. | `reranker.py` |
+| **Collins & Loftus** "A spreading-activation theory of semantic processing" | 1975 | Psych. Review | Recursive entity graph traversal with exponential decay, implemented as PL/pgSQL recursive CTE. | `spreading_activation.py` |
 
-### What gets installed
+### Neuroscience — Encoding
 
-| Component | What it does | Automatic? |
+| Paper | Year | Venue | Implementation | Module |
+|---|---|---|---|---|
+| **Friston** "A theory of cortical responses" | 2005 | Phil. Trans. R. Soc. B | 3-level free energy write gate (sensory/entity/schema). Fires when prediction error exceeds threshold. | `hierarchical_predictive_coding.py` |
+| **Bastos et al.** "Canonical microcircuits for predictive coding" | 2012 | Neuron | Forward (prediction error) and backward (prediction) message passing in the 3-level hierarchy. | `hierarchical_predictive_coding.py` |
+| **Wang & Bhatt** "Emotional modulation of memory" | 2024 | Psych. Review | Yerkes-Dodson inverted-U priority encoding: `priority = valence * yerkes_dodson(arousal)`. | `emotional_tagging.py` |
+| **Doya** "Metalearning and neuromodulation" | 2002 | Neural Networks | DA/NE/ACh/5-HT coupled cascade with cross-channel effects. | `coupled_neuromodulation.py` |
+| **Schultz** "A neural substrate of prediction and reward" | 1997 | Science | Dopamine prediction error: `DA = reward - expected_reward`. | `coupled_neuromodulation.py` |
+
+### Neuroscience — Consolidation
+
+| Paper | Year | Venue | Implementation | Module |
+|---|---|---|---|---|
+| **Kandel** "The molecular biology of memory storage" | 2001 | Nobel / Science | Four-stage cascade: LABILE -> EARLY_LTP -> LATE_LTP -> CONSOLIDATED. | `cascade.py` |
+| **Dudai** "The restless engram" | 2012 | Phil. Trans. R. Soc. B | Reconsolidation: accessing a consolidated memory returns it to labile state. | `reconsolidation.py` |
+| **McClelland et al.** "Why there are complementary learning systems" | 1995 | Psych. Review | CLS: fast hippocampal binding + slow cortical integration. Two-stage transfer. | `dual_store_cls.py`, `two_stage_model.py` |
+| **Kumaran et al.** "What learning systems do intelligent agents need?" | 2016 | Neurosci. & Biobehav. Rev. | Schema-consistent rapid cortical learning accelerating hippocampal transfer. | `two_stage_model.py` |
+| **Frey & Morris** "Synaptic tagging and long-term potentiation" | 1997 | Nature | Weak memories sharing entities with strong ones get retroactively promoted. | `synaptic_tagging.py` |
+| **Josselyn & Tonegawa** "Memory engrams" | 2020 | Science | CREB-like excitability slots for engram allocation competition. | `engram.py` |
+
+### Neuroscience — Retrieval & Navigation
+
+| Paper | Year | Venue | Implementation | Module |
+|---|---|---|---|---|
+| **Behrouz et al.** "Titans: Learning to Memorize at Test Time" | 2025 | ICML | `S_t = eta*S_{t-1} - theta*grad_l(M;x)`, `M_t = M_{t-1} - S_t`. Note: paper uses learned eta/theta; we use fixed constants (documented simplification). | `titans_memory.py` |
+| **Stachenfeld et al.** "The hippocampus as a predictive map" | 2017 | Nat. Neurosci. | Successor Representation: co-access matrix for "what memories are usually accessed together?" | `cognitive_map.py` |
+| **Ramsauer et al.** "Hopfield Networks is All You Need" | 2021 | ICLR | Modern continuous Hopfield for content-addressable recall: `E = -log(sum(exp(beta * xi^T * q)))`. | `hopfield.py` |
+| **Kanerva** "Hyperdimensional computing" | 2009 | Cognitive Computation | 1024-dim bipolar HDC: bind, bundle, permute for compositional memory addressing. | `hdc_encoder.py` |
+
+### Neuroscience — Plasticity & Maintenance
+
+| Paper | Year | Venue | Implementation | Module |
+|---|---|---|---|---|
+| **Hasselmo** "What is the function of hippocampal theta rhythm?" | 2005 | Hippocampus | Theta/gamma oscillatory gating for encoding vs retrieval phases. | `oscillatory_clock.py` |
+| **Buzsaki** "Hippocampal sharp wave-ripple" | 2015 | Neuron | SWR events trigger replay and consolidation during idle periods. | `oscillatory_clock.py` |
+| **Leutgeb et al.** "Pattern separation in the dentate gyrus" | 2007 | Science | DG orthogonalization via random projection: `output = sign(W_random @ input)`. | `pattern_separation.py` |
+| **Yassa & Stark** "Pattern separation in the hippocampus" | 2011 | Trends Neurosci. | Neurogenesis analog: new random projections increase separation capacity over time. | `pattern_separation.py` |
+| **Turrigiano** "The self-tuning neuron" | 2008 | Nat. Rev. Neurosci. | Homeostatic synaptic scaling: proportional rescaling when average heat drifts from target. | `homeostatic_plasticity.py` |
+| **Abraham & Bear** "Metaplasticity" | 1996 | Trends Neurosci. | BCM sliding threshold: LTP/LTD threshold shifts based on recent activity history. | `homeostatic_plasticity.py` |
+| **Tse et al.** "Schemas and memory consolidation" | 2007 | Science | Schema-accelerated consolidation: matching memories skip hippocampal replay. | `schema_engine.py` |
+| **Gilboa & Marlatte** "Neurobiology of schemas" | 2017 | Trends Cogn. Sci. | Piaget accommodation: schema updates when new evidence conflicts. | `schema_engine.py` |
+| **Hebb** *The Organization of Behavior* | 1949 | Book | `delta_w = lr * pre * post`. Co-occurrence strengthening of entity edges. | `synaptic_plasticity.py` |
+| **Bi & Poo** "Synaptic modifications in cultured hippocampal neurons" | 1998 | J. Neurosci. | STDP: temporal order determines LTP vs LTD direction. | `synaptic_plasticity.py` |
+| **Perea et al.** "Tripartite synapses" | 2009 | Trends Neurosci. | Astrocyte calcium dynamics: `dCa/dt = IP3_influx - SERCA_pump + leak`. D-serine LTP facilitation. | `tripartite_synapse.py` |
+| **Kastellakis et al.** "Synaptic clustering within dendrites" | 2015 | Neuron | Branch-specific nonlinear integration: co-active inputs produce supralinear summation. | `dendritic_clusters.py` |
+| **Wang et al.** "Microglia-mediated synapse elimination" | 2020 | Science | Complement-dependent pruning of weak edges + orphan archival. | `microglial_pruning.py` |
+| **Wixted** "The psychology and neuroscience of forgetting" | 2004 | Ann. Rev. Psych. | Proactive/retroactive interference detection + sleep orthogonalization. | `interference.py` |
+| **Ebbinghaus** *Memory* | 1885 | Book | Exponential forgetting: `retention = e^(-t/S)`. Foundation for heat decay. | `thermodynamics.py` |
+| **Kosowski et al.** "Dragon Hatchling" | 2025 | arXiv | Hebbian co-activation: `weight += lr * score_a * score_b` on co-retrieved entity edges. | `pg_store_relationships.py` |
+
+---
+
+## Ablation Data
+
+Ablation results are committed to the repository as JSON for reproducibility.
+
+### Rerank Alpha (Cross-Encoder Blend Weight)
+
+Tested on BEAM 100K (20 conversations, 395 questions). Source: `benchmarks/beam/ablation_results.json`
+
+| Alpha | BEAM MRR | Note |
 |---|---|---|
-| **MCP Server** | 35 tools for memory, retrieval, profiling, codebase analysis | Yes |
-| **SessionStart hook** | Injects hot memories + cognitive profile at session start | Yes |
-| **SessionEnd hook** | Updates your cognitive profile after each session | Yes |
-| **PostToolUse hook** | Auto-captures important tool outputs as memories | Yes |
-| **Compaction hook** | Saves checkpoint before context window compaction | Yes |
-| **10 Skills** | Workflow guides for every tool (invoke via `/cortex-*`) | Yes |
+| 0.00 | 0.442 | No CE reranking |
+| 0.30 | 0.511 | Light CE influence |
+| 0.50 | 0.529 | Equal blend |
+| 0.55 | 0.535 | Previous default |
+| **0.70** | **0.542** | **Current default** |
 
-### Database setup
+Higher CE weight helps because conversational memory benefits more from semantic understanding (cross-encoder) than lexical matching (first-stage).
 
-Cortex stores memories in PostgreSQL with pgvector for semantic search:
+### Documented Engineering Defaults
 
-```bash
-# macOS
-brew install postgresql@17 pgvector
-brew services start postgresql@17
-createdb cortex
-psql -d cortex -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
-export DATABASE_URL=postgresql://localhost:5432/cortex
-```
+These values lack paper backing and are explicitly marked as such in code:
 
-### Docker (zero setup, includes PostgreSQL)
-
-Everything pre-installed: PostgreSQL 17 + pgvector, Python deps, sentence-transformers model cached, Claude Code CLI. One command:
-
-```bash
-# Clone, build, and run (first time)
-git clone https://github.com/cdeust/Cortex.git && cd Cortex
-./docker/run.sh /path/to/your/project
-```
-
-The `run.sh` script auto-extracts credentials from macOS keychain, builds the image on first run, and mounts a persistent volume for memories.
-
-<details>
-<summary>Manual Docker commands</summary>
-
-```bash
-docker build -t cortex-runtime -f docker/Dockerfile .
-
-docker run -it \
-  -v /path/to/project:/workspace \
-  -v cortex-pgdata:/var/lib/postgresql/17/data \
-  -v ~/.claude:/home/cortex/.claude-host:ro \
-  -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
-  cortex-runtime
-```
-
-Or with an OAuth token:
-
-```bash
-docker run -it \
-  -v /path/to/project:/workspace \
-  -v cortex-pgdata:/var/lib/postgresql/17/data \
-  -e CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
-  cortex-runtime
-```
-
-</details>
-
-The `cortex-pgdata` named volume persists memories across container restarts. Host credentials are mounted read-only — never modified.
-
-### Alternative install methods
-
-<details>
-<summary>Claude Code CLI (no plugin)</summary>
-
-```bash
-claude mcp add cortex -- uvx neuro-cortex-memory
-```
-
-This registers the MCP server only. No hooks, no skills, no auto-capture.
-
-</details>
-
-<details>
-<summary>From source</summary>
-
-```bash
-git clone https://github.com/cdeust/Cortex.git
-cd Cortex
-pip install -e ".[dev,postgresql]"
-claude mcp add cortex -- python -m mcp_server
-```
-
-</details>
+| Constant | Value | Location | Status |
+|---|---|---|---|
+| FTS weight | 0.5 | `pg_recall.py` | Engineering default |
+| Heat weight | 0.3 | `pg_recall.py` | Engineering default |
+| Ngram weight | fts * 0.6 | `pg_recall.py` | Engineering heuristic |
+| Recency decay | 0.01/day | `pg_schema.py` | Half-life ~69 days |
+| Titans eta | 0.9 | `titans_memory.py` | Paper uses learned params; this is fixed SGD default |
+| Titans theta | 0.01 | `titans_memory.py` | Paper uses learned params; this is fixed lr default |
+| CE gate threshold | 0.15 | `reranker.py` | Engineering default |
+| CE suppression | 0.1 | `reranker.py` | Engineering default |
 
 ---
 
-## What You Can Do
+## Architecture
 
-### 10 skills — invoke any with `/cortex-*`
+Clean Architecture. Inner layers never import outer layers.
 
-| Skill | What it does | Example |
+<p align="center">
+<img src="docs/diagram-architecture.svg" alt="Clean Architecture layers" width="80%"/>
+</p>
+
+| Layer | Modules | Rule |
 |---|---|---|
-| `/cortex-remember` | Store decisions, fixes, patterns, lessons | *"Remember we chose JWT over sessions for auth"* |
-| `/cortex-recall` | Search memories with intent-aware retrieval | *"Why did we switch databases?"* |
-| `/cortex-explore-memory` | Check memory health, find gaps, assess coverage | *"What do we know about the payment module?"* |
-| `/cortex-consolidate` | Run maintenance: decay, compress, merge | *"Clean up old memories"* |
-| `/cortex-profile` | View cognitive style, patterns, blind spots | *"Show my work patterns"* |
-| `/cortex-navigate-knowledge` | Trace relationships, explore causal chains | *"How does auth relate to billing?"* |
-| `/cortex-setup-project` | Bootstrap memory from code or import history | *"Set up Cortex for this project"* |
-| `/cortex-visualize` | Launch unified neural graph visualization | *"Show me the memory map"* |
-| `/cortex-automate` | Create triggers, rules, sync to CLAUDE.md | *"Remind me about X when I open that file"* |
-| `/cortex-debug-memory` | Fix bad memories, rate quality, restore checkpoints | *"That memory is wrong, delete it"* |
-
-### Codebase analysis
-
-Cortex can index your codebase directly into memory — replacing external tools like GitNexus.
-
-```bash
-# From any Claude Code session:
-codebase_analyze(directory="/path/to/project")
-```
-
-| Feature | What it does |
-|---|---|
-| **Tree-sitter AST parsing** | Extracts imports, classes, functions, methods for Python, TypeScript, Go, Swift, Rust (regex fallback for others) |
-| **Cross-file import resolution** | `from auth.tokens import verify_jwt` resolves to the actual file defining it |
-| **Type-reference resolution** | For Swift/Go where files reference types without explicit imports |
-| **Class-method binding** | Methods scoped to parent class (`AuthService.validate`, not just `validate`) |
-| **Inheritance tracking** | `class Child(Parent)` creates "extends" edges in the knowledge graph |
-| **Community detection** | Louvain clustering groups functionally related files |
-| **Impact analysis** | Upstream/downstream BFS — "what breaks if I change this file?" |
-| **Incremental** | SHA-256 hash per file, only re-processes changed files |
-
-Every file becomes a semantic memory. Every symbol becomes an entity. Every import and type reference becomes a relationship edge. All queryable via `recall("how does authentication work")`.
-
-### What happens automatically (no skill needed)
-
-**At session start** — Cortex injects your hottest memories, fired triggers, and cognitive profile. You get context without asking.
-
-**During the session** — The PostToolUse hook captures significant outputs (bug fixes, file edits, test results) as memories automatically. The predictive coding gate filters noise.
-
-**At session end** — Your cognitive profile updates with what you did, how you worked, and what tools you used.
-
-**On context compaction** — A checkpoint saves your working state so nothing is lost when the context window compresses.
-
-**Global memory auto-detection** — When you store architecture rules, infrastructure facts, coding conventions, or security policies, Cortex automatically marks them as **global** — visible across all your projects. No manual tagging needed. A weighted signal detector scores content across 6 categories (architecture, convention, infrastructure, security, cross-project, knowledge) and promotes memories that transcend any single codebase.
-
-### Quick examples
-
-**Remember a decision:**
-> "Remember that we're using PostgreSQL instead of MongoDB for the auth service because we need ACID transactions"
-
-**Recall with context:**
-> "What did we decide about the database for auth?" — Cortex detects causal intent, boosts entity graph signals, returns the decision with reasoning
-
-**Get proactive context:**
-> Start a session in a project you haven't touched in 2 weeks — Cortex surfaces what you were working on, what decisions were pending, and what patterns it noticed
-
-**Import your history:**
-> `/cortex-setup-project` — backfill memories from all your past Claude Code conversations across every project
-
-**Share knowledge across projects:**
-> "Remember that we always use clean architecture with dependency injection" — auto-detected as global, visible in every project you work on
-
----
-
-## How It Works
-
-### The big picture
-
-<p align="center">
-<img src="docs/diagram-big-picture.svg" alt="Cortex big picture: Claude Code connects to the Cortex Plugin (MCP Server with 34 tools and 4 lifecycle hooks) and 10 Skills, backed by PostgreSQL + pgvector" width="100%"/>
-</p>
-
-### Memory write path
-
-When you say "remember this" or the auto-capture hook fires:
-
-<p align="center">
-<img src="docs/diagram-write-path.svg" alt="Memory write path: remember -> Predictive Coding Gate (novel/redundant) -> Emotional Tagging -> Active Curation (merge/link/create) -> PostgreSQL" width="100%"/>
-</p>
-
-The 4-signal write gate compares embedding distance, entity overlap, temporal proximity, and structural similarity against existing memories. Only genuinely novel content passes through.
-
-### Memory read path
-
-When you ask a question or the session-start hook fires:
-
-<p align="center">
-<img src="docs/diagram-read-path.svg" alt="Memory read path: recall query -> Intent Classification -> PL/pgSQL recall_memories() -> 5-signal WRRF fusion -> FlashRank Reranking -> Surprise Momentum -> Top 10 Results" width="100%"/>
-</p>
-
-The system classifies your query intent first, then adjusts which signals matter most. A "when did we..." question boosts recency; a "why did we..." question boosts causal graph traversal.
-
-### Memory lifecycle
-
-Memories aren't static. They heat up when accessed, cool down over time, compress when old, and consolidate from episodic (specific events) into semantic (general knowledge):
-
-<p align="center">
-<img src="docs/diagram-lifecycle.svg" alt="Memory lifecycle: New (heat=1.0) -> Active -> Cooling -> Compressed -> Consolidated, with recall loops back to Active" width="100%"/>
-</p>
-
-### Cognitive profiling
-
-Cortex builds a profile of how you work — from your Claude Code session history:
-
-<p align="center">
-<img src="docs/diagram-profiling.svg" alt="Cognitive profiling: Session History -> Pattern Extraction -> Cognitive Style, Entry Patterns, Blind Spots, Cross-Domain Bridges -> Cognitive Profile" width="100%"/>
-</p>
-
----
-
-## 35 MCP Tools
-
-<details>
-<summary>Full tool reference</summary>
-
-### Memory (8 tools)
-
-| Tool | What it does |
-|---|---|
-| `remember` | Store a memory through the predictive coding write gate (auto-detects global) |
-| `recall` | Retrieve via 5-signal WRRF fusion + FlashRank reranking |
-| `consolidate` | Run decay, compression, CLS consolidation, sleep compute |
-| `checkpoint` | Save/restore working state across context compaction |
-| `memory_stats` | Memory system diagnostics |
-| `narrative` | Generate project story from stored memories |
-| `import_sessions` | Import conversation history into memory |
-
-### Navigation (5 tools)
-
-| Tool | What it does |
-|---|---|
-| `recall_hierarchical` | Fractal L0/L1/L2 hierarchy with drill-down |
-| `drill_down` | Navigate into a fractal cluster |
-| `navigate_memory` | Co-access graph traversal (Successor Representation) |
-| `get_causal_chain` | Trace entity relationships through the knowledge graph |
-| `detect_gaps` | Find isolated entities, sparse domains, temporal drift |
-
-### Management (6 tools)
-
-| Tool | What it does |
-|---|---|
-| `forget` | Hard/soft delete with protection guard |
-| `anchor` | Mark as compaction-resistant (heat=1.0, permanent) |
-| `rate_memory` | Useful/not-useful feedback for metamemory |
-| `validate_memory` | Check memories against current filesystem state |
-| `backfill_memories` | Auto-import prior Claude Code conversations |
-| `seed_project` | Bootstrap memory from codebase structure |
-| `codebase_analyze` | Tree-sitter AST analysis with cross-file resolution |
-
-### Profiling (8 tools)
-
-| Tool | What it does |
-|---|---|
-| `query_methodology` | Load cognitive profile + hot memories for session |
-| `detect_domain` | Classify current domain from working directory |
-| `rebuild_profiles` | Full rescan of all session history |
-| `list_domains` | Overview of all tracked project domains |
-| `record_session_end` | Incremental profile update + session critique |
-| `explore_features` | Behavioral interpretability (features, persona, attribution) |
-| `get_methodology_graph` | Graph data for visualization |
-| `open_visualization` | Launch 3D neural graph in browser |
-
-### Automation (7 tools)
-
-| Tool | What it does |
-|---|---|
-| `sync_instructions` | Push top memory insights into CLAUDE.md |
-| `create_trigger` | Prospective memory triggers (keyword/time/file/domain) |
-| `add_rule` | Add neuro-symbolic rules (hard/soft/tag) |
-| `get_rules` | List active rules by scope |
-| `get_project_story` | Period-based autobiographical narrative |
-| `assess_coverage` | Knowledge coverage score (0-100) + recommendations |
-| `run_pipeline` | Drive ai-architect pipeline end-to-end |
-
-</details>
-
----
-
-## Agents
-
-Cortex supports 11 specialized agents, each with memory-scoped knowledge. The orchestrator decomposes tasks and spawns specialists in parallel worktrees.
-
-<details>
-<summary>Agent roster</summary>
-
-| Agent | Role | Memory scope |
-|---|---|---|
-| **Orchestrator** | Decomposes tasks, spawns agents, merges results | Project story, entity chains, gaps |
-| **Engineer** | Clean Architecture, SOLID, root-cause fixes | Past implementations, causal chains |
-| **Tester** | Test strategy, coverage, fragile modules | Past failures, wiring gaps |
-| **Reviewer** | Code review, ADR enforcement | Review feedback, accepted trade-offs |
-| **UX** | Design rationale, accessibility | UX decisions, user constraints |
-| **Frontend** | Component architecture, integration | Existing components, patterns |
-| **Security** | Threat models, risk acceptance | Prior findings, data flows |
-| **Researcher** | Paper reviews, benchmarks | Papers reviewed, benchmark history |
-| **DBA** | Schema design, query optimization | Schema decisions, perf issues |
-| **DevOps** | Infrastructure, incidents, deployments | Infra decisions, postmortems |
-| **Architect** | ADRs, decomposition, refactoring | ADRs, decomposition plans |
-
-Each agent uses `agent_topic` scoping — a **soft boost** that promotes topic-relevant memories during retrieval without hiding cross-topic knowledge. Validated empirically: hard filtering destroyed precision (-0.101 MRR), soft boosting is neutral-to-positive (-0.001 MRR).
-
-</details>
-
----
-
-## Visualization
-
-```bash
-# From any Claude Code session:
-/cortex-visualize    # or directly:
-# cortex:open_visualization    — Unified neural graph at localhost:3458
-```
-
-The graph organizes everything into a 6-level hierarchy — from broad categories down to individual memories and entities. Node size reflects importance, glow reflects heat (recency), and colored arcs show quality scores. Auto-shuts down after 10 minutes idle.
-
-<details>
-<summary>Visual encoding reference</summary>
-
-| Node type | Color | Represents |
-|---|---|---|
-| Domain | Gold | A project you work in |
-| Memory (episodic) | Mint green | A specific event or conversation |
-| Memory (semantic) | Magenta | Abstracted knowledge |
-| Entity | Cyan/Blue/Red | Extracted element (function, dependency, error) |
-| Entry point | Cyan | How you start work in a domain |
-| Recurring pattern | Green | Behavioral pattern across sessions |
-| Behavioral feature | Purple | Learned feature from sparse dictionary |
-
-| Visual | Meaning |
-|---|---|
-| Node size | Importance (session volume, access frequency, heat) |
-| Glow intensity | Thermodynamic heat (bright = recent, dim = cold) |
-| Quality arc | Colored ring: green (>60%), amber (30-60%), red (<30%) |
-| Pulsing ring | Emotional arousal |
-| Edge width | Relationship strength |
-| Edge particles | Animated dots on selected node's connections |
-
-| Interaction | Effect |
-|---|---|
-| Click node | Select, show details, highlight neighbors |
-| Scroll | Zoom through 4 fractal levels |
-| Filter buttons | All, Methodology, Memories, Knowledge, Hot |
-| Search bar | Full-text search across labels and content |
-| `M` key | Toggle activity monitor |
-| `R` key | Reset view |
-| `?` key | Open glossary |
-
-</details>
+| **core/** | 108 | Pure business logic. Zero I/O. Imports only `shared/`. |
+| **infrastructure/** | 21 | All I/O: PostgreSQL, embeddings, file system. |
+| **handlers/** | 60 | Composition roots wiring core + infrastructure. |
+| **shared/** | 11 | Pure utilities. Python stdlib only. |
+
+**Storage:** PostgreSQL 15+ with pgvector (HNSW) and pg_trgm. All retrieval in PL/pgSQL stored procedures.
+
+**Retrieval pipeline:** Intent classification -> PG `recall_memories()` (5-signal TMM fusion) -> FlashRank cross-encoder reranking -> Titans surprise update.
+
+| Signal | Source | TMM Theoretical Min | Paper |
+|---|---|---|---|
+| Vector similarity | pgvector HNSW (384-dim) | -1.0 | Bruch et al. 2023 |
+| Full-text search | tsvector + ts_rank_cd | 0.0 | Bruch et al. 2023 |
+| Trigram similarity | pg_trgm | 0.0 | Bruch et al. 2023 |
+| Thermodynamic heat | Ebbinghaus decay model | 0.0 | Ebbinghaus 1885 |
+| Recency | Exponential time decay | 0.0 | -- |
 
 ---
 
 ## Benchmarks
 
-7 benchmarks spanning 2024-2026, all running on the **production PostgreSQL backend** — same `recall_memories()` stored procedure, same FlashRank reranking. No custom retrievers.
+All scores are **retrieval-only** — no LLM reader in the evaluation loop. We measure whether retrieval places correct evidence in the top results. Nothing else.
 
-### Results
+Most memory systems report full QA scores (retrieve + GPT-4 reader + judge). This conflates retrieval quality with reader model strength. A strong reader compensates for broken retrieval. We don't do that.
 
-| Benchmark | Cortex | Best in paper | Delta |
-|---|---|---|---|
-| **LongMemEval R@10** (ICLR 2025) | **98.0%** | 78.4% | **+19.6pp** |
-| **LongMemEval MRR** | **0.880** | -- | -- |
-| **LoCoMo R@10** (ACL 2024) | **97.7%** | -- | -- |
-| **LoCoMo MRR** | **0.840** | -- | -- |
-| **BEAM Overall MRR** (ICLR 2026) | **0.627** | 0.329 | **+91%** |
-| **Spell Alteration** (1.5M token haystack) | **5/5 PASS** | -- | -- |
+| Benchmark | Metric | Cortex | Best in Paper | Paper |
+|---|---|---|---|---|
+| LongMemEval | R@10 | **98.0%** | 78.4% | Wang et al., ICLR 2025 |
+| LongMemEval | MRR | **0.880** | -- | |
+| LoCoMo | R@10 | **97.7%** | -- | Maharana et al., ACL 2024 |
+| LoCoMo | MRR | **0.840** | -- | |
+| BEAM | Overall MRR | **0.532** | 0.329 (LIGHT) | Tavakoli et al., ICLR 2026 |
 
-### Why retrieval-only metrics?
+Note: BEAM LIGHT comparison is full QA (LLM-as-judge from Table 2), not retrieval-only — shown for reference.
 
-Every score above is **retrieval-only** — no LLM reader in the evaluation loop. We measure one thing: *did the retrieval system place the correct evidence in the top results?*
+<details>
+<summary>BEAM per-ability breakdown</summary>
 
-Most memory systems report full QA scores — retrieve context, feed to GPT-4/Claude, judge the answer. This conflates retrieval quality with reader model strength. A powerful reader can compensate for broken retrieval by reasoning over vaguely related context.
+| Ability | MRR | R@5 | R@10 | LIGHT (Table 2) |
+|---|---|---|---|---|
+| contradiction_resolution | 0.879 | 100.0% | 100.0% | 0.050 |
+| knowledge_update | 0.867 | 97.5% | 97.5% | 0.375 |
+| temporal_reasoning | 0.857 | 95.0% | 97.5% | 0.075 |
+| multi_session_reasoning | 0.738 | 87.5% | 92.5% | -- |
+| information_extraction | 0.542 | 65.0% | 72.5% | 0.375 |
+| summarization | 0.359 | 61.1% | 69.4% | 0.277 |
+| preference_following | 0.356 | 55.0% | 62.5% | 0.483 |
+| event_ordering | 0.353 | 52.5% | 62.5% | 0.266 |
+| instruction_following | 0.242 | 37.5% | 52.5% | 0.500 |
+| abstention | 0.125 | 12.5% | 12.5% | 0.750 |
 
-We report two standard metrics:
-- **Recall@K**: What fraction of questions had correct evidence *anywhere* in the top K?
-- **MRR (Mean Reciprocal Rank)**: *Where* in the ranked list does the first correct result appear? MRR 0.880 means it's typically the first or second result.
+**Known weaknesses:** Abstention requires knowing what was *never discussed* — a comprehension problem, not retrieval. Instruction following requires surfacing meta-directives semantically distant from topical queries.
 
-High retrieval MRR guarantees high QA with any competent reader. High QA does *not* guarantee high retrieval. [See detailed methodology explanation.](#retrieval-methodology)
+</details>
 
 <details>
 <summary>LongMemEval per-category breakdown</summary>
@@ -450,258 +241,74 @@ High retrieval MRR guarantees high QA with any competent reader. High QA does *n
 
 </details>
 
-<details>
-<summary>BEAM per-ability breakdown</summary>
-
-| Ability | Cortex | LIGHT | Delta |
-|---|---|---|---|
-| contradiction_resolution | **0.892** | 0.050 | **+1684%** |
-| temporal_reasoning | **0.789** | 0.075 | **+952%** |
-| knowledge_update | **0.826** | 0.375 | **+120%** |
-| multi_session_reasoning | **0.737** | 0.000 | -- |
-| information_extraction | **0.519** | 0.375 | **+38%** |
-| preference_following | 0.410 | **0.483** | -15% |
-| event_ordering | **0.326** | 0.266 | **+23%** |
-| summarization | **0.311** | 0.277 | **+12%** |
-| instruction_following | 0.218 | **0.500** | -56% |
-| abstention | 0.125 | **0.750** | -83% |
-
-Cortex dominates 7/10 abilities. The three where LIGHT leads (preference, instruction, abstention) expose genuine retrieval challenges: abstention requires knowing what was *never discussed*, instruction following requires surfacing directives across 100K tokens of noise.
-
-</details>
-
-<details>
-<summary>Spell Alteration benchmark</summary>
-
-Needle-in-a-haystack memory fidelity test. Ingests a complete 1.5M-token novel as 3000+ memories, replaces 2 specific terms with fakes throughout the entire corpus, then tests recall precision.
-
-**Test A (Easy):** Ingest altered story. Can the system find the 2 fake terms among 3372 memories and confirm the originals are absent?
-
-**Test B (Hard):** Ingest BOTH the original and altered versions (6744 total memories, ~3.1M tokens). Compare them from memory alone: identify which terms were removed, which fakes were added, and correctly pair each original to its replacement.
-
-| Test | Result | What it proves |
-|---|---|---|
-| A1 — Fake terms retrievable | **PASS** | Both fakes found in 3372-memory haystack |
-| A2 — Original terms absent | **PASS** | Both originals confirmed gone from corpus |
-| B1 — Identified removed terms | **PASS** | Correctly identified which 2 terms disappeared |
-| B2 — Identified fake terms | **PASS** | Correctly identified which 2 new terms appeared |
-| B3 — Correct original-to-fake pairing | **PASS** | Matched each original to its replacement via context overlap |
-
-Haystack: 6744 memories (~3.1M tokens). Total time: ~208s on Apple Silicon.
-
-**Note:** The benchmark requires a user-provided PDF (not included for copyright reasons). See [Reproduce](#reproduce) for instructions.
-
-</details>
-
-### Reproduce
-
-```bash
-pip install sentence-transformers flashrank datasets
-
-# LongMemEval (~19 min)
-curl -sL -o benchmarks/longmemeval/longmemeval_s.json \
-  "https://huggingface.co/datasets/xiaowu0162/LongMemEval/resolve/main/longmemeval_s"
-DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/longmemeval/run_benchmark.py --variant s
-
-# LoCoMo (~24 min)
-curl -sL -o benchmarks/locomo/locomo10.json \
-  "https://huggingface.co/datasets/Percena/locomo-mc10/resolve/main/raw/locomo10.json"
-DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/locomo/run_benchmark.py
-
-# BEAM (~5 min, auto-downloads)
-DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/beam/run_benchmark.py --split 100K
-
-# Spell Alteration (~4 min, requires user-provided PDF)
-# Provide any long-form PDF (1M+ tokens recommended)
-pip install pymupdf
-DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/spell_alteration/run_benchmark.py --pdf /path/to/your/book.pdf
-```
-
----
-
-## The Science
-
-Cortex implements 23 neuroscience-inspired mechanisms, each grounded in published research. This isn't metaphor — the computational models follow the papers' equations and algorithms, adapted to a memory system operating at hours/days timescale.
-
-### Why neuroscience?
-
-Biological memory solves the exact problems we face: storing selectively (not everything), retrieving by relevance (not recency alone), forgetting gracefully (not all-or-nothing), and consolidating over time (episodic events become general knowledge). Evolution spent 500 million years optimizing these mechanisms. We implement their computational models.
-
-### Test-time learning (Titans + Dragon Hatchling)
-
-The biggest innovation: the retrieval system **learns from its own queries**.
-
-- **Surprise momentum** (Behrouz et al., NeurIPS 2025 — Titans): After each recall, compute `surprise = 1 - mean(cosine_sim(query, results))`. Surprising results get a heat boost; redundant ones get suppressed. An EMA momentum term amplifies the effect. This single mechanism improved LongMemEval R@10 from 90.4% to **98.0%** (+7.6pp).
-
-- **Co-activation strengthening** (Kosowski et al., 2025 — Dragon Hatchling): When memories A and B are co-retrieved, their entity edges get Hebbian reinforcement: `weight += lr * score_product`. The knowledge graph learns from usage patterns.
-
-- **Adaptive decay** (Behrouz et al., NeurIPS 2025 — Titans): Per-memory decay rates computed from `access_count`, `useful_count`, and `surprise_score`. Useful memories decay slower (0.999/hr); redundant ones faster (0.90/hr).
-
-### Server-side WRRF fusion
-
-All retrieval runs in a single PL/pgSQL stored procedure. Five signals fused server-side with Weighted Reciprocal Rank Fusion:
-
-| Signal | Source | What it captures |
-|---|---|---|
-| **Vector** | pgvector HNSW (384-dim) | Semantic similarity |
-| **FTS** | tsvector + ts_rank_cd | Keyword matching |
-| **Trigram** | pg_trgm similarity | Fuzzy/partial matching |
-| **Heat** | Thermodynamic model | Importance + recency |
-| **Recency** | Timestamp decay | Temporal relevance |
-
-Intent classification adjusts signal weights per query: temporal queries boost recency, causal queries boost spreading activation, entity queries boost BM25/FTS.
-
-### Biological mechanisms
-
-<p align="center">
-<img src="docs/diagram-mechanisms.svg" alt="23 biological mechanisms organized into Encoding, Storage, Retrieval, and Plasticity stages with feedback loop" width="100%"/>
-</p>
-
-<details>
-<summary>Full mechanism reference with paper citations</summary>
-
-| Mechanism | Module | Paper | What it does |
-|---|---|---|---|
-| Surprise Momentum | `thermodynamics.py` | Behrouz et al. 2025 (Titans) | Test-time learning: retrieval surprise -> heat modulation via EMA momentum |
-| Adaptive Decay | `decay_cycle.py` | Behrouz et al. 2025 (Titans) | Per-memory decay rates from access/useful/surprise signals |
-| Co-Activation | `pg_store_relationships.py` | Kosowski et al. 2025 (Dragon Hatchling) | Hebbian reinforcement of entity edges from co-retrieval |
-| Hierarchical Predictive Coding | `hierarchical_predictive_coding.py` | Friston 2005, Bastos 2012 | 3-level free energy gate (sensory/entity/schema) |
-| Coupled Neuromodulation | `coupled_neuromodulation.py` | Doya 2002, Schultz 1997 | DA/NE/ACh/5-HT coupled cascade with cross-channel effects |
-| Oscillatory Clock | `oscillatory_clock.py` | Hasselmo 2005, Buzsaki 2015 | Theta/gamma/SWR phase gating for encoding/retrieval |
-| Consolidation Cascade | `cascade.py` | Kandel 2001, Dudai 2012 | LABILE -> EARLY_LTP -> LATE_LTP -> CONSOLIDATED |
-| Pattern Separation | `pattern_separation.py` | Leutgeb 2007, Yassa & Stark 2011 | DG orthogonalization + neurogenesis analog |
-| Schema Engine | `schema_engine.py` | Tse 2007, Gilboa & Marlatte 2017 | Cortical knowledge structures with Piaget accommodation |
-| Tripartite Synapse | `tripartite_synapse.py` | Perea 2009, De Pitta 2012 | Astrocyte calcium dynamics, D-serine LTP facilitation |
-| Interference Management | `interference.py` | Wixted 2004 | Proactive/retroactive detection + sleep orthogonalization |
-| Homeostatic Plasticity | `homeostatic_plasticity.py` | Turrigiano 2008, Abraham & Bear 1996 | Synaptic scaling + BCM sliding threshold |
-| Dendritic Clusters | `dendritic_clusters.py` | Kastellakis 2015 | Branch-specific nonlinear integration + priming |
-| Two-Stage Model | `two_stage_model.py` | McClelland 1995, Kumaran 2016 | Hippocampal fast-bind -> cortical slow-integrate |
-| Emotional Tagging | `emotional_tagging.py` | Wang & Bhatt 2024 | Amygdala-inspired priority encoding with Yerkes-Dodson curve |
-| Synaptic Tagging | `synaptic_tagging.py` | Frey & Morris 1997 | Retroactive promotion of weak memories sharing entities |
-| Engram Competition | `engram.py` | Josselyn & Tonegawa 2020 | CREB-like excitability slots |
-| Thermodynamics | `thermodynamics.py` | Ebbinghaus 1885 | Heat/decay, surprise, importance, valence, metamemory |
-| CLS | `dual_store_cls.py` | McClelland 1995 | Episodic -> semantic consolidation |
-| Hopfield Network | `hopfield.py` | Ramsauer 2021 | Modern continuous Hopfield for content-addressable recall |
-| Spreading Activation | `spreading_activation.py` | Collins & Loftus 1975 | Entity graph priming via recursive CTE in PL/pgSQL |
-| HDC Encoding | `hdc_encoder.py` | Kanerva 2009 | 1024-dim bipolar hypervectors |
-| Successor Representation | `cognitive_map.py` | Stachenfeld 2017 | Hippocampal place cell-like co-access navigation |
-| LTP/LTD + STDP | `synaptic_plasticity.py` | Hebb 1949, Bi & Poo 1998 | Hebbian plasticity + spike-timing-dependent causal direction |
-| Microglial Pruning | `microglial_pruning.py` | Wang et al. 2020 | Complement-dependent edge elimination + orphan archival |
-| Ablation Framework | `ablation.py` | -- | Lesion study simulator for 23 mechanisms |
-
-</details>
-
-### Retrieval methodology
-
-<a id="retrieval-methodology"></a>
-
-Every benchmark score is **retrieval-only**. There is no LLM reader in the evaluation loop.
-
-Most memory systems report full QA scores — retrieve context, feed to a powerful reader (GPT-4, Claude), judge the answer. This conflates retrieval quality with reader model strength. A strong reader compensates for broken retrieval by reasoning over vaguely related context, or drawing on parametric knowledge while ignoring the retrieved context entirely.
-
-The relationship is asymmetric:
-- **High retrieval MRR guarantees high QA.** If correct evidence is consistently at rank 1, any competent reader answers correctly.
-- **High QA does *not* guarantee high retrieval.** A system can score well on QA while retrieval is broken, as long as the reader is strong enough.
-
-This is not theoretical. On BEAM, one comparable system reports full-QA instruction_following of 0.750 with Claude Opus as reader — but their retrieval MRR for that category is **0.086**. The retrieval finds the correct instruction less than 9% of the time. The 0.750 is almost entirely the reader reasoning its way to the answer despite wrong context. Cortex's retrieval MRR of 0.218 on the same category means the retrieval itself is 2.5x better — a property that holds regardless of downstream reader.
-
----
-
-## Architecture
-
-Clean Architecture with concentric dependency layers. Inner layers never import outer layers.
-
-<p align="center">
-<img src="docs/diagram-architecture.svg" alt="Clean Architecture: server -> handlers -> core (108 modules) + infrastructure (21 modules) -> shared (11 modules), with hooks using core and infrastructure" width="100%"/>
-</p>
-
-| Component | Count | Description |
-|---|---|---|
-| Core modules | 108 | Pure business logic, zero I/O |
-| Handlers | 60 | Composition roots wiring core + infrastructure |
-| Infrastructure | 21 | PostgreSQL + pgvector, embeddings, file I/O |
-| Shared | 11 | Pure utilities and Pydantic types |
-| Hooks | 4 | Session lifecycle, compaction, auto-capture |
-| Tests | 2000+ | Passing across Python 3.10-3.13 |
-| Benchmarks | 7 | LongMemEval, LoCoMo, BEAM, Spell Alteration, and 3 more |
-
----
-
-## Configuration
-
-All settings via environment variables with `CORTEX_MEMORY_` prefix:
-
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `postgresql://localhost:5432/cortex` | PostgreSQL connection (mandatory) |
-| `CORTEX_MEMORY_DECAY_FACTOR` | `0.95` | Base heat decay rate per hour |
-| `CORTEX_MEMORY_SURPRISE_MOMENTUM_ENABLED` | `true` | Enable test-time learning |
-| `CORTEX_MEMORY_SURPRISE_MOMENTUM_ETA` | `0.7` | Momentum decay (EMA) |
-| `CORTEX_MEMORY_ADAPTIVE_DECAY_ENABLED` | `true` | Per-memory adaptive decay rates |
-| `CORTEX_MEMORY_CO_ACTIVATION_ENABLED` | `true` | Hebbian co-retrieval strengthening |
-| `CORTEX_MEMORY_WRRF_VECTOR_WEIGHT` | `1.0` | Vector signal weight in WRRF |
-| `CORTEX_MEMORY_WRRF_FTS_WEIGHT` | `0.5` | FTS signal weight |
-| `CORTEX_MEMORY_WRRF_HEAT_WEIGHT` | `0.3` | Heat signal weight |
-
 ---
 
 ## Development
 
 ```bash
-# Run tests
-pytest
-
-# Run with coverage
-pytest --cov=mcp_server --cov-report=term-missing
-
-# Run specific layer
-pytest tests_py/core/
-pytest tests_py/handlers/
-
-# Run benchmarks (requires PostgreSQL)
-DATABASE_URL=postgresql://localhost:5432/cortex python3 benchmarks/longmemeval/run_benchmark.py --variant s
+pytest                    # 2068 tests
+pytest tests_py/core/     # Core layer only
 ```
 
-### Docker development
+---
 
-```bash
-# Build image (~5 min first time, cached after)
-docker build -t cortex-runtime -f docker/Dockerfile .
+## References
 
-# Interactive shell inside container (with persistent memory)
-docker run -it \
-  -v $(pwd):/workspace \
-  -v cortex-pgdata:/var/lib/postgresql/17/data \
-  -v ~/.claude:/home/cortex/.claude-host:ro \
-  -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
-  cortex-runtime shell
+1. Ebbinghaus, H. (1885). *Memory: A Contribution to Experimental Psychology.*
+2. Hebb, D.O. (1949). *The Organization of Behavior.* Wiley.
+3. Collins, A.M. & Loftus, E.F. (1975). A spreading-activation theory of semantic processing. *Psychological Review*, 82(6).
+4. Bienenstock, E.L., Cooper, L.N. & Munro, P.W. (1982). Theory for the development of neuron selectivity. *J. Neuroscience*, 2(1).
+5. McClelland, J.L., McNaughton, B.L. & O'Reilly, R.C. (1995). Why there are complementary learning systems. *Psychological Review*, 102(3).
+6. Abraham, W.C. & Bear, M.F. (1996). Metaplasticity. *Trends in Neuroscience*, 19(4).
+7. Frey, U. & Morris, R.G.M. (1997). Synaptic tagging and long-term potentiation. *Nature*, 385.
+8. Schultz, W. (1997). A neural substrate of prediction and reward. *Science*, 275(5306).
+9. Bi, G.Q. & Poo, M.M. (1998). Synaptic modifications in cultured hippocampal neurons. *J. Neuroscience*, 18(24).
+10. Kandel, E.R. (2001). The molecular biology of memory storage. *Science*, 294(5544).
+11. Doya, K. (2002). Metalearning and neuromodulation. *Neural Networks*, 15(4-6).
+12. Wixted, J.T. (2004). The psychology and neuroscience of forgetting. *Ann. Rev. Psychology*, 55.
+13. Friston, K. (2005). A theory of cortical responses. *Phil. Trans. R. Soc. B*, 360(1456).
+14. Hasselmo, M.E. (2005). What is the function of hippocampal theta rhythm? *Hippocampus*, 15(7).
+15. Leutgeb, J.K. et al. (2007). Pattern separation in the dentate gyrus and CA3. *Science*, 315(5814).
+16. Tse, D. et al. (2007). Schemas and memory consolidation. *Science*, 316(5821).
+17. Turrigiano, G.G. (2008). The self-tuning neuron. *Nature Reviews Neuroscience*, 135(3).
+18. Kanerva, P. (2009). Hyperdimensional computing. *Cognitive Computation*, 1(2).
+19. Perea, G. et al. (2009). Tripartite synapses. *Trends in Neuroscience*, 32(8).
+20. Yassa, M.A. & Stark, C.E.L. (2011). Pattern separation in the hippocampus. *Trends in Neuroscience*, 34(10).
+21. Bastos, A.M. et al. (2012). Canonical microcircuits for predictive coding. *Neuron*, 76(4).
+22. Dudai, Y. (2012). The restless engram. *Ann. Rev. Neuroscience*, 35.
+23. De Pitta, M. et al. (2012). Computational quest for understanding astrocyte signaling. *Front. Comp. Neuroscience*, 6.
+24. Sutskever, I. et al. (2013). On the importance of initialization and momentum in deep learning. *ICML*.
+25. Kastellakis, G. et al. (2015). Synaptic clustering within dendrites. *Prog. in Neurobiology*, 126.
+26. Buzsaki, G. (2015). Hippocampal sharp wave-ripple. *Hippocampus*, 25(10).
+27. Kumaran, D. et al. (2016). What learning systems do intelligent agents need? *Neurosci. & Biobehav. Rev.*, 68.
+28. Gilboa, A. & Marlatte, H. (2017). Neurobiology of schemas. *Trends in Cognitive Sciences*, 21(8).
+29. Stachenfeld, K.L. et al. (2017). The hippocampus as a predictive map. *Nature Neuroscience*, 20.
+30. Nogueira, R. & Cho, K. (2019). Passage re-ranking with BERT. *arXiv:1901.04085*.
+31. Josselyn, S.A. & Tonegawa, S. (2020). Memory engrams. *Science*, 367(6473).
+32. Wang, C. et al. (2020). Microglia mediate forgetting via complement-dependent synaptic elimination. *Science*, 367(6478).
+33. Ramsauer, H. et al. (2021). Hopfield networks is all you need. *ICLR*.
+34. Bruch, S. et al. (2023). An analysis of fusion functions for hybrid retrieval. *ACM TOIS*, 42(1).
+35. Wang, X. & Bhatt, S. (2024). Emotional modulation of memory. *Psychological Review*.
+36. Maharana, A. et al. (2024). LoCoMo: Long context conversational memory. *ACL*.
+37. Behrouz, A. et al. (2025). Titans: Learning to memorize at test time. *arXiv:2501.00663*.
+38. Joren, D. et al. (2025). Sufficient context. *ICLR*.
+39. Kosowski, A. et al. (2025). Dragon Hatchling: Memory management system. *arXiv*.
+40. Wang, Y. et al. (2025). LongMemEval. *ICLR*.
+41. Tavakoli, M. et al. (2026). BEAM: Beyond a million tokens. *ICLR*.
 
-# Run a single prompt
-docker run --rm \
-  -v /path/to/project:/workspace \
-  -v cortex-pgdata:/var/lib/postgresql/17/data \
-  -v ~/.claude:/home/cortex/.claude-host:ro \
-  -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
-  cortex-runtime -p "recall what we decided about the database"
-```
+---
 
-Image includes: PostgreSQL 17 + pgvector, Python 3.12, all deps, sentence-transformers model (4.9GB total, CPU-only PyTorch). The `cortex-pgdata` volume persists all memories across runs.
+## License
 
-## Contributing
-
-Contributions welcome. Please open an issue first to discuss what you'd like to change. See [Architecture](#architecture) for dependency rules.
+MIT
 
 ## Citation
 
 ```bibtex
 @software{cortex2026,
-  title={Cortex: Biologically-Inspired Persistent Memory for Claude Code},
+  title={Cortex: Scientifically-Grounded Memory System Based on Computational Neuroscience},
   author={Deust, Clement},
   year={2026},
   url={https://github.com/cdeust/Cortex}
 }
 ```
-
-## License
-
-MIT
