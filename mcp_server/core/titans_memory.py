@@ -64,8 +64,16 @@ class TitansMemory:
 
     Args:
         dim: Embedding dimension (384 for MiniLM-L6-v2).
-        eta: Momentum coefficient — decay of past surprise (paper: ~0.9).
-        theta: Learning rate — weight of current gradient (paper: ~0.01).
+        eta: Momentum coefficient — decay of past surprise.
+            IMPORTANT: In the paper, η_t is data-dependent (learned as a
+            function of x_t), not a fixed constant. Using a fixed 0.9 is a
+            simplification — standard SGD momentum default (Sutskever et al.,
+            ICML 2013). This loses the adaptive property of the paper.
+        theta: Learning rate — weight of current gradient.
+            IMPORTANT: In the paper, θ_t is data-dependent, controlling how
+            much momentary surprise to incorporate. Using a fixed 0.01 is a
+            simplification. The paper's outer-loop optimizer uses lr=4e-4
+            (AdamW), but the inner-loop memory lr is learned, not fixed.
     """
 
     def __init__(self, dim: int = 384, eta: float = 0.9, theta: float = 0.01):

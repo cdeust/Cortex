@@ -253,7 +253,7 @@ class PgMemoryStore(
             "SELECT * FROM recall_memories("
             "  %s::TEXT, %s::vector, %s::TEXT, %s::TEXT, %s::TEXT, %s::TEXT,"
             "  %s::REAL, %s::INT, %s::INT,"
-            "  %s::REAL, %s::REAL, %s::REAL, %s::REAL, %s::REAL, %s::REAL,"
+            "  %s::REAL, %s::REAL, %s::REAL, %s::REAL, %s::REAL,"
             "  %s::BOOLEAN"
             ")",
             (
@@ -268,7 +268,6 @@ class PgMemoryStore(
                 wrrf_k,
                 w.get("vector", 1.0),
                 w.get("fts", 0.5),
-                w.get("bm25", 0.4),
                 w.get("heat", 0.3),
                 w.get("ngram", 0.3),
                 w.get("recency", 0.0),

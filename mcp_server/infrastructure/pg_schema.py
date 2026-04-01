@@ -230,7 +230,6 @@ CREATE OR REPLACE FUNCTION recall_memories(
     p_wrrf_k        INT DEFAULT 60,
     p_w_vector      REAL DEFAULT 1.0,
     p_w_fts         REAL DEFAULT 0.5,
-    p_w_bm25        REAL DEFAULT 0.4,
     p_w_heat        REAL DEFAULT 0.3,
     p_w_ngram       REAL DEFAULT 0.3,
     p_w_recency     REAL DEFAULT 0.0,
@@ -315,6 +314,9 @@ BEGIN
         LIMIT v_pool
     ),
     -- Signal 5: Recency via exponential decay. Theoretical min = 0
+    -- Decay rate 0.01/day: engineering default. Standard exponential
+    -- recency decay; rate controls half-life (~69 days at 0.01).
+    -- Not paper-prescribed — needs ablation for optimal BEAM performance.
     recency AS (
         SELECT m.id,
                EXP(-0.01 * EXTRACT(EPOCH FROM (NOW() - m.created_at)) / 86400.0)::REAL AS raw_score

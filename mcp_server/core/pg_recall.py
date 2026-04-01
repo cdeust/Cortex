@@ -32,14 +32,18 @@ def _get_titans() -> TitansMemory:
 
 
 # ── PG weight profiles ──────────────────────────────────────────────────
+# NOTE: These weights are engineering defaults, NOT paper-prescribed values.
+# The TMM normalization framework (Bruch et al., ACM TOIS 2023) defines the
+# fusion formula but does NOT prescribe per-signal weights — those are
+# corpus-specific. See benchmarks/beam/ablation_results.json for empirical
+# justification from the BEAM ablation study.
 
 _BASE_PG_WEIGHTS: dict[str, float] = {
-    "vector": 1.0,
-    "fts": 0.5,
-    "bm25": 0.4,
-    "heat": 0.3,
-    "ngram": 0.3,
-    "recency": 0.0,
+    "vector": 1.0,   # Primary signal — always full strength
+    "fts": 0.5,      # Engineering default — needs ablation
+    "heat": 0.3,     # Engineering default — needs ablation
+    "ngram": 0.3,    # Engineering default — needs ablation
+    "recency": 0.0,  # Disabled by default; enabled for temporal intents
 }
 
 _PG_INTENT_OVERRIDES: dict[str, dict[str, float]] = {
@@ -67,12 +71,15 @@ def compute_pg_weights(
     # The core_weights may reduce vector for intents like ENTITY (0.5) because
     # the 9-signal system compensates with entity/spreading signals. The PG
     # stored procedure has no such signals, so vector must stay at full strength.
+    #
+    # ngram is derived from fts weight × 0.6 — engineering heuristic based on
+    # the assumption that trigram is a noisier lexical signal than FTS. Not
+    # paper-backed; needs ablation to validate the 0.6 ratio.
     base = {
         "vector": 1.0,
         "fts": cw.get("fts", 0.5),
-        "bm25": cw.get("fts", 0.5) * 0.8,
         "heat": cw.get("heat", 0.3),
-        "ngram": cw.get("fts", 0.5) * 0.6,
+        "ngram": cw.get("fts", 0.5) * 0.6,  # Engineering heuristic — needs ablation
         "recency": 0.0,
     }
     overrides = _PG_INTENT_OVERRIDES.get(intent)
@@ -95,7 +102,7 @@ def recall(
     agent_topic: str | None = None,
     min_heat: float = 0.01,
     rerank: bool = True,
-    rerank_alpha: float = 0.55,
+    rerank_alpha: float = 0.70,
     wrrf_k: int = 60,
     momentum_state: dict | None = None,
     include_globals: bool = True,
@@ -112,7 +119,7 @@ def recall(
         agent_topic: Optional agent context filter (e.g., "engineer", "researcher").
         min_heat: Minimum heat threshold.
         rerank: Whether to apply FlashRank reranking.
-        rerank_alpha: Blend weight for cross-encoder scores.
+        rerank_alpha: Blend weight for cross-encoder scores (0.70 from BEAM ablation).
         wrrf_k: WRRF fusion constant.
         momentum_state: Mutable dict with 'momentum' key for Titans surprise.
 
