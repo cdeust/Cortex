@@ -4,8 +4,6 @@ Tests the Serrano et al. (2009) disparity filter for edge pruning and
 standard orphan detection for entity cleanup.
 """
 
-import math
-
 from mcp_server.core.microglial_pruning import (
     _build_adjacency,
     _disparity_alpha,
