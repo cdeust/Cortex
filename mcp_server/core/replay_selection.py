@@ -76,9 +76,7 @@ def select_replay_sequences(
     Filters by priority threshold, then ranks by priority score. Ensures
     at least one forward and one reverse sequence if available.
     """
-    viable = [
-        s for s in candidate_sequences if s.priority_score >= priority_threshold
-    ]
+    viable = [s for s in candidate_sequences if s.priority_score >= priority_threshold]
 
     if not viable:
         return _fallback_selection(candidate_sequences, max_sequences)
@@ -91,9 +89,7 @@ def _fallback_selection(
     max_sequences: int,
 ) -> list[ReplaySequence]:
     """Take top candidates when none meet the priority threshold."""
-    by_priority = sorted(
-        candidates, key=lambda s: s.priority_score, reverse=True
-    )
+    by_priority = sorted(candidates, key=lambda s: s.priority_score, reverse=True)
     return by_priority[:max_sequences]
 
 

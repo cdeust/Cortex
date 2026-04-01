@@ -90,6 +90,7 @@ class TestBranchSubunit:
     def test_one_synapse(self):
         """s(1) = 1/(1+exp(2.6/2)) + 0.30 + 0.0114."""
         import math
+
         sigmoid = 1.0 / (1.0 + math.exp(2.6 / 2.0))
         expected = sigmoid + 0.30 + 0.0114
         assert branch_subunit(1) == pytest.approx(expected, abs=1e-6)
@@ -97,6 +98,7 @@ class TestBranchSubunit:
     def test_ten_synapses(self):
         """s(10) = 1/(1+exp(-6.4/2)) + 3.0 + 1.14."""
         import math
+
         sigmoid = 1.0 / (1.0 + math.exp(-6.4 / 2.0))
         expected = sigmoid + 3.0 + 1.14
         assert branch_subunit(10) == pytest.approx(expected, abs=1e-6)

@@ -42,20 +42,63 @@ from mcp_server.shared.vader import vader_compound
 # Bonus words: domain-specific high-importance indicators (positive cue)
 # Stigma words: low-importance indicators (negative cue)
 
-_BONUS_WORDS = frozenset({
-    "error", "exception", "traceback", "failed", "failure", "bug", "crash",
-    "broken", "timeout", "denied", "rejected", "deprecated",
-    "decided", "chose", "switched", "migrated", "selected", "picked", "opted",
-    "design", "pattern", "refactor", "architecture", "restructure",
-    "modular", "decouple", "abstract",
-    "breaking", "migration", "critical", "security", "vulnerability",
-    "performance", "bottleneck", "regression", "root cause",
-})
+_BONUS_WORDS = frozenset(
+    {
+        "error",
+        "exception",
+        "traceback",
+        "failed",
+        "failure",
+        "bug",
+        "crash",
+        "broken",
+        "timeout",
+        "denied",
+        "rejected",
+        "deprecated",
+        "decided",
+        "chose",
+        "switched",
+        "migrated",
+        "selected",
+        "picked",
+        "opted",
+        "design",
+        "pattern",
+        "refactor",
+        "architecture",
+        "restructure",
+        "modular",
+        "decouple",
+        "abstract",
+        "breaking",
+        "migration",
+        "critical",
+        "security",
+        "vulnerability",
+        "performance",
+        "bottleneck",
+        "regression",
+        "root cause",
+    }
+)
 
-_STIGMA_WORDS = frozenset({
-    "maybe", "minor", "trivial", "fyi", "note", "aside", "btw",
-    "probably", "might", "perhaps", "just", "small",
-})
+_STIGMA_WORDS = frozenset(
+    {
+        "maybe",
+        "minor",
+        "trivial",
+        "fyi",
+        "note",
+        "aside",
+        "btw",
+        "probably",
+        "might",
+        "perhaps",
+        "just",
+        "small",
+    }
+)
 
 _CODE_BLOCK_RE = re.compile(r"```|`[^`]+`")
 _FILE_PATH_RE = re.compile(r"(?:\.{0,2}/)?(?:[\w@.-]+/)+[\w@.-]+\.\w+")

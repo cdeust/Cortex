@@ -25,24 +25,24 @@ import math
 
 # ── De Pitta 2009 Parameters (Table 1, AM mode) ─────────────────────────
 
-R_C = 6.0       # s^-1, maximal CICR rate
-R_L = 0.11      # s^-1, ER leak rate
-C_0 = 2.0       # uM, total cell calcium
-C_1 = 0.185     # cytosol/ER volume ratio
-V_ER = 0.9      # uM/s, SERCA max pump rate
-K_ER = 0.1      # uM, SERCA affinity
-D_1 = 0.13      # uM, IP3 binding dissociation
-D_2 = 1.049     # uM, Ca2+ inactivation dissociation
-D_3 = 0.9434    # uM, IP3 dissociation (inhibiting)
-D_5 = 0.08234   # uM, Ca2+ activation dissociation
-A_2 = 0.2       # s^-1, IP3R inactivation rate
+R_C = 6.0  # s^-1, maximal CICR rate
+R_L = 0.11  # s^-1, ER leak rate
+C_0 = 2.0  # uM, total cell calcium
+C_1 = 0.185  # cytosol/ER volume ratio
+V_ER = 0.9  # uM/s, SERCA max pump rate
+K_ER = 0.1  # uM, SERCA affinity
+D_1 = 0.13  # uM, IP3 binding dissociation
+D_2 = 1.049  # uM, Ca2+ inactivation dissociation
+D_3 = 0.9434  # uM, IP3 dissociation (inhibiting)
+D_5 = 0.08234  # uM, Ca2+ activation dissociation
+A_2 = 0.2  # s^-1, IP3R inactivation rate
 
 # ── System mapping constants (not from paper) ───────────────────────────
 
-IP3_PER_EVENT = 0.15   # uM IP3 per synaptic event
-IP3_MAX = 2.0          # uM, saturation ceiling
-CA_RESTING_UM = 0.54   # uM, resting Ca2+ from De Pitta at IP3=0
-CA_RANGE_UM = 1.0      # uM, dynamic range above resting -> [0, 1]
+IP3_PER_EVENT = 0.15  # uM IP3 per synaptic event
+IP3_MAX = 2.0  # uM, saturation ceiling
+CA_RESTING_UM = 0.54  # uM, resting Ca2+ from De Pitta at IP3=0
+CA_RANGE_UM = 1.0  # uM, dynamic range above resting -> [0, 1]
 
 # Regime thresholds (De Pitta bifurcation, normalized scale)
 CA_LOW_THRESHOLD = 0.3
@@ -246,7 +246,10 @@ def compute_heterosynaptic_depression(
 
 
 def _compute_activity_rate(
-    density: float, baseline: float, max_boost: float, min_rate: float,
+    density: float,
+    baseline: float,
+    max_boost: float,
+    min_rate: float,
 ) -> float:
     """Map activity density to metabolic rate via sigmoid response."""
     if density > 1.0:

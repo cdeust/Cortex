@@ -141,7 +141,7 @@ def _compute_actr_decay(
     d = _ACT_R_DECAY_D
     if importance > 0.7:
         d *= 0.8  # Important memories decay 20% slower
-    d *= (1.0 - abs(valence) * 0.3)  # Emotional memories resist decay
+    d *= 1.0 - abs(valence) * 0.3  # Emotional memories resist decay
     d = max(0.1, d)  # Floor to prevent d=0
 
     base_level = compute_actr_base_level(access_count, lifetime, d)
@@ -173,7 +173,8 @@ def _compute_single_decay(
     if adaptive_decay:
         # ACT-R path: compute heat from base-level activation
         new_heat = _compute_actr_decay(
-            mem, now,
+            mem,
+            now,
             importance=mem.get("importance", 0.5),
             valence=mem.get("emotional_valence", 0.0),
         )
@@ -235,8 +236,10 @@ def compute_decay_updates(
         if mem.get("is_protected") or mem.get("heat", 0.0) < cold_threshold:
             continue
         result = _compute_single_decay(
-            mem, now,
-            decay_factor, importance_decay_factor,
+            mem,
+            now,
+            decay_factor,
+            importance_decay_factor,
             emotional_decay_resistance,
             adaptive_decay=adaptive_decay,
         )
@@ -284,7 +287,7 @@ def compute_entity_decay(
         hours = _parse_hours_since_access(entity, now)
         if hours is None:
             continue
-        new_heat = current_heat * (decay_factor ** hours)
+        new_heat = current_heat * (decay_factor**hours)
         if abs(new_heat - current_heat) > 0.001:
             updates.append((entity["id"], round(new_heat, 6)))
 

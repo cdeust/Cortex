@@ -27,7 +27,9 @@ class TestEffectiveReleaseProbability:
     def test_default_state(self):
         """Default: u=0, x=1 → u_eff = U=0.2, p = 0.2*1.0 = 0.2."""
         state = SynapticState()
-        assert compute_effective_release_probability(state) == pytest.approx(0.2, abs=0.01)
+        assert compute_effective_release_probability(state) == pytest.approx(
+            0.2, abs=0.01
+        )
 
     def test_high_facilitation_increases_p(self):
         """High u → higher u_eff → higher release probability."""
@@ -55,7 +57,9 @@ class TestEffectiveReleaseProbability:
         """High u but low x: facilitation can't overcome empty vesicles."""
         full = SynapticState(u=0.5, x=1.0)
         depleted = SynapticState(u=0.5, x=0.3)
-        assert compute_effective_release_probability(full) > compute_effective_release_probability(depleted)
+        assert compute_effective_release_probability(
+            full
+        ) > compute_effective_release_probability(depleted)
 
 
 # -- Stochastic Transmission --------------------------------------------------
@@ -134,7 +138,9 @@ class TestShortTermDynamics:
     def test_full_recovery_after_long_time(self):
         """After very long time, u→0 and x→1."""
         state = SynapticState(u=0.9, x=0.1)
-        updated = update_short_term_dynamics(state, hours_elapsed=100.0, is_access=False)
+        updated = update_short_term_dynamics(
+            state, hours_elapsed=100.0, is_access=False
+        )
         assert updated.u < 0.01
         assert updated.x > 0.99
 
@@ -224,10 +230,15 @@ class TestStochasticHebbianUpdate:
 
     def test_facilitated_mostly_succeeds(self):
         """High u + no recovery time → high release probability → mostly LTP."""
-        edges = [{
-            "source_entity_id": 1, "target_entity_id": 2,
-            "weight": 0.5, "u": 0.9, "x": 1.0,
-        }]
+        edges = [
+            {
+                "source_entity_id": 1,
+                "target_entity_id": 2,
+                "weight": 0.5,
+                "u": 0.9,
+                "x": 1.0,
+            }
+        ]
         rng = random.Random(42)
         ltp_count = 0
         for _ in range(50):
@@ -262,8 +273,15 @@ class TestStochasticHebbianUpdate:
 
     def test_phase_gating_modulates_ltp(self):
         """LTP during encoding phase should be stronger than retrieval."""
-        edges = [{"source_entity_id": 1, "target_entity_id": 2,
-                   "weight": 0.5, "u": 0.9, "x": 1.0}]
+        edges = [
+            {
+                "source_entity_id": 1,
+                "target_entity_id": 2,
+                "weight": 0.5,
+                "u": 0.9,
+                "x": 1.0,
+            }
+        ]
 
         enc_deltas = []
         ret_deltas = []

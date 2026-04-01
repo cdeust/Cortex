@@ -116,9 +116,15 @@ def _stochastic_single(
     if is_co:
         # 2. Check transmission using pre-spike state
         new_w, action = _stochastic_ltp(
-            w, pre_spike, src, tgt,
-            entity_activities, entity_thresholds,
-            theta_phase, ltp_rate, rng,
+            w,
+            pre_spike,
+            src,
+            tgt,
+            entity_activities,
+            entity_thresholds,
+            theta_phase,
+            ltp_rate,
+            rng,
         )
         # 3. Apply spike update after transmission check
         post_spike = update_short_term_dynamics(pre_spike, 0.0, is_access=True)
@@ -151,10 +157,15 @@ def apply_stochastic_hebbian_update(
     """Hebbian LTP/LTD with Tsodyks-Markram stochastic gating + phase modulation."""
     return [
         _stochastic_single(
-            edge, co_accessed_pairs,
-            entity_activities, entity_thresholds,
-            hours_since_last_update, theta_phase,
-            ltp_rate, ltd_rate, rng,
+            edge,
+            co_accessed_pairs,
+            entity_activities,
+            entity_thresholds,
+            hours_since_last_update,
+            theta_phase,
+            ltp_rate,
+            ltd_rate,
+            rng,
         )
         for edge in edges
     ]

@@ -75,7 +75,9 @@ class TestComputeImportance:
     def test_cue_rich_content_scores_higher(self):
         """Content dense with cue words should score notably higher."""
         sparse = compute_importance("Updated the readme file")
-        dense = compute_importance("Critical error: migration failure broke architecture")
+        dense = compute_importance(
+            "Critical error: migration failure broke architecture"
+        )
         assert dense > sparse
 
     def test_multiple_signals_stack(self):
