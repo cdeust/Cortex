@@ -1,8 +1,15 @@
 """Pattern separation core — dentate gyrus orthogonalization and sparsification.
 
 Implements the computational analog of hippocampal dentate gyrus (DG) pattern
-separation: similar inputs are orthogonalized via Gram-Schmidt-like projection
-and sparse coding to force non-overlapping representations.
+separation: similar inputs are orthogonalized and sparsified to force
+non-overlapping representations.
+
+The biological DG achieves pattern separation through winner-take-all lateral
+inhibition among granule cells (beta_INT ~0.9; Myers & Scharfman 2009),
+producing extremely sparse population codes (~2-5% active cells). This module
+uses Gram-Schmidt projection as a computational proxy — the mathematical effect
+(increasing Hamming distance between similar patterns) is equivalent, though the
+biological mechanism is competitive inhibition, not linear algebra.
 
 References:
     Leutgeb JK et al. (2007) Pattern separation in the DG and CA3.
@@ -11,6 +18,8 @@ References:
         Trends in Neurosciences 34:515-525
     Rolls ET (2013) The mechanisms for pattern completion and pattern
         separation in the hippocampus. Front Syst Neurosci 7:74
+    Myers CE, Scharfman HE (2009) A role for hilar cells in pattern
+        separation in the dentate gyrus. Hippocampus 19:321-337
 
 Pure business logic — no I/O.
 """
@@ -27,17 +36,23 @@ from mcp_server.shared.linear_algebra import (
 
 # ── Configuration ─────────────────────────────────────────────────────────
 
-# Similarity threshold above which two memories need separation
+# Engineering choice: cosine similarity threshold above which two memories need
+# separation. The biological DG uses firing rate overlap, not cosine similarity;
+# this threshold was tuned empirically for 384-dim dense embeddings.
 _SEPARATION_THRESHOLD = 0.75
 
-# Above this, memories are near-duplicates (handled by dedup, not separation)
+# Engineering choice: deduplication boundary. Above this cosine similarity,
+# memories are treated as near-duplicates (handled by dedup, not separation).
 _IDENTITY_THRESHOLD = 0.95
 
-# Floor for post-separation similarity with original
+# Engineering constraint: floor for post-separation similarity with the original
+# embedding, preventing orthogonalization from destroying semantic content.
 _MIN_POST_SEPARATION_SIMILARITY = 0.3
 
-# DG uses ~2-5% sparsity; we use a relaxed version for dense embeddings
-_SPARSITY_TARGET = 0.15
+# DG granule cell activation sparsity: 2-5% of cells active.
+# Leutgeb et al. (2007) Science 315:961-966; Rolls (2013) Front Syst Neurosci.
+# We use 4% as the midpoint of the published range.
+_SPARSITY_TARGET = 0.04
 
 
 # ── Interference Detection ───────────────────────────────────────────────

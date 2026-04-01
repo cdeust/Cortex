@@ -35,14 +35,14 @@ class ReplaySequence:
     Attributes:
         events: Ordered memories in the sequence.
         direction: Forward or reverse replay.
-        rpe_score: Reward prediction error — higher RPE = higher priority.
+        priority_score: Heat/variance heuristic — higher = higher priority.
         stdp_pairs: Entity pairs for STDP updates (source, target, delta_t).
         schema_update_signal: How much this replay should update schemas.
     """
 
     events: list[ReplayEvent] = field(default_factory=list)
     direction: ReplayDirection = ReplayDirection.FORWARD
-    rpe_score: float = 0.0
+    priority_score: float = 0.0
     stdp_pairs: list[tuple[int, int, float]] = field(default_factory=list)
     schema_update_signal: float = 0.0
 

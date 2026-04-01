@@ -1,28 +1,72 @@
 """Individual neuromodulator channel computations.
 
 Computes per-channel updates for the 4 neuromodulatory channels (DA, NE, ACh, 5-HT)
-and their cross-coupling interactions. Split from coupled_neuromodulation.py for the
-300-line file limit.
+and their cross-coupling interactions.
 
-Channel architecture (Doya 2002):
-  DA: Reward prediction error (Rescorla-Wagner)
-  NE: Arousal/urgency with habituation
-  ACh: Encoding/retrieval mode (theta-driven)
-  5-HT: Exploration/exploitation balance
+What Doya (2002) actually says:
+  DA -> temporal discount factor (gamma in RL value estimation)
+  NE -> inverse temperature in softmax policy (exploration/exploitation)
+  ACh -> learning rate for value function updates
+  5-HT -> time scale of reward prediction
 
-Cross-coupling:
-  DA ↔ NE: High DA dampens NE (success reduces arousal)
-  NE → ACh: High NE boosts ACh (arousal enhances encoding)
-  5-HT ↔ DA: High 5-HT dampens DA (exploration dampens reward)
-  ACh → 5-HT: High ACh dampens 5-HT (learning reduces exploration)
+What this module implements (departures from Doya noted):
+  DA: Reward prediction error signal (Schultz 1997 — Rescorla-Wagner RPE).
+      delta = actual - V(s); V(s) := V(s) + alpha * delta (alpha=0.1).
+      DA level = 1.0 + delta, clamped to [0.0, 2.0].
+      Floor 0.0: DA neurons cannot fire below zero (Schultz 1997, Fig 2).
+      Ceiling 2.0: max firing ~80 Hz is ~2x baseline ~40 Hz (Schultz 1997).
+      The actual-reward heuristic (0.7+importance*0.3 for positive, etc.) is
+      an engineering translation — Schultz used juice rewards, not memory ops.
+
+  NE: Arousal/urgency with habituation.
+      Inspired by Aston-Jones & Cohen (2005) tonic/phasic LC framework,
+      simplified to burst/decay for hours timescale. Aston-Jones proposes
+      tonic vs phasic LC modes driven by utility monitoring — a full
+      implementation would require task-utility tracking. This code captures
+      the qualitative behavior: errors trigger phasic bursts (attenuated by
+      habituation), absence of errors returns to tonic baseline.
+
+  ACh: Encoding/retrieval mode from theta phase.
+      FAITHFUL to Hasselmo (2005): high ACh during encoding, low during
+      retrieval. Theta phase is externally provided.
+
+  5-HT: Exploration/exploitation from novelty vs schema match.
+      Engineering translation of Dayan & Huys (2009) behavioral inhibition
+      concept. Dayan & Huys show 5-HT opposes impulsive responding and
+      promotes behavioral inhibition / exploitation of known structure.
+      The direction is qualitatively correct: high novelty -> exploration
+      (high 5-HT), high schema match -> exploitation (low 5-HT). The
+      specific formula is an engineering approximation — no paper provides
+      an equation mapping novelty/schema to 5-HT level.
+
+Cross-coupling: Engineering heuristic coupling. The directions are qualitatively
+  plausible (high DA dampens NE per success reducing arousal, high NE boosts ACh
+  per arousal enhancing encoding, high 5-HT dampens DA per inhibition reducing
+  reward sensitivity, high ACh dampens 5-HT per encoding reducing exploration)
+  but specific coupling constants are hand-tuned. No paper provides these
+  equations or values.
+
+EMA rates: Ordered to reflect biological response timescales.
+  ACH_ALPHA=0.4 — ACh closely tracks theta oscillations (fast, ~200ms cycle)
+  DA_ALPHA=0.3  — DA RPE responses are rapid (~100ms phasic bursts, Schultz 1997)
+  NE_ALPHA=0.2  — LC phasic responses are moderate (~seconds, Aston-Jones 2005)
+  SER_ALPHA=0.15 — 5-HT changes slowly (minutes/hours, tonic modulation)
+  The ordering matches biology; absolute values are hand-tuned for this system's
+  per-operation update cadence (hours timescale, not milliseconds).
 
 References:
+    Schultz W (1997) A neural substrate of prediction and reward.
+        Science 275:1593-1599
     Doya K (2002) Metalearning and neuromodulation.
-        Neural Networks 15:495-506
-    Schultz W (1997) Dopamine neurons and their role in reward mechanisms.
-        Curr Opin Neurobiol 7:191-197
-    Yu AJ, Dayan P (2005) Uncertainty, neuromodulation, and attention.
-        Neuron 46:681-692
+        Neural Networks 15:495-506 (framework inspiration, not faithfully implemented)
+    Aston-Jones G, Cohen JD (2005) An integrative theory of locus
+        coeruleus-norepinephrine function. Annu Rev Neurosci 28:403-450
+        (tonic/phasic concept; full model not implemented)
+    Hasselmo ME (2005) What is the function of hippocampal theta rhythm?
+        Hippocampus 15:936-949
+    Dayan P, Huys QJM (2009) Serotonin in affective control.
+        Annu Rev Neurosci 32:95-126 (behavioral inhibition concept;
+        no specific equation implemented)
 
 Pure business logic — no I/O.
 """
@@ -30,20 +74,24 @@ Pure business logic — no I/O.
 from __future__ import annotations
 
 # ── EMA rates for each channel ──────────────────────────────────────────
+# Ordered by biological response speed. See module docstring for rationale.
 
-DA_ALPHA = 0.3  # DA responds quickly to RPE
-NE_ALPHA = 0.2  # NE responds moderately
-ACH_ALPHA = 0.4  # ACh closely tracks theta phase
-SER_ALPHA = 0.15  # 5-HT changes slowly (mood-like)
+DA_ALPHA = 0.3   # DA phasic RPE bursts (~100ms in biology)
+NE_ALPHA = 0.2   # LC phasic responses (~seconds in biology)
+ACH_ALPHA = 0.4  # ACh tracks theta oscillations (~200ms cycle)
+SER_ALPHA = 0.15  # 5-HT tonic modulation (minutes/hours in biology)
 
 # ── Cross-coupling strengths ────────────────────────────────────────────
+# Engineering heuristic. Directions are qualitatively plausible but specific
+# values are hand-tuned. No paper provides these coupling equations.
 
-_DA_NE_COUPLING = -0.15  # High DA dampens NE
-_NE_ACH_COUPLING = 0.2  # High NE boosts ACh
-_SER_DA_COUPLING = -0.1  # High 5-HT dampens DA sensitivity
-_ACH_SER_COUPLING = -0.15  # High ACh dampens 5-HT
+_DA_NE_COUPLING = -0.15   # High DA dampens NE (success reduces arousal)
+_NE_ACH_COUPLING = 0.2    # High NE boosts ACh (arousal enhances encoding)
+_SER_DA_COUPLING = -0.1   # High 5-HT dampens DA (inhibition reduces reward sensitivity)
+_ACH_SER_COUPLING = -0.15  # High ACh dampens 5-HT (encoding reduces exploration)
 
 # ── Habituation constants ──────────────────────────────────────────────
+# Engineering values for NE habituation (repeated stressors reduce response).
 
 NE_HABITUATION_RATE = 0.05
 NE_HABITUATION_DECAY = 0.02
@@ -58,11 +106,17 @@ def compute_dopamine_rpe(
     memory_importance: float,
     da_baseline: float,
 ) -> tuple[float, float]:
-    """Compute dopamine RPE signal and updated baseline.
+    """Rescorla-Wagner RPE (Schultz 1997).
 
-    True Rescorla-Wagner: RPE = actual_reward - expected_reward.
-    Positive RPE -> DA burst. Negative RPE -> DA dip.
-    Baseline adapts to predict average reward.
+    Implements: delta = actual - V(s), DA = 1.0 + delta.
+    Baseline adapts: V(s) := V(s) + alpha * delta, alpha=0.1.
+
+    Clamped to [0.0, 2.0]:
+      Floor 0.0 — DA neurons cannot have negative firing rate.
+      Ceiling 2.0 — max phasic burst ~2x baseline tonic rate (Schultz 1997).
+
+    The actual-reward mapping (positive/negative/neutral -> numeric value)
+    is an engineering translation of Schultz's juice/airpuff paradigm.
 
     Returns:
         (da_level, updated_baseline).
@@ -74,8 +128,8 @@ def compute_dopamine_rpe(
     else:
         actual = 0.5
 
-    rpe = actual - da_baseline
-    da = max(0.3, min(2.0, 1.0 + rpe * 1.5))
+    delta = actual - da_baseline
+    da = max(0.0, min(2.0, 1.0 + delta))
 
     new_baseline = da_baseline + 0.1 * (actual - da_baseline)
     new_baseline = max(0.1, min(0.9, new_baseline))
@@ -88,11 +142,15 @@ def compute_norepinephrine_arousal(
     current_ne: float,
     ne_adaptation: float,
 ) -> tuple[float, float]:
-    """Compute NE arousal level with habituation.
+    """Arousal model inspired by Aston-Jones & Cohen (2005) tonic/phasic LC framework.
 
-    Repeated errors gradually reduce NE response (habituation).
-    Novel errors produce strong NE burst.
-    Absence of errors lets NE decay toward baseline.
+    Simplified to burst/decay for hours timescale. Aston-Jones proposes tonic vs
+    phasic LC modes driven by utility monitoring — this code captures the
+    qualitative behavior without the full utility-tracking model.
+
+    Errors trigger phasic NE burst (attenuated by habituation, modeling
+    repeated-stressor adaptation). Absence of errors decays NE toward tonic
+    baseline (1.0). All numeric constants are hand-tuned.
 
     Returns:
         (ne_level, updated_adaptation).
@@ -114,13 +172,16 @@ def compute_serotonin_exploration(
     total_entities: int,
     current_ser: float,
 ) -> float:
-    """Compute 5-HT exploration/exploitation signal.
+    """Exploration/exploitation signal — engineering translation of Dayan & Huys (2009).
 
-    High schema match -> exploitation (5-HT low).
-    Many novel entities -> exploration (5-HT high).
+    Dayan & Huys show 5-HT opposes impulsive responding and promotes behavioral
+    inhibition. This translates to: high schema match promotes exploitation
+    (lower 5-HT), high novelty promotes exploration (higher 5-HT). The
+    direction is qualitatively consistent with the paper; the specific formula
+    and coefficients are engineering approximations.
 
     Returns:
-        Updated 5-HT level.
+        Updated 5-HT level (EMA-blended with current).
     """
     novelty_ratio = (
         novel_entities / max(total_entities, 1) if total_entities > 0 else 0.5
@@ -139,12 +200,15 @@ def apply_cross_coupling(
     ach: float,
     ser: float,
 ) -> tuple[float, float, float, float]:
-    """Apply inter-channel coupling effects.
+    """Linear additive cross-coupling — engineering heuristic.
 
-    DA <-> NE: Success dampens arousal
-    NE -> ACh: Arousal enhances novelty detection
-    5-HT <-> DA: Exploration dampens reward signal
-    ACh -> 5-HT: Learning mode reduces exploration
+    Coupling directions are qualitatively plausible:
+      DA dampens NE — success reduces arousal.
+      NE boosts ACh — arousal enhances encoding.
+      5-HT dampens DA — inhibition reduces reward sensitivity.
+      ACh dampens 5-HT — encoding reduces exploration.
+    Specific coupling constants are hand-tuned. No paper provides these
+    equations or values.
 
     Returns:
         Post-coupling (da, ne, ach, ser).
@@ -155,7 +219,7 @@ def apply_cross_coupling(
     ser_coupled = ser + _ACH_SER_COUPLING * (ach - 1.0)
 
     return (
-        max(0.3, min(2.0, da_coupled)),
+        max(0.0, min(2.0, da_coupled)),
         max(0.3, min(2.0, ne_coupled)),
         max(0.3, min(2.0, ach_coupled)),
         max(0.3, min(2.0, ser_coupled)),

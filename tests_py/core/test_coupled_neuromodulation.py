@@ -39,7 +39,7 @@ class TestDopamine:
 
     def test_da_bounded(self):
         da, _ = compute_dopamine_rpe(True, False, 1.0, 0.0)
-        assert 0.3 <= da <= 2.0
+        assert 0.0 <= da <= 2.0
 
 
 class TestNorepinephrine:
@@ -82,7 +82,8 @@ class TestCrossCoupling:
 
     def test_all_bounded(self):
         da, ne, ach, ser = apply_cross_coupling(2.0, 2.0, 2.0, 2.0)
-        for v in [da, ne, ach, ser]:
+        assert 0.0 <= da <= 2.0
+        for v in [ne, ach, ser]:
             assert 0.3 <= v <= 2.0
 
 

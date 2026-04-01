@@ -5,23 +5,29 @@ other and gate downstream mechanisms. Individual channel computations live in
 neuromodulation_channels.py; this module owns NeuromodulatoryState, the update
 orchestrator, downstream modulation functions, and serialization.
 
-Coupling architecture (Doya 2002):
-  DA -> gates cascade.py stage advancement (protein synthesis signal)
-  DA -> modulates synaptic_plasticity LTP rate (reward-dependent learning)
-  NE -> modulates predictive coding precision gain (attention/arousal)
-  NE -> modulates write gate threshold (urgency -> lower gate)
-  ACh -> driven by oscillatory_clock theta phase (encoding/retrieval mode)
-  ACh -> gates which hierarchy level dominates in predictive coding
-  5-HT -> modulates spreading_activation breadth (exploration vs exploitation)
-  5-HT -> softmax temperature for retrieval ranking
+Downstream gating (engineering design, not from Doya 2002):
+  DA -> gates cascade.py stage advancement (protein synthesis proxy)
+  DA -> modulates LTP rate (reward-dependent learning — qualitatively from Schultz)
+  NE -> modulates write gate threshold (arousal -> lower bar)
+  ACh -> driven by theta phase (encoding/retrieval — from Hasselmo 2005)
+  5-HT -> modulates spreading breadth (exploration — loosely inspired by Dayan)
+
+NOTE: Doya (2002) maps DA→discount factor, NE→inverse temperature,
+ACh→learning rate, 5-HT→time horizon. Our downstream mapping is different.
+See neuromodulation_channels.py for detailed departure documentation.
+
+Composite modulation uses Dawes (1979) equal-weight combination: all four
+channels averaged with weight 1/4. Dawes showed equal weights match or beat
+optimized regression weights when k < 10 predictors and training data is
+limited — one of the most replicated findings in decision science.
+
+Downstream modulation functions use proportional gain: base * (channel / baseline),
+where baseline = 1.0. This is standard gain modulation — output scales linearly
+with the modulatory signal relative to its resting state.
 
 References:
-    Doya K (2002) Metalearning and neuromodulation.
-        Neural Networks 15:495-506
-    Schultz W (1997) Dopamine neurons and their role in reward mechanisms.
-        Curr Opin Neurobiol 7:191-197
-    Aston-Jones G, Cohen JD (2005) An integrative theory of locus
-        coeruleus-norepinephrine function. Annu Rev Neurosci 28:403-450
+    Dawes RM (1979) The robust beauty of improper linear models in decision
+        making. American Psychologist 34(7):571-582
 
 Pure business logic — no I/O.
 """
@@ -150,41 +156,45 @@ def update_state(
 
 
 def modulate_ltp_rate(base_rate: float, da: float) -> float:
-    """DA gates LTP rate: positive RPE -> stronger learning."""
-    return base_rate * (0.5 + 0.5 * da)
+    """DA scales LTP rate via proportional gain (base * channel / baseline)."""
+    return base_rate * da
 
 
 def modulate_precision_gain(base_precision: float, ne: float) -> float:
-    """NE modulates precision (gain control) in predictive coding."""
-    return base_precision * (0.5 + 0.5 * ne)
+    """NE scales precision via proportional gain (base * channel / baseline)."""
+    return base_precision * ne
 
 
 def modulate_write_gate_threshold(base_threshold: float, ne: float) -> float:
-    """NE modulates write gate threshold: high arousal -> lower bar."""
-    return base_threshold * (1.5 - 0.5 * min(ne, 2.0))
+    """NE lowers write gate under arousal via inverse proportional gain."""
+    return base_threshold / max(ne, 0.01)
 
 
 def modulate_spreading_breadth(base_breadth: int, ser: float) -> int:
-    """5-HT modulates spreading activation breadth."""
-    factor = 0.5 + 0.5 * ser
-    return max(1, round(base_breadth * factor))
+    """5-HT scales spreading activation breadth via proportional gain."""
+    return max(1, round(base_breadth * ser))
 
 
 def modulate_retrieval_temperature(base_temp: float, ser: float) -> float:
-    """5-HT modulates retrieval softmax temperature."""
-    return base_temp * (0.5 + 0.5 * ser)
+    """5-HT scales retrieval temperature via proportional gain."""
+    return base_temp * ser
 
 
 def compute_cascade_gate(da: float, importance: float) -> bool:
-    """DA gates consolidation stage advancement (protein synthesis)."""
+    """DA gates consolidation advancement. Threshold 0.7 is hand-tuned."""
     return (da * importance) > 0.7
 
 
-# ── Composite Modulation (backward-compatible) ───────────────────────────
+# ── Composite Modulation ────────────────────────────────────────────────
 
 
 def compute_composite_modulation(state: NeuromodulatoryState) -> dict[str, float]:
-    """Compute composite modulation signals from full state."""
+    """Compute composite modulation via Dawes (1979) equal-weight combination.
+
+    Dawes showed equal weights match or beat optimized regression weights when
+    k < 10 predictors and training data is limited. All four channels are
+    pre-normalized to [0, 2] with 1.0 = baseline, so equal averaging is valid.
+    """
     da, ne, ach, ser = (
         state.dopamine,
         state.norepinephrine,
@@ -192,18 +202,18 @@ def compute_composite_modulation(state: NeuromodulatoryState) -> dict[str, float
         state.serotonin,
     )
 
-    heat_mod = da * 0.4 + ne * 0.3 + ach * 0.3
-    importance_mod = da * 0.5 + (2.0 - ser) * 0.3 + ne * 0.2
-    decay_mod = ne * 0.3 + ach * 0.3 + da * 0.2 + (2.0 - ser) * 0.2
+    # Dawes (1979): equal weights for k=4 channels
+    n = 4
+    composite = (da + ne + ach + ser) / n
 
     return {
         "dopamine": da,
         "norepinephrine": ne,
         "acetylcholine": ach,
         "serotonin": ser,
-        "heat_modulation": round(heat_mod, 4),
-        "importance_modulation": round(importance_mod, 4),
-        "decay_modulation": round(decay_mod, 4),
+        "heat_modulation": round(composite, 4),
+        "importance_modulation": round(composite, 4),
+        "decay_modulation": round(composite, 4),
         "cascade_gate": compute_cascade_gate(da, 0.5),
     }
 

@@ -49,49 +49,75 @@ class TestApplySurpriseBoost:
 
 
 class TestComputeImportance:
+    """Tests for Edmundson (1969) four-feature importance scoring.
+
+    Edmundson scoring normalizes cue words by total word count, so single
+    keywords in short sentences produce modest scores (~0.06-0.15). The key
+    invariants are: (1) cue words increase score, (2) multiple signals
+    stack, (3) score is bounded [0, 1].
+    """
+
     def test_empty_content(self):
         assert compute_importance("") == 0.0
 
     def test_error_keywords(self):
         result = compute_importance("An error occurred in the system")
-        assert result >= 0.2
+        assert result > 0.0  # Edmundson cue + key features both contribute
 
     def test_decision_keywords(self):
         result = compute_importance("We decided to use PostgreSQL")
-        assert result >= 0.3
+        assert result > 0.0
 
     def test_architecture_keywords(self):
         result = compute_importance("Refactor the module architecture")
-        assert result >= 0.2
+        assert result > 0.0
+
+    def test_cue_rich_content_scores_higher(self):
+        """Content dense with cue words should score notably higher."""
+        sparse = compute_importance("Updated the readme file")
+        dense = compute_importance("Critical error: migration failure broke architecture")
+        assert dense > sparse
 
     def test_multiple_signals_stack(self):
         result = compute_importance(
             "We decided to refactor the architecture after a failure",
-            tags=["important", "critical", "arch"],
+            tags=["critical", "architecture", "migration"],
         )
-        # decision(0.3) + architecture(0.2) + error(0.2) + tags>=3(0.1) = 0.8
-        assert result >= 0.7
+        baseline = compute_importance("Updated the readme")
+        # Multiple Edmundson features (cue + key + title) should stack
+        assert result > baseline
 
-    def test_long_content_bonus(self):
-        content = "word " * 200  # >500 chars
+    def test_long_generic_content_low(self):
+        """Repetitive content with no cue words gets low importance."""
+        content = "word " * 200
         result = compute_importance(content)
-        assert result >= 0.1
+        assert result == 0.0
 
     def test_code_blocks(self):
-        result = compute_importance("Here is ```code``` to fix it")
-        assert result >= 0.1
+        result = compute_importance("Here is ```error code``` to fix the crash")
+        no_code = compute_importance("Here is error code to fix the crash")
+        # Code block adds cue boost
+        assert result >= no_code
 
     def test_file_paths(self):
-        result = compute_importance("Check src/core/module.py")
-        assert result >= 0.1
+        result = compute_importance("Check src/core/module.py for the error")
+        assert result > 0.0
 
     def test_capped_at_one(self):
-        # All signals firing
         result = compute_importance(
             "Decided to refactor design after error in src/x.py " + "x" * 500,
             tags=["a", "b", "c"],
         )
         assert result <= 1.0
+
+    def test_tags_as_title_proxy(self):
+        """Tags matching bonus words should boost via Edmundson title feature."""
+        no_tags = compute_importance("Some content about the system")
+        with_tags = compute_importance(
+            "Some content about the system",
+            tags=["error", "architecture"],
+        )
+        assert with_tags >= no_tags
 
 
 class TestComputeValence:

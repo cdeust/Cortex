@@ -1,10 +1,20 @@
-"""Complementary Learning Systems -- episodic/semantic classification and consolidation.
+"""Episodic/semantic memory classification via regex heuristics.
 
-Based on McClelland et al. (1995) and Go-CLS (Sun et al., Nature Neuroscience 2023):
-  - Fast episodic store: captures specific events verbatim
-  - Slow semantic store: abstracts recurring patterns into general knowledge
+Classifies memories as "episodic" (specific events with line numbers, paths,
+timestamps) or "semantic" (general knowledge with decision/architecture/
+convention keywords). Used to weight retrieval results.
 
-Pure business logic -- no I/O.
+NOTE: Previously cited McClelland et al. (1995) CLS theory and Go-CLS (Sun
+et al., 2023). Those papers describe dual learning systems (fast hippocampal
+binding vs slow cortical gradient descent) and gated encoding architectures.
+This module implements neither — it is a keyword-based text classifier.
+Citations removed per zetetic standard.
+
+The episodic/semantic distinction is conceptually aligned with CLS theory's
+two-store model, but the implementation mechanism (regex) bears no
+relationship to the paper's computational model (neural network learning).
+
+Pure business logic — no I/O.
 """
 
 from __future__ import annotations
@@ -54,7 +64,7 @@ def classify_memory(
     tags: list[str] | None = None,
     directory: str = "",
 ) -> str:
-    """Classify content as 'episodic' or 'semantic'.
+    """Classify content as 'episodic' or 'semantic' via regex heuristics.
 
     Resolution order:
       1. Tag-based: semantic tags -> "semantic"

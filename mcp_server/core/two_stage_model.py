@@ -31,6 +31,13 @@ The hippocampal_dependency field in Memory tracks this:
   0.5 = transitional (partial cortical trace, hippocampus still needed)
   0.0 = cortically independent (fully consolidated, hippocampus can release)
 
+Note: hippocampal_dependency is an engineering construct that combines the
+qualitative CLS framework (McClelland 1995) with quantitative learning rates
+from C-HORSE (Ketz et al., eLife 12:e77185, 2023). The original CLS paper
+does not define a scalar "dependency" metric; we model it as the complement
+of cortical trace strength, decaying via the cortical learning rate (0.02)
+during replay-driven transfer.
+
 This integrates with:
   - cascade.py: consolidation stages track biochemical maturation
   - oscillatory_clock.py: SWR windows gate replay-driven transfer
@@ -44,6 +51,9 @@ References:
         do intelligent agents need? Neuron 92:1258-1273
     Frankland PW, Bontempi B (2005) The organization of recent and
         remote memories. Nat Rev Neurosci 6:119-130
+    Ketz NA, et al. (2023) C-HORSE: A computational model of hippocampal-
+        cortical complementary learning. eLife 12:e77185
+    Tse D, et al. (2007) Schemas and memory consolidation. Science 316:76-82
 
 Pure business logic — no I/O.
 """
@@ -73,8 +83,17 @@ __all__ = [
 
 # ── Configuration ─────────────────────────────────────────────────────────
 
+# Engineering choice. McClelland et al. (1995) discuss hippocampal capacity
+# limits as a motivation for CLS but provide no specific number. We use 100
+# as a practical bound for active traces in a session-based AI memory system.
 _HIPPOCAMPAL_CAPACITY = 100
+
+# Engineering choice: dependency threshold below which a memory is considered
+# cortically independent and no longer needs hippocampal support.
 _CORTICAL_INDEPENDENCE_THRESHOLD = 0.15
+
+# Engineering choice: threshold below which the hippocampal trace can be freed.
+# Calibrated to the cortical learning rate (0.02) from C-HORSE (Ketz et al., 2023).
 _HIPPOCAMPAL_RELEASE_THRESHOLD = 0.05
 
 

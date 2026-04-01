@@ -38,8 +38,15 @@ class TestTransfer:
         assert dep < 1.0
 
     def test_many_replays_approach_zero(self):
+        """After many replays, dependency decreases substantially.
+
+        With cortical LR = 0.02 (C-HORSE, Ketz et al. 2023) and schema_match=0.8,
+        50 replays reduce dependency from 1.0 to ~0.45. With 100 replays it
+        approaches ~0.2. The slower rate reflects the published 10:1 ratio
+        between hippocampal and cortical learning.
+        """
         dep = 1.0
-        for i in range(50):
+        for i in range(100):
             dep = update_hippocampal_dependency(dep, i + 1, schema_match=0.8)
         assert dep < 0.3
 

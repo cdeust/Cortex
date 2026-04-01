@@ -1,44 +1,77 @@
-"""Neuroscience-inspired memory thermodynamics — heat, surprise, decay, importance, valence.
+"""Memory thermodynamics — heat, surprise, decay, importance, valence.
 
-Pure business logic — no I/O. Receives storage/embeddings via constructor injection.
-Thermodynamic model with domain-awareness.
+Pure business logic — no I/O.
 
 Key concepts:
   - Heat: freshness signal (1.0=hot, 0.0=cold). Decays over time, reheated on access.
   - Surprise: novelty signal (1.0=maximally novel). Drives write gate decisions.
-  - Importance: heuristic content scoring (errors, decisions, architecture weighted higher).
-  - Valence: emotional polarity (-1=frustration, +1=satisfaction). Modulates decay rate.
+  - Importance: Edmundson (1969) four-feature scoring (cue + key + title + loc).
+  - Valence: VADER compound sentiment (Hutto & Gilbert 2014).
   - Metamemory: tracks access frequency and usefulness for confidence calibration.
+
+Citations:
+  - compute_decay: Exponential forgetting curve (Ebbinghaus, 1885,
+    "Über das Gedächtnis"). R(t) = e^{-t/S} where S is memory stability.
+    Importance and valence modulate S, following the finding that emotional
+    and meaningful memories decay slower (McGaugh 2004, "The amygdala
+    modulates the consolidation of memories of emotionally arousing
+    experiences", Annual Review of Neuroscience).
+  - compute_surprise: Simple cosine distance novelty. No paper claimed.
+  - compute_importance: Edmundson HP (1969) "New Methods in Automatic
+    Extracting." JACM 16(2):264-285. Four-feature scoring with validated
+    weights: w_cue=2, w_key=1, w_title=1, w_loc=1.
+  - compute_valence: Hutto CJ & Gilbert E (2014) "VADER: A Parsimonious
+    Rule-based Model for Sentiment Analysis of Social Media Text." ICWSM.
+    compound = x / sqrt(x^2 + alpha), alpha=15.
+  - compute_session_coherence: Linear recency bonus. No paper — engineering
+    decision to prevent "I just told you this" failures.
+  - compute_metamemory_confidence: Frequentist accuracy (useful/total).
+    Loosely inspired by Nelson & Narens (1990) metamemory framework but
+    implemented as a simple ratio, not their full monitoring-control model.
 """
 
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import datetime, timezone
 
-import numpy as np
+from mcp_server.shared.vader import vader_compound
 
-# ── Keyword sets for heuristic scoring ────────────────────────────────────
+# ── Edmundson cue word sets ───────────────────────────────────────────────
+# Bonus words: domain-specific high-importance indicators (positive cue)
+# Stigma words: low-importance indicators (negative cue)
+
+_BONUS_WORDS = frozenset({
+    "error", "exception", "traceback", "failed", "failure", "bug", "crash",
+    "broken", "timeout", "denied", "rejected", "deprecated",
+    "decided", "chose", "switched", "migrated", "selected", "picked", "opted",
+    "design", "pattern", "refactor", "architecture", "restructure",
+    "modular", "decouple", "abstract",
+    "breaking", "migration", "critical", "security", "vulnerability",
+    "performance", "bottleneck", "regression", "root cause",
+})
+
+_STIGMA_WORDS = frozenset({
+    "maybe", "minor", "trivial", "fyi", "note", "aside", "btw",
+    "probably", "might", "perhaps", "just", "small",
+})
+
+_CODE_BLOCK_RE = re.compile(r"```|`[^`]+`")
+_FILE_PATH_RE = re.compile(r"(?:\.{0,2}/)?(?:[\w@.-]+/)+[\w@.-]+\.\w+")
+_WORD_RE = re.compile(r"[a-z]+(?:'[a-z]+)?", re.IGNORECASE)
+
+# ── Keyword patterns for backward-compatible helper functions ─────────────
 
 _ERROR_KW = re.compile(
     r"\b(error|exception|traceback|failed|failure|bug|crash|broken|timeout|"
     r"denied|rejected|deprecated)\b",
     re.IGNORECASE,
 )
-_SUCCESS_KW = re.compile(
-    r"\b(fixed|resolved|working|success|passed|deployed|completed|shipped|merged|approved)\b",
-    re.IGNORECASE,
-)
 _DECISION_KW = re.compile(
     r"\b(decided|chose|switched|migrated|selected|picked|opted)\b",
     re.IGNORECASE,
 )
-_ARCHITECTURE_KW = re.compile(
-    r"\b(design|pattern|refactor|architecture|restructur|modular|decouple|abstract)\b",
-    re.IGNORECASE,
-)
-_CODE_BLOCK_RE = re.compile(r"```|`[^`]+`")
-_FILE_PATH_RE = re.compile(r"(?:\.{0,2}/)?(?:[\w@.-]+/)+[\w@.-]+\.\w+")
 
 
 def compute_surprise(content: str, existing_similarities: list[float]) -> float:
@@ -63,45 +96,96 @@ def apply_surprise_boost(
     return min(base_heat + surprise * boost_factor, 1.0)
 
 
-def compute_importance(content: str, tags: list[str] | None = None) -> float:
-    """Heuristic importance scoring based on content signals. No LLM needed.
+def _edmundson_cue(words: list[str]) -> float:
+    """Edmundson cue feature: bonus/stigma word ratio.
 
-    Scores:
-      - error/exception keywords: +0.2
-      - decision keywords: +0.3
-      - architecture keywords: +0.2
-      - 3+ tags: +0.1
-      - content > 500 chars: +0.1
-      - code blocks or file paths: +0.1
+    cue(m) = (bonus_count - stigma_count) / content_words, clamped [0, 1].
+    Code blocks and file paths count as bonus indicators for technical content.
     """
-    score = 0.0
-    if _ERROR_KW.search(content):
-        score += 0.2
-    if _DECISION_KW.search(content):
-        score += 0.3
-    if _ARCHITECTURE_KW.search(content):
-        score += 0.2
-    if tags and len(tags) >= 3:
-        score += 0.1
-    if len(content) > 500:
-        score += 0.1
+    if not words:
+        return 0.0
+    bonus = sum(1 for w in words if w in _BONUS_WORDS)
+    stigma = sum(1 for w in words if w in _STIGMA_WORDS)
+    raw = (bonus - stigma) / len(words)
+    return max(0.0, min(1.0, raw))
+
+
+def _edmundson_key(words: list[str]) -> float:
+    """Edmundson key feature: TF concentration in top quartile.
+
+    Measures what fraction of total term frequency mass is held by the
+    top 25% most frequent terms. Higher concentration = more focused content.
+    """
+    if not words:
+        return 0.0
+    freq = Counter(words)
+    if len(freq) < 2:
+        return 0.0
+    sorted_counts = sorted(freq.values(), reverse=True)
+    total_mass = sum(sorted_counts)
+    # Top quartile of unique terms
+    top_k = max(1, len(sorted_counts) // 4)
+    top_mass = sum(sorted_counts[:top_k])
+    return top_mass / total_mass
+
+
+def compute_importance(content: str, tags: list[str] | None = None) -> float:
+    """Edmundson (1969) four-feature importance scoring.
+
+    Edmundson HP (1969) "New Methods in Automatic Extracting."
+    JACM 16(2):264-285.
+
+    importance = w_cue * cue(m) + w_key * key(m) + w_title * title(m)
+                 + w_loc * loc(m)
+
+    Validated weights: w_cue=2, w_key=1, w_title=1, w_loc=1.
+
+    For single-unit memories (no document structure):
+      - title(m): tags as proxy (tag overlap with bonus words), else 0
+      - loc(m): 0 (no positional signal for atomic memories)
+      - Code blocks and file paths add to cue score (technical content cue)
+
+    Final score normalized to [0, 1].
+    """
+    words = [m.group().lower() for m in _WORD_RE.finditer(content)]
+
+    # cue(m): bonus/stigma word ratio + technical content indicators
+    cue = _edmundson_cue(words)
+    # Boost cue for code blocks and file paths (technical cue signals)
     if _CODE_BLOCK_RE.search(content) or _FILE_PATH_RE.search(content):
-        score += 0.1
-    return min(score, 1.0)
+        cue = min(1.0, cue + 0.15)
+
+    # key(m): TF concentration
+    key = _edmundson_key(words)
+
+    # title(m): tags as proxy — fraction of tags that are bonus words
+    title = 0.0
+    if tags:
+        tag_words = {t.lower() for t in tags}
+        overlap = tag_words & _BONUS_WORDS
+        title = len(overlap) / len(tags) if tags else 0.0
+
+    # loc(m): not applicable for single-unit memories
+    loc = 0.0
+
+    # Edmundson validated weights
+    w_cue, w_key, w_title, w_loc = 2, 1, 1, 1
+    raw = w_cue * cue + w_key * key + w_title * title + w_loc * loc
+
+    # Normalize: max possible raw = 2*1 + 1*1 + 1*1 + 1*0 = 4
+    # But typical scores are much lower; normalize to [0, 1]
+    max_raw = w_cue + w_key + w_title + w_loc  # 5
+    return min(1.0, round(raw / max_raw, 4))
 
 
 def compute_valence(content: str) -> float:
-    """Compute emotional valence from content keywords.
+    """VADER compound sentiment score (Hutto & Gilbert 2014).
 
     Returns a value in [-1.0, +1.0].
-    Negative = frustration (errors), positive = satisfaction (success).
+    Uses engineering-domain lexicon with negation and degree modifiers.
+    compound = x / sqrt(x^2 + alpha), alpha=15.
     """
-    frustration = len(_ERROR_KW.findall(content))
-    satisfaction = len(_SUCCESS_KW.findall(content))
-    total = frustration + satisfaction
-    if total == 0:
-        return 0.0
-    return max(-1.0, min(1.0, (satisfaction - frustration) / total))
+    return vader_compound(content)
 
 
 def compute_decay(
@@ -115,12 +199,19 @@ def compute_decay(
     importance_decay_factor: float = 0.998,
     emotional_decay_resistance: float = 0.5,
 ) -> float:
-    """Compute decayed heat using importance, valence, and confidence modifiers.
+    """Exponential forgetting: heat(t) = heat(0) * λ^t  (Ebbinghaus 1885).
 
-    Base: heat * (decay_factor ^ hours_elapsed)
-    High importance (>0.7): uses slower decay
-    High |valence|: resists decay (emotional memories persist)
-    High confidence: slight resistance to decay
+    λ (effective decay factor per hour) is modulated by:
+      - Importance > 0.7: λ increases to importance_decay_factor (slower decay).
+        Rationale: meaningful memories consolidate better (Craik & Lockhart 1972,
+        levels-of-processing).
+      - |valence|: pushes λ toward 1.0 (emotional memories resist decay).
+        Rationale: amygdala modulation of consolidation (McGaugh 2004).
+      - confidence: minor λ increase. Engineering decision — no paper.
+
+    Constants: decay_factor=0.95 and importance_decay_factor=0.998 are tuned
+    to produce reasonable half-lives (~14h normal, ~346h important) for a
+    memory system operating at hours/days timescale. Not from any paper.
     """
     if hours_elapsed <= 0:
         return current_heat
@@ -178,54 +269,3 @@ def is_error_content(content: str) -> bool:
 def is_decision_content(content: str) -> bool:
     """Check if content contains decision keywords."""
     return bool(_DECISION_KW.search(content))
-
-
-# ── Test-time learning (Titans, NeurIPS 2025) ─────────────────────────
-
-
-def compute_retrieval_surprise(
-    query_emb: bytes | None, result_embs: list[bytes | None]
-) -> float:
-    """Surprise = 1 - mean(cosine_sim(query, results)).
-
-    High surprise means results are far from the query embedding —
-    the system found unexpected content (Titans: ∇ℓ(M; x) is large).
-    Returns 0.5 when embeddings are unavailable.
-    """
-    if not query_emb or not result_embs:
-        return 0.5
-    q = np.frombuffer(query_emb, dtype=np.float32)
-    q_norm = np.linalg.norm(q)
-    if q_norm == 0:
-        return 0.5
-    sims = []
-    for emb in result_embs:
-        if emb is None:
-            continue
-        r = np.frombuffer(emb, dtype=np.float32)
-        r_norm = np.linalg.norm(r)
-        if r_norm > 0 and len(r) == len(q):
-            sims.append(float(np.dot(q, r) / (q_norm * r_norm)))
-    if not sims:
-        return 0.5
-    return max(0.0, min(1.0, 1.0 - sum(sims) / len(sims)))
-
-
-def compute_heat_adjustment(
-    surprise: float,
-    momentum: float,
-    delta: float = 0.08,
-) -> float:
-    """Titans-inspired heat delta: Sₜ = η·Sₜ₋₁ - θ·∇ℓ.
-
-    Surprising results (>0.5) get heat boost; unsurprising (<0.3) get suppressed.
-    Momentum amplifies the effect when recent recalls were consistently surprising.
-
-    Returns a heat delta in [-delta, +delta].
-    """
-    amplification = 1.0 + momentum * 0.5
-    if surprise > 0.5:
-        return delta * (surprise - 0.5) * 2.0 * amplification
-    elif surprise < 0.3:
-        return -delta * (0.3 - surprise) * amplification
-    return 0.0

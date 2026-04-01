@@ -14,13 +14,25 @@ Two modes of operation:
 
 SWR replay is gated by the oscillatory clock — replay only fires during
 sharp-wave ripple events, not on every consolidation call. Replay prioritizes
-sequences with high reward prediction error (dopamine signal).
+sequences with high dopamine-modulated priority scores (see replay_selection.py).
+
+Biological adaptation note:
+    Biological SWR replay uses population burst dynamics where place cell
+    sequences are reactivated in compressed time (Ecker et al. 2022, eLife).
+    This code approximates replay by building sequences from entity-overlap
+    and temporal ordering, not from population-level burst detection. The
+    compression ratio (~20x, Davidson et al. 2009) is applied to STDP timing
+    in replay_execution.py.
 
 References:
     Foster DJ, Wilson MA (2006) Reverse replay of behavioural sequences
         in hippocampal place cells during the awake state. Nature 440:680-683
     Diba K, Buzsaki G (2007) Forward and reverse hippocampal place-cell
         sequences during ripples. Nature Neurosci 10:1241-1242
+    Davidson TJ, Kloosterman F, Wilson MA (2009) Hippocampal replay of
+        extended experience. Neuron 63:497-507
+    Ecker A et al. (2022) Hippocampal sharp wave-ripples and the associated
+        sequence replay emerge from structured synaptic interactions. eLife
     Nelli S et al. (2025) Large SWRs promote hippocampo-cortical reactivation.
         Neuron (in press)
 
@@ -28,7 +40,7 @@ This module is the public API. Implementation is split across:
     - replay_types.py — Data types (ReplayDirection, ReplayEvent, etc.)
     - replay_formatting.py — Context restoration and micro-checkpoint detection
     - replay_execution.py — Sequence building and STDP pair extraction
-    - replay_selection.py — RPE scoring and sequence selection
+    - replay_selection.py — Priority scoring and sequence selection
 
 Pure business logic — no I/O. Storage operations are handled by the caller.
 """
@@ -45,7 +57,8 @@ from mcp_server.core.replay_formatting import (
     should_micro_checkpoint,
 )
 from mcp_server.core.replay_selection import (
-    compute_sequence_rpe,
+    compute_sequence_priority,
+    compute_sequence_rpe,  # backward compat alias
     select_replay_sequences,
 )
 from mcp_server.core.replay_types import (
@@ -137,13 +150,13 @@ def _build_single_sequence(
     if len(events) < _MIN_SEQUENCE_LENGTH:
         return None
 
-    rpe = compute_sequence_rpe(events, dopamine_level)
+    rpe = compute_sequence_priority(events, dopamine_level)
     stdp = compute_replay_stdp_pairs(events, direction)
 
     return ReplaySequence(
         events=events,
         direction=direction,
-        rpe_score=rpe,
+        priority_score=rpe,
         stdp_pairs=stdp,
     )
 
@@ -158,14 +171,14 @@ def _build_temporal_candidates(
     if len(events) < _MIN_SEQUENCE_LENGTH:
         return []
 
-    rpe = compute_sequence_rpe(events, dopamine_level)
+    rpe = compute_sequence_priority(events, dopamine_level)
     stdp = compute_replay_stdp_pairs(events, ReplayDirection.FORWARD)
 
     return [
         ReplaySequence(
             events=events,
             direction=ReplayDirection.FORWARD,
-            rpe_score=rpe,
+            priority_score=rpe,
             stdp_pairs=stdp,
         )
     ]
@@ -190,13 +203,13 @@ def _aggregate_results(selected: list[ReplaySequence]) -> ReplayResult:
         else:
             result.reverse_count += 1
 
-        if seq.rpe_score > 0.5:
+        if seq.priority_score > 0.5:
             schema_signals.append(
                 {
                     "entities": [e for ev in seq.events for e in ev.entities],
-                    "rpe": seq.rpe_score,
+                    "priority": seq.priority_score,
                     "direction": seq.direction.value,
-                    "update_strength": seq.rpe_score * 0.3,
+                    "update_strength": seq.priority_score * 0.3,
                 }
             )
 
@@ -241,7 +254,8 @@ __all__ = [
     "build_causal_sequence",
     "compute_replay_stdp_pairs",
     # Selection
-    "compute_sequence_rpe",
+    "compute_sequence_priority",
+    "compute_sequence_rpe",  # backward compat alias
     "select_replay_sequences",
     # Orchestration
     "run_swr_replay",

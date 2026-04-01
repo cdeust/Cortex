@@ -1,9 +1,27 @@
 """Hebbian LTP/LTD and STDP updates.
 
-Hebbian learning (Hebb 1949) with BCM sliding threshold (BCM 1982).
-STDP (Bi & Poo 1998) for temporal causal structure learning.
+BCM theory (Bienenstock, Cooper & Munro 1982, "Theory for the development
+of neuron selectivity", J Neuroscience 2:32-48):
+  phi(c, theta_m) = c * (c - theta_m)
+  dw/dt = phi(c, theta_m) * d
+  theta_m = E[c^2]  (sliding threshold)
 
-Pure business logic -- no I/O.
+  When c > theta_m: phi > 0 → LTP
+  When 0 < c < theta_m: phi < 0 → LTD
+  theta_m slides up with high activity, down with low activity.
+
+STDP (Bi & Poo 1998, "Synaptic modifications in cultured hippocampal
+neurons", J Neuroscience 18:10464-10472):
+  Pre-before-post (dt > 0): delta_w = A+ * exp(-dt/tau+)
+  Post-before-pre (dt < 0): delta_w = -A- * exp(dt/tau-)
+  With A+ > A-, tau+ ≈ 17ms, tau- ≈ 34ms (biological).
+  Adapted to hours timescale: tau+ = tau- = 24h.
+
+Constants: _LTP_RATE, _LTD_RATE are overall scaling factors (hand-tuned).
+STDP amplitudes A+/A- maintain the A+ > A- asymmetry from Bi & Poo.
+Time constants are adapted from ms to hours (documented adaptation).
+
+Pure business logic — no I/O.
 """
 
 from __future__ import annotations
@@ -25,6 +43,18 @@ _STDP_TAU_PLUS: float = 24.0
 _STDP_TAU_MINUS: float = 24.0
 
 
+def compute_bcm_phi(
+    post_activity: float,
+    theta: float,
+) -> float:
+    """BCM quadratic phi function: phi(c, theta_m) = c * (c - theta_m).
+
+    Bienenstock, Cooper & Munro (1982), Eq. 3.
+    Returns positive for LTP (c > theta_m), negative for LTD (0 < c < theta_m).
+    """
+    return post_activity * (post_activity - theta)
+
+
 def compute_ltp(
     current_weight: float,
     co_activation: float,
@@ -34,10 +64,15 @@ def compute_ltp(
     ltp_rate: float = _LTP_RATE,
     max_weight: float = _MAX_WEIGHT,
 ) -> float:
-    """BCM rule: dw = ltp_rate x (post - theta) x pre x co_activation."""
-    if post_activity <= theta:
+    """BCM LTP: dw = rate * phi(c, theta_m) * d * co_activation.
+
+    phi(c, theta_m) = c * (c - theta_m) — quadratic, per BCM 1982.
+    Only applies potentiation (phi > 0); use compute_ltd for depression.
+    """
+    phi = compute_bcm_phi(post_activity, theta)
+    if phi <= 0:
         return current_weight
-    delta = ltp_rate * (post_activity - theta) * pre_activity * co_activation
+    delta = ltp_rate * phi * pre_activity * co_activation
     return min(max_weight, current_weight + delta)
 
 
@@ -46,8 +81,25 @@ def compute_ltd(
     time_since_co_access_hours: float,
     ltd_rate: float = _LTD_RATE,
     min_weight: float = _MIN_WEIGHT,
+    post_activity: float = 0.0,
+    theta: float = 0.5,
 ) -> float:
-    """Logarithmic weight decay for inactive edges."""
+    """BCM LTD: activity-based depression when 0 < c < theta_m.
+
+    Two mechanisms:
+    1. Activity-based (BCM 1982): phi(c, theta_m) < 0 when 0 < c < theta_m.
+       dw = ltd_rate * phi(c, theta_m).
+    2. Inactivity-based (fallback): logarithmic decay for edges with no
+       recent co-access. This is engineering heuristic, not from BCM —
+       BCM requires postsynaptic activity for LTD.
+    """
+    if post_activity > 0:
+        phi = compute_bcm_phi(post_activity, theta)
+        if phi < 0:
+            delta = ltd_rate * abs(phi)
+            return max(min_weight, current_weight - delta)
+        return current_weight
+
     if time_since_co_access_hours <= 0:
         return current_weight
     decay = ltd_rate * math.log1p(time_since_co_access_hours / 24.0)
@@ -59,7 +111,11 @@ def update_bcm_threshold(
     entity_activity: float,
     decay: float = _BCM_THETA_DECAY,
 ) -> float:
-    """Update BCM sliding threshold via EMA of squared activity."""
+    """BCM sliding threshold: theta_m = E[c^2] (BCM 1982, Eq. 5).
+
+    Implemented as EMA: theta_m' = decay * theta_m + (1 - decay) * c^2.
+    This is faithful to BCM theory.
+    """
     return decay * current_theta + (1.0 - decay) * (entity_activity**2)
 
 

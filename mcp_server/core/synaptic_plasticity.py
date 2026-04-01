@@ -1,17 +1,29 @@
-"""Synaptic plasticity -- stochastic transmission, phase gating, and public API.
+"""Synaptic plasticity — Tsodyks-Markram STP, phase gating, and public API.
 
-Stochastic synaptic transmission (Markram et al. 1998, Abbott & Regehr 2004):
-Real synapses are probabilistic. Each edge has a release probability p that
-determines whether a signal propagates. Short-term facilitation increases p
-on repeated use; short-term depression depletes vesicles and decreases p.
+Tsodyks-Markram short-term plasticity (Tsodyks & Markram 1997, "The neural
+code between neocortical pyramidal neurons depends on neurotransmitter
+release probability", PNAS 94:719-723; Markram et al. 1998):
+
+  At each spike event:
+    u_eff = u + U * (1 - u)        (facilitation: residual Ca2+ boost)
+    x_new = x - u_eff * x          (depression: vesicle depletion)
+
+  Between spikes (continuous recovery):
+    du/dt = -u / tau_F              (facilitation decays, tau_F ~ 530ms)
+    dx/dt = (1 - x) / tau_D        (vesicles recover, tau_D ~ 130ms)
+
+  Effective release = u_eff * x (utilization * available resources)
+
+  Timescale adaptation: biological tau_F ~ 530ms, tau_D ~ 130ms.
+  Adapted to hours: tau_F = 0.5h (30min facilitation), tau_D = 2.0h
+  (2h vesicle recovery). This is a documented departure — ratio preserved.
 
 Phase-gated plasticity: LTP/LTD magnitude is modulated by theta phase
 (Hasselmo 2005). Encoding phase amplifies LTP; retrieval phase suppresses it.
 
-Re-exports Hebbian/STDP functions from synaptic_plasticity_hebbian for
-backward compatibility.
+Re-exports Hebbian/STDP functions from synaptic_plasticity_hebbian.
 
-Pure business logic -- no I/O.
+Pure business logic — no I/O.
 """
 
 from __future__ import annotations
@@ -20,49 +32,61 @@ import math
 import random
 from dataclasses import dataclass
 
-# -- Stochastic Transmission Defaults ----------------------------------------
+# -- Tsodyks-Markram STP Constants (adapted timescale) -------------------------
 
-_BASE_RELEASE_PROB: float = 0.5
-_FACILITATION_RATE: float = 0.15
-_FACILITATION_DECAY: float = 0.9
-_DEPRESSION_RATE: float = 0.2
-_DEPRESSION_DECAY: float = 0.85
-_DEPRESSION_INTERVAL_HOURS: float = 0.5
+# U: baseline utilization increment per spike (Tsodyks & Markram 1997)
+# Biological range: 0.15-0.5 depending on synapse type
+_U_INCREMENT: float = 0.2
+
+# tau_F: facilitation time constant. Biological: ~530ms.
+# Adapted to hours: 0.5h (30min) — residual Ca2+ decays over ~30 min.
+_TAU_F_HOURS: float = 0.5
+
+# tau_D: depression recovery time constant. Biological: ~130ms.
+# Adapted to hours: 2.0h — vesicle replenishment takes ~2h.
+_TAU_D_HOURS: float = 2.0
+
 _NOISE_SCALE: float = 0.01
 
-# -- Weight Bounds (shared with hebbian module) -------------------------------
+# -- Weight Bounds (shared with hebbian module) --------------------------------
 
 _MIN_WEIGHT: float = 0.01
 _MAX_WEIGHT: float = 2.0
 
 
-# -- Synaptic State -----------------------------------------------------------
+# -- Synaptic State (Tsodyks-Markram) ------------------------------------------
 
 
 @dataclass
 class SynapticState:
-    """Per-edge stochastic transmission state.
+    """Per-edge Tsodyks-Markram STP state.
 
-    Tracks release probability, short-term facilitation/depression,
-    and access history for noise scaling.
+    u: utilization parameter (facilitation). Starts at 0, boosted by U on
+       each spike, decays with tau_F. Represents residual Ca2+ in terminal.
+    x: available resources (1 = full vesicle pool, 0 = depleted). Starts at 1,
+       depleted by u*x on each spike, recovers with tau_D.
+    access_count: for noise scaling (Bayesian evidence accumulation).
+    hours_since_last_access: for continuous recovery between spikes.
     """
 
-    release_probability: float = _BASE_RELEASE_PROB
-    facilitation: float = 0.0
-    depression: float = 0.0
+    u: float = 0.0
+    x: float = 1.0
     access_count: int = 0
     hours_since_last_access: float = 0.0
 
 
-# -- Release Probability ------------------------------------------------------
+# -- Release Probability (Tsodyks-Markram) -------------------------------------
 
 
 def compute_effective_release_probability(state: SynapticState) -> float:
-    """Compute effective release probability after facilitation/depression.
+    """Effective release: u_eff * x (Tsodyks-Markram 1997).
 
-    p_eff = p_base + facilitation - depression, clamped to [0.05, 0.95].
+    u_eff = U + u * (1 - U): facilitation-boosted utilization.
+    x: available vesicle fraction.
+    Product gives transmission probability, clamped to [0.05, 0.95].
     """
-    p_eff = state.release_probability + state.facilitation - state.depression
+    u_eff = _U_INCREMENT + state.u * (1.0 - _U_INCREMENT)
+    p_eff = u_eff * state.x
     return max(0.05, min(0.95, p_eff))
 
 
@@ -79,7 +103,7 @@ def stochastic_transmit(
     return r < p
 
 
-# -- Short-Term Dynamics -------------------------------------------------------
+# -- Tsodyks-Markram Dynamics --------------------------------------------------
 
 
 def update_short_term_dynamics(
@@ -87,67 +111,71 @@ def update_short_term_dynamics(
     hours_elapsed: float,
     is_access: bool = False,
 ) -> SynapticState:
-    """Update short-term facilitation and depression.
+    """Tsodyks-Markram STP update (Tsodyks & Markram 1997).
 
-    On access: facilitation increases; rapid access triggers depression.
-    Over time: both facilitation and depression decay exponentially.
-    Returns new SynapticState (immutable update).
+    Between spikes (continuous recovery):
+      u(t) = u0 * exp(-t / tau_F)
+      x(t) = 1 - (1 - x0) * exp(-t / tau_D)
+
+    At spike (discrete update):
+      u_new = u + U * (1 - u)      (facilitation boost)
+      x_new = x - u_new * x        (vesicle depletion)
+
+    Returns new SynapticState (original not mutated).
     """
-    fac, dep = _decay_facilitation_depression(
-        state.facilitation,
-        state.depression,
-        hours_elapsed,
-    )
+    u, x = _recover_between_spikes(state.u, state.x, hours_elapsed)
+
     access_count = state.access_count
     hours_since = hours_elapsed
 
     if is_access:
-        fac, dep, access_count, hours_since = _apply_access(
-            fac,
-            dep,
-            access_count,
-            state.hours_since_last_access,
-        )
+        u, x, access_count, hours_since = _apply_spike(u, x, access_count)
 
     return SynapticState(
-        release_probability=state.release_probability,
-        facilitation=round(fac, 6),
-        depression=round(dep, 6),
+        u=round(u, 6),
+        x=round(x, 6),
         access_count=access_count,
         hours_since_last_access=hours_since,
     )
 
 
-def _decay_facilitation_depression(
-    facilitation: float,
-    depression: float,
+def _recover_between_spikes(
+    u: float,
+    x: float,
     hours_elapsed: float,
 ) -> tuple[float, float]:
-    """Decay facilitation and depression over elapsed time."""
+    """Continuous recovery: u decays to 0, x recovers to 1.
+
+    Tsodyks-Markram 1997, between-spike analytical solution:
+      u(t) = u0 * exp(-t / tau_F)
+      x(t) = 1 - (1 - x0) * exp(-t / tau_D)
+    """
     if hours_elapsed <= 0:
-        return facilitation, depression
+        return u, x
 
-    fac = facilitation * (_FACILITATION_DECAY**hours_elapsed)
-    dep = depression * (_DEPRESSION_DECAY**hours_elapsed)
-    return fac, dep
+    u_new = u * math.exp(-hours_elapsed / _TAU_F_HOURS)
+    x_new = 1.0 - (1.0 - x) * math.exp(-hours_elapsed / _TAU_D_HOURS)
+    return u_new, x_new
 
 
-def _apply_access(
-    facilitation: float,
-    depression: float,
+def _apply_spike(
+    u: float,
+    x: float,
     access_count: int,
-    hours_since_last_access: float,
 ) -> tuple[float, float, int, float]:
-    """Apply access effects: boost facilitation, maybe trigger depression."""
-    facilitation = min(1.0, facilitation + _FACILITATION_RATE)
+    """Spike event: facilitation boost + vesicle depletion.
 
-    if hours_since_last_access < _DEPRESSION_INTERVAL_HOURS:
-        depression = min(1.0, depression + _DEPRESSION_RATE)
+    Tsodyks-Markram 1997:
+      u_new = u + U * (1 - u)    (residual Ca2+ increment)
+      x_new = x - u_new * x      (release depletes available resources)
+    """
+    u_new = u + _U_INCREMENT * (1.0 - u)
+    x_new = x - u_new * x
+    x_new = max(0.0, x_new)
+    return u_new, x_new, access_count + 1, 0.0
 
-    return facilitation, depression, access_count + 1, 0.0
 
-
-# -- Noise Injection ----------------------------------------------------------
+# -- Noise Injection -----------------------------------------------------------
 
 
 def compute_noisy_weight_update(
@@ -170,7 +198,7 @@ def compute_noisy_weight_update(
     return delta_w + noise
 
 
-# -- Phase-Gated Plasticity ---------------------------------------------------
+# -- Phase-Gated Plasticity (Hasselmo 2005) ------------------------------------
 
 
 def phase_modulate_plasticity(
@@ -178,11 +206,11 @@ def phase_modulate_plasticity(
     theta_phase: float,
     is_ltp: bool = True,
 ) -> float:
-    """Modulate plasticity magnitude by theta phase.
+    """Modulate plasticity magnitude by theta phase (Hasselmo 2005).
 
     Encoding phase (0.0-0.5): LTP amplified, LTD suppressed.
     Retrieval phase (0.5-1.0): LTP suppressed, LTD amplified.
-    Uses cosine envelope matching oscillatory_clock.compute_encoding_strength.
+    Cosine envelope for smooth transition.
     """
     raw = math.cos(2.0 * math.pi * (theta_phase - 0.25))
     encoding_strength = 0.65 + 0.35 * raw
@@ -194,11 +222,12 @@ def phase_modulate_plasticity(
     return delta_w * retrieval_strength
 
 
-# -- Hebbian/STDP functions (used by phase_modulate_plasticity) ----------------
+# -- Re-exports from sub-modules -----------------------------------------------
 
 from mcp_server.core.synaptic_plasticity_hebbian import (  # noqa: E402
     apply_hebbian_update,
     apply_stdp_batch,
+    compute_bcm_phi,
     compute_ltd,
     compute_ltp,
     compute_stdp_update,
@@ -209,14 +238,13 @@ from mcp_server.core.synaptic_plasticity_stochastic import (  # noqa: E402
 )
 
 __all__ = [
-    # Stochastic transmission
     "SynapticState",
     "compute_effective_release_probability",
     "stochastic_transmit",
     "update_short_term_dynamics",
     "compute_noisy_weight_update",
     "phase_modulate_plasticity",
-    # From hebbian module
+    "compute_bcm_phi",
     "compute_ltp",
     "compute_ltd",
     "update_bcm_threshold",

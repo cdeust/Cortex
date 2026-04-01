@@ -1,8 +1,18 @@
 """Query routing and decomposition for multi-signal retrieval.
 
 Routes classified queries to retrieval strategies and decomposes complex
-queries into sub-queries for multi-hop retrieval (inspired by IRCoT and
-HippoRAG).
+queries into sub-queries via regex entity extraction.
+
+NOTE: Previously cited IRCoT (ACL 2023) and HippoRAG (NeurIPS 2024).
+IRCoT decomposes queries via iterative LLM chain-of-thought reasoning.
+HippoRAG uses personalized PageRank over a knowledge graph. This module
+does neither — it uses regex to extract CamelCase identifiers, file
+paths, backtick-quoted terms, and multi-word proper nouns. Citations
+removed per zetetic standard.
+
+The intent-based routing (route_query) is useful engineering but not from
+any specific paper. Entity extraction and sub-query generation are regex
+heuristics. Stop word list and sub-query limit of 6 are hand-tuned.
 
 Pure business logic — no I/O.
 """
@@ -172,12 +182,11 @@ def generate_sub_queries(
     entities: list[str],
     keywords: list[str],
 ) -> list[str]:
-    """Generate sub-queries for multi-hop retrieval.
+    """Generate sub-queries via regex entity/phrase extraction.
 
     For multi-entity queries, creates per-entity sub-queries.
-    For complex queries, extracts clause-level sub-queries.
-
-    Inspired by IRCoT (ACL 2023) and HippoRAG (NeurIPS 2024).
+    For complex queries, extracts quoted phrases and keyword combinations.
+    This is regex heuristic extraction, not LLM-based decomposition.
     """
     sub_queries: list[str] = []
 
