@@ -1,11 +1,14 @@
 {
   "rerank_alpha": {
+    "description": "CE vs first-stage blend weight (Nogueira & Cho 2019 linear interpolation)",
     "0.3": 0.5115,
     "0.5": 0.5291,
     "0.55": 0.5347,
-    "0.7": 0.5423
+    "0.7": 0.5423,
+    "conclusion": "Monotonically increasing up to 0.70. Higher alpha not tested via official ablation.py."
   },
   "signal_weights": {
+    "description": "Per-signal weight ablation (one-at-a-time, baseline: fts=0.5, heat=0.3, ngram=0.3)",
     "fts=0.0": {"beam_mrr": 0.554},
     "fts=0.3": {"beam_mrr": 0.548},
     "fts=0.5": {"beam_mrr": 0.541},
@@ -40,5 +43,27 @@
       "beam_mrr": 0.554
     },
     "conclusion": "Corpus-adaptive weights needed. Static weights cannot optimize across conversational (BEAM) and factual (LME/LoCoMo) benchmarks simultaneously."
+  },
+  "adaptive_alpha": {
+    "description": "Per-query alpha based on CE score spread (QPP, Shtok et al. TOIS 2012)",
+    "approach": "Boost alpha above base 0.70 when CE score spread > 0.3, up to max 0.85",
+    "results": {
+      "beam_mrr": 0.5404,
+      "beam_delta": -0.002,
+      "longmemeval_mrr": 0.883,
+      "longmemeval_r10": 0.978,
+      "longmemeval_delta_mrr": 0.003,
+      "locomo_mrr": 0.802,
+      "locomo_r10": 0.926,
+      "locomo_delta_mrr": -0.038,
+      "locomo_delta_r10": -0.051
+    },
+    "conclusion": "Adaptive alpha via CE spread does NOT work. Improved LME marginally (+0.003 MRR) but severely regressed LoCoMo (-3.8pp MRR, -5.1pp R@10). CE score spread cannot distinguish 'one great match' from 'one irrelevant outlier'. Fixed alpha=0.70 remains the empirically justified default."
+  },
+  "failed_approaches": {
+    "quality_gating": "Count-based signal quality factor in PL/pgSQL — regressed all 3 benchmarks (BEAM 0.511, LME 0.854, LoCoMo 0.790). Reverted.",
+    "pre_retrieval_specificity": "Query content word count / ratio / entity presence — features are NOT discriminative between BEAM and LME queries (BEAM ratio=0.470, LME ratio=0.459).",
+    "meta_conversational_detection": "Regex patterns for conversation-about-conversation queries — only 20.5% of BEAM matches, 9.8% of LME matches. Not selective enough.",
+    "higher_fixed_alpha": "alpha=0.80 (BEAM 0.476), 0.90 (0.469), 1.00 (0.465) all worse than 0.70 on BEAM."
   }
 }
