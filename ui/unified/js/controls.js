@@ -33,6 +33,15 @@
       });
     }
 
+    // ── Stage dropdown ──
+    var stageSelect = document.getElementById('stage-select');
+    if (stageSelect) {
+      stageSelect.addEventListener('change', function() {
+        JUG.state.stageFilter = stageSelect.value;
+        if (JUG.state.lastData) rebuildWithFilters();
+      });
+    }
+
     // ── Search ──
     var searchBox = document.getElementById('search-box');
     var searchTimer = null;
@@ -54,10 +63,12 @@
         filterBtns[0] && filterBtns[0].classList.add('active');
         if (domainSelect) domainSelect.value = '';
         if (emotionSelect) emotionSelect.value = '';
+        if (stageSelect) stageSelect.value = '';
         if (searchBox) searchBox.value = '';
         JUG.state.activeFilter = 'all';
         JUG.state.domainFilter = '';
         JUG.state.emotionFilter = '';
+        JUG.state.stageFilter = '';
         JUG.state.searchQuery = '';
         JUG.resetCamera();
       });
@@ -120,14 +131,21 @@
   JUG._applyExtraFilters = function(nodes) {
     var domain = JUG.state.domainFilter || '';
     var emotion = JUG.state.emotionFilter || '';
+    var stage = JUG.state.stageFilter || '';
 
     if (domain) {
       nodes = nodes.filter(function(n) { return n.domain === domain || n.type === 'domain'; });
     }
     if (emotion) {
       nodes = nodes.filter(function(n) {
-        if (n.type !== 'memory') return true; // Don't filter non-memories by emotion
+        if (n.type !== 'memory') return true;
         return n.emotion === emotion;
+      });
+    }
+    if (stage) {
+      nodes = nodes.filter(function(n) {
+        if (JUG.STRUCTURAL_TYPES[n.type]) return true;
+        return n.consolidationStage === stage;
       });
     }
     return nodes;

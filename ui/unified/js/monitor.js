@@ -146,6 +146,11 @@
         emotionalBoost: n.emotionalBoost,
         decayResistance: n.decayResistance,
         valence: n.valence,
+        consolidationStage: n.consolidationStage || '',
+        interferenceScore: n.interferenceScore,
+        schemaMatchScore: n.schemaMatchScore,
+        plasticity: n.plasticity,
+        stability: n.stability,
         connections: connections,
       });
     });
@@ -177,6 +182,9 @@
         if (activeBioFilter === 'emotional') return e.emotion && e.emotion !== 'neutral' && e.emotion !== '';
         if (activeBioFilter === 'protected') return e.isProtected;
         if (activeBioFilter === 'high-heat') return (e.heat || 0) >= 0.7;
+        if (activeBioFilter === 'labile') return e.consolidationStage === 'labile';
+        if (activeBioFilter === 'consolidated') return e.consolidationStage === 'consolidated';
+        if (activeBioFilter === 'high-interference') return (e.interferenceScore || 0) > 0.5;
         // Specific emotion
         return e.emotion === activeBioFilter;
       });
@@ -192,7 +200,7 @@
     });
 
     // Tab counts (bio)
-    var bioCounts = { emotional: 0, urgency: 0, frustration: 0, satisfaction: 0, discovery: 0, confusion: 0, protected: 0, 'high-heat': 0 };
+    var bioCounts = { emotional: 0, urgency: 0, frustration: 0, satisfaction: 0, discovery: 0, confusion: 0, protected: 0, 'high-heat': 0, labile: 0, consolidated: 0, 'high-interference': 0 };
     logEntries.forEach(function(e) {
       if (e.emotion && e.emotion !== 'neutral' && e.emotion !== '') {
         bioCounts.emotional++;
@@ -200,6 +208,9 @@
       }
       if (e.isProtected) bioCounts.protected++;
       if ((e.heat || 0) >= 0.7) bioCounts['high-heat']++;
+      if (e.consolidationStage === 'labile') bioCounts.labile++;
+      if (e.consolidationStage === 'consolidated') bioCounts.consolidated++;
+      if ((e.interferenceScore || 0) > 0.5) bioCounts['high-interference']++;
     });
     (panel || document).querySelectorAll('.mon-tab[data-bio]').forEach(function(tab) {
       var b = tab.dataset.bio;
@@ -251,6 +262,11 @@
       if (e.arousal !== undefined && e.arousal > 0.1) metrics.push('<span class="mon-m">arousal <b>' + (e.arousal * 100).toFixed(0) + '%</b></span>');
       if (e.emotionalBoost !== undefined && e.emotionalBoost > 1.01) metrics.push('<span class="mon-m">emo×<b>' + e.emotionalBoost.toFixed(2) + '</b></span>');
       if (e.decayResistance !== undefined && e.decayResistance > 1.01) metrics.push('<span class="mon-m">resist <b>' + e.decayResistance.toFixed(2) + '</b></span>');
+      if (e.consolidationStage) {
+        var stgc = JUG.CONSOLIDATION_COLORS[e.consolidationStage] || '#50C8E0';
+        metrics.push('<span class="mon-m" style="color:' + stgc + '">' + e.consolidationStage.replace(/_/g, ' ') + '</span>');
+      }
+      if (e.interferenceScore > 0.1) metrics.push('<span class="mon-m">interference <b>' + (e.interferenceScore * 100).toFixed(0) + '%</b></span>');
 
       if (metrics.length) {
         html += '<div class="mon-metrics">' + metrics.join('') + '</div>';

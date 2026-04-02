@@ -20,6 +20,7 @@
     activeView: 'graph',
     domainFilter: '',
     emotionFilter: '',
+    stageFilter: '',
   };
 
   JUG.state = {};

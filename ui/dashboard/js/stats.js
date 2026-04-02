@@ -8,11 +8,14 @@
 
     // Bottom bar stats
     var bar = document.getElementById('stats-bar');
-    bar.innerHTML =
-      'Nodes: <span>' + (s.total + s.entities) + '</span> \u00b7 ' +
-      'Edges: <span>' + s.relationships + '</span> \u00b7 ' +
-      'Heat: <span>' + s.avg_heat.toFixed(3) + '</span>' +
-      '<span class="sync-badge">Synchronized</span>';
+    var parts = [
+      'Nodes: <span>' + (s.total + s.entities) + '</span>',
+      'Edges: <span>' + s.relationships + '</span>',
+      'Heat: <span>' + s.avg_heat.toFixed(3) + '</span>',
+    ];
+    if (s.protected > 0) parts.push('\u26e8 <span>' + s.protected + '</span> protected');
+    if (s.triggers > 0) parts.push('\u23f0 <span>' + s.triggers + '</span> triggers');
+    bar.innerHTML = parts.join(' \u00b7 ') + '<span class="sync-badge">Synchronized</span>';
   }
 
   function updateConnection() {

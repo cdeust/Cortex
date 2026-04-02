@@ -19,6 +19,25 @@
     other:        { icon: '.', color: '#5a7a9a', bg: '#1e293b', keywords: [] },
   };
 
+  // Agent topic colors for team memory visualization
+  JMD.AGENT_COLORS = {
+    engineer:     '#8b5cf6',
+    tester:       '#10b981',
+    reviewer:     '#f59e0b',
+    architect:    '#3b82f6',
+    dba:          '#06b6d4',
+    researcher:   '#ef4444',
+    frontend:     '#ec4899',
+    security:     '#f97316',
+    devops:       '#14b8a6',
+    ux:           '#a855f7',
+    orchestrator: '#6366f1',
+  };
+
+  JMD.agentColor = function(agent) {
+    return JMD.AGENT_COLORS[agent] || '#5a7a9a';
+  };
+
   JMD.HEAT_COLORS = {
     hot:  '#ff4444',
     warm: '#ffaa00',

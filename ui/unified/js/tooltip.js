@@ -101,6 +101,18 @@
     parts.push(buildKeyMetric(node));
     parts.push(buildQualityDot(node));
     parts.push(buildEmotionTag(node));
+    if (node.consolidationStage) {
+      var sc = JUG.CONSOLIDATION_COLORS[node.consolidationStage] || '#50C8E0';
+      parts.push('<div class="tt-kv"><span class="tt-kv-label">Stage</span>' +
+        '<span class="tt-kv-val" style="color:' + sc + '">' +
+        (JUG.CONSOLIDATION_LABELS[node.consolidationStage] || node.consolidationStage) +
+        '</span></div>');
+    }
+    if (node.interferenceScore > 0.3) {
+      parts.push('<div class="tt-kv"><span class="tt-kv-label">Interference</span>' +
+        '<span class="tt-kv-val" style="color:#E07070">' +
+        Math.round(node.interferenceScore * 100) + '%</span></div>');
+    }
     parts.push(buildPreview(node));
     // Diff placeholder for file entities — filled async
     if (isFileEntity(node)) {

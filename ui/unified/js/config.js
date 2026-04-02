@@ -60,6 +60,22 @@ JUG.NODE_LABELS = {
   'entity': 'Entity',
 };
 
+JUG.CONSOLIDATION_COLORS = {
+  'labile': '#00D2FF',
+  'early_ltp': '#60A0E0',
+  'late_ltp': '#40D870',
+  'consolidated': '#E8B840',
+  'reconsolidating': '#C070D0',
+};
+
+JUG.CONSOLIDATION_LABELS = {
+  'labile': 'Labile',
+  'early_ltp': 'Early LTP',
+  'late_ltp': 'Late LTP',
+  'consolidated': 'Consolidated',
+  'reconsolidating': 'Reconsolidating',
+};
+
 JUG.ZOOM_LEVELS = {
   L3: { minDist: 1200, label: 'Universe' },
   L2: { minDist: 600, label: 'Galaxy' },

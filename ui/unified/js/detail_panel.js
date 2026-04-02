@@ -117,6 +117,7 @@
     h += JUG._fmt.content(data);
     h += JUG._fmt.tags(data.tags);
     h += buildEmotion(data);
+    h += JUG._fmt.bioSection(data);
     h += buildConnections(data, edges);
     h += JUG._fmt.badges(data);
 
