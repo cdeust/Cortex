@@ -59,6 +59,32 @@ _EVENT_RE = re.compile(
 )
 
 
+# ── Content Cleanup ──────────────────────────────────────────────────────
+
+_TOOL_HEADER_RE = re.compile(
+    r"^#\s*Tool:\s*\w+\s*\n"
+    r"(?:\*\*(?:File|Command|Read):\*\*\s*`[^`]*`\s*\n)?",
+    re.MULTILINE,
+)
+_OUTPUT_BLOCK_RE = re.compile(r"\*\*Output:\*\*\s*\n```\n?", re.MULTILINE)
+
+
+def _clean_auto_captured(content: str) -> str:
+    """Remove PostToolUse hook headers from auto-captured memories.
+
+    Auto-captured memories start with "# Tool: Edit" + metadata lines.
+    For narrative display, strip these to get the meaningful content.
+    """
+    cleaned = _TOOL_HEADER_RE.sub("", content)
+    cleaned = _OUTPUT_BLOCK_RE.sub("", cleaned)
+    cleaned = cleaned.replace("```", "").strip()
+    # Remove leading/trailing whitespace lines
+    lines = cleaned.split("\n")
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    return "\n".join(lines).strip()
+
+
 # ── Extraction Functions ──────────────────────────────────────────────────
 
 
@@ -80,9 +106,9 @@ def extract_decisions(memories: list[dict[str, Any]]) -> list[str]:
             _DECISION_RE.search(content)
         )
         if is_decision:
-            # Truncate to first 150 chars for readability
-            text = content[:150].strip()
-            if len(content) > 150:
+            cleaned = _clean_auto_captured(content)
+            text = cleaned[:150].strip()
+            if len(cleaned) > 150:
                 text += "..."
             decisions.append(text)
 
@@ -106,7 +132,8 @@ def extract_events(
 
         is_event = importance >= importance_threshold or bool(_EVENT_RE.search(content))
         if is_event:
-            text = content[:150].strip()
+            cleaned = _clean_auto_captured(content)
+            text = cleaned[:150].strip()
             if len(content) > 150:
                 text += "..."
             events.append(text)
