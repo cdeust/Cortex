@@ -153,9 +153,7 @@ def _blend_scores(
     confidence = _compute_retrieval_confidence(raw_ce_list)
 
     # Per-query adaptive alpha based on CE score distribution
-    effective_alpha = (
-        _compute_adaptive_alpha(raw_ce_list, alpha) if adaptive else alpha
-    )
+    effective_alpha = _compute_adaptive_alpha(raw_ce_list, alpha) if adaptive else alpha
 
     reranked = []
     for i, (mem_id, wrrf_score) in enumerate(candidates):
