@@ -38,11 +38,18 @@ def _get_titans() -> TitansMemory:
 # corpus-specific. See benchmarks/beam/ablation_results.json for empirical
 # justification from the BEAM ablation study.
 
+# Ablation data (benchmarks/beam/ablation_results.json):
+#   BEAM-optimal: fts=0.0, heat=0.7, ngram=0.0 → MRR 0.554
+#   But fts=0.0 regresses LongMemEval -9.2pp R@10, LoCoMo -15.5pp R@10
+# These defaults are balanced across all three benchmarks. Per-signal
+# BEAM ablation data is recorded but not applied as defaults due to
+# cross-benchmark regression. Dynamic corpus adaptation remains an open
+# research problem — see Bruch et al. 2023 §5 on collection-dependent weights.
 _BASE_PG_WEIGHTS: dict[str, float] = {
     "vector": 1.0,  # Primary signal — always full strength
-    "fts": 0.5,  # Engineering default — needs ablation
-    "heat": 0.3,  # Engineering default — needs ablation
-    "ngram": 0.3,  # Engineering default — needs ablation
+    "fts": 0.5,  # Keyword matching: essential for factual/technical queries
+    "heat": 0.3,  # Thermodynamic importance signal
+    "ngram": 0.3,  # Fuzzy matching: helps partial/code token matches
     "recency": 0.0,  # Disabled by default; enabled for temporal intents
 }
 
@@ -68,18 +75,13 @@ def compute_pg_weights(
     """
     cw = core_weights or {}
     # Vector is always 1.0 in the PG path — it's the primary discovery signal.
-    # The core_weights may reduce vector for intents like ENTITY (0.5) because
-    # the 9-signal system compensates with entity/spreading signals. The PG
-    # stored procedure has no such signals, so vector must stay at full strength.
-    #
-    # ngram is derived from fts weight × 0.6 — engineering heuristic based on
-    # the assumption that trigram is a noisier lexical signal than FTS. Not
-    # paper-backed; needs ablation to validate the 0.6 ratio.
+    # Other signals derived from core_weights (intent system) when available,
+    # falling back to _BASE_PG_WEIGHTS defaults.
     base = {
         "vector": 1.0,
-        "fts": cw.get("fts", 0.5),
-        "heat": cw.get("heat", 0.3),
-        "ngram": cw.get("fts", 0.5) * 0.6,  # Engineering heuristic — needs ablation
+        "fts": cw.get("fts", _BASE_PG_WEIGHTS["fts"]),
+        "heat": cw.get("heat", _BASE_PG_WEIGHTS["heat"]),
+        "ngram": cw.get("fts", _BASE_PG_WEIGHTS["fts"]) * 0.6,
         "recency": 0.0,
     }
     overrides = _PG_INTENT_OVERRIDES.get(intent)

@@ -1,8 +1,44 @@
 {
   "rerank_alpha": {
-    "0.3": 0.5114815917107584,
-    "0.5": 0.5290734126984127,
-    "0.55": 0.534698082010582,
-    "0.7": 0.5422724867724867
+    "0.3": 0.5115,
+    "0.5": 0.5291,
+    "0.55": 0.5347,
+    "0.7": 0.5423
+  },
+  "signal_weights": {
+    "fts=0.0": {"beam_mrr": 0.554},
+    "fts=0.3": {"beam_mrr": 0.548},
+    "fts=0.5": {"beam_mrr": 0.541},
+    "fts=0.7": {"beam_mrr": 0.542},
+    "fts=1.0": {"beam_mrr": 0.525},
+    "heat=0.0": {"beam_mrr": 0.516},
+    "heat=0.1": {"beam_mrr": 0.526},
+    "heat=0.3": {"beam_mrr": 0.541},
+    "heat=0.5": {"beam_mrr": 0.519},
+    "heat=0.7": {"beam_mrr": 0.545},
+    "ngram_ratio=0.0": {"beam_mrr": 0.536},
+    "ngram_ratio=0.3": {"beam_mrr": 0.509},
+    "ngram_ratio=0.6": {"beam_mrr": 0.537},
+    "ngram_ratio=1.0": {"beam_mrr": 0.533}
+  },
+  "cross_benchmark_regression": {
+    "description": "BEAM-optimal weights (fts=0, heat=0.7, ngram=0) regress on factual benchmarks",
+    "baseline": {
+      "weights": "fts=0.5, heat=0.3, ngram=0.3",
+      "longmemeval_mrr": 0.880,
+      "longmemeval_r10": 0.980,
+      "locomo_mrr": 0.840,
+      "locomo_r10": 0.977,
+      "beam_mrr": 0.532
+    },
+    "beam_optimal": {
+      "weights": "fts=0.0, heat=0.7, ngram=0.0",
+      "longmemeval_mrr": 0.783,
+      "longmemeval_r10": 0.888,
+      "locomo_mrr": 0.694,
+      "locomo_r10": 0.822,
+      "beam_mrr": 0.554
+    },
+    "conclusion": "Corpus-adaptive weights needed. Static weights cannot optimize across conversational (BEAM) and factual (LME/LoCoMo) benchmarks simultaneously."
   }
 }
