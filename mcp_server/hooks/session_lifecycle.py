@@ -97,8 +97,22 @@ def _resolve_domain(event: dict[str, Any], profiles: dict) -> str:
     return "unknown"
 
 
-def _run_consolidation() -> None:
-    """Run memory consolidation (decay + compression) at session end.
+def _run_consolidation(turn_count: int = 0) -> None:
+    """Run memory consolidation ("dream" cycle) at session end.
+
+    Implements automatic consolidation inspired by:
+      - Borbely 1982: two-process model — consolidation pressure accumulates
+        with new memories, fires when threshold exceeded.
+      - Tononi & Cirelli 2003 (SHY): wakefulness (session activity) builds
+        synaptic weight; consolidation restores homeostasis.
+      - Dewar et al. 2012: rest after encoding boosts long-term retention.
+      - McClelland et al. 1995 (CLS): interleaved replay for hippocampal →
+        cortical transfer.
+
+    Time/activity gates (engineering heuristics — thresholds not paper-prescribed):
+      - Short sessions (<5 turns): skip full consolidation, only decay.
+      - Medium sessions (5-20 turns): decay + compression.
+      - Long sessions (>20 turns): full dream cycle (decay + compress + CLS).
 
     Non-blocking: logs errors but never raises.
     """
@@ -107,12 +121,29 @@ def _run_consolidation() -> None:
 
         from mcp_server.handlers.consolidate import handler as consolidate_handler
 
-        result = asyncio.run(consolidate_handler({"decay": True, "compress": True}))
+        # Gate consolidation depth by session activity
+        # (Borbely 1982: pressure accumulates with waking activity)
+        if turn_count < 5:
+            args = {"decay": True, "compress": False}
+            mode = "light"
+        elif turn_count < 20:
+            args = {"decay": True, "compress": True}
+            mode = "standard"
+        else:
+            # Full dream cycle: decay + compress + CLS replay
+            args = {"decay": True, "compress": True, "cls": True}
+            mode = "full"
+
+        result = asyncio.run(consolidate_handler(args))
         decayed = result.get("decay", {}).get("memories_decayed", 0)
         compressed = result.get("compression", {}).get(
             "compressed_to_gist", 0
         ) + result.get("compression", {}).get("compressed_to_tag", 0)
-        _log(f"Consolidation: {decayed} decayed, {compressed} compressed")
+        cls_count = result.get("cls", {}).get("abstractions_created", 0)
+        _log(
+            f"Dream ({mode}): {decayed} decayed, {compressed} compressed"
+            + (f", {cls_count} CLS abstractions" if cls_count else "")
+        )
     except Exception as exc:
         _log(f"Consolidation failed (non-fatal): {exc}")
 
@@ -179,7 +210,7 @@ def process_event(event: dict[str, Any] | None) -> None:
     else:
         _log(f'No profile for domain "{domain_id}", logged session only')
 
-    _run_consolidation()
+    _run_consolidation(turn_count=event.get("turn_count", 0))
 
 
 def main() -> None:

@@ -132,6 +132,41 @@ def _fetch_anchors(conn) -> list[dict]:
     return anchors
 
 
+def _fetch_team_decisions(conn, exclude_ids: set) -> list[dict]:
+    """Fetch auto-protected decision memories visible across agents.
+
+    Implements the directory layer of Transactive Memory Systems
+    (Wegner 1987): team members know WHAT was decided, regardless
+    of WHO decided it. Decisions auto-propagate via is_global=TRUE
+    set during ingestion (memory_ingest.py).
+
+    Only fetches decisions not already in anchors to avoid duplicates.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT id, content, domain, agent_context, heat FROM memories "
+            "WHERE is_protected = TRUE AND is_global = TRUE "
+            "AND agent_context != '' "
+            "ORDER BY heat DESC LIMIT 5",
+        ).fetchall()
+    except Exception:
+        return []
+
+    decisions = []
+    for r in rows:
+        if r["id"] not in exclude_ids:
+            decisions.append(
+                {
+                    "id": r["id"],
+                    "content": r.get("content", ""),
+                    "domain": r.get("domain", ""),
+                    "agent": r.get("agent_context", ""),
+                    "heat": r.get("heat", 0.0),
+                }
+            )
+    return decisions[:3]  # Keep injection compact
+
+
 def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
     """Fetch high-heat memories, excluding anchors."""
     try:
@@ -244,9 +279,10 @@ def _build_context(
     anchors: list[dict],
     hot: list[dict],
     checkpoint: dict | None,
+    team_decisions: list[dict] | None = None,
 ) -> str:
     """Build the Markdown context block injected into the session."""
-    if not anchors and not hot and not checkpoint:
+    if not anchors and not hot and not checkpoint and not team_decisions:
         return ""
 
     lines = ["## Cortex Memory Context\n"]
@@ -258,6 +294,15 @@ def _build_context(
         lines.append("### Anchored Memories (critical)")
         for a in anchors:
             lines.append(f"- {_short(a['content'])}")
+        lines.append("")
+
+    # Team decisions from other agents (TMS directory layer, Wegner 1987)
+    if team_decisions:
+        lines.append("### Team Decisions")
+        for d in team_decisions:
+            agent = d.get("agent", "")
+            prefix = f"[{agent}] " if agent else ""
+            lines.append(f"- {prefix}{_short(d['content'])}")
         lines.append("")
 
     if hot:
@@ -403,10 +448,11 @@ def main() -> None:
     anchors = _fetch_anchors(conn)
     anchor_ids = {a["id"] for a in anchors}
     hot = _fetch_hot_memories(conn, anchor_ids)
+    team_decisions = _fetch_team_decisions(conn, anchor_ids)
     checkpoint = _fetch_checkpoint(conn)
     conn.close()
 
-    context = _build_context(anchors, hot, checkpoint)
+    context = _build_context(anchors, hot, checkpoint, team_decisions)
 
     if context:
         print(context)
