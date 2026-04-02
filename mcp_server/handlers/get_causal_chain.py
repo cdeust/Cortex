@@ -210,7 +210,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         return _build_empty_result("provide entity_name or memory_id")
 
     max_depth = min(int(args.get("max_depth", 3)), 5)
-    max_edges = min(int(args.get("max_edges", 200)), 500)
+    max_edges = min(int(args.get("max_edges", 50)), 200)
     direction = args.get("direction", "both")
     rel_types = args.get("relationship_types")
     rel_filter = set(rel_types) if rel_types else None

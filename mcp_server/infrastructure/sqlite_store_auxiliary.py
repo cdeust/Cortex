@@ -65,8 +65,9 @@ class SqliteAuxiliaryMixin:
             "INSERT INTO checkpoints "
             "(session_id, directory_context, current_task, "
             "files_being_edited, key_decisions, open_questions, "
-            "next_steps, active_errors, custom_context, epoch, is_active) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+            "next_steps, active_errors, custom_context, epoch, is_active, "
+            "created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))",
             (
                 data.get("session_id", "default"),
                 data.get("directory_context", ""),
