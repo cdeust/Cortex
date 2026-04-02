@@ -2,8 +2,13 @@
 """Claude Code SubagentStart hook — automatic agent briefing.
 
 When the orchestrator or any parent agent spawns a subagent, this hook
-automatically retrieves relevant memories and injects them into the
-agent's context. The agent starts with knowledge instead of starting blind.
+retrieves relevant memories for the spawned agent's task context.
+
+NOTE: SubagentStart hook context injection behavior is not fully documented
+in Claude Code. If exit 0 stdout is injected (like SessionStart), the
+briefing appears in the agent's context. If not, this hook still warms
+related memories via access timestamps, improving subsequent recall.
+Needs validation against Claude Code source.
 
 Paper backing:
   - Smith & Vela 2001 "Environmental context-dependent memory" (meta-analysis):

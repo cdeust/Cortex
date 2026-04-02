@@ -1,41 +1,37 @@
 #!/usr/bin/env python3
-"""Claude Code PreToolUse hook — preemptive context injection.
+"""Claude Code PostToolUse hook — preemptive memory priming.
 
-Injects relevant memory context before file edits, implementing the
-"proactive brain" pattern: context triggers anticipatory retrieval
-BEFORE the user/agent explicitly asks.
+When an agent reads or edits a file, this hook "primes" related memories
+by boosting their heat. This makes them surface naturally in subsequent
+recall() calls without explicit querying — implementing the "proactive
+brain" pattern where context pre-activates related representations.
 
 Paper backing:
-  - Bar 2007 "The proactive brain: using analogies and associations to
-    generate predictions" (Trends in Cognitive Sciences): the brain
-    continuously generates top-down predictions from context, pre-activating
-    representations before bottom-up input arrives.
+  - Bar 2007 "The proactive brain" (Trends in Cognitive Sciences):
+    the brain continuously generates top-down predictions from context,
+    pre-activating representations before bottom-up input arrives.
   - Collins & Loftus 1975: spreading activation — file path as cue node
-    activates related memories in the knowledge graph.
-  - Smith & Vela 2001: context reinstatement at retrieval (~15-20% boost
-    when encoding context matches retrieval context, d=0.28).
-  - Godden & Baddeley 1975: ~30% recall advantage with context match.
-  - McDaniel & Einstein 2007: spontaneous retrieval is cue-driven and
-    automatic — no active monitoring needed.
+    activates related memory nodes in the knowledge graph.
+  - Smith & Vela 2001: context reinstatement at retrieval produces a
+    reliable memory benefit (d=0.28, ~15-20% boost).
 
 Source backing:
-  - Claude Code hooks system (markdown.engineering/learn-claude-code/10-hooks-system):
-    PreToolUse hooks fire before tool execution, can inject context via
-    exit code 0 (stdout shown to model).
-  - Claude Code auto-memory (lesson 40): memories extract post-sampling,
-    surface pre-query via relevance selector.
+  - Claude Code hooks system (lesson 10): PreToolUse exit 0 does NOT
+    inject context (stdout not shown to model). PostToolUse is the
+    correct hook for capturing context and influencing subsequent behavior.
+  - Claude Code auto-memory (lesson 40): "findRelevantMemories" surfaces
+    relevant files before the main agent responds — analogous to our
+    heat priming making memories surface in recall.
 
 Strategy:
-  Only fires on Edit/Write tools (file modifications). Extracts the
-  file_path from tool input, queries memory for past context about that
-  file (decisions, bugs, patterns). Injects as a brief context note
-  visible to the model.
+  On Edit/Write/Read of a file, boost heat of memories mentioning that
+  file. This is "spreading activation" — the file access cue propagates
+  activation to related memory nodes via heat boost. Those memories then
+  rank higher in the next recall() call.
 
-  Gated by:
-    - Tool type (Edit/Write only — read-only tools don't need context)
-    - Heat threshold (only high-heat memories — avoid noise)
-    - Result limit (max 2 memories — keep injection compact)
-    - Cooldown (same file within 60s → skip, avoid repetition)
+  This avoids the PreToolUse injection limitation: instead of trying to
+  push context into the model (which PreToolUse can't do), we pull it
+  by making relevant memories hotter so they surface organically.
 
 Installation
 ------------
@@ -43,27 +39,20 @@ Add to ``~/.claude/settings.json`` under hooks::
 
     {
         "hooks": {
-            "PreToolUse": [{
+            "PostToolUse": [{
                 "type": "command",
                 "command": "python3 -m mcp_server.hooks.preemptive_context",
-                "timeout": 5,
-                "matcher": "Edit"
-            }],
-            "PreToolUse": [{
-                "type": "command",
-                "command": "python3 -m mcp_server.hooks.preemptive_context",
-                "timeout": 5,
-                "matcher": "Write"
+                "timeout": 3
             }]
         }
     }
 
 Invariants
 ----------
-- Exit 0: stdout shown to model as context (preemptive injection)
-- Exit 1: skip (no relevant context found)
-- Non-blocking: must complete within 5s timeout
-- Logs to stderr only
+- Fires on Edit/Write/Read tools only
+- Non-blocking: exits quickly, errors logged to stderr
+- Heat boost is small (0.1) — primes but doesn't dominate ranking
+- Cooldown per file (60s) — avoids repeated boosting on rapid edits
 """
 
 from __future__ import annotations
@@ -77,12 +66,12 @@ from typing import Any
 
 _LOG_PREFIX = "[cortex-preemptive]"
 _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
-_MIN_HEAT = 0.3  # Only inject high-heat memories
-_MAX_RESULTS = 2  # Keep injection compact
-_COOLDOWN_SECONDS = 60  # Don't repeat for same file within 60s
-
-# Simple in-memory cooldown tracker (resets each hook invocation)
+_HEAT_BOOST = 0.1  # Small boost — primes without dominating
+_COOLDOWN_SECONDS = 60
 _COOLDOWN_FILE = Path("/tmp/cortex_preemptive_cooldown.json")
+
+# Tools that indicate file interaction worth priming for
+_FILE_TOOLS = {"Edit", "Write", "Read"}
 
 
 def _log(msg: str) -> None:
@@ -90,7 +79,7 @@ def _log(msg: str) -> None:
 
 
 def _check_cooldown(file_path: str) -> bool:
-    """Return True if this file was injected recently (skip)."""
+    """Return True if this file was primed recently (skip)."""
     try:
         if _COOLDOWN_FILE.exists():
             data = json.loads(_COOLDOWN_FILE.read_text())
@@ -103,13 +92,13 @@ def _check_cooldown(file_path: str) -> bool:
 
 
 def _update_cooldown(file_path: str) -> None:
-    """Record that we injected context for this file."""
+    """Record that we primed memories for this file."""
     try:
         data = {}
         if _COOLDOWN_FILE.exists():
             data = json.loads(_COOLDOWN_FILE.read_text())
         data[file_path] = time.time()
-        # Prune old entries (keep last 50)
+        # Prune old entries
         if len(data) > 50:
             sorted_items = sorted(data.items(), key=lambda x: x[1], reverse=True)
             data = dict(sorted_items[:50])
@@ -118,120 +107,83 @@ def _update_cooldown(file_path: str) -> None:
         pass
 
 
-def _fetch_file_context(file_path: str) -> list[dict]:
-    """Query PG for memories related to this file path.
+def _prime_file_memories(file_path: str) -> int:
+    """Boost heat of memories related to this file.
 
-    Uses direct SQL for speed (no embedding model load needed).
-    Matches via:
-      1. Content containing the file path (exact)
-      2. Content containing the filename (fuzzy)
-    Filtered by heat >= threshold.
+    Implements Collins & Loftus 1975 spreading activation: file access
+    cue propagates activation (heat) to related memory nodes.
+
+    Returns number of memories primed.
     """
     try:
         import psycopg
-        from psycopg.rows import dict_row
     except ImportError:
-        return []
+        return 0
 
     try:
-        conn = psycopg.connect(_DATABASE_URL, row_factory=dict_row, autocommit=True)
+        conn = psycopg.connect(_DATABASE_URL, autocommit=True)
     except Exception:
-        return []
+        return 0
 
     filename = Path(file_path).name
     try:
-        rows = conn.execute(
+        # Boost heat for memories mentioning this file
+        # LEAST(heat + boost, 1.0) prevents exceeding max heat
+        result = conn.execute(
             """
-            SELECT id, content, heat, tags, agent_context
-            FROM memories
-            WHERE heat >= %s
-              AND NOT is_benchmark
+            UPDATE memories
+            SET heat = LEAST(heat + %s, 1.0),
+                last_accessed = NOW()
+            WHERE NOT is_benchmark
+              AND heat < 1.0
               AND (content ILIKE %s OR content ILIKE %s)
-            ORDER BY heat DESC
-            LIMIT %s
             """,
-            (
-                _MIN_HEAT,
-                f"%{file_path}%",
-                f"%{filename}%",
-                _MAX_RESULTS + 2,  # Fetch extra for filtering
-            ),
-        ).fetchall()
-    except Exception:
-        conn.close()
-        return []
+            (_HEAT_BOOST, f"%{file_path}%", f"%{filename}%"),
+        )
+        count = result.rowcount if result else 0
+    except Exception as exc:
+        _log(f"prime failed: {exc}")
+        count = 0
 
     conn.close()
-
-    results = []
-    for r in rows:
-        content = r.get("content", "")
-        # Skip very long memories (just tool output dumps)
-        if len(content) > 2000:
-            continue
-        results.append(
-            {
-                "content": content[:300],
-                "heat": r.get("heat", 0),
-                "agent": r.get("agent_context", ""),
-            }
-        )
-
-    return results[:_MAX_RESULTS]
+    return count
 
 
 def process_event(event: dict[str, Any]) -> None:
-    """Process PreToolUse event and inject context if relevant."""
+    """Process PostToolUse event and prime related memories."""
     tool_name = event.get("tool_name", "")
 
-    if tool_name not in ("Edit", "Write"):
-        sys.exit(1)  # Skip — not a file modification tool
+    if tool_name not in _FILE_TOOLS:
+        return
 
     tool_input = event.get("tool_input") or {}
     file_path = tool_input.get("file_path", "")
 
     if not file_path:
-        sys.exit(1)
+        return
 
-    # Cooldown check
     if _check_cooldown(file_path):
-        _log(f"cooldown: {file_path}")
-        sys.exit(1)
+        return
 
-    # Fetch context
-    memories = _fetch_file_context(file_path)
-
-    if not memories:
-        sys.exit(1)  # No relevant context
-
-    # Build injection
-    lines = [f"Cortex: past context for `{Path(file_path).name}`:"]
-    for m in memories:
-        agent_prefix = f"[{m['agent']}] " if m.get("agent") else ""
-        # Truncate to first meaningful line
-        first_line = m["content"].split("\n")[0][:150]
-        lines.append(f"  - {agent_prefix}{first_line}")
-
-    # Output to stdout (shown to model via exit 0)
-    print("\n".join(lines))
-    _update_cooldown(file_path)
-    _log(f"injected {len(memories)} memories for {Path(file_path).name}")
-    sys.exit(0)
+    count = _prime_file_memories(file_path)
+    if count > 0:
+        _update_cooldown(file_path)
+        _log(f"primed {count} memories for {Path(file_path).name}")
 
 
 def main() -> None:
     """Entry point — read JSON event from stdin."""
     if sys.stdin.isatty():
-        sys.exit(1)
+        return
 
     raw = sys.stdin.read().strip()
     if not raw:
-        sys.exit(1)
+        return
 
     try:
         event = json.loads(raw)
     except json.JSONDecodeError:
-        sys.exit(1)
+        return
 
     process_event(event)
 
