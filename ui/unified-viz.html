@@ -41,6 +41,16 @@
     <div class="stat-row"><span>LoCoMo</span><span class="val bench-val" id="b-loc" style="color:#40D870">--</span></div>
     <div class="stat-row"><span>BEAM</span><span class="val bench-val" id="b-beam" style="color:#E0B040">--</span></div>
   </div>
+
+  <div id="system-vitals" style="margin-top:10px;border-top:1px solid #ffffff10;padding-top:8px;display:none">
+    <div style="font-size:7px;text-transform:uppercase;letter-spacing:0.5px;color:var(--cyan-dim,#508090);margin-bottom:6px">System Vitals</div>
+    <div class="stat-row"><span>Mean Heat</span><span class="val" id="sv-heat">--</span></div>
+    <div class="stat-row"><span>Labile</span><span class="val" id="sv-labile" style="color:#00D2FF">--</span></div>
+    <div class="stat-row"><span>Early LTP</span><span class="val" id="sv-eltp" style="color:#60A0E0">--</span></div>
+    <div class="stat-row"><span>Late LTP</span><span class="val" id="sv-lltp" style="color:#40D870">--</span></div>
+    <div class="stat-row"><span>Consolidated</span><span class="val" id="sv-cons" style="color:#E8B840">--</span></div>
+    <div class="stat-row"><span>Reconsolidating</span><span class="val" id="sv-recon" style="color:#C070D0">--</span></div>
+  </div>
 </div>
 
 <div id="filter-bar">
@@ -64,6 +74,14 @@
     <option value="satisfaction">Satisfaction</option>
     <option value="discovery">Discovery</option>
     <option value="confusion">Confusion</option>
+  </select>
+  <select id="stage-select" class="filter-select">
+    <option value="">All Stages</option>
+    <option value="labile">Labile</option>
+    <option value="early_ltp">Early LTP</option>
+    <option value="late_ltp">Late LTP</option>
+    <option value="consolidated">Consolidated</option>
+    <option value="reconsolidating">Reconsolidating</option>
   </select>
   <input type="text" id="search-box" placeholder="Search...">
 </div>
@@ -105,6 +123,9 @@
     <button class="mon-tab" data-bio="confusion">Confusion <span class="mon-count">0</span></button>
     <button class="mon-tab" data-bio="protected">Protected <span class="mon-count">0</span></button>
     <button class="mon-tab" data-bio="high-heat">Hot <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="labile">Labile <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="consolidated">Consolidated <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="high-interference">Interfering <span class="mon-count">0</span></button>
   </div>
   <div id="monitor-log"></div>
 </div>
@@ -139,6 +160,13 @@
   <div class="leg-item"><div class="leg-dot" style="background:#58D888;box-shadow:0 0 6px #58D88860"></div>Memory</div>
   <div class="leg-item"><div class="leg-dot" style="background:#50C8E0;box-shadow:0 0 6px #50C8E060"></div>Entity</div>
   <div class="leg-item"><div class="leg-dot" style="background:#FF4081;box-shadow:0 0 6px #FF408160"></div>Global</div>
+  <div class="leg-item" style="margin-top:4px;border-top:1px solid #ffffff10;padding-top:4px">
+    <div class="leg-dot" style="background:#00D2FF;box-shadow:0 0 6px #00D2FF60"></div>Labile
+  </div>
+  <div class="leg-item"><div class="leg-dot" style="background:#60A0E0;box-shadow:0 0 6px #60A0E060"></div>Early LTP</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#40D870;box-shadow:0 0 6px #40D87060"></div>Late LTP</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#E8B840;box-shadow:0 0 6px #E8B84060"></div>Consolidated</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#C070D0;box-shadow:0 0 6px #C070D060"></div>Reconsolidating</div>
   <div class="leg-item" style="margin-top:4px;border-top:1px solid #ffffff10;padding-top:4px">
     <div class="leg-dot" style="background:#40D870;box-shadow:0 0 6px #40D87060"></div>Quality ≥60%
   </div>
@@ -214,17 +242,56 @@
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#ff3366"></span><span class="gloss-name">Emotional Tagging</span></div>
-    <div class="gloss-desc">Memories with emotional charge get colored by their dominant emotion. Emotional memories have pulsing rings.</div>
+    <div class="gloss-desc">Memories with emotional charge get colored by their dominant emotion. Emotional memories have pulsing rings. Based on amygdala priority encoding (Wang & Bhatt 2024).</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#f59e0b"></span><span class="gloss-name">Neuromodulation</span></div>
-    <div class="gloss-desc">Four chemical channels modulate how strongly memories are encoded: DA, NE, ACh, 5-HT.</div>
+    <div class="gloss-desc">Four coupled channels modulate encoding strength: <b>DA</b> (reward/surprise, Schultz 1997), <b>NE</b> (arousal/salience), <b>ACh</b> (encoding gate, driven by theta phase), <b>5-HT</b> (exploration breadth). Baseline is 1.0; above excites, below suppresses.</div>
   </div>
 
   <div class="gloss-entry">
     <div class="gloss-header"><span class="gloss-dot" style="background:#00d2ff"></span><span class="gloss-name">Synaptic Plasticity</span></div>
-    <div class="gloss-desc">LTP: edges strengthen on co-appearance. LTD: inactive edges weaken. STDP: temporal ordering builds causal direction.</div>
+    <div class="gloss-desc">LTP: edges strengthen on co-appearance. LTD: inactive edges weaken. STDP: temporal ordering builds causal direction (Bi & Poo 1998).</div>
+  </div>
+
+  <div class="gloss-section">Consolidation Stages</div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#00D2FF"></span><span class="gloss-name">Labile</span></div>
+    <div class="gloss-desc">Freshly encoded — unstable, vulnerable to interference, not yet protein-synthesis dependent. Shown as <b>dotted ring</b>. (Kandel 2001)</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#60A0E0"></span><span class="gloss-name">Early LTP</span></div>
+    <div class="gloss-desc">Synaptic strengthening has begun (1-6h). Tagged for potential long-term storage. Requires synaptic tagging (Frey & Morris 1997).</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#40D870"></span><span class="gloss-name">Late LTP</span></div>
+    <div class="gloss-desc">Protein synthesis-dependent consolidation (6-24h). Stronger resistance to interference and decay.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#E8B840"></span><span class="gloss-name">Consolidated</span></div>
+    <div class="gloss-desc">Fully cortically integrated (>24h). High stability, low hippocampal dependency. Shown as <b>solid thick ring</b>. (McClelland 1995)</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#C070D0"></span><span class="gloss-name">Reconsolidating</span></div>
+    <div class="gloss-desc">Reactivated memory temporarily returns to labile state for updating. Shown as <b>dashed ring</b>. Can be modified or strengthened.</div>
+  </div>
+
+  <div class="gloss-section">Node Indicators</div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#E07070"></span><span class="gloss-name">Interference Spikes</span></div>
+    <div class="gloss-desc">Red rotating spikes around memories with high interference scores (>50%). Indicates competing similar memories that may cause retrieval confusion.</div>
+  </div>
+
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#E8B840"></span><span class="gloss-name">Schema Badge</span></div>
+    <div class="gloss-desc">Small gold diamond on memories with strong schema match (>50%). Schema-consistent memories consolidate faster (Tse 2007).</div>
   </div>
 
   <div class="gloss-section">Quality Assessment</div>

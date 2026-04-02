@@ -164,6 +164,32 @@
     return h + '</div>';
   }
 
+  // ── Biological State ──
+
+  function buildBioSection(data) {
+    if (data.type !== 'memory' || !data.consolidationStage) return '';
+    var sc = JUG.CONSOLIDATION_COLORS[data.consolidationStage] || '#50C8E0';
+    var sl = JUG.CONSOLIDATION_LABELS[data.consolidationStage] || data.consolidationStage;
+    var h = '<div class="section-title">Biological State</div>';
+    h += bdg(sl, sc);
+    h += '<div class="gauge-grid">';
+    var fields = [
+      ['encodingStrength', 'Encoding Strength', '#50D0E8'],
+      ['separationIndex', 'Pattern Separation', '#70D880'],
+      ['interferenceScore', 'Interference', '#E07070'],
+      ['schemaMatchScore', 'Schema Match', '#E8B840'],
+      ['hippocampalDependency', 'Hippocampal Dep.', '#C070D0'],
+      ['plasticity', 'Plasticity', '#2DD4BF'],
+      ['stability', 'Stability', '#40D870'],
+    ];
+    fields.forEach(function(f) {
+      var val = data[f[0]];
+      if (val !== undefined && val !== null) h += gauge(f[0], val, 1, f[2], '%');
+    });
+    h += '</div>';
+    return h;
+  }
+
   // ── Badges ──
 
   function buildBadges(data) {
@@ -193,6 +219,6 @@
   JUG._fmt = {
     cleanLabel: cleanLabel, header: buildHeader, quality: buildQuality,
     gauges: buildGauges, content: buildContent, tags: buildTags,
-    badges: buildBadges, esc: esc,
+    badges: buildBadges, bioSection: buildBioSection, gauge: gauge, esc: esc,
   };
 })();

@@ -81,6 +81,31 @@
     if (labelText.length > 22) labelText = labelText.slice(0, 22) + '...';
     group.add(createLabel(labelText, '#' + typeColor.getHexString()));
 
+    // Protected decision ring — gold wireframe torus (McGaugh 2004)
+    if (m.is_protected) {
+      var ringGeo = new THREE.TorusGeometry(scale * 1.3, 0.08, 8, 32);
+      var ringMat = new THREE.MeshBasicMaterial({
+        color: 0xffaa00, transparent: true, opacity: 0.6,
+        wireframe: true,
+      });
+      var ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      group.add(ring);
+    }
+
+    // Team/global indicator — agent-colored outer glow (Wegner 1987 TMS)
+    if (m.is_global && m.agent_context) {
+      var agentHex = JMD.agentColor(m.agent_context);
+      var agentColor = new THREE.Color(agentHex);
+      var teamGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: JMD.glowTexture, color: agentColor,
+        transparent: true, opacity: 0.12,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      teamGlow.scale.setScalar(scale * 5.5);
+      group.add(teamGlow);
+    }
+
     // Bloom
     core.layers.enable(JMD.BLOOM_LAYER);
 

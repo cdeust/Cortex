@@ -25,9 +25,17 @@
 
     var typeLabel = isEntity ? 'ENTITY' : (d.store_type || 'episodic').toUpperCase();
     var content = isEntity ? (d.name || '') : (d.content || '').slice(0, 120);
-    var meta = isEntity
-      ? (d.type || '') + ' \u00b7 heat ' + (d.heat || 0).toFixed(2)
-      : JMD.timeAgo(d.created_at) + ' \u00b7 heat ' + (d.heat || 0).toFixed(2) + ' \u00b7 ' + (d.domain || '');
+    var metaParts = [];
+    if (isEntity) {
+      metaParts.push(d.type || '', 'heat ' + (d.heat || 0).toFixed(2));
+    } else {
+      metaParts.push(JMD.timeAgo(d.created_at), 'heat ' + (d.heat || 0).toFixed(2));
+      if (d.domain) metaParts.push(d.domain);
+      if (d.agent_context) metaParts.push('\u{1f464} ' + d.agent_context);
+      if (d.is_protected) metaParts.push('\u26e8 protected');
+      if (d.is_global) metaParts.push('\u{1f310} team');
+    }
+    var meta = metaParts.filter(Boolean).join(' \u00b7 ');
 
     var colorMap = { episodic: '#26de81', semantic: '#d946ef', entity: '#00d2ff' };
     var color = colorMap[nd.storeType] || '#00d2ff';
@@ -78,14 +86,18 @@
         'Domain': d.domain || '\u2014',
       });
     } else {
-      meta.innerHTML = buildMetaGrid({
+      var metaFields = {
         'Heat': (d.heat || 0).toFixed(4),
         'Importance': (d.importance || 0).toFixed(4),
         'Domain': d.domain || '\u2014',
         'Source': d.source || '\u2014',
         'Created': JMD.timeAgo(d.created_at),
         'Accessed': d.access_count || 0,
-      });
+      };
+      if (d.agent_context) metaFields['Agent'] = d.agent_context;
+      if (d.is_protected) metaFields['Status'] = '\u26e8 Protected';
+      if (d.is_global) metaFields['Scope'] = '\u{1f310} Team';
+      meta.innerHTML = buildMetaGrid(metaFields);
     }
 
     // Tags

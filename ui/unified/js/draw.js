@@ -132,6 +132,46 @@
       ctx.stroke();
     }
 
+    // Consolidation stage ring — colored per stage, line style indicates stability
+    if (node.consolidationStage && node.type === 'memory' && !isDimmed) {
+      var sc = JUG.CONSOLIDATION_COLORS[node.consolidationStage] || '#50C8E0';
+      ctx.strokeStyle = rgba(sc, 0.7);
+      ctx.lineWidth = node.consolidationStage === 'consolidated' ? 1.0 : 0.7;
+      if (node.consolidationStage === 'labile') ctx.setLineDash([0.8, 1.2]);
+      else if (node.consolidationStage === 'reconsolidating') ctx.setLineDash([1.5, 1.5]);
+      ctx.beginPath();
+      ctx.arc(x, y, r + 4.5, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Interference spikes — red radiating lines for high-interference memories
+    if (node.interferenceScore > 0.5 && node.type === 'memory' && !isDimmed) {
+      var iAlpha = Math.min(0.6, (node.interferenceScore - 0.5) * 1.2);
+      ctx.strokeStyle = rgba('#E07070', iAlpha);
+      ctx.lineWidth = 0.4;
+      for (var spike = 0; spike < 4; spike++) {
+        var angle = spike * Math.PI / 2 + animFrame * 0.01;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(angle) * (r + 2), y + Math.sin(angle) * (r + 2));
+        ctx.lineTo(x + Math.cos(angle) * (r + 5), y + Math.sin(angle) * (r + 5));
+        ctx.stroke();
+      }
+    }
+
+    // Schema badge — small gold diamond for schema-matched memories
+    if (node.schemaMatchScore > 0.5 && node.type === 'memory' && !isDimmed) {
+      ctx.fillStyle = rgba('#E8B840', 0.6);
+      var dx = x + r * 0.7, dy = y + r * 0.7;
+      ctx.beginPath();
+      ctx.moveTo(dx, dy - 1.5);
+      ctx.lineTo(dx + 1.5, dy);
+      ctx.lineTo(dx, dy + 1.5);
+      ctx.lineTo(dx - 1.5, dy);
+      ctx.closePath();
+      ctx.fill();
+    }
+
     // Labels
     if (!isDimmed) drawLabel(ctx, node, x, y, r, globalScale, isHighlit);
 

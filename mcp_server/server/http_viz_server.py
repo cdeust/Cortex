@@ -142,7 +142,7 @@ def _build_graph_response(profiles_getter, store_getter, path: str) -> dict:
     relationships = store.get_all_relationships()
     params = _parse_query_params(path)
 
-    return build_unified_graph(
+    result = build_unified_graph(
         profiles=profiles,
         memories=[format_memory(m, 500) for m in memories],
         entities=[format_entity(e) for e in entities],
@@ -151,6 +151,29 @@ def _build_graph_response(profiles_getter, store_getter, path: str) -> dict:
         batch=params["batch"],
         batch_size=params["batch_size"],
     )
+
+    # System vitals — aggregated from already-fetched memories, no new queries
+    stages: dict[str, int] = {}
+    heats: list[float] = []
+    episodic = 0
+    semantic = 0
+    for m in memories:
+        s = m.get("consolidation_stage", "labile")
+        stages[s] = stages.get(s, 0) + 1
+        heats.append(m.get("heat", 0))
+        if m.get("store_type") == "episodic":
+            episodic += 1
+        elif m.get("store_type") == "semantic":
+            semantic += 1
+
+    result["meta"]["system_vitals"] = {
+        "consolidation_pipeline": stages,
+        "mean_heat": round(sum(heats) / max(len(heats), 1), 4),
+        "total_memories": len(memories),
+        "episodic": episodic,
+        "semantic": semantic,
+    }
+    return result
 
 
 def _bind_and_start(handler_cls, preferred_port: int) -> str:

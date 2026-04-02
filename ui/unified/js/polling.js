@@ -39,6 +39,20 @@
 
     setText('s-nodes', meta.node_count || 0);
 
+    // System vitals
+    var sv = meta.system_vitals;
+    if (sv) {
+      var svEl = document.getElementById('system-vitals');
+      if (svEl) svEl.style.display = 'block';
+      setText('sv-heat', sv.mean_heat ? sv.mean_heat.toFixed(3) : '--');
+      var cp = sv.consolidation_pipeline || {};
+      setText('sv-labile', cp.labile || 0);
+      setText('sv-eltp', cp.early_ltp || 0);
+      setText('sv-lltp', cp.late_ltp || 0);
+      setText('sv-cons', cp.consolidated || 0);
+      setText('sv-recon', cp.reconsolidating || 0);
+    }
+
     // Benchmark summary — R@10 + MRR side by side
     var bm = meta.benchmarks;
     if (bm) {

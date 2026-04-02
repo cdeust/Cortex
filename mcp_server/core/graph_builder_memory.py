@@ -217,6 +217,15 @@ def _build_memory_node(mem: dict, nid: str, emo: dict, color: str) -> Node:
         "emotionalBoost": round(emo["importance_boost"], 4),
         "decayResistance": round(emo["decay_resistance"], 4),
         "isGlobal": bool(mem.get("is_global", False)),
+        "consolidationStage": mem.get("consolidation_stage", "labile"),
+        "thetaPhase": round(mem.get("theta_phase_at_encoding", 0), 4),
+        "encodingStrength": round(mem.get("encoding_strength", 1.0), 4),
+        "separationIndex": round(mem.get("separation_index", 0), 4),
+        "interferenceScore": round(mem.get("interference_score", 0), 4),
+        "schemaMatchScore": round(mem.get("schema_match_score", 0), 4),
+        "hippocampalDependency": round(mem.get("hippocampal_dependency", 1.0), 4),
+        "plasticity": round(mem.get("plasticity", 1.0), 4),
+        "stability": round(mem.get("stability", 0), 4),
     }
 
 
