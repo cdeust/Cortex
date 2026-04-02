@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 320" font-family="Inter, -apple-system, system-ui, sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="750" height="320" rx="12" fill="#0f172a"/>
+
+  <!-- Title -->
+  <text x="375" y="30" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="600">Retrieval Pipeline</text>
+
+  <!-- Query -->
+  <rect x="20" y="55" width="130" height="40" rx="8" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="85" y="80" text-anchor="middle" fill="#93c5fd" font-size="12" font-weight="500">Query</text>
+
+  <!-- Arrow -->
+  <line x1="150" y1="75" x2="180" y2="75" stroke="#64748b" marker-end="url(#arr)"/>
+
+  <!-- Intent Classification -->
+  <rect x="185" y="55" width="150" height="40" rx="8" fill="#1e293b" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="260" y="73" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="500">Intent Classification</text>
+  <text x="260" y="87" text-anchor="middle" fill="#64748b" font-size="9">weight profiles</text>
+
+  <!-- Arrow -->
+  <line x1="335" y1="75" x2="365" y2="75" stroke="#64748b" marker-end="url(#arr)"/>
+
+  <!-- PG recall_memories -->
+  <rect x="370" y="45" width="180" height="60" rx="8" fill="#1e293b" stroke="#10b981" stroke-width="1.5"/>
+  <text x="460" y="68" text-anchor="middle" fill="#6ee7b7" font-size="11" font-weight="500">PG recall_memories()</text>
+  <text x="460" y="83" text-anchor="middle" fill="#64748b" font-size="9">5-signal TMM fusion</text>
+  <text x="460" y="95" text-anchor="middle" fill="#64748b" font-size="9">Bruch et al. 2023</text>
+
+  <!-- Arrow down -->
+  <line x1="460" y1="105" x2="460" y2="135" stroke="#64748b" marker-end="url(#arr)"/>
+
+  <!-- 5 signals box -->
+  <rect x="50" y="140" width="650" height="55" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+  <text x="375" y="160" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="500">TMM Fusion Signals</text>
+  <!-- Signal pills -->
+  <rect x="75" y="167" width="100" height="20" rx="10" fill="#1e3a5f"/>
+  <text x="125" y="181" text-anchor="middle" fill="#60a5fa" font-size="9">Vector (pgvector)</text>
+  <rect x="185" y="167" width="100" height="20" rx="10" fill="#1e3a5f"/>
+  <text x="235" y="181" text-anchor="middle" fill="#60a5fa" font-size="9">FTS (tsvector)</text>
+  <rect x="295" y="167" width="100" height="20" rx="10" fill="#1e3a5f"/>
+  <text x="345" y="181" text-anchor="middle" fill="#60a5fa" font-size="9">Trigram (pg_trgm)</text>
+  <rect x="405" y="167" width="100" height="20" rx="10" fill="#1e3a5f"/>
+  <text x="455" y="181" text-anchor="middle" fill="#60a5fa" font-size="9">Heat (Ebbinghaus)</text>
+  <rect x="515" y="167" width="100" height="20" rx="10" fill="#1e3a5f"/>
+  <text x="565" y="181" text-anchor="middle" fill="#60a5fa" font-size="9">Recency (decay)</text>
+
+  <!-- Arrow down -->
+  <line x1="375" y1="195" x2="375" y2="220" stroke="#64748b" marker-end="url(#arr)"/>
+
+  <!-- FlashRank -->
+  <rect x="250" y="225" width="250" height="40" rx="8" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="375" y="243" text-anchor="middle" fill="#fcd34d" font-size="11" font-weight="500">FlashRank CE Reranking (α=0.70)</text>
+  <text x="375" y="257" text-anchor="middle" fill="#64748b" font-size="9">Nogueira &amp; Cho 2019</text>
+
+  <!-- Arrow down -->
+  <line x1="375" y1="265" x2="375" y2="280" stroke="#64748b" marker-end="url(#arr)"/>
+
+  <!-- Results -->
+  <rect x="280" y="280" width="190" height="30" rx="8" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="375" y="300" text-anchor="middle" fill="#93c5fd" font-size="12" font-weight="500">Ranked Results</text>
+</svg>

@@ -42,16 +42,9 @@ You don't manage memory. Cortex does.
 
 Five signals fused server-side in PostgreSQL, then reranked client-side:
 
-```mermaid
-graph TD
-    Q[Query] --> IC[Intent Classification]
-    IC --> WP[Weight Profiles]
-    IC --> RM["PG recall_memories()"]
-    WP --> RM
-    RM --> |"5-signal TMM fusion<br/>(Bruch et al. 2023)"| FR["FlashRank CE Reranking<br/>α=0.70"]
-    FR --> TM["Titans Surprise<br/>Momentum Update"]
-    TM --> R[Ranked Results]
-```
+<p align="center">
+<img src="docs/diagram-retrieval-pipeline.svg" alt="Retrieval pipeline: Intent → TMM fusion → FlashRank reranking" width="80%"/>
+</p>
 
 | Signal | Source | Paper |
 |---|---|---|
@@ -84,16 +77,9 @@ Cortex is designed to work with a team of specialized agents. Each agent has sco
 
 Based on Wegner 1987: teams store more knowledge than individuals because each member specializes, and a shared directory tells everyone who knows what.
 
-```mermaid
-graph TD
-    E["Engineer<br/>topic: engineer"] --> CM
-    T["Tester<br/>topic: tester"] --> CM
-    R["Reviewer<br/>topic: reviewer"] --> CM
-    CM["Cortex Memory (PostgreSQL)"]
-    CM --> AS["Agent-scoped: private per agent"]
-    CM --> TD["Team decisions: auto-propagated"]
-    CM --> SE["Shared entities: knowledge graph spans all"]
-```
+<p align="center">
+<img src="docs/diagram-team-memory.svg" alt="Transactive Memory System — agent specialization, coordination, directory" width="80%"/>
+</p>
 
 **Specialization** — each agent writes to its own topic. Engineer's debugging notes don't clutter tester's recall.
 
