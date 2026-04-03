@@ -109,17 +109,8 @@ def _build_unified_handler(
 
         def do_GET(self):
             _reset_unified_idle_timer()
-            base = self.path.split("?")[0]
-            if base == "/api/graph":
+            if self.path == "/api/graph" or self.path.startswith("/api/graph?"):
                 self._serve_graph_api()
-            elif base == "/api/timeline":
-                self._serve_timeline_api()
-            elif base == "/api/local-graph":
-                self._serve_local_graph_api()
-            elif base == "/api/backlinks":
-                self._serve_backlinks_api()
-            elif base == "/api/entity":
-                self._serve_entity_api()
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
                 serve_static_file(self, js_dir, self.path[4:], "application/javascript")
             elif self.path.startswith("/css/") and self.path.endswith(".css"):
@@ -127,66 +118,9 @@ def _build_unified_handler(
             else:
                 send_html_response(self, html_path, cached_html)
 
-        def do_POST(self):
-            _reset_unified_idle_timer()
-            base = self.path.split("?")[0]
-            if base == "/api/memory":
-                self._serve_update_memory_api()
-            else:
-                send_error_response(self, ValueError("Unknown POST endpoint"))
-
         def _serve_graph_api(self):
             try:
                 data = _build_graph_response(profiles_getter, store_getter, self.path)
-                send_json_response(self, data)
-            except Exception as e:
-                send_error_response(self, e)
-
-        def _serve_timeline_api(self):
-            try:
-                data = _build_timeline_response(store_getter, self.path)
-                send_json_response(self, data)
-            except Exception as e:
-                send_error_response(self, e)
-
-        def _serve_local_graph_api(self):
-            try:
-                data = _build_local_graph_response(store_getter, self.path)
-                send_json_response(self, data)
-            except Exception as e:
-                send_error_response(self, e)
-
-        def _serve_backlinks_api(self):
-            try:
-                data = _build_backlinks_response(store_getter, self.path)
-                send_json_response(self, data)
-            except Exception as e:
-                send_error_response(self, e)
-
-        def _serve_entity_api(self):
-            try:
-                from mcp_server.server.http_viz_api import (
-                    handle_entity_detail, parse_single_param,
-                )
-                eid = parse_single_param(self.path, "entity_id")
-                if not eid:
-                    send_error_response(self, ValueError("entity_id required"))
-                    return
-                data = handle_entity_detail(store_getter, int(eid))
-                send_json_response(self, data)
-            except Exception as e:
-                send_error_response(self, e)
-
-        def _serve_update_memory_api(self):
-            try:
-                from mcp_server.server.http_viz_api import (
-                    handle_update_memory, read_json_body,
-                )
-                body = read_json_body(self)
-                if not body:
-                    send_error_response(self, ValueError("JSON body required"))
-                    return
-                data = handle_update_memory(store_getter, body)
                 send_json_response(self, data)
             except Exception as e:
                 send_error_response(self, e)
@@ -203,20 +137,9 @@ def _build_graph_response(profiles_getter, store_getter, path: str) -> dict:
 
     profiles = profiles_getter()
     store = store_getter()
-    memories = store.get_hot_memories(min_heat=0.0, limit=2000)
+    memories = store.get_hot_memories(min_heat=0.0, limit=200)
     entities = store.get_all_entities(min_heat=0.0)
     relationships = store.get_all_relationships()
-
-    # Materialized memory-entity links (from memory_entities join table)
-    memory_entity_links = []
-    try:
-        rows = store._conn.execute(
-            "SELECT memory_id, entity_id, confidence FROM memory_entities"
-        ).fetchall()
-        memory_entity_links = [dict(r) for r in rows]
-    except Exception:
-        pass
-
     params = _parse_query_params(path)
 
     result = build_unified_graph(
@@ -227,7 +150,6 @@ def _build_graph_response(profiles_getter, store_getter, path: str) -> dict:
         filter_domain=params["domain_filter"],
         batch=params["batch"],
         batch_size=params["batch_size"],
-        memory_entity_links=memory_entity_links,
     )
 
     # System vitals — aggregated from already-fetched memories, no new queries
@@ -252,89 +174,6 @@ def _build_graph_response(profiles_getter, store_getter, path: str) -> dict:
         "semantic": semantic,
     }
     return result
-
-
-def _parse_timeline_params(path: str) -> dict:
-    """Parse timeline query params: domain, days, limit."""
-    result = {"domain": "", "days": 30, "limit": 50}
-    if "?" not in path:
-        return result
-    params = path.split("?", 1)[1]
-    for p in params.split("&"):
-        if p.startswith("domain="):
-            result["domain"] = p[7:]
-        elif p.startswith("days="):
-            try:
-                result["days"] = int(p[5:])
-            except ValueError:
-                pass
-        elif p.startswith("limit="):
-            try:
-                result["limit"] = int(p[6:])
-            except ValueError:
-                pass
-    return result
-
-
-def _build_timeline_response(store_getter, path: str) -> dict:
-    """Fetch sessions from store and group via core logic."""
-    from mcp_server.core.session_grouper import group_into_sessions
-
-    store = store_getter()
-    params = _parse_timeline_params(path)
-
-    raw_sessions = store.get_sessions(
-        domain=params["domain"],
-        limit=params["limit"],
-    )
-
-    if not raw_sessions:
-        return {"sessions": [], "total": 0}
-
-    # Fetch memories for each session to build full summaries
-    all_memories: list[dict] = []
-    for sess in raw_sessions:
-        sid = sess.get("session_id", "")
-        if sid:
-            mems = store.get_memories_by_session(sid, limit=50)
-            all_memories.extend(mems)
-
-    sessions = group_into_sessions(all_memories)
-    sessions = sessions[: params["limit"]]
-
-    return {"sessions": sessions, "total": len(sessions)}
-
-
-def _build_local_graph_response(store_getter, path: str) -> dict:
-    """Build local graph response for a memory."""
-    from mcp_server.core.local_graph import build_local_graph
-    from mcp_server.server.http_viz_api import parse_single_param
-
-    mid = parse_single_param(path, "memory_id")
-    if not mid:
-        return {"error": "memory_id required"}
-    depth = int(parse_single_param(path, "depth") or "1")
-    store = store_getter()
-    raw = store.get_local_graph(int(mid), depth=min(depth, 3))
-    if raw["center"] is None:
-        return {"error": "memory_not_found", "memory_id": int(mid)}
-    return build_local_graph(
-        raw["center"], raw["entities"], raw["neighbors"], raw["relationships"]
-    )
-
-
-def _build_backlinks_response(store_getter, path: str) -> dict:
-    """Build backlinks response for an entity."""
-    from mcp_server.core.backlink_resolver import resolve_backlinks
-    from mcp_server.server.http_viz_api import parse_single_param
-
-    eid = parse_single_param(path, "entity_id")
-    if not eid:
-        return {"error": "entity_id required"}
-    limit = int(parse_single_param(path, "limit") or "50")
-    store = store_getter()
-    raw = store.get_backlinks(int(eid), limit=min(limit, 200))
-    return resolve_backlinks(raw)
 
 
 def _bind_and_start(handler_cls, preferred_port: int) -> str:
