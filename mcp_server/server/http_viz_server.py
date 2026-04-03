@@ -203,9 +203,20 @@ def _build_graph_response(profiles_getter, store_getter, path: str) -> dict:
 
     profiles = profiles_getter()
     store = store_getter()
-    memories = store.get_hot_memories(min_heat=0.0, limit=200)
+    memories = store.get_hot_memories(min_heat=0.0, limit=2000)
     entities = store.get_all_entities(min_heat=0.0)
     relationships = store.get_all_relationships()
+
+    # Materialized memory-entity links (from memory_entities join table)
+    memory_entity_links = []
+    try:
+        rows = store._conn.execute(
+            "SELECT memory_id, entity_id, confidence FROM memory_entities"
+        ).fetchall()
+        memory_entity_links = [dict(r) for r in rows]
+    except Exception:
+        pass
+
     params = _parse_query_params(path)
 
     result = build_unified_graph(
@@ -216,6 +227,7 @@ def _build_graph_response(profiles_getter, store_getter, path: str) -> dict:
         filter_domain=params["domain_filter"],
         batch=params["batch"],
         batch_size=params["batch_size"],
+        memory_entity_links=memory_entity_links,
     )
 
     # System vitals — aggregated from already-fetched memories, no new queries

@@ -420,9 +420,26 @@ def add_memory_nodes(
     domain_hub_ids: dict[str, str],
     entity_names: dict[str, str],
     type_group_map: dict[str, dict[str, str]],
+    memory_entity_links: list[dict] | None = None,
+    entity_id_map: dict[int, str] | None = None,
 ) -> None:
-    """Add memory nodes with emotional tagging and hierarchical linking."""
+    """Add memory nodes with emotional tagging and hierarchical linking.
+
+    When memory_entity_links is provided (from materialized join table),
+    uses those for memory-entity edges instead of fuzzy text matching.
+    """
     inline_entities: dict[str, str] = {}
+
+    # Build lookup: memory_db_id → [entity_db_ids]
+    mem_entity_lookup: dict[int, list[tuple[int, float]]] = {}
+    for link in memory_entity_links or []:
+        mid = link.get("memory_id")
+        eid = link.get("entity_id")
+        conf = link.get("confidence", 0.8)
+        if mid is not None and eid is not None:
+            mem_entity_lookup.setdefault(mid, []).append((eid, conf))
+
+    eid_map = entity_id_map or {}
 
     for mem in sorted_memories:
         nid = next_id("mem")
@@ -432,15 +449,66 @@ def add_memory_nodes(
         color = _resolve_memory_color(emo, mem.get("store_type", "episodic"))
         nodes.append(_build_memory_node(mem, nid, emo, color))
 
-        _link_memory(
-            nid,
-            mem,
-            mem_domain,
-            entity_names,
-            nodes,
-            edges,
-            domain_hub_ids,
-            type_group_map,
-            next_id,
-            inline_entities,
-        )
+        db_id = mem.get("id")
+        linked_entities = mem_entity_lookup.get(db_id, []) if db_id else []
+
+        if linked_entities and eid_map:
+            # Use materialized links — direct memory-entity edges
+            linked_any = False
+            for entity_db_id, confidence in linked_entities:
+                ent_node_id = eid_map.get(entity_db_id)
+                if ent_node_id:
+                    edges.append({
+                        "source": nid,
+                        "target": ent_node_id,
+                        "type": "memory-entity",
+                        "weight": min(confidence, 0.7),
+                        "color": EDGE_COLORS["memory-entity"],
+                    })
+                    linked_any = True
+            if not linked_any:
+                # Fallback: link to domain hub
+                _link_to_domain_or_group(
+                    nid, mem_domain, domain_hub_ids, type_group_map, edges
+                )
+        else:
+            # No materialized links — use fuzzy text matching
+            _link_memory(
+                nid,
+                mem,
+                mem_domain,
+                entity_names,
+                nodes,
+                edges,
+                domain_hub_ids,
+                type_group_map,
+                next_id,
+                inline_entities,
+            )
+
+
+def _link_to_domain_or_group(
+    nid: str,
+    mem_domain: str,
+    domain_hub_ids: dict[str, str],
+    type_group_map: dict[str, dict[str, str]],
+    edges: list[Edge],
+) -> None:
+    """Link memory to its domain's Memories type-group or hub as fallback."""
+    tg_id = _resolve_type_group(mem_domain, "Memories", domain_hub_ids, type_group_map)
+    if tg_id:
+        edges.append({
+            "source": tg_id,
+            "target": nid,
+            "type": "groups",
+            "weight": 0.2,
+            "color": EDGE_COLORS.get("groups", "#64748B40"),
+        })
+    elif mem_domain in domain_hub_ids:
+        edges.append({
+            "source": domain_hub_ids[mem_domain],
+            "target": nid,
+            "type": "domain-entity",
+            "weight": 0.15,
+            "color": EDGE_COLORS.get("domain-entity", "#E8B84040"),
+        })
