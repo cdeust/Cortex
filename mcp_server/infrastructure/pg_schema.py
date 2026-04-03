@@ -699,6 +699,11 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_memories_is_global
     ON memories (is_global) WHERE is_global = TRUE;
+
+-- Migration: add session_id column for temporal session grouping
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS session_id TEXT DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_memories_session
+    ON memories(session_id) WHERE session_id != '';
 """
 
 # ── Schema initialization ────────────────────────────────────────────────
