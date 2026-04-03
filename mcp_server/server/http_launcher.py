@@ -59,12 +59,11 @@ def launch_server(server_type: str) -> str:
         env["PYTHONPATH"] = f"{pkg_root}:{existing_pp}" if existing_pp else pkg_root
 
     # Ensure DATABASE_URL is set for the subprocess
-    if "DATABASE_URL" not in env:
+    if not env.get("DATABASE_URL"):
         from mcp_server.infrastructure.memory_config import get_memory_settings
 
         settings = get_memory_settings()
-        if settings.DATABASE_URL:
-            env["DATABASE_URL"] = settings.DATABASE_URL
+        env["DATABASE_URL"] = settings.DATABASE_URL or "postgresql://localhost:5432/cortex"
 
     # Spawn detached process
     proc = subprocess.Popen(
