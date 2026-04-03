@@ -1,5 +1,17 @@
 # Lessons Learned
 
+## 2026-04-03 — Platt Sigmoid Confidence Gate
+
+**Issue**: Binary gate in reranker.py (1.0 above CE threshold, 0.1 below) was replaced with Platt-calibrated sigmoid to provide smooth confidence transitions. Hypothesis: gradual suppression would help BEAM abstention.
+
+**Approaches tried and rejected:**
+- Platt sigmoid A=10, B=-1.5 (inflection CE=0.15): BEAM 0.479 (-0.148), LoCoMo R@10 92.6% (-5.1pp), LME flat
+- Platt sigmoid A=30, B=-1.5 (inflection CE=0.05): BEAM 0.442 (-0.185) — even worse
+
+**Root cause**: Even 1-5% multiplicative suppression on mid-range CE scores (0.15-0.30) compounds across rankings and pushes correct results down. The binary gate is empirically optimal — valid retrievals need exactly 1.0 confidence, not 0.95. Smooth transitions only help if properly calibrated from held-out data via logistic regression over (max_CE, is_correct) pairs.
+
+**Rule**: Don't replace a tuned binary gate with a hand-tuned sigmoid. Platt scaling requires proper calibration data fit via maximum likelihood, not hand-picked A/B values. The binary gate's harshness is a feature, not a bug.
+
 ## 2026-04-02 — Adaptive Retrieval Weights
 
 **Issue**: Static signal weights (fts=0.5, heat=0.3, ngram=0.3) can't optimize across both conversational (BEAM) and factual (LME/LoCoMo) benchmarks simultaneously. BEAM-optimal weights (fts=0, heat=0.7) regress LME by -9.2pp R@10.

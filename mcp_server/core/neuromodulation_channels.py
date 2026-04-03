@@ -10,11 +10,17 @@ What Doya (2002) actually says:
   5-HT -> time scale of reward prediction
 
 What this module implements (departures from Doya noted):
-  DA: Reward prediction error signal (Schultz 1997 — Rescorla-Wagner RPE).
-      delta = actual - V(s); V(s) := V(s) + alpha * delta (alpha=0.1).
-      DA level = 1.0 + delta, clamped to [0.0, 2.0].
-      Floor 0.0: DA neurons cannot fire below zero (Schultz 1997, Fig 2).
-      Ceiling 2.0: max firing ~80 Hz is ~2x baseline ~40 Hz (Schultz 1997).
+  DA: Reward prediction error signal (Rescorla & Wagner 1972; Schultz 1997).
+      Rescorla-Wagner: delta_V = alpha_cs * beta_us * (lambda - V_total).
+      In single-CS form: V(s) := V(s) + alpha*beta * (actual - V(s)).
+      Current code uses combined alpha*beta = 0.1 (within standard simulation
+      range [0.01-0.25]; Daw 2011, Sutton & Barto 1998).
+      DA level = 1.0 + delta, clamped to [0.0, 3.0].
+      Floor 0.0: DA neurons cannot fire below zero (Schultz 1997, Fig 1-3).
+      Ceiling 3.0: baseline tonic ~5 Hz, phasic burst ~20-30 Hz (~4-6x
+      baseline; Schultz 1997; Ljungberg et al. 1992; Mirenowicz & Schultz
+      1994). Using 3x as conservative upper bound (full 5-6x would make
+      positive RPE dominate downstream effects disproportionately).
       The actual-reward heuristic (0.7+importance*0.3 for positive, etc.) is
       an engineering translation — Schultz used juice rewards, not memory ops.
 
@@ -55,8 +61,15 @@ EMA rates: Ordered to reflect biological response timescales.
   per-operation update cadence (hours timescale, not milliseconds).
 
 References:
+    Rescorla RA, Wagner AR (1972) A theory of Pavlovian conditioning:
+        Variations in the effectiveness of reinforcement and nonreinforcement.
+        In: Black AH, Prokasy WF (Eds.), Classical Conditioning II, pp. 64-99.
+        (RPE equation: delta_V = alpha * beta * (lambda - V_total))
     Schultz W (1997) A neural substrate of prediction and reward.
-        Science 275:1593-1599
+        Science 275:1593-1599 (DA firing rate data: ~5 Hz tonic, ~20-30 Hz burst)
+    Schultz W, Dayan P, Montague PR (1997) A neural substrate of prediction
+        and reward. Science 275:1593-1599 (TD error: delta = r + gamma*V(s') - V(s);
+        this code uses R-W not TD — appropriate for discrete memory operations)
     Doya K (2002) Metalearning and neuromodulation.
         Neural Networks 15:495-506 (framework inspiration, not faithfully implemented)
     Aston-Jones G, Cohen JD (2005) An integrative theory of locus
@@ -106,14 +119,23 @@ def compute_dopamine_rpe(
     memory_importance: float,
     da_baseline: float,
 ) -> tuple[float, float]:
-    """Rescorla-Wagner RPE (Schultz 1997).
+    """Rescorla-Wagner RPE (Rescorla & Wagner 1972; Schultz 1997).
 
-    Implements: delta = actual - V(s), DA = 1.0 + delta.
-    Baseline adapts: V(s) := V(s) + alpha * delta, alpha=0.1.
+    Implements single-CS Rescorla-Wagner:
+      delta = actual - V(s)                    (prediction error)
+      V(s) := V(s) + alpha*beta * delta        (learning rule)
+      DA = 1.0 + delta                         (firing rate mapping)
 
-    Clamped to [0.0, 2.0]:
-      Floor 0.0 — DA neurons cannot have negative firing rate.
-      Ceiling 2.0 — max phasic burst ~2x baseline tonic rate (Schultz 1997).
+    Combined alpha*beta = 0.1 — hand-tuned within standard simulation
+    range [0.01-0.25] (Daw 2011, Sutton & Barto 1998). In R-W theory,
+    alpha = CS salience, beta = US intensity; here they are merged since
+    each memory operation has a single stimulus context.
+
+    Clamped to [0.0, 3.0]:
+      Floor 0.0 — DA neurons cannot fire below zero (Schultz 1997).
+      Ceiling 3.0 — conservative bound. Biology: baseline ~5 Hz, burst
+      ~20-30 Hz = ~4-6x (Schultz 1997, Ljungberg et al. 1992). Using
+      3x to avoid positive RPE dominating downstream modulation.
 
     The actual-reward mapping (positive/negative/neutral -> numeric value)
     is an engineering translation of Schultz's juice/airpuff paradigm.
@@ -121,6 +143,7 @@ def compute_dopamine_rpe(
     Returns:
         (da_level, updated_baseline).
     """
+    # Hand-tuned reward mapping — no paper provides this translation.
     if outcome_positive:
         actual = 0.7 + memory_importance * 0.3
     elif outcome_negative:
@@ -128,9 +151,13 @@ def compute_dopamine_rpe(
     else:
         actual = 0.5
 
+    # Rescorla-Wagner: delta = lambda - V(s)
     delta = actual - da_baseline
-    da = max(0.0, min(2.0, 1.0 + delta))
+    # Schultz: DA firing = baseline * (1 + delta), clamped to [0, 3x baseline]
+    da = max(0.0, min(3.0, 1.0 + delta))
 
+    # Rescorla-Wagner: V(s) := V(s) + alpha*beta * (actual - V(s))
+    # Combined alpha*beta = 0.1 (hand-tuned, within standard range)
     new_baseline = da_baseline + 0.1 * (actual - da_baseline)
     new_baseline = max(0.1, min(0.9, new_baseline))
 
@@ -219,7 +246,7 @@ def apply_cross_coupling(
     ser_coupled = ser + _ACH_SER_COUPLING * (ach - 1.0)
 
     return (
-        max(0.0, min(2.0, da_coupled)),
+        max(0.0, min(3.0, da_coupled)),  # DA: asymmetric [0, 3] per Schultz 1997
         max(0.3, min(2.0, ne_coupled)),
         max(0.3, min(2.0, ach_coupled)),
         max(0.3, min(2.0, ser_coupled)),

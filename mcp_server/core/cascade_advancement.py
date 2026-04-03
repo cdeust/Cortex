@@ -4,9 +4,26 @@ Split from cascade.py to keep files under 300 lines.
 Contains the transition logic that determines when memories advance
 between consolidation stages.
 
+Schema acceleration (Tse et al. 2007):
+    Tse showed that rodents with pre-existing spatial schemas consolidated
+    new schema-consistent associations in ~48 hours, compared to ~2-4 weeks
+    for schema-inconsistent ones — an approximately 10-15x acceleration.
+    This applies specifically to systems consolidation (LATE_LTP → CONSOLIDATED),
+    not to earlier synaptic stages.
+
+    IMPORTANT: Tse 2007 is an experimental finding, not a computational model.
+    No paper in this chain (Tse 2007, van Kesteren 2012, McClelland 2013)
+    provides a mathematical function mapping schema_match to consolidation
+    rate. The exponential model used here (15^(-schema_match)) is an
+    engineering approximation chosen to: (a) match the ~15x magnitude at
+    full schema match, (b) provide diminishing returns at low match, and
+    (c) equal 1.0 (no acceleration) at zero match. The functional form
+    and the 15.0 constant are engineering choices, not paper-derived equations.
+
 References:
     Kandel ER (2001) The molecular biology of memory storage.
     Tse D et al. (2007) Schemas and memory consolidation. Science 316:76-82
+        (experimental: ~48h vs ~2-4 weeks for schema-consistent memories)
     Nader K et al. (2000) Fear memories require protein synthesis in the
         amygdala for reconsolidation after retrieval. Nature 406:722-726
 
@@ -76,9 +93,29 @@ def _check_reconsolidating_advancement(
 def _effective_min_dwell(
     props: object,
     schema_match: float,
+    stage: ConsolidationStage | None = None,
 ) -> float:
-    """Compute schema-accelerated minimum dwell time (Tse et al. 2007)."""
-    schema_factor = 1.0 - (schema_match * 0.5)  # Up to 50% reduction
+    """Compute schema-accelerated minimum dwell time.
+
+    For systems consolidation stages (LATE_LTP, CONSOLIDATED):
+        Uses exponential acceleration: dwell * 15^(-schema_match).
+        At schema_match=1.0: ~15x faster (Tse 2007: ~2-4 weeks → 48h).
+        At schema_match=0.0: no acceleration.
+        Engineering approximation — Tse 2007 provides no equation.
+        The 15.0 constant matches the experimental ~10-15x magnitude.
+
+    For earlier stages (LABILE, EARLY_LTP, RECONSOLIDATING):
+        Modest linear factor: dwell * (1 - schema_match * 0.2).
+        Schema acceleration is a systems consolidation phenomenon;
+        synaptic tagging stages are not schema-dependent.
+    """
+    if stage in (ConsolidationStage.LATE_LTP, ConsolidationStage.CONSOLIDATED):
+        # Tse et al. (2007): ~15x acceleration for schema-consistent memories.
+        # Engineering approximation: exponential gives diminishing returns.
+        schema_factor = 15.0 ** (-schema_match)  # 1.0 at 0, ~0.067 at 1.0
+    else:
+        # Earlier stages: modest acceleration (hand-tuned, no paper basis)
+        schema_factor = 1.0 - (schema_match * 0.2)
     return props.min_dwell_hours * schema_factor  # type: ignore[attr-defined]
 
 
@@ -100,7 +137,7 @@ def compute_advancement_readiness(
         return False, current_stage, 0.0
 
     props = _STAGE_PROPERTIES[stage]
-    min_dwell = _effective_min_dwell(props, schema_match)
+    min_dwell = _effective_min_dwell(props, schema_match, stage)
 
     if hours_in_stage < min_dwell:
         readiness = hours_in_stage / max(min_dwell, 0.01)

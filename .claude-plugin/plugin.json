@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import fastmcp\" 2>/dev/null || python3 -m pip install -q --target \"${CLAUDE_PLUGIN_DATA}/deps\" fastmcp pydantic pydantic-settings numpy 2>/dev/null; PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\" python3 -m mcp_server.hooks.session_start",
+            "command": "python3 -c \"import psycopg\" 2>/dev/null || python3 -m pip install -q --target \"${CLAUDE_PLUGIN_DATA}/deps\" fastmcp pydantic pydantic-settings numpy \"psycopg[binary]>=3.1\" \"pgvector>=0.3\" \"sentence-transformers>=2.2.0\" \"flashrank>=0.2.0\" 2>/dev/null; PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\" python3 -m mcp_server.hooks.session_start",
             "cwd": "${CLAUDE_PLUGIN_ROOT}"
           }
         ]
