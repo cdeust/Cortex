@@ -1,14 +1,17 @@
 // Cortex Neural Graph — Async Progressive Batch Streaming
+// Fetches skeleton first (batch=0), then child nodes in pages.
 (function() {
   var abortController = null;
+  var BATCH_SIZE = 500;
 
   function fetchGraph() {
     if (abortController) abortController.abort();
     abortController = new AbortController();
     var signal = abortController.signal;
 
-    // Single fetch — no batching. Domain dedup keeps node count manageable.
-    fetch(JUG.API_URL, { signal: signal })
+    // Batch 0: skeleton (root, categories, domains, agents, type-groups)
+    var url0 = JUG.API_URL + '?batch=0&batch_size=' + BATCH_SIZE;
+    fetch(url0, { signal: signal })
       .then(function(res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
@@ -21,8 +24,16 @@
         updateStats(data.meta || {});
         hideLoading();
 
-        var count = (data.meta || {}).node_count || (data.nodes || []).length;
-        updateStatus('Online (' + count + ' nodes)');
+        var total = (data.meta || {}).total_batches || 1;
+        var nodeCount = (data.meta || {}).node_count || 0;
+        updateStatus('Loading (' + nodeCount + ' nodes, batch 0/' + total + ')');
+
+        // Fetch remaining batches progressively
+        if (total > 1) {
+          fetchBatches(1, total, signal);
+        } else {
+          updateStatus('Online (' + nodeCount + ' nodes)');
+        }
       })
       .catch(function(err) {
         if (err.name === 'AbortError') return;
@@ -31,15 +42,49 @@
       });
   }
 
+  function fetchBatches(current, total, signal) {
+    if (current > total || signal.aborted) {
+      var nc = (JUG.state.lastData || {}).meta || {};
+      updateStatus('Online (' + (nc.node_count || '?') + ' nodes)');
+      return;
+    }
+    var url = JUG.API_URL + '?batch=' + current + '&batch_size=' + BATCH_SIZE;
+    fetch(url, { signal: signal })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (signal.aborted) return;
+
+        // Merge batch into existing graph
+        if (JUG.addBatchToGraph) {
+          JUG.addBatchToGraph(data);
+        } else if (JUG.buildGraph) {
+          // Fallback: merge nodes/edges into lastData and rebuild
+          var ld = JUG.state.lastData || { nodes: [], edges: [], clusters: [] };
+          ld.nodes = (ld.nodes || []).concat(data.nodes || []);
+          ld.edges = (ld.edges || []).concat(data.edges || []);
+          JUG.state.lastData = ld;
+          JUG.buildGraph(ld);
+        }
+
+        updateStatus('Loading (batch ' + current + '/' + total + ')');
+
+        // Next batch with small delay to keep UI responsive
+        setTimeout(function() { fetchBatches(current + 1, total, signal); }, 50);
+      })
+      .catch(function(err) {
+        if (err.name !== 'AbortError') {
+          console.warn('[cortex] Batch ' + current + ' error:', err.message);
+        }
+      });
+  }
+
   function updateStats(meta) {
     setText('s-dom', meta.domain_count || 0);
     setText('s-mem', meta.memory_count || 0);
     setText('s-ent', meta.entity_count || 0);
     setText('s-edge', meta.edge_count || 0);
-
     setText('s-nodes', meta.node_count || 0);
 
-    // System vitals
     var sv = meta.system_vitals;
     if (sv) {
       var svEl = document.getElementById('system-vitals');
@@ -53,7 +98,6 @@
       setText('sv-recon', cp.reconsolidating || 0);
     }
 
-    // Benchmark summary — R@10 + MRR side by side
     var bm = meta.benchmarks;
     if (bm) {
       var el = document.getElementById('benchmark-summary');
@@ -116,7 +160,7 @@
       .map(function(v) { return String(v).padStart(2, '0'); }).join(':');
   }, 1000);
 
-  // Boot — delay initial fetch to let Three.js scene fully initialize
+  // Boot
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       setTimeout(fetchGraph, 500);
@@ -124,6 +168,4 @@
   } else {
     setTimeout(fetchGraph, 500);
   }
-
-  // No auto-refresh — user triggers manually via Reset button or page reload
 })();

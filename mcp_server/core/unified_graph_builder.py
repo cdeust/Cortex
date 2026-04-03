@@ -263,6 +263,7 @@ def _add_memory_and_entity_nodes(
     domain_hub_ids: dict[str, str],
     entity_id_map: dict[int, str],
     type_group_map: dict[str, dict[str, str]],
+    memory_entity_links: list[dict] | None = None,
 ) -> None:
     """Add entity and memory nodes to the graph."""
     sorted_entities = _filter_and_sort(entities, filter_domain, max_entities)
@@ -286,6 +287,8 @@ def _add_memory_and_entity_nodes(
         domain_hub_ids,
         entity_names,
         type_group_map,
+        memory_entity_links=memory_entity_links or [],
+        entity_id_map=entity_id_map,
     )
 
 
@@ -300,6 +303,7 @@ def _populate_graph(
     filter_domain: str | None,
     max_memories: int,
     max_entities: int,
+    memory_entity_links: list[dict] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, str]]:
     """Populate nodes and edges from all data sources."""
     next_id, nodes, edges, domain_hub_ids, entity_id_map = _make_id_allocator()
@@ -320,6 +324,7 @@ def _populate_graph(
         domain_hub_ids,
         entity_id_map,
         type_group_map,
+        memory_entity_links=memory_entity_links or [],
     )
     score_all_nodes(nodes, edges)
     return nodes, edges, domain_hub_ids
@@ -370,10 +375,11 @@ def build_unified_graph(
     entities: list[dict] | None = None,
     relationships: list[dict] | None = None,
     filter_domain: str | None = None,
-    max_memories: int = 200,
-    max_entities: int = 100,
+    max_memories: int = 2000,
+    max_entities: int = 2000,
     batch: int = 0,
     batch_size: int = 0,
+    memory_entity_links: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Build a unified hierarchical graph combining all data sources."""
     profiles = profiles or {}
@@ -385,5 +391,6 @@ def build_unified_graph(
         filter_domain,
         max_memories,
         max_entities,
+        memory_entity_links=memory_entity_links or [],
     )
     return _build_and_paginate(nodes, edges, domain_hub_ids, batch, batch_size)
