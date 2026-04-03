@@ -62,6 +62,7 @@ def _score_node(node: dict[str, Any], conns: int, total: int) -> tuple[float, st
         "behavioral-feature": _score_feature,
         "memory": _score_memory,
         "entity": _score_entity,
+        "discussion": _score_discussion,
     }
     scorer = scorers.get(ntype, _score_default)
     return scorer(node, conns, total)
@@ -221,6 +222,38 @@ def _score_agent(n: dict, conns: int, total: int) -> tuple[float, str]:
     tool_count = n.get("toolCount", 0)
     q = min(0.5 + tool_count * 0.05, 1.0)
     return q, f"agent with {tool_count} tools, {conns} connections"
+
+
+def _score_discussion(n: dict, conns: int, total: int) -> tuple[float, str]:
+    turn_count = n.get("turnCount", 0)
+    tools_used = n.get("toolsUsed") or []
+    duration = n.get("duration") or 0
+    parts: list[str] = []
+    q = 0.0
+
+    # Turn count signal
+    if turn_count >= 20:
+        q += 0.4
+        parts.append(f"{turn_count} turns (deep)")
+    elif turn_count >= 5:
+        q += 0.25
+        parts.append(f"{turn_count} turns (moderate)")
+    else:
+        q += 0.1
+        parts.append(f"{turn_count} turns (brief)")
+
+    # Tool diversity bonus
+    tool_bonus = min(len(tools_used) * 0.03, 0.3)
+    q += tool_bonus
+    if tools_used:
+        parts.append(f"{len(tools_used)} tools")
+
+    # Duration bonus (duration is in ms, 30 min = 1_800_000 ms)
+    if duration > 1_800_000:
+        q += 0.1
+        parts.append("long session")
+
+    return min(q, 1.0), " | ".join(parts)
 
 
 def _score_default(n: dict, conns: int, total: int) -> tuple[float, str]:

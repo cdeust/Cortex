@@ -20,6 +20,7 @@
         JUG.buildGraph(data);
         updateStats(data.meta || {});
         hideLoading();
+        _loadDiscussionBatch(0);
 
         var count = (data.meta || {}).node_count || (data.nodes || []).length;
         updateStatus('Online (' + count + ' nodes)');
@@ -123,6 +124,27 @@
     });
   } else {
     setTimeout(fetchGraph, 500);
+  }
+
+  function _loadDiscussionBatch(batch) {
+    var batchSize = 500;
+    fetch(JUG.API_URL.replace('/api/graph', '/api/discussions') + '?batch=' + batch + '&batch_size=' + batchSize)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.nodes || !data.nodes.length) return;
+        JUG.addBatchToGraph(data);
+        var discEl = document.getElementById('s-disc');
+        if (discEl && JUG.state.lastData) {
+          var count = JUG.state.lastData.nodes.filter(function(n) { return n.type === 'discussion'; }).length;
+          discEl.textContent = count;
+        }
+        if (data.meta && batch < (data.meta.total_batches || 1) - 1) {
+          setTimeout(function() { _loadDiscussionBatch(batch + 1); }, 200);
+        }
+      })
+      .catch(function(err) {
+        console.warn('[cortex] Discussion batch error:', err.message);
+      });
   }
 
   // No auto-refresh — user triggers manually via Reset button or page reload

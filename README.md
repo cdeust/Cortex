@@ -16,8 +16,11 @@ Memory that learns, consolidates, forgets intelligently, and surfaces the right 
 </div>
 
 <p align="center">
-<img src="docs/neural-graph-overview.png" width="49%" alt="Cortex Neural Graph — unified view with domain separation, memories, entities, and connections" />
-<img src="docs/neural-graph-detail.png" width="49%" alt="Cortex Neural Graph — detail panel showing biological state, consolidation stage, and connections" />
+<img src="docs/neural-graph-overview.png" width="100%" alt="Cortex Neural Graph — unified view with discussions, memories, entities, and domain clusters" />
+</p>
+<p align="center">
+<img src="docs/neural-graph-detail.png" width="49%" alt="Cortex Neural Graph — conversation viewer with full session history" />
+<img src="docs/neural-graph-diff.png" width="49%" alt="Cortex Neural Graph — code diff viewer with memory detail panel" />
 </p>
 
 ---

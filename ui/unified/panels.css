@@ -216,11 +216,24 @@
 .mon-conn-weight { color: var(--text-dim); font-size: 7px; font-variant-numeric: tabular-nums; }
 
 /* Detail panel enrichments */
-.detail-content-block {
+.detail-summary {
   font-size: 10px; color: var(--text); line-height: 1.7; padding: 10px 12px;
   background: rgba(0,255,255,0.02); border: 1px solid rgba(0,255,255,0.06);
   white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
 }
+.detail-raw-toggle {
+  font-size: 7px; letter-spacing: 2px; text-transform: uppercase; color: var(--cyan);
+  cursor: pointer; padding: 4px 0; text-align: center; border: 1px solid var(--border);
+  border-top: none; transition: all 0.2s;
+}
+.detail-raw-toggle:hover { color: var(--text-bright); background: rgba(0,255,255,0.04); }
+.detail-raw {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace; font-size: 8px;
+  color: var(--text-dim); line-height: 1.5; padding: 10px 12px; margin: 0;
+  background: rgba(0,0,0,0.3); border: 1px solid rgba(0,255,255,0.06); border-top: none;
+  white-space: pre-wrap; word-break: break-all; overflow-wrap: anywhere; max-height: 400px; overflow-y: auto;
+}
+.detail-raw.hidden { display: none; }
 .detail-content-block.collapsed { max-height: 200px; overflow-y: hidden; position: relative; }
 .detail-content-block.collapsed::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 40px; background: linear-gradient(transparent, rgba(10,10,15,0.95)); pointer-events: none; }
 .detail-expand { font-size: 7px; letter-spacing: 2px; text-transform: uppercase; color: var(--cyan); cursor: pointer; padding: 4px 0; text-align: center; border: 1px solid var(--border); border-top: none; transition: all 0.2s; }

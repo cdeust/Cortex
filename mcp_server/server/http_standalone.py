@@ -15,9 +15,15 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 IDLE_TIMEOUT = 600.0  # 10 minutes
+_CONVERSATIONS_CACHE_TTL = 60.0  # seconds
 
 _last_request_time = time.monotonic()
 _lock = threading.Lock()
+
+# Cached state shared between graph and discussion endpoints
+_cached_domain_hub_ids: dict[str, str] = {}
+_cached_conversations: list[dict] | None = None
+_conversations_cache_ts: float = 0.0
 
 
 def _touch() -> None:
@@ -66,6 +72,54 @@ def _get_store():
     return MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
+def _get_cached_conversations() -> list[dict]:
+    """Return cached conversations, refreshing if TTL expired."""
+    global _cached_conversations, _conversations_cache_ts
+    now = time.time()
+    if (
+        _cached_conversations is None
+        or (now - _conversations_cache_ts) > _CONVERSATIONS_CACHE_TTL
+    ):
+        from mcp_server.infrastructure.scanner import discover_conversations
+
+        _cached_conversations = discover_conversations()
+        _conversations_cache_ts = now
+    return _cached_conversations
+
+
+def _extract_domain_hub_ids(nodes: list[dict]) -> dict[str, str]:
+    """Extract domain_key -> node_id mapping from graph nodes."""
+    hub_ids: dict[str, str] = {}
+    for node in nodes:
+        if node.get("type") == "domain":
+            domain_key = node.get("domain", "")
+            if domain_key:
+                hub_ids[domain_key] = node["id"]
+    return hub_ids
+
+
+def _parse_discussion_params(path: str) -> dict:
+    """Parse query params for the discussions endpoint."""
+    result: dict = {"project": None, "batch": 0, "batch_size": 500}
+    if "?" not in path:
+        return result
+    params = path.split("?", 1)[1]
+    for p in params.split("&"):
+        if p.startswith("project="):
+            result["project"] = p[8:]
+        elif p.startswith("batch="):
+            try:
+                result["batch"] = int(p[6:])
+            except ValueError:
+                pass
+        elif p.startswith("batch_size="):
+            try:
+                result["batch_size"] = int(p[11:])
+            except ValueError:
+                pass
+    return result
+
+
 def _build_unified_handler(ui_root: Path, store) -> type:
     """Build unified viz HTTP handler."""
     from mcp_server.core.unified_graph_builder import build_unified_graph
@@ -110,8 +164,15 @@ def _build_unified_handler(ui_root: Path, store) -> type:
 
         def do_GET(self):
             _touch()
+            path_no_qs = self.path.split("?")[0]
             if self.path == "/api/graph" or self.path.startswith("/api/graph?"):
                 self._serve_graph()
+            elif self.path == "/api/discussions" or self.path.startswith(
+                "/api/discussions?"
+            ):
+                self._serve_discussions()
+            elif path_no_qs.startswith("/api/discussion/"):
+                self._serve_discussion_detail(path_no_qs)
             elif self.path.startswith("/api/file-diff?"):
                 _serve_file_diff(self)
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
@@ -132,6 +193,7 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 self.wfile.write(html_bytes)
 
         def _serve_graph(self):
+            global _cached_domain_hub_ids
             try:
                 profiles = load_profiles()
                 memories = store.get_hot_memories(min_heat=0.0, limit=200)
@@ -148,6 +210,40 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                     batch=params["batch"],
                     batch_size=params["batch_size"],
                 )
+                _cached_domain_hub_ids = _extract_domain_hub_ids(data.get("nodes", []))
+                body = json.dumps(data, default=str).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+        def _serve_discussions(self):
+            try:
+                data = _build_discussions_response(self.path)
+                body = json.dumps(data, default=str).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+        def _serve_discussion_detail(self, path_no_qs: str):
+            try:
+                session_id = path_no_qs.rsplit("/", 1)[-1]
+                data = _build_discussion_detail(session_id)
                 body = json.dumps(data, default=str).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -165,6 +261,82 @@ def _build_unified_handler(ui_root: Path, store) -> type:
             pass
 
     return Handler
+
+
+def _build_discussions_response(path: str) -> dict:
+    """Build the paginated discussions response."""
+    from mcp_server.core.graph_builder_discussions import build_discussion_nodes
+
+    params = _parse_discussion_params(path)
+    conversations = _get_cached_conversations()
+
+    if params["project"]:
+        conversations = [
+            c for c in conversations if c.get("project") == params["project"]
+        ]
+
+    conversations = sorted(
+        conversations,
+        key=lambda c: c.get("startedAt") or "",
+        reverse=True,
+    )
+
+    total = len(conversations)
+    batch_size = max(1, params["batch_size"])
+    batch = params["batch"]
+    total_batches = max(1, (total + batch_size - 1) // batch_size)
+    start = batch * batch_size
+    end = start + batch_size
+    page = conversations[start:end]
+
+    nodes, edges = build_discussion_nodes(page, _cached_domain_hub_ids)
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "meta": {
+            "total": total,
+            "batch": batch,
+            "batch_size": batch_size,
+            "total_batches": total_batches,
+        },
+    }
+
+
+def _build_discussion_detail(session_id: str) -> dict:
+    """Build the detail response for a single discussion."""
+    from mcp_server.infrastructure.conversation_reader import (
+        format_conversation_messages,
+        read_full_conversation,
+    )
+
+    conversations = _get_cached_conversations()
+    conv = next(
+        (c for c in conversations if c.get("sessionId") == session_id),
+        None,
+    )
+    if conv is None:
+        return {"error": "Discussion not found", "sessionId": session_id}
+
+    file_path = conv.get("filePath")
+    if not file_path:
+        from mcp_server.infrastructure.config import CLAUDE_DIR
+
+        project = conv.get("project", "")
+        file_path = str(CLAUDE_DIR / "projects" / project / f"{session_id}.jsonl")
+
+    raw = read_full_conversation(file_path)
+    messages = format_conversation_messages(raw)
+
+    return {
+        "sessionId": session_id,
+        "project": conv.get("project"),
+        "messages": messages,
+        "startedAt": conv.get("startedAt"),
+        "endedAt": conv.get("endedAt"),
+        "duration": conv.get("duration"),
+        "turnCount": conv.get("turnCount"),
+    }
 
 
 def _build_methodology_handler(ui_root: Path) -> type:

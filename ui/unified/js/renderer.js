@@ -80,7 +80,8 @@
         'agent': -50, 'type-group': -20,
         'entry-point': -15, 'recurring-pattern': -10,
         'tool-preference': -15, 'behavioral-feature': -12,
-        'memory': -15, 'entity': -12
+        'memory': -15, 'entity': -12,
+        'discussion': -12
       }[n.type] || -12;
     }).distanceMax(300);
 
@@ -90,7 +91,8 @@
           'has-category': 80, 'has-project': 60,
           'has-agent': 35, 'has-group': 22, 'groups': 15,
           'bridge': 80, 'persistent-feature': 70,
-          'memory-entity': 25, 'domain-entity': 30
+          'memory-entity': 25, 'domain-entity': 30,
+          'has-discussion': 20
         }[e.type || 'default'] || 18;
       })
       .strength(function(e) {
