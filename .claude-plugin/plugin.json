@@ -16,7 +16,7 @@
       "args": ["-m", "mcp_server"],
       "cwd": "${CLAUDE_PLUGIN_ROOT}",
       "env": {
-        "DATABASE_URL": "${DATABASE_URL}",
+        "DATABASE_URL": "${DATABASE_URL:-postgresql://localhost:5432/cortex}",
         "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps"
       }
     }

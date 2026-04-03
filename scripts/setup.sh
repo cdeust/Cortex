@@ -223,7 +223,27 @@ else
     fail "Database setup failed: $MSG"
 fi
 
-# ── Step 5: Pre-cache embedding model ───────────────────────────────────
+# ── Step 5: Backfill memory-entity links ────────────────────────────────
+
+step "Memory-entity index"
+
+PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}" python3 -c "
+try:
+    from mcp_server.infrastructure.pg_store import PgMemoryStore
+    store = PgMemoryStore()
+    existing = store._conn.execute('SELECT COUNT(*) as c FROM memory_entities').fetchone()
+    if existing and existing['c'] > 0:
+        print(f'Already populated ({existing[\"c\"]} links)')
+    else:
+        count = store.backfill_memory_entities(batch_size=500)
+        print(f'Backfilled {count} memory-entity links')
+except Exception as e:
+    print(f'Skipped: {e}')
+" 2>/dev/null
+
+ok "Memory-entity index ready"
+
+# ── Step 6: Pre-cache embedding model ──────────────────────────────────
 
 step "Embedding model"
 
