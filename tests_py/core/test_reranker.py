@@ -10,7 +10,7 @@ from mcp_server.core.reranker import (
 
 
 class TestRetrievalConfidence:
-    """Tests for Sufficient Context confidence gating (Joren et al., ICLR 2025)."""
+    """Tests for Sufficient Context confidence gating (binary gate)."""
 
     def test_high_ce_scores_give_full_confidence(self):
         confidence = _compute_retrieval_confidence([0.8, 0.6, 0.3])
@@ -35,6 +35,10 @@ class TestRetrievalConfidence:
     def test_custom_gate_threshold(self):
         confidence = _compute_retrieval_confidence([0.3], gate_threshold=0.5)
         assert confidence < 1.0
+
+    def test_at_threshold_gives_full_confidence(self):
+        confidence = _compute_retrieval_confidence([0.15])
+        assert confidence == 1.0
 
 
 class TestBlendScoresWithConfidence:

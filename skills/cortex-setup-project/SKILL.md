@@ -6,7 +6,7 @@ description: "Bootstrap Cortex for a new project or import existing session hist
 # Setup Project — Bootstrap and Import
 
 ## Keywords
-setup, seed, bootstrap, import, backfill, initialize, new project, import history, import sessions, first time, getting started, onboard, configure
+setup, seed, bootstrap, import, backfill, initialize, new project, import history, import sessions, first time, getting started, onboard, configure, install, dependencies
 
 ## Overview
 
@@ -15,6 +15,24 @@ Get Cortex up and running for a project — either by seeding from the codebase 
 **Use this skill when:** First time using Cortex on a project, or when you want to import historical conversations that happened before Cortex was installed.
 
 ## Workflow
+
+### Step 0: Infrastructure Setup (First Install Only)
+
+If PostgreSQL, pgvector, or Python dependencies are not yet installed, run the single-command setup script:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
+```
+
+This handles everything automatically:
+- Installs PostgreSQL 17 + pgvector (via brew on macOS, apt on Linux)
+- Starts the PostgreSQL service
+- Installs Python dependencies (psycopg, sentence-transformers, flashrank)
+- Creates the `cortex` database with pgvector and pg_trgm extensions
+- Initializes all tables, indexes, and PL/pgSQL stored procedures
+- Pre-caches the embedding model (~100MB one-time download)
+
+Skip this step if Cortex is already working (i.e., `cortex:memory_stats({})` returns results).
 
 ### Option A: Seed from Codebase (New Project)
 

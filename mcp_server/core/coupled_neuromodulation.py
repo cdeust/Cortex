@@ -53,7 +53,8 @@ from mcp_server.core.neuromodulation_channels import (
 class NeuromodulatoryState:
     """Dynamic state of the 4-channel modulatory system.
 
-    All levels in [0, 2] with 1.0 = baseline (no modulation).
+    DA in [0, 3] (asymmetric per Schultz 1997: burst ~4-6x baseline).
+    NE, ACh, 5-HT in [0, 2] with 1.0 = baseline (no modulation).
     """
 
     dopamine: float = 1.0

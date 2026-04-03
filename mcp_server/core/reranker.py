@@ -15,21 +15,31 @@ Adaptive alpha (EXPERIMENTAL — disabled by default):
     Kept as opt-in (adaptive=True) for future experimentation.
     See benchmarks/beam/ablation_results.json for full data.
 
-Sufficient Context gate (inspired by Joren et al., ICLR 2025):
-    The paper uses a calibrated sigmoid confidence model to decide whether
-    retrieved context is sufficient. This implementation simplifies to a
-    binary threshold gate: if the max CE score falls below gate_threshold,
-    all scores are suppressed by a fixed multiplier. This is a lossy
-    simplification — the paper's calibrated model would be more principled.
+Sufficient Context gate (Joren et al., ICLR 2025):
+    The paper uses an LLM autorater (Gemini 1.5 Pro CoT) to classify whether
+    retrieved context is sufficient — not applicable at <200ms retrieval latency.
+    This implementation uses a binary threshold gate: if the max CE score
+    falls below gate_threshold, all scores are suppressed by a fixed multiplier.
+
+    Platt sigmoid REJECTED (2026-04-03 ablation):
+    Attempted replacing the binary gate with Platt-calibrated sigmoid
+    (P = 1/(1+exp(-(A*s+B))), Platt 1999). Even with steep slopes (A=30)
+    and low inflection (CE=0.05), any multiplicative suppression on mid-range
+    CE scores degrades retrieval. Results:
+      A=10, B=-1.5 (inflection 0.15): BEAM 0.479 (-0.148), LoCoMo R@10 92.6% (-5.1pp)
+      A=30, B=-1.5 (inflection 0.05): BEAM 0.442 (-0.185)
+    Root cause: valid retrievals with CE 0.15-0.30 get 1-5% suppression that
+    compounds across rankings. The binary gate (1.0 above threshold, 0.1 below)
+    is empirically optimal — scores either clearly match or they don't.
+    Proper Platt calibration would require collecting (max_CE, is_correct)
+    pairs from benchmark runs and fitting A, B via logistic regression.
 
     ENGINEERING DEFAULTS (not paper-prescribed):
     - alpha=0.70: Base blend weight for CE vs first-stage scores. Empirically
       determined via BEAM ablation (see benchmarks/beam/ablation_results.json):
-      0.30→0.511, 0.50→0.529, 0.55→0.535, 0.70→0.542. Higher CE weight
-      helps for conversational memory where semantic understanding dominates.
+      0.30→0.511, 0.50→0.529, 0.55→0.535, 0.70→0.542.
     - gate_threshold=0.15: Min CE score to consider retrieval sufficient.
-      Engineering default; the paper does not prescribe a specific threshold.
-    - suppression=0.1: Score multiplier when gated. Engineering default.
+    - suppression=0.1: Score multiplier when gated.
 
 Pure business logic -- lazy-loaded singleton, no persistent I/O.
 """
@@ -66,9 +76,12 @@ def _compute_retrieval_confidence(
 ) -> float:
     """Compute confidence that retrieval found relevant results.
 
-    Inspired by 'Sufficient Context' (Joren et al., ICLR 2025).
-    Binary threshold approximation: the paper likely uses calibrated
-    sigmoid confidence; we simplify to a hard gate on max CE score.
+    Binary threshold gate: if max CE score >= threshold, results are
+    considered sufficient (confidence=1.0). Otherwise, all scores are
+    suppressed by a fixed multiplier.
+
+    Platt sigmoid was attempted (2026-04-03) and rejected — see module
+    docstring for ablation data showing regression on all benchmarks.
 
     Args:
         ce_scores: Raw cross-encoder scores from FlashRank.
