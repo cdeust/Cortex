@@ -40,17 +40,14 @@ def _resolve_plugin_root() -> str:
 
 def _build_hooks(root: str) -> dict:
     """Build the hooks config with resolved paths."""
-    db = "export DATABASE_URL=\\\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\\\";"
-    py = f"export PYTHONPATH=\\\"{root}\\\";"
-    cd = f"cd \\\"{root}\\\" &&"
-
-    # Simpler: no escaping needed since we build Python dicts, not JSON strings
-    db_export = 'export DATABASE_URL="${DATABASE_URL:-postgresql://localhost:5432/cortex}";'
+    db_export = (
+        'export DATABASE_URL="${DATABASE_URL:-postgresql://localhost:5432/cortex}";'
+    )
     py_export = f'export PYTHONPATH="{root}";'
     cd_cmd = f'cd "{root}" &&'
 
     def cmd(module: str) -> str:
-        return f'{db_export} {py_export} {cd_cmd} python3 -m {module}'
+        return f"{db_export} {py_export} {cd_cmd} python3 -m {module}"
 
     return {
         "SessionStart": [
@@ -60,11 +57,11 @@ def _build_hooks(root: str) -> dict:
                     {
                         "type": "command",
                         "command": (
-                            f'{db_export} {py_export} '
-                            f'python3 -c \'import psycopg\' 2>/dev/null || '
+                            f"{db_export} {py_export} "
+                            f"python3 -c 'import psycopg' 2>/dev/null || "
                             f'python3 -m pip install -q "psycopg[binary]>=3.1" "pgvector>=0.3" '
                             f'"sentence-transformers>=2.2.0" "flashrank>=0.2.0" 2>/dev/null; '
-                            f'{cd_cmd} python3 -m mcp_server.hooks.session_start'
+                            f"{cd_cmd} python3 -m mcp_server.hooks.session_start"
                         ),
                     }
                 ],
@@ -156,10 +153,10 @@ def _remove_cortex_hooks(hooks: dict) -> dict:
         kept = [e for e in entries if e.get("matcher") != _MARKER]
         # Also remove entries whose commands reference mcp_server.hooks
         kept = [
-            e for e in kept
+            e
+            for e in kept
             if not any(
-                "mcp_server.hooks" in h.get("command", "")
-                for h in e.get("hooks", [])
+                "mcp_server.hooks" in h.get("command", "") for h in e.get("hooks", [])
             )
         ]
         if kept:
@@ -191,16 +188,18 @@ def install() -> None:
     _save_settings(settings)
 
     hook_count = sum(
-        len(e.get("hooks", []))
-        for entries in new_hooks.values()
-        for e in entries
+        len(e.get("hooks", [])) for entries in new_hooks.values() for e in entries
     )
-    print(json.dumps({
-        "status": "installed",
-        "plugin_root": root,
-        "hooks_registered": hook_count,
-        "events": list(new_hooks.keys()),
-    }))
+    print(
+        json.dumps(
+            {
+                "status": "installed",
+                "plugin_root": root,
+                "hooks_registered": hook_count,
+                "events": list(new_hooks.keys()),
+            }
+        )
+    )
 
 
 def uninstall() -> None:
