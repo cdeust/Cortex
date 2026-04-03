@@ -27,6 +27,7 @@ from mcp_server.infrastructure.pg_store_navigation import PgNavigationMixin
 from mcp_server.infrastructure.pg_store_queries import PgQueryMixin
 from mcp_server.infrastructure.pg_store_relationships import PgRelationshipMixin
 from mcp_server.infrastructure.pg_store_rules import PgRuleMixin
+from mcp_server.infrastructure.pg_store_sessions import PgSessionMixin
 from mcp_server.infrastructure.pg_store_stats import PgStatsMixin
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ class PgMemoryStore(
     PgEntityMixin,
     PgRelationshipMixin,
     PgNavigationMixin,
+    PgSessionMixin,
     PgQueryMixin,
     PgRuleMixin,
     PgStatsMixin,

@@ -104,6 +104,7 @@ def _build_entity_node(ent: dict, nid: str) -> Node:
     heat = ent.get("heat", 0)
     return {
         "id": nid,
+        "entityId": ent.get("id"),
         "type": "entity",
         "label": ent.get("name", ""),
         "domain": ent.get("domain", ""),
@@ -198,6 +199,7 @@ def _build_memory_node(mem: dict, nid: str, emo: dict, color: str) -> Node:
     label = content[:40].replace("\n", " ") + ("..." if len(content) > 40 else "")
     return {
         "id": nid,
+        "memoryId": mem.get("id"),
         "type": "memory",
         "label": label,
         "domain": mem.get("domain", ""),
