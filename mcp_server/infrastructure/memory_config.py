@@ -6,12 +6,24 @@ Defaults tuned from production parameters.
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
+
+def _detect_runtime() -> str:
+    """Detect runtime environment: 'cli' or 'cowork'."""
+    explicit = os.environ.get("CORTEX_RUNTIME", "")
+    if explicit in ("cli", "cowork"):
+        return explicit
+    if os.environ.get("CLAUDE_ENVIRONMENT") == "cowork":
+        return "cowork"
+    return "cli"
 
 
 class MemorySettings(BaseSettings):
@@ -27,6 +39,9 @@ class MemorySettings(BaseSettings):
       - Hippocampal replay: checkpoint settings
       - Embedding: model and dimensions
     """
+
+    # ── Runtime ──────────────────────────────────────────────────────────
+    RUNTIME: str = ""  # "cli" | "cowork" — set by validator from CORTEX_RUNTIME or CLAUDE_ENVIRONMENT
 
     # ── Storage ──────────────────────────────────────────────────────────
     DATABASE_URL: str = "postgresql://localhost:5432/cortex"
@@ -122,6 +137,12 @@ class MemorySettings(BaseSettings):
     EMBEDDING_DIM: int = 384
 
     model_config = {"env_prefix": "CORTEX_MEMORY_"}
+
+    @model_validator(mode="after")
+    def _set_runtime(self) -> "MemorySettings":
+        if not self.RUNTIME:
+            self.RUNTIME = _detect_runtime()
+        return self
 
     @property
     def db_path_resolved(self) -> Path:

@@ -1,7 +1,7 @@
-"""Memory store factory — PostgreSQL with SQLite fallback.
+"""Memory store factory — runtime-aware backend selection.
 
-Tries PostgreSQL first (via DATABASE_URL). Falls back to SQLite
-when PostgreSQL is unavailable (e.g., sandboxed environments).
+CLI mode: PostgreSQL required, no silent fallback.
+Cowork mode: tries PostgreSQL, falls back to SQLite.
 """
 
 from __future__ import annotations
@@ -26,10 +26,11 @@ def _try_pg(database_url: str):
 
 
 class MemoryStore:
-    """Factory that tries PostgreSQL first, falls back to SQLite.
+    """Runtime-aware store factory.
 
-    Returns the appropriate store instance via __new__ — callers
-    get a PgMemoryStore or SqliteMemoryStore transparently.
+    CLI mode: PostgreSQL required (auto → postgresql). Raises on failure.
+    Cowork mode: tries PostgreSQL, falls back to SQLite.
+    Explicit sqlite backend always works (for testing).
     """
 
     def __new__(
@@ -42,12 +43,16 @@ class MemoryStore:
         from mcp_server.infrastructure.memory_config import get_memory_settings
 
         settings = get_memory_settings()
+        runtime = settings.RUNTIME
         backend = settings.STORE_BACKEND
         url = (
             database_url or os.environ.get("DATABASE_URL", "") or settings.DATABASE_URL
         )
 
-        # Explicit backend selection
+        # In CLI mode, "auto" means PostgreSQL is required
+        if runtime == "cli" and backend == "auto":
+            backend = "postgresql"
+
         if backend == "sqlite":
             return _make_sqlite(db_path or settings.SQLITE_FALLBACK_PATH, embedding_dim)
 
@@ -56,10 +61,12 @@ class MemoryStore:
             if store is not None:
                 return store
             raise RuntimeError(
-                "STORE_BACKEND=postgresql but PostgreSQL connection failed"
+                "PostgreSQL connection failed. Cortex requires PostgreSQL in CLI mode.\n"
+                "Run: bash setup.sh to configure PostgreSQL.\n"
+                "Or set CORTEX_RUNTIME=cowork to allow SQLite fallback."
             )
 
-        # Auto mode: try PG first, fall back to SQLite
+        # "auto" in cowork mode: try PG, fall back to SQLite
         if url:
             store = _try_pg(url)
             if store is not None:
