@@ -54,23 +54,51 @@ def _reset_unified_idle_timer() -> None:
 
 
 def _parse_query_params(path: str) -> dict:
-    """Parse query string into domain_filter, batch, batch_size."""
-    result = {"domain_filter": None, "batch": 0, "batch_size": 0}
+    """Parse query string into a flat key-value dict."""
+    result: dict = {"domain_filter": None, "batch": 0, "batch_size": 0}
     if "?" not in path:
         return result
 
     params = path.split("?", 1)[1]
     for p in params.split("&"):
-        if p.startswith("domain="):
-            result["domain_filter"] = p[7:]
-        elif p.startswith("batch="):
+        if "=" not in p:
+            continue
+        key, _, val = p.partition("=")
+        if key == "domain":
+            result["domain_filter"] = val
+        elif key == "batch":
             try:
-                result["batch"] = int(p[6:])
+                result["batch"] = int(val)
             except ValueError:
                 pass
-        elif p.startswith("batch_size="):
+        elif key == "batch_size":
             try:
-                result["batch_size"] = int(p[11:])
+                result["batch_size"] = int(val)
+            except ValueError:
+                pass
+        elif key == "memory_id":
+            try:
+                result["memory_id"] = int(val)
+            except ValueError:
+                pass
+        elif key == "depth":
+            try:
+                result["depth"] = int(val)
+            except ValueError:
+                pass
+        elif key == "max_neighbors":
+            try:
+                result["max_neighbors"] = int(val)
+            except ValueError:
+                pass
+        elif key == "entity_id":
+            try:
+                result["entity_id"] = int(val)
+            except ValueError:
+                pass
+        elif key == "limit":
+            try:
+                result["limit"] = int(val)
             except ValueError:
                 pass
     return result
@@ -109,8 +137,13 @@ def _build_unified_handler(
 
         def do_GET(self):
             _reset_unified_idle_timer()
-            if self.path == "/api/graph" or self.path.startswith("/api/graph?"):
+            base = self.path.split("?")[0]
+            if base == "/api/graph":
                 self._serve_graph_api()
+            elif base == "/api/local-graph":
+                self._serve_local_graph_api()
+            elif base == "/api/backlinks":
+                self._serve_backlinks_api()
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
                 serve_static_file(self, js_dir, self.path[4:], "application/javascript")
             elif self.path.startswith("/css/") and self.path.endswith(".css"):
@@ -121,6 +154,20 @@ def _build_unified_handler(
         def _serve_graph_api(self):
             try:
                 data = _build_graph_response(profiles_getter, store_getter, self.path)
+                send_json_response(self, data)
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_local_graph_api(self):
+            try:
+                data = _build_local_graph_response(store_getter, self.path)
+                send_json_response(self, data)
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_backlinks_api(self):
+            try:
+                data = _build_backlinks_response(store_getter, self.path)
                 send_json_response(self, data)
             except Exception as e:
                 send_error_response(self, e)
@@ -174,6 +221,43 @@ def _build_graph_response(profiles_getter, store_getter, path: str) -> dict:
         "semantic": semantic,
     }
     return result
+
+
+def _build_local_graph_response(store_getter, path: str) -> dict:
+    """Build local graph response for a memory's neighborhood."""
+    from mcp_server.core.local_graph import build_local_graph
+
+    params = _parse_query_params(path)
+    memory_id = params.get("memory_id")
+    if memory_id is None:
+        return {"error": "memory_id query parameter is required"}
+
+    depth = min(params.get("depth", 1), 3)
+    max_neighbors = min(params.get("max_neighbors", 30), 100)
+    store = store_getter()
+    raw = store.get_local_graph(memory_id, depth=depth, max_neighbors=max_neighbors)
+
+    if raw["center"] is None:
+        return {"error": f"Memory {memory_id} not found"}
+
+    return build_local_graph(
+        raw["center"], raw["entities"], raw["neighbors"], raw["relationships"]
+    )
+
+
+def _build_backlinks_response(store_getter, path: str) -> dict:
+    """Build backlinks response for an entity."""
+    from mcp_server.core.backlink_resolver import resolve_backlinks
+
+    params = _parse_query_params(path)
+    entity_id = params.get("entity_id")
+    if entity_id is None:
+        return {"error": "entity_id query parameter is required"}
+
+    limit = min(params.get("limit", 50), 200)
+    store = store_getter()
+    raw = store.get_backlinks(entity_id, limit=limit)
+    return resolve_backlinks(raw)
 
 
 def _bind_and_start(handler_cls, preferred_port: int) -> str:

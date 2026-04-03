@@ -96,6 +96,59 @@ class PgEntityMixin:
         ).fetchall()
         return {row["source_entity_id"] for row in rows}
 
+    def link_memory_to_entities(
+        self, memory_id: int, entity_ids: list[int], confidence: float = 1.0
+    ) -> int:
+        """Materialize memory↔entity links in the join table.
+
+        Uses ON CONFLICT DO UPDATE to refresh confidence on re-link.
+        Returns the number of links inserted/updated.
+        """
+        if not entity_ids:
+            return 0
+        count = 0
+        for eid in entity_ids:
+            try:
+                self._conn.execute(
+                    "INSERT INTO memory_entities (memory_id, entity_id, confidence) "
+                    "VALUES (%s, %s, %s) "
+                    "ON CONFLICT (memory_id, entity_id) DO UPDATE "
+                    "SET confidence = EXCLUDED.confidence",
+                    (memory_id, eid, confidence),
+                )
+                count += 1
+            except Exception:
+                continue
+        self._conn.commit()
+        return count
+
+    def get_entities_for_memory(self, memory_id: int) -> list[dict[str, Any]]:
+        """Get all entities linked to a memory via the join table."""
+        rows = self._conn.execute(
+            "SELECT e.*, me.confidence AS link_confidence "
+            "FROM entities e "
+            "JOIN memory_entities me ON me.entity_id = e.id "
+            "WHERE me.memory_id = %s ORDER BY me.confidence DESC",
+            (memory_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_memories_for_entity(
+        self, entity_id: int, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Get all memories linked to an entity (backlinks)."""
+        rows = self._conn.execute(
+            "SELECT m.id, m.content, m.heat, m.importance, m.domain, "
+            "m.store_type, m.tags, m.created_at, m.source, m.agent_context, "
+            "m.is_protected, m.is_global, me.confidence AS link_confidence "
+            "FROM memories m "
+            "JOIN memory_entities me ON me.memory_id = m.id "
+            "WHERE me.entity_id = %s AND NOT m.is_stale "
+            "ORDER BY m.heat DESC LIMIT %s",
+            (entity_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_memories_mentioning_entity(
         self, entity_name: str, limit: int = 20
     ) -> list[dict[str, Any]]:
