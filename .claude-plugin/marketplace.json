@@ -22,7 +22,9 @@
       "repository": "https://github.com/cdeust/Cortex",
       "license": "MIT",
       "keywords": ["memory", "cognitive-profiling", "mcp", "claude-code", "cortex", "knowledge-graph", "codebase-analysis", "docker"],
-      "category": "productivity"
+      "category": "productivity",
+      "runtime": ["cli"],
+      "runtime_notes": "Requires PostgreSQL 15+ with pgvector. Not compatible with Claude Cowork sandboxed environment."
     }
   ]
 }
