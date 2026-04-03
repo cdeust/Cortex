@@ -58,12 +58,88 @@ def _get_ui_root() -> Path:
 
 
 def _get_store():
-    """Create a fresh MemoryStore for this process."""
+    """Create a fresh store for this process. Prefers PostgreSQL."""
+    import os
+
     from mcp_server.infrastructure.memory_config import get_memory_settings
-    from mcp_server.infrastructure.memory_store import MemoryStore
 
     settings = get_memory_settings()
+    url = os.environ.get("DATABASE_URL", "") or settings.DATABASE_URL
+
+    if url:
+        try:
+            from mcp_server.infrastructure.pg_store import PgMemoryStore
+
+            return PgMemoryStore(database_url=url)
+        except Exception:
+            pass
+
+    from mcp_server.infrastructure.memory_store import MemoryStore
+
     return MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+
+
+def _parse_param(path: str, key: str) -> str | None:
+    """Extract a single query parameter."""
+    if "?" not in path:
+        return None
+    for p in path.split("?", 1)[1].split("&"):
+        if p.startswith(key + "="):
+            return p[len(key) + 1:]
+    return None
+
+
+def _build_local_graph(store, path: str) -> dict:
+    from mcp_server.core.local_graph import build_local_graph
+    mid = _parse_param(path, "memory_id")
+    if not mid:
+        return {"error": "memory_id required"}
+    depth = int(_parse_param(path, "depth") or "1")
+    raw = store.get_local_graph(int(mid), depth=min(depth, 3))
+    if raw["center"] is None:
+        return {"error": "memory_not_found"}
+    return build_local_graph(
+        raw["center"], raw["entities"], raw["neighbors"], raw["relationships"]
+    )
+
+
+def _build_backlinks(store, path: str) -> dict:
+    from mcp_server.core.backlink_resolver import resolve_backlinks
+    eid = _parse_param(path, "entity_id")
+    if not eid:
+        return {"error": "entity_id required"}
+    limit = int(_parse_param(path, "limit") or "50")
+    raw = store.get_backlinks(int(eid), limit=min(limit, 200))
+    return resolve_backlinks(raw)
+
+
+def _build_entity_detail(store, path: str) -> dict:
+    from mcp_server.core.entity_profile import build_entity_profile
+    eid = _parse_param(path, "entity_id")
+    if not eid:
+        return {"error": "entity_id required"}
+    entity = store.get_entity_by_id(int(eid))
+    if not entity:
+        return {"error": "entity_not_found"}
+    memories = store.get_memories_mentioning_entity(entity.get("name", ""), limit=50)
+    rels = store.get_relationships_for_entity(int(eid), direction="both")
+    return {"entity": build_entity_profile(entity, memories, rels)}
+
+
+def _build_timeline(store, path: str) -> dict:
+    from mcp_server.core.session_grouper import group_into_sessions
+    domain = _parse_param(path, "domain") or ""
+    limit = int(_parse_param(path, "limit") or "50")
+    sessions = store.get_sessions(domain=domain, limit=limit)
+    if not sessions:
+        return {"sessions": [], "total": 0}
+    all_mems: list[dict] = []
+    for s in sessions:
+        sid = s.get("session_id", "")
+        if sid:
+            all_mems.extend(store.get_memories_by_session(sid, limit=50))
+    grouped = group_into_sessions(all_mems)[:limit]
+    return {"sessions": grouped, "total": len(grouped)}
 
 
 def _build_unified_handler(ui_root: Path, store) -> type:
@@ -110,8 +186,17 @@ def _build_unified_handler(ui_root: Path, store) -> type:
 
         def do_GET(self):
             _touch()
-            if self.path == "/api/graph" or self.path.startswith("/api/graph?"):
+            base = self.path.split("?")[0]
+            if base == "/api/graph":
                 self._serve_graph()
+            elif base == "/api/local-graph":
+                self._serve_json(_build_local_graph, self.path)
+            elif base == "/api/backlinks":
+                self._serve_json(_build_backlinks, self.path)
+            elif base == "/api/entity":
+                self._serve_json(_build_entity_detail, self.path)
+            elif base == "/api/timeline":
+                self._serve_json(_build_timeline, self.path)
             elif self.path.startswith("/api/file-diff?"):
                 _serve_file_diff(self)
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
@@ -120,6 +205,54 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 _serve_static(self, css_dir, self.path[5:], "text/css")
             else:
                 self._serve_html()
+
+        def do_POST(self):
+            _touch()
+            base = self.path.split("?")[0]
+            if base == "/api/memory":
+                self._serve_memory_update()
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def _serve_memory_update(self):
+            try:
+                from mcp_server.server.http_viz_api import (
+                    handle_update_memory, read_json_body,
+                )
+                body = read_json_body(self)
+                if not body:
+                    self.send_response(400)
+                    self.end_headers()
+                    return
+                data = handle_update_memory(lambda: store, body)
+                body_bytes = json.dumps(data, default=str).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(body_bytes)
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+        def _serve_json(self, builder_fn, path):
+            try:
+                data = builder_fn(store, path)
+                body = json.dumps(data, default=str).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
 
         def _serve_html(self):
             self.send_response(200)
