@@ -24,6 +24,7 @@ JUG.NODE_COLORS = {
   'entity-file': '#7088D0',
   'entity-variable': '#50B8D0',
   'entity-default': '#50C8E0',
+  'discussion': '#F43F5E',
 };
 
 JUG.EDGE_COLORS = {
@@ -44,6 +45,7 @@ JUG.EDGE_COLORS = {
   'memory-entity': '#40A0B8',
   'domain-entity': '#50B0C8',
   'default': '#40B0C8',
+  'has-discussion': '#F43F5E60',
 };
 
 JUG.NODE_LABELS = {
@@ -58,6 +60,7 @@ JUG.NODE_LABELS = {
   'behavioral-feature': 'Feature',
   'memory': 'Memory',
   'entity': 'Entity',
+  'discussion': 'Discussion',
 };
 
 JUG.CONSOLIDATION_COLORS = {
@@ -87,7 +90,7 @@ JUG.ZOOM_LEVELS = {
 JUG.STRUCTURAL_TYPES = { 'root': true, 'category': true, 'domain': true, 'agent': true, 'type-group': true };
 
 JUG.getNodeColor = function(node) {
-  if (node.isGlobal) return '#FF4081';
+  if (node.isGlobal) return '#8B6914';
   if (node.type === 'memory') {
     return JUG.NODE_COLORS['memory-' + (node.storeType || 'episodic')] || '#26de81';
   }

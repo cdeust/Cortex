@@ -113,22 +113,42 @@
   }
 
   function buildPlainContent(raw, type) {
-    var clean = raw.replace(/^#+\s*/gm, '').replace(/\*\*/g, '')
-      .replace(/`([^`]*)`/g, '$1').replace(/\\u[0-9a-fA-F]{4}/g, '')
-      .replace(/\\n/g, '\n').replace(/\\t/g, '  ')
-      .replace(/\n{3,}/g, '\n\n').trim();
-    if (!clean) return '';
+    var summary = extractSummary(raw);
+    if (!summary) return '';
     var labels = {
       'memory': 'What was remembered', 'entity': 'Description',
       'recurring-pattern': 'Pattern', 'entry-point': 'Entry pattern',
       'domain': 'Summary',
     };
-    var isLong = clean.length > 300;
     var h = '<div class="section-title">' + (labels[type] || 'Details') + '</div>';
-    h += '<div class="detail-content-block' + (isLong ? ' collapsed' : '') +
-      '" id="detail-content-text">' + esc(clean) + '</div>';
-    if (isLong) h += '<div class="detail-expand" id="detail-expand-btn">Show more</div>';
+    h += '<div class="detail-summary">' + esc(summary) + '</div>';
+    h += '<div class="detail-raw-toggle" id="detail-raw-btn">Show raw</div>';
+    h += '<pre class="detail-raw hidden" id="detail-raw-text">' + esc(raw) + '</pre>';
     return h;
+  }
+
+  function extractSummary(raw) {
+    // Strip all markup to get clean prose
+    var s = raw
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]*)`/g, '$1')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/^#{1,6}\s*/gm, '')
+      .replace(/\*\*([^*]*)\*\*/g, '$1')
+      .replace(/\*([^*]*)\*/g, '$1')
+      .replace(/^[\s|:*-]+$/gm, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\\u[0-9a-fA-F]{4}/g, '')
+      .replace(/\\n/g, '\n').replace(/\\t/g, '  ')
+      .replace(/\n{3,}/g, '\n\n').trim();
+    // Take first meaningful paragraph (up to 300 chars)
+    var lines = s.split('\n').filter(function(l) { return l.trim().length > 0; });
+    var out = '';
+    for (var i = 0; i < lines.length && out.length < 300; i++) {
+      out += (out ? '\n' : '') + lines[i].trim();
+    }
+    return out || s.substring(0, 300);
   }
 
   // ── Tags ──
@@ -194,7 +214,7 @@
 
   function buildBadges(data) {
     var b = [];
-    if (data.isGlobal) b.push(bdg('Global', '#FF4081'));
+    if (data.isGlobal) b.push(bdg('Global', '#8B6914'));
     if (data.isProtected) b.push(bdg('Anchored', '#E0B840'));
     if (data.storeType) b.push(bdg(data.storeType, '#40A8C0'));
     return b.length ? '<div class="badge-row">' + b.join('') + '</div>' : '';

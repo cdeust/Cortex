@@ -208,9 +208,10 @@ class SqliteSearchMixin:
                 continue
             if row["heat"] < min_heat or row["is_stale"]:
                 continue
-            if domain and row["domain"] != domain:
+            is_global = bool(row.get("is_global", 0))
+            if domain and row["domain"] != domain and not is_global:
                 continue
-            if directory and row["directory_context"] != directory:
+            if directory and row["directory_context"] != directory and not is_global:
                 continue
             results.append(
                 {

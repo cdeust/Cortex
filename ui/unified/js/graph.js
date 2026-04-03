@@ -15,9 +15,10 @@
     var filteredNodes = nodes.filter(function(n) {
       var isStructural = JUG.STRUCTURAL_TYPES && JUG.STRUCTURAL_TYPES[n.type];
       if (isStructural) return true;
-      if (filter === 'methodology' && (n.type === 'memory' || n.type === 'entity')) return false;
+      if (filter === 'methodology' && (n.type === 'memory' || n.type === 'entity' || n.type === 'discussion')) return false;
       if (filter === 'memories' && n.type !== 'memory') return false;
       if (filter === 'knowledge' && n.type !== 'entity') return false;
+      if (filter === 'discussions' && n.type !== 'discussion') return false;
       if (filter === 'emotional' && !(n.type === 'memory' && n.emotion && n.emotion !== 'neutral')) return false;
       if (filter === 'protected' && !n.isProtected) return false;
       if (filter === 'hot' && (n.heat === undefined || n.heat < 0.5)) return false;

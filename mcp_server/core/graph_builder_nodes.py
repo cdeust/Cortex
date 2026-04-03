@@ -40,6 +40,8 @@ ENTITY_COLORS = {
     "variable": "#50B8D0",
 }
 
+DISCUSSION_COLOR = "#F43F5E"
+
 EDGE_COLORS = {
     "has-category": "#B0B0B0",
     "has-project": "#8B5CF6",
@@ -50,6 +52,7 @@ EDGE_COLORS = {
     "persistent-feature": "#ec4899",
     "memory-entity": "#40A0B8",
     "domain-entity": "#50B0C8",
+    "has-discussion": "#F43F5E60",
 }
 
 # ── Technology category classification ───────────────────────────────
@@ -300,7 +303,14 @@ def add_agent_node(
 
 # ── Level 4: Type-group nodes ───────────────────────────────────────
 
-TYPE_GROUP_LABELS = ["Entry Points", "Patterns", "Tools", "Features", "Memories"]
+TYPE_GROUP_LABELS = [
+    "Entry Points",
+    "Patterns",
+    "Tools",
+    "Features",
+    "Memories",
+    "Discussions",
+]
 
 
 def add_type_group_nodes(

@@ -15,6 +15,7 @@
     if (n.type === 'domain') return Math.max(5, base * 0.9);
     if (n.type === 'agent') return 4;
     if (n.type === 'type-group') return 2.5;
+    if (n.type === 'discussion') return Math.max(2.5, base * 0.5);
     return Math.max(2.2, base * 0.45);
   };
 
@@ -99,12 +100,12 @@
 
     // Global indicator — golden double ring
     if (node.isGlobal && !isDimmed) {
-      ctx.strokeStyle = rgba('#FF4081', 0.7);
+      ctx.strokeStyle = rgba('#8B6914', 0.7);
       ctx.lineWidth = 0.7;
       ctx.beginPath();
       ctx.arc(x, y, r + 1.8, 0, 2 * Math.PI);
       ctx.stroke();
-      ctx.strokeStyle = rgba('#FF4081', 0.35);
+      ctx.strokeStyle = rgba('#8B6914', 0.35);
       ctx.lineWidth = 0.4;
       ctx.beginPath();
       ctx.arc(x, y, r + 3.2, 0, 2 * Math.PI);

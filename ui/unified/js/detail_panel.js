@@ -78,6 +78,7 @@
       'resolved_by': 'Resolved by',
       'imports': 'Imports',
       'calls': 'Calls',
+      'has-discussion': 'Discussion in',
     };
 
     var h = '<div class="section-title">Connections (' + edges.length + ')</div>';
@@ -111,15 +112,23 @@
     var typeLabel = JUG.NODE_LABELS[data.type] || data.type;
     var edges = getConnections(data);
 
-    var h = JUG._fmt.header(data, col, typeLabel);
-    h += JUG._fmt.quality(data);
-    h += JUG._fmt.gauges(data);
-    h += JUG._fmt.content(data);
-    h += JUG._fmt.tags(data.tags);
-    h += buildEmotion(data);
-    h += JUG._fmt.bioSection(data);
-    h += buildConnections(data, edges);
-    h += JUG._fmt.badges(data);
+    var h = '';
+    if (data.type === 'discussion') {
+      h += JUG._fmt.header(data, col, typeLabel);
+      h += JUG._fmt.quality(data);
+      h += JUG._disc.buildDiscussionDetail(data);
+      h += buildConnections(data, edges);
+    } else {
+      h += JUG._fmt.header(data, col, typeLabel);
+      h += JUG._fmt.quality(data);
+      h += JUG._fmt.gauges(data);
+      h += JUG._fmt.content(data);
+      h += JUG._fmt.tags(data.tags);
+      h += buildEmotion(data);
+      h += JUG._fmt.bioSection(data);
+      h += buildConnections(data, edges);
+      h += JUG._fmt.badges(data);
+    }
 
     content.innerHTML = h;
     panel.classList.add('open');
@@ -139,6 +148,21 @@
         if (!block) return;
         var collapsed = block.classList.toggle('collapsed');
         expandBtn.textContent = collapsed ? 'Show more' : 'Show less';
+      });
+    }
+    var viewBtn = content.querySelector('.disc-view-btn');
+    if (viewBtn) {
+      viewBtn.addEventListener('click', function() {
+        JUG._disc.openConversationModal(viewBtn.dataset.sessionId);
+      });
+    }
+    var rawBtn = document.getElementById('detail-raw-btn');
+    if (rawBtn) {
+      rawBtn.addEventListener('click', function() {
+        var raw = document.getElementById('detail-raw-text');
+        if (!raw) return;
+        var hidden = raw.classList.toggle('hidden');
+        rawBtn.textContent = hidden ? 'Show raw' : 'Hide raw';
       });
     }
   }

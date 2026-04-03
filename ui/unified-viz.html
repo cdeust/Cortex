@@ -34,6 +34,7 @@
   <div class="stat-row"><span>Entities</span><span class="val" id="s-ent">--</span></div>
   <div class="stat-row"><span>Nodes</span><span class="val" id="s-nodes">--</span></div>
   <div class="stat-row"><span>Synapses</span><span class="val" id="s-edge">--</span></div>
+  <div class="stat-row"><span>Discussions</span><span class="val" id="s-disc">--</span></div>
 
   <div id="benchmark-summary" style="margin-top:10px;border-top:1px solid #ffffff10;padding-top:8px;display:none">
     <div style="font-size:7px;text-transform:uppercase;letter-spacing:0.5px;color:var(--cyan-dim,#508090);margin-bottom:6px">System Benchmarks</div>
@@ -65,6 +66,7 @@
   <button class="filter-btn" data-filter="protected">Protected</button>
   <button class="filter-btn" data-filter="hot">Hot</button>
   <button class="filter-btn" data-filter="global">Global</button>
+  <button class="filter-btn" data-filter="discussions">Discussions</button>
   <span class="filter-sep"></span>
   <select id="domain-select" class="filter-select"><option value="">All Domains</option></select>
   <select id="emotion-select" class="filter-select">
@@ -112,6 +114,7 @@
     <button class="mon-tab" data-type="behavioral-feature">Feature <span class="mon-count">0</span></button>
     <button class="mon-tab" data-type="memory">Memory <span class="mon-count">0</span></button>
     <button class="mon-tab" data-type="entity">Entity <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="discussion">Discussion <span class="mon-count">0</span></button>
   </div>
   <div class="mon-tabs mon-tabs-bio">
     <span class="mon-tabs-label">Bio:</span>
@@ -148,6 +151,17 @@
   </div>
 </div>
 
+<div id="conversation-modal">
+  <div class="conv-modal-backdrop"></div>
+  <div class="conv-modal-panel">
+    <div class="conv-modal-header">
+      <div class="conv-modal-title"></div>
+      <button class="conv-modal-close">&#x2715;</button>
+    </div>
+    <div class="conv-modal-body"></div>
+  </div>
+</div>
+
 <div id="legend">
   <div class="leg-item"><div class="leg-dot" style="background:#FFFFFF;box-shadow:0 0 6px #FFFFFF60"></div>Root</div>
   <div class="leg-item"><div class="leg-dot" style="background:#8B5CF6;box-shadow:0 0 6px #8B5CF660"></div>Category</div>
@@ -159,7 +173,8 @@
   <div class="leg-item"><div class="leg-dot" style="background:#E0A840;box-shadow:0 0 6px #E0A84060"></div>Tool</div>
   <div class="leg-item"><div class="leg-dot" style="background:#58D888;box-shadow:0 0 6px #58D88860"></div>Memory</div>
   <div class="leg-item"><div class="leg-dot" style="background:#50C8E0;box-shadow:0 0 6px #50C8E060"></div>Entity</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#FF4081;box-shadow:0 0 6px #FF408160"></div>Global</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#F43F5E;box-shadow:0 0 6px #F43F5E60"></div>Discussion</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#8B6914;box-shadow:0 0 6px #8B691460"></div>Global</div>
   <div class="leg-item"><div class="leg-dot" style="background:#00D2FF;box-shadow:0 0 6px #00D2FF60"></div>Labile</div>
   <div class="leg-item"><div class="leg-dot" style="background:#60A0E0;box-shadow:0 0 6px #60A0E060"></div>Early LTP</div>
   <div class="leg-item"><div class="leg-dot" style="background:#40D870;box-shadow:0 0 6px #40D87060"></div>Late LTP</div>
@@ -341,6 +356,7 @@
 <script src="/js/detail_format.js"></script>
 <script src="/js/detail_diff.js"></script>
 <script src="/js/detail_panel.js"></script>
+<script src="/js/discussion_detail.js"></script>
 <script src="/js/controls.js"></script>
 <script src="/js/monitor.js"></script>
 <script src="/js/polling.js"></script>
