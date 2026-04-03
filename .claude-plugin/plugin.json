@@ -12,11 +12,10 @@
   "keywords": ["memory", "persistent", "mcp", "claude-code", "neuroscience", "agents"],
   "mcpServers": {
     "cortex": {
-      "command": "python3",
-      "args": ["-m", "mcp_server"],
+      "command": "bash",
+      "args": ["-c", "PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\" python3 -c 'import psycopg' 2>/dev/null || python3 -m pip install -q --target \"${CLAUDE_PLUGIN_DATA}/deps\" \"psycopg[binary]>=3.1\" \"pgvector>=0.3\" 2>/dev/null; exec python3 -m mcp_server"],
       "cwd": "${CLAUDE_PLUGIN_ROOT}",
       "env": {
-        "DATABASE_URL": "${DATABASE_URL}",
         "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps"
       }
     }
@@ -27,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import psycopg\" 2>/dev/null || python3 -m pip install -q --target \"${CLAUDE_PLUGIN_DATA}/deps\" fastmcp pydantic pydantic-settings numpy \"psycopg[binary]>=3.1\" \"pgvector>=0.3\" \"sentence-transformers>=2.2.0\" \"flashrank>=0.2.0\" 2>/dev/null; PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\" python3 -m mcp_server.hooks.session_start",
+            "command": "PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\" python3 -c \"import psycopg\" 2>/dev/null || python3 -m pip install -q --target \"${CLAUDE_PLUGIN_DATA}/deps\" fastmcp pydantic pydantic-settings numpy \"psycopg[binary]>=3.1\" \"pgvector>=0.3\" \"sentence-transformers>=2.2.0\" \"flashrank>=0.2.0\" 2>/dev/null; PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\" python3 -m mcp_server.hooks.session_start",
             "cwd": "${CLAUDE_PLUGIN_ROOT}"
           }
         ]
