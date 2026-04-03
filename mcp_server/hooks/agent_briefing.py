@@ -273,21 +273,21 @@ def process_event(event: dict[str, Any]) -> None:
 
     if agent_name not in _SPECIALIST_AGENTS:
         _log(f"skip: agent '{agent_name}' not a specialist")
-        sys.exit(1)
+        sys.exit(0)
 
     if not prompt or len(prompt) < 20:
         _log("skip: prompt too short")
-        sys.exit(1)
+        sys.exit(0)
 
     keywords = _extract_task_keywords(prompt)
     if not keywords:
         _log("skip: no keywords extracted")
-        sys.exit(1)
+        sys.exit(0)
 
     memories = _fetch_agent_context(agent_name, keywords)
     if not memories:
         _log(f"skip: no relevant memories for {agent_name}")
-        sys.exit(1)
+        sys.exit(0)
 
     # Build injection
     lines = [f"## Cortex Briefing ({agent_name})\n"]
@@ -306,16 +306,16 @@ def process_event(event: dict[str, Any]) -> None:
 def main() -> None:
     """Entry point — read JSON event from stdin."""
     if sys.stdin.isatty():
-        sys.exit(1)
+        sys.exit(0)
 
     raw = sys.stdin.read().strip()
     if not raw:
-        sys.exit(1)
+        sys.exit(0)
 
     try:
         event = json.loads(raw)
     except json.JSONDecodeError:
-        sys.exit(1)
+        sys.exit(0)
 
     process_event(event)
 

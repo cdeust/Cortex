@@ -213,20 +213,20 @@ def process_event(event: dict[str, Any]) -> None:
     query = _extract_query(event)
 
     if not query:
-        sys.exit(1)
+        sys.exit(0)
 
     if _should_skip(query):
-        sys.exit(1)
+        sys.exit(0)
 
     memories = _recall_memories(query)
 
     if not memories:
-        sys.exit(1)
+        sys.exit(0)
 
     injection = _format_injection(memories)
 
     if not injection:
-        sys.exit(1)
+        sys.exit(0)
 
     # Exit 0 + stdout → injected into Claude's context
     print(injection)
@@ -237,16 +237,16 @@ def process_event(event: dict[str, Any]) -> None:
 def main() -> None:
     """Entry point — read JSON event from stdin."""
     if sys.stdin.isatty():
-        sys.exit(1)
+        sys.exit(0)
 
     raw = sys.stdin.read().strip()
     if not raw:
-        sys.exit(1)
+        sys.exit(0)
 
     try:
         event = json.loads(raw)
     except json.JSONDecodeError:
-        sys.exit(1)
+        sys.exit(0)
 
     process_event(event)
 
