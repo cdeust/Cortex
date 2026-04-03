@@ -91,3 +91,53 @@
 .diff-line-hunk .diff-code { color: var(--cyan-dim); font-style: italic; }
 
 .diff-line-ctx { background: transparent; }
+
+/* ── Navigator bar ── */
+#navigator-bar {
+  position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+  z-index: 50; display: flex; align-items: center; gap: 6px;
+  background: rgba(10,10,15,0.9); border: 1px solid rgba(255,255,255,0.08);
+  padding: 4px 10px; border-radius: 6px; backdrop-filter: blur(8px);
+  font-family: 'JetBrains Mono', monospace; font-size: 9px;
+}
+.nav-btn {
+  background: none; border: 1px solid rgba(255,255,255,0.12); color: #90a4ae;
+  padding: 2px 8px; font-size: 10px; cursor: pointer; border-radius: 3px;
+}
+.nav-btn:hover:not(:disabled) { color: #fff; border-color: rgba(255,255,255,0.3); }
+.nav-btn:disabled { opacity: 0.3; cursor: default; }
+.nav-crumbs { display: flex; align-items: center; gap: 2px; overflow: hidden; max-width: 400px; }
+.nav-crumb { color: #607080; padding: 2px 4px; cursor: pointer; white-space: nowrap; }
+.nav-crumb:hover { color: #90a4ae; }
+.nav-crumb-active { color: #E8B840; font-weight: 600; }
+.nav-sep { color: #303840; margin: 0 1px; }
+
+/* ── Local graph container ── */
+#local-graph-container {
+  margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 8px;
+}
+#local-graph-container canvas { border-radius: 4px; background: rgba(0,0,0,0.3); }
+
+/* ── Backlinks ── */
+.backlinks-list { margin-top: 6px; }
+.backlink-domain { margin-bottom: 10px; }
+.backlink-domain-label {
+  font-family: 'Orbitron', monospace; font-size: 8px; font-weight: 600;
+  color: #607080; letter-spacing: 1px; text-transform: uppercase;
+  margin-bottom: 4px; padding-bottom: 2px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.backlink-item {
+  padding: 6px 8px; cursor: pointer; border-left: 2px solid transparent;
+  transition: border-color 0.15s, background 0.15s;
+}
+.backlink-item:hover { border-left-color: #E8B840; background: rgba(255,255,255,0.02); }
+.backlink-snippet { font-size: 9px; color: #b0bec5; line-height: 1.5; margin-bottom: 3px; }
+.backlink-meta { display: flex; align-items: center; gap: 8px; font-size: 7px; color: #607080; }
+.backlink-type { text-transform: uppercase; letter-spacing: 0.5px; }
+.backlink-heat { display: flex; align-items: center; gap: 3px; }
+.backlink-badge {
+  background: rgba(232,184,64,0.15); color: #E8B840; padding: 1px 4px;
+  border-radius: 2px; font-size: 7px; text-transform: uppercase; letter-spacing: 0.5px;
+}

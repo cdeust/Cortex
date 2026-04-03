@@ -94,6 +94,20 @@ CREATE TABLE IF NOT EXISTS relationships (
 );
 """
 
+MEMORY_ENTITIES_DDL = """
+CREATE TABLE IF NOT EXISTS memory_entities (
+    memory_id   INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    entity_id   INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    confidence  REAL DEFAULT 1.0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (memory_id, entity_id)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_entities_entity
+    ON memory_entities(entity_id);
+CREATE INDEX IF NOT EXISTS idx_memory_entities_memory
+    ON memory_entities(memory_id);
+"""
+
 SUPPORT_TABLES_DDL = """
 CREATE TABLE IF NOT EXISTS prospective_memories (
     id                  SERIAL PRIMARY KEY,
@@ -719,6 +733,7 @@ def get_all_ddl() -> list[str]:
         MEMORIES_DDL,
         ENTITIES_DDL,
         RELATIONSHIPS_DDL,
+        MEMORY_ENTITIES_DDL,
         SUPPORT_TABLES_DDL,
         INDEXES_DDL,
         MIGRATIONS_DDL,

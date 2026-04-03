@@ -266,7 +266,8 @@ def _run_post_store(
     """Run post-insert operations: triggers, entities, tagging, engram."""
     settings = get_memory_settings()
     tids = write_post_store.extract_triggers(content, directory, store)
-    write_post_store.persist_entities(extracted, domain, content, store)
+    entity_ids = write_post_store.persist_entities(extracted, domain, content, store)
+    store.link_memory_to_entities(mem_id, entity_ids)
     tagged = write_post_store.run_synaptic_tagging(
         mem_id, mod["importance"], ent_names, store
     )
