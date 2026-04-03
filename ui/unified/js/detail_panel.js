@@ -112,9 +112,6 @@
     var edges = getConnections(data);
 
     var h = JUG._fmt.header(data, col, typeLabel);
-    if (data.type === 'memory') {
-      h += buildEditButton(data);
-    }
     h += JUG._fmt.quality(data);
     h += JUG._fmt.gauges(data);
     h += JUG._fmt.content(data);
@@ -127,70 +124,6 @@
     content.innerHTML = h;
     panel.classList.add('open');
     wireInteractions(content);
-    wireEditButton(content, data);
-  }
-
-  // ── Edit button ──
-
-  function buildEditButton(data) {
-    if (data.is_protected) return '';
-    return '<button class="memory-edit-btn" id="memory-edit-toggle">Edit</button>';
-  }
-
-  function wireEditButton(container, data) {
-    var btn = container.querySelector('#memory-edit-toggle');
-    if (!btn) return;
-
-    btn.addEventListener('click', function() {
-      var existing = container.querySelector('.memory-edit-area');
-      if (existing) { existing.remove(); btn.textContent = 'Edit'; return; }
-
-      btn.textContent = 'Cancel';
-      var rawId = (data.id || '').replace(/^memory-/, '');
-      var contentText = data.content || '';
-
-      var area = document.createElement('div');
-      area.className = 'memory-edit-area';
-      area.innerHTML =
-        '<textarea class="memory-edit-textarea">' + JUG._fmt.esc(contentText) + '</textarea>' +
-        '<div class="memory-edit-actions">' +
-        '<button class="memory-edit-save">Save</button>' +
-        '<span class="memory-edit-status"></span></div>';
-
-      btn.parentNode.insertBefore(area, btn.nextSibling);
-
-      area.querySelector('.memory-edit-save').addEventListener('click', function() {
-        var ta = area.querySelector('.memory-edit-textarea');
-        var status = area.querySelector('.memory-edit-status');
-        var newContent = ta.value.trim();
-        if (!newContent) { status.textContent = 'Content cannot be empty'; return; }
-
-        status.textContent = 'Saving...';
-        fetch('/api/memory', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ memory_id: parseInt(rawId), content: newContent })
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(resp) {
-          if (resp.error) {
-            status.textContent = 'Error: ' + resp.error;
-            status.style.color = '#E05050';
-          } else {
-            status.textContent = 'Saved';
-            status.style.color = '#40D870';
-            data.content = newContent;
-            btn.textContent = 'Edit';
-            setTimeout(function() { area.remove(); }, 800);
-            JUG.emit('memory:updated', { id: data.id, content: newContent });
-          }
-        })
-        .catch(function(err) {
-          status.textContent = 'Network error';
-          status.style.color = '#E05050';
-        });
-      });
-    });
   }
 
   function wireInteractions(content) {
@@ -225,7 +158,7 @@
   });
 
   window.addEventListener('keydown', function(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.target.tagName === 'INPUT') return;
     if (e.key === 'Escape') JUG.deselectNode();
   });
 

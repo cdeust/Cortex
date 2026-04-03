@@ -23,11 +23,9 @@ from psycopg.rows import dict_row
 from mcp_server.infrastructure.pg_schema import get_all_ddl
 from mcp_server.infrastructure.pg_store_auxiliary import PgAuxiliaryMixin
 from mcp_server.infrastructure.pg_store_entities import PgEntityMixin
-from mcp_server.infrastructure.pg_store_navigation import PgNavigationMixin
 from mcp_server.infrastructure.pg_store_queries import PgQueryMixin
 from mcp_server.infrastructure.pg_store_relationships import PgRelationshipMixin
 from mcp_server.infrastructure.pg_store_rules import PgRuleMixin
-from mcp_server.infrastructure.pg_store_sessions import PgSessionMixin
 from mcp_server.infrastructure.pg_store_stats import PgStatsMixin
 
 logger = logging.getLogger(__name__)
@@ -50,8 +48,6 @@ def _now_iso() -> str:
 class PgMemoryStore(
     PgEntityMixin,
     PgRelationshipMixin,
-    PgNavigationMixin,
-    PgSessionMixin,
     PgQueryMixin,
     PgRuleMixin,
     PgStatsMixin,
