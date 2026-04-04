@@ -68,7 +68,7 @@ class EmbeddingEngine:
                 from sentence_transformers import SentenceTransformer
 
                 self._model = SentenceTransformer(
-                    self._model_name, device="cpu"
+                    self._model_name, trust_remote_code=True, device="cpu"
                 )
             except OSError:
                 # Model not in local cache — need to download it once
@@ -80,7 +80,7 @@ class EmbeddingEngine:
                 from sentence_transformers import SentenceTransformer
 
                 self._model = SentenceTransformer(
-                    self._model_name, device="cpu"
+                    self._model_name, trust_remote_code=True, device="cpu"
                 )
             finally:
                 if had_offline is None:
@@ -114,10 +114,7 @@ class EmbeddingEngine:
         if target:
             target = os.path.join(target, "deps")
 
-        cmd = [
-            sys.executable, "-m", "pip", "install", "-q",
-            "sentence-transformers>=2.2.0,<4.0.0",
-        ]
+        cmd = [sys.executable, "-m", "pip", "install", "-q", "sentence-transformers"]
         if target:
             cmd.extend(["--target", target])
 

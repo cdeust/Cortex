@@ -11,13 +11,6 @@ build/
 .DS_Store
 mcp-server_old/
 
-# Secrets and credentials
-.env
-.env.*
-*.credentials.json
-*.pem
-*.key
-
 # Large benchmark datasets (download instructions in README)
 benchmarks/longmemeval/longmemeval_s.json
 benchmarks/longmemeval/longmemeval_oracle.json

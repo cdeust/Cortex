@@ -301,45 +301,7 @@ for name, passed in checks:
 sys.exit(0 if all_ok else 1)
 "
 
-# ── Step 7: Register MCP server ───────────────────────────────────────
-
-step "MCP server registration"
-
-CLAUDE_JSON="${HOME}/.claude.json"
-PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}" python3 -c "
-import json, os, sys
-
-claude_json = os.path.expanduser('${CLAUDE_JSON}')
-data = {}
-if os.path.exists(claude_json):
-    with open(claude_json) as f:
-        data = json.load(f)
-
-servers = data.setdefault('mcpServers', {})
-servers['cortex'] = {
-    'type': 'stdio',
-    'command': sys.executable,
-    'args': ['-m', 'mcp_server'],
-    'env': {
-        'PYTHONPATH': '${PROJECT_DIR}:${DEPS_DIR}',
-        'DATABASE_URL': '${DATABASE_URL:-postgresql://localhost:5432/cortex}',
-        'PYTHONUNBUFFERED': '1',
-    },
-}
-
-with open(claude_json, 'w') as f:
-    json.dump(data, f, indent=2)
-    f.write('\n')
-print('Registered cortex MCP server in', claude_json)
-" 2>/dev/null
-
-if [ $? -eq 0 ]; then
-    ok "MCP server registered in ~/.claude.json"
-else
-    warn "MCP registration failed — add manually to ~/.claude.json"
-fi
-
-# ── Step 8: Install hooks ──────────────────────────────────────────────
+# ── Step 7: Install hooks ──────────────────────────────────────────────
 
 step "Hooks"
 

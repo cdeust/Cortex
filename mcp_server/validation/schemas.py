@@ -85,28 +85,6 @@ SCHEMAS: dict[str, dict] = {
         },
         "required": ["codebase_path", "task_path"],
     },
-    "remember": {
-        "properties": {
-            "content": {"type": "string", "maxLength": 50000},
-            "tags": {"type": "array"},
-            "source": {"type": "string", "maxLength": 200},
-            "domain": {"type": "string", "maxLength": 200},
-            "directory": {"type": "string", "maxLength": 500},
-            "agent_topic": {"type": "string", "maxLength": 200},
-            "importance": {"type": "number"},
-        },
-        "required": ["content"],
-    },
-    "recall": {
-        "properties": {
-            "query": {"type": "string", "maxLength": 10000},
-            "limit": {"type": "number"},
-            "domain": {"type": "string", "maxLength": 200},
-            "directory": {"type": "string", "maxLength": 500},
-            "agent_topic": {"type": "string", "maxLength": 200},
-        },
-        "required": ["query"],
-    },
     "codebase_analyze": {
         "properties": {
             "directory": {"type": "string"},
@@ -148,12 +126,6 @@ def _check_field_type(
         raise ValidationError(
             f'Field "{field}" must be a {spec["type"]}, got {got}',
             {"tool": tool_name, "field": field, "expected": spec["type"], "got": got},
-        )
-    max_len = spec.get("maxLength")
-    if max_len is not None and isinstance(value, str) and len(value) > max_len:
-        raise ValidationError(
-            f'Field "{field}" exceeds maximum length ({len(value)} > {max_len})',
-            {"tool": tool_name, "field": field, "maxLength": max_len},
         )
 
 

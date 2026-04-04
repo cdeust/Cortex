@@ -15,17 +15,9 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
-
-
-def _safe_ident(name: str) -> str:
-    """Validate a database identifier contains only safe characters."""
-    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
-        raise ValueError(f"Unsafe database name: {name!r}")
-    return name
 
 
 def _log(msg: str) -> None:
@@ -92,7 +84,7 @@ def _db_exists(host: str, port: str, dbname: str) -> bool:
                 "-d",
                 "postgres",
                 "-tAc",
-                f"SELECT 1 FROM pg_database WHERE datname = '{_safe_ident(dbname)}'",
+                f"SELECT 1 FROM pg_database WHERE datname = '{dbname}'",
             ],
             capture_output=True,
             timeout=5,
