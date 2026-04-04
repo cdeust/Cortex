@@ -7,21 +7,13 @@
 [![CI](https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg)](https://github.com/cdeust/Cortex/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-2068_passing-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-2080_passing-brightgreen.svg)](#development)
 
 Memory that learns, consolidates, forgets intelligently, and surfaces the right context at the right time. Works standalone or with a team of specialized agents.
 
-[How It Works](#how-it-works) | [Agent Integration](#agent-integration) | [Benchmarks](#benchmarks) | [Scientific Foundation](#scientific-foundation)
+[How It Works](#how-it-works) | [Neural Graph](#neural-graph) | [Agent Integration](#agent-integration) | [Benchmarks](#benchmarks) | [Scientific Foundation](#scientific-foundation)
 
 </div>
-
-<p align="center">
-<img src="docs/neural-graph-overview.png" width="100%" alt="Cortex Neural Graph — unified view with discussions, memories, entities, and domain clusters" />
-</p>
-<p align="center">
-<img src="docs/neural-graph-detail.png" width="49%" alt="Cortex Neural Graph — conversation viewer with full session history" />
-<img src="docs/neural-graph-diff.png" width="49%" alt="Cortex Neural Graph — code diff viewer with memory detail panel" />
-</p>
 
 ---
 
@@ -59,16 +51,52 @@ Five signals fused server-side in PostgreSQL, then reranked client-side:
 
 ### Hooks
 
-Six hooks integrate with Claude Code's lifecycle:
+Seven hooks integrate with Claude Code's lifecycle:
 
 | Hook | Event | What It Does |
 |---|---|---|
 | **SessionStart** | Session opens | Injects anchors + hot memories + team decisions + checkpoint |
+| **UserPromptSubmit** | Before response | Auto-recalls relevant memories based on user's prompt |
 | **PostToolUse** | After Edit/Write/Bash | Auto-captures significant actions as memories |
 | **PostToolUse** | After Edit/Write/Read | Primes related memories via heat boost (spreading activation) |
 | **SessionEnd** | Session closes | Runs dream cycle (decay, compress, CLS based on activity) |
 | **Compaction** | Context compacts | Saves checkpoint; restores context after compaction |
 | **SubagentStart** | Agent spawned | Briefs agent with prior work + team decisions |
+
+---
+
+## Neural Graph
+
+The unified neural graph renders the entire memory system as an interactive 3D visualization in the browser (`/cortex-visualize`).
+
+<p align="center">
+<img src="docs/neural-graph-overview.png" width="100%" alt="Cortex Neural Graph — unified view with discussions, memories, entities, and domain clusters" />
+</p>
+
+### Node Types
+
+| Category | Nodes | Color |
+|---|---|---|
+| **Structural** | Root, categories, domains, agents, entry points | Blue / Cyan |
+| **Behavioral** | Recurring patterns, tool preferences, behavioral features | Yellow / Orange |
+| **Memory** | Episodic memories, semantic memories | Green (episodic), Teal (semantic) |
+| **Entities** | Functions, files, dependencies, decisions, errors, technologies | Varies by type |
+| **Discussions** | Full conversation sessions linked to domain hubs | Rose (#F43F5E) |
+
+### Conversation History
+
+Discussion nodes represent every Claude Code session. Each links to its parent domain via keyword matching. Clicking a discussion node opens a detail panel showing timeline, duration, tools used, and keywords.
+
+**Full Conversation Viewer** — the "View Full Conversation" button opens a modal with the complete session transcript: timestamped user/assistant messages with collapsible tool call details (input/output).
+
+<p align="center">
+<img src="docs/neural-graph-detail.png" width="49%" alt="Cortex Neural Graph — conversation viewer with full session history" />
+<img src="docs/neural-graph-diff.png" width="49%" alt="Cortex Neural Graph — code diff viewer with memory detail panel" />
+</p>
+
+### Filters
+
+Domain, emotion, and consolidation stage dropdowns. Toggle buttons for methodology, memories, knowledge, emotional nodes, protected/hot/global memories, and discussions.
 
 ---
 
@@ -209,11 +237,11 @@ Clean Architecture with strict dependency rules. Inner layers never import outer
 
 | Layer | Modules | Rule |
 |---|---|---|
-| **core/** | 108 | Pure business logic. Zero I/O. Imports only `shared/`. |
-| **infrastructure/** | 21 | All I/O: PostgreSQL, embeddings, file system. |
-| **handlers/** | 33 tools | Composition roots wiring core + infrastructure. |
-| **hooks/** | 6 | Lifecycle automation (SessionStart/End, PostToolUse, etc.) |
-| **shared/** | 11 | Pure utilities. Python stdlib only. |
+| **core/** | 118 | Pure business logic. Zero I/O. Imports only `shared/`. |
+| **infrastructure/** | 33 | All I/O: PostgreSQL, embeddings, file system. |
+| **handlers/** | 62 tools | Composition roots wiring core + infrastructure. |
+| **hooks/** | 7 | Lifecycle automation (SessionStart/End, PostToolUse, etc.) |
+| **shared/** | 12 | Pure utilities. Python stdlib only. |
 
 **Storage:** PostgreSQL 15+ with pgvector (HNSW) and pg_trgm. All retrieval in PL/pgSQL stored procedures.
 
@@ -341,7 +369,7 @@ Values without paper backing, explicitly documented:
 ## Development
 
 ```bash
-pytest                    # 2068 tests
+pytest                    # 2080 tests
 ruff check .              # Lint
 ruff format --check .     # Format
 ```
