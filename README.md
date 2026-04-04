@@ -44,7 +44,7 @@ This handles everything: PostgreSQL + pgvector installation, database creation, 
 >
 > ```bash
 > claude plugin marketplace add cdeust/Cortex-cowork
-> claude plugin install cortex
+> claude plugin install cortex-cowork
 > ```
 
 ### Option B — Standalone Clone
