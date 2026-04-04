@@ -67,9 +67,7 @@ class EmbeddingEngine:
             try:
                 from sentence_transformers import SentenceTransformer
 
-                self._model = SentenceTransformer(
-                    self._model_name, device="cpu"
-                )
+                self._model = SentenceTransformer(self._model_name, device="cpu")
             except OSError:
                 # Model not in local cache — need to download it once
                 if had_offline is None:
@@ -79,9 +77,7 @@ class EmbeddingEngine:
                 logger.info("Downloading embedding model: %s", self._model_name)
                 from sentence_transformers import SentenceTransformer
 
-                self._model = SentenceTransformer(
-                    self._model_name, device="cpu"
-                )
+                self._model = SentenceTransformer(self._model_name, device="cpu")
             finally:
                 if had_offline is None:
                     os.environ.pop("HF_HUB_OFFLINE", None)
@@ -115,7 +111,11 @@ class EmbeddingEngine:
             target = os.path.join(target, "deps")
 
         cmd = [
-            sys.executable, "-m", "pip", "install", "-q",
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-q",
             "sentence-transformers>=2.2.0,<4.0.0",
         ]
         if target:
