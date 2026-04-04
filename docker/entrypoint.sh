@@ -137,6 +137,11 @@ log "MCP server configured"
 # ── Step 4: Git + permissions ─────────────────────────────────────────────
 
 chown -R cortex:cortex /workspace "$CORTEX_HOME" 2>/dev/null || true
+
+# ── Step 4b: Install Cortex hooks (as cortex user so ~/.claude resolves correctly) ──
+
+gosu cortex bash -c 'PYTHONPATH=/opt/cortex python3 /opt/cortex/scripts/install_hooks.py --plugin-root /opt/cortex' 2>/dev/null \
+    && log "Hooks installed" || log "Hook install skipped"
 gosu cortex git config --global --add safe.directory /workspace 2>/dev/null || true
 gosu cortex git config --global user.email "${GIT_USER_EMAIL:-cortex@ai-architect.local}"
 gosu cortex git config --global user.name "${GIT_USER_NAME:-Cortex}"
