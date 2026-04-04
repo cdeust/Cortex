@@ -109,6 +109,13 @@ class PgEntityMixin:
             rows = self._conn.execute(
                 "SELECT * FROM memories WHERE content ILIKE %s "
                 "AND NOT is_stale ORDER BY heat DESC LIMIT %s",
-                (f"%{entity_name}%", limit),
+                (
+                    "%{}%".format(
+                        entity_name.replace("\\", "\\\\")
+                        .replace("%", "\\%")
+                        .replace("_", "\\_")
+                    ),
+                    limit,
+                ),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]

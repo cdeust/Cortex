@@ -17,18 +17,24 @@ Execute all four phases sequentially without asking the user any questions. If a
    - If it still fails, report the error output and **stop**. Do not continue to later phases.
 4. If both checks pass, proceed to Phase 2.
 
-## Phase 2: Codebase Seeding
+## Phase 2: Build Methodology Profiles
+
+1. Call `cortex:rebuild_profiles({"force": true})` to scan all session history and build cognitive profiles per domain.
+2. This creates the domain hubs that memories, entities, and discussions link to. It must run before seeding.
+3. Record the domain count for the final summary.
+
+## Phase 3: Codebase Seeding
 
 1. Call `cortex:seed_project({"directory": "<cwd>"})` where `<cwd>` is the current working directory.
 2. Record the count of discoveries for the final summary.
 
-## Phase 3: History Import
+## Phase 4: History Import
 
 1. Call `cortex:backfill_memories({"dry_run": true, "max_files": 500})` to preview available session files.
 2. If files are available, call `cortex:backfill_memories({"max_files": 500, "min_importance": 0.35})` to import.
 3. Record the count of imported memories for the final summary.
 
-## Phase 4: Consolidation and Verification
+## Phase 5: Consolidation and Verification
 
 1. Call `cortex:consolidate({})` to run decay, compression, CLS, and causal discovery on all memories.
 2. Call `cortex:memory_stats({})` to get the final system state.
@@ -41,6 +47,7 @@ After all phases complete, print a single summary block:
 ```
 Cortex Setup Complete
 ---------------------
+Domains:         <count from rebuild_profiles>
 Memories stored: <total from memory_stats>
 Entities:        <count from memory_stats>
 Relationships:   <count from memory_stats>
