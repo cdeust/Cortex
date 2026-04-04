@@ -101,21 +101,28 @@ When the orchestrator spawns a specialist agent, the SubagentStart hook automati
 
 ### Compatible Agent Team
 
-Works with any custom Claude Code agents. See [zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents) for a reference team of 11 specialists:
+Works with any custom Claude Code agents. See [zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents) for a reference team of 18 specialists:
 
 | Agent | Specialty | Memory Topic |
 |---|---|---|
-| orchestrator | Task decomposition, parallel dispatch | `orchestrator` |
-| engineer | Implementation, any language/stack | `engineer` |
-| tester | Testing, CI verification | `tester` |
-| reviewer | Code review, architecture enforcement | `reviewer` |
-| architect | System decomposition, refactoring | `architect` |
-| dba | Database design, query optimization | `dba` |
-| researcher | Benchmark improvement, paper research | `researcher` |
-| frontend | React/TypeScript, component design | `frontend` |
-| security | Threat modeling, vulnerability analysis | `security` |
-| devops | CI/CD, Docker, deployment | `devops` |
-| ux | Usability, accessibility, design systems | `ux` |
+| orchestrator | Parallel agent execution, coordination, merge | `orchestrator` |
+| engineer | Clean Architecture, SOLID, any language/stack | `engineer` |
+| architect | Module decomposition, layer boundaries, refactoring | `architect` |
+| code-reviewer | Clean Architecture enforcement, SOLID violations | `code-reviewer` |
+| test-engineer | Testing, CI verification, wiring checks | `test-engineer` |
+| dba | Schema design, query optimization, migrations | `dba` |
+| research-scientist | Benchmark improvement, neuroscience/IR papers | `research-scientist` |
+| frontend-engineer | React/TypeScript, component design, accessibility | `frontend-engineer` |
+| security-auditor | Threat modeling, OWASP, defense-in-depth | `security-auditor` |
+| devops-engineer | CI/CD, Docker, PostgreSQL provisioning | `devops-engineer` |
+| ux-designer | Usability, accessibility, design systems | `ux-designer` |
+| data-scientist | EDA, feature engineering, data quality, bias auditing | `data-scientist` |
+| experiment-runner | Ablation studies, hyperparameter search, statistical rigor | `experiment-runner` |
+| mlops | Training pipelines, model serving, GPU optimization | `mlops` |
+| paper-writer | Research paper structure, narrative flow, venue conventions | `paper-writer` |
+| reviewer-academic | Peer review simulation (NeurIPS/CVPR/ICML style) | `reviewer-academic` |
+| professor | Concept explanation, mental models, adaptive teaching | `professor` |
+| latex-engineer | LaTeX templates, figures, TikZ, bibliographies | `latex-engineer` |
 
 ### Skills
 
