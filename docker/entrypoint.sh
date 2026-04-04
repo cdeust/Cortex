@@ -18,7 +18,7 @@ if [[ ! -f "$PGDATA/PG_VERSION" ]]; then
     log "Initializing PostgreSQL data directory..."
     chown postgres:postgres "$PGDATA"
     su postgres -c "/usr/lib/postgresql/17/bin/initdb -D $PGDATA"
-    echo "host all all 0.0.0.0/0 trust" >> "$PGDATA/pg_hba.conf"
+    echo "host all all 127.0.0.1/32 scram-sha-256" >> "$PGDATA/pg_hba.conf"
     echo "listen_addresses = 'localhost'" >> "$PGDATA/postgresql.conf"
 fi
 

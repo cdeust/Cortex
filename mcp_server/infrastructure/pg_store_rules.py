@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import psycopg
+from psycopg import sql
 
 
 class PgRuleMixin:
@@ -59,16 +60,18 @@ class PgRuleMixin:
             "priority",
             "is_active",
         }
-        sets = []
+        set_clauses: list[sql.Composable] = []
         vals: list[Any] = []
         for k, v in updates.items():
             if k in allowed:
-                sets.append(f"{k} = %s")
+                set_clauses.append(sql.SQL("{} = %s").format(sql.Identifier(k)))
                 vals.append(v)
-        if sets:
+        if set_clauses:
             vals.append(rule_id)
             self._conn.execute(
-                f"UPDATE memory_rules SET {', '.join(sets)} WHERE id = %s",
+                sql.SQL("UPDATE memory_rules SET {} WHERE id = %s").format(
+                    sql.SQL(", ").join(set_clauses)
+                ),
                 tuple(vals),
             )
             self._conn.commit()
