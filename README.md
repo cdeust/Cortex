@@ -40,6 +40,13 @@ Restart your Claude Code session, then run:
 
 This handles everything: PostgreSQL + pgvector installation, database creation, embedding model download, cognitive profile building from session history, codebase seeding, conversation import, and hook registration. Zero manual steps.
 
+> **Using Claude Cowork?** Install [Cortex-cowork](https://github.com/cdeust/Cortex-cowork) instead — uses SQLite, no PostgreSQL required.
+>
+> ```bash
+> claude plugin marketplace add cdeust/Cortex-cowork
+> claude plugin install cortex
+> ```
+
 ### Option B — Standalone Clone
 
 ```bash
@@ -50,7 +57,7 @@ bash scripts/setup.sh
 
 Same setup from a local clone. Installs PostgreSQL + pgvector (via Homebrew on macOS, apt/dnf on Linux), creates the database, downloads the embedding model (~100 MB), and registers hooks in `~/.claude/settings.json`. Restart Claude Code after setup.
 
-### Option B — Docker
+### Option C — Docker
 
 ```bash
 git clone https://github.com/cdeust/Cortex.git
