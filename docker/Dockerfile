@@ -111,6 +111,7 @@ WORKDIR /workspace
 
 ENV DATABASE_URL=postgresql://cortex:cortex@localhost:5432/cortex
 ENV CORTEX_MEMORY_STORE_BACKEND=postgresql
+ENV CORTEX_RUNTIME=cli
 ENV PYTHONPATH=/opt/cortex
 
 ENTRYPOINT ["/entrypoint.sh"]
