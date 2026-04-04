@@ -417,7 +417,7 @@ class TestHandlerBehavior:
 
         handler.send_response.assert_called_with(204)
         header_calls = [c[0] for c in handler.send_header.call_args_list]
-        assert ("Access-Control-Allow-Origin", "*") in header_calls
+        assert ("Access-Control-Allow-Origin", "http://127.0.0.1") in header_calls
         assert ("Access-Control-Allow-Methods", "GET, OPTIONS") in header_calls
 
     def test_log_message_suppressed(self):

@@ -91,7 +91,7 @@ def _build_handler_class(server_state: dict) -> type:
     class Handler(BaseHTTPRequestHandler):
         def do_OPTIONS(self):
             self.send_response(204)
-            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
             self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             self.end_headers()
 
