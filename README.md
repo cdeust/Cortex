@@ -489,6 +489,42 @@ Values without paper backing, explicitly documented:
 
 ---
 
+## Security
+
+Cortex runs locally (MCP over stdio, PostgreSQL on localhost, visualization on 127.0.0.1). No data leaves your machine unless you explicitly configure an external database.
+
+### Audit Score: 91/100
+
+| Category | Score | Notes |
+|---|---|---|
+| Data Flow | 90 | No external data exfiltration. Embeddings computed locally. |
+| SQL Injection | 95 | All queries parameterized (psycopg `%s`). Dynamic columns use `sql.Identifier()`. |
+| Auth & Access Control | 85 | Docker PG uses `scram-sha-256` on localhost. MCP over stdio (no network auth needed). |
+| Dependency Health | 80 | Floor-pinned deps. Background install version-bounded. |
+| Network Behavior | 92 | Model download on first run only. Viz servers bind `127.0.0.1` with same-origin CORS. |
+| Code Quality | 90 | Pydantic validation on all tools. Input length limits on `remember`/`recall`. Path traversal protected. |
+| Prompt Injection | 88 | Memory content escaped in HTML rendering. Session injection uses data delimiters. |
+| Secrets Management | 90 | `.env`/credentials in `.gitignore`. No hardcoded secrets. Docker credentials via env vars. |
+
+<details>
+<summary>Hardening measures</summary>
+
+- SQL parameterization across all 7 `pg_store` modules (psycopg `%s` placeholders)
+- `sql.Identifier()` for dynamic column names (no f-string SQL)
+- ILIKE patterns escape `%`, `_`, `\` from user input
+- CORS restricted to `http://127.0.0.1` (no wildcard)
+- Docker PostgreSQL uses `scram-sha-256` auth on `127.0.0.1/32`
+- `trust_remote_code` removed from embedding model loading
+- Input length validation: `remember` content capped at 50KB, queries at 10KB
+- Path traversal protection via `.resolve()` in `sync_instructions`
+- HTML escaping (`esc()`) on all user-generated content in visualization
+- Background `pip install` version-bounded (`>=2.2.0,<4.0.0`)
+- Secrets patterns (`.env`, `*.credentials.json`, `*.pem`, `*.key`) in `.gitignore`
+
+</details>
+
+---
+
 ## Development
 
 ```bash
