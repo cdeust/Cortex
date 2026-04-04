@@ -25,7 +25,22 @@ Memory that learns, consolidates, forgets intelligently, and surfaces the right 
 - **PostgreSQL 15+** with [pgvector](https://github.com/pgvector/pgvector) and pg_trgm extensions
 - **Claude Code** CLI or desktop app
 
-### Option A — Automatic Setup (recommended)
+### Option A — Claude Code Marketplace (recommended)
+
+```bash
+claude plugin marketplace add cdeust/Cortex
+claude plugin install cortex
+```
+
+Restart your Claude Code session, then run:
+
+```
+/cortex-setup-project
+```
+
+This handles everything: PostgreSQL + pgvector installation, database creation, embedding model download, cognitive profile building from session history, codebase seeding, conversation import, and hook registration. Zero manual steps.
+
+### Option B — Standalone Clone
 
 ```bash
 git clone https://github.com/cdeust/Cortex.git
@@ -33,7 +48,7 @@ cd Cortex
 bash scripts/setup.sh
 ```
 
-This installs PostgreSQL + pgvector (via Homebrew on macOS, apt/dnf on Linux), creates the database, downloads the embedding model (~100 MB), and registers hooks in `~/.claude/settings.json`. Restart Claude Code after setup.
+Same setup from a local clone. Installs PostgreSQL + pgvector (via Homebrew on macOS, apt/dnf on Linux), creates the database, downloads the embedding model (~100 MB), and registers hooks in `~/.claude/settings.json`. Restart Claude Code after setup.
 
 ### Option B — Docker
 
