@@ -170,10 +170,9 @@ def _fetch_memories(store: MemoryStore, directory: str, min_heat: float) -> list
 
 def _find_claude_md(directory: str) -> Path:
     """Find CLAUDE.md in directory or one level up."""
-    resolved = Path(directory).resolve()
-    claude_md = resolved / "CLAUDE.md"
+    claude_md = Path(directory) / "CLAUDE.md"
     if not claude_md.exists():
-        parent = resolved.parent / "CLAUDE.md"
+        parent = Path(directory).parent / "CLAUDE.md"
         if parent.exists():
             return parent
     return claude_md

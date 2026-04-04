@@ -91,7 +91,7 @@ RUN mkdir -p /run/postgresql /var/log/postgresql \
 USER postgres
 RUN rm -rf /var/lib/postgresql/17/data \
     && /usr/lib/postgresql/17/bin/initdb -D /var/lib/postgresql/17/data \
-    && echo "host all all 127.0.0.1/32 scram-sha-256" >> /var/lib/postgresql/17/data/pg_hba.conf \
+    && echo "host all all 0.0.0.0/0 trust" >> /var/lib/postgresql/17/data/pg_hba.conf \
     && echo "listen_addresses = 'localhost'" >> /var/lib/postgresql/17/data/postgresql.conf
 USER root
 
