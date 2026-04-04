@@ -51,12 +51,21 @@ def launch_server(server_type: str) -> str:
     # Find the standalone module
     standalone = Path(__file__).parent / "http_standalone.py"
 
-    # Build env — inherit everything, ensure PYTHONPATH includes our package
+    # Build env — inherit everything, ensure PYTHONPATH includes our package + deps
     env = {**os.environ}
     pkg_root = str(Path(__file__).parent.parent.parent)
+    paths = [pkg_root]
+    # Include plugin deps directory if running inside Claude Code plugin
+    plugin_data = env.get("CLAUDE_PLUGIN_DATA", "")
+    if plugin_data:
+        deps = os.path.join(plugin_data, "deps")
+        if os.path.isdir(deps):
+            paths.append(deps)
     existing_pp = env.get("PYTHONPATH", "")
-    if pkg_root not in existing_pp:
-        env["PYTHONPATH"] = f"{pkg_root}:{existing_pp}" if existing_pp else pkg_root
+    for p in existing_pp.split(":"):
+        if p and p not in paths:
+            paths.append(p)
+    env["PYTHONPATH"] = ":".join(paths)
 
     # Spawn detached process
     proc = subprocess.Popen(
