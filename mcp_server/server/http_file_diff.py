@@ -61,7 +61,7 @@ def _json_response(handler, data: dict, code: int = 200) -> None:
     body = json.dumps(data, default=str).encode()
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
     handler.send_header("Cache-Control", "no-cache")
     handler.end_headers()
     handler.wfile.write(body)
