@@ -11,9 +11,132 @@
 
 Memory that learns, consolidates, forgets intelligently, and surfaces the right context at the right time. Works standalone or with a team of specialized agents.
 
-[How It Works](#how-it-works) | [Neural Graph](#neural-graph) | [Agent Integration](#agent-integration) | [Benchmarks](#benchmarks) | [Scientific Foundation](#scientific-foundation)
+[Getting Started](#getting-started) | [How It Works](#how-it-works) | [Neural Graph](#neural-graph) | [Agent Integration](#agent-integration) | [Benchmarks](#benchmarks) | [Scientific Foundation](#scientific-foundation)
 
 </div>
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **Python 3.10+**
+- **PostgreSQL 15+** with [pgvector](https://github.com/pgvector/pgvector) and pg_trgm extensions
+- **Claude Code** CLI or desktop app
+
+### Option A — Automatic Setup (recommended)
+
+```bash
+git clone https://github.com/cdeust/Cortex.git
+cd Cortex
+bash scripts/setup.sh
+```
+
+This installs PostgreSQL + pgvector (via Homebrew on macOS, apt/dnf on Linux), creates the database, downloads the embedding model (~100 MB), and registers hooks in `~/.claude/settings.json`. Restart Claude Code after setup.
+
+### Option B — Docker
+
+```bash
+git clone https://github.com/cdeust/Cortex.git
+cd Cortex
+
+docker build -t cortex-runtime -f docker/Dockerfile .
+docker run -it \
+  -v $(pwd):/workspace \
+  -v cortex-pgdata:/var/lib/postgresql/17/data \
+  -v ~/.claude:/home/cortex/.claude-host:ro \
+  -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
+  cortex-runtime
+```
+
+The container includes PostgreSQL 17, pgvector, the embedding model, and Claude Code. Data persists via the `cortex-pgdata` volume.
+
+### Option C — Manual Setup
+
+<details>
+<summary>Step-by-step instructions</summary>
+
+**1. Install PostgreSQL + pgvector**
+
+```bash
+# macOS
+brew install postgresql@17 pgvector
+brew services start postgresql@17
+
+# Ubuntu/Debian
+sudo apt-get install postgresql postgresql-server-dev-all
+sudo apt-get install postgresql-17-pgvector
+sudo systemctl start postgresql
+```
+
+**2. Create the database**
+
+```bash
+createdb cortex
+psql cortex -c "CREATE EXTENSION IF NOT EXISTS vector;"
+psql cortex -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+```
+
+**3. Install Python dependencies**
+
+```bash
+pip install -e ".[postgresql]"
+pip install sentence-transformers flashrank
+```
+
+**4. Initialize schema**
+
+```bash
+export DATABASE_URL=postgresql://localhost:5432/cortex
+python3 -c "
+from mcp_server.infrastructure.pg_schema import get_all_ddl
+from mcp_server.infrastructure.pg_store import PgStore
+import asyncio
+asyncio.run(PgStore(database_url='$DATABASE_URL').initialize())
+"
+```
+
+**5. Pre-cache the embedding model**
+
+```bash
+python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+```
+
+**6. Install hooks**
+
+```bash
+python3 scripts/install_hooks.py --plugin-root $(pwd)
+```
+
+Restart Claude Code to activate.
+
+</details>
+
+### Verify Installation
+
+After setup, open Claude Code in any project. The SessionStart hook should inject context automatically. You can also test manually:
+
+```bash
+python3 -m mcp_server  # Should start on stdio without errors
+```
+
+### Configuration
+
+Cortex reads `DATABASE_URL` from the environment (default: `postgresql://localhost:5432/cortex`). All tunable parameters use the `CORTEX_MEMORY_` prefix:
+
+| Variable | Default | What It Controls |
+|---|---|---|
+| `DATABASE_URL` | `postgresql://localhost:5432/cortex` | PostgreSQL connection string |
+| `CORTEX_RUNTIME` | auto-detected | `cli` (strict) or `cowork` (SQLite fallback) |
+| `CORTEX_MEMORY_DECAY_FACTOR` | 0.95 | Per-session heat decay rate |
+| `CORTEX_MEMORY_HOT_THRESHOLD` | 0.7 | Heat level considered "hot" |
+| `CORTEX_MEMORY_WRRF_VECTOR_WEIGHT` | 1.0 | Vector similarity weight in fusion |
+| `CORTEX_MEMORY_WRRF_FTS_WEIGHT` | 0.5 | Full-text search weight in fusion |
+| `CORTEX_MEMORY_WRRF_HEAT_WEIGHT` | 0.3 | Thermodynamic heat weight in fusion |
+| `CORTEX_MEMORY_DEFAULT_RECALL_LIMIT` | 10 | Max memories returned per query |
+
+See `mcp_server/infrastructure/memory_config.py` for the full list (~40 parameters).
 
 ---
 
