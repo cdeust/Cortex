@@ -1,11 +1,9 @@
 {
   "mcpServers": {
     "cortex": {
-      "command": "python3",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py", "mcp_server"],
-      "cwd": "${CLAUDE_PLUGIN_ROOT}",
+      "command": "uvx",
+      "args": ["--from", "neuro-cortex-memory[postgresql]", "neuro-cortex-memory"],
       "env": {
-        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps",
         "DATABASE_URL": "postgresql://localhost:5432/cortex"
       }
     }
