@@ -43,7 +43,9 @@ def _remove_cortex_hooks(hooks: dict) -> tuple[dict, int]:
             if e.get("matcher") == _MARKER:
                 removed += 1
                 continue
-            if any("mcp_server.hooks" in h.get("command", "") for h in e.get("hooks", [])):
+            if any(
+                "mcp_server.hooks" in h.get("command", "") for h in e.get("hooks", [])
+            ):
                 removed += 1
                 continue
             kept.append(e)
@@ -59,7 +61,14 @@ def main() -> None:
     if "--check" in sys.argv:
         _, count = _remove_cortex_hooks(existing_hooks)
         if count > 0:
-            print(json.dumps({"legacy_hooks_found": count, "action": "run without --check to clean up"}))
+            print(
+                json.dumps(
+                    {
+                        "legacy_hooks_found": count,
+                        "action": "run without --check to clean up",
+                    }
+                )
+            )
         else:
             print(json.dumps({"legacy_hooks_found": 0, "status": "clean"}))
         return
@@ -72,11 +81,15 @@ def main() -> None:
 
     settings["hooks"] = cleaned
     _save_settings(settings)
-    print(json.dumps({
-        "status": "migrated",
-        "removed": removed,
-        "message": "Hooks now managed by .claude-plugin/plugin.json"
-    }))
+    print(
+        json.dumps(
+            {
+                "status": "migrated",
+                "removed": removed,
+                "message": "Hooks now managed by .claude-plugin/plugin.json",
+            }
+        )
+    )
 
 
 if __name__ == "__main__":
