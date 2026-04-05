@@ -5,6 +5,7 @@
   var visible = false;
   var currentData = null;
   var selectedId = null;
+  var _emitting = false;
 
   var STAGES = ['labile', 'early_ltp', 'late_ltp', 'consolidated', 'reconsolidating'];
   var STAGE_COLORS = JUG.CONSOLIDATION_COLORS;
@@ -30,10 +31,13 @@
     JUG.on('state:emotionFilter', rebuildIfVisible);
     JUG.on('state:stageFilter', rebuildIfVisible);
     JUG.on('graph:selectNode', function(node) {
-      if (visible && node && node.type === 'memory') highlightMemory(node.id);
+      if (_emitting || !visible || !node || node.type !== 'memory') return;
+      if (selectedId === node.id) return;
+      highlightMemory(node.id);
     });
     JUG.on('graph:deselectNode', function() {
-      if (visible) clearHighlight();
+      if (_emitting || !visible) return;
+      clearHighlight();
     });
   }
 
@@ -42,6 +46,8 @@
     container.style.display = 'flex';
     visible = true;
     if (JUG.state.lastData) { currentData = JUG.state.lastData; rebuild(); }
+    // Restore selection from graph view
+    if (JUG.state.selectedId) highlightMemory(JUG.state.selectedId);
   }
   function hide() {
     visible = false;
@@ -219,6 +225,7 @@
     card.addEventListener('mouseleave', function() { JUG._tooltip.hide(); });
     card.addEventListener('click', function(e) {
       e.stopPropagation();
+      _emitting = true;
       if (selectedId === mem.id) {
         clearHighlight();
         JUG.emit('graph:deselectNode');
@@ -226,6 +233,7 @@
         highlightMemory(mem.id);
         JUG.emit('graph:selectNode', mem);
       }
+      _emitting = false;
     });
 
     return card;
