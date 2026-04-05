@@ -13,7 +13,7 @@ class PgRelationshipMixin:
     _conn: psycopg.Connection
 
     def insert_relationship(self, data: dict[str, Any]) -> int:
-        row = self._conn.execute(
+        row = self._execute(
             "INSERT INTO relationships "
             "(source_entity_id, target_entity_id, relationship_type, weight, "
             "is_causal, confidence, created_at, last_reinforced) "
@@ -32,14 +32,14 @@ class PgRelationshipMixin:
         return row["id"]
 
     def count_relationships(self) -> int:
-        row = self._conn.execute("SELECT COUNT(*) AS c FROM relationships").fetchone()
+        row = self._execute("SELECT COUNT(*) AS c FROM relationships").fetchone()
         return row["c"] if row else 0
 
     def get_relationships_for_entity(
         self, entity_id: int, direction: str = "both", limit: int = 50
     ) -> list[dict[str, Any]]:
         if direction == "outgoing":
-            rows = self._conn.execute(
+            rows = self._execute(
                 "SELECT r.*, e.name AS target_name, e.type AS target_type "
                 "FROM relationships r "
                 "JOIN entities e ON e.id = r.target_entity_id "
@@ -48,7 +48,7 @@ class PgRelationshipMixin:
                 (entity_id, limit),
             ).fetchall()
         elif direction == "incoming":
-            rows = self._conn.execute(
+            rows = self._execute(
                 "SELECT r.*, e.name AS source_name, e.type AS source_type "
                 "FROM relationships r "
                 "JOIN entities e ON e.id = r.source_entity_id "
@@ -57,7 +57,7 @@ class PgRelationshipMixin:
                 (entity_id, limit),
             ).fetchall()
         else:
-            rows = self._conn.execute(
+            rows = self._execute(
                 "SELECT r.* FROM relationships r "
                 "WHERE r.source_entity_id = %s OR r.target_entity_id = %s "
                 "ORDER BY r.weight DESC LIMIT %s",
@@ -66,7 +66,7 @@ class PgRelationshipMixin:
         return [dict(r) for r in rows]
 
     def get_all_relationships(self) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT id, source_entity_id, target_entity_id, "
             "relationship_type, weight, is_causal, confidence "
             "FROM relationships"
@@ -74,7 +74,7 @@ class PgRelationshipMixin:
         return [dict(r) for r in rows]
 
     def get_relationship_counts(self) -> dict[int, int]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT entity_id, COUNT(*) AS cnt FROM ("
             "  SELECT source_entity_id AS entity_id FROM relationships "
             "  UNION ALL "
@@ -84,7 +84,7 @@ class PgRelationshipMixin:
         return {row["entity_id"]: row["cnt"] for row in rows}
 
     def get_entity_relationship_pairs(self) -> set[tuple[str, str]]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT e1.name AS source_name, e2.name AS target_name "
             "FROM relationships r "
             "JOIN entities e1 ON r.source_entity_id = e1.id "
@@ -105,11 +105,11 @@ class PgRelationshipMixin:
         If not, resolve entity IDs and create new relationship.
         """
         # Resolve entity IDs
-        src = self._conn.execute(
+        src = self._execute(
             "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1",
             (source_name,),
         ).fetchone()
-        tgt = self._conn.execute(
+        tgt = self._execute(
             "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1",
             (target_name,),
         ).fetchone()
@@ -117,7 +117,7 @@ class PgRelationshipMixin:
             return
         sid, tid = src["id"], tgt["id"]
         # Try to reinforce existing relationship
-        updated = self._conn.execute(
+        updated = self._execute(
             "UPDATE relationships SET "
             "weight = LEAST(2.0, weight + %s), "
             "facilitation = LEAST(1.0, facilitation + 0.05), "
@@ -128,7 +128,7 @@ class PgRelationshipMixin:
         ).rowcount
         if not updated:
             # Also check reverse direction
-            updated = self._conn.execute(
+            updated = self._execute(
                 "UPDATE relationships SET "
                 "weight = LEAST(2.0, weight + %s), "
                 "facilitation = LEAST(1.0, facilitation + 0.05), "
@@ -139,7 +139,7 @@ class PgRelationshipMixin:
             ).rowcount
         if not updated:
             # Create new relationship
-            self._conn.execute(
+            self._execute(
                 "INSERT INTO relationships "
                 "(source_entity_id, target_entity_id, relationship_type, weight) "
                 "VALUES (%s, %s, %s, %s)",

@@ -20,7 +20,7 @@ class PgAuxiliaryMixin:
     # ── Prospective Memory ────────────────────────────────────────────
 
     def insert_prospective_memory(self, data: dict[str, Any]) -> int:
-        row = self._conn.execute(
+        row = self._execute(
             "INSERT INTO prospective_memories "
             "(content, trigger_condition, trigger_type, "
             "target_directory, is_active, triggered_count) "
@@ -38,13 +38,13 @@ class PgAuxiliaryMixin:
         return row["id"]
 
     def get_active_prospective_memories(self) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM prospective_memories WHERE is_active"
         ).fetchall()
         return [dict(r) for r in rows]
 
     def trigger_prospective_memory(self, pm_id: int) -> None:
-        self._conn.execute(
+        self._execute(
             "UPDATE prospective_memories SET triggered_at = NOW(), "
             "triggered_count = triggered_count + 1 WHERE id = %s",
             (pm_id,),
@@ -52,7 +52,7 @@ class PgAuxiliaryMixin:
         self._conn.commit()
 
     def deactivate_prospective_memory(self, pm_id: int) -> None:
-        self._conn.execute(
+        self._execute(
             "UPDATE prospective_memories SET is_active = FALSE WHERE id = %s",
             (pm_id,),
         )
@@ -61,8 +61,8 @@ class PgAuxiliaryMixin:
     # ── Checkpoint ────────────────────────────────────────────────────
 
     def insert_checkpoint(self, data: dict[str, Any]) -> int:
-        self._conn.execute("UPDATE checkpoints SET is_active = FALSE")
-        row = self._conn.execute(
+        self._execute("UPDATE checkpoints SET is_active = FALSE")
+        row = self._execute(
             "INSERT INTO checkpoints "
             "(session_id, directory_context, current_task, "
             "files_being_edited, key_decisions, open_questions, "
@@ -86,18 +86,18 @@ class PgAuxiliaryMixin:
         return row["id"]
 
     def get_active_checkpoint(self) -> dict[str, Any] | None:
-        row = self._conn.execute(
+        row = self._execute(
             "SELECT * FROM checkpoints WHERE is_active ORDER BY created_at DESC LIMIT 1"
         ).fetchone()
         return self._normalize_memory_row(row) if row else None
 
     def get_current_epoch(self) -> int:
-        row = self._conn.execute("SELECT MAX(epoch) AS e FROM checkpoints").fetchone()
+        row = self._execute("SELECT MAX(epoch) AS e FROM checkpoints").fetchone()
         return (row["e"] or 0) if row else 0
 
     def increment_epoch(self) -> int:
         new_epoch = self.get_current_epoch() + 1
-        self._conn.execute(
+        self._execute(
             "INSERT INTO checkpoints "
             "(session_id, directory_context, current_task, "
             "files_being_edited, key_decisions, open_questions, "
@@ -115,7 +115,7 @@ class PgAuxiliaryMixin:
         from mcp_server.infrastructure.pg_store import PgMemoryStore
 
         emb = PgMemoryStore._bytes_to_vector(data.get("embedding"))
-        row = self._conn.execute(
+        row = self._execute(
             "INSERT INTO memory_archives "
             "(original_memory_id, content, embedding, "
             "mismatch_score, archive_reason) "
@@ -132,7 +132,7 @@ class PgAuxiliaryMixin:
         return row["id"]
 
     def get_archives_for_memory(self, memory_id: int) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM memory_archives "
             "WHERE original_memory_id = %s ORDER BY archived_at DESC",
             (memory_id,),
@@ -142,12 +142,12 @@ class PgAuxiliaryMixin:
     # ── Engram Slots ──────────────────────────────────────────────────
 
     def init_engram_slots(self, num_slots: int) -> None:
-        row = self._conn.execute("SELECT COUNT(*) AS c FROM engram_slots").fetchone()
+        row = self._execute("SELECT COUNT(*) AS c FROM engram_slots").fetchone()
         existing = row["c"] if row else 0
         if existing >= num_slots:
             return
         for i in range(existing, num_slots):
-            self._conn.execute(
+            self._execute(
                 "INSERT INTO engram_slots (slot_index, excitability) "
                 "VALUES (%s, 0.5) ON CONFLICT DO NOTHING",
                 (i,),
@@ -155,13 +155,13 @@ class PgAuxiliaryMixin:
         self._conn.commit()
 
     def get_all_engram_slots(self) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM engram_slots ORDER BY slot_index"
         ).fetchall()
         return [dict(r) for r in rows]
 
     def get_engram_slot(self, slot_index: int) -> dict[str, Any] | None:
-        row = self._conn.execute(
+        row = self._execute(
             "SELECT * FROM engram_slots WHERE slot_index = %s",
             (slot_index,),
         ).fetchone()
@@ -170,7 +170,7 @@ class PgAuxiliaryMixin:
     def update_engram_slot(
         self, slot_index: int, excitability: float, last_activated: str
     ) -> None:
-        self._conn.execute(
+        self._execute(
             "UPDATE engram_slots SET excitability = %s, "
             "last_activated = %s WHERE slot_index = %s",
             (excitability, last_activated, slot_index),
@@ -178,21 +178,21 @@ class PgAuxiliaryMixin:
         self._conn.commit()
 
     def assign_memory_slot(self, memory_id: int, slot_index: int) -> None:
-        self._conn.execute(
+        self._execute(
             "UPDATE memories SET slot_index = %s WHERE id = %s",
             (slot_index, memory_id),
         )
         self._conn.commit()
 
     def get_memories_in_slot(self, slot_index: int) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM memories WHERE slot_index = %s",
             (slot_index,),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_slot_occupancy(self) -> dict[int, int]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT slot_index, COUNT(*) AS c FROM memories "
             "WHERE slot_index IS NOT NULL GROUP BY slot_index"
         ).fetchall()
@@ -202,7 +202,7 @@ class PgAuxiliaryMixin:
 
     def insert_schema(self, data: dict[str, Any]) -> int:
         try:
-            row = self._conn.execute(
+            row = self._execute(
                 """INSERT INTO schemas (
                     schema_id, domain, label, entity_signature,
                     relationship_types, tag_signature,
@@ -230,7 +230,7 @@ class PgAuxiliaryMixin:
             return self._update_existing_schema(data)
 
     def _update_existing_schema(self, data: dict[str, Any]) -> int:
-        self._conn.execute(
+        self._execute(
             """UPDATE schemas SET
                 domain = %s, label = %s, entity_signature = %s::jsonb,
                 relationship_types = %s::jsonb, tag_signature = %s::jsonb,
@@ -252,31 +252,31 @@ class PgAuxiliaryMixin:
             ),
         )
         self._conn.commit()
-        row = self._conn.execute(
+        row = self._execute(
             "SELECT id FROM schemas WHERE schema_id = %s",
             (data["schema_id"],),
         ).fetchone()
         return row["id"] if row else 0
 
     def get_schemas_for_domain(self, domain: str) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM schemas WHERE domain = %s ORDER BY formation_count DESC",
             (domain,),
         ).fetchall()
         return [dict(r) for r in rows]
 
     def get_all_schemas(self) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM schemas ORDER BY formation_count DESC"
         ).fetchall()
         return [dict(r) for r in rows]
 
     def count_schemas(self) -> int:
-        row = self._conn.execute("SELECT COUNT(*) AS c FROM schemas").fetchone()
+        row = self._execute("SELECT COUNT(*) AS c FROM schemas").fetchone()
         return row["c"] if row else 0
 
     def delete_schema(self, schema_id: str) -> bool:
-        cur = self._conn.execute(
+        cur = self._execute(
             "DELETE FROM schemas WHERE schema_id = %s", (schema_id,)
         )
         self._conn.commit()

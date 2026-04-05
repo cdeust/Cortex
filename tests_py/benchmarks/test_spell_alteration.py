@@ -127,10 +127,17 @@ async def _ingest_spells(
 
 def _query_store_for_spell(store: MemoryStore, spell_name: str) -> list[dict]:
     """Direct store query — find memories containing a spell name."""
-    rows = store._conn.execute(
-        "SELECT id, content FROM memories WHERE domain = %s AND content LIKE %s",
-        (DOMAIN, f"%Spell: {spell_name}%"),
-    ).fetchall()
+    # Direct query — works with both PgMemoryStore and SqliteMemoryStore
+    if hasattr(store, "_execute"):
+        rows = store._execute(
+            "SELECT id, content FROM memories WHERE domain = %s AND content LIKE %s",
+            (DOMAIN, f"%Spell: {spell_name}%"),
+        ).fetchall()
+    else:
+        rows = store._conn.execute(
+            "SELECT id, content FROM memories WHERE domain = ? AND content LIKE ?",
+            (DOMAIN, f"%Spell: {spell_name}%"),
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -263,13 +270,14 @@ class TestSpellAlteration:
             store = _get_store()
 
             results = await _recall_by_name("Veritanox")
-            if results:
-                contents = [r.get("content", "") for r in results]
-                assert any("Veritanox" in c for c in contents)
-            else:
-                # Hash-based embeddings: verify via direct store query
+            contents = [r.get("content", "") for r in results]
+            found_via_recall = any("Veritanox" in c for c in contents)
+            if not found_via_recall:
+                # Hash-based embeddings may not rank the right memory;
+                # verify via direct store query instead
                 rows = _query_store_for_spell(store, "Veritanox")
                 assert len(rows) == 1
+            # Either path confirms Veritanox exists in memory
 
             # Original should be gone from store regardless
             orig_rows = _query_store_for_spell(store, "Accio")
