@@ -194,7 +194,7 @@
 }
 
 /* ═══════════════════════════════════
-   CSS CONNECTION LINES (pure HTML divs)
+   CANVAS CONNECTION LINES
    ═══════════════════════════════════ */
 .hf-lines {
   flex: 0.5;
@@ -202,22 +202,11 @@
   position: relative;
   overflow: hidden;
 }
-.hf-line {
+.hf-canvas {
   position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
   pointer-events: none;
-  border-color: inherit;
-}
-.hf-line-pass {
-  opacity: 0.3;
-}
-.hf-line-fail {
-  opacity: 0.05;
-}
-.hf-line-hl {
-  opacity: 1 !important;
-  border-width: 2px !important;
-  z-index: 10;
-  filter: drop-shadow(0 0 3px currentColor);
 }
 
 /* ═══════════════════════════════════
