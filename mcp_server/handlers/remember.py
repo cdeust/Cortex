@@ -106,7 +106,9 @@ def _enrich_mod_with_gate(mod: dict, gate: dict) -> None:
     )
 
 
-def _parse_args(args: dict[str, Any]) -> tuple[str, list, str, str, bool, str, bool, str | None]:
+def _parse_args(
+    args: dict[str, Any],
+) -> tuple[str, list, str, str, bool, str, bool, str | None]:
     """Extract and default handler arguments."""
     return (
         args["content"],
@@ -125,7 +127,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if not args or not args.get("content"):
         return {"stored": False, "reason": "no_content"}
 
-    content, tags, directory, source, force, agent_topic, is_global, created_at = _parse_args(args)
+    content, tags, directory, source, force, agent_topic, is_global, created_at = (
+        _parse_args(args)
+    )
     store, emb_engine = _get_store(), _get_embeddings()
     domain = _resolve_domain(directory, args.get("domain", ""))
     embedding = emb_engine.encode(content)
