@@ -167,7 +167,7 @@ def send_json_response(
     body = json.dumps(data, default=str).encode()
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
+    handler.send_header("Access-Control-Allow-Origin", "*")
     handler.send_header("Cache-Control", "no-cache")
     handler.end_headers()
     handler.wfile.write(body)
@@ -177,6 +177,7 @@ def send_error_response(handler: BaseHTTPRequestHandler, error: Exception) -> No
     """Send a 500 JSON error response."""
     handler.send_response(500)
     handler.send_header("Content-Type", "application/json")
+    handler.send_header("Access-Control-Allow-Origin", "*")
     handler.end_headers()
     handler.wfile.write(json.dumps({"error": str(error)}).encode())
 
@@ -220,6 +221,6 @@ def serve_static_file(
 def send_cors_options(handler: BaseHTTPRequestHandler) -> None:
     """Send a 204 CORS preflight response."""
     handler.send_response(204)
-    handler.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
+    handler.send_header("Access-Control-Allow-Origin", "*")
     handler.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
     handler.end_headers()
