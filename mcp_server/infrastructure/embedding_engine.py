@@ -212,7 +212,9 @@ class EmbeddingEngine:
         # Character trigram hashing
         for i in range(len(text_lower) - 2):
             trigram = text_lower[i : i + 3]
-            h = int(hashlib.sha256(trigram.encode()).hexdigest(), 16)  # non-security: deterministic bucketing
+            h = int(
+                hashlib.sha256(trigram.encode()).hexdigest(), 16
+            )  # non-security: deterministic bucketing
             idx = h % self._dim
             vec[idx] += 1.0
 
@@ -220,7 +222,9 @@ class EmbeddingEngine:
         words = text_lower.split()
         for word in words:
             if len(word) > 2:
-                h = int(hashlib.sha256(word.encode()).hexdigest(), 16)  # non-security: deterministic bucketing
+                h = int(
+                    hashlib.sha256(word.encode()).hexdigest(), 16
+                )  # non-security: deterministic bucketing
                 idx = h % self._dim
                 vec[idx] += 2.0  # Words weighted more than trigrams
 

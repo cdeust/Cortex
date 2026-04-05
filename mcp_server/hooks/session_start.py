@@ -397,13 +397,17 @@ def _build_cold_start_message(setup_result: dict | None) -> str:
         _log(f"Empty DB with {session_files} session files — auto-backfilling...")
         imported = _auto_backfill()
         if imported > 0:
-            lines.append(f"Cortex auto-imported **{imported} memories** from your conversation history.\n")
+            lines.append(
+                f"Cortex auto-imported **{imported} memories** from your conversation history.\n"
+            )
             lines.append(
                 "Memories will consolidate naturally as you use them "
                 "(recall = replay = consolidation)."
             )
         else:
-            lines.append("Cortex is set up and ready. Auto-import found no memorable items.\n")
+            lines.append(
+                "Cortex is set up and ready. Auto-import found no memorable items.\n"
+            )
             lines.append(
                 "Start working normally — Cortex will automatically remember "
                 "important decisions, fixes, and patterns as you go."

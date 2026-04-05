@@ -104,10 +104,7 @@ def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
 
     # 5. Direct read for untracked files — validate path stays within repo
     full_path = (git_root / filepath).resolve()
-    if (
-        full_path.is_file()
-        and str(full_path).startswith(str(git_root.resolve()))
-    ):
+    if full_path.is_file() and str(full_path).startswith(str(git_root.resolve())):
         try:
             content = full_path.read_text(errors="replace")
             if content:
@@ -148,7 +145,11 @@ def _git_cmd(cmd: list[str], cwd: Path) -> str:
         if not cmd or cmd[0] != "git":
             return ""
         result = subprocess.run(  # noqa: S603
-            cmd, capture_output=True, text=True, cwd=str(cwd), timeout=10,
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=str(cwd),
+            timeout=10,
             shell=False,
         )
         return result.stdout.strip() if result.returncode == 0 else ""

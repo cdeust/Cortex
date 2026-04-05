@@ -153,7 +153,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     neighbors = _enrich_neighbors(navigation, store)
 
     # Track replay for start memory and traversed neighbors
-    for mem_id in [start_id] + [n.get("memory_id") for n in navigation if n.get("memory_id")]:
+    for mem_id in [start_id] + [
+        n.get("memory_id") for n in navigation if n.get("memory_id")
+    ]:
         try:
             store.update_memory_access(mem_id)
             store.increment_replay_count(mem_id)
