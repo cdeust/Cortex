@@ -43,7 +43,7 @@
   cursor: pointer;
 }
 #detail-panel.minimized .detail-peek-bar { display: flex; }
-#detail-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0.5; }
+/* Top accent line removed — was causing visual noise with centered panel */
 
 .detail-window-btns {
   position: absolute; top: 12px; right: 14px;

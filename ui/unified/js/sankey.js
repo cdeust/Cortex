@@ -1,6 +1,6 @@
 // Cortex Pipeline Tree — Horizontal flow, vertical columns per stage
-// Each pipeline stage is a column, memories flow left → right
-// SVG Bezier lines use full screen width for visibility
+// Each memory flows left → right through pipeline stages
+// Lines connect the SAME memory between adjacent columns
 (function() {
   var container = null;
   var visible = false;
@@ -63,47 +63,129 @@
       return;
     }
 
+    // Sort by domain then importance
     mems.sort(function(a, b) {
       if (a.domain !== b.domain) return (a.domain || '').localeCompare(b.domain || '');
       return (b.importance || 0) - (a.importance || 0);
     });
 
+    // Compute per-memory flags
     mems.forEach(function(m, i) {
       m._row = i;
       m._dc = dc(m.domain || 'unknown');
-      m._novelty = (m.surpriseScore || 0) > 0.05;
+      m._novelty = (m.surpriseScore || 0) > 0;
       m._emotional = m.emotion && m.emotion !== 'neutral';
       m._strongEnc = (m.encodingStrength || 0) > 0.5;
       m._active = (m.heat || 0) > 0.1;
       m._stage = m.consolidationStage || 'labile';
     });
 
+    // Count domains
+    var domainSet = {};
+    mems.forEach(function(m) { domainSet[m.domain || 'unknown'] = true; });
+    var domainCount = Object.keys(domainSet).length;
+
+    // Count per stage
+    var stageCounts = {};
+    mems.forEach(function(m) { stageCounts[m._stage] = (stageCounts[m._stage] || 0) + 1; });
+
+    // Pipeline stages
     var stages = [
-      { id: 'input', label: 'DOMAINS', sub: mems.length + ' mem' },
-      { id: 'gate', label: 'WRITE GATE', sub: 'Friston 2005', test: function(m) { return m._novelty; } },
-      { id: 'emotion', label: 'EMOTIONAL', sub: 'Wang & Bhatt 2024', test: function(m) { return m._emotional; } },
-      { id: 'encoding', label: 'ENCODING', sub: 'Hasselmo 2005', test: function(m) { return m._strongEnc; } },
-      { id: 'consol', label: 'CONSOLIDATION', sub: 'Kandel 2001', isConsol: true },
-      { id: 'retention', label: 'RETENTION', sub: 'heat > 0.1', test: function(m) { return m._active; } },
+      {
+        id: 'input', label: 'DOMAINS',
+        sub: domainCount + ' domains',
+        count: mems.length
+      },
+      {
+        id: 'gate', label: 'WRITE GATE',
+        sub: 'Predictive coding',
+        ref: 'Friston 2005',
+        test: function(m) { return m._novelty; }
+      },
+      {
+        id: 'emotion', label: 'EMOTIONAL TAG',
+        sub: 'Priority encoding',
+        ref: 'Wang & Bhatt 2024',
+        test: function(m) { return m._emotional; }
+      },
+      {
+        id: 'encoding', label: 'ENCODING',
+        sub: '\u03B8 phase gating',
+        ref: 'Hasselmo 2005',
+        test: function(m) { return m._strongEnc; }
+      },
+      {
+        id: 'consol', label: 'CONSOLIDATION',
+        sub: 'Stage cascade',
+        ref: 'Kandel 2001',
+        isConsol: true
+      },
+      {
+        id: 'retention', label: 'RETENTION',
+        sub: 'heat > 0.1',
+        test: function(m) { return m._active; }
+      },
     ];
 
     var flow = el('div', 'hf-flow');
-    var prevPositions = null;
 
     stages.forEach(function(stage, si) {
-      // SVG lines between columns
-      if (prevPositions && si > 0) {
-        flow.appendChild(buildLines(mems, prevPositions, stage));
+      // Placeholder for connection lines (filled after DOM render)
+      if (si > 0) {
+        var lineCol = el('div', 'hf-lines');
+        lineCol.dataset.stageIdx = si;
+        flow.appendChild(lineCol);
       }
 
       // Column
       var col = el('div', 'hf-col');
+
+      // Rich header
       var header = el('div', 'hf-col-header');
-      header.innerHTML =
-        '<div class="hf-col-title">' + stage.label + '</div>' +
-        '<div class="hf-col-sub">' + stage.sub + '</div>';
+      var titleEl = el('div', 'hf-col-title');
+      titleEl.textContent = stage.label;
+      header.appendChild(titleEl);
+
+      if (stage.ref) {
+        var refEl = el('div', 'hf-col-ref');
+        refEl.textContent = stage.ref;
+        header.appendChild(refEl);
+      }
+
+      var subEl = el('div', 'hf-col-sub');
+      subEl.textContent = stage.sub;
+      header.appendChild(subEl);
+
+      // Counts in header
+      if (stage.test) {
+        var passed = mems.filter(function(m) { return stage.test(m); });
+        var failed = mems.filter(function(m) { return !stage.test(m); });
+        var countsEl = el('div', 'hf-col-counts');
+        countsEl.innerHTML =
+          '<span class="hf-count-pass">' + passed.length + ' pass</span>' +
+          '<span class="hf-count-sep">/</span>' +
+          '<span class="hf-count-fail">' + failed.length + ' fail</span>';
+        header.appendChild(countsEl);
+      } else if (stage.count !== undefined) {
+        var countEl = el('div', 'hf-col-total');
+        countEl.textContent = stage.count;
+        header.appendChild(countEl);
+      } else if (stage.isConsol) {
+        var consolCounts = el('div', 'hf-col-consol-counts');
+        ['labile', 'early_ltp', 'late_ltp', 'consolidated', 'reconsolidating'].forEach(function(cs) {
+          var c = stageCounts[cs] || 0;
+          if (c === 0) return;
+          var span = el('span', 'hf-consol-count');
+          span.style.color = STAGE_COLORS[cs] || '#50C8E0';
+          span.textContent = (STAGE_LABELS[cs] || cs).charAt(0).toUpperCase() + ':' + c;
+          consolCounts.appendChild(span);
+        });
+        header.appendChild(consolCounts);
+      }
+
       col.appendChild(header);
 
+      // Blocks
       var blocksWrap = el('div', 'hf-blocks');
       var positions = {};
 
@@ -117,132 +199,173 @@
           section.style.borderColor = STAGE_COLORS[cs] || '#50C8E0';
           var sLabel = el('div', 'hf-consol-label');
           sLabel.style.color = STAGE_COLORS[cs] || '#50C8E0';
-          sLabel.textContent = (STAGE_LABELS[cs] || cs).toUpperCase() + ' ' + stageMems.length;
+          sLabel.textContent = (STAGE_LABELS[cs] || cs).toUpperCase() + ' (' + stageMems.length + ')';
           section.appendChild(sLabel);
           stageMems.forEach(function(m) {
             section.appendChild(makeBlock(m));
             positions[m.id] = rowIdx++;
           });
           blocksWrap.appendChild(section);
-          rowIdx++;
+          rowIdx++; // gap between sections
         });
+
       } else if (stage.test) {
         var passed = mems.filter(function(m) { return stage.test(m); });
         var failed = mems.filter(function(m) { return !stage.test(m); });
         var rowIdx = 0;
-        var pl = el('div', 'hf-gate-label hf-pass-label');
-        pl.textContent = '\u2713 ' + passed.length;
-        blocksWrap.appendChild(pl);
-        passed.forEach(function(m) {
-          var b = makeBlock(m); b.classList.add('hf-block-pass');
-          blocksWrap.appendChild(b);
-          positions[m.id] = rowIdx++;
-        });
-        blocksWrap.appendChild(el('div', 'hf-gate-divider'));
-        rowIdx += 2;
-        var fl = el('div', 'hf-gate-label hf-fail-label');
-        fl.textContent = '\u2717 ' + failed.length;
-        blocksWrap.appendChild(fl);
-        failed.forEach(function(m) {
-          var b = makeBlock(m); b.classList.add('hf-block-fail');
-          blocksWrap.appendChild(b);
-          positions[m.id] = rowIdx++;
-        });
+
+        // Pass group
+        if (passed.length > 0) {
+          var passSection = el('div', 'hf-gate-section hf-gate-pass');
+          passed.forEach(function(m) {
+            passSection.appendChild(makeBlock(m));
+            positions[m.id] = rowIdx++;
+          });
+          blocksWrap.appendChild(passSection);
+        }
+
+        // Divider
+        if (passed.length > 0 && failed.length > 0) {
+          blocksWrap.appendChild(el('div', 'hf-gate-divider'));
+          rowIdx += 2;
+        }
+
+        // Fail group
+        if (failed.length > 0) {
+          var failSection = el('div', 'hf-gate-section hf-gate-fail');
+          failed.forEach(function(m) {
+            var b = makeBlock(m);
+            b.classList.add('hf-block-fail');
+            failSection.appendChild(b);
+            positions[m.id] = rowIdx++;
+          });
+          blocksWrap.appendChild(failSection);
+        }
+
       } else {
-        mems.forEach(function(m, i) {
-          blocksWrap.appendChild(makeBlock(m));
-          positions[m.id] = i;
+        // Domain column: group by domain with colored borders
+        var domains = {};
+        mems.forEach(function(m) {
+          var d = m.domain || 'unknown';
+          if (!domains[d]) domains[d] = [];
+          domains[d].push(m);
+        });
+        var rowIdx = 0;
+        Object.keys(domains).forEach(function(d) {
+          var section = el('div', 'hf-domain-section');
+          section.style.borderColor = dc(d);
+          var dLabel = el('div', 'hf-domain-label');
+          dLabel.style.color = dc(d);
+          dLabel.textContent = d + ' (' + domains[d].length + ')';
+          section.appendChild(dLabel);
+          domains[d].forEach(function(m) {
+            section.appendChild(makeBlock(m));
+            positions[m.id] = rowIdx++;
+          });
+          blocksWrap.appendChild(section);
+          rowIdx++; // gap between domains
         });
       }
 
       col.appendChild(blocksWrap);
       flow.appendChild(col);
-      prevPositions = positions;
     });
 
     container.appendChild(flow);
 
-    // Legend
-    var legend = el('div', 'hf-legend');
-    var seen = {};
-    mems.forEach(function(m) {
-      var d = m.domain || 'unknown';
-      if (seen[d]) return; seen[d] = true;
-      var item = el('span', 'hf-legend-item');
-      item.innerHTML = '<span class="hf-legend-dot" style="background:' + m._dc + '"></span>' + d;
-      legend.appendChild(item);
+    // Draw connection lines after DOM layout is complete
+    requestAnimationFrame(function() {
+      requestAnimationFrame(drawLinesPostRender);
     });
-    container.appendChild(legend);
   }
 
-  function buildLines(mems, prevPos, stage) {
-    var lineCol = el('div', 'hf-lines');
-    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('class', 'hf-svg');
+  // ── Draw lines AFTER DOM render using real block positions ──
+  function drawLinesPostRender() {
+    if (!container) return;
+    var flow = container.querySelector('.hf-flow');
+    if (!flow) return;
 
-    var nextPos = {};
-    if (stage.isConsol) {
-      var idx = 0;
-      ['labile', 'early_ltp', 'late_ltp', 'consolidated', 'reconsolidating'].forEach(function(cs) {
-        var sm = mems.filter(function(m) { return m._stage === cs; });
-        sm.forEach(function(m) { nextPos[m.id] = idx++; });
-        if (sm.length > 0) idx++;
+    var cols = flow.querySelectorAll('.hf-col');
+    var lineCols = flow.querySelectorAll('.hf-lines');
+
+    // For each line column (between col[i-1] and col[i])
+    lineCols.forEach(function(lineCol) {
+      lineCol.innerHTML = ''; // clear any previous lines
+      var si = parseInt(lineCol.dataset.stageIdx);
+      if (isNaN(si) || si < 1) return;
+
+      var prevCol = cols[si - 1];
+      var nextCol = cols[si];
+      if (!prevCol || !nextCol) return;
+
+      var lineRect = lineCol.getBoundingClientRect();
+
+      // Get all blocks in previous and next columns, indexed by memId
+      var prevBlocks = {};
+      prevCol.querySelectorAll('.hf-block').forEach(function(b) {
+        prevBlocks[b.dataset.memId] = b;
       });
-    } else if (stage.test) {
-      var passed = mems.filter(function(m) { return stage.test(m); });
-      var failed = mems.filter(function(m) { return !stage.test(m); });
-      var idx = 0;
-      passed.forEach(function(m) { nextPos[m.id] = idx++; });
-      idx += 2;
-      failed.forEach(function(m) { nextPos[m.id] = idx++; });
-    } else {
-      mems.forEach(function(m, i) { nextPos[m.id] = i; });
-    }
+      var nextBlocks = {};
+      nextCol.querySelectorAll('.hf-block').forEach(function(b) {
+        nextBlocks[b.dataset.memId] = b;
+      });
 
-    var maxRow = 0;
-    Object.values(prevPos).concat(Object.values(nextPos)).forEach(function(v) {
-      if (v > maxRow) maxRow = v;
+      // Draw lines: fail first (behind), then pass
+      var memIds = Object.keys(prevBlocks);
+      [true, false].forEach(function(failFirst) {
+        memIds.forEach(function(memId) {
+          var prevB = prevBlocks[memId];
+          var nextB = nextBlocks[memId];
+          if (!prevB || !nextB) return;
+
+          var isFail = nextB.classList.contains('hf-block-fail');
+          if (failFirst !== isFail) return;
+
+          var prevRect = prevB.getBoundingClientRect();
+          var nextRect = nextB.getBoundingClientRect();
+
+          // Y positions relative to line column
+          var y1 = prevRect.top + prevRect.height / 2 - lineRect.top;
+          var y2 = nextRect.top + nextRect.height / 2 - lineRect.top;
+
+          var line = el('div', isFail ? 'hf-line hf-line-fail' : 'hf-line hf-line-pass');
+          line.dataset.memId = memId;
+
+          // Get the memory's domain color from the block
+          line.style.borderColor = prevB.style.background || '#50C8E0';
+
+          var top = Math.min(y1, y2);
+          var height = Math.abs(y2 - y1);
+
+          if (height < 2) {
+            line.style.top = y1 + 'px';
+            line.style.left = '0';
+            line.style.right = '0';
+            line.style.height = '0';
+            line.style.borderTopWidth = '1px';
+            line.style.borderTopStyle = isFail ? 'dashed' : 'solid';
+          } else {
+            line.style.top = top + 'px';
+            line.style.height = height + 'px';
+            line.style.left = '0';
+            line.style.right = '0';
+            if (y2 >= y1) {
+              line.style.borderRightWidth = '1px';
+              line.style.borderRightStyle = isFail ? 'dashed' : 'solid';
+              line.style.borderBottomWidth = '1px';
+              line.style.borderBottomStyle = isFail ? 'dashed' : 'solid';
+            } else {
+              line.style.borderRightWidth = '1px';
+              line.style.borderRightStyle = isFail ? 'dashed' : 'solid';
+              line.style.borderTopWidth = '1px';
+              line.style.borderTopStyle = isFail ? 'dashed' : 'solid';
+            }
+          }
+
+          lineCol.appendChild(line);
+        });
+      });
     });
-    var svgH = (maxRow + 1) * CELL + 60;
-    svg.setAttribute('viewBox', '0 0 100 ' + svgH);
-    svg.setAttribute('preserveAspectRatio', 'none');
-
-    var headerOff = 52;
-
-    // Render fail lines first (behind)
-    mems.forEach(function(m) {
-      var fromY = prevPos[m.id];
-      var toY = nextPos[m.id];
-      if (fromY === undefined || toY === undefined) return;
-      var isFail = stage.test && !stage.test(m);
-      if (!isFail) return;
-      svg.appendChild(makePath(fromY, toY, headerOff, m._dc, m.id, true));
-    });
-    // Then pass lines on top
-    mems.forEach(function(m) {
-      var fromY = prevPos[m.id];
-      var toY = nextPos[m.id];
-      if (fromY === undefined || toY === undefined) return;
-      var isFail = stage.test && !stage.test(m);
-      if (isFail) return;
-      svg.appendChild(makePath(fromY, toY, headerOff, m._dc, m.id, false));
-    });
-
-    lineCol.appendChild(svg);
-    return lineCol;
-  }
-
-  function makePath(fromRow, toRow, offset, color, memId, isFail) {
-    var y1 = offset + fromRow * CELL + BLOCK / 2;
-    var y2 = offset + toRow * CELL + BLOCK / 2;
-    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    var d = 'M 0,' + y1 + ' C 40,' + y1 + ' 60,' + y2 + ' 100,' + y2;
-    path.setAttribute('d', d);
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', color);
-    path.setAttribute('data-mem-id', memId);
-    path.setAttribute('class', isFail ? 'hf-line-fail' : 'hf-line-pass');
-    return path;
   }
 
   function makeBlock(mem) {
@@ -268,9 +391,12 @@
       b.classList.toggle('hf-block-selected', b.dataset.memId === id);
       b.classList.toggle('hf-block-dimmed', b.dataset.memId !== id);
     });
-    container.querySelectorAll('.hf-svg path').forEach(function(p) {
-      if (p.getAttribute('data-mem-id') === id) p.classList.add('hf-line-hl');
-      else p.style.opacity = '0.02';
+    container.querySelectorAll('.hf-line').forEach(function(l) {
+      if (l.dataset.memId === id) {
+        l.classList.add('hf-line-hl');
+      } else {
+        l.style.opacity = '0.01';
+      }
     });
   }
 
@@ -280,9 +406,9 @@
     container.querySelectorAll('.hf-block').forEach(function(b) {
       b.classList.remove('hf-block-selected', 'hf-block-dimmed');
     });
-    container.querySelectorAll('.hf-svg path').forEach(function(p) {
-      p.classList.remove('hf-line-hl');
-      p.style.opacity = '';
+    container.querySelectorAll('.hf-line').forEach(function(l) {
+      l.classList.remove('hf-line-hl');
+      l.style.opacity = '';
     });
   }
 
