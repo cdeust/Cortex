@@ -119,7 +119,7 @@
       }
 
       logEntries.push({
-        time: new Date(),
+        time: n.createdAt ? new Date(n.createdAt) : new Date(),
         type: n.type || 'unknown',
         id: n.id || '',
         label: JUG.cleanText(n.label || ''),
@@ -218,8 +218,11 @@
       if (countEl) countEl.textContent = bioCounts[b] || 0;
     });
 
+    // Sort newest first
+    filtered.sort(function(a, b) { return b.time - a.time; });
+
     var html = '';
-    for (var i = filtered.length - 1; i >= Math.max(0, filtered.length - 500); i--) {
+    for (var i = 0; i < Math.min(filtered.length, 500); i++) {
       var e = filtered[i];
       var time = e.time.toLocaleTimeString('en-US', { hour12: false });
       var typeLabel = JUG.NODE_LABELS[e.type] || e.type;
