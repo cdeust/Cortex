@@ -231,7 +231,6 @@ def _git_cmd(cmd: list[str], cwd: Path) -> str:
             shell=False,
             cwd=str(cwd),
             timeout=10,
-            shell=False,
         )
         return result.stdout.strip() if result.returncode == 0 else ""
     except (subprocess.TimeoutExpired, FileNotFoundError):
