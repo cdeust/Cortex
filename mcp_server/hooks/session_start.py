@@ -264,16 +264,16 @@ def _detect_external_sources() -> list[dict]:
             import sqlite3
 
             conn = sqlite3.connect(str(claude_mem_db))
-            count = conn.execute(
-                "SELECT COUNT(*) FROM observations"
-            ).fetchone()[0]
+            count = conn.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
             conn.close()
             if count > 0:
                 sources.append(
                     {"name": "claude-mem", "count": count, "path": str(claude_mem_db)}
                 )
         except Exception:
-            sources.append({"name": "claude-mem", "count": 0, "path": str(claude_mem_db)})
+            sources.append(
+                {"name": "claude-mem", "count": 0, "path": str(claude_mem_db)}
+            )
 
     # Cursor conversations
     cursor_dir = Path.home() / ".cursor"
@@ -557,9 +557,7 @@ def _print_external_sources() -> None:
         for s in sources:
             count_str = f" ({s['count']} items)" if s.get("count") else ""
             lines.append(f"- **{s['name']}**{count_str} — `{s['path']}`")
-        lines.append(
-            "\nUse `/cortex-import` to import these into Cortex."
-        )
+        lines.append("\nUse `/cortex-import` to import these into Cortex.")
         print("\n".join(lines))
         _log(f"Detected {len(sources)} external memory sources")
     except Exception as exc:
