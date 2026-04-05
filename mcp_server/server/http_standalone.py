@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import threading
 import time
@@ -404,8 +403,6 @@ def _build_discussion_detail(session_id: str) -> dict:
     )
     if conv is None:
         return {"error": "Discussion not found", "sessionId": session_id}
-
-    import re
 
     from mcp_server.infrastructure.config import CLAUDE_DIR
 
