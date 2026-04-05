@@ -47,17 +47,26 @@ This handles everything: PostgreSQL + pgvector installation, database creation, 
 > claude plugin install cortex-cowork
 > ```
 
-### Option B — Standalone Clone
+### Option B — Standalone MCP (no plugin)
+
+```bash
+claude mcp add cortex -- uvx --from "neuro-cortex-memory[postgresql]" neuro-cortex-memory
+```
+
+Adds Cortex as a standalone MCP server via [uvx](https://docs.astral.sh/uv/). No hooks, no skills — just the 33 MCP tools. Requires `uv` installed.
+
+### Option C — Clone + Setup Script
 
 ```bash
 git clone https://github.com/cdeust/Cortex.git
 cd Cortex
-bash scripts/setup.sh
+bash scripts/setup.sh        # macOS / Linux
+python3 scripts/setup.py     # Windows / cross-platform
 ```
 
-Same setup from a local clone. Installs PostgreSQL + pgvector (via Homebrew on macOS, apt/dnf on Linux), creates the database, downloads the embedding model (~100 MB), and registers hooks in `~/.claude/settings.json`. Restart Claude Code after setup.
+Installs PostgreSQL + pgvector (Homebrew on macOS, apt/dnf on Linux), creates the database, downloads the embedding model (~100 MB). On Windows, install PostgreSQL manually first, then run `setup.py`. Restart Claude Code after setup.
 
-### Option C — Docker
+### Option D — Docker
 
 ```bash
 git clone https://github.com/cdeust/Cortex.git
@@ -74,7 +83,7 @@ docker run -it \
 
 The container includes PostgreSQL 17, pgvector, the embedding model, and Claude Code. Data persists via the `cortex-pgdata` volume.
 
-### Option C — Manual Setup
+### Option E — Manual Setup
 
 <details>
 <summary>Step-by-step instructions</summary>
@@ -125,10 +134,10 @@ asyncio.run(PgStore(database_url='$DATABASE_URL').initialize())
 python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 ```
 
-**6. Install hooks**
+**6. Register MCP server**
 
 ```bash
-python3 scripts/install_hooks.py --plugin-root $(pwd)
+claude mcp add cortex -- uvx --from "neuro-cortex-memory[postgresql]" neuro-cortex-memory
 ```
 
 Restart Claude Code to activate.
@@ -180,7 +189,7 @@ You don't manage memory. Cortex does.
 
 ### Retrieval Pipeline
 
-Five signals fused server-side in PostgreSQL, then reranked client-side:
+Six signals fused server-side in PostgreSQL, then reranked client-side:
 
 <p align="center">
 <img src="docs/diagram-retrieval-pipeline.svg" alt="Retrieval pipeline: Intent → TMM fusion → FlashRank reranking" width="80%"/>
@@ -196,7 +205,7 @@ Five signals fused server-side in PostgreSQL, then reranked client-side:
 
 ### Hooks
 
-Seven hooks integrate with Claude Code's lifecycle:
+Seven hooks integrate with Claude Code's lifecycle (managed via `plugin.json`, no manual setup):
 
 | Hook | Event | What It Does |
 |---|---|---|
@@ -212,31 +221,39 @@ Seven hooks integrate with Claude Code's lifecycle:
 
 ## Neural Graph
 
-The unified neural graph renders the entire memory system as an interactive 3D visualization in the browser (`/cortex-visualize`).
+Launch the interactive visualization with `/cortex-visualize`. Three views: Graph, Board, and Pipeline.
+
+### Graph View
+
+Force-directed neural graph showing domain clusters, memories, entities, and discussions connected by typed edges.
 
 <p align="center">
-<img src="docs/neural-graph-overview.png" width="100%" alt="Cortex Neural Graph — unified view with discussions, memories, entities, and domain clusters" />
+<img src="docs/neural-graph-overview.png" width="100%" alt="Cortex Neural Graph — unified view with domain clusters, memories, entities, and discussions" />
 </p>
 
-### Node Types
+### Board View
 
-| Category | Nodes | Color |
-|---|---|---|
-| **Structural** | Root, categories, domains, agents, entry points | Blue / Cyan |
-| **Behavioral** | Recurring patterns, tool preferences, behavioral features | Yellow / Orange |
-| **Memory** | Episodic memories, semantic memories | Green (episodic), Teal (semantic) |
-| **Entities** | Functions, files, dependencies, decisions, errors, technologies | Varies by type |
-| **Discussions** | Full conversation sessions linked to domain hubs | Rose (#F43F5E) |
-
-### Conversation History
-
-Discussion nodes represent every Claude Code session. Each links to its parent domain via keyword matching. Clicking a discussion node opens a detail panel showing timeline, duration, tools used, and keywords.
-
-**Full Conversation Viewer** — the "View Full Conversation" button opens a modal with the complete session transcript: timestamped user/assistant messages with collapsible tool call details (input/output).
+Memories organized by biological consolidation stage. Each column shows decay rate, vulnerability, and plasticity. Memory cards display domain, heat, importance, and emotional tags.
 
 <p align="center">
-<img src="docs/neural-graph-detail.png" width="49%" alt="Cortex Neural Graph — conversation viewer with full session history" />
-<img src="docs/neural-graph-diff.png" width="49%" alt="Cortex Neural Graph — code diff viewer with memory detail panel" />
+<img src="docs/neural-graph-board.png" width="100%" alt="Cortex Board View — kanban consolidation stages with biological metrics" />
+</p>
+
+### Pipeline View
+
+Horizontal flow from domains through the write gate into consolidation stages. Block height reflects importance, color indicates domain.
+
+<p align="center">
+<img src="docs/neural-graph-pipeline.png" width="100%" alt="Cortex Pipeline View — Sankey flow through consolidation stages" />
+</p>
+
+### Detail Panels
+
+Click any node for full context. Discussion nodes show session timeline, tools used, keywords, and a full conversation viewer. Memory nodes show biological meters (encoding strength, interference, schema match) and git diffs.
+
+<p align="center">
+<img src="docs/neural-graph-discussion.png" width="49%" alt="Cortex — discussion detail with full conversation history" />
+<img src="docs/neural-graph-diff.png" width="49%" alt="Cortex — code diff viewer in memory detail panel" />
 </p>
 
 ### Filters
@@ -523,7 +540,7 @@ Cortex runs locally (MCP over stdio, PostgreSQL on localhost, visualization on 1
 | SQL Injection | 95 | All queries parameterized (psycopg `%s`). Dynamic columns use `sql.Identifier()`. |
 | Auth & Access Control | 85 | Docker PG uses `scram-sha-256` on localhost. MCP over stdio (no network auth needed). |
 | Dependency Health | 80 | Floor-pinned deps. Background install version-bounded. |
-| Network Behavior | 92 | Model download on first run only. Viz servers bind `127.0.0.1` with same-origin CORS. |
+| Network Behavior | 92 | Model download on first run only. Viz servers bind `127.0.0.1`. |
 | Code Quality | 90 | Pydantic validation on all tools. Input length limits on `remember`/`recall`. Path traversal protected. |
 | Prompt Injection | 88 | Memory content escaped in HTML rendering. Session injection uses data delimiters. |
 | Secrets Management | 90 | `.env`/credentials in `.gitignore`. No hardcoded secrets. Docker credentials via env vars. |
@@ -534,7 +551,7 @@ Cortex runs locally (MCP over stdio, PostgreSQL on localhost, visualization on 1
 - SQL parameterization across all 7 `pg_store` modules (psycopg `%s` placeholders)
 - `sql.Identifier()` for dynamic column names (no f-string SQL)
 - ILIKE patterns escape `%`, `_`, `\` from user input
-- CORS restricted to `http://127.0.0.1` (no wildcard)
+- CORS allows `*` (localhost-only servers, no external exposure)
 - Docker PostgreSQL uses `scram-sha-256` auth on `127.0.0.1/32`
 - `trust_remote_code` removed from embedding model loading
 - Input length validation: `remember` content capped at 50KB, queries at 10KB
