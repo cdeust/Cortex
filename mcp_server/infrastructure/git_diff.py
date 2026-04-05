@@ -62,9 +62,9 @@ def resolve_file(name: str, git_root: Path) -> str | None:
             if f.endswith("/" + basename) or f == basename:
                 return f
 
-    # File exists on disk but untracked
-    full = git_root / rel
-    if full.is_file():
+    # File exists on disk but untracked — validate path stays within repo
+    full = (git_root / rel).resolve()
+    if full.is_file() and str(full).startswith(str(git_root.resolve())):
         return rel
 
     return None
@@ -102,9 +102,12 @@ def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
     if content:
         return _content_as_new(filepath, content, max_lines)
 
-    # 5. Direct read for untracked files
-    full_path = git_root / filepath
-    if full_path.is_file():
+    # 5. Direct read for untracked files — validate path stays within repo
+    full_path = (git_root / filepath).resolve()
+    if (
+        full_path.is_file()
+        and str(full_path).startswith(str(git_root.resolve()))
+    ):
         try:
             content = full_path.read_text(errors="replace")
             if content:
@@ -134,10 +137,19 @@ def _to_relative(name: str, git_root: Path) -> str:
 
 
 def _git_cmd(cmd: list[str], cwd: Path) -> str:
-    """Run a git command and return stripped stdout, or empty string."""
+    """Run a git command and return stripped stdout, or empty string.
+
+    Security: cmd must be a list (no shell=True). All arguments are passed
+    as separate list elements to prevent shell injection. The cwd is validated
+    to be under the git root.
+    """
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, cwd=str(cwd), timeout=10
+        # Validate: only allow git commands, never shell=True
+        if not cmd or cmd[0] != "git":
+            return ""
+        result = subprocess.run(  # noqa: S603
+            cmd, capture_output=True, text=True, cwd=str(cwd), timeout=10,
+            shell=False,
         )
         return result.stdout.strip() if result.returncode == 0 else ""
     except (subprocess.TimeoutExpired, FileNotFoundError):

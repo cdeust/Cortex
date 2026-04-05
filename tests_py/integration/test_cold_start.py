@@ -93,8 +93,10 @@ class TestSessionStartHook:
         # Should NOT contain setup instructions
         assert "brew install" not in output
 
-    def test_empty_db_with_session_files_asks_consent(self):
-        """When DB is empty but sessions exist, should ask user before importing."""
+    def test_empty_db_with_session_files_auto_backfills(self):
+        """When DB is empty but sessions exist, auto-backfill runs and reports result."""
+        from unittest.mock import patch
+
         from mcp_server.hooks.session_start import _build_cold_start_message
 
         setup_result = {
@@ -102,13 +104,14 @@ class TestSessionStartHook:
             "memories": 0,
             "session_files": 150,
         }
-        msg = _build_cold_start_message(setup_result)
+        # Mock _auto_backfill to avoid actual DB operations
+        with patch(
+            "mcp_server.hooks.session_start._auto_backfill", return_value=42
+        ):
+            msg = _build_cold_start_message(setup_result)
 
-        assert "150 conversation files" in msg
-        assert "Would you like me to import" in msg
-        assert "backfill" not in msg.lower() or "import" in msg.lower()
-        # Must NOT auto-import — user consent required
-        assert "automatically" not in msg.lower()
+        assert "auto-imported" in msg.lower() or "42 memories" in msg
+        assert msg  # non-empty
 
     def test_empty_db_no_sessions_shows_getting_started(self):
         """Brand new user with no history gets a friendly start guide."""
@@ -361,32 +364,34 @@ class TestSetupScript:
 class TestBackfillConsent:
     """Verify backfill never auto-runs — user must explicitly consent."""
 
-    def test_session_start_never_calls_backfill(self):
-        """The session start hook must NEVER call backfill_memories directly."""
+    def test_session_start_auto_backfills(self):
+        """Session start hook auto-backfills when DB is empty with session files."""
         import inspect
         from mcp_server.hooks import session_start
 
         source = inspect.getsource(session_start)
-        # Must not import or call backfill
-        assert "backfill_memories" not in source
-        assert "import_sessions" not in source
+        # Must contain auto-backfill logic
+        assert "_auto_backfill" in source
+        assert "backfill" in source.lower()
 
-    def test_cold_start_message_asks_permission(self):
-        """Cold start message must ask, not tell."""
+    def test_cold_start_auto_import_reports_count(self):
+        """Cold start with sessions auto-imports and reports the count."""
+        from unittest.mock import patch
+
         from mcp_server.hooks.session_start import _build_cold_start_message
 
-        msg = _build_cold_start_message(
-            {
-                "status": "ready",
-                "memories": 0,
-                "session_files": 500,
-            }
-        )
+        with patch("mcp_server.hooks.session_start._auto_backfill", return_value=42):
+            msg = _build_cold_start_message(
+                {
+                    "status": "ready",
+                    "memories": 0,
+                    "session_files": 500,
+                }
+            )
 
-        # Must contain a question/request for consent
-        assert "?" in msg or "Would you" in msg or "like me to" in msg
-        # Must mention the number of files found
-        assert "500" in msg
+        # Must report auto-import result
+        assert "42" in msg
+        assert "import" in msg.lower() or "memor" in msg.lower()
 
     def test_backfill_handler_exists_and_is_callable(self):
         """The backfill handler should exist for when user says yes."""

@@ -28,7 +28,7 @@ _DECISION_RE = re.compile(
     re.IGNORECASE,
 )
 _NUMBER_VERSION_RE = re.compile(r"\b\d+(?:\.\d+)+\b")
-_CAMELCASE_RE = re.compile(r"\b[A-Z][a-zA-Z]+(?:[A-Z][a-zA-Z]+)+\b")
+_CAMELCASE_RE = re.compile(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b")
 
 
 def _parse_created_at(memory: dict) -> datetime | None:

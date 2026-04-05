@@ -22,7 +22,8 @@
 
   function esc(s) {
     if (!s) return '';
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
   }
 
   // ── Header ──
@@ -138,7 +139,7 @@
       .replace(/\*\*([^*]*)\*\*/g, '$1')
       .replace(/\*([^*]*)\*/g, '$1')
       .replace(/^[\s|:*-]+$/gm, '')
-      .replace(/<[^>]+>/g, '')
+      .replace(/<[^>]{0,500}>/g, '')
       .replace(/\\u[0-9a-fA-F]{4}/g, '')
       .replace(/\\n/g, '\n').replace(/\\t/g, '  ')
       .replace(/\n{3,}/g, '\n\n').trim();

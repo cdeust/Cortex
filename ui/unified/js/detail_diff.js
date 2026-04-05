@@ -192,12 +192,14 @@
 
   function esc(s) {
     if (!s) return '';
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
   }
 
   function decodeStr(s) {
-    return s.replace(/&amp;/g, '&').replace(/&quot;/g, '"')
-      .replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+    // Decode HTML entities in the correct order: &amp; last to prevent double-unescaping
+    return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&amp;/g, '&');
   }
 
   if (document.readyState === 'loading') {
