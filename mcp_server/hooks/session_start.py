@@ -250,6 +250,56 @@ def _count_session_files() -> int:
     return count
 
 
+# ── External memory source detection ─────────────────────────────────────
+
+
+def _detect_external_sources() -> list[dict]:
+    """Detect other AI memory systems that can be imported into Cortex."""
+    sources = []
+
+    # claude-mem SQLite
+    claude_mem_db = Path.home() / ".claude-mem" / "claude-mem.db"
+    if claude_mem_db.exists():
+        try:
+            import sqlite3
+
+            conn = sqlite3.connect(str(claude_mem_db))
+            count = conn.execute(
+                "SELECT COUNT(*) FROM observations"
+            ).fetchone()[0]
+            conn.close()
+            if count > 0:
+                sources.append(
+                    {"name": "claude-mem", "count": count, "path": str(claude_mem_db)}
+                )
+        except Exception:
+            sources.append({"name": "claude-mem", "count": 0, "path": str(claude_mem_db)})
+
+    # Cursor conversations
+    cursor_dir = Path.home() / ".cursor"
+    if cursor_dir.exists():
+        cursor_files = list(cursor_dir.glob("**/*.jsonl"))
+        if cursor_files:
+            sources.append(
+                {"name": "Cursor", "count": len(cursor_files), "path": str(cursor_dir)}
+            )
+
+    # ChatGPT exports in Downloads
+    downloads = Path.home() / "Downloads"
+    if downloads.exists():
+        chatgpt_files = list(downloads.glob("**/conversations.json"))
+        if chatgpt_files:
+            sources.append(
+                {
+                    "name": "ChatGPT",
+                    "count": len(chatgpt_files),
+                    "path": str(chatgpt_files[0]),
+                }
+            )
+
+    return sources
+
+
 # ── Auto-backfill ────────────────────────────────────────────────────────
 
 
@@ -492,6 +542,28 @@ def main() -> None:
         )
     else:
         _log("No memories above threshold")
+
+    # Always check for external memory sources that can be imported
+    _print_external_sources()
+
+
+def _print_external_sources() -> None:
+    """Detect and report importable external memory sources."""
+    try:
+        sources = _detect_external_sources()
+        if not sources:
+            return
+        lines = ["\n### External Memory Sources Detected\n"]
+        for s in sources:
+            count_str = f" ({s['count']} items)" if s.get("count") else ""
+            lines.append(f"- **{s['name']}**{count_str} — `{s['path']}`")
+        lines.append(
+            "\nUse `/cortex-import` to import these into Cortex."
+        )
+        print("\n".join(lines))
+        _log(f"Detected {len(sources)} external memory sources")
+    except Exception as exc:
+        _log(f"External source detection failed (non-fatal): {exc}")
 
 
 if __name__ == "__main__":

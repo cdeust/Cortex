@@ -51,7 +51,7 @@ class TestRecencyBoost:
         assert boost > 0.0
 
     def test_naive_datetime_handled(self):
-        dt = datetime.utcnow() - timedelta(days=1)
+        dt = datetime.now(tz=timezone.utc) - timedelta(days=1)
         boost = _compute_recency_boost(dt)
         assert boost > 0.0
 

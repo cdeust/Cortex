@@ -409,25 +409,26 @@ def _build_discussion_detail(session_id: str) -> dict:
 
     from mcp_server.infrastructure.config import CLAUDE_DIR
 
-    # Security: construct path from sanitized components only — never trust filePath directly
-    safe_session = re.sub(r"[^a-zA-Z0-9\-_]", "", session_id)
-    if not safe_session:
-        return {"error": "Invalid session ID", "sessionId": session_id}
+    # Whitelist approach: find the JSONL file by scanning actual files on disk
+    # Never construct a path from user-provided session_id or project
+    target_filename = session_id + ".jsonl"
+    projects_dir = CLAUDE_DIR / "projects"
+    found_path = None
 
-    project = conv.get("project", "")
-    safe_project = (
-        re.sub(r"[^a-zA-Z0-9\-_.]", "", Path(project).name) if project else ""
-    )
+    if projects_dir.is_dir():
+        for project_dir in projects_dir.iterdir():
+            if not project_dir.is_dir():
+                continue
+            candidate = project_dir / target_filename
+            if candidate.is_file():
+                found_path = candidate
+                break
 
-    file_path = str(CLAUDE_DIR / "projects" / safe_project / f"{safe_session}.jsonl")
+    if found_path is None:
+        return {"error": "Session file not found", "sessionId": session_id}
 
-    # Final validation: path must be within CLAUDE_DIR
-    resolved_base = CLAUDE_DIR.resolve()
-    resolved_fp = Path(file_path).resolve()
-    if not str(resolved_fp).startswith(str(resolved_base) + os.sep):
-        return {"error": "Invalid file path", "sessionId": session_id}
-
-    raw = read_full_conversation(file_path)
+    # found_path comes from directory enumeration, not user input
+    raw = read_full_conversation(str(found_path))
     messages = format_conversation_messages(raw)
 
     return {
@@ -521,18 +522,15 @@ def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> 
         handler.send_response(403)
         handler.end_headers()
         return
-    # safe_name is now guaranteed to be a simple filename (no path separators,
-    # no dots-only, starts with word char). Construct the full path.
-    file_path = base_dir.resolve() / safe_name
-    if not file_path.exists():
+    # Whitelist approach: enumerate actual files in base_dir and match
+    resolved_base = base_dir.resolve()
+    actual_files = {f.name: f for f in resolved_base.iterdir() if f.is_file()}
+    if safe_name not in actual_files:
         handler.send_response(404)
         handler.end_headers()
         return
-    if not file_path.exists():
-        handler.send_response(404)
-        handler.end_headers()
-        return
-    body = file_path.read_bytes()
+    # Use the Path object from the directory listing — never from user input
+    body = actual_files[safe_name].read_bytes()
     handler.send_response(200)
     handler.send_header("Content-Type", content_type + "; charset=utf-8")
     handler.send_header("Cache-Control", "no-cache")
