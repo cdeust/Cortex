@@ -18,7 +18,7 @@ class PgRuleMixin:
         return dict(row)
 
     def insert_rule(self, data: dict[str, Any]) -> int:
-        row = self._conn.execute(
+        row = self._execute(
             "INSERT INTO memory_rules "
             "(rule_type, scope, scope_value, condition, action, priority, "
             "is_active, created_at) "
@@ -37,7 +37,7 @@ class PgRuleMixin:
         return row["id"]
 
     def get_rules_for_scope(self, scope: str) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM memory_rules WHERE scope = %s AND is_active "
             "ORDER BY priority DESC",
             (scope,),
@@ -45,7 +45,7 @@ class PgRuleMixin:
         return [dict(r) for r in rows]
 
     def get_all_active_rules(self) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC"
         ).fetchall()
         return [dict(r) for r in rows]
@@ -68,7 +68,7 @@ class PgRuleMixin:
                 vals.append(v)
         if set_clauses:
             vals.append(rule_id)
-            self._conn.execute(
+            self._execute(
                 sql.SQL("UPDATE memory_rules SET {} WHERE id = %s").format(
                     sql.SQL(", ").join(set_clauses)
                 ),

@@ -56,10 +56,63 @@ class PgMemoryStore(
     """PostgreSQL + pgvector storage engine for Cortex memory system."""
 
     def __init__(self, database_url: str | None = None) -> None:
-        url = database_url or _get_database_url()
-        self._conn = psycopg.connect(url, row_factory=dict_row, autocommit=True)
+        self._url = database_url or _get_database_url()
+        self._conn = self._create_connection()
         self._init_schema()
+        # Invalidate prepared statements after schema DDL — stored procedure
+        # signatures may have changed, making cached plans stale.
+        self._deallocate_all()
         register_vector(self._conn)
+
+    def _create_connection(self) -> psycopg.Connection:
+        """Create a new database connection."""
+        return psycopg.connect(
+            self._url, row_factory=dict_row, autocommit=True
+        )
+
+    def _deallocate_all(self) -> None:
+        """Invalidate all prepared statements on the current connection.
+
+        Called after schema initialization because CREATE OR REPLACE FUNCTION
+        can change stored procedure signatures, making psycopg's auto-prepared
+        plans stale (error: "cached plan must not change result type").
+        """
+        try:
+            self._conn.execute("DEALLOCATE ALL")
+        except Exception:
+            pass
+
+    def _reconnect(self) -> None:
+        """Drop the current connection and create a fresh one."""
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+        self._conn = self._create_connection()
+        register_vector(self._conn)
+
+    def _execute(
+        self, query: str | psycopg.sql.Composable, params: Any = None, **kwargs: Any
+    ) -> psycopg.Cursor:
+        """Execute a query with stale-plan recovery and reconnection.
+
+        On 'cached plan must not change result type' (FeatureNotSupported):
+        deallocates all prepared statements and retries once.
+        On connection errors: reconnects and retries once.
+        """
+        try:
+            return self._conn.execute(query, params, **kwargs)
+        except psycopg.errors.FeatureNotSupported:
+            # Stale prepared statement — invalidate all and retry
+            logger.info("Stale prepared plan detected, deallocating and retrying")
+            self._conn.rollback()
+            self._deallocate_all()
+            return self._conn.execute(query, params, **kwargs)
+        except psycopg.OperationalError:
+            # Connection lost — reconnect and retry
+            logger.warning("Database connection lost, reconnecting")
+            self._reconnect()
+            return self._conn.execute(query, params, **kwargs)
 
     def _init_schema(self) -> None:
         """Create all tables, indexes, and stored procedures.
@@ -113,7 +166,7 @@ class PgMemoryStore(
             from mcp_server.core.temporal import normalize_date_to_iso
 
             raw_created = normalize_date_to_iso(raw_created) or raw_created
-        row = self._conn.execute(
+        row = self._execute(
             """INSERT INTO memories (
                 content, embedding, tags, source, domain,
                 directory_context, created_at, last_accessed,
@@ -171,7 +224,7 @@ class PgMemoryStore(
         return row["id"]
 
     def get_memory(self, memory_id: int) -> dict[str, Any] | None:
-        row = self._conn.execute(
+        row = self._execute(
             "SELECT * FROM memories WHERE id = %s", (memory_id,)
         ).fetchone()
         if row is None:
@@ -179,20 +232,20 @@ class PgMemoryStore(
         return self._normalize_memory_row(row)
 
     def update_memory_heat(self, memory_id: int, heat: float) -> None:
-        self._conn.execute(
+        self._execute(
             "UPDATE memories SET heat = %s WHERE id = %s", (heat, memory_id)
         )
         self._conn.commit()
 
     def update_memory_importance(self, memory_id: int, importance: float) -> None:
-        self._conn.execute(
+        self._execute(
             "UPDATE memories SET importance = %s WHERE id = %s",
             (importance, memory_id),
         )
         self._conn.commit()
 
     def update_memory_access(self, memory_id: int) -> None:
-        self._conn.execute(
+        self._execute(
             "UPDATE memories SET last_accessed = NOW(), "
             "access_count = access_count + 1 WHERE id = %s",
             (memory_id,),
@@ -202,7 +255,7 @@ class PgMemoryStore(
     def update_memory_metamemory(
         self, memory_id: int, access_count: int, useful_count: int, confidence: float
     ) -> None:
-        self._conn.execute(
+        self._execute(
             "UPDATE memories SET access_count = %s, useful_count = %s, "
             "confidence = %s WHERE id = %s",
             (access_count, useful_count, confidence, memory_id),
@@ -210,19 +263,19 @@ class PgMemoryStore(
         self._conn.commit()
 
     def delete_memory(self, memory_id: int) -> bool:
-        cur = self._conn.execute("DELETE FROM memories WHERE id = %s", (memory_id,))
+        cur = self._execute("DELETE FROM memories WHERE id = %s", (memory_id,))
         self._conn.commit()
         return cur.rowcount > 0
 
     def set_memory_protected(self, memory_id: int, protected: bool = True) -> None:
-        self._conn.execute(
+        self._execute(
             "UPDATE memories SET is_protected = %s WHERE id = %s",
             (protected, memory_id),
         )
         self._conn.commit()
 
     def mark_memory_stale(self, memory_id: int, stale: bool = True) -> None:
-        self._conn.execute(
+        self._execute(
             "UPDATE memories SET is_stale = %s WHERE id = %s", (stale, memory_id)
         )
         self._conn.commit()
@@ -250,7 +303,7 @@ class PgMemoryStore(
         """
         w = weights or {}
         emb = self._bytes_to_vector(query_embedding)
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM recall_memories("
             "  %s::TEXT, %s::vector, %s::TEXT, %s::TEXT, %s::TEXT, %s::TEXT,"
             "  %s::REAL, %s::INT, %s::INT,"
@@ -279,7 +332,7 @@ class PgMemoryStore(
 
     def search_fts(self, query: str, limit: int = 20) -> list[tuple[int, float]]:
         """Full-text search via tsvector. Returns (memory_id, score) pairs."""
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT id, ts_rank_cd(content_tsv, plainto_tsquery('english', %s)) AS score "
             "FROM memories "
             "WHERE content_tsv @@ plainto_tsquery('english', %s) "
@@ -293,7 +346,7 @@ class PgMemoryStore(
     ) -> list[tuple[int, float]]:
         """Vector KNN search via pgvector. Returns (memory_id, distance) pairs."""
         emb = self._bytes_to_vector(query_embedding)
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT id, embedding <=> %s AS distance "
             "FROM memories "
             "WHERE heat >= %s AND NOT is_stale AND embedding IS NOT NULL "
@@ -315,14 +368,14 @@ class PgMemoryStore(
     ) -> None:
         emb = self._bytes_to_vector(embedding)
         if original_content is not None:
-            self._conn.execute(
+            self._execute(
                 "UPDATE memories SET content = %s, embedding = %s, "
                 "compression_level = %s, compressed = TRUE, original_content = %s "
                 "WHERE id = %s",
                 (content, emb, compression_level, original_content, memory_id),
             )
         else:
-            self._conn.execute(
+            self._execute(
                 "UPDATE memories SET content = %s, embedding = %s, "
                 "compression_level = %s, compressed = TRUE "
                 "WHERE id = %s",
@@ -365,7 +418,7 @@ class PgMemoryStore(
 
         Single server-side call replacing 4 Python round trips.
         """
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM spread_activation_memories("
             "  %s::TEXT[], %s::REAL, %s::REAL, %s::INT, %s::INT, %s::REAL"
             ")",
@@ -383,7 +436,7 @@ class PgMemoryStore(
 
         Returns raw pgvector embeddings — caller converts to numpy.
         """
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM get_hot_embeddings(%s::REAL, %s::TEXT, %s::INT)",
             (min_heat, domain, limit),
         ).fetchall()
@@ -402,7 +455,7 @@ class PgMemoryStore(
 
         Returns (mem_a, mem_b, proximity_weight) tuples.
         """
-        rows = self._conn.execute(
+        rows = self._execute(
             "SELECT * FROM get_temporal_co_access(%s::REAL, %s::INT, %s::INT)",
             (window_hours, min_access, limit),
         ).fetchall()
