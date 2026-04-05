@@ -276,8 +276,6 @@ class PgAuxiliaryMixin:
         return row["c"] if row else 0
 
     def delete_schema(self, schema_id: str) -> bool:
-        cur = self._execute(
-            "DELETE FROM schemas WHERE schema_id = %s", (schema_id,)
-        )
+        cur = self._execute("DELETE FROM schemas WHERE schema_id = %s", (schema_id,))
         self._conn.commit()
         return cur.rowcount > 0

@@ -66,9 +66,7 @@ class PgMemoryStore(
 
     def _create_connection(self) -> psycopg.Connection:
         """Create a new database connection."""
-        return psycopg.connect(
-            self._url, row_factory=dict_row, autocommit=True
-        )
+        return psycopg.connect(self._url, row_factory=dict_row, autocommit=True)
 
     def _deallocate_all(self) -> None:
         """Invalidate all prepared statements on the current connection.
@@ -232,9 +230,7 @@ class PgMemoryStore(
         return self._normalize_memory_row(row)
 
     def update_memory_heat(self, memory_id: int, heat: float) -> None:
-        self._execute(
-            "UPDATE memories SET heat = %s WHERE id = %s", (heat, memory_id)
-        )
+        self._execute("UPDATE memories SET heat = %s WHERE id = %s", (heat, memory_id))
         self._conn.commit()
 
     def update_memory_importance(self, memory_id: int, importance: float) -> None:

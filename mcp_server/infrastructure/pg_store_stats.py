@@ -33,9 +33,7 @@ class PgStatsMixin:
         return dict(row) if row else {}
 
     def get_avg_heat(self) -> float:
-        row = self._execute(
-            "SELECT AVG(heat) AS avg_heat FROM memories"
-        ).fetchone()
+        row = self._execute("SELECT AVG(heat) AS avg_heat FROM memories").fetchone()
         return float(row["avg_heat"] or 0.0) if row else 0.0
 
     def get_domain_counts(self) -> dict[str, int]:
