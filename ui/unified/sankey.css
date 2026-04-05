@@ -12,7 +12,7 @@
 }
 
 /* ═══════════════════════════════════
-   HORIZONTAL FLOW — columns left to right
+   HORIZONTAL FLOW
    ═══════════════════════════════════ */
 .hf-flow {
   flex: 1;
@@ -27,43 +27,74 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border-right: 1px solid rgba(255,255,255,0.04);
+  border-right: 1px solid rgba(255,255,255,0.06);
 }
-.hf-col:last-of-type {
-  border-right: none;
-}
+.hf-col:last-of-type { border-right: none; }
 
+/* ── Column header ── */
 .hf-col-header {
-  padding: 10px 8px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 10px 8px;
+  border-bottom: 2px solid rgba(80,210,235,0.15);
   flex-shrink: 0;
-  min-height: 50px;
+  background: rgba(255,255,255,0.015);
 }
 .hf-col-title {
-  font: 700 11px 'Orbitron', sans-serif;
+  font: 700 12px 'Orbitron', sans-serif;
   color: var(--cyan, #50D0E8);
   letter-spacing: 0.1em;
-  text-shadow: 0 0 6px var(--cyan, #50D0E8);
+  text-shadow: 0 0 8px var(--cyan, #50D0E8);
   white-space: nowrap;
+}
+.hf-col-ref {
+  font-size: 11px;
+  color: #8AA0B0;
+  font-style: italic;
+  margin-top: 2px;
 }
 .hf-col-sub {
   font-size: 11px;
-  color: #A0B8C8;
+  color: #B0C8D8;
   margin-top: 2px;
   white-space: nowrap;
 }
+.hf-col-counts {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.hf-count-pass { color: #40D870; }
+.hf-count-fail { color: #E07070; }
+.hf-count-sep { color: rgba(255,255,255,0.2); }
+.hf-col-total {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cyan, #50D0E8);
+  margin-top: 2px;
+}
+.hf-col-consol-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.hf-consol-count {
+  font-size: 11px;
+  font-weight: 700;
+}
 
-/* ── Blocks area (vertical stack) ── */
+/* ── Blocks area ── */
 .hf-blocks {
   flex: 1;
-  padding: 4px 6px;
+  padding: 4px 4px;
   display: flex;
   flex-direction: column;
   gap: 3px;
   overflow-y: auto;
 }
-.hf-blocks::-webkit-scrollbar { width: 2px; }
-.hf-blocks::-webkit-scrollbar-thumb { background: rgba(80,210,235,0.15); }
+.hf-blocks::-webkit-scrollbar { width: 3px; }
+.hf-blocks::-webkit-scrollbar-thumb { background: rgba(80,210,235,0.15); border-radius: 2px; }
 
 /* ── Memory block ── */
 .hf-block {
@@ -73,17 +104,14 @@
   border-radius: 2px;
   cursor: pointer;
   transition: transform 0.1s, opacity 0.1s, box-shadow 0.1s;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
   flex-shrink: 0;
 }
 .hf-block:hover {
-  transform: scaleY(1.8);
+  transform: scaleY(2);
   z-index: 10;
   box-shadow: 0 0 8px currentColor;
-  border-color: rgba(255,255,255,0.3);
-}
-.hf-block-pass {
-  box-shadow: inset 0 0 2px rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.4);
 }
 .hf-block-fail {
   opacity: 0.2;
@@ -93,31 +121,53 @@
 .hf-block-selected {
   transform: scaleY(2.5) !important;
   z-index: 20 !important;
-  box-shadow: 0 0 10px #FFF !important;
+  box-shadow: 0 0 12px #FFF !important;
   outline: 2px solid #FFF;
 }
 .hf-block-dimmed {
-  opacity: 0.04;
+  opacity: 0.03;
 }
 
-/* ── Gate labels ── */
-.hf-gate-label {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 6px 2px;
-  flex-shrink: 0;
+/* ── Gate sections ── */
+.hf-gate-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 0;
 }
-.hf-pass-label { color: #40D870; }
-.hf-fail-label { color: #E07070; }
-
-/* ── Gate divider ── */
+.hf-gate-pass {
+  border-left: 3px solid #40D870;
+  padding-left: 4px;
+}
+.hf-gate-fail {
+  border-left: 3px solid #E07070;
+  padding-left: 4px;
+}
 .hf-gate-divider {
-  height: 2px;
-  min-height: 2px;
-  margin: 6px 0;
-  background: linear-gradient(90deg, rgba(224,80,80,0.4), rgba(224,80,80,0.1));
-  border-radius: 1px;
+  height: 3px;
+  min-height: 3px;
+  margin: 8px 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0.15), rgba(255,255,255,0.03));
+  border-radius: 2px;
   flex-shrink: 0;
+}
+
+/* ── Domain sections (first column) ── */
+.hf-domain-section {
+  border-left: 3px solid;
+  padding: 2px 0 2px 4px;
+  margin-bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.hf-domain-label {
+  font: 600 11px 'JetBrains Mono', monospace;
+  padding-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Consolidation sections ── */
@@ -130,50 +180,44 @@
   flex-direction: column;
   gap: 3px;
   flex-shrink: 0;
+  background: rgba(255,255,255,0.01);
 }
 .hf-consol-label {
-  font: 700 9px 'Orbitron', sans-serif;
-  letter-spacing: 0.08em;
-  padding-bottom: 2px;
+  font: 700 11px 'Orbitron', sans-serif;
+  letter-spacing: 0.06em;
+  padding-bottom: 3px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   margin-bottom: 2px;
   text-align: center;
   white-space: nowrap;
+  text-shadow: 0 0 6px currentColor;
 }
 
 /* ═══════════════════════════════════
-   SVG CONNECTION LINES (between columns)
+   CSS CONNECTION LINES (pure HTML divs)
    ═══════════════════════════════════ */
 .hf-lines {
-  flex: 0.4;
-  min-width: 20px;
+  flex: 0.5;
+  min-width: 24px;
   position: relative;
   overflow: hidden;
 }
-.hf-svg {
+.hf-line {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
   pointer-events: none;
+  border-color: inherit;
 }
 .hf-line-pass {
-  stroke-width: 1.2;
-  vector-effect: non-scaling-stroke;
-  opacity: 0.4;
+  opacity: 0.3;
 }
 .hf-line-fail {
-  stroke-width: 0.8;
-  vector-effect: non-scaling-stroke;
-  stroke-dasharray: 3,3;
-  opacity: 0.08;
+  opacity: 0.05;
 }
 .hf-line-hl {
-  stroke-width: 2.5 !important;
-  vector-effect: non-scaling-stroke;
   opacity: 1 !important;
-  filter: drop-shadow(0 0 4px currentColor);
+  border-width: 2px !important;
+  z-index: 10;
+  filter: drop-shadow(0 0 3px currentColor);
 }
 
 /* ═══════════════════════════════════
@@ -186,6 +230,7 @@
   padding: 8px 12px;
   border-top: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
+  background: rgba(255,255,255,0.01);
 }
 .hf-legend-item {
   display: inline-flex;
@@ -196,8 +241,7 @@
 }
 .hf-legend-dot {
   display: inline-block;
-  width: 10px;
-  height: 10px;
+  width: 10px; height: 10px;
   border-radius: 2px;
 }
 

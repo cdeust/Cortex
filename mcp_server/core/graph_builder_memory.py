@@ -226,6 +226,7 @@ def _build_memory_node(mem: dict, nid: str, emo: dict, color: str) -> Node:
         "hippocampalDependency": round(mem.get("hippocampal_dependency", 1.0), 4),
         "plasticity": round(mem.get("plasticity", 1.0), 4),
         "stability": round(mem.get("stability", 0), 4),
+        "surpriseScore": round(mem.get("surprise_score", 0), 4),
         "createdAt": str(mem.get("created_at", "")),
         "lastAccessed": str(mem.get("last_accessed", "")),
     }
