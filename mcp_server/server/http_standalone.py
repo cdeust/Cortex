@@ -159,7 +159,7 @@ def _build_unified_handler(ui_root: Path, store) -> type:
         def do_OPTIONS(self):
             _touch()
             self.send_response(204)
-            self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             self.end_headers()
 
@@ -217,7 +217,7 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 body = json.dumps(data, default=str).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(body)
@@ -301,7 +301,7 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 ).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(body)
@@ -317,7 +317,7 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 body = json.dumps(data, default=str).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(body)
@@ -334,7 +334,7 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 body = json.dumps(data, default=str).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(body)
@@ -455,7 +455,7 @@ def _build_methodology_handler(ui_root: Path) -> type:
         def do_OPTIONS(self):
             _touch()
             self.send_response(204)
-            self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
             self.end_headers()
 
