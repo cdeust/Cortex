@@ -141,19 +141,26 @@
 
   function handleBgClick() { deselectNode(); }
 
+  var _emitting = false;
+
   function selectNode(node) {
     selectedNode = node;
     buildNeighborSet(node.id);
     JUG.state.selectedId = node.id;
+    _emitting = true;
     JUG.emit('graph:selectNode', node);
+    _emitting = false;
     if (graph) graph.linkColor(graph.linkColor());
   }
 
   function deselectNode() {
+    if (!selectedNode && !JUG.state.selectedId) return;
     selectedNode = null;
     neighborSet = {};
     JUG.state.selectedId = null;
+    _emitting = true;
     JUG.emit('graph:deselectNode');
+    _emitting = false;
     if (graph) graph.linkColor(graph.linkColor());
   }
 
@@ -190,6 +197,33 @@
     requestAnimationFrame(init);
   }
 
+  // ── Brushing/linking: sync selection from other views ──
+  JUG.on('graph:selectNode', function(node) {
+    if (_emitting || !node || !graph) return;
+    if (selectedNode && selectedNode.id === node.id) return;
+    // External selection (from board view) — sync graph state
+    var data = graph.graphData();
+    for (var i = 0; i < data.nodes.length; i++) {
+      if (data.nodes[i].id === node.id) {
+        selectedNode = data.nodes[i];
+        buildNeighborSet(node.id);
+        JUG.state.selectedId = node.id;
+        graph.linkColor(graph.linkColor());
+        return;
+      }
+    }
+    // Node not in graph data — store ID for when we switch to graph view
+    JUG.state.selectedId = node.id;
+  });
+
+  JUG.on('graph:deselectNode', function() {
+    if (_emitting || !selectedNode) return;
+    selectedNode = null;
+    neighborSet = {};
+    JUG.state.selectedId = null;
+    if (graph) graph.linkColor(graph.linkColor());
+  });
+
   // ── View switching ──
   JUG.on('state:activeView', function(e) {
     var graphContainer = document.getElementById('graph-container');
@@ -205,6 +239,10 @@
 
     if (isGraph) {
       if (graph) graph.resumeAnimation();
+      // Restore selection from board view
+      if (JUG.state.selectedId && !selectedNode) {
+        selectNodeById(JUG.state.selectedId);
+      }
     } else {
       if (graph) graph.pauseAnimation();
     }
