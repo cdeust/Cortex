@@ -180,14 +180,14 @@
   }
 
   function drawLabel(ctx, node, x, y, r, scale, isHighlit) {
-    var isStructural = JUG.STRUCTURAL_TYPES && JUG.STRUCTURAL_TYPES[node.type];
-    var isTop = node.type === 'root' || node.type === 'category' || node.type === 'domain';
-    var show = isTop || isHighlit || (node.type === 'agent' && scale > 0.8)
-      || (node.type === 'type-group' && scale > 1.5) || scale > 1.2;
-    if (!show) return;
+    var isLabeled = node.type === 'root' || node.type === 'category'
+      || node.type === 'domain' || node.type === 'agent';
+    // Only show labels for structural nodes; others only on hover/select
+    if (!isLabeled && !isHighlit) return;
 
+    var isTop = node.type === 'root' || node.type === 'category' || node.type === 'domain';
     var fs = isTop ? Math.max(4, r * 0.5) : Math.max(2.8, 3.2 / Math.max(scale * 0.3, 0.6));
-    var weight = isTop ? '700 ' : (isStructural ? '600 ' : '500 ');
+    var weight = isTop ? '700 ' : (node.type === 'agent' ? '600 ' : '500 ');
     ctx.font = weight + fs + 'px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
@@ -201,8 +201,8 @@
     ctx.lineJoin = 'round';
     ctx.strokeText(text, x, ty);
 
-    // Fill with brighter colors
-    ctx.fillStyle = isTop ? rgba('#E0F4FF', 0.95) : rgba('#C0D8E8', isHighlit ? 0.95 : 0.85);
+    // White text for readability
+    ctx.fillStyle = rgba('#FFFFFF', isHighlit ? 1.0 : 0.92);
     ctx.fillText(text, x, ty);
   }
 

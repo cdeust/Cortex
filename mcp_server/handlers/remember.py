@@ -57,6 +57,10 @@ schema = {
                 "type": "boolean",
                 "description": "Mark as global memory visible to all projects",
             },
+            "created_at": {
+                "type": "string",
+                "description": "Original timestamp (ISO 8601) for imported memories",
+            },
         },
         "required": ["content"],
     },
@@ -102,7 +106,7 @@ def _enrich_mod_with_gate(mod: dict, gate: dict) -> None:
     )
 
 
-def _parse_args(args: dict[str, Any]) -> tuple[str, list, str, str, bool, str, bool]:
+def _parse_args(args: dict[str, Any]) -> tuple[str, list, str, str, bool, str, bool, str | None]:
     """Extract and default handler arguments."""
     return (
         args["content"],
@@ -112,6 +116,7 @@ def _parse_args(args: dict[str, Any]) -> tuple[str, list, str, str, bool, str, b
         args.get("force", False),
         args.get("agent_topic", ""),
         args.get("is_global", False),
+        args.get("created_at"),
     )
 
 
@@ -120,7 +125,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if not args or not args.get("content"):
         return {"stored": False, "reason": "no_content"}
 
-    content, tags, directory, source, force, agent_topic, is_global = _parse_args(args)
+    content, tags, directory, source, force, agent_topic, is_global, created_at = _parse_args(args)
     store, emb_engine = _get_store(), _get_embeddings()
     domain = _resolve_domain(directory, args.get("domain", ""))
     embedding = emb_engine.encode(content)
@@ -185,6 +190,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         emb_engine,
         agent_context=agent_topic,
         is_global=is_global,
+        created_at=created_at,
     )
     if is_global and result.get("stored"):
         result["is_global"] = True

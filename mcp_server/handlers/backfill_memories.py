@@ -90,16 +90,19 @@ async def _import_single_item(
         return None
 
     tags = item.get("tags", []) + ["_backfill", f"project:{project_slug[:30]}"]
-    result = await remember_handler(
-        {
-            "content": content,
-            "tags": tags,
-            "directory": cwd,
-            "domain": domain,
-            "source": f"backfill:{project_slug[:40]}",
-            "force": True,
-        }
-    )
+    remember_args = {
+        "content": content,
+        "tags": tags,
+        "directory": cwd,
+        "domain": domain,
+        "source": f"backfill:{project_slug[:40]}",
+        "force": True,
+    }
+    # Preserve original session timestamp if available
+    timestamp = item.get("timestamp")
+    if timestamp:
+        remember_args["created_at"] = str(timestamp)
+    result = await remember_handler(remember_args)
 
     if not result.get("stored"):
         return None
@@ -267,10 +270,25 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             files_skipped,
         )
 
-    return await _process_imports(
+    result = await _process_imports(
         store,
         ready,
         parsed["min_importance"],
         len(candidates),
         files_skipped,
     )
+
+    # Run cascade advancement after backfill to place imported memories
+    # in the correct consolidation stage based on their real timestamps
+    if result.get("backfilled", 0) > 0:
+        try:
+            from mcp_server.handlers.consolidation.cascade import (
+                run_cascade_advancement,
+            )
+
+            cascade = run_cascade_advancement(store)
+            result["cascade_advanced"] = cascade.get("advanced", 0)
+        except Exception:
+            pass
+
+    return result

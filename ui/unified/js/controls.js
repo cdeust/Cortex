@@ -1,6 +1,16 @@
 // Cortex Neural Graph — UI Controls
 (function() {
   document.addEventListener('DOMContentLoaded', function() {
+    // ── View toggle (Graph / Timeline) ──
+    var viewBtns = document.querySelectorAll('.view-toggle .view-btn[data-view]');
+    viewBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        viewBtns.forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        JUG.state.activeView = btn.dataset.view || 'graph';
+      });
+    });
+
     // ── Filter buttons (source type) ──
     var filterBtns = document.querySelectorAll('#filter-bar .filter-btn[data-filter]');
     filterBtns.forEach(function(btn) {

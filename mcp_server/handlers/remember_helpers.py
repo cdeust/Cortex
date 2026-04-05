@@ -209,9 +209,10 @@ def _build_insert_record(
     stype: str,
     sep: float,
     interf: float,
+    created_at: str | None = None,
 ) -> dict[str, Any]:
     """Build the memory record dict for insertion."""
-    return {
+    record = {
         "content": content,
         "embedding": embedding,
         "tags": tags,
@@ -233,6 +234,10 @@ def _build_insert_record(
         "schema_id": mod["schema_id"],
         "hippocampal_dependency": 1.0,
     }
+    if created_at:
+        record["created_at"] = created_at
+        record["stage_entered_at"] = created_at
+    return record
 
 
 def _link_if_needed(
@@ -293,6 +298,7 @@ def insert_and_post_process(
     emb_engine: EmbeddingEngine,
     agent_context: str = "",
     is_global: bool = False,
+    created_at: str | None = None,
 ) -> dict[str, Any]:
     """Separate, store, and run post-storage operations."""
     is_dec = thermodynamics.is_decision_content(content)
@@ -317,6 +323,7 @@ def insert_and_post_process(
         stype,
         sep,
         interf,
+        created_at=created_at,
     )
     record["agent_context"] = agent_context
     record["is_global"] = is_global

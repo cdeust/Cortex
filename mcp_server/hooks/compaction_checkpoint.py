@@ -73,6 +73,20 @@ def process_event(event: dict[str, Any] | None) -> None:
         )
         cp_id = result.get("checkpoint_id")
         _log(f"Auto-checkpoint saved: id={cp_id}, epoch={new_epoch}")
+
+        # Run cascade advancement on compaction — consolidation during rest
+        # (Dewar et al. 2012: rest after encoding boosts retention)
+        try:
+            from mcp_server.handlers.consolidation.cascade import (
+                run_cascade_advancement,
+            )
+
+            cascade_result = run_cascade_advancement(store)
+            advanced = cascade_result.get("advanced", 0)
+            if advanced > 0:
+                _log(f"Cascade: {advanced} memories advanced during compaction")
+        except Exception as cascade_exc:
+            _log(f"Cascade failed (non-fatal): {cascade_exc}")
     except Exception as exc:
         _log(f"Auto-checkpoint failed (non-fatal): {exc}")
 

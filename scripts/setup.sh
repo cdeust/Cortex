@@ -16,7 +16,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DEPS_DIR="${CLAUDE_PLUGIN_DATA:-$PROJECT_DIR}/.deps"
+DEPS_DIR="${CLAUDE_PLUGIN_DATA:-$PROJECT_DIR}/deps"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -301,25 +301,15 @@ for name, passed in checks:
 sys.exit(0 if all_ok else 1)
 "
 
-# ── Step 7: Install hooks ──────────────────────────────────────────────
-
-step "Hooks"
-
-PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}" python3 "$SCRIPT_DIR/install_hooks.py" --plugin-root "$PROJECT_DIR" 2>/dev/null
-HOOK_STATUS=$?
-
-if [ $HOOK_STATUS -eq 0 ]; then
-    ok "Hooks installed to ~/.claude/settings.json"
-else
-    warn "Hook installation failed — hooks can be installed later via: python3 scripts/install_hooks.py"
-fi
-
 echo ""
 echo -e "${GREEN}Cortex setup complete!${NC}"
 echo ""
+echo "Hooks are managed by plugin.json — no manual installation needed."
+echo ""
 echo "Next steps:"
-echo "  1. Restart Claude Code to activate hooks"
+echo "  1. Restart Claude Code to activate"
 echo "  2. Start a conversation — Cortex works automatically"
 echo "  3. Use /cortex-recall to search memories"
 echo ""
 echo "Database: ${DATABASE_URL:-postgresql://localhost:5432/cortex}"
+echo "Deps:     ${DEPS_DIR}"

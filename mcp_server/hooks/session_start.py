@@ -250,6 +250,37 @@ def _count_session_files() -> int:
     return count
 
 
+# ── Auto-backfill ────────────────────────────────────────────────────────
+
+
+def _auto_backfill() -> int:
+    """Run backfill + cascade automatically on first install.
+
+    Returns number of memories imported.
+    """
+    try:
+        import asyncio
+
+        from mcp_server.handlers.backfill_memories import handler as backfill_handler
+
+        result = asyncio.run(
+            backfill_handler(
+                {
+                    "max_files": 100,
+                    "min_importance": 0.35,
+                    "force_reprocess": False,
+                }
+            )
+        )
+        imported = result.get("backfilled", 0)
+        cascade_advanced = result.get("cascade_advanced", 0)
+        _log(f"Auto-backfill: {imported} imported, {cascade_advanced} cascaded")
+        return imported
+    except Exception as exc:
+        _log(f"Auto-backfill failed (non-fatal): {exc}")
+        return 0
+
+
 # ── Context building ─────────────────────────────────────────────────────
 
 
@@ -362,33 +393,28 @@ def _build_cold_start_message(setup_result: dict | None) -> str:
     session_files = (setup_result or {}).get("session_files", 0)
 
     if memories == 0 and session_files > 0:
-        lines.append("Cortex is set up and ready.\n")
-        lines.append(
-            f"I found **{session_files} conversation files** from your previous "
-            f"Claude Code sessions. I can import decisions, bug fixes, architecture "
-            f"choices, and lessons from those conversations into Cortex's memory.\n"
-        )
-        lines.append(
-            "**Would you like me to import your conversation history?** "
-            "This is a one-time operation that takes a few minutes. "
-            "You can also do this later with `/cortex-setup-project`.\n"
-        )
-        lines.append(
-            "*To import now, just say yes. To skip, say no or start working — "
-            "Cortex will remember new things from this session onward.*"
-        )
+        # Auto-backfill on first run — no user interaction needed
+        _log(f"Empty DB with {session_files} session files — auto-backfilling...")
+        imported = _auto_backfill()
+        if imported > 0:
+            lines.append(f"Cortex auto-imported **{imported} memories** from your conversation history.\n")
+            lines.append(
+                "Memories will consolidate naturally as you use them "
+                "(recall = replay = consolidation)."
+            )
+        else:
+            lines.append("Cortex is set up and ready. Auto-import found no memorable items.\n")
+            lines.append(
+                "Start working normally — Cortex will automatically remember "
+                "important decisions, fixes, and patterns as you go."
+            )
         return "\n".join(lines)
 
     if memories == 0:
         lines.append("Cortex is set up and ready. No previous sessions found.\n")
         lines.append(
             "Start working normally — Cortex will automatically remember "
-            "important decisions, fixes, and patterns as you go. "
-            'You can also explicitly say "remember this" at any time.\n'
-        )
-        lines.append(
-            "Use `/cortex-remember` to store something, "
-            "`/cortex-recall` to search your memory."
+            "important decisions, fixes, and patterns as you go."
         )
         return "\n".join(lines)
 

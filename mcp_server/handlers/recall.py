@@ -130,6 +130,23 @@ def _apply_rules_and_order(
     return results
 
 
+def _track_recall_replay(results: list[dict], store: Any) -> None:
+    """Increment access_count and replay_count for recalled memories.
+
+    Each recall event counts as a hippocampal replay (McClelland 1995).
+    This drives consolidation stage advancement through the cascade.
+    """
+    for mem in results:
+        mem_id = mem.get("id")
+        if mem_id is None:
+            continue
+        try:
+            store.update_memory_access(mem_id)
+            store.increment_replay_count(mem_id)
+        except Exception:
+            pass
+
+
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Retrieve memories: pg_recall base + production enrichments."""
     if not args or not args.get("query"):
@@ -161,6 +178,11 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     results = inject_triggered_memories(results, query, store)
     _apply_co_activation(results, store, settings)
     results = _apply_rules_and_order(results, store, settings, max_results)
+
+    # Track access + replay for consolidation cascade
+    # Biological basis: retrieval = hippocampal replay (McClelland 1995)
+    # Each recall increments replay_count, driving stage advancement
+    _track_recall_replay(results, store)
 
     intent_info = classify_query_intent(query)
     intent = intent_info.get("intent", QueryIntent.GENERAL)

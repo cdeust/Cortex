@@ -6,13 +6,16 @@
 
 /* Detail panel */
 #detail-panel {
-  position: fixed; top: 0; right: 0; bottom: 0; width: 380px;
-  background: rgba(10,10,15,0.92); backdrop-filter: blur(24px);
-  border-left: 1px solid var(--border);
-  transform: translateX(100%); transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 200; overflow-y: auto; padding: 28px 24px;
+  position: fixed; top: 60px; left: 50%; bottom: 20px;
+  width: 66vw;
+  transform: translateX(-50%) scale(0.95);
+  opacity: 0; pointer-events: none;
+  background: rgba(10,10,15,0.96); backdrop-filter: blur(24px);
+  border: 1px solid var(--border); border-radius: 6px;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+  z-index: 200; overflow-y: auto; padding: 28px 32px;
 }
-#detail-panel.open { transform: translateX(0); }
+#detail-panel.open { transform: translateX(-50%) scale(1); opacity: 1; pointer-events: auto; }
 #detail-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0.5; }
 
 .close-btn {
@@ -67,13 +70,14 @@
 
 /* Glossary panel */
 #glossary-panel {
-  position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
-  width: 560px; max-height: calc(100vh - 120px); overflow-y: auto;
+  position: fixed; top: 60px; left: 50%; transform: translateX(-50%) scale(0.95);
+  width: 66vw; max-height: calc(100vh - 100px); overflow-y: auto;
   background: rgba(6,6,12,0.96); backdrop-filter: blur(24px);
-  border: 1px solid var(--border); z-index: 180;
+  border: 1px solid var(--border); border-radius: 6px; z-index: 180;
   padding: 24px 28px 20px; display: none;
+  opacity: 0; transition: transform 0.3s, opacity 0.3s;
 }
-#glossary-panel.open { display: block; }
+#glossary-panel.open { display: block; opacity: 1; transform: translateX(-50%) scale(1); }
 #glossary-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0.3; }
 
 .gloss-title { font-family: 'Orbitron'; font-size: 12px; font-weight: 700; color: var(--cyan); letter-spacing: 4px; text-transform: uppercase; text-shadow: 0 0 12px var(--cyan-glow); margin-bottom: 2px; }

@@ -135,13 +135,12 @@
         h += '<div class="conv-msg-time">' + new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) + '</div>';
       }
       var text = (msg.text || '').trim();
-      if (text.length > 2000) text = text.substring(0, 2000) + '\n... [truncated]';
       h += '<div class="conv-msg-text">' + JUG._fmt.esc(text) + '</div>';
       if (msg.toolCalls && msg.toolCalls.length) {
         msg.toolCalls.forEach(function(tc) {
           h += '<details class="conv-tool-call">';
           h += '<summary>' + JUG._fmt.esc(tc.name || 'tool') + '</summary>';
-          if (tc.input) h += '<pre class="conv-tool-io">' + JUG._fmt.esc(String(tc.input).substring(0, 500)) + '</pre>';
+          if (tc.input) h += '<pre class="conv-tool-io">' + JUG._fmt.esc(String(tc.input)) + '</pre>';
           h += '</details>';
         });
       }

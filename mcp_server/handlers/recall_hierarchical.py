@@ -179,6 +179,16 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     )
     results = _enrich_results(raw_results, store, max_results)
 
+    # Track replay for consolidation cascade
+    for mem in results:
+        mem_id = mem.get("id")
+        if mem_id is not None:
+            try:
+                store.update_memory_access(mem_id)
+                store.increment_replay_count(mem_id)
+            except Exception:
+                pass
+
     return {
         "results": results,
         "total": len(results),

@@ -143,15 +143,18 @@ async def _store_memory(
     """Store a single extracted item via the remember handler."""
     from mcp_server.handlers.remember import handler as remember_handler
 
-    result = await remember_handler(
-        {
-            "content": item["content"],
-            "tags": item["tags"],
-            "domain": domain,
-            "source": "import",
-            "force": False,
-        }
-    )
+    remember_args = {
+        "content": item["content"],
+        "tags": item["tags"],
+        "domain": domain,
+        "source": "import",
+        "force": False,
+    }
+    # Preserve original session timestamp if available
+    timestamp = item.get("timestamp")
+    if timestamp:
+        remember_args["created_at"] = str(timestamp)
+    result = await remember_handler(remember_args)
 
     return bool(result and result.get("stored"))
 
