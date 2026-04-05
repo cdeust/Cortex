@@ -1,7 +1,7 @@
 {
   "name": "cortex",
   "description": "Persistent memory for Claude Code — remembers across sessions automatically. Install and forget. Scientific retrieval backed by 41 published papers.",
-  "version": "3.4.1",
+  "version": "3.4.2",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"
@@ -12,8 +12,8 @@
   "keywords": ["memory", "persistent", "mcp", "claude-code", "neuroscience", "agents"],
   "mcpServers": {
     "cortex": {
-      "command": "bash",
-      "args": ["-c", "export DATABASE_URL=\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\"; export CORTEX_RUNTIME=\"${CORTEX_RUNTIME:-cli}\"; export PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\"; mkdir -p \"${CLAUDE_PLUGIN_DATA}/deps\"; python3 -c 'import psycopg' 2>/dev/null || python3 -m pip install -q --target \"${CLAUDE_PLUGIN_DATA}/deps\" \"psycopg[binary]>=3.1\" \"pgvector>=0.3\" 2>/dev/null; cd \"${CLAUDE_PLUGIN_ROOT}\" && exec python3 -m mcp_server"],
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py", "mcp_server"],
       "cwd": "${CLAUDE_PLUGIN_ROOT}",
       "env": {
         "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps",
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "export PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\"; export DATABASE_URL=\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\"; python3 -c 'import psycopg' 2>/dev/null || python3 -m pip install -q --target \"${CLAUDE_PLUGIN_DATA}/deps\" \"psycopg[binary]>=3.1\" \"pgvector>=0.3\" \"sentence-transformers>=2.2.0\" \"flashrank>=0.2.0\" 2>/dev/null; cd \"${CLAUDE_PLUGIN_ROOT}\" && python3 -m mcp_server.hooks.session_start",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.session_start",
             "timeout": 10
           }
         ]
@@ -38,7 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "export PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\"; export DATABASE_URL=\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\"; cd \"${CLAUDE_PLUGIN_ROOT}\" && python3 -m mcp_server.hooks.auto_recall",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.auto_recall",
             "timeout": 3
           }
         ]
@@ -49,12 +49,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "export PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\"; export DATABASE_URL=\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\"; cd \"${CLAUDE_PLUGIN_ROOT}\" && python3 -m mcp_server.hooks.post_tool_capture",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.post_tool_capture",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "export PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\"; export DATABASE_URL=\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\"; cd \"${CLAUDE_PLUGIN_ROOT}\" && python3 -m mcp_server.hooks.preemptive_context",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.preemptive_context",
             "timeout": 3
           }
         ]
@@ -65,7 +65,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "export PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\"; export DATABASE_URL=\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\"; cd \"${CLAUDE_PLUGIN_ROOT}\" && python3 -m mcp_server.hooks.session_lifecycle",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.session_lifecycle",
             "timeout": 30
           }
         ]
@@ -77,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "export PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\"; export DATABASE_URL=\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\"; cd \"${CLAUDE_PLUGIN_ROOT}\" && python3 -m mcp_server.hooks.compaction_checkpoint",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.compaction_checkpoint",
             "timeout": 10
           }
         ]
@@ -88,7 +88,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "export PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\"; export DATABASE_URL=\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\"; cd \"${CLAUDE_PLUGIN_ROOT}\" && python3 -m mcp_server.hooks.agent_briefing",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.agent_briefing",
             "timeout": 5
           }
         ]
