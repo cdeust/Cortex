@@ -173,6 +173,8 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 self._serve_discussions()
             elif path_no_qs.startswith("/api/discussion/"):
                 self._serve_discussion_detail(path_no_qs)
+            elif self.path == "/api/sankey" or self.path.startswith("/api/sankey?"):
+                self._serve_sankey()
             elif self.path.startswith("/api/file-diff?"):
                 _serve_file_diff(self)
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
@@ -212,6 +214,90 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 )
                 _cached_domain_hub_ids = _extract_domain_hub_ids(data.get("nodes", []))
                 body = json.dumps(data, default=str).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+        def _serve_sankey(self):
+            try:
+                rows = store._conn.execute(
+                    "SELECT from_stage, to_stage, COUNT(*) as count "
+                    "FROM stage_transitions "
+                    "GROUP BY from_stage, to_stage "
+                    "ORDER BY from_stage, to_stage"
+                ).fetchall()
+                transitions = [dict(r) for r in rows]
+
+                # Transition timing stats
+                timing_rows = store._conn.execute(
+                    "SELECT from_stage, to_stage, "
+                    "AVG(hours_in_prev_stage) as avg_hours, "
+                    "MIN(hours_in_prev_stage) as min_hours, "
+                    "MAX(hours_in_prev_stage) as max_hours "
+                    "FROM stage_transitions GROUP BY from_stage, to_stage"
+                ).fetchall()
+                timing = {}
+                for r in timing_rows:
+                    key = r["from_stage"] + "->" + r["to_stage"]
+                    timing[key] = {
+                        "avg_hours": round(r["avg_hours"], 1),
+                        "min_hours": round(r["min_hours"], 1),
+                        "max_hours": round(r["max_hours"], 1),
+                    }
+
+                # Per-stage metrics
+                stages = [
+                    "labile",
+                    "early_ltp",
+                    "late_ltp",
+                    "consolidated",
+                    "reconsolidating",
+                ]
+                stage_metrics = {}
+                for s in stages:
+                    r = store._conn.execute(
+                        "SELECT COUNT(*) as count, "
+                        "AVG(heat) as avg_heat, AVG(importance) as avg_importance, "
+                        "AVG(replay_count) as avg_replay, AVG(access_count) as avg_access, "
+                        "AVG(encoding_strength) as avg_encoding, "
+                        "AVG(interference_score) as avg_interference, "
+                        "AVG(schema_match_score) as avg_schema, "
+                        "AVG(hippocampal_dependency) as avg_hippo, "
+                        "AVG(plasticity) as avg_plasticity, "
+                        "AVG(stability) as avg_stability, "
+                        "AVG(hours_in_stage) as avg_hours "
+                        "FROM memories WHERE consolidation_stage = %s "
+                        "AND NOT is_benchmark AND NOT is_stale",
+                        (s,),
+                    ).fetchone()
+                    stage_metrics[s] = {
+                        k: round(v, 3) if isinstance(v, float) else (v or 0)
+                        for k, v in dict(r).items()
+                    }
+
+                # Total memories
+                total = store._conn.execute(
+                    "SELECT COUNT(*) as c FROM memories "
+                    "WHERE NOT is_benchmark AND NOT is_stale"
+                ).fetchone()
+
+                body = json.dumps(
+                    {
+                        "transitions": transitions,
+                        "timing": timing,
+                        "stage_metrics": stage_metrics,
+                        "total_memories": total["c"],
+                    },
+                    default=str,
+                ).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1")

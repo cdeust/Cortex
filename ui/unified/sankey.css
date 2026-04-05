@@ -1,0 +1,211 @@
+/* Cortex Pipeline Tree — Horizontal flow, vertical columns */
+
+#sankey-container {
+  position: absolute;
+  top: 55px; left: 0; right: 0; bottom: 0;
+  display: none;
+  flex-direction: column;
+  background: var(--void, #080810);
+  z-index: 0;
+  font-family: 'JetBrains Mono', monospace;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════
+   HORIZONTAL FLOW — columns left to right
+   ═══════════════════════════════════ */
+.hf-flow {
+  flex: 1;
+  display: flex;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Stage column ── */
+.hf-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid rgba(255,255,255,0.04);
+}
+.hf-col:last-of-type {
+  border-right: none;
+}
+
+.hf-col-header {
+  padding: 10px 8px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+  min-height: 50px;
+}
+.hf-col-title {
+  font: 700 11px 'Orbitron', sans-serif;
+  color: var(--cyan, #50D0E8);
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 6px var(--cyan, #50D0E8);
+  white-space: nowrap;
+}
+.hf-col-sub {
+  font-size: 11px;
+  color: #A0B8C8;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* ── Blocks area (vertical stack) ── */
+.hf-blocks {
+  flex: 1;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+}
+.hf-blocks::-webkit-scrollbar { width: 2px; }
+.hf-blocks::-webkit-scrollbar-thumb { background: rgba(80,210,235,0.15); }
+
+/* ── Memory block ── */
+.hf-block {
+  width: 100%;
+  height: 12px;
+  min-height: 12px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.1s, box-shadow 0.1s;
+  border: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+.hf-block:hover {
+  transform: scaleY(1.8);
+  z-index: 10;
+  box-shadow: 0 0 8px currentColor;
+  border-color: rgba(255,255,255,0.3);
+}
+.hf-block-pass {
+  box-shadow: inset 0 0 2px rgba(255,255,255,0.1);
+}
+.hf-block-fail {
+  opacity: 0.2;
+  border-style: dashed;
+  border-color: rgba(224,80,80,0.3);
+}
+.hf-block-selected {
+  transform: scaleY(2.5) !important;
+  z-index: 20 !important;
+  box-shadow: 0 0 10px #FFF !important;
+  outline: 2px solid #FFF;
+}
+.hf-block-dimmed {
+  opacity: 0.04;
+}
+
+/* ── Gate labels ── */
+.hf-gate-label {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 6px 2px;
+  flex-shrink: 0;
+}
+.hf-pass-label { color: #40D870; }
+.hf-fail-label { color: #E07070; }
+
+/* ── Gate divider ── */
+.hf-gate-divider {
+  height: 2px;
+  min-height: 2px;
+  margin: 6px 0;
+  background: linear-gradient(90deg, rgba(224,80,80,0.4), rgba(224,80,80,0.1));
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+/* ── Consolidation sections ── */
+.hf-consol-section {
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 4px;
+  margin-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.hf-consol-label {
+  font: 700 9px 'Orbitron', sans-serif;
+  letter-spacing: 0.08em;
+  padding-bottom: 2px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 2px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════
+   SVG CONNECTION LINES (between columns)
+   ═══════════════════════════════════ */
+.hf-lines {
+  flex: 0.4;
+  min-width: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.hf-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.hf-line-pass {
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.4;
+}
+.hf-line-fail {
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 3,3;
+  opacity: 0.08;
+}
+.hf-line-hl {
+  stroke-width: 2.5 !important;
+  vector-effect: non-scaling-stroke;
+  opacity: 1 !important;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+/* ═══════════════════════════════════
+   LEGEND
+   ═══════════════════════════════════ */
+.hf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+.hf-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #C0D4E0;
+}
+.hf-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.hf-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 13px;
+  color: #8AA0B0;
+}

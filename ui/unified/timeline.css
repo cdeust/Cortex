@@ -18,7 +18,7 @@
 }
 .view-toggle .view-btn {
   padding: 4px 10px; font-family: 'JetBrains Mono', monospace;
-  font-size: 9px; font-weight: 500; text-transform: uppercase;
+  font-size: 11px; font-weight: 500; text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--cyan, #50D0E8);
   background: transparent; border: none; cursor: pointer;
   transition: background 0.2s, color 0.2s;
@@ -28,13 +28,171 @@
 .view-toggle .view-btn:hover:not(.active) { background: rgba(80,208,232,0.12); }
 
 /* ═══════════════════════════════════
+   FLOW HEADER STRIP
+   ═══════════════════════════════════ */
+.kb-flow-strip {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 8px 6px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.kb-flow-node {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+}
+.kb-flow-count {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 0 8px currentColor;
+}
+.kb-flow-label {
+  font: 700 11px 'Orbitron', sans-serif;
+  color: var(--sc, #50C8E0);
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 6px currentColor;
+}
+/* Percentage bar row */
+.kb-flow-pct-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 6px;
+}
+.kb-flow-pct-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.kb-flow-pct-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.kb-flow-pct {
+  font-size: 11px;
+  font-weight: 600;
+  color: #FFF;
+  min-width: 32px;
+  text-align: right;
+}
+/* Biological properties */
+.kb-flow-bio-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  width: 100%;
+}
+.kb-flow-bio-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+.kb-flow-bio-row span:first-child { color: #C0D4E0; }
+.kb-flow-bio-row span:last-child { color: #FFF; font-weight: 600; }
+/* Live metrics section */
+.kb-flow-live {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 4px 0 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.kb-flow-live-title {
+  font: 700 11px 'Orbitron', sans-serif;
+  color: var(--sc, #50C8E0);
+  letter-spacing: 0.15em;
+  text-align: center;
+  margin-bottom: 2px;
+}
+/* Advance condition */
+.kb-flow-advance {
+  font-size: 11px;
+  color: #C0D4E0;
+  text-align: center;
+  padding: 4px 6px 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  width: 100%;
+  line-height: 1.4;
+}
+/* Mini metric bars in flow nodes */
+.kb-flow-metric {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 0 6px;
+}
+.kb-flow-metric-label {
+  font-size: 11px;
+  color: #C0D4E0;
+  width: 40px;
+  min-width: 40px;
+}
+.kb-flow-metric-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.kb-flow-metric-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.kb-flow-metric-val {
+  font-size: 11px;
+  font-weight: 600;
+  color: #FFF;
+  width: 30px;
+  text-align: right;
+}
+
+.kb-flow-arrow {
+  width: 28px;
+  min-width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 16px;
+}
+.kb-flow-arrow-line {
+  width: 100%;
+  height: 2px;
+  background: var(--sc, #50C8E0);
+  opacity: 0.3;
+  position: relative;
+}
+.kb-flow-arrow-line::after {
+  content: '\u25B6';
+  position: absolute;
+  right: -6px; top: -6px;
+  font-size: 8px;
+  color: var(--sc, #50C8E0);
+  opacity: 0.5;
+}
+
+/* ═══════════════════════════════════
    BOARD — 5 columns side by side
    ═══════════════════════════════════ */
 .kb-board {
   flex: 1;
   display: flex;
   gap: 6px;
-  padding: 8px;
+  padding: 4px 8px 8px;
   overflow: hidden;
 }
 
@@ -44,9 +202,9 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: rgba(255,255,255,0.015);
+  background: rgba(255,255,255,0.02);
   border-radius: 6px;
-  border: 1px solid rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
 }
 
 /* Column header */
@@ -65,13 +223,13 @@
   text-shadow: 0 0 10px var(--sc, #50C8E0);
 }
 .kb-col-count {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--sc, #50C8E0);
-  background: rgba(255,255,255,0.04);
-  padding: 1px 6px;
+  background: rgba(255,255,255,0.06);
+  padding: 2px 8px;
   border-radius: 8px;
-  min-width: 20px;
+  min-width: 24px;
   text-align: center;
 }
 
@@ -94,9 +252,9 @@
   align-items: center;
   justify-content: center;
   height: 60px;
-  font-size: 8px;
-  color: rgba(160,200,220,0.2);
-  border: 1px dashed rgba(255,255,255,0.06);
+  font-size: 11px;
+  color: rgba(200,220,235,0.3);
+  border: 1px dashed rgba(255,255,255,0.08);
   border-radius: 4px;
 }
 
@@ -106,7 +264,7 @@
 .kb-card {
   display: flex;
   background: var(--card, #0e1018);
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 4px;
   cursor: pointer;
   transition: border-color 0.15s, opacity 0.15s, box-shadow 0.15s;
@@ -114,33 +272,33 @@
   flex-shrink: 0;
 }
 .kb-card:hover {
-  border-color: rgba(80,210,235,0.25);
+  border-color: rgba(80,210,235,0.3);
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 /* Left color indicator */
 .kb-card-indicator {
-  width: 3px;
-  min-width: 3px;
+  width: 4px;
+  min-width: 4px;
   flex-shrink: 0;
 }
 
 /* Card body */
 .kb-card-body {
   flex: 1;
-  padding: 6px 8px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
 /* Label */
 .kb-card-label {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 500;
-  color: rgba(220,235,245,0.92);
-  line-height: 1.35;
+  color: #FFF;
+  line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -151,19 +309,19 @@
 .kb-card-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .kb-card-domain {
-  font-size: 7px;
+  font-size: 11px;
   font-weight: 500;
-  color: rgba(180,210,230,0.65);
+  color: #A0C0D8;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .kb-card-time {
-  font-size: 7px;
-  color: rgba(180,210,230,0.55);
+  font-size: 11px;
+  color: #8AB0C8;
   margin-left: auto;
   flex-shrink: 0;
 }
@@ -171,30 +329,30 @@
 /* Tags */
 .kb-card-tags {
   display: flex;
-  gap: 3px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 .kb-card-tag {
-  font-size: 7px;
+  font-size: 11px;
   font-weight: 500;
-  color: rgba(80,210,235,0.7);
-  background: rgba(80,210,235,0.08);
-  padding: 1px 5px;
-  border-radius: 2px;
-  border: 1px solid rgba(80,210,235,0.12);
+  color: #50D0E8;
+  background: rgba(80,210,235,0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(80,210,235,0.15);
 }
 
 /* Bottom: heat bar + metrics + badges */
 .kb-card-bottom {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-top: 2px;
 }
 .kb-heat-bar {
-  width: 32px;
-  height: 3px;
-  background: rgba(255,255,255,0.04);
+  width: 40px;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
   border-radius: 2px;
   overflow: hidden;
   flex-shrink: 0;
@@ -205,21 +363,20 @@
   transition: width 0.3s;
 }
 .kb-card-metrics {
-  font-size: 7px;
-  color: rgba(180,210,230,0.5);
+  font-size: 11px;
+  color: #A0C0D8;
   letter-spacing: 0.03em;
 }
 
 /* Badges */
 .kb-badge {
-  font-size: 6px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
 }
 .kb-badge-protected { color: #E8B840; }
 .kb-badge-semantic {
-  color: rgba(192,112,208,0.6);
-  font-size: 5px;
+  color: #C070D0;
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -232,6 +389,16 @@
   box-shadow: 0 0 12px rgba(80,210,235,0.2) !important;
   z-index: 10;
 }
+/* Fading/dropped memories (heat < 0.1) */
+.kb-card-fading {
+  opacity: 0.4;
+  border-style: dashed;
+}
+.kb-card-fading .kb-card-label {
+  text-decoration: line-through;
+  text-decoration-color: rgba(224,80,80,0.3);
+}
+
 .kb-card-dimmed {
   opacity: 0.15;
 }
