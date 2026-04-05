@@ -102,9 +102,7 @@ class PgQueryMixin:
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_all_memories_for_decay(self) -> list[dict[str, Any]]:
-        rows = self._execute(
-            "SELECT * FROM memories WHERE NOT is_stale"
-        ).fetchall()
+        rows = self._execute("SELECT * FROM memories WHERE NOT is_stale").fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
     def delete_memories_by_tag(self, tag: str) -> int:
