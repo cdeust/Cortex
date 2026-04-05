@@ -6,17 +6,57 @@
 
 /* Detail panel */
 #detail-panel {
-  position: fixed; top: 60px; left: 50%; bottom: 20px;
-  width: 66vw;
-  transform: translateX(-50%) scale(0.95);
+  position: fixed; left: 50%; bottom: 0;
+  width: 66vw; height: calc(100vh - 70px);
+  transform: translateX(-50%) translateY(100%);
   opacity: 0; pointer-events: none;
   background: rgba(10,10,15,0.96); backdrop-filter: blur(24px);
-  border: 1px solid var(--border); border-radius: 6px;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s;
+  border: 1px solid var(--border); border-radius: 6px 6px 0 0;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s;
   z-index: 200; overflow-y: auto; padding: 28px 32px;
 }
-#detail-panel.open { transform: translateX(-50%) scale(1); opacity: 1; pointer-events: auto; }
+/* Full open — panel fills from top to bottom */
+#detail-panel.open {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1; pointer-events: auto;
+}
+/* Minimized — just a 36px peek bar at the bottom */
+#detail-panel.minimized {
+  transform: translateX(-50%) translateY(calc(100% - 36px));
+  opacity: 1; pointer-events: auto;
+  cursor: pointer;
+  overflow: hidden;
+}
+#detail-panel.minimized #detail-content { display: none; }
+#detail-panel.minimized .detail-window-btns { display: none; }
+/* Peek bar label */
+#detail-panel .detail-peek-bar {
+  display: none;
+  height: 36px;
+  align-items: center; justify-content: center; gap: 8px;
+  font: 600 8px 'Orbitron', sans-serif;
+  color: var(--cyan); letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  margin: -28px -32px 20px;
+  padding: 0 32px;
+  cursor: pointer;
+}
+#detail-panel.minimized .detail-peek-bar { display: flex; }
 #detail-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0.5; }
+
+.detail-window-btns {
+  position: absolute; top: 12px; right: 14px;
+  display: flex; gap: 6px; z-index: 10;
+}
+.window-btn {
+  background: none; border: 1px solid var(--border);
+  width: 26px; height: 26px; color: var(--text-dim); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+  border-radius: 3px;
+}
+.window-btn:hover { color: var(--cyan); border-color: var(--border-bright); box-shadow: 0 0 10px var(--cyan-glow); }
+#minimize-detail { font-size: 12px; font-weight: 700; }
 
 .close-btn {
   position: absolute; top: 14px; right: 16px; background: none; border: 1px solid var(--border);
