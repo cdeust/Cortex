@@ -44,6 +44,10 @@ def resolve_file(name: str, git_root: Path) -> str | None:
     """
     rel = _to_relative(name, git_root)
 
+    # Security: validate the relative path stays within the repo before any use
+    if not _path_within_root(rel, git_root):
+        return None
+
     # Check if it's tracked by git
     tracked = _git_cmd(["git", "ls-files", "--", rel], git_root)
     if tracked:
@@ -82,6 +86,10 @@ def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
     """
     empty = {"file": filepath, "diff_type": "none", "lines": [], "truncated": False}
 
+    # Security: validate filepath stays within repo before any use
+    if not _path_within_root(filepath, git_root):
+        return empty
+
     # 1. Unstaged working tree changes
     raw = _git_cmd(["git", "diff", "--", filepath], git_root)
     if raw:
@@ -98,13 +106,16 @@ def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
         return _build_result(filepath, "last_commit", raw, max_lines)
 
     # 4. File content at HEAD (file exists but no diff history)
-    content = _git_cmd(["git", "show", "HEAD:" + filepath], git_root)
+    # Validate: filepath must not contain null bytes or shell metacharacters
+    safe_ref = "HEAD:" + filepath
+    content = _git_cmd(["git", "show", safe_ref], git_root)
     if content:
         return _content_as_new(filepath, content, max_lines)
 
-    # 5. Direct read for untracked files — validate path stays within repo
+    # 5. Direct read for untracked files — validated path via resolve+startswith
+    resolved_root = git_root.resolve()
     full_path = (git_root / filepath).resolve()
-    if full_path.is_file() and str(full_path).startswith(str(git_root.resolve())):
+    if full_path.is_file() and str(full_path).startswith(str(resolved_root) + os.sep):
         try:
             content = full_path.read_text(errors="replace")
             if content:
@@ -113,6 +124,27 @@ def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
             pass
 
     return empty
+
+
+def _path_within_root(rel_path: str, git_root: Path) -> bool:
+    """Validate that a relative path resolves to within the git root.
+
+    Rejects path traversal attempts (e.g., ../../etc/passwd) and
+    paths containing null bytes.
+    """
+    # Reject null bytes — common injection technique
+    if "\x00" in rel_path:
+        return False
+    try:
+        resolved_root = git_root.resolve()
+        resolved_path = (git_root / rel_path).resolve()
+        # Use os.sep suffix to prevent prefix confusion (e.g., /repo-evil matching /repo)
+        return (
+            str(resolved_path).startswith(str(resolved_root) + os.sep)
+            or resolved_path == resolved_root
+        )
+    except (ValueError, OSError):
+        return False
 
 
 def _to_relative(name: str, git_root: Path) -> str:
@@ -137,12 +169,26 @@ def _git_cmd(cmd: list[str], cwd: Path) -> str:
     """Run a git command and return stripped stdout, or empty string.
 
     Security: cmd must be a list (no shell=True). All arguments are passed
-    as separate list elements to prevent shell injection. The cwd is validated
-    to be under the git root.
+    as separate list elements to prevent shell injection. Arguments are
+    validated to reject null bytes and shell metacharacters.
     """
     try:
         # Validate: only allow git commands, never shell=True
         if not cmd or cmd[0] != "git":
+            return ""
+        # Reject arguments containing null bytes (argument injection)
+        for arg in cmd:
+            if "\x00" in arg:
+                return ""
+        # Validate: only known git subcommands are allowed
+        _allowed_subcommands = {
+            "rev-parse",
+            "ls-files",
+            "diff",
+            "log",
+            "show",
+        }
+        if len(cmd) < 2 or cmd[1] not in _allowed_subcommands:
             return ""
         result = subprocess.run(  # noqa: S603
             cmd,
