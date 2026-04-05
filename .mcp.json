@@ -2,9 +2,10 @@
   "mcpServers": {
     "cortex": {
       "command": "bash",
-      "args": ["-c", "export DATABASE_URL=\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\"; export CORTEX_RUNTIME=\"${CORTEX_RUNTIME:-cli}\"; PLUGIN_ROOT=\"${CLAUDE_PLUGIN_ROOT:-.}\"; DEPS_DIR=\"${CLAUDE_PLUGIN_DATA:-/tmp/cortex-deps}/deps\"; export PYTHONPATH=\"${PLUGIN_ROOT}:${DEPS_DIR}\"; python3 -c 'import psycopg' 2>/dev/null || python3 -m pip install -q --target \"${DEPS_DIR}\" \"psycopg[binary]>=3.1\" \"pgvector>=0.3\" 2>/dev/null; cd \"${PLUGIN_ROOT}\" && exec python3 -m mcp_server"],
-      "cwd": ".",
+      "args": ["-c", "export DATABASE_URL=\"${DATABASE_URL:-postgresql://localhost:5432/cortex}\"; export CORTEX_RUNTIME=\"${CORTEX_RUNTIME:-cli}\"; export PYTHONPATH=\"${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps\"; mkdir -p \"${CLAUDE_PLUGIN_DATA}/deps\"; python3 -c 'import psycopg' 2>/dev/null || python3 -m pip install -q --target \"${CLAUDE_PLUGIN_DATA}/deps\" \"psycopg[binary]>=3.1\" \"pgvector>=0.3\" 2>/dev/null; cd \"${CLAUDE_PLUGIN_ROOT}\" && exec python3 -m mcp_server"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}",
       "env": {
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}/deps",
         "DATABASE_URL": "postgresql://localhost:5432/cortex"
       }
     }

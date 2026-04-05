@@ -124,7 +124,7 @@ class PgMemoryStore(
                 separation_index, interference_score,
                 schema_match_score, schema_id,
                 hippocampal_dependency, is_benchmark, agent_context,
-                is_global
+                is_global, stage_entered_at
             ) VALUES (
                 %(content)s, %(embedding)s, %(tags)s::jsonb, %(source)s, %(domain)s,
                 %(directory_context)s, %(created_at)s, %(last_accessed)s,
@@ -135,7 +135,7 @@ class PgMemoryStore(
                 %(separation_index)s, %(interference_score)s,
                 %(schema_match_score)s, %(schema_id)s,
                 %(hippocampal_dependency)s, %(is_benchmark)s, %(agent_context)s,
-                %(is_global)s
+                %(is_global)s, %(stage_entered_at)s
             ) RETURNING id""",
             {
                 "content": data["content"],
@@ -164,6 +164,7 @@ class PgMemoryStore(
                 "is_benchmark": data.get("is_benchmark", False),
                 "agent_context": data.get("agent_context", ""),
                 "is_global": data.get("is_global", False),
+                "stage_entered_at": data.get("stage_entered_at") or raw_created or now,
             },
         ).fetchone()
         self._conn.commit()

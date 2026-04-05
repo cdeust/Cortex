@@ -222,12 +222,47 @@ def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> No
         _log(f"gated {tool_name}: {result.get('reason', 'below_threshold')}")
 
 
+# ── Periodic cascade advancement ──────────────────────────────────────
+# Run cascade every N tool calls during active sessions.
+# Biological basis: consolidation occurs during waking rest periods
+# (Dewar et al. 2012), not only during sleep.
+
+_CASCADE_INTERVAL = 20  # Run cascade every 20 tool calls
+_tool_call_counter = 0
+
+
+def _maybe_run_cascade() -> None:
+    """Run cascade advancement if enough tool calls have accumulated."""
+    global _tool_call_counter
+    _tool_call_counter += 1
+    if _tool_call_counter < _CASCADE_INTERVAL:
+        return
+    _tool_call_counter = 0
+
+    try:
+        from mcp_server.handlers.consolidation.cascade import (
+            run_cascade_advancement,
+        )
+        from mcp_server.infrastructure.memory_store import MemoryStore
+
+        store = MemoryStore()
+        result = run_cascade_advancement(store)
+        advanced = result.get("advanced", 0)
+        if advanced > 0:
+            _log(f"cascade: {advanced} memories advanced")
+    except Exception as exc:
+        _log(f"cascade failed (non-fatal): {exc}")
+
+
 def process_event(event: dict[str, Any]) -> None:
     """Process a PostToolUse event and optionally store a memory."""
     tool_name = event.get("tool_name", "")
     tool_input = event.get("tool_input") or {}
     cwd = event.get("cwd", "")
     output = _normalize_output(event.get("tool_response") or "")
+
+    # Periodic cascade check
+    _maybe_run_cascade()
 
     should, reason = _should_capture(tool_name, tool_input, output)
     if not should:

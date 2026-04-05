@@ -142,6 +142,20 @@ CREATE TABLE IF NOT EXISTS consolidation_log (
     duration_ms         INTEGER DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS stage_transitions (
+    id                  SERIAL PRIMARY KEY,
+    memory_id           INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    from_stage          TEXT NOT NULL,
+    to_stage            TEXT NOT NULL,
+    transitioned_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    hours_in_prev_stage REAL DEFAULT 0.0,
+    trigger             TEXT DEFAULT 'cascade'
+);
+CREATE INDEX IF NOT EXISTS idx_stage_transitions_memory
+    ON stage_transitions (memory_id);
+CREATE INDEX IF NOT EXISTS idx_stage_transitions_time
+    ON stage_transitions (transitioned_at);
+
 CREATE TABLE IF NOT EXISTS engram_slots (
     slot_index          INTEGER PRIMARY KEY,
     excitability        REAL DEFAULT 0.5,
@@ -685,6 +699,19 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_memories_is_global
     ON memories (is_global) WHERE is_global = TRUE;
+
+-- Migration: add stage_entered_at for real-time cascade tracking
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'stage_entered_at'
+    ) THEN
+        ALTER TABLE memories ADD COLUMN stage_entered_at TIMESTAMPTZ;
+        -- Backfill: set to created_at for existing memories
+        UPDATE memories SET stage_entered_at = created_at WHERE stage_entered_at IS NULL;
+    END IF;
+END $$;
 """
 
 # ── Schema initialization ────────────────────────────────────────────────

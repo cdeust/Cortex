@@ -151,9 +151,18 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         return _build_empty_navigation(start_id, len(sr_graph))
 
     neighbors = _enrich_neighbors(navigation, store)
+
+    # Track replay for start memory and traversed neighbors
+    for mem_id in [start_id] + [n.get("memory_id") for n in navigation if n.get("memory_id")]:
+        try:
+            store.update_memory_access(mem_id)
+            store.increment_replay_count(mem_id)
+        except Exception:
+            pass
+
     result: dict[str, Any] = {
         "start_memory_id": start_id,
-        "start_content": start_mem["content"][:150],
+        "start_content": start_mem["content"],
         "neighbors": neighbors,
         "total": len(neighbors),
         "max_depth": max_depth,

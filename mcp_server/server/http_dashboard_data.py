@@ -92,12 +92,9 @@ def build_stats(
 def format_memory(m: dict, content_limit: int) -> dict:
     """Format a memory row for the dashboard API."""
     content = m.get("content", "")
-    truncated = (
-        content[:content_limit] + "..." if len(content) > content_limit else content
-    )
     return {
         "id": m["id"],
-        "content": truncated,
+        "content": content,
         "heat": round(m.get("heat", 0), 4),
         "importance": round(m.get("importance", 0.5), 4),
         "store_type": m.get("store_type", "episodic"),
@@ -119,6 +116,11 @@ def format_memory(m: dict, content_limit: int) -> dict:
         "interference_score": round(m.get("interference_score", 0), 4),
         "hippocampal_dependency": round(m.get("hippocampal_dependency", 1.0), 4),
         "theta_phase": round(m.get("theta_phase_at_encoding", 0), 4),
+        "encoding_strength": round(m.get("encoding_strength", 1.0), 4),
+        "separation_index": round(m.get("separation_index", 0), 4),
+        "plasticity": round(m.get("plasticity", 1.0), 4),
+        "stability": round(m.get("stability", 0), 4),
+        "last_accessed": m.get("last_accessed", ""),
     }
 
 

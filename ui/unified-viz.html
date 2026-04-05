@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/css/theme.css">
 <link rel="stylesheet" href="/css/panels.css">
 <link rel="stylesheet" href="/css/detail.css">
+<link rel="stylesheet" href="/css/timeline.css">
 </head>
 <body>
 
@@ -20,6 +21,7 @@
 <div id="scanlines"></div>
 <div id="vignette"></div>
 <div id="graph-container"></div>
+<div id="timeline-container"></div>
 
 <div id="info-panel" class="hud-panel">
   <div class="panel-header">
@@ -55,6 +57,10 @@
 </div>
 
 <div id="filter-bar">
+  <span class="view-toggle">
+    <button class="view-btn active" data-view="graph">Graph</button>
+    <button class="view-btn" data-view="timeline">Timeline</button>
+  </span>
   <button class="filter-btn" id="glossary-toggle" title="Glossary (?)">?</button>
   <span class="filter-sep"></span>
   <button class="filter-btn active" data-filter="all">All</button>
@@ -357,6 +363,7 @@
 <script src="/js/detail_diff.js"></script>
 <script src="/js/detail_panel.js"></script>
 <script src="/js/discussion_detail.js"></script>
+<script src="/js/timeline.js"></script>
 <script src="/js/controls.js"></script>
 <script src="/js/monitor.js"></script>
 <script src="/js/polling.js"></script>

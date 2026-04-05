@@ -43,11 +43,21 @@ from mcp_server.core.cascade_stages import (
 def _check_labile_advancement(
     dopamine_level: float,
     importance: float,
+    hours_in_stage: float = 0.0,
 ) -> tuple[bool, str, float]:
-    """Check LABILE -> EARLY_LTP advancement conditions."""
-    da_ready = dopamine_level > 1.0
-    importance_ready = importance > 0.6
-    readiness = min(1.0, (dopamine_level - 0.5) / 1.5 + importance * 0.3)
+    """Check LABILE -> EARLY_LTP advancement conditions.
+
+    Biological basis (Frey & Morris 1997): synaptic tagging requires
+    dopamine signal (DA >= 1.0) indicating the event was noteworthy,
+    OR sufficient importance from the encoding context.
+
+    Advances if:
+      - dopamine_level >= 1.0 (encoding signal present), OR
+      - importance > 0.3 (moderately important)
+    """
+    da_ready = dopamine_level >= 1.0
+    importance_ready = importance > 0.3
+    readiness = min(1.0, (dopamine_level - 0.5) / 1.5 + importance * 0.5)
     if da_ready or importance_ready:
         return True, ConsolidationStage.EARLY_LTP.value, readiness
     return False, ConsolidationStage.LABILE.value, readiness
@@ -56,11 +66,21 @@ def _check_labile_advancement(
 def _check_early_ltp_advancement(
     replay_count: int,
     importance: float,
+    hours_in_stage: float = 0.0,
 ) -> tuple[bool, str, float]:
-    """Check EARLY_LTP -> LATE_LTP advancement conditions."""
+    """Check EARLY_LTP -> LATE_LTP advancement conditions.
+
+    Biological basis (Kandel 2001): transition to late LTP requires
+    protein synthesis triggered by replay (reactivation) or high
+    importance (strong initial encoding).
+
+    Advances if:
+      - replay_count >= 1 (memory has been replayed/accessed), OR
+      - importance > 0.4 (strong encoding)
+    """
     replay_ready = replay_count >= 1
-    importance_boost = importance > 0.7
-    readiness = min(1.0, replay_count / 2.0 + importance * 0.3)
+    importance_boost = importance > 0.4
+    readiness = min(1.0, replay_count / 2.0 + importance * 0.5)
     if replay_ready or importance_boost:
         return True, ConsolidationStage.LATE_LTP.value, readiness
     return False, ConsolidationStage.EARLY_LTP.value, readiness
@@ -69,8 +89,17 @@ def _check_early_ltp_advancement(
 def _check_late_ltp_advancement(
     replay_count: int,
     schema_match: float,
+    hours_in_stage: float = 0.0,
 ) -> tuple[bool, str, float]:
-    """Check LATE_LTP -> CONSOLIDATED advancement conditions."""
+    """Check LATE_LTP -> CONSOLIDATED advancement conditions.
+
+    Biological basis (McClelland 1995, Kandel 2001): systems consolidation
+    requires hippocampal replay to transfer traces to cortical networks.
+    Schema-consistent memories consolidate faster (Tse 2007).
+
+    Advances if:
+      - replay_count >= replay_threshold (3 normally, 1 with schema > 0.5)
+    """
     replay_threshold = 3 if schema_match < 0.5 else 1
     replay_ready = replay_count >= replay_threshold
     readiness = min(1.0, replay_count / max(replay_threshold, 1))
@@ -144,11 +173,11 @@ def compute_advancement_readiness(
         return False, current_stage, min(readiness, 0.99)
 
     if stage == ConsolidationStage.LABILE:
-        return _check_labile_advancement(dopamine_level, importance)
+        return _check_labile_advancement(dopamine_level, importance, hours_in_stage)
     if stage == ConsolidationStage.EARLY_LTP:
-        return _check_early_ltp_advancement(replay_count, importance)
+        return _check_early_ltp_advancement(replay_count, importance, hours_in_stage)
     if stage == ConsolidationStage.LATE_LTP:
-        return _check_late_ltp_advancement(replay_count, schema_match)
+        return _check_late_ltp_advancement(replay_count, schema_match, hours_in_stage)
     if stage == ConsolidationStage.RECONSOLIDATING:
         return _check_reconsolidating_advancement(hours_in_stage, min_dwell)
     return False, current_stage, 1.0

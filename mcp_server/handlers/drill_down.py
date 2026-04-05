@@ -91,7 +91,7 @@ def _enrich_leaf_memories(
             children.append(
                 {
                     "memory_id": mid,
-                    "content": mem["content"][:300],
+                    "content": mem["content"],
                     "heat": round(mem.get("heat", 0), 4),
                     "domain": mem.get("domain", ""),
                     "tags": mem.get("tags", []),
@@ -161,6 +161,15 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     store = _get_store()
     if "memory_id" in children_raw[0]:
         children = _enrich_leaf_memories(children_raw, store)
+        # Track replay for drilled-into memories
+        for child in children:
+            mid = child.get("memory_id")
+            if mid:
+                try:
+                    store.update_memory_access(mid)
+                    store.increment_replay_count(mid)
+                except Exception:
+                    pass
     else:
         children = _format_cluster_children(children_raw)
 

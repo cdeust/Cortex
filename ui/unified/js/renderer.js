@@ -190,6 +190,26 @@
     requestAnimationFrame(init);
   }
 
+  // ── View switching ──
+  JUG.on('state:activeView', function(e) {
+    var graphContainer = document.getElementById('graph-container');
+    var infoPanel = document.getElementById('info-panel');
+    var legend = document.getElementById('legend');
+    var statusBar = document.getElementById('status-bar');
+    var isGraph = e.value === 'graph';
+
+    if (graphContainer) graphContainer.style.display = isGraph ? 'block' : 'none';
+    if (infoPanel) infoPanel.style.display = isGraph ? '' : 'none';
+    if (legend) legend.style.display = isGraph ? '' : 'none';
+    if (statusBar) statusBar.style.display = isGraph ? '' : 'none';
+
+    if (isGraph) {
+      if (graph) graph.resumeAnimation();
+    } else {
+      if (graph) graph.pauseAnimation();
+    }
+  });
+
   JUG.setGraphData = setGraphData;
   JUG.resetCamera = resetView;
   JUG.selectNodeById = selectNodeById;
