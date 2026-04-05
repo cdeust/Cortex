@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
 import time
@@ -409,7 +410,17 @@ def _build_discussion_detail(session_id: str) -> dict:
         from mcp_server.infrastructure.config import CLAUDE_DIR
 
         project = conv.get("project", "")
-        file_path = str(CLAUDE_DIR / "projects" / project / f"{session_id}.jsonl")
+        # Security: sanitize project to prevent path traversal
+        safe_project = Path(project).name if project else ""
+        file_path = str(CLAUDE_DIR / "projects" / safe_project / f"{session_id}.jsonl")
+
+    # Security: validate resolved path stays within CLAUDE_DIR
+    from mcp_server.infrastructure.config import CLAUDE_DIR as _claude_dir
+
+    resolved_fp = Path(file_path).resolve()
+    resolved_base = _claude_dir.resolve()
+    if not str(resolved_fp).startswith(str(resolved_base) + os.sep):
+        return {"error": "Invalid file path", "sessionId": session_id}
 
     raw = read_full_conversation(file_path)
     messages = format_conversation_messages(raw)
@@ -491,10 +502,20 @@ def _build_methodology_handler(ui_root: Path) -> type:
 
 def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> None:
     """Serve a static file, sanitizing filename."""
+    # Security: strip all path components, keep only the final filename
     safe_name = Path(filename).name
-    file_path = (base_dir / safe_name).resolve()
-    # Validate: resolved path must stay within base_dir
-    if not str(file_path).startswith(str(base_dir.resolve())):
+    # Reject empty names, hidden files, and null bytes
+    if not safe_name or safe_name.startswith(".") or "\x00" in safe_name:
+        handler.send_response(403)
+        handler.end_headers()
+        return
+    resolved_base = base_dir.resolve()
+    file_path = (resolved_base / safe_name).resolve()
+    # Validate: resolved path must stay within base_dir (with os.sep to avoid prefix confusion)
+    if not (
+        str(file_path).startswith(str(resolved_base) + os.sep)
+        or file_path == resolved_base
+    ):
         handler.send_response(403)
         handler.end_headers()
         return

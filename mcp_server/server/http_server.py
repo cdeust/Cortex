@@ -7,6 +7,7 @@ Auto-shuts down after 10 minutes of inactivity.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -133,11 +134,20 @@ def _serve_graph_json(handler, server_state: dict) -> None:
 def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> None:
     """Serve a static file from the given directory."""
     try:
-        # Sanitize: strip path components, use only the basename
+        # Security: strip all path components, keep only the final filename
         safe_name = Path(filename).name
-        file_path = (base_dir / safe_name).resolve()
-        # Validate: resolved path must stay within base_dir
-        if not str(file_path).startswith(str(base_dir.resolve())):
+        # Reject empty names, hidden files, and null bytes
+        if not safe_name or safe_name.startswith(".") or "\x00" in safe_name:
+            handler.send_response(403)
+            handler.end_headers()
+            return
+        resolved_base = base_dir.resolve()
+        file_path = (resolved_base / safe_name).resolve()
+        # Validate: resolved path must stay within base_dir (os.sep prevents prefix confusion)
+        if not (
+            str(file_path).startswith(str(resolved_base) + os.sep)
+            or file_path == resolved_base
+        ):
             handler.send_response(403)
             handler.end_headers()
             return
