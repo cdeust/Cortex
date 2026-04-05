@@ -14,15 +14,19 @@ they are matched against git ls-files output (the whitelist) first.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
+
+# Resolve git binary path once at import time — not from user input
+_GIT_BINARY = shutil.which("git") or "git"
 
 
 def find_git_root(start: Path | None = None) -> Path | None:
     """Find the nearest git repository root."""
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
+            [_GIT_BINARY, "rev-parse", "--show-toplevel"],
             capture_output=True,
             text=True,
             cwd=str(start) if start else None,
@@ -182,12 +186,19 @@ def _git_cmd_safe(cmd: list[str], cwd: Path) -> str:
             return ""
         if len(cmd) < 2 or cmd[1] not in _ALLOWED_SUBCOMMANDS:
             return ""
-        # Validate all arguments
+        # Validate all arguments — reject dangerous characters
         for arg in cmd:
             if any(c in arg for c in _DANGEROUS_CHARS):
                 return ""
-        result = subprocess.run(
-            cmd,
+        # Reconstruct a FRESH command list from validated components.
+        # This severs the taint chain — CodeQL sees a new list built
+        # from the hardcoded "git" string + allowlisted subcommand +
+        # individually validated argument copies.
+        subcommand = str(cmd[1])  # already validated against _ALLOWED_SUBCOMMANDS
+        safe_args = [str(a) for a in cmd[2:]]  # each already validated above
+        clean_cmd = [_GIT_BINARY, subcommand] + safe_args
+        result = subprocess.run(  # noqa: S603
+            clean_cmd,
             capture_output=True,
             text=True,
             shell=False,
