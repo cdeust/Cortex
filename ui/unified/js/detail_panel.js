@@ -169,21 +169,60 @@
 
   function closeDetailPanel() {
     var panel = document.getElementById('detail-panel');
-    if (panel) panel.classList.remove('open');
+    if (panel) {
+      panel.classList.remove('open');
+      panel.classList.remove('minimized');
+    }
   }
 
   // Event listeners
   JUG.on('graph:selectNode', function(node) { openDetailPanel(node); });
   JUG.on('graph:deselectNode', closeDetailPanel);
 
+  function minimizeDetailPanel() {
+    var panel = document.getElementById('detail-panel');
+    if (!panel) return;
+    panel.classList.remove('open');
+    panel.classList.add('minimized');
+  }
+
+  function restoreDetailPanel() {
+    var panel = document.getElementById('detail-panel');
+    if (!panel) return;
+    panel.classList.remove('minimized');
+    panel.classList.add('open');
+  }
+
   document.addEventListener('DOMContentLoaded', function() {
+    // Minimize: slide panel down to peek bar, keep selection
+    var minBtn = document.getElementById('minimize-detail');
+    if (minBtn) minBtn.addEventListener('click', function() {
+      minimizeDetailPanel();
+    });
+
+    // Peek bar: click to restore full panel
+    var peekBar = document.getElementById('detail-peek');
+    if (peekBar) peekBar.addEventListener('click', function() {
+      restoreDetailPanel();
+    });
+
+    // Close: deselect node entirely
     var closeBtn = document.getElementById('close-detail');
-    if (closeBtn) closeBtn.addEventListener('click', function() { JUG.deselectNode(); });
+    if (closeBtn) closeBtn.addEventListener('click', function() {
+      JUG.deselectNode();
+    });
   });
 
   window.addEventListener('keydown', function(e) {
-    if (e.target.tagName === 'INPUT') return;
-    if (e.key === 'Escape') JUG.deselectNode();
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'Escape') {
+      var panel = document.getElementById('detail-panel');
+      if (panel && panel.classList.contains('open')) minimizeDetailPanel();
+      else if (panel && panel.classList.contains('minimized')) {
+        panel.classList.remove('minimized');
+        JUG.deselectNode();
+      }
+    }
   });
 
   JUG.openDetailPanel = openDetailPanel;
