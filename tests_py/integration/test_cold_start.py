@@ -105,9 +105,7 @@ class TestSessionStartHook:
             "session_files": 150,
         }
         # Mock _auto_backfill to avoid actual DB operations
-        with patch(
-            "mcp_server.hooks.session_start._auto_backfill", return_value=42
-        ):
+        with patch("mcp_server.hooks.session_start._auto_backfill", return_value=42):
             msg = _build_cold_start_message(setup_result)
 
         assert "auto-imported" in msg.lower() or "42 memories" in msg
