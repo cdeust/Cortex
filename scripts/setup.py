@@ -58,6 +58,7 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 
 # ── Step 1: Python version check ──────────────────────────────────────
 
+
 def check_python() -> None:
     step("Python")
     v = sys.version_info
@@ -68,6 +69,7 @@ def check_python() -> None:
 
 # ── Step 2: PostgreSQL check ──────────────────────────────────────────
 
+
 def check_postgresql() -> None:
     step("PostgreSQL")
 
@@ -75,18 +77,27 @@ def check_postgresql() -> None:
     result = run(["pg_isready"])
     if result.returncode != 0:
         if sys.platform == "win32":
-            warn("PostgreSQL not running. Install from: https://www.postgresql.org/download/windows/")
+            warn(
+                "PostgreSQL not running. Install from: https://www.postgresql.org/download/windows/"
+            )
             warn("Then start the PostgreSQL service from Windows Services.")
         elif sys.platform == "darwin":
-            warn("PostgreSQL not running. Install with: brew install postgresql@17 && brew services start postgresql@17")
+            warn(
+                "PostgreSQL not running. Install with: brew install postgresql@17 && brew services start postgresql@17"
+            )
         else:
-            warn("PostgreSQL not running. Install with: sudo apt install postgresql && sudo systemctl start postgresql")
-        fail("PostgreSQL must be running before setup. Start it and re-run this script.")
+            warn(
+                "PostgreSQL not running. Install with: sudo apt install postgresql && sudo systemctl start postgresql"
+            )
+        fail(
+            "PostgreSQL must be running before setup. Start it and re-run this script."
+        )
 
     ok("PostgreSQL running")
 
 
 # ── Step 3: Python dependencies ───────────────────────────────────────
+
 
 def install_deps() -> None:
     step("Python dependencies")
@@ -105,11 +116,18 @@ def install_deps() -> None:
     ]
 
     print("Installing Python packages...")
-    result = run([
-        sys.executable, "-m", "pip", "install", "-q",
-        "--target", DEPS_DIR,
-        *packages,
-    ])
+    result = run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "--target",
+            DEPS_DIR,
+            *packages,
+        ]
+    )
 
     if result.returncode != 0:
         warn(f"pip install had issues: {result.stderr[:200]}")
@@ -118,6 +136,7 @@ def install_deps() -> None:
 
 
 # ── Step 4: Database setup ────────────────────────────────────────────
+
 
 def setup_database() -> None:
     step("Database & schema")
@@ -141,11 +160,16 @@ def setup_database() -> None:
         memories = data.get("memories", 0)
         ok(f"Database ready ({memories} memories)")
     else:
-        msg = data.get("message", result.stderr[:200]) if isinstance(data, dict) else result.stdout[:200]
+        msg = (
+            data.get("message", result.stderr[:200])
+            if isinstance(data, dict)
+            else result.stdout[:200]
+        )
         fail(f"Database setup failed: {msg}")
 
 
 # ── Step 5: Embedding model ──────────────────────────────────────────
+
 
 def cache_embedding_model() -> None:
     step("Embedding model")
@@ -153,12 +177,16 @@ def cache_embedding_model() -> None:
     sys.path.insert(0, DEPS_DIR)
     print("Pre-caching sentence-transformers model (one-time ~100MB download)...")
 
-    result = run([
-        sys.executable, "-c",
-        "from sentence_transformers import SentenceTransformer; "
-        "m = SentenceTransformer('all-MiniLM-L6-v2'); "
-        "print(f'Model loaded: {m.encode([\"test\"]).shape[1]}D embeddings')",
-    ], env={**os.environ, "PYTHONPATH": f"{PROJECT_DIR}{os.pathsep}{DEPS_DIR}"})
+    result = run(
+        [
+            sys.executable,
+            "-c",
+            "from sentence_transformers import SentenceTransformer; "
+            "m = SentenceTransformer('all-MiniLM-L6-v2'); "
+            "print(f'Model loaded: {m.encode([\"test\"]).shape[1]}D embeddings')",
+        ],
+        env={**os.environ, "PYTHONPATH": f"{PROJECT_DIR}{os.pathsep}{DEPS_DIR}"},
+    )
 
     if result.returncode == 0:
         ok("Embedding model cached")
@@ -167,6 +195,7 @@ def cache_embedding_model() -> None:
 
 
 # ── Step 6: Verify ───────────────────────────────────────────────────
+
 
 def verify() -> None:
     step("Verification")
@@ -177,6 +206,7 @@ def verify() -> None:
     # PostgreSQL
     try:
         import psycopg
+
         conn = psycopg.connect(DATABASE_URL, autocommit=True)
         conn.execute("SELECT 1")
         checks.append(("PostgreSQL connection", True))
@@ -207,6 +237,7 @@ def verify() -> None:
     # sentence-transformers
     try:
         import sentence_transformers  # noqa: F401
+
         checks.append(("sentence-transformers", True))
     except ImportError:
         checks.append(("sentence-transformers", False))
@@ -214,6 +245,7 @@ def verify() -> None:
     # FlashRank
     try:
         from flashrank import Ranker  # noqa: F401
+
         checks.append(("FlashRank reranker", True))
     except ImportError:
         checks.append(("FlashRank reranker", False))
@@ -230,6 +262,7 @@ def verify() -> None:
 
 
 # ── Main ─────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     print(f"Cortex setup — {sys.platform}")

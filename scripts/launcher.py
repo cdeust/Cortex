@@ -48,9 +48,15 @@ def _ensure_deps(deps_dir: str) -> None:
     except ImportError:
         subprocess.run(
             [
-                sys.executable, "-m", "pip", "install", "-q",
-                "--target", deps_dir,
-                "psycopg[binary]>=3.1", "pgvector>=0.3",
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-q",
+                "--target",
+                deps_dir,
+                "psycopg[binary]>=3.1",
+                "pgvector>=0.3",
             ],
             capture_output=True,
         )
@@ -64,9 +70,15 @@ def _ensure_all_deps(deps_dir: str) -> None:
     except ImportError:
         subprocess.run(
             [
-                sys.executable, "-m", "pip", "install", "-q",
-                "--target", deps_dir,
-                "sentence-transformers>=2.2.0", "flashrank>=0.2.0",
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-q",
+                "--target",
+                deps_dir,
+                "sentence-transformers>=2.2.0",
+                "flashrank>=0.2.0",
             ],
             capture_output=True,
         )
@@ -74,7 +86,10 @@ def _ensure_all_deps(deps_dir: str) -> None:
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("Usage: python3 scripts/launcher.py <module> [--install-deps]", file=sys.stderr)
+        print(
+            "Usage: python3 scripts/launcher.py <module> [--install-deps]",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     module = sys.argv[1]
@@ -112,6 +127,7 @@ def main() -> None:
     sys.argv = [module] + [a for a in sys.argv[2:] if a != "--install-deps"]
     try:
         from runpy import run_module
+
         run_module(module, run_name="__main__", alter_sys=True)
     except SystemExit:
         raise
