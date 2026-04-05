@@ -273,13 +273,30 @@
 
     container.appendChild(flow);
 
+    // Sync scroll: when any column scrolls, all others follow + redraw lines
+    var allScrollable = flow.querySelectorAll('.hf-blocks');
+    var syncing = false;
+    allScrollable.forEach(function(scrollEl) {
+      scrollEl.addEventListener('scroll', function() {
+        if (syncing) return;
+        syncing = true;
+        var top = scrollEl.scrollTop;
+        allScrollable.forEach(function(other) {
+          if (other !== scrollEl) other.scrollTop = top;
+        });
+        syncing = false;
+        // Redraw lines at new positions
+        drawLinesPostRender();
+      });
+    });
+
     // Draw connection lines after DOM layout is complete
     requestAnimationFrame(function() {
       requestAnimationFrame(drawLinesPostRender);
     });
   }
 
-  // ── Draw lines AFTER DOM render using real block positions ──
+  // ── Canvas connection lines — drawn after DOM render ──
   function drawLinesPostRender() {
     if (!container) return;
     var flow = container.querySelector('.hf-flow');
@@ -288,9 +305,7 @@
     var cols = flow.querySelectorAll('.hf-col');
     var lineCols = flow.querySelectorAll('.hf-lines');
 
-    // For each line column (between col[i-1] and col[i])
     lineCols.forEach(function(lineCol) {
-      lineCol.innerHTML = ''; // clear any previous lines
       var si = parseInt(lineCol.dataset.stageIdx);
       if (isNaN(si) || si < 1) return;
 
@@ -298,9 +313,17 @@
       var nextCol = cols[si];
       if (!prevCol || !nextCol) return;
 
-      var lineRect = lineCol.getBoundingClientRect();
+      // Create canvas filling the line column
+      var rect = lineCol.getBoundingClientRect();
+      var canvas = document.createElement('canvas');
+      var dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.className = 'hf-canvas';
+      var ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
 
-      // Get all blocks in previous and next columns, indexed by memId
+      // Map blocks by memId
       var prevBlocks = {};
       prevCol.querySelectorAll('.hf-block').forEach(function(b) {
         prevBlocks[b.dataset.memId] = b;
@@ -310,61 +333,102 @@
         nextBlocks[b.dataset.memId] = b;
       });
 
-      // Draw lines: fail first (behind), then pass
+      var w = rect.width;
       var memIds = Object.keys(prevBlocks);
-      [true, false].forEach(function(failFirst) {
+
+      // Store line data for highlight
+      lineCol._lineData = [];
+
+      // Draw fail lines first (behind)
+      [true, false].forEach(function(drawFail) {
         memIds.forEach(function(memId) {
           var prevB = prevBlocks[memId];
           var nextB = nextBlocks[memId];
           if (!prevB || !nextB) return;
 
           var isFail = nextB.classList.contains('hf-block-fail');
-          if (failFirst !== isFail) return;
+          if (drawFail !== isFail) return;
 
           var prevRect = prevB.getBoundingClientRect();
           var nextRect = nextB.getBoundingClientRect();
+          var y1 = prevRect.top + prevRect.height / 2 - rect.top;
+          var y2 = nextRect.top + nextRect.height / 2 - rect.top;
+          var color = prevB.style.background || '#50C8E0';
 
-          // Y positions relative to line column
-          var y1 = prevRect.top + prevRect.height / 2 - lineRect.top;
-          var y2 = nextRect.top + nextRect.height / 2 - lineRect.top;
+          lineCol._lineData.push({ memId: memId, y1: y1, y2: y2, color: color, fail: isFail });
 
-          var line = el('div', isFail ? 'hf-line hf-line-fail' : 'hf-line hf-line-pass');
-          line.dataset.memId = memId;
-
-          // Get the memory's domain color from the block
-          line.style.borderColor = prevB.style.background || '#50C8E0';
-
-          var top = Math.min(y1, y2);
-          var height = Math.abs(y2 - y1);
-
-          if (height < 2) {
-            line.style.top = y1 + 'px';
-            line.style.left = '0';
-            line.style.right = '0';
-            line.style.height = '0';
-            line.style.borderTopWidth = '1px';
-            line.style.borderTopStyle = isFail ? 'dashed' : 'solid';
+          ctx.beginPath();
+          ctx.moveTo(0, y1);
+          ctx.bezierCurveTo(w * 0.4, y1, w * 0.6, y2, w, y2);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = isFail ? 0.5 : 1;
+          ctx.globalAlpha = isFail ? 0.06 : 0.3;
+          if (isFail) {
+            ctx.setLineDash([2, 4]);
           } else {
-            line.style.top = top + 'px';
-            line.style.height = height + 'px';
-            line.style.left = '0';
-            line.style.right = '0';
-            if (y2 >= y1) {
-              line.style.borderRightWidth = '1px';
-              line.style.borderRightStyle = isFail ? 'dashed' : 'solid';
-              line.style.borderBottomWidth = '1px';
-              line.style.borderBottomStyle = isFail ? 'dashed' : 'solid';
-            } else {
-              line.style.borderRightWidth = '1px';
-              line.style.borderRightStyle = isFail ? 'dashed' : 'solid';
-              line.style.borderTopWidth = '1px';
-              line.style.borderTopStyle = isFail ? 'dashed' : 'solid';
-            }
+            ctx.setLineDash([]);
           }
-
-          lineCol.appendChild(line);
+          ctx.stroke();
         });
       });
+
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+
+      lineCol.innerHTML = '';
+      lineCol.appendChild(canvas);
+    });
+  }
+
+  // ── Redraw lines with highlight ──
+  function redrawLinesHighlight(highlightId) {
+    if (!container) return;
+    var lineCols = container.querySelectorAll('.hf-lines');
+    lineCols.forEach(function(lineCol) {
+      var canvas = lineCol.querySelector('canvas');
+      if (!canvas || !lineCol._lineData) return;
+
+      var dpr = window.devicePixelRatio || 1;
+      var ctx = canvas.getContext('2d');
+      var w = canvas.width / dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, canvas.height / dpr);
+
+      lineCol._lineData.forEach(function(d) {
+        var isHL = d.memId === highlightId;
+        ctx.beginPath();
+        ctx.moveTo(0, d.y1);
+        ctx.bezierCurveTo(w * 0.4, d.y1, w * 0.6, d.y2, w, d.y2);
+        ctx.strokeStyle = d.color;
+
+        if (highlightId) {
+          if (isHL) {
+            ctx.lineWidth = 2.5;
+            ctx.globalAlpha = 1;
+            ctx.shadowColor = d.color;
+            ctx.shadowBlur = 4;
+          } else {
+            ctx.lineWidth = 0.5;
+            ctx.globalAlpha = 0.03;
+            ctx.shadowBlur = 0;
+          }
+        } else {
+          ctx.lineWidth = d.fail ? 0.5 : 1;
+          ctx.globalAlpha = d.fail ? 0.06 : 0.3;
+          ctx.shadowBlur = 0;
+        }
+
+        if (d.fail && !isHL) {
+          ctx.setLineDash([2, 4]);
+        } else {
+          ctx.setLineDash([]);
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      });
+
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
     });
   }
 
@@ -391,13 +455,7 @@
       b.classList.toggle('hf-block-selected', b.dataset.memId === id);
       b.classList.toggle('hf-block-dimmed', b.dataset.memId !== id);
     });
-    container.querySelectorAll('.hf-line').forEach(function(l) {
-      if (l.dataset.memId === id) {
-        l.classList.add('hf-line-hl');
-      } else {
-        l.style.opacity = '0.01';
-      }
-    });
+    redrawLinesHighlight(id);
   }
 
   function clearHL() {
@@ -406,10 +464,7 @@
     container.querySelectorAll('.hf-block').forEach(function(b) {
       b.classList.remove('hf-block-selected', 'hf-block-dimmed');
     });
-    container.querySelectorAll('.hf-line').forEach(function(l) {
-      l.classList.remove('hf-line-hl');
-      l.style.opacity = '';
-    });
+    redrawLinesHighlight(null);
   }
 
   function el(tag, cls) {
