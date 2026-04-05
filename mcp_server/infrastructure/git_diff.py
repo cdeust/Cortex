@@ -45,7 +45,7 @@ def _get_tracked_files(git_root: Path) -> set[str]:
     This is the ONLY source of truth for valid file paths.
     User-controlled paths must match an entry in this set.
     """
-    raw = _git_cmd_safe(["git", "ls-files"], git_root)
+    raw = _git_cmd_safe("ls-files", [], git_root)
     if not raw:
         return set()
     return set(raw.splitlines())
@@ -94,7 +94,7 @@ def resolve_file(name: str, git_root: Path) -> str | None:
         return match
 
     # Check staged files
-    staged = _git_cmd_safe(["git", "diff", "--staged", "--name-only"], git_root)
+    staged = _git_cmd_safe("diff", ["--staged", "--name-only"], git_root)
     if staged:
         staged_files = set(staged.splitlines())
         match = _match_in_whitelist(clean, staged_files)
@@ -114,7 +114,7 @@ def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
 
     # Validate: filepath must exist in git's tracked/staged files
     tracked = _get_tracked_files(git_root)
-    staged_raw = _git_cmd_safe(["git", "diff", "--staged", "--name-only"], git_root)
+    staged_raw = _git_cmd_safe("diff", ["--staged", "--name-only"], git_root)
     staged_files = set(staged_raw.splitlines()) if staged_raw else set()
     all_known = tracked | staged_files
 
@@ -125,7 +125,7 @@ def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
     if not safe_path:
         # Last resort: check if git show HEAD:<path> works
         # This is safe because git itself validates the path
-        test = _git_cmd_safe(["git", "show", "HEAD:" + filepath], git_root)
+        test = _git_cmd_safe("show", ["HEAD:" + filepath], git_root)
         if test:
             safe_path = filepath
         else:
@@ -134,24 +134,22 @@ def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
     # From here, safe_path came from git's own output — safe to use
 
     # 1. Unstaged working tree changes
-    raw = _git_cmd_safe(["git", "diff", "--", safe_path], git_root)
+    raw = _git_cmd_safe("diff", ["--", safe_path], git_root)
     if raw:
         return _build_result(safe_path, "uncommitted", raw, max_lines)
 
     # 2. Staged changes
-    raw = _git_cmd_safe(["git", "diff", "--staged", "--", safe_path], git_root)
+    raw = _git_cmd_safe("diff", ["--staged", "--", safe_path], git_root)
     if raw:
         return _build_result(safe_path, "staged", raw, max_lines)
 
     # 3. Most recent commit
-    raw = _git_cmd_safe(
-        ["git", "log", "-1", "-p", "--format=", "--", safe_path], git_root
-    )
+    raw = _git_cmd_safe("log", ["-1", "-p", "--format=", "--", safe_path], git_root)
     if raw:
         return _build_result(safe_path, "last_commit", raw, max_lines)
 
     # 4. File content at HEAD
-    content = _git_cmd_safe(["git", "show", "HEAD:" + safe_path], git_root)
+    content = _git_cmd_safe("show", ["HEAD:" + safe_path], git_root)
     if content:
         return _content_as_new(safe_path, content, max_lines)
 
@@ -174,30 +172,28 @@ _ALLOWED_SUBCOMMANDS = frozenset(
 _DANGEROUS_CHARS = frozenset(";|&$`\n\r\x00")
 
 
-def _git_cmd_safe(cmd: list[str], cwd: Path) -> str:
+def _git_cmd_safe(subcommand: str, args: list[str], cwd: Path) -> str:
     """Run a git command with strict validation.
 
-    Only allows known git subcommands. Rejects arguments with
-    shell metacharacters or null bytes. Always uses shell=False.
+    Args:
+        subcommand: Git subcommand (must be in _ALLOWED_SUBCOMMANDS).
+        args: Additional arguments (each validated for dangerous chars).
+        cwd: Working directory for the git command.
+
+    The command list is built internally from _GIT_BINARY (resolved at
+    import time) + the validated subcommand + validated args. No caller
+    data flows directly into subprocess.run.
     """
     try:
-        if not cmd or cmd[0] != "git":
+        if subcommand not in _ALLOWED_SUBCOMMANDS:
             return ""
-        if len(cmd) < 2 or cmd[1] not in _ALLOWED_SUBCOMMANDS:
-            return ""
-        # Validate all arguments — reject dangerous characters
-        for arg in cmd:
+        for arg in args:
             if any(c in arg for c in _DANGEROUS_CHARS):
                 return ""
-        # Reconstruct a FRESH command list from validated components.
-        # This severs the taint chain — CodeQL sees a new list built
-        # from the hardcoded "git" string + allowlisted subcommand +
-        # individually validated argument copies.
-        subcommand = str(cmd[1])  # already validated against _ALLOWED_SUBCOMMANDS
-        safe_args = [str(a) for a in cmd[2:]]  # each already validated above
-        clean_cmd = [_GIT_BINARY, subcommand] + safe_args
+        # Build command from trusted binary + validated components
+        run_cmd = [_GIT_BINARY, subcommand] + args
         result = subprocess.run(  # noqa: S603
-            clean_cmd,
+            run_cmd,
             capture_output=True,
             text=True,
             shell=False,
