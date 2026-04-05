@@ -7,7 +7,6 @@ Auto-shuts down after 10 minutes of inactivity.
 from __future__ import annotations
 
 import json
-import os
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
