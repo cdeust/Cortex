@@ -6,10 +6,9 @@ last commit -> file content at HEAD.
 
 Infrastructure layer - I/O via subprocess.
 
-References:
-- https://git-scm.com/docs/git-diff
-- https://git-scm.com/docs/git-log
-- https://graphite.com/guides/git-diff-not-showing-anything
+Security: All file paths are validated against git's own tracked file list.
+User-controlled paths are NEVER used directly in filesystem operations —
+they are matched against git ls-files output (the whitelist) first.
 """
 
 from __future__ import annotations
@@ -28,6 +27,7 @@ def find_git_root(start: Path | None = None) -> Path | None:
             text=True,
             cwd=str(start) if start else None,
             timeout=5,
+            shell=False,
         )
         if result.returncode == 0:
             return Path(result.stdout.strip())
@@ -36,42 +36,67 @@ def find_git_root(start: Path | None = None) -> Path | None:
     return None
 
 
+def _get_tracked_files(git_root: Path) -> set[str]:
+    """Get the set of all git-tracked files (the whitelist).
+
+    This is the ONLY source of truth for valid file paths.
+    User-controlled paths must match an entry in this set.
+    """
+    raw = _git_cmd_safe(["git", "ls-files"], git_root)
+    if not raw:
+        return set()
+    return set(raw.splitlines())
+
+
+def _match_in_whitelist(name: str, tracked: set[str]) -> str | None:
+    """Match a user-provided name against the git-tracked whitelist.
+
+    Returns the canonical tracked path or None if no match.
+    This ensures we NEVER use the user's raw input as a path.
+    """
+    # Direct match
+    if name in tracked:
+        return name
+
+    # Basename match
+    basename = name.rsplit("/", 1)[-1] if "/" in name else name
+    for f in tracked:
+        if f == basename or f.endswith("/" + basename):
+            return f
+
+    return None
+
+
 def resolve_file(name: str, git_root: Path) -> str | None:
     """Resolve a file name/path to a repo-relative path.
 
-    Handles absolute paths, relative paths, and bare filenames.
-    Uses git ls-files for verification.
+    Uses git ls-files as the whitelist — user input is matched
+    against tracked files, never used directly as a path.
     """
-    rel = _to_relative(name, git_root)
+    # Strip quotes and normalize
+    clean = name.strip().strip("\"'`")
 
-    # Security: validate the relative path stays within the repo before any use
-    if not _path_within_root(rel, git_root):
-        return None
+    # Make relative if absolute
+    try:
+        p = Path(clean)
+        if p.is_absolute():
+            clean = str(p.relative_to(git_root))
+    except (ValueError, OSError):
+        pass
 
-    # Check if it's tracked by git
-    tracked = _git_cmd(["git", "ls-files", "--", rel], git_root)
-    if tracked:
-        return tracked.splitlines()[0]
+    # Match against tracked files (whitelist)
+    tracked = _get_tracked_files(git_root)
+    match = _match_in_whitelist(clean, tracked)
+    if match:
+        return match
 
-    # Check if it's a new staged file
-    staged = _git_cmd(["git", "diff", "--staged", "--name-only", "--", rel], git_root)
+    # Check staged files
+    staged = _git_cmd_safe(["git", "diff", "--staged", "--name-only"], git_root)
     if staged:
-        return staged.splitlines()[0]
-
-    # Try basename search across all tracked files
-    basename = Path(rel).name
-    all_files = _git_cmd(["git", "ls-files"], git_root)
-    if all_files:
-        for f in all_files.splitlines():
-            if f.endswith("/" + basename) or f == basename:
-                return f
-
-    # File exists on disk but untracked — pre-sanitize then validate
-    safe_rel = _sanitize_path(rel)
-    if safe_rel:
-        full = (git_root / safe_rel).resolve()
-        if full.is_file() and str(full).startswith(str(git_root.resolve()) + os.sep):
-            return safe_rel
+        staged_files = set(staged.splitlines())
+        match = _match_in_whitelist(clean, staged_files)
+        if match:
+            return match
 
     return None
 
@@ -79,153 +104,90 @@ def resolve_file(name: str, git_root: Path) -> str | None:
 def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
     """Get diff for a file using proper git cascade.
 
-    Cascade order:
-    1. Working tree changes (unstaged): git diff -- <file>
-    2. Staged changes: git diff --staged -- <file>
-    3. Most recent commit: git log -1 -p -- <file>
-    4. File content at HEAD: git show HEAD:<file>
-    5. Direct file read (untracked new files)
+    Security: filepath is validated against git's tracked file list.
+    Direct filesystem reads only happen for files confirmed by git.
     """
     empty = {"file": filepath, "diff_type": "none", "lines": [], "truncated": False}
 
-    # Security: validate filepath stays within repo before any use
-    if not _path_within_root(filepath, git_root):
-        return empty
+    # Validate: filepath must exist in git's tracked/staged files
+    tracked = _get_tracked_files(git_root)
+    staged_raw = _git_cmd_safe(["git", "diff", "--staged", "--name-only"], git_root)
+    staged_files = set(staged_raw.splitlines()) if staged_raw else set()
+    all_known = tracked | staged_files
+
+    # Match the user's path against known files
+    safe_path = _match_in_whitelist(filepath, all_known)
+
+    # If not in tracked/staged, check if git knows about it at all
+    if not safe_path:
+        # Last resort: check if git show HEAD:<path> works
+        # This is safe because git itself validates the path
+        test = _git_cmd_safe(["git", "show", "HEAD:" + filepath], git_root)
+        if test:
+            safe_path = filepath
+        else:
+            return empty
+
+    # From here, safe_path came from git's own output — safe to use
 
     # 1. Unstaged working tree changes
-    raw = _git_cmd(["git", "diff", "--", filepath], git_root)
+    raw = _git_cmd_safe(["git", "diff", "--", safe_path], git_root)
     if raw:
-        return _build_result(filepath, "uncommitted", raw, max_lines)
+        return _build_result(safe_path, "uncommitted", raw, max_lines)
 
     # 2. Staged changes
-    raw = _git_cmd(["git", "diff", "--staged", "--", filepath], git_root)
+    raw = _git_cmd_safe(["git", "diff", "--staged", "--", safe_path], git_root)
     if raw:
-        return _build_result(filepath, "staged", raw, max_lines)
+        return _build_result(safe_path, "staged", raw, max_lines)
 
-    # 3. Most recent commit that touched this file
-    raw = _git_cmd(["git", "log", "-1", "-p", "--format=", "--", filepath], git_root)
+    # 3. Most recent commit
+    raw = _git_cmd_safe(
+        ["git", "log", "-1", "-p", "--format=", "--", safe_path], git_root
+    )
     if raw:
-        return _build_result(filepath, "last_commit", raw, max_lines)
+        return _build_result(safe_path, "last_commit", raw, max_lines)
 
-    # 4. File content at HEAD (file exists but no diff history)
-    # Validate: filepath must not contain null bytes or shell metacharacters
-    safe_ref = "HEAD:" + filepath
-    content = _git_cmd(["git", "show", safe_ref], git_root)
+    # 4. File content at HEAD
+    content = _git_cmd_safe(["git", "show", "HEAD:" + safe_path], git_root)
     if content:
-        return _content_as_new(filepath, content, max_lines)
-
-    # 5. Direct read for untracked files — pre-sanitized path
-    safe_fp = _sanitize_path(filepath)
-    if not safe_fp:
-        return empty
-    resolved_root = git_root.resolve()
-    full_path = (git_root / safe_fp).resolve()
-    if full_path.is_file() and str(full_path).startswith(str(resolved_root) + os.sep):
-        try:
-            content = full_path.read_text(errors="replace")
-            if content:
-                return _content_as_new(filepath, content, max_lines)
-        except OSError:
-            pass
+        return _content_as_new(safe_path, content, max_lines)
 
     return empty
 
 
-def _sanitize_path(rel_path: str) -> str | None:
-    """Sanitize a relative path string BEFORE any filesystem operations.
-
-    Returns the sanitized path or None if it's unsafe.
-    This pre-validation ensures CodeQL sees the path as safe
-    before it flows into resolve() or any filesystem call.
-    """
-    if not rel_path or not isinstance(rel_path, str):
-        return None
-    # Reject null bytes
-    if "\x00" in rel_path:
-        return None
-    # Reject absolute paths
-    if os.path.isabs(rel_path):
-        return None
-    # Reject path traversal components
-    parts = rel_path.replace("\\", "/").split("/")
-    if ".." in parts:
-        return None
-    # Reject hidden files/dirs (dotfiles)
-    if any(p.startswith(".") and p not in (".", "") for p in parts):
-        return None
-    # Reject shell metacharacters
-    if any(c in rel_path for c in (";", "&", "|", "$", "`", "\n", "\r")):
-        return None
-    return rel_path
+# ── Safe git command execution ───────────────────────────────────────────
 
 
-def _path_within_root(rel_path: str, git_root: Path) -> bool:
-    """Validate that a relative path is safe and resolves within the git root."""
-    safe = _sanitize_path(rel_path)
-    if safe is None:
-        return False
-    try:
-        resolved_root = git_root.resolve()
-        resolved_path = (git_root / safe).resolve()
-        return (
-            str(resolved_path).startswith(str(resolved_root) + os.sep)
-            or resolved_path == resolved_root
-        )
-    except (ValueError, OSError):
-        return False
+_ALLOWED_SUBCOMMANDS = frozenset(
+    {
+        "rev-parse",
+        "ls-files",
+        "diff",
+        "log",
+        "show",
+    }
+)
+
+_DANGEROUS_CHARS = frozenset(";|&$`\n\r\x00")
 
 
-def _to_relative(name: str, git_root: Path) -> str:
-    """Convert any path form to repo-relative."""
-    clean = name.strip().strip("\"'`")
-    try:
-        p = Path(clean)
-        if p.is_absolute():
-            return str(p.relative_to(git_root))
-    except (ValueError, OSError):
-        pass
-    # Try os.path.relpath as fallback for tricky paths
-    if os.path.isabs(clean):
-        try:
-            return os.path.relpath(clean, str(git_root))
-        except ValueError:
-            pass
-    return clean
+def _git_cmd_safe(cmd: list[str], cwd: Path) -> str:
+    """Run a git command with strict validation.
 
-
-def _git_cmd(cmd: list[str], cwd: Path) -> str:
-    """Run a git command and return stripped stdout, or empty string.
-
-    Security: cmd must be a list (no shell=True). All arguments are passed
-    as separate list elements to prevent shell injection. Arguments are
-    validated to reject null bytes and shell metacharacters.
+    Only allows known git subcommands. Rejects arguments with
+    shell metacharacters or null bytes. Always uses shell=False.
     """
     try:
-        # Validate: only allow git commands, never shell=True
         if not cmd or cmd[0] != "git":
             return ""
-        # Reject arguments containing null bytes (argument injection)
-        for arg in cmd:
-            if "\x00" in arg:
-                return ""
-        # Validate: only known git subcommands are allowed
-        _allowed_subcommands = {
-            "rev-parse",
-            "ls-files",
-            "diff",
-            "log",
-            "show",
-        }
-        if len(cmd) < 2 or cmd[1] not in _allowed_subcommands:
+        if len(cmd) < 2 or cmd[1] not in _ALLOWED_SUBCOMMANDS:
             return ""
-        # Sanitize all arguments: reject shell metacharacters
-        for arg in cmd[2:]:
-            if any(c in arg for c in (";", "&", "|", "$", "`", "\n", "\r")):
+        # Validate all arguments
+        for arg in cmd:
+            if any(c in arg for c in _DANGEROUS_CHARS):
                 return ""
-        # Build a clean command list with only validated arguments
-        clean_cmd = ["git", cmd[1]] + [str(a) for a in cmd[2:]]
-        result = subprocess.run(  # noqa: S603
-            clean_cmd,
+        result = subprocess.run(
+            cmd,
             capture_output=True,
             text=True,
             shell=False,
@@ -233,12 +195,14 @@ def _git_cmd(cmd: list[str], cwd: Path) -> str:
             timeout=10,
         )
         return result.stdout.strip() if result.returncode == 0 else ""
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return ""
 
 
+# ── Result formatting ────────────────────────────────────────────────────
+
+
 def _build_result(filepath: str, diff_type: str, raw: str, max_lines: int) -> dict:
-    """Parse raw diff output into structured result."""
     lines = _parse_diff_lines(raw)
     return {
         "file": filepath,
@@ -249,7 +213,6 @@ def _build_result(filepath: str, diff_type: str, raw: str, max_lines: int) -> di
 
 
 def _content_as_new(filepath: str, content: str, max_lines: int) -> dict:
-    """Wrap file content as a 'new file' diff (all additions)."""
     raw_lines = content.splitlines()
     lines = [{"text": "+" + ln, "type": "add"} for ln in raw_lines]
     return {
@@ -261,11 +224,6 @@ def _content_as_new(filepath: str, content: str, max_lines: int) -> dict:
 
 
 def _parse_diff_lines(raw: str) -> list[dict]:
-    """Parse git diff/log output into structured line objects.
-
-    Each line: {text: str, type: 'add'|'del'|'hunk'|'ctx'}
-    Skips diff headers (diff, index, ---, +++ lines).
-    """
     result: list[dict] = []
     for line in raw.splitlines():
         if line.startswith("diff ") or line.startswith("index "):

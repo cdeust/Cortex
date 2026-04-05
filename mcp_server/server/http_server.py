@@ -147,9 +147,14 @@ def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> 
             handler.send_response(403)
             handler.end_headers()
             return
-        # safe_name is a simple filename — no path separators possible
-        file_path = base_dir.resolve() / safe_name
-        body = file_path.read_bytes()
+        # Whitelist: enumerate actual files and match
+        resolved_base = base_dir.resolve()
+        actual_files = {f.name: f for f in resolved_base.iterdir() if f.is_file()}
+        if safe_name not in actual_files:
+            handler.send_response(404)
+            handler.end_headers()
+            return
+        body = actual_files[safe_name].read_bytes()
         handler.send_response(200)
         handler.send_header("Content-Type", content_type)
         handler.send_header("Cache-Control", "no-cache")
