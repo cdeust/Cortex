@@ -71,7 +71,7 @@ _DECIDED_RE = re.compile(
     re.IGNORECASE,
 )
 _FILE_PATH_RE = re.compile(r"(?:\.{0,2}/)?(?:[\w@.-]+/)+[\w@.-]+\.\w+")
-_CAMELCASE_RE = re.compile(r"\b[A-Z][a-zA-Z]+(?:[A-Z][a-zA-Z]+)+\b")
+_CAMELCASE_RE = re.compile(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b")
 
 
 def _extract_import_entities(content: str) -> list[tuple[str, str, str]]:
