@@ -43,6 +43,9 @@ def resolve_file(name: str, git_root: Path) -> str | None:
     Uses git ls-files for verification.
     """
     rel = _to_relative(name, git_root)
+    if not rel:
+        # Invalid or unsafe path (outside repo, traversal, etc.)
+        return None
 
     # Check if it's tracked by git
     tracked = _git_cmd(["git", "ls-files", "--", rel], git_root)
@@ -116,25 +119,49 @@ def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
 
 
 def _to_relative(name: str, git_root: Path) -> str:
-    """Convert any path form to repo-relative."""
-    clean = name.strip().strip("\"'`")
+    """Convert any path form to a safe repo-relative path.
+
+    Returns an empty string if the path is invalid or would escape the repo.
+    """
+    # Strip whitespace, surrounding quotes, and any embedded NULs
+    clean = name.replace("\x00", "").strip().strip("\"'`")
+    if not clean:
+        return ""
+
+    # Absolute path: ensure it is under git_root and return a relative path
     try:
         p = Path(clean)
         if p.is_absolute():
-            return str(p.relative_to(git_root))
+            try:
+                rel = p.resolve().relative_to(git_root.resolve())
+            except (ValueError, OSError):
+                # Path is outside the repo or cannot be resolved safely
+                return ""
+            return str(rel)
     except (ValueError, OSError):
+        # Fall through to generic handling below
         pass
-    # Try os.path.relpath as fallback for tricky paths
-    if os.path.isabs(clean):
+
+    # Relative or bare path: normalize and ensure it stays under git_root
+    try:
+        # Build a candidate absolute path and normalize it
+        abs_candidate = (git_root / clean).resolve()
         try:
-            return os.path.relpath(clean, str(git_root))
+            rel = abs_candidate.relative_to(git_root.resolve())
         except ValueError:
-            pass
-    return clean
+            # Would escape the repo (e.g., contains '..')
+            return ""
+        return str(rel)
+    except (ValueError, OSError):
+        return ""
 
 
 def _git_cmd(cmd: list[str], cwd: Path) -> str:
     """Run a git command and return stripped stdout, or empty string."""
+    # Defensive guard: reject obviously invalid arguments (e.g., with NUL bytes)
+    for part in cmd:
+        if isinstance(part, str) and "\x00" in part:
+            return ""
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, cwd=str(cwd), timeout=10
