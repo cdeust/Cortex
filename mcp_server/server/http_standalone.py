@@ -406,7 +406,12 @@ def _build_methodology_handler(ui_root: Path) -> type:
 def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> None:
     """Serve a static file, sanitizing filename."""
     safe_name = Path(filename).name
-    file_path = base_dir / safe_name
+    file_path = (base_dir / safe_name).resolve()
+    # Validate: resolved path must stay within base_dir
+    if not str(file_path).startswith(str(base_dir.resolve())):
+        handler.send_response(403)
+        handler.end_headers()
+        return
     if not file_path.exists():
         handler.send_response(404)
         handler.end_headers()

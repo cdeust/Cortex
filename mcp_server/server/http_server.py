@@ -133,7 +133,14 @@ def _serve_graph_json(handler, server_state: dict) -> None:
 def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> None:
     """Serve a static file from the given directory."""
     try:
-        file_path = base_dir / filename
+        # Sanitize: strip path components, use only the basename
+        safe_name = Path(filename).name
+        file_path = (base_dir / safe_name).resolve()
+        # Validate: resolved path must stay within base_dir
+        if not str(file_path).startswith(str(base_dir.resolve())):
+            handler.send_response(403)
+            handler.end_headers()
+            return
         body = file_path.read_bytes()
         handler.send_response(200)
         handler.send_header("Content-Type", content_type)
