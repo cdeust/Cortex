@@ -405,20 +405,25 @@ def _build_discussion_detail(session_id: str) -> dict:
     if conv is None:
         return {"error": "Discussion not found", "sessionId": session_id}
 
-    file_path = conv.get("filePath")
-    if not file_path:
-        from mcp_server.infrastructure.config import CLAUDE_DIR
+    import re
 
-        project = conv.get("project", "")
-        # Security: sanitize project to prevent path traversal
-        safe_project = Path(project).name if project else ""
-        file_path = str(CLAUDE_DIR / "projects" / safe_project / f"{session_id}.jsonl")
+    from mcp_server.infrastructure.config import CLAUDE_DIR
 
-    # Security: validate resolved path stays within CLAUDE_DIR
-    from mcp_server.infrastructure.config import CLAUDE_DIR as _claude_dir
+    # Security: construct path from sanitized components only — never trust filePath directly
+    safe_session = re.sub(r"[^a-zA-Z0-9\-_]", "", session_id)
+    if not safe_session:
+        return {"error": "Invalid session ID", "sessionId": session_id}
 
+    project = conv.get("project", "")
+    safe_project = (
+        re.sub(r"[^a-zA-Z0-9\-_.]", "", Path(project).name) if project else ""
+    )
+
+    file_path = str(CLAUDE_DIR / "projects" / safe_project / f"{safe_session}.jsonl")
+
+    # Final validation: path must be within CLAUDE_DIR
+    resolved_base = CLAUDE_DIR.resolve()
     resolved_fp = Path(file_path).resolve()
-    resolved_base = _claude_dir.resolve()
     if not str(resolved_fp).startswith(str(resolved_base) + os.sep):
         return {"error": "Invalid file path", "sessionId": session_id}
 
@@ -502,21 +507,25 @@ def _build_methodology_handler(ui_root: Path) -> type:
 
 def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> None:
     """Serve a static file, sanitizing filename."""
+    import re
+
     # Security: strip all path components, keep only the final filename
     safe_name = Path(filename).name
-    # Reject empty names, hidden files, and null bytes
-    if not safe_name or safe_name.startswith(".") or "\x00" in safe_name:
+    # Reject empty names, hidden files, null bytes, and non-alphanumeric filenames
+    if (
+        not safe_name
+        or safe_name.startswith(".")
+        or "\x00" in safe_name
+        or not re.match(r"^[\w][\w.\-]*$", safe_name)
+    ):
         handler.send_response(403)
         handler.end_headers()
         return
-    resolved_base = base_dir.resolve()
-    file_path = (resolved_base / safe_name).resolve()
-    # Validate: resolved path must stay within base_dir (with os.sep to avoid prefix confusion)
-    if not (
-        str(file_path).startswith(str(resolved_base) + os.sep)
-        or file_path == resolved_base
-    ):
-        handler.send_response(403)
+    # safe_name is now guaranteed to be a simple filename (no path separators,
+    # no dots-only, starts with word char). Construct the full path.
+    file_path = base_dir.resolve() / safe_name
+    if not file_path.exists():
+        handler.send_response(404)
         handler.end_headers()
         return
     if not file_path.exists():

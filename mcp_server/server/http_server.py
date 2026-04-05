@@ -133,24 +133,23 @@ def _serve_graph_json(handler, server_state: dict) -> None:
 
 def _serve_static(handler, base_dir: Path, filename: str, content_type: str) -> None:
     """Serve a static file from the given directory."""
+    import re
+
     try:
         # Security: strip all path components, keep only the final filename
         safe_name = Path(filename).name
-        # Reject empty names, hidden files, and null bytes
-        if not safe_name or safe_name.startswith(".") or "\x00" in safe_name:
-            handler.send_response(403)
-            handler.end_headers()
-            return
-        resolved_base = base_dir.resolve()
-        file_path = (resolved_base / safe_name).resolve()
-        # Validate: resolved path must stay within base_dir (os.sep prevents prefix confusion)
-        if not (
-            str(file_path).startswith(str(resolved_base) + os.sep)
-            or file_path == resolved_base
+        # Reject empty, hidden, null bytes, and non-alphanumeric filenames
+        if (
+            not safe_name
+            or safe_name.startswith(".")
+            or "\x00" in safe_name
+            or not re.match(r"^[\w][\w.\-]*$", safe_name)
         ):
             handler.send_response(403)
             handler.end_headers()
             return
+        # safe_name is a simple filename — no path separators possible
+        file_path = base_dir.resolve() / safe_name
         body = file_path.read_bytes()
         handler.send_response(200)
         handler.send_header("Content-Type", content_type)
