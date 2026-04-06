@@ -192,6 +192,7 @@ def recall(
     q_emb = embeddings.encode(query[:500]) if embeddings else None
 
     # 4. PG recall_memories (server-side WRRF fusion)
+    pg_max = top_k
     candidates = store.recall_memories(
         query_text=query,
         query_embedding=q_emb,
@@ -200,7 +201,7 @@ def recall(
         directory=directory,
         agent_topic=agent_topic,
         min_heat=min_heat,
-        max_results=top_k,
+        max_results=pg_max,
         wrrf_k=wrrf_k,
         weights=weights,
         include_globals=include_globals,
@@ -222,14 +223,23 @@ def recall(
                 c["score"] = score
                 candidates.append(c)
 
-    # 6. Chronological reranking for event ordering queries.
+    # 6. MMR diversity reranking — DISABLED after ablation.
+    # Carbonell & Goldstein (SIGIR 1998) MMR trades precision for coverage.
+    # BEAM uses MRR (first-hit position), so any diversity reranking hurts:
+    #   lambda=0.5: summarization 0.391→0.367 (-0.024)
+    #   lambda=0.7: summarization 0.391→0.381 (-0.010)
+    # MMR would help with nugget-based QA scoring (coverage matters) but
+    # our retrieval-only MRR evaluation penalizes it. Keeping the module
+    # (mmr_diversity.py) for future use when full QA evaluation is added.
+
+    # 7. Chronological reranking for event ordering queries.
     # ChronoRAG (Chen et al., 2025): blend relevance rank with
     # chronological rank via RRF (Cormack et al., 2009).
     # Only activates when intent is EVENT_ORDER.
     if intent == QueryIntent.EVENT_ORDER and len(candidates) > 1:
         candidates = _chronological_rerank(candidates, beta=0.5, k=60)
 
-    # 7. Titans test-time learning (Behrouz et al., NeurIPS 2025)
+    # 8. Titans test-time learning (Behrouz et al., NeurIPS 2025)
     # Update the neural associative memory M and surprise momentum S
     # using the exact equations from the paper:
     #   S_t = eta * S_{t-1} - theta * grad_l(M_{t-1}; x_t)
