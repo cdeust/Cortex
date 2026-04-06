@@ -105,6 +105,47 @@ class PgQueryMixin:
         rows = self._execute("SELECT * FROM memories WHERE NOT is_stale").fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
+    def search_by_tag_vector(
+        self,
+        query_embedding: bytes | None,
+        tag: str,
+        domain: str | None = None,
+        min_heat: float = 0.01,
+        limit: int = 3,
+    ) -> list[dict[str, Any]]:
+        """Vector search filtered by tag. Returns scored memories.
+
+        ENGRAM (arxiv 2511.12960): per-type retrieval pools guarantee
+        typed memories (preference, instruction) are not drowned out.
+        """
+        import numpy as np
+
+        emb = (
+            np.frombuffer(query_embedding, dtype=np.float32)
+            if query_embedding
+            else None
+        )
+        if emb is not None:
+            rows = self._execute(
+                "SELECT *, (1.0 - (embedding <=> %s))::REAL AS score "
+                "FROM memories "
+                "WHERE tags @> %s::jsonb AND heat >= %s AND NOT is_stale "
+                "AND embedding IS NOT NULL "
+                "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
+                "ORDER BY embedding <=> %s LIMIT %s",
+                (emb, json.dumps([tag]), min_heat, domain, domain, emb, limit),
+            ).fetchall()
+        else:
+            rows = self._execute(
+                "SELECT *, heat::REAL AS score "
+                "FROM memories "
+                "WHERE tags @> %s::jsonb AND heat >= %s AND NOT is_stale "
+                "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
+                "ORDER BY heat DESC LIMIT %s",
+                (json.dumps([tag]), min_heat, domain, domain, limit),
+            ).fetchall()
+        return [self._normalize_memory_row(r) for r in rows]
+
     def delete_memories_by_tag(self, tag: str) -> int:
         """Delete all memories containing the given tag."""
         cur = self._execute(

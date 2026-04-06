@@ -400,17 +400,35 @@ BEGIN
                ab.boosted_score * (
                    1.0 + ABS(COALESCE(m.emotional_valence, 0.0)) * 0.15
                    * (1.0 - EXP(-EXTRACT(EPOCH FROM (NOW() - m.created_at)) / 3600.0))
-               ) AS final_score
+               ) AS emo_score
         FROM agent_boosted ab
         JOIN memories m ON m.id = ab.id
+    ),
+    -- Signal 8: Tag-type boost (ENGRAM, arxiv 2511.12960).
+    -- When intent matches a memory's type tag (preference, instruction),
+    -- boost that memory's score. Prevents typed memories from being
+    -- drowned out by the larger pool of episodic/semantic memories.
+    -- Weight 0.4: engineering default, needs ablation [0.2, 0.4, 0.6].
+    tag_boosted AS (
+        SELECT eb.id,
+               eb.emo_score * (
+                   1.0 + CASE
+                       WHEN p_intent IN ('preference', 'instruction')
+                            AND m.tags @> to_jsonb(p_intent::TEXT)
+                       THEN 0.4
+                       ELSE 0.0
+                   END
+               ) AS final_score
+        FROM emotional_boosted eb
+        JOIN memories m ON m.id = eb.id
     )
-    SELECT eb.id, m.content, eb.final_score::REAL, m.heat,
+    SELECT tb.id, m.content, tb.final_score::REAL, m.heat,
            m.domain, m.created_at, m.store_type,
            m.tags, m.importance, m.surprise_score,
            m.emotional_valence
-    FROM emotional_boosted eb
-    JOIN memories m ON m.id = eb.id
-    ORDER BY eb.final_score DESC
+    FROM tag_boosted tb
+    JOIN memories m ON m.id = tb.id
+    ORDER BY tb.final_score DESC
     LIMIT p_max_results * 3;
 END;
 $$ LANGUAGE plpgsql STABLE;

@@ -1,7 +1,6 @@
 """Tests for MMR diversity reranking (Carbonell & Goldstein, SIGIR 1998)."""
 
 import numpy as np
-import pytest
 
 from mcp_server.core.mmr_diversity import mmr_rerank
 

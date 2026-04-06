@@ -75,6 +75,8 @@ def ingest_memory(
         tags = list(memory.get("tags", []))
         if entities.get("has_preference"):
             tags.append("preference")
+        if entities.get("has_instruction"):
+            tags.append("instruction")
         if entities.get("has_decision"):
             tags.append("decision")
         if entities.get("has_activity"):

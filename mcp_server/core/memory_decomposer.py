@@ -24,8 +24,9 @@ _PERSON_RE = re.compile(r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]+)*)\b")
 _QUOTED_RE = re.compile(r'"([^"]{3,60})"' r"|\u201c([^\u201d]{3,60})\u201d")
 
 _PREFERENCE_RE = re.compile(
-    r"\b(prefer|love|enjoy|like|hate|dislike|favorite|"
-    r"fan of|into|passionate about|interested in)\b",
+    r"\b(prefer|favorite|fan of|passionate about)\b|"
+    r"\bi (?:love|enjoy|hate|dislike|like to|like using)\b|"
+    r"\bmy (?:preference|choice|style)\b",
     re.IGNORECASE,
 )
 
@@ -39,6 +40,16 @@ _ACTIVITY_RE = re.compile(
 _DECISION_RE = re.compile(
     r"\b(decided|chose|plan to|going to|will|want to|"
     r"thinking about|considering|from now on|always|never)\b",
+    re.IGNORECASE,
+)
+
+# Directive language markers (Searle 1969 speech act theory: directives).
+# Tight patterns: only match explicit user directives, not general conversation.
+# "always use X", "never do Y", "make sure to Z" — not "I should go".
+_INSTRUCTION_RE = re.compile(
+    r"(?:^|\.\s+)(?:always|never|make sure|from now on|every time|each time|"
+    r"whenever you|don't ever|do not ever|stick to|use only|format as)\b|"
+    r"\b(?:required|mandatory|forbidden|prohibited|guideline|convention|constraint)\b",
     re.IGNORECASE,
 )
 
@@ -153,6 +164,7 @@ def extract_conversational_entities(content: str) -> dict:
         "persons": persons[:20],
         "quoted_terms": quoted[:10],
         "has_preference": bool(_PREFERENCE_RE.search(content)),
+        "has_instruction": bool(_INSTRUCTION_RE.search(content)),
         "has_activity": bool(_ACTIVITY_RE.search(content)),
         "has_decision": bool(_DECISION_RE.search(content)),
     }
@@ -168,6 +180,8 @@ def build_entity_summary(entities: dict) -> str:
     tags = []
     if entities.get("has_preference"):
         tags.append("preference")
+    if entities.get("has_instruction"):
+        tags.append("instruction")
     if entities.get("has_activity"):
         tags.append("activity")
     if entities.get("has_decision"):
