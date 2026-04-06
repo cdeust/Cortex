@@ -13,6 +13,10 @@ Memory that learns, consolidates, forgets intelligently, and surfaces the right 
 
 [Getting Started](#getting-started) | [How It Works](#how-it-works) | [Neural Graph](#neural-graph) | [Agent Integration](#agent-integration) | [Benchmarks](#benchmarks) | [Scientific Foundation](#scientific-foundation)
 
+**Companion projects:**
+[cortex-beam-abstain](https://github.com/cdeust/cortex-know-when-to-stop-training-model) — community-trained retrieval abstention model for RAG systems
+| [zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents) — specialist Claude Code agents Cortex orchestrates with
+
 </div>
 
 ---
