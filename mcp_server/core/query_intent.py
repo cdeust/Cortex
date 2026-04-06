@@ -80,6 +80,16 @@ _SUMMARIZATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Preference queries: asking about user likes, choices, style preferences.
+# ENGRAM (arxiv 2511.12960): typed retrieval for preference memories.
+_PREFERENCE_QUERY_RE = re.compile(
+    r"\b(prefer|preference|favorite|like|dislike|taste|"
+    r"style|choice|habit|want|wish|rather)\b|"
+    r"what (?:do|does|did) (?:i|the user|they) (?:like|prefer|want)|"
+    r"how (?:do|does|did) (?:i|the user|they) (?:like|prefer)",
+    re.IGNORECASE,
+)
+
 # Question words that boost certain intents
 _QUESTION_WHY = re.compile(r"^\s*why\b", re.IGNORECASE)
 _QUESTION_WHEN = re.compile(r"^\s*when\b", re.IGNORECASE)
@@ -104,6 +114,7 @@ class QueryIntent:
     INSTRUCTION = "instruction"
     EVENT_ORDER = "event_order"
     SUMMARIZATION = "summarization"
+    PREFERENCE = "preference"
     GENERAL = "general"
 
 
@@ -119,6 +130,7 @@ def _score_patterns(query: str) -> dict[str, float]:
         QueryIntent.INSTRUCTION: 0.0,
         QueryIntent.EVENT_ORDER: 0.0,
         QueryIntent.SUMMARIZATION: 0.0,
+        QueryIntent.PREFERENCE: 0.0,
     }
 
     if _TEMPORAL_RE.search(query):
@@ -142,6 +154,8 @@ def _score_patterns(query: str) -> dict[str, float]:
         scores[QueryIntent.TEMPORAL] += 0.3  # also boost temporal
     if _SUMMARIZATION_RE.search(query):
         scores[QueryIntent.SUMMARIZATION] += 1.0
+    if _PREFERENCE_QUERY_RE.search(query):
+        scores[QueryIntent.PREFERENCE] += 1.0
 
     # Multi-entity detection boosts multi-hop
     named_entities = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", query)
@@ -275,6 +289,16 @@ _INTENT_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
         "fts": 0.8,
         "heat": 0.5,
         "entity": 0.6,
+        "spreading": 0.5,
+    },
+    # Preference: FTS boosted (preference keywords are distinctive),
+    # heat boosted (preferences tend to be important). ENGRAM (arxiv
+    # 2511.12960) shows typed retrieval improves preference recall.
+    QueryIntent.PREFERENCE: {
+        "fts": 0.8,
+        "heat": 0.5,
+        "vector": 0.7,
+        "entity": 0.5,
         "spreading": 0.5,
     },
 }

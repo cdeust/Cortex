@@ -115,6 +115,10 @@ _PG_INTENT_OVERRIDES: dict[str, dict[str, float]] = {
         "heat": 0.5,
         "fts": 0.7,
     },
+    QueryIntent.PREFERENCE: {
+        "fts": 0.8,
+        "heat": 0.5,
+    },
 }
 
 
@@ -223,7 +227,28 @@ def recall(
                 c["score"] = score
                 candidates.append(c)
 
-    # 6. MMR diversity reranking — DISABLED after ablation.
+    # 6. Per-type pool guarantee for instruction/preference queries.
+    # ENGRAM (arxiv 2511.12960): typed memory pools prevent instruction/
+    # preference memories from being drowned out by episodic memories.
+    # Reserves 2 slots for tag-matched memories when intent matches.
+    _TYPE_INTENTS = {
+        QueryIntent.INSTRUCTION: "instruction",
+        QueryIntent.PREFERENCE: "preference",
+    }
+    tag_for_intent = _TYPE_INTENTS.get(intent)
+    if tag_for_intent and store and q_emb:
+        existing_ids = {c["memory_id"] for c in candidates}
+        typed = store.search_by_tag_vector(
+            q_emb, tag_for_intent, domain=domain, limit=2
+        )
+        for t in typed:
+            mid = t.get("id") or t.get("memory_id")
+            if mid and mid not in existing_ids:
+                t["memory_id"] = mid
+                candidates.insert(0, t)  # Front of list = high rank
+                existing_ids.add(mid)
+
+    # 7. MMR diversity reranking — DISABLED after ablation (see above).
     # Carbonell & Goldstein (SIGIR 1998) MMR trades precision for coverage.
     # BEAM uses MRR (first-hit position), so any diversity reranking hurts:
     #   lambda=0.5: summarization 0.391→0.367 (-0.024)
@@ -232,14 +257,14 @@ def recall(
     # our retrieval-only MRR evaluation penalizes it. Keeping the module
     # (mmr_diversity.py) for future use when full QA evaluation is added.
 
-    # 7. Chronological reranking for event ordering queries.
+    # 8. Chronological reranking for event ordering queries.
     # ChronoRAG (Chen et al., 2025): blend relevance rank with
     # chronological rank via RRF (Cormack et al., 2009).
     # Only activates when intent is EVENT_ORDER.
     if intent == QueryIntent.EVENT_ORDER and len(candidates) > 1:
         candidates = _chronological_rerank(candidates, beta=0.5, k=60)
 
-    # 8. Titans test-time learning (Behrouz et al., NeurIPS 2025)
+    # 9. Titans test-time learning (Behrouz et al., NeurIPS 2025)
     # Update the neural associative memory M and surprise momentum S
     # using the exact equations from the paper:
     #   S_t = eta * S_{t-1} - theta * grad_l(M_{t-1}; x_t)
