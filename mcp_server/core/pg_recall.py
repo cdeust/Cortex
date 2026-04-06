@@ -31,6 +31,50 @@ def _get_titans() -> TitansMemory:
     return _titans
 
 
+# ── Chronological reranking ─────────────────────────────────────────────
+# ChronoRAG (Chen et al., arxiv 2508.18748, 2025): for event ordering
+# queries, blend relevance rank with chronological rank via Reciprocal
+# Rank Fusion (Cormack et al., SIGIR 2009).
+
+
+def _chronological_rerank(
+    candidates: list[dict], beta: float = 0.5, k: int = 60
+) -> list[dict]:
+    """Blend relevance ranking with chronological ordering.
+
+    For event ordering queries, the chronological position of memories
+    matters as much as semantic relevance. This function assigns each
+    candidate a blended score from its relevance rank and its
+    chronological rank (by created_at timestamp).
+
+    Args:
+        candidates: Results ordered by relevance score.
+        beta: Weight for chronological rank (0=pure relevance, 1=pure chrono).
+        k: RRF constant (Cormack et al., 2009). Default 60.
+
+    Returns:
+        Reranked candidates with updated scores.
+    """
+    # Assign relevance rank
+    for i, c in enumerate(candidates):
+        c["_rel_rank"] = i
+
+    # Sort by timestamp for chronological rank
+    chrono = sorted(candidates, key=lambda c: c.get("created_at", ""))
+    for i, c in enumerate(chrono):
+        c["_chr_rank"] = i
+
+    # RRF blend: score = (1-beta)/(k+rel_rank) + beta/(k+chr_rank)
+    for c in candidates:
+        c["score"] = float(
+            (1 - beta) / (k + c["_rel_rank"]) + beta / (k + c["_chr_rank"])
+        )
+        del c["_rel_rank"]
+        del c["_chr_rank"]
+
+    return sorted(candidates, key=lambda c: c["score"], reverse=True)
+
+
 # ── PG weight profiles ──────────────────────────────────────────────────
 # NOTE: These weights are engineering defaults, NOT paper-prescribed values.
 # The TMM normalization framework (Bruch et al., ACM TOIS 2023) defines the
@@ -61,6 +105,15 @@ _PG_INTENT_OVERRIDES: dict[str, dict[str, float]] = {
     QueryIntent.KNOWLEDGE_UPDATE: {
         "recency": 0.5,
         "heat": 0.5,
+    },
+    QueryIntent.EVENT_ORDER: {
+        "heat": 0.4,
+        "recency": 0.3,
+        "fts": 0.6,
+    },
+    QueryIntent.SUMMARIZATION: {
+        "heat": 0.5,
+        "fts": 0.7,
     },
 }
 
@@ -169,7 +222,14 @@ def recall(
                 c["score"] = score
                 candidates.append(c)
 
-    # 6. Titans test-time learning (Behrouz et al., NeurIPS 2025)
+    # 6. Chronological reranking for event ordering queries.
+    # ChronoRAG (Chen et al., 2025): blend relevance rank with
+    # chronological rank via RRF (Cormack et al., 2009).
+    # Only activates when intent is EVENT_ORDER.
+    if intent == QueryIntent.EVENT_ORDER and len(candidates) > 1:
+        candidates = _chronological_rerank(candidates, beta=0.5, k=60)
+
+    # 7. Titans test-time learning (Behrouz et al., NeurIPS 2025)
     # Update the neural associative memory M and surprise momentum S
     # using the exact equations from the paper:
     #   S_t = eta * S_{t-1} - theta * grad_l(M_{t-1}; x_t)

@@ -46,7 +46,7 @@ class BenchmarkDB:
     def _purge_stale_benchmark_data(self) -> None:
         """Remove orphaned benchmark memories from crashed/killed runs."""
         assert self._store is not None
-        self._store._conn.execute("DELETE FROM memories WHERE is_benchmark = TRUE")
+        self._store._execute("DELETE FROM memories WHERE is_benchmark = TRUE")
         self._store._conn.commit()
 
     def close(self) -> None:
