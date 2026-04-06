@@ -339,14 +339,14 @@ python3 benchmarks/evermembench/run_benchmark.py                    # EverMemBen
 python3 benchmarks/episodic/run_benchmark.py --events 20           # Episodic Memories (ICLR 2025)
 ```
 
-**Current benchmark scores:**
+**Current benchmark scores (clean DB, April 2026):**
 | Benchmark | Cortex | Best in paper |
 |---|---|---|
-| LongMemEval R@10 | **98.0%** | 78.4% |
-| LongMemEval MRR | **0.880** | -- |
-| LoCoMo R@10 | **97.7%** | -- |
-| LoCoMo MRR | **0.840** | -- |
-| BEAM Overall | **0.627** | 0.329 |
+| LongMemEval R@10 | **97.8%** | 78.4% |
+| LongMemEval MRR | **0.882** | -- |
+| LoCoMo R@10 | **92.6%** | -- |
+| LoCoMo MRR | **0.794** | -- |
+| BEAM Overall | **0.543** | 0.329 |
 
 ## Research-Driven Improvement Workflow
 

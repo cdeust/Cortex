@@ -340,50 +340,52 @@ All scores are **retrieval-only** — no LLM reader in the evaluation loop. We m
 
 | Benchmark | Metric | Cortex | Best in Paper | Paper |
 |---|---|---|---|---|
-| LongMemEval | R@10 | **98.0%** | 78.4% | Wang et al., ICLR 2025 |
-| LongMemEval | MRR | **0.880** | — | |
-| LoCoMo | R@10 | **97.7%** | — | Maharana et al., ACL 2024 |
-| LoCoMo | MRR | **0.840** | — | |
-| BEAM | Overall MRR | **0.627** | 0.329 (LIGHT) | Tavakoli et al., ICLR 2026 |
+| LongMemEval | R@10 | **97.8%** | 78.4% | Wang et al., ICLR 2025 |
+| LongMemEval | MRR | **0.882** | — | |
+| LoCoMo | R@10 | **92.6%** | — | Maharana et al., ACL 2024 |
+| LoCoMo | MRR | **0.794** | — | |
+| BEAM | Overall MRR | **0.543** | 0.329 (LIGHT) | Tavakoli et al., ICLR 2026 |
+
+> **Correction (April 2026):** Previously reported BEAM MRR of 0.627, LoCoMo MRR of 0.840, and LongMemEval MRR of 0.880 were measured on a polluted database — stale benchmark memories from prior runs were not properly purged between conversations, inflating retrieval scores with cross-conversation leakage. The root cause was a psycopg prepared statement cache invalidation bug (`cached plan must not change result type`) that silently prevented the benchmark cleanup function from executing after schema migrations. The bug has been fixed (stale plan recovery via `_execute()` wrapper + `DEALLOCATE ALL` after DDL). All scores above are from clean-database runs with verified per-conversation isolation.
 
 <details>
 <summary>Per-category breakdowns</summary>
 
-**BEAM (10 abilities, 400 questions)**
+**BEAM (10 abilities, 395 questions, 100K split)**
 
 | Ability | MRR | R@10 |
 |---|---|---|
-| contradiction_resolution | 0.879 | 100.0% |
+| temporal_reasoning | 0.903 | 100.0% |
+| contradiction_resolution | 0.892 | 100.0% |
 | knowledge_update | 0.867 | 97.5% |
-| temporal_reasoning | 0.857 | 97.5% |
-| multi_session_reasoning | 0.738 | 92.5% |
-| information_extraction | 0.542 | 72.5% |
-| summarization | 0.359 | 69.4% |
-| preference_following | 0.356 | 62.5% |
-| event_ordering | 0.353 | 62.5% |
-| instruction_following | 0.242 | 52.5% |
-| abstention | 0.125 | 12.5% |
+| multi_session_reasoning | 0.742 | 95.0% |
+| information_extraction | 0.570 | 77.5% |
+| summarization | 0.391 | 66.7% |
+| preference_following | 0.374 | 72.5% |
+| event_ordering | 0.349 | 62.5% |
+| instruction_following | 0.244 | 52.5% |
+| abstention | 0.100 | 10.0% |
 
 **LongMemEval (6 categories, 500 questions)**
 
 | Category | MRR | R@10 |
 |---|---|---|
-| Single-session (assistant) | 0.970 | 100.0% |
-| Multi-session reasoning | 0.917 | 100.0% |
-| Temporal reasoning | 0.887 | 97.7% |
-| Knowledge updates | 0.884 | 100.0% |
-| Single-session (user) | 0.793 | 91.4% |
-| Single-session (preference) | 0.706 | 96.7% |
+| Single-session (assistant) | 0.982 | 100.0% |
+| Multi-session reasoning | 0.936 | 99.2% |
+| Knowledge updates | 0.921 | 100.0% |
+| Temporal reasoning | 0.857 | 97.7% |
+| Single-session (user) | 0.806 | 94.3% |
+| Single-session (preference) | 0.641 | 90.0% |
 
-**LoCoMo (5 categories, 1986 questions)**
+**LoCoMo (5 categories, 1982 questions)**
 
 | Category | MRR | R@10 |
 |---|---|---|
-| adversarial | 0.809 | 89.0% |
-| open_domain | 0.817 | 91.1% |
-| multi_hop | 0.736 | 84.1% |
-| single_hop | 0.714 | 91.8% |
-| temporal | 0.538 | 76.1% |
+| adversarial | 0.855 | 93.9% |
+| open_domain | 0.835 | 95.0% |
+| multi_hop | 0.760 | 88.8% |
+| single_hop | 0.700 | 92.9% |
+| temporal | 0.539 | 77.2% |
 
 </details>
 
