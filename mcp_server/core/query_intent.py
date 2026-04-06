@@ -58,6 +58,28 @@ _INSTRUCTION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Event ordering: queries about chronological sequence of events.
+# Distinct from general TEMPORAL (which asks "when did X happen").
+# Event ordering asks "what happened first/in what order".
+# ChronoRAG (Chen et al., 2025): chronological assembly improves ordering.
+_EVENT_ORDER_RE = re.compile(
+    r"\b(what happened first|in what order|sequence of|"
+    r"chronological|what came before|what came after|"
+    r"order of events|first.*then.*then|happened before|"
+    r"happened after|what order|which came first|"
+    r"what was the first|what was the last|earliest|latest)\b",
+    re.IGNORECASE,
+)
+
+# Summarization: queries needing broad coverage across multiple memories.
+# MMR diversity reranking (Carbonell & Goldstein, SIGIR 1998).
+_SUMMARIZATION_RE = re.compile(
+    r"\b(summarize|summary|overview|recap|give me a rundown|"
+    r"tell me about all|everything about|what do you know about|"
+    r"main points|key events|highlights|what happened with)\b",
+    re.IGNORECASE,
+)
+
 # Question words that boost certain intents
 _QUESTION_WHY = re.compile(r"^\s*why\b", re.IGNORECASE)
 _QUESTION_WHEN = re.compile(r"^\s*when\b", re.IGNORECASE)
@@ -80,6 +102,8 @@ class QueryIntent:
     KNOWLEDGE_UPDATE = "knowledge_update"
     MULTI_HOP = "multi_hop"
     INSTRUCTION = "instruction"
+    EVENT_ORDER = "event_order"
+    SUMMARIZATION = "summarization"
     GENERAL = "general"
 
 
@@ -93,6 +117,8 @@ def _score_patterns(query: str) -> dict[str, float]:
         QueryIntent.KNOWLEDGE_UPDATE: 0.0,
         QueryIntent.MULTI_HOP: 0.0,
         QueryIntent.INSTRUCTION: 0.0,
+        QueryIntent.EVENT_ORDER: 0.0,
+        QueryIntent.SUMMARIZATION: 0.0,
     }
 
     if _TEMPORAL_RE.search(query):
@@ -111,6 +137,11 @@ def _score_patterns(query: str) -> dict[str, float]:
         scores[QueryIntent.MULTI_HOP] += 1.0
     if _INSTRUCTION_RE.search(query):
         scores[QueryIntent.INSTRUCTION] += 1.0
+    if _EVENT_ORDER_RE.search(query):
+        scores[QueryIntent.EVENT_ORDER] += 1.5  # strong signal, override temporal
+        scores[QueryIntent.TEMPORAL] += 0.3  # also boost temporal
+    if _SUMMARIZATION_RE.search(query):
+        scores[QueryIntent.SUMMARIZATION] += 1.0
 
     # Multi-entity detection boosts multi-hop
     named_entities = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", query)
@@ -224,6 +255,27 @@ _INTENT_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
         "heat": 0.3,
         "entity": 0.3,
         "spreading": 0.3,
+    },
+    # Event ordering: temporal + vector for finding events, recency
+    # to anchor time. ChronoRAG (Chen et al., 2025) validates
+    # chronological reranking is applied post-retrieval.
+    QueryIntent.EVENT_ORDER: {
+        "temporal": 1.0,
+        "vector": 0.8,
+        "fts": 0.6,
+        "heat": 0.3,
+        "entity": 0.5,
+        "spreading": 0.3,
+    },
+    # Summarization: broad retrieval, diversity matters more than
+    # precision. MMR reranking (Carbonell & Goldstein, SIGIR 1998)
+    # applied post-retrieval.
+    QueryIntent.SUMMARIZATION: {
+        "vector": 1.0,
+        "fts": 0.8,
+        "heat": 0.5,
+        "entity": 0.6,
+        "spreading": 0.5,
     },
 }
 
