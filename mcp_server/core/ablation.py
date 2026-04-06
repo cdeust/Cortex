@@ -45,6 +45,9 @@ class Mechanism(Enum):
     SURPRISE_MOMENTUM = "surprise_momentum"
     ADAPTIVE_DECAY = "adaptive_decay"
     CO_ACTIVATION = "co_activation"
+    EMOTIONAL_RETRIEVAL = "emotional_retrieval"
+    EMOTIONAL_DECAY = "emotional_decay"
+    MOOD_CONGRUENT_RERANK = "mood_congruent_rerank"
 
 
 @dataclass

@@ -258,7 +258,8 @@ CREATE OR REPLACE FUNCTION recall_memories(
     store_type      TEXT,
     tags            JSONB,
     importance      REAL,
-    surprise_score  REAL
+    surprise_score  REAL,
+    emotional_valence REAL
 ) AS $$
 DECLARE
     v_pool INT := p_max_results * 10;
@@ -387,13 +388,29 @@ BEGIN
                END AS boosted_score
         FROM fused f
         JOIN memories m ON m.id = f.id
+    ),
+    -- Signal 7: Emotional salience boost (Yonelinas & Ritchey 2015)
+    -- Emotional memories get a time-dependent retrieval advantage.
+    -- At t=0: no boost (crossover effect, Kleinsmith & Kaplan 1963).
+    -- At t>>1h: up to 15% boost (meta-analytic g=0.38 → ~15% hit rate gain).
+    -- Coefficient 0.15: Yonelinas & Ritchey 2015, 165-study meta-analysis.
+    -- Time constant tau=1h: adapted from 20-45min biological crossover.
+    emotional_boosted AS (
+        SELECT ab.id,
+               ab.boosted_score * (
+                   1.0 + ABS(COALESCE(m.emotional_valence, 0.0)) * 0.15
+                   * (1.0 - EXP(-EXTRACT(EPOCH FROM (NOW() - m.created_at)) / 3600.0))
+               ) AS final_score
+        FROM agent_boosted ab
+        JOIN memories m ON m.id = ab.id
     )
-    SELECT ab.id, m.content, ab.boosted_score::REAL, m.heat,
+    SELECT eb.id, m.content, eb.final_score::REAL, m.heat,
            m.domain, m.created_at, m.store_type,
-           m.tags, m.importance, m.surprise_score
-    FROM agent_boosted ab
-    JOIN memories m ON m.id = ab.id
-    ORDER BY ab.boosted_score DESC
+           m.tags, m.importance, m.surprise_score,
+           m.emotional_valence
+    FROM emotional_boosted eb
+    JOIN memories m ON m.id = eb.id
+    ORDER BY eb.final_score DESC
     LIMIT p_max_results * 3;
 END;
 $$ LANGUAGE plpgsql STABLE;
@@ -412,6 +429,12 @@ BEGIN
     -- Stage-adjusted decay: consolidated memories decay slower (Kandel 2001)
     -- LABILE: factor^2.0, EARLY_LTP: factor^1.2, LATE_LTP: factor^0.8,
     -- CONSOLIDATED: factor^0.5, RECONSOLIDATING: factor^1.5
+    --
+    -- Emotional damping (Yonelinas & Ritchey 2015):
+    -- Emotional memories decay slower. b_neutral=0.12, b_emotional=0.06
+    -- (2x ratio). The 0.30 coefficient reduces the exponent by up to 30%
+    -- at max |valence|, growing with time in the current stage
+    -- (crossover effect: Kleinsmith & Kaplan 1963).
     UPDATE memories
     SET heat = GREATEST(
         -- Permastore floor by stage (Bahrick 1984, Benna & Fusi 2016):
@@ -431,6 +454,9 @@ BEGIN
                 WHEN 'reconsolidating' THEN 1.5
                 ELSE 1.0
             END
+            * (1.0 - ABS(COALESCE(emotional_valence, 0.0)) * 0.30
+               * (1.0 - EXP(-EXTRACT(EPOCH FROM
+                   (NOW() - COALESCE(stage_entered_at, created_at))) / 3600.0)))
         )
     )
     WHERE NOT is_protected AND NOT is_stale AND heat >= p_threshold;
