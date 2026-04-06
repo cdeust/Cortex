@@ -32,6 +32,8 @@ Citations:
 
 from __future__ import annotations
 
+import math
+
 import re
 from collections import Counter
 from datetime import datetime, timezone
@@ -261,8 +263,11 @@ def compute_decay(
 
     base = importance_decay_factor if importance > 0.7 else decay_factor
 
-    # Emotional resistance pushes factor closer to 1.0
-    emotional_mod = 1.0 + abs(valence) * emotional_decay_resistance
+    # Emotional resistance: time-dependent (Yonelinas & Ritchey 2015).
+    # Emotional advantage grows with delay (Kleinsmith & Kaplan 1963 crossover).
+    # At t=0: no resistance. At t>>1h: full resistance (up to 30% at |v|=1).
+    time_saturation = 1.0 - math.exp(-hours_elapsed) if hours_elapsed > 0 else 0.0
+    emotional_mod = 1.0 + abs(valence) * emotional_decay_resistance * time_saturation
     effective = 1.0 - (1.0 - base) / emotional_mod
 
     # Confidence modifier

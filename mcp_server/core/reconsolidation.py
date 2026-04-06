@@ -7,12 +7,18 @@ Three outcomes based on mismatch between stored memory and current context:
   - low <= mismatch < high: RECONSOLIDATE — update memory with current context
   - mismatch >= high: EXTINCTION — archive old memory, create new one
 
+Emotional modulation (Yonelinas & Ritchey 2015, Lee 2009):
+  - Prediction error gate: PE = mismatch * (1 - stability * 0.5)
+  - Age-dependent threshold: older memories resist reconsolidation (Milekic & Alberini 2002)
+  - Emotional strength gain: reconsolidation is 1-1.8x stronger for emotional memories
+
 Pure business logic — no I/O. Decisions are returned to the caller.
 """
 
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -77,27 +83,47 @@ def compute_mismatch(
     return max(0.0, min(1.0, mismatch))
 
 
+@dataclass
+class ReconsolidationResult:
+    """Result of reconsolidation decision with emotional modulation."""
+
+    action: Literal["none", "update", "archive"]
+    prediction_error: float = 0.0
+    strength_delta: float = 0.0
+    emotional_multiplier: float = 1.0
+
+
 def decide_action(
     mismatch: float,
     stability: float = 0.0,
     plasticity: float = 1.0,
     is_protected: bool = False,
+    emotional_arousal: float = 0.0,
+    age_days: float = 0.0,
     *,
-    low_threshold: float = 0.3,
-    high_threshold: float = 0.7,
-) -> Literal["none", "update", "archive"]:
+    low_threshold: float = 0.15,
+    high_threshold: float = 0.65,
+) -> ReconsolidationResult:
     """Determine reconsolidation action based on mismatch and memory state.
 
-    Returns:
-      "none" — no modification (stable or low mismatch)
-      "update" — merge new context into existing memory
-      "archive" — archive old memory, create new one
+    Thresholds: Osan-Tort-Amaral (PLoS ONE, 2011).
+    PE gate: Lee (Trends Neurosci, 2009).
+    Age factor: Milekic & Alberini (2002).
+    Emotional multiplier: Yonelinas & Ritchey (2015) decay ratio.
+
+    Returns ReconsolidationResult with action, prediction_error,
+    strength_delta, and emotional_multiplier.
     """
     if is_protected:
-        return "none"
+        return ReconsolidationResult(action="none")
 
-    # Stable memories need more mismatch to trigger reconsolidation
-    effective_low = low_threshold + (stability * 0.2)
+    # Prediction error gate (Lee 2009): stable memories dampen PE
+    prediction_error = mismatch * (1.0 - stability * 0.5)
+
+    # Age-dependent threshold (Milekic & Alberini 2002):
+    # Older memories require larger PE to destabilize
+    age_factor = min(age_days / 30.0, 1.0) * 0.15
+    effective_low = low_threshold + age_factor + (stability * 0.2)
     effective_high = high_threshold + (stability * 0.1)
 
     # Recently accessed (high plasticity) memories are MORE susceptible
@@ -105,11 +131,26 @@ def decide_action(
         effective_low -= 0.1
         effective_high -= 0.1
 
-    if mismatch < effective_low:
-        return "none"
-    if mismatch < effective_high:
-        return "update"
-    return "archive"
+    if prediction_error < effective_low:
+        return ReconsolidationResult(action="none", prediction_error=prediction_error)
+    if prediction_error >= effective_high:
+        return ReconsolidationResult(
+            action="archive",
+            prediction_error=prediction_error,
+            strength_delta=-0.2,
+        )
+
+    # Reconsolidation regime — emotional multiplier (Yonelinas & Ritchey 2015)
+    # Decay ratio b_neutral/b_emotional = 2.0 → up to 1.8x at arousal=0.8
+    emotional_multiplier = 1.0 + min(emotional_arousal, 0.8)
+    strength_delta = prediction_error * 0.1 * emotional_multiplier
+
+    return ReconsolidationResult(
+        action="update",
+        prediction_error=prediction_error,
+        strength_delta=strength_delta,
+        emotional_multiplier=emotional_multiplier,
+    )
 
 
 def merge_content(old_content: str, new_context: str, max_length: int = 2000) -> str:

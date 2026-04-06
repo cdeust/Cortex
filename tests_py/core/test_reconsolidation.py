@@ -1,5 +1,6 @@
 """Tests for mcp_server.core.reconsolidation — memory lability after retrieval."""
 
+import pytest
 from datetime import datetime, timezone, timedelta
 
 from mcp_server.core.reconsolidation import (
@@ -75,28 +76,56 @@ class TestComputeMismatch:
 
 class TestDecideAction:
     def test_low_mismatch_no_action(self):
-        assert decide_action(0.1) == "none"
+        # PE=0.03, effective_low=0.05 (plasticity=1.0 lowers 0.15 to 0.05)
+        assert decide_action(0.03).action == "none"
 
     def test_medium_mismatch_update(self):
-        assert decide_action(0.5) == "update"
+        # 0.5 PE > 0.15 and < 0.65
+        assert decide_action(0.5).action == "update"
 
     def test_high_mismatch_archive(self):
-        assert decide_action(0.85) == "archive"
+        # 0.85 PE > 0.65
+        assert decide_action(0.85).action == "archive"
 
     def test_protected_always_none(self):
-        assert decide_action(0.9, is_protected=True) == "none"
+        assert decide_action(0.9, is_protected=True).action == "none"
 
     def test_stable_memory_needs_more_mismatch(self):
-        # Without stability: 0.35 > 0.3 => update
-        assert decide_action(0.35, stability=0.0) == "update"
-        # With high stability: effective_low = 0.3 + 0.2*1.0 = 0.5 => none
-        assert decide_action(0.35, stability=1.0) == "none"
+        # Without stability: PE=0.35, effective_low=0.15 => update
+        assert decide_action(0.35, stability=0.0).action == "update"
+        # With high stability: PE=0.35*(1-0.5)=0.175, effective_low=0.15+0.2=0.35 => none
+        assert decide_action(0.35, stability=1.0).action == "none"
 
     def test_high_plasticity_lowers_thresholds(self):
-        # Normally 0.25 < 0.3 => none
-        assert decide_action(0.25, plasticity=0.3) == "none"
-        # With high plasticity: effective_low = 0.3 - 0.1 = 0.2 => 0.25 > 0.2 => update
-        assert decide_action(0.25, plasticity=0.8) == "update"
+        # Normally PE=0.25 > 0.15 => update, but plasticity=0.3 doesn't lower
+        r = decide_action(0.25, plasticity=0.3)
+        assert r.action == "update"  # 0.25 > 0.15
+        # With high plasticity: effective_low = 0.15 - 0.1 = 0.05
+        assert decide_action(0.08, plasticity=0.8).action == "update"
+
+    def test_prediction_error_gate(self):
+        # Lee 2009: PE = mismatch * (1 - stability * 0.5)
+        r = decide_action(0.4, stability=0.8)
+        assert r.prediction_error == pytest.approx(0.4 * (1 - 0.8 * 0.5))
+
+    def test_age_raises_threshold(self):
+        # Milekic & Alberini 2002: old memories resist reconsolidation
+        # age=30d, plasticity=0: low = 0.15 + 0.15 = 0.30 → 0.25 < 0.30 = none
+        assert decide_action(0.25, age_days=30.0, plasticity=0.0).action == "none"
+        # age=0d, plasticity=0: low = 0.15 → 0.25 > 0.15 = update
+        assert decide_action(0.25, age_days=0.0, plasticity=0.0).action == "update"
+
+    def test_emotional_multiplier(self):
+        # Yonelinas & Ritchey 2015: emotional reconsolidation is stronger
+        r = decide_action(0.4, emotional_arousal=0.8)
+        assert r.emotional_multiplier == pytest.approx(1.8)
+        assert r.strength_delta > 0
+
+    def test_result_is_dataclass(self):
+        r = decide_action(0.5)
+        assert hasattr(r, "action")
+        assert hasattr(r, "strength_delta")
+        assert hasattr(r, "emotional_multiplier")
 
 
 class TestMergeContent:
