@@ -20,15 +20,15 @@ from mcp_server.core.wiki_projection import (
     WikiSnapshot,
     build_pages,
 )
-
-_CHAIN_TOP_MEMORIES_PER_DOMAIN = 3
-_CHAIN_BFS_DEPTH = 2
-_CHAIN_BFS_MAX_EDGES = 12
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.infrastructure.wiki_writer import sync as wiki_sync_write
+
+_CHAIN_TOP_MEMORIES_PER_DOMAIN = 3
+_CHAIN_BFS_DEPTH = 2
+_CHAIN_BFS_MAX_EDGES = 12
 
 _store: MemoryStore | None = None
 
@@ -43,6 +43,7 @@ def _get_store() -> MemoryStore | None:
         except Exception:
             return None
     return _store
+
 
 schema = {
     "description": (
@@ -163,7 +164,11 @@ def _bfs_edges(store: Any, start_entity_id: int) -> list[tuple[str, str, str]]:
             if src_id is None or tgt_id is None:
                 continue
             edges.append(
-                (_name(src_id), str(rel.get("relationship_type") or "related"), _name(tgt_id))
+                (
+                    _name(src_id),
+                    str(rel.get("relationship_type") or "related"),
+                    _name(tgt_id),
+                )
             )
             for nxt in (src_id, tgt_id):
                 if nxt not in visited:

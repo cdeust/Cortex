@@ -132,9 +132,7 @@ def _render_global_index(snapshot: WikiSnapshot) -> str:
     for d in _sorted_domains(snapshot.domains):
         link = f"[{d.label}]({d.id}/INDEX.md)"
         last = d.last_active or "—"
-        lines += [
-            f"| {link} | {d.session_count} | {d.confidence:.2f} | {last} |"
-        ]
+        lines += [f"| {link} | {d.session_count} | {d.confidence:.2f} | {last} |"]
     lines += [""]
     return "\n".join(lines)
 
