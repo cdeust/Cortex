@@ -2,7 +2,7 @@
   "mcpServers": {
     "cortex": {
       "command": "uvx",
-      "args": ["--from", "neuro-cortex-memory[postgresql]", "neuro-cortex-memory"],
+      "args": ["--python", "3.13", "--from", "neuro-cortex-memory[postgresql]", "neuro-cortex-memory"],
       "env": {
         "DATABASE_URL": "postgresql://localhost:5432/cortex"
       }
