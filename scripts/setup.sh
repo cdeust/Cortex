@@ -197,6 +197,10 @@ python3 -m pip install -q --target "$DEPS_DIR" \
     "pgvector>=0.3" \
     "sentence-transformers>=2.2.0" \
     "flashrank>=0.2.0" \
+    "datasets>=2.14.0" \
+    "networkx>=3.0" \
+    "tree-sitter>=0.24.0" \
+    "tree-sitter-language-pack>=0.24.0" \
     2>/dev/null
 
 ok "Python packages installed"
