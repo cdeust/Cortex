@@ -107,6 +107,13 @@ SCHEMAS: dict[str, dict] = {
         },
         "required": ["query"],
     },
+    "wiki_sync": {
+        "properties": {
+            "domain": {"type": "string", "maxLength": 200},
+            "dry_run": {"type": "boolean", "default": False},
+        },
+        "required": [],
+    },
     "codebase_analyze": {
         "properties": {
             "directory": {"type": "string"},
