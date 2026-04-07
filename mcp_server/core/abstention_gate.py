@@ -104,9 +104,7 @@ def filter_by_abstention(
     scores = clf.predict_batch(pairs)
 
     # Filter by threshold
-    kept = [
-        c for c, s in zip(candidates, scores, strict=False) if s >= threshold
-    ]
+    kept = [c for c, s in zip(candidates, scores, strict=False) if s >= threshold]
 
     # If filtering removed everything but caller wants minimum results,
     # keep top-N by score regardless of threshold
