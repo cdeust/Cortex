@@ -14,6 +14,7 @@ from mcp_server.handlers import (
     get_project_story,
     get_rules,
     sync_instructions,
+    wiki_sync,
 )
 from mcp_server.tool_error_handler import safe_handler
 
@@ -26,6 +27,7 @@ def register(mcp: FastMCP) -> None:
     _register_get_rules(mcp)
     _register_get_project_story(mcp)
     _register_assess_coverage(mcp)
+    _register_wiki_sync(mcp)
 
 
 def _register_sync_instructions(mcp: FastMCP) -> None:
@@ -163,4 +165,20 @@ def _register_assess_coverage(mcp: FastMCP) -> None:
                 "domain": domain or "",
                 "stale_days": stale_days,
             },
+        )
+
+
+def _register_wiki_sync(mcp: FastMCP) -> None:
+    @mcp.tool(
+        name="wiki_sync",
+        description=wiki_sync.schema["description"],
+    )
+    async def tool_wiki_sync(
+        domain: str | None = None,
+        dry_run: bool = False,
+    ) -> str:
+        """Render Cortex memory state as a browsable Markdown wiki."""
+        return await safe_handler(
+            wiki_sync.handler,
+            {"domain": domain, "dry_run": dry_run},
         )
