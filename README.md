@@ -342,6 +342,47 @@ Cortex ships as a Claude Code plugin with 14 skills:
 
 All scores are **retrieval-only** — no LLM reader in the evaluation loop. We measure whether retrieval places correct evidence in the top results.
 
+### Running benchmarks from a fresh clone
+
+Benchmarks need extra dependencies beyond the core MCP server. Install them via the `benchmarks` extra:
+
+```bash
+git clone https://github.com/cdeust/Cortex.git
+cd Cortex
+pip install -e ".[postgresql,benchmarks,dev]"
+```
+
+This pulls in everything needed:
+- `datasets` — HuggingFace loader (BEAM, LoCoMo, LongMemEval auto-download)
+- `sentence-transformers` — `all-MiniLM-L6-v2` embeddings (~90 MB on first run)
+- `flashrank` — cross-encoder reranking (`ms-marco-MiniLM-L-12-v2`, ~30 MB)
+- `psycopg[binary]` + `pgvector` — PostgreSQL driver and vector similarity
+
+Then make sure PostgreSQL 15+ is running with `pgvector` and `pg_trgm` extensions, and `DATABASE_URL` points to it. The default is `postgresql://localhost:5432/cortex` — create the database with:
+
+```bash
+createdb cortex
+psql cortex -c "CREATE EXTENSION IF NOT EXISTS vector;"
+psql cortex -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+```
+
+Run a benchmark:
+
+```bash
+# BEAM (ICLR 2026) — 100K split, 20 conversations, ~10 min
+python benchmarks/beam/run_benchmark.py --split 100K
+
+# LoCoMo (ACL 2024) — 1986 questions, ~40 min
+python benchmarks/locomo/run_benchmark.py
+
+# LongMemEval (ICLR 2025) — 500 questions, ~45 min
+python benchmarks/longmemeval/run_benchmark.py --variant s
+```
+
+**If you skip the `[benchmarks]` extra**, you'll see catastrophically low scores because the embedder falls back to a hash-based stub (no semantic understanding) and FlashRank reranking is disabled. Always install the extra before running benchmarks.
+
+### Reported scores
+
 | Benchmark | Metric | Cortex | Best in Paper | Paper |
 |---|---|---|---|---|
 | LongMemEval | R@10 | **97.8%** | 78.4% | Wang et al., ICLR 2025 |
