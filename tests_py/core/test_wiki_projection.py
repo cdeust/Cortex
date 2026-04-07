@@ -123,9 +123,7 @@ def test_domain_index_lists_schemas_and_overlap_graph() -> None:
 
 def test_schema_page_contains_entity_table_and_wheel() -> None:
     pages = build_pages(_snapshot_with_schemas())
-    sa = next(
-        p for p in pages if str(p.path) == "cortex/schemas/schema_a.md"
-    ).markdown
+    sa = next(p for p in pages if str(p.path) == "cortex/schemas/schema_a.md").markdown
     assert "# Memory consolidation" in sa
     assert "memory" in sa
     assert "0.90" in sa
@@ -190,9 +188,7 @@ def test_domain_index_lists_chains_sorted_by_heat() -> None:
 
 def test_chain_page_contains_graph_and_edge_table() -> None:
     pages = build_pages(_snapshot_with_chains())
-    page = next(
-        p for p in pages if str(p.path) == "cortex/chains/mem_42.md"
-    ).markdown
+    page = next(p for p in pages if str(p.path) == "cortex/chains/mem_42.md").markdown
     assert "# Chain: Decay tuning" in page
     assert "```mermaid" in page
     assert "graph TD" in page
