@@ -232,6 +232,13 @@ CREATE INDEX IF NOT EXISTS idx_memories_agent_context
 # ── PL/pgSQL: recall_memories ─────────────────────────────────────────────
 
 RECALL_MEMORIES_FN = """
+-- Migration: dropping the prior signature is required because adding a
+-- column to RETURNS TABLE is rejected by CREATE OR REPLACE in Postgres.
+-- The DROP is idempotent and only triggers when the old shape exists.
+DROP FUNCTION IF EXISTS recall_memories(
+    TEXT, vector, TEXT, TEXT, TEXT, TEXT, REAL, INT, INT,
+    REAL, REAL, REAL, REAL, REAL, BOOLEAN
+);
 CREATE OR REPLACE FUNCTION recall_memories(
     p_query_text    TEXT,
     p_query_emb     vector(384),
@@ -259,7 +266,8 @@ CREATE OR REPLACE FUNCTION recall_memories(
     tags            JSONB,
     importance      REAL,
     surprise_score  REAL,
-    emotional_valence REAL
+    emotional_valence REAL,
+    source          TEXT
 ) AS $$
 DECLARE
     v_pool INT := p_max_results * 10;
@@ -425,7 +433,7 @@ BEGIN
     SELECT tb.id, m.content, tb.final_score::REAL, m.heat,
            m.domain, m.created_at, m.store_type,
            m.tags, m.importance, m.surprise_score,
-           m.emotional_valence
+           m.emotional_valence, m.source
     FROM tag_boosted tb
     JOIN memories m ON m.id = tb.id
     ORDER BY tb.final_score DESC
