@@ -17,11 +17,15 @@ _LEADING_TRAILING_DASH_RE = re.compile(r"^-|-$")
 def cwd_to_project_id(cwd: str | None) -> str | None:
     """Convert a working directory path to a Claude project ID.
 
-    /Users/dev/cortex -> -Users-dev-cortex
+    POSIX: /Users/dev/cortex -> -Users-dev-cortex
+    Windows: C:\\Users\\dev\\cortex -> C--Users-dev-cortex
+
+    Backslashes are normalized to forward slashes first so Windows paths
+    produce the same dash-separated project ID shape as POSIX paths.
     """
     if not cwd:
         return None
-    return cwd.replace("/", "-")
+    return cwd.replace("\\", "/").replace("/", "-")
 
 
 def project_id_to_label(project_id: str | None) -> str:
