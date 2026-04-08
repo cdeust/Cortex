@@ -17,6 +17,8 @@ from mcp_server.handlers.remember_helpers import (
     try_curation,
 )
 from mcp_server.handlers.remember_response import build_merge_response
+from mcp_server.infrastructure import wiki_store
+from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
@@ -199,4 +201,17 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if is_global and result.get("stored"):
         result["is_global"] = True
         result["global_reason"] = global_reason
+
+    # Promote decision-shaped memories to the authored wiki layer.
+    # Delegated entirely to wiki_store.sync_memory, which never raises.
+    if result.get("stored") and result.get("memory_id") is not None:
+        wiki_path = wiki_store.sync_memory(
+            WIKI_ROOT,
+            memory_id=result["memory_id"],
+            content=content,
+            tags=tags,
+        )
+        if wiki_path:
+            result["wiki_page"] = wiki_path
+
     return result

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from mcp_server.core.wiki_layout import PAGE_KINDS
+from mcp_server.core.wiki_sync import build_from_memory
 from mcp_server.infrastructure.file_io import ensure_dir
 
 WriteMode = str  # "create" | "append" | "replace"
@@ -153,6 +154,37 @@ def list_pages(root: Path | str, *, kind: str | None = None) -> list[str]:
         for p in sorted(kind_dir.rglob("*.md")):
             results.append(str(p.relative_to(root_path)).replace("\\", "/"))
     return results
+
+
+def sync_memory(
+    root: Path | str,
+    *,
+    memory_id: int | str,
+    content: str,
+    tags: list[str] | None,
+) -> str | None:
+    """Promote a stored memory to a wiki note if its tags warrant it.
+
+    Delegates the "is this syncable?" + "what does the page look like?"
+    decision to :mod:`mcp_server.core.wiki_sync` (pure logic), then writes
+    the resulting markdown via :func:`write_page` in ``replace`` mode so
+    re-syncing the same memory ID overwrites rather than raising.
+
+    Never raises: swallows all exceptions and returns None, since this
+    runs on every ``remember`` call and must not break the write path.
+
+    Returns the relative path of the written page, or None when the
+    memory isn't a sync candidate or on error.
+    """
+    try:
+        built = build_from_memory(memory_id=memory_id, content=content, tags=tags)
+        if built is None:
+            return None
+        rel_path, markdown = built
+        write_page(root, rel_path, markdown, mode="replace")
+        return rel_path
+    except Exception:
+        return None
 
 
 def next_adr_number(root: Path | str) -> int:
