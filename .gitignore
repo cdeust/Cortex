@@ -23,3 +23,6 @@ benchmarks/longmemeval/longmemeval_s.json
 benchmarks/longmemeval/longmemeval_oracle.json
 benchmarks/spell_alteration/*.pdf
 *.pdf
+
+# Runtime telemetry
+traces/
