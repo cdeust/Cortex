@@ -14,15 +14,22 @@ logger = logging.getLogger(__name__)
 
 def _try_pg(database_url: str):
     """Try connecting to PostgreSQL. Returns PgMemoryStore or None."""
+    store, _ = _try_pg_verbose(database_url)
+    return store
+
+
+def _try_pg_verbose(database_url: str):
+    """Try connecting to PostgreSQL. Returns (store, error_message)."""
     try:
         import psycopg  # noqa: F401
 
         from mcp_server.infrastructure.pg_store import PgMemoryStore
 
-        return PgMemoryStore(database_url=database_url)
+        return PgMemoryStore(database_url=database_url), None
     except Exception as exc:
-        logger.warning("PostgreSQL unavailable (%s), falling back to SQLite", exc)
-        return None
+        msg = f"{type(exc).__name__}: {exc}"
+        logger.warning("PostgreSQL unavailable (%s), falling back to SQLite", msg)
+        return None, msg
 
 
 class MemoryStore:
@@ -57,12 +64,18 @@ class MemoryStore:
             return _make_sqlite(db_path or settings.SQLITE_FALLBACK_PATH, embedding_dim)
 
         if backend == "postgresql":
-            store = _try_pg(url) if url else None
+            if url:
+                store, err = _try_pg_verbose(url)
+            else:
+                store, err = None, "DATABASE_URL not set"
             if store is not None:
                 return store
             raise RuntimeError(
-                "PostgreSQL connection failed. Cortex requires PostgreSQL in CLI mode.\n"
+                f"PostgreSQL connection failed (url={url or '<unset>'}): {err}\n"
+                "Cortex requires PostgreSQL in CLI mode.\n"
                 "Run: bash setup.sh to configure PostgreSQL.\n"
+                "If DATABASE_URL is set, verify it points to a reachable Postgres instance "
+                "(host/port/credentials/database exists).\n"
                 "Or set CORTEX_RUNTIME=cowork to allow SQLite fallback."
             )
 
