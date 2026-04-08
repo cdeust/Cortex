@@ -107,11 +107,51 @@ SCHEMAS: dict[str, dict] = {
         },
         "required": ["query"],
     },
-    "wiki_sync": {
+    "wiki_write": {
         "properties": {
-            "domain": {"type": "string", "maxLength": 200},
-            "dry_run": {"type": "boolean", "default": False},
+            "path": {"type": "string", "maxLength": 500},
+            "content": {"type": "string", "maxLength": 200000},
+            "mode": {"type": "string"},
+            "title": {"type": "string", "maxLength": 500},
+            "summary": {"type": "string", "maxLength": 5000},
+            "body": {"type": "string", "maxLength": 200000},
+            "tags": {"type": "array"},
         },
+        "required": ["path"],
+    },
+    "wiki_read": {
+        "properties": {
+            "path": {"type": "string", "maxLength": 500},
+        },
+        "required": ["path"],
+    },
+    "wiki_list": {
+        "properties": {
+            "kind": {"type": "string", "maxLength": 20},
+        },
+        "required": [],
+    },
+    "wiki_link": {
+        "properties": {
+            "from_path": {"type": "string", "maxLength": 500},
+            "to_path": {"type": "string", "maxLength": 500},
+            "relation": {"type": "string", "maxLength": 40},
+        },
+        "required": ["from_path", "to_path", "relation"],
+    },
+    "wiki_adr": {
+        "properties": {
+            "title": {"type": "string", "maxLength": 500},
+            "context": {"type": "string", "maxLength": 20000},
+            "decision": {"type": "string", "maxLength": 20000},
+            "consequences": {"type": "string", "maxLength": 20000},
+            "status": {"type": "string", "maxLength": 40},
+            "tags": {"type": "array"},
+        },
+        "required": ["title", "context", "decision", "consequences"],
+    },
+    "wiki_reindex": {
+        "properties": {},
         "required": [],
     },
     "codebase_analyze": {
