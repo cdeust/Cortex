@@ -1,14 +1,16 @@
 """Wiki path contract — pure functions, no I/O.
 
-Defines the directory layout for the read-only Markdown projection of
-Cortex memory state. All paths are relative to a caller-supplied root so
-this module stays in the core layer (no filesystem coupling).
+The wiki is an authored long-form Markdown layer. Pages live under a
+supplied wiki root; this module only computes paths so the core layer
+stays filesystem-agnostic.
 
-Layout:
-    <root>/INDEX.md
-    <root>/<domain_id>/INDEX.md
-    <root>/<domain_id>/schemas/<schema_id>.md          (slice 2)
-    <root>/<domain_id>/chains/<chain_id>.md            (slice 4)
+Layout::
+
+    <root>/adr/NNNN-<slug>.md         architecture decision records
+    <root>/specs/<slug>.md            feature specs / PRDs / design docs
+    <root>/files/<path-slug>.md       per-file documentation
+    <root>/notes/<slug>.md            free-form notes / investigations
+    <root>/.generated/INDEX.md        auto-regenerated table of contents
 """
 
 from __future__ import annotations
@@ -16,32 +18,53 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
+PAGE_KINDS = ("adr", "specs", "files", "notes")
+
 _SAFE = re.compile(r"[^a-zA-Z0-9_.-]+")
+_MAX_SLUG_LEN = 80
 
 
-def slugify(value: str) -> str:
-    """Stable filesystem-safe slug. Deterministic, lowercased."""
+def slugify(value: str, *, max_len: int = _MAX_SLUG_LEN) -> str:
+    """Stable filesystem-safe slug. Deterministic, lowercased, length-capped."""
     if not value:
         return "unknown"
     cleaned = _SAFE.sub("-", value.strip().lower()).strip("-")
-    return cleaned or "unknown"
+    if not cleaned:
+        return "unknown"
+    return cleaned[:max_len].rstrip("-") or "unknown"
 
 
-def global_index_path() -> PurePosixPath:
-    """Top-level INDEX.md (lists all domains)."""
-    return PurePosixPath("INDEX.md")
+def file_path_slug(file_path: str) -> str:
+    """Slugify a source-file path into a single token suitable for files/.
+
+    ``src/auth/login.py`` → ``src-auth-login-py``.
+    """
+    return slugify(file_path.replace("/", "-").replace("\\", "-"))
 
 
-def domain_index_path(domain_id: str) -> PurePosixPath:
-    """Per-domain INDEX.md."""
-    return PurePosixPath(slugify(domain_id)) / "INDEX.md"
+def adr_filename(number: int, slug: str) -> str:
+    """Canonical ADR filename: NNNN-slug.md (4-digit zero-padded)."""
+    return f"{number:04d}-{slug}.md"
 
 
-def schema_page_path(domain_id: str, schema_id: str) -> PurePosixPath:
-    """Per-schema page (slice 2+)."""
-    return PurePosixPath(slugify(domain_id)) / "schemas" / f"{slugify(schema_id)}.md"
+def page_path(kind: str, filename: str) -> PurePosixPath:
+    """Path relative to the wiki root for a page of a given kind."""
+    if kind not in PAGE_KINDS:
+        raise ValueError(f"unknown wiki page kind: {kind}")
+    return PurePosixPath(kind) / filename
 
 
-def chain_page_path(domain_id: str, chain_id: str) -> PurePosixPath:
-    """Per-causal-chain page (slice 4+)."""
-    return PurePosixPath(slugify(domain_id)) / "chains" / f"{slugify(chain_id)}.md"
+def index_path() -> PurePosixPath:
+    """Path of the single auto-generated table of contents."""
+    return PurePosixPath(".generated") / "INDEX.md"
+
+
+def parse_page_path(path: str) -> tuple[str, str] | None:
+    """Given a path like ``adr/0001-foo.md`` return ``(kind, filename)``.
+
+    Returns None for unrecognised paths (including the generated INDEX).
+    """
+    parts = PurePosixPath(path).parts
+    if len(parts) < 2 or parts[0] not in PAGE_KINDS:
+        return None
+    return parts[0], parts[-1]

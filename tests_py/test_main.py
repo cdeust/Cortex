@@ -51,8 +51,13 @@ class TestMain:
         assert "narrative" in tool_names
         assert "import_sessions" in tool_names
         assert "codebase_analyze" in tool_names
-        assert "wiki_sync" in tool_names
-        assert len(tool_names) == 35
+        assert "wiki_write" in tool_names
+        assert "wiki_read" in tool_names
+        assert "wiki_list" in tool_names
+        assert "wiki_link" in tool_names
+        assert "wiki_adr" in tool_names
+        assert "wiki_reindex" in tool_names
+        assert len(tool_names) == 40
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"

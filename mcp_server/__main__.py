@@ -20,6 +20,7 @@ from mcp_server import (
     tool_registry_manage,
     tool_registry_memory,
     tool_registry_nav,
+    tool_registry_wiki,
 )
 from mcp_server.infrastructure.mcp_client_pool import close_all
 from mcp_server.server.http_server import shutdown_server
@@ -45,6 +46,7 @@ tool_registry_memory.register(mcp)
 tool_registry_manage.register(mcp)
 tool_registry_nav.register(mcp)
 tool_registry_advanced.register(mcp)
+tool_registry_wiki.register(mcp)
 
 # ── Lifecycle ──────────────────────────────────────────────────────────────
 
