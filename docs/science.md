@@ -485,7 +485,7 @@ where $u$ is the utilization of synaptic efficacy (facilitation), $x$ is the ava
 
 **Paper:** Perea, G., Navarrete, M., & Araque, A. (2009). Tripartite synapses: Astrocytes process and control synaptic information. *Trends in Neurosciences*, 32(8), 421--431. De Pitta, M., Volman, V., Berry, H., & Ben-Jacob, E. (2012). A tale of two stories: Astrocyte regulation of synaptic depression and facilitation. *PLOS Computational Biology*, 7(12), e1002293.
 
-**Core idea:** Astrocytes participate in synaptic transmission via calcium-dependent gliotransmitter release. Three regimes: (1) quiescent --- no modulation, (2) moderate Ca$^{2+}$ --- D-serine release potentiates NMDA-dependent LTP, (3) high Ca$^{2+}$ --- glutamate release causes heterosynaptic depression.
+**Core idea:** Astrocytes participate in synaptic transmission via calcium-dependent gliotransmitter release. Three regimes: (1) quiescent — no modulation, (2) moderate $\text{Ca}^{2+}$ — D-serine release potentiates NMDA-dependent LTP, (3) high $\text{Ca}^{2+}$ — glutamate release causes heterosynaptic depression.
 
 **Adaptation:** Astrocyte territories map to L1 fractal memory clusters. Calcium dynamics follow a simplified rise/decay model rather than De Pitta's full Li-Rinzel ODE system ($d[\text{Ca}^{2+}]/dt$, $d[\text{IP}_3]/dt$, $dh/dt$ with 15+ parameters). The three-regime classification (quiescent/facilitation/depression) faithfully captures the qualitative model from Perea (2009). De Pitta's ODE system is documented as the target for future faithful implementation.
 
