@@ -302,6 +302,14 @@ After plugin install, use these from any Claude Code session:
 
 ---
 
+## Scientific Foundation
+
+Built on **41 published papers** across neuroscience, information retrieval, and cognitive science. **20 biological mechanisms** implemented faithfully — predictive coding, emotional tagging, neuromodulation, sleep replay, compression cascade, episodic-to-semantic transfer, schema formation, pattern separation, synaptic tagging, homeostatic plasticity, and more.
+
+Every threshold, weight, and algorithm traces to a published source or measured ablation — nothing is guessed. Full science with plain-language explanations: **[docs/science.md](docs/science.md)**
+
+---
+
 ## Benchmarks
 
 All scores are **retrieval-only** — no LLM reader. We measure whether the right evidence appears in the top results.
@@ -316,7 +324,7 @@ All scores are **retrieval-only** — no LLM reader. We measure whether the righ
 The BEAM-10M improvement comes from the [Structured Context Assembly](docs/research-post-context-assembly.md) architecture — originating from [ai-prd-builder](https://github.com/cdeust/ai-prd-builder) (September 2025, one month before the BEAM paper).
 
 <details>
-<summary>Running benchmarks yourself</summary>
+<summary>Running benchmarks, measurement protocol, per-category breakdowns</summary>
 
 ```bash
 pip install -e ".[postgresql,benchmarks,dev]"
@@ -328,23 +336,7 @@ python benchmarks/locomo/run_benchmark.py                     # ~40 min
 python benchmarks/longmemeval/run_benchmark.py --variant s    # ~45 min
 ```
 
-Requires PostgreSQL 15+ with pgvector and pg_trgm. If you skip `[benchmarks]` extra, scores will be catastrophically low (hash-based fallback instead of real embeddings).
-
-</details>
-
-<details>
-<summary>Measurement protocol and score corrections</summary>
-
-All BEAM scores measured on a fresh `cortex_bench` database (DROP + CREATE per run), TRUNCATE all data tables between conversations, verified FlashRank preflight, deterministic within ±0.01 MRR. BEAM-10M turn IDs remapped to globally unique via cumulative plan offsets. BEAM does not define a retrieval metric — our "MRR" is a retrieval-proxy (rank of first substring-matching memory). Paper "LIGHT" scores are end-to-end QA, shown for directional reference.
-
-Previously reported 0.627 was on a polluted database. 0.546 had per-conversation entity contamination. Both superseded by the clean measurements above. See [full ablation log and methodology](docs/research-post-context-assembly.md).
-
-</details>
-
-<details>
-<summary>Per-category breakdowns and ablation log</summary>
-
-Full ablation results (emotional memory, event ordering, MMR, instruction/preference typed retrieval) and per-category breakdowns for all three benchmarks are in [docs/science.md](docs/science.md) and `benchmarks/beam/ablation_results.json`.
+All BEAM scores measured on a fresh database (DROP + CREATE per run), TRUNCATE between conversations, FlashRank preflight verified, deterministic within ±0.01 MRR. Full ablation results, per-category breakdowns, and methodology in [docs/science.md](docs/science.md) and [docs/research-post-context-assembly.md](docs/research-post-context-assembly.md).
 
 </details>
 
@@ -352,34 +344,21 @@ Full ablation results (emotional memory, event ordering, MMR, instruction/prefer
 
 ## Architecture
 
-Cortex follows Clean Architecture — the brain (core logic) never touches the outside world (database, files, network). Everything flows through strict layers:
+Clean Architecture — the brain (core logic) never touches the outside world. Everything flows through strict layers:
 
 <p align="center">
 <img src="docs/diagram-architecture.svg" alt="Clean Architecture layers" width="80%"/>
 </p>
 
-| Layer | What lives here | Count | Rule |
-|---|---|---|---|
-| **core/** | All the neuroscience + retrieval logic | 118 modules | Pure math and algorithms. No database calls, no file reads. |
-| **context_assembly/** | The structured context assembler (new) | 10 modules | Stage-aware 3-phase retrieval + priority-budgeted prompt assembly |
-| **infrastructure/** | PostgreSQL, embeddings, file I/O | 33 modules | The only layer that talks to the outside world |
-| **handlers/** | MCP tools (remember, recall, consolidate...) | 62 tools | Wires core logic to infrastructure — the "plugs" |
-| **hooks/** | Automatic lifecycle actions | 7 hooks | Fires on session start/end, tool use, compaction |
-| **shared/** | Utility functions | 12 modules | Text processing, similarity, hashing — no dependencies |
+| Layer | What lives here | Count |
+|---|---|---|
+| **core/** | Neuroscience + retrieval logic | 118 modules |
+| **context_assembly/** | Structured context assembler | 10 modules |
+| **infrastructure/** | PostgreSQL, embeddings, file I/O | 33 modules |
+| **handlers/** | MCP tools | 62 tools |
+| **hooks/** | Lifecycle automation | 7 hooks |
 
-**Why this matters:** Any mechanism can be tested in isolation (no database needed), swapped without breaking others, and audited against its paper without reading infrastructure code.
-
-**Storage:** PostgreSQL 15+ with pgvector (HNSW vector index) and pg_trgm (fuzzy text matching). All retrieval runs as PL/pgSQL stored procedures — the database does the heavy lifting, not Python.
-
----
-
-## Scientific Foundation
-
-Built on 41 published papers across neuroscience, information retrieval, and cognitive science. Every threshold, weight, and algorithm traces to a published source or measured ablation — nothing is guessed.
-
-**20 biological mechanisms** implemented faithfully: predictive coding write gate, emotional tagging, neuromodulation, sleep replay, compression cascade, episodic-to-semantic transfer, schema formation, pattern separation, synaptic tagging, homeostatic plasticity, and more.
-
-Full science documentation with plain-language explanations, paper citations, and ablation data: **[docs/science.md](docs/science.md)** | Research post on structured context assembly: **[docs/research-post-context-assembly.md](docs/research-post-context-assembly.md)**
+**Storage:** PostgreSQL 15+ with pgvector (HNSW) and pg_trgm. All retrieval in PL/pgSQL stored procedures.
 
 ---
 
