@@ -372,6 +372,12 @@ Run a benchmark:
 # BEAM (ICLR 2026) — 100K split, 20 conversations, ~10 min
 python benchmarks/beam/run_benchmark.py --split 100K
 
+# BEAM 10M split (hardest), 10 conversations, ~50 min baseline / ~2h assembler
+python benchmarks/beam/run_benchmark.py --split 10M
+
+# BEAM with structured context assembly (any split)
+CORTEX_USE_ASSEMBLER=1 python benchmarks/beam/run_benchmark.py --split 10M
+
 # LoCoMo (ACL 2024) — 1986 questions, ~40 min
 python benchmarks/locomo/run_benchmark.py
 
@@ -383,15 +389,22 @@ python benchmarks/longmemeval/run_benchmark.py --variant s
 
 ### Reported scores
 
-| Benchmark | Metric | Cortex | Best in Paper | Paper |
-|---|---|---|---|---|
-| LongMemEval | R@10 | **97.8%** | 78.4% | Wang et al., ICLR 2025 |
-| LongMemEval | MRR | **0.882** | — | |
-| LoCoMo | R@10 | **92.6%** | — | Maharana et al., ACL 2024 |
-| LoCoMo | MRR | **0.794** | — | |
-| BEAM | Overall MRR | **0.546** | 0.329 (LIGHT) | Tavakoli et al., ICLR 2026 |
+| Benchmark | Split | Metric | WRRF baseline | Assembler | Paper best | Paper |
+|---|---|---|---|---|---|---|
+| LongMemEval | S | R@10 | **97.8%** | — | 78.4% | Wang et al., ICLR 2025 |
+| LongMemEval | S | MRR | **0.882** | — | — | |
+| LoCoMo | — | R@10 | **92.6%** | — | — | Maharana et al., ACL 2024 |
+| LoCoMo | — | MRR | **0.794** | — | — | |
+| BEAM | 100K | MRR | 0.591 | **0.602** | 0.329 (LIGHT QA) | Tavakoli et al., ICLR 2026 |
+| BEAM | **10M** | MRR | 0.353 | **0.429 (+21.5%)** | 0.266 (LIGHT QA) | Tavakoli et al., ICLR 2026 |
 
-> **Correction (April 2026):** Previously reported BEAM MRR of 0.627, LoCoMo MRR of 0.840, and LongMemEval MRR of 0.880 were measured on a polluted database — stale benchmark memories from prior runs were not properly purged between conversations, inflating retrieval scores with cross-conversation leakage. The root cause was a psycopg prepared statement cache invalidation bug (`cached plan must not change result type`) that silently prevented the benchmark cleanup function from executing after schema migrations. The bug has been fixed (stale plan recovery via `_execute()` wrapper + `DEALLOCATE ALL` after DDL). All scores above are from clean-database runs with verified per-conversation isolation.
+**Structured Context Assembly (April 2026):** The Assembler column uses the new 3-phase stage-aware context assembly architecture — ported from [ai-architect-prd-builder](https://github.com/cdeust/ai-architect-prd-builder) (original Swift design, April 2025) and complemented with HippoRAG PPR (Gutiérrez NeurIPS 2024) and submodular coverage (Krause & Guestrin 2008). At 10M tokens per conversation, it improves 8 of 10 BEAM abilities over flat WRRF retrieval. See [research post](docs/research-post-context-assembly.md) for full methodology and per-category results.
+
+> **Note on BEAM scores:** BEAM (Tavakoli et al., ICLR 2026) does not define a retrieval MRR metric — the paper's evaluation is nugget-based LLM-as-judge. Our "MRR" is a retrieval-proxy metric (rank of first substring-matching memory). The "LIGHT QA" scores in the "Paper best" column are end-to-end QA scores, not directly comparable to our retrieval MRR but shown for directional reference.
+
+> **Measurement protocol (April 2026):** All BEAM scores measured on a fresh `cortex_bench` database (DROP + CREATE per run), TRUNCATE all data tables between conversations, verified FlashRank preflight, deterministic within ±0.01 MRR. BEAM-10M turn IDs remapped to globally unique via cumulative plan offsets (raw dataset has plan-relative IDs that collide). See `scripts/bench_variance.sh` and `benchmarks/lib/bench_db.py` for protocol details.
+
+> **Prior score corrections:** Previously reported BEAM MRR of 0.627 was measured on a polluted database (cross-conversation entity leakage). The 0.546 was measured with per-conversation entity contamination that inflated cross-session categories. Both have been superseded by the clean-DB measurements above.
 
 <details>
 <summary>Ablation log — approaches tried and results</summary>
