@@ -13,7 +13,7 @@ Memory that learns, consolidates, forgets intelligently, and surfaces the right 
 
 **97.8% R@10 LongMemEval** · **+21.5% BEAM-10M** · **41 paper citations** · **2080 tests**
 
-[Getting Started](#getting-started) | [How It Works](#how-it-works) | [Neural Graph](#neural-graph) | [Agent Integration](#agent-integration) | [Benchmarks](#benchmarks) | [Scientific Foundation](#scientific-foundation)
+[Getting Started](#getting-started) | [What It Feels Like](#what-this-actually-feels-like) | [Benchmarks](#retrieval-that-actually-works) | [Science](#the-science-under-the-hood) | [Neural Graph](#neural-graph)
 
 **Companion projects:**
 [cortex-beam-abstain](https://github.com/cdeust/cortex-know-when-to-stop-training-model) — community-trained retrieval abstention model for RAG systems
@@ -23,37 +23,13 @@ Memory that learns, consolidates, forgets intelligently, and surfaces the right 
 
 ---
 
-Claude Code forgets everything when you close the tab.
+Claude Code forgets you every time you close the tab. Every architecture decision you explained. Every debugging session where you traced a bug through four layers of abstraction. Every "remember, we decided to use event sourcing, not CRUD" correction. Gone. Next session, you're a stranger to your own tools.
 
-The architecture decisions you anchored on Monday. The debugging breakthrough from last Thursday. The migration plan you iterated on for three sessions. The correction you made about never mocking the database. Gone. Every session starts from zero.
-
-Cortex fixes this. Not with "conversation history" — with real memory. The kind that fades when unused, strengthens when accessed, compresses over time, connects related ideas across sessions, and surfaces exactly what you need before you ask for it. Built on the same neuroscience that explains how your own memory works.
+Cortex is a persistent memory engine for Claude Code built on computational neuroscience. It remembers what you worked on, how you think, what you decided and why. Not as a dumb text dump shoved into context, but as a living memory system that consolidates, forgets intelligently, and reconstructs the right context at the right time.
 
 **20 biological mechanisms. 33 MCP tools. 7 automatic hooks. Runs entirely on your machine. PostgreSQL + pgvector.**
 
----
-
-## What It Actually Feels Like
-
-**Monday** — You're debugging a webhook handler. After two hours, you find the root cause: a race condition in the Redis session store where TTL expiry can fire between the auth check and the permission lookup. You note a fix approach. Session ends.
-
-**Thursday** — Different project, different codebase. You hit a similar authentication issue. You start typing a question to Claude about session management, and before Claude responds, Cortex has already injected three memories: Monday's race condition analysis, a decision from last month to use Redis for all session state, and a lesson from an even older session about TTL edge cases.
-
-Not "here's your conversation history." Real recall — across sessions, across projects, weighted by relevance and recency, with the noisy stuff already forgotten.
-
-**Three weeks later** — Those individual debugging sessions have been consolidated into a general pattern: "authentication edge cases involving TTL-based caches." The specific Redis commands are compressed to a summary. The principle survived. The noise didn't. Your next auth debugging session starts with institutional knowledge, not a blank page.
-
----
-
 ## Getting Started
-
-### Prerequisites
-
-- **Python 3.10+**
-- **PostgreSQL 15+** with [pgvector](https://github.com/pgvector/pgvector) and pg_trgm extensions
-- **Claude Code** CLI or desktop app
-
-### Option A — Claude Code Marketplace (recommended)
 
 ```bash
 claude plugin marketplace add cdeust/Cortex
@@ -69,34 +45,24 @@ Restart your Claude Code session, then run:
 This handles everything: PostgreSQL + pgvector installation, database creation, embedding model download, cognitive profile building from session history, codebase seeding, conversation import, and hook registration. Zero manual steps.
 
 > **Using Claude Cowork?** Install [Cortex-cowork](https://github.com/cdeust/Cortex-cowork) instead — uses SQLite, no PostgreSQL required.
->
-> ```bash
-> claude plugin marketplace add cdeust/Cortex-cowork
-> claude plugin install cortex-cowork
-> ```
 
-### Option B — Standalone MCP (no plugin)
+Or add as a standalone MCP server (no hooks, no skills — just the 33 tools):
 
 ```bash
 claude mcp add cortex -- uvx --from "neuro-cortex-memory[postgresql]" neuro-cortex-memory
 ```
 
-Adds Cortex as a standalone MCP server via [uvx](https://docs.astral.sh/uv/). No hooks, no skills — just the 33 MCP tools. Requires `uv` installed.
-
 <details>
-<summary><strong>More installation options</strong> (Clone, Docker, Manual)</summary>
+<summary><strong>More options</strong> (Clone, Docker, Manual setup)</summary>
 
-### Option C — Clone + Setup Script
-
+**Clone + setup script:**
 ```bash
-git clone https://github.com/cdeust/Cortex.git
-cd Cortex
+git clone https://github.com/cdeust/Cortex.git && cd Cortex
 bash scripts/setup.sh        # macOS / Linux
 python3 scripts/setup.py     # Windows / cross-platform
 ```
 
-### Option D — Docker
-
+**Docker:**
 ```bash
 git clone https://github.com/cdeust/Cortex.git && cd Cortex
 docker build -t cortex-runtime -f docker/Dockerfile .
@@ -104,202 +70,175 @@ docker run -it \
   -v $(pwd):/workspace \
   -v cortex-pgdata:/var/lib/postgresql/17/data \
   -v ~/.claude:/home/cortex/.claude-host:ro \
-  -v ~/.claude.json:/home/cortex/.claude-host-json/.claude.json:ro \
   cortex-runtime
 ```
 
-### Option E — Manual Setup
-
-<details>
-<summary>Step-by-step instructions</summary>
-
-**1. Install PostgreSQL + pgvector**
-
-```bash
-# macOS
-brew install postgresql@17 pgvector
-brew services start postgresql@17
-
-# Ubuntu/Debian
-sudo apt-get install postgresql postgresql-server-dev-all
-sudo apt-get install postgresql-17-pgvector
-sudo systemctl start postgresql
-```
-
-**2. Create the database**
-
-```bash
-createdb cortex
-psql cortex -c "CREATE EXTENSION IF NOT EXISTS vector;"
-psql cortex -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
-```
-
-**3. Install Python dependencies**
-
-```bash
-pip install -e ".[postgresql]"
-pip install sentence-transformers flashrank
-```
-
-**4. Initialize schema**
-
-```bash
-export DATABASE_URL=postgresql://localhost:5432/cortex
-python3 -c "
-from mcp_server.infrastructure.pg_schema import get_all_ddl
-from mcp_server.infrastructure.pg_store import PgStore
-import asyncio
-asyncio.run(PgStore(database_url='$DATABASE_URL').initialize())
-"
-```
-
-**5. Pre-cache the embedding model**
-
-```bash
-python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
-```
-
-**6. Register MCP server**
-
-```bash
-claude mcp add cortex -- uvx --from "neuro-cortex-memory[postgresql]" neuro-cortex-memory
-```
-
-Restart Claude Code to activate.
+**Manual:** See [detailed manual setup instructions](docs/manual-setup.md).
 
 </details>
-</details>
-
-### Verify Installation
-
-After setup, open Claude Code in any project. The SessionStart hook should inject context automatically. You can also test manually:
-
-```bash
-python3 -m mcp_server  # Should start on stdio without errors
-```
-
-### Configuration
-
-Set `DATABASE_URL` (default: `postgresql://localhost:5432/cortex`). All parameters use the `CORTEX_MEMORY_` prefix — see `mcp_server/infrastructure/memory_config.py` for the full list (~40 parameters).
 
 ---
 
-## How It Works
+## What this actually feels like
 
-Cortex runs invisibly alongside Claude Code. You don't manage memory — it does.
+**Monday.** You spend an hour debugging a webhook handler. After tracing through four layers, you find the root cause: a race condition in the Redis session store where TTL expiry can fire between the auth check and the permission lookup. You discuss the fix with Claude, decide on an approach, and implement it. Session ends.
 
-### Your session, automatically enriched
+**Thursday.** Different project, but a user reports intermittent logouts. You open Claude Code. Before you even describe the bug, Cortex has already injected three memories: Monday's race condition analysis, a decision from two weeks ago to use Redis for all session state, and a lesson from an older session about TTL edge cases in distributed caches.
 
-| When | What happens | You see |
+Claude doesn't just have your conversation history. It has *context*. It connects the current problem to past decisions, surfaces lessons you forgot you learned, and skips the part where you re-explain your entire architecture.
+
+**Three weeks later.** Those individual debugging sessions have been consolidated into a general pattern: "authentication edge cases involving TTL-based caches." The specific Redis commands compressed to a summary. The debugging steps faded. The principle survived. Your next auth issue starts with institutional knowledge, not a blank page.
+
+That's the difference. Not "here's what you said last time." Real recall — the kind where your tools understand the *shape* of what you've been building.
+
+---
+
+## Retrieval that actually works
+
+We tested Cortex against three published benchmarks. All scores are **retrieval-only** — no LLM reader in the evaluation loop. We measure whether the right memory shows up, not whether a model can generate a good answer from it.
+
+### LongMemEval — can you find a fact from 40 sessions ago?
+
+LongMemEval (Wu et al., ICLR 2025): 500 human-curated questions embedded in ~40 sessions of conversation history (~115k tokens). The paper's best retrieval hit 78.4% Recall@10.
+
+| | Cortex | What it means |
 |---|---|---|
-| **Session starts** | Cortex loads your hot memories, anchored decisions, and team context into Claude's prompt | Claude already knows what you were working on yesterday |
-| **You write code** | Hooks capture edits, commands, and test results as memories. Related memories get a heat boost so they surface in future recalls | Nothing — it's automatic |
-| **You ask a question** | Cortex searches 5 signals simultaneously (meaning, keywords, fuzzy match, importance, recency), reranks with a cross-encoder, and injects the best matches into Claude's context | Claude answers with context from weeks ago that you forgot about |
-| **Session ends** | A "dream" cycle decays old memories, compresses verbose ones, and promotes repeated patterns into general knowledge | Your next session is cleaner and more focused |
-| **Days pass** | Unused memories cool down naturally. Important ones stay hot. Protected decisions never decay | Cortex forgets the noise, keeps the signal |
+| Recall@10 | **97.8%** | The right memory shows up in the top 10 results for nearly every question |
+| MRR | **0.882** | The correct answer is usually the first or second result |
 
-### Retrieval: five signals, one answer
+Knowledge updates scored highest because heat-based decay naturally pushes newer information above older versions of the same fact. This wasn't designed for the benchmark. It's just how the thermodynamic model works.
 
-When you search, Cortex doesn't just look for similar text — it combines five different signals, all computed inside PostgreSQL in a single query:
+### LoCoMo — can you handle trick questions and multi-hop reasoning?
 
-<p align="center">
-<img src="docs/diagram-retrieval-pipeline.svg" alt="Retrieval pipeline: Intent → TMM fusion → FlashRank reranking" width="80%"/>
-</p>
+LoCoMo (Maharana et al., ACL 2024): 1,986 questions across 10 conversations, including adversarial trick questions designed to confuse retrieval, multi-hop queries requiring evidence from multiple turns, and temporal reasoning about when things happened.
 
-| Signal | What it finds | Example |
+| | Cortex | What it means |
 |---|---|---|
-| **Vector similarity** | Memories with similar *meaning* | "fix the auth bug" finds "resolved authentication issue" |
-| **Full-text search** | Memories with matching *keywords* | "PostgreSQL migration" finds exact term matches |
-| **Trigram similarity** | Memories with similar *spelling* | "postgre" still finds "PostgreSQL" |
-| **Thermodynamic heat** | Memories you use *frequently* | Your most-accessed architectural decisions rank higher |
-| **Recency** | Memories from *recent* sessions | Yesterday's context ranks above last month's |
+| Recall@10 | **92.6%** | Right memory in top 10 over 9 times out of 10 |
+| MRR | **0.794** | Correct answer is typically the first result |
 
-After fusion, a cross-encoder AI (FlashRank) re-scores the top candidates for a final quality check.
+No LLM at query time. No API calls. Just a 22MB embedding model, PostgreSQL with pgvector, and neuroscience algorithms doing the heavy lifting. Five retrieval signals fused server-side (vector similarity, full-text search, trigram matching, thermodynamic heat, recency), then reranked by a cross-encoder.
 
-For conversations over 1M tokens, the **Structured Context Assembler** replaces flat search with stage-scoped 3-phase retrieval — see [benchmarks](#benchmarks) for measured results.
+### BEAM — 10 million tokens of conversation, one memory system
 
-### Auto-generated project wiki
+BEAM (Tavakoli et al., ICLR 2026) is the hardest long-term memory benchmark published. 10 conversations, each spanning 10 million tokens. 200 probing questions across 10 memory abilities, including three that no prior benchmark tests: contradiction resolution, event ordering, and instruction following.
 
-Every time you store a memory (manually or via hooks), Cortex doesn't just save it — it extracts entities, builds relationships, detects schemas, and links the new memory into a growing knowledge graph. Over time, this becomes a **living wiki of your project**: decisions and their rationale, patterns that emerged, lessons learned, architectural constraints, and how they all connect.
+Every system in the paper collapses at this scale. The best result reported (LIGHT on Llama-4-Maverick) scores 0.266. Context-window approaches can't fit it. Standard RAG drowns in noise.
 
-You can explore this wiki through:
-- **`/cortex-visualize`** — interactive neural graph in your browser (see screenshots below)
-- **`/cortex-explore-memory`** — navigate by entity, domain, or time
+| Split | WRRF baseline | With Context Assembler | What happened |
+|---|---|---|---|
+| BEAM-100K | 0.591 | **0.602** | Flat search still works at small scale |
+| **BEAM-10M** | 0.353 | **0.429 (+21.5%)** | Structured assembly dominates when flat search drowns |
+
+At 10 million tokens per conversation, you have ~7,500 memories that all look similar to a vector search engine. The [Structured Context Assembly](docs/research-post-context-assembly.md) architecture fixes this by breaking the conversation into stages (distinct topics), retrieving within the current stage first, following entity graph connections to related stages, and falling back to summaries for everything else. 8 of 10 memory abilities improve.
+
+This architecture was originally designed in September 2025 for generating coherent 9-page PRDs on Apple Intelligence's 4096-token context window ([ai-prd-builder](https://github.com/cdeust/ai-prd-builder), commit [`462de01`](https://github.com/cdeust/ai-prd-builder/commit/462de01) — one month before the BEAM paper existed). It works because the problem is the same at both scales: you can't fit everything in context, so you need to be smart about what goes in.
+
+**Honest caveat:** BEAM doesn't define a retrieval MRR metric — the paper uses LLM-as-judge nugget scoring. Our "MRR" is a retrieval proxy (rank of first substring-matching memory). The paper's "LIGHT" scores are end-to-end QA, shown for directional reference.
+
+<details>
+<summary>Running benchmarks yourself</summary>
+
+```bash
+pip install -e ".[postgresql,benchmarks,dev]"
+
+python benchmarks/beam/run_benchmark.py --split 100K          # ~10 min
+python benchmarks/beam/run_benchmark.py --split 10M           # ~50 min
+CORTEX_USE_ASSEMBLER=1 python benchmarks/beam/run_benchmark.py --split 10M
+python benchmarks/locomo/run_benchmark.py                     # ~40 min
+python benchmarks/longmemeval/run_benchmark.py --variant s    # ~45 min
+```
+
+All scores on fresh database (DROP + CREATE per run), TRUNCATE between conversations, FlashRank preflight verified. See [full methodology](docs/research-post-context-assembly.md).
+
+</details>
+
+---
+
+## The science under the hood
+
+Cortex doesn't store memories the way a database stores rows. It treats them more like a brain treats experiences.
+
+**Memories have temperature.** Every memory starts hot. Access it and it stays hot. Ignore it and it cools. Below a threshold, it compresses: full text → summary → keywords → fades entirely. This isn't a bug — it's [rate-distortion optimal forgetting](docs/science.md), the same mathematical framework your brain uses to decide what's worth keeping. Important memories resist compression. Surprising ones get a heat boost. Boring, redundant ones quietly disappear. *(Anderson & Lebiere 1998; Ebbinghaus 1885)*
+
+**Storage has a gatekeeper.** Not everything deserves to be remembered. Cortex maintains a predictive model of what it already knows, and only stores information that violates its expectations. Tell it the same thing twice and the write gate blocks the second attempt. This is predictive coding — the same mechanism your neocortex uses to filter sensory input. Only prediction errors get through. *(Friston 2005; Bastos et al. 2012)*
+
+**Retrieval changes the memory.** When you recall a memory in a new context, Cortex doesn't just passively hand it back. It compares the retrieval context against the storage context, and if there's enough mismatch, it reconsolidates — updates the memory to reflect what's true now. This is real neuroscience. Nader et al. showed in 2000 that retrieved memories become labile and can be rewritten. Your codebase evolves, and so do Cortex's memories of it. *(Dudai 2012; Nader et al. 2000)*
+
+**Emotional memories are stronger.** Frustration during debugging, excitement when a test passes, urgency in a production incident — Cortex detects emotional valence and encodes those memories with more force. They decay slower, compress later, and surface faster. Like how you remember your worst production outage in vivid detail but can't recall last Tuesday's standup. *(Wang & Bhatt 2024; Yerkes-Dodson 1908)*
+
+**Background consolidation runs like sleep.** When you're away, a consolidation cycle processes recent memories: decays old ones, compresses verbose ones, promotes recurring patterns into general knowledge (episodic → semantic transfer), discovers entity relationships, and runs "dream replay" where related memories are compared and new connections emerge. *(McClelland et al. 1995; Foster & Wilson 2006; Buzsáki 2015)*
+
+**Similar memories stay distinct.** Pattern separation — modeled on the dentate gyrus, which keeps "Tuesday's standup" separate from "Wednesday's standup" even though they're almost identical. Without this, retrieval returns the same generic match for every similar query. *(Leutgeb et al. 2007; Yassa & Stark 2011)*
+
+**41 papers total.** Every algorithm, constant, and threshold traces to a published source. Full citations, equations, ablation data, and per-module implementation audit: **[docs/science.md](docs/science.md)** | **[Research post on structured context assembly](docs/research-post-context-assembly.md)**
+
+---
+
+## Hippocampal Replay: context that survives compaction
+
+Claude Code has a 200k/1M token context window. During long sessions, when that window fills up, it compacts: summarizes older messages, strips tool outputs, paraphrases your instructions. Important nuance evaporates. Decisions you anchored early in the conversation dissolve into vague summaries.
+
+Hippocampal Replay fixes this. Named after the neuroscience phenomenon where your brain replays important experiences during sleep to consolidate them, it treats context compaction as "sleep" and replays what matters when Claude "wakes up."
+
+**Before compaction hits,** a hook fires. Cortex drains your active context — what you were working on, which files were open, what decisions you'd made, what errors were unresolved — and stores it as a checkpoint.
+
+**After compaction,** a second hook fires. Cortex reconstructs your context intelligently. Not by dumping everything back in, but by assembling the right pieces: your latest checkpoint, any facts you'd anchored as critical, the hottest project memories, and predictions about what you'll need next.
+
+You can be explicit about what matters:
+
+```
+cortex:anchor({ content: "We're using the event-sourcing pattern. All state changes go through the event bus.", reason: "Architecture constraint" })
+```
+
+Anchored memories get maximum protection. They always survive compaction, no matter what.
+
+---
+
+## Auto-generated project wiki
+
+Every time you store a memory, Cortex doesn't just save text — it extracts entities, builds relationships, detects schemas, and links the new memory into a growing knowledge graph. Over time, this becomes a **living wiki of your project**: decisions and their rationale, patterns that emerged, lessons learned, architectural constraints, and how they all connect.
+
+Explore it through:
+- **`/cortex-visualize`** — interactive neural graph in your browser
 - **`get_causal_chain`** — trace how one decision led to another
 - **`get_project_story`** — auto-generated narrative of your project's evolution
 - **`detect_gaps`** — find areas where knowledge is thin or isolated
 
-This isn't documentation you write — it's documentation that writes itself from how you work.
-
-### Seven hooks — zero configuration
-
-Hooks fire automatically via Claude Code's plugin system. No manual setup after installation.
-
-| Hook | When it fires | What it does for you |
-|---|---|---|
-| **SessionStart** | You open Claude Code | Loads your hot memories, anchored decisions, and last checkpoint |
-| **UserPromptSubmit** | Before Claude responds | Searches for memories relevant to what you just asked |
-| **PostToolUse** | After you edit/write/run code | Captures the action as a memory if it's significant |
-| **PostToolUse** | After you read/edit files | Boosts related memories so they surface in the next recall |
-| **SessionEnd** | You close Claude Code | Runs the dream cycle — decay, compress, consolidate |
-| **Compaction** | Claude's context window fills up | Saves a checkpoint so nothing is lost when context compresses |
-| **SubagentStart** | An agent is spawned | Briefs the agent with your prior work and team decisions |
+This isn't documentation you write. It's documentation that writes itself from how you work.
 
 ---
 
 ## Neural Graph
 
-Launch the interactive visualization with `/cortex-visualize`. Three views: Graph, Board, and Pipeline.
-
-### Graph View
-
-Force-directed neural graph showing domain clusters, memories, entities, and discussions connected by typed edges.
+Launch with `/cortex-visualize`. Three views:
 
 <p align="center">
 <img src="docs/neural-graph-overview.png" width="100%" alt="Cortex Neural Graph — unified view with domain clusters, memories, entities, and discussions" />
 </p>
 
-### Board View
-
-Memories organized by biological consolidation stage. Each column shows decay rate, vulnerability, and plasticity. Memory cards display domain, heat, importance, and emotional tags.
+**Graph View** — force-directed neural graph showing domain clusters, memories, entities, and discussions connected by typed edges. Click any node for full context.
 
 <p align="center">
 <img src="docs/neural-graph-board.png" width="100%" alt="Cortex Board View — kanban consolidation stages with biological metrics" />
 </p>
 
-### Pipeline View
-
-Horizontal flow from domains through the write gate into consolidation stages. Block height reflects importance, color indicates domain.
+**Board View** — memories organized by biological consolidation stage. Each card shows domain, heat, importance, and emotional tags.
 
 <p align="center">
 <img src="docs/neural-graph-pipeline.png" width="100%" alt="Cortex Pipeline View — Sankey flow through consolidation stages" />
 </p>
 
-### Detail Panels
-
-Click any node for full context. Discussion nodes show session timeline, tools used, keywords, and a full conversation viewer. Memory nodes show biological meters (encoding strength, interference, schema match) and git diffs.
-
-<p align="center">
-<img src="docs/neural-graph-discussion.png" width="49%" alt="Cortex — discussion detail with full conversation history" />
-<img src="docs/neural-graph-diff.png" width="49%" alt="Cortex — code diff viewer in memory detail panel" />
-</p>
-
-### Filters
-
-Domain, emotion, and consolidation stage dropdowns. Toggle buttons for methodology, memories, knowledge, emotional nodes, protected/hot/global memories, and discussions.
+**Pipeline View** — horizontal flow from domains through the write gate into consolidation stages.
 
 ---
 
 ## Agent Integration
 
-Cortex is designed to work with a team of specialized agents. Each agent has scoped memory (`agent_topic`) while sharing critical decisions across the team.
-
-### Transactive Memory System
-
-Based on Wegner 1987: teams store more knowledge than individuals because each member specializes, and a shared directory tells everyone who knows what.
+Cortex works with teams of specialized agents. Each agent has scoped memory (`agent_topic`) while sharing critical decisions across the team — based on Wegner's transactive memory theory (1987): teams store more knowledge than individuals because each member specializes.
 
 <p align="center">
-<img src="docs/diagram-team-memory.svg" alt="Transactive Memory System — agent specialization, coordination, directory" width="80%"/>
+<img src="docs/diagram-team-memory.svg" alt="Transactive Memory System" width="80%"/>
 </p>
 
 **Specialization** — each agent writes to its own topic. Engineer's debugging notes don't clutter tester's recall.
@@ -308,107 +247,13 @@ Based on Wegner 1987: teams store more knowledge than individuals because each m
 
 **Directory** — entity-based queries span all topics. "What do we know about the reranker?" returns results from engineer, tester, and researcher.
 
-### Agent Briefing
-
-When the orchestrator spawns a specialist agent, the SubagentStart hook automatically:
-
-1. Extracts task keywords from the prompt
-2. Queries agent-scoped prior work (FTS, no embedding load needed)
-3. Fetches team decisions (protected + global memories from other agents)
-4. Injects as context prefix — agent starts with knowledge
-
-### Compatible Agent Team
-
-Works with any custom Claude Code agents. See [zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents) for a ready-made team of **18 specialists** (engineer, architect, researcher, DBA, security auditor, and more) — each with scoped memory that doesn't clutter the others.
-
-### Slash Commands
-
-After plugin install, use these from any Claude Code session:
-
-| Command | What it does |
-|---|---|
-| `/cortex-setup-project` | Bootstrap memory for a new project (one-time) |
-| `/cortex-recall` | Search memories with intent-adaptive retrieval |
-| `/cortex-consolidate` | Run maintenance — decay, compress, consolidate |
-| `/cortex-visualize` | Launch the interactive neural graph in your browser |
-| `/cortex-remember` | Manually store something important |
-| `/cortex-explore-memory` | Navigate memory by entity, domain, or time |
-| `/cortex-profile` | View your cognitive methodology profile |
-
----
-
-## Scientific Foundation
-
-Built on **41 published papers** across neuroscience, information retrieval, and cognitive science. **20 biological mechanisms** implemented faithfully — not as metaphors, but with the actual equations from the papers. Every threshold, weight, and algorithm traces to a published source or measured ablation. Nothing is guessed.
-
-| What Cortex does | How your brain does it | Paper |
-|---|---|---|
-| Only stores what's genuinely new | Predictive coding — your brain filters out predictable input | Friston 2005 |
-| Emotional memories are stronger | Amygdala tags important moments for priority encoding | Wang & Bhatt 2024 |
-| Replays important memories during idle time | Hippocampal sharp-wave ripples during sleep | Foster & Wilson 2006 |
-| Old memories compress to summaries | Episodic → semantic transfer over time | McClelland et al. 1995 |
-| Unused memories fade, accessed ones stay hot | Power-law forgetting curve | Anderson & Lebiere 1998 |
-| Similar memories stay distinct | Dentate gyrus pattern separation | Leutgeb et al. 2007 |
-| Related memories form reusable templates | Schema formation in prefrontal cortex | Tse et al. 2007 |
-| Important new info retroactively boosts old related memories | Synaptic tagging and capture | Frey & Morris 1997 |
-
-**Technical deep-dives:** [docs/science.md](docs/science.md) — full paper citations, equations, ablation data, and per-module audit | [Research post on structured context assembly](docs/research-post-context-assembly.md) — the BEAM-10M +21.5% result with full methodology and provenance
-
----
-
-## Benchmarks
-
-Three published benchmarks, each testing a different aspect of long-term memory. All scores are **retrieval-only** — no LLM reader in the loop. We measure whether retrieval places the right evidence in front of the model.
-
-### LongMemEval — can you find a specific fact from 40 sessions ago?
-
-500 human-curated questions embedded in ~40 sessions of conversation history. The paper's best retrieval hit 78.4% Recall@10.
-
-**Cortex: 97.8% Recall@10, 0.882 MRR.** The correct memory is almost always the first result.
-
-### LoCoMo — can you handle adversarial, multi-hop, and temporal queries?
-
-1,986 questions across 10 conversations, including trick questions designed to confuse retrieval systems, questions requiring connecting evidence from multiple turns, and time-sensitive queries.
-
-**Cortex: 92.6% Recall@10, 0.794 MRR.** Strongest on adversarial (93.9% R@10) and open-domain (95.0%) queries.
-
-### BEAM — the stress test at 10 million tokens
-
-BEAM (Tavakoli et al., ICLR 2026) is the hardest long-term memory benchmark published. 10 conversations, each spanning up to 10 million tokens. 200 probing questions across 10 memory abilities — including three that no prior benchmark tests: contradiction resolution, event ordering, and instruction following.
-
-Every system in the paper collapses at this scale. The best result reported (LIGHT on Llama-4-Maverick) scores 0.266.
-
-| Split | WRRF baseline | With Context Assembler | Improvement |
-|---|---|---|---|
-| BEAM-100K (20 conversations) | 0.591 | **0.602** | +0.011 |
-| **BEAM-10M** (10 conversations) | 0.353 | **0.429** | **+21.5%** |
-
-At 10M tokens per conversation, flat retrieval drowns in ~7,500 near-duplicate memories. The [Structured Context Assembly](docs/research-post-context-assembly.md) architecture — originally designed for generating 9-page PRDs on Apple Intelligence's 4096-token window ([ai-prd-builder](https://github.com/cdeust/ai-prd-builder), [September 2025](https://github.com/cdeust/ai-prd-builder/commit/462de01)) — breaks the conversation into stages, retrieves within the current stage, follows entity graph connections to related stages, and falls back to summaries for everything else. 8 of 10 memory abilities improve.
-
-> **Honest caveat:** BEAM does not define a retrieval MRR metric — the paper uses LLM-as-judge nugget scoring. Our "MRR" is a retrieval proxy (rank of first substring-matching memory). Paper scores shown for directional reference, not direct comparison.
-
-<details>
-<summary>Running benchmarks, measurement protocol, per-category breakdowns</summary>
-
-```bash
-pip install -e ".[postgresql,benchmarks,dev]"
-
-python benchmarks/beam/run_benchmark.py --split 100K          # ~10 min
-python benchmarks/beam/run_benchmark.py --split 10M           # ~50 min
-CORTEX_USE_ASSEMBLER=1 python benchmarks/beam/run_benchmark.py --split 10M  # with assembler
-python benchmarks/locomo/run_benchmark.py                     # ~40 min
-python benchmarks/longmemeval/run_benchmark.py --variant s    # ~45 min
-```
-
-All BEAM scores measured on a fresh database (DROP + CREATE per run), TRUNCATE between conversations, FlashRank preflight verified, deterministic within ±0.01 MRR. Full ablation results, per-category breakdowns, and methodology in [docs/science.md](docs/science.md) and [docs/research-post-context-assembly.md](docs/research-post-context-assembly.md).
-
-</details>
+Works with any custom agents. See [zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents) for a ready-made team of **18 specialists**.
 
 ---
 
 ## Architecture
 
-Clean Architecture — the brain (core logic) never touches the outside world. Everything flows through strict layers:
+Clean Architecture with strict dependency rules. Inner layers never import outer layers.
 
 <p align="center">
 <img src="docs/diagram-architecture.svg" alt="Clean Architecture layers" width="80%"/>
@@ -424,11 +269,13 @@ Clean Architecture — the brain (core logic) never touches the outside world. E
 
 **Storage:** PostgreSQL 15+ with pgvector (HNSW) and pg_trgm. All retrieval in PL/pgSQL stored procedures.
 
+**Configuration:** Set `DATABASE_URL` (default: `postgresql://localhost:5432/cortex`). All parameters use `CORTEX_MEMORY_` prefix — see `mcp_server/infrastructure/memory_config.py` for the full list (~40 parameters).
+
 ---
 
 ## Security
 
-Runs **100% locally** — MCP over stdio, PostgreSQL on localhost, visualization on 127.0.0.1. No data leaves your machine. Audit score: **91/100** (all SQL parameterized, Pydantic validation on all tools, HTML escaping on visualization, input length limits, path traversal protection).
+Runs **100% locally** — MCP over stdio, PostgreSQL on localhost, visualization on 127.0.0.1. No data leaves your machine. Audit score: **91/100**.
 
 ---
 
@@ -456,4 +303,3 @@ MIT
   url={https://github.com/cdeust/Cortex}
 }
 ```
-</div>
