@@ -80,7 +80,7 @@ We organize related work by approach category and state what distinguishes Corte
 | LIGHT | No | No | Three-tier | Partial | No |
 | A-MEM | LLM-directed | LLM-directed | No | No | No |
 | HippoRAG | No | No | PPR + vector | No | Partial |
-| **Cortex** | **Predictive coding** | **20 mechanisms** | **5-signal WRRF** | **3-phase** | **Yes** |
+| **Cortex** | **Predictive coding** | **20 mechanisms** | **5-signal WRRF** | **2-phase (+ planned summary)** | **Yes** |
 
 ---
 
@@ -604,7 +604,7 @@ The Python port to Cortex, BEAM benchmark integration, and paper-backed compleme
 
 The system comprises two core primitives:
 
-#### 5.3.1 ContextDecomposer: Priority-Budgeted Prompt Assembly
+#### 5.3.1 ContextDecomposer: Token-Budgeted Prompt Assembly (Planned)
 
 A prompt is a template with typed placeholder slots. Each slot has:
 
@@ -622,7 +622,7 @@ When the filled template exceeds the budget:
 
 The truncation warning is, to our knowledge, novel. No paper in the 2024--2026 literature we surveyed implements explicit truncation awareness in the prompt itself.
 
-#### 5.3.2 StageAwareContextAssembler: Three-Phase Hierarchical Retrieval
+#### 5.3.2 StageAwareContextAssembler: Two-Phase Hierarchical Retrieval
 
 A "stage" is a distinct topical segment of a conversation --- analogous to a work session, a discussion topic, or a thematic unit. The assembler operates in three phases with a configurable budget split (default 60/30/10):
 
@@ -650,7 +650,7 @@ The architecture's building blocks each have paper backing:
 - **Personalized PageRank for retrieval**: Gutierrez, B. J., et al. (2024). HippoRAG: Neurobiologically inspired long-term memory for large language models. *NeurIPS 2024*.
 - **Schema-structured summaries**: Tse, D., et al. (2007). Schemas and memory consolidation. *Science*, 316(5821), 76--82.
 
-The *composition* --- priority-budgeted progressive condensation with per-type domain-aware condensers, truncation warning injection, and 60/30/10 three-phase stage-aware assembly with entity graph PPR --- has no published precedent in the 2024--2026 literature we surveyed across six cross-disciplinary research agents covering biology, mathematics, AI lab publications, PhD theses, vendor engineering, and information theory.
+The *composition* --- stage-aware two-phase assembly with submodular coverage selection and entity graph PPR --- has, to our knowledge, no direct precedent in the 2024--2026 literature we surveyed across six cross-disciplinary research agents covering biology, mathematics, AI lab publications, PhD theses, vendor engineering, and information theory.
 
 The closest architectural neighbors are:
 

@@ -14,7 +14,7 @@
 \newcommand{\eg}{e.g.}
 \newcommand{\cf}{cf.}
 
-\title{Priority-Budgeted Stage-Aware Context Assembly\\for Long-Context Memory Retrieval}
+\title{Stage-Aware Context Assembly\\for Long-Context Memory Retrieval}
 
 \author{
   Clement Deust\\
@@ -40,7 +40,7 @@ We present a structured context assembly architecture that recovers
 this degradation: a two-primitive system combining
 (1)~a priority-budgeted prompt decomposer with domain-aware
 condensers and truncation warning injection, and
-(2)~a three-phase stage-aware assembler with submodular coverage
+(2)~a two-phase stage-aware assembler (with a planned third phase) with submodular coverage
 selection, Personalized PageRank entity graph traversal, and
 schema-structured summary fallback.
 On BEAM-10M, the assembler achieves 0.429 MRR, a $+21.5\%$ improvement
@@ -528,7 +528,7 @@ context.
 \paragraph{Grid modules} \citep{Stensola2012}.
 The entorhinal cortex organizes spatial information in modular grids
 at different scales---small grids for local navigation, large grids
-for global orientation.  Our three-phase structure (current stage,
+for global orientation.  Our two-phase structure (with planned summary tier) (current stage,
 adjacent stages, all stages) mirrors this multi-scale organization:
 Phase~1 operates at the finest scale (within-stage), Phase~2 at an
 intermediate scale (across nearby stages via entity connections), and
@@ -730,7 +730,7 @@ content you CAN see.
 \paragraph{Novelty claim.}
 The truncation warning is, to our knowledge, novel.  We surveyed the
 2024--2026 literature across RAG, prompt engineering, context
-management, and agent architectures and found no published precedent
+management, and agent architectures and found no published work we are aware of that combines these specific primitives
 for injecting explicit truncation awareness into the prompt itself.
 The closest mechanisms are: Anthropic's contextual retrieval (2024),
 which adds chunk-level LLM summaries but enriches content rather than
@@ -899,9 +899,14 @@ Algorithm~\ref{alg:submodular}.
 By \citet{Krause2008}, the greedy algorithm achieves
 $f(S_k) \geq (1 - 1/e) \cdot f(S_k^*) \approx 0.63 \cdot f(S_k^*)$
 for any monotone submodular function under cardinality constraints.
-The MMR objective with $\lambda < 1$ is submodular (the
-max-similarity penalty is submodular as the pointwise maximum of
-linear functions), so this guarantee applies.
+The MMR objective with $\lambda < 1$ exhibits diminishing returns:
+adding a candidate $c$ to a larger selected set $A$ incurs a
+penalty $\lambda \cdot \max_{s \in A} \mathrm{sim}(c, s)$ that
+can only increase as $|A|$ grows, so the marginal gain
+$\Delta(c|A) = \mathrm{score}(c) - \lambda \cdot \max_{s \in A}
+\mathrm{sim}(c, s)$ decreases monotonically with $|A|$.  This
+is the definition of submodularity, and the $(1 - 1/e)$
+approximation guarantee of \citet{Krause2008} therefore applies.
 
 \paragraph{Why submodular selection matters at scale.}
 At BEAM-10M, the top-5 candidates from WRRF within a single stage
@@ -1151,7 +1156,7 @@ without reimplementing them.  The full data flow is:
   \item \textbf{Phase 3: Summary fallback.}  Summaries for uncovered
     stages retrieved by proximity.
 
-  \item \textbf{Assembly.}  The three phases produce a structured
+  \item \textbf{Assembly.}  The two active phases produce a structured
     context with labeled sections (\texttt{\#\# Current Stage Context},
     \texttt{\#\# Related Prior Context},
     \texttt{\#\# Stage Summaries}).
@@ -1832,7 +1837,7 @@ The architecture evolved through three codebases:
   \item \textbf{ai-architect-prd-builder} (February--March 2026):
     ContextDecomposer with priority-driven progressive condensation,
     domain-aware condensers, and truncation warning injection.
-    StageAwareContextAssembler with three-phase 60/30/10 retrieval.
+    StageAwareContextAssembler with two-phase 60/30 (with planned 10% summary tier) retrieval.
     Private repository.
 
   \item \textbf{Cortex} (April 2026): Python port adapted for
@@ -1843,7 +1848,7 @@ The architecture evolved through three codebases:
 
 \subsection{Relationship to Published Systems}
 
-The full combination has no published precedent in the 2024--2026
+The full combination has no published work we are aware of that combines these specific primitives in the 2024--2026
 literature we surveyed across six research areas: computational
 neuroscience, mathematics (submodularity, dimensionality reduction),
 AI systems (RAG, long-context, agent memory), PhD theses on
@@ -1986,7 +1991,7 @@ The architecture introduces two composable primitives.  The
 \textbf{ContextDecomposer} manages prompt-level budgeting with typed
 priority slots, domain-aware condensers, and an explicit truncation
 warning mechanism that communicates assembly decisions to the reader
-model---a mechanism with no published precedent in the retrieval or
+model---a mechanism with no published work we are aware of that combines these specific primitives in the retrieval or
 prompt engineering literature.  The \textbf{StageAwareContextAssembler}
 manages retrieval-level composition through three phases: own-stage
 retrieval with submodular diversity \citep{Krause2008}, cross-stage

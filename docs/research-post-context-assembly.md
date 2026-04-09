@@ -1,4 +1,4 @@
-# Priority-Budgeted Stage-Aware Context Assembly for Long-Context Memory Retrieval
+# Stage-Aware Context Assembly for Long-Context Memory Retrieval
 
 **Clement Deust** (architecture, original design, benchmarking) and **Claude Opus 4.6** (Python port, benchmark integration, paper-backed complements)
 
@@ -22,7 +22,7 @@ We present a structured context assembly architecture that recovers
 this degradation: a two-primitive system combining
 (1) a priority-budgeted prompt decomposer with domain-aware
 condensers and truncation warning injection, and
-(2) a three-phase stage-aware assembler with submodular coverage
+(2) a two-phase stage-aware assembler (with a planned summary tier) with submodular coverage
 selection, Personalized PageRank entity graph traversal, and
 schema-structured summary fallback.
 On BEAM-10M, the assembler achieves 0.429 MRR, a +21.5% improvement
@@ -184,11 +184,11 @@ We make four contributions:
 1. **ContextDecomposer**: a priority-budgeted prompt assembly
    primitive with typed placeholder slots, domain-aware condensers,
    progressive condensation, and truncation warning injection -- a
-   mechanism that, to our knowledge, has no published precedent in
+   mechanism that, to our knowledge, has no direct precedent we are aware of in
    the 2024-2026 retrieval, prompt engineering, or agent memory
    literature.
 
-2. **StageAwareContextAssembler**: a three-phase hierarchical
+2. **StageAwareContextAssembler**: a two-phase hierarchical
    retrieval architecture with a configurable budget split (default
    60/30/10), combining submodular coverage selection (Krause &
    Guestrin, 2008), Personalized PageRank entity graph traversal
@@ -212,7 +212,7 @@ Section 2 reviews related work across dense retrieval, long-context
 memory systems, hierarchical retrieval, and the biological
 foundations that inspired design choices.  Section 3 presents the
 method in detail, including the ContextDecomposer algorithm, the
-three-phase assembler, and the integration with the existing Cortex
+two-phase assembler, and the integration with the existing Cortex
 pipeline.  Section 4 describes the experimental setup, benchmarks,
 baselines, and measurement protocol.  Section 5 presents results at
 both scales with per-ability breakdowns.  Section 6 provides
@@ -484,7 +484,7 @@ entity overlap with the current query context.
 **Grid modules** (Stensola et al., Nature 2012).  The entorhinal
 cortex organizes spatial information in modular grids at different
 scales -- small grids for local navigation, large grids for global
-orientation.  Our three-phase structure (current stage, adjacent
+orientation.  Our two-phase structure (current stage, adjacent
 stages, all stages) mirrors this multi-scale organization: Phase 1
 operates at the finest scale (within-stage), Phase 2 at an
 intermediate scale (across nearby stages via entity connections),
@@ -553,7 +553,7 @@ Query
 Final Prompt --> Reader Model
 ```
 
-### 3.1 ContextDecomposer: Priority-Budgeted Prompt Assembly
+### 3.1 ContextDecomposer: Token-Budgeted Prompt Assembly (Planned)
 
 A prompt template contains typed placeholder slots.  Each slot is
 defined by a 4-tuple:
@@ -679,7 +679,7 @@ You may be missing information. Prioritize the content you CAN see.
 **Novelty claim.**  The truncation warning is, to our knowledge,
 novel.  We surveyed the 2024-2026 literature across RAG, prompt
 engineering, context management, and agent architectures and found
-no published precedent for injecting explicit truncation awareness
+no direct precedent we are aware of for injecting explicit truncation awareness
 into the prompt itself.  The closest mechanisms are:
 
 - Anthropic's contextual retrieval (2024): adds chunk-level LLM
@@ -1703,7 +1703,7 @@ The architecture evolved through three codebases:
 2. **ai-architect-prd-builder** (February-March 2026):
    ContextDecomposer with priority-driven progressive condensation,
    domain-aware condensers, and truncation warning injection.
-   StageAwareContextAssembler with three-phase 60/30/10 retrieval.
+   StageAwareContextAssembler with two-phase 60/30 (with planned 10% summary tier) retrieval.
    Private repository.
 
 3. **Cortex** (April 2026): Python port adapted for Cortex's
@@ -1713,7 +1713,7 @@ The architecture evolved through three codebases:
 
 ### 7.5 Relationship to Published Systems
 
-The full combination has no published precedent in the 2024-2026
+The full combination has no direct precedent we are aware of in the 2024-2026
 literature we surveyed across six research areas: computational
 neuroscience, mathematics (submodularity, dimensionality reduction),
 AI systems (RAG, long-context, agent memory), PhD theses on
@@ -1864,7 +1864,7 @@ The architecture introduces two composable primitives.  The
 **ContextDecomposer** manages prompt-level budgeting with typed
 priority slots, domain-aware condensers, and an explicit truncation
 warning mechanism that communicates assembly decisions to the reader
-model -- a mechanism with no published precedent in the retrieval or
+model -- a mechanism with no direct precedent we are aware of in the retrieval or
 prompt engineering literature.  The **StageAwareContextAssembler**
 manages retrieval-level composition through three phases: own-stage
 retrieval with submodular diversity (Krause & Guestrin, 2008),
@@ -1881,7 +1881,7 @@ that the benefit is genuinely scale-dependent rather than incidental.
 
 The architecture does not introduce novel retrieval primitives.
 Every building block has strong paper backing.  The contribution is
-the composition: priority budgeting, stage-aware three-phase assembly,
+the composition: stage-aware two-phase assembly,
 domain-aware condensation, and model-facing truncation awareness,
 combined into a system that manages context at a level of abstraction
 above individual retrieval signals.
@@ -2443,7 +2443,7 @@ function PERSONALIZED_PAGERANK(adjacency, seeds, alpha=0.15, max_iters=30, tol=1
 
 ```bibtex
 @article{deust2026context,
-  title={Priority-Budgeted Stage-Aware Context Assembly for
+  title={Stage-Aware Context Assembly for
          Long-Context Memory Retrieval},
   author={Deust, Clement and {Claude Opus 4.6}},
   year={2026},
