@@ -43,7 +43,7 @@ Code, data, and benchmark harness are publicly available.
 Retrieval-augmented generation (RAG) has become the dominant paradigm
 for grounding language models in external knowledge.  The standard
 recipe -- embed documents, index them in a vector store, retrieve the
-top-$k$ nearest neighbors at query time, and concatenate them into the
+top-k nearest neighbors at query time, and concatenate them into the
 prompt -- works well when the corpus is moderate and topically diverse.
 But when applied to long-term conversational memory, where a single
 user's history spans millions of tokens of thematically overlapping
@@ -59,24 +59,24 @@ the content has accumulated around a small number of recurring
 topics -- the same frameworks, the same debugging patterns, the same
 architectural decisions discussed from slightly different angles
 across hundreds of sessions.  The embedding space becomes crowded
-with near-identical vectors, and top-$k$ retrieval degenerates into
-returning $k$ paraphrases of the same piece of information.
+with near-identical vectors, and top-k retrieval degenerates into
+returning k paraphrases of the same piece of information.
 
 This is not a failure of any particular embedding model.  Three
 well-documented phenomena make it structural:
 
 **Hubness** (Radovanovic et al., JMLR 2010).  In high-dimensional
 spaces, certain points become disproportionately frequent nearest
-neighbors of many queries.  Formally, let $N_k(x)$ denote the number
-of times point $x$ appears in the $k$-nearest-neighbor lists of all
-other points.  In uniformly distributed data, $\mathbb{E}[N_k(x)]$
-is constant, but the variance of $N_k$ grows with dimensionality.
-The skewness of the $N_k$ distribution -- the *hubness* --
-increases monotonically with $d/\log n$ where $d$ is the
-dimensionality and $n$ is the sample size.  Radovanovic et al. showed
+neighbors of many queries.  Formally, let Nₖ(x) denote the number
+of times point x appears in the k-nearest-neighbor lists of all
+other points.  In uniformly distributed data, E[Nₖ(x)]
+is constant, but the variance of Nₖ grows with dimensionality.
+The skewness of the Nₖ distribution -- the *hubness* --
+increases monotonically with d/log n where d is the
+dimensionality and n is the sample size.  Radovanovic et al. showed
 that this is an inherent property of the geometry, not an artifact of
 particular distance metrics.  As corpus size grows, a small set of
-"hub" memories dominates the top-$k$ results regardless of query
+"hub" memories dominates the top-k results regardless of query
 content.  At 7,500 memories in 384 dimensions, we observe empirically
 that the top-5 retrievals for topically distinct queries share
 2-3 common memories -- the hubs.  These hub memories are not
@@ -91,9 +91,11 @@ nearest-neighbor distance to the farthest-neighbor distance converges
 to 1.  Formally, for i.i.d. points drawn from any distribution with
 finite variance:
 
-$$\lim_{d \to \infty} \Pr\left[\frac{\|X_{\text{max}} - q\| - \|X_{\text{min}} - q\|}{\|X_{\text{min}} - q\|} \leq \epsilon\right] = 1$$
+```
+lim(d->inf) Pr[ (||X_max - q|| - ||X_min - q||) / ||X_min - q|| <= ε ] = 1
+```
 
-for any $\epsilon > 0$.  The practical consequence: in 384 dimensions
+for any ε > 0.  The practical consequence: in 384 dimensions
 with 7,500 points, the gap between the "most relevant" and "50th most
 relevant" memory shrinks to the point where cosine similarity cannot
 reliably discriminate them.  Adding more dimensions helps, but the
@@ -101,14 +103,16 @@ next phenomenon places a lower bound on how many dimensions suffice.
 
 **Dimensionality lower bounds** (Larsen & Nelson, FOCS 2017).  The
 Johnson-Lindenstrauss lemma guarantees that pairwise distances among
-$n$ points can be preserved to within $(1 \pm \epsilon)$ in
-$O(\epsilon^{-2} \log n)$ dimensions.  Larsen and Nelson proved this
-is tight: any embedding that preserves pairwise distances among $n$
-points to within $(1 \pm \epsilon)$ requires
-$\Omega(\epsilon^{-2} \log n)$ dimensions.  For $n = 7{,}500$ and
-$\epsilon = 0.1$ (10% distance preservation), this gives:
+n points can be preserved to within (1 ± ε) in
+O(ε⁻² log n) dimensions.  Larsen and Nelson proved this
+is tight: any embedding that preserves pairwise distances among n
+points to within (1 ± ε) requires
+Ω(ε⁻² log n) dimensions.  For n = 7,500 and
+ε = 0.1 (10% distance preservation), this gives:
 
-$$d \geq \frac{1}{\epsilon^2} \cdot \ln(n) = \frac{1}{0.01} \cdot \ln(7500) \approx 100 \cdot 8.92 \approx 892$$
+```
+d >= (1/ε²) · ln(n) = (1/0.01) · ln(7500) ≈ 100 · 8.92 ≈ 892
+```
 
 Our 384-dimensional embeddings (all-MiniLM-L6-v2) operate below
 this lower bound, meaning pairwise distance preservation to 10%
@@ -132,7 +136,7 @@ The architecture must change.
 
 The insight behind this work is that the problem is not *how* to
 retrieve better, but *what* to compose into context.  A flat retrieval
-pipeline treats the context window as a ranked list: the top-$k$ most
+pipeline treats the context window as a ranked list: the top-k most
 similar items, concatenated.  A structured assembly pipeline treats
 the context window as a *document* with typed sections, priority
 ordering, and explicit awareness of what was included and what was
@@ -143,7 +147,7 @@ thematically dense -- precisely the regime where flat retrieval fails.
 By partitioning the corpus into topical stages, retrieving within the
 current stage first, following entity graph connections to related
 stages, and falling back to summaries for uncovered stages, the
-assembler recovers information that flat top-$k$ cannot reach.
+assembler recovers information that flat top-k cannot reach.
 
 The analogy is to how humans prepare for a meeting: you do not read
 every email from the past year sorted by relevance score.  You
@@ -198,7 +202,7 @@ We make four contributions:
    collapses) -- with 8 of 10 memory abilities improving.
 
 4. **Ablation analysis** isolating the contribution of submodular
-   selection (+17.6% over naive top-$k$) and establishing that the
+   selection (+17.6% over naive top-k) and establishing that the
    architecture's value is compositional rather than attributable to
    any single mechanism.
 
@@ -264,14 +268,16 @@ published system (LIGHT with Llama-4-Maverick) achieves only 0.266.
 
 Our baseline, Weighted Reciprocal Rank Fusion (WRRF), extends the
 original Reciprocal Rank Fusion (Cormack et al., 2009) with
-per-signal weights.  Given $m$ ranking signals, the fused score for
-document $d$ is:
+per-signal weights.  Given m ranking signals, the fused score for
+document d is:
 
-$$\text{WRRF}(d) = \sum_{i=1}^{m} \frac{w_i}{k + r_i(d)}$$
+```
+WRRF(d) = Σᵢ wᵢ / (k + rᵢ(d))    for i = 1..m
+```
 
-where $r_i(d)$ is the rank of $d$ under signal $i$, $k$ is a
-smoothing constant (we use $k = 60$, following the original RRF
-recommendation), and $w_i$ is the weight for signal $i$.
+where rᵢ(d) is the rank of d under signal i, k is a
+smoothing constant (we use k = 60, following the original RRF
+recommendation), and wᵢ is the weight for signal i.
 
 Cortex's WRRF pipeline fuses five signals:
 
@@ -285,7 +291,7 @@ Cortex's WRRF pipeline fuses five signals:
 
 All five signals are computed server-side in a single PL/pgSQL stored
 procedure (`recall_memories()`), returning pre-fused results.
-Client-side, FlashRank (ONNX cross-encoder) reranks the top-$3k$
+Client-side, FlashRank (ONNX cross-encoder) reranks the top-3k
 candidates to produce the final ranking.
 
 This pipeline is strong at moderate scale: 97.8% R@10 on LongMemEval,
@@ -424,10 +430,12 @@ stage-composition problem.
 ### 2.5 Submodular Optimization for Information Selection
 
 Submodular set functions have a rich history in information selection
-problems.  A set function $f: 2^V \to \mathbb{R}$ is submodular if
-for all $A \subseteq B \subseteq V$ and $e \notin B$:
+problems.  A set function f: 2^V → R is submodular if
+for all A ⊆ B ⊆ V and e ∉ B:
 
-$$f(A \cup \{e\}) - f(A) \geq f(B \cup \{e\}) - f(B)$$
+```
+f(A ∪ {e}) - f(A) >= f(B ∪ {e}) - f(B)
+```
 
 This *diminishing returns* property formalizes the intuition that
 adding an item is more valuable when less has already been selected.
@@ -435,7 +443,7 @@ adding an item is more valuable when less has already been selected.
 **Sensor placement** (Krause & Guestrin, JMLR 2008).  Proved that
 for monotone submodular functions, the greedy algorithm (iteratively
 select the item with the highest marginal gain) achieves a
-$(1 - 1/e) \approx 0.63$ approximation to the optimal set.  This
+(1 - 1/e) ≈ 0.63 approximation to the optimal set.  This
 guarantee holds regardless of the constraint set (cardinality,
 matroid, knapsack), with different approximation ratios for
 different constraints.
@@ -448,10 +456,10 @@ information is represented) with diversity (how different the
 selected sentences are).
 
 **Maximal Marginal Relevance** (Carbonell & Goldstein, SIGIR 1998).
-The MMR criterion -- $\text{score}(c) - \lambda \cdot \max_{s \in S} \text{sim}(c, s)$ -- is the most common instantiation of submodular
+The MMR criterion -- score(c) - λ · max(sim(c, s) for s in S) -- is the most common instantiation of submodular
 selection in retrieval.  Carbonell and Goldstein introduced it for
 reranking search results; we apply it to memory selection within a
-stage.  When $\lambda < 1$, the MMR objective is submodular (proof:
+stage.  When λ < 1, the MMR objective is submodular (proof:
 the max-similarity penalty is a modular function, and the difference
 of a modular function from a monotone function is submodular).
 
@@ -550,15 +558,17 @@ Final Prompt --> Reader Model
 A prompt template contains typed placeholder slots.  Each slot is
 defined by a 4-tuple:
 
-$$P_i = (k_i, v_i, p_i, c_i)$$
+```
+Pᵢ = (kᵢ, vᵢ, pᵢ, cᵢ)
+```
 
 where:
-- $k_i$ is the template key (e.g., `{{CONTEXT}}`, `{{QUERY}}`,
+- kᵢ is the template key (e.g., `{{CONTEXT}}`, `{{QUERY}}`,
   `{{RELATED}}`)
-- $v_i$ is the content to fill it
-- $p_i \in \mathbb{N}$ is the priority rank (lower = more important;
+- vᵢ is the content to fill it
+- pᵢ ∈ N is the priority rank (lower = more important;
   priority 1 is the last to be condensed)
-- $c_i: (\text{text}, \text{budget}) \to \text{text}$ is an optional
+- cᵢ: (text, budget) → text is an optional
   domain-aware condenser function
 
 The assembly algorithm operates in six steps:
@@ -566,24 +576,26 @@ The assembly algorithm operates in six steps:
 #### Step 1: Shell Computation
 
 Compute the template with all placeholders replaced by empty strings.
-Let $s = \tau(\text{shell})$ where $\tau$ is the token estimator
-(default: conservative $\lceil |\text{text}| / 3 \rceil$, swappable
+Let s = τ(shell) where τ is the token estimator
+(default: conservative ceil(|text| / 3), swappable
 for tiktoken at integration).
 
 #### Step 2: Budget Allocation
 
-Given context window $W$ and headroom fraction $h$ (default 0.75,
+Given context window W and headroom fraction h (default 0.75,
 reserving 25% for the response):
 
-$$B = \max\left(300, \lfloor W \cdot h \rfloor - s\right)$$
+```
+B = max(300, floor(W · h) - s)
+```
 
-The variable budget $B$ is the total token budget available for all
+The variable budget B is the total token budget available for all
 placeholder content.  The minimum of 300 tokens ensures that even
 with a large shell, some content always survives.
 
 #### Step 3: Fast Path
 
-If $\sum_{i=1}^{n} \tau(v_i) \leq B$, all placeholders are used
+If Σ τ(vᵢ) <= B, all placeholders are used
 verbatim.  No condensation is needed.  This is the common case for
 short queries with small context.
 
@@ -591,22 +603,27 @@ short queries with small context.
 
 When the fast path fails, placeholders are condensed progressively
 from least to most important.  Sort placeholders by descending
-priority number (highest $p_i$ first -- least important first).
-For each placeholder $P_i$ in this order:
+priority number (highest pᵢ first -- least important first).
+For each placeholder Pᵢ in this order:
 
 1. Compute a proportional share of the remaining budget:
 
-$$\text{share}_i = \max\left(50, \left\lfloor \frac{B_{\text{remaining}}}{|\{P_j : j \geq i, P_j \text{ not yet assigned}\}|} \right\rfloor\right)$$
+```
+shareᵢ = max(50, floor(B_remaining / |{Pⱼ : j >= i, Pⱼ not yet assigned}|))
+```
 
-2. If $\tau(v_i) \leq \text{share}_i$, use $v_i$ verbatim and
-   subtract $\tau(v_i)$ from $B_{\text{remaining}}$.
+2. If τ(vᵢ) <= shareᵢ, use vᵢ verbatim and
+   subtract τ(vᵢ) from B_remaining.
 
 3. Otherwise, apply the condenser:
 
-$$v_i' = \begin{cases} c_i(v_i, \text{share}_i) & \text{if } c_i \neq \text{null} \\ \text{truncate}(v_i, \text{share}_i) & \text{otherwise} \end{cases}$$
+```
+vᵢ' = cᵢ(vᵢ, shareᵢ)              if cᵢ != null
+     truncate(vᵢ, shareᵢ)          otherwise
+```
 
-4. Use $v_i'$ and subtract $\min(\tau(v_i'), B_{\text{remaining}})$
-   from $B_{\text{remaining}}$.
+4. Use vᵢ' and subtract min(τ(vᵢ'), B_remaining)
+   from B_remaining.
 
 The proportional allocation ensures that low-priority placeholders
 with small content are not penalized -- they get their full content
@@ -617,7 +634,7 @@ share are condensed.
 
 After all placeholders are assigned, assemble the final prompt by
 substituting each placeholder with its assigned content.  If the
-assembled prompt still exceeds $(W - \text{safety\_margin})$ tokens
+assembled prompt still exceeds (W - safety_margin) tokens
 (due to estimation errors or template overhead), iteratively halve
 the content of the lowest-priority placeholder at the nearest line
 boundary.  This is a defensive measure -- it should rarely trigger
@@ -643,7 +660,9 @@ reduction is possible.
 
 For each placeholder whose surviving fraction is below 90%:
 
-$$\text{surviving}(P_i) = \frac{\tau(\text{final}_i)}{\tau(\text{original}_i)}$$
+```
+surviving(Pᵢ) = τ(finalᵢ) / τ(originalᵢ)
+```
 
 build a warning line.  If any placeholders were materially truncated,
 prepend a banner to the final prompt:
@@ -682,7 +701,7 @@ truncated.
 
 #### Domain-Aware Condensers
 
-Generic truncation (keeping the first $N$ tokens) is a poor strategy
+Generic truncation (keeping the first N tokens) is a poor strategy
 because the most important information is rarely at the beginning.
 Domain-aware condensers exploit structural properties of different
 content types to preserve high-signal content and drop filler:
@@ -701,8 +720,8 @@ The detection heuristics are:
 1. **Tag-driven** (highest priority): if the memory has tags like
    `code`, `timeline`, `event`, dispatch directly.
 2. **Code fence detection**: presence of triple backticks or
-   $\geq 3$ indented lines triggers the assistant message condenser.
-3. **Arrow operator count**: $\geq 2$ occurrences of `->` or
+   >= 3 indented lines triggers the assistant message condenser.
+3. **Arrow operator count**: >= 2 occurrences of `->` or
    triggers the entity triple condenser.
 4. **Role prefix detection**: lines starting with `[user]:` or
    `[assistant]:` trigger the appropriate message condenser.
@@ -718,7 +737,7 @@ A *stage* is a distinct topical segment of a conversation --
 analogous to a work session, a debugging episode, or a design
 discussion.  Stage detection is pluggable (Section 3.2.1).  The
 assembler operates in three phases with a configurable budget split
-$(\beta_1, \beta_2, \beta_3)$ where $\beta_1 + \beta_2 + \beta_3 = 1$ (default: 0.6, 0.3, 0.1).
+(β₁, β₂, β₃) where β₁ + β₂ + β₃ = 1 (default: 0.6, 0.3, 0.1).
 
 #### 3.2.1 Stage Detection
 
@@ -771,14 +790,16 @@ is:
 2. **Submodular selection.**  From the oversample, select the final
    set via the MMR-submodular objective:
 
-$$S^* = \arg\max_{|S| \leq k} \sum_{c \in S} \left[ \text{score}(c) - \lambda \cdot \max_{c' \in S \setminus \{c\}} \text{sim}(c, c') \right]$$
+```
+S* = argmax(|S| <= k) Σ(c in S) [score(c) - λ · max(sim(c, c') for c' in S\{c})]
+```
 
-   where $\text{score}(c)$ is the WRRF score, $\text{sim}(c, c')$ is
-   cosine similarity over 384D embeddings, and $\lambda = 0.5$
+   where score(c) is the WRRF score, sim(c, c') is
+   cosine similarity over 384D embeddings, and λ = 0.5
    balances relevance against diversity.
 
 3. **Greedy algorithm.**  Iterate up to `max_chunks` times.  At each
-   step, select the candidate not yet in $S$ that maximizes the
+   step, select the candidate not yet in S that maximizes the
    marginal gain:
 
 ```
@@ -806,8 +827,8 @@ function SUBMODULAR_SELECT(candidates, max_chunks, lambda):
 ```
 
 **Approximation guarantee.**  By Krause & Guestrin (2008), the greedy
-algorithm achieves $f(S_k) \geq (1 - 1/e) \cdot f(S^*_k) \approx 0.63 \cdot f(S^*_k)$ for any monotone submodular function under
-cardinality constraints.  The MMR objective with $\lambda < 1$ is
+algorithm achieves f(Sₖ) >= (1 - 1/e) · f(S*ₖ) ≈ 0.63 · f(S*ₖ) for any monotone submodular function under
+cardinality constraints.  The MMR objective with λ < 1 is
 submodular (the max-similarity penalty is submodular as the pointwise
 maximum of linear functions), so this guarantee applies.
 
@@ -851,9 +872,11 @@ Cortex is annotated with its contained entities at ingest time
 is built by aggregating entity IDs across all Phase 1 results, with
 each entity weighted by how many Phase 1 memories contain it:
 
-$$\mathbf{s}(e) = |\{m \in S_1 : e \in \text{entities}(m)\}|$$
+```
+s(e) = |{m in S₁ : e in entities(m)}|
+```
 
-where $S_1$ is the Phase 1 selected set.
+where S₁ is the Phase 1 selected set.
 
 **Step 2: Graph construction.**  Build an adjacency structure over
 Cortex's entity and relationship tables.  Each entity is a node;
@@ -874,33 +897,37 @@ Edge weights are normalized to transition probabilities within the
 PPR computation.
 
 **Step 3: Personalized PageRank.**  Compute PPR scores via power
-iteration with restart probability $\alpha = 0.15$ (Brin & Page,
+iteration with restart probability α = 0.15 (Brin & Page,
 1998):
 
-$$\mathbf{r}^{(t+1)} = \alpha \cdot \mathbf{s} + (1 - \alpha) \cdot \mathbf{M} \cdot \mathbf{r}^{(t)}$$
+```
+r(t+1) = α · s + (1 - α) · M · r(t)
+```
 
 where:
-- $\mathbf{s}$ is the normalized seed vector (mass concentrated on
+- **s** is the normalized seed vector (mass concentrated on
   Phase 1 entities)
-- $\mathbf{M}$ is the column-stochastic transition matrix derived
+- **M** is the column-stochastic transition matrix derived
   from the adjacency structure
-- Iteration continues until $\|\mathbf{r}^{(t+1)} - \mathbf{r}^{(t)}\|_1 < 10^{-4}$ or 30 iterations
+- Iteration continues until ||r(t+1) - r(t)||₁ < 10⁻⁴ or 30 iterations
 
 Dangling nodes (entities with no outgoing edges) redistribute their
 mass to the seed distribution, maintaining the random walk
 interpretation.  This is the standard treatment of dangling nodes
 in PageRank (Langville & Meyer, 2005).
 
-The restart probability $\alpha = 0.15$ is the canonical value from
-the original PageRank paper.  Higher $\alpha$ produces more localized
-results (closer to the seed entities); lower $\alpha$ produces more
+The restart probability α = 0.15 is the canonical value from
+the original PageRank paper.  Higher α produces more localized
+results (closer to the seed entities); lower α produces more
 global results.  We did not tune this parameter.
 
 **Step 4: Memory scoring by PPR aggregation.**  Following HippoRAG
 Section 3.3, a memory's relevance under PPR is the sum of PPR mass
 of its contained entities:
 
-$$\text{score}_{\text{PPR}}(m) = \sum_{e \in \text{entities}(m)} \mathbf{r}(e)$$
+```
+score_PPR(m) = Σ(e in entities(m)) r(e)
+```
 
 Memories from the current stage are excluded (they were already
 considered in Phase 1).  The remaining cross-stage memories are
@@ -909,7 +936,7 @@ optionally constrained by the adjacent-stage token budget.
 
 **Why PPR over BFS.**  Cortex already implements spreading activation
 (Collins & Loftus, 1975), which is a decaying breadth-first search
-with activation decay factor $d$ per hop.  PPR provides a
+with activation decay factor d per hop.  PPR provides a
 *stationary* distribution rather than a depth-bounded traversal.  The
 differences matter:
 
@@ -955,8 +982,8 @@ and the schema engine exists -- only the plumbing is missing.
 
 #### 3.2.5 Budget Split Justification
 
-The default split of 60/30/10 ($\beta_1 = 0.6$, $\beta_2 = 0.3$,
-$\beta_3 = 0.1$) is motivated by three observations:
+The default split of 60/30/10 (β₁ = 0.6, β₂ = 0.3,
+β₃ = 0.1) is motivated by three observations:
 
 **Locality dominance.**  For the majority of queries, the answer
 exists within the current stage.  On BEAM-10M, 65% of questions
@@ -982,7 +1009,7 @@ ContextManager's heuristic for PRD generation (approximately
 55/25/20 in the original), rounded to cleaner values.  We did not
 perform a systematic grid search over budget splits and expect the
 optimal split to be task-dependent.  Automated tuning (e.g., Bayesian
-optimization over $(\beta_1, \beta_2, \beta_3)$ with MRR as the
+optimization over (β₁, β₂, β₃) with MRR as the
 objective) is left to future work.
 
 ### 3.3 Integration with the Cortex WRRF Pipeline
@@ -1126,19 +1153,24 @@ retrieval-only.
 Both WRRF and assembler conditions use the identical embedding model,
 database, reranker, and entity extraction.  The only difference is
 whether the assembled results are stage-scoped and submodular-selected
-(assembler) or flat and top-$k$-selected (WRRF).
+(assembler) or flat and top-k-selected (WRRF).
 
 ### 4.4 Measurement Protocol
 
 **Metric: retrieval-proxy MRR.**  We measure the Mean Reciprocal
 Rank of the first retrieved memory whose content substring-matches
-the gold source turn or answer text.  Formally, for a question $q$
-with gold source text $g$, and a ranked list of retrieved memories
-$[m_1, m_2, \ldots, m_k]$:
+the gold source turn or answer text.  Formally, for a question q
+with gold source text g, and a ranked list of retrieved memories
+[m₁, m₂, ..., mₖ]:
 
-$$\text{RR}(q) = \begin{cases} \frac{1}{\text{rank}(m^*)} & \text{if } \exists m^* : g \subseteq m^*.content \\ 0 & \text{otherwise} \end{cases}$$
+```
+RR(q) = 1/rank(m*)    if exists m* : g ⊆ m*.content
+        0              otherwise
+```
 
-$$\text{MRR} = \frac{1}{|Q|} \sum_{q \in Q} \text{RR}(q)$$
+```
+MRR = (1/|Q|) · Σ(q in Q) RR(q)
+```
 
 This is *not* the BEAM paper's metric.  The paper uses LLM-as-judge
 nugget scoring for end-to-end QA quality, which evaluates whether the
@@ -1201,7 +1233,7 @@ all candidates without raising an exception, producing random
 rankings for both conditions.
 
 **Variance characterization.**  Results are deterministic within
-$\pm 0.01$ MRR across runs with PostgreSQL restart between runs.
+± 0.01 MRR across runs with PostgreSQL restart between runs.
 Sources of variance:
 
 - *Embedding model*: deterministic on CPU (no dropout, no stochastic
@@ -1219,7 +1251,7 @@ Sources of variance:
 
 ### 5.1 BEAM-100K (5 Conversations, Same-Conversation A/B)
 
-| Ability | WRRF | Assembler | $\Delta$ |
+| Ability | WRRF | Assembler | Δ |
 |---|---|---|---|
 | temporal\_reasoning | 0.950 | 0.920 | -0.030 |
 | knowledge\_update | 0.900 | 0.900 | 0.000 |
@@ -1261,11 +1293,11 @@ paraphrases.
 **Summarization: +0.099.**  A surprising positive at 100K.  We
 attribute this to submodular diversity: summarization questions
 benefit from broad coverage, and submodular selection covers more
-aspects of the stage than naive top-$k$.
+aspects of the stage than naive top-k.
 
 ### 5.2 BEAM-10M (10 Conversations, Full Benchmark)
 
-| Ability | WRRF | Assembler | $\Delta$ | R@5 | R@10 | LIGHT$^*$ |
+| Ability | WRRF | Assembler | Δ | R@5 | R@10 | LIGHT* |
 |---|---|---|---|---|---|---|
 | knowledge\_update | 0.835 | **0.892** | +0.057 | 100.0% | 100.0% | 0.375 |
 | contradiction\_resolution | 0.633 | **0.725** | +0.092 | 90.0% | 90.0% | 0.050 |
@@ -1277,9 +1309,9 @@ aspects of the stage than naive top-$k$.
 | instruction\_following | 0.068 | **0.125** | +0.057 | 15.0% | 15.0% | 0.500 |
 | event\_ordering | 0.067 | 0.067 | 0.000 | 10.0% | 10.0% | 0.266 |
 | summarization | 0.186 | 0.150 | -0.036 | 22.2% | 22.2% | 0.277 |
-| **Overall MRR** | **0.353** | **0.429** | **+0.076 (+21.5%)** | | | 0.266$^*$ |
+| **Overall MRR** | **0.353** | **0.429** | **+0.076 (+21.5%)** | | | 0.266* |
 
-$^*$LIGHT scores are end-to-end QA (LLM-as-judge, Llama-4-Maverick).
+*LIGHT scores are end-to-end QA (LLM-as-judge, Llama-4-Maverick).
 Not comparable to retrieval MRR.  Shown for directional reference.
 
 At 10M scale (7,500 memories per conversation, 50 plans per
@@ -1357,22 +1389,26 @@ more precisely:
 
 At 100K tokens, the embedding space density is:
 
-$$\rho_{100K} = \frac{n}{d} = \frac{94}{384} \approx 0.24$$
+```
+ρ_100K = n/d = 94/384 ≈ 0.24
+```
 
 At 10M tokens:
 
-$$\rho_{10M} = \frac{n}{d} = \frac{7500}{384} \approx 19.5$$
+```
+ρ_10M = n/d = 7500/384 ≈ 19.5
+```
 
 The hubness phenomenon (Radovanovic et al., 2010) becomes significant
-when $\rho \gg 1$.  At $\rho = 0.24$, the embedding space is underpopulated; nearest-neighbor search is reliable.  At $\rho = 19.5$, the space is overcrowded; hubness, distance concentration, and
+when ρ >> 1.  At ρ = 0.24, the embedding space is underpopulated; nearest-neighbor search is reliable.  At ρ = 19.5, the space is overcrowded; hubness, distance concentration, and
 the JL lower bound all contribute to retrieval degradation.
 
 The crossover point -- where structured assembly's benefit exceeds
-its overhead -- lies somewhere in the range $1 < \rho < 19.5$,
+its overhead -- lies somewhere in the range 1 < ρ < 19.5,
 corresponding to roughly 400-7,500 memories in 384 dimensions, or
 approximately 400K to 10M tokens of conversation.  We did not
 evaluate at intermediate scales, but we conjecture that the benefit
-increases monotonically with $\rho$.
+increases monotonically with ρ.
 
 ### 5.4 Phase Contribution Analysis (Ablation)
 
@@ -1380,10 +1416,10 @@ We conducted ablation experiments on BEAM-100K (5 conversations) to
 isolate the contribution of individual mechanisms.  Each ablation
 removes one mechanism while holding all others constant.
 
-| Configuration | Overall MRR | $\Delta$ vs WRRF |
+| Configuration | Overall MRR | Δ vs WRRF |
 |---|---|---|
 | WRRF baseline (no assembler) | 0.591 | -- |
-| Assembler, no submodular (naive top-$k$) | 0.512 | -0.079 |
+| Assembler, no submodular (naive top-k) | 0.512 | -0.079 |
 | Assembler, Phase 1 only (submodular, no PPR) | 0.513 | -0.078 |
 | Assembler, Phase 1 + Phase 2 (sub + PPR) | 0.602 | +0.011 |
 | Full assembler (Phase 1 + 2, Phase 3 stub) | 0.602 | +0.011 |
@@ -1408,7 +1444,7 @@ Key findings:
 **Submodular selection is essential.**  Without it, the assembler
 *hurts* performance (-0.079 vs. WRRF).  This is because stage-scoping
 reduces the candidate pool from 94 to ~19 memories (one stage), and
-naive top-$k$ within that smaller pool selects redundant memories.
+naive top-k within that smaller pool selects redundant memories.
 The stage-scoping restriction is only beneficial when paired with
 diversity-aware selection.  This is a critical implementation detail:
 stage-scoped retrieval without submodular selection is worse than no
@@ -1476,7 +1512,7 @@ so they are immune to the hubness and concentration problems that
 defeat flat retrieval.
 
 The implication is clear: **stage-aware retrieval should be gated by
-corpus density**.  At $\rho < 1$, use flat retrieval.  At $\rho > 1$,
+corpus density**.  At ρ < 1, use flat retrieval.  At ρ > 1,
 enable the assembler.  The optimal threshold likely depends on the
 embedding model and corpus characteristics.
 
@@ -1776,7 +1812,7 @@ This requires an LLM inference budget (~200-500 USD for 196 questions x
 
 The 60/30/10 split is a design heuristic inherited from the Swift
 PRD generator, not an optimized parameter.  Systematic optimization
-(e.g., Bayesian optimization over $(\beta_1, \beta_2, \beta_3)$
+(e.g., Bayesian optimization over (β₁, β₂, β₃)
 with BEAM-10M MRR as the objective) could improve results.  The
 optimal split may also vary by query type: temporal queries may
 benefit from more Phase 2 allocation (temporal entities bridge
@@ -2067,7 +2103,7 @@ bash benchmarks/beam/variance/bench_variance.sh
 
 This script runs each configuration 3 times, with PostgreSQL restart
 between runs, and reports mean and standard deviation of MRR.
-Observed variance: $\pm 0.01$ MRR across runs.
+Observed variance: ± 0.01 MRR across runs.
 
 ---
 
@@ -2091,10 +2127,10 @@ Observed variance: $\pm 0.01$ MRR across runs.
 ### B.2 Configuration Descriptions
 
 - **WRRF**: flat retrieval over the entire corpus, no assembler.
-  Standard top-$k$ selection after WRRF fusion + FlashRank reranking.
+  Standard top-k selection after WRRF fusion + FlashRank reranking.
 
 - **No Submod**: assembler enabled with stage-scoping, but Phase 1
-  uses naive top-$k$ selection instead of submodular coverage.
+  uses naive top-k selection instead of submodular coverage.
   This isolates the effect of stage-scoping without diversity.
 
 - **Ph1 Only**: assembler with submodular coverage selection in
@@ -2111,8 +2147,8 @@ Observed variance: $\pm 0.01$ MRR across runs.
 
 1. **Stage-scoping without diversity hurts** (-0.079 vs. WRRF).
    The No Submod configuration reduces the candidate pool to one
-   stage's memories and then picks the top-$k$ by score, which
-   selects redundant memories.  This is worse than flat top-$k$
+   stage's memories and then picks the top-k by score, which
+   selects redundant memories.  This is worse than flat top-k
    over the full corpus.
 
 2. **Submodular selection alone (Ph1 Only) is not sufficient**
