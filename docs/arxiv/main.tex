@@ -1,0 +1,2409 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{natbib}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+
+% Utility commands
+\newcommand{\ie}{i.e.}
+\newcommand{\eg}{e.g.}
+\newcommand{\cf}{cf.}
+
+\title{Priority-Budgeted Stage-Aware Context Assembly\\for Long-Context Memory Retrieval}
+
+\author{
+  Clement Deust\\
+  Independent Researcher\\
+  \texttt{github.com/cdeust/Cortex}
+}
+
+\date{April 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Dense vector retrieval degrades structurally at scale.
+On BEAM \citep{Tavakoli2026}, the hardest publicly available
+long-context memory benchmark at 10 million tokens per conversation,
+a production-grade 5-signal fusion pipeline with cross-encoder
+reranking drops from 0.591 MRR at 100K tokens to 0.353 MRR at
+10M tokens---a 40\% degradation that no amount of reranking or
+embedding model upgrade can address because the failure is geometric,
+not parametric.
+We present a structured context assembly architecture that recovers
+this degradation: a two-primitive system combining
+(1)~a priority-budgeted prompt decomposer with domain-aware
+condensers and truncation warning injection, and
+(2)~a three-phase stage-aware assembler with submodular coverage
+selection, Personalized PageRank entity graph traversal, and
+schema-structured summary fallback.
+On BEAM-10M, the assembler achieves 0.429 MRR, a $+21.5\%$ improvement
+over the flat baseline, with 8 of 10 memory abilities improving.
+The architecture was originally designed in September 2025 for
+generating coherent product requirement documents on Apple
+Intelligence's 4,096-token context window---one month before the
+BEAM paper was published.
+The key insight is that at scale, structured composition of what
+enters context outperforms improving how individual items are
+retrieved.
+Code, data, and benchmark harness are publicly available.\footnote{\url{https://github.com/cdeust/Cortex}}
+\end{abstract}
+
+%----------------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+
+Retrieval-augmented generation (RAG) has become the dominant paradigm
+for grounding language models in external knowledge.  The standard
+recipe---embed documents, index them in a vector store, retrieve the
+top-$k$ nearest neighbors at query time, and concatenate them into the
+prompt---works well when the corpus is moderate and topically diverse.
+But when applied to long-term conversational memory, where a single
+user's history spans millions of tokens of thematically overlapping
+content, this recipe fails in a specific and well-characterized way.
+
+\subsection{The Scaling Failure}
+\label{sec:scaling-failure}
+
+Consider a memory system storing the conversational history of a
+software developer over six months.  At 100K tokens ($\sim$94 memories),
+the content is sparse enough that a dense retrieval query returns
+meaningfully different candidates.  At 10M tokens ($\sim$7,500 memories),
+the content has accumulated around a small number of recurring
+topics---the same frameworks, the same debugging patterns, the same
+architectural decisions discussed from slightly different angles
+across hundreds of sessions.  The embedding space becomes crowded
+with near-identical vectors, and top-$k$ retrieval degenerates into
+returning $k$ paraphrases of the same piece of information.
+
+This is not a failure of any particular embedding model.  Three
+well-documented phenomena make it structural:
+
+\paragraph{Hubness} \citep{Radovanovic2010}.
+In high-dimensional spaces, certain points become disproportionately
+frequent nearest neighbors of many queries.  Formally, let $N_k(x)$
+denote the number of times point $x$ appears in the $k$-nearest-neighbor
+lists of all other points.  In uniformly distributed data,
+$\mathbb{E}[N_k(x)]$ is constant, but the variance of $N_k$ grows
+with dimensionality.  The skewness of the $N_k$ distribution---the
+\emph{hubness}---increases monotonically with $d / \log n$ where $d$
+is the dimensionality and $n$ is the sample size.
+\citet{Radovanovic2010} showed that this is an inherent property of
+the geometry, not an artifact of particular distance metrics.  As
+corpus size grows, a small set of ``hub'' memories dominates the
+top-$k$ results regardless of query content.  At 7,500 memories in
+384 dimensions, we observe empirically that the top-5 retrievals for
+topically distinct queries share 2--3 common memories---the hubs.
+These hub memories are not necessarily irrelevant; they are typically
+the most ``central'' memories that have high average similarity to
+all queries.  But their dominance crowds out the specific, targeted
+memories that would actually answer the query.
+
+\paragraph{Concentration of distances} \citep{Beyer1999}.
+As dimensionality grows relative to sample size, the ratio of the
+nearest-neighbor distance to the farthest-neighbor distance converges
+to 1.  Formally, for i.i.d.\ points drawn from any distribution with
+finite variance:
+\begin{equation}
+\lim_{d \to \infty} \Pr\!\left[\frac{\|X_{\max} - q\| - \|X_{\min} - q\|}{\|X_{\min} - q\|} \leq \epsilon\right] = 1
+\label{eq:concentration}
+\end{equation}
+for any $\epsilon > 0$.  The practical consequence: in 384 dimensions
+with 7,500 points, the gap between the ``most relevant'' and ``50th
+most relevant'' memory shrinks to the point where cosine similarity
+cannot reliably discriminate them.  Adding more dimensions helps, but
+the next phenomenon places a lower bound on how many dimensions suffice.
+
+\paragraph{Dimensionality lower bounds} \citep{Larsen2017}.
+The Johnson--Lindenstrauss lemma guarantees that pairwise distances
+among $n$ points can be preserved to within $(1 \pm \epsilon)$ in
+$O(\epsilon^{-2} \log n)$ dimensions.  \citet{Larsen2017} proved
+this is tight: any embedding that preserves pairwise distances among
+$n$ points to within $(1 \pm \epsilon)$ requires
+$\Omega(\epsilon^{-2} \log n)$ dimensions.  For $n = 7{,}500$ and
+$\epsilon = 0.1$ (10\% distance preservation), this gives:
+\begin{equation}
+d \geq \frac{1}{\epsilon^2} \cdot \ln(n) = \frac{1}{0.01} \cdot \ln(7500) \approx 100 \cdot 8.92 \approx 892
+\label{eq:jl-bound}
+\end{equation}
+
+Our 384-dimensional embeddings (all-MiniLM-L6-v2) operate below
+this lower bound, meaning pairwise distance preservation to 10\%
+accuracy is not guaranteed even in principle for 7,500 points.
+
+The consequence is measurable.  On the BEAM benchmark
+\citep{Tavakoli2026}, our production Weighted Reciprocal Rank Fusion
+(WRRF) pipeline---which fuses five PostgreSQL-side signals (vector
+similarity, full-text search, trigram matching, thermodynamic heat,
+temporal recency) with client-side FlashRank cross-encoder reranking---scores:
+
+\begin{itemize}
+  \item \textbf{BEAM-100K} (94 memories/conversation): 0.591 MRR
+  \item \textbf{BEAM-10M} (7,500 memories/conversation): 0.353 MRR
+\end{itemize}
+
+A 40\% degradation at 100$\times$ scale.  No reranking layer, query
+rewriting strategy, or embedding model upgrade addresses a geometric
+ceiling.  The architecture must change.
+
+\subsection{The Insight}
+\label{sec:insight}
+
+The insight behind this work is that the problem is not \emph{how} to
+retrieve better, but \emph{what} to compose into context.  A flat
+retrieval pipeline treats the context window as a ranked list: the
+top-$k$ most similar items, concatenated.  A structured assembly
+pipeline treats the context window as a \emph{document} with typed
+sections, priority ordering, and explicit awareness of what was
+included and what was cut.
+
+This distinction matters most when the corpus is large and
+thematically dense---precisely the regime where flat retrieval fails.
+By partitioning the corpus into topical stages, retrieving within the
+current stage first, following entity graph connections to related
+stages, and falling back to summaries for uncovered stages, the
+assembler recovers information that flat top-$k$ cannot reach.
+
+The analogy is to how humans prepare for a meeting: you do not read
+every email from the past year sorted by relevance score.  You
+identify the current topic, gather the directly relevant material,
+follow references to related discussions, and glance at summaries of
+background context.  The structured approach is not better because
+it uses a superior search algorithm---it is better because it
+organizes the search into scopes that match the information need.
+
+\subsection{Origin}
+\label{sec:origin}
+
+This architecture did not originate from a retrieval research project.
+It was designed in September 2025 for a production Swift application
+(\texttt{ai-architect-prd-builder}) that generates comprehensive
+product requirement documents using Apple Intelligence, which has a
+4,096-token context window.  The application must produce coherent
+9-page documents with cross-referenced requirements, working code
+examples, verification reports, and Jira ticket specifications---none
+of which fit in the model's context simultaneously.
+
+The solution: \emph{do not try to fit everything.  Structure what
+goes in, prioritize it, and tell the model what was cut.}
+
+This principle---born from a practical constraint on a tiny context
+window---turns out to be exactly what is needed for 10-million-token
+memory retrieval.  The problem is structurally identical at both
+scales: the available context is smaller than the relevant information,
+so you must be intelligent about what enters the context.
+
+\subsection{Contributions}
+\label{sec:contributions}
+
+We make four contributions:
+
+\begin{enumerate}
+  \item \textbf{ContextDecomposer}: a priority-budgeted prompt
+    assembly primitive with typed placeholder slots, domain-aware
+    condensers, progressive condensation, and truncation warning
+    injection---a mechanism that, to our knowledge, has no published
+    precedent in the 2024--2026 retrieval, prompt engineering, or
+    agent memory literature.
+
+  \item \textbf{StageAwareContextAssembler}: a three-phase
+    hierarchical retrieval architecture with a configurable budget
+    split (default 60/30/10), combining submodular coverage selection
+    \citep{Krause2008}, Personalized PageRank entity graph traversal
+    \citep{Gutierrez2024}, and schema-structured summary fallback
+    \citep{Tse2007}.
+
+  \item \textbf{Empirical validation} on BEAM at two scales (100K
+    and 10M tokens), showing that structured assembly is net-flat at
+    small scale (where flat retrieval is already sufficient) and
+    provides a $+21.5\%$ improvement at large scale (where flat
+    retrieval collapses)---with 8 of 10 memory abilities improving.
+
+  \item \textbf{Ablation analysis} isolating the contribution of
+    submodular selection ($+17.6\%$ over naive top-$k$) and
+    establishing that the architecture's value is compositional
+    rather than attributable to any single mechanism.
+\end{enumerate}
+
+\subsection{Paper Organization}
+\label{sec:organization}
+
+Section~\ref{sec:background} reviews related work across dense
+retrieval, long-context memory systems, hierarchical retrieval, and
+the biological foundations that informed design choices.
+Section~\ref{sec:method} presents the method in detail, including
+the ContextDecomposer algorithm, the three-phase assembler, and the
+integration with the existing Cortex pipeline.
+Section~\ref{sec:experiments} describes the experimental setup,
+benchmarks, baselines, and measurement protocol.
+Section~\ref{sec:results} presents results at both scales with
+per-ability breakdowns.  Section~\ref{sec:analysis} provides
+analysis of scale-dependent behavior, the multi-session reasoning
+sign flip, and comparison with published systems.
+Section~\ref{sec:provenance} documents the provenance timeline with
+verifiable commit SHAs.  Section~\ref{sec:limitations} discusses
+limitations and future work.  Section~\ref{sec:conclusion} concludes.
+
+%----------------------------------------------------------------------
+\section{Background and Related Work}
+\label{sec:background}
+
+\subsection{Dense Retrieval at Scale}
+\label{sec:dense-retrieval}
+
+The standard dense retrieval pipeline embeds queries and documents
+into a shared vector space and retrieves by nearest-neighbor search.
+The bi-encoder architecture \citep{Karpukhin2020,Reimers2019} maps
+queries and passages independently, enabling pre-computation of
+passage embeddings and sublinear retrieval via approximate
+nearest-neighbor indices (HNSW, IVF, product quantization).
+
+\paragraph{Benchmarking dense retrieval.}
+BEIR \citep{Thakur2021} established zero-shot evaluation across 18
+diverse datasets, revealing that dense retrievers trained on MS~MARCO
+generalize poorly to domain-specific corpora.  MTEB
+\citep{Muennighoff2023} extended this to 56 datasets across 8 tasks,
+becoming the standard benchmark for embedding models.  Both benchmarks
+evaluate on corpora where documents are topically diverse---web pages,
+Wikipedia passages, scientific abstracts, and forum posts.
+
+\paragraph{Long-document retrieval.}
+LongEmbed \citep{Zhu2024} extends evaluation to documents exceeding
+8,000 tokens, testing whether embedding models preserve relevance
+over longer passages.  However, it still assumes a diverse corpus:
+the challenge is encoding long documents, not discriminating among
+thousands of topically similar documents from a single user.
+
+\paragraph{The gap in existing benchmarks.}
+The failure mode we address---topical density within a single user's
+conversational history, where 7,500 memories discuss overlapping
+topics in similar vocabulary---is not covered by existing retrieval
+benchmarks.  LongMemEval \citep{Wu2025} evaluates conversational
+memory but at modest scale ($\sim$115K tokens, $\sim$40 sessions).
+LoCoMo \citep{Maharana2024} tests multi-hop and adversarial queries
+but caps at 10 conversations.  BEAM is the first benchmark to
+stress-test memory retrieval at 10M tokens per conversation, and
+the results confirm that existing systems collapse at this scale:
+the best published system (LIGHT with Llama-4-Maverick) achieves
+only 0.266.
+
+\subsection{Reciprocal Rank Fusion and Hybrid Search}
+\label{sec:rrf}
+
+Our baseline, Weighted Reciprocal Rank Fusion (WRRF), extends the
+original Reciprocal Rank Fusion \citep{Cormack2009} with per-signal
+weights.  Given $m$ ranking signals, the fused score for document $d$
+is:
+\begin{equation}
+\text{WRRF}(d) = \sum_{i=1}^{m} \frac{w_i}{k + r_i(d)}
+\label{eq:wrrf}
+\end{equation}
+where $r_i(d)$ is the rank of $d$ under signal $i$, $k$ is a
+smoothing constant (we use $k = 60$, following the original RRF
+recommendation), and $w_i$ is the weight for signal $i$.
+
+Cortex's WRRF pipeline fuses five signals:
+
+\begin{table}[h]
+\centering
+\caption{WRRF signal configuration.}
+\label{tab:wrrf-signals}
+\begin{tabular}{lcc}
+\toprule
+Signal & Weight & Computed At \\
+\midrule
+Vector similarity (pgvector HNSW, 384D) & 0.35 & PostgreSQL \\
+Full-text search (tsvector, BM25-weighted) & 0.25 & PostgreSQL \\
+Trigram matching (pg\_trgm) & 0.15 & PostgreSQL \\
+Thermodynamic heat (access recency/frequency) & 0.15 & PostgreSQL \\
+Temporal recency (exponential decay) & 0.10 & PostgreSQL \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All five signals are computed server-side in a single PL/pgSQL stored
+procedure (\texttt{recall\_memories()}), returning pre-fused results.
+Client-side, FlashRank (ONNX cross-encoder) reranks the top-$3k$
+candidates to produce the final ranking.
+
+This pipeline is strong at moderate scale: 97.8\% R@10 on
+LongMemEval, 92.6\% R@10 on LoCoMo.  The five-signal fusion
+mitigates any single signal's weakness (\eg, vector similarity
+misses lexical matches that trigram catches; FTS misses paraphrases
+that vectors catch).  But at BEAM-10M scale, all five signals suffer
+from the same underlying geometric degradation, and fusion of
+degraded signals produces a degraded result.
+
+\subsection{Long-Context Memory Systems}
+\label{sec:memory-systems}
+
+Several systems have been proposed for persistent conversational
+memory, each addressing different aspects of the long-term memory
+challenge:
+
+\paragraph{MemGPT / Letta} \citep{Packer2024}.
+Implements a tiered memory system with conversation buffer (recent
+messages), archival storage (compressed older messages), and recall
+storage (searchable facts).  Memory management is delegated to the
+LLM via tool calls---the model decides when to read, write, and
+search its own memory.  This is an elegant design for self-managing
+memory, but it relies on the LLM's judgment for retrieval,
+introducing the same failure modes as any single-signal retrieval
+(the LLM may generate poor search queries) plus additional latency
+and cost for each memory operation.  Letta does not implement
+structured context assembly, priority budgeting, or entity graph
+traversal.
+
+\paragraph{mem0} \citep{Chheda2024}.
+Extracts key-value facts from conversations using an LLM and stores
+them as a flat memory bank.  Retrieval is by embedding similarity
+over the extracted facts, with optional filtering by category or time
+range.  The extraction step is valuable (it produces cleaner, more
+searchable memories than raw conversation turns), but the retrieval
+layer is standard dense search without any structural organization.
+At scale, mem0 would face the same hubness and concentration issues
+we document.
+
+\paragraph{MIRIX} \citep{Wang2025}.
+The closest architectural neighbor in the active retrieval dimension.
+MIRIX introduces three key mechanisms: (1)~typed memory categories
+(episodic, semantic, working), (2)~active retrieval---the agent
+reformulates queries before searching, and (3)~reflection---the
+agent periodically reviews and consolidates its memories.  The
+system reports 85.4\% on LoCoMo.  However, MIRIX does not implement
+stage-scoped retrieval, entity graph traversal, priority-budgeted
+prompt assembly, or truncation awareness.  Its active retrieval
+component (query reformulation via LLM) is complementary to our
+approach and could be composed with our assembler.
+
+\paragraph{A-MEM} \citep{Xu2025}.
+Introduces Zettelkasten-style agentic memory with on-write
+reconsolidation: when a new memory is stored, the system uses an LLM
+to compare it against existing memories, create bidirectional links,
+and update an index.  The write-time intelligence builds a richer
+memory graph, which could benefit our Phase~2 entity traversal.
+However, A-MEM's retrieval layer is standard dense search, and the
+write-time LLM calls add significant latency and cost at scale.
+
+\paragraph{LIGHT} \citep{Tavakoli2026}.
+The strongest published system on BEAM, achieving 0.266 overall on
+BEAM-10M with Llama-4-Maverick.  LIGHT implements a three-tier
+architecture: \emph{episodic memory} (stores raw conversation turns,
+indexed for retrieval), \emph{working memory} (a fixed-size buffer
+of the most recently accessed memories, refreshed each query), and
+\emph{scratchpad} (an LLM-generated intermediate representation that
+helps the reader reason across multiple retrieved passages).
+
+LIGHT's three tiers serve different purposes than our three phases.
+LIGHT's working memory is a recency-biased buffer; our Phase~1 is a
+relevance-biased stage-scoped selection.  LIGHT's scratchpad is a
+reader-side reasoning aid; we have no equivalent.  LIGHT does not
+implement priority budgeting, truncation awareness, submodular
+diversity, or entity graph traversal.  Its scratchpad mechanism and
+our context assembly are complementary approaches that could
+potentially be combined.
+
+\subsection{Hierarchical and Graph-Based Retrieval}
+\label{sec:hierarchical}
+
+\paragraph{HippoRAG} \citep{Gutierrez2024}.
+Draws on the hippocampal indexing theory \citep{Teyler2007} to propose
+a retrieval architecture that separates the neocortex (knowledge graph
+of extracted entities and relations) from the hippocampus (passage
+store) and bridges them via Personalized PageRank.  The PPR walk
+propagates relevance from query-mentioned entities outward through
+the knowledge graph, scoring passages by the aggregated PPR mass of
+their contained entities.
+
+On multi-hop QA benchmarks (MuSiQue, 2WikiMultihopQA, HotpotQA),
+HippoRAG demonstrates that graph-based traversal reaches relevant
+passages that flat dense retrieval misses---particularly when the
+answer requires synthesizing information from passages that do not
+directly mention the query terms but are connected through shared
+entities.
+
+We adopt their PPR formulation for Phase~2 of our assembler but
+apply it to a different problem: cross-stage entity bridging in
+conversational memory rather than multi-hop factoid QA.  The key
+adaptation is the seeding strategy: HippoRAG seeds PPR on
+query-extracted entities, while we seed on entities extracted from
+Phase~1 results.  This two-stage seeding (WRRF retrieval first, then
+PPR traversal) is more robust than direct query seeding because
+Phase~1 results are enriched with the memory system's entity
+annotations, which are more complete than entities extractable from
+a short query string.
+
+\paragraph{RAPTOR} \citep{Sarthi2024}.
+Builds a tree of summaries over document chunks using recursive LLM
+summarization: leaf nodes are original chunks, and each internal node
+summarizes its children.  Retrieval can occur at any level of the
+tree, enabling queries to match at different levels of abstraction.
+The hierarchical summary structure is related to our Phase~3 summary
+fallback, but RAPTOR operates on documents (where the tree structure
+reflects the document's own hierarchy) rather than conversational
+stages (where the structure reflects topical shifts over time).
+RAPTOR's LLM summarization cost at build time is significant; we use
+rule-based schema extraction instead.
+
+\paragraph{Late Chunking} \citep{JinaAI2025}.
+Proposes deferring chunking until after encoding with a long-context
+model, so each chunk's embedding reflects the full document context.
+This addresses a different failure mode---loss of cross-chunk context
+during embedding---and is complementary to our approach.  Late
+chunking could improve the quality of per-stage embeddings within our
+Phase~1.
+
+\paragraph{ColBERT and Multi-Vector Retrieval} \citep{Khattab2020}.
+Represents each passage as a set of token-level vectors and computes
+relevance via MaxSim aggregation.  This finer-grained representation
+mitigates some hubness effects by allowing individual tokens to
+contribute independently.  However, the storage and computation
+overhead (one vector per token) is substantial at 7,500-memory scale,
+and the approach does not address the stage-composition problem.
+
+\subsection{Submodular Optimization for Information Selection}
+\label{sec:submodular-background}
+
+Submodular set functions have a rich history in information selection
+problems.  A set function $f: 2^V \to \mathbb{R}$ is submodular if
+for all $A \subseteq B \subseteq V$ and $e \notin B$:
+\begin{equation}
+f(A \cup \{e\}) - f(A) \geq f(B \cup \{e\}) - f(B)
+\label{eq:submodular}
+\end{equation}
+
+This \emph{diminishing returns} property formalizes the intuition that
+adding an item is more valuable when less has already been selected.
+
+\paragraph{Sensor placement} \citep{Krause2008}.
+Proved that for monotone submodular functions, the greedy algorithm
+(iteratively select the item with the highest marginal gain) achieves
+a $(1 - 1/e) \approx 0.63$ approximation to the optimal set.  This
+guarantee holds regardless of the constraint set (cardinality,
+matroid, knapsack), with different approximation ratios for different
+constraints.
+
+\paragraph{Document summarization} \citep{Lin2011}.
+Applied submodular optimization to extractive summarization, treating
+sentence selection as a budget-constrained submodular maximization
+problem.  The objective combines coverage (how much of the document's
+information is represented) with diversity (how different the selected
+sentences are).
+
+\paragraph{Maximal Marginal Relevance} \citep{Carbonell1998}.
+The MMR criterion---$\text{score}(c) - \lambda \cdot \max_{s \in S}
+\text{sim}(c, s)$---is the most common instantiation of submodular
+selection in retrieval.  \citet{Carbonell1998} introduced it for
+reranking search results; we apply it to memory selection within a
+stage.  When $\lambda < 1$, the MMR objective is submodular (proof:
+the max-similarity penalty is a modular function, and the difference
+of a modular function from a monotone function is submodular).
+
+\subsection{Biological Foundations}
+\label{sec:bio-foundations}
+
+The stage-aware assembly architecture has structural parallels to
+established neuroscience models.  We emphasize that these are design
+analogies rather than mechanistic implementations---we do not claim
+that the algorithms replicate biological processes, only that the
+biological principles informed useful design choices.
+
+\paragraph{Hippocampal indexing theory} \citep{Teyler2007}.
+The hippocampus stores pointers to neocortical representations, not
+the representations themselves.  During retrieval, hippocampal
+activation triggers reactivation of the corresponding neocortical
+patterns.  This ``index + content'' separation maps to our Phase~2
+architecture: the entity graph serves as an index (hippocampus),
+and the memories stored in PostgreSQL serve as the content
+(neocortex).  PPR traversal over the entity graph activates the
+memories that share the most entity overlap with the current query
+context.
+
+\paragraph{Grid modules} \citep{Stensola2012}.
+The entorhinal cortex organizes spatial information in modular grids
+at different scales---small grids for local navigation, large grids
+for global orientation.  Our three-phase structure (current stage,
+adjacent stages, all stages) mirrors this multi-scale organization:
+Phase~1 operates at the finest scale (within-stage), Phase~2 at an
+intermediate scale (across nearby stages via entity connections), and
+Phase~3 at the broadest scale (summaries of all stages).  The analogy
+should not be pushed further than the structural level---we do not
+implement grid-like spatial representations.
+
+\paragraph{Schema consolidation} \citep{Tse2007}.
+Prior knowledge structures (schemas) facilitate rapid integration of
+new information that is consistent with existing schemas.
+\citet{Tse2007} showed that rats with a pre-existing spatial schema
+could learn new object-location associations in a single trial,
+compared to weeks without a schema.  Our Phase~3 summary fallback
+draws on this principle: schema-structured summaries of each stage
+serve as compressed prior knowledge that new queries can be matched
+against, even when the original memories are too numerous or too
+distant to retrieve directly.
+
+\paragraph{Complementary learning systems} \citep{McClelland1995}.
+The hippocampal and neocortical systems serve complementary roles:
+hippocampal learning is fast and episodic (one-shot, detail-rich),
+while neocortical learning is slow and semantic (gradual,
+pattern-extracting).  Our architecture embodies this complementarity:
+Phase~1 retrieves specific episodic memories (fast, detail-rich),
+while Phase~3 retrieves consolidated semantic summaries (compressed,
+pattern-level).  Phase~2 bridges the two via entity-structural
+connections.
+
+%----------------------------------------------------------------------
+\section{Method}
+\label{sec:method}
+
+The architecture comprises two core primitives that can be used
+independently or composed.  The \textbf{ContextDecomposer} manages
+the prompt-level budget: given a template with typed placeholders, it
+allocates tokens by priority and communicates truncation decisions to
+the reader model.  The \textbf{StageAwareContextAssembler} manages
+the retrieval-level composition: given a query and a corpus
+partitioned into stages, it selects memories from three scopes with
+configurable budget proportions.
+
+Figure~\ref{fig:dataflow} illustrates the conceptual data flow.
+
+\begin{figure}[t]
+\centering
+\fbox{\parbox{0.9\columnwidth}{%
+\small
+\begin{verbatim}
+Query
+  |
+  v
+[Stage Detection] --> current_stage
+  |
+  v
+[Phase 1: Own-Stage WRRF + Submodular Select]
+  --> 60% budget
+  |
+  v
+[Phase 2: Entity Extract --> PPR Walk
+  --> Cross-Stage Select] --> 30% budget
+  |
+  v
+[Phase 3: Summary Fallback for Uncovered Stages]
+  --> 10% budget
+  |
+  v
+[Structured Context:
+  ## Current Stage | ## Related Prior
+  | ## Summaries]
+  |
+  v
+[ContextDecomposer: Priority Budget +
+  Condense + Truncation Warning]
+  |
+  v
+Final Prompt --> Reader Model
+\end{verbatim}
+}}
+\caption{Conceptual data flow of the two-primitive architecture.  The
+StageAwareContextAssembler produces structured context from three
+retrieval phases; the ContextDecomposer fits it into the model's
+context window with priority budgeting.}
+\label{fig:dataflow}
+\end{figure}
+
+\subsection{ContextDecomposer: Priority-Budgeted Prompt Assembly}
+\label{sec:decomposer}
+
+A prompt template contains typed placeholder slots.  Each slot is
+defined by a 4-tuple:
+\begin{equation}
+P_i = (k_i, v_i, p_i, c_i)
+\label{eq:placeholder}
+\end{equation}
+where $k_i$ is the template key (\eg, \texttt{\{\{CONTEXT\}\}},
+\texttt{\{\{QUERY\}\}}, \texttt{\{\{RELATED\}\}}), $v_i$ is the
+content to fill it, $p_i \in \mathbb{N}$ is the priority rank
+(lower = more important; priority~1 is the last to be condensed),
+and $c_i: (\text{text}, \text{budget}) \to \text{text}$ is an
+optional domain-aware condenser function.
+
+The assembly algorithm operates in six steps:
+
+\subsubsection{Step 1: Shell Computation}
+
+Compute the template with all placeholders replaced by empty strings.
+Let $s = \tau(\text{shell})$ where $\tau$ is the token estimator
+(default: conservative $\lceil |text| / 3 \rceil$, swappable for
+tiktoken at integration).
+
+\subsubsection{Step 2: Budget Allocation}
+
+Given context window $W$ and headroom fraction $h$ (default 0.75,
+reserving 25\% for the response):
+\begin{equation}
+B = \max\!\left(300, \lfloor W \cdot h \rfloor - s\right)
+\label{eq:budget}
+\end{equation}
+The variable budget $B$ is the total token budget available for all
+placeholder content.  The minimum of 300 tokens ensures that even
+with a large shell, some content always survives.
+
+\subsubsection{Step 3: Fast Path}
+
+If $\sum_i \tau(v_i) \leq B$, all placeholders are used verbatim.
+No condensation is needed.  This is the common case for short queries
+with small context.
+
+\subsubsection{Step 4: Progressive Condensation}
+
+When the fast path fails, placeholders are condensed progressively
+from least to most important.  Sort placeholders by descending
+priority number (highest $p_i$ first---least important first).  For
+each placeholder $P_i$ in this order:
+
+\begin{enumerate}
+  \item Compute a proportional share of the remaining budget:
+    \begin{equation}
+    \text{share}_i = \max\!\left(50, \left\lfloor \frac{B_{\text{remaining}}}{|\{P_j : j \geq i,\; P_j \text{ not yet assigned}\}|}\right\rfloor\right)
+    \label{eq:share}
+    \end{equation}
+
+  \item If $\tau(v_i) \leq \text{share}_i$, use $v_i$ verbatim and
+    subtract $\tau(v_i)$ from $B_{\text{remaining}}$.
+
+  \item Otherwise, apply the condenser:
+    \begin{equation}
+    v_i' =
+    \begin{cases}
+    c_i(v_i, \text{share}_i) & \text{if } c_i \neq \text{null} \\
+    \text{truncate}(v_i, \text{share}_i) & \text{otherwise}
+    \end{cases}
+    \label{eq:condense}
+    \end{equation}
+
+  \item Use $v_i'$ and subtract $\min(\tau(v_i'), B_{\text{remaining}})$
+    from $B_{\text{remaining}}$.
+\end{enumerate}
+
+The proportional allocation ensures that low-priority placeholders
+with small content are not penalized---they get their full content if
+it fits within their share.  Only placeholders that exceed their share
+are condensed.
+
+\subsubsection{Step 5: Post-Assembly Safety Loop}
+
+After all placeholders are assigned, assemble the final prompt by
+substituting each placeholder with its assigned content.  If the
+assembled prompt still exceeds $(W - \text{safety\_margin})$ tokens
+(due to estimation errors or template overhead), iteratively halve
+the content of the lowest-priority placeholder at the nearest line
+boundary.  This is a defensive measure---it should rarely trigger if
+the budget computation is accurate.
+
+The loop terminates after at most 50 iterations or when no further
+reduction is possible.
+
+\subsubsection{Step 6: Truncation Warning Injection}
+
+For each placeholder whose surviving fraction is below 90\%:
+\begin{equation}
+\text{surviving}(P_i) = \frac{\tau(\text{final}_i)}{\tau(\text{original}_i)}
+\label{eq:surviving}
+\end{equation}
+build a warning line.  If any placeholders were materially truncated,
+prepend a banner to the final prompt:
+
+\begin{verbatim}
+WARNING: CONTEXT TRUNCATION
+The following sections were truncated to fit
+the context window.
+You may be missing information. Prioritize the
+content you CAN see.
+
+- {{RELATED_CONTEXT}}: 45% retained (340/756 tokens)
+- {{STAGE_SUMMARIES}}: 22% retained (88/400 tokens)
+\end{verbatim}
+
+\paragraph{Novelty claim.}
+The truncation warning is, to our knowledge, novel.  We surveyed the
+2024--2026 literature across RAG, prompt engineering, context
+management, and agent architectures and found no published precedent
+for injecting explicit truncation awareness into the prompt itself.
+The closest mechanisms are: Anthropic's contextual retrieval (2024),
+which adds chunk-level LLM summaries but enriches content rather than
+communicating truncation decisions; LangChain/LlamaIndex token
+budgeting, which truncates silently without informing the model what
+was cut; and OpenAI's function calling with \texttt{max\_tokens}
+constraints, which truncates tool outputs but does not inject a
+warning about the truncation.
+
+The design rationale is straightforward: a model that knows what it
+\emph{cannot} see can hedge its confidence appropriately, request
+clarification, or flag uncertainty.  A model that receives a silently
+truncated context has no basis for distinguishing ``this information
+does not exist'' from ``this information was cut.''  We hypothesize
+(but have not experimentally verified) that truncation warnings
+improve answer quality for questions whose evidence was partially
+truncated.
+
+\subsubsection{Domain-Aware Condensers}
+
+Generic truncation (keeping the first $N$ tokens) is a poor strategy
+because the most important information is rarely at the beginning.
+Domain-aware condensers exploit structural properties of different
+content types to preserve high-signal content and drop filler:
+
+\begin{table}[h]
+\centering
+\caption{Domain-aware condenser strategies.}
+\label{tab:condensers}
+\small
+\begin{tabular}{lll}
+\toprule
+Content Type & Strategy & Signal Preserved \\
+\midrule
+User messages & First sentence + questions + last & Intent, queries \\
+Assistant messages & Code blocks verbatim; prose to topics & Facts, implementations \\
+Entity triples & Keep $(S, P, O)$ lines; drop prose & Relationship structure \\
+Timeline events & Extract \texttt{[when] what} format & Temporal anchors \\
+Code blocks & Function/class/import signatures only & API surface \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The condenser is selected automatically by content shape detection.
+The detection heuristics are: (1)~tag-driven (highest priority): if
+the memory has tags like \texttt{code}, \texttt{timeline},
+\texttt{event}, dispatch directly; (2)~code fence detection: presence
+of triple backticks or $\geq 3$ indented lines triggers the assistant
+message condenser; (3)~arrow operator count: $\geq 2$ occurrences of
+\texttt{->} triggers the entity triple condenser; (4)~role prefix
+detection: lines starting with \texttt{[user]:} or
+\texttt{[assistant]:} trigger the appropriate message condenser;
+(5)~default: treat as prose user message.
+
+Each condenser is a pure function
+$(\text{text}, \text{token\_budget}) \to \text{text}$ with a fast
+path: if the input already fits within the budget, return it unchanged.
+
+\subsection{StageAwareContextAssembler}
+\label{sec:assembler}
+
+A \emph{stage} is a distinct topical segment of a conversation---analogous to a work session, a debugging episode, or a design
+discussion.  Stage detection is pluggable (Section~\ref{sec:stage-detection}).
+The assembler operates in three phases with a configurable budget
+split $(\beta_1, \beta_2, \beta_3)$ where
+$\beta_1 + \beta_2 + \beta_3 = 1$ (default: 0.6, 0.3, 0.1).
+
+\subsubsection{Stage Detection}
+\label{sec:stage-detection}
+
+The \texttt{StageDetector} interface abstracts stage assignment with
+two operations: \texttt{stage\_of(memory) -> str} (assigns a single
+memory to its stage ID) and \texttt{all\_stages(corpus) -> list[str]}
+(returns all distinct stages in a stable order).
+
+We provide three implementations:
+
+\paragraph{ExplicitStageDetector.}
+Stage = value of an explicit metadata field.  For BEAM, this is
+\texttt{plan\_id} (the dataset provides plan indices per turn, with
+each plan representing a thematic conversation segment).  For
+production use, this could be \texttt{agent\_topic},
+\texttt{project\_directory}, or any other session-level label.
+
+\paragraph{TemporalStageDetector.}
+Stage = contiguous block of memories where inter-memory temporal gaps
+are below a threshold (default: 4 hours).  When a gap exceeds the
+threshold, a new stage begins.  The 4-hour default matches a typical
+work-session boundary.
+
+\paragraph{CompositeStageDetector.}
+Tries detectors in priority order, falling back from explicit to
+temporal when labels are absent.  This is the recommended production
+configuration.
+
+The pluggable design enables A/B testing of stage strategies without
+modifying the assembly logic.  For the experiments in this paper, we
+use \texttt{ExplicitStageDetector} with \texttt{plan\_id} on BEAM
+(where plan boundaries are ground truth) and note that production
+deployment would use \texttt{CompositeStageDetector}.
+
+\subsubsection{Phase 1: Own-Stage Retrieval with Submodular Coverage}
+\label{sec:phase1}
+
+Phase~1 retrieves from the current stage's memories.  The procedure is:
+
+\begin{enumerate}
+  \item \textbf{Candidate generation.}  Query the WRRF pipeline with
+    a stage filter and 3$\times$ oversampling: retrieve
+    $\text{max\_chunks} \times 3$ candidates from the current stage.
+
+  \item \textbf{Submodular selection.}  From the oversample, select
+    the final set via the MMR-submodular objective:
+    \begin{equation}
+    S^* = \argmax_{|S| \leq k} \sum_{c \in S} \left[\text{score}(c) - \lambda \cdot \max_{c' \in S \setminus \{c\}} \text{sim}(c, c')\right]
+    \label{eq:mmr}
+    \end{equation}
+    where $\text{score}(c)$ is the WRRF score,
+    $\text{sim}(c, c')$ is cosine similarity over 384D embeddings,
+    and $\lambda = 0.5$ balances relevance against diversity.
+
+  \item \textbf{Greedy algorithm.}  Iterate up to
+    $\text{max\_chunks}$ times.  At each step, select the candidate
+    not yet in $S$ that maximizes the marginal gain.
+\end{enumerate}
+
+The greedy submodular selection procedure is given in
+Algorithm~\ref{alg:submodular}.
+
+\begin{algorithm}[t]
+\caption{Submodular coverage selection (Phase~1)}
+\label{alg:submodular}
+\begin{algorithmic}[1]
+\REQUIRE candidates, max\_chunks, $\lambda$
+\STATE $S \leftarrow \emptyset$, $E \leftarrow \emptyset$ \COMMENT{selected set, selected embeddings}
+\FOR{$i = 1$ \TO max\_chunks}
+  \STATE best\_idx $\leftarrow -1$, best\_gain $\leftarrow -\infty$
+  \FOR{$j = 0$ \TO $|\text{candidates}| - 1$}
+    \IF{$j \in S$}
+      \STATE \textbf{continue}
+    \ENDIF
+    \IF{$E = \emptyset$ \OR embedding[$j$] is null}
+      \STATE penalty $\leftarrow 0$
+    \ELSE
+      \STATE penalty $\leftarrow \max_{e \in E} \text{cosine}(\text{embedding}[j], e)$
+    \ENDIF
+    \STATE gain $\leftarrow \text{score}[j] - \lambda \cdot \text{penalty}$
+    \IF{gain $>$ best\_gain}
+      \STATE best\_gain $\leftarrow$ gain
+      \STATE best\_idx $\leftarrow j$
+    \ENDIF
+  \ENDFOR
+  \IF{best\_idx $< 0$}
+    \STATE \textbf{break}
+  \ENDIF
+  \STATE $S \leftarrow S \cup \{\text{best\_idx}\}$
+  \IF{embedding[best\_idx] is not null}
+    \STATE $E \leftarrow E \cup \{\text{embedding}[\text{best\_idx}]\}$
+  \ENDIF
+\ENDFOR
+\RETURN $\{\text{candidates}[i] : i \in \text{sorted}(S)\}$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Approximation guarantee.}
+By \citet{Krause2008}, the greedy algorithm achieves
+$f(S_k) \geq (1 - 1/e) \cdot f(S_k^*) \approx 0.63 \cdot f(S_k^*)$
+for any monotone submodular function under cardinality constraints.
+The MMR objective with $\lambda < 1$ is submodular (the
+max-similarity penalty is submodular as the pointwise maximum of
+linear functions), so this guarantee applies.
+
+\paragraph{Why submodular selection matters at scale.}
+At BEAM-10M, the top-5 candidates from WRRF within a single stage
+frequently overlap in content.  A specific failure mode we observed:
+three of five selected memories described the same debugging session
+from slightly different timestamps.  Submodular selection penalizes
+this redundancy, forcing the selected set to cover more aspects of
+the queried topic.
+
+\paragraph{Decoupling selection from budget.}
+A deliberate design choice: selection is always by count
+(\texttt{max\_chunks}), never by token budget.  This ensures retrieval
+ranking metrics (MRR, R@$k$) are well-defined regardless of individual
+memory sizes.  Token budgeting is enforced at assembly time by the
+ContextDecomposer, which may truncate individual chunks but never
+reduces the count of selected items.  The two concerns---``which
+memories matter?'' and ``how many tokens can we spend?''---are
+independent and should not contaminate each other.
+
+This decoupling was itself a bug fix.  The initial implementation
+enforced token budgets at selection time, causing the assembler to
+select fewer than \texttt{max\_chunks} items when individual memories
+were long.  This degraded retrieval recall (fewer items means fewer
+chances for a hit) without improving prompt quality (the
+ContextDecomposer would have condensed the long items anyway).
+
+\subsubsection{Phase 2: Cross-Stage Retrieval via Personalized PageRank}
+\label{sec:phase2}
+
+Phase~2 addresses the question: ``What information from \emph{other}
+stages is relevant to the current query?''
+
+Flat dense retrieval over the entire corpus is the default answer,
+but at 7,500 memories it degenerates (Section~\ref{sec:scaling-failure}).
+Instead, we follow the HippoRAG approach \citep{Gutierrez2024} and
+use entity co-occurrence as a structural bridge between stages.
+
+\paragraph{Step 1: Entity extraction from Phase~1.}
+From the Phase~1 selected memories, extract the set of entity IDs.
+Each memory in Cortex is annotated with its contained entities at
+ingest time (stored in the \texttt{entity\_memory} junction table).
+The seed entity set is built by aggregating entity IDs across all
+Phase~1 results, with each entity weighted by how many Phase~1
+memories contain it:
+\begin{equation}
+s(e) = |\{m \in S_1 : e \in \text{entities}(m)\}|
+\label{eq:seed}
+\end{equation}
+where $S_1$ is the Phase~1 selected set.
+
+\paragraph{Step 2: Graph construction.}
+Build an adjacency structure over Cortex's entity and relationship
+tables.  Each entity is a node; each relationship adds a bidirectional
+weighted edge with strength proportional to the co-occurrence strength
+stored in the database.  Edge weights are normalized to transition
+probabilities within the PPR computation.
+
+\paragraph{Step 3: Personalized PageRank.}
+Compute PPR scores via power iteration with restart probability
+$\alpha = 0.15$ \citep{Brin1998}:
+\begin{equation}
+\mathbf{r}^{(t+1)} = \alpha \cdot \mathbf{s} + (1 - \alpha) \cdot \mathbf{M} \cdot \mathbf{r}^{(t)}
+\label{eq:ppr}
+\end{equation}
+where $\mathbf{s}$ is the normalized seed vector (mass concentrated
+on Phase~1 entities), $\mathbf{M}$ is the column-stochastic
+transition matrix derived from the adjacency structure, and iteration
+continues until $\|\mathbf{r}^{(t+1)} - \mathbf{r}^{(t)}\|_1 < 10^{-4}$
+or 30 iterations.
+
+Dangling nodes (entities with no outgoing edges) redistribute their
+mass to the seed distribution, maintaining the random walk
+interpretation.  This is the standard treatment of dangling nodes in
+PageRank \citep{Langville2005}.
+
+The restart probability $\alpha = 0.15$ is the canonical value from
+the original PageRank paper.  Higher $\alpha$ produces more localized
+results (closer to the seed entities); lower $\alpha$ produces more
+global results.  We did not tune this parameter.
+
+The full PPR procedure is given in Algorithm~\ref{alg:ppr}.
+
+\begin{algorithm}[t]
+\caption{Personalized PageRank (Phase~2)}
+\label{alg:ppr}
+\begin{algorithmic}[1]
+\REQUIRE adjacency, seeds, $\alpha = 0.15$, max\_iters $= 30$, tol $= 10^{-4}$
+\STATE Normalize seeds: $\mathbf{s}[k] \leftarrow \text{seeds}[k] / \sum_j \text{seeds}[j]$
+\STATE Normalize adjacency to transition matrix $\mathbf{M}$
+\STATE $\mathbf{r} \leftarrow \mathbf{s}$ \COMMENT{initialize rank}
+\FOR{$t = 1$ \TO max\_iters}
+  \STATE $\mathbf{r}' \leftarrow \alpha \cdot \mathbf{s}$ \COMMENT{restart mass}
+  \FOR{each node with mass $\mathbf{r}[\text{node}] > 0$}
+    \IF{node is dangling}
+      \FOR{each $k \in \mathbf{s}$}
+        \STATE $\mathbf{r}'[k] \mathrel{+}= (1 - \alpha) \cdot \mathbf{r}[\text{node}] \cdot \mathbf{s}[k]$
+      \ENDFOR
+    \ELSE
+      \FOR{each (neighbor, prob) in $\mathbf{M}[\text{node}]$}
+        \STATE $\mathbf{r}'[\text{neighbor}] \mathrel{+}= (1 - \alpha) \cdot \mathbf{r}[\text{node}] \cdot \text{prob}$
+      \ENDFOR
+    \ENDIF
+  \ENDFOR
+  \STATE $\delta \leftarrow \sum_k |\mathbf{r}'[k] - \mathbf{r}[k]|$
+  \STATE $\mathbf{r} \leftarrow \mathbf{r}'$
+  \IF{$\delta <$ tol}
+    \STATE \textbf{break}
+  \ENDIF
+\ENDFOR
+\RETURN $\mathbf{r}$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Step 4: Memory scoring by PPR aggregation.}
+Following HippoRAG Section~3.3, a memory's relevance under PPR is the
+sum of PPR mass of its contained entities:
+\begin{equation}
+\text{score}_{\text{PPR}}(m) = \sum_{e \in \text{entities}(m)} r(e)
+\label{eq:ppr-score}
+\end{equation}
+
+Memories from the current stage are excluded (they were already
+considered in Phase~1).  The remaining cross-stage memories are ranked
+by PPR score, and the top \texttt{max\_chunks\_per\_phase} are
+selected.
+
+\paragraph{Why PPR over BFS.}
+Cortex already implements spreading activation \citep{Collins1975},
+which is a decaying breadth-first search with activation decay factor
+$d$ per hop.  PPR provides a \emph{stationary} distribution rather
+than a depth-bounded traversal.  The differences matter:
+
+\begin{table}[h]
+\centering
+\caption{Comparison of graph traversal strategies.}
+\label{tab:ppr-vs-bfs}
+\small
+\begin{tabular}{lll}
+\toprule
+Property & Spreading Activation & PPR \\
+\midrule
+Termination & After max hops & At convergence \\
+Cycle handling & May revisit w/ decay & Natural via restart \\
+Long-range connections & Penalized by distance & Captured if reachable \\
+Sensitivity to density & High (dense amplifies) & Lower (normalization) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+PPR is better suited to cross-stage bridging where the relevant
+connection may be at variable depth and the graph has heterogeneous
+density.
+
+\subsubsection{Phase 3: Summary Fallback}
+\label{sec:phase3}
+
+For stages not covered by Phase~1 or Phase~2, the assembler retrieves
+pre-computed schema-structured summaries ordered by stage proximity
+(temporal distance from the current stage).  This ensures that even
+distant stages contribute contextual background.
+
+The summaries are produced by Cortex's schema engine, which implements
+\citet{Tse2007} schema-congruent consolidation: recurring patterns
+across memories within a stage are extracted into a fixed-slot format:
+\emph{Entities} (key actors, systems, and concepts),
+\emph{Decisions} (choices made and their rationale),
+\emph{Outcomes} (results of actions taken), and
+\emph{Open questions} (unresolved issues).
+
+This fixed-slot format compresses efficiently (50--200 tokens per
+stage vs.\ thousands for raw memories) and matches queries
+structurally rather than lexically.
+
+\paragraph{Current status.}
+In the implementation evaluated in this paper, Phase~3 is a stub---the
+summary callback returns empty strings for all stages.  Wiring it to
+Cortex's CLS consolidation engine, which already produces
+schema-structured summaries per stage, is planned but not yet
+benchmarked.  The results reported here reflect Phase~1 + Phase~2
+only.  We include Phase~3 in the architecture description because the
+interface is defined, the callback mechanism is wired, and the schema
+engine exists---only the plumbing is missing.
+
+\subsubsection{Budget Split Justification}
+\label{sec:budget-split}
+
+The default split of 60/30/10 ($\beta_1 = 0.6$, $\beta_2 = 0.3$,
+$\beta_3 = 0.1$) is motivated by three observations:
+
+\paragraph{Locality dominance.}
+For the majority of queries, the answer exists within the current
+stage.  On BEAM-10M, 65\% of questions target information from a
+single plan (stage).  The 60\% allocation to Phase~1 ensures that
+same-stage retrieval has the largest share of resources.
+
+\paragraph{Diminishing cross-stage returns.}
+Entity graph traversal is high-precision but low-recall: it finds
+specific connections between stages via shared entities, but the
+number of useful cross-stage memories for any single query is small
+(typically 1--3, rarely more than 5).  The 30\% allocation is
+sufficient to retrieve these without diluting the context with
+marginally relevant cross-stage content.
+
+\paragraph{Summaries as compressed context.}
+Stage summaries are compressed by design (50--200 tokens each).  The
+10\% allocation accommodates several summaries, providing broad
+coverage at minimal token cost.  Even 10\% of a 4,096-token window
+(409 tokens) can hold 2--4 summaries.
+
+\paragraph{Origin.}
+The 60/30/10 values descend from the Swift ContextManager's heuristic
+for PRD generation (approximately 55/25/20 in the original), rounded
+to cleaner values.  We did not perform a systematic grid search over
+budget splits and expect the optimal split to be task-dependent.
+Automated tuning (\eg, Bayesian optimization over
+$(\beta_1, \beta_2, \beta_3)$ with MRR as the objective) is left to
+future work.
+
+\subsection{Integration with the Cortex WRRF Pipeline}
+\label{sec:integration}
+
+The assembler is a composition layer \emph{on top of} the existing
+retrieval pipeline, not a replacement.  This is a deliberate
+architectural choice: the assembler composes retrieval primitives
+without reimplementing them.  The full data flow is:
+
+\begin{enumerate}
+  \item \textbf{Query intent classification.}  Cortex classifies the
+    query as temporal, causal, semantic, entity, knowledge-update, or
+    multi-hop using regex-based rules and keyword detection (pure
+    logic, no LLM).
+
+  \item \textbf{Stage detection.}  The \texttt{StageDetector} maps
+    the query to a current stage, either from an explicit label or by
+    temporal proximity.
+
+  \item \textbf{Phase 1: Own-stage WRRF + submodular select.}  The
+    WRRF pipeline's \texttt{recall\_memories()} stored procedure runs
+    with a stage filter added to the WHERE clause.  Returns
+    3$\times$ oversample.  Submodular selection reduces to
+    \texttt{max\_chunks}.
+
+  \item \textbf{Phase 2: Entity PPR traversal.}  Entity IDs from
+    Phase~1 seed a PPR walk over the entity graph.  Cross-stage
+    memories scored by PPR mass.
+
+  \item \textbf{Phase 3: Summary fallback.}  Summaries for uncovered
+    stages retrieved by proximity.
+
+  \item \textbf{Assembly.}  The three phases produce a structured
+    context with labeled sections (\texttt{\#\# Current Stage Context},
+    \texttt{\#\# Related Prior Context},
+    \texttt{\#\# Stage Summaries}).
+
+  \item \textbf{FlashRank reranking} (optional).  Client-side
+    cross-encoder reranking on the combined candidate set.
+
+  \item \textbf{Prompt assembly} (if reader downstream).  The
+    ContextDecomposer fits the structured context into the model's
+    context window with priority budgeting.
+\end{enumerate}
+
+For retrieval evaluation (BEAM benchmark), steps 7--8 are bypassed:
+the metric is the rank of the gold memory within the
+\texttt{selected\_memories} list produced by step~6.
+
+\subsection{Active Retrieval (Query Reformulation)}
+\label{sec:active-retrieval}
+
+Following MIRIX \citep{Wang2025}, we provide an optional active
+retrieval layer that reformulates the query before it enters the WRRF
+pipeline.  Two implementations are available:
+
+\paragraph{KeywordExtractor} (rule-based).
+Strips question words and filler, preserves quoted strings, dates,
+capitalized words (likely proper nouns), and words of length $\geq 4$.
+Zero latency, deterministic, no model required.
+
+\paragraph{LLMReformulator} (model-based).
+Rewrites the query using a small local model.  Gated by model
+availability.
+
+In the experiments reported here, active retrieval is \emph{not}
+enabled.  Both WRRF and assembler conditions receive the raw query.
+We include the component in the architecture description because the
+interface is defined and wired; ablation against query reformulation
+is planned for future work.
+
+%----------------------------------------------------------------------
+\section{Experimental Setup}
+\label{sec:experiments}
+
+\subsection{Benchmark: BEAM}
+\label{sec:beam}
+
+BEAM (Beyond a Million Tokens; \citealt{Tavakoli2026}) is a long-term
+memory benchmark comprising 10 synthetic conversations generated by
+GPT-4, each available at two scales:
+
+\begin{itemize}
+  \item \textbf{BEAM-100K}: $\sim$94 memories per conversation,
+    $\sim$100K tokens total.  Each conversation spans 5 plans
+    (stages), with each plan containing approximately 19 turns.
+
+  \item \textbf{BEAM-10M}: $\sim$7,500 memories per conversation,
+    $\sim$10M tokens total.  Each conversation spans 50 plans
+    (stages), with each plan containing approximately 150 turns.
+\end{itemize}
+
+Each conversation is probed with 20 questions (196 total at 10M due
+to 4 missing summarization questions in some conversations) spanning
+10 memory abilities:
+
+\begin{table}[h]
+\centering
+\caption{BEAM memory abilities.}
+\label{tab:beam-abilities}
+\small
+\begin{tabular}{llc}
+\toprule
+Ability & What It Tests & Count (10M) \\
+\midrule
+Abstention & Declining when no relevant memory exists & 20 \\
+Contradiction resolution & Surfacing conflicting user statements & 20 \\
+Event ordering & Sequencing events chronologically & 20 \\
+Info extraction & Retrieving specific stated facts & 20 \\
+Instruction following & Adhering to user interaction preferences & 20 \\
+Knowledge update & Surfacing latest version of updated fact & 20 \\
+Multi-session reasoning & Synthesizing evidence across sessions & 20 \\
+Preference following & Tracking evolving user preferences & 20 \\
+Summarization & Producing broad summaries across sessions & 16 \\
+Temporal reasoning & Answering ``when'' questions about events & 20 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+BEAM is notable for including three abilities that no prior benchmark
+tests: contradiction resolution, event ordering, and instruction
+following.  These abilities specifically stress multi-session memory
+management---the regime where our architecture is designed to help.
+
+\subsection{Baselines}
+\label{sec:baselines}
+
+\paragraph{WRRF baseline.}
+Cortex's production pipeline without the assembler: 5-signal
+server-side fusion + FlashRank client-side reranking.  This is a
+strong baseline: 97.8\% R@10 on LongMemEval, 92.6\% R@10 on LoCoMo,
+and 0.591 MRR on BEAM-100K.
+
+\paragraph{LIGHT} \citep{Tavakoli2026}.
+The strongest published system on BEAM, achieving 0.266 overall on
+BEAM-10M with Llama-4-Maverick (170B parameters).  LIGHT scores are
+end-to-end QA (LLM-as-judge nugget scoring), not retrieval MRR.  We
+include LIGHT scores for directional reference but emphasize that
+direct comparison is not valid: LIGHT's score reflects both retrieval
+quality \emph{and} reader quality, while our MRR is retrieval-only.
+
+\subsection{Implementation Details}
+\label{sec:impl-details}
+
+\begin{table}[h]
+\centering
+\caption{Implementation specification.}
+\label{tab:impl}
+\small
+\begin{tabular}{ll}
+\toprule
+Component & Specification \\
+\midrule
+Embedding model & all-MiniLM-L6-v2 (384D, 256 max tokens) \\
+Database & PostgreSQL 17.4 + pgvector 0.8.0 \\
+ & (HNSW: $m$=16, ef\_construction=200, ef\_search=200) \\
+Index & pg\_trgm for trigram similarity \\
+Reranker & FlashRank v0.4.3 (ONNX, ms-marco-MiniLM-L-12-v2) \\
+Entity extraction & Rule-based NER \\
+PPR parameters & $\alpha$=0.15, max\_iters=30, tol=$10^{-4}$ \\
+Submodular selection & $\lambda$=0.5, max\_chunks=5, oversample=3$\times$ \\
+Stage detection & ExplicitStageDetector (field=plan\_id) \\
+Token estimator & Conservative chars/3 heuristic \\
+Hardware & Apple M1 Max, 64GB RAM, PostgreSQL on localhost \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both WRRF and assembler conditions use the identical embedding model,
+database, reranker, and entity extraction.  The only difference is
+whether the assembled results are stage-scoped and
+submodular-selected (assembler) or flat and top-$k$-selected (WRRF).
+
+\subsection{Measurement Protocol}
+\label{sec:measurement}
+
+\paragraph{Metric: retrieval-proxy MRR.}
+We measure the Mean Reciprocal Rank of the first retrieved memory
+whose content substring-matches the gold source turn or answer text.
+Formally, for a question $q$ with gold source text $g$, and a ranked
+list of retrieved memories $[m_1, m_2, \ldots, m_k]$:
+\begin{equation}
+\text{RR}(q) =
+\begin{cases}
+1/\text{rank}(m^*) & \text{if } \exists\, m^* : g \subseteq m^*.\text{content} \\
+0 & \text{otherwise}
+\end{cases}
+\label{eq:rr}
+\end{equation}
+\begin{equation}
+\text{MRR} = \frac{1}{|Q|} \sum_{q \in Q} \text{RR}(q)
+\label{eq:mrr}
+\end{equation}
+
+This is \emph{not} the BEAM paper's metric.  The paper uses
+LLM-as-judge nugget scoring for end-to-end QA quality, which evaluates
+whether the reader model's answer contains the key information nuggets.
+Our retrieval-proxy MRR evaluates whether the retrieved context
+contains the gold source---a necessary but not sufficient condition
+for good answers.  Both WRRF and assembler are measured with the
+identical harness, so relative comparisons are valid.
+
+\paragraph{Database isolation.}
+Fresh \texttt{cortex\_bench} database per benchmark run.  Between
+conversations within a run, all data tables are truncated
+(\texttt{TRUNCATE memories, entities, relationships, entity\_memory CASCADE}),
+ensuring zero cross-conversation contamination.
+
+\paragraph{BEAM-10M turn ID fix.}
+Turn IDs in the raw BEAM-10M dataset are plan-relative: each plan
+restarts turn numbering from 0.  Gold annotations reference turns by
+their global index across all plans.  We apply cumulative plan offsets
+to produce globally unique IDs.  Without this fix, gold memory
+matching fails entirely (0\% hit rate).  This data issue is not
+documented in the BEAM paper.  See commit \texttt{5348f74}.
+
+\paragraph{FlashRank preflight verification.}
+Before each benchmark run, the harness verifies FlashRank by reranking
+a synthetic pair and asserting non-zero scores.  This catches a
+failure mode discovered during development: FlashRank occasionally
+fails to load its ONNX model and returns 0.0 scores for all
+candidates without raising an exception, producing random rankings.
+
+\paragraph{Variance characterization.}
+Results are deterministic within $\pm 0.01$ MRR across runs with
+PostgreSQL restart between runs.  Sources of variance: the embedding
+model is deterministic on CPU; HNSW search with ef\_search=200
+produces exact results in practice for our corpus sizes; PPR
+convergence is deterministic (power iteration with fixed seed);
+submodular selection is deterministic (greedy, no randomization).
+
+%----------------------------------------------------------------------
+\section{Results}
+\label{sec:results}
+
+\subsection{BEAM-100K (5 Conversations, Same-Conversation A/B)}
+\label{sec:results-100k}
+
+\begin{table}[t]
+\centering
+\caption{BEAM-100K results (5 conversations, same-conversation A/B).
+  $\Delta$ = Assembler $-$ WRRF.}
+\label{tab:100k}
+\begin{tabular}{lccc}
+\toprule
+Ability & WRRF & Assembler & $\Delta$ \\
+\midrule
+temporal\_reasoning & 0.950 & 0.920 & $-0.030$ \\
+knowledge\_update & 0.900 & 0.900 & $0.000$ \\
+contradiction\_resolution & 0.817 & 0.783 & $-0.034$ \\
+multi\_session\_reasoning & 0.812 & 0.500 & $\mathbf{-0.312}$ \\
+event\_ordering & 0.380 & 0.525 & $\mathbf{+0.145}$ \\
+info\_extraction & --- & 0.700 & $\mathbf{+0.157}$ \\
+instruction\_following & 0.448 & 0.478 & $+0.030$ \\
+preference\_following & 0.442 & 0.442 & $0.000$ \\
+abstention & 0.400 & 0.400 & $0.000$ \\
+summarization & 0.271 & 0.370 & $+0.099$ \\
+\midrule
+\textbf{Overall MRR} & \textbf{0.591} & \textbf{0.602} & $\mathbf{+0.011}$ \textbf{(+1.9\%)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At 100K scale (94 memories per conversation, 5 plans per
+conversation), the assembler is \textbf{net-flat}.  The overall
+improvement of +0.011 MRR (+1.9\%) is within noise.  Individual
+ability-level patterns are worth examining:
+
+\paragraph{Multi-session reasoning: $-0.312$.}
+The sharpest regression and the most informative data point.  At 94
+memories, flat WRRF over the entire corpus reaches cross-session
+evidence easily---the embedding space is sparse enough for
+nearest-neighbor search to discriminate.  Stage-scoping restricts
+Phase~1 to the current stage's $\sim$19 memories, missing evidence
+from other stages.  Phase~2 PPR can partially recover this, but the
+overhead of the two-phase process loses more than it gains at this
+scale.
+
+\paragraph{Event ordering: $+0.145$.}
+Submodular selection helps here by avoiding the redundancy problem:
+chronological ordering questions need memories from \emph{different}
+time points, and submodular diversity naturally selects temporally
+diverse memories over topically similar ones.
+
+\paragraph{Info extraction: $+0.157$.}
+Specific-fact questions benefit from stage-scoped retrieval: the
+relevant fact is usually within the current stage, and submodular
+selection avoids drowning it in paraphrases.
+
+\paragraph{Summarization: $+0.099$.}
+A surprising positive at 100K.  We attribute this to submodular
+diversity: summarization questions benefit from broad coverage, and
+submodular selection covers more aspects of the stage than naive
+top-$k$.
+
+\subsection{BEAM-10M (10 Conversations, Full Benchmark)}
+\label{sec:results-10m}
+
+\begin{table}[t]
+\centering
+\caption{BEAM-10M results (10 conversations, full benchmark).
+  $\Delta$ = Assembler $-$ WRRF.  LIGHT scores are end-to-end QA
+  (LLM-as-judge, Llama-4-Maverick); not comparable to retrieval MRR.
+  Shown for directional reference only.}
+\label{tab:10m}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Ability & WRRF & Assembler & $\Delta$ & R@5 & R@10 & LIGHT$^*$ \\
+\midrule
+knowledge\_update & 0.835 & \textbf{0.892} & $+0.057$ & 100\% & 100\% & 0.375 \\
+contradiction\_res. & 0.633 & \textbf{0.725} & $+0.092$ & 90\% & 90\% & 0.050 \\
+multi\_session\_reas. & 0.415 & \textbf{0.543} & $+0.128$ & 80\% & 80\% & 0.000 \\
+info\_extraction & 0.448 & \textbf{0.487} & $+0.039$ & 70\% & 70\% & --- \\
+preference\_follow. & 0.412 & \textbf{0.481} & $+0.069$ & 65\% & 65\% & 0.483 \\
+temporal\_reasoning & 0.370 & \textbf{0.467} & $+0.097$ & 50\% & 50\% & 0.075 \\
+abstention & 0.100 & \textbf{0.350} & $+0.250$ & 35\% & 35\% & 0.750 \\
+instruction\_follow. & 0.068 & \textbf{0.125} & $+0.057$ & 15\% & 15\% & 0.500 \\
+event\_ordering & 0.067 & 0.067 & $0.000$ & 10\% & 10\% & 0.266 \\
+summarization & 0.186 & 0.150 & $-0.036$ & 22\% & 22\% & 0.277 \\
+\midrule
+\textbf{Overall MRR} & \textbf{0.353} & \textbf{0.429} & $\mathbf{+0.076}$ \textbf{(+21.5\%)} & & & 0.266$^*$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At 10M scale (7,500 memories per conversation, 50 plans per
+conversation), \textbf{8 of 10 categories improve, 1 is unchanged,
+and 1 regresses}.  We analyze each category:
+
+\paragraph{Abstention: $+0.250$ (the largest gain).}
+When the assembler's stage-scoped retrieval returns no relevant
+memories within the current stage, the absence itself is informative.
+Flat WRRF always returns \emph{something} from 7,500
+candidates---typically hub memories that are generically similar to
+everything.  These false positives make abstention decisions
+impossible.  The assembler's stage-scoping effectively creates a
+``null result'' signal that WRRF cannot produce.
+
+\paragraph{Multi-session reasoning: $+0.128$ (the critical validation).}
+This category \emph{regressed} at 100K ($-0.312$) but \emph{improves}
+at 10M ($+0.128$).  The sign flip is the strongest evidence for the
+scale-dependent thesis.  At 7,500 memories, flat WRRF cannot reach
+cross-session evidence through embedding similarity alone (the
+geometric ceiling of Section~\ref{sec:scaling-failure}).  Phase~2's
+PPR traversal follows entity connections to memories in other stages
+that share specific entities---project names, API endpoints, error
+codes, people's names---with the current stage's content.
+
+\paragraph{Temporal reasoning: $+0.097$.}
+Stage boundaries provide implicit temporal structure.  A memory's
+stage ID encodes ``when'' information (which plan/session it belongs
+to), supplementing the explicit timestamp that WRRF already uses.
+
+\paragraph{Contradiction resolution: $+0.092$.}
+Stage-scoped retrieval naturally isolates contradicting statements
+that occur in different stages.  Flat WRRF tends to surface the more
+recent (and more frequently accessed) version of a contradicted fact.
+The assembler's Phase~2 can surface both the original statement (in
+a distant stage) and the contradiction (in a recent stage) through
+entity connections.
+
+\paragraph{Knowledge update: $+0.057$.}
+WRRF is already strong here (0.835) because Cortex's thermodynamic
+heat naturally surfaces the newest version of a fact.
+
+\paragraph{Event ordering: $0.000$.}
+No change.  Chronological sequencing requires explicit temporal
+reasoning (ordering by timestamp), which neither retrieval
+architecture provides.
+
+\paragraph{Summarization: $-0.036$.}
+The only regression.  Summarization questions require broad coverage
+across many stages.  Stage-scoped retrieval focuses depth within a
+stage at the cost of breadth.  Phase~3 is designed to address this
+but is currently a stub.
+
+\subsection{Scale-Dependent Behavior}
+\label{sec:scale-dependent}
+
+The central finding is that structured assembly is \textbf{net-flat at
+small scale and dominates at large scale}.  We can characterize this
+more precisely.
+
+At 100K tokens, the embedding space density is:
+\begin{equation}
+\rho_{100K} = n/d = 94/384 \approx 0.24
+\label{eq:rho-100k}
+\end{equation}
+
+At 10M tokens:
+\begin{equation}
+\rho_{10M} = n/d = 7500/384 \approx 19.5
+\label{eq:rho-10m}
+\end{equation}
+
+The hubness phenomenon \citep{Radovanovic2010} becomes significant
+when $\rho \gg 1$.  At $\rho = 0.24$, the embedding space is
+underpopulated; nearest-neighbor search is reliable.  At
+$\rho = 19.5$, the space is overcrowded; hubness, distance
+concentration, and the JL lower bound all contribute to retrieval
+degradation.
+
+The crossover point---where structured assembly's benefit exceeds its
+overhead---lies somewhere in the range $1 < \rho < 19.5$,
+corresponding to roughly 400--7,500 memories in 384 dimensions, or
+approximately 400K to 10M tokens of conversation.  We did not evaluate
+at intermediate scales, but we conjecture that the benefit increases
+monotonically with $\rho$.
+
+\subsection{Phase Contribution Analysis (Ablation)}
+\label{sec:ablation}
+
+We conducted ablation experiments on BEAM-100K (5 conversations) to
+isolate the contribution of individual mechanisms.  Each ablation
+removes one mechanism while holding all others constant.
+
+\begin{table}[t]
+\centering
+\caption{Ablation results on BEAM-100K (overall MRR).}
+\label{tab:ablation-overall}
+\begin{tabular}{lcc}
+\toprule
+Configuration & Overall MRR & $\Delta$ vs WRRF \\
+\midrule
+WRRF baseline (no assembler) & 0.591 & --- \\
+Assembler, no submodular (naive top-$k$) & 0.512 & $-0.079$ \\
+Assembler, Phase~1 only (sub., no PPR) & 0.513 & $-0.078$ \\
+Assembler, Phase~1 + Phase~2 (sub.\ + PPR) & 0.602 & $+0.011$ \\
+Full assembler (Ph.\ 1 + 2, Ph.\ 3 stub) & 0.602 & $+0.011$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Detailed per-ability ablation on BEAM-100K (5 conversations).}
+\label{tab:ablation-detail}
+\small
+\begin{tabular}{lccccc}
+\toprule
+Ability & WRRF & No Sub. & Ph1 & Ph1+2 & Full \\
+\midrule
+knowledge\_update & 0.850 & 0.850 & 0.850 & 0.900 & 0.900 \\
+temporal\_reasoning & 0.950 & 0.900 & 0.900 & 0.920 & 0.920 \\
+contradiction\_res. & 0.817 & 0.600 & 0.650 & 0.783 & 0.783 \\
+multi\_session\_reas. & 0.812 & 0.500 & 0.500 & 0.500 & 0.500 \\
+event\_ordering & 0.380 & 0.333 & 0.400 & 0.525 & 0.525 \\
+instruction\_follow. & 0.448 & 0.283 & 0.233 & 0.478 & 0.478 \\
+preference\_follow. & 0.442 & 0.300 & 0.250 & 0.442 & 0.442 \\
+abstention & 0.400 & 0.400 & 0.400 & 0.400 & 0.400 \\
+summarization & 0.271 & 0.250 & 0.250 & 0.370 & 0.370 \\
+\midrule
+\textbf{Overall} & \textbf{0.591} & \textbf{0.512} & \textbf{0.513} & \textbf{0.602} & \textbf{0.602} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Key findings:
+
+\paragraph{Submodular selection is essential.}
+Without it, the assembler \emph{hurts} performance ($-0.079$ vs.\
+WRRF).  Stage-scoping reduces the candidate pool from 94 to $\sim$19
+memories (one stage), and naive top-$k$ within that smaller pool
+selects redundant memories.  Stage-scoped retrieval without submodular
+selection is worse than no assembler at all.
+
+\paragraph{Phase~2 PPR has marginal effect at 100K.}
+The ``Phase~1 only'' (0.513) and ``Phase~1+2'' (0.602) configurations
+differ, but the improvement is primarily attributable to the
+interaction between PPR entity bridging and submodular selection
+rather than PPR alone.
+
+\paragraph{The value is compositional.}
+No single mechanism accounts for the improvement.  The architecture
+requires all three ingredients: stage-scoping (to create the
+partition), submodular selection (to exploit the partition), and PPR
+bridging (to overcome the partition's limitations).  Removing any one
+piece degrades the whole.
+
+\paragraph{BEAM-10M ablation.}
+We did not run the full ablation at 10M due to computational cost
+($\sim$7 hours per configuration, 4 configurations = 28 hours).
+Based on the 100K results and the scale-dependent analysis, we expect
+Phase~2's contribution to be larger at 10M.
+
+%----------------------------------------------------------------------
+\section{Analysis}
+\label{sec:analysis}
+
+\subsection{The Multi-Session Reasoning Sign Flip}
+\label{sec:sign-flip}
+
+The most striking result is that multi-session reasoning flips from
+$-0.312$ at 100K to $+0.128$ at 10M.  This warrants detailed
+examination.
+
+At 100K, the multi-session reasoning failure is instructive.  A
+typical BEAM multi-session question is: ``Based on our discussions
+across multiple plans, what is the user's overall approach to error
+handling?''  At 94 memories spread across 5 plans, flat WRRF over the
+entire corpus can easily surface memories from 3--4 different plans in
+the top-5.  The embedding space is sparse enough that memories from
+different plans about ``error handling'' are distinctly separated.
+
+Stage-scoping restricts Phase~1 to the current plan ($\sim$19
+memories), which by definition misses evidence from other plans.
+Phase~2 PPR can bridge to other plans via entity connections, but
+this requires (a)~that the relevant entities appear in both the
+current plan's memories and other plans' memories, and (b)~that the
+entity graph has sufficient connectivity.  At 100K with a small entity
+graph, these conditions are often not met.
+
+At 10M, the situation inverts.  The same ``error handling'' query now
+competes with 7,500 memories, many of which discuss error handling
+tangentially.  Flat WRRF's top-5 is dominated by hub memories---the
+most generic error-handling discussions that have high average
+similarity to everything.  The specific multi-plan evidence is buried
+below rank~20.
+
+Phase~1 retrieves from the current plan's $\sim$150 memories, and
+submodular selection ensures diverse coverage of error-handling
+subtopics within that plan.  Phase~2 seeds PPR on the entities from
+Phase~1 results---specific error codes, API names, library
+names---and follows connections to memories in other plans that mention
+the same entities.  These entity connections are structural
+(co-occurrence in the knowledge graph) rather than geometric
+(embedding similarity), so they are immune to the hubness and
+concentration problems that defeat flat retrieval.
+
+The implication is clear: \textbf{stage-aware retrieval should be
+gated by corpus density}.  At $\rho < 1$, use flat retrieval.  At
+$\rho > 1$, enable the assembler.
+
+\subsection{The Summarization Trade-Off}
+\label{sec:summarization-tradeoff}
+
+Summarization is the only category that regresses at 10M ($-0.036$).
+This is a genuine trade-off inherent in stage-scoped retrieval, not a
+bug.
+
+Summarization questions require broad coverage: ``Summarize the
+user's main interests across all conversations.''  The gold answer
+draws from memories across many plans.  Stage-scoped retrieval
+concentrates resources on one stage (Phase~1) and its immediate
+entity neighbors (Phase~2), systematically missing distant stages
+that contain relevant summarization evidence.
+
+Phase~3 is designed to address this.  Schema-structured stage
+summaries would provide exactly the breadth that summarization
+questions need: one compressed summary per stage, covering the entire
+conversation at the cost of detail.  We predict that wiring Phase~3
+will eliminate the summarization regression.
+
+\subsection{Comparison with LIGHT}
+\label{sec:light-comparison}
+
+LIGHT achieves 0.266 overall on BEAM-10M.  We achieve 0.429 on
+retrieval-proxy MRR.  \textbf{These numbers are not directly
+comparable.}
+
+LIGHT's 0.266 is an end-to-end score: it reflects the reader model's
+ability to produce a correct answer \emph{given the retrieved
+context}.  Reader errors (hallucination, refusal, wrong extraction)
+lower the score even when retrieval is correct.  Our 0.429 is
+retrieval-only: it reflects whether the gold memory appears in the
+retrieved set, regardless of what a reader would do with it.
+
+A rough decomposition: if LIGHT's retrieval were perfect (MRR = 1.0),
+its end-to-end score would be bounded by the reader's accuracy on
+perfectly retrieved context.  LIGHT uses Llama-4-Maverick (170B
+parameters), which is strong but not perfect on 10-ability memory
+questions.  If we estimate the reader's accuracy at $\sim$50\%, then
+LIGHT's retrieval MRR might be around 0.53---in the same ballpark as
+our 0.429.  This is speculative arithmetic, not a rigorous comparison.
+
+Per-ability directional comparisons are more informative:
+
+\begin{table}[h]
+\centering
+\caption{Per-ability directional comparison with LIGHT.  Note that
+  LIGHT scores are end-to-end QA; our scores are retrieval MRR.}
+\label{tab:light-comparison}
+\small
+\begin{tabular}{lccc}
+\toprule
+Ability & Our Assembler & LIGHT & Who Benefits \\
+\midrule
+Abstention & 0.350 & 0.750 & LIGHT (LLM decides) \\
+Contradiction res. & 0.725 & 0.050 & Assembler \\
+Event ordering & 0.067 & 0.266 & LIGHT (scratchpad) \\
+Instruction follow. & 0.125 & 0.500 & LIGHT (LLM understands) \\
+Knowledge update & 0.892 & 0.375 & Assembler \\
+Multi-session reas. & 0.543 & 0.000 & Assembler \\
+Preference follow. & 0.481 & 0.483 & Tie \\
+Temporal reasoning & 0.467 & 0.075 & Assembler \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+LIGHT dominates on abilities that benefit from LLM reasoning at
+answer time (abstention, instruction following, event ordering).
+Our assembler dominates on abilities that require better retrieval
+(contradiction resolution, knowledge update, multi-session reasoning,
+temporal reasoning).  This suggests the two approaches are
+complementary: LIGHT's reader-side scratchpad + our retriever-side
+assembly could potentially outperform either alone.
+
+\subsection{Engineering Bugs Found During Development}
+\label{sec:bugs}
+
+We report three bugs discovered during implementation and
+benchmarking, for transparency and because they represent failure
+modes that other implementors may encounter.
+
+\paragraph{Bug 1: entity\_ids field not populated in retrieval results.}
+The initial Phase~2 implementation returned zero cross-stage results.
+Root cause: the memory dicts returned by the PostgreSQL retrieval
+query did not include the \texttt{entity\_ids} field (it was not in
+the SELECT clause).  Fix: adding a LEFT JOIN to the
+\texttt{entity\_memory} table and an \texttt{ARRAY\_AGG} of entity
+IDs to the SELECT clause.
+
+\paragraph{Bug 2: token budget constraining selection count.}
+The initial submodular selection enforced the token budget as a hard
+constraint: if a candidate's token count would exceed the remaining
+budget, it was skipped.  This caused the assembler to select 2--3
+items instead of 5.  Fix: decouple selection (by count) from budget
+enforcement (at assembly time).
+
+\paragraph{Bug 3: FlashRank silent failure.}
+FlashRank's ONNX model occasionally fails to load and returns 0.0
+scores for all candidates without raising an exception, producing
+random rankings for both conditions.  Fix: a preflight check before
+each benchmark run that reranks a synthetic pair and asserts non-zero
+scores.
+
+%----------------------------------------------------------------------
+\section{Provenance and Prior Art}
+\label{sec:provenance}
+
+\subsection{Motivation for Provenance Documentation}
+
+The structured context assembly architecture was designed before the
+BEAM benchmark existed.  Because we report results on BEAM that
+exceed previously published numbers (with the caveat that our metric
+differs), it is important to document the chronological relationship
+between the architecture's development and the benchmark's
+publication.  We do so with verifiable commit SHAs from public
+repositories.
+
+\subsection{Timeline}
+
+\begin{table}[t]
+\centering
+\caption{Development timeline with verifiable commit SHAs.}
+\label{tab:timeline}
+\small
+\begin{tabular}{llll}
+\toprule
+Date & Event & Repo & SHA \\
+\midrule
+2025-09-14 & Context-aware PRD generation & ai-prd-builder & \texttt{3ef6c3f} \\
+2025-09-25 & Modular arch.\ with cognitive modes & ai-prd-builder & \texttt{4f90564} \\
+\textbf{2025-09-30} & \textbf{ContextManager.swift} & ai-prd-builder & \texttt{462de01} \\
+2025-10-04 & Context-aware codebase interceptor & ai-prd-builder & \texttt{0743b0e} \\
+\textbf{2025-10-31} & \textbf{BEAM paper published} & arXiv & --- \\
+2025-07-10 & MIRIX published & arXiv & 2507.07957 \\
+2026-02-10 & Hierarchical chunking + compression & ai-prd-generator & \texttt{8bc58f1} \\
+2026-02-27 & ContextDecomposer & ai-architect* & \texttt{ba99681} \\
+2026-03-03 & StageAwareContextAssembler & ai-architect* & \texttt{d4e2eb2} \\
+2026-03-16 & Object-centric context decomposition & ai-architect* & \texttt{dc3c71d} \\
+2026-04-07 & Python port + BEAM integration & Cortex & \texttt{5348f74} \\
+\bottomrule
+\multicolumn{4}{l}{\footnotesize *ai-architect-prd-builder (private repository)} \\
+\end{tabular}
+\end{table}
+
+\subsection{The ContextManager.swift Origin}
+
+The \texttt{ContextManager.swift} module, committed on September 30,
+2025 in the public ai-prd-builder repository, implements the following
+features that directly ancestor the ContextDecomposer:
+
+\begin{itemize}
+  \item Per-section token-budgeted context assembly with
+    provider-specific limits (Apple Intelligence: 3,500 tokens,
+    OpenAI: model-dependent)
+  \item Slot-based budget splitting: 1/3 core request + 1/4
+    clarifications + 1/6 tech stack, with the remaining budget
+    distributed to lower-priority sections
+  \item Section-keyword relevance filtering: only sections whose
+    keywords match the current task are included
+  \item Truncation awareness: the model is told which sections were
+    reduced and by how much
+\end{itemize}
+
+The key design principle---``don't try to fit everything; structure
+what goes in, prioritize it, and tell the model what was cut''---was
+formulated for generating coherent 9-page PRDs on Apple Intelligence's
+4,096-token context window.
+
+\subsection{Evolution to Cortex}
+
+The architecture evolved through three codebases:
+
+\begin{enumerate}
+  \item \textbf{ai-prd-builder} (September 2025): ContextManager with
+    fixed-section budget splitting.  Public repository.
+
+  \item \textbf{ai-architect-prd-builder} (February--March 2026):
+    ContextDecomposer with priority-driven progressive condensation,
+    domain-aware condensers, and truncation warning injection.
+    StageAwareContextAssembler with three-phase 60/30/10 retrieval.
+    Private repository.
+
+  \item \textbf{Cortex} (April 2026): Python port adapted for
+    Cortex's PostgreSQL-backed memory system, complemented with
+    paper-backed mechanisms (HippoRAG PPR formulation, Krause \&
+    Guestrin submodular guarantee).  Public repository.
+\end{enumerate}
+
+\subsection{Relationship to Published Systems}
+
+The full combination has no published precedent in the 2024--2026
+literature we surveyed across six research areas: computational
+neuroscience, mathematics (submodularity, dimensionality reduction),
+AI systems (RAG, long-context, agent memory), PhD theses on
+computational memory models, vector database engineering, and
+information theory.
+
+The individual building blocks each have strong paper backing:
+
+\begin{table}[h]
+\centering
+\caption{Paper backing for individual components.}
+\label{tab:paper-backing}
+\begin{tabular}{lll}
+\toprule
+Component & Paper & Year \\
+\midrule
+Submodular coverage & Krause \& Guestrin, JMLR & 2008 \\
+MMR diversity & Carbonell \& Goldstein, SIGIR & 1998 \\
+Personalized PageRank & Brin \& Page / Gutierrez et al. & 1998/2024 \\
+Schema-structured summaries & Tse et al., Science & 2007 \\
+Active retrieval & Wang \& Chen (MIRIX) & 2025 \\
+RRF fusion & Cormack et al. & 2009 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The contribution is the composition: the specific way these pieces
+are combined into a two-primitive architecture that manages both
+retrieval composition (StageAwareContextAssembler) and prompt-level
+budgeting (ContextDecomposer).
+
+%----------------------------------------------------------------------
+\section{Limitations and Future Work}
+\label{sec:limitations}
+
+\subsection{Summarization Regression}
+
+Summarization regresses at 10M scale ($-0.036$).  Stage-scoped
+retrieval focuses depth at the cost of breadth.  Phase~3 (summary
+fallback) is designed to address this but is currently a stub.
+Wiring it to Cortex's CLS consolidation engine is the immediate next
+step.  We predict elimination of the regression but have not verified
+experimentally.
+
+\subsection{Event Ordering Stagnation}
+
+Event ordering scores 0.067 for both conditions---effectively random.
+This ability requires precise chronological sequencing across
+sessions, which is a temporal reasoning problem rather than a
+retrieval problem.
+
+\subsection{Entity Extraction Quality}
+
+Entity extraction is rule-based: capitalized multi-word phrases,
+quoted strings, technical terms with camelCase or snake\_case
+patterns.  On BEAM's synthetic conversations (clear entity mentions,
+consistent naming), this works adequately.  On real-world
+conversational data with informal phrasing (``that Redis thing from
+last week''), abbreviations (``the auth bug''), and implicit
+references (``the same approach''), extraction quality would degrade
+significantly.  Upgrading to a lightweight NER model (SpaCy,
+fine-tuned token classifier) or LLM-based extraction is a natural
+improvement.
+
+\subsection{Latency Overhead}
+
+\begin{table}[h]
+\centering
+\caption{Latency comparison (BEAM-10M).}
+\label{tab:latency}
+\begin{tabular}{lccc}
+\toprule
+Operation & WRRF & Assembler & Overhead \\
+\midrule
+Per-conversation (10M) & 307s & 733s & 2.4$\times$ \\
+Per-query (10M) & $\sim$15s & $\sim$37s & 2.4$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The overhead comes from per-query entity extraction from Phase~1
+results, PPR graph construction and iteration, and submodular
+selection's $O(nk)$ greedy loop.  Optimizations available but not
+implemented include PPR precomputation, batched graph queries, and
+lazy greedy acceleration \citep{Minoux1978}.
+
+\subsection{End-to-End QA Evaluation}
+
+All results are retrieval-proxy MRR.  We have not evaluated whether
+improved retrieval translates to improved answer quality when a reader
+model consumes the assembled context.  An LLM-as-judge evaluation
+using BEAM's nugget scoring protocol would enable direct comparison
+with LIGHT and other published systems.
+
+\subsection{Budget Split Optimization}
+
+The 60/30/10 split is a design heuristic inherited from the Swift PRD
+generator, not an optimized parameter.  Systematic optimization (\eg,
+Bayesian optimization over $(\beta_1, \beta_2, \beta_3)$ with
+BEAM-10M MRR as the objective) could improve results.
+
+\subsection{Stage Detection for Free-Form Conversations}
+
+Our experiments use ground-truth plan IDs from BEAM.  Production
+deployment requires robust stage detection without explicit labels.
+The TemporalStageDetector (4-hour gap threshold) is reasonable but
+untested on BEAM.
+
+\subsection{Larger Embedding Models}
+
+Our experiments use all-MiniLM-L6-v2 (384D).  The JL lower bound
+analysis suggests that 768D or 1024D embeddings could push the
+geometric ceiling higher, reducing the need for structured assembly.
+An important open question: does the assembly architecture remain
+beneficial with state-of-the-art 1024D models (\eg, E5-Mistral,
+NV-Embed-2), or does the improved embedding space make flat retrieval
+sufficient even at 10M tokens?
+
+\subsection{Generalization Beyond Conversational Memory}
+
+The architecture was designed for and tested on conversational memory.
+Whether it generalizes to other long-context retrieval
+problems---legal document search, medical record retrieval, codebase
+navigation---is unknown.  The stage-detection mechanism is generic
+(any partitioning of the corpus), but the specific condensers and
+entity extraction are tuned for conversation.
+
+%----------------------------------------------------------------------
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented a structured context assembly architecture for long-term
+memory retrieval that addresses the fundamental scaling limitation of
+dense vector retrieval: at sufficient corpus density, embedding-based
+nearest-neighbor search cannot discriminate relevant from irrelevant
+memories because the geometric structure of the embedding space
+degenerates.
+
+The architecture introduces two composable primitives.  The
+\textbf{ContextDecomposer} manages prompt-level budgeting with typed
+priority slots, domain-aware condensers, and an explicit truncation
+warning mechanism that communicates assembly decisions to the reader
+model---a mechanism with no published precedent in the retrieval or
+prompt engineering literature.  The \textbf{StageAwareContextAssembler}
+manages retrieval-level composition through three phases: own-stage
+retrieval with submodular diversity \citep{Krause2008}, cross-stage
+bridging via Personalized PageRank over the entity graph
+\citep{Gutierrez2024}, and summary fallback for uncovered stages
+\citep{Tse2007}.
+
+The empirical results on BEAM validate the scale-dependent thesis:
+the architecture is net-flat at 100K tokens ($+1.9\%$, within noise)
+and provides a $+21.5\%$ improvement at 10M tokens, with 8 of 10
+memory abilities improving.  The multi-session reasoning sign flip
+(from $-0.312$ at 100K to $+0.128$ at 10M) is the strongest evidence
+that the benefit is genuinely scale-dependent rather than incidental.
+
+The architecture does not introduce novel retrieval primitives.
+Every building block has strong paper backing.  The contribution is
+the composition: priority budgeting, stage-aware three-phase assembly,
+domain-aware condensation, and model-facing truncation awareness,
+combined into a system that manages context at a level of abstraction
+above individual retrieval signals.
+
+The insight that motivated this work---that at scale, \emph{what}
+enters context matters more than \emph{how well} individual items are
+retrieved---emerged from a practical constraint: generating coherent
+documents on a 4,096-token context window.  That the same
+architectural principle applies to 10-million-token memory retrieval
+suggests it may be general: whenever the available context is smaller
+than the relevant information, structured assembly outperforms flat
+ranking.
+
+The crossover point between flat retrieval and structured assembly is
+empirically located between 100K and 10M tokens for 384D embeddings.
+As embedding models improve and context windows grow, this crossover
+point will shift---but the fundamental principle will remain: there
+will always be a scale at which the relevant information exceeds the
+available context, and at that scale, structured assembly will
+dominate.
+
+%----------------------------------------------------------------------
+\section*{Acknowledgments}
+
+The Python port, benchmark integration, and paper-backed complements
+were implemented with Claude Opus 4.6 (Anthropic).
+
+%----------------------------------------------------------------------
+\appendix
+
+\section{Reproducing the Experiments}
+\label{app:reproducing}
+
+\subsection{Prerequisites}
+
+PostgreSQL 17+ with pgvector and pg\_trgm extensions, Python 3.10+,
+and Cortex installed from source:
+
+\begin{verbatim}
+git clone https://github.com/cdeust/Cortex.git
+cd Cortex
+pip install -e ".[postgresql,benchmarks]"
+\end{verbatim}
+
+\subsection{Running Benchmarks}
+
+\begin{verbatim}
+# BEAM-100K baseline (WRRF only)
+DATABASE_URL="postgresql://localhost:5432/cortex_bench" \
+  python benchmarks/beam/run_benchmark.py --split 100K
+
+# BEAM-10M baseline (WRRF only)
+DATABASE_URL="postgresql://localhost:5432/cortex_bench" \
+  python benchmarks/beam/run_benchmark.py --split 10M
+
+# BEAM-10M with structured context assembly
+CORTEX_USE_ASSEMBLER=1 \
+DATABASE_URL="postgresql://localhost:5432/cortex_bench" \
+  python benchmarks/beam/run_benchmark.py --split 10M
+
+# BEAM-100K with structured context assembly
+CORTEX_USE_ASSEMBLER=1 \
+DATABASE_URL="postgresql://localhost:5432/cortex_bench" \
+  python benchmarks/beam/run_benchmark.py --split 100K
+\end{verbatim}
+
+\subsection{Expected Runtimes}
+
+\begin{table}[h]
+\centering
+\caption{Expected benchmark runtimes.}
+\label{tab:runtimes}
+\begin{tabular}{lccc}
+\toprule
+Configuration & Conversations & Time/Conv & Total \\
+\midrule
+BEAM-100K WRRF & 5 & $\sim$32s & $\sim$2.5 min \\
+BEAM-100K Assembler & 5 & $\sim$293s & $\sim$24 min \\
+BEAM-10M WRRF & 10 & $\sim$307s & $\sim$51 min \\
+BEAM-10M Assembler & 10 & $\sim$733s & $\sim$122 min \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Database Protocol}
+
+The benchmark harness creates a fresh \texttt{cortex\_bench} database
+per run.  Between conversations within a run, all data tables are
+truncated:
+
+\begin{verbatim}
+TRUNCATE memories, entities, relationships,
+  entity_memory CASCADE;
+\end{verbatim}
+
+This ensures zero cross-conversation contamination.  The TRUNCATE
+approach (vs.\ DROP/CREATE) preserves the schema, extensions, and
+stored procedures, reducing per-conversation setup time.
+
+\subsection{Variance Script}
+
+The full variance analysis is run via:
+
+\begin{verbatim}
+bash benchmarks/beam/variance/bench_variance.sh
+\end{verbatim}
+
+This script runs each configuration 3 times, with PostgreSQL restart
+between runs, and reports mean and standard deviation of MRR.
+Observed variance: $\pm 0.01$ MRR.
+
+%----------------------------------------------------------------------
+\section{Full Ablation Results}
+\label{app:ablation}
+
+\subsection{Per-Ability Ablation on BEAM-100K (5 Conversations)}
+
+See Table~\ref{tab:ablation-detail} in Section~\ref{sec:ablation} for
+the full per-ability breakdown.
+
+\subsection{Configuration Descriptions}
+
+\begin{itemize}
+  \item \textbf{WRRF}: flat retrieval over the entire corpus, no
+    assembler.  Standard top-$k$ selection after WRRF fusion +
+    FlashRank reranking.
+
+  \item \textbf{No Submod}: assembler enabled with stage-scoping, but
+    Phase~1 uses naive top-$k$ selection instead of submodular
+    coverage.  Isolates the effect of stage-scoping without diversity.
+
+  \item \textbf{Ph1 Only}: assembler with submodular coverage
+    selection in Phase~1, but Phase~2 (PPR traversal) disabled.
+
+  \item \textbf{Ph1+Ph2}: assembler with submodular coverage in
+    Phase~1 and PPR traversal in Phase~2.  Phase~3 is a stub.
+
+  \item \textbf{Full}: same as Ph1+Ph2 in the current implementation
+    (Phase~3 not yet wired to real summaries).
+\end{itemize}
+
+\subsection{Key Ablation Findings}
+
+\begin{enumerate}
+  \item \textbf{Stage-scoping without diversity hurts} ($-0.079$ vs.\
+    WRRF).  The No~Submod configuration reduces the candidate pool to
+    one stage's memories and then picks the top-$k$ by score, which
+    selects redundant memories.
+
+  \item \textbf{Submodular selection alone (Ph1 Only) is not
+    sufficient} ($-0.078$ vs.\ WRRF).  Without Phase~2 PPR bridging,
+    the assembler is limited to same-stage memories.
+
+  \item \textbf{The combination of submodular + PPR recovers and
+    slightly exceeds WRRF} ($+0.011$).  Neither mechanism alone helps
+    at 100K; together, they produce a marginal improvement.
+
+  \item \textbf{At 10M, we expect both effects to be amplified}, based
+    on the scale-dependent analysis in Section~\ref{sec:scale-dependent}.
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\section{Implementation Architecture}
+\label{app:implementation}
+
+\subsection{Module Structure}
+
+The context assembly module resides in
+\texttt{mcp\_server/core/context\_assembly/} within the Cortex
+codebase:
+
+\begin{table}[h]
+\centering
+\caption{Module structure of the context assembly implementation.}
+\label{tab:modules}
+\small
+\begin{tabular}{lrcl}
+\toprule
+Module & Lines & Purpose & Paper Backing \\
+\midrule
+\texttt{decomposer.py} & 195 & Priority-budgeted assembly & Novel \\
+\texttt{stage\_assembler.py} & 320 & Three-phase assembler & Novel composition \\
+\texttt{coverage.py} & 128 & Submodular selection (Ph1) & Krause \& Guestrin \\
+\texttt{ppr\_traversal.py} & 177 & PPR traversal (Ph2) & Gutierrez et al. \\
+\texttt{stage\_detector.py} & 196 & Pluggable stage detection & Novel interface \\
+\texttt{condensers.py} & 277 & Domain-aware condensers & Novel \\
+\texttt{budget.py} & 123 & Token estimation/allocation & Ported from Swift \\
+\texttt{warning.py} & 62 & Truncation warning banner & Novel \\
+\texttt{active\_retrieval.py} & 189 & Query reformulation & Wang \& Chen \\
+\bottomrule
+\multicolumn{4}{l}{\footnotesize Total: $\sim$1,667 lines of Python across 10 modules.} \\
+\end{tabular}
+\end{table}
+
+\subsection{Architectural Invariants}
+
+All modules are in the \texttt{core/} layer (pure business logic, zero
+I/O).  This is enforced by Cortex's clean architecture:
+\texttt{core/} modules import only from \texttt{shared/} and Python
+stdlib.  External dependencies (PostgreSQL queries, embedding
+generation, schema engine) are injected as callbacks at construction
+time.  Handlers (the composition root layer) wire \texttt{core/} to
+\texttt{infrastructure/} via dependency injection.
+
+This means the context assembly logic can be tested entirely in memory
+with mock callbacks, without a running database.  The test suite
+includes 47 tests covering all modules.
+
+\subsection{Callback Interface}
+
+The \texttt{StageAwareContextAssembler} receives five callbacks:
+
+\begin{itemize}
+  \item \texttt{retrieve\_fn(query, stage\_id, max\_results)}: Phase~1
+    retrieval.  Wired to the WRRF pipeline with a stage filter.
+  \item \texttt{entity\_graph\_fn()}: returns (entities,
+    relationships) for PPR.  Wired to PostgreSQL entity/relationship
+    queries.
+  \item \texttt{memories\_by\_entity\_fn(entity\_ids)}: returns
+    memories containing the given entities.  Wired to the
+    \texttt{entity\_memory} junction table.
+  \item \texttt{stage\_summary\_fn(stage\_id)}: returns a summary for
+    the given stage.  Currently a stub returning empty string.
+\end{itemize}
+
+This callback design ensures that the assembler is agnostic to the
+underlying storage and retrieval infrastructure.
+
+%----------------------------------------------------------------------
+\section{BEAM-100K Full Results (20 Conversations, WRRF Control)}
+\label{app:100k-full}
+
+For completeness, we include the full WRRF results on the BEAM-100K
+20-conversation split (all conversations, not just the 5 used for
+A/B comparison):
+
+\begin{table}[h]
+\centering
+\caption{BEAM-100K full WRRF results (20 conversations).}
+\label{tab:100k-full}
+\begin{tabular}{lcccc}
+\toprule
+Ability & MRR & R@5 & R@10 & Qs \\
+\midrule
+contradiction\_resolution & 0.729 & 90.0\% & 90.0\% & 40 \\
+temporal\_reasoning & 0.684 & 75.0\% & 80.0\% & 40 \\
+knowledge\_update & 0.735 & 87.5\% & 90.0\% & 40 \\
+multi\_session\_reasoning & 0.596 & 77.5\% & 80.0\% & 40 \\
+event\_ordering & 0.311 & 50.0\% & 62.5\% & 40 \\
+summarization & 0.315 & 44.4\% & 61.1\% & 36 \\
+preference\_following & 0.309 & 52.5\% & 60.0\% & 39 \\
+instruction\_following & 0.219 & 27.5\% & 42.5\% & 40 \\
+abstention & 0.125 & 12.5\% & 12.5\% & 40 \\
+\midrule
+\textbf{Overall} & \textbf{0.438} & --- & --- & 395 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This 20-conversation result (0.438 MRR) is lower than the
+5-conversation result (0.591 MRR), reflecting variance across
+conversations.  The 5 conversations selected for A/B comparison
+happen to be above-average in difficulty.
+
+%----------------------------------------------------------------------
+\section{Development Timeline and Intermediate Results}
+\label{app:dev-timeline}
+
+\subsection{Intermediate BEAM-10M Runs}
+
+During development, several intermediate assembler configurations
+were benchmarked on BEAM-10M:
+
+\begin{table}[h]
+\centering
+\caption{Intermediate BEAM-10M results during development.}
+\label{tab:intermediate}
+\begin{tabular}{lcp{5cm}}
+\toprule
+Configuration & MRR & Issue \\
+\midrule
+First run (entity\_ids bug) & 0.100 & Phase~2 returned 0 results \\
+After entity\_ids fix & 0.120 & Stage detection used local turn IDs \\
+After stage fix (final) & 0.429 & Correct stage assignment \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The jump from 0.120 to 0.429 upon fixing the stage detection confirms
+that correct stage assignment is critical to the architecture's
+performance.
+
+\subsection{Debugging the entity\_ids Bug}
+
+The initial Phase~2 implementation consistently returned zero
+cross-stage memories.  The debugging trace: (1)~PPR returned non-zero
+scores for entities, but \texttt{memories\_by\_entity\_fn} returned
+empty lists.  (2)~The retrieval query's SELECT clause did not include
+\texttt{entity\_ids}.  (3)~The field was populated at ingest time but
+not JOINed at retrieval time.  (4)~Fix: add LEFT JOIN and
+ARRAY\_AGG.
+
+\subsection{Debugging the Stage Detection Bug}
+
+BEAM-10M turn IDs are plan-relative (each plan restarts numbering
+from 0), but gold annotations reference global turn indices.  Without
+cumulative plan offsets, the stage detector assigned all memories to
+``plan-0.''  Fix: compute cumulative turn offsets per plan and apply
+before gold matching.
+
+%----------------------------------------------------------------------
+\section{Pseudocode for Core Algorithms}
+\label{app:pseudocode}
+
+\subsection{assemble\_prompt (ContextDecomposer)}
+
+\begin{algorithm}[H]
+\caption{ContextDecomposer prompt assembly}
+\label{alg:assemble-prompt}
+\begin{algorithmic}[1]
+\REQUIRE template, placeholders, context\_window, headroom
+\STATE budget $\leftarrow \lfloor$ context\_window $\times$ headroom $\rfloor$
+\STATE shell $\leftarrow$ substitute(template, $\{p.\text{key}: \text{``''} \mid p \in \text{placeholders}\}$)
+\STATE variable\_budget $\leftarrow \max(300, \text{budget} - \tau(\text{shell}))$
+
+\STATE \COMMENT{Fast path}
+\IF{$\sum_p \tau(p.\text{value}) \leq$ variable\_budget}
+  \RETURN fill\_template(template, placeholders)
+\ENDIF
+
+\STATE \COMMENT{Progressive condensation}
+\STATE sorted\_ph $\leftarrow$ sort(placeholders, by priority DESC)
+\STATE remaining $\leftarrow$ variable\_budget
+\STATE effective $\leftarrow \{\}$
+\FOR{$i, p$ \textbf{in} enumerate(sorted\_ph)}
+  \STATE not\_yet $\leftarrow |\text{sorted\_ph}| - i$
+  \STATE share $\leftarrow \max(50, \lfloor \text{remaining} / \max(1, \text{not\_yet}) \rfloor)$
+  \IF{$\tau(p.\text{value}) \leq$ share}
+    \STATE effective[$p.\text{key}$] $\leftarrow p.\text{value}$
+    \STATE remaining $\leftarrow$ remaining $- \tau(p.\text{value})$
+  \ELSE
+    \IF{$p.\text{condenser} \neq$ null}
+      \STATE reduced $\leftarrow p.\text{condenser}(p.\text{value}, \text{share})$
+    \ELSE
+      \STATE reduced $\leftarrow$ truncate(${p.\text{value}}$, share)
+    \ENDIF
+    \STATE effective[$p.\text{key}$] $\leftarrow$ reduced
+    \STATE remaining $\leftarrow$ remaining $- \min(\tau(\text{reduced}), \text{remaining})$
+  \ENDIF
+\ENDFOR
+
+\STATE \COMMENT{Post-assembly safety}
+\STATE prompt $\leftarrow$ fill\_template(template, effective)
+\WHILE{$\tau(\text{prompt}) >$ context\_window $-$ safety\_margin}
+  \STATE halve\_lowest\_priority(effective, sorted\_ph)
+  \STATE prompt $\leftarrow$ fill\_template(template, effective)
+\ENDWHILE
+
+\STATE \COMMENT{Truncation warning}
+\STATE banner $\leftarrow$ build\_truncation\_banner(original, final)
+\IF{banner $\neq$ ``''}
+  \STATE prompt $\leftarrow$ banner $+$ ``\textbackslash n\textbackslash n'' $+$ prompt
+\ENDIF
+\RETURN prompt
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{assemble (StageAwareContextAssembler)}
+
+\begin{algorithm}[H]
+\caption{StageAwareContextAssembler}
+\label{alg:assemble}
+\begin{algorithmic}[1]
+\REQUIRE query, current\_stage, budget\_split, max\_chunks
+\STATE \COMMENT{Phase 1: Own-stage}
+\STATE candidates $\leftarrow$ retrieve(query, current\_stage, max\_chunks $\times$ 3)
+\STATE phase1 $\leftarrow$ submodular\_select(candidates, max\_chunks, $\lambda = 0.5$)
+
+\STATE \COMMENT{Phase 2: Cross-stage via PPR}
+\STATE seed\_entities $\leftarrow$ extract\_entities(phase1)
+\STATE entities, relationships $\leftarrow$ entity\_graph()
+\STATE adjacency $\leftarrow$ build\_adjacency(entities, relationships)
+\STATE ppr $\leftarrow$ PPR(adjacency, seed\_entities, $\alpha = 0.15$)
+\STATE top\_entities $\leftarrow$ top\_$k$(ppr, 50)
+\STATE cross $\leftarrow$ memories\_by\_entities(top\_entities)
+\STATE cross $\leftarrow$ filter(cross, stage $\neq$ current\_stage)
+\STATE phase2 $\leftarrow$ score\_by\_ppr(cross, ppr)[:max\_chunks]
+
+\STATE \COMMENT{Phase 3: Summary fallback}
+\STATE covered $\leftarrow \{$current\_stage$\} \cup$ stages\_of(phase2)
+\STATE uncovered $\leftarrow$ all\_stages $-$ covered
+\STATE phase3 $\leftarrow$ [stage\_summary($s$) for $s$ in uncovered]
+
+\RETURN structured\_context(phase1, phase2, phase3)
+\end{algorithmic}
+\end{algorithm}
+
+%----------------------------------------------------------------------
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
