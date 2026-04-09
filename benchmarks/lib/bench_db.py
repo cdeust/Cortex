@@ -16,6 +16,7 @@ import os
 from typing import Any
 
 from mcp_server.core.memory_ingest import ingest_memories_batch
+from mcp_server.core.pg_recall import assemble_context as pg_assemble_context
 from mcp_server.core.pg_recall import recall as pg_recall
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.pg_store import PgMemoryStore
@@ -113,6 +114,36 @@ class BenchmarkDB:
             rerank_alpha=rerank_alpha,
             momentum_state=self._momentum_state,
             include_globals=False,
+        )
+
+    def assemble_context(
+        self,
+        query: str,
+        *,
+        current_stage: str,
+        token_budget: int | None = None,
+        domain: str | None = "beam",
+        stage_field: str = "agent_context",
+        budget_split: tuple[float, float, float] = (0.6, 0.3, 0.1),
+        max_chunks_per_phase: int = 5,
+    ) -> dict[str, Any]:
+        """Delegate to mcp_server.core.pg_recall.assemble_context().
+
+        Returns the structured 3-phase context dict (see pg_recall
+        for the schema). The benchmark uses ``selected_memories`` to
+        compute retrieval hit ranks.
+        """
+        assert self._store is not None, "Call open() first"
+        return pg_assemble_context(
+            query=query,
+            store=self._store,
+            embeddings=self._embeddings,
+            current_stage=current_stage,
+            token_budget=token_budget,
+            domain=domain,
+            stage_field=stage_field,
+            budget_split=budget_split,
+            max_chunks_per_phase=max_chunks_per_phase,
         )
 
     # ── Cleanup ───────────────────────────────────────────────────

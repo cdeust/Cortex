@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from benchmarks.beam.data import (
+    extract_10m_chat,
     extract_conversation_turns,
     load_beam_dataset,
     parse_probing_questions,
@@ -46,6 +47,43 @@ from benchmarks.lib.bench_db import BenchmarkDB
 
 
 # ── Evaluation ───────────────────────────────────────────────────────────
+
+
+def _current_stage_for_question(
+    q: dict, conversation_turns: list[dict]
+) -> str:
+    """Determine the stage ID the question is about.
+
+    Must match the stage_id used in data.turns_to_memories when tagging
+    memories' agent_context. For 10M: plan_id (e.g. "plan-0") takes
+    precedence over time_anchor. For 100K/500K/1M: time_anchor is the
+    stage boundary.
+    """
+    raw_ids = q.get("source_chat_ids", [])
+    src_ids: set[int] = set()
+    if isinstance(raw_ids, dict):
+        for v in raw_ids.values():
+            if isinstance(v, list):
+                src_ids.update(v)
+    elif isinstance(raw_ids, list):
+        src_ids = {i for i in raw_ids if isinstance(i, int)}
+
+    # Walk conversation, track both plan_id and time_anchor.
+    # Return whichever the first source turn carries — matches
+    # turns_to_memories' priority: plan_id > time_anchor > "stage-0".
+    last_anchor = "stage-0"
+    last_plan = ""
+    for turn in conversation_turns:
+        a = turn.get("time_anchor", "")
+        p = turn.get("plan_id", "")
+        if a:
+            last_anchor = a
+        if p:
+            last_plan = p
+        if turn.get("id") in src_ids:
+            # Match turns_to_memories priority: plan_id > anchor
+            return last_plan if last_plan else last_anchor
+    return last_plan if last_plan else last_anchor
 
 
 def evaluate_retrieval(
@@ -85,7 +123,25 @@ def evaluate_retrieval(
             if not source_ids and ability != "abstention":
                 continue
 
-            retrieved = db.recall(query, top_k=10, domain="beam")
+            # Optional: use the structured 3-phase context assembler
+            # instead of flat top-k WRRF. Gated by env var so we can A/B
+            # on the same benchmark without touching the production code.
+            if os.environ.get("CORTEX_USE_ASSEMBLER") == "1":
+                # Benchmark has no LLM reader: token_budget=None means
+                # pure rank-based retrieval (Swift pattern: budget is
+                # caller-provided from reasoner.contextWindowSize when
+                # a reader exists; benchmarks have no reader).
+                bstr = os.environ.get("CORTEX_ASSEMBLER_BUDGET")
+                tbudget: int | None = int(bstr) if bstr else None
+                asm = db.assemble_context(
+                    query=query,
+                    current_stage=f"beam:{_current_stage_for_question(q, conversation_turns)}",
+                    token_budget=tbudget,
+                    stage_field="agent_context",
+                )
+                retrieved = asm["selected_memories"]
+            else:
+                retrieved = db.recall(query, top_k=10, domain="beam")
 
             answer = q.get("answer", "")
 
@@ -191,7 +247,11 @@ def run_benchmark(split: str = "100K", limit: int | None = None, verbose: bool =
         for conv_idx, conversation in enumerate(ds):
             conv_start = time.time()
 
-            chat = conversation.get("chat", "")
+            # BEAM-10M aggregates 10 sub-plans into one ~10M-token convo
+            if split == "10M":
+                chat = extract_10m_chat(conversation)
+            else:
+                chat = conversation.get("chat", "")
             turns = extract_conversation_turns(chat)
             memories = turns_to_memories(turns)
 
@@ -311,7 +371,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--split",
         default="100K",
-        choices=["100K", "500K", "1M"],
+        choices=["100K", "500K", "1M", "10M"],
         help="Dataset split (default: 100K for fast testing)",
     )
     parser.add_argument("--limit", type=int, help="Limit number of conversations")
