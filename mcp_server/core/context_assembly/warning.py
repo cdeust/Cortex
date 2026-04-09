@@ -13,6 +13,7 @@ into the prompt itself.
 Original: ai-architect-prd-builder/packages/AIPRDMetaPromptingEngine/
           Sources/Pipeline/ContextDecomposer.swift → buildTruncationWarning
 """
+
 from __future__ import annotations
 
 from mcp_server.core.context_assembly.budget import AssemblyMetrics
@@ -56,7 +57,5 @@ def build_truncation_banner(
     ]
     for key, original, final in truncated:
         pct = int(100 * final / original) if original else 0
-        lines.append(
-            f"- {key}: {pct}% retained ({final}/{original} tokens)"
-        )
+        lines.append(f"- {key}: {pct}% retained ({final}/{original} tokens)")
     return "\n".join(lines)

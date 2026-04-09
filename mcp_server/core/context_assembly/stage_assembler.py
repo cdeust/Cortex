@@ -49,6 +49,7 @@ A `StageContextResult` with four fields:
   - Phase 3 SUMMARIES (schema-structured) uses Cortex's
     `schema_engine.py` (Tse 2007 schema-congruent consolidation).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -70,6 +71,7 @@ from mcp_server.core.context_assembly.stage_detector import StageDetector
 @dataclass(frozen=True)
 class BudgetSplit:
     """Three-phase budget proportions. Must sum to 1.0."""
+
     own_stage: float = 0.6
     adjacent: float = 0.3
     summaries: float = 0.1
@@ -77,9 +79,7 @@ class BudgetSplit:
     def __post_init__(self) -> None:
         total = self.own_stage + self.adjacent + self.summaries
         if abs(total - 1.0) > 1e-3:
-            raise ValueError(
-                f"BudgetSplit must sum to 1.0, got {total}"
-            )
+            raise ValueError(f"BudgetSplit must sum to 1.0, got {total}")
 
 
 DEFAULT_SPLIT = BudgetSplit()
@@ -98,6 +98,7 @@ class StageContextResult:
     retrieval hits — the concatenated text fields are for the LLM
     reader, not for scoring.
     """
+
     own_stage_context: str = ""
     adjacent_stage_context: str = ""
     stage_summaries: str = ""
@@ -112,6 +113,7 @@ class StageContextResult:
 @dataclass
 class StageCandidate:
     """A memory candidate annotated with its stage membership."""
+
     memory: dict[str, Any]
     stage_id: str
     score: float
@@ -149,9 +151,7 @@ class StageAwareContextAssembler:
             [],
             tuple[list[dict[str, Any]], list[dict[str, Any]]],
         ],
-        memories_by_entity_fn: Callable[
-            [list[str]], list[dict[str, Any]]
-        ],
+        memories_by_entity_fn: Callable[[list[str]], list[dict[str, Any]]],
         stage_summary_fn: Callable[[str], str],
     ) -> None:
         self._detector = stage_detector
@@ -216,9 +216,7 @@ class StageAwareContextAssembler:
                     "phase": 1,
                 }
             )
-        own_text = "\n\n".join(
-            c.get("content", "") for c in selected_own
-        ).strip()
+        own_text = "\n\n".join(c.get("content", "") for c in selected_own).strip()
         own_tokens = estimate_tokens(own_text)
 
         # ── Phase 2 — Adjacent stages via PPR ─────────────────────────
@@ -238,16 +236,12 @@ class StageAwareContextAssembler:
             ppr = personalized_pagerank(adjacency, seed_entities)
 
             # Fetch candidate memories that contain PPR-hot entities
-            top_entity_ids = sorted(
-                ppr.keys(), key=lambda k: ppr[k], reverse=True
-            )[:50]
+            top_entity_ids = sorted(ppr.keys(), key=lambda k: ppr[k], reverse=True)[:50]
             candidate_mems = self._mem_by_ent(top_entity_ids)
 
             # Filter to NOT-current-stage and score by PPR
             cross_stage = [
-                m
-                for m in candidate_mems
-                if self._detector.stage_of(m) != current_stage
+                m for m in candidate_mems if self._detector.stage_of(m) != current_stage
             ]
             scored = score_memories_by_ppr(cross_stage, ppr)
 
@@ -294,9 +288,7 @@ class StageAwareContextAssembler:
         # ── Assemble ──────────────────────────────────────────────────
         parts: list[str] = []
         if own_text:
-            parts.append(
-                f"## Current Stage Context ({current_stage})\n\n{own_text}"
-            )
+            parts.append(f"## Current Stage Context ({current_stage})\n\n{own_text}")
         if adjacent_text:
             parts.append(f"## Related Prior Context\n\n{adjacent_text}")
         if summary_text:

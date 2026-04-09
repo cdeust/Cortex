@@ -7,6 +7,7 @@ Original Swift design by Clément Deust in ai-architect-prd-builder
 (packages/AIPRDMetaPromptingEngine/Sources/Pipeline/ContextDecomposer.swift).
 Python port with Cortex-specific adaptations.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -61,6 +62,7 @@ class Placeholder:
             is `(value: str, target_tokens: int) -> str`. When None,
             generic truncation is applied.
     """
+
     key: str
     value: str
     priority: int = 1
@@ -74,6 +76,7 @@ class AssemblyMetrics:
     Consumed by warning.py to build the banner injected at the top of
     the final prompt so the LLM knows what was cut.
     """
+
     original_tokens: dict[str, int] = field(default_factory=dict)
     final_tokens: dict[str, int] = field(default_factory=dict)
     total_shell_tokens: int = 0

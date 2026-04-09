@@ -19,6 +19,7 @@ Ships two detectors in v1:
 Future (A/B candidates): semantic clustering, LLM topic-shift detection,
 hybrid explicit+temporal fallback.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

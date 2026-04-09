@@ -22,6 +22,7 @@ Complements (not replaces) Cortex's existing `spreading_activation.py`
 *stationary* distribution rather than a depth-bounded traversal; both
 are valid, with different use cases.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict

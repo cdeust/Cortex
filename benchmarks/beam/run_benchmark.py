@@ -49,9 +49,7 @@ from benchmarks.lib.bench_db import BenchmarkDB
 # ── Evaluation ───────────────────────────────────────────────────────────
 
 
-def _current_stage_for_question(
-    q: dict, conversation_turns: list[dict]
-) -> str:
+def _current_stage_for_question(q: dict, conversation_turns: list[dict]) -> str:
     """Determine the stage ID the question is about.
 
     Must match the stage_id used in data.turns_to_memories when tagging

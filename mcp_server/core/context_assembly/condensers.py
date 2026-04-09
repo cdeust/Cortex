@@ -10,6 +10,7 @@ Adapted from Clément Deust's Swift condensers in ContextDecomposer.swift
 (`condenseContracts`, `condenseEngineGraph`, `condenseFileTree`,
 `condenseImpactReport`), plus Cortex-specific memory types.
 """
+
 from __future__ import annotations
 
 import re
@@ -78,9 +79,7 @@ def condense_assistant_message(text: str, token_budget: int) -> str:
     prose_budget = token_budget - code_tokens
     if prose_parts and prose_budget > 0:
         per_prose = max(20, prose_budget // len(prose_parts))
-        compressed_prose = [
-            _first_sentence(p)[: per_prose * 3] for p in prose_parts
-        ]
+        compressed_prose = [_first_sentence(p)[: per_prose * 3] for p in prose_parts]
         # Reassemble in original order
         out: list[str] = []
         pi = ci = 0
@@ -177,7 +176,7 @@ def condense_code_block(text: str, token_budget: int) -> str:
         "interface ",
         "@",  # decorators
         "//",  # comments
-        "#",   # comments
+        "#",  # comments
     )
     for line in text.split("\n"):
         stripped = line.strip()
