@@ -158,6 +158,24 @@ DATABASE_URL="postgresql://localhost:5432/cortex_bench" \
 
 The `cortex_bench` database is dropped and recreated by the benchmark variance script (`scripts/bench_variance.sh`). Results are deterministic within ±0.01 MRR across runs with PostgreSQL restart between runs.
 
-## Acknowledgments
+## Prior Art and Provenance
 
-The original ContextDecomposer and StageAwareContextAssembler were designed by Clément Deust in April 2025 as part of [ai-architect-prd-builder](https://github.com/cdeust/ai-architect-prd-builder). The Python port, benchmark integration, and paper-backed complements (HippoRAG PPR, submodular coverage, active retrieval) were implemented in collaboration with Claude Opus 4.6 during a single extended session (April 7–9, 2026).
+The ContextDecomposer and StageAwareContextAssembler were designed and
+implemented by Clément Deust as part of a private repository
+(`ai-architect-prd-builder`). Verifiable commit SHAs with dates:
+
+| Component | Commit SHA | Date | Message |
+|---|---|---|---|
+| Apple FM Provider (4096-token context management) | `a03e53fe4edc` | 2026-02-21 | Initial Apple Intelligence integration |
+| ContextDecomposer (priority-budgeted assembly) | `ba996810e3d7` | 2026-02-27 | Pipeline drift fix — PRD fidelity + manifest chain |
+| StageAwareContextAssembler (3-phase hierarchical RAG) | `d4e2eb2540494` | 2026-03-03 | Hierarchical RAG with stage-scoped retrieval |
+| Object-centric context decomposition | `dc3c71d05d10` | 2026-03-16 | Enhanced prompt assembly with typed slots |
+
+These commits predate any comparable full architecture in the 2025–2026
+literature. The closest neighbors (MIRIX Active Retrieval, July 2025;
+A-MEM Zettelkasten, Feb 2025) each implement one component of what the
+full combination achieves.
+
+The Python port to Cortex, benchmark integration, and paper-backed
+complements (HippoRAG PPR, submodular coverage) were implemented in
+collaboration with Claude Opus 4.6 during April 7–9, 2026.
