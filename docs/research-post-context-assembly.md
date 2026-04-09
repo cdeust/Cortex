@@ -160,22 +160,71 @@ The `cortex_bench` database is dropped and recreated by the benchmark variance s
 
 ## Prior Art and Provenance
 
-The ContextDecomposer and StageAwareContextAssembler were designed and
-implemented by Clément Deust as part of a private repository
-(`ai-architect-prd-builder`). Verifiable commit SHAs with dates:
+The context management architecture originates from
+[ai-prd-generator](https://github.com/cdeust/ai-prd-generator)
+(Clément Deust) — a **public** repository whose commit history is
+verifiable by anyone.
 
-| Component | Commit SHA | Date | Message |
+### Origin: ai-prd-builder (public, September 2025)
+
+The concept originates from [ai-prd-builder](https://github.com/cdeust/ai-prd-builder),
+a public repository for generating PRDs with Apple Intelligence. The
+`ContextManager.swift` module — committed **one month before the BEAM
+paper** — already implements per-section token-budgeted context assembly
+with provider-specific limits (Apple Intelligence 3500 tokens), slot-based
+budget splitting (1/3 core request + 1/4 clarifications + 1/6 tech stack),
+section-keyword relevance filtering, and truncation awareness.
+
+| Component | File | Commit | Date |
 |---|---|---|---|
-| Apple FM Provider (4096-token context management) | `a03e53fe4edc` | 2026-02-21 | Initial Apple Intelligence integration |
-| ContextDecomposer (priority-budgeted assembly) | `ba996810e3d7` | 2026-02-27 | Pipeline drift fix — PRD fidelity + manifest chain |
-| StageAwareContextAssembler (3-phase hierarchical RAG) | `d4e2eb2540494` | 2026-03-03 | Hierarchical RAG with stage-scoped retrieval |
-| Object-centric context decomposition | `dc3c71d05d10` | 2026-03-16 | Enhanced prompt assembly with typed slots |
+| Context-aware PRD generation (first concept) | PRD generation pipeline | [`3ef6c3f`](https://github.com/cdeust/ai-prd-builder/commit/3ef6c3f) | **2025-09-14** |
+| Modular architecture with cognitive modes | Prompt engineering | [`4f90564`](https://github.com/cdeust/ai-prd-builder/commit/4f90564) | **2025-09-25** |
+| **ContextManager** — per-section budget-split assembly | `swift/Sources/PRDGenerator/Components/ContextManager.swift` | [`462de01`](https://github.com/cdeust/ai-prd-builder/commit/462de01) | **2025-09-30** |
+| Context-aware codebase interceptor | `CodebaseContextInterceptor` | [`0743b0e`](https://github.com/cdeust/ai-prd-builder/commit/0743b0e) | **2025-10-04** |
 
-These commits predate any comparable full architecture in the 2025–2026
-literature. The closest neighbors (MIRIX Active Retrieval, July 2025;
-A-MEM Zettelkasten, Feb 2025) each implement one component of what the
-full combination achieves.
+> **Timeline note:** The BEAM paper (Tavakoli et al.) was published on arxiv on October 31, 2025 — one month **after** the ContextManager was committed.
 
-The Python port to Cortex, benchmark integration, and paper-backed
+### Evolution: ai-prd-generator (public, February 2026)
+
+The architecture matured into a richer infrastructure with paper-backed primitives:
+
+| Component | File | Commit | Date |
+|---|---|---|---|
+| Hierarchical chunking with per-level token budgets | `HierarchicalChunker.swift` | [`8bc58f1`](https://github.com/cdeust/ai-prd-generator/commit/8bc58f1) | 2026-02-10 |
+| Late chunking (Jina AI 2025) | `JinaLateChunker.swift` | [`8bc58f1`](https://github.com/cdeust/ai-prd-generator/commit/8bc58f1) | 2026-02-10 |
+| Contextual retrieval enrichment (Anthropic 2024) | `AnthropicContextualEnricher.swift` | [`8bc58f1`](https://github.com/cdeust/ai-prd-generator/commit/8bc58f1) | 2026-02-10 |
+| Meta-token lossless compression (arxiv 2506.00307) | `MetaTokenCompressor.swift` | [`8bc58f1`](https://github.com/cdeust/ai-prd-generator/commit/8bc58f1) | 2026-02-10 |
+| Context window adaptive detection | `ContextWindowDetector.swift` | [`8bc58f1`](https://github.com/cdeust/ai-prd-generator/commit/8bc58f1) | 2026-02-10 |
+
+### Private repository (ai-architect-prd-builder) — extended architecture
+
+The ContextDecomposer and StageAwareContextAssembler were developed in
+a private repository that extends the public one with proprietary
+pipeline orchestration. Commit SHAs verifiable by auditors with access:
+
+| Component | Commit SHA | Date |
+|---|---|---|
+| ContextDecomposer (priority-budgeted assembly + truncation warnings) | `ba996810e3d7` | 2026-02-27 |
+| StageAwareContextAssembler (3-phase 60/30/10 hierarchical RAG) | `d4e2eb2540494` | 2026-03-03 |
+| Object-centric context decomposition (typed slots) | `dc3c71d05d10` | 2026-03-16 |
+
+### Timeline
+
+- **2025-09-14**: Context-aware PRD generation — first concept ([`3ef6c3f`](https://github.com/cdeust/ai-prd-builder/commit/3ef6c3f), public)
+- **2025-09-30**: `ContextManager.swift` — per-section budget-split assembly ([`462de01`](https://github.com/cdeust/ai-prd-builder/commit/462de01), public)
+- **2025-10-31**: BEAM paper (Tavakoli et al.) — arxiv v1
+- **2026-02-10**: Chunking + compression infrastructure (ai-prd-generator, public)
+- **2026-02-27**: ContextDecomposer — priority ordering + truncation warnings (private)
+- **2026-03-03**: StageAwareContextAssembler — 3-phase 60/30/10 (private)
+- **2025-07-10**: MIRIX (Wang & Chen) — closest published neighbor (active retrieval only)
+
+The full combination (priority-budgeted progressive condensation +
+per-type domain condensers + truncation warning banner + 3-phase
+stage-aware assembly with entity graph PPR) has no precedent in the
+2024–2026 literature surveyed across 6 cross-disciplinary research
+agents covering biology, mathematics, AI lab publications, PhD theses,
+vendor engineering, and information theory.
+
+The Python port to Cortex, BEAM benchmark integration, and paper-backed
 complements (HippoRAG PPR, submodular coverage) were implemented in
 collaboration with Claude Opus 4.6 during April 7–9, 2026.
