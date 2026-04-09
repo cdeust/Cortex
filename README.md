@@ -247,7 +247,7 @@ Cortex works with teams of specialized agents. Each agent has scoped memory (`ag
 
 **Directory** — entity-based queries span all topics. "What do we know about the reranker?" returns results from engineer, tester, and researcher.
 
-Works with any custom agents. See [zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents) for a ready-made team of **18 specialists**.
+Works with any custom agents. See [zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents) for a ready-made team of **27 specialists** — each with scoped memory that doesn't clutter the others.
 
 ---
 
