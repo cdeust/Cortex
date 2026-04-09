@@ -20,7 +20,7 @@ LLM-based code assistants operate within a single context window. When a session
 
 This is not merely an inconvenience. It represents a fundamental failure of the tool-human relationship. A programmer's effectiveness depends on accumulated context: knowing *why* event sourcing was chosen over CRUD, *which* Redis TTL edge cases cause intermittent logouts, *what* patterns emerged across dozens of debugging sessions. Without persistent memory, every interaction is a cold start.
 
-Existing approaches to LLM memory fall into two categories. Context-window stuffing concatenates prior conversation turns into the prompt, but collapses at scale: a 200k-token window cannot hold months of project history. Retrieval-augmented generation (RAG) over a vector database provides scalable storage, but naive top-$k$ cosine retrieval degrades as the corpus grows, returning increasingly noisy results as embedding distances concentrate (Beyer et al., 1999; Radovanovic et al., 2010).
+Existing approaches to LLM memory fall into two categories. Context-window stuffing concatenates prior conversation turns into the prompt, but collapses at scale: a 200k-token window cannot hold months of project history. Retrieval-augmented generation (RAG) over a vector database provides scalable storage, but naive top-k cosine retrieval degrades as the corpus grows, returning increasingly noisy results as embedding distances concentrate (Beyer et al., 1999; Radovanovic et al., 2010).
 
 ### 1.2 Approach
 
@@ -123,9 +123,11 @@ Retrieval follows a five-stage pipeline:
 
 **Stage 3: 5-Signal WRRF Fusion.** A PL/pgSQL stored procedure (`recall_memories()`) computes five signals server-side and fuses them via Weighted Reciprocal Rank Fusion (Bruch et al., 2023):
 
-$$\text{WRRF}(d) = \sum_{s \in S} w_s \cdot \frac{1}{k + \text{rank}_s(d)}$$
+```
+WRRF(d) = Σ(s in S) wₛ · 1/(k + rankₛ(d))
+```
 
-where $S = \{\text{vector}, \text{FTS}, \text{trigram}, \text{heat}, \text{recency}\}$, $w_s$ is the intent-specific weight for signal $s$, and $k = 60$ is the smoothing constant. The five signals are:
+where S = {vector, FTS, trigram, heat, recency}, wₛ is the intent-specific weight for signal s, and k = 60 is the smoothing constant. The five signals are:
 
 1. **Vector similarity**: Cosine distance between query and memory embeddings via pgvector HNSW index.
 2. **Full-text search (FTS)**: PostgreSQL ts_rank with language-aware stemming.
@@ -137,9 +139,11 @@ All five signals are computed in a single SQL query, avoiding round-trips betwee
 
 **Stage 4: Cross-Encoder Reranking.** The top candidates from WRRF are reranked by a FlashRank cross-encoder (ms-marco-MiniLM-L-12-v2, 22MB). Scores are blended:
 
-$$\text{final}(d) = (1 - \alpha) \cdot \text{WRRF}(d) + \alpha \cdot \text{CE}(d)$$
+```
+final(d) = (1 - α) · WRRF(d) + α · CE(d)
+```
 
-with $\alpha = 0.55$ (tuned via ablation; see Section 6.4). A sufficient-context gate (Joren et al., ICLR 2025) suppresses results where the maximum cross-encoder score falls below a threshold ($\tau = 0.15$), enabling the system to abstain when no relevant memory exists.
+with α = 0.55 (tuned via ablation; see Section 6.4). A sufficient-context gate (Joren et al., ICLR 2025) suppresses results where the maximum cross-encoder score falls below a threshold (τ = 0.15), enabling the system to abstain when no relevant memory exists.
 
 **Stage 5: Neuro-Symbolic Filtering.** Hard and soft rules filter results by scope, entity, or tag. Hard rules exclude matches unconditionally; soft rules adjust scores.
 
@@ -166,9 +170,9 @@ Cortex implements 20 mechanisms organized into four functional groups: encoding 
 
 **Core idea:** The neocortex maintains a generative model of its inputs and only propagates prediction errors --- the difference between expected and actual sensory input. Redundant, predictable input is suppressed at the source.
 
-**Algorithm:** The write gate maintains a three-level predictive hierarchy (sensory, entity, schema) corresponding to Bastos et al.'s canonical microcircuit. For each candidate memory $m$, the gate computes four signals:
+**Algorithm:** The write gate maintains a three-level predictive hierarchy (sensory, entity, schema) corresponding to Bastos et al.'s canonical microcircuit. For each candidate memory m, the gate computes four signals:
 
-1. **Embedding novelty**: $1 - \max_{m' \in M} \cos(\mathbf{e}_m, \mathbf{e}_{m'})$, where $M$ is the set of recent memories and $\mathbf{e}$ denotes the embedding vector.
+1. **Embedding novelty**: 1 - max(cos(e_m, e_m') for m' in M), where M is the set of recent memories and **e** denotes the embedding vector.
 2. **Entity overlap**: Jaccard coefficient between the candidate's extracted entities and those of existing memories.
 3. **Temporal proximity**: Hours since the last memory from the same session.
 4. **Structural similarity**: Content-level similarity via trigram matching.
@@ -187,9 +191,11 @@ The gate accepts the memory if the weighted prediction error exceeds a threshold
 
 **Equation:** The Yerkes-Dodson arousal-performance curve:
 
-$$f(a) = c \cdot a \cdot \exp(-b \cdot a)$$
+```
+f(a) = c · a · exp(-b · a)
+```
 
-where $a$ is the arousal level, and $c$, $b$ are scaling parameters. This produces a smooth inverted-U with peak encoding strength at moderate arousal.
+where a is the arousal level, and c, b are scaling parameters. This produces a smooth inverted-U with peak encoding strength at moderate arousal.
 
 **Adaptation:** Arousal is estimated from emotional keyword detection in memory content (frustration, excitement, urgency markers). The biological mechanism involves oscillatory coupling between the amygdala and hippocampus measured via intracranial EEG; the digital adaptation uses text-based emotion detection as a proxy. This is a documented simplification --- Wang & Bhatt's finding is an empirical result about neural activity, not a computational model.
 
@@ -203,11 +209,15 @@ where $a$ is the arousal level, and $c$, $b$ are scaling parameters. This produc
 
 **Equation (DA channel):** The dopamine reward prediction error follows the Rescorla-Wagner learning rule:
 
-$$\delta = r - V(s)$$
+```
+δ = r - V(s)
+```
 
-$$\text{DA} = 1 + \delta, \quad \text{DA} \in [0, 3]$$
+```
+DA = 1 + δ,    DA in [0, 3]
+```
 
-where $r$ is the actual outcome and $V(s)$ is the predicted value. The bounds $[0, 3]$ reflect Schultz's (1997) finding of asymmetric dopamine neuron firing: baseline at ~5 Hz, suppression to ~0 Hz for negative RPE, bursts to 20--30 Hz for positive RPE (approximately 3x baseline).
+where r is the actual outcome and V(s) is the predicted value. The bounds [0, 3] reflect Schultz's (1997) finding of asymmetric dopamine neuron firing: baseline at ~5 Hz, suppression to ~0 Hz for negative RPE, bursts to 20--30 Hz for positive RPE (approximately 3x baseline).
 
 **Adaptation:** Doya's framework maps each neuromodulator to a reinforcement learning meta-parameter. Our implementation faithfully implements the DA channel via Rescorla-Wagner but honestly documents that the NE, ACh, and 5-HT channels use heuristic formulas rather than the specific models from Aston-Jones & Cohen (2005), Yu & Dayan (2005), and Daw et al. (2002), respectively. These channels modulate downstream systems (write gate threshold, retrieval precision, exploration breadth) through linear interpolation functions that are labeled as engineering defaults.
 
@@ -233,9 +243,9 @@ where $r$ is the actual outcome and $V(s)$ is the predicted value. The bounds $[
 A fifth state, RECONSOLIDATING, is entered when a consolidated memory is retrieved in a context with sufficient mismatch (Nader et al., 2000). The heat floor for CONSOLIDATED memories (0.10) prevents the "permastore destruction" problem where all memories eventually decay to zero --- grounded in Bahrick's (1984) finding that well-learned material resists forgetting over decades.
 
 **Advancement criteria:**
-- LABILE $\to$ EARLY_LTP: DA level > 1.0 or importance > 0.6 (proxy for protein kinase activation).
-- EARLY_LTP $\to$ LATE_LTP: At least 1 replay event or importance > 0.7 (proxy for CREB-dependent protein synthesis).
-- LATE_LTP $\to$ CONSOLIDATED: At least 3 replays, or 1 if schema-congruent (Tse et al., 2007: schema-consistent memories consolidate faster).
+- LABILE → EARLY_LTP: DA level > 1.0 or importance > 0.6 (proxy for protein kinase activation).
+- EARLY_LTP → LATE_LTP: At least 1 replay event or importance > 0.7 (proxy for CREB-dependent protein synthesis).
+- LATE_LTP → CONSOLIDATED: At least 3 replays, or 1 if schema-congruent (Tse et al., 2007: schema-consistent memories consolidate faster).
 
 **Implementation:** `core/cascade_stages.py`, `core/cascade_advancement.py` (DOCUMENTED)
 
@@ -265,12 +275,12 @@ A fifth state, RECONSOLIDATING, is entered when a consolidated memory is retriev
 
 **Algorithm:** Cortex implements a two-stage model:
 
-1. **Hippocampal store** (fast, labile): New memories enter with hippocampal dependency $h = 1.0$.
-2. **Cortical transfer**: Each replay event reduces $h$ by a transfer rate $\Delta h = r / \sqrt{n_{\text{replay}}}$, with $r = 0.02$ from the C-HORSE model (Ketz et al., 2023). Diminishing returns ensure early replays matter most.
+1. **Hippocampal store** (fast, labile): New memories enter with hippocampal dependency h = 1.0.
+2. **Cortical transfer**: Each replay event reduces h by a transfer rate Δh = r / sqrt(n_replay), with r = 0.02 from the C-HORSE model (Ketz et al., 2023). Diminishing returns ensure early replays matter most.
 3. **Schema acceleration**: Schema-congruent memories transfer up to 2.5x faster, following Tse et al. (2007).
 4. **Interleaving**: Round-robin scheduling across domains prevents catastrophic interference, following CLS theory.
 
-When hippocampal dependency drops below a threshold, memories are eligible for compression: full text $\to$ summary $\to$ keywords, following the rate-distortion framework of forgetting (Ebbinghaus, 1885).
+When hippocampal dependency drops below a threshold, memories are eligible for compression: full text → summary → keywords, following the rate-distortion framework of forgetting (Ebbinghaus, 1885).
 
 **Implementation:** `core/two_stage_model.py`, `core/two_stage_transfer.py` (FAITHFUL for cortical learning rate), `core/compression.py`, `core/dual_store_cls.py`
 
@@ -280,7 +290,7 @@ When hippocampal dependency drops below a threshold, memories are eligible for c
 
 **Core idea:** A weak stimulus sets a "synaptic tag" at activated synapses. If a strong stimulus occurs at nearby synapses within a time window, the proteins produced by the strong stimulus are captured by the tagged synapses, converting early-phase LTP to late-phase LTP. This explains how a later important event can retroactively strengthen earlier weak memories.
 
-**Algorithm:** When a high-importance memory ($\text{importance} > 0.7$) is stored, Cortex searches for recent weak memories ($\text{importance} < 0.5$) that share entities, within a 48-hour window. Matching memories receive an importance boost ($+0.25$ scaled by entity overlap) and a heat boost ($\times 1.5$).
+**Algorithm:** When a high-importance memory (importance > 0.7) is stored, Cortex searches for recent weak memories (importance < 0.5) that share entities, within a 48-hour window. Matching memories receive an importance boost (+0.25 scaled by entity overlap) and a heat boost (× 1.5).
 
 **Adaptation:** The biological tagging window is 1--6 hours; Cortex extends to 48 hours to match the hours-to-days timescale of software development sessions. Entity overlap serves as a proxy for synaptic proximity on the dendritic tree. The Szymkiewicz-Simpson coefficient is used for overlap computation. The bistable tag dynamics follow Luboeinski & Tetzlaff (2021).
 
@@ -294,13 +304,15 @@ When hippocampal dependency drops below a threshold, memories are eligible for c
 
 **Algorithm:** Cortex maintains schema structures extracted from memory clusters. Each schema has an entity signature, tag distribution, and relationship pattern. New memories are classified via weighted Jaccard overlap (0.7 entity + 0.3 tag):
 
-- **Assimilate** ($\text{match} \geq 0.7$): Memory fits the existing schema, receives accelerated consolidation.
-- **Normal** ($0.3 \leq \text{match} < 0.7$): Partial match, standard processing.
-- **Accommodate** ($\text{match} < 0.3$): Memory violates the schema, potentially triggering schema revision via EMA update ($\alpha = 0.1$), following Piaget's equilibration theory.
+- **Assimilate** (match >= 0.7): Memory fits the existing schema, receives accelerated consolidation.
+- **Normal** (0.3 <= match < 0.7): Partial match, standard processing.
+- **Accommodate** (match < 0.3): Memory violates the schema, potentially triggering schema revision via EMA update (α = 0.1), following Piaget's equilibration theory.
 
 Schema free energy is computed as the sum of squared prediction errors:
 
-$$F = \sum_i (x_i - \hat{x}_i)^2$$
+```
+F = Σᵢ (xᵢ - x̂ᵢ)²
+```
 
 consistent with the variational free energy framework (Friston, 2005), though simplified to the squared-error case.
 
@@ -316,9 +328,11 @@ consistent with the variational free energy framework (Friston, 2005), though si
 
 **Algorithm:** Breadth-first search from seed entities with exponential decay:
 
-$$a_j = \sum_{i \in \text{parents}(j)} a_i \cdot w_{ij} \cdot \gamma^d$$
+```
+aⱼ = Σ(i in parents(j)) aᵢ · wᵢⱼ · γᵈ
+```
 
-where $a_j$ is the activation at node $j$, $w_{ij}$ is the edge weight between nodes $i$ and $j$, $\gamma = 0.65$ is the decay factor, and $d$ is the graph distance. Convergent summation allows multi-path boosting: entities reachable via multiple paths accumulate activation from all sources.
+where aⱼ is the activation at node j, wᵢⱼ is the edge weight between nodes i and j, γ = 0.65 is the decay factor, and d is the graph distance. Convergent summation allows multi-path boosting: entities reachable via multiple paths accumulate activation from all sources.
 
 **Adaptation:** This is one of the most faithful implementations in Cortex. Collins & Loftus described the mechanism conceptually; the BFS formalization with decay and convergent summation is the standard computational interpretation. Practical constraints (max depth 3, max nodes 50, threshold 0.1) prevent runaway activation in large graphs.
 
@@ -332,13 +346,17 @@ where $a_j$ is the activation at node $j$, $w_{ij}$ is the edge weight between n
 
 **Equation:**
 
-$$S_t = \eta \cdot S_{t-1} - \theta \cdot \nabla_M \mathcal{L}(M; x_t)$$
+```
+Sₜ = η · Sₜ₋₁ - θ · ∇_M L(M; xₜ)
+```
 
-$$M_t = M_{t-1} - S_t$$
+```
+Mₜ = Mₜ₋₁ - Sₜ
+```
 
-where $S_t$ is the momentum surprise signal, $\eta = 0.9$ is the momentum coefficient, $\theta = 0.01$ is the learning rate, and $\mathcal{L}$ is the prediction loss.
+where Sₜ is the momentum surprise signal, η = 0.9 is the momentum coefficient, θ = 0.01 is the learning rate, and L is the prediction loss.
 
-**Adaptation:** The biological/neural Titans model uses differentiable memory matrices and true gradient computation. Cortex computes $\nabla_M \mathcal{L}$ as the embedding-space prediction error between the new memory and the current memory state. The momentum term ensures that sustained surprise accumulates while transient noise is dampened. The paper uses learned parameters for $\eta$ and $\theta$; Cortex uses fixed values ($\eta = 0.9$, $\theta = 0.01$) as an engineering default.
+**Adaptation:** The biological/neural Titans model uses differentiable memory matrices and true gradient computation. Cortex computes ∇_M L as the embedding-space prediction error between the new memory and the current memory state. The momentum term ensures that sustained surprise accumulates while transient noise is dampened. The paper uses learned parameters for η and θ; Cortex uses fixed values (η = 0.9, θ = 0.01) as an engineering default.
 
 **Implementation:** `core/titans_memory.py` (FAITHFUL)
 
@@ -346,7 +364,7 @@ where $S_t$ is the momentum surprise signal, $\eta = 0.9$ is the momentum coeffi
 
 **Paper:** Stachenfeld, K. L., Botvinick, M. M., & Gershman, S. J. (2017). The hippocampus as a predictive map. *Nature Neuroscience*, 20, 1643--1653.
 
-**Core idea:** The hippocampus represents space not as a simple map of locations but as a *predictive map* encoding the expected future occupancy of states. The Successor Representation (SR) $M(s, s') = \mathbb{E}[\sum_{t=0}^{\infty} \gamma^t \mathbb{1}[s_t = s'] | s_0 = s]$ captures the discounted probability of visiting state $s'$ starting from state $s$.
+**Core idea:** The hippocampus represents space not as a simple map of locations but as a *predictive map* encoding the expected future occupancy of states. The Successor Representation (SR) M(s, s') = E[Σ(t=0..inf) γᵗ · 1[sₜ = s'] | s₀ = s] captures the discounted probability of visiting state s' starting from state s.
 
 **Adaptation:** Cortex builds a co-access graph: each time two memories are retrieved in the same session, their edge weight increases. Over time, this approximates the successor representation --- memories that are frequently co-accessed develop strong predictive links. The graph supports BFS navigation and 2D t-SNE projection for visualization.
 
@@ -358,9 +376,11 @@ where $S_t$ is the momentum surprise signal, $\eta = 0.9$ is the momentum coeffi
 
 **Core idea:** Modern Hopfield networks provide exponential storage capacity and one-step convergence for content-addressable memory retrieval. The energy function:
 
-$$E(\boldsymbol{\xi}) = -\text{lse}(\beta, \mathbf{X}^T \boldsymbol{\xi}) + \frac{1}{2}\|\boldsymbol{\xi}\|^2$$
+```
+E(ξ) = -lse(β, X^T ξ) + (1/2)||ξ||²
+```
 
-where lse is the log-sum-exp function and $\beta$ is the inverse temperature, yields an update rule equivalent to attention with softmax.
+where lse is the log-sum-exp function and β is the inverse temperature, yields an update rule equivalent to attention with softmax.
 
 **Adaptation:** Cortex uses Hopfield networks as an auxiliary retrieval signal for pattern completion: given a partial cue (noisy or incomplete query embedding), the network converges to the stored memory pattern with highest overlap. This complements the primary WRRF pipeline for cases where exact match fails.
 
@@ -384,11 +404,13 @@ where lse is the log-sum-exp function and $\beta$ is the inverse temperature, yi
 
 **Core idea:** Memory strength decays as a power function of time, modulated by the number of prior retrievals. The ACT-R base-level activation equation:
 
-$$B_i = \ln(n) - d \cdot \ln(L)$$
+```
+Bᵢ = ln(n) - d · ln(L)
+```
 
-where $n$ is the number of presentations/retrievals, $L$ is the time since creation (lifetime), and $d = 0.5$ is the decay parameter. This produces the classic power-law forgetting curve documented by Ebbinghaus (1885).
+where n is the number of presentations/retrievals, L is the time since creation (lifetime), and d = 0.5 is the decay parameter. This produces the classic power-law forgetting curve documented by Ebbinghaus (1885).
 
-**Adaptation:** Each memory has a "heat" value in $[0, 1]$ that decays exponentially between access events and receives a boost on each retrieval. The decay rate is modulated by consolidation stage (Section 4.2.1): LABILE memories decay at 2.0x the base rate, CONSOLIDATED memories at 0.5x, and CONSOLIDATED memories have a heat floor of 0.10 to prevent permastore destruction (Bahrick, 1984).
+**Adaptation:** Each memory has a "heat" value in [0, 1] that decays exponentially between access events and receives a boost on each retrieval. The decay rate is modulated by consolidation stage (Section 4.2.1): LABILE memories decay at 2.0x the base rate, CONSOLIDATED memories at 0.5x, and CONSOLIDATED memories have a heat floor of 0.10 to prevent permastore destruction (Bahrick, 1984).
 
 **Implementation:** `core/decay_cycle.py` (FAITHFUL for ACT-R equation)
 
@@ -398,11 +420,13 @@ where $n$ is the number of presentations/retrievals, $L$ is the time since creat
 
 **Core idea:** The dentate gyrus transforms similar cortical inputs into non-overlapping hippocampal representations via sparse coding and competitive inhibition. Granule cells have extremely low firing rates (~2--5% active), and the large expansion ratio from entorhinal cortex to DG (~5:1) enables orthogonal encoding of similar experiences.
 
-**Algorithm:** When a new memory's embedding has cosine similarity $> 0.75$ with an existing memory (but $< 0.95$, the identity threshold), Cortex applies Gram-Schmidt-like orthogonalization:
+**Algorithm:** When a new memory's embedding has cosine similarity > 0.75 with an existing memory (but < 0.95, the identity threshold), Cortex applies Gram-Schmidt-like orthogonalization:
 
-$$\mathbf{e}_{\text{new}}' = \mathbf{e}_{\text{new}} - s \cdot \sum_{i \in I} \text{proj}_{\mathbf{e}_i}(\mathbf{e}_{\text{new}})$$
+```
+e_new' = e_new - s · Σ(i in I) proj_eᵢ(e_new)
+```
 
-where $I$ is the set of interfering memories, $s = 0.5$ is the separation strength, and $\text{proj}$ denotes vector projection. Post-separation, sparsification zeroes out the smallest dimensions to achieve 4% target sparsity, matching DG granule cell firing rates from Leutgeb et al. (2007) and Rolls (2013).
+where I is the set of interfering memories, s = 0.5 is the separation strength, and proj denotes vector projection. Post-separation, sparsification zeroes out the smallest dimensions to achieve 4% target sparsity, matching DG granule cell firing rates from Leutgeb et al. (2007) and Rolls (2013).
 
 **Implementation:** `core/separation_core.py` (FAITHFUL --- sparsity target from DG data, Gram-Schmidt orthogonalization)
 
@@ -416,19 +440,25 @@ where $I$ is the set of interfering memories, $s = 0.5$ is the separation streng
 
 Multiplicative synaptic scaling (Tetzlaff et al., 2011, Eq. 3):
 
-$$w_i' = w_i \cdot \left(\frac{r_{\text{target}}}{r_{\text{actual}}}\right)^\alpha$$
+```
+wᵢ' = wᵢ · (r_target / r_actual)^α
+```
 
 The BCM sliding threshold:
 
-$$\theta_m = \mathbb{E}[c^2]$$
+```
+θₘ = E[c²]
+```
 
-implemented as an EMA: $\theta_{m,t} = \gamma \cdot \theta_{m,t-1} + (1 - \gamma) \cdot \bar{c}_t^2$, where $\gamma = 0.95$.
+implemented as an EMA: θₘ,ₜ = γ · θₘ,ₜ₋₁ + (1 - γ) · c̄ₜ², where γ = 0.95.
 
 The BCM plasticity function:
 
-$$\phi(c, \theta_m) = c \cdot (c - \theta_m)$$
+```
+φ(c, θₘ) = c · (c - θₘ)
+```
 
-Activity above $\theta_m$ produces LTP; below produces LTD. The quadratic form ensures that the threshold slides: periods of high activity raise it (making LTP harder), and periods of low activity lower it (making LTP easier).
+Activity above θₘ produces LTP; below produces LTD. The quadratic form ensures that the threshold slides: periods of high activity raise it (making LTP harder), and periods of low activity lower it (making LTP easier).
 
 **Adaptation:** In Cortex, "firing rate" maps to average memory heat across the store. When average heat drifts from the target (0.4), multiplicative scaling adjusts all heat values proportionally. The BCM threshold prevents the system from becoming either too eager (storing everything) or too conservative (storing nothing) about memory formation.
 
@@ -438,9 +468,9 @@ Activity above $\theta_m$ produces LTP; below produces LTD. The quadratic form e
 
 **Paper:** Hasselmo, M. E. (2005). What is the function of hippocampal theta rhythm? --- Linking behavioral data to phasic properties of field potential and unit recording data. *Hippocampus*, 15(7), 936--949. Lisman, J. E. & Jensen, O. (2013). The theta-gamma neural code. *Neuron*, 77(6), 1002--1016. Buzsaki, G. (2015). Hippocampal sharp wave-ripple: A cognitive biomarker for episodic memory and planning. *Hippocampus*, 25(10), 1073--1188.
 
-**Core idea:** Theta rhythm (4--8 Hz) in the hippocampus separates encoding from retrieval via cholinergic modulation (Hasselmo, 2005). High acetylcholine during the encoding phase suppresses CA3$\to$CA1 transmission (retrieval) and enhances EC$\to$CA1 (encoding). Gamma oscillations nested within theta encode ordered items with capacity ~7 (Lisman & Jensen, 2013). Sharp-wave ripples (SWRs) during offline states trigger memory replay (Buzsaki, 2015).
+**Core idea:** Theta rhythm (4--8 Hz) in the hippocampus separates encoding from retrieval via cholinergic modulation (Hasselmo, 2005). High acetylcholine during the encoding phase suppresses CA3→CA1 transmission (retrieval) and enhances EC→CA1 (encoding). Gamma oscillations nested within theta encode ordered items with capacity ~7 (Lisman & Jensen, 2013). Sharp-wave ripples (SWRs) during offline states trigger memory replay (Buzsaki, 2015).
 
-**Adaptation:** Theta operates at 4--8 Hz in biology (125--250 ms period). Cortex maps theta phase to session-level cycles using a cosine envelope for encoding/retrieval strength. The gamma binding capacity of ~7 items maps to Lisman & Jensen's theta-gamma code (consistent with Miller's 7$\pm$2). SWR generation is deterministic (threshold-based) rather than stochastic to ensure reproducibility across benchmark runs.
+**Adaptation:** Theta operates at 4--8 Hz in biology (125--250 ms period). Cortex maps theta phase to session-level cycles using a cosine envelope for encoding/retrieval strength. The gamma binding capacity of ~7 items maps to Lisman & Jensen's theta-gamma code (consistent with Miller's 7±2). SWR generation is deterministic (threshold-based) rather than stochastic to ensure reproducibility across benchmark runs.
 
 **Implementation:** `core/oscillatory_clock.py`, `core/oscillatory_phases.py` (DOCUMENTED)
 
@@ -454,20 +484,29 @@ Activity above $\theta_m$ produces LTP; below produces LTD. The quadratic form e
 
 BCM plasticity rule:
 
-$$\phi(c, \theta_m) = c \cdot (c - \theta_m)$$
+```
+φ(c, θₘ) = c · (c - θₘ)
+```
 
 STDP temporal window (Bi & Poo, 1998):
 
-$$\Delta w = \begin{cases} A^+ \exp(-\Delta t / \tau^+) & \text{if } \Delta t > 0 \text{ (pre before post: LTP)} \\ -A^- \exp(\Delta t / \tau^-) & \text{if } \Delta t < 0 \text{ (post before pre: LTD)} \end{cases}$$
+```
+Δw = A⁺ exp(-Δt / τ⁺)     if Δt > 0 (pre before post: LTP)
+    -A⁻ exp(Δt / τ⁻)      if Δt < 0 (post before pre: LTD)
+```
 
-with $A^+ = 0.03$, $A^- = 0.02$ (preserving the biological ratio $A^+ > A^-$), and $\tau^+ = \tau^- = 24$ hours (adapted from biological 17--34 ms).
+with A⁺ = 0.03, A⁻ = 0.02 (preserving the biological ratio A⁺ > A⁻), and τ⁺ = τ⁻ = 24 hours (adapted from biological 17--34 ms).
 
 Tsodyks-Markram short-term plasticity (Markram et al., 1997):
 
-$$u_{\text{new}} = u + U \cdot (1 - u)$$
-$$x_{\text{new}} = x - u_{\text{eff}} \cdot x$$
+```
+u_new = u + U · (1 - u)
+```
+```
+x_new = x - u_eff · x
+```
 
-where $u$ is the utilization of synaptic efficacy (facilitation), $x$ is the available synaptic resources (depression), and $U$ is the baseline release probability.
+where u is the utilization of synaptic efficacy (facilitation), x is the available synaptic resources (depression), and U is the baseline release probability.
 
 **Implementation:** `core/synaptic_plasticity.py` (FAITHFUL for Tsodyks-Markram), `core/synaptic_plasticity_hebbian.py` (FAITHFUL for BCM quadratic and STDP), `core/synaptic_plasticity_stochastic.py` (DOCUMENTED --- novel composition of faithful components)
 
@@ -485,9 +524,9 @@ where $u$ is the utilization of synaptic efficacy (facilitation), $x$ is the ava
 
 **Paper:** Perea, G., Navarrete, M., & Araque, A. (2009). Tripartite synapses: Astrocytes process and control synaptic information. *Trends in Neurosciences*, 32(8), 421--431. De Pitta, M., Volman, V., Berry, H., & Ben-Jacob, E. (2012). A tale of two stories: Astrocyte regulation of synaptic depression and facilitation. *PLOS Computational Biology*, 7(12), e1002293.
 
-**Core idea:** Astrocytes participate in synaptic transmission via calcium-dependent gliotransmitter release. Three regimes: (1) quiescent — no modulation, (2) moderate $\text{Ca}^{2+}$ — D-serine release potentiates NMDA-dependent LTP, (3) high $\text{Ca}^{2+}$ — glutamate release causes heterosynaptic depression.
+**Core idea:** Astrocytes participate in synaptic transmission via calcium-dependent gliotransmitter release. Three regimes: (1) quiescent — no modulation, (2) moderate Ca²⁺ — D-serine release potentiates NMDA-dependent LTP, (3) high Ca²⁺ — glutamate release causes heterosynaptic depression.
 
-**Adaptation:** Astrocyte territories map to L1 fractal memory clusters. Calcium dynamics follow a simplified rise/decay model rather than De Pitta's full Li-Rinzel ODE system ($d[\text{Ca}^{2+}]/dt$, $d[\text{IP}_3]/dt$, $dh/dt$ with 15+ parameters). The three-regime classification (quiescent/facilitation/depression) faithfully captures the qualitative model from Perea (2009). De Pitta's ODE system is documented as the target for future faithful implementation.
+**Adaptation:** Astrocyte territories map to L1 fractal memory clusters. Calcium dynamics follow a simplified rise/decay model rather than De Pitta's full Li-Rinzel ODE system (d[Ca²⁺]/dt, d[IP₃]/dt, dh/dt with 15+ parameters). The three-regime classification (quiescent/facilitation/depression) faithfully captures the qualitative model from Perea (2009). De Pitta's ODE system is documented as the target for future faithful implementation.
 
 **Implementation:** `core/tripartite_synapse.py`, `core/tripartite_calcium.py` (DOCUMENTED)
 
@@ -499,9 +538,13 @@ where $u$ is the utilization of synaptic efficacy (facilitation), $x$ is the ava
 
 **Equations:** Branch transfer function (Poirazi et al., 2003, Figure 3):
 
-$$\text{branch}(n) = s(n) = \frac{1}{1 + \exp(-\beta(n - n_{\text{threshold}}))}$$
+```
+branch(n) = s(n) = 1 / (1 + exp(-β(n - n_threshold)))
+```
 
-$$\text{soma}(x_1, \ldots, x_B) = g\left(\sum_{b=1}^{B} x_b\right)$$
+```
+soma(x₁, ..., x_B) = g(Σ(b=1..B) xᵦ)
+```
 
 Below the spike threshold: sublinear summation (power-law compression). Above: supralinear amplification via NMDA spikes.
 
@@ -517,7 +560,9 @@ Below the spike threshold: sublinear summation (power-law compression). Above: s
 
 **Equation:** Excitability decay with 6-hour half-life:
 
-$$E(t) = E_0 \cdot 2^{-t/6h}$$
+```
+E(t) = E₀ · 2^(-t/6h)
+```
 
 matching the ~6 hour CREB excitability window from Rashid et al. (2016).
 
@@ -543,7 +588,7 @@ matching the ~6 hour CREB excitability window from Rashid et al. (2016).
 
 Dense vector retrieval degrades structurally at long-context scale. On BEAM (Tavakoli et al., ICLR 2026), Cortex's production WRRF pipeline scores 0.437 MRR at 100K tokens (94 memories/conversation) but drops to 0.353 MRR at 10M tokens (7,500 memories/conversation). This degradation is not parametric --- it reflects geometric limits of cosine similarity in moderate dimensions.
 
-The hubness phenomenon (Radovanovic et al., 2010) causes certain points to appear as nearest neighbors of many queries regardless of true relevance. Concentration of distances (Beyer et al., 1999) narrows the gap between nearest and farthest neighbors, making top-$k$ selection unreliable. The Johnson-Lindenstrauss lower bound (Larsen & Nelson, 2017) confirms that 384 dimensions cannot preserve pairwise distances to 10% accuracy for 7,500+ points.
+The hubness phenomenon (Radovanovic et al., 2010) causes certain points to appear as nearest neighbors of many queries regardless of true relevance. Concentration of distances (Beyer et al., 1999) narrows the gap between nearest and farthest neighbors, making top-k selection unreliable. The Johnson-Lindenstrauss lower bound (Larsen & Nelson, 2017) confirms that 384 dimensions cannot preserve pairwise distances to 10% accuracy for 7,500+ points.
 
 No amount of reranking, query rewriting, or embedding model upgrade can fix a geometric ceiling. The architecture must change.
 
@@ -564,7 +609,7 @@ The system comprises two core primitives:
 A prompt is a template with typed placeholder slots. Each slot has:
 
 - A **priority rank** (lower number = higher importance, condensed last).
-- An optional **domain-aware condenser** (code $\to$ signatures only; prose $\to$ first sentence + questions; entity triples $\to$ verbatim).
+- An optional **domain-aware condenser** (code → signatures only; prose → first sentence + questions; entity triples → verbatim).
 - A **token budget** derived from the reader's context window at runtime (never hardcoded).
 
 When the filled template exceeds the budget:
@@ -581,7 +626,7 @@ The truncation warning is, to our knowledge, novel. No paper in the 2024--2026 l
 
 A "stage" is a distinct topical segment of a conversation --- analogous to a work session, a discussion topic, or a thematic unit. The assembler operates in three phases with a configurable budget split (default 60/30/10):
 
-**Phase 1 --- Own-Stage (60% budget).** Retrieve from the current stage's memories using the WRRF pipeline, then select via submodular coverage maximization (Krause & Guestrin, 2008) to maximize information gain rather than raw similarity. Submodular selection ensures diversity: each selected memory adds maximum marginal coverage over concepts not yet covered, preventing the "echo chamber" effect of pure top-$k$ selection.
+**Phase 1 --- Own-Stage (60% budget).** Retrieve from the current stage's memories using the WRRF pipeline, then select via submodular coverage maximization (Krause & Guestrin, 2008) to maximize information gain rather than raw similarity. Submodular selection ensures diversity: each selected memory adds maximum marginal coverage over concepts not yet covered, preventing the "echo chamber" effect of pure top-k selection.
 
 **Phase 2 --- Adjacent Stages via Entity Graph (30% budget).** Extract entities from Phase 1 results. Seed Personalized PageRank (Gutierrez et al., "HippoRAG", NeurIPS 2024) on the entity co-occurrence graph. Score cross-stage memories by aggregated PPR mass. This bridges topically distinct sessions that share entities --- e.g., a debugging session from Monday and a design decision from Thursday that both involve the same Redis component.
 
@@ -682,7 +727,7 @@ We evaluate Cortex on three published benchmarks spanning different scales and c
 
 #### 6.3.1 BEAM-100K
 
-| Metric | WRRF | Assembler | $\Delta$ |
+| Metric | WRRF | Assembler | Δ |
 |--------|------|-----------|----------|
 | **Overall MRR** | 0.591 | 0.602 | +0.011 |
 
@@ -690,13 +735,13 @@ At 100K scale (94 memories/conversation), the assembler is net-flat. Stage-scopi
 
 #### 6.3.2 BEAM-10M
 
-| Metric | WRRF | Assembler | $\Delta$ |
+| Metric | WRRF | Assembler | Δ |
 |--------|------|-----------|----------|
 | **Overall MRR** | 0.353 | **0.429** | **+0.076 (+21.5%)** |
 
 **Per-ability breakdown (Context Assembler):**
 
-| Ability | MRR | R@10 | $\Delta$ vs WRRF | Analysis |
+| Ability | MRR | R@10 | Δ vs WRRF | Analysis |
 |---------|-----|------|-------------------|----------|
 | knowledge_update | **0.892** | 100.0% | +0.057 | Heat decay surfaces newest fact version; stage scoping reduces interference from old versions. |
 | contradiction_resolution | **0.725** | 90.0% | +0.092 | Stage-scoped retrieval isolates conflicting statements to their temporal contexts. |
@@ -707,11 +752,11 @@ At 100K scale (94 memories/conversation), the assembler is net-flat. Stage-scopi
 | abstention | **0.350** | 35.0% | +0.250 | Empty retrieval within a stage correctly signals "no relevant memory," enabling the CE gate to suppress results. |
 | instruction_following | **0.125** | 15.0% | +0.057 | Hardest category --- instructions are phrased like normal statements, lacking the lexical distinctiveness needed for retrieval. |
 | event_ordering | 0.067 | 10.0% | +0.000 | Chronological sequencing requires temporal reasoning beyond what retrieval can provide. |
-| summarization | 0.150 | 22.2% | $-$0.036 | Summarization needs broad coverage across many memories; stage-scoping trades breadth for depth. |
+| summarization | 0.150 | 22.2% | −0.036 | Summarization needs broad coverage across many memories; stage-scoping trades breadth for depth. |
 
-**Architecture thesis:** Stage-scoped structured assembly is net-flat at small scale (corpus fits in flat search) and dominates at large scale (corpus exceeds flat search capacity). The crossover point is between 1M and 10M tokens. The critical validation: multi-session reasoning flips from $-$0.312 at 100K to +0.128 at 10M --- Phase 2's cross-stage PPR traversal reaches gold content that flat WRRF cannot find when drowning in 7,500 near-duplicate embeddings.
+**Architecture thesis:** Stage-scoped structured assembly is net-flat at small scale (corpus fits in flat search) and dominates at large scale (corpus exceeds flat search capacity). The crossover point is between 1M and 10M tokens. The critical validation: multi-session reasoning flips from −0.312 at 100K to +0.128 at 10M --- Phase 2's cross-stage PPR traversal reaches gold content that flat WRRF cannot find when drowning in 7,500 near-duplicate embeddings.
 
-Seven of ten abilities improve. The biggest gains are on exactly the abilities where structured memory should help most: multi-session reasoning (+0.128), abstention (+0.250), and temporal reasoning (+0.097). The one regression (summarization $-$0.036) reflects a genuine trade-off: stage-scoped retrieval focuses depth at the cost of breadth.
+Seven of ten abilities improve. The biggest gains are on exactly the abilities where structured memory should help most: multi-session reasoning (+0.128), abstention (+0.250), and temporal reasoning (+0.097). The one regression (summarization −0.036) reflects a genuine trade-off: stage-scoped retrieval focuses depth at the cost of breadth.
 
 ### 6.4 Ablation Studies
 
@@ -719,16 +764,16 @@ All ablation results are committed to `benchmarks/beam/ablation_results.json`.
 
 #### 6.4.1 Reranking Alpha
 
-The blending coefficient $\alpha$ between WRRF and cross-encoder scores:
+The blending coefficient α between WRRF and cross-encoder scores:
 
-| $\alpha$ | BEAM-100K MRR | Notes |
+| α | BEAM-100K MRR | Notes |
 |----------|---------------|-------|
 | 0.30 | 0.547 | Under-weights cross-encoder |
 | 0.50 | 0.569 | Balanced |
 | **0.55** | **0.591** | **Production default** |
 | 0.70 | 0.585 | Over-weights cross-encoder; slight regression |
 
-The optimal $\alpha = 0.55$ slightly favors the cross-encoder, reflecting its superior ability to judge query-passage relevance compared to the bag-of-signals WRRF score.
+The optimal α = 0.55 slightly favors the cross-encoder, reflecting its superior ability to judge query-passage relevance compared to the bag-of-signals WRRF score.
 
 #### 6.4.2 FTS Weight
 
@@ -760,9 +805,9 @@ Heat weight 0.7 is optimal for BEAM (where recency matters for knowledge updates
 
 #### 6.4.4 Rejected Approaches
 
-**Adaptive alpha (CE spread QPP).** We attempted to dynamically adjust $\alpha$ based on the cross-encoder score spread (query performance prediction). Result: regressed LoCoMo by $-$5.1 pp R@10 while providing negligible BEAM improvement. Rejected.
+**Adaptive alpha (CE spread QPP).** We attempted to dynamically adjust α based on the cross-encoder score spread (query performance prediction). Result: regressed LoCoMo by −5.1 pp R@10 while providing negligible BEAM improvement. Rejected.
 
-**Platt sigmoid for CE gate.** We attempted to replace the binary sufficient-context gate with a calibrated sigmoid (Platt scaling). Result: regressed BEAM by $-$0.148 MRR and LoCoMo by $-$5.1 pp R@10. The hand-tuned binary gate is empirically superior. Proper calibration would require collecting (max\_CE, is\_correct) pairs from benchmarks and fitting via logistic regression --- left for future work.
+**Platt sigmoid for CE gate.** We attempted to replace the binary sufficient-context gate with a calibrated sigmoid (Platt scaling). Result: regressed BEAM by −0.148 MRR and LoCoMo by −5.1 pp R@10. The hand-tuned binary gate is empirically superior. Proper calibration would require collecting (max\_CE, is\_correct) pairs from benchmarks and fitting via logistic regression --- left for future work.
 
 ---
 
@@ -784,17 +829,17 @@ We conducted a module-by-module audit of all 33 neuroscience-related modules, ex
 | Module | Paper | Equation |
 |--------|-------|----------|
 | `spreading_activation.py` | Collins & Loftus 1975 | BFS spreading + convergent summation |
-| `titans_memory.py` | Behrouz et al., NeurIPS 2025 | $M_t = M_{t-1} - S_t$; $S_t = \eta S_{t-1} - \theta \nabla \mathcal{L}$ |
-| `synaptic_plasticity_hebbian.py` | BCM 1982; Bi & Poo 1998 | $\phi(c, \theta_m) = c(c - \theta_m)$; $A^+ \exp(-\Delta t/\tau^+)$ |
-| `synaptic_plasticity.py` | Tsodyks-Markram 1997 | $u_{\text{new}} = u + U(1-u)$; $x_{\text{new}} = x - u_{\text{eff}} x$ |
-| `decay_cycle.py` | ACT-R (Anderson & Lebiere 1998) | $B_i = \ln(n) - d \ln(L)$, $d = 0.5$ |
-| `emotional_tagging.py` | Yerkes-Dodson 1908 | $f(a) = c \cdot a \cdot \exp(-b \cdot a)$ |
-| `dendritic_computation.py` | Poirazi et al. 2003 | Sigmoid $s(n)$ + soma $g(x)$ from Neuron Fig. 3 |
-| `homeostatic_plasticity.py` | Tetzlaff et al. 2011; BCM 1982 | Eq. 3 multiplicative scaling + quadratic $\phi$ |
+| `titans_memory.py` | Behrouz et al., NeurIPS 2025 | Mₜ = Mₜ₋₁ - Sₜ; Sₜ = η·Sₜ₋₁ - θ·∇L |
+| `synaptic_plasticity_hebbian.py` | BCM 1982; Bi & Poo 1998 | φ(c, θₘ) = c(c - θₘ); A⁺ exp(-Δt/τ⁺) |
+| `synaptic_plasticity.py` | Tsodyks-Markram 1997 | u_new = u + U(1-u); x_new = x - u_eff·x |
+| `decay_cycle.py` | ACT-R (Anderson & Lebiere 1998) | Bᵢ = ln(n) - d·ln(L), d = 0.5 |
+| `emotional_tagging.py` | Yerkes-Dodson 1908 | f(a) = c·a·exp(-b·a) |
+| `dendritic_computation.py` | Poirazi et al. 2003 | Sigmoid s(n) + soma g(x) from Neuron Fig. 3 |
+| `homeostatic_plasticity.py` | Tetzlaff et al. 2011; BCM 1982 | Eq. 3 multiplicative scaling + quadratic φ |
 | `separation_core.py` | Leutgeb et al. 2007; Rolls 2013 | 4% sparsity from DG granule cell data |
 | `two_stage_transfer.py` | Ketz et al. 2023 (C-HORSE) | Cortical learning rate 0.02 |
-| `neuromodulation_channels.py` (DA) | Rescorla-Wagner 1972; Schultz 1997 | $\delta = r - V(s)$; DA $= 1 + \delta \in [0, 3]$ |
-| `engram.py` (half-life) | Rashid et al. 2016 | $E(t) = E_0 \cdot 2^{-t/6h}$ |
+| `neuromodulation_channels.py` (DA) | Rescorla-Wagner 1972; Schultz 1997 | δ = r - V(s); DA = 1 + δ in [0, 3] |
+| `engram.py` (half-life) | Rashid et al. 2016 | E(t) = E₀·2^(-t/6h) |
 
 **12 DOCUMENTED** engineering adaptations with explicit justification:
 
@@ -854,7 +899,7 @@ The audit has undergone two major revision waves:
 
 **Event ordering.** 10.0% R@10 on BEAM-10M event ordering (unchanged by the context assembler). Chronological sequencing requires architectural support beyond what retrieval provides --- likely a dedicated sequence model over the conversation timeline.
 
-**Summarization regression.** The context assembler's stage-scoping trades breadth for depth, causing a $-$0.036 MRR regression on summarization at 10M scale. Wiring Phase 3 to Cortex's CLS consolidation engine (which produces cross-stage semantic summaries) should address this.
+**Summarization regression.** The context assembler's stage-scoping trades breadth for depth, causing a −0.036 MRR regression on summarization at 10M scale. Wiring Phase 3 to Cortex's CLS consolidation engine (which produces cross-stage semantic summaries) should address this.
 
 **Instruction following.** 15.0% R@10 on BEAM-10M. Instructions are phrased like normal statements, lacking the lexical or semantic distinctiveness needed for current retrieval signals. This may require a dedicated instruction-detection classifier.
 
@@ -883,11 +928,11 @@ Values without paper backing, explicitly documented as engineering choices:
 | FTS weight | 0.5 | `pg_recall.py` | Balanced across benchmarks (Section 6.4.2) |
 | Heat weight | 0.3 | `pg_recall.py` | Balanced across benchmarks (Section 6.4.3) |
 | CE gate threshold | 0.15 | `reranker.py` | Engineering default |
-| Titans $\eta/\theta$ | 0.9/0.01 | `titans_memory.py` | Paper uses learned params |
-| Reranking $\alpha$ | 0.55 | `reranker.py` | Ablation-derived (Section 6.4.1) |
-| WRRF smoothing $k$ | 60 | `pg_recall.py` | Standard RRF constant |
+| Titans η/θ | 0.9/0.01 | `titans_memory.py` | Paper uses learned params |
+| Reranking α | 0.55 | `reranker.py` | Ablation-derived (Section 6.4.1) |
+| WRRF smoothing k | 60 | `pg_recall.py` | Standard RRF constant |
 | Separation strength | 0.5 | `separation_core.py` | Controls orthogonalization aggressiveness |
-| BCM $\theta$ decay | 0.95 | `homeostatic_plasticity.py` | EMA smoothing coefficient |
+| BCM θ decay | 0.95 | `homeostatic_plasticity.py` | EMA smoothing coefficient |
 | STDP time constants | 24h | `synaptic_plasticity_hebbian.py` | Adapted from biological 17--34 ms |
 | Synaptic tag window | 48h | `synaptic_tagging.py` | Adapted from biological 1--6 h |
 
