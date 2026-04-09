@@ -1,9 +1,6 @@
 # Priority-Budgeted Stage-Aware Context Assembly for Long-Context Memory Retrieval
 
-**Clement Deust**$^{1}$ and **Claude Opus 4.6**$^{2}$
-
-$^{1}$Independent researcher (architecture, original design, benchmarking)
-$^{2}$Anthropic (Python port, benchmark integration, paper-backed complements)
+**Clement Deust** (architecture, original design, benchmarking) and **Claude Opus 4.6** (Python port, benchmark integration, paper-backed complements)
 
 **Date:** April 2026
 
@@ -451,8 +448,7 @@ information is represented) with diversity (how different the
 selected sentences are).
 
 **Maximal Marginal Relevance** (Carbonell & Goldstein, SIGIR 1998).
-The MMR criterion -- $\text{score}(c) - \lambda \cdot \max_{s \in S}
-\text{sim}(c, s)$ -- is the most common instantiation of submodular
+The MMR criterion -- $\text{score}(c) - \lambda \cdot \max_{s \in S} \text{sim}(c, s)$ -- is the most common instantiation of submodular
 selection in retrieval.  Carbonell and Goldstein introduced it for
 reranking search results; we apply it to memory selection within a
 stage.  When $\lambda < 1$, the MMR objective is submodular (proof:
@@ -722,8 +718,7 @@ A *stage* is a distinct topical segment of a conversation --
 analogous to a work session, a debugging episode, or a design
 discussion.  Stage detection is pluggable (Section 3.2.1).  The
 assembler operates in three phases with a configurable budget split
-$(\beta_1, \beta_2, \beta_3)$ where $\beta_1 + \beta_2 + \beta_3
-= 1$ (default: 0.6, 0.3, 0.1).
+$(\beta_1, \beta_2, \beta_3)$ where $\beta_1 + \beta_2 + \beta_3 = 1$ (default: 0.6, 0.3, 0.1).
 
 #### 3.2.1 Stage Detection
 
@@ -811,8 +806,7 @@ function SUBMODULAR_SELECT(candidates, max_chunks, lambda):
 ```
 
 **Approximation guarantee.**  By Krause & Guestrin (2008), the greedy
-algorithm achieves $f(S_k) \geq (1 - 1/e) \cdot f(S^*_k) \approx
-0.63 \cdot f(S^*_k)$ for any monotone submodular function under
+algorithm achieves $f(S_k) \geq (1 - 1/e) \cdot f(S^*_k) \approx 0.63 \cdot f(S^*_k)$ for any monotone submodular function under
 cardinality constraints.  The MMR objective with $\lambda < 1$ is
 submodular (the max-similarity penalty is submodular as the pointwise
 maximum of linear functions), so this guarantee applies.
@@ -1370,9 +1364,7 @@ At 10M tokens:
 $$\rho_{10M} = \frac{n}{d} = \frac{7500}{384} \approx 19.5$$
 
 The hubness phenomenon (Radovanovic et al., 2010) becomes significant
-when $\rho \gg 1$.  At $\rho = 0.24$, the embedding space is
-underpopulated; nearest-neighbor search is reliable.  At $\rho =
-19.5$, the space is overcrowded; hubness, distance concentration, and
+when $\rho \gg 1$.  At $\rho = 0.24$, the embedding space is underpopulated; nearest-neighbor search is reliable.  At $\rho = 19.5$, the space is overcrowded; hubness, distance concentration, and
 the JL lower bound all contribute to retrieval degradation.
 
 The crossover point -- where structured assembly's benefit exceeds
@@ -1777,7 +1769,7 @@ untested.
 
 An LLM-as-judge evaluation using BEAM's nugget scoring protocol
 would enable direct comparison with LIGHT and other published systems.
-This requires an LLM inference budget (~$200-500 for 196 questions x
+This requires an LLM inference budget (~200-500 USD for 196 questions x
 3 nuggets x GPT-4-class judge) not available for this work.
 
 ### 8.6 Budget Split Optimization
