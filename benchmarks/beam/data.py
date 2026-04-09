@@ -222,8 +222,8 @@ def turns_to_memories(turns: list[dict]) -> list[dict]:
             # Stage ID: for 10M, prefer plan_id (from extract_10m_chat);
             # for 100K/500K/1M, fall back to time_anchor session.
             turn_plan = turns[max(0, i - 1)].get("plan_id", "")
-            stage_id = turn_plan if turn_plan else (
-                last_anchor if last_anchor else "stage-0"
+            stage_id = (
+                turn_plan if turn_plan else (last_anchor if last_anchor else "stage-0")
             )
             memories.append(
                 {

@@ -144,10 +144,9 @@ def ingest_memory(
         # it inline here makes benchmark and production paths consistent.
         try:
             from mcp_server.core import knowledge_graph, write_post_store
+
             extracted = knowledge_graph.extract_entities(chunk_content)
-            write_post_store.persist_entities(
-                extracted, domain, chunk_content, store
-            )
+            write_post_store.persist_entities(extracted, domain, chunk_content, store)
         except Exception:
             # Entity extraction failures must not block ingest.
             pass

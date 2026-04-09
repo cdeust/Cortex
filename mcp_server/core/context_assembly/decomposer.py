@@ -20,6 +20,7 @@ Retrieval (chunk-level LLM summaries, different goal) and various
 token-budgeting recipes in LangChain-style libraries (flat truncation,
 no priorities, no domain awareness, no model-side warning).
 """
+
 from __future__ import annotations
 
 from typing import Callable
@@ -173,9 +174,7 @@ def assemble_prompt(
             # Rebuild prompt
             prompt = template
             for pp in placeholders:
-                prompt = prompt.replace(
-                    pp.key, current_values.get(pp.key, pp.value)
-                )
+                prompt = prompt.replace(pp.key, current_values.get(pp.key, pp.value))
             did_trim = True
             break
         if not did_trim:
@@ -184,9 +183,7 @@ def assemble_prompt(
 
     # Update final metrics after the safety loop
     for p in placeholders:
-        metrics.final_tokens[p.key] = estimator(
-            current_values.get(p.key, p.value)
-        )
+        metrics.final_tokens[p.key] = estimator(current_values.get(p.key, p.value))
     metrics.total_final_tokens = estimator(prompt)
 
     # Step 6: truncation warning banner

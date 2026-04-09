@@ -372,9 +372,7 @@ def assemble_context(
         if _graph_cache:
             return _graph_cache
         entities = (
-            store.get_all_entities()
-            if hasattr(store, "get_all_entities")
-            else []
+            store.get_all_entities() if hasattr(store, "get_all_entities") else []
         )
         relationships = (
             store.get_all_relationships()
@@ -384,12 +382,10 @@ def assemble_context(
         _graph_cache["entities"] = entities
         _graph_cache["relationships"] = relationships
         _graph_cache["id_to_name"] = {
-            str(e.get("id")): e.get("name", "")
-            for e in entities
+            str(e.get("id")): e.get("name", "") for e in entities
         }
         _graph_cache["name_to_id"] = {
-            (e.get("name") or "").lower(): str(e.get("id"))
-            for e in entities
+            (e.get("name") or "").lower(): str(e.get("id")) for e in entities
         }
         return _graph_cache
 
@@ -404,9 +400,7 @@ def assemble_context(
     # appearing in any memory is present in the graph. Substring
     # matching from the graph down to each memory gives complete
     # memory→entity linkage for both code and prose.
-    def _retrieve_fn(
-        q: str, stage_id: str, max_results: int
-    ) -> list[dict[str, Any]]:
+    def _retrieve_fn(q: str, stage_id: str, max_results: int) -> list[dict[str, Any]]:
         candidates = recall(
             query=q,
             store=store,
@@ -445,9 +439,7 @@ def assemble_context(
         return filtered
 
     # ── Entity graph callback for Phase 2 ─────────────────────────────
-    def _entity_graph_fn() -> tuple[
-        list[dict[str, Any]], list[dict[str, Any]]
-    ]:
+    def _entity_graph_fn() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         graph = _ensure_graph()
         return graph["entities"], graph["relationships"]
 

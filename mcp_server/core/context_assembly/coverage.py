@@ -18,6 +18,7 @@ chunks are often substrings of each other.
 where similarity is cosine over embeddings. This is the Carbonell &
 Goldstein MMR (1998) objective, which is submodular when λ < 1.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -100,7 +101,10 @@ def submodular_select(
             else:
                 emb = embeddings[i]
                 sims = [
-                    float(np.dot(emb, s) / (np.linalg.norm(emb) * np.linalg.norm(s) + 1e-8))
+                    float(
+                        np.dot(emb, s)
+                        / (np.linalg.norm(emb) * np.linalg.norm(s) + 1e-8)
+                    )
                     for s in selected_embs
                     if s is not None
                 ]
