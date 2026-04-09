@@ -23,6 +23,28 @@ Memory that learns, consolidates, forgets intelligently, and surfaces the right 
 
 ---
 
+Claude Code forgets everything when you close the tab.
+
+The architecture decisions you anchored on Monday. The debugging breakthrough from last Thursday. The migration plan you iterated on for three sessions. The correction you made about never mocking the database. Gone. Every session starts from zero.
+
+Cortex fixes this. Not with "conversation history" — with real memory. The kind that fades when unused, strengthens when accessed, compresses over time, connects related ideas across sessions, and surfaces exactly what you need before you ask for it. Built on the same neuroscience that explains how your own memory works.
+
+**20 biological mechanisms. 33 MCP tools. 7 automatic hooks. Runs entirely on your machine. PostgreSQL + pgvector.**
+
+---
+
+## What It Actually Feels Like
+
+**Monday** — You're debugging a webhook handler. After two hours, you find the root cause: a race condition in the Redis session store where TTL expiry can fire between the auth check and the permission lookup. You note a fix approach. Session ends.
+
+**Thursday** — Different project, different codebase. You hit a similar authentication issue. You start typing a question to Claude about session management, and before Claude responds, Cortex has already injected three memories: Monday's race condition analysis, a decision from last month to use Redis for all session state, and a lesson from an even older session about TTL edge cases.
+
+Not "here's your conversation history." Real recall — across sessions, across projects, weighted by relevance and recency, with the noisy stuff already forgotten.
+
+**Three weeks later** — Those individual debugging sessions have been consolidated into a general pattern: "authentication edge cases involving TTL-based caches." The specific Redis commands are compressed to a summary. The principle survived. The noise didn't. Your next auth debugging session starts with institutional knowledge, not a blank page.
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -336,16 +358,34 @@ Built on **41 published papers** across neuroscience, information retrieval, and
 
 ## Benchmarks
 
-All scores are **retrieval-only** — no LLM reader. We measure whether the right evidence appears in the top results.
+Three published benchmarks, each testing a different aspect of long-term memory. All scores are **retrieval-only** — no LLM reader in the loop. We measure whether retrieval places the right evidence in front of the model.
 
-| Benchmark | What it tests | Cortex | Paper best | Paper |
-|---|---|---|---|---|
-| **LongMemEval** | 500 questions across ~40 sessions | **97.8% R@10** | 78.4% | Wang et al., ICLR 2025 |
-| **LoCoMo** | 1986 questions, multi-session conversations | **92.6% R@10** | — | Maharana et al., ACL 2024 |
-| **BEAM-100K** | 20 conversations, 100K tokens each | **0.602 MRR** | 0.329 (LIGHT) | Tavakoli et al., ICLR 2026 |
-| **BEAM-10M** | 10 conversations, 10M tokens each (hardest) | **0.429 MRR (+21.5%)** | 0.266 (LIGHT) | Tavakoli et al., ICLR 2026 |
+### LongMemEval — can you find a specific fact from 40 sessions ago?
 
-The BEAM-10M improvement comes from the [Structured Context Assembly](docs/research-post-context-assembly.md) architecture — originating from [ai-prd-builder](https://github.com/cdeust/ai-prd-builder) (September 2025, one month before the BEAM paper).
+500 human-curated questions embedded in ~40 sessions of conversation history. The paper's best retrieval hit 78.4% Recall@10.
+
+**Cortex: 97.8% Recall@10, 0.882 MRR.** The correct memory is almost always the first result.
+
+### LoCoMo — can you handle adversarial, multi-hop, and temporal queries?
+
+1,986 questions across 10 conversations, including trick questions designed to confuse retrieval systems, questions requiring connecting evidence from multiple turns, and time-sensitive queries.
+
+**Cortex: 92.6% Recall@10, 0.794 MRR.** Strongest on adversarial (93.9% R@10) and open-domain (95.0%) queries.
+
+### BEAM — the stress test at 10 million tokens
+
+BEAM (Tavakoli et al., ICLR 2026) is the hardest long-term memory benchmark published. 10 conversations, each spanning up to 10 million tokens. 200 probing questions across 10 memory abilities — including three that no prior benchmark tests: contradiction resolution, event ordering, and instruction following.
+
+Every system in the paper collapses at this scale. The best result reported (LIGHT on Llama-4-Maverick) scores 0.266.
+
+| Split | WRRF baseline | With Context Assembler | Improvement |
+|---|---|---|---|
+| BEAM-100K (20 conversations) | 0.591 | **0.602** | +0.011 |
+| **BEAM-10M** (10 conversations) | 0.353 | **0.429** | **+21.5%** |
+
+At 10M tokens per conversation, flat retrieval drowns in ~7,500 near-duplicate memories. The [Structured Context Assembly](docs/research-post-context-assembly.md) architecture — originally designed for generating 9-page PRDs on Apple Intelligence's 4096-token window ([ai-prd-builder](https://github.com/cdeust/ai-prd-builder), [September 2025](https://github.com/cdeust/ai-prd-builder/commit/462de01)) — breaks the conversation into stages, retrieves within the current stage, follows entity graph connections to related stages, and falls back to summaries for everything else. 8 of 10 memory abilities improve.
+
+> **Honest caveat:** BEAM does not define a retrieval MRR metric — the paper uses LLM-as-judge nugget scoring. Our "MRR" is a retrieval proxy (rank of first substring-matching memory). Paper scores shown for directional reference, not direct comparison.
 
 <details>
 <summary>Running benchmarks, measurement protocol, per-category breakdowns</summary>
