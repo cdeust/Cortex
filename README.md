@@ -177,49 +177,51 @@ See `mcp_server/infrastructure/memory_config.py` for the full list (~40 paramete
 
 ## How It Works
 
-Cortex runs as an MCP server alongside Claude Code. It captures what you work on, consolidates it while you're away, and resurfaces the right context when you need it.
+Cortex runs invisibly alongside Claude Code. You don't manage memory — it does.
 
-### Memory is Invisible
+### Your session, automatically enriched
 
-You don't manage memory. Cortex does.
+| When | What happens | You see |
+|---|---|---|
+| **Session starts** | Cortex loads your hot memories, anchored decisions, and team context into Claude's prompt | Claude already knows what you were working on yesterday |
+| **You write code** | Hooks capture edits, commands, and test results as memories. Related memories get a heat boost so they surface in future recalls | Nothing — it's automatic |
+| **You ask a question** | Cortex searches 5 signals simultaneously (meaning, keywords, fuzzy match, importance, recency), reranks with a cross-encoder, and injects the best matches into Claude's context | Claude answers with context from weeks ago that you forgot about |
+| **Session ends** | A "dream" cycle decays old memories, compresses verbose ones, and promotes repeated patterns into general knowledge | Your next session is cleaner and more focused |
+| **Days pass** | Unused memories cool down naturally. Important ones stay hot. Protected decisions never decay | Cortex forgets the noise, keeps the signal |
 
-**Session start** — hot memories, anchored decisions, and team context inject automatically. No manual recall needed.
+### Retrieval: five signals, one answer
 
-**During work** — PostToolUse hooks capture significant actions (edits, commands, test results). Decisions are auto-detected and protected from forgetting. File edits prime related memories via spreading activation so they surface in subsequent recall.
-
-**Session end** — a "dream" cycle runs automatically: decay old memories, compress verbose ones, and for long sessions, consolidate episodic memories into semantic knowledge (CLS).
-
-**Between sessions** — memories cool naturally (Ebbinghaus forgetting curve). Important ones stay hot. Protected decisions never decay.
-
-### Retrieval Pipeline
-
-Six signals fused server-side in PostgreSQL, then reranked client-side:
+When you search, Cortex doesn't just look for similar text — it combines five different signals, all computed inside PostgreSQL in a single query:
 
 <p align="center">
 <img src="docs/diagram-retrieval-pipeline.svg" alt="Retrieval pipeline: Intent → TMM fusion → FlashRank reranking" width="80%"/>
 </p>
 
-| Signal | Source | Paper |
+| Signal | What it finds | Example |
 |---|---|---|
-| Vector similarity | pgvector HNSW (384-dim) | Bruch et al. 2023 |
-| Full-text search | tsvector + ts_rank_cd | Bruch et al. 2023 |
-| Trigram similarity | pg_trgm | Bruch et al. 2023 |
-| Thermodynamic heat | Ebbinghaus decay model | Ebbinghaus 1885 |
-| Recency | Exponential time decay | — |
+| **Vector similarity** | Memories with similar *meaning* | "fix the auth bug" finds "resolved authentication issue" |
+| **Full-text search** | Memories with matching *keywords* | "PostgreSQL migration" finds exact term matches |
+| **Trigram similarity** | Memories with similar *spelling* | "postgre" still finds "PostgreSQL" |
+| **Thermodynamic heat** | Memories you use *frequently* | Your most-accessed architectural decisions rank higher |
+| **Recency** | Memories from *recent* sessions | Yesterday's context ranks above last month's |
 
-### Hooks
+After fusion, a cross-encoder AI (FlashRank) re-scores the top candidates for a final quality check.
 
-Seven hooks integrate with Claude Code's lifecycle (managed via `plugin.json`, no manual setup):
+For conversations over 1M tokens, the **Structured Context Assembler** replaces flat search with stage-scoped 3-phase retrieval — see [benchmarks](#benchmarks) for measured results.
 
-| Hook | Event | What It Does |
+### Seven hooks — zero configuration
+
+Hooks fire automatically via Claude Code's plugin system. No manual setup after installation.
+
+| Hook | When it fires | What it does for you |
 |---|---|---|
-| **SessionStart** | Session opens | Injects anchors + hot memories + team decisions + checkpoint |
-| **UserPromptSubmit** | Before response | Auto-recalls relevant memories based on user's prompt |
-| **PostToolUse** | After Edit/Write/Bash | Auto-captures significant actions as memories |
-| **PostToolUse** | After Edit/Write/Read | Primes related memories via heat boost (spreading activation) |
-| **SessionEnd** | Session closes | Runs dream cycle (decay, compress, CLS based on activity) |
-| **Compaction** | Context compacts | Saves checkpoint; restores context after compaction |
-| **SubagentStart** | Agent spawned | Briefs agent with prior work + team decisions |
+| **SessionStart** | You open Claude Code | Loads your hot memories, anchored decisions, and last checkpoint |
+| **UserPromptSubmit** | Before Claude responds | Searches for memories relevant to what you just asked |
+| **PostToolUse** | After you edit/write/run code | Captures the action as a memory if it's significant |
+| **PostToolUse** | After you read/edit files | Boosts related memories so they surface in the next recall |
+| **SessionEnd** | You close Claude Code | Runs the dream cycle — decay, compress, consolidate |
+| **Compaction** | Claude's context window fills up | Saves a checkpoint so nothing is lost when context compresses |
+| **SubagentStart** | An agent is spawned | Briefs the agent with your prior work and team decisions |
 
 ---
 
@@ -499,21 +501,24 @@ Six approaches tried to improve instruction_following (0.244) and preference_fol
 
 ## Architecture
 
-Clean Architecture with strict dependency rules. Inner layers never import outer layers.
+Cortex follows Clean Architecture — the brain (core logic) never touches the outside world (database, files, network). Everything flows through strict layers:
 
 <p align="center">
 <img src="docs/diagram-architecture.svg" alt="Clean Architecture layers" width="80%"/>
 </p>
 
-| Layer | Modules | Rule |
-|---|---|---|
-| **core/** | 118 | Pure business logic. Zero I/O. Imports only `shared/`. |
-| **infrastructure/** | 33 | All I/O: PostgreSQL, embeddings, file system. |
-| **handlers/** | 62 tools | Composition roots wiring core + infrastructure. |
-| **hooks/** | 7 | Lifecycle automation (SessionStart/End, PostToolUse, etc.) |
-| **shared/** | 12 | Pure utilities. Python stdlib only. |
+| Layer | What lives here | Count | Rule |
+|---|---|---|---|
+| **core/** | All the neuroscience + retrieval logic | 118 modules | Pure math and algorithms. No database calls, no file reads. |
+| **context_assembly/** | The structured context assembler (new) | 10 modules | Stage-aware 3-phase retrieval + priority-budgeted prompt assembly |
+| **infrastructure/** | PostgreSQL, embeddings, file I/O | 33 modules | The only layer that talks to the outside world |
+| **handlers/** | MCP tools (remember, recall, consolidate...) | 62 tools | Wires core logic to infrastructure — the "plugs" |
+| **hooks/** | Automatic lifecycle actions | 7 hooks | Fires on session start/end, tool use, compaction |
+| **shared/** | Utility functions | 12 modules | Text processing, similarity, hashing — no dependencies |
 
-**Storage:** PostgreSQL 15+ with pgvector (HNSW) and pg_trgm. All retrieval in PL/pgSQL stored procedures.
+**Why this matters:** Any mechanism can be tested in isolation (no database needed), swapped without breaking others, and audited against its paper without reading infrastructure code.
+
+**Storage:** PostgreSQL 15+ with pgvector (HNSW vector index) and pg_trgm (fuzzy text matching). All retrieval runs as PL/pgSQL stored procedures — the database does the heavy lifting, not Python.
 
 ---
 
