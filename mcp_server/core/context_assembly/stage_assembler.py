@@ -180,11 +180,9 @@ class StageAwareContextAssembler:
         real budget (the Swift ContextDecomposer pattern).
         """
         if token_budget is None:
-            own_budget = None
             adj_budget = None
             sum_budget = None
         else:
-            own_budget = int(token_budget * budget_split.own_stage)
             adj_budget = int(token_budget * budget_split.adjacent)
             sum_budget = int(token_budget * budget_split.summaries)
 
