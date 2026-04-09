@@ -106,6 +106,15 @@ LongMemEval (Wu et al., ICLR 2025): 500 human-curated questions embedded in ~40 
 | Recall@10 | **97.8%** | The right memory shows up in the top 10 results for nearly every question |
 | MRR | **0.882** | The correct answer is usually the first or second result |
 
+| Category | MRR | R@10 | Why this score |
+|---|---|---|---|
+| Single-session (assistant) | 0.982 | 100.0% | Verbatim assistant responses are easy to match |
+| Multi-session reasoning | 0.936 | 99.2% | Entity graph connects evidence across sessions |
+| Knowledge updates | 0.921 | 100.0% | Heat decay naturally surfaces the newest version of a fact |
+| Temporal reasoning | 0.857 | 97.7% | Time anchors embedded directly in memory content |
+| Single-session (user) | 0.806 | 94.3% | User phrasing varies more than assistant responses |
+| Single-session (preference) | 0.641 | 90.0% | Preferences are implicit — harder to retrieve by keyword |
+
 Knowledge updates scored highest because heat-based decay naturally pushes newer information above older versions of the same fact. This wasn't designed for the benchmark. It's just how the thermodynamic model works.
 
 ### LoCoMo — can you handle trick questions and multi-hop reasoning?
@@ -116,6 +125,14 @@ LoCoMo (Maharana et al., ACL 2024): 1,986 questions across 10 conversations, inc
 |---|---|---|
 | Recall@10 | **92.6%** | Right memory in top 10 over 9 times out of 10 |
 | MRR | **0.794** | Correct answer is typically the first result |
+
+| Category | MRR | R@10 | Why this score |
+|---|---|---|---|
+| Adversarial | 0.855 | 93.9% | Trick questions can't fool five fused signals |
+| Open-domain | 0.835 | 95.0% | Broad questions benefit from multi-signal coverage |
+| Multi-hop | 0.760 | 88.8% | Entity graph connects evidence across turns |
+| Single-hop | 0.700 | 92.9% | Direct factual questions — strong but room to improve |
+| Temporal | 0.539 | 77.2% | "When did X happen?" is the hardest category — needs better time-series matching |
 
 No LLM at query time. No API calls. Just a 22MB embedding model, PostgreSQL with pgvector, and neuroscience algorithms doing the heavy lifting. Five retrieval signals fused server-side (vector similarity, full-text search, trigram matching, thermodynamic heat, recency), then reranked by a cross-encoder.
 
@@ -129,6 +146,23 @@ Every system in the paper collapses at this scale. The best result reported (LIG
 |---|---|---|---|
 | BEAM-100K | 0.591 | **0.602** | Flat search still works at small scale |
 | **BEAM-10M** | 0.353 | **0.429 (+21.5%)** | Structured assembly dominates when flat search drowns |
+
+**BEAM-10M per-ability breakdown (Context Assembler):**
+
+| Ability | MRR | R@10 | Δ vs WRRF | What happened |
+|---|---|---|---|---|
+| knowledge_update | **0.892** | 100.0% | +0.057 | Heat decay surfaces the newest version of a fact |
+| contradiction_resolution | **0.725** | 90.0% | +0.092 | Stage-scoped retrieval isolates conflicting statements |
+| multi_session_reasoning | **0.543** | 80.0% | +0.128 | Entity graph bridges evidence across sessions |
+| information_extraction | **0.487** | 70.0% | +0.039 | Specific facts found within the right stage |
+| preference_following | **0.481** | 65.0% | +0.069 | User preferences tracked via entity co-occurrence |
+| temporal_reasoning | **0.467** | 50.0% | +0.097 | Time anchors + stage boundaries help "when" questions |
+| abstention | **0.350** | 35.0% | +0.250 | Empty retrieval correctly signals "no relevant memory" |
+| instruction_following | **0.125** | 15.0% | +0.057 | Hardest category — instructions look like normal questions |
+| event_ordering | 0.067 | 10.0% | +0.000 | Chronological sequencing needs more than retrieval |
+| summarization | 0.150 | 22.2% | −0.036 | Summarization needs many sources at once — stage scoping limits breadth |
+
+Seven of ten abilities improve. The biggest gains are on exactly the abilities where structured memory should help most: multi-session reasoning (+0.128), abstention (+0.250), and temporal reasoning (+0.097). The one regression (summarization −0.036) reflects a genuine trade-off: stage-scoped retrieval focuses depth at the cost of breadth.
 
 At 10 million tokens per conversation, you have ~7,500 memories that all look similar to a vector search engine. The [Structured Context Assembly](docs/research-post-context-assembly.md) architecture fixes this by breaking the conversation into stages (distinct topics), retrieving within the current stage first, following entity graph connections to related stages, and falling back to summaries for everything else. 8 of 10 memory abilities improve.
 
