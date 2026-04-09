@@ -196,6 +196,19 @@ After fusion, a cross-encoder AI (FlashRank) re-scores the top candidates for a 
 
 For conversations over 1M tokens, the **Structured Context Assembler** replaces flat search with stage-scoped 3-phase retrieval — see [benchmarks](#benchmarks) for measured results.
 
+### Auto-generated project wiki
+
+Every time you store a memory (manually or via hooks), Cortex doesn't just save it — it extracts entities, builds relationships, detects schemas, and links the new memory into a growing knowledge graph. Over time, this becomes a **living wiki of your project**: decisions and their rationale, patterns that emerged, lessons learned, architectural constraints, and how they all connect.
+
+You can explore this wiki through:
+- **`/cortex-visualize`** — interactive neural graph in your browser (see screenshots below)
+- **`/cortex-explore-memory`** — navigate by entity, domain, or time
+- **`get_causal_chain`** — trace how one decision led to another
+- **`get_project_story`** — auto-generated narrative of your project's evolution
+- **`detect_gaps`** — find areas where knowledge is thin or isolated
+
+This isn't documentation you write — it's documentation that writes itself from how you work.
+
 ### Seven hooks — zero configuration
 
 Hooks fire automatically via Claude Code's plugin system. No manual setup after installation.
@@ -304,9 +317,20 @@ After plugin install, use these from any Claude Code session:
 
 ## Scientific Foundation
 
-Built on **41 published papers** across neuroscience, information retrieval, and cognitive science. **20 biological mechanisms** implemented faithfully — predictive coding, emotional tagging, neuromodulation, sleep replay, compression cascade, episodic-to-semantic transfer, schema formation, pattern separation, synaptic tagging, homeostatic plasticity, and more.
+Built on **41 published papers** across neuroscience, information retrieval, and cognitive science. **20 biological mechanisms** implemented faithfully — not as metaphors, but with the actual equations from the papers. Every threshold, weight, and algorithm traces to a published source or measured ablation. Nothing is guessed.
 
-Every threshold, weight, and algorithm traces to a published source or measured ablation — nothing is guessed. Full science with plain-language explanations: **[docs/science.md](docs/science.md)**
+| What Cortex does | How your brain does it | Paper |
+|---|---|---|
+| Only stores what's genuinely new | Predictive coding — your brain filters out predictable input | Friston 2005 |
+| Emotional memories are stronger | Amygdala tags important moments for priority encoding | Wang & Bhatt 2024 |
+| Replays important memories during idle time | Hippocampal sharp-wave ripples during sleep | Foster & Wilson 2006 |
+| Old memories compress to summaries | Episodic → semantic transfer over time | McClelland et al. 1995 |
+| Unused memories fade, accessed ones stay hot | Power-law forgetting curve | Anderson & Lebiere 1998 |
+| Similar memories stay distinct | Dentate gyrus pattern separation | Leutgeb et al. 2007 |
+| Related memories form reusable templates | Schema formation in prefrontal cortex | Tse et al. 2007 |
+| Important new info retroactively boosts old related memories | Synaptic tagging and capture | Frey & Morris 1997 |
+
+**Technical deep-dives:** [docs/science.md](docs/science.md) — full paper citations, equations, ablation data, and per-module audit | [Research post on structured context assembly](docs/research-post-context-assembly.md) — the BEAM-10M +21.5% result with full methodology and provenance
 
 ---
 
