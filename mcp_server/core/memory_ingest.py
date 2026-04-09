@@ -136,6 +136,21 @@ def ingest_memory(
             }
         )
         ids.append(mid)
+        # Entity extraction for the knowledge graph. The production
+        # `remember` handler calls write_post_store.persist_entities
+        # after insertion; benchmark ingestion historically bypassed
+        # this which left the entity/relationship tables empty and
+        # broke Phase 2 of the structured context assembler. Running
+        # it inline here makes benchmark and production paths consistent.
+        try:
+            from mcp_server.core import knowledge_graph, write_post_store
+            extracted = knowledge_graph.extract_entities(chunk_content)
+            write_post_store.persist_entities(
+                extracted, domain, chunk_content, store
+            )
+        except Exception:
+            # Entity extraction failures must not block ingest.
+            pass
 
     return ids
 
