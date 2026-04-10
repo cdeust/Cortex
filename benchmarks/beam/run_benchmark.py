@@ -60,11 +60,13 @@ def _get_stage_detector():
         from mcp_server.core.context_assembly.stage_detector import (
             TemporalStageDetector,
         )
+
         return TemporalStageDetector(gap_hours=24.0, time_field="created_at")
     else:
         from mcp_server.core.context_assembly.stage_detector import (
             ExplicitStageDetector,
         )
+
         return ExplicitStageDetector(field="agent_context")
 
 
@@ -102,6 +104,7 @@ def _current_stage_for_question(q: dict, conversation_turns: list[dict]) -> str:
                 from mcp_server.core.context_assembly.stage_detector import (
                     TemporalStageDetector,
                 )
+
                 ts = TemporalStageDetector._parse_ts(last_anchor)
                 if ts:
                     return f"day-{ts.date().isoformat()}"
@@ -112,6 +115,7 @@ def _current_stage_for_question(q: dict, conversation_turns: list[dict]) -> str:
         from mcp_server.core.context_assembly.stage_detector import (
             TemporalStageDetector,
         )
+
         ts = TemporalStageDetector._parse_ts(last_anchor)
         if ts:
             return f"day-{ts.date().isoformat()}"
@@ -171,7 +175,9 @@ def evaluate_retrieval(
                 raw_stage = _current_stage_for_question(q, conversation_turns)
                 # Oracle mode: memories have agent_context="beam:plan-0"
                 # Temporal mode: detector reads created_at → "day-YYYY-MM-DD"
-                current_stage = f"beam:{raw_stage}" if stage_mode != "temporal" else raw_stage
+                current_stage = (
+                    f"beam:{raw_stage}" if stage_mode != "temporal" else raw_stage
+                )
                 asm = db.assemble_context(
                     query=query,
                     current_stage=current_stage,
