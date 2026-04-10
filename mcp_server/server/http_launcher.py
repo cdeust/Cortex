@@ -85,17 +85,28 @@ def launch_server(server_type: str) -> str:
 
 
 def open_in_browser(url: str) -> None:
-    """Open a URL in the default browser (cross-platform)."""
+    """Open a URL in the default browser (cross-platform).
+
+    Security: URL is validated to be a localhost HTTP URL before being
+    passed to the system browser opener (CWE-78 mitigation). Only
+    http://127.0.0.1:* URLs are allowed — no arbitrary command execution.
+    """
+    import re
+
+    # Strict allowlist: only localhost HTTP URLs on numeric ports
+    if not re.match(r"^https?://127\.0\.0\.1:\d{1,5}(/.*)?$", url):
+        return  # Silently reject non-localhost URLs
+
     try:
         subprocess.Popen(
-            ["open", url],
+            ["open", url],  # noqa: S603 — URL validated above
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
     except FileNotFoundError:
         try:
             subprocess.Popen(
-                ["xdg-open", url],
+                ["xdg-open", url],  # noqa: S603
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )

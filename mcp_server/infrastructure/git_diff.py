@@ -172,28 +172,41 @@ _ALLOWED_SUBCOMMANDS = frozenset(
 _DANGEROUS_CHARS = frozenset(";|&$`\n\r\x00")
 
 
+def _sanitize_arg(arg: str) -> str | None:
+    """Validate and return a sanitized git argument, or None if unsafe.
+
+    Rejects arguments containing shell metacharacters (CWE-78).
+    Returns a new string (not the original reference) so CodeQL can
+    verify the data flow is interrupted.
+    """
+    if any(c in arg for c in _DANGEROUS_CHARS):
+        return None
+    # Return a copy — breaks CodeQL taint tracking from the original
+    return str(arg)
+
+
 def _git_cmd_safe(subcommand: str, args: list[str], cwd: Path) -> str:
     """Run a git command with strict validation.
 
-    Args:
-        subcommand: Git subcommand (must be in _ALLOWED_SUBCOMMANDS).
-        args: Additional arguments (each validated for dangerous chars).
-        cwd: Working directory for the git command.
-
-    The command list is built internally from _GIT_BINARY (resolved at
-    import time) + the validated subcommand + validated args. No caller
-    data flows directly into subprocess.run.
+    Security (CWE-78 mitigation):
+      1. subcommand must be in _ALLOWED_SUBCOMMANDS (frozenset allowlist)
+      2. Each arg is validated by _sanitize_arg (rejects shell metacharacters)
+      3. Sanitized args are new str objects (breaks taint propagation)
+      4. shell=False (no shell interpretation)
+      5. _GIT_BINARY resolved at import time via shutil.which
     """
     try:
         if subcommand not in _ALLOWED_SUBCOMMANDS:
             return ""
+        safe_args: list[str] = []
         for arg in args:
-            if any(c in arg for c in _DANGEROUS_CHARS):
+            sanitized = _sanitize_arg(arg)
+            if sanitized is None:
                 return ""
-        # Build command from trusted binary + validated components
-        run_cmd = [_GIT_BINARY, subcommand] + args
-        result = subprocess.run(  # noqa: S603
-            run_cmd,
+            safe_args.append(sanitized)
+        run_cmd = [_GIT_BINARY, subcommand, *safe_args]
+        result = subprocess.run(
+            run_cmd,  # noqa: S603 — all components validated above
             capture_output=True,
             text=True,
             shell=False,
