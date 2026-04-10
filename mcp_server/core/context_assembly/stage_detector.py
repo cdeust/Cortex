@@ -148,10 +148,29 @@ class TemporalStageDetector(StageDetector):
         if isinstance(value, datetime):
             return value
         if isinstance(value, str):
+            # Try ISO format first (2024-03-15, 2024-03-15T10:00:00Z)
             try:
                 return datetime.fromisoformat(value.replace("Z", "+00:00"))
             except (ValueError, AttributeError):
-                return None
+                pass
+            # Try BEAM's "Month-DD-YYYY" format (March-15-2024)
+            import calendar
+            try:
+                parts = value.split("-")
+                if len(parts) == 3 and parts[0].isalpha():
+                    month_name = parts[0]
+                    day = int(parts[1])
+                    year = int(parts[2])
+                    month_abbrs = {
+                        m.lower(): i
+                        for i, m in enumerate(calendar.month_name)
+                        if m
+                    }
+                    month_num = month_abbrs.get(month_name.lower())
+                    if month_num:
+                        return datetime(year, month_num, day)
+            except (ValueError, IndexError):
+                pass
         return None
 
 

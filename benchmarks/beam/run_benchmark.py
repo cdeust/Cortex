@@ -49,14 +49,34 @@ from benchmarks.lib.bench_db import BenchmarkDB
 # ── Evaluation ───────────────────────────────────────────────────────────
 
 
+def _get_stage_detector():
+    """Return the configured stage detector based on env var.
+
+    CORTEX_STAGE_DETECTOR=temporal → TemporalStageDetector (no oracle labels)
+    CORTEX_STAGE_DETECTOR=oracle (default) → ExplicitStageDetector (plan_id)
+    """
+    mode = os.environ.get("CORTEX_STAGE_DETECTOR", "oracle")
+    if mode == "temporal":
+        from mcp_server.core.context_assembly.stage_detector import (
+            TemporalStageDetector,
+        )
+        return TemporalStageDetector(gap_hours=24.0, time_field="created_at")
+    else:
+        from mcp_server.core.context_assembly.stage_detector import (
+            ExplicitStageDetector,
+        )
+        return ExplicitStageDetector(field="agent_context")
+
+
 def _current_stage_for_question(q: dict, conversation_turns: list[dict]) -> str:
     """Determine the stage ID the question is about.
 
-    Must match the stage_id used in data.turns_to_memories when tagging
-    memories' agent_context. For 10M: plan_id (e.g. "plan-0") takes
-    precedence over time_anchor. For 100K/500K/1M: time_anchor is the
-    stage boundary.
+    In oracle mode: uses plan_id > time_anchor from source turns.
+    In temporal mode: uses the TemporalStageDetector's day-bucket
+    format so the assembler's stage filter matches memory created_at.
     """
+    mode = os.environ.get("CORTEX_STAGE_DETECTOR", "oracle")
+
     raw_ids = q.get("source_chat_ids", [])
     src_ids: set[int] = set()
     if isinstance(raw_ids, dict):
@@ -66,9 +86,6 @@ def _current_stage_for_question(q: dict, conversation_turns: list[dict]) -> str:
     elif isinstance(raw_ids, list):
         src_ids = {i for i in raw_ids if isinstance(i, int)}
 
-    # Walk conversation, track both plan_id and time_anchor.
-    # Return whichever the first source turn carries — matches
-    # turns_to_memories' priority: plan_id > time_anchor > "stage-0".
     last_anchor = "stage-0"
     last_plan = ""
     for turn in conversation_turns:
@@ -79,8 +96,25 @@ def _current_stage_for_question(q: dict, conversation_turns: list[dict]) -> str:
         if p:
             last_plan = p
         if turn.get("id") in src_ids:
-            # Match turns_to_memories priority: plan_id > anchor
-            return last_plan if last_plan else last_anchor
+            if mode == "temporal":
+                # Return the day-bucket format that TemporalStageDetector
+                # produces from created_at timestamps.
+                from mcp_server.core.context_assembly.stage_detector import (
+                    TemporalStageDetector,
+                )
+                ts = TemporalStageDetector._parse_ts(last_anchor)
+                if ts:
+                    return f"day-{ts.date().isoformat()}"
+                return last_anchor
+            else:
+                return last_plan if last_plan else last_anchor
+    if mode == "temporal":
+        from mcp_server.core.context_assembly.stage_detector import (
+            TemporalStageDetector,
+        )
+        ts = TemporalStageDetector._parse_ts(last_anchor)
+        if ts:
+            return f"day-{ts.date().isoformat()}"
     return last_plan if last_plan else last_anchor
 
 
@@ -131,11 +165,19 @@ def evaluate_retrieval(
                 # a reader exists; benchmarks have no reader).
                 bstr = os.environ.get("CORTEX_ASSEMBLER_BUDGET")
                 tbudget: int | None = int(bstr) if bstr else None
+                # Stage detector: oracle (plan_id) or temporal (timestamp gaps)
+                detector = _get_stage_detector()
+                stage_mode = os.environ.get("CORTEX_STAGE_DETECTOR", "oracle")
+                raw_stage = _current_stage_for_question(q, conversation_turns)
+                # Oracle mode: memories have agent_context="beam:plan-0"
+                # Temporal mode: detector reads created_at → "day-YYYY-MM-DD"
+                current_stage = f"beam:{raw_stage}" if stage_mode != "temporal" else raw_stage
                 asm = db.assemble_context(
                     query=query,
-                    current_stage=f"beam:{_current_stage_for_question(q, conversation_turns)}",
+                    current_stage=current_stage,
                     token_budget=tbudget,
                     stage_field="agent_context",
+                    stage_detector=detector,
                 )
                 retrieved = asm["selected_memories"]
             else:
