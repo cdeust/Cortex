@@ -47,16 +47,51 @@ class MCPClient:
         await asyncio.sleep(1.5)
         await self._perform_handshake()
 
-    async def _spawn_process(self) -> None:
-        """Spawn the child MCP server process."""
-        import os
+    # Allowlisted MCP server commands. Only these binaries may be spawned.
+    # Config-supplied commands are validated against this list to prevent
+    # command injection (CodeQL py/command-line-injection, CWE-78).
+    _ALLOWED_COMMANDS = frozenset(
+        {
+            "node",
+            "npx",
+            "python",
+            "python3",
+            "uvx",
+            "uv",
+            "cortex",
+            "mcp-server",
+        }
+    )
 
-        command = self._config["command"]
+    async def _spawn_process(self) -> None:
+        """Spawn the child MCP server process.
+
+        Security: command must be in _ALLOWED_COMMANDS allowlist.
+        Args are passed as a list (no shell=True). Environment is
+        merged from os.environ + config, not constructed from user input.
+        """
+        import os
+        import shutil
+
+        raw_command: str = self._config["command"]
         args = self._config.get("args") or []
         cwd = self._config.get("cwd")
         env = self._config.get("env")
         merged_env = {**os.environ, **(env or {})}
         line_limit = 10 * 1024 * 1024
+
+        # Validate command against allowlist (CWE-78 mitigation).
+        # In test/dev, extra commands can be allowed via _extra_allowed_commands.
+        allowed = self._ALLOWED_COMMANDS | getattr(
+            self, "_extra_allowed_commands", set()
+        )
+        base_cmd = raw_command.split("/")[-1] if "/" in raw_command else raw_command
+        if base_cmd not in allowed:
+            raise McpConnectionError(
+                f"Command '{raw_command}' not in allowed list: {sorted(allowed)}"
+            )
+        # Resolve to full path via shutil.which to avoid PATH manipulation
+        command = shutil.which(raw_command) or raw_command
 
         try:
             self._proc = await asyncio.wait_for(

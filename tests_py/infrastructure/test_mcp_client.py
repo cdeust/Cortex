@@ -27,7 +27,10 @@ def _run(coro):
 
 def _make_client(**overrides) -> tuple:
     config = {"command": "echo", "args": [], **overrides}
-    return config, MCPClient(config)
+    client = MCPClient(config)
+    # Allow test commands through the security allowlist
+    client._extra_allowed_commands = {"echo", "mybin"}
+    return config, client
 
 
 def _mock_proc(stdout_lines: list[bytes] | None = None):
