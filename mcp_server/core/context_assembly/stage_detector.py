@@ -155,6 +155,7 @@ class TemporalStageDetector(StageDetector):
                 pass
             # Try BEAM's "Month-DD-YYYY" format (March-15-2024)
             import calendar
+
             try:
                 parts = value.split("-")
                 if len(parts) == 3 and parts[0].isalpha():
@@ -162,9 +163,7 @@ class TemporalStageDetector(StageDetector):
                     day = int(parts[1])
                     year = int(parts[2])
                     month_abbrs = {
-                        m.lower(): i
-                        for i, m in enumerate(calendar.month_name)
-                        if m
+                        m.lower(): i for i, m in enumerate(calendar.month_name) if m
                     }
                     month_num = month_abbrs.get(month_name.lower())
                     if month_num:
