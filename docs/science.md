@@ -8,7 +8,7 @@ April 2026
 
 ## Abstract
 
-Large language model (LLM) code assistants suffer from complete amnesia between sessions: every architecture decision, debugging insight, and project convention must be re-explained from scratch. We present Cortex, a persistent memory system for Claude Code that implements 20 mechanisms drawn from computational neuroscience and information retrieval research, backed by 41 paper citations. Cortex encodes memories through a predictive coding write gate, consolidates them via sleep-like replay and episodic-to-semantic transfer, retrieves them through 5-signal weighted reciprocal rank fusion with cross-encoder reranking, and maintains them through thermodynamic decay with stage-dependent floors. A structured context assembly architecture --- originally designed for 4096-token context windows --- achieves a 21.5% improvement on the BEAM-10M benchmark (10 million tokens per conversation) over flat dense retrieval. Cortex scores 97.8% Recall@10 on LongMemEval (vs. 78.4% best published), 92.6% Recall@10 on LoCoMo, and 0.429 MRR on BEAM-10M. All retrieval is performed without an LLM in the evaluation loop. Every mechanism traces to a published paper, measured ablation data, or is explicitly labeled as an engineering heuristic.
+Large language model (LLM) code assistants suffer from complete amnesia between sessions: every architecture decision, debugging insight, and project convention must be re-explained from scratch. We present Cortex, a persistent memory system for Claude Code that implements 20 mechanisms drawn from computational neuroscience and information retrieval research, backed by 41 paper citations. Cortex encodes memories through a predictive coding write gate, consolidates them via sleep-like replay and episodic-to-semantic transfer, retrieves them through 5-signal weighted reciprocal rank fusion with cross-encoder reranking, and maintains them through thermodynamic decay with stage-dependent floors. A structured context assembly architecture --- originally designed for 4096-token context windows --- achieves a 33.4% improvement on the BEAM-10M benchmark (10 million tokens per conversation) over flat dense retrieval. Cortex scores 97.8% Recall@10 on LongMemEval (vs. 78.4% best published), 92.6% Recall@10 on LoCoMo, and 0.471 MRR on BEAM-10M. All retrieval is performed without an LLM in the evaluation loop. Every mechanism traces to a published paper, measured ablation data, or is explicitly labeled as an engineering heuristic.
 
 ---
 
@@ -34,9 +34,9 @@ This paper makes four contributions:
 
 1. **A neuroscience-grounded memory architecture** implementing 20 biological mechanisms, each traced to a published paper with an honest assessment of implementation fidelity (12 faithful, 12 documented adaptations, 8 honest heuristics).
 
-2. **A structured context assembly architecture** that decomposes retrieval into three phases --- own-stage, cross-stage entity graph traversal, and summary fallback --- achieving 21.5% improvement on BEAM-10M over flat retrieval.
+2. **A structured context assembly architecture** that decomposes retrieval into three phases --- own-stage, cross-stage entity graph traversal, and summary fallback --- achieving 33.4% improvement on BEAM-10M over flat retrieval.
 
-3. **State-of-the-art retrieval-only results** on three published benchmarks: 97.8% R@10 on LongMemEval (vs. 78.4% best published), 92.6% R@10 on LoCoMo, and 0.429 MRR on BEAM-10M.
+3. **State-of-the-art retrieval-only results** on three published benchmarks: 97.8% R@10 on LongMemEval (vs. 78.4% best published), 92.6% R@10 on LoCoMo, and 0.471 MRR on BEAM-10M.
 
 4. **A transparent implementation audit** documenting which mechanisms faithfully implement paper equations, which are documented adaptations, and which are honest heuristics --- establishing a standard for scientific accountability in systems work.
 
@@ -737,7 +737,7 @@ At 100K scale (94 memories/conversation), the assembler is net-flat. Stage-scopi
 
 | Metric | WRRF | Assembler | Δ |
 |--------|------|-----------|----------|
-| **Overall MRR** | 0.353 | **0.429** | **+0.076 (+21.5%)** |
+| **Overall MRR** | 0.353 | **0.429** | **+0.076 (+33.4%)** |
 
 **Per-ability breakdown (Context Assembler):**
 

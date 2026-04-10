@@ -315,6 +315,7 @@ def assemble_context(
     budget_split: tuple[float, float, float] = (0.6, 0.3, 0.1),
     max_chunks_per_phase: int = 5,
     diversity_lambda: float = 0.0,
+    stage_detector: Any | None = None,
 ) -> dict[str, Any]:
     """Structured 3-phase context assembly for a single query.
 
@@ -355,6 +356,7 @@ def assemble_context(
     )
     from mcp_server.core.context_assembly.stage_detector import (
         ExplicitStageDetector,
+        StageDetector,
     )
 
     split = BudgetSplit(
@@ -362,7 +364,11 @@ def assemble_context(
         adjacent=budget_split[1],
         summaries=budget_split[2],
     )
-    detector = ExplicitStageDetector(field=stage_field)
+    # Use the caller-provided detector if given, else default to Explicit
+    if stage_detector is not None:
+        detector = stage_detector
+    else:
+        detector = ExplicitStageDetector(field=stage_field)
 
     # Cache entity graph + entity-id→name lookup once per assemble call
     # so we don't re-query on every phase.

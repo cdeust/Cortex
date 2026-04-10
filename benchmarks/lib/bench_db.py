@@ -126,6 +126,7 @@ class BenchmarkDB:
         stage_field: str = "agent_context",
         budget_split: tuple[float, float, float] = (0.6, 0.3, 0.1),
         max_chunks_per_phase: int = 5,
+        stage_detector: Any | None = None,
     ) -> dict[str, Any]:
         """Delegate to mcp_server.core.pg_recall.assemble_context().
 
@@ -144,6 +145,7 @@ class BenchmarkDB:
             stage_field=stage_field,
             budget_split=budget_split,
             max_chunks_per_phase=max_chunks_per_phase,
+            stage_detector=stage_detector,
         )
 
     # ── Cleanup ───────────────────────────────────────────────────

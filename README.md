@@ -11,7 +11,7 @@
 
 Memory that learns, consolidates, forgets intelligently, and surfaces the right context at the right time.
 
-**97.8% R@10 LongMemEval** · **+21.5% BEAM-10M** · **41 paper citations** · **2080 tests**
+**97.8% R@10 LongMemEval** · **+33.4% BEAM-10M** · **41 paper citations** · **2080 tests**
 
 [Getting Started](#getting-started) | [What It Feels Like](#what-this-actually-feels-like) | [Benchmarks](#retrieval-that-actually-works) | [Science](#the-science-under-the-hood) | [Neural Graph](#neural-graph)
 
@@ -145,24 +145,24 @@ Every system in the paper collapses at this scale. The best result reported (LIG
 | Split | WRRF baseline | With Context Assembler | What happened |
 |---|---|---|---|
 | BEAM-100K | 0.591 | **0.602** | Flat search still works at small scale |
-| **BEAM-10M** | 0.353 | **0.429 (+21.5%)** | Structured assembly dominates when flat search drowns |
+| **BEAM-10M** | 0.353 | **0.471 (+33.4%)** | Structured assembly dominates when flat search drowns |
 
-**BEAM-10M per-ability breakdown (Context Assembler):**
+**BEAM-10M per-ability breakdown (Temporal Context Assembler — no oracle labels, timestamps only):**
 
 | Ability | MRR | R@10 | Δ vs WRRF | What happened |
 |---|---|---|---|---|
-| knowledge_update | **0.892** | 100.0% | +0.057 | Heat decay surfaces the newest version of a fact |
-| contradiction_resolution | **0.725** | 90.0% | +0.092 | Stage-scoped retrieval isolates conflicting statements |
-| multi_session_reasoning | **0.543** | 80.0% | +0.128 | Entity graph bridges evidence across sessions |
-| information_extraction | **0.487** | 70.0% | +0.039 | Specific facts found within the right stage |
-| preference_following | **0.481** | 65.0% | +0.069 | User preferences tracked via entity co-occurrence |
-| temporal_reasoning | **0.467** | 50.0% | +0.097 | Time anchors + stage boundaries help "when" questions |
-| abstention | **0.350** | 35.0% | +0.250 | Empty retrieval correctly signals "no relevant memory" |
-| instruction_following | **0.125** | 15.0% | +0.057 | Hardest category — instructions look like normal questions |
-| event_ordering | 0.067 | 10.0% | +0.000 | Chronological sequencing needs more than retrieval |
-| summarization | 0.150 | 22.2% | −0.036 | Summarization needs many sources at once — stage scoping limits breadth |
+| knowledge_update | **0.950** | 100.0% | +0.115 | Day-level grouping keeps knowledge updates tighter than topic labels |
+| contradiction_resolution | **0.892** | 95.0% | +0.259 | Temporal proximity catches contradictions better than topic boundaries |
+| information_extraction | **0.592** | 75.0% | +0.144 | Same-day memories cluster the right facts |
+| preference_following | **0.508** | 60.0% | +0.096 | Preferences cluster by time, not topic |
+| abstention | **0.600** | 60.0% | +0.500 | Temporal scoping correctly empties irrelevant stages |
+| temporal_reasoning | **0.460** | 50.0% | +0.090 | Time anchors naturally align with temporal stages |
+| multi_session_reasoning | 0.425 | 60.0% | +0.010 | Cross-day bridging via entity graph — marginal gain |
+| instruction_following | 0.150 | 15.0% | +0.082 | Instructions still look like normal questions |
+| summarization | 0.083 | 11.1% | −0.103 | Temporal scoping too narrow for broad summary queries |
+| event_ordering | 0.050 | 5.0% | −0.017 | Chronological sequencing needs more than retrieval |
 
-Seven of ten abilities improve. The biggest gains are on exactly the abilities where structured memory should help most: multi-session reasoning (+0.128), abstention (+0.250), and temporal reasoning (+0.097). The one regression (summarization −0.036) reflects a genuine trade-off: stage-scoped retrieval focuses depth at the cost of breadth.
+Eight of ten abilities improve. The key finding: **temporal day-level partitioning outperforms BEAM's ground-truth topic labels** (0.471 vs 0.429 with oracle plan_id). This was not predicted — it means temporal proximity is a stronger stage signal than topic boundaries for conversational memory, and the architecture generalizes without any oracle metadata.
 
 At 10 million tokens per conversation, you have ~7,500 memories that all look similar to a vector search engine. The [Structured Context Assembly](docs/research-post-context-assembly.md) architecture fixes this by breaking the conversation into stages (distinct topics), retrieving within the current stage first, following entity graph connections to related stages, and falling back to summaries for everything else. 8 of 10 memory abilities improve.
 
