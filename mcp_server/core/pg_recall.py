@@ -356,7 +356,6 @@ def assemble_context(
     )
     from mcp_server.core.context_assembly.stage_detector import (
         ExplicitStageDetector,
-        StageDetector,
     )
 
     split = BudgetSplit(
