@@ -128,7 +128,7 @@ class TestConsolidateSingletons:
         assert store is not None
 
     def test_get_embeddings_returns_engine(self):
-        from mcp_server.handlers.consolidate import _get_embeddings
+        from mcp_server.infrastructure.embedding_engine import get_embedding_engine
 
-        engine = _get_embeddings()
+        engine = get_embedding_engine()
         assert engine is not None

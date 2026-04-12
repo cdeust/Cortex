@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.core import fractal
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.infrastructure.embedding_engine import get_embedding_engine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
@@ -48,7 +48,6 @@ schema = {
 # ── Singletons ────────────────────────────────────────────────────────────
 
 _store: MemoryStore | None = None
-_embeddings: EmbeddingEngine | None = None
 
 
 def _get_store() -> MemoryStore:
@@ -57,14 +56,6 @@ def _get_store() -> MemoryStore:
         settings = get_memory_settings()
         _store = MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
     return _store
-
-
-def _get_embeddings() -> EmbeddingEngine:
-    global _embeddings
-    if _embeddings is None:
-        settings = get_memory_settings()
-        _embeddings = EmbeddingEngine(dim=settings.EMBEDDING_DIM)
-    return _embeddings
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -151,7 +142,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     cluster_threshold = float(args.get("cluster_threshold", 0.6))
 
     store = _get_store()
-    embeddings = _get_embeddings()
+    embeddings = get_embedding_engine()
 
     memories = _fetch_candidate_memories(store, domain, min_heat)
     if not memories:

@@ -21,7 +21,7 @@ from mcp_server.handlers.consolidation.plasticity import run_plasticity_cycle
 from mcp_server.handlers.consolidation.pruning import run_pruning_cycle
 from mcp_server.handlers.consolidation.sleep import run_deep_sleep
 from mcp_server.handlers.consolidation.transfer import run_two_stage_transfer
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.infrastructure.embedding_engine import EmbeddingEngine, get_embedding_engine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
@@ -57,7 +57,6 @@ schema = {
 }
 
 _store: MemoryStore | None = None
-_embeddings: EmbeddingEngine | None = None
 
 
 def _get_store() -> MemoryStore:
@@ -68,20 +67,12 @@ def _get_store() -> MemoryStore:
     return _store
 
 
-def _get_embeddings() -> EmbeddingEngine:
-    global _embeddings
-    if _embeddings is None:
-        settings = get_memory_settings()
-        _embeddings = EmbeddingEngine(dim=settings.EMBEDDING_DIM)
-    return _embeddings
-
-
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Run maintenance cycles on the memory system."""
     args = args or {}
     settings = get_memory_settings()
     store = _get_store()
-    embeddings = _get_embeddings()
+    embeddings = get_embedding_engine()
     start = time.monotonic()
 
     stats = _run_cycles(args, store, settings, embeddings)
