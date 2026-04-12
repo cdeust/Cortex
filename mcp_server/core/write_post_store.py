@@ -171,6 +171,57 @@ def _hours_since_creation(iso_str: str) -> float:
         return 0.0
 
 
+# Module-level slot cache for engram allocation.  Avoids re-fetching all
+# 5 000 engram_slots rows on every remember() call — a pure performance
+# optimisation with no change in behaviour.  The cache is invalidated
+# whenever the store instance changes and kept in sync by applying the
+# same excitability update to both the DB and the cached list.
+#
+# Precedent: sensory_buffer._global_buffer, reranker._flashrank_instance,
+# pg_recall._titans all use the same module-level cache pattern.
+_slot_cache: list[dict] | None = None
+_slot_cache_store_id: int | None = None
+_slots_initialised: bool = False
+
+
+def _get_slot_cache(store: Any, num_slots: int) -> list[dict]:
+    """Return the cached slot list, populating it on first access."""
+    global _slot_cache, _slot_cache_store_id, _slots_initialised
+
+    store_id = id(store)
+    if _slot_cache is not None and _slot_cache_store_id == store_id:
+        return _slot_cache
+
+    if not _slots_initialised or _slot_cache_store_id != store_id:
+        store.init_engram_slots(num_slots)
+        _slots_initialised = True
+
+    _slot_cache = store.get_all_engram_slots()
+    _slot_cache_store_id = store_id
+    return _slot_cache
+
+
+def _update_slot_cache(
+    slot_index: int, new_exc: float, activated_at: str,
+) -> None:
+    """Apply an excitability update to the in-memory cache."""
+    if _slot_cache is None:
+        return
+    for slot in _slot_cache:
+        if slot["slot_index"] == slot_index:
+            slot["excitability"] = new_exc
+            slot["last_activated"] = activated_at
+            break
+
+
+def invalidate_slot_cache() -> None:
+    """Force-clear the slot cache (for testing or after bulk operations)."""
+    global _slot_cache, _slot_cache_store_id, _slots_initialised
+    _slot_cache = None
+    _slot_cache_store_id = None
+    _slots_initialised = False
+
+
 def allocate_engram_slot(
     mem_id: int,
     settings: Any,
@@ -178,8 +229,7 @@ def allocate_engram_slot(
 ) -> dict | None:
     """Allocate an engram slot for competitive memory allocation."""
     try:
-        store.init_engram_slots(settings.HOPFIELD_MAX_PATTERNS)
-        all_slots = store.get_all_engram_slots()
+        all_slots = _get_slot_cache(store, settings.HOPFIELD_MAX_PATTERNS)
         if not all_slots:
             return None
         best_slot, best_exc = engram.find_best_slot(
@@ -188,12 +238,15 @@ def allocate_engram_slot(
         )
         store.assign_memory_slot(mem_id, best_slot)
         new_exc = engram.compute_boost(best_exc, settings.EXCITABILITY_BOOST)
-        store.update_engram_slot(best_slot, new_exc, store._now_iso())
-        linked = store.get_memories_in_slot(best_slot)
-        linked_ids = [m["id"] for m in linked if m["id"] != mem_id]
+        now_iso = store._now_iso()
+        store.update_engram_slot(best_slot, new_exc, now_iso)
+        _update_slot_cache(best_slot, new_exc, now_iso)
+        linked_count = store.count_memories_in_slot(
+            best_slot, exclude_id=mem_id,
+        )
         return {
             "slot_index": best_slot,
-            "temporally_linked": len(linked_ids),
+            "temporally_linked": linked_count,
         }
     except Exception:
         return None
