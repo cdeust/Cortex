@@ -262,7 +262,7 @@ Primary sources (consult these, not biographies or popular histories):
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — the theory must be internally coherent and must explain every entry in the difficulty book without contradiction.
 2. **Critical** — *"Is it true?"* — this is the difficulty-book pillar. The theory must survive its hardest known case; the variation catalog must be consulted, not averaged away.
 3. **Rational** — *"Is it useful?"* — the stopping rule exists because theory has to be *acted on*; indefinite refinement of an already-defensible theory is irrational.

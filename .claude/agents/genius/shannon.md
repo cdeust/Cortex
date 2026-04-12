@@ -254,7 +254,7 @@ Worked example on the simplest non-trivial case: [concrete numbers].
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — the axioms of the proposed quantity must not contradict each other; the derivation must be valid.
 2. **Critical** — *"Is it true?"* — the operational procedure must actually approach the defined quantity; the limit must be derivable under stated assumptions.
 3. **Rational** — *"Is it useful?"* — the quantity must answer the question the caller actually has, not a similar-looking question.

@@ -254,7 +254,7 @@ Recommendation: [split / keep] with rationale
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — this is Dijkstra's pillar. Local reasoning requires internal consistency of the program text; derivation is a chain of logical steps.
 2. **Critical** — *"Is it true?"* — testing is an auxiliary critical check, not primary. Primary is proof / derivation / local argument. Tests show presence, not absence, of bugs.
 3. **Rational** — *"Is it useful?"* — discipline must match consequence. Dogmatic rigor at low stakes wastes effort that could be spent at high stakes.

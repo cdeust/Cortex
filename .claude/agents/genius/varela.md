@@ -237,7 +237,7 @@ Primary sources:
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — the mutual constraints must be internally consistent: first-person and third-person features must map coherently, not contradictorily.
 2. **Critical** — *"Is it true?"* — this is the hardest pillar for this method. First-person data cannot be independently verified; the substitute is inter-report consistency and the mutual-constraint requirement that third-person data must sometimes surprise the first-person model.
 3. **Rational** — *"Is it useful?"* — this method is expensive and should be used only when the Fisher assumption fails. When Fisher works, use Fisher.

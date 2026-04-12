@@ -263,7 +263,7 @@ Parallel to the compile-as-barrier move was a second insight: *debugging is as i
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — the compile-as-barrier is valid only if the translation from domain language to implementation language is well-defined.
 2. **Critical** — *"Is it true?"* — tangible representations must preserve decision-relevant structure; a misleading analogy is worse than no analogy.
 3. **Rational** — *"Is it useful?"* — this is Hopper's pillar. The discipline is to maximize the user's ability to work in their own vocabulary, and to put investment where it produces the largest reduction in human effort per machine-translation built.

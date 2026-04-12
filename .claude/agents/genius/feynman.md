@@ -253,7 +253,7 @@ What the integrity check surfaced that was not in the original claim: [...]
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — rederivation is a direct consistency check: the result must follow from stated premises without appeals to memory of the original derivation.
 2. **Critical** — *"Is it true?"* — this is Feynman's pillar. Integrity demands *active* search for invalidating evidence, not passive willingness to consider it.
 3. **Rational** — *"Is it useful?"* — cargo-cult detection is about removing procedures that consume effort without producing the outcome they imitate.

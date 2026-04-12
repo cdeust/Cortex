@@ -274,7 +274,7 @@ ALL PASS? [yes → ship / no → rethink]
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — the experience spec must not contradict itself (you cannot simultaneously require "minimal settings" and "maximum configurability"). Trade-offs between dimensions must be genuinely irreducible, not merely unresolved.
 2. **Critical** — *"Is it true?"* — "it just works" is a falsifiable claim. Test it at every user contact point. Every falsification is data. The claim is true only when the falsification count is zero.
 3. **Rational** — *"Is it useful?"* — this is the Jobs pillar. The integrated experience is what the user buys; component metrics are what engineers measure. The standard costs real effort and must be justified by the product's value proposition. Do not apply it where it is not justified.

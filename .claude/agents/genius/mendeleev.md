@@ -247,7 +247,7 @@ Items: [count, scope]
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — the table must be internally coherent; the axis choices must not contradict the known items' positions.
 2. **Critical** — *"Is it true?"* — the predictions must be testable and tested; vindication and refutation both inform the table.
 3. **Rational** — *"Is it useful?"* — axes should be chosen to maximize predictive power, not aesthetic symmetry.

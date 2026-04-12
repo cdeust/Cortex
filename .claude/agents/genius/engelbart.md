@@ -274,7 +274,7 @@ Primary sources (consult these, not narrative histories):
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — the H-LAM/T components must not contradict each other; tool, language, methodology, and training must be coherent as a system.
 2. **Critical** — *"Is it true?"* — this is the demo-as-argument pillar. Claims about what a system can do should be validated by live demonstration, not by description.
 3. **Rational** — *"Is it useful?"* — augmentation and automation are design choices, not moral choices; recommend whichever actually serves the caller's goal.

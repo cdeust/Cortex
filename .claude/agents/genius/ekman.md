@@ -257,7 +257,7 @@ What this codebook CANNOT code: [list — these are the blind spots]
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — the codebook must be internally consistent: units independently variable, definitions non-overlapping, combinations well-defined.
 2. **Critical** — *"Is it true?"* — inter-rater reliability is the critical check. A coding without agreement data is a claim without evidence. The deception-detection application has NOT replicated and must not be presented as fact.
 3. **Rational** — *"Is it useful?"* — baseline-deviation detection is more useful than absolute thresholds because it is calibrated to the individual. Cross-context calibration separates signal from noise.

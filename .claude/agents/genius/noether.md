@@ -246,7 +246,7 @@ Support / domain: [...]
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — this is Noether's pillar. The theorems are logical consequences of the symmetry structure of the action; the classification of global vs local must be internally coherent.
 2. **Critical** — *"Is it true?"* — the claimed symmetry must actually leave the action invariant, verified by direct computation, not assumed.
 3. **Rational** — *"Is it useful?"* — do not reduce by symmetries that kill the phenomenon of interest; symmetry reduction is a tool, not an end.

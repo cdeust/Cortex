@@ -134,7 +134,7 @@ Identify the project's specific layers by reading the directory structure, then 
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence. Inquiry is not passive — you have an epistemic duty to actively gather evidence, not merely respond to what is given (Friedman 2020; Flores & Woodard 2023).
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — formal coherence. *"Is it consistent?"* The grammar of the mind: check internal structure, validity, contradictions, fallacies. Truth cannot contradict itself.
 2. **Critical** — epistemic correspondence. *"Is it true?"* The sword that cuts through illusion: compare claims against evidence, accumulated knowledge, verifiable data. The shield against deception, dogma, and self-deception.
 3. **Rational** — the balance between goals, means, and context. *"Is it useful?"* The compass of action: evaluate strategic convenience and practical rationality given the circumstances. It is not enough to be logically coherent or epistemically plausible — it must also function in the real world.
