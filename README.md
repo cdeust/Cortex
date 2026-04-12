@@ -1,25 +1,24 @@
-<div align="center">
+<p align="center">
+  <img src="assets/banner.svg" alt="Cortex — persistent memory for Claude Code" width="100%"/>
+</p>
 
-# Cortex
+<p align="center">
+  <a href="https://github.com/cdeust/Cortex/actions/workflows/ci.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/tests-2080_passing-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/citations-41_papers-orange.svg" alt="Citations">
+</p>
 
-### Persistent memory for Claude Code — built on neuroscience research, not guesswork
+<p align="center">
+  <a href="#getting-started">Getting Started</a> · <a href="#what-this-actually-feels-like">What It Feels Like</a> · <a href="#retrieval-that-actually-works">Benchmarks</a> · <a href="#the-science-under-the-hood">Science</a> · <a href="#neural-graph">Neural Graph</a>
+</p>
 
-[![CI](https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg)](https://github.com/cdeust/Cortex/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-2080_passing-brightgreen.svg)](#development)
-
-Memory that learns, consolidates, forgets intelligently, and surfaces the right context at the right time.
-
-**97.8% R@10 LongMemEval** · **+33.4% BEAM-10M** · **41 paper citations** · **2080 tests**
-
-[Getting Started](#getting-started) | [What It Feels Like](#what-this-actually-feels-like) | [Benchmarks](#retrieval-that-actually-works) | [Science](#the-science-under-the-hood) | [Neural Graph](#neural-graph)
-
-**Companion projects:**
-[cortex-beam-abstain](https://github.com/cdeust/cortex-know-when-to-stop-training-model) — community-trained retrieval abstention model for RAG systems
-| [zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents) — specialist Claude Code agents Cortex orchestrates with
-
-</div>
+<p align="center">
+  <strong>Companion projects:</strong><br>
+  <a href="https://github.com/cdeust/cortex-know-when-to-stop-training-model">cortex-beam-abstain</a> — community-trained retrieval abstention model for RAG systems<br>
+  <a href="https://github.com/cdeust/zetetic-team-subagents">zetetic-team-subagents</a> — specialist Claude Code agents Cortex orchestrates with
+</p>
 
 ---
 

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 340" width="820" height="340">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;display=swap');
+      .mono { font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="820" height="340" rx="8" fill="#0d1117"/>
+
+  <!-- ASCII art title -->
+  <text class="mono" x="32" y="52" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve"> ██████╗ ██████╗ ██████╗ ████████╗███████╗██╗  ██╗</text>
+  <text class="mono" x="32" y="70" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve">██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝██╔════╝╚██╗██╔╝</text>
+  <text class="mono" x="32" y="88" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve">██║     ██║   ██║██████╔╝   ██║   █████╗   ╚███╔╝</text>
+  <text class="mono" x="32" y="106" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve">██║     ██║   ██║██╔══██╗   ██║   ██╔══╝   ██╔██╗</text>
+  <text class="mono" x="32" y="124" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve">╚██████╗╚██████╔╝██║  ██║   ██║   ███████╗██╔╝ ██╗</text>
+  <text class="mono" x="32" y="142" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve"> ╚═════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝</text>
+
+  <!-- Subtitle -->
+  <text class="mono" x="32" y="174" fill="#e0e0e0" font-size="14" font-weight="700">persistent memory for Claude Code</text>
+
+  <!-- Stats -->
+  <text class="mono" x="32" y="208" fill="#e0e0e0" font-size="12">33 MCP tools  ·  20 bio mechanisms  ·  7 hooks  ·  2080 tests  ·  41 citations</text>
+
+  <!-- Benchmarks -->
+  <text class="mono" x="32" y="244" fill="#bec3be" font-size="11">97.8% R@10 LongMemEval  ·  92.6% R@10 LoCoMo  ·  +33.4% BEAM-10M</text>
+
+  <!-- Mechanism chain -->
+  <text class="mono" x="32" y="272" fill="#96a09b" font-size="11">encode ── consolidate ── decay ── retrieve ── reconstruct</text>
+  <text class="mono" x="32" y="288" fill="#96a09b" font-size="11">thermodynamic memory that learns, forgets, and surfaces what matters</text>
+
+  <!-- Principles -->
+  <text class="mono" x="32" y="320" fill="#bec3be" font-size="10">built on neuroscience research, not guesswork  ·  runs entirely on your machine</text>
+
+  <!-- for Claude Code -->
+  <text class="mono" x="600" y="320" fill="#96a09b" font-size="10">PostgreSQL + pgvector</text>
+</svg>
