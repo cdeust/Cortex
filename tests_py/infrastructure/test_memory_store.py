@@ -234,6 +234,33 @@ class TestEngramSlots:
         mems = store.get_memories_in_slot(2)
         assert any(m["content"] == "slotted" for m in mems)
 
+    def test_count_memories_in_slot(self, store):
+        store.init_engram_slots(3)
+        m1 = store.insert_memory({"content": "alpha"})
+        m2 = store.insert_memory({"content": "beta"})
+        m3 = store.insert_memory({"content": "gamma"})
+        store.assign_memory_slot(m1, 1)
+        store.assign_memory_slot(m2, 1)
+        store.assign_memory_slot(m3, 2)
+        assert store.count_memories_in_slot(1) == 2
+        assert store.count_memories_in_slot(2) == 1
+        assert store.count_memories_in_slot(0) == 0
+
+    def test_count_memories_in_slot_with_exclude(self, store):
+        store.init_engram_slots(3)
+        m1 = store.insert_memory({"content": "alpha"})
+        m2 = store.insert_memory({"content": "beta"})
+        store.assign_memory_slot(m1, 1)
+        store.assign_memory_slot(m2, 1)
+        # Excluding m1 should return 1
+        assert store.count_memories_in_slot(1, exclude_id=m1) == 1
+        # Excluding a non-existent id should return full count
+        assert store.count_memories_in_slot(1, exclude_id=99999) == 2
+
+    def test_count_memories_in_slot_empty(self, store):
+        store.init_engram_slots(3)
+        assert store.count_memories_in_slot(0) == 0
+
 
 class TestConsolidationLog:
     def test_log_and_retrieve_last(self, store):

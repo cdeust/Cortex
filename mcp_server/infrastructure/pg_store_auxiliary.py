@@ -191,6 +191,29 @@ class PgAuxiliaryMixin:
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
+    def count_memories_in_slot(
+        self, slot_index: int, exclude_id: int | None = None,
+    ) -> int:
+        """Return the number of memories assigned to *slot_index*.
+
+        Lightweight alternative to ``get_memories_in_slot`` when only the
+        count is needed (e.g. the ``temporally_linked`` metric in engram
+        allocation).  *exclude_id* omits a specific memory from the count
+        so the caller doesn't need to guess whether it's committed yet.
+        """
+        if exclude_id is not None:
+            row = self._execute(
+                "SELECT COUNT(*) AS c FROM memories "
+                "WHERE slot_index = %s AND id != %s",
+                (slot_index, exclude_id),
+            ).fetchone()
+        else:
+            row = self._execute(
+                "SELECT COUNT(*) AS c FROM memories WHERE slot_index = %s",
+                (slot_index,),
+            ).fetchone()
+        return row["c"] if row else 0
+
     def get_slot_occupancy(self) -> dict[int, int]:
         rows = self._execute(
             "SELECT slot_index, COUNT(*) AS c FROM memories "
