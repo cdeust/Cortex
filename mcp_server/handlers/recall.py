@@ -19,7 +19,10 @@ from mcp_server.handlers.recall_helpers import (
     build_enhancements,
     inject_triggered_memories,
 )
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine, get_embedding_engine
+from mcp_server.infrastructure.embedding_engine import (
+    EmbeddingEngine,
+    get_embedding_engine,
+)
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 

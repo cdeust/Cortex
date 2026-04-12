@@ -66,7 +66,9 @@ class TestAllocateEngramSlot:
     def test_returns_none_when_no_slots(self):
         store = _make_store(slots=[])
         result = allocate_engram_slot(
-            mem_id=1, settings=_make_settings(), store=store,
+            mem_id=1,
+            settings=_make_settings(),
+            store=store,
         )
         assert result is None
 
@@ -74,7 +76,9 @@ class TestAllocateEngramSlot:
         """The count must exclude mem_id — this is why we pass exclude_id."""
         store = _make_store(memories_in_slot=3)
         result = allocate_engram_slot(
-            mem_id=99, settings=_make_settings(), store=store,
+            mem_id=99,
+            settings=_make_settings(),
+            store=store,
         )
         assert result is not None
         # count_memories_in_slot is called with exclude_id=mem_id
@@ -87,7 +91,9 @@ class TestAllocateEngramSlot:
     def test_temporally_linked_zero_when_empty_slot(self):
         store = _make_store(memories_in_slot=0)
         result = allocate_engram_slot(
-            mem_id=1, settings=_make_settings(), store=store,
+            mem_id=1,
+            settings=_make_settings(),
+            store=store,
         )
         assert result is not None
         assert result["temporally_linked"] == 0
@@ -98,7 +104,9 @@ class TestAllocateEngramSlot:
         # Cache must be clear so it actually calls get_all_engram_slots
         invalidate_slot_cache()
         result = allocate_engram_slot(
-            mem_id=1, settings=_make_settings(), store=store,
+            mem_id=1,
+            settings=_make_settings(),
+            store=store,
         )
         assert result is None
 

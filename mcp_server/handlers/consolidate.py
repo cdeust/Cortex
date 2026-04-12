@@ -21,7 +21,10 @@ from mcp_server.handlers.consolidation.plasticity import run_plasticity_cycle
 from mcp_server.handlers.consolidation.pruning import run_pruning_cycle
 from mcp_server.handlers.consolidation.sleep import run_deep_sleep
 from mcp_server.handlers.consolidation.transfer import run_two_stage_transfer
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine, get_embedding_engine
+from mcp_server.infrastructure.embedding_engine import (
+    EmbeddingEngine,
+    get_embedding_engine,
+)
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
