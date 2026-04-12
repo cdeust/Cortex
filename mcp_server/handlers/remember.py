@@ -19,7 +19,7 @@ from mcp_server.handlers.remember_helpers import (
 from mcp_server.handlers.remember_response import build_merge_response
 from mcp_server.infrastructure import wiki_store
 from mcp_server.infrastructure.config import WIKI_ROOT
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.infrastructure.embedding_engine import EmbeddingEngine, get_embedding_engine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.profile_store import load_profiles
@@ -69,7 +69,6 @@ schema = {
 }
 
 _store: MemoryStore | None = None
-_embeddings: EmbeddingEngine | None = None
 
 
 def _get_store() -> MemoryStore:
@@ -78,13 +77,6 @@ def _get_store() -> MemoryStore:
         s = get_memory_settings()
         _store = MemoryStore(s.DB_PATH, s.EMBEDDING_DIM)
     return _store
-
-
-def _get_embeddings() -> EmbeddingEngine:
-    global _embeddings
-    if _embeddings is None:
-        _embeddings = EmbeddingEngine(dim=get_memory_settings().EMBEDDING_DIM)
-    return _embeddings
 
 
 def _resolve_domain(directory: str, domain: str) -> str:
@@ -132,7 +124,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     content, tags, directory, source, force, agent_topic, is_global, created_at = (
         _parse_args(args)
     )
-    store, emb_engine = _get_store(), _get_embeddings()
+    store, emb_engine = _get_store(), get_embedding_engine()
     domain = _resolve_domain(directory, args.get("domain", ""))
     embedding = emb_engine.encode(content)
     valence = thermodynamics.compute_valence(content)

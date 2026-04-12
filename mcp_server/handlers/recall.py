@@ -19,7 +19,7 @@ from mcp_server.handlers.recall_helpers import (
     build_enhancements,
     inject_triggered_memories,
 )
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.infrastructure.embedding_engine import EmbeddingEngine, get_embedding_engine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
@@ -52,7 +52,6 @@ schema = {
 }
 
 _store: MemoryStore | None = None
-_embeddings: EmbeddingEngine | None = None
 _momentum_state: dict = {"momentum": 0.5}
 
 
@@ -62,13 +61,6 @@ def _get_store() -> MemoryStore:
         s = get_memory_settings()
         _store = MemoryStore(s.DB_PATH, s.EMBEDDING_DIM)
     return _store
-
-
-def _get_embeddings() -> EmbeddingEngine:
-    global _embeddings
-    if _embeddings is None:
-        _embeddings = EmbeddingEngine(dim=get_memory_settings().EMBEDDING_DIM)
-    return _embeddings
 
 
 def _apply_strategic_ordering(
@@ -158,7 +150,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     max_results = args.get("max_results", 10)
     min_heat = args.get("min_heat", 0.05)
     settings = get_memory_settings()
-    store, emb = _get_store(), _get_embeddings()
+    store, emb = _get_store(), get_embedding_engine()
 
     # Base retrieval: pg_recall (intent → PG weights → recall_memories → rerank)
     results = pg_recall(

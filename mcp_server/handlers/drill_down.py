@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.core import fractal
-from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.infrastructure.embedding_engine import get_embedding_engine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
@@ -43,7 +43,6 @@ schema = {
 # ── Singletons ────────────────────────────────────────────────────────────
 
 _store: MemoryStore | None = None
-_embeddings: EmbeddingEngine | None = None
 
 
 def _get_store() -> MemoryStore:
@@ -52,14 +51,6 @@ def _get_store() -> MemoryStore:
         settings = get_memory_settings()
         _store = MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
     return _store
-
-
-def _get_embeddings() -> EmbeddingEngine:
-    global _embeddings
-    if _embeddings is None:
-        settings = get_memory_settings()
-        _embeddings = EmbeddingEngine(dim=settings.EMBEDDING_DIM)
-    return _embeddings
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -120,7 +111,7 @@ def _build_hierarchy_from_store(
 ) -> dict:
     """Fetch memories and build the fractal hierarchy."""
     store = _get_store()
-    embeddings = _get_embeddings()
+    embeddings = get_embedding_engine()
     settings = get_memory_settings()
 
     memories = _fetch_candidate_memories(store, domain, min_heat)

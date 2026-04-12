@@ -135,6 +135,7 @@ class MemorySettings(BaseSettings):
 
     # ── Embedding ─────────────────────────────────────────────────────────
     EMBEDDING_DIM: int = 384
+    EMBEDDING_DEVICE: str = "cpu"  # "cpu" | "auto" | "cuda" | "mps"
 
     model_config = {"env_prefix": "CORTEX_MEMORY_"}
 
