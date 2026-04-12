@@ -19,10 +19,7 @@ from mcp_server.handlers.remember_helpers import (
 from mcp_server.handlers.remember_response import build_merge_response
 from mcp_server.infrastructure import wiki_store
 from mcp_server.infrastructure.config import WIKI_ROOT
-from mcp_server.infrastructure.embedding_engine import (
-    EmbeddingEngine,
-    get_embedding_engine,
-)
+from mcp_server.infrastructure.embedding_engine import get_embedding_engine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.profile_store import load_profiles
