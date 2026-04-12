@@ -202,7 +202,9 @@ def _get_slot_cache(store: Any, num_slots: int) -> list[dict]:
 
 
 def _update_slot_cache(
-    slot_index: int, new_exc: float, activated_at: str,
+    slot_index: int,
+    new_exc: float,
+    activated_at: str,
 ) -> None:
     """Apply an excitability update to the in-memory cache."""
     if _slot_cache is None:
@@ -242,7 +244,8 @@ def allocate_engram_slot(
         store.update_engram_slot(best_slot, new_exc, now_iso)
         _update_slot_cache(best_slot, new_exc, now_iso)
         linked_count = store.count_memories_in_slot(
-            best_slot, exclude_id=mem_id,
+            best_slot,
+            exclude_id=mem_id,
         )
         return {
             "slot_index": best_slot,

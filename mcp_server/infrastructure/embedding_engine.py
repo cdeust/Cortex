@@ -126,14 +126,17 @@ class EmbeddingEngine:
             logger.warning("Unknown embedding device %r, using cpu", requested)
             self._device = "cpu"
         logger.info(
-            "Embedding device: %s (requested: %s)", self._device, requested,
+            "Embedding device: %s (requested: %s)",
+            self._device,
+            requested,
         )
         return self._device
 
     def _fallback_to_cpu(self) -> None:
         """Reload model on CPU after GPU failure."""
         logger.warning(
-            "GPU inference failed (device=%s) — reloading on CPU", self._device,
+            "GPU inference failed (device=%s) — reloading on CPU",
+            self._device,
         )
         self._device = "cpu"
         self._model = None

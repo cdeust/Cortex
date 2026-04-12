@@ -186,7 +186,9 @@ class SqliteAuxiliaryMixin:
         return [self._normalize_memory_row(r) for r in rows]
 
     def count_memories_in_slot(
-        self, slot_index: int, exclude_id: int | None = None,
+        self,
+        slot_index: int,
+        exclude_id: int | None = None,
     ) -> int:
         """Return the number of memories assigned to *slot_index*.
 
@@ -197,8 +199,7 @@ class SqliteAuxiliaryMixin:
         """
         if exclude_id is not None:
             row = self._conn.execute(
-                "SELECT COUNT(*) AS c FROM memories "
-                "WHERE slot_index = ? AND id != ?",
+                "SELECT COUNT(*) AS c FROM memories WHERE slot_index = ? AND id != ?",
                 (slot_index, exclude_id),
             ).fetchone()
         else:

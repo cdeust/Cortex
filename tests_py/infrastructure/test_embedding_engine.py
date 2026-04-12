@@ -184,6 +184,7 @@ class TestDeviceDetection:
     def test_detect_cuda(self):
         with patch.dict("sys.modules", {"torch": MagicMock()}):
             import sys
+
             mock_torch = sys.modules["torch"]
             mock_torch.cuda.is_available.return_value = True
             assert EmbeddingEngine._detect_device() == "cuda"
@@ -191,6 +192,7 @@ class TestDeviceDetection:
     def test_detect_mps(self):
         with patch.dict("sys.modules", {"torch": MagicMock()}):
             import sys
+
             mock_torch = sys.modules["torch"]
             mock_torch.cuda.is_available.return_value = False
             mock_torch.backends.mps.is_available.return_value = True
@@ -199,6 +201,7 @@ class TestDeviceDetection:
     def test_detect_cpu_fallback(self):
         with patch.dict("sys.modules", {"torch": MagicMock()}):
             import sys
+
             mock_torch = sys.modules["torch"]
             mock_torch.cuda.is_available.return_value = False
             mock_torch.backends.mps.is_available.return_value = False
@@ -238,7 +241,9 @@ class TestDeviceResolution:
     def test_detect_once(self):
         """_resolve_device() caches; second call doesn't re-detect."""
         engine = EmbeddingEngine(device="auto")
-        with patch.object(EmbeddingEngine, "_detect_device", return_value="mps") as mock:
+        with patch.object(
+            EmbeddingEngine, "_detect_device", return_value="mps"
+        ) as mock:
             engine._resolve_device()
             engine._resolve_device()
             mock.assert_called_once()
