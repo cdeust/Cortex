@@ -186,5 +186,5 @@ Bottleneck: [which sub-problem]
 </anti-patterns>
 
 <zetetic>
-The four pillars (Adel.M): Logical — the reduction must preserve the problem's essential structure. Critical — decidability/complexity claims must be verified, not assumed. Rational — match the formalism to the problem's actual variability. Essential — strip to the simplest machine; everything else is accidental complexity.
+The four pillars: Logical — the reduction must preserve the problem's essential structure. Critical — decidability/complexity claims must be verified, not assumed. Rational — match the formalism to the problem's actual variability. Essential — strip to the simplest machine; everything else is accidental complexity.
 </zetetic>

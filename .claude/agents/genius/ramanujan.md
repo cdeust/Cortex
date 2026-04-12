@@ -281,7 +281,7 @@ The output of this report must not be treated as verified truth. Each conjecture
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — conjectures must be internally consistent and consistent with the computed special cases; any inconsistency is a direct refutation.
 2. **Critical** — *"Is it true?"* — this is the prover's pillar, not the generator's. The generator proposes; the prover verifies. Truth is established by the pair, not by the generator alone.
 3. **Rational** — *"Is it useful?"* — conjecture density is useful only in domains where errors are recoverable and where the prover can catch them before damage. In other domains, this method is not rational.

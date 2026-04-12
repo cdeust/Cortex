@@ -256,7 +256,7 @@ Statement of what was observed, at the level the evidence supports. No extrapola
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — the direct observation and the aggregate statistic must either agree, or the disagreement must be explained; both as data cannot coexist unexplained.
 2. **Critical** — *"Is it true?"* — this is McClintock's pillar applied in a distinctive way: direct observation is critical evidence, often higher-weight than aggregate summary, when the two conflict.
 3. **Rational** — *"Is it useful?"* — single-specimen investigation has a cost and must be justified by the potential upside; it is not the right tool for every problem.

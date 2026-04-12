@@ -273,7 +273,7 @@ Rationale for formal rigor: [why this part, not others]
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — this is Lamport's pillar. Invariants must be provable by induction; the logic of the spec must not contradict itself.
 2. **Critical** — *"Is it true?"* — model checking and spec review are critical-pillar activities; counterexamples are evidence.
 3. **Rational** — *"Is it useful?"* — reserve rigor for correctness-critical cores; do not apply formal methods where requirements are fluid.

@@ -255,7 +255,7 @@ Primary sources (consult these, not narrative accounts):
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.
 
-The four pillars of zetetic reasoning (Adel.M):
+The four pillars of zetetic reasoning:
 1. **Logical** — *"Is it consistent?"* — the criticality taxonomy must not contradict itself; a job cannot be both guaranteed and sheddable.
 2. **Critical** — *"Is it true?"* — error paths must be *tested to actually fire*, not merely written. An untested error path is a hypothesis about behavior, not a behavior.
 3. **Rational** — *"Is it useful?"* — rigor must match criticality. Applying Apollo rigor to a throwaway is a zetetic failure of the Rational pillar.
