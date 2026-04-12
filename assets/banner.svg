@@ -10,12 +10,12 @@
   <rect width="820" height="340" rx="8" fill="#0d1117"/>
 
   <!-- ASCII art title -->
-  <text class="mono" x="32" y="52" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve"> ██████╗ ██████╗ ██████╗ ████████╗███████╗██╗  ██╗</text>
-  <text class="mono" x="32" y="70" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve">██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝██╔════╝╚██╗██╔╝</text>
-  <text class="mono" x="32" y="88" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve">██║     ██║   ██║██████╔╝   ██║   █████╗   ╚███╔╝</text>
-  <text class="mono" x="32" y="106" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve">██║     ██║   ██║██╔══██╗   ██║   ██╔══╝   ██╔██╗</text>
-  <text class="mono" x="32" y="124" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve">╚██████╗╚██████╔╝██║  ██║   ██║   ███████╗██╔╝ ██╗</text>
-  <text class="mono" x="32" y="142" fill="#f0883e" font-size="13" font-weight="700" xml:space="preserve"> ╚═════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝</text>
+  <text class="mono" x="32" y="52" fill="#7fbbb3" font-size="13" font-weight="700" xml:space="preserve"> ██████╗ ██████╗ ██████╗ ████████╗███████╗██╗  ██╗</text>
+  <text class="mono" x="32" y="70" fill="#7fbbb3" font-size="13" font-weight="700" xml:space="preserve">██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝██╔════╝╚██╗██╔╝</text>
+  <text class="mono" x="32" y="88" fill="#7fbbb3" font-size="13" font-weight="700" xml:space="preserve">██║     ██║   ██║██████╔╝   ██║   █████╗   ╚███╔╝</text>
+  <text class="mono" x="32" y="106" fill="#7fbbb3" font-size="13" font-weight="700" xml:space="preserve">██║     ██║   ██║██╔══██╗   ██║   ██╔══╝   ██╔██╗</text>
+  <text class="mono" x="32" y="124" fill="#7fbbb3" font-size="13" font-weight="700" xml:space="preserve">╚██████╗╚██████╔╝██║  ██║   ██║   ███████╗██╔╝ ██╗</text>
+  <text class="mono" x="32" y="142" fill="#7fbbb3" font-size="13" font-weight="700" xml:space="preserve"> ╚═════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝</text>
 
   <!-- Subtitle -->
   <text class="mono" x="32" y="174" fill="#e0e0e0" font-size="14" font-weight="700">persistent memory for Claude Code</text>
@@ -33,6 +33,6 @@
   <!-- Principles -->
   <text class="mono" x="32" y="320" fill="#bec3be" font-size="10">built on neuroscience research, not guesswork  ·  runs entirely on your machine</text>
 
-  <!-- for Claude Code -->
-  <text class="mono" x="600" y="320" fill="#96a09b" font-size="10">PostgreSQL + pgvector</text>
+  <!-- Ecosystem brand -->
+  <text class="mono" x="640" y="320" fill="#7fbbb3" font-size="10" opacity="0.6">ai-architect.tools</text>
 </svg>
