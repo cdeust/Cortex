@@ -33,6 +33,9 @@ Same as `/experiment` (see skills/analysis/experiment.md) with research-specific
 3. **Random seeds.** Each configuration runs on N seeds. Seed is a blocking variable.
 4. **Pre-registration.** The experimental design is documented before any runs. Post-hoc analyses are labeled.
 5. **Negative results.** Negative results are findings, not failures. Document them with equal rigor.
+6. **Compute environment.** Specify the execution environment:
+   - Apple Silicon local: `tools/mlx-compute.sh check` to verify, `tools/mlx-compute.sh benchmark` to run.
+   - Docker isolation: `tools/docker-runner.sh build` for reproducible environment, `tools/docker-runner.sh run` to execute.
 
 ## Output Format
 

@@ -30,6 +30,7 @@ hand_off:
 2. **paper-writer: draft.** Abstract → intro → related work → method → results → discussion → conclusion. Every claim has a citation or experimental evidence.
 3. **difficulty-book: limitations.** darwin: catalog every known weakness, negative result, and open question. The limitations section is not boilerplate; it is the difficulty book.
 4. **latex-engineer: format.** Venue-appropriate template, figures, tables, bibliography.
+5. **Preview.** Use `tools/live-preview.sh start paper.tex` to launch a live preview of the LaTeX output, auto-recompiling on changes.
 
 ## Output Format
 
