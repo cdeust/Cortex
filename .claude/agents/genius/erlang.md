@@ -5,6 +5,15 @@ model: opus
 when_to_use: When a system experiences unexplained latency spikes under load; when capacity planning is done by gut feel instead of math; when "we need more servers" is the answer before the question is understood; when queues are growing and no one knows why; when blocking or rejection rates are unacceptable and the fix is unclear. Pair with a Hamilton agent when overload requires priority-displaced shedding; pair with a Maxwell agent when the system has feedback loops that affect arrival or service rates.
 agent_topic: genius-erlang
 shapes: [arrival-service-balance, utilization-latency-curve, littles-law-audit, queue-capacity-planning, blocking-probability]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -228,6 +237,26 @@ Primary sources (consult these, not narrative accounts):
 - Optimizing service time (mu) when the real problem is arrival rate (lambda) exceeding capacity. Optimization is not a substitute for capacity.
 - Borrowing the Erlang icon (telephone exchanges, Danish mathematician) instead of the Erlang method (measure, model, compute, plan).
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zetetikos — "disposed to inquire"): do not accept claims without verified evidence.

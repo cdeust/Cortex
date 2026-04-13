@@ -172,12 +172,220 @@ def build_note(
     title: str,
     body: str,
     tags: list[str] | None = None,
+    updated: str | None = None,
 ) -> str:
     """Render a free-form note / investigation."""
-    fm = {
+    fm: dict[str, object] = {
         "kind": "note",
         "title": title,
         "created": _now_iso(),
         "tags": tags or ["note"],
     }
+    if updated:
+        fm["updated"] = updated
     return render_page(PageDocument(frontmatter=fm, body=f"# {title}\n\n{body}\n"))
+
+
+def maturity_label(source_count: int) -> str:
+    """Compute maturity from number of source memories."""
+    if source_count >= 8:
+        return "stable"
+    if source_count >= 4:
+        return "reviewed"
+    if source_count >= 2:
+        return "draft"
+    return "stub"
+
+
+def _sources_section(source_ids: list[int | str] | None) -> str:
+    """Render a Sources section from memory IDs."""
+    if not source_ids:
+        return "\n## Sources\n\n*Auto-generated from memory system.*\n"
+    items = "\n".join(f"- Memory #{sid}" for sid in source_ids)
+    return f"\n## Sources\n\n{items}\n"
+
+
+def _related_section() -> str:
+    """Empty Related section — filled by auto-linking."""
+    return "\n## Related\n\n*No cross-links yet.*\n"
+
+
+def build_lesson(
+    *,
+    title: str,
+    situation: str,
+    mistake: str,
+    fix: str,
+    rule: str,
+    domain: str = "",
+    tags: list[str] | None = None,
+    created: str | None = None,
+    updated: str | None = None,
+    source_ids: list[int | str] | None = None,
+) -> str:
+    """Render a lesson-learned page."""
+    sc = len(source_ids) if source_ids else 1
+    fm: dict[str, object] = {
+        "kind": "lesson",
+        "title": title,
+        "domain": domain,
+        "created": created or _now_iso(),
+        "maturity": maturity_label(sc),
+        "source_count": sc,
+        "tags": tags or ["lesson"],
+    }
+    if updated:
+        fm["updated"] = updated
+    body = (
+        f"# {title}\n\n"
+        f"## Situation\n\n{situation}\n\n"
+        f"## What Went Wrong\n\n{mistake}\n\n"
+        f"## Fix Applied\n\n{fix}\n\n"
+        f"## Rule for the Future\n\n{rule}\n"
+        + _sources_section(source_ids)
+        + _related_section()
+    )
+    return render_page(PageDocument(frontmatter=fm, body=body))
+
+
+def build_convention(
+    *,
+    title: str,
+    rule: str,
+    rationale: str,
+    scope: str = "",
+    domain: str = "",
+    tags: list[str] | None = None,
+    created: str | None = None,
+    updated: str | None = None,
+    source_ids: list[int | str] | None = None,
+) -> str:
+    """Render a convention/standard page."""
+    sc = len(source_ids) if source_ids else 1
+    fm: dict[str, object] = {
+        "kind": "convention",
+        "title": title,
+        "domain": domain,
+        "created": created or _now_iso(),
+        "maturity": maturity_label(sc),
+        "source_count": sc,
+        "tags": tags or ["convention"],
+    }
+    if updated:
+        fm["updated"] = updated
+    body = (
+        f"# {title}\n\n"
+        f"## Rule\n\n{rule}\n\n"
+        f"## Rationale\n\n{rationale}\n"
+    )
+    if scope:
+        body += f"\n## Scope\n\n{scope}\n"
+    body += _sources_section(source_ids) + _related_section()
+    return render_page(PageDocument(frontmatter=fm, body=body))
+
+
+def build_reference(
+    *,
+    title: str,
+    overview: str,
+    architecture: str = "",
+    api: str = "",
+    domain: str = "",
+    tags: list[str] | None = None,
+    created: str | None = None,
+    updated: str | None = None,
+    source_ids: list[int | str] | None = None,
+) -> str:
+    """Render a reference page — current truth about a component."""
+    sc = len(source_ids) if source_ids else 1
+    fm: dict[str, object] = {
+        "kind": "reference",
+        "title": title,
+        "domain": domain,
+        "created": created or _now_iso(),
+        "maturity": maturity_label(sc),
+        "source_count": sc,
+        "tags": tags or ["reference"],
+    }
+    if updated:
+        fm["updated"] = updated
+    body = f"# {title}\n\n## Overview\n\n{overview}\n"
+    if architecture:
+        body += f"\n## Architecture\n\n{architecture}\n"
+    if api:
+        body += f"\n## API / Interface\n\n{api}\n"
+    body += _sources_section(source_ids) + _related_section()
+    return render_page(PageDocument(frontmatter=fm, body=body))
+
+
+def build_index(page_paths: list[str]) -> str:
+    """Build a structured INDEX.md grouped by domain then kind.
+
+    Each path is relative to the wiki root. Supports both flat
+    (``notes/foo.md``) and domain-scoped (``notes/cortex/foo.md``) paths.
+    Pure function — no I/O.
+    """
+    from mcp_server.core.wiki_layout import PAGE_KINDS
+
+    # Parse paths into (kind, domain, filename, full_path)
+    entries: list[tuple[str, str, str, str]] = []
+    for p in page_paths:
+        parts = p.split("/")
+        if len(parts) >= 2 and parts[0] in PAGE_KINDS:
+            kind = parts[0]
+            if len(parts) >= 3:
+                domain = parts[1]
+                filename = parts[-1].removesuffix(".md")
+            else:
+                domain = "_general"
+                filename = parts[-1].removesuffix(".md")
+            entries.append((kind, domain, filename, p))
+
+    total = len(entries)
+    domains = sorted({e[1] for e in entries})
+    domain_count = len([d for d in domains if d != "_general"])
+
+    # Group by domain → kind → pages
+    tree: dict[str, dict[str, list[tuple[str, str]]]] = {}
+    for kind, domain, filename, path in entries:
+        tree.setdefault(domain, {}).setdefault(kind, []).append((filename, path))
+
+    _KIND_LABELS = {
+        "adr": "Architecture Decisions",
+        "specs": "Specifications",
+        "guides": "Guides & How-To",
+        "reference": "Reference",
+        "conventions": "Conventions",
+        "lessons": "Lessons Learned",
+        "notes": "Notes",
+        "journal": "Journal",
+        "files": "File Documentation",
+    }
+
+    lines = [
+        "# Cortex Knowledge Base",
+        "",
+        f"**{total} pages** across {domain_count} domains",
+        "",
+    ]
+
+    # Render each domain
+    for domain in sorted(tree.keys(), key=lambda d: ("zzz" if d == "_general" else d)):
+        kinds = tree[domain]
+        page_count = sum(len(pages) for pages in kinds.values())
+        label = "Global" if domain == "_general" else domain.replace("-", " ").title()
+        lines.append(f"## {label} ({page_count} pages)")
+        lines.append("")
+
+        for kind in PAGE_KINDS:
+            pages = kinds.get(kind, [])
+            if not pages:
+                continue
+            kind_label = _KIND_LABELS.get(kind, kind.title())
+            lines.append(f"### {kind_label}")
+            lines.append("")
+            for filename, path in sorted(pages):
+                lines.append(f"- [{filename}]({path})")
+            lines.append("")
+
+    return "\n".join(lines)

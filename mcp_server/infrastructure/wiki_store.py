@@ -156,35 +156,71 @@ def list_pages(root: Path | str, *, kind: str | None = None) -> list[str]:
     return results
 
 
+def _try_reindex(root: Path) -> None:
+    """Best-effort index rebuild after wiki write."""
+    try:
+        from mcp_server.core.wiki_pages import build_index
+
+        page_paths = list_pages(root)
+        index_md = build_index(page_paths)
+        gen_dir = root / ".generated"
+        gen_dir.mkdir(exist_ok=True)
+        (gen_dir / "INDEX.md").write_text(index_md)
+        cleanup_id_prefixed_pages(root)
+    except Exception:
+        pass
+
+
 def sync_memory(
     root: Path | str,
     *,
     memory_id: int | str,
     content: str,
     tags: list[str] | None,
+    domain: str = "",
 ) -> str | None:
-    """Promote a stored memory to a wiki note if its tags warrant it.
+    """Promote a stored memory to a wiki page if it passes the classifier.
 
-    Delegates the "is this syncable?" + "what does the page look like?"
-    decision to :mod:`mcp_server.core.wiki_sync` (pure logic), then writes
-    the resulting markdown via :func:`write_page` in ``replace`` mode so
-    re-syncing the same memory ID overwrites rather than raising.
+    Uses the wiki classifier to determine page kind and reject noise.
+    Domain-scoped paths organize pages by project.
 
     Never raises: swallows all exceptions and returns None, since this
     runs on every ``remember`` call and must not break the write path.
 
     Returns the relative path of the written page, or None when the
-    memory isn't a sync candidate or on error.
+    memory is rejected or on error.
     """
     try:
-        built = build_from_memory(memory_id=memory_id, content=content, tags=tags)
+        built = build_from_memory(
+            memory_id=memory_id, content=content, tags=tags, domain=domain
+        )
         if built is None:
             return None
         rel_path, markdown = built
         write_page(root, rel_path, markdown, mode="replace")
+        _try_reindex(Path(root))
         return rel_path
     except Exception:
         return None
+
+
+def cleanup_id_prefixed_pages(root: Path | str) -> int:
+    """Remove old {id}-{slug}.md files that have a {slug}.md counterpart."""
+    import re as _re
+
+    notes_dir = Path(root) / "notes"
+    if not notes_dir.exists():
+        return 0
+    removed = 0
+    slug_files = {
+        f.name for f in notes_dir.glob("*.md") if not _re.match(r"^\d+-", f.name)
+    }
+    for f in list(notes_dir.glob("*.md")):
+        m = _re.match(r"^(\d+)-(.+)$", f.name)
+        if m and m.group(2) in slug_files:
+            f.unlink()
+            removed += 1
+    return removed
 
 
 def next_adr_number(root: Path | str) -> int:

@@ -262,6 +262,7 @@
    CARD
    ═══════════════════════════════════ */
 .kb-card {
+  position: relative;
   display: flex;
   background: var(--card, #0e1018);
   border: 1px solid rgba(255,255,255,0.08);
@@ -271,17 +272,28 @@
   overflow: hidden;
   flex-shrink: 0;
 }
+/* Heat tint pseudo-element */
+.kb-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: var(--card-stage-color, transparent);
+  opacity: calc(var(--card-heat, 0) * 0.12);
+  transition: opacity 0.3s;
+}
 .kb-card:hover {
   border-color: rgba(80,210,235,0.3);
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
-/* Left color indicator */
-.kb-card-indicator {
-  width: 4px;
-  min-width: 4px;
-  flex-shrink: 0;
-}
+/* Integrity border variants */
+.kb-card--healthy { border-left: 4px solid #60D888; }
+.kb-card--consolidating { border-left: 4px solid #E0B840; }
+.kb-card--at-risk { border-left: 4px dashed #E07070; }
+.kb-card--fading { border-left: 4px dotted #555; }
+.kb-card--neutral { border-left: 4px solid #666; }
 
 /* Card body */
 .kb-card-body {
@@ -342,30 +354,84 @@
   border: 1px solid rgba(80,210,235,0.15);
 }
 
-/* Bottom: heat bar + metrics + badges */
-.kb-card-bottom {
+/* Store type badge */
+.kb-card__store-badge {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.kb-card__store-badge--episodic { background: rgba(88, 216, 136, 0.15); color: #58D888; }
+.kb-card__store-badge--semantic { background: rgba(192, 112, 208, 0.15); color: #C070D0; }
+
+/* Hover-expand scan tier */
+.kb-card__scan {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+  padding: 0;
+}
+.kb-card:hover .kb-card__scan {
+  max-height: 120px;
+  padding: 6px 0 0;
+  border-top: 1px solid rgba(80, 208, 232, 0.1);
+}
+
+/* Bio bars */
+.kb-card__bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 2px;
+  gap: 6px;
+  margin: 2px 0;
 }
-.kb-heat-bar {
-  width: 40px;
-  height: 4px;
+.kb-card__bar-label {
+  font-size: 9px;
+  color: var(--text-dim, #8AB0C8);
+  width: 55px;
+  flex-shrink: 0;
+}
+.kb-card__bar-track {
+  flex: 1;
+  height: 3px;
   background: rgba(255,255,255,0.06);
   border-radius: 2px;
   overflow: hidden;
-  flex-shrink: 0;
 }
-.kb-heat-fill {
-  height: 100%;
+.kb-card__bar-fill {
+  height: 3px;
+  background: var(--cyan, #50D0E8);
   border-radius: 2px;
-  transition: width 0.3s;
+  max-width: 100%;
 }
-.kb-card-metrics {
-  font-size: 11px;
-  color: #A0C0D8;
-  letter-spacing: 0.03em;
+
+/* Risk badges */
+.kb-card__risk-badge {
+  font-size: 9px;
+  color: #E07070;
+  padding: 1px 4px;
+  border: 1px solid rgba(224, 112, 112, 0.3);
+  border-radius: 3px;
+  margin-top: 3px;
+  display: inline-block;
+}
+.kb-card__meta-badge {
+  font-size: 9px;
+  color: var(--cyan-dim, #508090);
+  margin-left: 4px;
+}
+
+/* Flow header at-risk badge */
+.kb-flow-risk-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #E07070;
+  background: rgba(224, 112, 112, 0.1);
+  border: 1px solid rgba(224, 112, 112, 0.3);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-top: 4px;
+  text-align: center;
 }
 
 /* Badges */

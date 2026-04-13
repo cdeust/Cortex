@@ -39,7 +39,11 @@ def aggregate_domains(all_domains: dict) -> dict[str, dict]:
     for key, dp in all_domains.items():
         if not dp:
             continue
-        gk = domain_group_key(dp.get("label") or key)
+        # Use git-derived domain mapping for grouping (falls back to
+        # domain_group_key for domains not in any git repo).
+        from mcp_server.shared.domain_mapping import resolve_domain
+        resolved = resolve_domain(key)
+        gk = resolved if resolved != key else domain_group_key(dp.get("label") or key)
         groups.setdefault(gk, []).append((key, dp))
 
     merged: dict[str, dict] = {}

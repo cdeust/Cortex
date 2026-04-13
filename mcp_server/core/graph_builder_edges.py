@@ -24,6 +24,9 @@ EDGE_COLORS = {
     "debugged_with": "#ef4444",
     "preceded_by": "#94a3b8",
     "derived_from": "#a78bfa",
+    "domain-contains": "#06b6d4",
+    "topic-member": "#06b6d480",
+    "co-entity": "#a78bfa",
 }
 
 PERSISTENT_COLOR = "#ec4899"
@@ -108,8 +111,17 @@ def add_relationship_edges(
     entity_id_map: dict[int, str],
     edges: list[Edge],
 ) -> None:
-    """Add edges from knowledge-graph relationships between entities."""
+    """Add edges from knowledge-graph relationships between entities.
+
+    Excludes co_occurrence relationships from visualization — they represent
+    extraction coincidence (96% of all edges), not semantic structure.
+    Only co_retrieval, derived_from, and other curated types are shown.
+    """
     for rel in relationships:
+        rel_type = rel.get("relationship_type") or rel.get("type", "related")
+        if rel_type == "co_occurrence":
+            continue
+
         src_db_id = rel.get("source_entity_id") or rel.get("source")
         tgt_db_id = rel.get("target_entity_id") or rel.get("target")
         src_nid = entity_id_map.get(src_db_id)
@@ -117,7 +129,6 @@ def add_relationship_edges(
         if not src_nid or not tgt_nid or src_nid == tgt_nid:
             continue
 
-        rel_type = rel.get("relationship_type") or rel.get("type", "related")
         edges.append(
             {
                 "source": src_nid,

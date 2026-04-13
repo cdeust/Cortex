@@ -55,6 +55,17 @@
     visible = true;
     if (JUG.state.lastData) { currentData = JUG.state.lastData; rebuild(); }
     if (JUG.state.selectedId) highlightMemory(JUG.state.selectedId);
+
+    // 30s poll for live updates
+    if (!window._boardPollInterval) {
+      window._boardPollInterval = setInterval(function() {
+        if (document.querySelector('.kb-board')) {
+          fetch('/api/graph').then(function(r) { return r.json(); }).then(function(data) {
+            JUG._events.emit('data:loaded', data);
+          }).catch(function() {});
+        }
+      }, 30000);
+    }
   }
   function hide() {
     visible = false;
@@ -90,7 +101,9 @@
       groups[s].push(m);
     });
     STAGES.forEach(function(s) {
-      groups[s].sort(function(a, b) { return b._ts - a._ts; });
+      groups[s].sort(function(a, b) {
+        return (b.heat || 0) - (a.heat || 0) || (b._ts || 0) - (a._ts || 0);
+      });
     });
 
     var total = memories.length;
@@ -168,6 +181,16 @@
       advEl.innerHTML = '<span style="color:' + sc + '">Advance:</span> ' + bio.advance;
       card.appendChild(advEl);
 
+      // At-risk count badge
+      var atRisk = stageMems.filter(function(m) {
+        return (m.interferenceScore || 0) > 0.3 && (m.heat || 0) < 0.2;
+      }).length;
+      if (atRisk > 0) {
+        var riskBadge = el('div', 'kb-flow-risk-badge');
+        riskBadge.textContent = '\u26A0 ' + atRisk + ' at risk';
+        card.appendChild(riskBadge);
+      }
+
       flowStrip.appendChild(card);
     });
     container.appendChild(flowStrip);
@@ -217,31 +240,64 @@
     var card = el('div', 'kb-card');
     card.dataset.memId = mem.id;
 
-    var color = stageColor;
-    if (mem.emotion && mem.emotion !== 'neutral' && EMO_COLORS[mem.emotion]) {
-      color = EMO_COLORS[mem.emotion];
-    }
-
-    // Dropped indicator (low heat = fading memory)
     var heat = Math.max(0, Math.min(1, mem.heat || 0));
+    var stability = mem.stability;
+    var interference = mem.interferenceScore || 0;
+    var plasticity = Math.max(0, Math.min(1, mem.plasticity || 0));
+    var replayCount = mem.accessCount || 0;
+
+    // Heat tint via CSS custom property (used by ::before pseudo-element)
+    card.style.setProperty('--card-heat', heat);
+    card.style.setProperty('--card-stage-color', stageColor);
+
+    // Card opacity — floor at 0.55
+    card.style.opacity = Math.max(0.55, 0.4 + heat * 0.5);
+
+    // Integrity border class (null-safe stability check)
+    var borderClass;
+    if (stability == null || stability === undefined) {
+      borderClass = 'kb-card--neutral';
+    } else if (stability > 0.7 && interference < 0.3) {
+      borderClass = 'kb-card--healthy';
+    } else if (stability > 0.3) {
+      borderClass = 'kb-card--consolidating';
+    } else if (interference > 0.5) {
+      borderClass = 'kb-card--at-risk';
+    } else {
+      borderClass = 'kb-card--fading';
+    }
+    card.classList.add(borderClass);
+
+    // Fading indicator for very low heat
     if (heat < 0.1) {
       card.classList.add('kb-card-fading');
     }
 
-    var indicator = el('div', 'kb-card-indicator');
-    indicator.style.background = color;
-    card.appendChild(indicator);
-
     var body = el('div', 'kb-card-body');
 
+    // Content — 2 lines max, 100 chars
     var label = el('div', 'kb-card-label');
-    label.textContent = (mem.label || mem.content || '').slice(0, 80);
+    label.textContent = (mem.label || mem.content || '').slice(0, 100);
     body.appendChild(label);
 
+    // Meta row: domain pill + store type badge + relative age
     var meta = el('div', 'kb-card-meta');
+
     var domain = el('span', 'kb-card-domain');
     domain.textContent = (mem.domain || '').slice(0, 18);
     meta.appendChild(domain);
+
+    var storeType = mem.storeType || (mem.consolidationStage === 'consolidated' ? 'semantic' : 'episodic');
+    var storeBadge = el('span', 'kb-card__store-badge');
+    if (storeType === 'semantic') {
+      storeBadge.classList.add('kb-card__store-badge--semantic');
+      storeBadge.textContent = 'SEM';
+    } else {
+      storeBadge.classList.add('kb-card__store-badge--episodic');
+      storeBadge.textContent = 'EP';
+    }
+    meta.appendChild(storeBadge);
+
     if (mem._ts) {
       var time = el('span', 'kb-card-time');
       time.textContent = formatTime(mem._ts);
@@ -249,9 +305,10 @@
     }
     body.appendChild(meta);
 
+    // Tags — up to 2
     if (mem.tags && mem.tags.length > 0) {
       var tagsRow = el('div', 'kb-card-tags');
-      mem.tags.slice(0, 3).forEach(function(t) {
+      mem.tags.slice(0, 2).forEach(function(t) {
         var tag = el('span', 'kb-card-tag');
         tag.textContent = t;
         tagsRow.appendChild(tag);
@@ -259,32 +316,38 @@
       body.appendChild(tagsRow);
     }
 
-    var bottom = el('div', 'kb-card-bottom');
-    var imp = Math.max(0, Math.min(1, mem.importance || 0));
-
-    var heatBar = el('div', 'kb-heat-bar');
-    var heatFill = el('div', 'kb-heat-fill');
-    heatFill.style.width = (heat * 100) + '%';
-    heatFill.style.background = color;
-    heatBar.appendChild(heatFill);
-    bottom.appendChild(heatBar);
-
-    var metrics = el('span', 'kb-card-metrics');
-    metrics.textContent = 'H:' + heat.toFixed(2) + ' I:' + imp.toFixed(2) +
-      ' R:' + (mem.accessCount || 0);
-    bottom.appendChild(metrics);
-
+    // Protected badge
     if (mem.isProtected) {
       var shield = el('span', 'kb-badge kb-badge-protected');
       shield.textContent = '\u26A1';
-      bottom.appendChild(shield);
+      body.appendChild(shield);
     }
 
-    body.appendChild(bottom);
+    // Hover-expand scan tier (hidden by default, shown on hover via CSS)
+    var scan = el('div', 'kb-card__scan');
+    var safeStability = (stability != null) ? Math.max(0, Math.min(1, stability)) : 0;
+
+    // Plasticity bar
+    scan.innerHTML =
+      '<div class="kb-card__bar">' +
+        '<span class="kb-card__bar-label">Plasticity</span>' +
+        '<div class="kb-card__bar-track"><div class="kb-card__bar-fill" style="width:' + (plasticity * 100) + '%"></div></div>' +
+      '</div>' +
+      '<div class="kb-card__bar">' +
+        '<span class="kb-card__bar-label">Stability</span>' +
+        '<div class="kb-card__bar-track"><div class="kb-card__bar-fill" style="width:' + (safeStability * 100) + '%"></div></div>' +
+      '</div>' +
+      (interference > 0.3 ? '<span class="kb-card__risk-badge">\u26A0 Interference</span>' : '') +
+      (replayCount > 0 ? '<span class="kb-card__meta-badge">\u21BB ' + replayCount + '</span>' : '');
+
+    body.appendChild(scan);
     card.appendChild(body);
 
+    // Tooltip on hover
     card.addEventListener('mouseenter', function() { JUG._tooltip.show(mem); });
     card.addEventListener('mouseleave', function() { JUG._tooltip.hide(); });
+
+    // Click to select/deselect
     card.addEventListener('click', function(e) {
       e.stopPropagation();
       _emitting = true;

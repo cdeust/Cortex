@@ -16,6 +16,13 @@
       .then(function(data) {
         if (signal.aborted) return;
 
+        // Retry if server is still building the graph cache
+        if (data.meta && data.meta.warming) {
+          updateStatus('Building graph...');
+          setTimeout(function() { if (!signal.aborted) fetchGraph(); }, 1000);
+          return;
+        }
+
         JUG.state.lastData = data;
         JUG.buildGraph(data);
         updateStats(data.meta || {});

@@ -91,7 +91,7 @@
         label + ' <span class="conn-count">' + items.length + '</span></div>';
       items.forEach(function(item) {
         var c = JUG.getNodeColor(item.node);
-        var name = JUG._fmt.cleanLabel(item.node.label || item.node.id);
+        var name = JUG._fmt.fullLabel(item.node.label || item.node.id);
         h += '<div class="conn-item" data-node-id="' + item.node.id + '">' +
           '<span class="conn-dot" style="background:' + c + '"></span>' +
           '<span class="conn-label">' + JUG._fmt.esc(name) + '</span></div>';

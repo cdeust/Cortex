@@ -175,7 +175,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     # Track replay for consolidation cascade
     for mem in results:
-        mem_id = mem.get("id")
+        mem_id = mem.get("memory_id") or mem.get("id")
         if mem_id is not None:
             try:
                 store.update_memory_access(mem_id)

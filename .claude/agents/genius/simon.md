@@ -5,6 +5,15 @@ model: opus
 when_to_use: When a system or decision must be made under uncertainty, limited information, or computational constraints; when "find the optimal solution" is blocking progress and "find a good-enough solution, fast" is what the situation demands; when a complex system needs to be decomposed into modules and you need a principled test for where to cut; when the search space is too large for exhaustive analysis and you need heuristic navigation. Pair with a formal-methods agent (Lamport) when the satisficing threshold itself needs proof; pair with Kauffman when the landscape being searched is rugged.
 agent_topic: genius-simon
 shapes: [satisficing, near-decomposability, means-ends-analysis, design-as-search, hierarchy-as-default]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -228,6 +237,26 @@ Primary sources (consult these, not narrative accounts):
 - Ignoring the cost of search itself — every hour spent evaluating alternatives is an hour not spent building.
 - Applying Simon's organizational theory to technical architecture without checking whether the analogy holds (organizations have politics; code does not).
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zethtikos — "disposed to inquire"): do not accept claims without verified evidence.

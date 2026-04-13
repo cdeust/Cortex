@@ -51,34 +51,47 @@ _ACT_R_NOISE_S: float = 1.0
 _MIN_LIFETIME_HOURS: float = 0.01
 
 
+def _parse_datetime(value) -> datetime | None:
+    """Parse a datetime from either a string or native datetime object.
+
+    psycopg3 returns native datetime objects from TIMESTAMPTZ columns,
+    while some code paths pass ISO strings. Handle both.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+    if isinstance(value, str) and value:
+        try:
+            dt = datetime.fromisoformat(value)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except ValueError:
+            return None
+    return None
+
+
 def _hours_since_access(mem: dict, now: datetime) -> float | None:
     """Return hours elapsed since last access, or None if unparseable."""
     last_accessed = mem.get("last_accessed", mem.get("created_at", ""))
-    if not last_accessed:
+    last_dt = _parse_datetime(last_accessed)
+    if last_dt is None:
         return None
-    try:
-        last_dt = datetime.fromisoformat(last_accessed)
-        if last_dt.tzinfo is None:
-            last_dt = last_dt.replace(tzinfo=timezone.utc)
-        hours = (now - last_dt).total_seconds() / 3600.0
-        return hours if hours > 0 else None
-    except (ValueError, TypeError):
-        return None
+    hours = (now - last_dt).total_seconds() / 3600.0
+    return hours if hours > 0 else None
 
 
 def _hours_since_creation(mem: dict, now: datetime) -> float | None:
     """Return hours elapsed since creation."""
     created = mem.get("created_at", "")
-    if not created:
+    created_dt = _parse_datetime(created)
+    if created_dt is None:
         return None
-    try:
-        created_dt = datetime.fromisoformat(created)
-        if created_dt.tzinfo is None:
-            created_dt = created_dt.replace(tzinfo=timezone.utc)
-        hours = (now - created_dt).total_seconds() / 3600.0
-        return max(_MIN_LIFETIME_HOURS, hours)
-    except (ValueError, TypeError):
-        return None
+    hours = (now - created_dt).total_seconds() / 3600.0
+    return max(_MIN_LIFETIME_HOURS, hours)
 
 
 def compute_actr_base_level(
@@ -252,16 +265,11 @@ def compute_decay_updates(
 def _parse_hours_since_access(record: dict, now: datetime) -> float | None:
     """Parse hours since last access from a memory or entity record."""
     last_accessed = record.get("last_accessed", record.get("created_at", ""))
-    if not last_accessed:
+    last_dt = _parse_datetime(last_accessed)
+    if last_dt is None:
         return None
-    try:
-        last_dt = datetime.fromisoformat(last_accessed)
-        if last_dt.tzinfo is None:
-            last_dt = last_dt.replace(tzinfo=timezone.utc)
-        hours = (now - last_dt).total_seconds() / 3600.0
-        return hours if hours > 0 else None
-    except (ValueError, TypeError):
-        return None
+    hours = (now - last_dt).total_seconds() / 3600.0
+    return hours if hours > 0 else None
 
 
 def compute_entity_decay(

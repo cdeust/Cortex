@@ -26,12 +26,10 @@ body { background: var(--void); color: var(--text); font-family: 'JetBrains Mono
 
 /* Scanlines — very subtle for scientific look */
 #scanlines {
-  position: fixed; inset: 0; pointer-events: none; z-index: 10;
-  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(80,120,160,0.006) 2px, rgba(80,120,160,0.006) 4px);
+  display: none;
 }
 #vignette {
-  position: fixed; inset: 0; pointer-events: none; z-index: 9;
-  background: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 40%, rgba(6,6,12,0.7) 100%);
+  display: none;
 }
 
 /* HUD Panel */

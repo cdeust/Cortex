@@ -5,6 +5,15 @@ model: opus
 when_to_use: When a subtype/implementation breaks when substituted for its parent/interface; when a function that "works with the base class" fails with a derived class; when modules can't be swapped without ripple effects; when an API contract is ambiguous about behavioral guarantees; when inheritance or polymorphism is being used without behavioral specification. Distinct from Dijkstra (who proves individual program correctness) — Liskov proves *compositional* correctness across module boundaries. Pair with Dijkstra for within-module correctness; pair with Lamport when the substitution happens across distributed boundaries.
 agent_topic: genius-liskov
 shapes: [substitutability-as-contract, behavioral-subtyping, data-abstraction, contract-is-interface, composition-correctness]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -180,6 +189,26 @@ History constraint: [...]
 - Ignoring the history constraint while checking individual operations.
 - Borrowing the Liskov icon ("the L in SOLID") without the substance (behavioral subtyping is more than a naming convention).
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Logical — contracts must be internally consistent. Critical — the swap-test is empirical evidence of substitutability. Rational — match specification effort to interface criticality. Essential — the contract is the minimum structure that guarantees composability; everything beyond it is implementation detail.

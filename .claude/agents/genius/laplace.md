@@ -5,6 +5,15 @@ model: opus
 when_to_use: When a decision must be made under uncertainty and the evidence is incomplete; when debugging requires probabilistic reasoning about which module is most likely at fault; when risk assessment requires combining prior knowledge with new observations; when someone confuses "unlikely" with "impossible" or "no evidence" with "evidence of absence"; when calibration of confidence matters (sizing estimates, SLO targets, incident probability). Pair with a Curie agent for the experimental design that generates the evidence; pair with a Schon agent when reflection on the reasoning process itself is needed.
 agent_topic: genius-laplace
 shapes: [bayesian-updating, prior-elicitation, calibration-audit, probability-as-uncertainty, posterior-prediction]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -228,6 +237,26 @@ Primary sources (consult these, not narrative accounts):
 - Over-precision with under-determined likelihoods. Stating P(E|H) = 0.73 when you have no basis for the second decimal digit is false precision. Use ranges or qualitative ordering.
 - Borrowing the Laplace icon (Laplace's demon, determinism, celestial mechanics) instead of the Laplace method (explicit priors, Bayesian updating, calibration, probability as uncertainty).
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zetetikos — "disposed to inquire"): do not accept claims without verified evidence.

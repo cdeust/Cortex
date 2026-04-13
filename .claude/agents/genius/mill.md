@@ -5,6 +5,15 @@ model: opus
 when_to_use: When you need to determine WHY some cases succeed and others fail; when you have multiple cases with different outcomes and need to isolate the causal conditions; when the question is "what combination of factors produces this outcome?"; when anecdotal comparison ("Company X did Y and it worked") is being used as evidence; when you need to distinguish necessary from sufficient conditions. Pair with a Bayesian agent (Jaynes) when prior probabilities matter; pair with a Schelling agent when the outcome is emergent rather than configurational.
 agent_topic: genius-mill
 shapes: [method-of-agreement, method-of-difference, qualitative-comparative-analysis, necessary-vs-sufficient, most-similar-most-different]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -230,6 +239,26 @@ Primary sources (consult these, not narrative accounts):
 - Cherry-picking cases to confirm a predetermined conclusion.
 - Applying the method without a clearly defined outcome — garbage in, garbage out.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.

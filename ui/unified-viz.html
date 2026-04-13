@@ -4,12 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cortex — Neural Graph</title>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/theme.css">
 <link rel="stylesheet" href="/css/panels.css">
 <link rel="stylesheet" href="/css/detail.css">
 <link rel="stylesheet" href="/css/timeline.css">
 <link rel="stylesheet" href="/css/sankey.css">
+<link rel="stylesheet" href="/css/knowledge.css">
 </head>
 <body>
 
@@ -24,6 +25,8 @@
 <div id="graph-container"></div>
 <div id="timeline-container"></div>
 <div id="sankey-container"></div>
+<div id="knowledge-container"></div>
+<div id="wiki-container"></div>
 
 <div id="info-panel" class="hud-panel">
   <div class="panel-header">
@@ -50,17 +53,19 @@
   <div id="system-vitals" style="margin-top:10px;border-top:1px solid #ffffff10;padding-top:8px;display:none">
     <div style="font-size:7px;text-transform:uppercase;letter-spacing:0.5px;color:var(--cyan-dim,#508090);margin-bottom:6px">System Vitals</div>
     <div class="stat-row"><span>Mean Heat</span><span class="val" id="sv-heat">--</span></div>
-    <div class="stat-row"><span>Labile</span><span class="val" id="sv-labile" style="color:#00D2FF">--</span></div>
-    <div class="stat-row"><span>Early LTP</span><span class="val" id="sv-eltp" style="color:#60A0E0">--</span></div>
-    <div class="stat-row"><span>Late LTP</span><span class="val" id="sv-lltp" style="color:#40D870">--</span></div>
-    <div class="stat-row"><span>Consolidated</span><span class="val" id="sv-cons" style="color:#E8B840">--</span></div>
-    <div class="stat-row"><span>Reconsolidating</span><span class="val" id="sv-recon" style="color:#C070D0">--</span></div>
+    <div class="stat-row"><span>New</span><span class="val" id="sv-labile" style="color:#00D2FF">--</span></div>
+    <div class="stat-row"><span>Growing</span><span class="val" id="sv-eltp" style="color:#60A0E0">--</span></div>
+    <div class="stat-row"><span>Strong</span><span class="val" id="sv-lltp" style="color:#40D870">--</span></div>
+    <div class="stat-row"><span>Stable</span><span class="val" id="sv-cons" style="color:#E8B840">--</span></div>
+    <div class="stat-row"><span>Updating</span><span class="val" id="sv-recon" style="color:#C070D0">--</span></div>
   </div>
 </div>
 
 <div id="filter-bar">
   <span class="view-toggle">
-    <button class="view-btn active" data-view="graph">Graph</button>
+    <button class="view-btn" data-view="graph">Graph</button>
+    <button class="view-btn" data-view="knowledge">Knowledge</button>
+    <button class="view-btn active" data-view="wiki">Wiki</button>
     <button class="view-btn" data-view="timeline">Board</button>
     <button class="view-btn" data-view="sankey">Pipeline</button>
   </span>
@@ -88,11 +93,11 @@
   </select>
   <select id="stage-select" class="filter-select">
     <option value="">All Stages</option>
-    <option value="labile">Labile</option>
-    <option value="early_ltp">Early LTP</option>
-    <option value="late_ltp">Late LTP</option>
-    <option value="consolidated">Consolidated</option>
-    <option value="reconsolidating">Reconsolidating</option>
+    <option value="labile">New</option>
+    <option value="early_ltp">Growing</option>
+    <option value="late_ltp">Strong</option>
+    <option value="consolidated">Stable</option>
+    <option value="reconsolidating">Updating</option>
   </select>
   <input type="text" id="search-box" placeholder="Search...">
 </div>
@@ -135,8 +140,8 @@
     <button class="mon-tab" data-bio="confusion">Confusion <span class="mon-count">0</span></button>
     <button class="mon-tab" data-bio="protected">Protected <span class="mon-count">0</span></button>
     <button class="mon-tab" data-bio="high-heat">Hot <span class="mon-count">0</span></button>
-    <button class="mon-tab" data-bio="labile">Labile <span class="mon-count">0</span></button>
-    <button class="mon-tab" data-bio="consolidated">Consolidated <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="labile">New <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="consolidated">Stable <span class="mon-count">0</span></button>
     <button class="mon-tab" data-bio="high-interference">Interfering <span class="mon-count">0</span></button>
   </div>
   <div id="monitor-log"></div>
@@ -188,11 +193,11 @@
   <div class="leg-item"><div class="leg-dot" style="background:#50C8E0;box-shadow:0 0 6px #50C8E060"></div>Entity</div>
   <div class="leg-item"><div class="leg-dot" style="background:#F43F5E;box-shadow:0 0 6px #F43F5E60"></div>Discussion</div>
   <div class="leg-item"><div class="leg-dot" style="background:#8B6914;box-shadow:0 0 6px #8B691460"></div>Global</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#00D2FF;box-shadow:0 0 6px #00D2FF60"></div>Labile</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#60A0E0;box-shadow:0 0 6px #60A0E060"></div>Early LTP</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#40D870;box-shadow:0 0 6px #40D87060"></div>Late LTP</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#E8B840;box-shadow:0 0 6px #E8B84060"></div>Consolidated</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#C070D0;box-shadow:0 0 6px #C070D060"></div>Reconsolidating</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#00D2FF;box-shadow:0 0 6px #00D2FF60"></div>New</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#60A0E0;box-shadow:0 0 6px #60A0E060"></div>Growing</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#40D870;box-shadow:0 0 6px #40D87060"></div>Strong</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#E8B840;box-shadow:0 0 6px #E8B84060"></div>Stable</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#C070D0;box-shadow:0 0 6px #C070D060"></div>Updating</div>
   <div class="leg-item"><div class="leg-dot" style="background:#40D870;box-shadow:0 0 6px #40D87060"></div>Quality ≥60%</div>
   <div class="leg-item"><div class="leg-dot" style="background:#E0B040;box-shadow:0 0 6px #E0B04060"></div>Quality ≥30%</div>
   <div class="leg-item"><div class="leg-dot" style="background:#E05050;box-shadow:0 0 6px #E0505060"></div>Quality &lt;30%</div>
@@ -282,27 +287,27 @@
   <div class="gloss-section">Consolidation Stages</div>
 
   <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#00D2FF"></span><span class="gloss-name">Labile</span></div>
+    <div class="gloss-header"><span class="gloss-dot" style="background:#00D2FF"></span><span class="gloss-name">New</span></div>
     <div class="gloss-desc">Freshly encoded — unstable, vulnerable to interference, not yet protein-synthesis dependent. Shown as <b>dotted ring</b>. (Kandel 2001)</div>
   </div>
 
   <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#60A0E0"></span><span class="gloss-name">Early LTP</span></div>
+    <div class="gloss-header"><span class="gloss-dot" style="background:#60A0E0"></span><span class="gloss-name">Growing</span></div>
     <div class="gloss-desc">Synaptic strengthening has begun (1-6h). Tagged for potential long-term storage. Requires synaptic tagging (Frey & Morris 1997).</div>
   </div>
 
   <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#40D870"></span><span class="gloss-name">Late LTP</span></div>
+    <div class="gloss-header"><span class="gloss-dot" style="background:#40D870"></span><span class="gloss-name">Strong</span></div>
     <div class="gloss-desc">Protein synthesis-dependent consolidation (6-24h). Stronger resistance to interference and decay.</div>
   </div>
 
   <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#E8B840"></span><span class="gloss-name">Consolidated</span></div>
+    <div class="gloss-header"><span class="gloss-dot" style="background:#E8B840"></span><span class="gloss-name">Stable</span></div>
     <div class="gloss-desc">Fully cortically integrated (>24h). High stability, low hippocampal dependency. Shown as <b>solid thick ring</b>. (McClelland 1995)</div>
   </div>
 
   <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#C070D0"></span><span class="gloss-name">Reconsolidating</span></div>
+    <div class="gloss-header"><span class="gloss-dot" style="background:#C070D0"></span><span class="gloss-name">Updating</span></div>
     <div class="gloss-desc">Reactivated memory temporarily returns to labile state for updating. Shown as <b>dashed ring</b>. Can be modified or strengthened.</div>
   </div>
 
@@ -372,6 +377,8 @@
 <script src="/js/discussion_detail.js"></script>
 <script src="/js/timeline.js"></script>
 <script src="/js/sankey.js"></script>
+<script src="/js/knowledge.js"></script>
+<script src="/js/wiki.js"></script>
 <script src="/js/controls.js"></script>
 <script src="/js/monitor.js"></script>
 <script src="/js/polling.js"></script>

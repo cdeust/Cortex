@@ -20,12 +20,19 @@ memory ID overwrites the same file rather than creating duplicates.
 
 from __future__ import annotations
 
+import re
+from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
-from mcp_server.core.wiki_layout import page_path, slugify
+from mcp_server.core.wiki_classifier import classify_memory, derive_title
+from mcp_server.core.wiki_layout import domain_page_path, slugify
 from mcp_server.core.wiki_pages import build_note
 
 _DECISION_TAGS = frozenset({"decision", "adr", "architecture", "spec", "design"})
+
+
+def _now_iso() -> str:
+    return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 _TITLE_MAX_LEN = 80
 
 
@@ -37,10 +44,15 @@ def should_sync(tags: list[str] | None) -> bool:
 
 
 def _derive_title(content: str) -> str:
-    """Extract a short title from the first line or sentence of content."""
+    """Extract a short title from the first line or sentence of content.
+
+    Returns ``""`` when no usable title can be derived.
+    """
     if not content:
-        return "untitled memory"
+        return ""
     first_line = content.strip().splitlines()[0].strip()
+    # Strip markdown heading prefixes (## , ### , etc.).
+    first_line = re.sub(r"^#+\s*", "", first_line)
     # Strip common prefixes like "Decision:" or "Rule:".
     for prefix in ("Decision:", "Rule:", "Lesson:", "Note:"):
         if first_line.startswith(prefix):
@@ -48,7 +60,7 @@ def _derive_title(content: str) -> str:
             break
     if len(first_line) > _TITLE_MAX_LEN:
         first_line = first_line[:_TITLE_MAX_LEN].rsplit(" ", 1)[0] + "…"
-    return first_line or "untitled memory"
+    return first_line
 
 
 def build_from_memory(
@@ -56,17 +68,38 @@ def build_from_memory(
     memory_id: int | str,
     content: str,
     tags: list[str] | None,
+    domain: str = "",
 ) -> tuple[str, str] | None:
-    """Build (relative_path, markdown) for a memory, or None if not syncable.
+    """Build (relative_path, markdown) for a memory, or None if rejected.
 
-    The relative path is POSIX-style (forward slashes) rooted at the wiki
-    root; the caller joins it with the concrete root directory.
+    Uses the wiki classifier to determine page kind and smart title.
+    Routes to kind-specific templates. Domain-scoped paths.
     """
-    if not should_sync(tags):
+    # Use classifier instead of tag-only gate
+    kind = classify_memory(content, tags)
+    if kind is None:
         return None
-    title = _derive_title(content)
+
+    title = derive_title(content, kind, tags)
+    if not title:
+        import hashlib
+        title = f"memory-{hashlib.sha256(content.encode()).hexdigest()[:8]}"
+
     slug = slugify(title)
     filename = f"{memory_id}-{slug}.md"
-    rel = page_path("notes", filename)
-    markdown = build_note(title=title, body=content, tags=tags or ["note"])
-    return str(PurePosixPath(rel)), markdown
+
+    # Map classifier kind (singular) to PAGE_KINDS directory (plural)
+    _KIND_TO_DIR = {
+        "adr": "adr", "spec": "specs", "lesson": "lessons",
+        "convention": "conventions", "note": "notes", "guide": "guides",
+        "reference": "reference", "journal": "journal",
+    }
+    dir_name = _KIND_TO_DIR.get(kind, "notes")
+    safe_domain = slugify(domain, max_len=40) if domain else "_general"
+    rel = f"{dir_name}/{safe_domain}/{filename}"
+
+    # Build page with kind-appropriate template
+    markdown = build_note(
+        title=title, body=content, tags=tags or [kind], updated=_now_iso()
+    )
+    return rel, markdown

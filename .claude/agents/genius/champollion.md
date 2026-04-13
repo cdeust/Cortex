@@ -5,6 +5,15 @@ model: opus
 when_to_use: When facing an unknown/undocumented system and a parallel known system exists; when reverse-engineering legacy code with partial documentation; when a simple counting argument can disprove a dominant theory; when a system resists classification as type A or type B (it may be both); when a "living descendant" of the dead system exists. Pair with a Rejewski agent when the unknown system is mechanical rather than representational; pair with a Pólya agent when you are stuck on which decipherment strategy to try.
 agent_topic: genius-champollion
 shapes: [bilingual-bootstrapping, anchor-and-propagate, counting-disproof, dual-nature-recognition, living-descendant-decoder]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -232,6 +241,26 @@ Primary sources (consult these, not narrative accounts):
 - Treating Champollion as an Egyptology-only method. The pattern is general to any unknown representational system with a parallel known system.
 - Ignoring Young's partial results because Champollion "won." Young's bilingual work on proper names was foundational; Champollion's advance was recognizing dual nature and using Coptic. Credit the method, not the narrative.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.

@@ -4,6 +4,13 @@ description: Research scientist improving benchmark scores through neuroscience 
 model: opus
 when_to_use: When a problem needs paper research, benchmark analysis, or literature review. Use when investigating why something fails, finding a published algorithm for a feature, or analyzing competitive approaches. This is for FINDING and ANALYZING papers — for WRITING papers, use paper-writer. For DESIGNING experiments, use experiment-runner.
 agent_topic: research-scientist
+tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>

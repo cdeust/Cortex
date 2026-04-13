@@ -1,0 +1,1306 @@
+/* Cortex — Knowledge & Wiki Views */
+
+/* ─── Shared ─── */
+.kv-hidden { display: none !important; }
+
+/* ─── Knowledge View ─── */
+#knowledge-container {
+  position: absolute; inset: 0;
+  display: none; flex-direction: column;
+  overflow: hidden;
+  padding: 3% 4% 2%;
+  background: #080810;
+}
+
+/* Domain pills bar */
+.kv-domain-bar {
+  display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.kv-domain-pill {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #c0c8d8;
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.kv-domain-pill:hover {
+  border-color: rgba(255,255,255,0.18);
+  color: #f0eff4;
+}
+.kv-domain-pill.active {
+  border-color: rgba(144,184,224,0.5);
+  color: #f0eff4;
+  background: rgba(144,184,224,0.08);
+}
+.kv-domain-pill.kv-pill-global.active {
+  border-color: rgba(224,184,64,0.4);
+  color: #E0B840;
+  background: rgba(224,184,64,0.06);
+}
+
+/* Search */
+.kv-search-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 16px;
+}
+.kv-search {
+  flex: 1; max-width: 520px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #f0eff4;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  padding: 9px 16px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.kv-search:focus {
+  border-color: rgba(144,184,224,0.5);
+}
+.kv-search::placeholder { color: #b0b8c8; }
+
+/* Sort controls */
+.kv-sort-group {
+  display: flex; align-items: center; gap: 4px;
+  margin-left: auto;
+}
+.kv-sort-label {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: #b0b8c8;
+  margin-right: 4px;
+}
+.kv-sort-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: #b0b8c8;
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.kv-sort-btn:hover { border-color: rgba(255,255,255,0.15); color: #c0c8d8; }
+.kv-sort-btn.active {
+  border-color: rgba(144,184,224,0.4);
+  color: #f0eff4;
+  background: rgba(144,184,224,0.06);
+}
+
+/* Stats summary */
+.kv-stats-bar {
+  display: flex; gap: 24px; margin-bottom: 16px;
+  padding: 8px 0;
+}
+.kv-stat {
+  display: flex; align-items: baseline; gap: 6px;
+}
+.kv-stat-val {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 18px; font-weight: 600;
+  color: #f0eff4;
+}
+.kv-stat-label {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 11px;
+  color: #b0b8c8;
+  letter-spacing: 0.2px;
+}
+
+/* Global rules banner */
+.kv-global-banner {
+  margin-bottom: 8px;
+  padding: 0;
+}
+.kv-global-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 16px; font-weight: 600;
+  color: #E0B840;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(224,184,64,0.12);
+  font-variant: small-caps;
+  letter-spacing: 0.5px;
+}
+
+/* Cards list */
+.kv-grid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+.kv-grid::-webkit-scrollbar { width: 3px; }
+.kv-grid::-webkit-scrollbar-track { background: transparent; }
+.kv-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); }
+
+/* Domain section header */
+.kv-domain-header {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 16px; font-weight: 600;
+  color: #c0c8d8;
+  padding: 18px 0 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 2px;
+  font-variant: small-caps;
+  letter-spacing: 0.5px;
+}
+
+/* ── Memory card ── */
+.kv-card {
+  background: #0d0d1a;
+  border: 1px solid rgba(255,255,255,0.04);
+  border-left: 4px solid transparent;
+  padding: 16px 20px 14px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  position: relative;
+}
+.kv-card:hover {
+  background: #101020;
+  border-color: rgba(255,255,255,0.08);
+  border-left-color: rgba(144,184,224,0.3);
+}
+
+/* Hot memory accent */
+.kv-card.kv-card-hot {
+  border-left-color: #E07070;
+}
+.kv-card.kv-card-hot:hover {
+  border-left-color: #E07070;
+}
+
+/* Global card accent */
+.kv-card.kv-card-global {
+  border-left-color: rgba(224,184,64,0.4);
+}
+.kv-card.kv-card-global:hover {
+  border-left-color: rgba(224,184,64,0.6);
+}
+
+/* Card title */
+.kv-card-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.35;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Card body preview */
+.kv-card-body {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 14px;
+  color: #d0d4e0;
+  line-height: 1.55;
+  margin-bottom: 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* Card metadata row */
+.kv-card-meta {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+/* Consolidation badge */
+.kv-badge {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 1px 8px;
+  border: 1px solid;
+}
+.kv-badge-new { color: #80D0F0; border-color: rgba(128,208,240,0.25); }
+.kv-badge-growing { color: #80C0F0; border-color: rgba(96,160,224,0.25); }
+.kv-badge-strong { color: #70E090; border-color: rgba(112,224,144,0.25); }
+.kv-badge-stable { color: #E8B840; border-color: rgba(232,184,64,0.25); }
+.kv-badge-updating { color: #D090E0; border-color: rgba(208,144,224,0.25); }
+
+/* Domain pill inside card */
+.kv-card-domain {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 10px;
+  color: #b0b8c8;
+  padding: 1px 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+/* Store type */
+.kv-card-store {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 10px;
+  color: #c0c8d8;
+}
+
+/* Heat label in metadata */
+.kv-card-heat {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 10px; font-weight: 600;
+}
+
+/* Date in metadata */
+.kv-card-date {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 10px;
+  color: #c0c8d8;
+  margin-left: auto;
+}
+
+/* Tags row */
+.kv-card-tags {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 4px;
+}
+.kv-card-tag {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 10px;
+  padding: 1px 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: #b0b8c8;
+  letter-spacing: 0.2px;
+}
+.kv-tag-more {
+  color: #c0c8d8;
+  border-style: dashed;
+}
+
+/* Emotion indicator */
+.kv-card-emotion {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 10px; font-weight: 600;
+}
+
+/* Protected indicator */
+.kv-card-protected {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 10px;
+  color: #E0B840;
+}
+
+/* ── Expanded card overlay ── */
+.kv-expanded {
+  position: fixed;
+  top: 3%; left: 3%; right: 3%; bottom: 3%;
+  overflow-y: auto;
+  background: #0d0d1a;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 4% 5%;
+  z-index: 300;
+  box-shadow: 0 8px 80px rgba(0,0,0,0.6);
+}
+.kv-expanded::-webkit-scrollbar { width: 3px; }
+.kv-expanded::-webkit-scrollbar-track { background: transparent; }
+.kv-expanded::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
+
+.kv-expanded-close {
+  position: absolute; top: 16px; right: 18px;
+  background: none; border: 1px solid rgba(255,255,255,0.08);
+  width: 28px; height: 28px;
+  color: #b0b8c8; font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.kv-expanded-close:hover {
+  color: #f0eff4;
+  border-color: rgba(255,255,255,0.2);
+}
+
+/* Expanded title */
+.kv-expanded-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.3;
+  margin: 0 0 12px;
+  padding-right: 40px;
+}
+
+/* Expanded metadata row */
+.kv-expanded-meta-row {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Expanded full content -- wiki typography */
+.kv-expanded-content {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 18px;
+  color: #f0eff4;
+  line-height: 1.7;
+  word-break: break-word;
+  margin: 0 0 24px;
+}
+.kv-expanded-content p {
+  margin: 0 0 16px;
+}
+.kv-expanded-content h2, .kv-expanded-content h3, .kv-expanded-content h4, .kv-expanded-content h5 {
+  font-family: 'EB Garamond', Georgia, serif;
+  color: #ffffff;
+  margin: 28px 0 12px;
+}
+.kv-expanded-content h2 { font-size: 22px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+.kv-expanded-content h3 { font-size: 19px; }
+.kv-expanded-content h4 { font-size: 17px; font-style: italic; }
+.kv-expanded-content li {
+  margin: 4px 0 4px 24px;
+  list-style: disc;
+}
+.kv-expanded-content strong { color: #ffffff; }
+.kv-expanded-content code {
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  background: rgba(255,255,255,0.06);
+  padding: 2px 6px;
+}
+.kv-code {
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  background: #101020;
+  color: #c8d0e0;
+  padding: 16px 20px;
+  margin: 16px 0;
+  overflow-x: auto;
+  border: 1px solid rgba(255,255,255,0.06);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Section headers in expanded view */
+.kv-expanded-section {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 14px; font-weight: 600;
+  color: #c0c8d8;
+  margin: 20px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-variant: small-caps;
+  letter-spacing: 0.5px;
+}
+
+.kv-expanded-meta {
+  display: flex; flex-wrap: wrap; gap: 16px;
+}
+.kv-expanded-meta-item {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.kv-expanded-meta-label {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 10px;
+  color: #c0c8d8;
+  letter-spacing: 0.3px;
+}
+.kv-expanded-meta-val {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  color: #f0eff4;
+}
+
+.kv-expanded-entities {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.kv-entity-chip {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px; padding: 2px 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #c0c8d8;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.kv-entity-chip:hover {
+  border-color: rgba(144,184,224,0.4);
+  color: #f0eff4;
+  background: rgba(144,184,224,0.06);
+}
+
+/* Related memory items in expanded view */
+.kv-related-item {
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.04);
+  background: rgba(255,255,255,0.02);
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.kv-related-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+.kv-related-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0eff4;
+  line-height: 1.3;
+  margin-bottom: 2px;
+}
+.kv-related-preview {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  color: #b0b8c8;
+  line-height: 1.4;
+}
+
+.kv-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(4,4,8,0.75);
+  z-index: 299;
+  backdrop-filter: blur(6px);
+}
+
+/* Empty state */
+.kv-empty {
+  text-align: center;
+  padding: 80px 20px;
+}
+.kv-empty-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 20px; font-weight: 600;
+  color: #c0c8d8;
+  margin-bottom: 8px;
+}
+.kv-empty-sub {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  color: #b0b8c8;
+  font-style: italic;
+}
+
+/* ─── Wiki View — LaTeX Academic ─── */
+#wiki-container {
+  position: absolute; inset: 0;
+  display: none;
+  overflow: hidden;
+  padding: 3% 0 0 0;
+  background: #111118;
+}
+
+.wiki-layout {
+  display: grid;
+  grid-template-columns: 20% 1fr;
+  height: 100%;
+}
+
+/* ── Sidebar ── */
+.wiki-sidebar {
+  min-width: 0;
+  min-height: 0;
+  background: #0e0e16;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wiki-search-wrap {
+  position: relative;
+  padding: 16px 16px 12px;
+}
+.wiki-search-icon {
+  position: absolute;
+  left: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #d0d8e8;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+.wiki-search {
+  width: 100%;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 0;
+  color: #f0eff4;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 14px;
+  padding: 8px 12px 8px 36px;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+.wiki-search:focus {
+  border-color: rgba(122,158,194,0.5);
+  background: rgba(255,255,255,0.05);
+}
+.wiki-search::placeholder {
+  color: #c0c8e0;
+}
+
+/* Tree */
+.wiki-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0 16px;
+}
+.wiki-tree::-webkit-scrollbar { width: 3px; }
+.wiki-tree::-webkit-scrollbar-track { background: transparent; }
+.wiki-tree::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
+
+.wiki-tree-section {
+  margin-bottom: 2px;
+}
+
+.wiki-tree-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+.wiki-tree-kind:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.wiki-tree-arrow {
+  font-size: 8px;
+  color: #c0c8e0;
+  transition: transform 0.2s;
+  display: inline-block;
+  width: 10px;
+  flex-shrink: 0;
+}
+.wiki-tree-arrow.expanded {
+  transform: rotate(90deg);
+}
+.wiki-tree-arrow-sm {
+  font-size: 7px;
+}
+
+.wiki-tree-kind-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  display: none;
+}
+
+.wiki-tree-kind-label {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #c8c6d0;
+  letter-spacing: 0.2px;
+  flex: 1;
+}
+
+.wiki-tree-count {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 12px;
+  color: #c8c8d8;
+  background: rgba(255,255,255,0.03);
+  padding: 1px 7px;
+  border-radius: 0;
+  flex-shrink: 0;
+}
+
+.wiki-tree-items {
+  padding-left: 0;
+}
+.wiki-tree-items.collapsed,
+.wiki-tree-domain-items.collapsed {
+  display: none;
+}
+
+.wiki-tree-domain {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px 6px 36px;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+.wiki-tree-domain:hover {
+  background: rgba(255,255,255,0.02);
+}
+.wiki-tree-domain-label {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #c8c8d8;
+  letter-spacing: 0.3px;
+  font-variant: small-caps;
+  flex: 1;
+}
+
+.wiki-tree-domain-items {
+  padding-left: 0;
+}
+
+.wiki-tree-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 16px 6px 46px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border-left: 2px solid transparent;
+  position: relative;
+}
+.wiki-tree-item:hover {
+  background: rgba(255,255,255,0.03);
+  color: #f0eff4;
+}
+.wiki-tree-item.active {
+  background: rgba(255,255,255,0.04);
+  border-left-color: #90b8e0;
+}
+.wiki-tree-item.active .wiki-tree-item-label {
+  color: #f0eff4;
+  font-weight: 500;
+}
+
+.wiki-tree-item-label {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 14px;
+  color: #c8c8d8;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.wiki-tree-item:hover .wiki-tree-item-label {
+  color: #c8c4be;
+}
+
+.wiki-tree-empty {
+  padding: 24px 16px;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 14px;
+  color: #c8c8d8;
+  text-align: center;
+}
+
+/* ── Main Content ── */
+.wiki-main {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0;
+  background: #111118;
+}
+.wiki-main::-webkit-scrollbar { width: 4px; }
+.wiki-main::-webkit-scrollbar-track { background: transparent; }
+.wiki-main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); }
+
+.wiki-article {
+  padding: 3% 5% 5%;
+}
+
+/* Page Header — academic paper style */
+.wiki-page-header {
+  margin-bottom: 36px;
+  text-align: center;
+}
+
+.wiki-breadcrumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 16px;
+}
+.wiki-breadcrumb span {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  color: #c0c0d0;
+  letter-spacing: 0.3px;
+  font-variant: small-caps;
+}
+.wiki-breadcrumb-sep {
+  margin: 0 8px;
+  color: #b0b0c8 !important;
+}
+
+.wiki-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.wiki-page-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.25;
+  letter-spacing: 0;
+  margin: 0;
+}
+
+/* Maturity labels — academic, not pills */
+.wiki-mat-pill {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  font-variant: small-caps;
+  padding: 2px 8px;
+  border-radius: 0;
+  border: 1px solid;
+  display: inline-block;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.wiki-mat-stub {
+  background: none;
+  color: #F0A090;
+  border-color: rgba(160,96,80,0.3);
+}
+.wiki-mat-draft {
+  background: none;
+  color: #F0D880;
+  border-color: rgba(160,144,80,0.3);
+}
+.wiki-mat-reviewed {
+  background: none;
+  color: #A0E0F0;
+  border-color: rgba(96,144,160,0.3);
+}
+.wiki-mat-stable {
+  background: none;
+  color: #A0F0B0;
+  border-color: rgba(96,144,112,0.3);
+}
+
+.wiki-kind-pill {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  color: #c0c0d0;
+  font-variant: small-caps;
+  flex-shrink: 0;
+}
+
+/* Metadata bar — author/date line */
+.wiki-meta-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-wrap: wrap;
+}
+
+.wiki-meta-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.wiki-meta-label {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  color: #c0c0d0;
+  font-variant: small-caps;
+}
+.wiki-meta-value {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 14px;
+  color: #d0ccc8;
+}
+
+.wiki-tag-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.wiki-tag {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #90b8e0;
+  background: none;
+  padding: 1px 8px;
+  border: 1px solid rgba(122,158,194,0.2);
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+/* ── Markdown Body — LaTeX Typography ── */
+.wiki-body {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 18px;
+  color: #f0eff4;
+  line-height: 1.7;
+  padding-top: 28px;
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+.wiki-body h1 {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 44px 0 14px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-align: left;
+}
+.wiki-body h2 {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 23px;
+  font-weight: 700;
+  color: #e2ddd6;
+  margin: 36px 0 10px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  line-height: 1.3;
+  text-align: left;
+}
+.wiki-body h3 {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 20px;
+  font-weight: 700;
+  font-style: italic;
+  color: #d0ccc6;
+  margin: 30px 0 8px;
+  line-height: 1.4;
+  text-align: left;
+}
+.wiki-body h4 {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #d0d0dc;
+  margin: 24px 0 6px;
+  line-height: 1.4;
+  font-variant: small-caps;
+  letter-spacing: 0.5px;
+  text-align: left;
+}
+
+.wiki-body p {
+  margin: 0 0 1em;
+  text-indent: 1.5em;
+}
+.wiki-body h1 + p,
+.wiki-body h2 + p,
+.wiki-body h3 + p,
+.wiki-body h4 + p,
+.wiki-body blockquote + p,
+.wiki-body .wiki-code-block + p,
+.wiki-body ul + p,
+.wiki-body ol + p,
+.wiki-body table + p,
+.wiki-body hr + p {
+  text-indent: 0;
+}
+
+.wiki-body strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.wiki-body em {
+  color: #c8c4be;
+  font-style: italic;
+}
+
+.wiki-body code {
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  background: #151520;
+  border: none;
+  padding: 2px 5px;
+  border-radius: 0;
+  color: #c8c6d0;
+}
+
+.wiki-code-block {
+  margin: 20px 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: #151520;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.wiki-code-block pre {
+  margin: 0;
+  padding: 16px 20px;
+  overflow-x: auto;
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #d8d4d0;
+  background: none;
+  border: none;
+}
+.wiki-code-block pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+  border-radius: 0;
+}
+
+.wiki-body ul, .wiki-body ol {
+  margin: 0 0 1em;
+  padding-left: 2em;
+}
+.wiki-body li {
+  margin: 4px 0;
+  line-height: 1.6;
+  text-indent: 0;
+}
+.wiki-body li::marker {
+  color: #c0c0d0;
+}
+
+.wiki-body blockquote {
+  border-left: 2px solid #c0c0d0;
+  padding: 8px 20px;
+  margin: 20px 0;
+  color: #c8c6d0;
+  background: none;
+  border-radius: 0;
+  font-style: italic;
+}
+
+.wiki-body hr {
+  border: none;
+  height: 1px;
+  background: rgba(255,255,255,0.1);
+  margin: 32px 0;
+}
+
+/* Tables — booktabs style */
+.wiki-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  border-top: 2px solid rgba(255,255,255,0.2);
+  border-bottom: 2px solid rgba(255,255,255,0.2);
+}
+.wiki-body table th {
+  text-align: left;
+  padding: 8px 14px;
+  background: none;
+  color: #f0eff4;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.wiki-body table td {
+  padding: 7px 14px;
+  color: #c8c6d0;
+  border-bottom: none;
+}
+.wiki-body table tr:nth-child(even) td {
+  background: none;
+}
+.wiki-body table tr:hover td {
+  background: rgba(255,255,255,0.02);
+}
+
+/* Links — hyperref style (dark blue, no underline) */
+.wiki-body a, .wiki-body .wiki-link {
+  color: #90b8e0;
+  text-decoration: none;
+  transition: color 0.15s;
+  cursor: pointer;
+}
+.wiki-body a:hover, .wiki-body .wiki-link:hover {
+  color: #9ab8d6;
+  text-decoration: none;
+}
+
+/* ── Loading / Error States ── */
+.wiki-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 80px 20px;
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  color: #c0c0d0;
+}
+.wiki-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid rgba(255,255,255,0.06);
+  border-top-color: #90b8e0;
+  border-radius: 50%;
+  animation: wiki-spin 0.8s linear infinite;
+}
+@keyframes wiki-spin {
+  to { transform: rotate(360deg); }
+}
+
+.wiki-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #c8c8d8;
+  text-align: center;
+  padding: 40px;
+}
+.wiki-error-icon {
+  margin-bottom: 16px;
+  opacity: 0.25;
+}
+.wiki-error-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: #d0ccc8;
+  margin-bottom: 8px;
+}
+.wiki-error-sub {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  color: #c0c0d0;
+}
+
+/* ── Welcome Panel — Academic Index ── */
+.wiki-welcome {
+  padding: 4% 5% 5%;
+}
+
+.wiki-welcome-header {
+  margin-bottom: 40px;
+  text-align: center;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.wiki-welcome-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 8px;
+  letter-spacing: 0;
+}
+.wiki-welcome-subtitle {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 16px;
+  color: #c0c0d0;
+  margin: 0;
+  font-style: italic;
+}
+
+.wiki-welcome-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 40px;
+}
+.wiki-welcome-kind-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.wiki-welcome-kind-card:hover {
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.1);
+}
+.wiki-welcome-kind-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  display: none;
+}
+.wiki-welcome-kind-info {
+  display: flex;
+  flex-direction: column;
+}
+.wiki-welcome-kind-count {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: #f0eff4;
+  line-height: 1.1;
+}
+.wiki-welcome-kind-label {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 12px;
+  color: #c0c0d0;
+  letter-spacing: 0.2px;
+  font-variant: small-caps;
+}
+
+.wiki-welcome-section {
+  margin-bottom: 32px;
+}
+.wiki-welcome-section-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #f0eff4;
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 0 0 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.wiki-welcome-section-sub {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 14px;
+  color: #c0c0d0;
+  font-style: italic;
+  margin: 0 0 12px;
+}
+
+.wiki-welcome-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.wiki-welcome-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.wiki-welcome-list-item:hover {
+  background: rgba(255,255,255,0.03);
+}
+.wiki-welcome-list-item--stable {
+  gap: 10px;
+  justify-content: flex-start;
+}
+.wiki-welcome-list-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  color: #f0eff4;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wiki-welcome-list-item:hover .wiki-welcome-list-title {
+  color: #ffffff;
+}
+.wiki-welcome-list-meta {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  color: #c8c8d8;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-style: italic;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 900px) {
+  #knowledge-container {
+    padding: 2% 3%;
+  }
+  #wiki-container {
+    padding-left: 0;
+  }
+
+  .wiki-layout {
+    grid-template-columns: 22% 1fr;
+  }
+
+  .wiki-article {
+    max-width: none;
+    padding: 3% 3% 5%;
+  }
+
+  .wiki-tree-item {
+    padding-left: 32px;
+  }
+
+  .kv-card-title {
+    font-size: 15px;
+  }
+  .kv-card-body {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 600px) {
+  .wiki-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .wiki-article {
+    max-width: none;
+    padding: 2% 4% 4%;
+  }
+
+  .wiki-page-title {
+    font-size: 22px;
+  }
+
+  .wiki-body {
+    font-size: 15px;
+    text-align: left;
+  }
+
+  .wiki-welcome {
+    max-width: none;
+    padding: 32px 16px 40px;
+  }
+
+  .wiki-welcome-title {
+    font-size: 26px;
+  }
+
+  .wiki-welcome-kinds {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .kv-expanded {
+    top: 1%; left: 1%; right: 1%; bottom: 1%;
+    padding: 3% 3%;
+  }
+  .kv-expanded-title {
+    font-size: 22px;
+  }
+}

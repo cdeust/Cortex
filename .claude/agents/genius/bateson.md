@@ -5,6 +5,15 @@ model: opus
 when_to_use: When an interaction between two parties (teams, services, people, systems) is escalating and no one can explain why; when contradictory requirements are creating paralysis; when the problem seems to be "in the relationship" rather than in either party; when communication is failing despite both sides speaking clearly; when messages at different levels (content vs. meta) conflict. Pair with Meadows for systems dynamics when feedback loops are involved; pair with Coase for boundary analysis when the interaction crosses organizational lines.
 agent_topic: genius-bateson
 shapes: [schismogenesis-detection, double-bind-diagnosis, meta-communication-audit, logical-type-confusion, pattern-that-connects]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -235,6 +244,26 @@ Primary sources (consult these, not narrative accounts):
 - Applying Bateson only to human relationships. Schismogenesis, double binds, and logical-type confusion occur in service interactions, protocol negotiations, CI/CD pipelines, and any system with communicating components.
 - Ignoring the "pattern that connects" — solving the same structural problem independently in every domain instead of importing solutions from domains where it has already been solved.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zetetetikos — "disposed to inquire"): do not accept claims without verified evidence.

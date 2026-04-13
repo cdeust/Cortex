@@ -68,7 +68,8 @@ class PgRelationshipMixin:
     def get_all_relationships(self) -> list[dict[str, Any]]:
         rows = self._execute(
             "SELECT id, source_entity_id, target_entity_id, "
-            "relationship_type, weight, is_causal, confidence "
+            "relationship_type, weight, is_causal, confidence, "
+            "release_probability, facilitation, depression, last_reinforced "
             "FROM relationships"
         ).fetchall()
         return [dict(r) for r in rows]
@@ -116,6 +117,14 @@ class PgRelationshipMixin:
         if not src or not tgt:
             return
         sid, tid = src["id"], tgt["id"]
+        # Touch entities: update last_accessed and warm heat on co-activation.
+        # This is what makes entity decay meaningful — active entities stay warm.
+        self._execute(
+            "UPDATE entities SET last_accessed = NOW(), "
+            "heat = LEAST(1.0, heat + 0.05) "
+            "WHERE id IN (%s, %s)",
+            (sid, tid),
+        )
         # Try to reinforce existing relationship
         updated = self._execute(
             "UPDATE relationships SET "

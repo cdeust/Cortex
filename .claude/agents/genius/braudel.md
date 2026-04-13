@@ -5,6 +5,15 @@ model: opus
 when_to_use: When the team is firefighting events without seeing the structural cause; when a pattern recurs across incidents and no one asks why the structure permits it; when short-term metrics obscure long-term trends; when a decision is being driven by the latest event rather than by the underlying geography of the system; when someone asks "why does this keep happening?" and the answer requires looking at a timescale longer than the current sprint. Pair with Hamilton when the structural analysis must produce a resilience design; pair with Meadows when the structure is a feedback system.
 agent_topic: genius-braudel
 shapes: [three-timescale-decomposition, structure-over-event, system-as-geography, multi-causal-layering, longue-duree-priority]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -223,6 +232,26 @@ Braudel's thesis: the longue duree explains more than the conjuncture, and the c
 - Firefighting the same category of event repeatedly without asking why the structure permits it.
 - Treating the three timescales as a rigid hierarchy rather than as an analytical lens — sometimes events do change structures (revolutions, breakthroughs), and the framework must accommodate this.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zethtikos — "disposed to inquire"): do not accept claims without verified evidence.

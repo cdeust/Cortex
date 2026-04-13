@@ -7,9 +7,18 @@
       btn.addEventListener('click', function() {
         viewBtns.forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
-        JUG.state.activeView = btn.dataset.view || 'graph';
+        var view = btn.dataset.view || 'graph';
+        JUG.state.activeView = view;
+        toggleFilterBarVisibility(view);
       });
     });
+
+    // Set Wiki as default view on load — force emit by toggling
+    setTimeout(function() {
+      JUG.state.activeView = '_init';
+      JUG.state.activeView = 'wiki';
+      toggleFilterBarVisibility('wiki');
+    }, 0);
 
     // ── Filter buttons (source type) ──
     var filterBtns = document.querySelectorAll('#filter-bar .filter-btn[data-filter]');
@@ -134,6 +143,27 @@
     var current = JUG.state.activeFilter;
     JUG.state.activeFilter = '_force_rebuild';
     JUG.state.activeFilter = current;
+  }
+
+  function toggleFilterBarVisibility(view) {
+    var isFullscreen = (view === 'wiki' || view === 'knowledge' || view === 'timeline' || view === 'sankey');
+    var showFilters = (view === 'graph');
+
+    // Hide side panels for fullscreen views — but KEEP the filter bar (it has the view toggle)
+    var infoPanel = document.getElementById('info-panel');
+    var statusBar = document.getElementById('status-bar');
+    var legend = document.getElementById('legend');
+    if (infoPanel) infoPanel.style.display = isFullscreen ? 'none' : '';
+    if (statusBar) statusBar.style.display = isFullscreen ? 'none' : '';
+    if (legend) legend.style.display = isFullscreen ? 'none' : '';
+
+    // Hide filter controls (not the view toggle) for non-graph views
+    var filterBtnsRow = document.querySelectorAll('#filter-bar .filter-btn[data-filter]');
+    var filterExtras = document.querySelectorAll('#filter-bar .filter-select, #filter-bar #search-box');
+    var filterSeps = document.querySelectorAll('#filter-bar .filter-sep');
+    filterBtnsRow.forEach(function(b) { b.style.display = showFilters ? '' : 'none'; });
+    filterExtras.forEach(function(s) { s.style.display = showFilters ? '' : 'none'; });
+    filterSeps.forEach(function(s) { s.style.display = showFilters ? '' : 'none'; });
   }
 
   // Extend the graph filter logic to respect domain and emotion filters

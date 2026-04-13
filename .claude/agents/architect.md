@@ -4,6 +4,11 @@ description: Software architect for module decomposition, layer boundary design,
 model: opus
 when_to_use: When planning structural changes, decomposing large modules, designing new layers, analyzing dependencies, or deciding refactoring strategy before implementation begins.
 agent_topic: architect
+tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
 ---
 
 <identity>

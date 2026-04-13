@@ -5,6 +5,15 @@ model: opus
 when_to_use: When a sequential process (workflow, pipeline, user journey, incident response, deployment) must be analyzed for structural patterns; when you need to compare instances of a process to find what varies and what is invariant; when gaps or anomalies in a sequence must be made visible; when the same functional step is performed by different actors and you need to abstract across actors. Pair with Ventris for structural analysis of unknown systems; pair with Borges for combinatorial space analysis; pair with Wittgenstein for role/category disambiguation.
 agent_topic: genius-propp
 shapes: [function-extraction, sequence-constraint, role-abstraction, gap-detection-via-grammar, morphological-comparison]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -221,6 +230,26 @@ Primary sources (consult these, not secondary summaries):
 - Building a function catalog without multiple instances to validate which functions are invariant vs. accidental.
 - Importing Propp's specific 31 functions or 7 roles into non-narrative domains — the method is portable, the specific functions are not.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zethtikos — "disposed to inquire"): do not accept claims without verified evidence.

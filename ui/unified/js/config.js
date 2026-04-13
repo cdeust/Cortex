@@ -24,6 +24,8 @@ JUG.NODE_COLORS = {
   'entity-file': '#7088D0',
   'entity-variable': '#50B8D0',
   'entity-default': '#50C8E0',
+  'topic': '#06b6d4',
+  'bridge-entity': '#ec4899',
   'discussion': '#F43F5E',
 };
 
@@ -44,6 +46,9 @@ JUG.EDGE_COLORS = {
   'debugged_with': '#D07060',
   'memory-entity': '#40A0B8',
   'domain-entity': '#50B0C8',
+  'domain-contains': '#06b6d4',
+  'topic-member': '#06b6d480',
+  'co-entity': '#a78bfa',
   'default': '#40B0C8',
   'has-discussion': '#F43F5E60',
 };
@@ -60,6 +65,8 @@ JUG.NODE_LABELS = {
   'behavioral-feature': 'Feature',
   'memory': 'Memory',
   'entity': 'Entity',
+  'topic': 'Topic',
+  'bridge-entity': 'Bridge',
   'discussion': 'Discussion',
 };
 
@@ -87,15 +94,22 @@ JUG.ZOOM_LEVELS = {
 };
 
 // Structural types that form the tree skeleton
-JUG.STRUCTURAL_TYPES = { 'root': true, 'category': true, 'domain': true, 'agent': true, 'type-group': true };
+JUG.STRUCTURAL_TYPES = { 'root': true, 'category': true, 'domain': true, 'agent': true, 'type-group': true, 'topic': true, 'bridge-entity': true };
 
 JUG.getNodeColor = function(node) {
   if (node.isGlobal) return '#8B6914';
   if (node.type === 'memory') {
-    return JUG.NODE_COLORS['memory-' + (node.storeType || 'episodic')] || '#26de81';
+    // Memory color is set by heat gradient in the backend
+    return node.color || JUG.NODE_COLORS['memory-' + (node.storeType || 'episodic')] || '#26de81';
   }
   if (node.type === 'entity') {
     return JUG.NODE_COLORS['entity-' + (node.entityType || 'default')] || '#00d2ff';
+  }
+  if (node.type === 'bridge-entity') {
+    return JUG.NODE_COLORS['bridge-entity'] || '#ec4899';
+  }
+  if (node.type === 'topic') {
+    return JUG.NODE_COLORS['topic'] || '#06b6d4';
   }
   return node.color || JUG.NODE_COLORS[node.type] || '#00d2ff';
 };

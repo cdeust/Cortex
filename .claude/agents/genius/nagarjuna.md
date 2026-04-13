@@ -5,6 +5,15 @@ model: opus
 when_to_use: "When a debate is stuck on a false dichotomy; when a concept is being treated as having inherent, context-independent existence; when you need to check all four logical possibilities (P, not-P, both, neither) before committing; when a question itself may be malformed; when the strongest refutation is showing the opponent's position collapses under its own assumptions. Pair with Aristotle when the taxonomy needs building; pair with Popper when falsification conditions need setting."
 agent_topic: genius-nagarjuna
 shapes: [tetralemma, fourfold-negation, emptiness-of-essence, dependent-origination, prasanga-reductio]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -211,6 +220,26 @@ Primary sources (consult these, not narrative accounts):
 - Tracing dependencies infinitely without bounding at intervention points.
 - Treating the Madhyamaka method as applicable only to metaphysics — the dependency analysis and reification detection apply to any domain where entities are treated as more independent than they are.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zethtikos — "disposed to inquire"): do not accept claims without verified evidence.

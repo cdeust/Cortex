@@ -4,6 +4,12 @@ description: UX/UI designer focused on usability, accessibility, information arc
 model: opus
 when_to_use: When user experience needs attention — designing user flows, improving information architecture, reviewing accessibility (WCAG), or building design system components.
 agent_topic: ux-designer
+tools:
+  - Read
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>

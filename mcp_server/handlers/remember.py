@@ -80,11 +80,23 @@ def _get_store() -> MemoryStore:
 
 
 def _resolve_domain(directory: str, domain: str) -> str:
-    if not domain and directory:
+    from mcp_server.shared.domain_mapping import resolve_cwd, resolve_domain as resolve_hint
+
+    # Shannon: cwd is the minimum sufficient statistic for domain identity.
+    # Try git-root resolution first (most reliable), then profile detection fallback.
+    if directory:
+        resolved = resolve_cwd(directory)
+        if resolved:
+            return resolved
+    if domain:
+        return resolve_hint(domain)
+    if directory:
+        # Fallback to profile-based detection
         profiles = load_profiles()
         detection = detect_domain({"cwd": directory}, profiles)
-        domain = detection.get("domain", "") or ""
-    return domain
+        detected = detection.get("domain", "") or ""
+        return resolve_hint(detected) if detected else ""
+    return ""
 
 
 def _enrich_mod_with_gate(mod: dict, gate: dict) -> None:
@@ -202,6 +214,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             memory_id=result["memory_id"],
             content=content,
             tags=tags,
+            domain=domain,
         )
         if wiki_path:
             result["wiki_page"] = wiki_path
