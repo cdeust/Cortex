@@ -22,10 +22,9 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
-from pathlib import PurePosixPath
 
 from mcp_server.core.wiki_classifier import classify_memory, derive_title
-from mcp_server.core.wiki_layout import domain_page_path, slugify
+from mcp_server.core.wiki_layout import slugify
 from mcp_server.core.wiki_pages import build_note
 
 _DECISION_TAGS = frozenset({"decision", "adr", "architecture", "spec", "design"})
@@ -33,6 +32,8 @@ _DECISION_TAGS = frozenset({"decision", "adr", "architecture", "spec", "design"}
 
 def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 _TITLE_MAX_LEN = 80
 
 
@@ -83,6 +84,7 @@ def build_from_memory(
     title = derive_title(content, kind, tags)
     if not title:
         import hashlib
+
         title = f"memory-{hashlib.sha256(content.encode()).hexdigest()[:8]}"
 
     slug = slugify(title)
@@ -90,9 +92,14 @@ def build_from_memory(
 
     # Map classifier kind (singular) to PAGE_KINDS directory (plural)
     _KIND_TO_DIR = {
-        "adr": "adr", "spec": "specs", "lesson": "lessons",
-        "convention": "conventions", "note": "notes", "guide": "guides",
-        "reference": "reference", "journal": "journal",
+        "adr": "adr",
+        "spec": "specs",
+        "lesson": "lessons",
+        "convention": "conventions",
+        "note": "notes",
+        "guide": "guides",
+        "reference": "reference",
+        "journal": "journal",
     }
     dir_name = _KIND_TO_DIR.get(kind, "notes")
     safe_domain = slugify(domain, max_len=40) if domain else "_general"

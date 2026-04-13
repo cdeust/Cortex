@@ -191,9 +191,7 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 relationships=[format_relationship(r) for r in relationships],
                 filter_domain=domain_filter,
             )
-            _cached_domain_hub_ids = _extract_domain_hub_ids(
-                data.get("nodes", [])
-            )
+            _cached_domain_hub_ids = _extract_domain_hub_ids(data.get("nodes", []))
             _graph_cache = {"data": data, "domain_filter": domain_filter}
             _graph_cache_ts = time.monotonic()
             print(
@@ -281,9 +279,9 @@ def _build_unified_handler(ui_root: Path, store) -> type:
 
         def _serve_wiki_list(self):
             try:
-                import urllib.parse
                 from mcp_server.handlers.wiki_api import list_wiki_pages
                 from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
                 data = list_wiki_pages(METHODOLOGY_DIR / "wiki")
                 body = json.dumps({"pages": data}, default=str).encode()
                 self.send_response(200)
@@ -303,6 +301,7 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 import urllib.parse
                 from mcp_server.handlers.wiki_api import read_wiki_page
                 from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
                 rel_path = ""
                 if "?" in self.path:
                     for p in self.path.split("?", 1)[1].split("&"):

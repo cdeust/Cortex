@@ -19,14 +19,24 @@ import re
 # ── Rejection patterns ────────────────────────────────────────────────
 
 _REJECT_PREFIXES = (
-    "# Tool:", "Tool:", "tool:", "# tool:",
-    "System:", "system:",
-    "<tool_result>", "<result>",
+    "# Tool:",
+    "Tool:",
+    "tool:",
+    "# tool:",
+    "System:",
+    "system:",
+    "<tool_result>",
+    "<result>",
 )
 
 _REJECT_TITLES = {
-    "tool-edit", "tool-bash", "tool-read", "tool-write",
-    "tool-grep", "tool-glob", "tool-search",
+    "tool-edit",
+    "tool-bash",
+    "tool-read",
+    "tool-write",
+    "tool-grep",
+    "tool-glob",
+    "tool-search",
 }
 
 _REJECT_PATTERNS = [
@@ -40,15 +50,24 @@ _REJECT_PATTERNS = [
 # ── Classification patterns ───────────────────────────────────────────
 
 _ADR_PATTERNS = [
-    re.compile(r"\b(decided to|decision:|the decision is|chose .+ because|rejected .+ (due to|because)|we will use|selected .+ over)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(decided to|decision:|the decision is|chose .+ because|rejected .+ (due to|because)|we will use|selected .+ over)\b",
+        re.IGNORECASE,
+    ),
 ]
 
 _LESSON_PATTERNS = [
-    re.compile(r"\b(the bug was|root cause|lesson learned|mistake was|never again|fix:|fixed by|the issue was|the problem was|turned out)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(the bug was|root cause|lesson learned|mistake was|never again|fix:|fixed by|the issue was|the problem was|turned out)\b",
+        re.IGNORECASE,
+    ),
 ]
 
 _CONVENTION_PATTERNS = [
-    re.compile(r"\b(always use|never |the canonical|convention:|rule:|standard:|must follow|naming convention|coding standard)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(always use|never |the canonical|convention:|rule:|standard:|must follow|naming convention|coding standard)\b",
+        re.IGNORECASE,
+    ),
 ]
 
 _SPEC_TAGS = {"spec", "design", "specification", "feature"}
@@ -56,8 +75,10 @@ _SPEC_TAGS = {"spec", "design", "specification", "feature"}
 # ── Title prefix stripping ────────────────────────────────────────────
 
 _TITLE_STRIP_PREFIXES = [
-    re.compile(r"^#+\s*"),              # Markdown headings
-    re.compile(r"^(Tool|System|Rule|Decision|Convention|Lesson|Note):\s*", re.IGNORECASE),
+    re.compile(r"^#+\s*"),  # Markdown headings
+    re.compile(
+        r"^(Tool|System|Rule|Decision|Convention|Lesson|Note):\s*", re.IGNORECASE
+    ),
     re.compile(r"^Implement the following plan:?\s*", re.IGNORECASE),
     re.compile(r"^Execute the following:?\s*", re.IGNORECASE),
     re.compile(r"^(Here is|Here's|The following)\s+", re.IGNORECASE),
@@ -145,7 +166,11 @@ def derive_title(
         cleaned = line.strip()
         for pat in _TITLE_STRIP_PREFIXES:
             cleaned = pat.sub("", cleaned).strip()
-        if len(cleaned) > 10 and not cleaned.startswith("{") and not cleaned.startswith("["):
+        if (
+            len(cleaned) > 10
+            and not cleaned.startswith("{")
+            and not cleaned.startswith("[")
+        ):
             first_meaningful = cleaned
             break
 

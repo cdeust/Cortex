@@ -20,7 +20,6 @@ from mcp_server.core.graph_builder_nodes import (
     IdAllocator,
     Node,
 )
-from mcp_server.core.knowledge_graph import extract_entities
 
 # ── Constants ─────────────────────────────────────────────────────────
 
@@ -52,11 +51,11 @@ _STAGE_OPACITY = {
 # ── Heat gradient ─────────────────────────────────────────────────────
 
 _HEAT_COLORS = [
-    (0.0, "#1e3a5f"),   # cold: dark blue
-    (0.3, "#2563eb"),   # cool: blue
-    (0.5, "#06b6d4"),   # warm: cyan
-    (0.7, "#f59e0b"),   # hot: amber
-    (1.0, "#ef4444"),   # burning: red
+    (0.0, "#1e3a5f"),  # cold: dark blue
+    (0.3, "#2563eb"),  # cool: blue
+    (0.5, "#06b6d4"),  # warm: cyan
+    (0.7, "#f59e0b"),  # hot: amber
+    (1.0, "#ef4444"),  # burning: red
 ]
 
 
@@ -521,8 +520,11 @@ def _build_topic_nodes(
     # Find tags with enough members to be topics
     # Sort by member count descending — greedily pick the densest topics
     candidate_tags = sorted(
-        ((tag, mems) for tag, mems in tag_members.items()
-         if len(mems) >= _MIN_TOPIC_MEMBERS),
+        (
+            (tag, mems)
+            for tag, mems in tag_members.items()
+            if len(mems) >= _MIN_TOPIC_MEMBERS
+        ),
         key=lambda x: len(x[1]),
         reverse=True,
     )
@@ -546,7 +548,9 @@ def _build_topic_nodes(
             d = memory_domains.get(m, "")
             if d:
                 domain_counts[d] = domain_counts.get(d, 0) + 1
-        dominant_domain = max(domain_counts, key=domain_counts.get) if domain_counts else ""
+        dominant_domain = (
+            max(domain_counts, key=domain_counts.get) if domain_counts else ""
+        )
 
         # Count consolidation stages for topic border encoding
         stage_counts: dict[str, int] = {}
@@ -557,8 +561,7 @@ def _build_topic_nodes(
                 stage_counts[s] = stage_counts.get(s, 0) + 1
         total = sum(stage_counts.values()) or 1
         consolidated_ratio = (
-            stage_counts.get("consolidated", 0)
-            + stage_counts.get("late_ltp", 0)
+            stage_counts.get("consolidated", 0) + stage_counts.get("late_ltp", 0)
         ) / total
 
         # Create topic node.
@@ -569,7 +572,7 @@ def _build_topic_nodes(
         topic_nid = next_id("topic")
         topic_count += 1
         member_count = len(available)
-        topic_size = max(4, min(16, 4 + member_count ** 0.5 * 2))
+        topic_size = max(4, min(16, 4 + member_count**0.5 * 2))
         nodes.append(
             {
                 "id": topic_nid,
@@ -646,8 +649,7 @@ def _add_coref_edges(
             continue
         for i in range(len(ent_nids)):
             for j in range(i + 1, len(ent_nids)):
-                key = (min(ent_nids[i], ent_nids[j]),
-                       max(ent_nids[i], ent_nids[j]))
+                key = (min(ent_nids[i], ent_nids[j]), max(ent_nids[i], ent_nids[j]))
                 coref_counts[key] = coref_counts.get(key, 0) + 1
 
     # Add edges for pairs with 2+ co-references (noise filter)
@@ -731,7 +733,7 @@ def _resize_entities_by_references(
         node = node_index.get(ent_nid)
         if node and node.get("type") in ("entity", "bridge-entity"):
             # Size proportional to sqrt(references) for visual balance
-            node["size"] = max(node.get("size", 2), 2 + count ** 0.5 * 2)
+            node["size"] = max(node.get("size", 2), 2 + count**0.5 * 2)
             node["referenceCount"] = count
 
 

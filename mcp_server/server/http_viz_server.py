@@ -168,6 +168,7 @@ def _build_unified_handler(
             try:
                 from mcp_server.handlers.wiki_api import list_wiki_pages
                 from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
                 wiki_root = METHODOLOGY_DIR / "wiki"
                 data = list_wiki_pages(wiki_root)
                 send_json_response(self, {"pages": data})
@@ -180,6 +181,7 @@ def _build_unified_handler(
 
                 from mcp_server.handlers.wiki_api import read_wiki_page
                 from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
                 wiki_root = METHODOLOGY_DIR / "wiki"
                 params = self.path.split("?", 1)
                 rel_path = ""
@@ -207,7 +209,9 @@ def _build_unified_handler(
 
 
 def _do_background_build(
-    profiles_getter, store_getter, domain_filter: str | None,
+    profiles_getter,
+    store_getter,
+    domain_filter: str | None,
 ) -> None:
     """Build the full graph in background and cache it."""
     global _graph_cache, _graph_cache_ts, _cached_domain_hub_ids

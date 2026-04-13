@@ -80,7 +80,10 @@ def _get_store() -> MemoryStore:
 
 
 def _resolve_domain(directory: str, domain: str) -> str:
-    from mcp_server.shared.domain_mapping import resolve_cwd, resolve_domain as resolve_hint
+    from mcp_server.shared.domain_mapping import (
+        resolve_cwd,
+        resolve_domain as resolve_hint,
+    )
 
     # Shannon: cwd is the minimum sufficient statistic for domain identity.
     # Try git-root resolution first (most reliable), then profile detection fallback.
