@@ -5,6 +5,15 @@ model: opus
 when_to_use: When someone claims X causes Y from observational data alone; when an A/B test result seems confounded; when "what would have happened if we had done X instead?" is the question; when correlation is being treated as causation; when variables are being controlled for without checking whether controlling introduces collider bias. Pair with Fisher for experimental design; pair with Curie for measurement.
 agent_topic: genius-pearl
 shapes: [ladder-of-causation, intervention-vs-association, causal-graph-construction, confound-detection, counterfactual-reasoning]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -225,6 +234,26 @@ Primary sources (consult these, not summaries):
 - Applying counterfactual reasoning without a structural model.
 - Treating the Ladder of Causation as a metaphor rather than a formal framework with specific mathematical content.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.

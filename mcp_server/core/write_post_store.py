@@ -36,8 +36,9 @@ def persist_entities(
     domain: str,
     content: str,
     store: Any,
+    memory_id: int | None = None,
 ) -> list[int]:
-    """Insert new entities and co-occurrence relationships."""
+    """Insert new entities, co-occurrence relationships, and memory-entity links."""
     entity_ids: list[int] = []
     for ent in extracted_entities:
         existing = store.get_entity_by_name(ent["name"])
@@ -53,6 +54,10 @@ def persist_entities(
             )
             entity_ids.append(eid)
     _create_co_occurrences(extracted_entities, content, store, entity_ids)
+    # Persist memory-entity links in join table
+    if memory_id is not None:
+        for eid in entity_ids:
+            store.insert_memory_entity(memory_id, eid)
     return entity_ids
 
 

@@ -5,6 +5,15 @@ model: opus
 when_to_use: When adoption of a technology, practice, tool, or process is slower than expected; when you need to understand WHO has adopted and WHO has not and WHY; when an innovation is stuck between early enthusiasts and mainstream users; when designing a rollout strategy for a new tool, API, framework, or organizational practice. Pair with a Fisher agent for stakeholder negotiation around adoption resistance; pair with a Ranganathan agent for information architecture that supports findability during rollout.
 agent_topic: genius-rogers
 shapes: [adoption-curve-segmentation, chasm-diagnosis, diffusion-dynamics, adopter-category-analysis, innovation-attributes]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -231,6 +240,26 @@ Primary sources (consult these, not narrative accounts):
 - Applying pro-innovation bias — assuming the innovation deserves adoption without verifying its value.
 - Ignoring the social network and relying on broadcasts, announcements, or mandates to drive adoption.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zethtikos — "disposed to inquire"): do not accept claims without verified evidence.

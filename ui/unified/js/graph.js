@@ -11,13 +11,17 @@
     var filter = JUG.state.activeFilter;
     var query = (JUG.state.searchQuery || '').toLowerCase();
 
-    // Filter nodes — structural nodes always pass
+    // Filter nodes — structural nodes always pass, collapsed nodes hidden by default
+    var expandedParents = JUG._expandedParents || {};
     var filteredNodes = nodes.filter(function(n) {
+      // Collapsed degree-1 leaves: only show if parent is expanded
+      if (n.collapsed && !expandedParents[n._parentId]) return false;
+
       var isStructural = JUG.STRUCTURAL_TYPES && JUG.STRUCTURAL_TYPES[n.type];
       if (isStructural) return true;
-      if (filter === 'methodology' && (n.type === 'memory' || n.type === 'entity' || n.type === 'discussion')) return false;
-      if (filter === 'memories' && n.type !== 'memory') return false;
-      if (filter === 'knowledge' && n.type !== 'entity') return false;
+      if (filter === 'methodology' && (n.type === 'memory' || n.type === 'entity' || n.type === 'bridge-entity' || n.type === 'topic' || n.type === 'discussion')) return false;
+      if (filter === 'memories' && n.type !== 'memory' && n.type !== 'topic') return false;
+      if (filter === 'knowledge' && n.type !== 'entity' && n.type !== 'bridge-entity') return false;
       if (filter === 'discussions' && n.type !== 'discussion') return false;
       if (filter === 'emotional' && !(n.type === 'memory' && n.emotion && n.emotion !== 'neutral')) return false;
       if (filter === 'protected' && !n.isProtected) return false;
@@ -107,6 +111,75 @@
   JUG.on('state:searchQuery', function() {
     if (JUG.state.lastData) buildGraph(JUG.state.lastData);
   });
+
+  // ── Expand/collapse degree-1 children ──
+  JUG._expandedParents = {};
+
+  JUG.toggleExpand = function(parentId) {
+    if (JUG._expandedParents[parentId]) {
+      delete JUG._expandedParents[parentId];
+    } else {
+      JUG._expandedParents[parentId] = true;
+      // Position collapsed children around parent.
+      // For large sets (topics with 50+ memories), use a spiral layout
+      // so children don't overlap each other.
+      if (JUG.state.lastData) {
+        var nodes = JUG.state.lastData.nodes || [];
+        var parent = null;
+        for (var i = 0; i < nodes.length; i++) {
+          if (nodes[i].id === parentId) { parent = nodes[i]; break; }
+        }
+        if (parent) {
+          var children = nodes.filter(function(n) { return n._parentId === parentId; });
+          var count = children.length;
+          // Sort by heat descending so hottest memories are closest
+          children.sort(function(a, b) { return (b.heat || 0) - (a.heat || 0); });
+          var px = parent.x || 0;
+          var py = parent.y || 0;
+
+          if (count <= 20) {
+            // Small set: simple ring
+            var radius = 18 + count * 1.2;
+            for (var j = 0; j < count; j++) {
+              var angle = (2 * Math.PI * j) / count;
+              children[j].x = px + Math.cos(angle) * radius;
+              children[j].y = py + Math.sin(angle) * radius;
+              children[j].fx = children[j].x;
+              children[j].fy = children[j].y;
+            }
+          } else {
+            // Large set: Archimedean spiral — no overlaps
+            var spacing = 5;
+            for (var j = 0; j < count; j++) {
+              var t = j * 0.5;
+              var r = spacing + t * 2.2;
+              children[j].x = px + Math.cos(t) * r;
+              children[j].y = py + Math.sin(t) * r;
+              children[j].fx = children[j].x;
+              children[j].fy = children[j].y;
+            }
+          }
+
+          // Mark for fade-in animation
+          var fadeIds = {};
+          for (var k = 0; k < count; k++) fadeIds[children[k].id] = true;
+          JUG._fadeInNodes = fadeIds;
+          JUG._fadeInStart = Date.now();
+          JUG._fadeInDuration = 800;
+
+          // Release pins after layout settles
+          setTimeout(function() {
+            for (var k = 0; k < children.length; k++) {
+              delete children[k].fx;
+              delete children[k].fy;
+            }
+          }, 1200);
+        }
+      }
+    }
+    // Rebuild to apply filter change
+    if (JUG.state.lastData) buildGraph(JUG.state.lastData);
+  };
 
   JUG.buildGraph = buildGraph;
   JUG.addBatchToGraph = addBatchToGraph;

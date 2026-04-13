@@ -8,7 +8,7 @@
   var neighborSet = {};
 
   // Default bright edge color — cyan like the reference image
-  var EDGE_DEFAULT = 'rgba(80, 210, 235, 0.45)';
+  var EDGE_DEFAULT = 'rgba(80, 210, 235, 0.12)';
   var EDGE_DIMMED  = 'rgba(80, 210, 235, 0.04)';
   var EDGE_ACTIVE  = 'rgba(240, 210, 100, 0.9)';
 
@@ -40,10 +40,10 @@
       .linkDirectionalParticleWidth(1.5)
       .linkDirectionalParticleColor(function() { return '#F0D870'; })
       .linkDirectionalParticleSpeed(0.006)
-      .d3AlphaDecay(0.02)
-      .d3VelocityDecay(0.4)
-      .warmupTicks(50)
-      .cooldownTicks(300)
+      .d3AlphaDecay(0.015)
+      .d3VelocityDecay(0.35)
+      .warmupTicks(100)
+      .cooldownTicks(400)
       .onNodeHover(handleHover)
       .onNodeClick(handleClick)
       .onBackgroundClick(handleBgClick);
@@ -57,50 +57,67 @@
 
   // ── Link styling — bright cyan like reference image ──
   function linkColor(e) {
-    if (!selectedNode) return EDGE_DEFAULT;
+    var focusId = selectedNode ? selectedNode.id : (hoveredNode ? hoveredNode.id : null);
+    if (!focusId) return EDGE_DEFAULT;
     var sid = typeof e.source === 'object' ? e.source.id : e.source;
     var tid = typeof e.target === 'object' ? e.target.id : e.target;
-    if (sid === selectedNode.id || tid === selectedNode.id) return EDGE_ACTIVE;
+    if (sid === focusId || tid === focusId) return EDGE_ACTIVE;
     return EDGE_DIMMED;
   }
 
   function linkWidth(e) {
-    if (!selectedNode) return 0.4 + (e.weight || 0.3) * 1.2;
+    var focusId = selectedNode ? selectedNode.id : (hoveredNode ? hoveredNode.id : null);
+    if (!focusId) return 0.4 + (e.weight || 0.3) * 1.2;
     var sid = typeof e.source === 'object' ? e.source.id : e.source;
     var tid = typeof e.target === 'object' ? e.target.id : e.target;
-    if (sid === selectedNode.id || tid === selectedNode.id) return 1.5;
+    if (sid === focusId || tid === focusId) return 1.5;
     return 0.15;
   }
 
   // ── Layout forces ──
+  // Tuned for ~1800 nodes. Collision force prevents overlap.
+  // Strong hierarchy (category→domain→children) with generous spacing.
   function configureForces() {
+    // Collision detection — the key to preventing overlap.
+    // Radius = nodeRadius + padding. This guarantees minimum spacing.
+    graph.d3Force('collide', d3.forceCollide(function(n) {
+      var base = JUG._draw.nodeRadius(n);
+      // Extra padding for structural nodes so they breathe
+      var padding = (n.type === 'domain' || n.type === 'category' || n.type === 'root') ? 8
+        : (n.type === 'topic' || n.type === 'bridge-entity') ? 5 : 2;
+      return base + padding;
+    }).iterations(3).strength(0.9));
+
     graph.d3Force('charge').strength(function(n) {
       return {
-        'root': -300, 'category': -150, 'domain': -100,
-        'agent': -50, 'type-group': -20,
-        'entry-point': -15, 'recurring-pattern': -10,
-        'tool-preference': -15, 'behavioral-feature': -12,
-        'memory': -15, 'entity': -12,
-        'discussion': -12
-      }[n.type] || -12;
-    }).distanceMax(300);
+        'root': -800, 'category': -400, 'domain': -250,
+        'agent': -100, 'type-group': -50,
+        'topic': -120, 'bridge-entity': -100,
+        'entry-point': -35, 'recurring-pattern': -25,
+        'tool-preference': -35, 'behavioral-feature': -30,
+        'memory': -20, 'entity': -18,
+        'discussion': -18
+      }[n.type] || -18;
+    }).distanceMax(600);
 
     graph.d3Force('link')
       .distance(function(e) {
         return {
-          'has-category': 80, 'has-project': 60,
-          'has-agent': 35, 'has-group': 22, 'groups': 15,
-          'bridge': 80, 'persistent-feature': 70,
-          'memory-entity': 25, 'domain-entity': 30,
-          'has-discussion': 20
-        }[e.type || 'default'] || 18;
+          'has-category': 180, 'has-project': 130,
+          'has-agent': 70, 'has-group': 45, 'groups': 30,
+          'bridge': 180, 'persistent-feature': 140,
+          'memory-entity': 35, 'domain-entity': 55,
+          'has-discussion': 40,
+          'topic-member': 20, 'domain-contains': 65, 'co-entity': 55
+        }[e.type || 'default'] || 30;
       })
       .strength(function(e) {
         return {
-          'has-category': 0.7, 'has-project': 0.6,
-          'has-agent': 0.5, 'has-group': 0.5, 'groups': 0.4,
-          'bridge': 0.15, 'persistent-feature': 0.15
-        }[e.type] || 0.35;
+          'has-category': 0.6, 'has-project': 0.5,
+          'has-agent': 0.4, 'has-group': 0.4, 'groups': 0.35,
+          'bridge': 0.1, 'persistent-feature': 0.1,
+          'topic-member': 0.4, 'domain-contains': 0.3, 'co-entity': 0.1
+        }[e.type] || 0.3;
       });
 
   }
@@ -128,9 +145,15 @@
 
   // ── Interaction ──
   function handleHover(node) {
+    var changed = hoveredNode !== node;
     hoveredNode = node;
     document.body.style.cursor = node ? 'pointer' : 'default';
     node ? JUG._tooltip.show(node) : JUG._tooltip.hide();
+    // Refresh link styles so edges highlight on hover
+    if (changed && graph) {
+      graph.linkColor(graph.linkColor());
+      graph.linkWidth(graph.linkWidth());
+    }
   }
 
   function handleClick(node) {

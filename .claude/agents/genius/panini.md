@@ -5,6 +5,15 @@ model: opus
 when_to_use: "When a system needs a compact set of rules that generates all valid outputs and rejects all invalid ones; when rules conflict and you need principled resolution; when a specification is bloated and needs compression without loss; when metadata must be embedded in the specification itself; when the question is 'what is the minimal rule set that covers this domain?' Pair with Knuth when the implementation needs algorithmic precision; pair with Dijkstra when correctness must be formally verified."
 agent_topic: genius-panini
 shapes: [generative-specification, rule-conflict-resolution, compression-by-metalanguage, auxiliary-markers, economy-principle]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -225,6 +234,26 @@ Primary sources (consult these, not narrative accounts):
 - Building a metalanguage that is itself inconsistent or ambiguous, shifting the problem rather than solving it.
 - Ignoring irregularities by forcing them into general rules that then over-generate.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zethtikos — "disposed to inquire"): do not accept claims without verified evidence.

@@ -43,17 +43,18 @@ class PgQueryMixin:
         limit: int = 20,
         include_benchmarks: bool = False,
     ) -> list[dict[str, Any]]:
-        if include_benchmarks:
+        bench_filter = "" if include_benchmarks else "AND NOT coalesce(is_benchmark, FALSE) "
+        if limit > 0:
             rows = self._execute(
-                "SELECT * FROM memories WHERE heat >= %s ORDER BY heat DESC LIMIT %s",
+                f"SELECT * FROM memories WHERE heat >= %s {bench_filter}"
+                "ORDER BY heat DESC LIMIT %s",
                 (min_heat, limit),
             ).fetchall()
         else:
             rows = self._execute(
-                "SELECT * FROM memories WHERE heat >= %s "
-                "AND NOT coalesce(is_benchmark, FALSE) "
-                "ORDER BY heat DESC LIMIT %s",
-                (min_heat, limit),
+                f"SELECT * FROM memories WHERE heat >= %s {bench_filter}"
+                "ORDER BY heat DESC",
+                (min_heat,),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 

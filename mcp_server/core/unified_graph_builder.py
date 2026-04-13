@@ -48,7 +48,7 @@ def _filter_and_sort(
     result = sorted(items, key=lambda x: x.get("heat", 0), reverse=True)
     if filter_domain:
         result = [x for x in result if (x.get("domain") or "") == filter_domain]
-    return result[:limit]
+    return result[:limit] if limit > 0 else result
 
 
 def _build_entity_name_lookup(
@@ -79,9 +79,11 @@ def _build_meta(
     return {
         "domain_count": type_counts.get("domain", 0),
         "memory_count": type_counts.get("memory", 0),
-        "entity_count": type_counts.get("entity", 0),
+        "entity_count": type_counts.get("entity", 0) + type_counts.get("bridge-entity", 0),
         "agent_count": type_counts.get("agent", 0),
         "category_count": type_counts.get("category", 0),
+        "topic_count": type_counts.get("topic", 0),
+        "bridge_entity_count": type_counts.get("bridge-entity", 0),
         "edge_count": total_edges,
         "cluster_count": len(clusters),
         "node_count": total_nodes,
@@ -158,6 +160,10 @@ def _build_hierarchy(
             domain_hub_ids[domain_key] = hub_id
             for orig in dp.get("_orig_keys", []):
                 domain_hub_ids[orig] = hub_id
+            # Also register kebab-case variant so DB memory domains match
+            kebab = domain_key.replace(" ", "-").lower()
+            if kebab != domain_key:
+                domain_hub_ids[kebab] = hub_id
 
             # Level 3: Agents for this project
             agents = get_agents_for_project(domain_key)
@@ -276,6 +282,17 @@ def _add_memory_and_entity_nodes(
         type_group_map,
     )
     add_relationship_edges(relationships, entity_id_map, edges)
+
+    # Remove orphan entity nodes (zero edges after filtering)
+    connected_ids: set[str] = set()
+    for e in edges:
+        connected_ids.add(e["source"] if isinstance(e["source"], str) else e["source"]["id"])
+        connected_ids.add(e["target"] if isinstance(e["target"], str) else e["target"]["id"])
+    nodes[:] = [
+        n for n in nodes
+        if n["type"] != "entity" or n["id"] in connected_ids
+    ]
+
     sorted_memories = _filter_and_sort(memories, filter_domain, max_memories)
     entity_names = _build_entity_name_lookup(sorted_entities, entity_id_map)
     add_memory_nodes(
@@ -322,7 +339,161 @@ def _populate_graph(
         type_group_map,
     )
     score_all_nodes(nodes, edges)
+    _mark_collapsed_leaves(nodes, edges)
     return nodes, edges, domain_hub_ids
+
+
+# ── Progressive disclosure collapse ────────────────────────────────
+
+# Node types that form the visible skeleton — never collapse them.
+_STRUCTURAL_TYPES = {
+    "root", "category", "domain", "agent", "type-group", "topic", "bridge-entity",
+}
+
+# Types always collapsed into a parent for progressive disclosure.
+# Only entities are collapsed — memories ARE the content and must be visible.
+_ALWAYS_COLLAPSE_TYPES = {"entity"}
+
+# Types collapsed only when degree-1 (low-cardinality, useful visible).
+_DEGREE1_COLLAPSE_TYPES = {
+    "entry-point",
+    "recurring-pattern",
+    "tool-preference",
+    "behavioral-feature",
+}
+
+# Priority order for choosing the best parent among neighbors.
+# Lower index = preferred parent. Topic > type-group > domain > anything.
+_PARENT_PRIORITY = {
+    "topic": 0,
+    "type-group": 1,
+    "domain": 2,
+    "agent": 3,
+    "category": 4,
+    "bridge-entity": 5,
+    "root": 6,
+}
+
+
+def _mark_collapsed_leaves(
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+) -> None:
+    """Collapse nodes for progressive disclosure — readable graph at a glance.
+
+    Two-tier strategy:
+    1. Memory and entity nodes are ALWAYS collapsed into their best parent
+       (topic > type-group > domain), regardless of degree. This is what
+       takes the graph from 1887 unreadable nodes to ~200 visible landmarks.
+    2. Methodology leaf nodes (entry-points, patterns, tools, features) are
+       collapsed only when degree-1 (same as before).
+
+    The visible graph shows: root, categories, domains, agents, type-groups,
+    topics, and bridge-entities. Individual memories appear on click/expand.
+
+    Nodes with ``collapsed=True`` carry their parent id in ``_parentId``.
+    Parent nodes receive ``_childCount`` (total hidden children) and
+    ``_collapsedChildren`` (list of collapsed child node dicts).
+    """
+    node_index: dict[str, dict[str, Any]] = {n["id"]: n for n in nodes}
+
+    # Build adjacency: node_id -> [(neighbor_id, edge_type, edge_weight)]
+    adjacency: dict[str, list[tuple[str, str, float]]] = {n["id"]: [] for n in nodes}
+    for e in edges:
+        src = e["source"] if isinstance(e["source"], str) else e["source"]["id"]
+        tgt = e["target"] if isinstance(e["target"], str) else e["target"]["id"]
+        etype = e.get("type", "default")
+        weight = e.get("weight", 0.3)
+        if src in adjacency:
+            adjacency[src].append((tgt, etype, weight))
+        if tgt in adjacency:
+            adjacency[tgt].append((src, etype, weight))
+
+    # Assign each collapsible node to its best parent.
+    collapse_map: dict[str, str] = {}  # node_id -> parent_id
+
+    for n in nodes:
+        nid = n["id"]
+        ntype = n["type"]
+        neighbors = adjacency.get(nid, [])
+        degree = len(neighbors)
+
+        # Tier 1: always collapse memory/entity nodes
+        if ntype in _ALWAYS_COLLAPSE_TYPES:
+            parent_id = _best_parent(nid, neighbors, node_index)
+            if parent_id:
+                collapse_map[nid] = parent_id
+            else:
+                # No parent found — orphan. Mark collapsed with no parent
+                # so it's hidden but not assigned to any expandable group.
+                n["collapsed"] = True
+            continue
+
+        # Tier 2: collapse degree-1 methodology leaves
+        if ntype in _DEGREE1_COLLAPSE_TYPES and degree == 1:
+            collapse_map[nid] = neighbors[0][0]
+            continue
+
+        # Tier 3: collapse type-groups with no visible children
+        # (all their children were collapsed in tier 1)
+        if ntype == "type-group" and degree <= 1:
+            if neighbors:
+                collapse_map[nid] = neighbors[0][0]
+            else:
+                n["collapsed"] = True
+
+    # Tag collapsed nodes and build parent metadata.
+    parent_children: dict[str, list[dict[str, Any]]] = {}
+    for child_id, parent_id in collapse_map.items():
+        node_index[child_id]["collapsed"] = True
+        node_index[child_id]["_parentId"] = parent_id
+        parent_children.setdefault(parent_id, []).append(node_index[child_id])
+
+    for parent_id, children in parent_children.items():
+        if parent_id in node_index:
+            node_index[parent_id]["_childCount"] = len(children)
+            # Include minimal child info for frontend expansion.
+            node_index[parent_id]["_collapsedChildren"] = [
+                {
+                    "id": c["id"],
+                    "type": c["type"],
+                    "label": c.get("label", ""),
+                    "color": c.get("color", "#50C8E0"),
+                    "size": c.get("size", 2),
+                    "heat": c.get("heat", 0),
+                    "content": (c.get("content", "") or "")[:120],
+                }
+                for c in children
+            ]
+
+
+def _best_parent(
+    node_id: str,
+    neighbors: list[tuple[str, str, float]],
+    node_index: dict[str, dict[str, Any]],
+) -> str | None:
+    """Choose the best parent for a collapsible node.
+
+    Prefers: topic > type-group > domain > agent > category > bridge-entity.
+    Among same-priority parents, picks the one with highest edge weight.
+    """
+    best_id: str | None = None
+    best_priority = 999
+    best_weight = -1.0
+
+    for neighbor_id, _etype, weight in neighbors:
+        neighbor = node_index.get(neighbor_id)
+        if not neighbor:
+            continue
+        priority = _PARENT_PRIORITY.get(neighbor["type"], 10)
+        if priority < best_priority or (
+            priority == best_priority and weight > best_weight
+        ):
+            best_id = neighbor_id
+            best_priority = priority
+            best_weight = weight
+
+    return best_id
 
 
 # ── Final assembly ───────────────────────────────────────────────────
@@ -370,8 +541,8 @@ def build_unified_graph(
     entities: list[dict] | None = None,
     relationships: list[dict] | None = None,
     filter_domain: str | None = None,
-    max_memories: int = 200,
-    max_entities: int = 100,
+    max_memories: int = 0,
+    max_entities: int = 0,
     batch: int = 0,
     batch_size: int = 0,
 ) -> dict[str, Any]:

@@ -4,6 +4,11 @@ description: Code reviewer specializing in Clean Architecture enforcement, SOLID
 model: opus
 when_to_use: When code needs review before merging. Use after implementation to check for SOLID violations, layer boundary breaks, or architectural drift. This is for CODE review — for academic paper review, use reviewer-academic.
 agent_topic: code-reviewer
+tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
 ---
 
 <identity>

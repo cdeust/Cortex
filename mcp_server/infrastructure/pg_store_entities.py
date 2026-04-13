@@ -119,3 +119,31 @@ class PgEntityMixin:
                 ),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
+
+    def insert_memory_entity(self, memory_id: int, entity_id: int) -> None:
+        """Link a memory to an entity. Idempotent via ON CONFLICT."""
+        self._execute(
+            "INSERT INTO memory_entities (memory_id, entity_id) "
+            "VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            (memory_id, entity_id),
+        )
+
+    def get_entities_for_memory(self, memory_id: int) -> list[dict[str, Any]]:
+        """Return all entities linked to a memory via the join table."""
+        rows = self._execute(
+            "SELECT e.* FROM entities e "
+            "JOIN memory_entities me ON me.entity_id = e.id "
+            "WHERE me.memory_id = %s ORDER BY e.heat DESC",
+            (memory_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_memories_for_entity(self, entity_id: int) -> list[dict[str, Any]]:
+        """Return all memories linked to an entity via the join table."""
+        rows = self._execute(
+            "SELECT m.* FROM memories m "
+            "JOIN memory_entities me ON me.memory_id = m.id "
+            "WHERE me.entity_id = %s ORDER BY m.heat DESC",
+            (entity_id,),
+        ).fetchall()
+        return [self._normalize_memory_row(r) for r in rows]

@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
-PAGE_KINDS = ("adr", "specs", "files", "notes")
+PAGE_KINDS = ("adr", "specs", "guides", "reference", "conventions", "lessons", "notes", "journal", "files")
 
 _SAFE = re.compile(r"[^a-zA-Z0-9_.-]+")
 _MAX_SLUG_LEN = 80
@@ -45,6 +45,14 @@ def file_path_slug(file_path: str) -> str:
 def adr_filename(number: int, slug: str) -> str:
     """Canonical ADR filename: NNNN-slug.md (4-digit zero-padded)."""
     return f"{number:04d}-{slug}.md"
+
+
+def domain_page_path(kind: str, domain: str, slug: str) -> str:
+    """Generate a domain-scoped page path: <kind>/<domain>/<slug>.md."""
+    if kind not in PAGE_KINDS:
+        raise ValueError(f"unknown wiki page kind: {kind}")
+    safe_domain = slugify(domain, max_len=40) if domain else "_general"
+    return f"{kind}/{safe_domain}/{slug}.md"
 
 
 def page_path(kind: str, filename: str) -> PurePosixPath:

@@ -212,6 +212,7 @@ def _build_insert_record(
     created_at: str | None = None,
 ) -> dict[str, Any]:
     """Build the memory record dict for insertion."""
+    domain = domain.lower().strip() if domain else ""
     record = {
         "content": content,
         "embedding": embedding,
@@ -234,6 +235,9 @@ def _build_insert_record(
         "schema_id": mod["schema_id"],
         "hippocampal_dependency": 1.0,
     }
+    etag = mod.get("emotional_tag")
+    record["arousal"] = round(etag["arousal"], 4) if etag and "arousal" in etag else 0.0
+    record["dominant_emotion"] = etag.get("dominant_emotion", "neutral") if etag else "neutral"
     if created_at:
         record["created_at"] = created_at
         record["stage_entered_at"] = created_at
@@ -271,7 +275,7 @@ def _run_post_store(
     """Run post-insert operations: triggers, entities, tagging, engram."""
     settings = get_memory_settings()
     tids = write_post_store.extract_triggers(content, directory, store)
-    write_post_store.persist_entities(extracted, domain, content, store)
+    write_post_store.persist_entities(extracted, domain, content, store, memory_id=mem_id)
     tagged = write_post_store.run_synaptic_tagging(
         mem_id, mod["importance"], ent_names, store
     )

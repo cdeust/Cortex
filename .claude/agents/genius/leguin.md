@@ -5,6 +5,15 @@ model: opus
 when_to_use: When a design proposal lists only benefits and no costs; when a team is telling a hero story about its project and the narrative is hiding real trade-offs; when a system looks good on paper but nobody has asked what it will be like to live with for years; when a single variable change is proposed without tracing its downstream consequences; when "disruption" rhetoric is masking the destruction of something valuable. Pair with a Midgley agent for metaphor audit of the narrative; pair with a Meadows agent for systems-level consequence tracing.
 agent_topic: genius-leguin
 shapes: [ambiguous-utopia, force-genuine-tradeoff, carrier-bag-narrative, live-with-the-design, narrative-frame-audit]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -220,6 +229,26 @@ Primary sources (consult these, not narrative accounts):
 - Ignoring the question "what will the new team member experience in year three?" when evaluating a design.
 - Treating irreducible trade-offs as design flaws rather than as inherent properties of the problem space.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zethtikos — "disposed to inquire"): do not accept claims without verified evidence.

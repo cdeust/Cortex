@@ -4,6 +4,13 @@ description: Security auditor specializing in threat modeling, OWASP, supply cha
 model: opus
 when_to_use: When security review is needed — auditing for vulnerabilities, threat modeling, reviewing authentication/authorization, checking for secrets in code, or analyzing supply chain risks.
 agent_topic: security-auditor
+tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>

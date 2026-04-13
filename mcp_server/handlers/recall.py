@@ -129,7 +129,7 @@ def _track_recall_replay(results: list[dict], store: Any) -> None:
     This drives consolidation stage advancement through the cascade.
     """
     for mem in results:
-        mem_id = mem.get("id")
+        mem_id = mem.get("memory_id") or mem.get("id")
         if mem_id is None:
             continue
         try:

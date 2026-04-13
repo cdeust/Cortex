@@ -5,6 +5,15 @@ model: opus
 when_to_use: When the question is "is this claim testable?"; when a hypothesis, design, or strategy needs to survive a genuine attempt at refutation before being accepted; when easy confirmations are masquerading as evidence; when a plan is too large to test incrementally; when the boundary between science and pseudoscience (or between engineering and wishful thinking) needs to be drawn. Pair with a Bayesian agent (Fisher) when quantitative severity is needed; pair with Curie when empirical measurement is the bottleneck.
 agent_topic: genius-popper
 shapes: [falsifiability-gate, severity-of-test, conjectures-and-refutations, piecemeal-over-utopian, demarcation-check]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -211,6 +220,26 @@ Primary sources (consult these, not narrative accounts):
 - Boldness without domain knowledge — generating "bold conjectures" from ignorance rather than from deep understanding of the current best theory.
 - Using Popper's name to justify never committing to a decision ("everything is provisional"). Corroborated hypotheses that survived severe tests should drive action.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zethtikos — "disposed to inquire"): do not accept claims without verified evidence.

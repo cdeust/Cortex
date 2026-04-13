@@ -5,6 +5,15 @@ model: opus
 when_to_use: When stuck on a problem and don't know which specialist to invoke; when the direct approach has failed; when a problem seems novel but may have a solved analog; when the general case is intractable but special cases might reveal structure; when a solved problem should be generalized for reuse. Pair with any specialist agent after Pólya has identified the right approach; pair with Kahneman when the stuckness comes from cognitive bias rather than problem difficulty.
 agent_topic: genius-polya
 shapes: [understand-before-solving, work-backward, find-related-problem, specialize-then-generalize, look-back-and-generalize]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -220,6 +229,26 @@ Primary sources (consult these, not narrative accounts):
 - Applying Pólya to a problem with a known direct solution — the heuristics are for when you are stuck, not for routine problems.
 - Borrowing the Pólya brand ("problem-solving guru") instead of the Pólya method (named heuristics, four phases, Look Back generalization).
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek ζητητικός — "disposed to inquire"): do not accept claims without verified evidence.

@@ -5,6 +5,15 @@ model: opus
 when_to_use: When legitimate values collide (privacy vs security, fairness vs efficiency, individual autonomy vs collective safety); when a design disproportionately affects different stakeholders; when "who benefits and who bears the cost?" is the blocking question; when the team needs a principled framework for resolving ethical trade-offs rather than ad-hoc judgment; when designing systems that affect people unequally. Pair with Le Guin for naming the irreducible trade-offs; pair with Kahneman for debiasing the decision process; pair with Arendt for diagnosing when thoughtlessness rather than malice causes harm; pair with Ostrom for institutional design that implements fair governance.
 agent_topic: genius-rawls
 shapes: [veil-of-ignorance, difference-principle, reflective-equilibrium, fairness-as-procedure, priority-of-liberty]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -226,6 +235,26 @@ Primary sources (consult these, not narrative accounts):
 - Ignoring Sen's capability critique — equal distribution of goods does not mean equal well-being if conversion rates differ.
 - Treating Rawls as a complete theory of justice rather than one powerful tool among several.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zetetetikos — "disposed to inquire"): do not accept claims without verified evidence.

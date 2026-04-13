@@ -15,6 +15,8 @@
     if (n.type === 'domain') return Math.max(5, base * 0.9);
     if (n.type === 'agent') return 4;
     if (n.type === 'type-group') return 2.5;
+    if (n.type === 'topic') return Math.max(4, base * 0.7);
+    if (n.type === 'bridge-entity') return Math.max(3.5, base * 0.6);
     if (n.type === 'discussion') return Math.max(2.5, base * 0.5);
     return Math.max(2.2, base * 0.45);
   };
@@ -58,9 +60,10 @@
 
     ctx.globalAlpha = isDimmed ? 0.08 : 1.0;
 
-    // Outer glow halo — wide soft bloom
-    var glowR = isHighlit ? r * 5 : r * 3;
-    var glowA = isHighlit ? 0.35 : (node.type === 'domain' ? 0.2 : 0.12);
+    // Outer glow halo — scaled by node importance
+    var isLeaf = node.type === 'memory' || node.type === 'entity' || node.type === 'discussion';
+    var glowR = isHighlit ? r * 5 : (isLeaf ? r * 1.8 : r * 3);
+    var glowA = isHighlit ? 0.35 : (node.type === 'domain' ? 0.2 : (isLeaf ? 0.06 : 0.12));
     var grad = ctx.createRadialGradient(x, y, r * 0.5, x, y, glowR);
     grad.addColorStop(0, rgba(color, glowA));
     grad.addColorStop(0.5, rgba(color, glowA * 0.3));
@@ -181,7 +184,8 @@
 
   function drawLabel(ctx, node, x, y, r, scale, isHighlit) {
     var isLabeled = node.type === 'root' || node.type === 'category'
-      || node.type === 'domain' || node.type === 'agent';
+      || node.type === 'domain' || node.type === 'agent'
+      || node.type === 'topic' || node.type === 'bridge-entity';
     // Only show labels for structural nodes; others only on hover/select
     if (!isLabeled && !isHighlit) return;
 

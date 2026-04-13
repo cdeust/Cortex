@@ -13,7 +13,19 @@
       .replace(/\s+/g, ' ').trim();
     // Apply tool label cleaning for human-readable titles
     if (JUG._cleanToolLabel) s = JUG._cleanToolLabel(s);
-    return s.length > 120 ? s.substring(0, 117) + '...' : s;
+    return s;
+  }
+
+  // Full label — strips markdown but never truncates. Used in detail panel
+  // connection lists where the full text must be visible.
+  function fullLabel(raw) {
+    if (!raw) return '';
+    return raw
+      .replace(/^#+\s*/g, '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/\s+/g, ' ').trim();
   }
 
   function colorForPct(pct) {
@@ -238,7 +250,7 @@
   };
 
   JUG._fmt = {
-    cleanLabel: cleanLabel, header: buildHeader, quality: buildQuality,
+    cleanLabel: cleanLabel, fullLabel: fullLabel, header: buildHeader, quality: buildQuality,
     gauges: buildGauges, content: buildContent, tags: buildTags,
     badges: buildBadges, bioSection: buildBioSection, gauge: gauge, esc: esc,
   };

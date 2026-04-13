@@ -5,6 +5,15 @@ model: opus
 when_to_use: When a system rests on assumptions inherited from predecessors that nobody has tested; when previous experiments or benchmarks had systematic errors that went unexamined; when the precision of existing measurements or tests is insufficient to distinguish between competing hypotheses; when "everyone knows" something to be true but nobody can point to the test that established it; when debugging requires going back to the original experimental setup and finding what was wrong with it. Pair with a Curie agent for measurement rigor; pair with a Popper agent for falsification design.
 agent_topic: genius-wu
 shapes: [error-archaeology, test-the-obvious, precision-as-refutation, assumption-inventory, untested-assumption-detection]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -224,6 +233,26 @@ Primary sources (consult these, not narrative accounts):
 - Treating a passing test as proof of correctness without examining whether the test's precision was sufficient to detect the failure mode.
 - Ignoring the organizational incentive problem: assumption-testing is high-value, low-visibility work that default incentive structures under-reward.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zethtikos — "disposed to inquire"): do not accept claims without verified evidence.

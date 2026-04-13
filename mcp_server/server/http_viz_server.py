@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
 
 from mcp_server.server.http_common import (
     get_ui_root,
@@ -37,6 +38,18 @@ _cached_domain_hub_ids: dict[str, str] = {}
 _cached_conversations: list[dict] | None = None
 _conversations_cache_ts: float = 0.0
 _CONVERSATIONS_CACHE_TTL = 60.0  # seconds
+
+# Graph cache — avoids rebuilding 8000+ nodes on every request
+_graph_cache: dict | None = None
+_graph_cache_ts: float = 0.0
+_graph_build_lock = threading.Lock()
+_GRAPH_CACHE_TTL = 120.0  # seconds
+
+
+class _ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    """Threaded HTTP server — prevents graph builds from blocking static files."""
+
+    daemon_threads = True
 
 
 def _reset_unified_idle_timer() -> None:
@@ -103,7 +116,7 @@ def start_unified_viz_server(profiles_getter, store_getter) -> str:
     handler_cls = _build_unified_handler(
         profiles_getter, store_getter, html_path, cached_html, js_dir, css_dir
     )
-    return _bind_and_start(handler_cls, 3458)
+    return _bind_and_start(handler_cls, 3458, profiles_getter, store_getter)
 
 
 def _build_unified_handler(
@@ -126,6 +139,10 @@ def _build_unified_handler(
                 self._serve_discussions_api()
             elif re.match(r"^/api/discussion/[^/]+$", path_no_qs):
                 self._serve_discussion_detail(path_no_qs)
+            elif path_no_qs == "/api/wiki/list":
+                self._serve_wiki_list()
+            elif path_no_qs == "/api/wiki/page":
+                self._serve_wiki_page()
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
                 serve_static_file(self, js_dir, self.path[4:], "application/javascript")
             elif self.path.startswith("/css/") and self.path.endswith(".css"):
@@ -135,7 +152,7 @@ def _build_unified_handler(
 
         def _serve_graph_api(self):
             try:
-                data = _build_graph_response(profiles_getter, store_getter, self.path)
+                data = _get_graph_response(profiles_getter, store_getter, self.path)
                 send_json_response(self, data)
             except Exception as e:
                 send_error_response(self, e)
@@ -143,6 +160,34 @@ def _build_unified_handler(
         def _serve_discussions_api(self):
             try:
                 data = _build_discussions_response(self.path)
+                send_json_response(self, data)
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_list(self):
+            try:
+                from mcp_server.handlers.wiki_api import list_wiki_pages
+                from mcp_server.infrastructure.config import METHODOLOGY_DIR
+                wiki_root = METHODOLOGY_DIR / "wiki"
+                data = list_wiki_pages(wiki_root)
+                send_json_response(self, {"pages": data})
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_page(self):
+            try:
+                import urllib.parse
+
+                from mcp_server.handlers.wiki_api import read_wiki_page
+                from mcp_server.infrastructure.config import METHODOLOGY_DIR
+                wiki_root = METHODOLOGY_DIR / "wiki"
+                params = self.path.split("?", 1)
+                rel_path = ""
+                if len(params) > 1:
+                    for p in params[1].split("&"):
+                        if p.startswith("path="):
+                            rel_path = urllib.parse.unquote(p[5:])
+                data = read_wiki_page(wiki_root, rel_path)
                 send_json_response(self, data)
             except Exception as e:
                 send_error_response(self, e)
@@ -161,53 +206,102 @@ def _build_unified_handler(
     return UnifiedHandler
 
 
-def _build_graph_response(profiles_getter, store_getter, path: str) -> dict:
-    """Fetch data from stores and build the unified graph response."""
-    global _cached_domain_hub_ids
+def _do_background_build(
+    profiles_getter, store_getter, domain_filter: str | None,
+) -> None:
+    """Build the full graph in background and cache it."""
+    global _graph_cache, _graph_cache_ts, _cached_domain_hub_ids
     from mcp_server.core.unified_graph_builder import build_unified_graph
 
-    profiles = profiles_getter()
-    store = store_getter()
-    memories = store.get_hot_memories(min_heat=0.0, limit=200)
-    entities = store.get_all_entities(min_heat=0.0)
-    relationships = store.get_all_relationships()
-    params = _parse_query_params(path)
+    acquired = _graph_build_lock.acquire(blocking=False)
+    if not acquired:
+        return  # Another build already in progress
 
-    result = build_unified_graph(
-        profiles=profiles,
-        memories=[format_memory(m, 500) for m in memories],
-        entities=[format_entity(e) for e in entities],
-        relationships=[format_relationship(r) for r in relationships],
-        filter_domain=params["domain_filter"],
-        batch=params["batch"],
-        batch_size=params["batch_size"],
+    try:
+        profiles = profiles_getter()
+        store = store_getter()
+        memories = store.get_hot_memories(min_heat=0.0, limit=0)
+        entities = store.get_all_entities(min_heat=0.0)
+        relationships = store.get_all_relationships()
+
+        result = build_unified_graph(
+            profiles=profiles,
+            memories=[format_memory(m, 500) for m in memories],
+            entities=[format_entity(e) for e in entities],
+            relationships=[format_relationship(r) for r in relationships],
+            filter_domain=domain_filter,
+        )
+
+        # System vitals
+        stages: dict[str, int] = {}
+        heats: list[float] = []
+        episodic = 0
+        semantic = 0
+        for m in memories:
+            s = m.get("consolidation_stage", "labile")
+            stages[s] = stages.get(s, 0) + 1
+            heats.append(m.get("heat", 0))
+            if m.get("store_type") == "episodic":
+                episodic += 1
+            elif m.get("store_type") == "semantic":
+                semantic += 1
+
+        result["meta"]["system_vitals"] = {
+            "consolidation_pipeline": stages,
+            "mean_heat": round(sum(heats) / max(len(heats), 1), 4),
+            "total_memories": len(memories),
+            "episodic": episodic,
+            "semantic": semantic,
+        }
+
+        # Session counts per domain from methodology profiles
+        session_counts = {}
+        for did, ddata in (profiles.get("domains") or {}).items():
+            session_counts[did] = ddata.get("sessionCount", 0)
+        result["meta"]["session_counts"] = session_counts
+
+        _cached_domain_hub_ids = _extract_domain_hub_ids(result.get("nodes", []))
+        _graph_cache = {"data": result, "domain_filter": domain_filter}
+        _graph_cache_ts = time.monotonic()
+        print(
+            f"[cortex] Graph cache ready: {len(result.get('nodes', []))} nodes",
+            file=sys.stderr,
+        )
+    except Exception as exc:
+        print(f"[cortex] Graph build error: {exc}", file=sys.stderr)
+    finally:
+        _graph_build_lock.release()
+
+
+def _get_graph_response(profiles_getter, store_getter, path: str) -> dict:
+    """Return cached full graph, or signal warming while building."""
+    global _graph_cache, _graph_cache_ts
+
+    params = _parse_query_params(path)
+    domain_filter = params["domain_filter"]
+    now = time.monotonic()
+
+    cache_valid = (
+        _graph_cache
+        and _graph_cache.get("domain_filter") == domain_filter
+        and (now - _graph_cache_ts) < _GRAPH_CACHE_TTL
     )
 
-    # Export domain_hub_ids for the discussions endpoint
-    _cached_domain_hub_ids = _extract_domain_hub_ids(result.get("nodes", []))
+    if cache_valid:
+        return _graph_cache["data"]
 
-    # System vitals — aggregated from already-fetched memories, no new queries
-    stages: dict[str, int] = {}
-    heats: list[float] = []
-    episodic = 0
-    semantic = 0
-    for m in memories:
-        s = m.get("consolidation_stage", "labile")
-        stages[s] = stages.get(s, 0) + 1
-        heats.append(m.get("heat", 0))
-        if m.get("store_type") == "episodic":
-            episodic += 1
-        elif m.get("store_type") == "semantic":
-            semantic += 1
-
-    result["meta"]["system_vitals"] = {
-        "consolidation_pipeline": stages,
-        "mean_heat": round(sum(heats) / max(len(heats), 1), 4),
-        "total_memories": len(memories),
-        "episodic": episodic,
-        "semantic": semantic,
+    # No cache — return warming signal, kick off background build
+    threading.Thread(
+        target=_do_background_build,
+        args=(profiles_getter, store_getter, domain_filter),
+        daemon=True,
+    ).start()
+    return {
+        "nodes": [],
+        "edges": [],
+        "clusters": [],
+        "meta": {"warming": True, "node_count": 0},
     }
-    return result
 
 
 def _extract_domain_hub_ids(nodes: list[dict]) -> dict[str, str]:
@@ -221,13 +315,18 @@ def _extract_domain_hub_ids(nodes: list[dict]) -> dict[str, str]:
     return hub_ids
 
 
-def _bind_and_start(handler_cls, preferred_port: int) -> str:
+def _bind_and_start(
+    handler_cls,
+    preferred_port: int,
+    profiles_getter=None,
+    store_getter=None,
+) -> str:
     """Bind to preferred port (fallback to OS-assigned) and start serving."""
     global _unified_server
 
     for port in [preferred_port, 0]:
         try:
-            server = HTTPServer(("127.0.0.1", port), handler_cls)
+            server = _ThreadedHTTPServer(("127.0.0.1", port), handler_cls)
             actual_port = server.server_address[1]
             url = f"http://127.0.0.1:{actual_port}"
 
@@ -242,6 +341,16 @@ def _bind_and_start(handler_cls, preferred_port: int) -> str:
             thread.start()
             _reset_unified_idle_timer()
             print(f"[cortex] Unified viz started at {url}", file=sys.stderr)
+
+            # Pre-warm graph cache in background
+            if profiles_getter and store_getter:
+                warm = threading.Thread(
+                    target=_do_background_build,
+                    args=(profiles_getter, store_getter, None),
+                    daemon=True,
+                )
+                warm.start()
+
             return url
         except OSError:
             if port != 0:

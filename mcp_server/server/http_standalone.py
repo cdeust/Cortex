@@ -13,6 +13,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from socketserver import ThreadingMixIn
 
 IDLE_TIMEOUT = 600.0  # 10 minutes
 _CONVERSATIONS_CACHE_TTL = 60.0  # seconds
@@ -24,6 +25,21 @@ _lock = threading.Lock()
 _cached_domain_hub_ids: dict[str, str] = {}
 _cached_conversations: list[dict] | None = None
 _conversations_cache_ts: float = 0.0
+
+# Graph cache — avoids rebuilding 8000+ nodes on every request
+_graph_cache: dict | None = None
+_graph_cache_ts: float = 0.0
+_graph_build_lock = threading.Lock()
+_GRAPH_CACHE_TTL = 120.0  # seconds
+
+# Set by _build_unified_handler for pre-warm access
+_graph_builder_fn = None
+
+
+class _ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    """Threaded HTTP server — prevents graph builds from blocking static files."""
+
+    daemon_threads = True
 
 
 def _touch() -> None:
@@ -154,6 +170,71 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                     pass
         return result
 
+    def _do_background_build(domain_filter: str | None) -> None:
+        """Build the full graph in background and cache it."""
+        global _graph_cache, _graph_cache_ts, _cached_domain_hub_ids
+
+        acquired = _graph_build_lock.acquire(blocking=False)
+        if not acquired:
+            return  # Another build already in progress
+
+        try:
+            profiles = load_profiles()
+            memories = store.get_hot_memories(min_heat=0.0, limit=0)
+            entities = store.get_all_entities(min_heat=0.0)
+            relationships = store.get_all_relationships()
+
+            data = build_unified_graph(
+                profiles=profiles,
+                memories=[format_memory(m, 500) for m in memories],
+                entities=[format_entity(e) for e in entities],
+                relationships=[format_relationship(r) for r in relationships],
+                filter_domain=domain_filter,
+            )
+            _cached_domain_hub_ids = _extract_domain_hub_ids(
+                data.get("nodes", [])
+            )
+            _graph_cache = {"data": data, "domain_filter": domain_filter}
+            _graph_cache_ts = time.monotonic()
+            print(
+                f"[cortex] Graph cache ready: {len(data.get('nodes', []))} nodes",
+                file=sys.stderr,
+            )
+        except Exception as exc:
+            print(f"[cortex] Graph build error: {exc}", file=sys.stderr)
+        finally:
+            _graph_build_lock.release()
+
+    def _get_graph_response(path: str) -> dict:
+        """Return cached full graph, or signal warming while building."""
+        global _graph_cache, _graph_cache_ts
+
+        params = _parse_query(path)
+        domain_filter = params["domain_filter"]
+        now = time.monotonic()
+
+        cache_valid = (
+            _graph_cache
+            and _graph_cache.get("domain_filter") == domain_filter
+            and (now - _graph_cache_ts) < _GRAPH_CACHE_TTL
+        )
+
+        if cache_valid:
+            return _graph_cache["data"]
+
+        # No cache — return warming signal, kick off background build
+        threading.Thread(
+            target=_do_background_build,
+            args=(domain_filter,),
+            daemon=True,
+        ).start()
+        return {
+            "nodes": [],
+            "edges": [],
+            "clusters": [],
+            "meta": {"warming": True, "node_count": 0},
+        }
+
     class Handler(BaseHTTPRequestHandler):
         def do_OPTIONS(self):
             _touch()
@@ -173,6 +254,10 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 self._serve_discussions()
             elif path_no_qs.startswith("/api/discussion/"):
                 self._serve_discussion_detail(path_no_qs)
+            elif path_no_qs == "/api/wiki/list":
+                self._serve_wiki_list()
+            elif path_no_qs == "/api/wiki/page":
+                self._serve_wiki_page()
             elif self.path == "/api/sankey" or self.path.startswith("/api/sankey?"):
                 self._serve_sankey()
             elif self.path.startswith("/api/file-diff?"):
@@ -194,25 +279,52 @@ def _build_unified_handler(ui_root: Path, store) -> type:
             except Exception:
                 self.wfile.write(html_bytes)
 
-        def _serve_graph(self):
-            global _cached_domain_hub_ids
+        def _serve_wiki_list(self):
             try:
-                profiles = load_profiles()
-                memories = store.get_hot_memories(min_heat=0.0, limit=200)
-                entities = store.get_all_entities(min_heat=0.0)
-                relationships = store.get_all_relationships()
-                params = _parse_query(self.path)
+                import urllib.parse
+                from mcp_server.handlers.wiki_api import list_wiki_pages
+                from mcp_server.infrastructure.config import METHODOLOGY_DIR
+                data = list_wiki_pages(METHODOLOGY_DIR / "wiki")
+                body = json.dumps({"pages": data}, default=str).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
 
-                data = build_unified_graph(
-                    profiles=profiles,
-                    memories=[format_memory(m, 500) for m in memories],
-                    entities=[format_entity(e) for e in entities],
-                    relationships=[format_relationship(r) for r in relationships],
-                    filter_domain=params["domain_filter"],
-                    batch=params["batch"],
-                    batch_size=params["batch_size"],
-                )
-                _cached_domain_hub_ids = _extract_domain_hub_ids(data.get("nodes", []))
+        def _serve_wiki_page(self):
+            try:
+                import urllib.parse
+                from mcp_server.handlers.wiki_api import read_wiki_page
+                from mcp_server.infrastructure.config import METHODOLOGY_DIR
+                rel_path = ""
+                if "?" in self.path:
+                    for p in self.path.split("?", 1)[1].split("&"):
+                        if p.startswith("path="):
+                            rel_path = urllib.parse.unquote(p[5:])
+                data = read_wiki_page(METHODOLOGY_DIR / "wiki", rel_path)
+                body = json.dumps(data, default=str).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+        def _serve_graph(self):
+            try:
+                data = _get_graph_response(self.path)
                 body = json.dumps(data, default=str).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -345,6 +457,9 @@ def _build_unified_handler(ui_root: Path, store) -> type:
 
         def log_message(self, format, *args):
             pass
+
+    global _graph_builder_fn
+    _graph_builder_fn = _do_background_build
 
     return Handler
 
@@ -546,7 +661,7 @@ def _bind_server(handler_cls: type, preferred_port: int) -> HTTPServer:
     """Bind to preferred port, fall back to OS-assigned."""
     for port in [preferred_port, 0]:
         try:
-            return HTTPServer(("127.0.0.1", port), handler_cls)
+            return _ThreadedHTTPServer(("127.0.0.1", port), handler_cls)
         except OSError:
             if port != 0:
                 continue
@@ -580,6 +695,14 @@ def main() -> None:
     # Start idle watchdog
     watchdog = threading.Thread(target=_idle_watchdog, args=(server,), daemon=True)
     watchdog.start()
+
+    # Pre-warm graph cache for unified viz
+    if args.type == "unified" and _graph_builder_fn:
+        warm = threading.Thread(
+            target=lambda: _graph_builder_fn(None),
+            daemon=True,
+        )
+        warm.start()
 
     print(f"[cortex] Standalone {args.type} server at {url}", file=sys.stderr)
     server.serve_forever()

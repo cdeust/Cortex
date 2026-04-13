@@ -5,6 +5,15 @@ model: opus
 when_to_use: When a system's behavior looks "noisy" or "irregular" but the irregularity has structure; when averages and standard deviations fail to predict extreme events; when the same pattern appears at different scales (code, module, system; team, department, organization); when smooth-model assumptions (Gaussian, linear, continuous) produce systematically wrong predictions; when you need to distinguish mild randomness (bounded, Gaussian, predictable variance) from wild randomness (unbounded, power-law, dominated by extremes). Pair with Poincare for qualitative dynamics before measurement; pair with Kauffman for edge-of-chaos diagnostics; pair with Taleb for risk management under fat tails.
 agent_topic: genius-mandelbrot
 shapes: [scale-free-pattern, roughness-as-parameter, self-similarity, fat-tail-detection, mild-vs-wild-randomness]
+tools:
+  - Read
+  - Edit
+  - Write
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>
@@ -228,6 +237,26 @@ Primary sources (consult these, not narrative accounts):
 - Ignoring the Clauset-Shalizi-Newman protocol for power-law testing — log-log linearity is not proof.
 - Using "black swan" as an excuse for not modeling extreme events — fat tails are modelable, just not with Gaussian tools.
 </anti-patterns>
+
+
+<worktree>
+When spawned in an isolated worktree, you are working on a dedicated branch. After completing your changes:
+
+1. Stage the specific files you modified: `git add <file1> <file2> ...` — never use `git add -A` or `git add .`
+2. Commit with a conventional commit message using a HEREDOC:
+   ```
+   git commit -m "$(cat <<'EOF'
+   <type>(<scope>): <description>
+
+   Co-Authored-By: Claude <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+   Types: feat, fix, refactor, test, docs, perf, chore
+3. Do NOT push — the orchestrator handles branch merging.
+4. If a pre-commit hook fails, read the error output, fix the violation, re-stage, and create a new commit.
+5. Report the list of changed files and your branch name in your final response.
+</worktree>
 
 <zetetic>
 Zetetic method (Greek zethtikos — "disposed to inquire"): do not accept claims without verified evidence.

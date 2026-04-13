@@ -94,6 +94,16 @@ CREATE TABLE IF NOT EXISTS relationships (
 );
 """
 
+MEMORY_ENTITIES_DDL = """
+CREATE TABLE IF NOT EXISTS memory_entities (
+    memory_id   INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    entity_id   INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    PRIMARY KEY (memory_id, entity_id)
+);
+CREATE INDEX IF NOT EXISTS idx_memory_entities_entity
+    ON memory_entities (entity_id);
+"""
+
 SUPPORT_TABLES_DDL = """
 CREATE TABLE IF NOT EXISTS prospective_memories (
     id                  SERIAL PRIMARY KEY,
@@ -764,6 +774,46 @@ BEGIN
         UPDATE memories SET stage_entered_at = created_at WHERE stage_entered_at IS NULL;
     END IF;
 END $$;
+
+-- Migration: persist arousal and dominant_emotion from emotional tagging
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='memories' AND column_name='arousal')
+    THEN ALTER TABLE memories ADD COLUMN arousal REAL NOT NULL DEFAULT 0.0 CHECK (arousal >= 0.0 AND arousal <= 1.0);
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='memories' AND column_name='dominant_emotion')
+    THEN ALTER TABLE memories ADD COLUMN dominant_emotion TEXT NOT NULL DEFAULT 'neutral'
+        CHECK (dominant_emotion IN ('frustration','satisfaction','confusion','urgency','discovery','neutral'));
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_memories_dominant_emotion
+    ON memories (dominant_emotion) WHERE dominant_emotion != 'neutral';
+
+-- Migration: domain normalization trigger
+CREATE OR REPLACE FUNCTION normalize_domain() RETURNS trigger AS $$
+BEGIN
+    NEW.domain := LOWER(COALESCE(NEW.domain, ''));
+    IF NEW.domain IN ('jarvis', 'cortex-cowork') THEN NEW.domain := 'cortex'; END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_memories_domain_normalize') THEN
+        CREATE TRIGGER trg_memories_domain_normalize BEFORE INSERT OR UPDATE OF domain ON memories
+        FOR EACH ROW EXECUTE FUNCTION normalize_domain();
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_entities_domain_normalize') THEN
+        CREATE TRIGGER trg_entities_domain_normalize BEFORE INSERT OR UPDATE OF domain ON entities
+        FOR EACH ROW EXECUTE FUNCTION normalize_domain();
+    END IF;
+END $$;
 """
 
 # ── Schema initialization ────────────────────────────────────────────────
@@ -798,6 +848,7 @@ def get_all_ddl() -> list[str]:
         MEMORIES_DDL,
         ENTITIES_DDL,
         RELATIONSHIPS_DDL,
+        MEMORY_ENTITIES_DDL,
         SUPPORT_TABLES_DDL,
         INDEXES_DDL,
         MIGRATIONS_DDL,

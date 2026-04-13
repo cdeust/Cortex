@@ -65,4 +65,4 @@ def test_index_path() -> None:
 
 
 def test_page_kinds_stable() -> None:
-    assert PAGE_KINDS == ("adr", "specs", "files", "notes")
+    assert PAGE_KINDS == ("adr", "specs", "guides", "reference", "conventions", "lessons", "notes", "journal", "files")

@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 def build_dashboard_data(store) -> dict:
     """Assemble all dashboard data in a single response."""
     counts = store.count_memories()
-    hot = store.get_hot_memories(min_heat=0.0, limit=200)
+    hot = store.get_hot_memories(min_heat=0.0, limit=0)
     entities = store.get_all_entities(min_heat=0.0)
     relationships = store.get_all_relationships()
     recent = store.get_recent_memories(limit=50)
@@ -25,6 +25,7 @@ def build_dashboard_data(store) -> dict:
 
     stage_counts = _safe_call(store.get_stage_counts, {})
     schema_count = _safe_call(store.count_schemas, 0)
+    schemas = _safe_call(store.get_all_schemas, [])
 
     return {
         "stats": build_stats(
@@ -42,6 +43,7 @@ def build_dashboard_data(store) -> dict:
         "engram_slots": engram_active,
         "domain_counts": domain_counts,
         "stage_counts": stage_counts,
+        "schemas": [format_schema(s) for s in schemas],
         "schema_count": schema_count,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -121,6 +123,12 @@ def format_memory(m: dict, content_limit: int) -> dict:
         "plasticity": round(m.get("plasticity", 1.0), 4),
         "stability": round(m.get("stability", 0), 4),
         "last_accessed": m.get("last_accessed", ""),
+        "replay_count": m.get("replay_count", 0),
+        "hours_in_stage": round(m.get("hours_in_stage", 0), 2),
+        "reconsolidation_count": m.get("reconsolidation_count", 0),
+        "excitability": round(m.get("excitability", 1.0), 4),
+        "stage_entered_at": m.get("stage_entered_at", ""),
+        "confidence": round(m.get("confidence", 1.0), 4),
     }
 
 
@@ -143,6 +151,24 @@ def format_relationship(r: dict) -> dict:
         "type": r.get("relationship_type", "related"),
         "weight": round(r.get("weight", 1.0), 4),
         "is_causal": bool(r.get("is_causal", 0)),
+        "release_probability": round(r.get("release_probability", 0.5), 4),
+        "facilitation": round(r.get("facilitation", 0), 4),
+        "depression": round(r.get("depression", 0), 4),
+        "confidence": round(r.get("confidence", 1.0), 4),
+        "last_reinforced": r.get("last_reinforced", ""),
+    }
+
+
+def format_schema(s: dict) -> dict:
+    """Format a schema row for the dashboard API."""
+    return {
+        "id": s.get("schema_id", ""),
+        "label": s.get("label", ""),
+        "domain": s.get("domain", ""),
+        "formation_count": s.get("formation_count", 0),
+        "assimilation_count": s.get("assimilation_count", 0),
+        "violation_count": s.get("violation_count", 0),
+        "consistency_threshold": round(s.get("consistency_threshold", 0.5), 4),
     }
 
 

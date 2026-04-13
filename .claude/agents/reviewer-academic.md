@@ -4,6 +4,13 @@ description: Academic peer review simulator — reviews papers as a NeurIPS/CVPR
 model: opus
 when_to_use: When a paper draft needs pre-submission review. Use to simulate the peer review process — identify weak claims, missing baselines, unclear writing, and anticipate reviewer objections before submission.
 agent_topic: reviewer-academic
+tools:
+  - Read
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
 ---
 
 <identity>

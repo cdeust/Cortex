@@ -53,6 +53,9 @@ EDGE_COLORS = {
     "memory-entity": "#40A0B8",
     "domain-entity": "#50B0C8",
     "has-discussion": "#F43F5E60",
+    "domain-contains": "#06b6d4",
+    "topic-member": "#06b6d480",
+    "co-entity": "#a78bfa",
 }
 
 # ── Technology category classification ───────────────────────────────
