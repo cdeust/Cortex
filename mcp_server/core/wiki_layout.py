@@ -18,7 +18,17 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
-PAGE_KINDS = ("adr", "specs", "guides", "reference", "conventions", "lessons", "notes", "journal", "files")
+PAGE_KINDS = (
+    "adr",
+    "specs",
+    "guides",
+    "reference",
+    "conventions",
+    "lessons",
+    "notes",
+    "journal",
+    "files",
+)
 
 _SAFE = re.compile(r"[^a-zA-Z0-9_.-]+")
 _MAX_SLUG_LEN = 80

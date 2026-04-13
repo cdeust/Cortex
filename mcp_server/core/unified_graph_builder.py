@@ -79,7 +79,8 @@ def _build_meta(
     return {
         "domain_count": type_counts.get("domain", 0),
         "memory_count": type_counts.get("memory", 0),
-        "entity_count": type_counts.get("entity", 0) + type_counts.get("bridge-entity", 0),
+        "entity_count": type_counts.get("entity", 0)
+        + type_counts.get("bridge-entity", 0),
         "agent_count": type_counts.get("agent", 0),
         "category_count": type_counts.get("category", 0),
         "topic_count": type_counts.get("topic", 0),
@@ -286,12 +287,13 @@ def _add_memory_and_entity_nodes(
     # Remove orphan entity nodes (zero edges after filtering)
     connected_ids: set[str] = set()
     for e in edges:
-        connected_ids.add(e["source"] if isinstance(e["source"], str) else e["source"]["id"])
-        connected_ids.add(e["target"] if isinstance(e["target"], str) else e["target"]["id"])
-    nodes[:] = [
-        n for n in nodes
-        if n["type"] != "entity" or n["id"] in connected_ids
-    ]
+        connected_ids.add(
+            e["source"] if isinstance(e["source"], str) else e["source"]["id"]
+        )
+        connected_ids.add(
+            e["target"] if isinstance(e["target"], str) else e["target"]["id"]
+        )
+    nodes[:] = [n for n in nodes if n["type"] != "entity" or n["id"] in connected_ids]
 
     sorted_memories = _filter_and_sort(memories, filter_domain, max_memories)
     entity_names = _build_entity_name_lookup(sorted_entities, entity_id_map)
@@ -347,7 +349,13 @@ def _populate_graph(
 
 # Node types that form the visible skeleton — never collapse them.
 _STRUCTURAL_TYPES = {
-    "root", "category", "domain", "agent", "type-group", "topic", "bridge-entity",
+    "root",
+    "category",
+    "domain",
+    "agent",
+    "type-group",
+    "topic",
+    "bridge-entity",
 }
 
 # Types always collapsed into a parent for progressive disclosure.

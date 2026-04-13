@@ -23,16 +23,18 @@ def list_wiki_pages(wiki_root: Path) -> list[dict]:
         doc = parse_page(content)
         fm = doc.frontmatter
         stem = Path(rel_path).stem
-        result.append({
-            "path": rel_path,
-            "title": fm.get("title", stem),
-            "kind": fm.get("kind", ""),
-            "domain": fm.get("domain", ""),
-            "maturity": fm.get("maturity", ""),
-            "tags": fm.get("tags", []),
-            "created": str(fm.get("created", "")),
-            "updated": str(fm.get("updated", "")),
-        })
+        result.append(
+            {
+                "path": rel_path,
+                "title": fm.get("title", stem),
+                "kind": fm.get("kind", ""),
+                "domain": fm.get("domain", ""),
+                "maturity": fm.get("maturity", ""),
+                "tags": fm.get("tags", []),
+                "created": str(fm.get("created", "")),
+                "updated": str(fm.get("updated", "")),
+            }
+        )
     return result
 
 

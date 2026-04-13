@@ -200,7 +200,8 @@ def _match_slug(slug: str, slug_index: dict[str, RepoInfo]) -> RepoInfo | None:
 
 
 def _build_fragment_index(
-    repos: list[RepoInfo], name_to_canonical: dict[str, str],
+    repos: list[RepoInfo],
+    name_to_canonical: dict[str, str],
 ) -> dict[str, str]:
     """Map meaningful fragments to canonical names.
 

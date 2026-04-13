@@ -273,11 +273,7 @@ def build_convention(
     }
     if updated:
         fm["updated"] = updated
-    body = (
-        f"# {title}\n\n"
-        f"## Rule\n\n{rule}\n\n"
-        f"## Rationale\n\n{rationale}\n"
-    )
+    body = f"# {title}\n\n## Rule\n\n{rule}\n\n## Rationale\n\n{rationale}\n"
     if scope:
         body += f"\n## Scope\n\n{scope}\n"
     body += _sources_section(source_ids) + _related_section()
@@ -370,7 +366,7 @@ def build_index(page_paths: list[str]) -> str:
     ]
 
     # Render each domain
-    for domain in sorted(tree.keys(), key=lambda d: ("zzz" if d == "_general" else d)):
+    for domain in sorted(tree.keys(), key=lambda d: "zzz" if d == "_general" else d):
         kinds = tree[domain]
         page_count = sum(len(pages) for pages in kinds.values())
         label = "Global" if domain == "_general" else domain.replace("-", " ").title()
