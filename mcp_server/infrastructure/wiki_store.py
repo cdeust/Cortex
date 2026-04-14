@@ -85,23 +85,25 @@ _abs = _safe_join
 def read_page(root: Path | str, rel_path: str) -> str | None:
     import os
 
-    # Inline sanitization — variable used at the sink must be the SAME
-    # variable that was validated by commonpath. Rebinding through
-    # Path(...) creates a new binding CodeQL can't track across.
+    # Inline CWE-22 sanitization using the canonical CodeQL-recognised
+    # pattern: resolve-then-startswith-base. The sink (os.path.exists /
+    # open) is executed ONLY inside the positive branch of the check,
+    # ensuring the sanitizer→sink chain is visible in a single basic
+    # block to static analysis.
     if not rel_path or "\x00" in rel_path or os.path.isabs(rel_path):
         return None
-    root_resolved = os.path.realpath(str(root))
-    safe_path = os.path.realpath(os.path.join(root_resolved, rel_path))
-    try:
-        if os.path.commonpath([root_resolved, safe_path]) != root_resolved:
-            return None
-    except ValueError:
+    real_base = os.path.realpath(str(root)) + os.sep
+    real_target = os.path.realpath(os.path.join(real_base, rel_path))
+    # Positive containment check — the sanitizer pattern in CodeQL's
+    # py/path-injection whitelist.
+    if not (
+        real_target.startswith(real_base) or real_target == real_base.rstrip(os.sep)
+    ):
         return None
-    # safe_path is now sanitized — use it directly as the path argument
-    # to os.path.exists / open. No rebinding through Path().
-    if not os.path.exists(safe_path):
+    # real_target is now sanitized. Use it directly.
+    if not os.path.exists(real_target):
         return None
-    with open(safe_path, encoding="utf-8") as f:
+    with open(real_target, encoding="utf-8") as f:
         return f.read()
 
 
@@ -130,40 +132,39 @@ def write_page(
     """
     import os
 
-    # Inline sanitization — the variable used at the filesystem sink
-    # must be the SAME variable that was validated by commonpath,
-    # otherwise CodeQL loses the sanitizer link across rebinds.
+    # Inline CWE-22 sanitization using the canonical CodeQL-recognised
+    # resolve-then-startswith pattern, matching read_page.
     if not rel_path or "\x00" in rel_path:
         raise ValueError("invalid wiki path: empty or contains null byte")
     if os.path.isabs(rel_path):
         raise ValueError(f"absolute paths are not allowed: {rel_path!r}")
-    root_resolved = os.path.realpath(str(Path(root)))
-    safe_path = os.path.realpath(os.path.join(root_resolved, rel_path))
-    try:
-        if os.path.commonpath([root_resolved, safe_path]) != root_resolved:
-            raise ValueError(f"path escapes wiki root: {rel_path!r}")
-    except ValueError as exc:
-        raise ValueError(f"path escapes wiki root: {rel_path!r}") from exc
+    real_base = os.path.realpath(str(Path(root))) + os.sep
+    real_target = os.path.realpath(os.path.join(real_base, rel_path))
+    if not (
+        real_target.startswith(real_base) or real_target == real_base.rstrip(os.sep)
+    ):
+        raise ValueError(f"path escapes wiki root: {rel_path!r}")
 
-    existed = os.path.exists(safe_path)
+    # real_target is now sanitized — use it directly at every sink.
+    existed = os.path.exists(real_target)
 
     if mode == "create":
         if existed:
             raise WikiExists(rel_path)
-        written = _atomic_write_bytes_str(safe_path, content)
+        written = _atomic_write_bytes_str(real_target, content)
     elif mode == "replace":
-        written = _atomic_write_bytes_str(safe_path, content)
+        written = _atomic_write_bytes_str(real_target, content)
     elif mode == "append":
         if not existed:
             raise WikiMissing(rel_path)
-        with open(safe_path, encoding="utf-8") as f:
+        with open(real_target, encoding="utf-8") as f:
             current = f.read()
         if current and not current.endswith("\n"):
             current += "\n"
         merged = current + "\n" + content
         if not merged.endswith("\n"):
             merged += "\n"
-        written = _atomic_write_bytes_str(safe_path, merged)
+        written = _atomic_write_bytes_str(real_target, merged)
     else:
         raise ValueError(f"unknown write mode: {mode}")
 
