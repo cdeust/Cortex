@@ -259,13 +259,13 @@
 
           items.appendChild(domHeader);
 
-          byDomain[d].forEach(function(p) {
-            domItems.appendChild(buildTreeItem(p));
+          _renderCollapsedList(byDomain[d]).forEach(function(row) {
+            domItems.appendChild(buildTreeItem(row));
           });
           items.appendChild(domItems);
         } else {
-          byDomain[d].forEach(function(p) {
-            items.appendChild(buildTreeItem(p));
+          _renderCollapsedList(byDomain[d]).forEach(function(row) {
+            items.appendChild(buildTreeItem(row));
           });
         }
       });
@@ -278,6 +278,45 @@
     tree.scrollTop = savedScroll;
   }
 
+  // Collapse pages that share an identical (title) within the same
+  // (kind, domain) bucket into a single tree entry with a count
+  // badge. The tree row exposes all underlying paths so the user can
+  // still pick an individual copy if they want — clicking the
+  // collapsed row opens the newest (largest memory_id prefix) by
+  // default, and Alt-click opens a disambiguation popover.
+  function _renderCollapsedList(pages) {
+    var groups = {};
+    var order = [];
+    pages.forEach(function(p) {
+      var key = (p.title || p.path || '').trim().toLowerCase();
+      if (!groups[key]) {
+        groups[key] = { title: p.title || p.path, pages: [] };
+        order.push(key);
+      }
+      groups[key].pages.push(p);
+    });
+    return order.map(function(k) {
+      var g = groups[k];
+      // Newest first (biggest memory_id prefix in filename)
+      g.pages.sort(function(a, b) {
+        var na = _idFromPath(a.path);
+        var nb = _idFromPath(b.path);
+        return nb - na;
+      });
+      return {
+        title: g.title,
+        path: g.pages[0].path,
+        duplicates: g.pages.length,
+        siblings: g.pages
+      };
+    });
+  }
+
+  function _idFromPath(p) {
+    var m = String(p).match(/\/(\d+)-/);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
   function buildTreeItem(p) {
     var item = el('div', 'wiki-tree-item');
     item.dataset.path = p.path;
@@ -287,11 +326,48 @@
     var name = el('span', 'wiki-tree-item-label');
     name.textContent = p.title || p.path;
     item.appendChild(name);
+    if (p.duplicates && p.duplicates > 1) {
+      var badge = el('span', 'wiki-tree-dup-badge');
+      badge.textContent = '\u00D7' + p.duplicates;
+      badge.title = p.duplicates + ' pages share this title — Alt-click to pick';
+      item.appendChild(badge);
+      item._siblings = p.siblings;
+    }
     item.addEventListener('click', function(e) {
       e.stopPropagation();
+      if (e.altKey && item._siblings) {
+        _openSiblingPicker(item, p);
+        return;
+      }
       loadPage(p.path);
     });
     return item;
+  }
+
+  function _openSiblingPicker(anchor, group) {
+    var existing = document.querySelector('.wiki-sibling-picker');
+    if (existing) existing.remove();
+    var picker = el('div', 'wiki-sibling-picker');
+    group.siblings.forEach(function(s) {
+      var row = el('div', 'wiki-sibling-row');
+      row.textContent = s.path;
+      row.addEventListener('click', function(e) {
+        e.stopPropagation();
+        loadPage(s.path);
+        picker.remove();
+      });
+      picker.appendChild(row);
+    });
+    document.body.appendChild(picker);
+    var r = anchor.getBoundingClientRect();
+    picker.style.left = r.right + 'px';
+    picker.style.top = r.top + 'px';
+    setTimeout(function() {
+      document.addEventListener('click', function h() {
+        picker.remove();
+        document.removeEventListener('click', h);
+      });
+    }, 0);
   }
 
   // ── Welcome Panel ──

@@ -692,6 +692,51 @@
   color: #c8c4be;
 }
 
+.wiki-tree-dup-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: #909098;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 0;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.wiki-tree-item:hover .wiki-tree-dup-badge {
+  color: #c8c4be;
+  border-color: rgba(144,208,255,0.25);
+}
+
+.wiki-sibling-picker {
+  position: fixed;
+  z-index: 500;
+  background: #0e0e16;
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 4px 0;
+  max-width: 520px;
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.wiki-sibling-row {
+  padding: 6px 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: #c0c0d0;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wiki-sibling-row:hover {
+  background: rgba(144,208,255,0.08);
+  color: #90d0ff;
+}
+
 .wiki-tree-empty {
   padding: 24px 16px;
   font-family: 'EB Garamond', Georgia, serif;
