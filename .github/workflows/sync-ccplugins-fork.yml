@@ -1,0 +1,73 @@
+name: Keep ccplugins fork in sync
+
+# Keeps cdeust/awesome-claude-code-plugins fork's main in step with
+# ccplugins/awesome-claude-code-plugins main. Runs on:
+#   - every push to Cortex main (piggyback — cheap, stays fresh)
+#   - a daily cron (catches upstream activity when Cortex is quiet)
+#   - manual dispatch
+# This way, when publish-ccplugins.yml fires on a Cortex release, the
+# fork is already up-to-date and the sync/cortex-<tag> branch is
+# always rooted at a clean upstream HEAD.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * *"   # 05:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-ccplugins-fork
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Fast-forward fork main from upstream
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM: ccplugins/awesome-claude-code-plugins
+      FORK:     cdeust/awesome-claude-code-plugins
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FORK }}
+          token: ${{ secrets.CCPLUGINS_PAT }}
+          fetch-depth: 0
+
+      - name: Fast-forward main from upstream
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "https://github.com/${UPSTREAM}.git" || true
+          git fetch upstream main --prune
+          git checkout main
+          BEFORE="$(git rev-parse HEAD)"
+          # Try ff-only first — that preserves history if we had any
+          # local commits that somehow landed. Fall back to hard reset
+          # (the fork is meant to be a clean mirror, not an author).
+          if git merge --ff-only upstream/main; then
+            echo "fast-forwarded"
+          else
+            echo "non-ff — resetting fork/main to upstream/main"
+            git reset --hard upstream/main
+          fi
+          AFTER="$(git rev-parse HEAD)"
+          if [ "$BEFORE" = "$AFTER" ]; then
+            echo "already up-to-date"
+          else
+            echo "Advanced $BEFORE → $AFTER"
+            git push origin main --force-with-lease
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## ccplugins fork sync" >> "$GITHUB_STEP_SUMMARY"
+          echo "- fork: \`${{ env.FORK }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- upstream: \`${{ env.UPSTREAM }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ran at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_STEP_SUMMARY"
