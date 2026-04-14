@@ -174,13 +174,33 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if not pandoc:
         return {
             "error": (
-                "pandoc not installed on this host. Install with "
-                "`brew install pandoc` (macOS) or `apt install pandoc` "
-                "(Linux). For PDF export also install a TeX engine: "
-                "`brew install --cask mactex-no-gui` or "
-                "`apt install texlive-xetex`."
+                "pandoc is not installed — install it first and the "
+                "four export formats (HTML, TEX, DOCX, PDF) will all "
+                "work. Install: `brew install pandoc` (macOS) or "
+                "`apt install pandoc` (Linux). "
+                "For PDF specifically you ALSO need a LaTeX engine, "
+                "but basictex / mactex / texlive-xetex are all "
+                "acceptable — any one of them supplies `pdflatex`. "
+                "basictex alone is enough for simple documents; "
+                "missing packages can be added later with `tlmgr`."
             )
         }
+    # Fast, actionable check specific to PDF — if pandoc is present
+    # but no LaTeX engine is, the pandoc process would fail with a
+    # noisy stderr. Pre-check and surface a clean message instead.
+    if fmt == "pdf":
+        engines = ("pdflatex", "xelatex", "lualatex", "tectonic")
+        if not any(shutil.which(e) for e in engines):
+            return {
+                "error": (
+                    "pandoc is installed but no LaTeX engine was found "
+                    "on PATH (tried: " + ", ".join(engines) + "). "
+                    "Install one: `brew install --cask basictex` "
+                    "(smallest; includes pdflatex) or "
+                    "`brew install --cask mactex-no-gui` (full) on "
+                    "macOS; `apt install texlive-xetex` on Linux."
+                )
+            }
 
     from mcp_server.infrastructure.config import METHODOLOGY_DIR
 
