@@ -179,9 +179,9 @@ def migrate_wiki(wiki_root: Path | str, conn) -> dict:
             mid = _memory_id_from_rel_path(rp)
             mid = mid if mid in valid_ids else None
             row = _page_row_from_md(rp, content, memory_id=mid)
-            page_id = upsert_page(conn, row)
+            page_id, was_modified = upsert_page(conn, row)
             id_by_rel[rp] = page_id
-            if page_id >= 0:
+            if was_modified:
                 pages_written += 1
             else:
                 pages_unchanged += 1
