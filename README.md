@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="#getting-started">Getting Started</a> · <a href="#what-this-actually-feels-like">What It Feels Like</a> · <a href="#retrieval-that-actually-works">Benchmarks</a> · <a href="#the-science-under-the-hood">Science</a> · <a href="#neural-graph">Views</a>
+  <a href="#getting-started">Getting Started</a> · <a href="#write-papers-in-cortex">Write Papers</a> · <a href="#what-this-actually-feels-like">What It Feels Like</a> · <a href="#retrieval-that-actually-works">Benchmarks</a> · <a href="#the-science-under-the-hood">Science</a> · <a href="#neural-graph">Views</a>
 </p>
 
 <p align="center">
@@ -75,6 +75,24 @@ docker run -it \
 **Manual:** See [detailed manual setup instructions](docs/manual-setup.md).
 
 </details>
+
+---
+
+## Write papers in Cortex
+
+Cortex doesn't just remember — it authors. Every memory that passes the pipeline becomes a structured wiki page, editable in place with a full scientific writing environment:
+
+<p align="center">
+<img src="docs/wiki-edit.png" width="100%" alt="Cortex Wiki editor — CodeMirror 6 source pane on the left, live-preview pane on the right with headings, lists, and structured sections rendered via the project's LaTeX-inspired typography" />
+</p>
+
+- **CodeMirror 6 inline editor** with live preview; save round-trips atomically to the `.md` file on disk (git-diffable).
+- **LaTeX math** — `$E=\nabla \cdot F$` and `$$…$$` blocks rendered live via KaTeX.
+- **BibTeX citations** — drop `.bib` files under `wiki/_bibliography/`, use `[@friston2010]` inline, and Citation.js resolves them to `(Friston 2010)` with an auto-generated APA bibliography.
+- **Figure / equation / table auto-numbering** — `{#fig:arch}` labels, `{@fig:arch}` cross-refs, resolved to `Figure 1` / `Equation 3` / `Section 2.1`.
+- **Pandoc export** — one click produces PDF (via LaTeX), TEX, DOCX, or HTML. Journal-submittable from the same markdown that feeds the memory pipeline.
+
+The source stays markdown. Your `.md` files remain grep-able, diffable, and interoperable with any external tool. Cortex adds a rendering + editing + export layer on top without stealing your content into a proprietary format.
 
 ---
 
@@ -256,7 +274,14 @@ Launch with `/cortex-visualize`. Five views wired over the same data:
 <img src="docs/neural-graph-wiki.png" width="100%" alt="Cortex Wiki — LaTeX-styled page with thermodynamic heat bar, lifecycle pill, backlinks, and inspector drawer" />
 </p>
 
-**Wiki View** — every memory admitted by the grounded-theory pipeline lands here as a structured page (ADR, spec, lesson, convention, note). EB Garamond body, IBM Plex Mono code, heat bar, lifecycle pill (`active` / `area` / `archived` / `evergreen`), staleness flag, backlinks footer, and an inspector drawer exposing the full audit trail (memos, source claim events, draft history).
+**Wiki View** — every memory admitted by the grounded-theory pipeline lands here as a structured page (ADR / spec / lesson / convention / note) with:
+
+- EB Garamond body, IBM Plex Mono code, centered academic-paper layout
+- **Heat bar**, lifecycle pill (`active` / `area` / `archived` / `evergreen`), staleness flag, backlinks footer
+- **Inspector drawer** — full audit trail (memos, source claim events, draft history) for every page
+- **Inline CodeMirror 6 editor** + live preview with KaTeX math (see [Write Papers in Cortex](#write-papers-in-cortex) above)
+- **BibTeX citations**, figure/equation/table auto-numbering, cross-references
+- **Pandoc export** → PDF / LaTeX / DOCX / HTML
 
 <p align="center">
 <img src="docs/neural-graph-knowledge.png" width="100%" alt="Cortex Knowledge — card list of curated memories with emotion and consolidation colors" />
