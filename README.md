@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="#getting-started">Getting Started</a> · <a href="#what-this-actually-feels-like">What It Feels Like</a> · <a href="#retrieval-that-actually-works">Benchmarks</a> · <a href="#the-science-under-the-hood">Science</a> · <a href="#neural-graph">Neural Graph</a>
+  <a href="#getting-started">Getting Started</a> · <a href="#what-this-actually-feels-like">What It Feels Like</a> · <a href="#retrieval-that-actually-works">Benchmarks</a> · <a href="#the-science-under-the-hood">Science</a> · <a href="#neural-graph">Views</a>
 </p>
 
 <p align="center">
@@ -244,25 +244,37 @@ This isn't documentation you write. It's documentation that writes itself from h
 
 ## Neural Graph
 
-Launch with `/cortex-visualize`. Three views:
+Launch with `/cortex-visualize`. Five views wired over the same data:
 
 <p align="center">
-<img src="docs/neural-graph-overview.png" width="100%" alt="Cortex Neural Graph — unified view with domain clusters, memories, entities, and discussions" />
+<img src="docs/neural-graph-overview.png" width="100%" alt="Cortex Neural Graph — force-directed view with domain clusters, memories, entities, and discussions" />
 </p>
 
 **Graph View** — force-directed neural graph showing domain clusters, memories, entities, and discussions connected by typed edges. Click any node for full context.
 
 <p align="center">
-<img src="docs/neural-graph-board.png" width="100%" alt="Cortex Board View — kanban consolidation stages with biological metrics" />
+<img src="docs/neural-graph-wiki.png" width="100%" alt="Cortex Wiki — LaTeX-styled page with thermodynamic heat bar, lifecycle pill, backlinks, and inspector drawer" />
 </p>
 
-**Board View** — memories organized by biological consolidation stage. Each card shows domain, heat, importance, and emotional tags.
+**Wiki View** — every memory admitted by the grounded-theory pipeline lands here as a structured page (ADR, spec, lesson, convention, note). EB Garamond body, IBM Plex Mono code, heat bar, lifecycle pill (`active` / `area` / `archived` / `evergreen`), staleness flag, backlinks footer, and an inspector drawer exposing the full audit trail (memos, source claim events, draft history).
+
+<p align="center">
+<img src="docs/neural-graph-knowledge.png" width="100%" alt="Cortex Knowledge — card list of curated memories with emotion and consolidation colors" />
+</p>
+
+**Knowledge View** — curated memory cards with heat-based left border, emotion tag, consolidation stage, and evidence file references. Filter by domain or emotion; click any card for a full-screen detail panel with Markdown + JSON pretty-print.
+
+<p align="center">
+<img src="docs/neural-graph-board.png" width="100%" alt="Cortex Board View — kanban columns for consolidation stages" />
+</p>
+
+**Board View** — memories arranged across the four biological consolidation stages (`labile` → `early_ltp` → `late_ltp` → `consolidated`). Each card carries domain, heat, importance, and emotional tags so you can see what's hardening and what's still fragile.
 
 <p align="center">
 <img src="docs/neural-graph-pipeline.png" width="100%" alt="Cortex Pipeline View — Sankey flow through consolidation stages" />
 </p>
 
-**Pipeline View** — horizontal flow from domains through the write gate into consolidation stages.
+**Pipeline View** — horizontal Sankey flow from domains through the write gate into consolidation stages. Width of each ribbon = memory volume. Makes retention and drop-off across stages visible at a glance.
 
 ---
 
