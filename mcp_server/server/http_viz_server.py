@@ -167,6 +167,8 @@ def _build_unified_handler(
                 self._serve_wiki_bibliography()
             elif path_no_qs == "/api/wiki/bibliography/read":
                 self._serve_wiki_bibliography_read()
+            elif path_no_qs == "/api/wiki/export":
+                self._serve_wiki_export()
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
                 serve_static_file(self, js_dir, self.path[4:], "application/javascript")
             elif self.path.startswith("/css/") and self.path.endswith(".css"):
@@ -317,6 +319,42 @@ def _build_unified_handler(
                 send_json_response(
                     self, read_bibliography(METHODOLOGY_DIR / "wiki", rel_path)
                 )
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_export(self):
+            """GET /api/wiki/export?path=X&format=pdf|tex|docx|html
+
+            Streams the Pandoc-rendered bytes with the correct MIME
+            type + Content-Disposition so the browser triggers a file
+            download. Never exposes the base64 blob over HTTP — that
+            path is reserved for the MCP tool.
+            """
+            try:
+                import asyncio
+                import base64
+
+                from mcp_server.handlers.wiki_export import handler as _export
+
+                qs = self._qs()
+                rel_path = qs.get("path", "")
+                fmt = qs.get("format", "pdf")
+                result = asyncio.run(_export({"rel_path": rel_path, "format": fmt}))
+                if not result.get("ok"):
+                    send_json_response(self, result)
+                    return
+                data = base64.b64decode(result["content_base64"])
+                filename = (rel_path.split("/")[-1] or "page").rsplit(".", 1)[0]
+                self.send_response(200)
+                self.send_header("Content-Type", result["mime"])
+                self.send_header(
+                    "Content-Disposition",
+                    f'attachment; filename="{filename}.{result["format"]}"',
+                )
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(data)
             except Exception as e:
                 send_error_response(self, e)
 

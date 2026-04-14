@@ -906,8 +906,13 @@
 
 /* ─── Phase 8 — Inline editor ─── */
 
-.wiki-edit-btn {
+.wiki-page-actions {
+  display: flex;
+  gap: 8px;
   margin-top: 12px;
+  flex-wrap: wrap;
+}
+.wiki-edit-btn, .wiki-export-btn {
   padding: 4px 14px;
   font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
   font-size: 11px;
@@ -917,12 +922,18 @@
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.14);
   cursor: pointer;
+  text-decoration: none;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.wiki-edit-btn:hover {
+.wiki-edit-btn:hover, .wiki-export-btn:hover {
   background: rgba(144,208,255,0.08);
   border-color: rgba(144,208,255,0.45);
   color: #90d0ff;
+}
+.wiki-export-btn {
+  font-size: 10px;
+  padding: 4px 10px;
+  color: #b0b8c8;
 }
 
 .wiki-editor-wrap {
