@@ -446,12 +446,19 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                     self.wfile.write(body)
                     return
                 data = base64.b64decode(result["content_base64"])
-                filename = (rel_path.split("/")[-1] or "page").rsplit(".", 1)[0]
+                # Sanitize — rel_path is user-controlled, mustn't
+                # carry \r\n into the response header (CodeQL
+                # py/http-response-splitting).
+                import re as _re_safe
+
+                raw_name = (rel_path.split("/")[-1] or "page").rsplit(".", 1)[0]
+                filename = _re_safe.sub(r"[^\w.-]", "_", raw_name)[:200] or "page"
+                fmt_out = _re_safe.sub(r"[^\w]", "", result["format"])[:16]
                 self.send_response(200)
                 self.send_header("Content-Type", result["mime"])
                 self.send_header(
                     "Content-Disposition",
-                    f'attachment; filename="{filename}.{result["format"]}"',
+                    f'attachment; filename="{filename}.{fmt_out}"',
                 )
                 self.send_header("Content-Length", str(len(data)))
                 self.send_header("Access-Control-Allow-Origin", "*")

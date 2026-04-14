@@ -118,6 +118,16 @@ def _read_body(wiki_root: Path, rel_path: str | None, body: str | None) -> str:
     return content
 
 
+# Tight key validator — anchored, bounded length, no backtracking.
+# Replaces an earlier full-line regex that CodeQL flagged as
+# polynomial-redos (py/polynomial-redos): `\s*` + `.*$` combined on
+# an unbounded user-provided line could backtrack quadratically on
+# adversarial inputs such as "A:\t\t\t…". Using str.partition() for
+# the split eliminates the overlapping quantifiers entirely.
+_FM_KEY_RE = re.compile(r"^[A-Za-z_][\w-]{0,62}$")
+_FM_MAX_LINE = 1000  # sanity cap — valid frontmatter keys never approach this
+
+
 def _split_frontmatter(markdown: str) -> tuple[dict, str]:
     """Parse a best-effort frontmatter block out of ``markdown``.
 
@@ -137,16 +147,17 @@ def _split_frontmatter(markdown: str) -> tuple[dict, str]:
     body = markdown[end + 4 :].lstrip("\n")
     fields: dict[str, str] = {}
     for line in raw.splitlines():
-        # Match `key: value` with value running to end-of-line; values
-        # can contain any character including further colons.
-        m = re.match(r"^([A-Za-z_][\w-]*)\s*:\s*(.*)$", line)
-        if not m:
+        if len(line) > _FM_MAX_LINE or ":" not in line:
             continue
-        k, v = m.group(1), m.group(2).strip()
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if not _FM_KEY_RE.match(key):
+            continue
         # Strip surrounding quotes if present; otherwise keep as-is.
-        if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
-            v = v[1:-1]
-        fields[k] = v
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        fields[key] = value
     return fields, body
 
 
