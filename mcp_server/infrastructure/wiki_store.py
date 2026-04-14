@@ -85,25 +85,27 @@ _abs = _safe_join
 def read_page(root: Path | str, rel_path: str) -> str | None:
     import os
 
-    # Inline CWE-22 sanitization using the canonical CodeQL-recognised
-    # pattern: resolve-then-startswith-base. The sink (os.path.exists /
-    # open) is executed ONLY inside the positive branch of the check,
-    # ensuring the sanitizer→sink chain is visible in a single basic
-    # block to static analysis.
+    # CWE-22 sanitization. Structure matches CodeQL's py/path-injection
+    # example VERBATIM so the sanitizer is unambiguously recognised:
+    #   base_path = os.path.realpath(root)
+    #   fullpath  = os.path.realpath(os.path.join(base_path, user_input))
+    #   if not fullpath.startswith(base_path): ...
+    # https://codeql.github.com/codeql-query-help/python/py-path-injection/
     if not rel_path or "\x00" in rel_path or os.path.isabs(rel_path):
         return None
-    real_base = os.path.realpath(str(root)) + os.sep
-    real_target = os.path.realpath(os.path.join(real_base, rel_path))
-    # Positive containment check — the sanitizer pattern in CodeQL's
-    # py/path-injection whitelist.
-    if not (
-        real_target.startswith(real_base) or real_target == real_base.rstrip(os.sep)
-    ):
+    base_path = os.path.realpath(str(root))
+    fullpath = os.path.realpath(os.path.join(base_path, rel_path))
+    if not fullpath.startswith(base_path):
         return None
-    # real_target is now sanitized. Use it directly.
-    if not os.path.exists(real_target):
+    # Defence-in-depth against prefix-aliasing (base_path='/foo' matches
+    # '/foobar'). CodeQL's example doesn't do this; we add it because
+    # the containment check above is too permissive without a separator.
+    if fullpath != base_path and not fullpath[len(base_path) :].startswith(os.sep):
         return None
-    with open(real_target, encoding="utf-8") as f:
+    # fullpath is sanitized — sink uses the sanitized variable directly.
+    if not os.path.exists(fullpath):
+        return None
+    with open(fullpath, encoding="utf-8") as f:
         return f.read()
 
 
@@ -132,39 +134,40 @@ def write_page(
     """
     import os
 
-    # Inline CWE-22 sanitization using the canonical CodeQL-recognised
-    # resolve-then-startswith pattern, matching read_page.
+    # CWE-22 sanitization matching CodeQL's py/path-injection example
+    # VERBATIM (see read_page for references).
     if not rel_path or "\x00" in rel_path:
         raise ValueError("invalid wiki path: empty or contains null byte")
     if os.path.isabs(rel_path):
         raise ValueError(f"absolute paths are not allowed: {rel_path!r}")
-    real_base = os.path.realpath(str(Path(root))) + os.sep
-    real_target = os.path.realpath(os.path.join(real_base, rel_path))
-    if not (
-        real_target.startswith(real_base) or real_target == real_base.rstrip(os.sep)
-    ):
+    base_path = os.path.realpath(str(Path(root)))
+    fullpath = os.path.realpath(os.path.join(base_path, rel_path))
+    if not fullpath.startswith(base_path):
+        raise ValueError(f"path escapes wiki root: {rel_path!r}")
+    # Defence-in-depth against prefix-aliasing.
+    if fullpath != base_path and not fullpath[len(base_path) :].startswith(os.sep):
         raise ValueError(f"path escapes wiki root: {rel_path!r}")
 
-    # real_target is now sanitized — use it directly at every sink.
-    existed = os.path.exists(real_target)
+    # fullpath is sanitized — use it directly at every sink.
+    existed = os.path.exists(fullpath)
 
     if mode == "create":
         if existed:
             raise WikiExists(rel_path)
-        written = _atomic_write_bytes_str(real_target, content)
+        written = _atomic_write_bytes_str(fullpath, content)
     elif mode == "replace":
-        written = _atomic_write_bytes_str(real_target, content)
+        written = _atomic_write_bytes_str(fullpath, content)
     elif mode == "append":
         if not existed:
             raise WikiMissing(rel_path)
-        with open(real_target, encoding="utf-8") as f:
+        with open(fullpath, encoding="utf-8") as f:
             current = f.read()
         if current and not current.endswith("\n"):
             current += "\n"
         merged = current + "\n" + content
         if not merged.endswith("\n"):
             merged += "\n"
-        written = _atomic_write_bytes_str(real_target, merged)
+        written = _atomic_write_bytes_str(fullpath, merged)
     else:
         raise ValueError(f"unknown write mode: {mode}")
 
