@@ -429,27 +429,33 @@
     main.innerHTML = '<div class="wiki-loading"><div class="wiki-loading-spinner"></div>Loading page\u2026</div>';
     main.scrollTop = 0;
 
-    fetch('/api/wiki/page?path=' + encodeURIComponent(path))
-      .then(function(r) {
+    Promise.all([
+      fetch('/api/wiki/page?path=' + encodeURIComponent(path)).then(function(r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
-      })
-      .then(function(data) {
-        if (data.error) throw new Error(data.error);
-        renderPage(main, data);
-      })
-      .catch(function(err) {
-        console.warn('[cortex] Wiki page fetch error:', err.message);
-        main.innerHTML = '';
-        main.appendChild(buildErrorState('Page not found', 'Could not load ' + path));
-      });
+      }),
+      // page_meta is best-effort — missing DB shouldn't block page render
+      fetch('/api/wiki/page_meta?path=' + encodeURIComponent(path))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .catch(function() { return null; })
+    ]).then(function(results) {
+      var data = results[0];
+      var pmeta = results[1];
+      if (data.error) throw new Error(data.error);
+      renderPage(main, data, pmeta);
+    }).catch(function(err) {
+      console.warn('[cortex] Wiki page fetch error:', err.message);
+      main.innerHTML = '';
+      main.appendChild(buildErrorState('Page not found', 'Could not load ' + path));
+    });
   }
 
   // ── Page Rendering ──
-  function renderPage(main, data) {
+  function renderPage(main, data, pmeta) {
     main.innerHTML = '';
     var meta = data.meta || {};
     var body = data.body || '';
+    var dbRow = (pmeta && pmeta.db_row) || null;
 
     var article = el('article', 'wiki-article');
 
@@ -483,7 +489,35 @@
       titleRow.appendChild(kindBadge);
     }
 
+    // Thermodynamic state pills — only when DB has the row
+    if (dbRow) {
+      var lifecycle = dbRow.lifecycle_state || 'active';
+      var lcPill = el('span', 'wiki-lc-pill wiki-lc-' + lifecycle);
+      lcPill.textContent = lifecycle;
+      titleRow.appendChild(lcPill);
+
+      if (dbRow.is_stale) {
+        var stalePill = el('span', 'wiki-stale-pill');
+        stalePill.textContent = 'stale';
+        titleRow.appendChild(stalePill);
+      }
+    }
+
     pageHeader.appendChild(titleRow);
+
+    // Thermodynamic heat bar
+    if (dbRow && typeof dbRow.heat === 'number') {
+      var heatWrap = el('div', 'wiki-heat-bar');
+      var heatFill = el('div', 'wiki-heat-fill');
+      heatFill.style.width = Math.max(0, Math.min(1, dbRow.heat)) * 100 + '%';
+      heatWrap.appendChild(heatFill);
+      var heatLabel = el('span', 'wiki-heat-label');
+      heatLabel.textContent = 'heat ' + dbRow.heat.toFixed(2)
+        + ' \u00B7 cited ' + (dbRow.citation_count || 0)
+        + ' \u00B7 ' + (dbRow.backlink_count || 0) + ' backlinks';
+      heatWrap.appendChild(heatLabel);
+      pageHeader.appendChild(heatWrap);
+    }
 
     // Metadata
     var metaBar = el('div', 'wiki-meta-bar');
@@ -521,7 +555,122 @@
     });
 
     article.appendChild(bodyEl);
+
+    // Backlinks section — rendered from page_meta
+    if (pmeta && pmeta.backlinks && pmeta.backlinks.length > 0) {
+      var blSec = el('section', 'wiki-backlinks');
+      var blTitle = el('h2', 'wiki-backlinks-title');
+      blTitle.textContent = 'Backlinks (' + pmeta.backlinks.length + ')';
+      blSec.appendChild(blTitle);
+      var blList = el('ul', 'wiki-backlinks-list');
+      pmeta.backlinks.slice(0, 20).forEach(function(b) {
+        var li = el('li', 'wiki-backlinks-item');
+        var a = el('a', 'wiki-link');
+        a.textContent = b.src_title || b.src_rel_path || 'Unknown';
+        a.dataset.path = b.src_rel_path || '';
+        if (b.src_rel_path) {
+          a.addEventListener('click', function() { loadPage(b.src_rel_path); });
+          a.style.cursor = 'pointer';
+        }
+        var kindTag = el('span', 'wiki-link-kind');
+        kindTag.textContent = b.link_kind || 'see-also';
+        li.appendChild(a);
+        li.appendChild(kindTag);
+        blList.appendChild(li);
+      });
+      blSec.appendChild(blList);
+      article.appendChild(blSec);
+    }
+
+    // Inspector toggle — reveals draft history + memos
+    if (pmeta && dbRow) {
+      article.appendChild(buildInspector(dbRow, pmeta));
+    }
+
     main.appendChild(article);
+  }
+
+  // ── Inspector (Hopper "plumb drawer") ──
+  function buildInspector(dbRow, pmeta) {
+    var details = el('details', 'wiki-inspector');
+    var summary = el('summary', 'wiki-inspector-summary');
+    summary.textContent = 'Inspect — thermodynamic state, memos, lineage';
+    details.appendChild(summary);
+
+    var grid = el('div', 'wiki-inspector-grid');
+
+    // State column
+    var stateCol = el('div', 'wiki-inspector-col');
+    stateCol.appendChild(buildInspectLine('page id', dbRow.id));
+    stateCol.appendChild(buildInspectLine('heat', (dbRow.heat || 0).toFixed(4)));
+    stateCol.appendChild(buildInspectLine('lifecycle', dbRow.lifecycle_state));
+    stateCol.appendChild(buildInspectLine('status', dbRow.status));
+    stateCol.appendChild(buildInspectLine('is_stale', String(dbRow.is_stale)));
+    stateCol.appendChild(buildInspectLine('citations', dbRow.citation_count));
+    stateCol.appendChild(buildInspectLine('backlinks', dbRow.backlink_count));
+    stateCol.appendChild(buildInspectLine('planted', dbRow.planted));
+    stateCol.appendChild(buildInspectLine('tended', dbRow.tended));
+    if (dbRow.archived_at) {
+      stateCol.appendChild(buildInspectLine('archived_at', dbRow.archived_at));
+    }
+    if (dbRow.memory_id) stateCol.appendChild(buildInspectLine('memory_id', dbRow.memory_id));
+    if (dbRow.concept_id) stateCol.appendChild(buildInspectLine('concept_id', dbRow.concept_id));
+    grid.appendChild(stateCol);
+
+    // Memos column — lazy load on expand
+    var memosCol = el('div', 'wiki-inspector-col');
+    var memoTitle = el('h4', 'wiki-inspector-heading');
+    memoTitle.textContent = 'Memos';
+    memosCol.appendChild(memoTitle);
+    var memoBody = el('div', 'wiki-inspector-memos');
+    memoBody.textContent = 'Loading\u2026';
+    memosCol.appendChild(memoBody);
+    grid.appendChild(memosCol);
+
+    details.appendChild(grid);
+
+    // Fetch memos once details is opened
+    var loaded = false;
+    details.addEventListener('toggle', function() {
+      if (!details.open || loaded) return;
+      loaded = true;
+      fetch('/api/wiki/memos?subject_type=page&subject_id=' + dbRow.id + '&limit=20')
+        .then(function(r) { return r.ok ? r.json() : { memos: [] }; })
+        .then(function(data) {
+          memoBody.innerHTML = '';
+          var memos = data.memos || [];
+          if (memos.length === 0) {
+            memoBody.textContent = 'No memos yet.';
+            return;
+          }
+          memos.forEach(function(m) {
+            var entry = el('div', 'wiki-memo-entry');
+            var dec = el('strong', 'wiki-memo-decision');
+            dec.textContent = m.decision;
+            var rat = el('div', 'wiki-memo-rationale');
+            rat.textContent = m.rationale || '';
+            var by = el('div', 'wiki-memo-author');
+            by.textContent = (m.author || 'system') + ' \u00B7 ' + (m.created_at || '');
+            entry.appendChild(dec);
+            entry.appendChild(rat);
+            entry.appendChild(by);
+            memoBody.appendChild(entry);
+          });
+        })
+        .catch(function() { memoBody.textContent = 'Failed to load memos.'; });
+    });
+    return details;
+  }
+
+  function buildInspectLine(label, value) {
+    var row = el('div', 'wiki-inspect-row');
+    var l = el('span', 'wiki-inspect-label');
+    l.textContent = label;
+    var v = el('span', 'wiki-inspect-val');
+    v.textContent = value == null ? '—' : String(value);
+    row.appendChild(l);
+    row.appendChild(v);
+    return row;
   }
 
   function buildMetaItem(label, value) {

@@ -256,6 +256,18 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 self._serve_wiki_list()
             elif path_no_qs == "/api/wiki/page":
                 self._serve_wiki_page()
+            elif path_no_qs == "/api/wiki/page_meta":
+                self._serve_wiki_db("page_meta")
+            elif path_no_qs == "/api/wiki/concepts":
+                self._serve_wiki_db("concepts")
+            elif path_no_qs == "/api/wiki/drafts":
+                self._serve_wiki_db("drafts")
+            elif path_no_qs == "/api/wiki/memos":
+                self._serve_wiki_db("memos")
+            elif path_no_qs == "/api/wiki/views":
+                self._serve_wiki_db("views")
+            elif path_no_qs == "/api/wiki/view":
+                self._serve_wiki_db("view")
             elif self.path == "/api/sankey" or self.path.startswith("/api/sankey?"):
                 self._serve_sankey()
             elif self.path.startswith("/api/file-diff?"):
@@ -308,6 +320,70 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                         if p.startswith("path="):
                             rel_path = urllib.parse.unquote(p[5:])
                 data = read_wiki_page(METHODOLOGY_DIR / "wiki", rel_path)
+                body = json.dumps(data, default=str).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+        def _qs_map(self) -> dict:
+            import urllib.parse as _up
+
+            out: dict = {}
+            if "?" not in self.path:
+                return out
+            for kv in self.path.split("?", 1)[1].split("&"):
+                if not kv:
+                    continue
+                if "=" in kv:
+                    k, v = kv.split("=", 1)
+                    out[k] = _up.unquote(v)
+                else:
+                    out[kv] = ""
+            return out
+
+        def _serve_wiki_db(self, op: str):
+            """Dispatch all DB-backed wiki endpoints to handlers.wiki_api."""
+            try:
+                from mcp_server.handlers import wiki_api
+
+                qs = self._qs_map()
+                if op == "page_meta":
+                    data = wiki_api.page_meta(qs.get("path", ""))
+                elif op == "concepts":
+                    data = wiki_api.list_concepts(
+                        qs.get("status") or None, int(qs.get("limit", "100"))
+                    )
+                elif op == "drafts":
+                    data = wiki_api.list_drafts(
+                        qs.get("status") or None,
+                        qs.get("kind") or None,
+                        int(qs.get("limit", "100")),
+                    )
+                elif op == "memos":
+                    if not qs.get("subject_id"):
+                        data = {"error": "subject_id required"}
+                    else:
+                        data = wiki_api.list_memos(
+                            qs.get("subject_type", "page"),
+                            int(qs["subject_id"]),
+                            int(qs.get("limit", "50")),
+                        )
+                elif op == "views":
+                    data = wiki_api.list_views()
+                elif op == "view":
+                    data = wiki_api.execute_view(
+                        qs.get("name") or None, qs.get("query") or None
+                    )
+                else:
+                    data = {"error": f"unknown op: {op}"}
                 body = json.dumps(data, default=str).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")

@@ -143,6 +143,18 @@ def _build_unified_handler(
                 self._serve_wiki_list()
             elif path_no_qs == "/api/wiki/page":
                 self._serve_wiki_page()
+            elif path_no_qs == "/api/wiki/page_meta":
+                self._serve_wiki_page_meta()
+            elif path_no_qs == "/api/wiki/concepts":
+                self._serve_wiki_concepts()
+            elif path_no_qs == "/api/wiki/drafts":
+                self._serve_wiki_drafts()
+            elif path_no_qs == "/api/wiki/memos":
+                self._serve_wiki_memos()
+            elif path_no_qs == "/api/wiki/views":
+                self._serve_wiki_views()
+            elif path_no_qs == "/api/wiki/view":
+                self._serve_wiki_view()
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
                 serve_static_file(self, js_dir, self.path[4:], "application/javascript")
             elif self.path.startswith("/css/") and self.path.endswith(".css"):
@@ -191,6 +203,87 @@ def _build_unified_handler(
                             rel_path = urllib.parse.unquote(p[5:])
                 data = read_wiki_page(wiki_root, rel_path)
                 send_json_response(self, data)
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _qs(self) -> dict[str, str]:
+            import urllib.parse as _p
+
+            parts = self.path.split("?", 1)
+            if len(parts) < 2:
+                return {}
+            return {
+                k: _p.unquote(v)
+                for k, v in (
+                    kv.split("=", 1) if "=" in kv else (kv, "")
+                    for kv in parts[1].split("&")
+                    if kv
+                )
+            }
+
+        def _serve_wiki_page_meta(self):
+            try:
+                from mcp_server.handlers.wiki_api import page_meta
+
+                rel_path = self._qs().get("path", "")
+                send_json_response(self, page_meta(rel_path))
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_concepts(self):
+            try:
+                from mcp_server.handlers.wiki_api import list_concepts
+
+                qs = self._qs()
+                status = qs.get("status") or None
+                limit = int(qs.get("limit", "100"))
+                send_json_response(self, list_concepts(status, limit))
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_drafts(self):
+            try:
+                from mcp_server.handlers.wiki_api import list_drafts
+
+                qs = self._qs()
+                status = qs.get("status") or None
+                kind = qs.get("kind") or None
+                limit = int(qs.get("limit", "100"))
+                send_json_response(self, list_drafts(status, kind, limit))
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_memos(self):
+            try:
+                from mcp_server.handlers.wiki_api import list_memos
+
+                qs = self._qs()
+                subject_type = qs.get("subject_type") or "page"
+                subject_id = int(qs.get("subject_id", "0"))
+                if subject_id == 0:
+                    send_json_response(self, {"error": "subject_id required"})
+                    return
+                limit = int(qs.get("limit", "50"))
+                send_json_response(self, list_memos(subject_type, subject_id, limit))
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_views(self):
+            try:
+                from mcp_server.handlers.wiki_api import list_views
+
+                send_json_response(self, list_views())
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_view(self):
+            try:
+                from mcp_server.handlers.wiki_api import execute_view
+
+                qs = self._qs()
+                name = qs.get("name") or None
+                query = qs.get("query") or None
+                send_json_response(self, execute_view(name, query))
             except Exception as e:
                 send_error_response(self, e)
 
