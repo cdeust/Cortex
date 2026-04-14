@@ -271,7 +271,7 @@ Launch with `/cortex-visualize`. Five views wired over the same data:
 **Graph View** — force-directed neural graph showing domain clusters, memories, entities, and discussions connected by typed edges. Click any node for full context.
 
 <p align="center">
-<img src="docs/neural-graph-wiki.png" width="100%" alt="Cortex Wiki — LaTeX-styled page with thermodynamic heat bar, lifecycle pill, backlinks, and inspector drawer" />
+<img src="docs/neural-graph-wiki.png?v=3" width="100%" alt="Cortex Wiki — a Convention page rendered with LaTeX typography showing Edit + Export toolbar (PDF/TEX/DOCX/HTML), active lifecycle pill, heat bar, structured numbered sections authored via the in-browser editor" />
 </p>
 
 **Wiki View** — every memory admitted by the grounded-theory pipeline lands here as a structured page (ADR / spec / lesson / convention / note) with:
