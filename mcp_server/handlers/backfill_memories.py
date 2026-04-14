@@ -72,6 +72,10 @@ def _parse_args(args: dict[str, Any] | None) -> dict[str, Any]:
         "min_importance": float(args.get("min_importance", 0.35)),
         "dry_run": bool(args.get("dry_run", False)),
         "force_reprocess": bool(args.get("force_reprocess", False)),
+        # When true (default), kick off the wiki pipeline after imports
+        # so memories → claims → concepts → pages happens automatically.
+        # Disable if you want to run the pipeline manually afterwards.
+        "run_pipeline": bool(args.get("run_pipeline", True)),
     }
 
 
@@ -217,8 +221,16 @@ async def _process_imports(
     min_importance: float,
     total_candidates: int,
     files_skipped: int,
+    run_pipeline: bool = True,
 ) -> dict[str, Any]:
-    """Import files and return result summary."""
+    """Import files and optionally run the wiki pipeline end-to-end.
+
+    With ``run_pipeline=True`` (the default), once imports complete we
+    invoke handlers.wiki_pipeline which chains extract → resolve →
+    emerge → synthesize → curate → compile. This is what makes
+    "install and see pages" work on fresh installs (Phase 7 cold-start
+    fix); without it, users would have to call each tool manually.
+    """
     total_imported = 0
     total_skipped = 0
     files_processed = 0
@@ -229,7 +241,8 @@ async def _process_imports(
             files_processed += 1
             total_imported += imported
             total_skipped += skipped
-    return {
+
+    result: dict[str, Any] = {
         "backfilled": total_imported,
         "files_processed": files_processed,
         "files_already_done": files_skipped,
@@ -237,6 +250,21 @@ async def _process_imports(
         "concept_links_created": 0,
         "total_files_found": total_candidates,
     }
+
+    if run_pipeline and total_imported > 0:
+        try:
+            from mcp_server.handlers.wiki_pipeline import handler as _pipeline
+
+            pipe = await _pipeline({"limit_per_stage": 1000})
+            result["pipeline"] = {
+                "claims_inserted": pipe.get("claims_inserted", 0),
+                "concepts_inserted": pipe.get("concepts_inserted", 0),
+                "drafts_approved": pipe.get("drafts_approved", 0),
+                "pages_published": pipe.get("pages_published", 0),
+            }
+        except Exception as e:
+            result["pipeline"] = {"error": str(e)}
+    return result
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -276,6 +304,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         parsed["min_importance"],
         len(candidates),
         files_skipped,
+        run_pipeline=parsed["run_pipeline"],
     )
 
     # Run cascade advancement after backfill to place imported memories

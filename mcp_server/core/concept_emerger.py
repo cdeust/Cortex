@@ -42,6 +42,12 @@ from typing import Literal
 
 
 # ── Tunable thresholds ────────────────────────────────────────────────
+#
+# Two regimes: steady-state (default) and cold-start (small corpus).
+# Cold start relaxes promotion rules so new installs show a populated
+# wiki inside the first session rather than accumulating for weeks
+# before the first page appears. Regime is picked by the handler based
+# on total resolved-claim count.
 
 MIN_CLAIMS_PER_CONCEPT = 3
 MERGE_JACCARD = 0.5
@@ -50,6 +56,16 @@ PROMOTION_PROMOTE_STREAK = 5
 MIN_GROUNDING_MEMORIES = 3
 MIN_AXIAL_SLOTS_FILLED = 3
 ABANDON_AFTER_DAYS = 60  # candidates that never grow
+
+# Cold-start relaxation — smaller thresholds so first-session users
+# see concepts emerge and promote immediately. Once the corpus grows
+# past COLD_START_MEMORY_THRESHOLD, the steady-state values kick in.
+COLD_START_MEMORY_THRESHOLD = 50
+COLD_START_MIN_CLAIMS_PER_CONCEPT = 1
+COLD_START_SATURATION_STREAK = 1
+COLD_START_PROMOTION_STREAK = 2
+COLD_START_MIN_GROUNDING_MEMORIES = 1
+COLD_START_MIN_AXIAL_SLOTS_FILLED = 2
 
 ConceptStatus = Literal[
     "candidate", "saturating", "promoted", "merged", "split", "abandoned"
@@ -268,21 +284,49 @@ def _decide_status(
     axial_slots_filled: int,
     saturation_streak: int,
     current_status: ConceptStatus,
+    thresholds: dict | None = None,
 ) -> ConceptStatus:
-    """Apply transition rules. Never moves backwards from promoted."""
+    """Apply transition rules. Never moves backwards from promoted.
+
+    ``thresholds`` allows a handler to substitute cold-start values
+    without mutating module-level constants. Unknown keys are ignored.
+    """
+    t = thresholds or {}
+    min_grounding = t.get("min_grounding_memories", MIN_GROUNDING_MEMORIES)
+    min_axial = t.get("min_axial_slots_filled", MIN_AXIAL_SLOTS_FILLED)
+    promote_streak = t.get("promotion_streak", PROMOTION_PROMOTE_STREAK)
+    saturate_streak = t.get("saturation_streak", SATURATION_PROMOTE_STREAK)
+
     if current_status in ("merged", "split", "abandoned"):
         return current_status
     if current_status == "promoted":
         return "promoted"
     if (
-        grounding_memory_count >= MIN_GROUNDING_MEMORIES
-        and axial_slots_filled >= MIN_AXIAL_SLOTS_FILLED
-        and saturation_streak >= PROMOTION_PROMOTE_STREAK
+        grounding_memory_count >= min_grounding
+        and axial_slots_filled >= min_axial
+        and saturation_streak >= promote_streak
     ):
         return "promoted"
-    if saturation_streak >= SATURATION_PROMOTE_STREAK:
+    if saturation_streak >= saturate_streak:
         return "saturating"
     return "candidate"
+
+
+def cold_start_thresholds() -> dict:
+    """Threshold bundle for a small corpus (< COLD_START_MEMORY_THRESHOLD).
+
+    Handlers call this when memory counts are low and pass the result
+    through ``emerge(..., thresholds=...)``. Once the corpus grows
+    past the threshold the handler should stop passing this bundle
+    and the steady-state module constants take over.
+    """
+    return {
+        "min_claims_per_concept": COLD_START_MIN_CLAIMS_PER_CONCEPT,
+        "saturation_streak": COLD_START_SATURATION_STREAK,
+        "promotion_streak": COLD_START_PROMOTION_STREAK,
+        "min_grounding_memories": COLD_START_MIN_GROUNDING_MEMORIES,
+        "min_axial_slots_filled": COLD_START_MIN_AXIAL_SLOTS_FILLED,
+    }
 
 
 # ── Public entry point ────────────────────────────────────────────────
@@ -292,6 +336,7 @@ def emerge(
     *,
     claims: list[dict],
     existing_concepts_by_entities: dict[int, dict],
+    thresholds: dict | None = None,
 ) -> tuple[list[ConceptPlan], EmergenceStats]:
     """Run a single emergence pass.
 
@@ -304,6 +349,9 @@ def emerge(
               grounding_memory_ids, saturation_streak, status, label).
               Used to do incremental update rather than re-cluster
               from scratch every call.
+      thresholds: optional override bundle for promotion rules. Use
+              ``cold_start_thresholds()`` for small corpora (<50
+              memories); omit for steady state.
 
     Returns (plans, stats). Each ConceptPlan is either:
       - a new candidate (concept_id=None) → handler INSERTs
@@ -316,7 +364,10 @@ def emerge(
         empty_stats = EmergenceStats(0, 0, 0, 0, 0, 0, 0)
         return [], empty_stats
 
-    clusters = _cluster_by_entity(claims)
+    min_claims = (thresholds or {}).get(
+        "min_claims_per_concept", MIN_CLAIMS_PER_CONCEPT
+    )
+    clusters = _cluster_by_entity(claims, min_claims=min_claims)
     plans: list[ConceptPlan] = []
     promoted = 0
     saturating = 0
@@ -394,6 +445,7 @@ def emerge(
                 axial_slots_filled=_count_axial_slots_filled(merged_axial),
                 saturation_streak=streak,
                 current_status=current_status,
+                thresholds=thresholds,
             )
             plans.append(
                 ConceptPlan(
@@ -425,6 +477,7 @@ def emerge(
                 axial_slots_filled=_count_axial_slots_filled(new_axial),
                 saturation_streak=0,
                 current_status="candidate",
+                thresholds=thresholds,
             )
             plans.append(
                 ConceptPlan(
