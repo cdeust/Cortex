@@ -41,10 +41,32 @@ class WikiMissing(Exception):
 
 
 def _abs(root: Path, rel_path: str) -> Path:
-    target = (root / rel_path).resolve()
-    root_resolved = root.resolve()
-    if root_resolved not in target.parents and target != root_resolved:
-        raise ValueError(f"path escapes wiki root: {rel_path}")
+    """Resolve ``rel_path`` against ``root`` safely.
+
+    Hardened against CWE-22 (path traversal) in three layers:
+      1. Reject null bytes and empty paths outright.
+      2. Reject absolute paths (``/etc/passwd``, ``C:\\...``).
+      3. After resolution, require the target to be ``relative_to`` the
+         resolved root — the canonical CPython-recognised path-containment
+         check. ``relative_to`` raises ``ValueError`` if the target escapes.
+
+    This is the pattern CodeQL recognises as sanitizing untrusted path
+    components (``py/path-injection``).
+    """
+    if not rel_path or "\x00" in rel_path:
+        raise ValueError("invalid wiki path: empty or contains null byte")
+    if Path(rel_path).is_absolute():
+        raise ValueError(f"absolute paths are not allowed: {rel_path!r}")
+
+    root_resolved = root.resolve(strict=False)
+    target = (root_resolved / rel_path).resolve(strict=False)
+
+    # Canonical containment check — raises ValueError on escape, which we
+    # re-raise with a clearer message for the caller.
+    try:
+        target.relative_to(root_resolved)
+    except ValueError as exc:
+        raise ValueError(f"path escapes wiki root: {rel_path!r}") from exc
     return target
 
 
