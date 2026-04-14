@@ -27,6 +27,10 @@ _REJECT_PREFIXES = (
     "system:",
     "<tool_result>",
     "<result>",
+    "<command-message>",
+    "<command-name>",
+    "# <command-message>",
+    "# <command-name>",
 )
 
 _REJECT_TITLES = {
@@ -45,6 +49,8 @@ _REJECT_PATTERNS = [
     re.compile(r"^You must respond with only", re.IGNORECASE),
     re.compile(r"^\s*\{[\s\S]*\}\s*$"),  # Pure JSON object
     re.compile(r"^\s*\[[\s\S]*\]\s*$"),  # Pure JSON array
+    # Slash-command invocations — only Claude Code UI framing, no knowledge content
+    re.compile(r"<command-(message|name|args)>", re.IGNORECASE),
 ]
 
 # ── Classification patterns ───────────────────────────────────────────
