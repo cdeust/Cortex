@@ -210,6 +210,70 @@ def resolve_unresolved_links(conn: Connection) -> int:
         return cur.rowcount
 
 
+# ── wiki.claim_events ──────────────────────────────────────────────────
+
+
+def insert_claim_events(conn: Connection, claims: list[dict]) -> list[int]:
+    """Bulk insert ClaimEvent rows. Returns the new ids in order.
+
+    Each ``claims`` dict requires: ``text``, ``claim_type``. Optional:
+    memory_id, session_id, entity_ids, evidence_refs, confidence,
+    supersedes, embedding (vector or None).
+
+    All inserted in one cursor cycle for throughput.
+    """
+    if not claims:
+        return []
+
+    sql = """
+    INSERT INTO wiki.claim_events (
+        memory_id, session_id, text, claim_type, entity_ids,
+        evidence_refs, confidence, supersedes
+    ) VALUES (
+        %(memory_id)s, %(session_id)s, %(text)s, %(claim_type)s,
+        %(entity_ids)s, %(evidence_refs)s::jsonb, %(confidence)s,
+        %(supersedes)s
+    ) RETURNING id;
+    """
+    out: list[int] = []
+    with conn.cursor() as cur:
+        for c in claims:
+            params = {
+                "memory_id": c.get("memory_id"),
+                "session_id": c.get("session_id", ""),
+                "text": c["text"][:1900],
+                "claim_type": c.get("claim_type", "assertion"),
+                "entity_ids": c.get("entity_ids", []),
+                "evidence_refs": json.dumps(c.get("evidence_refs", [])),
+                "confidence": c.get("confidence", 0.5),
+                "supersedes": c.get("supersedes"),
+            }
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            out.append(row["id"] if isinstance(row, dict) else row[0])
+    return out
+
+
+def delete_claims_for_memory(conn: Connection, memory_id: int) -> int:
+    """Remove all claim_events derived from a single memory.
+
+    Used before re-extraction to keep the table clean of stale claims.
+    """
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM wiki.claim_events WHERE memory_id = %s", (memory_id,))
+        return cur.rowcount
+
+
+def get_claims_for_memory(conn: Connection, memory_id: int) -> list[dict]:
+    """Return all claim_events derived from a single memory."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT * FROM wiki.claim_events WHERE memory_id = %s ORDER BY id",
+            (memory_id,),
+        )
+        return list(cur.fetchall())
+
+
 # ── wiki.citations ─────────────────────────────────────────────────────
 
 
