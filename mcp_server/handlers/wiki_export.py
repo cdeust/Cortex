@@ -118,6 +118,41 @@ def _read_body(wiki_root: Path, rel_path: str | None, body: str | None) -> str:
     return content
 
 
+def _split_frontmatter(markdown: str) -> tuple[dict, str]:
+    """Parse a best-effort frontmatter block out of ``markdown``.
+
+    Returns (fields, body). Never raises; on any parse issue returns
+    ({}, markdown). This is intentionally forgiving because the wiki
+    writes titles with unquoted colons ("Decision: Use Postgres")
+    that strict YAML parsers reject. We extract what we can, then
+    feed only the body to pandoc and re-inject title/author/abstract
+    as pandoc --metadata flags.
+    """
+    if not markdown.startswith("---"):
+        return {}, markdown
+    end = markdown.find("\n---", 3)
+    if end < 0:
+        return {}, markdown
+    raw = markdown[3:end].strip("\n")
+    body = markdown[end + 4 :].lstrip("\n")
+    fields: dict[str, str] = {}
+    for line in raw.splitlines():
+        # Match `key: value` with value running to end-of-line; values
+        # can contain any character including further colons.
+        m = re.match(r"^([A-Za-z_][\w-]*)\s*:\s*(.*)$", line)
+        if not m:
+            continue
+        k, v = m.group(1), m.group(2).strip()
+        # Strip surrounding quotes if present; otherwise keep as-is.
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+            v = v[1:-1]
+        fields[k] = v
+    return fields, body
+
+
+_META_KEYS_FOR_PANDOC = ("title", "subtitle", "author", "date", "abstract")
+
+
 def _extract_bibliography_hint(markdown: str) -> list[str]:
     """Very small frontmatter reader — only looks for a bibliography:
     inline list. Full parsing lives in core/wiki_pages; this module
@@ -221,16 +256,29 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     meta = _ALLOWED_FORMATS[fmt]
 
+    # Strip the wiki's YAML frontmatter before handing to pandoc —
+    # the wiki writes unquoted colons in titles ("Decision: Foo")
+    # which pandoc's stricter YAML parser rejects. We re-inject the
+    # interesting metadata fields through pandoc's --metadata flags
+    # instead.
+    fm, body_only = _split_frontmatter(markdown)
+
     with tempfile.TemporaryDirectory(prefix="cortex-export-") as tmpdir:
         tmp = Path(tmpdir)
         src = tmp / "page.md"
-        src.write_text(markdown, encoding="utf-8")
+        src.write_text(body_only, encoding="utf-8")
         out = tmp / f"out.{meta['ext']}"
 
         cmd: list[str] = [pandoc, str(src), "-o", str(out)]
-        cmd.extend(["--from", "markdown"])
+        # Explicit suppression of YAML metadata block parsing — the
+        # source we write has no frontmatter, but be defensive.
+        cmd.extend(["--from", "markdown-yaml_metadata_block"])
         cmd.extend(["--to", meta["pandoc_to"]])
         cmd.extend(["--standalone"])
+        # Re-inject metadata from the stripped frontmatter.
+        for key in _META_KEYS_FOR_PANDOC:
+            if fm.get(key):
+                cmd.extend(["--metadata", f"{key}={fm[key]}"])
         if bib_files:
             cmd.extend(["--citeproc"])
             for bf in bib_files:
