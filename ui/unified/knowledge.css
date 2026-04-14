@@ -904,6 +904,123 @@
   letter-spacing: 1px;
 }
 
+/* ─── Phase 8 — Inline editor ─── */
+
+.wiki-edit-btn {
+  margin-top: 12px;
+  padding: 4px 14px;
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #d0d8e8;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.14);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.wiki-edit-btn:hover {
+  background: rgba(144,208,255,0.08);
+  border-color: rgba(144,208,255,0.45);
+  color: #90d0ff;
+}
+
+.wiki-editor-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.wiki-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+}
+.wiki-editor-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0ddd8;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+.wiki-editor-spacer { flex: 1; }
+.wiki-editor-btn {
+  padding: 6px 18px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: #d0d8e8;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.wiki-editor-save {
+  background: rgba(144,208,255,0.14);
+  border-color: rgba(144,208,255,0.5);
+  color: #90d0ff;
+}
+.wiki-editor-save:hover { background: rgba(144,208,255,0.22); }
+.wiki-editor-save:disabled { opacity: 0.6; cursor: progress; }
+.wiki-editor-cancel:hover { background: rgba(255,148,148,0.12); color: #ff9494; }
+
+.wiki-editor-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.wiki-editor-pane {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid rgba(255,255,255,0.06);
+}
+.wiki-editor-pane:first-child {
+  border-left: none;
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+.wiki-editor-source {
+  background: #0d0d18;
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+}
+.wiki-editor-source .cm-editor {
+  height: 100%;
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace !important;
+  font-size: 14px;
+}
+.wiki-editor-source .cm-content {
+  font-family: inherit !important;
+  padding: 16px 24px;
+}
+.wiki-editor-preview {
+  background: #111118;
+  padding: 24px 32px;
+}
+.wiki-preview-body {
+  max-width: 720px;
+}
+
+/* KaTeX tweaks — inherit our dark palette */
+.katex {
+  color: #e2ddd6;
+  font-size: 1.05em;
+}
+.katex-display {
+  margin: 16px 0;
+  overflow-x: auto;
+}
+
 /* ─── Inspector (Hopper plumb drawer) ─── */
 
 .wiki-inspector {

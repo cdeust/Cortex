@@ -540,11 +540,35 @@
     }
     pageHeader.appendChild(metaBar);
 
+    // Edit button (toggles inline editor)
+    var editBtn = el('button', 'wiki-edit-btn');
+    editBtn.type = 'button';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', function() {
+      openEditor(main, data, pmeta);
+    });
+    pageHeader.appendChild(editBtn);
+
     article.appendChild(pageHeader);
 
     // Body
     var bodyEl = el('div', 'wiki-body');
     bodyEl.innerHTML = renderMarkdown(body);
+
+    // KaTeX math — renders $…$ and $$…$$ spans to real math.
+    if (window.renderMathInElement) {
+      try {
+        window.renderMathInElement(bodyEl, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true }
+          ],
+          throwOnError: false
+        });
+      } catch (e) { /* KaTeX optional; swallow failures */ }
+    }
 
     // Wire internal wiki links
     bodyEl.querySelectorAll('.wiki-link').forEach(function(link) {
@@ -951,6 +975,189 @@
     var e = document.createElement(tag);
     if (cls) e.className = cls;
     return e;
+  }
+
+  // ── Inline editor (Phase 8.3) ──
+  //
+  // Lazy-loads CodeMirror 6 from esm.sh the first time the user clicks
+  // Edit. Keeps the initial wiki page load light (~200KB CM6 bundle
+  // isn't paid until needed). Split-pane: left = source, right = live
+  // markdown preview via the existing renderMarkdown + KaTeX.
+
+  var _cmModulesPromise = null;
+  function _loadCodeMirror() {
+    if (_cmModulesPromise) return _cmModulesPromise;
+    _cmModulesPromise = (async function() {
+      // Core + markdown mode + theme — via esm.sh (zero build, cached)
+      var urls = {
+        view: 'https://esm.sh/@codemirror/view@6',
+        state: 'https://esm.sh/@codemirror/state@6',
+        commands: 'https://esm.sh/@codemirror/commands@6',
+        lang: 'https://esm.sh/@codemirror/lang-markdown@6',
+        oneDark: 'https://esm.sh/@codemirror/theme-one-dark@6',
+        autoClose: 'https://esm.sh/@codemirror/autocomplete@6'
+      };
+      var mods = {};
+      await Promise.all(Object.keys(urls).map(async function(k) {
+        mods[k] = await import(urls[k]);
+      }));
+      return mods;
+    })();
+    return _cmModulesPromise;
+  }
+
+  async function openEditor(main, data, pmeta) {
+    var original = main.innerHTML;
+    main.innerHTML = '<div class="wiki-loading"><div class="wiki-loading-spinner"></div>Loading editor\u2026</div>';
+
+    var mods;
+    try {
+      mods = await _loadCodeMirror();
+    } catch (err) {
+      console.warn('[cortex] CodeMirror load failed', err);
+      main.innerHTML = original;
+      alert('Editor failed to load. See console for details.');
+      return;
+    }
+
+    main.innerHTML = '';
+    var wrap = el('div', 'wiki-editor-wrap');
+
+    // Toolbar: title, save, cancel
+    var toolbar = el('div', 'wiki-editor-toolbar');
+    var title = el('h2', 'wiki-editor-title');
+    title.textContent = (data.meta && data.meta.title) || data.path;
+    var spacer = el('span', 'wiki-editor-spacer');
+    var cancelBtn = el('button', 'wiki-editor-btn wiki-editor-cancel');
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Cancel';
+    var saveBtn = el('button', 'wiki-editor-btn wiki-editor-save');
+    saveBtn.type = 'button';
+    saveBtn.textContent = 'Save';
+    toolbar.appendChild(title);
+    toolbar.appendChild(spacer);
+    toolbar.appendChild(cancelBtn);
+    toolbar.appendChild(saveBtn);
+    wrap.appendChild(toolbar);
+
+    // Split pane: left editor, right preview
+    var split = el('div', 'wiki-editor-split');
+    var leftCol = el('div', 'wiki-editor-pane wiki-editor-source');
+    var rightCol = el('div', 'wiki-editor-pane wiki-editor-preview');
+    var previewBody = el('div', 'wiki-body wiki-preview-body');
+    rightCol.appendChild(previewBody);
+    split.appendChild(leftCol);
+    split.appendChild(rightCol);
+    wrap.appendChild(split);
+    main.appendChild(wrap);
+
+    // Reconstruct full source (frontmatter + body) so the user can
+    // edit metadata inline. If server gave us both, merge them.
+    var fullSource = _reconstructSource(data.meta || {}, data.body || '');
+
+    // Preview renderer with KaTeX
+    function rerender(src) {
+      var parts = _splitFrontmatter(src);
+      previewBody.innerHTML = renderMarkdown(parts.body);
+      if (window.renderMathInElement) {
+        try {
+          window.renderMathInElement(previewBody, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '$',  right: '$',  display: false },
+              { left: '\\(', right: '\\)', display: false },
+              { left: '\\[', right: '\\]', display: true }
+            ],
+            throwOnError: false
+          });
+        } catch (e) { /* noop */ }
+      }
+    }
+
+    // Build CM6 state + view
+    var EditorState = mods.state.EditorState;
+    var EditorView  = mods.view.EditorView;
+    var keymap      = mods.view.keymap;
+    var basicSetup  = mods.commands.history ? [mods.commands.history()] : [];
+    var markdownLang = mods.lang.markdown();
+    var oneDark = mods.oneDark.oneDark;
+    var updateListener = EditorView.updateListener.of(function(upd) {
+      if (upd.docChanged) rerender(upd.state.doc.toString());
+    });
+    var cm = new EditorView({
+      state: EditorState.create({
+        doc: fullSource,
+        extensions: [
+          markdownLang,
+          oneDark,
+          updateListener,
+          EditorView.lineWrapping
+        ]
+      }),
+      parent: leftCol
+    });
+    rerender(fullSource);
+
+    cancelBtn.addEventListener('click', function() {
+      if (!confirm('Discard changes?')) return;
+      loadPage(data.path);
+    });
+
+    saveBtn.addEventListener('click', async function() {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving\u2026';
+      var newSource = cm.state.doc.toString();
+      try {
+        var resp = await fetch('/api/wiki/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rel_path: data.path, body: newSource })
+        });
+        var result = await resp.json();
+        if (!resp.ok || result.error) {
+          throw new Error(result.error || 'save failed');
+        }
+        saveBtn.textContent = 'Saved';
+        setTimeout(function() { loadPage(data.path); }, 300);
+      } catch (err) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save';
+        alert('Save failed: ' + err.message);
+      }
+    });
+  }
+
+  function _splitFrontmatter(src) {
+    // Returns {frontmatter: str|'', body: str}. Recognises the standard
+    // `---\n…\n---\n` envelope; preserves everything else as body.
+    if (!src.startsWith('---\n') && !src.startsWith('---\r\n')) {
+      return { frontmatter: '', body: src };
+    }
+    var rest = src.slice(4);
+    var endRe = /(^|\n)---\s*(\n|$)/;
+    var m = endRe.exec(rest);
+    if (!m) return { frontmatter: '', body: src };
+    var fm = rest.slice(0, m.index);
+    var body = rest.slice(m.index + m[0].length);
+    return { frontmatter: fm, body: body };
+  }
+
+  function _reconstructSource(meta, body) {
+    // Server gives us parsed frontmatter + body separately; rebuild the
+    // full source for editing. Users can edit frontmatter directly.
+    if (!meta || Object.keys(meta).length === 0) return body || '';
+    var lines = ['---'];
+    Object.keys(meta).forEach(function(k) {
+      var v = meta[k];
+      if (v === null || v === undefined || v === '') return;
+      if (Array.isArray(v)) {
+        lines.push(k + ': [' + v.map(function(x) { return String(x); }).join(', ') + ']');
+      } else {
+        lines.push(k + ': ' + String(v));
+      }
+    });
+    lines.push('---', '', body || '');
+    return lines.join('\n');
   }
 
   // ── Init ──

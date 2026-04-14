@@ -238,8 +238,17 @@ def _build_unified_handler(ui_root: Path, store) -> type:
             _touch()
             self.send_response(204)
             self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.end_headers()
+
+        def do_POST(self):
+            _touch()
+            path_no_qs = self.path.split("?")[0]
+            if path_no_qs == "/api/wiki/save":
+                self._serve_wiki_save()
+            else:
+                self.send_response(404)
+                self.end_headers()
 
         def do_GET(self):
             _touch()
@@ -391,6 +400,38 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+        def _serve_wiki_save(self):
+            """POST /api/wiki/save — body: JSON {rel_path, body}."""
+            try:
+                from mcp_server.handlers.wiki_api import save_wiki_page
+                from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
+                length = int(self.headers.get("Content-Length") or 0)
+                if length <= 0 or length > 4_000_000:
+                    self.send_response(400)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(
+                        json.dumps({"error": "invalid content-length"}).encode()
+                    )
+                    return
+                payload = json.loads(self.rfile.read(length))
+                rel_path = payload.get("rel_path", "")
+                body = payload.get("body", "")
+                result = save_wiki_page(METHODOLOGY_DIR / "wiki", rel_path, body)
+                out = json.dumps(result, default=str).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(out)
             except Exception as e:
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
