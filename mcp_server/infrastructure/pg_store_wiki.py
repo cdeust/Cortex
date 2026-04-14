@@ -402,6 +402,177 @@ def update_claim_supersedes(conn: Connection, updates: list[tuple[int, int]]) ->
     return written
 
 
+# ── wiki.drafts ────────────────────────────────────────────────────────
+
+
+def insert_draft(conn: Connection, draft: dict[str, Any]) -> int:
+    """Insert a draft row. Returns the new wiki.drafts.id.
+
+    Required: title, kind. Optional: concept_id, memory_id, lead,
+    sections (list of dicts), frontmatter, provenance, synth_prompt,
+    synth_model, confidence, status.
+    """
+    sql = """
+    INSERT INTO wiki.drafts (
+        concept_id, memory_id, title, kind, lead, sections,
+        frontmatter, provenance, synth_prompt, synth_model,
+        confidence, status
+    ) VALUES (
+        %(concept_id)s, %(memory_id)s, %(title)s, %(kind)s, %(lead)s,
+        %(sections)s::jsonb, %(frontmatter)s::jsonb,
+        %(provenance)s::jsonb, %(synth_prompt)s, %(synth_model)s,
+        %(confidence)s, %(status)s
+    ) RETURNING id;
+    """
+    params = {
+        "concept_id": draft.get("concept_id"),
+        "memory_id": draft.get("memory_id"),
+        "title": draft["title"],
+        "kind": draft["kind"],
+        "lead": draft.get("lead", ""),
+        "sections": json.dumps(draft.get("sections", [])),
+        "frontmatter": json.dumps(draft.get("frontmatter", {})),
+        "provenance": json.dumps(draft.get("provenance", {})),
+        "synth_prompt": draft.get("synth_prompt"),
+        "synth_model": draft.get("synth_model"),
+        "confidence": float(draft.get("confidence", 0.5)),
+        "status": draft.get("status", "pending"),
+    }
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        return row["id"] if isinstance(row, dict) else row[0]
+
+
+def get_draft(conn: Connection, draft_id: int) -> dict | None:
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT * FROM wiki.drafts WHERE id = %s", (draft_id,))
+        return cur.fetchone()
+
+
+def list_drafts(
+    conn: Connection,
+    *,
+    status: str | None = None,
+    kind: str | None = None,
+    limit: int = 50,
+) -> list[dict]:
+    where: list[str] = []
+    params: list = []
+    if status:
+        where.append("status = %s")
+        params.append(status)
+    if kind:
+        where.append("kind = %s")
+        params.append(kind)
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+    sql = f"""
+    SELECT * FROM wiki.drafts {where_sql}
+    ORDER BY created_at DESC LIMIT %s
+    """
+    params.append(limit)
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(sql, params)
+        return list(cur.fetchall())
+
+
+def update_draft(
+    conn: Connection,
+    draft_id: int,
+    *,
+    title: str | None = None,
+    lead: str | None = None,
+    sections: list | None = None,
+    frontmatter: dict | None = None,
+    confidence: float | None = None,
+    synth_prompt: str | None = None,
+    synth_model: str | None = None,
+) -> bool:
+    """Patch a draft's content fields. Returns True if a row was updated.
+
+    Used by Path B (LLM refinement) — Claude submits a refined draft
+    by updating the in-DB record. Status transitions go through
+    update_draft_status.
+    """
+    sets: list[str] = []
+    params: list = []
+    if title is not None:
+        sets.append("title = %s")
+        params.append(title)
+    if lead is not None:
+        sets.append("lead = %s")
+        params.append(lead)
+    if sections is not None:
+        sets.append("sections = %s::jsonb")
+        params.append(json.dumps(sections))
+    if frontmatter is not None:
+        sets.append("frontmatter = %s::jsonb")
+        params.append(json.dumps(frontmatter))
+    if confidence is not None:
+        sets.append("confidence = %s")
+        params.append(float(confidence))
+    if synth_prompt is not None:
+        sets.append("synth_prompt = %s")
+        params.append(synth_prompt)
+    if synth_model is not None:
+        sets.append("synth_model = %s")
+        params.append(synth_model)
+    if not sets:
+        return False
+    params.append(draft_id)
+    sql = f"UPDATE wiki.drafts SET {', '.join(sets)} WHERE id = %s"
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        return cur.rowcount > 0
+
+
+def update_draft_status(
+    conn: Connection,
+    draft_id: int,
+    *,
+    status: str,
+    published_page_id: int | None = None,
+) -> bool:
+    """Transition a draft's status. Stamps reviewed_at automatically."""
+    if status not in ("pending", "approved", "rejected", "published"):
+        raise ValueError(f"invalid status: {status}")
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE wiki.drafts
+               SET status = %s,
+                   published_page_id = COALESCE(%s, published_page_id),
+                   reviewed_at = NOW()
+             WHERE id = %s
+            """,
+            (status, published_page_id, draft_id),
+        )
+        return cur.rowcount > 0
+
+
+def find_draft_for_source(
+    conn: Connection, *, memory_id: int | None = None, concept_id: int | None = None
+) -> dict | None:
+    """Return the most recent draft for a given source, or None."""
+    if not memory_id and not concept_id:
+        return None
+    if memory_id is not None:
+        sql = (
+            "SELECT * FROM wiki.drafts WHERE memory_id = %s "
+            "ORDER BY created_at DESC LIMIT 1"
+        )
+        params: tuple = (memory_id,)
+    else:
+        sql = (
+            "SELECT * FROM wiki.drafts WHERE concept_id = %s "
+            "ORDER BY created_at DESC LIMIT 1"
+        )
+        params = (concept_id,)
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(sql, params)
+        return cur.fetchone()
+
+
 # ── wiki.citations ─────────────────────────────────────────────────────
 
 
