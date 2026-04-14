@@ -44,13 +44,20 @@ _REJECT_TITLES = {
 }
 
 _REJECT_PATTERNS = [
-    re.compile(r"^Implement the following plan", re.IGNORECASE),
-    re.compile(r"^Execute the following", re.IGNORECASE),
-    re.compile(r"^You must respond with only", re.IGNORECASE),
+    # Leading `#+\s*` tolerates markdown heading prefix before the keyword
+    re.compile(r"^#*\s*Implement the following plan", re.IGNORECASE),
+    re.compile(r"^#*\s*Execute the following", re.IGNORECASE),
+    re.compile(r"^#*\s*You must respond with only", re.IGNORECASE),
+    re.compile(r"^#*\s*Perform all verification", re.IGNORECASE),
+    re.compile(r"^#*\s*Take the code and split", re.IGNORECASE),
     re.compile(r"^\s*\{[\s\S]*\}\s*$"),  # Pure JSON object
     re.compile(r"^\s*\[[\s\S]*\]\s*$"),  # Pure JSON array
     # Slash-command invocations — only Claude Code UI framing, no knowledge content
     re.compile(r"<command-(message|name|args)>", re.IGNORECASE),
+    # Benchmark spell content (Hogwarts benchmark artifacts)
+    re.compile(r"^#*\s*Spell:\s*\w+", re.IGNORECASE),
+    # Test content shape markers
+    re.compile(r"^#*\s*Shape test content", re.IGNORECASE),
 ]
 
 # ── Classification patterns ───────────────────────────────────────────
