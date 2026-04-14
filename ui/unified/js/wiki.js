@@ -550,11 +550,13 @@
     });
     actions.appendChild(editBtn);
     ['pdf', 'tex', 'docx', 'html'].forEach(function(fmt) {
-      var b = el('a', 'wiki-export-btn');
+      var b = el('button', 'wiki-export-btn');
+      b.type = 'button';
       b.textContent = fmt.toUpperCase();
-      b.href = '/api/wiki/export?path=' + encodeURIComponent(data.path) + '&format=' + fmt;
-      b.setAttribute('download', '');
       b.title = 'Export via Pandoc → ' + fmt;
+      b.addEventListener('click', function() {
+        _exportDownload(data.path, fmt, b);
+      });
       actions.appendChild(b);
     });
     pageHeader.appendChild(actions);
@@ -990,6 +992,53 @@
     var e = document.createElement(tag);
     if (cls) e.className = cls;
     return e;
+  }
+
+  // ── Export download (Phase 10) ──
+  //
+  // Fetches /api/wiki/export and decides between saving the blob (on
+  // success — binary Content-Type) and surfacing the error message
+  // (when the server returned JSON). Using fetch avoids the old
+  // <a download> trap where a JSON error response got silently saved
+  // as "page.pdf" with 2 KB of error text inside.
+
+  async function _exportDownload(relPath, fmt, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = fmt.toUpperCase() + '\u2026'; }
+    try {
+      var url = '/api/wiki/export?path=' + encodeURIComponent(relPath)
+        + '&format=' + fmt;
+      var resp = await fetch(url);
+      var contentType = resp.headers.get('Content-Type') || '';
+      if (contentType.indexOf('application/json') === 0) {
+        var err = await resp.json();
+        var msg = err.error || 'export failed';
+        if (err.stderr) msg += '\n\nstderr:\n' + err.stderr;
+        alert('Export failed (' + fmt + '):\n\n' + msg);
+        return;
+      }
+      if (!resp.ok) {
+        alert('Export failed (' + fmt + '): HTTP ' + resp.status);
+        return;
+      }
+      var blob = await resp.blob();
+      var dispo = resp.headers.get('Content-Disposition') || '';
+      var m = dispo.match(/filename="([^"]+)"/);
+      var filename = m ? m[1]
+        : (relPath.split('/').pop() || 'page').replace(/\.md$/, '') + '.' + fmt;
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(function() {
+        URL.revokeObjectURL(link.href);
+        link.remove();
+      }, 200);
+    } catch (err) {
+      alert('Export failed (' + fmt + '): ' + (err.message || err));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = fmt.toUpperCase(); }
+    }
   }
 
   // ── Academic rendering layer (Phase 9) ──
