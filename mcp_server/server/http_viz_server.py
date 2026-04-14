@@ -163,6 +163,10 @@ def _build_unified_handler(
                 self._serve_wiki_views()
             elif path_no_qs == "/api/wiki/view":
                 self._serve_wiki_view()
+            elif path_no_qs == "/api/wiki/bibliography":
+                self._serve_wiki_bibliography()
+            elif path_no_qs == "/api/wiki/bibliography/read":
+                self._serve_wiki_bibliography_read()
             elif self.path.startswith("/js/") and self.path.endswith(".js"):
                 serve_static_file(self, js_dir, self.path[4:], "application/javascript")
             elif self.path.startswith("/css/") and self.path.endswith(".css"):
@@ -292,6 +296,27 @@ def _build_unified_handler(
                 name = qs.get("name") or None
                 query = qs.get("query") or None
                 send_json_response(self, execute_view(name, query))
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_bibliography(self):
+            try:
+                from mcp_server.handlers.wiki_api import list_bibliography
+                from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
+                send_json_response(self, list_bibliography(METHODOLOGY_DIR / "wiki"))
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_bibliography_read(self):
+            try:
+                from mcp_server.handlers.wiki_api import read_bibliography
+                from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
+                rel_path = self._qs().get("path", "")
+                send_json_response(
+                    self, read_bibliography(METHODOLOGY_DIR / "wiki", rel_path)
+                )
             except Exception as e:
                 send_error_response(self, e)
 
