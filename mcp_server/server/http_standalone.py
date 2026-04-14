@@ -281,6 +281,8 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 self._serve_wiki_db("bibliography")
             elif path_no_qs == "/api/wiki/bibliography/read":
                 self._serve_wiki_db("bibliography_read")
+            elif path_no_qs == "/api/wiki/export":
+                self._serve_wiki_export()
             elif self.path == "/api/sankey" or self.path.startswith("/api/sankey?"):
                 self._serve_sankey()
             elif self.path.startswith("/api/file-diff?"):
@@ -414,6 +416,47 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(body)
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+        def _serve_wiki_export(self):
+            """GET /api/wiki/export?path=X&format=pdf|tex|docx|html
+
+            Returns the rendered file as a direct download.
+            """
+            try:
+                import asyncio
+                import base64
+
+                from mcp_server.handlers.wiki_export import handler as _export
+
+                qs = self._qs_map()
+                rel_path = qs.get("path", "")
+                fmt = qs.get("format", "pdf")
+                result = asyncio.run(_export({"rel_path": rel_path, "format": fmt}))
+                if not result.get("ok"):
+                    body = json.dumps(result, default=str).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                data = base64.b64decode(result["content_base64"])
+                filename = (rel_path.split("/")[-1] or "page").rsplit(".", 1)[0]
+                self.send_response(200)
+                self.send_header("Content-Type", result["mime"])
+                self.send_header(
+                    "Content-Disposition",
+                    f'attachment; filename="{filename}.{result["format"]}"',
+                )
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(data)
             except Exception as e:
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")

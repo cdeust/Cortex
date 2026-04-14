@@ -540,14 +540,24 @@
     }
     pageHeader.appendChild(metaBar);
 
-    // Edit button (toggles inline editor)
+    // Edit + Export buttons
+    var actions = el('div', 'wiki-page-actions');
     var editBtn = el('button', 'wiki-edit-btn');
     editBtn.type = 'button';
     editBtn.textContent = 'Edit';
     editBtn.addEventListener('click', function() {
       openEditor(main, data, pmeta);
     });
-    pageHeader.appendChild(editBtn);
+    actions.appendChild(editBtn);
+    ['pdf', 'tex', 'docx', 'html'].forEach(function(fmt) {
+      var b = el('a', 'wiki-export-btn');
+      b.textContent = fmt.toUpperCase();
+      b.href = '/api/wiki/export?path=' + encodeURIComponent(data.path) + '&format=' + fmt;
+      b.setAttribute('download', '');
+      b.title = 'Export via Pandoc → ' + fmt;
+      actions.appendChild(b);
+    });
+    pageHeader.appendChild(actions);
 
     article.appendChild(pageHeader);
 
