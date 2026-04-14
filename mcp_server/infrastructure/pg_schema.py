@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS wiki.claim_events (
 
 -- concepts: emergent candidate knowledge nodes (Strauss axial coding).
 -- Sits BETWEEN memories and pages. Crystallises from entity co-occurrence
--- + embedding density; graduates to a page on saturation.
+-- + embedding density. Graduates to a page on saturation.
 CREATE TABLE IF NOT EXISTS wiki.concepts (
     id                      BIGSERIAL PRIMARY KEY,
     label                   TEXT NOT NULL,
@@ -186,7 +186,7 @@ CREATE TABLE IF NOT EXISTS wiki.drafts (
 );
 
 -- pages: the authored, approved wiki page (mirror of .md file).
--- Files remain source of truth; this is the facet/query index.
+-- Files remain source of truth — this is the facet/query index.
 CREATE TABLE IF NOT EXISTS wiki.pages (
     id              SERIAL PRIMARY KEY,
     memory_id       INTEGER UNIQUE REFERENCES memories(id) ON DELETE SET NULL,
@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS wiki.links (
 );
 
 -- citations: page referenced during a Claude Code session.
--- Drives heat via trigger; is the primary authority-earning signal.
+-- Drives heat via trigger and is the primary authority-earning signal.
 CREATE TABLE IF NOT EXISTS wiki.citations (
     id              BIGSERIAL PRIMARY KEY,
     page_id         INTEGER NOT NULL REFERENCES wiki.pages(id) ON DELETE CASCADE,
