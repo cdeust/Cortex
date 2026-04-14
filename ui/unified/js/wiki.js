@@ -570,6 +570,11 @@
       } catch (e) { /* KaTeX optional; swallow failures */ }
     }
 
+    // Phase 9 — academic passes (section numbering, figure/equation
+    // numbering, cross-refs, citations + bibliography). Runs async;
+    // the body is visible immediately, citations appear when loaded.
+    applyAcademicPasses(bodyEl, meta);
+
     // Wire internal wiki links
     bodyEl.querySelectorAll('.wiki-link').forEach(function(link) {
       link.addEventListener('click', function() {
@@ -975,6 +980,247 @@
     var e = document.createElement(tag);
     if (cls) e.className = cls;
     return e;
+  }
+
+  // ── Academic rendering layer (Phase 9) ──
+  //
+  // Three post-render passes over the already-rendered body:
+  //   1. Number headings (section numbers)         — 9.5
+  //   2. Number figures + equations + tables       — 9.2
+  //   3. Resolve @label cross-refs                 — 9.3
+  //   4. Resolve [@citekey] citations + bibliography — 9.1
+  //
+  // Citation.js is lazy-loaded the first time we see a cite key on a
+  // page. Bibliography files live in wiki/_bibliography/*.bib; which
+  // file(s) a page uses is declared in its frontmatter
+  // (bibliography: [_bibliography/foo.bib]) or, absent that, all
+  // files in _bibliography/ are available.
+
+  var _bibCache = null;         // combined cite-key → entry map
+  var _bibLoadPromise = null;
+  var _citationJsPromise = null;
+
+  function _loadCitationJs() {
+    if (_citationJsPromise) return _citationJsPromise;
+    _citationJsPromise = import('https://esm.sh/@citation-js/core@0.7').then(function(core) {
+      return Promise.all([
+        import('https://esm.sh/@citation-js/plugin-bibtex@0.7'),
+        import('https://esm.sh/@citation-js/plugin-csl@0.7')
+      ]).then(function() { return core; });
+    });
+    return _citationJsPromise;
+  }
+
+  async function _ensureBibliography(meta) {
+    if (_bibCache) return _bibCache;
+    if (_bibLoadPromise) return _bibLoadPromise;
+    _bibLoadPromise = (async function() {
+      var explicit = (meta && meta.bibliography) || null;
+      var list;
+      try {
+        if (explicit && Array.isArray(explicit)) {
+          list = explicit;
+        } else {
+          var resp = await fetch('/api/wiki/bibliography');
+          var j = await resp.json();
+          list = (j.files || []).map(function(f) { return f.path; });
+        }
+      } catch (e) { return {}; }
+      if (!list || list.length === 0) return {};
+
+      var core = await _loadCitationJs();
+      var Cite = core.Cite;
+      var byKey = {};
+      await Promise.all(list.map(async function(path) {
+        try {
+          var r = await fetch('/api/wiki/bibliography/read?path=' + encodeURIComponent(path));
+          var data = await r.json();
+          if (!data.content) return;
+          var cite = new Cite(data.content);
+          cite.data.forEach(function(entry) {
+            if (entry.id) byKey[entry.id] = entry;
+          });
+        } catch (e) { /* skip bad file */ }
+      }));
+      _bibCache = byKey;
+      return byKey;
+    })();
+    return _bibLoadPromise;
+  }
+
+  function _formatInlineCite(entry) {
+    // Minimal "Author (Year)" format; Citation.js can do full CSL
+    // rendering in the bibliography pass. This is just the inline
+    // marker that sits where the `[@key]` was typed.
+    if (!entry) return '[?]';
+    var first = (entry.author && entry.author[0]) || {};
+    var surname = first.family || first.literal || '?';
+    var year = (entry.issued && entry.issued['date-parts'] && entry.issued['date-parts'][0] && entry.issued['date-parts'][0][0])
+      || entry.year || 'n.d.';
+    return surname + ' ' + year;
+  }
+
+  async function _formatBibliographyHtml(usedKeys, byKey) {
+    if (!usedKeys || usedKeys.size === 0) return '';
+    var core = await _loadCitationJs();
+    var Cite = core.Cite;
+    var entries = [];
+    usedKeys.forEach(function(k) {
+      if (byKey[k]) entries.push(byKey[k]);
+    });
+    if (entries.length === 0) return '';
+    try {
+      var cite = new Cite(entries);
+      var html = cite.format('bibliography', { format: 'html', template: 'apa', lang: 'en-US' });
+      return '<h2 id="references">References</h2>' + html;
+    } catch (e) {
+      // Fallback: plain list of raw ids
+      return '<h2 id="references">References</h2><ul>' +
+        Array.from(usedKeys).map(function(k) { return '<li>' + esc(k) + '</li>'; }).join('') +
+        '</ul>';
+    }
+  }
+
+  function _numberHeadings(root, enabled) {
+    if (!enabled) return;
+    var counters = [0, 0, 0, 0, 0, 0];
+    root.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(function(h) {
+      if (h.id === 'references') return; // don't number the bibliography
+      var level = parseInt(h.tagName.slice(1), 10);
+      counters[level - 1]++;
+      for (var i = level; i < 6; i++) counters[i] = 0;
+      var num = counters.slice(0, level).filter(function(n) { return n > 0; }).join('.');
+      var span = document.createElement('span');
+      span.className = 'wiki-section-num';
+      span.textContent = num + ' ';
+      h.insertBefore(span, h.firstChild);
+    });
+  }
+
+  function _numberLabeled(root, selector, prefix, labelMap) {
+    var i = 0;
+    root.querySelectorAll(selector).forEach(function(node) {
+      i++;
+      var label = node.getAttribute('data-label') || null;
+      node.setAttribute('data-num', String(i));
+      var caption = node.querySelector('figcaption, .wiki-caption');
+      if (caption) {
+        var pfx = document.createElement('span');
+        pfx.className = 'wiki-caption-prefix';
+        pfx.textContent = prefix + ' ' + i + ': ';
+        caption.insertBefore(pfx, caption.firstChild);
+      }
+      if (label) labelMap[label] = { prefix: prefix, num: i };
+    });
+  }
+
+  function _resolveCrossRefs(root, labelMap) {
+    // Replaces `{@fig:foo}` / `{@eq:bar}` / `{@sec:intro}` tokens that
+    // our markdown renderer has dropped into the HTML as literal
+    // text. We used `{@…}` to avoid collision with the `[@citekey]`
+    // citation syntax.
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    var nodes = [];
+    var n;
+    while ((n = walker.nextNode())) nodes.push(n);
+    nodes.forEach(function(text) {
+      if (text.nodeValue.indexOf('{@') < 0) return;
+      var frag = document.createDocumentFragment();
+      var re = /\{@([a-zA-Z0-9:_-]+)\}/g;
+      var remaining = text.nodeValue;
+      var lastIdx = 0;
+      var m;
+      while ((m = re.exec(text.nodeValue)) !== null) {
+        if (m.index > lastIdx) {
+          frag.appendChild(document.createTextNode(
+            text.nodeValue.slice(lastIdx, m.index)
+          ));
+        }
+        var key = m[1];
+        var ref = labelMap[key];
+        var out = document.createElement('a');
+        out.className = 'wiki-xref';
+        out.href = '#' + key;
+        out.textContent = ref ? (ref.prefix + ' ' + ref.num) : ('?' + key);
+        frag.appendChild(out);
+        lastIdx = m.index + m[0].length;
+      }
+      if (lastIdx < text.nodeValue.length) {
+        frag.appendChild(document.createTextNode(text.nodeValue.slice(lastIdx)));
+      }
+      remaining = frag;
+      text.parentNode.replaceChild(frag, text);
+    });
+  }
+
+  async function _resolveCitations(root, byKey, usedKeys) {
+    // Replace `[@key]` and `[@k1; @k2]` tokens with formatted inline
+    // citations.
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    var nodes = [];
+    var n;
+    while ((n = walker.nextNode())) nodes.push(n);
+    var re = /\[@([a-zA-Z0-9_-]+(?:\s*;\s*@[a-zA-Z0-9_-]+)*)\]/g;
+    nodes.forEach(function(text) {
+      if (text.nodeValue.indexOf('[@') < 0) return;
+      var frag = document.createDocumentFragment();
+      var lastIdx = 0;
+      var m;
+      while ((m = re.exec(text.nodeValue)) !== null) {
+        if (m.index > lastIdx) {
+          frag.appendChild(document.createTextNode(text.nodeValue.slice(lastIdx, m.index)));
+        }
+        var keys = m[1].split(';').map(function(s) { return s.trim().replace(/^@/, ''); });
+        var parts = keys.map(function(k) {
+          usedKeys.add(k);
+          return _formatInlineCite(byKey[k]);
+        });
+        var cite = document.createElement('a');
+        cite.className = 'wiki-cite';
+        cite.href = '#references';
+        cite.textContent = '(' + parts.join('; ') + ')';
+        frag.appendChild(cite);
+        lastIdx = m.index + m[0].length;
+      }
+      if (lastIdx < text.nodeValue.length) {
+        frag.appendChild(document.createTextNode(text.nodeValue.slice(lastIdx)));
+      }
+      text.parentNode.replaceChild(frag, text);
+    });
+  }
+
+  async function applyAcademicPasses(bodyEl, meta) {
+    if (!bodyEl) return;
+    var sectionNums = meta && meta.section_numbering === true;
+
+    // 1. Section numbers
+    _numberHeadings(bodyEl, sectionNums);
+
+    // 2. Figure / equation / table numbering
+    var labelMap = {};
+    _numberLabeled(bodyEl, 'figure', 'Figure', labelMap);
+    _numberLabeled(bodyEl, '.katex-display', 'Equation', labelMap);
+    _numberLabeled(bodyEl, 'table', 'Table', labelMap);
+
+    // 3. Cross-references
+    _resolveCrossRefs(bodyEl, labelMap);
+
+    // 4. Citations (async — loads Citation.js + bibliography)
+    var hasCite = /\[@[a-zA-Z0-9_-]/.test(bodyEl.textContent);
+    if (hasCite) {
+      try {
+        var byKey = await _ensureBibliography(meta);
+        var usedKeys = new Set();
+        await _resolveCitations(bodyEl, byKey, usedKeys);
+        var refsHtml = await _formatBibliographyHtml(usedKeys, byKey);
+        if (refsHtml) {
+          var refs = document.createElement('section');
+          refs.className = 'wiki-bibliography';
+          refs.innerHTML = refsHtml;
+          bodyEl.appendChild(refs);
+        }
+      } catch (e) { console.warn('[cortex] citation pass failed:', e); }
+    }
   }
 
   // ── Inline editor (Phase 8.3) ──

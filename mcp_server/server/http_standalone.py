@@ -277,6 +277,10 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 self._serve_wiki_db("views")
             elif path_no_qs == "/api/wiki/view":
                 self._serve_wiki_db("view")
+            elif path_no_qs == "/api/wiki/bibliography":
+                self._serve_wiki_db("bibliography")
+            elif path_no_qs == "/api/wiki/bibliography/read":
+                self._serve_wiki_db("bibliography_read")
             elif self.path == "/api/sankey" or self.path.startswith("/api/sankey?"):
                 self._serve_sankey()
             elif self.path.startswith("/api/file-diff?"):
@@ -390,6 +394,16 @@ def _build_unified_handler(ui_root: Path, store) -> type:
                 elif op == "view":
                     data = wiki_api.execute_view(
                         qs.get("name") or None, qs.get("query") or None
+                    )
+                elif op == "bibliography":
+                    from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
+                    data = wiki_api.list_bibliography(METHODOLOGY_DIR / "wiki")
+                elif op == "bibliography_read":
+                    from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
+                    data = wiki_api.read_bibliography(
+                        METHODOLOGY_DIR / "wiki", qs.get("path", "")
                     )
                 else:
                     data = {"error": f"unknown op: {op}"}

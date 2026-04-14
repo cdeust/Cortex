@@ -318,6 +318,58 @@ def execute_view(name: str | None, inline_query: str | None = None) -> dict:
     }
 
 
+def list_bibliography(wiki_root: Path) -> dict:
+    """List `.bib` files under wiki/_bibliography/ (Phase 9.1).
+
+    Scientists drop BibTeX files there; the frontend fetches them and
+    Citation.js parses them into a key → entry lookup for cite-key
+    resolution (`[@author2024]` → formatted citation).
+
+    Returns {"files": [{"path": "...", "size": N, "entries": int}]}.
+    """
+    bib_dir = wiki_root / "_bibliography"
+    if not bib_dir.exists() or not bib_dir.is_dir():
+        return {"files": []}
+    out = []
+    try:
+        for p in sorted(bib_dir.rglob("*.bib")):
+            try:
+                rel = str(p.relative_to(wiki_root)).replace("\\", "/")
+                # Cheap entry count: every BibTeX record starts with `@`
+                content = p.read_text(encoding="utf-8", errors="replace")
+                entries = content.count("\n@") + (1 if content.startswith("@") else 0)
+                out.append(
+                    {
+                        "path": rel,
+                        "size": p.stat().st_size,
+                        "entries": entries,
+                    }
+                )
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return {"files": out}
+
+
+def read_bibliography(wiki_root: Path, rel_path: str) -> dict:
+    """Return raw BibTeX content for one file.
+
+    Path validation via the existing CodeQL-verified wiki_store
+    commonpath sanitizer — we only serve files whose rel_path resolves
+    inside wiki_root. Must live under _bibliography/ to prevent
+    arbitrary file reads under the cover of this endpoint.
+    """
+    if not rel_path or "/../" in rel_path or rel_path.startswith("../"):
+        return {"error": "invalid path"}
+    if not rel_path.startswith("_bibliography/") or not rel_path.endswith(".bib"):
+        return {"error": "must be a .bib file under _bibliography/"}
+    content = read_page(wiki_root, rel_path)
+    if content is None:
+        return {"error": "not found", "path": rel_path}
+    return {"path": rel_path, "content": content, "size": len(content)}
+
+
 def save_wiki_page(wiki_root: Path, rel_path: str, body: str) -> dict:
     """Write ``body`` to ``<wiki_root>/<rel_path>`` atomically.
 
@@ -352,6 +404,8 @@ __all__ = [
     "list_wiki_pages",
     "read_wiki_page",
     "save_wiki_page",
+    "list_bibliography",
+    "read_bibliography",
     "page_meta",
     "list_concepts",
     "list_drafts",

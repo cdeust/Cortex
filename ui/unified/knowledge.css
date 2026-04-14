@@ -1021,6 +1021,78 @@
   overflow-x: auto;
 }
 
+/* ─── Phase 9 — academic layer ─── */
+
+.wiki-section-num {
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  font-weight: 400;
+  font-size: 0.85em;
+  color: #909098;
+  margin-right: 8px;
+  letter-spacing: 0.4px;
+}
+
+.wiki-caption-prefix {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-weight: 600;
+  color: #d0ccc6;
+  margin-right: 4px;
+}
+figure figcaption, .wiki-caption {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 0.9em;
+  color: #b0b0c0;
+  text-align: center;
+  font-style: italic;
+  margin-top: 6px;
+}
+
+.wiki-xref {
+  color: #90d0ff;
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(144, 208, 255, 0.4);
+  font-weight: 500;
+}
+.wiki-xref:hover {
+  color: #c0e0ff;
+  border-bottom-style: solid;
+}
+
+.wiki-cite {
+  color: #c8c4be;
+  text-decoration: none;
+  font-style: italic;
+  font-size: 0.9em;
+  padding: 0 1px;
+}
+.wiki-cite:hover {
+  color: #e2ddd6;
+  background: rgba(144, 208, 255, 0.08);
+}
+
+.wiki-bibliography {
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: 'EB Garamond', Georgia, serif;
+}
+.wiki-bibliography h2 {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #e0ddd8;
+  margin: 0 0 14px;
+  text-align: left;
+}
+.wiki-bibliography .csl-entry {
+  margin: 0 0 10px;
+  padding-left: 1.6em;
+  text-indent: -1.6em;
+  color: #d0ccc6;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 /* ─── Inspector (Hopper plumb drawer) ─── */
 
 .wiki-inspector {
