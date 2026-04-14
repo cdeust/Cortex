@@ -40,38 +40,62 @@ class WikiMissing(Exception):
     """Raised when ``append`` mode targets a missing file."""
 
 
-def _abs(root: Path, rel_path: str) -> Path:
-    """Resolve ``rel_path`` against ``root`` safely.
+def _safe_join(root: Path, rel_path: str) -> Path:
+    """Resolve ``rel_path`` against ``root`` with inline CWE-22 sanitization.
 
-    Hardened against CWE-22 (path traversal) in three layers:
-      1. Reject null bytes and empty paths outright.
-      2. Reject absolute paths (``/etc/passwd``, ``C:\\...``).
-      3. After resolution, require the target to be ``relative_to`` the
-         resolved root — the canonical CPython-recognised path-containment
-         check. ``relative_to`` raises ``ValueError`` if the target escapes.
+    Four layers, applied in order at every call site (no cross-function
+    taint gap that static analysis can miss):
+      1. Reject empty and null-byte paths.
+      2. Reject absolute paths.
+      3. Resolve both root and target.
+      4. Confirm the resolved target lies under the resolved root via
+         ``os.path.commonpath`` — a canonical CodeQL-recognised
+         sanitizer for path-injection (``py/path-injection``).
 
-    This is the pattern CodeQL recognises as sanitizing untrusted path
-    components (``py/path-injection``).
+    Returns the validated absolute target path. Raises ValueError on
+    any failure.
     """
+    import os
+
     if not rel_path or "\x00" in rel_path:
         raise ValueError("invalid wiki path: empty or contains null byte")
-    if Path(rel_path).is_absolute():
+    if os.path.isabs(rel_path):
         raise ValueError(f"absolute paths are not allowed: {rel_path!r}")
 
-    root_resolved = root.resolve(strict=False)
-    target = (root_resolved / rel_path).resolve(strict=False)
+    root_resolved = os.path.realpath(str(root))
+    candidate = os.path.realpath(os.path.join(root_resolved, rel_path))
 
-    # Canonical containment check — raises ValueError on escape, which we
-    # re-raise with a clearer message for the caller.
+    # os.path.commonpath on the pair — if they differ from the root, the
+    # candidate has escaped. This is the pattern CodeQL matches as a
+    # path-traversal sanitizer.
     try:
-        target.relative_to(root_resolved)
+        common = os.path.commonpath([root_resolved, candidate])
     except ValueError as exc:
+        # Different drives on Windows, etc.
         raise ValueError(f"path escapes wiki root: {rel_path!r}") from exc
-    return target
+    if common != root_resolved:
+        raise ValueError(f"path escapes wiki root: {rel_path!r}")
+    return Path(candidate)
+
+
+# Backwards-compatible alias — older call sites still use _abs.
+_abs = _safe_join
 
 
 def read_page(root: Path | str, rel_path: str) -> str | None:
-    target = _abs(Path(root), rel_path)
+    import os
+
+    # Inline sanitization at the sink — no cross-function taint gap.
+    if not rel_path or "\x00" in rel_path or os.path.isabs(rel_path):
+        return None
+    root_resolved = os.path.realpath(str(root))
+    candidate = os.path.realpath(os.path.join(root_resolved, rel_path))
+    try:
+        if os.path.commonpath([root_resolved, candidate]) != root_resolved:
+            return None
+    except ValueError:
+        return None
+    target = Path(candidate)
     if not target.exists():
         return None
     return target.read_text(encoding="utf-8")
@@ -100,7 +124,22 @@ def write_page(
     * ``append`` — appends the content to the existing file (with a
       separating blank line), raises WikiMissing if the file does not exist.
     """
-    target = _abs(Path(root), rel_path)
+    import os
+
+    # Inline sanitization at the sink — duplicates _safe_join but keeps
+    # the full taint-flow local for static analysis.
+    if not rel_path or "\x00" in rel_path:
+        raise ValueError("invalid wiki path: empty or contains null byte")
+    if os.path.isabs(rel_path):
+        raise ValueError(f"absolute paths are not allowed: {rel_path!r}")
+    root_resolved = os.path.realpath(str(Path(root)))
+    candidate = os.path.realpath(os.path.join(root_resolved, rel_path))
+    try:
+        if os.path.commonpath([root_resolved, candidate]) != root_resolved:
+            raise ValueError(f"path escapes wiki root: {rel_path!r}")
+    except ValueError as exc:
+        raise ValueError(f"path escapes wiki root: {rel_path!r}") from exc
+    target = Path(candidate)
     existed = target.exists()
 
     if mode == "create":

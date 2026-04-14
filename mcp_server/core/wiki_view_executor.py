@@ -138,8 +138,36 @@ class CompiledView:
 #     inner_key: value
 #     inner_key2: value
 
-_KV_RE = re.compile(r"^([A-Za-z_][\w]*):\s*(.*)$")
-_INDENTED_KV_RE = re.compile(r"^\s+([A-Za-z_][\w]*):\s*(.*)$")
+# Keys are matched with a tight anchored pattern that cannot backtrack
+# quadratically: `[A-Za-z_][A-Za-z0-9_]*` on bounded input. For the
+# actual line parsing we use str.partition(":") which has no regex
+# complexity at all. This replaces a pair of earlier regexes flagged by
+# CodeQL (py/polynomial-redos alerts #51, #52, #53) where `\s*` before
+# `(.*)` could combine with `[\w]*` under adversarial input.
+_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+# Cap line length before regex ever touches the string — defence in
+# depth against any input that slipped past the view-file discipline.
+_MAX_LINE_LEN = 2000
+
+
+def _parse_kv_line(line: str) -> tuple[str, str] | None:
+    """Parse ``key: value`` from a line without regex backtracking.
+
+    Returns None if the line isn't a valid key: value pair. Indentation
+    info is carried via ``line.lstrip() != line``; callers check that
+    separately.
+    """
+    if len(line) > _MAX_LINE_LEN:
+        return None
+    stripped = line.strip()
+    if ":" not in stripped:
+        return None
+    key, _, value = stripped.partition(":")
+    key = key.strip()
+    value = value.strip()
+    if not _KEY_RE.match(key):
+        return None
+    return key, value
 
 
 def _coerce_scalar(s: str):
@@ -167,8 +195,17 @@ def _coerce_scalar(s: str):
         return s
 
 
+def _is_indented(line: str) -> bool:
+    """Line starts with whitespace (indicates nested-dict value)."""
+    return line != "" and line[0] in (" ", "\t")
+
+
 def _parse_yamlish(text: str) -> dict[str, Any]:
-    """Parse the cortex-query block."""
+    """Parse the cortex-query block.
+
+    No regex-based line parsing — uses str.partition and simple
+    character checks. Immune to polynomial-redos by construction.
+    """
     out: dict[str, Any] = {}
     lines = text.splitlines()
     i = 0
@@ -177,31 +214,34 @@ def _parse_yamlish(text: str) -> dict[str, Any]:
         if not line.strip() or line.lstrip().startswith("#"):
             i += 1
             continue
-        # Top-level key
-        m = _KV_RE.match(line)
-        if m:
-            key = m.group(1)
-            value_str = m.group(2).strip()
-            if value_str:
-                out[key] = _coerce_scalar(value_str)
+        # Top-level (non-indented) key:value
+        if _is_indented(line):
+            i += 1
+            continue
+        parsed = _parse_kv_line(line)
+        if parsed is None:
+            i += 1
+            continue
+        key, value_str = parsed
+        if value_str:
+            out[key] = _coerce_scalar(value_str)
+            i += 1
+            continue
+        # Empty value → expect nested dict on indented lines
+        nested: dict[str, Any] = {}
+        i += 1
+        while i < len(lines):
+            nxt = lines[i]
+            if not nxt.strip():
                 i += 1
                 continue
-            # Empty value → may be a nested dict
-            nested: dict[str, Any] = {}
+            if not _is_indented(nxt):
+                break
+            sub = _parse_kv_line(nxt)
+            if sub is not None:
+                nested[sub[0]] = _coerce_scalar(sub[1])
             i += 1
-            while i < len(lines) and (
-                not lines[i].strip() or _INDENTED_KV_RE.match(lines[i])
-            ):
-                if not lines[i].strip():
-                    i += 1
-                    continue
-                im = _INDENTED_KV_RE.match(lines[i])
-                if im:
-                    nested[im.group(1)] = _coerce_scalar(im.group(2))
-                i += 1
-            out[key] = nested
-        else:
-            i += 1
+        out[key] = nested
     return out
 
 
