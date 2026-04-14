@@ -32,11 +32,12 @@ def body_hash(body: str) -> str:
 # ── wiki.pages ─────────────────────────────────────────────────────────
 
 
-def upsert_page(conn: Connection, page: dict[str, Any]) -> int:
-    """Upsert a page row by rel_path. Returns wiki.pages.id.
+def upsert_page(conn: Connection, page: dict[str, Any]) -> tuple[int, bool]:
+    """Upsert a page row by rel_path.
 
-    If body_hash matches the existing row, this is a no-op except for
-    touching `tended`. Otherwise, the row is updated in place.
+    Returns ``(page_id, was_modified)`` where ``was_modified`` is True
+    when the row was inserted or actually updated, False when the
+    body_hash matched and nothing changed.
 
     Required fields: rel_path, slug, kind, title.
     Optional: all other columns.
@@ -49,6 +50,9 @@ def upsert_page(conn: Connection, page: dict[str, Any]) -> int:
     body = page.get("body", "")
     bh = page.get("body_hash") or body_hash(body)
 
+    # Use xmax=0 (Postgres trick) to detect INSERT vs UPDATE: xmax is 0
+    # only on a fresh INSERT. We also OR in body_hash equality to detect
+    # no-op updates that the WHERE clause filtered out.
     sql = """
     INSERT INTO wiki.pages (
         memory_id, concept_id, rel_path, slug, kind, title, domain, domains,
@@ -82,8 +86,7 @@ def upsert_page(conn: Connection, page: dict[str, Any]) -> int:
         body_hash = EXCLUDED.body_hash,
         tended = NOW()
     WHERE wiki.pages.body_hash <> EXCLUDED.body_hash
-       OR wiki.pages.tended < NOW() - INTERVAL '1 hour'
-    RETURNING id;
+    RETURNING id, (xmax = 0) AS inserted;
     """
     params = {
         "memory_id": page.get("memory_id"),
@@ -110,15 +113,19 @@ def upsert_page(conn: Connection, page: dict[str, Any]) -> int:
         cur.execute(sql, params)
         row = cur.fetchone()
         if row is not None:
-            return row["id"] if isinstance(row, dict) else row[0]
-        # Upsert was a no-op (body unchanged). Fetch existing id.
+            # Row was inserted or actually updated.
+            if isinstance(row, dict):
+                return row["id"], True
+            return row[0], True
+        # WHERE clause filtered the UPDATE out → body_hash matched, no-op.
         cur.execute(
             "SELECT id FROM wiki.pages WHERE rel_path = %s", (page["rel_path"],)
         )
         existing = cur.fetchone()
         if existing is None:
-            return -1
-        return existing["id"] if isinstance(existing, dict) else existing[0]
+            return -1, False
+        existing_id = existing["id"] if isinstance(existing, dict) else existing[0]
+        return existing_id, False
 
 
 def get_page_by_slug(conn: Connection, slug: str) -> dict | None:
