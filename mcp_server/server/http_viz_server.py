@@ -128,6 +128,14 @@ def _build_unified_handler(
         def do_OPTIONS(self):
             send_cors_options(self)
 
+        def do_POST(self):
+            path_no_qs = self.path.split("?")[0]
+            if path_no_qs == "/api/wiki/save":
+                self._serve_wiki_save()
+            else:
+                self.send_response(404)
+                self.end_headers()
+
         def do_GET(self):
             _reset_unified_idle_timer()
             path_no_qs = self.path.split("?")[0]
@@ -284,6 +292,26 @@ def _build_unified_handler(
                 name = qs.get("name") or None
                 query = qs.get("query") or None
                 send_json_response(self, execute_view(name, query))
+            except Exception as e:
+                send_error_response(self, e)
+
+        def _serve_wiki_save(self):
+            """POST /api/wiki/save — body: JSON {rel_path, body}."""
+            try:
+                import json as _json
+
+                from mcp_server.handlers.wiki_api import save_wiki_page
+                from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
+                length = int(self.headers.get("Content-Length") or 0)
+                if length <= 0 or length > 4_000_000:
+                    send_json_response(self, {"error": "invalid content-length"})
+                    return
+                payload = _json.loads(self.rfile.read(length))
+                rel_path = payload.get("rel_path", "")
+                body = payload.get("body", "")
+                result = save_wiki_page(METHODOLOGY_DIR / "wiki", rel_path, body)
+                send_json_response(self, result)
             except Exception as e:
                 send_error_response(self, e)
 

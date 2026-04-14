@@ -318,9 +318,40 @@ def execute_view(name: str | None, inline_query: str | None = None) -> dict:
     }
 
 
+def save_wiki_page(wiki_root: Path, rel_path: str, body: str) -> dict:
+    """Write ``body`` to ``<wiki_root>/<rel_path>`` atomically.
+
+    Used by the in-browser editor (Phase 8.4). Path validation is
+    performed by infrastructure/wiki_store.write_page (commonpath
+    sanitizer — CodeQL-verified Phase 6 refactor).
+
+    Returns {"ok": True, "rel_path": ..., "bytes": N} on success,
+    or {"error": ...} on failure. Never raises.
+    """
+    if not rel_path or not isinstance(rel_path, str):
+        return {"error": "rel_path required"}
+    if body is None:
+        return {"error": "body required"}
+    if len(body) > 2_000_000:
+        return {"error": "body too large (> 2 MB)"}
+    try:
+        from mcp_server.infrastructure.wiki_store import write_page
+
+        result = write_page(wiki_root, rel_path, body, mode="replace")
+        return {
+            "ok": True,
+            "rel_path": result.path,
+            "bytes_written": result.bytes_written,
+            "mode": result.mode,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 __all__ = [
     "list_wiki_pages",
     "read_wiki_page",
+    "save_wiki_page",
     "page_meta",
     "list_concepts",
     "list_drafts",
