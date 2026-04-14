@@ -802,6 +802,199 @@
   flex-shrink: 0;
 }
 
+/* ─── Phase 6 — Thermodynamic state pills + heat bar ─── */
+
+.wiki-lc-pill {
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  flex-shrink: 0;
+}
+.wiki-lc-active {
+  color: #90d0ff;
+  border-color: rgba(144,208,255,0.35);
+  background: rgba(144,208,255,0.06);
+}
+.wiki-lc-area {
+  color: #e8c470;
+  border-color: rgba(232,196,112,0.35);
+  background: rgba(232,196,112,0.06);
+}
+.wiki-lc-archived {
+  color: #a0a0b0;
+  border-color: rgba(160,160,176,0.28);
+  background: rgba(160,160,176,0.04);
+}
+.wiki-lc-evergreen {
+  color: #a8e0b0;
+  border-color: rgba(168,224,176,0.35);
+  background: rgba(168,224,176,0.06);
+}
+
+.wiki-stale-pill {
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+  text-transform: uppercase;
+  color: #ff9494;
+  border: 1px solid rgba(255,148,148,0.35);
+  background: rgba(255,148,148,0.05);
+  flex-shrink: 0;
+}
+
+.wiki-heat-bar {
+  position: relative;
+  height: 4px;
+  background: rgba(255,255,255,0.05);
+  margin: 16px 0 8px;
+  border-radius: 0;
+  overflow: hidden;
+}
+.wiki-heat-fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  background: linear-gradient(90deg, #205868 0%, #50D0E8 60%, #e07070 100%);
+  transition: width 0.4s ease-out;
+}
+.wiki-heat-label {
+  display: block;
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #c0c8d8;
+  letter-spacing: 0.3px;
+  margin-top: 4px;
+}
+
+/* ─── Backlinks footer ─── */
+
+.wiki-backlinks {
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+.wiki-backlinks-title {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0ddd8;
+  margin: 0 0 12px;
+  text-align: left;
+}
+.wiki-backlinks-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.wiki-backlinks-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.wiki-link-kind {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: #909098;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ─── Inspector (Hopper plumb drawer) ─── */
+
+.wiki-inspector {
+  margin-top: 40px;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+}
+.wiki-inspector-summary {
+  cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #a0a8c0;
+  user-select: none;
+  outline: none;
+}
+.wiki-inspector-summary:hover {
+  color: #d0d8e8;
+}
+.wiki-inspector-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 28px;
+  margin-top: 20px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+}
+.wiki-inspector-col {
+  min-width: 0;
+}
+.wiki-inspector-heading {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 15px;
+  color: #e0ddd8;
+  margin: 0 0 10px;
+  font-weight: 600;
+}
+.wiki-inspect-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.04);
+}
+.wiki-inspect-label {
+  color: #909098;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 1px;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.wiki-inspect-val {
+  color: #d0d8e8;
+  font-family: 'IBM Plex Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+.wiki-inspector-memos {
+  font-family: 'EB Garamond', Georgia, serif;
+  font-size: 13px;
+  color: #d0ccc6;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.wiki-memo-entry {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.wiki-memo-entry:last-child { border-bottom: none; }
+.wiki-memo-decision {
+  color: #90d0ff;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.wiki-memo-rationale {
+  margin-top: 4px;
+  color: #c8c4be;
+}
+.wiki-memo-author {
+  margin-top: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: #808090;
+  letter-spacing: 0.5px;
+}
+
 /* Metadata bar — author/date line */
 .wiki-meta-bar {
   display: flex;
