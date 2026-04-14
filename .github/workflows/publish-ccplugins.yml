@@ -1,0 +1,202 @@
+name: Publish to awesome-claude-code-plugins
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the diff and branch name but do not push or open a PR."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-ccplugins
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync cortex plugin bundle
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM: ccplugins/awesome-claude-code-plugins
+      FORK: cdeust/awesome-claude-code-plugins
+      PLUGIN_NAME: cortex
+      CATEGORY: "Development Engineering"
+    steps:
+      - name: Checkout Cortex
+        uses: actions/checkout@v4
+        with:
+          path: cortex
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="$(git -C cortex describe --tags --abbrev=0 2>/dev/null || echo manual-$(date -u +%Y%m%d))"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Release tag: $TAG"
+
+      - name: Checkout fork of ccplugins
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.FORK }}
+          token: ${{ secrets.CCPLUGINS_PAT }}
+          path: ccplugins
+          fetch-depth: 0
+
+      - name: Sync fork with upstream
+        working-directory: ccplugins
+        env:
+          GH_TOKEN: ${{ secrets.CCPLUGINS_PAT }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "https://github.com/${UPSTREAM}.git" || true
+          git fetch upstream main
+          git checkout main
+          git merge --ff-only upstream/main || {
+            git reset --hard upstream/main
+          }
+          git push origin main --force-with-lease
+
+      - name: Write plugin bundle
+        working-directory: ccplugins
+        run: |
+          set -euo pipefail
+          TARGET="plugins/${PLUGIN_NAME}"
+          mkdir -p "${TARGET}/.claude-plugin"
+          # Copy the plugin manifest from Cortex; rewrite the homepage so
+          # installs from the ccplugins tree link back to the right page.
+          python3 - <<'PY'
+          import json, os, pathlib
+          src = pathlib.Path("../cortex/.claude-plugin/plugin.json")
+          data = json.loads(src.read_text())
+          data["homepage"] = (
+              "https://github.com/ccplugins/awesome-claude-code-plugins/"
+              "tree/main/plugins/" + os.environ["PLUGIN_NAME"]
+          )
+          data.setdefault("repository", "https://github.com/cdeust/Cortex")
+          out = pathlib.Path(f"plugins/{os.environ['PLUGIN_NAME']}/.claude-plugin/plugin.json")
+          out.write_text(json.dumps(data, indent=2) + "\n")
+          PY
+          # Drop a slim README that points back to Cortex canonical docs
+          cat > "${TARGET}/README.md" <<EOF
+          # Cortex
+
+          Persistent memory for Claude Code — scientific retrieval backed by
+          41 published papers. This directory is a mirror of the
+          [cdeust/Cortex](https://github.com/cdeust/Cortex) plugin manifest;
+          see the canonical repository for documentation, benchmarks, and
+          the full change log.
+
+          ## Install
+
+              claude plugin marketplace add cdeust/Cortex
+              claude plugin install cortex
+
+          ## Tag
+
+          Synced from Cortex release: **${{ steps.tag.outputs.tag }}**
+          EOF
+
+      - name: Update index entry in README
+        working-directory: ccplugins
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, re
+          readme = pathlib.Path("README.md")
+          body = readme.read_text()
+          category = os.environ["CATEGORY"]
+          plugin = os.environ["PLUGIN_NAME"]
+          entry = f"- [{plugin}](./plugins/{plugin})"
+          if entry in body:
+              print("index entry already present — nothing to do")
+              raise SystemExit(0)
+          marker = f"### {category}"
+          if marker not in body:
+              raise SystemExit(f"category not found: {category!r}")
+          # Insert the new entry inside the category block, alphabetical.
+          lines = body.splitlines()
+          i = lines.index(marker) + 1
+          bucket_start = i
+          # Walk to end of category (next heading or blank-then-heading).
+          while i < len(lines) and not lines[i].startswith("### "):
+              i += 1
+          bucket = lines[bucket_start:i]
+          # Keep only bullet lines for insertion sort; preserve blanks at end.
+          bullets = [l for l in bucket if l.startswith("- [")]
+          trailing = [l for l in bucket if not l.startswith("- [")]
+          bullets.append(entry)
+          bullets.sort(key=str.lower)
+          new_bucket = bullets + trailing
+          lines[bucket_start:i] = new_bucket
+          readme.write_text("\n".join(lines) + "\n")
+          print(f"inserted {entry!r} in category {category!r}")
+          PY
+
+      - name: Stage, commit, diff
+        id: diff
+        working-directory: ccplugins
+        run: |
+          git add "plugins/${PLUGIN_NAME}" README.md
+          if git diff --cached --quiet; then
+            echo "no changes — nothing to commit"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          git diff --cached --stat
+          BRANCH="sync/${PLUGIN_NAME}-${{ steps.tag.outputs.tag }}"
+          # sanitise branch name
+          BRANCH="$(echo "$BRANCH" | tr -c 'a-zA-Z0-9._/-' '-')"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          git checkout -b "$BRANCH" || git checkout "$BRANCH"
+          git commit -m "Sync cortex plugin ${{ steps.tag.outputs.tag }}
+
+          Automated sync from cdeust/Cortex@${{ github.sha }}."
+
+      - name: Push + open (or update) PR
+        if: steps.diff.outputs.changed == 'true' && inputs.dry_run != true
+        working-directory: ccplugins
+        env:
+          GH_TOKEN: ${{ secrets.CCPLUGINS_PAT }}
+        run: |
+          BRANCH="${{ steps.diff.outputs.branch }}"
+          git push -u origin "$BRANCH" --force-with-lease
+          EXISTING="$(gh pr list --repo $UPSTREAM --head "cdeust:$BRANCH" --state open --json number -q '.[0].number' || echo '')"
+          BODY="Automated sync from cdeust/Cortex.
+
+          **Release:** ${{ steps.tag.outputs.tag }}
+          **Commit:** cdeust/Cortex@${{ github.sha }}
+          **What this updates:**
+          - \`plugins/cortex/.claude-plugin/plugin.json\` — MCP server manifest (homepage rewritten to this repo tree)
+          - \`plugins/cortex/README.md\` — slim mirror pointing at canonical docs
+          - \`README.md\` index entry under _${CATEGORY}_ (alphabetical)
+
+          The plugin is a thin manifest; the actual code runs via \`uvx\` from the \`neuro-cortex-memory\` PyPI package, so there is nothing to vendor."
+          if [ -n "$EXISTING" ]; then
+            echo "Updating existing PR #$EXISTING"
+            gh pr edit "$EXISTING" --repo $UPSTREAM --body "$BODY"
+          else
+            gh pr create --repo $UPSTREAM \
+              --head "cdeust:$BRANCH" \
+              --title "Sync cortex plugin ${{ steps.tag.outputs.tag }}" \
+              --body "$BODY"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## ccplugins sync" >> "$GITHUB_STEP_SUMMARY"
+          echo "- tag: **${{ steps.tag.outputs.tag }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- changed: **${{ steps.diff.outputs.changed }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- branch: \`${{ steps.diff.outputs.branch || '(none)' }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- dry_run: **${{ inputs.dry_run || false }}**" >> "$GITHUB_STEP_SUMMARY"
