@@ -85,6 +85,199 @@ _CONVENTION_PATTERNS = [
 
 _SPEC_TAGS = {"spec", "design", "specification", "feature"}
 
+# ── Hard-negative gate (Eco + Ahrens): disqualifying patterns ─────────
+#
+# Each of these, if present, is a hard DISQUALIFICATION — single hit blocks
+# admission regardless of positive signals. Catches session chat, imperatives,
+# narration, status updates, and temporal deixis that should live in session
+# logs, not a wiki.
+
+# Imperative verbs in title/first line (task-shaped, not knowledge-shaped)
+_IMPERATIVE_TITLE_PATTERNS = [
+    re.compile(
+        r"^\s*#*\s*(let'?s|lets)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^\s*#*\s*("
+        r"use|fetch|take|give|look at|verify|audit|check|make|do|run|"
+        r"push|remove|rename|adapt|implement|execute|perform|replace|"
+        r"add|delete|update|modify|fix|install|setup|configure|"
+        r"create|build|write|test|sync|import|export|move|copy|ensure|"
+        r"try|go|start|stop|open|close|clean|restart|refactor|migrate|"
+        r"enable|disable|apply|reset|rebuild|regenerate|analyze"
+        r")\b",
+        re.IGNORECASE,
+    ),
+    # Second-person imperative directed at the AI
+    re.compile(r"^\s*#*\s*you (must|should|need|will|can)\b", re.IGNORECASE),
+    # Questions-as-titles (without resolution body)
+    re.compile(r"^\s*#*\s*(how|what|why|when|where|can|should|is|does)\b[^.]*\?\s*$"),
+]
+
+# First-person narration ("we pushed", "I tried", "we did")
+_FIRST_PERSON_PATTERNS = [
+    re.compile(
+        r"^\s*#*\s*(we|i)\s+"
+        r"(pushed|pulled|did|have|did|tried|ran|found|saw|noticed|got|made|"
+        r"created|added|removed|fixed|broke|updated|changed|deleted|merged|"
+        r"re?-?started|tested|benchmarked|think|need|want|should|re)",
+        re.IGNORECASE,
+    ),
+]
+
+# Status / progress register — NOT knowledge, but work-log entries
+_STATUS_PATTERNS = [
+    re.compile(
+        r"^\s*#*\s*("
+        r"successfully|done|failing|failed|broken|working|not working|"
+        r"finished|completed|in progress|wip|todo|pending"
+        r")\b",
+        re.IGNORECASE,
+    ),
+    # Command/tool output framing
+    re.compile(r"local[-_]command[-_](stdout|stderr|stdin|output)", re.IGNORECASE),
+    # Test harness metadata
+    re.compile(r"session[-_]test[-_]session", re.IGNORECASE),
+    re.compile(r"in domain unknown", re.IGNORECASE),
+]
+
+# Temporal deixis — "now", "just", "previous", "earlier" make the note
+# uninterpretable outside the session in which it was written
+_DEIXIS_PATTERNS = [
+    re.compile(
+        r"^\s*#*\s*("
+        r"just now|just did|previous|earlier|last session|new wip|"
+        r"the one we|like (we|i) (said|did)|yesterday|today|tomorrow|"
+        r"a while ago|recent(ly)?"
+        r")\b",
+        re.IGNORECASE,
+    ),
+]
+
+
+def _fails_hard_negatives(content: str, first_line: str) -> bool:
+    """Return True if content hits any hard-negative pattern.
+
+    Hard negatives are single-strike disqualifiers. Any one match blocks
+    wiki admission. Patterns check first_line primarily (title shape),
+    a few check full content.
+    """
+    for pat in _IMPERATIVE_TITLE_PATTERNS:
+        if pat.search(first_line):
+            return True
+    for pat in _FIRST_PERSON_PATTERNS:
+        if pat.search(first_line):
+            return True
+    for pat in _STATUS_PATTERNS:
+        if pat.search(first_line):
+            return True
+        if pat.search(content[:500]):  # status framing often appears in first 500 chars
+            return True
+    for pat in _DEIXIS_PATTERNS:
+        if pat.search(first_line):
+            return True
+    return False
+
+
+# ── Positive quality signals (admit only if ≥ threshold) ──────────────
+
+_STRUCTURE_HEADING = re.compile(r"^#{1,4}\s+\S", re.MULTILINE)
+_STRUCTURE_LIST = re.compile(r"^\s*[-*+]\s+\S", re.MULTILINE)
+_STRUCTURE_CODE = re.compile(r"```\w*\n", re.MULTILINE)
+_CITATION = re.compile(
+    r"\b("
+    r"ADR-?\d+|paper|arxiv|doi:|https?://|"
+    r"\b[A-Z][a-z]+ (et al\.|&) \d{4}|"
+    r"\b[A-Z][a-z]+ \d{4}\b"
+    r")",
+)
+_DECLARATIVE = re.compile(
+    r"\b(is|are|means|causes?|because|implies|requires?|enables?|prevents?|"
+    r"produces?|results? in|leads? to|defined? as|consists of)\b",
+    re.IGNORECASE,
+)
+_FILE_OR_ENTITY_REF = re.compile(
+    r"\b[a-zA-Z_]\w*\.(py|js|ts|md|json|yaml|sql|go|rs|rb|java)\b|"
+    r"\b[a-z_]+\(\)|"
+    r"\bclass\s+[A-Z]\w+|"
+    r"\bdef\s+[a-z_]\w+"
+)
+
+
+def _positive_score(content: str, tags: set[str]) -> int:
+    """Count how many positive quality signals the content exhibits.
+
+    Signals (8 total):
+      1. Multiple structural elements (heading/list/code)
+      2. Contains declarative claim-shaped sentences
+      3. Cites paper, ADR, URL, or function/file reference
+      4. Minimum substantive length (≥ 200 chars)
+      5. Has curated/knowledge tag
+      6. Is atomic (not too long, not too short) — 200-3000 chars
+      7. Domain vocabulary density — at least 3 distinct technical tokens
+      8. References files or code entities
+    """
+    score = 0
+    length = len(content)
+
+    # 1. Structure
+    struct = 0
+    struct += 1 if _STRUCTURE_HEADING.search(content) else 0
+    struct += 1 if _STRUCTURE_LIST.search(content) else 0
+    struct += 1 if _STRUCTURE_CODE.search(content) else 0
+    if struct >= 1:
+        score += 1
+
+    # 2. Declarative claims
+    if len(_DECLARATIVE.findall(content)) >= 2:
+        score += 1
+
+    # 3. Citations / references
+    if _CITATION.search(content):
+        score += 1
+
+    # 4. Substantive length
+    if length >= 200:
+        score += 1
+
+    # 5. Knowledge tag
+    _KNOWLEDGE_TAGS = {
+        "decision",
+        "adr",
+        "architecture",
+        "spec",
+        "design",
+        "lesson",
+        "convention",
+        "rule",
+        "standard",
+        "paper",
+        "research",
+        "reference",
+    }
+    if tags & _KNOWLEDGE_TAGS:
+        score += 1
+
+    # 6. Atomic scope (200–3000 chars is the Zettelkasten sweet spot)
+    if 200 <= length <= 3000:
+        score += 1
+
+    # 7. Domain vocabulary density — at least 3 distinct CamelCase/snake_case
+    #    technical tokens
+    tech_tokens = set(
+        re.findall(r"\b(?:[A-Z][a-z]+[A-Z]\w*|[a-z]+_[a-z_]+)\b", content)
+    )
+    if len(tech_tokens) >= 3:
+        score += 1
+
+    # 8. File/entity references
+    if _FILE_OR_ENTITY_REF.search(content):
+        score += 1
+
+    return score
+
+
 # ── Title prefix stripping ────────────────────────────────────────────
 
 _TITLE_STRIP_PREFIXES = [
@@ -98,8 +291,23 @@ _TITLE_STRIP_PREFIXES = [
 ]
 
 
+_POSITIVE_SCORE_THRESHOLD = 4  # must satisfy ≥ 4 of 8 positive signals
+
+
 def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
     """Classify memory content for wiki sync.
+
+    Inversion (Eco + Ahrens research): default to REJECT. A memory is
+    promoted to the wiki only if it passes three gates:
+
+      1. Noise rejection (tool output, JSON, slash-command framing)
+      2. Hard-negative gate (imperatives, first-person narration, status,
+         temporal deixis — any hit disqualifies)
+      3. Positive scoring (≥ 4 of 8 quality signals)
+
+    Explicit knowledge-shaped tags (decision/adr/spec/design/lesson/
+    convention/rule) bypass the positive scorer — those are opt-in by
+    the caller and presumed wiki-worthy.
 
     Returns page kind ('adr', 'lesson', 'convention', 'spec', 'note')
     or None if the content should be rejected.
@@ -110,7 +318,7 @@ def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
     stripped = content.strip()
     first_line = stripped.split("\n", 1)[0].strip()
 
-    # Rejection gate
+    # Gate 1 — Noise rejection (obvious tool/system/slash artefacts)
     for prefix in _REJECT_PREFIXES:
         if stripped.startswith(prefix):
             return None
@@ -119,13 +327,38 @@ def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
         if pattern.match(stripped):
             return None
 
-    # Reject if title would be a tool name
     slug = _slugify(first_line)
     if slug in _REJECT_TITLES:
         return None
 
-    # Classification by content patterns (most specific first)
+    # Gate 2 — Hard-negative gate (task-shape, narration, status, deixis)
+    if _fails_hard_negatives(content, first_line):
+        return None
+
+    # Tag-based fast-path: explicit knowledge tags bypass positive scoring.
+    # The caller has declared intent; trust the declaration.
     tag_set = {t.lower() for t in (tags or [])}
+    _EXPLICIT_KNOWLEDGE_TAGS = {
+        "decision",
+        "adr",
+        "architecture",
+        "spec",
+        "design",
+        "lesson",
+        "convention",
+        "rule",
+        "standard",
+        "paper",
+        "research",
+    }
+    has_explicit_tag = bool(tag_set & _EXPLICIT_KNOWLEDGE_TAGS)
+
+    # Gate 3 — Positive scoring (only when no explicit knowledge tag)
+    if not has_explicit_tag:
+        if _positive_score(content, tag_set) < _POSITIVE_SCORE_THRESHOLD:
+            return None
+
+    # ─── Admitted — now route to the right kind ──────────────────────
 
     for pat in _ADR_PATTERNS:
         if pat.search(content):
