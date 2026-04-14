@@ -294,6 +294,62 @@ _TITLE_STRIP_PREFIXES = [
 _POSITIVE_SCORE_THRESHOLD = 4  # must satisfy ≥ 4 of 8 positive signals
 
 
+# ── User-rule integration (Phase 5.1) ─────────────────────────────────
+#
+# Rules live in ~/.claude/methodology/wiki/_rules/*.md and are loaded
+# on demand. Cached in-process; refresh by calling reset_user_rules().
+# When no rules are loaded (or the wiki isn't initialised), falls back
+# to the hardcoded defaults below.
+
+_USER_RULES_CACHE = None  # None = not loaded; [] = loaded but empty
+
+
+def _load_user_rules():
+    """Lazy-load + cache user rules. Never raises; returns []."""
+    global _USER_RULES_CACHE
+    if _USER_RULES_CACHE is not None:
+        return _USER_RULES_CACHE
+    try:
+        from pathlib import Path
+
+        from mcp_server.core.wiki_schema_loader import load_registry
+        from mcp_server.infrastructure.config import WIKI_ROOT
+
+        registry = load_registry(Path(WIKI_ROOT))
+        _USER_RULES_CACHE = list(registry.rules)
+    except Exception:
+        _USER_RULES_CACHE = []
+    return _USER_RULES_CACHE
+
+
+def reset_user_rules() -> None:
+    """Force the next classify_memory call to re-read the rule files.
+
+    Public API — call from a wiki_reload tool when the user edits
+    `_rules/*.md` and wants the change to take effect immediately.
+    """
+    global _USER_RULES_CACHE
+    _USER_RULES_CACHE = None
+
+
+def _apply_user_rules(content: str, tags: list[str] | None):
+    """Apply user-loaded rules; return RuleMatch or None when no rule
+    matched (caller falls back to hardcoded defaults).
+
+    Returns the RuleMatch dataclass from wiki_rule_engine; the caller
+    inspects .target_kind and .matched_rule.
+    """
+    rules = _load_user_rules()
+    if not rules:
+        return None
+    from mcp_server.core.wiki_rule_engine import apply_rules
+
+    match = apply_rules(content, tags, rules)
+    if match.matched_rule is None:
+        return None  # No rule matched — defer to hardcoded defaults
+    return match
+
+
 def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
     """Classify memory content for wiki sync.
 
@@ -317,6 +373,17 @@ def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
 
     stripped = content.strip()
     first_line = stripped.split("\n", 1)[0].strip()
+
+    # Gate 0 — User-editable rules (Phase 5.1).
+    # If the wiki has rules in `_rules/*.md`, they fire BEFORE the
+    # hardcoded defaults so the user can override any built-in
+    # admit/reject decision without editing Python.
+    user_rule_match = _apply_user_rules(content, tags)
+    if user_rule_match is not None:
+        if user_rule_match.target_kind in (None, ""):
+            return None  # rule says reject
+        if user_rule_match.matched_rule and user_rule_match.target_kind:
+            return user_rule_match.target_kind  # rule admits with kind
 
     # Gate 1 — Noise rejection (obvious tool/system/slash artefacts)
     for prefix in _REJECT_PREFIXES:
