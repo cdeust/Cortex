@@ -104,6 +104,270 @@ CREATE INDEX IF NOT EXISTS idx_memory_entities_entity
     ON memory_entities (entity_id);
 """
 
+# ── Wiki Schema (Phase 1 of redesign) ─────────────────────────────────────
+# Isolated `wiki` schema. Intentionally ZERO joins from the recall hot path.
+#
+# Pipeline IRs stored as first-class tables, each inspectable and queryable:
+#   transcript  →  claim_events  →  concepts  →  drafts  →  pages  →  rendered
+#
+# Survival physics match memories.heat / decay / staleness — pages EARN
+# existence through citation, backlinks, access; LOSE it through idleness,
+# staleness, redundancy.
+
+WIKI_SCHEMA_DDL = """
+CREATE SCHEMA IF NOT EXISTS wiki;
+
+-- claim_events: atomic extracted assertions from a transcript/memory.
+-- Inspectable "laboratory notebook" — Hopper's nanosecond wire.
+CREATE TABLE IF NOT EXISTS wiki.claim_events (
+    id              BIGSERIAL PRIMARY KEY,
+    memory_id       INTEGER REFERENCES memories(id) ON DELETE SET NULL,
+    session_id      TEXT NOT NULL DEFAULT '',
+    text            TEXT NOT NULL,
+    claim_type      TEXT NOT NULL DEFAULT 'assertion'
+                    CHECK (claim_type IN (
+                      'assertion','decision','observation','question',
+                      'method','result','limitation','reference'
+                    )),
+    entity_ids      INTEGER[] NOT NULL DEFAULT '{}',
+    evidence_refs   JSONB NOT NULL DEFAULT '[]'::jsonb,
+    confidence      REAL NOT NULL DEFAULT 0.5 CHECK (confidence >= 0.0 AND confidence <= 1.0),
+    embedding       vector(384),
+    supersedes      BIGINT REFERENCES wiki.claim_events(id) ON DELETE SET NULL,
+    extracted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- concepts: emergent candidate knowledge nodes (Strauss axial coding).
+-- Sits BETWEEN memories and pages. Crystallises from entity co-occurrence
+-- + embedding density; graduates to a page on saturation.
+CREATE TABLE IF NOT EXISTS wiki.concepts (
+    id                      BIGSERIAL PRIMARY KEY,
+    label                   TEXT NOT NULL,
+    status                  TEXT NOT NULL DEFAULT 'candidate'
+                            CHECK (status IN (
+                              'candidate','saturating','promoted','merged','split','abandoned'
+                            )),
+    centroid_embedding      vector(384),
+    entity_ids              INTEGER[] NOT NULL DEFAULT '{}',
+    grounding_memory_ids    INTEGER[] NOT NULL DEFAULT '{}',
+    grounding_claim_ids     BIGINT[] NOT NULL DEFAULT '{}',
+    properties              JSONB NOT NULL DEFAULT '{}'::jsonb,
+    axial_slots             JSONB NOT NULL DEFAULT '{}'::jsonb,
+    saturation_rate         REAL NOT NULL DEFAULT 1.0,
+    saturation_streak       INTEGER NOT NULL DEFAULT 0,
+    first_seen_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_property_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    promoted_page_id        INTEGER,
+    merged_into_id          BIGINT REFERENCES wiki.concepts(id) ON DELETE SET NULL,
+    split_into_ids          BIGINT[],
+    core_category_link      BIGINT REFERENCES wiki.concepts(id) ON DELETE SET NULL
+);
+
+-- drafts: synthesized page content before curation.
+-- Inspectable pre-render review surface.
+CREATE TABLE IF NOT EXISTS wiki.drafts (
+    id              BIGSERIAL PRIMARY KEY,
+    concept_id      BIGINT REFERENCES wiki.concepts(id) ON DELETE CASCADE,
+    memory_id       INTEGER REFERENCES memories(id) ON DELETE SET NULL,
+    title           TEXT NOT NULL,
+    kind            TEXT NOT NULL,
+    lead            TEXT NOT NULL DEFAULT '',
+    sections        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    frontmatter     JSONB NOT NULL DEFAULT '{}'::jsonb,
+    provenance      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    synth_prompt    TEXT,
+    synth_model     TEXT,
+    confidence      REAL NOT NULL DEFAULT 0.5,
+    status          TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending','approved','rejected','published')),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    reviewed_at     TIMESTAMPTZ,
+    published_page_id INTEGER
+);
+
+-- pages: the authored, approved wiki page (mirror of .md file).
+-- Files remain source of truth; this is the facet/query index.
+CREATE TABLE IF NOT EXISTS wiki.pages (
+    id              SERIAL PRIMARY KEY,
+    memory_id       INTEGER UNIQUE REFERENCES memories(id) ON DELETE SET NULL,
+    concept_id      BIGINT REFERENCES wiki.concepts(id) ON DELETE SET NULL,
+    rel_path        TEXT UNIQUE NOT NULL,
+    slug            TEXT NOT NULL,
+    kind            TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    domain          TEXT NOT NULL DEFAULT '',
+    domains         JSONB NOT NULL DEFAULT '[]'::jsonb,
+    tags            JSONB NOT NULL DEFAULT '[]'::jsonb,
+    audience        JSONB NOT NULL DEFAULT '[]'::jsonb,
+    requires        JSONB NOT NULL DEFAULT '[]'::jsonb,
+    status          TEXT NOT NULL DEFAULT 'seedling'
+                    CHECK (status IN ('seedling','budding','evergreen')),
+    lifecycle_state TEXT NOT NULL DEFAULT 'active'
+                    CHECK (lifecycle_state IN ('active','area','archived','evergreen')),
+    supersedes      TEXT,
+    superseded_by   TEXT,
+    verified        TEXT,
+    lead            TEXT NOT NULL DEFAULT '',
+    sections        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    body_hash       TEXT NOT NULL DEFAULT '',
+    embedding       vector(384),
+    -- thermodynamic survival physics (mirrors memories table)
+    heat            REAL NOT NULL DEFAULT 1.0 CHECK (heat >= 0.0 AND heat <= 1.0),
+    access_count    INTEGER NOT NULL DEFAULT 0,
+    citation_count  INTEGER NOT NULL DEFAULT 0,
+    backlink_count  INTEGER NOT NULL DEFAULT 0,
+    source_memory_heat REAL,
+    is_stale        BOOLEAN NOT NULL DEFAULT FALSE,
+    planted         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    tended          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_accessed_at TIMESTAMPTZ,
+    last_cited_at   TIMESTAMPTZ,
+    archived_at     TIMESTAMPTZ
+);
+
+-- links: outgoing references from a page (see-also, requires, supersedes, inline).
+-- Backlink lookup = reverse index by dst_page_id.
+CREATE TABLE IF NOT EXISTS wiki.links (
+    src_page_id     INTEGER NOT NULL REFERENCES wiki.pages(id) ON DELETE CASCADE,
+    dst_slug        TEXT NOT NULL,
+    dst_page_id     INTEGER REFERENCES wiki.pages(id) ON DELETE SET NULL,
+    link_kind       TEXT NOT NULL DEFAULT 'see-also'
+                    CHECK (link_kind IN (
+                      'see-also','requires','supersedes','inline',
+                      'contradicts','refines','benchmarks'
+                    )),
+    PRIMARY KEY (src_page_id, dst_slug, link_kind)
+);
+
+-- citations: page referenced during a Claude Code session.
+-- Drives heat via trigger; is the primary authority-earning signal.
+CREATE TABLE IF NOT EXISTS wiki.citations (
+    id              BIGSERIAL PRIMARY KEY,
+    page_id         INTEGER NOT NULL REFERENCES wiki.pages(id) ON DELETE CASCADE,
+    session_id      TEXT NOT NULL DEFAULT '',
+    domain          TEXT NOT NULL DEFAULT '',
+    memory_id       INTEGER REFERENCES memories(id) ON DELETE SET NULL,
+    cited_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- memos: the grounded-theory audit trail. Every curation decision
+-- (merge, split, promote, abandon, reclassify) writes one row with
+-- its inputs, rationale, alternatives considered, and confidence.
+CREATE TABLE IF NOT EXISTS wiki.memos (
+    id              BIGSERIAL PRIMARY KEY,
+    subject_type    TEXT NOT NULL
+                    CHECK (subject_type IN ('concept','draft','page','claim')),
+    subject_id      BIGINT NOT NULL,
+    decision        TEXT NOT NULL,
+    rationale       TEXT NOT NULL DEFAULT '',
+    alternatives    JSONB NOT NULL DEFAULT '[]'::jsonb,
+    inputs          JSONB NOT NULL DEFAULT '{}'::jsonb,
+    confidence      REAL NOT NULL DEFAULT 0.5,
+    author          TEXT NOT NULL DEFAULT 'system',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Indexes for the likely query patterns
+CREATE INDEX IF NOT EXISTS idx_wiki_claim_events_memory
+    ON wiki.claim_events (memory_id);
+CREATE INDEX IF NOT EXISTS idx_wiki_claim_events_session
+    ON wiki.claim_events (session_id);
+CREATE INDEX IF NOT EXISTS idx_wiki_claim_events_embedding
+    ON wiki.claim_events USING hnsw (embedding vector_cosine_ops);
+
+CREATE INDEX IF NOT EXISTS idx_wiki_concepts_status
+    ON wiki.concepts (status) WHERE status IN ('candidate','saturating');
+CREATE INDEX IF NOT EXISTS idx_wiki_concepts_embedding
+    ON wiki.concepts USING hnsw (centroid_embedding vector_cosine_ops);
+
+CREATE INDEX IF NOT EXISTS idx_wiki_drafts_status
+    ON wiki.drafts (status) WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_wiki_pages_kind_status_domain
+    ON wiki.pages (kind, status, domain);
+CREATE INDEX IF NOT EXISTS idx_wiki_pages_lifecycle_domain
+    ON wiki.pages (lifecycle_state, domain)
+    WHERE lifecycle_state IN ('active','evergreen');
+CREATE INDEX IF NOT EXISTS idx_wiki_pages_heat
+    ON wiki.pages (heat DESC) WHERE NOT is_stale;
+CREATE INDEX IF NOT EXISTS idx_wiki_pages_tags_gin
+    ON wiki.pages USING gin (tags);
+CREATE INDEX IF NOT EXISTS idx_wiki_pages_embedding
+    ON wiki.pages USING hnsw (embedding vector_cosine_ops);
+
+CREATE INDEX IF NOT EXISTS idx_wiki_links_dst
+    ON wiki.links (dst_page_id) WHERE dst_page_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_wiki_links_dst_slug
+    ON wiki.links (dst_slug);
+
+CREATE INDEX IF NOT EXISTS idx_wiki_citations_page_time
+    ON wiki.citations (page_id, cited_at DESC);
+CREATE INDEX IF NOT EXISTS idx_wiki_citations_session
+    ON wiki.citations (session_id);
+
+CREATE INDEX IF NOT EXISTS idx_wiki_memos_subject
+    ON wiki.memos (subject_type, subject_id);
+"""
+
+# Triggers and PL/pgSQL functions for the wiki schema live in a separate
+# block because `_split_statements` treats any block containing `$$` as
+# a single atomic unit (CREATE FUNCTION body may contain semicolons).
+WIKI_TRIGGERS_DDL = """
+-- Trigger: denormalise citation_count + last_cited_at + heat bump on cite
+CREATE OR REPLACE FUNCTION wiki.on_citation_insert() RETURNS trigger AS $$
+BEGIN
+    UPDATE wiki.pages
+       SET citation_count = citation_count + 1,
+           last_cited_at = NEW.cited_at,
+           heat = LEAST(1.0, heat + 0.05),
+           tended = NEW.cited_at
+     WHERE id = NEW.page_id;
+    RETURN NEW;
+END; $$ LANGUAGE plpgsql;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_wiki_citation_bump') THEN
+    CREATE TRIGGER trg_wiki_citation_bump
+      AFTER INSERT ON wiki.citations
+      FOR EACH ROW EXECUTE FUNCTION wiki.on_citation_insert();
+  END IF;
+END $$;
+"""
+
+# Separate block: link-change trigger (PL/pgSQL function with $$)
+WIKI_LINK_TRIGGER_DDL = """
+CREATE OR REPLACE FUNCTION wiki.on_link_change() RETURNS trigger AS $$
+BEGIN
+    IF TG_OP = 'INSERT' AND NEW.dst_page_id IS NOT NULL THEN
+        UPDATE wiki.pages SET backlink_count = backlink_count + 1
+          WHERE id = NEW.dst_page_id;
+    ELSIF TG_OP = 'DELETE' AND OLD.dst_page_id IS NOT NULL THEN
+        UPDATE wiki.pages SET backlink_count = GREATEST(0, backlink_count - 1)
+          WHERE id = OLD.dst_page_id;
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF OLD.dst_page_id IS DISTINCT FROM NEW.dst_page_id THEN
+            IF OLD.dst_page_id IS NOT NULL THEN
+                UPDATE wiki.pages SET backlink_count = GREATEST(0, backlink_count - 1)
+                  WHERE id = OLD.dst_page_id;
+            END IF;
+            IF NEW.dst_page_id IS NOT NULL THEN
+                UPDATE wiki.pages SET backlink_count = backlink_count + 1
+                  WHERE id = NEW.dst_page_id;
+            END IF;
+        END IF;
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END; $$ LANGUAGE plpgsql;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_wiki_link_change') THEN
+    CREATE TRIGGER trg_wiki_link_change
+      AFTER INSERT OR UPDATE OR DELETE ON wiki.links
+      FOR EACH ROW EXECUTE FUNCTION wiki.on_link_change();
+  END IF;
+END $$;
+"""
+
 SUPPORT_TABLES_DDL = """
 CREATE TABLE IF NOT EXISTS prospective_memories (
     id                  SERIAL PRIMARY KEY,
@@ -849,6 +1113,9 @@ def get_all_ddl() -> list[str]:
         ENTITIES_DDL,
         RELATIONSHIPS_DDL,
         MEMORY_ENTITIES_DDL,
+        WIKI_SCHEMA_DDL,
+        WIKI_TRIGGERS_DDL,
+        WIKI_LINK_TRIGGER_DDL,
         SUPPORT_TABLES_DDL,
         INDEXES_DDL,
         MIGRATIONS_DDL,
