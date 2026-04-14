@@ -17,7 +17,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core.concept_emerger import emerge
+from mcp_server.core.concept_emerger import (
+    COLD_START_MEMORY_THRESHOLD,
+    cold_start_thresholds,
+    emerge,
+)
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.pg_store_wiki import (
@@ -197,7 +201,26 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     )
     existing_index = _existing_concepts_index(conn, candidate_entities)
 
-    plans, stats = emerge(claims=claims, existing_concepts_by_entities=existing_index)
+    # Cold-start detection: measured against TOTAL resolved-claim
+    # corpus size, not the loaded batch. That way a large corpus
+    # processed in small pages still runs with steady-state rules,
+    # and fresh installs benefit from the relaxed thresholds.
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) FROM wiki.claim_events "
+            "WHERE entity_ids IS NOT NULL "
+            "AND array_length(entity_ids, 1) > 0"
+        )
+        row = cur.fetchone()
+        total_claims = row["count"] if isinstance(row, dict) else row[0]
+    cold_start = total_claims < COLD_START_MEMORY_THRESHOLD
+    thresholds = cold_start_thresholds() if cold_start else None
+
+    plans, stats = emerge(
+        claims=claims,
+        existing_concepts_by_entities=existing_index,
+        thresholds=thresholds,
+    )
 
     inserted = 0
     updated = 0
@@ -228,5 +251,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "concepts_saturating": stats.saturating,
         "promoted_concept_ids": promoted_ids[:20],
         "saturating_concept_ids": saturating_ids[:20],
+        "regime": "cold_start" if cold_start else "steady_state",
         "dry_run": dry_run,
     }
