@@ -274,6 +274,134 @@ def get_claims_for_memory(conn: Connection, memory_id: int) -> list[dict]:
         return list(cur.fetchall())
 
 
+def get_entities_by_memory(
+    conn: Connection, memory_ids: list[int]
+) -> dict[int, list[int]]:
+    """Pre-fetch memory_id → list[entity_id] for a batch of memories."""
+    if not memory_ids:
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT memory_id, entity_id FROM memory_entities "
+            "WHERE memory_id = ANY(%s)",
+            (list(memory_ids),),
+        )
+        rows = cur.fetchall()
+    out: dict[int, list[int]] = {}
+    for r in rows:
+        if isinstance(r, dict):
+            mid, eid = r["memory_id"], r["entity_id"]
+        else:
+            mid, eid = r[0], r[1]
+        out.setdefault(mid, []).append(eid)
+    return out
+
+
+def get_entity_name_index(conn: Connection, limit: int = 5000) -> dict[str, int]:
+    """Return name → entity_id map for inline-mention matching.
+
+    Limit caps the index size for in-memory matching against claim text.
+    Heat-ranked so the most frequently-touched entities win.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT name, id FROM entities ORDER BY heat DESC NULLS LAST LIMIT %s",
+            (limit,),
+        )
+        rows = cur.fetchall()
+    out: dict[str, int] = {}
+    for r in rows:
+        if isinstance(r, dict):
+            name, eid = r["name"], r["id"]
+        else:
+            name, eid = r[0], r[1]
+        if name and len(name) >= 3:
+            out[name] = eid
+    return out
+
+
+def get_claims_by_entity(
+    conn: Connection,
+    entity_ids: list[int],
+    exclude_claim_ids: list[int] | None = None,
+) -> dict[int, list[dict]]:
+    """For each entity_id, fetch claims that already reference it.
+
+    Used by the resolver to find supersedes / conflict candidates.
+    Excludes the claims being resolved (avoid self-matches).
+    """
+    if not entity_ids:
+        return {}
+    excl = exclude_claim_ids or []
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT id, memory_id, text, claim_type, entity_ids, supersedes,
+                   extracted_at
+              FROM wiki.claim_events
+             WHERE entity_ids && %s::int[]
+               AND (%s::bigint[] IS NULL OR NOT (id = ANY(%s::bigint[])))
+            """,
+            (list(entity_ids), excl or None, excl or None),
+        )
+        rows = list(cur.fetchall())
+    out: dict[int, list[dict]] = {}
+    for r in rows:
+        # entity_ids returns as a list already (PG INT[] → Python list)
+        for eid in r.get("entity_ids") or []:
+            if eid in entity_ids:
+                out.setdefault(eid, []).append(r)
+    return out
+
+
+def update_claim_entities(
+    conn: Connection, updates: list[tuple[int, list[int]]]
+) -> int:
+    """Bulk update wiki.claim_events.entity_ids. Returns rows updated.
+
+    Idempotent: only writes when the new list differs from the current.
+    """
+    if not updates:
+        return 0
+    written = 0
+    with conn.cursor() as cur:
+        for claim_id, eids in updates:
+            cur.execute(
+                """
+                UPDATE wiki.claim_events
+                   SET entity_ids = %s::int[]
+                 WHERE id = %s
+                   AND entity_ids IS DISTINCT FROM %s::int[]
+                """,
+                (eids, claim_id, eids),
+            )
+            written += cur.rowcount
+    return written
+
+
+def update_claim_supersedes(conn: Connection, updates: list[tuple[int, int]]) -> int:
+    """Bulk update wiki.claim_events.supersedes. Returns rows updated.
+
+    ``updates`` is [(new_claim_id, superseded_claim_id), ...].
+    """
+    if not updates:
+        return 0
+    written = 0
+    with conn.cursor() as cur:
+        for new_id, sup_id in updates:
+            cur.execute(
+                """
+                UPDATE wiki.claim_events
+                   SET supersedes = %s
+                 WHERE id = %s
+                   AND (supersedes IS NULL OR supersedes <> %s)
+                """,
+                (sup_id, new_id, sup_id),
+            )
+            written += cur.rowcount
+    return written
+
+
 # ── wiki.citations ─────────────────────────────────────────────────────
 
 
