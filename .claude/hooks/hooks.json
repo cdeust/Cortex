@@ -4,82 +4,138 @@
       {
         "matcher": "Bash",
         "when": "command contains 'git commit'",
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-zetetic.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit-zetetic.sh"
+          }
+        ]
       },
       {
         "matcher": "Bash",
         "when": "command contains 'git push'",
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-review.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-review.sh"
+          }
+        ]
       },
       {
         "matcher": "Bash",
         "when": "command contains 'git push'",
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-provenance.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-push-provenance.sh"
+          }
+        ]
       },
       {
         "matcher": "Edit|Write",
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-layer-check.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-edit-layer-check.sh"
+          }
+        ]
       },
       {
         "matcher": "Edit|Write",
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-claim-gate.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/pre-tool-claim-gate.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
         "matcher": "Bash",
         "when": "command contains 'git commit'",
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-difficulty.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-difficulty.sh"
+          }
+        ]
       },
       {
         "matcher": "Bash",
         "when": "command contains 'git commit'",
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-lab-notebook.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-commit-lab-notebook.sh"
+          }
+        ]
       },
       {
         "matcher": "Edit|Write",
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-balance.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-balance.sh"
+          }
+        ]
       },
       {
         "matcher": "WebFetch|WebSearch",
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-research-provenance.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-research-provenance.sh"
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [
       {
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-error-routing.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-tool-error-routing.sh"
+          }
+        ]
       }
     ],
     "SessionStart": [
       {
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
+          }
+        ]
       },
       {
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start-research.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-start-research.sh"
+          }
+        ]
       }
     ],
     "Stop": [
       {
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-end.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-end.sh"
+          }
+        ]
       }
     ],
     "Notification": [
       {
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification-handler.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/notification-handler.sh"
+          }
+        ]
       }
     ]
   }
