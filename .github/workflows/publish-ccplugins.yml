@@ -27,7 +27,20 @@ jobs:
       PLUGIN_NAME: cortex
       CATEGORY: "Development Engineering"
     steps:
+      - name: Guard — skip cleanly when CCPLUGINS_PAT is missing
+        id: guard
+        env:
+          PAT: ${{ secrets.CCPLUGINS_PAT }}
+        run: |
+          if [ -z "$PAT" ]; then
+            echo "CCPLUGINS_PAT secret not configured — skipping."
+            echo "has_pat=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_pat=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout Cortex
+        if: steps.guard.outputs.has_pat == 'true'
         uses: actions/checkout@v4
         with:
           path: cortex
@@ -35,6 +48,7 @@ jobs:
 
       - name: Resolve release tag
         id: tag
+        if: steps.guard.outputs.has_pat == 'true'
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             TAG="${{ github.event.release.tag_name }}"
@@ -45,6 +59,7 @@ jobs:
           echo "Release tag: $TAG"
 
       - name: Checkout fork of ccplugins
+        if: steps.guard.outputs.has_pat == 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ env.FORK }}
@@ -53,6 +68,7 @@ jobs:
           fetch-depth: 0
 
       - name: Sync fork with upstream
+        if: steps.guard.outputs.has_pat == 'true'
         working-directory: ccplugins
         env:
           GH_TOKEN: ${{ secrets.CCPLUGINS_PAT }}
@@ -68,6 +84,7 @@ jobs:
           git push origin main --force-with-lease
 
       - name: Write plugin bundle
+        if: steps.guard.outputs.has_pat == 'true'
         working-directory: ccplugins
         run: |
           set -euo pipefail
@@ -108,6 +125,7 @@ jobs:
           EOF
 
       - name: Update index entry in README
+        if: steps.guard.outputs.has_pat == 'true'
         working-directory: ccplugins
         run: |
           python3 - <<'PY'
@@ -144,6 +162,7 @@ jobs:
 
       - name: Stage, commit, diff
         id: diff
+        if: steps.guard.outputs.has_pat == 'true'
         working-directory: ccplugins
         run: |
           git add "plugins/${PLUGIN_NAME}" README.md
@@ -164,7 +183,7 @@ jobs:
           Automated sync from cdeust/Cortex@${{ github.sha }}."
 
       - name: Push + open (or update) PR
-        if: steps.diff.outputs.changed == 'true' && inputs.dry_run != true
+        if: steps.guard.outputs.has_pat == 'true' && steps.diff.outputs.changed == 'true' && inputs.dry_run != true
         working-directory: ccplugins
         env:
           GH_TOKEN: ${{ secrets.CCPLUGINS_PAT }}

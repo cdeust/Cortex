@@ -31,7 +31,21 @@ jobs:
       UPSTREAM: ccplugins/awesome-claude-code-plugins
       FORK:     cdeust/awesome-claude-code-plugins
     steps:
+      - name: Guard — skip cleanly when CCPLUGINS_PAT is missing
+        id: guard
+        env:
+          PAT: ${{ secrets.CCPLUGINS_PAT }}
+        run: |
+          if [ -z "$PAT" ]; then
+            echo "CCPLUGINS_PAT secret not configured — skipping."
+            echo "Add it at Settings → Secrets and variables → Actions."
+            echo "has_pat=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_pat=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout fork
+        if: steps.guard.outputs.has_pat == 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ env.FORK }}
@@ -39,6 +53,7 @@ jobs:
           fetch-depth: 0
 
       - name: Fast-forward main from upstream
+        if: steps.guard.outputs.has_pat == 'true'
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
