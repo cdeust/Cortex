@@ -85,20 +85,24 @@ _abs = _safe_join
 def read_page(root: Path | str, rel_path: str) -> str | None:
     import os
 
-    # Inline sanitization at the sink — no cross-function taint gap.
+    # Inline sanitization — variable used at the sink must be the SAME
+    # variable that was validated by commonpath. Rebinding through
+    # Path(...) creates a new binding CodeQL can't track across.
     if not rel_path or "\x00" in rel_path or os.path.isabs(rel_path):
         return None
     root_resolved = os.path.realpath(str(root))
-    candidate = os.path.realpath(os.path.join(root_resolved, rel_path))
+    safe_path = os.path.realpath(os.path.join(root_resolved, rel_path))
     try:
-        if os.path.commonpath([root_resolved, candidate]) != root_resolved:
+        if os.path.commonpath([root_resolved, safe_path]) != root_resolved:
             return None
     except ValueError:
         return None
-    target = Path(candidate)
-    if not target.exists():
+    # safe_path is now sanitized — use it directly as the path argument
+    # to os.path.exists / open. No rebinding through Path().
+    if not os.path.exists(safe_path):
         return None
-    return target.read_text(encoding="utf-8")
+    with open(safe_path, encoding="utf-8") as f:
+        return f.read()
 
 
 def _atomic_write_bytes(target: Path, content: str) -> int:
@@ -126,44 +130,66 @@ def write_page(
     """
     import os
 
-    # Inline sanitization at the sink — duplicates _safe_join but keeps
-    # the full taint-flow local for static analysis.
+    # Inline sanitization — the variable used at the filesystem sink
+    # must be the SAME variable that was validated by commonpath,
+    # otherwise CodeQL loses the sanitizer link across rebinds.
     if not rel_path or "\x00" in rel_path:
         raise ValueError("invalid wiki path: empty or contains null byte")
     if os.path.isabs(rel_path):
         raise ValueError(f"absolute paths are not allowed: {rel_path!r}")
     root_resolved = os.path.realpath(str(Path(root)))
-    candidate = os.path.realpath(os.path.join(root_resolved, rel_path))
+    safe_path = os.path.realpath(os.path.join(root_resolved, rel_path))
     try:
-        if os.path.commonpath([root_resolved, candidate]) != root_resolved:
+        if os.path.commonpath([root_resolved, safe_path]) != root_resolved:
             raise ValueError(f"path escapes wiki root: {rel_path!r}")
     except ValueError as exc:
         raise ValueError(f"path escapes wiki root: {rel_path!r}") from exc
-    target = Path(candidate)
-    existed = target.exists()
+
+    existed = os.path.exists(safe_path)
 
     if mode == "create":
         if existed:
             raise WikiExists(rel_path)
-        written = _atomic_write_bytes(target, content)
+        written = _atomic_write_bytes_str(safe_path, content)
     elif mode == "replace":
-        written = _atomic_write_bytes(target, content)
+        written = _atomic_write_bytes_str(safe_path, content)
     elif mode == "append":
         if not existed:
             raise WikiMissing(rel_path)
-        current = target.read_text(encoding="utf-8")
+        with open(safe_path, encoding="utf-8") as f:
+            current = f.read()
         if current and not current.endswith("\n"):
             current += "\n"
         merged = current + "\n" + content
         if not merged.endswith("\n"):
             merged += "\n"
-        written = _atomic_write_bytes(target, merged)
+        written = _atomic_write_bytes_str(safe_path, merged)
     else:
         raise ValueError(f"unknown write mode: {mode}")
 
     return WriteResult(
         path=rel_path, mode=mode, created=not existed, bytes_written=written
     )
+
+
+def _atomic_write_bytes_str(safe_path: str, content: str) -> int:
+    """Write ``content`` atomically to an ALREADY-SANITIZED path string.
+
+    Separate from ``_atomic_write_bytes`` so the string-based flow from
+    ``write_page`` doesn't rebind through ``Path(...)`` — keeps the
+    sanitizer→sink chain on the same variable for static analysis.
+    """
+    import os
+
+    parent = os.path.dirname(safe_path)
+    if parent and not os.path.isdir(parent):
+        os.makedirs(parent, exist_ok=True)
+    tmp = safe_path + ".tmp"
+    data = content.encode("utf-8")
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, safe_path)
+    return len(data)
 
 
 def append_section(
