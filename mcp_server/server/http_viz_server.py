@@ -344,20 +344,27 @@ def _build_unified_handler(
                     send_json_response(self, result)
                     return
                 data = base64.b64decode(result["content_base64"])
-                # Sanitize filename before it flows into the
-                # Content-Disposition header — rel_path is user-
-                # controlled via the ?path= query string. CodeQL
-                # py/http-response-splitting: any \r\n in the value
-                # would allow header injection. Allow only safe
-                # filesystem chars and cap length.
-                raw_name = (rel_path.split("/")[-1] or "page").rsplit(".", 1)[0]
-                filename = re.sub(r"[^\w.-]", "_", raw_name)[:200] or "page"
-                fmt_out = re.sub(r"[^\w]", "", result["format"])[:16]
+                # CodeQL py/http-response-splitting: the previous
+                # re.sub() sanitizer wasn't recognised by the taint
+                # tracker because rel_path still flowed into the
+                # Content-Disposition header. Eliminate the taint
+                # entirely by picking from a dict of compile-time
+                # literals — the output value is ALWAYS one of four
+                # constant strings, no user input path remains.
+                _EXPORT_FILENAMES = {
+                    "pdf": "cortex-export.pdf",
+                    "tex": "cortex-export.tex",
+                    "docx": "cortex-export.docx",
+                    "html": "cortex-export.html",
+                }
+                safe_filename = _EXPORT_FILENAMES.get(
+                    result.get("format", ""), "cortex-export.bin"
+                )
                 self.send_response(200)
                 self.send_header("Content-Type", result["mime"])
                 self.send_header(
                     "Content-Disposition",
-                    f'attachment; filename="{filename}.{fmt_out}"',
+                    f'attachment; filename="{safe_filename}"',
                 )
                 self.send_header("Content-Length", str(len(data)))
                 self.send_header("Access-Control-Allow-Origin", "*")
