@@ -132,6 +132,14 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
     stats["duration_ms"] = elapsed_ms
+
+    # Aggregate rollup — surfacing partial failures (issue #13, code-reviewer).
+    # Without this, a caller that only reads duration_ms cannot tell that
+    # one or more stages errored inside _timed.
+    failed = [k for k, v in stats.items() if isinstance(v, dict) and "error" in v]
+    stats["failed_stages"] = failed
+    stats["status"] = "ok" if not failed else "partial"
+
     _log_consolidation(store, stats, elapsed_ms)
     return stats
 
@@ -179,16 +187,11 @@ def _run_always_cycles(
     if args.get("deep", False):
         stats["transfer"] = _timed(run_two_stage_transfer, store)
 
-    try:
-        t0 = time.monotonic()
+    def _run_emergence() -> dict[str, Any]:
         all_mems = store.get_all_memories_for_decay()
-        report = emergence_tracker.generate_emergence_report(all_mems) or {}
-        if isinstance(report, dict):
-            report["duration_ms"] = int((time.monotonic() - t0) * 1000)
-        stats["emergence"] = report
-    except Exception as exc:
-        logger.warning("Emergence report failed: %s", exc)
-        stats["emergence"] = {"error": f"{type(exc).__name__}: {exc}"}
+        return emergence_tracker.generate_emergence_report(all_mems) or {}
+
+    stats["emergence"] = _timed(_run_emergence)
 
     return stats
 
