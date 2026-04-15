@@ -155,6 +155,59 @@ _DEIXIS_PATTERNS = [
     ),
 ]
 
+# Path- or URL-shaped titles — these are file/URL access audit records,
+# not curated knowledge. Keep them as memories (for recall), refuse
+# promotion to the wiki.
+_PATH_OR_URL_TITLE_PATTERNS = [
+    # Absolute POSIX / Windows path as title
+    re.compile(r"^\s*#*\s*[/~]"),
+    re.compile(r"^\s*#*\s*[A-Za-z]:[\\/]"),  # Windows drive letter
+    # URL as title
+    re.compile(r"^\s*#*\s*(https?|ftp|file|ssh|git)://", re.IGNORECASE),
+    # Lone filename as the bulk of the title
+    re.compile(
+        r"^\s*#*\s*[\w.-]+\.(pdf|png|jpg|jpeg|svg|gif|zip|tar\.gz|docx?|xlsx?|csv|log|yaml|yml)\b",
+        re.IGNORECASE,
+    ),
+]
+
+# Session / audit artefact tags — these are recall-fodder, not wiki-worthy.
+# Any hit in tags auto-rejects from the wiki (memory is preserved separately).
+_AUDIT_TAGS = frozenset(
+    {
+        "_backfill",
+        "imported",
+        "session-summary",
+        "tool-output",
+        "code-review",
+        "stage-1",
+        "stage-2",
+        "stage-3",
+        "stage-4",
+        "stage-5",
+        "stage-6",
+        "stage-7",
+        "stage-8",
+        "stage-9",
+        "stage-10",
+        "stage-11",
+        "audit",
+        "automated",
+        "wip",
+        "progress",
+    }
+)
+
+# Audit/review-shaped title patterns — "stage N:", "code review", "audit:",
+# "session N" — these are work-product reports, not durable knowledge.
+_AUDIT_TITLE_PATTERNS = [
+    re.compile(r"\bstage[ -]?\d+\b", re.IGNORECASE),
+    re.compile(
+        r"\b(code[ -]?review|audit[ -]?report|review[ -]?notes?)\b", re.IGNORECASE
+    ),
+    re.compile(r"\bsession[ -]?(summary|log|report|\d+)\b", re.IGNORECASE),
+]
+
 
 def _fails_hard_negatives(content: str, first_line: str) -> bool:
     """Return True if content hits any hard-negative pattern.
@@ -177,7 +230,23 @@ def _fails_hard_negatives(content: str, first_line: str) -> bool:
     for pat in _DEIXIS_PATTERNS:
         if pat.search(first_line):
             return True
+    for pat in _PATH_OR_URL_TITLE_PATTERNS:
+        if pat.search(first_line):
+            return True
+    for pat in _AUDIT_TITLE_PATTERNS:
+        if pat.search(first_line):
+            return True
     return False
+
+
+def _fails_audit_tag_gate(tags: set[str]) -> bool:
+    """Return True if any audit/session tag is present.
+
+    Audit-tagged memories are valuable for recall but should never be
+    promoted to the wiki — the wiki is for curated specs, ADRs,
+    architecture, security, and lessons.
+    """
+    return bool(tags & _AUDIT_TAGS)
 
 
 # ── Positive quality signals (admit only if ≥ threshold) ──────────────
@@ -374,6 +443,16 @@ def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
     stripped = content.strip()
     first_line = stripped.split("\n", 1)[0].strip()
 
+    # Gate -1 — Audit-tag gate (runs BEFORE user rules).
+    # Session artefacts (backfill, imports, tool output, code reviews,
+    # stage reports) are memory-only. They are valuable for recall but
+    # noise in the wiki. This runs first because even a user rule that
+    # matches "Decision:" should not override the audit-tag disqualifier:
+    # backfilled decisions are still backfill, not curated knowledge.
+    tag_set_pre = {t.lower() for t in (tags or [])}
+    if _fails_audit_tag_gate(tag_set_pre):
+        return None
+
     # Gate 0 — User-editable rules (Phase 5.1).
     # If the wiki has rules in `_rules/*.md`, they fire BEFORE the
     # hardcoded defaults so the user can override any built-in
@@ -398,13 +477,14 @@ def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
     if slug in _REJECT_TITLES:
         return None
 
-    # Gate 2 — Hard-negative gate (task-shape, narration, status, deixis)
+    # Gate 2 — Hard-negative gate (task-shape, narration, status, deixis,
+    # path/URL titles, audit-shaped titles)
     if _fails_hard_negatives(content, first_line):
         return None
 
     # Tag-based fast-path: explicit knowledge tags bypass positive scoring.
     # The caller has declared intent; trust the declaration.
-    tag_set = {t.lower() for t in (tags or [])}
+    tag_set = tag_set_pre
     _EXPLICIT_KNOWLEDGE_TAGS = {
         "decision",
         "adr",
