@@ -34,23 +34,43 @@ from mcp_server.infrastructure.pg_store_wiki import (
 
 schema = {
     "description": (
-        "Run a concept emergence pass. Clusters resolved claim_events "
-        "by entity overlap, computes axial slots and saturation, "
-        "promotes saturated concepts to ready-for-synthesis status. "
-        "Phase 3 of the redesign pipeline."
+        "Cluster resolved claim_events by shared entity sets into candidate "
+        "concepts, compute their axial slots (the structural dimensions a "
+        "concept must fill) and saturation rate, then transition each through "
+        "candidate → saturating → promoted as evidence accumulates. Phase 3 of "
+        "the wiki redesign pipeline; runs after `wiki_resolve` and feeds "
+        "`wiki_synthesize` (Path B, concept-driven drafts). Mutates "
+        "wiki.concepts and writes audit memos. Auto-detects cold-start regime "
+        "(corpus < threshold) and applies relaxed thresholds. Distinct from "
+        "`wiki_extract` (atomic claims) and `wiki_synthesize` (drafts). "
+        "Latency varies (~1-10s depending on claim count). Returns "
+        "{claims_loaded, concepts_inserted, concepts_updated, "
+        "concepts_promoted, regime}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "limit": {
                 "type": "integer",
+                "description": (
+                    "Max resolved claim_events to load for the clustering pass. "
+                    "Cold-start detection still uses the full corpus count."
+                ),
                 "default": 5000,
-                "description": "Max claims to load for clustering.",
+                "minimum": 1,
+                "maximum": 50000,
+                "examples": [1000, 5000, 20000],
             },
             "dry_run": {
                 "type": "boolean",
+                "description": (
+                    "Compute and return clustering plans without persisting "
+                    "any rows. Useful for inspecting what an emergence pass "
+                    "would do before committing."
+                ),
                 "default": False,
-                "description": "Compute plans without persisting them.",
+                "examples": [False, True],
             },
         },
     },

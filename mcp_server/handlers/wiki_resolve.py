@@ -32,27 +32,54 @@ from mcp_server.infrastructure.pg_store_wiki import (
 
 schema = {
     "description": (
-        "Resolve claim_events: link entities, detect supersedes "
-        "and conflicts. Phase 2.2 of the wiki redesign pipeline."
+        "Attach entity_ids to unresolved claim_events, detect supersedes "
+        "relationships against prior claims for the same entities, and log "
+        "conflict candidates. Phase 2.2 of the wiki redesign pipeline; runs "
+        "after `wiki_extract` and before `wiki_emerge`. Reads "
+        "wiki.claim_events plus the entity name index; writes entity_ids, "
+        "supersedes pointers, and audit memos. Idempotent — already-resolved "
+        "rows are skipped unless memory_id is given. Distinct from "
+        "`wiki_extract` which creates the rows, and from `wiki_emerge` which "
+        "clusters resolved claims into concepts. Latency ~100ms per 100 "
+        "claims. Returns {claims_processed, entity_links_written, "
+        "supersedes_written, conflicts_logged}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "memory_id": {
                 "type": "integer",
-                "description": "Resolve claims from this memory only.",
+                "description": (
+                    "Resolve every claim_event for this memory regardless of "
+                    "current entity_ids state. Omit to sweep only unresolved "
+                    "claims (entity_ids empty)."
+                ),
+                "minimum": 1,
+                "examples": [42, 1024],
             },
             "limit": {
                 "type": "integer",
+                "description": (
+                    "Max unresolved claims to process per sweep. Ignored when "
+                    "memory_id is given."
+                ),
                 "default": 500,
-                "description": "Max claims to process per sweep.",
+                "minimum": 1,
+                "maximum": 10000,
+                "examples": [200, 500, 2000],
             },
             "name_index_size": {
                 "type": "integer",
-                "default": 5000,
                 "description": (
-                    "How many top-heat entity names to load for inline matching."
+                    "How many top-heat entity names to preload for inline string "
+                    "matching during resolution. Higher values catch more "
+                    "mentions at the cost of memory."
                 ),
+                "default": 5000,
+                "minimum": 0,
+                "maximum": 50000,
+                "examples": [1000, 5000, 20000],
             },
         },
     },

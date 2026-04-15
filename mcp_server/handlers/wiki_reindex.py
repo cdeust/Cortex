@@ -23,12 +23,18 @@ _BANNER = (
 
 schema = {
     "description": (
-        "Regenerate the wiki table of contents at .generated/INDEX.md by "
-        "enumerating every authored page and grouping it by kind (decision, "
-        "concept, ADR, runbook, etc.). Output is deterministic — sorted by "
-        "kind then path so unchanged wikis yield byte-identical INDEX files. "
-        "Authored pages are never modified. Use this after bulk wiki edits or "
-        "imports. Returns the index path, total page count, and per-kind counts."
+        "Regenerate the wiki table of contents at "
+        "<wiki_root>/.generated/INDEX.md by enumerating every authored page "
+        "and grouping it by kind (adr, specs, guides, reference, "
+        "conventions, lessons, notes, journal, files). Output is "
+        "deterministic — sorted by kind then path so unchanged wikis yield "
+        "byte-identical INDEX files. Authored pages are never touched; the "
+        "only file written is INDEX.md, atomically via tmp+rename. Use this "
+        "after bulk wiki edits, imports, or `wiki_compile` runs. Distinct "
+        "from `wiki_list` (returns the listing in the response, no file "
+        "write) and from `wiki_consolidate` (heat decay / staleness, not ToC "
+        "rebuild). Takes no arguments. Latency <100ms even for thousands of "
+        "pages. Returns {path, total_pages, by_kind: {kind: count}, root}."
     ),
     "inputSchema": {
         "type": "object",

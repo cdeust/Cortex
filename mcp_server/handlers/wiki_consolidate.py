@@ -45,29 +45,70 @@ from mcp_server.infrastructure.pg_store_wiki import (
 
 schema = {
     "description": (
-        "Run the wiki thermodynamic consolidation sweep: decay heat, "
-        "transition lifecycles, mark stale pages. Phase 4 of the redesign."
+        "Run the periodic wiki maintenance sweep: thermodynamic heat decay, "
+        "lifecycle transitions (active → area → archived, archived → active "
+        "on revival), and staleness checks for pages whose file references "
+        "no longer exist on disk. Phase 4 of the wiki redesign pipeline; "
+        "schedule on a daily/weekly cadence. Mutates wiki.pages and writes "
+        "audit memos. Distinct from `consolidate` (which operates on "
+        "memories, not wiki pages), and from `wiki_purge` (which deletes "
+        "pages failing classifier rules). File-existence checks are sandboxed "
+        "to repo_root. Latency ~1-3s for 5000 pages. Returns "
+        "{pages_evaluated, pages_decayed, transitions, staleness, "
+        "avg_heat_before/after}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
-            "limit": {"type": "integer", "default": 5000},
-            "dry_run": {"type": "boolean", "default": False},
-            "skip_staleness": {"type": "boolean", "default": False},
+            "limit": {
+                "type": "integer",
+                "description": (
+                    "Max pages to evaluate in this sweep. Pages are processed "
+                    "oldest-touched first."
+                ),
+                "default": 5000,
+                "minimum": 1,
+                "maximum": 50000,
+                "examples": [500, 5000, 20000],
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": (
+                    "Compute decay/transition/staleness decisions and return "
+                    "the summary without persisting any changes."
+                ),
+                "default": False,
+                "examples": [False, True],
+            },
+            "skip_staleness": {
+                "type": "boolean",
+                "description": (
+                    "Skip Pass 2 (filesystem reference checks). Useful when "
+                    "running consolidation in an environment without the "
+                    "source tree mounted."
+                ),
+                "default": False,
+                "examples": [False, True],
+            },
             "include_archived": {
                 "type": "boolean",
-                "default": False,
                 "description": (
-                    "Also evaluate archived pages (only useful to detect "
-                    "revivals — usually handled by the citation trigger)."
+                    "Also evaluate already-archived pages — only useful to "
+                    "detect revivals from new citations; usually handled by "
+                    "the citation trigger automatically."
                 ),
+                "default": False,
+                "examples": [False, True],
             },
             "repo_root": {
                 "type": "string",
                 "description": (
-                    "Override the repo root used for staleness file "
-                    "checks (defaults to current working directory)."
+                    "Absolute path used as the sandbox root when resolving "
+                    "page file references for staleness checks. Defaults to "
+                    "the current working directory."
                 ),
+                "examples": ["/Users/alice/code/cortex"],
             },
         },
     },

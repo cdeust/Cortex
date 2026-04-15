@@ -1,4 +1,4 @@
-"""Tests for tool registration — verify all 9 tools are registered via FastMCP."""
+"""Tests for tool registration — verify tier-1 tools are registered via FastMCP."""
 
 import asyncio
 
@@ -6,7 +6,7 @@ from mcp_server.__main__ import mcp
 
 
 class TestRegistry:
-    def test_has_all_nine_tools(self):
+    def test_has_all_tier1_tools(self):
         tools = asyncio.run(mcp.list_tools())
         tool_names = {t.name for t in tools}
         expected = [
@@ -18,7 +18,6 @@ class TestRegistry:
             "get_methodology_graph",
             "open_visualization",
             "explore_features",
-            "run_pipeline",
         ]
         for name in expected:
             assert name in tool_names, f"Missing tool: {name}"

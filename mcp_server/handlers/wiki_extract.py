@@ -29,27 +29,49 @@ from mcp_server.infrastructure.pg_store_wiki import (
 
 schema = {
     "description": (
-        "Extract typed claim_events from one memory or sweep all "
-        "un-extracted memories. Phase 2.1 of the wiki redesign pipeline."
+        "Parse a memory's prose into typed wiki.claim_events rows (assertion, "
+        "decision, method, result, observation, question, reference, limitation), "
+        "each carrying entity_ids, evidence_refs, confidence, and a supersedes "
+        "pointer. Phase 2.1 of the wiki redesign pipeline; the foundational "
+        "step every later phase reads from. Pass memory_id to extract one; "
+        "omit to sweep all not-yet-extracted memories. Mutates wiki.claim_events. "
+        "Distinct from `wiki_resolve` which links these claims to entities, and "
+        "from `wiki_synthesize` which renders them into drafts. Latency ~50ms "
+        "per memory. Returns {memories_processed, claims_inserted, "
+        "claims_per_type, errors}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "memory_id": {
                 "type": "integer",
-                "description": "Extract from this single memory only.",
+                "description": (
+                    "Extract claims from this single memory only. Omit to sweep "
+                    "every memory that has no claim_events yet."
+                ),
+                "minimum": 1,
+                "examples": [42, 1024],
             },
             "force": {
                 "type": "boolean",
-                "default": False,
                 "description": (
-                    "Re-extract even if claims already exist for this memory."
+                    "Re-extract even when claim_events already exist for the "
+                    "memory; existing rows for that memory are deleted first."
                 ),
+                "default": False,
+                "examples": [False, True],
             },
             "limit": {
                 "type": "integer",
+                "description": (
+                    "Max memories to process in a single sweep call. Ignored "
+                    "when memory_id is given."
+                ),
                 "default": 200,
-                "description": "Max memories to process in a sweep.",
+                "minimum": 1,
+                "maximum": 5000,
+                "examples": [100, 200, 1000],
             },
         },
     },

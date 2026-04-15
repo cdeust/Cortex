@@ -26,21 +26,79 @@ from typing import Any
 
 schema = {
     "description": (
-        "Seed the wiki from markdown documents already in the repo "
-        "(README, ADRs, docs/, …). Imports each as a memory, runs the "
-        "full wiki pipeline, returns per-stage counts."
+        "Bootstrap the wiki from markdown documents already in the repo "
+        "(README, CHANGELOG, CONTRIBUTING, ARCHITECTURE, docs/**/*.md, "
+        "adr/**/*.md, ADR-*.md, AGENTS.md, CLAUDE.md). Each file becomes "
+        "one memory tagged `seed:codebase` plus an inferred kind tag, then "
+        "(unless skipped) the full `wiki_pipeline` runs to convert those "
+        "memories into claim_events → concepts → drafts → published pages. "
+        "Use this on first install so the wiki is non-empty within minutes "
+        "instead of waiting for session memories to accumulate. Distinct "
+        "from `seed_project` (analyzes the codebase structure to seed "
+        "memories, not docs), `codebase_analyze` (tree-sitter AST "
+        "structural memories), and `backfill_memories` (Claude Code "
+        "conversation history). Per-file size capped (8 kB head); binaries "
+        "and node_modules-style paths skipped. Latency varies (~30s-3min "
+        "depending on doc count). Returns {files_found, imported, errors, "
+        "pipeline?: per-stage counts}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "repo_root": {
                 "type": "string",
-                "description": "Path to the repo. Defaults to cwd.",
+                "description": (
+                    "Absolute path to the repository to scan for seed-eligible "
+                    "markdown. Defaults to the current working directory."
+                ),
+                "examples": ["/Users/alice/code/cortex"],
             },
-            "max_files": {"type": "integer", "default": 50},
-            "max_bytes_per_file": {"type": "integer", "default": 8192},
-            "dry_run": {"type": "boolean", "default": False},
-            "run_pipeline": {"type": "boolean", "default": True},
+            "max_files": {
+                "type": "integer",
+                "description": (
+                    "Hard cap on the number of files imported in one call. "
+                    "Files past this cap are silently dropped (priority order: "
+                    "README, CHANGELOG, ARCHITECTURE, docs/, ADRs, …)."
+                ),
+                "default": 50,
+                "minimum": 1,
+                "maximum": 1000,
+                "examples": [25, 50, 200],
+            },
+            "max_bytes_per_file": {
+                "type": "integer",
+                "description": (
+                    "Per-file content size cap (head-only, prevents a giant "
+                    "README from flooding the extractor). Truncated content "
+                    "gets a `[...truncated]` marker."
+                ),
+                "default": 8192,
+                "minimum": 256,
+                "maximum": 1048576,
+                "examples": [4096, 8192, 32768],
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": (
+                    "List the files that WOULD be imported (with inferred "
+                    "kind and size) without writing any memories or running "
+                    "the pipeline."
+                ),
+                "default": False,
+                "examples": [False, True],
+            },
+            "run_pipeline": {
+                "type": "boolean",
+                "description": (
+                    "After importing the docs, immediately invoke "
+                    "`wiki_pipeline` to convert them into published pages. "
+                    "Set false to import-only and run the pipeline yourself "
+                    "later."
+                ),
+                "default": True,
+                "examples": [True, False],
+            },
         },
     },
 }

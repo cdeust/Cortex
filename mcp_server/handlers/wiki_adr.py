@@ -20,12 +20,19 @@ from mcp_server.infrastructure.wiki_store import (
 
 schema = {
     "description": (
-        "Create a numbered ADR (Architecture Decision Record) from structured "
-        "Context/Decision/Consequences fields. Auto-increments the ADR number, "
-        "renders the standard template, writes the page under the wiki adr/ "
-        "directory, and registers a protected pointer memory so the decision is "
-        "surfaced by recall. Use this whenever a non-trivial architectural choice "
-        "is made; the resulting page is the single citable source of truth."
+        "Create a numbered ADR (Architecture Decision Record) from "
+        "structured Context/Decision/Consequences fields. Atomically: "
+        "computes the next free ADR number, renders the standard template, "
+        "writes wiki/adr/<NNNN>-<slug>.md under the wiki root, and "
+        "registers a protected pointer memory tagged `wiki`+`adr` so the "
+        "decision surfaces in `recall`. Use this whenever a non-trivial "
+        "architectural choice is made — the resulting page is the single "
+        "citable source of truth. Distinct from `wiki_write` (raw markdown, "
+        "no auto-numbering, no template), and from `remember` (memory only, "
+        "no .md file). Mutates the wiki/ tree and the memories table; "
+        "refuses if the target file already exists. Latency ~50ms. Returns "
+        "{path, number, title, status, created, bytes_written, root} or "
+        "{error}."
     ),
     "inputSchema": {
         "type": "object",

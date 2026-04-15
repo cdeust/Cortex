@@ -30,24 +30,54 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Execute a wiki view. Either a named view from wiki/_views/ "
-        "or an inline query block. Phase 5.3 of the redesign."
+        "Run a saved wiki view (a wiki/_views/<name>.md page that contains "
+        "a `cortex-query` fenced block) or an ad-hoc inline cortex-query "
+        "and return the resulting rows. The query is compiled through a "
+        "safe DSL (parameterised SQL, no string interpolation) before being "
+        "executed against the wiki tables. Phase 5.3 of the wiki redesign "
+        "pipeline; the read-only query layer over wiki.pages / wiki.claim_"
+        "events / wiki.concepts / wiki.drafts. Read-only; never mutates. "
+        "Pass `list: true` to enumerate available saved views without "
+        "executing one. Distinct from `wiki_list` (filesystem page "
+        "listing), `wiki_read` (one page's markdown), and direct SQL "
+        "(this gates everything through the safe compiler). Latency "
+        "<200ms for typical views. Returns {view, table, row_count, "
+        "rows, sql} or {error}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "name": {
                 "type": "string",
-                "description": "Name of a saved view (file stem in _views/).",
+                "description": (
+                    "Name of a saved view — the file stem of a "
+                    "wiki/_views/<name>.md page. Mutually exclusive with "
+                    "`query`."
+                ),
+                "examples": ["open-questions", "stale-adrs", "recent-lessons"],
             },
             "query": {
                 "type": "string",
-                "description": "Inline cortex-query body (without code fence).",
+                "description": (
+                    "Inline cortex-query body (the YAML-style block content, "
+                    "without the surrounding code fence). Use for ad-hoc "
+                    "exploration; persist as a saved view if reused."
+                ),
+                "examples": [
+                    "table: pages\nlimit: 5",
+                    "table: claim_events\nfilter:\n  claim_type: decision\nlimit: 20",
+                ],
             },
             "list": {
                 "type": "boolean",
+                "description": (
+                    "Return the registry of saved views (name, rel_path, "
+                    "description) instead of executing one. Useful for "
+                    "discovery."
+                ),
                 "default": False,
-                "description": "Return the registry of available views.",
+                "examples": [False, True],
             },
         },
     },

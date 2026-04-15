@@ -18,23 +18,45 @@ from typing import Any
 
 schema = {
     "description": (
-        "Run the full wiki pipeline end-to-end: extract claims from "
-        "memories, resolve entities/supersedes/conflicts, emerge concepts, "
-        "synthesize drafts, curate, compile published pages. Returns a "
-        "per-stage summary."
+        "Drive the wiki redesign pipeline end-to-end in one call: "
+        "extract → resolve → emerge → synthesize → curate → compile. Each "
+        "stage is delegated to its own handler (`wiki_extract`, "
+        "`wiki_resolve`, `wiki_emerge`, `wiki_synthesize`, `wiki_curate`, "
+        "`wiki_compile`) and its summary is preserved in the response. Use "
+        "this on fresh installs, after backfilling memories, or as a "
+        "scheduled job; for surgical control over a single phase, call the "
+        "individual handlers instead. Per-stage errors are captured (never "
+        "raised), so a failure in one phase does not abort the rest. Mutates "
+        "wiki.* tables and (unless skip_compile) the wiki/ filesystem tree. "
+        "Latency varies (~10s-5min depending on memory corpus). Returns "
+        "{stages: per-handler summary, pages_published, drafts_approved, "
+        "concepts_inserted, claims_inserted}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "limit_per_stage": {
                 "type": "integer",
+                "description": (
+                    "Cap on the number of items each stage processes. Acts as "
+                    "a back-pressure knob — start low for safety, raise once "
+                    "the pipeline is known-good."
+                ),
                 "default": 500,
-                "description": "Max items processed per stage.",
+                "minimum": 1,
+                "maximum": 50000,
+                "examples": [200, 500, 5000],
             },
             "skip_compile": {
                 "type": "boolean",
+                "description": (
+                    "Stop after the curate stage — approved drafts stay in "
+                    "wiki.drafts unpublished. Useful when you want to review "
+                    "verdicts before any .md files are written."
+                ),
                 "default": False,
-                "description": "Stop after curate — leave approved drafts unpublished.",
+                "examples": [False, True],
             },
         },
     },

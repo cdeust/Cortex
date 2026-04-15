@@ -27,14 +27,20 @@ from mcp_server.infrastructure.wiki_store import (
 
 schema = {
     "description": (
-        "Author a new wiki page (adr/specs/files/notes/lessons/...) or append/"
-        "replace content on an existing one. Pages live under "
-        "~/.claude/methodology/wiki/ and are indexed in PostgreSQL as protected "
-        "pointer memories so recall can surface them like any other memory. "
-        "When path looks like an ADR or note kind and structured fields are "
-        "given (title/summary/body), the content is rendered from the matching "
-        "template; otherwise raw 'content' is written verbatim. Use this for "
-        "any document that should outlive the session."
+        "Author a new wiki page or append/replace content on an existing "
+        "one (kind inferred from the first path segment: adr, specs, "
+        "files, notes, lessons, conventions, guides, reference, journal). "
+        "Pages live under ~/.claude/methodology/wiki/, written atomically "
+        "via tmp+rename. After a successful write, registers a protected "
+        "PG pointer memory tagged `wiki` so the page surfaces in `recall`. "
+        "Use this for any document that should outlive the session — "
+        "lessons, conventions, runbooks, anything you might link from a "
+        "future ADR. Distinct from `wiki_adr` (auto-numbered ADRs from "
+        "structured Context/Decision/Consequences), `wiki_compile` "
+        "(publishes already-curated drafts), and `remember` (no markdown "
+        "page, just a memory). Mutates the wiki/ tree and the memories "
+        "table. Latency ~50ms. Returns {path, mode, created, "
+        "bytes_written, root} or {error}."
     ),
     "inputSchema": {
         "type": "object",

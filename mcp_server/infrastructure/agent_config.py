@@ -178,17 +178,6 @@ AGENT_REGISTRY: list[dict] = [
             "anchor",
         ],
     },
-    # ── pipeline (ai-architect integration) ────────────────────────
-    {
-        "name": "Pipeline",
-        "project": "ai architect",
-        "agent_file": None,
-        "topic": "pipeline",
-        "description": "End-to-end PRD and architecture pipeline",
-        "recalls": [],
-        "remembers": [],
-        "tools": ["run_pipeline"],
-    },
 ]
 
 # ── Lookup functions ─────────────────────────────────────────────────
