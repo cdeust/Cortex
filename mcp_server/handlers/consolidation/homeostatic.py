@@ -14,11 +14,22 @@ logger = logging.getLogger(__name__)
 
 
 def run_homeostatic_cycle(store: MemoryStore) -> dict:
-    """Apply synaptic scaling and BCM threshold updates."""
+    """Apply synaptic scaling and BCM threshold updates.
+
+    Surfaces failures explicitly via the returned dict (issue #13, darval):
+    previous versions swallowed exceptions with logger.debug and returned
+    {"health_score": 0.0} with no error field, which was indistinguishable
+    from a legitimate empty-store run.
+    """
     try:
         memories = store.get_all_memories_for_decay()
         if not memories:
-            return {"scaling_applied": False, "health_score": 0.0}
+            return {
+                "scaling_applied": False,
+                "health_score": None,
+                "reason": "no_memories",
+                "memories_scanned": 0,
+            }
 
         heats = [m.get("heat", 0.5) for m in memories]
         health = homeostatic_plasticity.compute_distribution_health(
@@ -34,10 +45,15 @@ def run_homeostatic_cycle(store: MemoryStore) -> dict:
             "mean_heat": health["mean"],
             "std_heat": health["std"],
             "bimodality": health["bimodality_coefficient"],
+            "memories_scanned": len(memories),
         }
-    except Exception:
-        logger.debug("Homeostatic cycle failed (non-fatal)")
-        return {"scaling_applied": False, "health_score": 0.0}
+    except Exception as exc:
+        logger.warning("Homeostatic cycle failed: %s", exc, exc_info=True)
+        return {
+            "scaling_applied": False,
+            "health_score": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
 
 
 def _maybe_apply_scaling(
