@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Persistent memory and cognitive profiling plugins for Claude Code",
-    "version": "3.9.0"
+    "version": "3.10.0"
   },
   "plugins": [
     {
       "name": "cortex",
       "source": "./",
-      "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence, and cognitive profiling. 33 MCP tools. Docker image available with PostgreSQL + pgvector pre-configured.",
-      "version": "3.9.0",
+      "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence, and cognitive profiling. 40 MCP tools with enriched schemas. PostgreSQL + pgvector in CLI mode; automatic SQLite fallback in Cowork/sandboxed mode. Docker image available.",
+      "version": "3.10.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
@@ -23,8 +23,8 @@
       "license": "MIT",
       "keywords": ["memory", "cognitive-profiling", "mcp", "claude-code", "cortex", "knowledge-graph", "codebase-analysis", "docker"],
       "category": "productivity",
-      "runtime": ["cli"],
-      "runtime_notes": "Requires PostgreSQL 15+ with pgvector. Not compatible with Claude Cowork sandboxed environment."
+      "runtime": ["cli", "cowork"],
+      "runtime_notes": "CLI mode requires PostgreSQL 15+ with pgvector. Cowork/sandboxed mode falls back to SQLite automatically (set CORTEX_RUNTIME=cowork or leave DATABASE_URL unset)."
     }
   ]
 }
