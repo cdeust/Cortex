@@ -1,4 +1,4 @@
-"""Tool registration: wiki authoring tools (6 tools).
+"""Tool registration: wiki authoring tools (7 tools).
 
 Registers the authoring surface that lets Claude maintain a first-class
 Markdown wiki (ADRs, specs, file docs, notes) alongside PostgreSQL
@@ -14,6 +14,7 @@ from mcp_server.handlers import (
     wiki_adr,
     wiki_link,
     wiki_list,
+    wiki_purge,
     wiki_read,
     wiki_reindex,
     wiki_write,
@@ -29,6 +30,7 @@ def register(mcp: FastMCP) -> None:
     _register_wiki_link(mcp)
     _register_wiki_adr(mcp)
     _register_wiki_reindex(mcp)
+    _register_wiki_purge(mcp)
 
 
 def _register_wiki_write(mcp: FastMCP) -> None:
@@ -104,3 +106,16 @@ def _register_wiki_reindex(mcp: FastMCP) -> None:
     async def tool_wiki_reindex() -> str:
         """Regenerate the wiki table of contents at .generated/INDEX.md."""
         return await safe_handler(wiki_reindex.handler, {})
+
+
+def _register_wiki_purge(mcp: FastMCP) -> None:
+    @mcp.tool(name="wiki_purge", description=wiki_purge.schema["description"])
+    async def tool_wiki_purge(
+        apply: bool = False,
+        kind: str | None = None,
+    ) -> str:
+        """Re-evaluate and purge wiki pages that fail the current classifier."""
+        return await safe_handler(
+            wiki_purge.handler,
+            {"apply": apply, "kind": kind},
+        )

@@ -57,7 +57,8 @@ class TestMain:
         assert "wiki_link" in tool_names
         assert "wiki_adr" in tool_names
         assert "wiki_reindex" in tool_names
-        assert len(tool_names) == 40
+        assert "wiki_purge" in tool_names
+        assert len(tool_names) == 41
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"

@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Persistent memory and cognitive profiling plugins for Claude Code",
-    "version": "3.10.0"
+    "version": "3.10.1"
   },
   "plugins": [
     {
       "name": "cortex",
       "source": "./",
-      "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence, and cognitive profiling. 40 MCP tools with enriched schemas. PostgreSQL + pgvector in CLI mode; automatic SQLite fallback in Cowork/sandboxed mode. Docker image available.",
-      "version": "3.10.0",
+      "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence, and cognitive profiling. 41 MCP tools with enriched schemas. PostgreSQL + pgvector in CLI mode; automatic SQLite fallback in Cowork/sandboxed mode. Curated wiki (ADRs, specs, lessons) with audit-artefact filtering. Docker image available.",
+      "version": "3.10.1",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
