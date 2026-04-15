@@ -99,6 +99,14 @@ CREATE TABLE IF NOT EXISTS relationships (
 );
 """
 
+MEMORY_ENTITIES_DDL = """
+CREATE TABLE IF NOT EXISTS memory_entities (
+    memory_id   INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    entity_id   INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    PRIMARY KEY (memory_id, entity_id)
+);
+"""
+
 PROSPECTIVE_MEMORIES_DDL = """
 CREATE TABLE IF NOT EXISTS prospective_memories (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -240,6 +248,7 @@ def get_all_ddl() -> list[str]:
         # MEMORIES_VEC_DDL is handled separately — requires sqlite-vec
         ENTITIES_DDL,
         RELATIONSHIPS_DDL,
+        MEMORY_ENTITIES_DDL,
         PROSPECTIVE_MEMORIES_DDL,
         CHECKPOINTS_DDL,
         MEMORY_ARCHIVES_DDL,

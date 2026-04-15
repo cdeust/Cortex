@@ -31,32 +31,65 @@ from mcp_server.infrastructure.scanner import read_head_tail
 
 schema = {
     "description": (
-        "Auto-import prior Claude Code conversations into the memory store. "
-        "Idempotent -- tracks already-processed session files by hash. "
-        "Links historical work to core concepts automatically."
+        "Auto-import prior Claude Code conversations from ~/.claude/projects/ "
+        "into the Cortex memory store. Walks JSONL session transcripts, "
+        "extracts memorable items (decisions, lessons, errors-and-fixes), "
+        "stores them with backfill tags, and links each to the auto-discovered "
+        "core concepts of the originating project. Idempotent — file hashes "
+        "are tracked in a backfill_log so re-runs only process new sessions. "
+        "Use this on first install or after long absences."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "project": {
                 "type": "string",
-                "description": "Filter to a specific project directory slug (e.g. '-Users-you-myproject'). Default: all projects.",
+                "description": (
+                    "Filter to a specific project directory slug (the "
+                    "Claude Code project ID). Omit to process every project."
+                ),
+                "examples": ["-Users-alice-code-cortex"],
             },
             "max_files": {
                 "type": "integer",
-                "description": "Maximum number of JSONL files to process per call (default 20).",
+                "description": (
+                    "Maximum number of JSONL session files to process per call. "
+                    "Use a small number for an initial dry run, then raise for "
+                    "the full backfill."
+                ),
+                "default": 20,
+                "minimum": 1,
+                "maximum": 1000,
+                "examples": [5, 20, 200],
             },
             "min_importance": {
                 "type": "number",
-                "description": "Minimum importance for extracted items (default 0.35).",
+                "description": (
+                    "Minimum extracted-item importance (0.0-1.0) to keep. "
+                    "Lower values import more lower-signal memories."
+                ),
+                "default": 0.35,
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "examples": [0.2, 0.35, 0.6],
             },
             "dry_run": {
                 "type": "boolean",
-                "description": "Preview what would be imported without storing (default false).",
+                "description": (
+                    "Preview what would be imported without writing to the "
+                    "store. Always run a dry_run first."
+                ),
+                "default": False,
             },
             "force_reprocess": {
                 "type": "boolean",
-                "description": "Re-process files even if already backfilled (default false).",
+                "description": (
+                    "Re-process files even if their hash is in the backfill log. "
+                    "Only set this if you have changed the extractor and want a "
+                    "fresh pass."
+                ),
+                "default": False,
             },
         },
     },

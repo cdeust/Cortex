@@ -9,14 +9,26 @@ from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.wiki_store import list_pages
 
 schema = {
-    "description": "List authored wiki pages. Optionally filter by kind (adr/specs/files/notes).",
+    "description": (
+        "List every authored wiki page under ~/.claude/methodology/wiki/, "
+        "optionally restricted to a single kind (adr, specs, guides, "
+        "reference, conventions, lessons, notes, journal, files). Use this to "
+        "browse what already exists before writing a new page or to feed a "
+        "downstream selector. Returns the wiki root, page count, and a list "
+        "of wiki-relative paths."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "kind": {
                 "type": "string",
+                "description": (
+                    "Restrict the listing to a single page kind. Omit to list "
+                    "every authored page across all kinds."
+                ),
                 "enum": list(PAGE_KINDS),
-                "description": "Restrict to a single page kind.",
+                "examples": ["adr", "lessons", "notes"],
             },
         },
     },

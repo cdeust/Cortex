@@ -20,49 +20,93 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 logger = logging.getLogger(__name__)
 
 schema = {
-    "description": "Hippocampal replay: save/restore working state across context compaction events.",
+    "description": (
+        "Hippocampal-replay-style save/restore of working state across context "
+        "compaction events. 'save' captures the current task, files being "
+        "edited, key decisions, open questions, planned next steps, and active "
+        "errors as a checkpoint row tied to the current epoch. 'restore' "
+        "reconstructs context after compaction by combining the latest "
+        "checkpoint with anchored + hot + directory-relevant memories. Use "
+        "'save' before risking compaction; use 'restore' immediately after."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["action"],
         "properties": {
             "action": {
                 "type": "string",
+                "description": (
+                    "'save' to write a new checkpoint capturing current state; "
+                    "'restore' to reconstruct context from the active checkpoint "
+                    "plus relevant memories."
+                ),
                 "enum": ["save", "restore"],
-                "description": "save: create checkpoint. restore: reconstruct context.",
+                "examples": ["save", "restore"],
             },
-            "directory": {"type": "string", "description": "Current working directory"},
-            "current_task": {"type": "string", "description": "What you're working on"},
+            "directory": {
+                "type": "string",
+                "description": "Current working directory the work is happening in.",
+                "examples": ["/Users/alice/code/cortex"],
+            },
+            "current_task": {
+                "type": "string",
+                "description": "Brief description of the active task or goal.",
+                "examples": [
+                    "Fixing recall regression introduced by FlashRank cache change"
+                ],
+            },
             "files_being_edited": {
                 "type": "array",
+                "description": "Absolute or repo-relative paths of files currently open for editing.",
                 "items": {"type": "string"},
-                "description": "Files currently being modified",
+                "default": [],
+                "examples": [
+                    ["mcp_server/core/pg_recall.py", "tests_py/core/test_pg_recall.py"]
+                ],
             },
             "key_decisions": {
                 "type": "array",
+                "description": "Important decisions made during this session that the next session must respect.",
                 "items": {"type": "string"},
-                "description": "Important decisions made this session",
+                "default": [],
+                "examples": [
+                    ["Use HNSW m=16 not IVFFlat", "Defer rerank cache fix to ADR-0043"]
+                ],
             },
             "open_questions": {
                 "type": "array",
+                "description": "Unresolved questions that block progress.",
                 "items": {"type": "string"},
-                "description": "Unresolved questions",
+                "default": [],
+                "examples": [["Why does R@10 drop on multi-hop queries?"]],
             },
             "next_steps": {
                 "type": "array",
+                "description": "Planned next actions, in order.",
                 "items": {"type": "string"},
-                "description": "Planned next actions",
+                "default": [],
+                "examples": [
+                    ["Run benchmark on clean DB", "Compare WRRF weights vs paper"]
+                ],
             },
             "active_errors": {
                 "type": "array",
+                "description": "Errors currently being debugged.",
                 "items": {"type": "string"},
-                "description": "Errors currently being debugged",
+                "default": [],
+                "examples": [["psycopg.OperationalError: connection refused"]],
             },
             "custom_context": {
                 "type": "string",
-                "description": "Any additional context to preserve",
+                "description": "Free-form additional context worth preserving across compaction.",
             },
-            "session_id": {"type": "string", "description": "Session identifier"},
+            "session_id": {
+                "type": "string",
+                "description": "Session identifier this checkpoint belongs to. Defaults to 'default'.",
+                "default": "default",
+                "examples": ["dbaca0ec-b346-464a-84b9-afe97b91d27d"],
+            },
         },
-        "required": ["action"],
     },
 }
 

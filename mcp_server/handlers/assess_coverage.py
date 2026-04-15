@@ -22,21 +22,36 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Evaluate knowledge coverage completeness for a project directory. Returns a 0-100 coverage score and actionable recommendations.",
+    "description": (
+        "Evaluate how well the Cortex memory store covers a project across "
+        "five axes: file coverage (which key files are remembered), domain "
+        "balance, age distribution (fresh vs. stale), entity density "
+        "(richness signal), and compression ratio (loss signal). Returns a "
+        "0-100 coverage score plus actionable recommendations (e.g., 'run "
+        "codebase_analyze on src/api/', 'consolidate to recompress 12 cold "
+        "memories'). Use this before claiming Cortex 'knows' a codebase."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "directory": {
                 "type": "string",
-                "description": "Project directory to assess (default: cwd)",
+                "description": "Absolute project directory to assess. Defaults to current working directory.",
+                "examples": ["/Users/alice/code/cortex"],
             },
             "domain": {
                 "type": "string",
-                "description": "Domain to assess (alternative to directory)",
+                "description": "Cognitive domain to assess when 'directory' is not supplied.",
+                "examples": ["cortex", "auth-service"],
             },
             "stale_days": {
                 "type": "integer",
-                "description": "Days threshold for stale knowledge (default 14)",
+                "description": "Days since last access for a memory to count as stale in the age-distribution score.",
+                "default": 14,
+                "minimum": 1,
+                "maximum": 365,
+                "examples": [7, 14, 30],
             },
         },
     },

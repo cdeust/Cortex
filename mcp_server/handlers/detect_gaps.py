@@ -23,29 +23,60 @@ from mcp_server.infrastructure.profile_store import load_profiles
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Identify knowledge gaps in the memory store: isolated entities, sparse domains, temporal drift, and low-heat topic clusters.",
+    "description": (
+        "Identify knowledge gaps in the memory store across four axes: "
+        "isolated entities (referenced but unconnected), sparse domains "
+        "(under-represented vs. global average), temporal drift (domains with "
+        "only stale memories), and low-heat topic clusters. Combines structural "
+        "gap detection with blindspot analysis to surface what to investigate "
+        "next. Use this when planning research priorities or auditing coverage."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "domain": {
                 "type": "string",
-                "description": "Focus gap analysis on a specific domain (default: global)",
+                "description": (
+                    "Focus gap analysis on a specific domain. Omit for a global "
+                    "scan across all domains."
+                ),
+                "examples": ["cortex", "auth-service"],
             },
             "include_entity_gaps": {
                 "type": "boolean",
-                "description": "Include isolated entity analysis (default true)",
+                "description": (
+                    "Include isolated-entity analysis: entities referenced in "
+                    "memories but with no outgoing/incoming relationships."
+                ),
+                "default": True,
             },
             "include_domain_gaps": {
                 "type": "boolean",
-                "description": "Include cross-domain coverage gaps (default true)",
+                "description": (
+                    "Include cross-domain coverage analysis: domains whose "
+                    "memory count or category coverage falls below the global average."
+                ),
+                "default": True,
             },
             "include_temporal_gaps": {
                 "type": "boolean",
-                "description": "Include temporal drift detection (default true)",
+                "description": (
+                    "Include temporal drift detection: domains whose most "
+                    "recent memory is older than 'stale_threshold_days'."
+                ),
+                "default": True,
             },
             "stale_threshold_days": {
                 "type": "integer",
-                "description": "Days since last access to consider a domain temporally drifted (default 30)",
+                "description": (
+                    "Days since last access for a domain to count as temporally "
+                    "drifted. Lower = stricter freshness requirement."
+                ),
+                "default": 30,
+                "minimum": 1,
+                "maximum": 365,
+                "examples": [7, 30, 90],
             },
         },
     },

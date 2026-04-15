@@ -15,17 +15,36 @@ from mcp_server.infrastructure.scanner import (
 )
 
 schema = {
-    "description": "Full rescan of all session data to rebuild methodology profiles. <10s.",
+    "description": (
+        "Full rescan of all Claude Code session data to rebuild methodology "
+        "profiles from scratch. Walks ~/.claude/projects/, parses JSONL "
+        "transcripts, groups by project, and re-derives per-domain cognitive "
+        "style, entry patterns, blind spots, and bridges. Use this on first "
+        "install, after a major workflow change, or when query_methodology "
+        "returns coldStart=true. Skipped automatically if profiles are <1h old "
+        "unless force=true. Sub-10s on typical histories."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "domain": {
                 "type": "string",
-                "description": "Rebuild only this domain (optional)",
+                "description": (
+                    "Rebuild only this single domain instead of the full set. "
+                    "Useful for fast targeted refresh after heavy work in one area."
+                ),
+                "examples": ["cortex", "ai-architect"],
             },
-            "force": {"type": "boolean", "description": "Force rebuild even if recent"},
+            "force": {
+                "type": "boolean",
+                "description": (
+                    "Bypass the 1-hour freshness check and rebuild even if "
+                    "profiles were updated recently."
+                ),
+                "default": False,
+            },
         },
-        "required": [],
     },
 }
 

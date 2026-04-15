@@ -23,10 +23,19 @@ _BANNER = (
 
 schema = {
     "description": (
-        "Regenerate the wiki table of contents at .generated/INDEX.md. "
-        "Authored pages are never touched."
+        "Regenerate the wiki table of contents at .generated/INDEX.md by "
+        "enumerating every authored page and grouping it by kind (decision, "
+        "concept, ADR, runbook, etc.). Output is deterministic — sorted by "
+        "kind then path so unchanged wikis yield byte-identical INDEX files. "
+        "Authored pages are never modified. Use this after bulk wiki edits or "
+        "imports. Returns the index path, total page count, and per-kind counts."
     ),
-    "inputSchema": {"type": "object", "properties": {}},
+    "inputSchema": {
+        "type": "object",
+        "required": [],
+        "properties": {},
+        "additionalProperties": False,
+    },
 }
 
 

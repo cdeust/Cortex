@@ -25,46 +25,101 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
-    "description": "Store a memory through the predictive coding write gate.",
+    "description": (
+        "Store a memory through the hierarchical predictive-coding write gate "
+        "(Friston free-energy minimization across sensory/entity/schema levels). "
+        "Novel surprising content passes; redundant content is rejected or "
+        "merged with the most-similar existing memory via active curation. "
+        "Use this after any non-trivial discovery, fix, decision, or lesson — "
+        "if it would surprise a future session, store it. Returns "
+        "{stored, memory_id, action: stored|merged|rejected, reason}."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["content"],
         "properties": {
-            "content": {"type": "string", "description": "The memory content to store"},
+            "content": {
+                "type": "string",
+                "description": (
+                    "The memory content to store. Plain prose works; markdown "
+                    "is preserved. Aim for a single fact, decision, or lesson "
+                    "with enough context to be intelligible standalone."
+                ),
+                "examples": [
+                    "Recall regression on 2026-03-12 traced to FlashRank ONNX cache; clearing fixed it.",
+                    "Decided to use pgvector HNSW (m=16, ef_construction=64) for ANN — 3x faster than IVFFlat.",
+                ],
+            },
             "tags": {
                 "type": "array",
+                "description": (
+                    "Free-form tags for filtering and rules. Convention: use "
+                    "lowercase, hyphenated, and include at least one category "
+                    "(e.g., 'bug-fix', 'decision', 'lesson')."
+                ),
                 "items": {"type": "string"},
-                "description": "Optional tags",
+                "default": [],
+                "examples": [["bug-fix", "recall"], ["decision", "embeddings"]],
             },
             "directory": {
                 "type": "string",
-                "description": "Directory context (defaults to cwd)",
+                "description": (
+                    "Absolute project directory the memory belongs to. Defaults "
+                    "to the current working directory; resolved against git-root "
+                    "for stable domain mapping."
+                ),
+                "examples": ["/Users/alice/code/cortex"],
             },
             "domain": {
                 "type": "string",
-                "description": "Domain override (auto-detected if omitted)",
+                "description": (
+                    "Cognitive-domain override. Auto-detected from directory if "
+                    "omitted; only set this when crossing project boundaries."
+                ),
+                "examples": ["cortex", "ai-architect"],
             },
             "source": {
                 "type": "string",
-                "description": "Memory source: session, tool, user, consolidation",
+                "description": "Origin tag for provenance and replay scoring.",
+                "enum": ["session", "tool", "user", "consolidation", "import"],
+                "default": "user",
+                "examples": ["session", "tool"],
             },
             "force": {
                 "type": "boolean",
-                "description": "Bypass write gate (always store)",
+                "description": (
+                    "Bypass the predictive-coding write gate and always insert. "
+                    "Use sparingly — anchored facts and curated lessons only."
+                ),
+                "default": False,
             },
             "agent_topic": {
                 "type": "string",
-                "description": "Agent context tag (e.g., 'engineer', 'researcher')",
+                "description": (
+                    "Subagent context tag for topic isolation; recall can scope "
+                    "to a single agent persona."
+                ),
+                "examples": ["engineer", "researcher", "reviewer"],
             },
             "is_global": {
                 "type": "boolean",
-                "description": "Mark as global memory visible to all projects",
+                "description": (
+                    "If true, the memory is visible across all projects/domains. "
+                    "Use for genuinely global facts (e.g., user identity, "
+                    "operating principles)."
+                ),
+                "default": False,
             },
             "created_at": {
                 "type": "string",
-                "description": "Original timestamp (ISO 8601) for imported memories",
+                "description": (
+                    "Original ISO-8601 timestamp for imported/backfilled memories. "
+                    "Omit for live captures (server timestamps the row)."
+                ),
+                "format": "date-time",
+                "examples": ["2026-04-14T10:23:00Z"],
             },
         },
-        "required": ["content"],
     },
 }
 

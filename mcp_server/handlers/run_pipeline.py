@@ -31,36 +31,58 @@ from mcp_server.infrastructure.mcp_client_pool import get_client
 # ── Schema ─────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Drive the ai-architect pipeline end-to-end: discovery -> impact -> strategy -> PRD -> verification -> implementation -> PR. Connects to ai-architect MCP server over stdio.",
+    "description": (
+        "Drive the ai-architect pipeline end-to-end through 11 stages: init → "
+        "discovery → impact → strategy → interview → PRD → HOR → audit → "
+        "verification → implementation → push & PR. Connects to the "
+        "ai-architect MCP server over stdio and injects Cortex cognitive "
+        "context at impact and PRD stages. Use this for non-trivial features "
+        "where you want a full PRD, verified implementation, and a GitHub PR "
+        "produced automatically. Returns per-stage outputs and the resulting "
+        "PR URL on success."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["codebase_path", "task_path"],
         "properties": {
             "codebase_path": {
                 "type": "string",
-                "description": "Absolute path to the target repository",
+                "description": "Absolute path to the target repository the pipeline will operate on.",
+                "examples": ["/Users/alice/code/myapp"],
             },
             "task_path": {
                 "type": "string",
-                "description": "Path to findings/task JSON file",
+                "description": "Absolute path to a findings/task JSON file describing the work to perform.",
+                "examples": ["/Users/alice/code/myapp/tasks/recall-fix.json"],
             },
             "context_path": {
                 "type": "string",
-                "description": "Path to supporting documentation (file or directory)",
+                "description": (
+                    "Optional path to supporting documentation (a single "
+                    "markdown file or a directory of references)."
+                ),
+                "examples": ["/Users/alice/code/myapp/docs"],
             },
             "github_repo": {
                 "type": "string",
-                "description": "GitHub repo (owner/name) for PR creation",
+                "description": "GitHub repo in 'owner/name' form for PR creation. Omit to skip the push stage.",
+                "examples": ["alice/myapp", "cdeust/Cortex"],
             },
             "server": {
                 "type": "string",
-                "description": "MCP server name from mcp-connections.json (default: ai-architect)",
+                "description": "MCP server name from mcp-connections.json that hosts the ai-architect tools.",
+                "default": "ai-architect",
+                "examples": ["ai-architect"],
             },
             "max_findings": {
                 "type": "number",
-                "description": "Maximum findings to process (default: 5)",
+                "description": "Maximum number of findings from task_path to process in one pipeline run.",
+                "default": 5,
+                "minimum": 1,
+                "maximum": 50,
+                "examples": [3, 5, 10],
             },
         },
-        "required": ["codebase_path", "task_path"],
     },
 }
 

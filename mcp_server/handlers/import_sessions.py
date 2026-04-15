@@ -30,38 +30,63 @@ from mcp_server.infrastructure.scanner import read_head_tail
 
 schema = {
     "description": (
-        "Import conversation history from ~/.claude/projects/ into the memory store. "
-        "Extracts decisions, errors, architecture notes, and key insights from JSONL sessions."
+        "Import Claude Code conversation history from ~/.claude/projects/ into "
+        "the Cortex memory store. Walks JSONL session files, extracts memorable "
+        "items (decisions, errors-and-fixes, architecture notes, key insights), "
+        "and routes each through the remember handler's full pipeline "
+        "(thermodynamics, write gate, knowledge graph, engram allocation). "
+        "Use this for an initial bootstrap or to ingest sessions from another "
+        "machine. Prefer backfill_memories for incremental hash-tracked re-runs."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "project": {
                 "type": "string",
                 "description": (
-                    "Project directory name filter (e.g. '-Users-cdeust-Developments-cortex'). "
-                    "If omitted, imports from all projects."
+                    "Filter to a single Claude Code project directory slug. "
+                    "Omit to import from every project."
                 ),
+                "examples": ["-Users-alice-code-cortex"],
             },
             "domain": {
                 "type": "string",
-                "description": "Domain filter — only import sessions from this domain.",
+                "description": "Restrict import to sessions classified under this cognitive domain.",
+                "examples": ["cortex", "ai-architect"],
             },
             "min_importance": {
                 "type": "number",
-                "description": "Minimum importance threshold (0.0-1.0, default 0.4).",
+                "description": (
+                    "Minimum importance (0.0-1.0) for an extracted item to be "
+                    "imported. Lower = more memories, more noise."
+                ),
+                "default": 0.4,
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "examples": [0.3, 0.4, 0.6],
             },
             "max_sessions": {
                 "type": "integer",
-                "description": "Maximum number of sessions to process (default: all).",
+                "description": "Maximum number of session files to process this call.",
+                "minimum": 1,
+                "examples": [50, 200],
             },
             "dry_run": {
                 "type": "boolean",
-                "description": "Preview what would be imported without storing.",
+                "description": (
+                    "Preview what would be imported without writing to the store. "
+                    "Always run a dry_run first."
+                ),
+                "default": False,
             },
             "full_read": {
                 "type": "boolean",
-                "description": "Read entire JSONL files instead of head+tail (slower, more thorough).",
+                "description": (
+                    "Read entire JSONL files instead of head+tail sampling. "
+                    "Slower but catches mid-session decisions; use for thorough imports."
+                ),
+                "default": False,
             },
         },
     },

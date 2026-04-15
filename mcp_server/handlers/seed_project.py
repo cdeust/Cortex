@@ -42,25 +42,56 @@ def _get_store() -> MemoryStore:
 # -- Schema --
 
 schema = {
-    "description": "Bootstrap memory from an existing codebase. Analyzes structure, config, docs, entry points, and CI/CD. Stores key discoveries as memories.",
+    "description": (
+        "Bootstrap Cortex memory from an existing codebase by performing a "
+        "five-stage structural analysis: (1) config extraction (package.json, "
+        "pyproject.toml, Cargo.toml, go.mod...), (2) documentation harvesting "
+        "(README, CLAUDE.md, docs/, ADRs, changelogs), (3) entry-point scan "
+        "(main.py, index.js, cmd/, __main__.py), (4) CI/CD detection "
+        "(.github/workflows, Makefile, Dockerfile, tox.ini), and (5) structural "
+        "summary (top-level layout, language detection, module map). Each "
+        "discovery is stored via remember (subject to the write gate). Use "
+        "this on first onboarding to a project. Returns counts and stored memory IDs."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "directory": {
                 "type": "string",
-                "description": "Root directory of the codebase (defaults to cwd)",
+                "description": (
+                    "Root directory of the codebase to seed. Defaults to the "
+                    "current working directory."
+                ),
+                "examples": ["/Users/alice/code/cortex"],
             },
             "domain": {
                 "type": "string",
-                "description": "Domain to tag seeded memories with (auto-detected if omitted)",
+                "description": (
+                    "Domain to tag seeded memories with. Auto-detected from "
+                    "the directory name if omitted."
+                ),
+                "examples": ["cortex", "auth-service"],
             },
             "max_file_size_kb": {
                 "type": "integer",
-                "description": "Skip files larger than this (default 64 KB)",
+                "description": (
+                    "Skip files larger than this many kilobytes during docs "
+                    "and config harvesting. Prevents binary blobs from being "
+                    "summarized."
+                ),
+                "default": 64,
+                "minimum": 1,
+                "maximum": 4096,
+                "examples": [64, 256],
             },
             "dry_run": {
                 "type": "boolean",
-                "description": "If true, report discoveries without storing. Default false.",
+                "description": (
+                    "Report discoveries without writing to the memory store. "
+                    "Always run a dry_run first to inspect what would be seeded."
+                ),
+                "default": False,
             },
         },
     },

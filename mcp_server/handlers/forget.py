@@ -14,24 +14,41 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Delete a memory by ID. Supports soft (mark stale) or hard (permanent) deletion. Protected memories require force=True.",
+    "description": (
+        "Delete a memory by integer ID. Supports two modes: hard delete "
+        "(permanent row removal — irreversible) and soft delete (mark is_stale "
+        "and zero out heat so it never surfaces in recall but can still be "
+        "audited). Protected/anchored memories are refused unless force=true. "
+        "Use this to remove genuinely-wrong memories or accidental captures; "
+        "prefer rate_memory(useful=false) for memories that are merely low-value."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["memory_id"],
         "properties": {
             "memory_id": {
                 "type": "integer",
-                "description": "ID of the memory to delete",
+                "description": "Integer ID of the memory to delete (returned by recall or memory_stats).",
+                "minimum": 1,
+                "examples": [42, 1024],
             },
             "soft": {
                 "type": "boolean",
-                "description": "If true, soft-delete (mark stale + zero heat) instead of permanent removal. Default false.",
+                "description": (
+                    "If true, soft-delete: set is_stale=true and heat=0 instead "
+                    "of permanently dropping the row. Recoverable via SQL."
+                ),
+                "default": False,
             },
             "force": {
                 "type": "boolean",
-                "description": "If true, delete even if memory is protected. Default false.",
+                "description": (
+                    "If true, delete even if the memory is protected (anchored). "
+                    "Use sparingly — anchored memories are usually load-bearing."
+                ),
+                "default": False,
             },
         },
-        "required": ["memory_id"],
     },
 }
 

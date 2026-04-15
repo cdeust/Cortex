@@ -19,25 +19,42 @@ from mcp_server.core.sparse_dictionary import build_seed_dictionary
 from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
-    "description": "Explore interpretability features: dictionary features, attribution graphs, persona vectors, and cross-domain behavioral persistence. Inspired by Anthropic's mechanistic interpretability research.",
+    "description": (
+        "Explore interpretability features of the user's cognitive profile in "
+        "one of four modes: 'features' returns the active sparse-dictionary "
+        "behavioral features for a domain; 'attribution' traces which signals "
+        "drove a recent decision through the pipeline; 'persona' returns the "
+        "12D persona vector with drift-from-baseline; 'crosscoder' compares "
+        "two domains to detect persistent behavioral features. Use this when "
+        "facing an unfamiliar pattern and you want a behavioral explanation. "
+        "Inspired by Anthropic's mechanistic interpretability research."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["mode"],
         "properties": {
             "mode": {
                 "type": "string",
+                "description": (
+                    "Which interpretability lens to apply. 'features' = sparse "
+                    "dictionary activations; 'attribution' = decision tracing; "
+                    "'persona' = 12D vector + drift; 'crosscoder' = "
+                    "two-domain feature persistence."
+                ),
                 "enum": ["features", "attribution", "persona", "crosscoder"],
-                "description": "Exploration mode",
+                "examples": ["features", "persona"],
             },
             "domain": {
                 "type": "string",
-                "description": "Domain ID (optional, defaults to all)",
+                "description": "Cognitive domain to inspect. Omit for global aggregate where supported.",
+                "examples": ["cortex", "auth-service"],
             },
             "compare_domain": {
                 "type": "string",
-                "description": "Second domain for crosscoder comparison",
+                "description": "Second cognitive domain for the 'crosscoder' mode comparison.",
+                "examples": ["ai-architect"],
             },
         },
-        "required": ["mode"],
     },
 }
 

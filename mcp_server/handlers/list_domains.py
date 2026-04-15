@@ -5,11 +5,19 @@ from __future__ import annotations
 from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
-    "description": "Overview of all detected cognitive domains. <10ms.",
+    "description": (
+        "Return an overview of every cognitive domain Cortex has profiled, "
+        "sorted by session count. For each domain: id, human label, session "
+        "count, confidence, last active timestamp, top-3 work categories with "
+        "ratios, and dominant session-shape mode. Use this to discover what "
+        "domains exist before scoping recall, narrate, or rebuild_profiles. "
+        "Sub-10ms latency. Takes no arguments."
+    ),
     "inputSchema": {
         "type": "object",
-        "properties": {},
         "required": [],
+        "properties": {},
+        "additionalProperties": False,
     },
 }
 

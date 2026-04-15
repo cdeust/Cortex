@@ -19,18 +19,45 @@ from mcp_server.infrastructure.profile_store import load_profiles
 logger = logging.getLogger(__name__)
 
 schema = {
-    "description": "Returns the user's cognitive profile for the current domain. Pre-computed, <50ms. Use at session start for context injection.",
+    "description": (
+        "Return the user's cognitive profile for the current domain — thinking "
+        "style (Felder-Silverman), entry patterns, recurring patterns, blind "
+        "spots, cross-domain bridges, and behavioral feature activations — "
+        "enriched with hot memories and any fired prospective triggers matching "
+        "the current context. Pre-computed and cached, sub-50ms. MANDATORY at "
+        "session start so subsequent reasoning is calibrated to the user's "
+        "tendencies. Returns coldStart=true if no profile exists yet (call "
+        "rebuild_profiles first)."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
-            "cwd": {"type": "string", "description": "Current working directory"},
-            "project": {"type": "string", "description": "Project identifier"},
+            "cwd": {
+                "type": "string",
+                "description": (
+                    "Absolute current working directory; primary signal for "
+                    "domain detection (last 3 path segments + git root)."
+                ),
+                "examples": ["/Users/alice/code/cortex"],
+            },
+            "project": {
+                "type": "string",
+                "description": (
+                    "Claude Code project identifier (slugified path). Falls "
+                    "back to derivation from cwd when omitted."
+                ),
+                "examples": ["-Users-alice-code-cortex"],
+            },
             "first_message": {
                 "type": "string",
-                "description": "First user message in session",
+                "description": (
+                    "The first user message of the session. Used for keyword-"
+                    "based domain inference and to fire keyword-trigger prospective memories."
+                ),
+                "examples": ["debug the recall regression in pg_recall.py"],
             },
         },
-        "required": [],
     },
 }
 

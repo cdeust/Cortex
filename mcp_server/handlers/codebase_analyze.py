@@ -36,35 +36,81 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Analyze a codebase and store its structure as Cortex memories. Uses tree-sitter AST for cross-file resolution, call graphs, and community detection. Incremental: only processes changed files.",
+    "description": (
+        "Analyze a codebase using tree-sitter AST parsing and store its "
+        "structure as Cortex memories. Walks the project tree, parses each "
+        "source file (with regex fallback), stores one memory per file with "
+        "symbols as entities and imports as relationships, then runs cross-"
+        "file symbol resolution, call-graph extraction, and community detection. "
+        "Incremental by default — re-runs only re-process files whose content "
+        "hash changed since last run. Use this on first onboarding or after "
+        "major refactors. Returns counts of files analyzed and memories written."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "directory": {
                 "type": "string",
-                "description": "Root directory (defaults to cwd)",
+                "description": "Root directory of the codebase to analyze. Defaults to the current working directory.",
+                "examples": ["/Users/alice/code/cortex"],
             },
             "languages": {
                 "type": "array",
-                "items": {"type": "string"},
-                "description": "Language filter",
+                "description": (
+                    "Restrict analysis to specific languages by tree-sitter "
+                    "grammar name. Omit to auto-detect from file extensions."
+                ),
+                "items": {
+                    "type": "string",
+                    "enum": [
+                        "python",
+                        "javascript",
+                        "typescript",
+                        "rust",
+                        "go",
+                        "java",
+                        "swift",
+                        "c",
+                        "cpp",
+                        "ruby",
+                    ],
+                },
+                "default": [],
+                "examples": [["python"], ["typescript", "javascript"]],
             },
-            "max_files": {"type": "integer", "description": "Max files (default 500)"},
+            "max_files": {
+                "type": "integer",
+                "description": "Maximum number of files to process per call. Cap to avoid runaway analysis on monorepos.",
+                "default": 500,
+                "minimum": 1,
+                "maximum": 50000,
+                "examples": [100, 500, 5000],
+            },
             "max_file_size_kb": {
                 "type": "integer",
-                "description": "Max file size KB (default 100)",
+                "description": "Skip files larger than this many kilobytes (typically generated files or binary blobs).",
+                "default": 100,
+                "minimum": 1,
+                "maximum": 4096,
+                "examples": [100, 256],
             },
             "incremental": {
                 "type": "boolean",
-                "description": "Only changed files (default true)",
+                "description": "Only re-process files whose content hash changed since the last analysis. Disable for a clean rescan.",
+                "default": True,
             },
             "dry_run": {
                 "type": "boolean",
-                "description": "Report only (default false)",
+                "description": "Report what would be analyzed and stored without writing any memories.",
+                "default": False,
             },
-            "domain": {"type": "string", "description": "Domain tag"},
+            "domain": {
+                "type": "string",
+                "description": "Cognitive domain to tag analysis memories with. Auto-detected from directory if omitted.",
+                "examples": ["cortex", "auth-service"],
+            },
         },
-        "required": [],
     },
 }
 

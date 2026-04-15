@@ -19,26 +19,43 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Generate a period-based autobiographical narrative of project activity. Returns chronological 'chapters' of what happened during a time period.",
+    "description": (
+        "Generate a period-based autobiographical narrative of project activity. "
+        "Distinct from 'narrative' (generic summary): get_project_story buckets "
+        "memories chronologically into chapters within a time window (day/week/"
+        "month/all) and produces a timeline of what actually happened. Use this "
+        "for retrospectives, status updates, sprint reports, or to brief a "
+        "collaborator on what they missed. Returns ordered chapters with "
+        "timestamps, themes, and key decisions."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "directory": {
                 "type": "string",
-                "description": "Project directory to narrate",
+                "description": "Absolute project directory whose history to narrate.",
+                "examples": ["/Users/alice/code/cortex"],
             },
             "domain": {
                 "type": "string",
-                "description": "Domain to narrate (alternative to directory)",
+                "description": "Domain to narrate when 'directory' is not supplied.",
+                "examples": ["cortex", "auth-service"],
             },
             "period": {
                 "type": "string",
+                "description": "Time window for the story. 'all' uses the full memory history.",
                 "enum": ["day", "week", "month", "all"],
-                "description": "Time window for the story (default: week)",
+                "default": "week",
+                "examples": ["day", "week"],
             },
             "max_chapters": {
                 "type": "integer",
-                "description": "Max number of time-bucketed chapters (default 5)",
+                "description": "Maximum number of time-bucketed chapters in the story.",
+                "default": 5,
+                "minimum": 1,
+                "maximum": 30,
+                "examples": [3, 5, 10],
             },
         },
     },

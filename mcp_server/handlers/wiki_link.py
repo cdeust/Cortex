@@ -18,20 +18,49 @@ from mcp_server.infrastructure.wiki_store import (
 
 schema = {
     "description": (
-        "Add a bidirectional link between two wiki pages. Updates the Related "
-        "section of both files. Idempotent."
+        "Add a bidirectional link between two wiki pages. Writes the forward "
+        "relation into the Related section of the source page and the inverse "
+        "relation into the target page in a single idempotent operation. "
+        "Use this to record dependencies, derivations, supersession chains, or "
+        "free-form 'see also' connections between knowledge artefacts. "
+        "Returns the relations written on each side and the wiki paths touched."
     ),
     "inputSchema": {
         "type": "object",
+        "required": ["from_path", "to_path", "relation"],
         "properties": {
-            "from_path": {"type": "string"},
-            "to_path": {"type": "string"},
+            "from_path": {
+                "type": "string",
+                "description": (
+                    "Wiki-relative path of the source page (the page that owns "
+                    "the forward relation). Example: 'decisions/0042-use-pgvector.md'."
+                ),
+                "examples": [
+                    "decisions/0001-clean-architecture.md",
+                    "concepts/wrrf-fusion.md",
+                ],
+            },
+            "to_path": {
+                "type": "string",
+                "description": (
+                    "Wiki-relative path of the target page (the page that "
+                    "receives the inverse relation)."
+                ),
+                "examples": ["concepts/pgvector.md", "decisions/0007-pg-store.md"],
+            },
             "relation": {
                 "type": "string",
+                "description": (
+                    "Semantic relation written on the source page; the inverse "
+                    "is written on the target. Pairs: depends_on/depended_on_by, "
+                    "derives/derived_from, implements/implemented_by, "
+                    "supersedes/superseded_by, plus the symmetric 'see_also'."
+                ),
                 "enum": sorted(RELATIONS.keys()),
+                "default": "see_also",
+                "examples": ["depends_on", "supersedes", "see_also"],
             },
         },
-        "required": ["from_path", "to_path", "relation"],
     },
 }
 
