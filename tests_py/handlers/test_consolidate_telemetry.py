@@ -119,14 +119,12 @@ class TestConsolidateHandlerTelemetry:
         """If one stage raises, other stages still run and an error field surfaces."""
         from mcp_server.handlers.consolidation import decay as decay_mod
 
-        def exploding_decay(store, settings):
+        def exploding_decay(store, settings, memories=None):
             raise RuntimeError("boom in decay")
 
         monkeypatch.setattr(decay_mod, "run_decay_cycle", exploding_decay)
         # Also patch the re-export imported by consolidate.py at module load time
-        monkeypatch.setattr(
-            consolidate_handler, "run_decay_cycle", exploding_decay
-        )
+        monkeypatch.setattr(consolidate_handler, "run_decay_cycle", exploding_decay)
 
         result = await consolidate_handler.handler()
 
