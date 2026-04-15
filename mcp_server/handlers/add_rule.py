@@ -24,36 +24,70 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Add a neuro-symbolic rule to the memory store. Rules hard-filter or soft-rerank recall results based on conditions.",
+    "description": (
+        "Add a neuro-symbolic rule to the Cortex memory store. Rules apply "
+        "during recall to hard-filter (exclude), soft-rerank (boost/penalize), "
+        "or tag matching memories. Conditions match on tags, keywords, or "
+        "metadata; actions specify what to do when matched. Rules are scoped "
+        "globally, to a domain, or to a directory and ordered by priority. "
+        "Use this to encode operating principles like 'never surface "
+        "deprecated memories' or 'boost lessons in the recall pipeline'."
+    ),
     "inputSchema": {
         "type": "object",
         "required": ["condition", "action"],
         "properties": {
             "condition": {
                 "type": "string",
-                "description": "Rule condition (e.g. 'tag:deprecated', 'domain:old_project', 'keyword:secret')",
+                "description": (
+                    "Rule condition expressed as 'matcher:value' (e.g. "
+                    "'tag:deprecated', 'domain:old_project', 'keyword:secret', "
+                    "'source:import')."
+                ),
+                "examples": ["tag:deprecated", "keyword:TODO", "domain:auth-service"],
             },
             "action": {
                 "type": "string",
-                "description": "Rule action (e.g. 'exclude', 'boost:0.3', 'penalize:0.5', 'tag:review')",
+                "description": (
+                    "Action to perform when the condition matches. "
+                    "'exclude' filters out (hard); 'boost:N' / 'penalize:N' "
+                    "adjusts ranking by N (soft); 'tag:NAME' attaches a tag (tag rule)."
+                ),
+                "examples": ["exclude", "boost:0.3", "penalize:0.5", "tag:review"],
             },
             "rule_type": {
                 "type": "string",
+                "description": (
+                    "Mechanism: 'hard' = filter results, 'soft' = rerank, "
+                    "'tag' = attach metadata."
+                ),
                 "enum": ["hard", "soft", "tag"],
-                "description": "Rule type: hard (filter), soft (rerank), tag (label). Default: soft",
+                "default": "soft",
+                "examples": ["hard", "soft"],
             },
             "scope": {
                 "type": "string",
+                "description": (
+                    "Where the rule applies: 'global' = everywhere; "
+                    "'domain' = one cognitive domain (set scope_value); "
+                    "'directory' = one project directory (set scope_value)."
+                ),
                 "enum": ["global", "domain", "directory"],
-                "description": "Scope where rule applies. Default: global",
+                "default": "global",
+                "examples": ["global", "domain"],
             },
             "scope_value": {
                 "type": "string",
-                "description": "Domain name or directory path when scope is domain/directory",
+                "description": "Domain id or absolute directory path. Required when scope is 'domain' or 'directory'.",
+                "examples": ["cortex", "/Users/alice/code/cortex"],
             },
             "priority": {
                 "type": "integer",
-                "description": "Rule priority (higher = applied first). Default: 0",
+                "description": "Higher priority rules apply first. Use to break ties among overlapping rules.",
+                "default": 0,
+                "minimum": -100,
+                "maximum": 100,
+                "examples": [0, 10, 50],
             },
         },
     },

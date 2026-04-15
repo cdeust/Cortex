@@ -24,30 +24,79 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
-    "description": "Retrieve memories using intent-adaptive PG recall with production enrichments.",
+    "description": (
+        "Retrieve memories from the Cortex store using intent-adaptive PG "
+        "recall (server-side WRRF fusion of vector + FTS + trigram + heat + "
+        "recency) followed by FlashRank cross-encoder reranking and "
+        "production enrichments (prospective memory injection, Hebbian "
+        "co-activation strengthening, neuro-symbolic rules, strategic ordering "
+        "to mitigate Lost-in-the-Middle). Use this before any non-trivial work "
+        "to check what Cortex already knows; running blind is unacceptable when "
+        "recall takes ~200ms. Returns ranked memories with scores, heat, and source."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["query"],
         "properties": {
-            "query": {"type": "string", "description": "What to search for"},
-            "domain": {"type": "string", "description": "Restrict to specific domain"},
+            "query": {
+                "type": "string",
+                "description": (
+                    "Natural-language query describing what to retrieve. Free "
+                    "text; intent (temporal/causal/semantic/entity/multi-hop) "
+                    "is auto-classified to weight the WRRF signals."
+                ),
+                "examples": [
+                    "why did we choose pgvector over Pinecone?",
+                    "failed attempts to fix recall regression",
+                    "what does the consolidate handler do?",
+                ],
+            },
+            "domain": {
+                "type": "string",
+                "description": (
+                    "Restrict results to a single cognitive domain. Omit to "
+                    "search across all domains."
+                ),
+                "examples": ["cortex", "auth-service"],
+            },
             "directory": {
                 "type": "string",
-                "description": "Restrict to specific directory",
+                "description": (
+                    "Restrict results to memories tagged with a specific "
+                    "absolute project directory."
+                ),
+                "examples": ["/Users/alice/code/cortex"],
             },
             "max_results": {
                 "type": "integer",
-                "description": "Maximum results (default 10)",
+                "description": (
+                    "Maximum number of ranked memories to return after reranking."
+                ),
+                "default": 10,
+                "minimum": 1,
+                "maximum": 100,
+                "examples": [5, 10, 25],
             },
             "min_heat": {
                 "type": "number",
-                "description": "Minimum heat threshold (default 0.05)",
+                "description": (
+                    "Minimum heat (0.0-1.0) for a memory to be considered. "
+                    "Lower = include colder/older memories. Use 0 to include everything."
+                ),
+                "default": 0.05,
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "examples": [0.0, 0.05, 0.3],
             },
             "agent_topic": {
                 "type": "string",
-                "description": "Restrict to specific agent context (e.g., 'engineer', 'researcher')",
+                "description": (
+                    "Restrict to memories produced under a specific agent "
+                    "context tag (subagent topic isolation)."
+                ),
+                "examples": ["engineer", "researcher", "reviewer"],
             },
         },
-        "required": ["query"],
     },
 }
 

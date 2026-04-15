@@ -14,10 +14,19 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Memory system diagnostics: counts, heat distribution, entities, triggers.",
+    "description": (
+        "Return aggregate diagnostics for the memory system: total/episodic/"
+        "semantic/active/archived/stale/protected memory counts, average heat, "
+        "entity and relationship totals, active prospective triggers, last "
+        "consolidation timestamp, and vector-search availability. Use this for "
+        "health checks, dashboards, or before/after a consolidation run to "
+        "verify cycles fired. Takes no arguments."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {},
+        "additionalProperties": False,
     },
 }
 

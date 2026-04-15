@@ -16,17 +16,34 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Rate a memory as useful or not. Drives metamemory confidence which affects decay resistance and recall ranking.",
+    "description": (
+        "Rate a memory as useful or not after it surfaced in recall. Increments "
+        "useful_count when helpful and recomputes metamemory confidence "
+        "(useful_count / access_count). High-confidence memories resist heat "
+        "decay and rank higher in future recalls; persistently unhelpful "
+        "memories drift toward archival. Use this whenever a recalled memory "
+        "either solved the problem or wasted attention. Returns the updated "
+        "access_count, useful_count, and confidence."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["memory_id", "useful"],
         "properties": {
-            "memory_id": {"type": "integer", "description": "ID of the memory to rate"},
+            "memory_id": {
+                "type": "integer",
+                "description": "Integer ID of the memory to rate (returned by recall).",
+                "minimum": 1,
+                "examples": [42, 1024],
+            },
             "useful": {
                 "type": "boolean",
-                "description": "True if the memory was helpful, False if not",
+                "description": (
+                    "true if the memory was helpful for the current task; "
+                    "false if it was noise or misleading."
+                ),
+                "examples": [True, False],
             },
         },
-        "required": ["memory_id", "useful"],
     },
 }
 

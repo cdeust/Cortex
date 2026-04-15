@@ -19,24 +19,41 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Navigate into a fractal memory cluster. L2 cluster → shows L1 child clusters. L1 cluster → shows individual memories.",
+    "description": (
+        "Navigate one level deeper into the fractal memory hierarchy returned "
+        "by recall_hierarchical. Drilling an L2 root cluster returns its "
+        "constituent L1 sub-clusters; drilling an L1 cluster returns the "
+        "individual memories it contains (with full content, heat, tags). "
+        "Use this for interactive exploration: top-down from a broad theme "
+        "to specific memories. Updates access counters for surfaced memories."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["cluster_id"],
         "properties": {
             "cluster_id": {
                 "type": "string",
-                "description": "Cluster ID to drill into (e.g. 'L2-0', 'L1-3')",
+                "description": (
+                    "Cluster identifier returned by recall_hierarchical. "
+                    "Format: 'L<level>-<index>'."
+                ),
+                "pattern": "^L[0-9]+-[0-9]+$",
+                "examples": ["L2-0", "L1-3", "L1-12"],
             },
             "domain": {
                 "type": "string",
-                "description": "Domain context for building hierarchy",
+                "description": "Cognitive domain to build the underlying hierarchy from. Omit for global.",
+                "examples": ["cortex", "auth-service"],
             },
             "min_heat": {
                 "type": "number",
-                "description": "Minimum heat for memory inclusion",
+                "description": "Minimum heat (0.0-1.0) for a memory to be eligible for the hierarchy.",
+                "default": 0.05,
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "examples": [0.0, 0.05, 0.3],
             },
         },
-        "required": ["cluster_id"],
     },
 }
 

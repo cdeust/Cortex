@@ -27,32 +27,66 @@ from mcp_server.infrastructure.wiki_store import (
 
 schema = {
     "description": (
-        "Author a wiki page (adr/specs/files/notes) or append/replace an "
-        "existing one. Pages live under ~/.claude/methodology/wiki/ and are "
-        "indexed in PostgreSQL as protected pointer memories for recall."
+        "Author a new wiki page (adr/specs/files/notes/lessons/...) or append/"
+        "replace content on an existing one. Pages live under "
+        "~/.claude/methodology/wiki/ and are indexed in PostgreSQL as protected "
+        "pointer memories so recall can surface them like any other memory. "
+        "When path looks like an ADR or note kind and structured fields are "
+        "given (title/summary/body), the content is rendered from the matching "
+        "template; otherwise raw 'content' is written verbatim. Use this for "
+        "any document that should outlive the session."
     ),
     "inputSchema": {
         "type": "object",
+        "required": ["path"],
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Relative path under the wiki root, e.g. 'notes/my-note.md'.",
+                "description": (
+                    "Wiki-relative path of the page (no leading slash). The "
+                    "first path segment determines the page kind."
+                ),
+                "examples": ["notes/recall-regression.md", "lessons/dont-mock-db.md"],
             },
             "content": {
                 "type": "string",
-                "description": "Raw markdown content to write (used when no template fields are given).",
+                "description": (
+                    "Raw markdown content. Used when structured fields "
+                    "(title/summary/body) are not provided. Markdown is preserved verbatim."
+                ),
             },
             "mode": {
                 "type": "string",
+                "description": (
+                    "Write mode. 'create' refuses if the page exists; "
+                    "'append' adds to the bottom; 'replace' overwrites."
+                ),
                 "enum": ["create", "append", "replace"],
-                "description": "Write mode. Defaults to 'create'.",
+                "default": "create",
+                "examples": ["create", "append"],
             },
-            "title": {"type": "string"},
-            "summary": {"type": "string"},
-            "body": {"type": "string"},
-            "tags": {"type": "array", "items": {"type": "string"}},
+            "title": {
+                "type": "string",
+                "description": "Page title (used when rendering from template).",
+                "examples": ["Recall regression triaged 2026-04-12"],
+            },
+            "summary": {
+                "type": "string",
+                "description": "One-paragraph summary placed near the top of the rendered page.",
+                "examples": ["FlashRank ONNX cache divergence; clearing fixed it."],
+            },
+            "body": {
+                "type": "string",
+                "description": "Main markdown body inserted into the template.",
+            },
+            "tags": {
+                "type": "array",
+                "description": "Free-form tags attached to both the wiki frontmatter and the pointer memory.",
+                "items": {"type": "string"},
+                "default": [],
+                "examples": [["lesson", "recall"], ["adr", "embeddings"]],
+            },
         },
-        "required": ["path"],
     },
 }
 

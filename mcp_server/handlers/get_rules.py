@@ -14,23 +14,41 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "List active neuro-symbolic rules in the memory store, optionally filtered by scope or rule type.",
+    "description": (
+        "List active neuro-symbolic rules in the memory store, optionally "
+        "filtered by scope (global/domain/directory) or rule type "
+        "(hard/soft/tag). Hard rules filter recall results; soft rules "
+        "rerank; tag rules attach metadata. Use this to audit which rules "
+        "are shaping recall before adding a new one. Returns rule rows with "
+        "id, scope, type, condition, action, and active flag."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "scope": {
                 "type": "string",
+                "description": (
+                    "Restrict to rules at a single scope. 'global' applies "
+                    "everywhere; 'domain' applies to one cognitive domain; "
+                    "'directory' applies to one project directory. Omit for all scopes."
+                ),
                 "enum": ["global", "domain", "directory"],
-                "description": "Filter by scope (default: all scopes)",
+                "examples": ["global", "domain"],
             },
             "rule_type": {
                 "type": "string",
+                "description": (
+                    "Restrict by rule mechanism: 'hard' = filter results, "
+                    "'soft' = rerank, 'tag' = attach metadata. Omit for all types."
+                ),
                 "enum": ["hard", "soft", "tag"],
-                "description": "Filter by rule type (default: all types)",
+                "examples": ["hard", "soft"],
             },
             "include_inactive": {
                 "type": "boolean",
-                "description": "Include deactivated rules (default false)",
+                "description": "Include rules that have been deactivated (default omits them).",
+                "default": False,
             },
         },
     },

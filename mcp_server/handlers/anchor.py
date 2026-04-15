@@ -20,22 +20,40 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Mark a memory as compaction-resistant. Anchored memories survive context compaction, heat decay, and cannot be deleted without force. Use for critical facts and active decisions.",
+    "description": (
+        "Mark a memory as compaction-resistant. Anchoring sets heat=1.0, "
+        "is_protected=true, importance=1.0, and adds an _anchor tag, so the "
+        "memory survives context compaction and heat decay and cannot be "
+        "deleted without force=true. The optional reason is stored as an "
+        "[ANCHOR: ...] prefix on the content for audit. Use this for critical "
+        "facts, active architectural decisions, and operating principles that "
+        "must persist across session boundaries."
+    ),
     "inputSchema": {
         "type": "object",
         "required": ["memory_id"],
         "properties": {
             "memory_id": {
                 "type": "integer",
-                "description": "ID of the memory to anchor",
+                "description": "Integer ID of the memory to anchor (returned by recall or remember).",
+                "minimum": 1,
+                "examples": [42, 1024],
             },
             "reason": {
                 "type": "string",
-                "description": "Why this memory is being anchored (stored as contextual prefix)",
+                "description": (
+                    "Short justification for why this memory is being anchored. "
+                    "Stored as a contextual prefix on the content (max 40 chars used in tag)."
+                ),
+                "examples": [
+                    "Load-bearing architectural decision",
+                    "Active production incident root cause",
+                ],
             },
             "is_global": {
                 "type": "boolean",
-                "description": "Mark as global memory visible to all projects",
+                "description": "If true, mark the memory as visible to all projects/domains, not just its origin.",
+                "default": False,
             },
         },
     },

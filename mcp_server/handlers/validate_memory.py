@@ -18,33 +18,58 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Validate memories against current filesystem state. Marks stale memories whose referenced files no longer exist.",
+    "description": (
+        "Validate memories against the current filesystem state. Extracts file/"
+        "path references from each memory, checks whether they still exist, "
+        "computes a staleness score (fraction of refs missing), and marks "
+        "memories above the threshold as is_stale=true. Use this after large "
+        "refactors, file moves, or before a recall that must not return dead "
+        "links. Scope to a single memory, a domain, a directory, or all memories."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "memory_id": {
                 "type": "integer",
-                "description": "Validate a single memory by ID",
+                "description": "Validate a single memory by its integer ID. Mutually exclusive with the domain/directory scopes.",
+                "minimum": 1,
+                "examples": [42, 1024],
             },
             "domain": {
                 "type": "string",
-                "description": "Validate all memories for a domain",
+                "description": "Validate every memory tagged to this cognitive domain.",
+                "examples": ["cortex", "auth-service"],
             },
             "directory": {
                 "type": "string",
-                "description": "Validate all memories for a directory context",
+                "description": "Validate every memory tagged to this absolute project directory.",
+                "examples": ["/Users/alice/code/cortex"],
             },
             "base_dir": {
                 "type": "string",
-                "description": "Base directory for resolving relative paths (defaults to cwd)",
+                "description": (
+                    "Base directory used to resolve relative paths inside "
+                    "memory content. Defaults to the current working directory."
+                ),
+                "examples": ["/Users/alice/code/cortex"],
             },
             "staleness_threshold": {
                 "type": "number",
-                "description": "Score 0-1 above which a memory is marked stale (default 0.5)",
+                "description": (
+                    "Score in [0,1] above which a memory is marked is_stale. "
+                    "0 = mark anything with one missing reference; 1 = mark "
+                    "only memories with all references missing."
+                ),
+                "default": 0.5,
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "examples": [0.3, 0.5, 0.8],
             },
             "dry_run": {
                 "type": "boolean",
-                "description": "If true, assess but do not update database. Default false.",
+                "description": "Assess and report results without updating is_stale in the database.",
+                "default": False,
             },
         },
     },

@@ -22,29 +22,60 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Retrieve memories using the fractal hierarchy (L0/L1/L2 clusters). Adaptive weighting based on query length — short queries search broad, long queries search specific.",
+    "description": (
+        "Retrieve memories using the fractal three-level hierarchy "
+        "(L0=individual memories, L1=topic clusters, L2=root clusters). "
+        "Weighting is adaptive: short queries are weighted toward broader L2 "
+        "clusters (you're scanning a topic), long queries toward specific L0 "
+        "memories (you have a precise question). Use this instead of recall "
+        "when you want the topology of the memory space, not just a flat "
+        "ranked list. Returns clustered hits annotated with their hierarchy level."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["query"],
         "properties": {
-            "query": {"type": "string", "description": "What to search for"},
+            "query": {
+                "type": "string",
+                "description": "Natural-language query. Length influences level weighting.",
+                "examples": [
+                    "recall regression",
+                    "why did pgvector beat IVFFlat on small corpus",
+                ],
+            },
             "domain": {
                 "type": "string",
-                "description": "Restrict to a specific domain",
+                "description": "Restrict the hierarchy to a single cognitive domain.",
+                "examples": ["cortex", "auth-service"],
             },
             "max_results": {
                 "type": "integer",
-                "description": "Maximum results (default 10)",
+                "description": "Maximum number of memories returned across all levels.",
+                "default": 10,
+                "minimum": 1,
+                "maximum": 100,
+                "examples": [5, 10, 25],
             },
             "min_heat": {
                 "type": "number",
-                "description": "Minimum heat threshold (default 0.05)",
+                "description": "Minimum heat (0.0-1.0) for a memory to be considered.",
+                "default": 0.05,
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "examples": [0.0, 0.05, 0.3],
             },
             "cluster_threshold": {
                 "type": "number",
-                "description": "Similarity threshold for L1 clustering (default 0.6)",
+                "description": (
+                    "Cosine-similarity threshold used when forming L1 clusters. "
+                    "Higher = tighter clusters, more groups."
+                ),
+                "default": 0.6,
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "examples": [0.5, 0.6, 0.75],
             },
         },
-        "required": ["query"],
     },
 }
 

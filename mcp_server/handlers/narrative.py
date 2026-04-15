@@ -13,21 +13,41 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
-    "description": "Generate a project narrative/story from stored memories for a directory or domain.",
+    "description": (
+        "Generate a coherent project narrative from stored memories for a "
+        "directory or domain. Clusters memories by topic and time, identifies "
+        "the through-line, and produces a paragraph-level story (or a one-line "
+        "brief). Use this for status updates, README seeds, or to onboard a "
+        "new contributor with the project's actual history. Returns the "
+        "narrative text plus the memory count consulted."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "directory": {
                 "type": "string",
-                "description": "Project directory to narrate",
+                "description": (
+                    "Absolute project directory to narrate. Pulls all memories "
+                    "tagged to this path. Mutually exclusive with 'domain'."
+                ),
+                "examples": ["/Users/alice/code/cortex"],
             },
             "domain": {
                 "type": "string",
-                "description": "Domain to narrate (alternative to directory)",
+                "description": (
+                    "Domain identifier to narrate (e.g., 'cortex', 'auth-service'). "
+                    "Used when 'directory' is omitted."
+                ),
+                "examples": ["cortex", "data-pipeline"],
             },
             "brief": {
                 "type": "boolean",
-                "description": "Return brief summary only (default false)",
+                "description": (
+                    "If true, return a one-paragraph executive summary instead "
+                    "of the full multi-section narrative."
+                ),
+                "default": False,
             },
         },
     },

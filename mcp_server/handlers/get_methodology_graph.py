@@ -6,16 +6,25 @@ from mcp_server.core.graph_builder import build_graph
 from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
-    "description": "Returns methodology map as graph data for 3D visualization. <100ms.",
+    "description": (
+        "Return the methodology map as JSON graph data {nodes, edges, meta} "
+        "suitable for force-directed visualization. Nodes include domains, "
+        "concepts, memories, and entities; edges encode bridges, co-activation, "
+        "and semantic relationships. Output is capped (200 nodes / 500 edges, "
+        "highest-quality first) so the payload stays embeddable in a single "
+        "MCP response. Use this to feed a custom client visualizer; for the "
+        "built-in browser UI use open_visualization. Sub-100ms."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "domain": {
                 "type": "string",
-                "description": "Filter to specific domain (optional)",
+                "description": "Restrict the graph to a single cognitive domain. Omit for the full cross-domain graph.",
+                "examples": ["cortex", "auth-service"],
             },
         },
-        "required": [],
     },
 }
 

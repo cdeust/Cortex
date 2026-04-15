@@ -31,29 +31,60 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 logger = logging.getLogger(__name__)
 
 schema = {
-    "description": "Run memory maintenance: heat decay, compression, and CLS consolidation cycles.",
+    "description": (
+        "Run scheduled memory-system maintenance cycles: thermodynamic heat "
+        "decay, full-text/gist compression, episodic→semantic CLS transfer, "
+        "synaptic plasticity (LTP/LTD), microglial pruning, homeostatic scaling, "
+        "and optional deep-sleep replay. Use this on a daily/weekly cadence (or "
+        "after large ingest bursts) to keep recall fast and the heat distribution "
+        "healthy. Returns per-cycle counters and total duration."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "decay": {
                 "type": "boolean",
-                "description": "Run heat decay cycle (default true)",
+                "description": (
+                    "Run thermodynamic heat decay (cools cold memories), plus "
+                    "synaptic plasticity (LTP/LTD on co-activated edges) and "
+                    "microglial pruning of orphan edges."
+                ),
+                "default": True,
             },
             "compress": {
                 "type": "boolean",
-                "description": "Run compression cycle (default true)",
+                "description": (
+                    "Run compression cycle: full-text → gist → tag for memories "
+                    "that are cold but still informative."
+                ),
+                "default": True,
             },
             "cls": {
                 "type": "boolean",
-                "description": "Run CLS episodic→semantic consolidation (default true)",
+                "description": (
+                    "Run Complementary Learning Systems consolidation: extract "
+                    "semantic memories from clusters of episodic ones (McClelland 1995)."
+                ),
+                "default": True,
             },
             "memify": {
                 "type": "boolean",
-                "description": "Run memify self-improvement cycle (default true)",
+                "description": (
+                    "Run the memify self-improvement cycle (extract reusable "
+                    "lessons and rules from recent successes/failures)."
+                ),
+                "default": True,
             },
             "deep": {
                 "type": "boolean",
-                "description": "Run deep sleep compute: dream replay, cluster summarization, re-embedding, auto-narration (default false)",
+                "description": (
+                    "Run deep-sleep compute: dream replay, cluster summarization, "
+                    "re-embedding with a fresh model, and auto-narration. Adds "
+                    "two-stage hippocampal-cortical transfer. Slow — schedule "
+                    "overnight or weekly, not per session."
+                ),
+                "default": False,
             },
         },
     },

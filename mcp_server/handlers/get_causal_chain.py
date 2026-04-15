@@ -18,35 +18,70 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Trace entity relationships through the knowledge graph. Returns causal/dependency chains from a starting entity or memory.",
+    "description": (
+        "Trace entity relationships through the Cortex knowledge graph using "
+        "bounded BFS, starting from either a named entity or every entity "
+        "extracted from a given memory. Returns chains of causation, "
+        "dependency, and resolution useful for understanding why a bug "
+        "occurred, tracing the origin of a decision, or following imports "
+        "across modules. Use this when you have a symptom and want the "
+        "upstream cause, or a cause and want all downstream impact. Returns "
+        "{nodes, edges, paths} capped at max_edges."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "entity_name": {
                 "type": "string",
-                "description": "Name of the entity to trace from (e.g. 'DatabaseError')",
+                "description": (
+                    "Name of the entity to trace from. Mutually exclusive with "
+                    "memory_id; one of the two must be provided."
+                ),
+                "examples": ["DatabaseError", "PgRecallEngine", "WRRFFusion"],
             },
             "memory_id": {
                 "type": "integer",
-                "description": "Memory ID to extract starting entities from",
+                "description": "Memory ID whose extracted entities seed the BFS frontier.",
+                "minimum": 1,
+                "examples": [42, 1024],
             },
             "relationship_types": {
                 "type": "array",
+                "description": (
+                    "Filter traversal to specific relationship types. Common "
+                    "types: 'caused_by', 'resolved_by', 'imports', 'depends_on'. "
+                    "Omit to traverse all types."
+                ),
                 "items": {"type": "string"},
-                "description": "Filter to specific relationship types (e.g. ['caused_by', 'resolved_by', 'imports']). Default: all.",
+                "default": [],
+                "examples": [["caused_by", "resolved_by"], ["imports", "depends_on"]],
             },
             "max_depth": {
                 "type": "integer",
-                "description": "Maximum BFS depth (default 3)",
+                "description": "Maximum BFS depth from the seed entities. Higher = wider blast radius.",
+                "default": 3,
+                "minimum": 1,
+                "maximum": 10,
+                "examples": [2, 3, 5],
             },
             "max_edges": {
                 "type": "integer",
-                "description": "Maximum edges to return (default 200)",
+                "description": "Hard cap on the number of edges returned to keep payloads small.",
+                "default": 200,
+                "minimum": 10,
+                "maximum": 5000,
+                "examples": [100, 200, 1000],
             },
             "direction": {
                 "type": "string",
+                "description": (
+                    "BFS direction: 'outgoing' = effects/impact, 'incoming' = "
+                    "causes/origins, 'both' = full neighborhood."
+                ),
                 "enum": ["outgoing", "incoming", "both"],
-                "description": "Traversal direction (default 'both')",
+                "default": "both",
+                "examples": ["outgoing", "incoming"],
             },
         },
     },

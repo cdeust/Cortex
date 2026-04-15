@@ -20,24 +20,76 @@ from mcp_server.infrastructure.wiki_store import (
 
 schema = {
     "description": (
-        "Create a numbered ADR (architecture decision record) from structured "
-        "fields. Auto-increments the ADR number."
+        "Create a numbered ADR (Architecture Decision Record) from structured "
+        "Context/Decision/Consequences fields. Auto-increments the ADR number, "
+        "renders the standard template, writes the page under the wiki adr/ "
+        "directory, and registers a protected pointer memory so the decision is "
+        "surfaced by recall. Use this whenever a non-trivial architectural choice "
+        "is made; the resulting page is the single citable source of truth."
     ),
     "inputSchema": {
         "type": "object",
+        "required": ["title", "context", "decision", "consequences"],
         "properties": {
-            "title": {"type": "string"},
-            "context": {"type": "string"},
-            "decision": {"type": "string"},
-            "consequences": {"type": "string"},
+            "title": {
+                "type": "string",
+                "description": (
+                    "Short imperative title of the decision. Will be slugified "
+                    "into the filename. 5-80 characters recommended."
+                ),
+                "examples": [
+                    "Use pgvector for ANN search",
+                    "Adopt Clean Architecture layers",
+                ],
+            },
+            "context": {
+                "type": "string",
+                "description": (
+                    "The forces at play: what problem, what constraints, what "
+                    "alternatives exist. Markdown allowed."
+                ),
+                "examples": [
+                    "Recall latency exceeded 1s on 100k memories with cosine-only ranking."
+                ],
+            },
+            "decision": {
+                "type": "string",
+                "description": (
+                    "What was decided, in active voice. State the rule, not the discussion."
+                ),
+                "examples": [
+                    "Adopt pgvector with HNSW index for first-stage ANN; FlashRank reranks top-N."
+                ],
+            },
+            "consequences": {
+                "type": "string",
+                "description": (
+                    "Resulting positive and negative consequences, including "
+                    "what becomes easier and what becomes harder."
+                ),
+                "examples": [
+                    "Postgres becomes mandatory; vector search ops are now server-side."
+                ],
+            },
             "status": {
                 "type": "string",
+                "description": (
+                    "Lifecycle status of the ADR. Use 'proposed' during review, "
+                    "'accepted' once shipped, 'superseded' when replaced (link "
+                    "the new ADR)."
+                ),
                 "enum": list(ADR_STATUSES),
-                "description": "Defaults to 'accepted'.",
+                "default": "accepted",
+                "examples": ["proposed", "accepted"],
             },
-            "tags": {"type": "array", "items": {"type": "string"}},
+            "tags": {
+                "type": "array",
+                "description": "Free-form tags for filtering and cross-referencing.",
+                "items": {"type": "string"},
+                "default": [],
+                "examples": [["architecture", "storage"], ["retrieval", "embeddings"]],
+            },
         },
-        "required": ["title", "context", "decision", "consequences"],
     },
 }
 

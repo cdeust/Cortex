@@ -24,28 +24,50 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Navigate memory space using Successor Representation (co-access patterns). Starting from a memory ID, returns co-accessed neighbors and their SR distances.",
+    "description": (
+        "Navigate the memory space using a Successor Representation built from "
+        "temporal co-access (memories accessed within window_hours of each "
+        "other). Starting from a memory ID, BFS outward and return co-accessed "
+        "neighbors with SR distances. Use this to follow a thread of thinking, "
+        "explore latent associations, or discover memories a topic touches that "
+        "you didn't know about. Optionally returns a 2D projection for "
+        "visualization."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["memory_id"],
         "properties": {
             "memory_id": {
                 "type": "integer",
-                "description": "Starting memory ID for navigation",
+                "description": "Integer ID of the memory to start navigation from.",
+                "minimum": 1,
+                "examples": [42, 1024],
             },
             "max_depth": {
                 "type": "integer",
-                "description": "BFS depth (default 2, max 4)",
+                "description": "BFS depth from the seed. Higher = wider exploration. Hard-capped at 4.",
+                "default": 2,
+                "minimum": 1,
+                "maximum": 4,
+                "examples": [1, 2, 3],
             },
             "include_2d_map": {
                 "type": "boolean",
-                "description": "Include 2D coordinates for visualization (default false)",
+                "description": "If true, include 2D coordinates (UMAP/PCA projection) for each returned memory.",
+                "default": False,
             },
             "window_hours": {
                 "type": "number",
-                "description": "Co-access time window in hours (default 2.0)",
+                "description": (
+                    "Co-access time window in hours: two memories accessed "
+                    "within this window count as co-accessed. Smaller = stricter."
+                ),
+                "default": 2.0,
+                "minimum": 0.1,
+                "maximum": 168.0,
+                "examples": [1.0, 2.0, 24.0],
             },
         },
-        "required": ["memory_id"],
     },
 }
 

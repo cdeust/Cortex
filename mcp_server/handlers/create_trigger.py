@@ -21,27 +21,52 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Create a prospective memory trigger: a future-oriented reminder that fires when a condition is met (keyword, time, file, or domain).",
+    "description": (
+        "Create a prospective memory trigger — a future-oriented reminder that "
+        "Cortex auto-fires when its condition matches. Keyword triggers fire "
+        "when the user's message contains a string; time triggers fire after "
+        "an ISO datetime; file triggers fire when a path is accessed or "
+        "modified; domain triggers fire when that cognitive domain becomes "
+        "active. Use this to leave instructions for a future session ('next "
+        "time we touch X, remember Y'). Returns the trigger row id."
+    ),
     "inputSchema": {
         "type": "object",
         "required": ["content", "trigger_condition"],
         "properties": {
             "content": {
                 "type": "string",
-                "description": "The reminder content to surface when the trigger fires",
+                "description": "The reminder text Cortex will surface when the trigger fires.",
+                "examples": [
+                    "Before changing pg_recall.py, re-read ADR-0042 on WRRF weights.",
+                    "Push the v3.10 release notes draft tonight.",
+                ],
             },
             "trigger_condition": {
                 "type": "string",
-                "description": "The condition value (keyword string, ISO datetime, file path, or domain name)",
+                "description": (
+                    "The condition value, interpreted per trigger_type: keyword "
+                    "string for 'keyword', ISO 8601 datetime for 'time', "
+                    "absolute file path for 'file', domain id for 'domain'."
+                ),
+                "examples": [
+                    "pg_recall",
+                    "2026-04-15T18:00:00Z",
+                    "/Users/alice/code/cortex/mcp_server/core/pg_recall.py",
+                    "cortex",
+                ],
             },
             "trigger_type": {
                 "type": "string",
+                "description": "Mechanism the trigger fires on.",
                 "enum": ["keyword", "time", "file", "domain"],
-                "description": "Trigger type (default: keyword)",
+                "default": "keyword",
+                "examples": ["keyword", "time"],
             },
             "target_directory": {
                 "type": "string",
-                "description": "Restrict trigger to a specific project directory (optional)",
+                "description": "If set, the trigger only fires when the active project directory matches.",
+                "examples": ["/Users/alice/code/cortex"],
             },
         },
     },

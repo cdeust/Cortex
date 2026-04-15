@@ -21,25 +21,44 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
-    "description": "Sync top memory insights into CLAUDE.md for the project directory. Adds or refreshes a '## Memory Insights' section.",
+    "description": (
+        "Push the top hot memories for the current project directory into "
+        "CLAUDE.md as a '## Memory Insights' section. Reads the project's "
+        "decisions, patterns, conventions, and lessons from Cortex; adds or "
+        "refreshes the section in-place. Closes the loop between Cortex's "
+        "thermodynamic memory and the Claude Code instruction file loaded at "
+        "every session start. Use this after a productive session so the next "
+        "session begins informed."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "directory": {
                 "type": "string",
-                "description": "Project directory containing CLAUDE.md (default: cwd)",
+                "description": "Project directory containing the CLAUDE.md to update. Defaults to current working directory.",
+                "examples": ["/Users/alice/code/cortex"],
             },
             "max_insights": {
                 "type": "integer",
-                "description": "Maximum number of insight bullets to include (default 10)",
+                "description": "Maximum number of insight bullets to include in the section.",
+                "default": 10,
+                "minimum": 1,
+                "maximum": 50,
+                "examples": [5, 10, 20],
             },
             "min_heat": {
                 "type": "number",
-                "description": "Minimum memory heat to include (default 0.3)",
+                "description": "Minimum heat (0.0-1.0) for a memory to qualify as an insight.",
+                "default": 0.3,
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "examples": [0.2, 0.3, 0.5],
             },
             "dry_run": {
                 "type": "boolean",
-                "description": "Preview the section without writing (default false)",
+                "description": "Preview the rendered section without writing to CLAUDE.md.",
+                "default": False,
             },
         },
     },

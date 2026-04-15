@@ -24,37 +24,73 @@ from mcp_server.shared.project_ids import (
 logger = logging.getLogger(__name__)
 
 schema = {
-    "description": "Incremental profile update after a session ends. <200ms.",
+    "description": (
+        "Record session-end signals and apply an incremental EMA update to the "
+        "matching domain's cognitive profile. Also stores an episodic session-"
+        "summary memory and runs a session self-critique (overall score + top "
+        "improvement suggestions). Normally invoked automatically by the "
+        "SessionEnd hook — call manually only when reconstructing offline "
+        "sessions. Sub-200ms latency."
+    ),
     "inputSchema": {
         "type": "object",
+        "required": ["session_id"],
         "properties": {
-            "session_id": {"type": "string", "description": "Session identifier"},
+            "session_id": {
+                "type": "string",
+                "description": (
+                    "Unique session identifier (Claude Code session UUID or "
+                    "similar). Used as the row key in the session log."
+                ),
+                "examples": ["dbaca0ec-b346-464a-84b9-afe97b91d27d"],
+            },
             "domain": {
                 "type": "string",
-                "description": "Domain ID (auto-detected if omitted)",
+                "description": (
+                    "Cognitive domain ID. Auto-detected from cwd/project if omitted."
+                ),
+                "examples": ["cortex", "auth-service"],
             },
             "tools_used": {
                 "type": "array",
+                "description": "Names of MCP/CLI tools used during the session.",
                 "items": {"type": "string"},
-                "description": "Tools used during the session",
+                "default": [],
+                "examples": [["Read", "Edit", "Bash", "cortex:recall"]],
             },
             "duration": {
                 "type": "number",
-                "description": "Session duration in milliseconds",
+                "description": "Session duration in milliseconds.",
+                "minimum": 0,
+                "examples": [1800000, 3600000],
             },
             "turn_count": {
                 "type": "number",
-                "description": "Number of assistant turns",
+                "description": "Number of assistant turns in the session.",
+                "minimum": 0,
+                "examples": [12, 47],
             },
             "keywords": {
                 "type": "array",
+                "description": "Key topics extracted from the session.",
                 "items": {"type": "string"},
-                "description": "Key topics from the session",
+                "default": [],
+                "examples": [["recall", "regression", "pgvector"]],
             },
-            "cwd": {"type": "string", "description": "Working directory"},
-            "project": {"type": "string", "description": "Project identifier"},
+            "cwd": {
+                "type": "string",
+                "description": "Working directory the session ran in.",
+                "examples": ["/Users/alice/code/cortex"],
+            },
+            "project": {
+                "type": "string",
+                "description": (
+                    "Claude Code project identifier (slugified path). Falls "
+                    "back to derivation from cwd."
+                ),
+                "examples": ["-Users-alice-code-cortex"],
+            },
         },
-        "required": ["session_id"],
     },
 }
 
