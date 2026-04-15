@@ -101,6 +101,24 @@ def _get_store() -> MemoryStore:
     return _store
 
 
+def _timed(fn, *args, **kwargs) -> dict[str, Any]:
+    """Run a cycle, inject duration_ms into its result dict.
+
+    Addresses issue #13 (darval): per-stage telemetry so operators can
+    see where time actually goes on real stores.
+    """
+    t0 = time.monotonic()
+    try:
+        result = fn(*args, **kwargs) or {}
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        return {"error": f"{type(exc).__name__}: {exc}", "duration_ms": ms}
+    ms = int((time.monotonic() - t0) * 1000)
+    if isinstance(result, dict):
+        result["duration_ms"] = ms
+    return result
+
+
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Run maintenance cycles on the memory system."""
     args = args or {}
@@ -128,21 +146,23 @@ def _run_cycles(
     stats: dict[str, Any] = {}
 
     if args.get("decay", True):
-        stats["decay"] = run_decay_cycle(store, settings)
-        stats["plasticity"] = run_plasticity_cycle(store)
-        stats["pruning"] = run_pruning_cycle(store)
+        stats["decay"] = _timed(run_decay_cycle, store, settings)
+        stats["plasticity"] = _timed(run_plasticity_cycle, store)
+        stats["pruning"] = _timed(run_pruning_cycle, store)
 
     if args.get("compress", True):
-        stats["compression"] = run_compression_cycle(store, settings, embeddings)
+        stats["compression"] = _timed(
+            run_compression_cycle, store, settings, embeddings
+        )
 
     if args.get("cls", True):
-        stats["cls"] = run_cls_cycle(store, settings, embeddings)
+        stats["cls"] = _timed(run_cls_cycle, store, settings, embeddings)
 
     if args.get("memify", True):
-        stats["memify"] = run_memify_cycle(store)
+        stats["memify"] = _timed(run_memify_cycle, store)
 
     if args.get("deep", False):
-        stats["deep_sleep"] = run_deep_sleep(store, embeddings)
+        stats["deep_sleep"] = _timed(run_deep_sleep, store, embeddings)
 
     return stats
 
@@ -153,17 +173,22 @@ def _run_always_cycles(
     stats: dict[str, Any],
 ) -> dict[str, Any]:
     """Run cycles that always execute regardless of flags."""
-    stats["cascade"] = run_cascade_advancement(store)
-    stats["homeostatic"] = run_homeostatic_cycle(store)
+    stats["cascade"] = _timed(run_cascade_advancement, store)
+    stats["homeostatic"] = _timed(run_homeostatic_cycle, store)
 
     if args.get("deep", False):
-        stats["transfer"] = run_two_stage_transfer(store)
+        stats["transfer"] = _timed(run_two_stage_transfer, store)
 
     try:
+        t0 = time.monotonic()
         all_mems = store.get_all_memories_for_decay()
-        stats["emergence"] = emergence_tracker.generate_emergence_report(all_mems)
-    except Exception:
-        pass
+        report = emergence_tracker.generate_emergence_report(all_mems) or {}
+        if isinstance(report, dict):
+            report["duration_ms"] = int((time.monotonic() - t0) * 1000)
+        stats["emergence"] = report
+    except Exception as exc:
+        logger.warning("Emergence report failed: %s", exc)
+        stats["emergence"] = {"error": f"{type(exc).__name__}: {exc}"}
 
     return stats
 
