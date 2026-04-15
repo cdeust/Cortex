@@ -16,6 +16,37 @@ class PgEntityMixin:
         """Provided by PgMemoryStore."""
         return dict(row)
 
+    def update_entities_heat_batch(self, updates: list[tuple[int, float]]) -> int:
+        """Batch-update entity heat. Single round-trip, single commit.
+
+        Source: issue #13 — mirror of update_memories_heat_batch for the
+        entity decay path in consolidate.
+        """
+        if not updates:
+            return 0
+        ids = [int(u[0]) for u in updates]
+        heats = [float(u[1]) for u in updates]
+        self._execute(
+            "UPDATE entities AS e SET heat = v.new_heat "
+            "FROM (SELECT UNNEST(%s::int[]) AS id, "
+            "            UNNEST(%s::real[]) AS new_heat) AS v "
+            "WHERE e.id = v.id",
+            (ids, heats),
+        )
+        self._conn.commit()
+        return len(updates)
+
+    def archive_entities_batch(self, entity_ids: list[int]) -> int:
+        """Set heat=0 on many entities in one statement (pruning orphans)."""
+        if not entity_ids:
+            return 0
+        self._execute(
+            "UPDATE entities SET heat = 0 WHERE id = ANY(%s::int[])",
+            ([int(e) for e in entity_ids],),
+        )
+        self._conn.commit()
+        return len(entity_ids)
+
     def insert_entity(self, data: dict[str, Any]) -> int:
         row = self._execute(
             "INSERT INTO entities (name, type, domain, created_at, last_accessed, heat) "

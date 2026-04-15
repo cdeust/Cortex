@@ -80,6 +80,30 @@ class PgStatsMixin:
         )
         self._conn.commit()
 
+    def insert_stage_transitions_batch(self, rows: list[dict]) -> int:
+        """Batch-insert cascade stage-transition rows in a single statement.
+
+        Source: issue #13 — was per-row INSERT + per-row commit inside the
+        cascade loop (503 fsyncs on darval's run).
+        """
+        if not rows:
+            return 0
+        memory_ids = [int(r["memory_id"]) for r in rows]
+        from_stages = [str(r["from_stage"]) for r in rows]
+        to_stages = [str(r["to_stage"]) for r in rows]
+        hours = [float(r["hours_in_prev"]) for r in rows]
+        triggers = [str(r.get("trigger", "cascade")) for r in rows]
+        self._execute(
+            "INSERT INTO stage_transitions "
+            "(memory_id, from_stage, to_stage, hours_in_prev_stage, trigger) "
+            "SELECT * FROM UNNEST("
+            "  %s::int[], %s::text[], %s::text[], %s::real[], %s::text[]"
+            ")",
+            (memory_ids, from_stages, to_stages, hours, triggers),
+        )
+        self._conn.commit()
+        return len(rows)
+
     def get_memories_by_stage(
         self, stage: str, limit: int = 100
     ) -> list[dict[str, Any]]:

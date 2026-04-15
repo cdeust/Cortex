@@ -17,34 +17,61 @@ logger = logging.getLogger(__name__)
 
 _ADVANCEABLE_STAGES = ["labile", "early_ltp", "late_ltp", "reconsolidating"]
 
+# Source: issue #13 — cascade previously wrote a heartbeat UPDATE on
+# EVERY scanned memory (~2000) even when nothing advanced. Below this
+# delta, the hours_in_stage change is noise and the write is waste.
+_HEARTBEAT_SKIP_HOURS = 1.0
+
+# Source: issue #13 — the 503-transition payload darval reported is
+# redundant with the stage_transitions table and inflates the MCP
+# response. Surface a preview + count instead.
+_TRANSITION_PREVIEW_CAP = 50
+
 
 def run_cascade_advancement(store: MemoryStore) -> dict:
-    """Advance memory consolidation stages based on real elapsed time."""
+    """Advance memory consolidation stages based on real elapsed time.
+
+    Skips no-op heartbeat UPDATEs (|Δhours| < _HEARTBEAT_SKIP_HOURS),
+    batches stage_transitions INSERTs into one statement, and caps the
+    response payload at `transitions_preview` (first N) + total count.
+    """
     try:
-        advanced = 0
         transitions: list[dict] = []
+        heartbeats_written = 0
+        heartbeats_skipped = 0
+        scanned = 0
         now = datetime.now(timezone.utc)
 
         for stage_name in _ADVANCEABLE_STAGES:
             memories = store.get_memories_by_stage(stage_name, limit=500)
+            scanned += len(memories)
 
             for mem in memories:
-                result = _try_advance(store, mem, stage_name, now)
+                result, heartbeat = _try_advance(store, mem, stage_name, now)
                 if result:
-                    advanced += 1
                     transitions.append(result)
+                if heartbeat == "written":
+                    heartbeats_written += 1
+                elif heartbeat == "skipped":
+                    heartbeats_skipped += 1
 
-        # Log transitions to stage_transitions table
-        for t in transitions:
-            _log_transition(store, t)
+        store.insert_stage_transitions_batch(transitions)
 
         return {
-            "advanced": advanced,
-            "transitions": transitions,
+            "advanced": len(transitions),
+            "scanned": scanned,
+            "heartbeats_written": heartbeats_written,
+            "heartbeats_skipped": heartbeats_skipped,
+            "transitions_count": len(transitions),
+            "transitions_preview": transitions[:_TRANSITION_PREVIEW_CAP],
         }
-    except Exception as e:
-        logger.debug("Cascade advancement failed: %s", e)
-        return {"advanced": 0, "transitions": []}
+    except Exception as exc:
+        logger.warning("Cascade advancement failed: %s", exc, exc_info=True)
+        return {
+            "advanced": 0,
+            "scanned": 0,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
 
 
 def _compute_real_hours(mem: dict, now: datetime) -> float:
@@ -93,8 +120,12 @@ def _try_advance(
     mem: dict,
     stage_name: str,
     now: datetime,
-) -> dict | None:
-    """Check and advance a single memory. Returns transition info or None."""
+) -> tuple[dict | None, str]:
+    """Check and advance a single memory.
+
+    Returns (transition_or_None, heartbeat_status) where heartbeat_status
+    is one of "written", "skipped", "transition".
+    """
     hours = _compute_real_hours(mem, now)
 
     ready, next_stage, _ = compute_advancement_readiness(
@@ -124,14 +155,24 @@ def _try_advance(
             mem.get("hippocampal_dependency", 1.0),
         )
         _update_stage_entered(store, mem["id"], new_entered)
-        return {
-            "memory_id": mem["id"],
-            "from_stage": stage_name,
-            "to_stage": next_stage,
-            "hours_in_prev": round(hours, 2),
-        }
+        return (
+            {
+                "memory_id": mem["id"],
+                "from_stage": stage_name,
+                "to_stage": next_stage,
+                "hours_in_prev": round(hours, 2),
+            },
+            "transition",
+        )
 
-    # Not ready: just update hours_in_stage with real value
+    # Not advancing: only write a heartbeat if the hours delta is
+    # large enough to be informative. Below _HEARTBEAT_SKIP_HOURS the
+    # change is noise and the write is wasted fsync amplification
+    # (issue #13, Feinstein audit of darval's 66K-store run).
+    prev_hours = float(mem.get("hours_in_stage", 0.0) or 0.0)
+    if abs(hours - prev_hours) < _HEARTBEAT_SKIP_HOURS:
+        return None, "skipped"
+
     store.update_memory_consolidation(
         mem["id"],
         stage_name,
@@ -139,7 +180,7 @@ def _try_advance(
         mem.get("replay_count", 0),
         mem.get("hippocampal_dependency", 1.0),
     )
-    return None
+    return None, "written"
 
 
 def _update_stage_entered(store: MemoryStore, memory_id: int, now: datetime) -> None:
@@ -152,23 +193,3 @@ def _update_stage_entered(store: MemoryStore, memory_id: int, now: datetime) -> 
         store._conn.commit()
     except Exception:
         pass
-
-
-def _log_transition(store: MemoryStore, transition: dict) -> None:
-    """Log a stage transition to the stage_transitions table."""
-    try:
-        store._conn.execute(
-            "INSERT INTO stage_transitions "
-            "(memory_id, from_stage, to_stage, hours_in_prev_stage, trigger) "
-            "VALUES (%s, %s, %s, %s, %s)",
-            (
-                transition["memory_id"],
-                transition["from_stage"],
-                transition["to_stage"],
-                transition["hours_in_prev"],
-                "cascade",
-            ),
-        )
-        store._conn.commit()
-    except Exception as e:
-        logger.debug("Failed to log transition: %s", e)

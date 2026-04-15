@@ -11,6 +11,31 @@ class SqliteRelationshipMixin:
 
     _conn: sqlite3.Connection
 
+    def update_relationships_weight_batch(
+        self, updates: list[tuple[int, float]]
+    ) -> int:
+        """Batch-update relationship weights via executemany + single commit."""
+        if not updates:
+            return 0
+        self._raw_conn.executemany(
+            "UPDATE relationships SET weight = ? WHERE id = ?",
+            [(float(w), int(i)) for i, w in updates],
+        )
+        self._conn.commit()
+        return len(updates)
+
+    def delete_relationships_batch(self, rel_ids: list[int]) -> int:
+        """Batch-delete relationships by id. Single statement via IN clause."""
+        if not rel_ids:
+            return 0
+        placeholders = ",".join("?" * len(rel_ids))
+        self._conn.execute(
+            f"DELETE FROM relationships WHERE id IN ({placeholders})",
+            tuple(int(r) for r in rel_ids),
+        )
+        self._conn.commit()
+        return len(rel_ids)
+
     def insert_relationship(self, data: dict[str, Any]) -> int:
         cur = self._conn.execute(
             "INSERT INTO relationships "

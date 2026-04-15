@@ -83,6 +83,28 @@ class SqliteStatsMixin:
         )
         self._conn.commit()
 
+    def insert_stage_transitions_batch(self, rows: list[dict]) -> int:
+        """Batch-insert cascade stage-transition rows via executemany."""
+        if not rows:
+            return 0
+        self._raw_conn.executemany(
+            "INSERT INTO stage_transitions "
+            "(memory_id, from_stage, to_stage, hours_in_prev_stage, trigger) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [
+                (
+                    int(r["memory_id"]),
+                    str(r["from_stage"]),
+                    str(r["to_stage"]),
+                    float(r["hours_in_prev"]),
+                    str(r.get("trigger", "cascade")),
+                )
+                for r in rows
+            ],
+        )
+        self._conn.commit()
+        return len(rows)
+
     def get_memories_by_stage(
         self, stage: str, limit: int = 100
     ) -> list[dict[str, Any]]:

@@ -237,6 +237,30 @@ class PgMemoryStore(
         self._execute("UPDATE memories SET heat = %s WHERE id = %s", (heat, memory_id))
         self._conn.commit()
 
+    def update_memories_heat_batch(self, updates: list[tuple[int, float]]) -> int:
+        """Batch-update heat for many memories in one round-trip.
+
+        Uses a single UPDATE ... FROM UNNEST() statement so 60k+ updates
+        become one round-trip and one commit instead of one of each per
+        row. Returns the number of rows updated.
+
+        Source: issue #13 (darval) — per-row UPDATE + fsync amplification
+        was the dominant cost of consolidate on a 66K-memory store.
+        """
+        if not updates:
+            return 0
+        ids = [int(u[0]) for u in updates]
+        heats = [float(u[1]) for u in updates]
+        self._execute(
+            "UPDATE memories AS m SET heat = v.new_heat "
+            "FROM (SELECT UNNEST(%s::int[]) AS id, "
+            "            UNNEST(%s::real[]) AS new_heat) AS v "
+            "WHERE m.id = v.id",
+            (ids, heats),
+        )
+        self._conn.commit()
+        return len(updates)
+
     def update_memory_importance(self, memory_id: int, importance: float) -> None:
         self._execute(
             "UPDATE memories SET importance = %s WHERE id = %s",

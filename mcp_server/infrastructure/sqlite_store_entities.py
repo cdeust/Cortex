@@ -15,6 +15,29 @@ class SqliteEntityMixin:
         """Provided by SqliteMemoryStore."""
         return dict(row)
 
+    def update_entities_heat_batch(self, updates: list[tuple[int, float]]) -> int:
+        """Batch-update entity heat via executemany + single commit."""
+        if not updates:
+            return 0
+        self._raw_conn.executemany(
+            "UPDATE entities SET heat = ? WHERE id = ?",
+            [(float(h), int(i)) for i, h in updates],
+        )
+        self._conn.commit()
+        return len(updates)
+
+    def archive_entities_batch(self, entity_ids: list[int]) -> int:
+        """Set heat=0 on many entities. Single statement via IN clause."""
+        if not entity_ids:
+            return 0
+        placeholders = ",".join("?" * len(entity_ids))
+        self._conn.execute(
+            f"UPDATE entities SET heat = 0 WHERE id IN ({placeholders})",
+            tuple(int(e) for e in entity_ids),
+        )
+        self._conn.commit()
+        return len(entity_ids)
+
     def insert_entity(self, data: dict[str, Any]) -> int:
         cur = self._conn.execute(
             "INSERT INTO entities (name, type, domain, created_at, last_accessed, heat) "
