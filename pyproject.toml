@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neuro-cortex-memory"
-version = "3.10.1"
+version = "3.11.0"
 description = "Scientifically-grounded memory system based on computational neuroscience research"
 readme = "README.md"
 license = "MIT"
