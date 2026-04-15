@@ -13,16 +13,23 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 logger = logging.getLogger(__name__)
 
 
-def run_homeostatic_cycle(store: MemoryStore) -> dict:
+def run_homeostatic_cycle(
+    store: MemoryStore,
+    memories: list[dict] | None = None,
+) -> dict:
     """Apply synaptic scaling and BCM threshold updates.
 
     Surfaces failures explicitly via the returned dict (issue #13, darval):
     previous versions swallowed exceptions with logger.debug and returned
     {"health_score": 0.0} with no error field, which was indistinguishable
     from a legitimate empty-store run.
+
+    `memories` may be pre-loaded by the consolidate handler to avoid
+    reloading the full store.
     """
     try:
-        memories = store.get_all_memories_for_decay()
+        if memories is None:
+            memories = store.get_all_memories_for_decay()
         if not memories:
             return {
                 "scaling_applied": False,

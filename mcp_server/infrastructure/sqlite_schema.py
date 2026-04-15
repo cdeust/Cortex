@@ -99,6 +99,18 @@ CREATE TABLE IF NOT EXISTS relationships (
 );
 """
 
+STAGE_TRANSITIONS_DDL = """
+CREATE TABLE IF NOT EXISTS stage_transitions (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    memory_id           INTEGER NOT NULL,
+    from_stage          TEXT NOT NULL,
+    to_stage            TEXT NOT NULL,
+    hours_in_prev_stage REAL DEFAULT 0.0,
+    trigger             TEXT DEFAULT 'cascade',
+    transitioned_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
 MEMORY_ENTITIES_DDL = """
 CREATE TABLE IF NOT EXISTS memory_entities (
     memory_id   INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
@@ -249,6 +261,7 @@ def get_all_ddl() -> list[str]:
         ENTITIES_DDL,
         RELATIONSHIPS_DDL,
         MEMORY_ENTITIES_DDL,
+        STAGE_TRANSITIONS_DDL,
         PROSPECTIVE_MEMORIES_DDL,
         CHECKPOINTS_DDL,
         MEMORY_ARCHIVES_DDL,
@@ -269,4 +282,5 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     ("memories", "is_benchmark", "INTEGER DEFAULT 0"),
     ("memories", "agent_context", "TEXT DEFAULT ''"),
     ("memories", "is_global", "INTEGER DEFAULT 0"),
+    ("memories", "stage_entered_at", "TEXT"),
 ]

@@ -24,15 +24,21 @@ def run_compression_cycle(
     store: MemoryStore,
     settings: Any,
     embeddings: EmbeddingEngine,
+    memories: list[dict] | None = None,
 ) -> dict:
-    """Compress aging memories along the rate-distortion curve."""
-    memories = store.get_all_memories_for_decay()
+    """Compress aging memories along the rate-distortion curve.
+
+    `memories` may be pre-loaded by the consolidate handler (issue #13).
+    """
+    if memories is None:
+        memories = store.get_all_memories_for_decay()
 
     stats = {
         "compressed_to_gist": 0,
         "compressed_to_tag": 0,
         "protected_skipped": 0,
         "semantic_skipped": 0,
+        "rows_scanned": len(memories),
     }
 
     for mem in memories:

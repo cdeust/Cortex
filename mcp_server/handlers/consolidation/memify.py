@@ -18,9 +18,16 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 logger = logging.getLogger(__name__)
 
 
-def run_memify_cycle(store: MemoryStore) -> dict:
-    """Run memify self-improvement: prune, strengthen, reweight."""
-    memories = store.get_all_memories_for_decay()
+def run_memify_cycle(
+    store: MemoryStore,
+    memories: list[dict] | None = None,
+) -> dict:
+    """Run memify self-improvement: prune, strengthen, reweight.
+
+    `memories` may be pre-loaded by the consolidate handler (issue #13).
+    """
+    if memories is None:
+        memories = store.get_all_memories_for_decay()
 
     pruned = _prune_memories(store, memories)
     strengthened = _strengthen_memories(store, memories)

@@ -22,9 +22,18 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 logger = logging.getLogger(__name__)
 
 
-def run_decay_cycle(store: MemoryStore, settings: Any) -> dict:
-    """Apply heat decay to all active memories and entities."""
-    memories = store.get_all_memories_for_decay()
+def run_decay_cycle(
+    store: MemoryStore,
+    settings: Any,
+    memories: list[dict] | None = None,
+) -> dict:
+    """Apply heat decay to all active memories and entities.
+
+    `memories` may be pre-loaded by the consolidate handler to avoid
+    reloading the full store across stages (issue #13 — Feynman audit).
+    """
+    if memories is None:
+        memories = store.get_all_memories_for_decay()
 
     updates = compute_decay_updates(
         memories,
@@ -34,8 +43,7 @@ def run_decay_cycle(store: MemoryStore, settings: Any) -> dict:
         cold_threshold=settings.COLD_THRESHOLD,
     )
 
-    for mem_id, new_heat in updates:
-        store.update_memory_heat(mem_id, new_heat)
+    store.update_memories_heat_batch(updates)
 
     entity_updates = _decay_entities(store, settings)
     metabolic_updates = _apply_metabolic_modulation(
@@ -63,13 +71,7 @@ def _decay_entities(
         decay_factor=0.98,
         cold_threshold=settings.COLD_THRESHOLD,
     )
-    for eid, new_heat in entity_updates:
-        store._conn.execute(
-            "UPDATE entities SET heat = %s WHERE id = %s",
-            (new_heat, eid),
-        )
-    if entity_updates:
-        store._conn.commit()
+    store.update_entities_heat_batch(entity_updates)
     return entity_updates
 
 
@@ -128,10 +130,9 @@ def _modulate_domain(
         mem_heats,
     )
 
-    count = 0
+    batch: list[tuple[int, float]] = []
     for mem, adj in zip(mems, adjustments):
         if adj < 0.99:
             new_heat = max(0.0, mem.get("heat", 0.5) * adj)
-            store.update_memory_heat(mem["id"], round(new_heat, 4))
-            count += 1
-    return count
+            batch.append((mem["id"], round(new_heat, 4)))
+    return store.update_memories_heat_batch(batch)

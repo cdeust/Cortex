@@ -127,8 +127,14 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     embeddings = get_embedding_engine()
     start = time.monotonic()
 
-    stats = _run_cycles(args, store, settings, embeddings)
-    stats = _run_always_cycles(args, store, stats)
+    # Phase B (issue #13): load the full memory list once and thread it
+    # through every stage that needs it, so consolidate does ONE load
+    # instead of 6 (decay, compression, memify, homeostatic, sleep,
+    # emergence). Cheap stages still load ad-hoc for standalone callers.
+    memories = store.get_all_memories_for_decay()
+
+    stats = _run_cycles(args, store, settings, embeddings, memories)
+    stats = _run_always_cycles(args, store, stats, memories)
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
     stats["duration_ms"] = elapsed_ms
@@ -149,28 +155,33 @@ def _run_cycles(
     store: MemoryStore,
     settings: Any,
     embeddings: EmbeddingEngine,
+    memories: list[dict],
 ) -> dict[str, Any]:
-    """Run optional maintenance cycles based on args flags."""
+    """Run optional maintenance cycles based on args flags.
+
+    `memories` is the consolidation-scoped snapshot so stages share one
+    load across the whole run (issue #13).
+    """
     stats: dict[str, Any] = {}
 
     if args.get("decay", True):
-        stats["decay"] = _timed(run_decay_cycle, store, settings)
+        stats["decay"] = _timed(run_decay_cycle, store, settings, memories)
         stats["plasticity"] = _timed(run_plasticity_cycle, store)
         stats["pruning"] = _timed(run_pruning_cycle, store)
 
     if args.get("compress", True):
         stats["compression"] = _timed(
-            run_compression_cycle, store, settings, embeddings
+            run_compression_cycle, store, settings, embeddings, memories
         )
 
     if args.get("cls", True):
         stats["cls"] = _timed(run_cls_cycle, store, settings, embeddings)
 
     if args.get("memify", True):
-        stats["memify"] = _timed(run_memify_cycle, store)
+        stats["memify"] = _timed(run_memify_cycle, store, memories)
 
     if args.get("deep", False):
-        stats["deep_sleep"] = _timed(run_deep_sleep, store, embeddings)
+        stats["deep_sleep"] = _timed(run_deep_sleep, store, embeddings, memories)
 
     return stats
 
@@ -179,17 +190,18 @@ def _run_always_cycles(
     args: dict,
     store: MemoryStore,
     stats: dict[str, Any],
+    memories: list[dict],
 ) -> dict[str, Any]:
     """Run cycles that always execute regardless of flags."""
     stats["cascade"] = _timed(run_cascade_advancement, store)
-    stats["homeostatic"] = _timed(run_homeostatic_cycle, store)
+    stats["homeostatic"] = _timed(run_homeostatic_cycle, store, memories)
 
     if args.get("deep", False):
         stats["transfer"] = _timed(run_two_stage_transfer, store)
 
     def _run_emergence() -> dict[str, Any]:
-        all_mems = store.get_all_memories_for_decay()
-        return emergence_tracker.generate_emergence_report(all_mems) or {}
+        # Uses the consolidation-scoped memory list — no extra load.
+        return emergence_tracker.generate_emergence_report(memories) or {}
 
     stats["emergence"] = _timed(_run_emergence)
 

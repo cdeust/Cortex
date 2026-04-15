@@ -12,6 +12,43 @@ class PgRelationshipMixin:
 
     _conn: psycopg.Connection
 
+    def update_relationships_weight_batch(
+        self, updates: list[tuple[int, float]]
+    ) -> int:
+        """Batch-update relationship weights. Single round-trip, single commit.
+
+        Source: issue #13 — plasticity LTP/LTD can update 30k+ edges in one
+        cycle. Per-row UPDATEs dominate wall-clock on the consolidate run.
+        """
+        if not updates:
+            return 0
+        ids = [int(u[0]) for u in updates]
+        weights = [float(u[1]) for u in updates]
+        self._execute(
+            "UPDATE relationships AS r SET weight = v.new_weight "
+            "FROM (SELECT UNNEST(%s::int[]) AS id, "
+            "            UNNEST(%s::real[]) AS new_weight) AS v "
+            "WHERE r.id = v.id",
+            (ids, weights),
+        )
+        self._conn.commit()
+        return len(updates)
+
+    def delete_relationships_batch(self, rel_ids: list[int]) -> int:
+        """Batch-delete relationships by id. Single round-trip.
+
+        Source: issue #13 — pruning cycle deleted 32k+ edges per-row on
+        darval's store.
+        """
+        if not rel_ids:
+            return 0
+        self._execute(
+            "DELETE FROM relationships WHERE id = ANY(%s::int[])",
+            ([int(r) for r in rel_ids],),
+        )
+        self._conn.commit()
+        return len(rel_ids)
+
     def insert_relationship(self, data: dict[str, Any]) -> int:
         row = self._execute(
             "INSERT INTO relationships "

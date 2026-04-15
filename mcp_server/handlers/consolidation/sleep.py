@@ -15,9 +15,17 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 logger = logging.getLogger(__name__)
 
 
-def run_deep_sleep(store: MemoryStore, embeddings: EmbeddingEngine) -> dict:
-    """Run deep sleep compute: dream replay, summarization, re-embedding."""
-    memories = store.get_all_memories_for_decay()
+def run_deep_sleep(
+    store: MemoryStore,
+    embeddings: EmbeddingEngine,
+    memories: list[dict] | None = None,
+) -> dict:
+    """Run deep sleep compute: dream replay, summarization, re-embedding.
+
+    `memories` may be pre-loaded by the consolidate handler (issue #13).
+    """
+    if memories is None:
+        memories = store.get_all_memories_for_decay()
     plan = run_sleep_compute(memories, clusters=[], directory="")
 
     replayed = _apply_dream_replay(store, embeddings, plan["replay_updates"])

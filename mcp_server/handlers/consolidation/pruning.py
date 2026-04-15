@@ -68,20 +68,12 @@ def _format_edges(relationships: list[dict]) -> list[dict]:
 
 
 def _prune_edges(store: MemoryStore, prunable: list[dict]) -> int:
-    """Delete prunable edges from the store."""
-    count = 0
-    for edge in prunable:
-        try:
-            store._conn.execute(
-                "DELETE FROM relationships WHERE id = %s",
-                (edge["id"],),
-            )
-            count += 1
-        except Exception:
-            pass
-    if count:
-        store._conn.commit()
-    return count
+    """Delete prunable edges in a single batched DELETE.
+
+    Source: issue #13 — was per-row DELETE inside a loop.
+    """
+    ids = [int(e["id"]) for e in prunable if e.get("id") is not None]
+    return store.delete_relationships_batch(ids)
 
 
 def _archive_orphans(
@@ -104,19 +96,8 @@ def _archive_orphans(
         memory_entity_ids,
     )
 
-    count = 0
-    for orphan in orphans:
-        try:
-            store._conn.execute(
-                "UPDATE entities SET heat = 0 WHERE id = %s",
-                (orphan["id"],),
-            )
-            count += 1
-        except Exception:
-            pass
-    if count:
-        store._conn.commit()
-    return count
+    ids = [int(o["id"]) for o in orphans if o.get("id") is not None]
+    return store.archive_entities_batch(ids)
 
 
 def _collect_active_edge_entities(

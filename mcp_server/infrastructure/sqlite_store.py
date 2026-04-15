@@ -215,6 +215,24 @@ class SqliteMemoryStore(
         )
         self._conn.commit()
 
+    def update_memories_heat_batch(self, updates: list[tuple[int, float]]) -> int:
+        """Batch-update heat for many memories. executemany + single commit.
+
+        SQLite has no array types like PostgreSQL, so batching collapses
+        per-row commits into a single transaction rather than a single
+        statement. Still eliminates per-row fsync cost.
+
+        Source: issue #13.
+        """
+        if not updates:
+            return 0
+        self._raw_conn.executemany(
+            "UPDATE memories SET heat = ? WHERE id = ?",
+            [(float(h), int(i)) for i, h in updates],
+        )
+        self._conn.commit()
+        return len(updates)
+
     def update_memory_importance(self, memory_id: int, importance: float) -> None:
         self._conn.execute(
             "UPDATE memories SET importance = ? WHERE id = ?",
