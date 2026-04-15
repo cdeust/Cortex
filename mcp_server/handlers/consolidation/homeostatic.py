@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from mcp_server.core import homeostatic_plasticity
+from mcp_server.core import homeostatic_health, homeostatic_plasticity
 from mcp_server.infrastructure.memory_store import MemoryStore
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def run_homeostatic_cycle(store: MemoryStore) -> dict:
             }
 
         heats = [m.get("heat", 0.5) for m in memories]
-        health = homeostatic_plasticity.compute_distribution_health(
+        health = homeostatic_health.compute_distribution_health(
             heats,
             target_mean=0.4,
         )
