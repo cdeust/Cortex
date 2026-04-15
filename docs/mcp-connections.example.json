@@ -1,0 +1,19 @@
+{
+  "_comment": "Copy this file to ~/.claude/methodology/mcp-connections.json and adjust paths. Cortex consumes these upstream MCP servers via ingest_codebase and ingest_prd.",
+  "servers": {
+    "codebase": {
+      "_comment": "ai-automatised-pipeline — codebase analysis (tree-sitter + graph). Consumed by ingest_codebase.",
+      "command": "/absolute/path/to/anthropic/ai-automatised-pipeline/target/release/ai-architect-mcp",
+      "args": [],
+      "env": {}
+    },
+    "prd-gen": {
+      "_comment": "prd-spec-generator — PRD authoring + validation. Consumed by ingest_prd.",
+      "command": "node",
+      "args": [
+        "/absolute/path/to/prd-spec-generator/mcp-server/index.mjs"
+      ],
+      "env": {}
+    }
+  }
+}

@@ -37,22 +37,68 @@ from mcp_server.infrastructure.pg_store_wiki import (
 
 schema = {
     "description": (
-        "Template-synthesize wiki drafts from resolved claim_events. "
-        "Phase 2.3 (Path A) of the redesign pipeline."
+        "Render resolved claim_events into a structured wiki DraftPage "
+        "(title, lead, kind-specific sections, frontmatter, provenance) and "
+        "persist it to wiki.drafts with status='pending'. Phase 2.3 Path A "
+        "(template-driven, no LLM) of the wiki redesign pipeline; runs after "
+        "`wiki_resolve`, before `wiki_curate`. Picks the target kind from the "
+        "dominant claim_type unless kind_hint is given (adr, lesson, "
+        "convention, spec, note). Mutates wiki.drafts. Distinct from "
+        "`wiki_compile` which converts approved drafts to .md files. Latency "
+        "~100ms per memory. Returns {drafts_created, drafts_updated, "
+        "memories_processed, by_kind, errors}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
-            "memory_id": {"type": "integer"},
-            "concept_id": {"type": "integer"},
-            "force": {"type": "boolean", "default": False},
-            "limit": {"type": "integer", "default": 100},
+            "memory_id": {
+                "type": "integer",
+                "description": (
+                    "Synthesize a draft for this single memory's claim_events. "
+                    "Omit to sweep memories that have claims but no template_v1 "
+                    "draft yet."
+                ),
+                "minimum": 1,
+                "examples": [42, 1024],
+            },
+            "concept_id": {
+                "type": "integer",
+                "description": (
+                    "(Phase 3, Path B) Synthesize a concept-level draft from "
+                    "the claim_events grounding a promoted concept."
+                ),
+                "minimum": 1,
+                "examples": [7, 42],
+            },
+            "force": {
+                "type": "boolean",
+                "description": (
+                    "Re-synthesize even if a template_v1 draft already exists "
+                    "for the source; updates the existing row in place."
+                ),
+                "default": False,
+                "examples": [False, True],
+            },
+            "limit": {
+                "type": "integer",
+                "description": (
+                    "Max source memories to process per sweep. Ignored when "
+                    "memory_id or concept_id is given."
+                ),
+                "default": 100,
+                "minimum": 1,
+                "maximum": 1000,
+                "examples": [50, 100, 500],
+            },
             "kind_hint": {
                 "type": "string",
                 "description": (
-                    "Force a target kind. Otherwise inferred from the "
-                    "dominant claim_type."
+                    "Force a target wiki kind, overriding inference from the "
+                    "dominant claim_type. Must match a kind defined in the "
+                    "wiki schema registry."
                 ),
+                "examples": ["adr", "lesson", "spec", "note", "convention"],
             },
         },
     },

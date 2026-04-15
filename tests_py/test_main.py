@@ -42,7 +42,6 @@ class TestMain:
         assert "get_methodology_graph" in tool_names
         assert "open_visualization" in tool_names
         assert "explore_features" in tool_names
-        assert "run_pipeline" in tool_names
         assert "remember" in tool_names
         assert "recall" in tool_names
         assert "memory_stats" in tool_names
@@ -58,7 +57,9 @@ class TestMain:
         assert "wiki_adr" in tool_names
         assert "wiki_reindex" in tool_names
         assert "wiki_purge" in tool_names
-        assert len(tool_names) == 41
+        assert "ingest_codebase" in tool_names
+        assert "ingest_prd" in tool_names
+        assert len(tool_names) == 42
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"

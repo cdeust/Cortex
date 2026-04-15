@@ -33,21 +33,67 @@ from mcp_server.infrastructure.pg_store_wiki import (
 
 schema = {
     "description": (
-        "Curate pending drafts: rule-gate auto-sweep or manual approve/"
-        "reject. Phase 2.4 of the redesign pipeline."
+        "Decide whether each pending wiki draft is ready to publish. "
+        "Auto-sweep mode (default): score every pending draft against its "
+        "kind's rule-gate (claim count, section coverage, confidence "
+        "threshold) and transition pending → approved | rejected; drafts "
+        "that score in the middle stay 'hold' for refinement. Manual mode: "
+        "supply draft_id + decision to force a verdict. Phase 2.4 of the "
+        "wiki redesign pipeline; runs after `wiki_synthesize`, before "
+        "`wiki_compile`. Mutates wiki.drafts.status and writes audit memos. "
+        "Distinct from `wiki_compile` which actually publishes the approved "
+        "drafts. Latency ~10ms per draft. Returns {drafts_evaluated, "
+        "approved, rejected, held, sample_held, errors}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
-            "draft_id": {"type": "integer"},
+            "draft_id": {
+                "type": "integer",
+                "description": (
+                    "Manual mode: target a single draft by id. Pair with "
+                    "`decision` to force the verdict, bypassing the rule gate."
+                ),
+                "minimum": 1,
+                "examples": [42, 1024],
+            },
             "decision": {
                 "type": "string",
+                "description": (
+                    "Manual verdict for the targeted draft_id. Required when "
+                    "draft_id is given; ignored otherwise."
+                ),
                 "enum": ["approved", "rejected"],
-                "description": "Manual override (requires draft_id).",
+                "examples": ["approved", "rejected"],
             },
-            "reason": {"type": "string"},
-            "limit": {"type": "integer", "default": 200},
-            "kind": {"type": "string"},
+            "reason": {
+                "type": "string",
+                "description": (
+                    "Free-text justification recorded in the audit memo. "
+                    "Strongly recommended for manual decisions."
+                ),
+                "examples": [
+                    "Reviewed against ADR-0042; matches the canonical decision",
+                    "Stale claim_events — superseded by memory 5123",
+                ],
+            },
+            "limit": {
+                "type": "integer",
+                "description": ("Max pending drafts to evaluate per auto-sweep call."),
+                "default": 200,
+                "minimum": 1,
+                "maximum": 5000,
+                "examples": [100, 200, 1000],
+            },
+            "kind": {
+                "type": "string",
+                "description": (
+                    "Restrict the auto-sweep to one wiki kind (e.g. only "
+                    "ADRs). Must match a kind in the wiki schema registry."
+                ),
+                "examples": ["adr", "lesson", "spec", "note"],
+            },
         },
     },
 }

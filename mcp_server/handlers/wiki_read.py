@@ -9,11 +9,14 @@ from mcp_server.infrastructure.wiki_store import read_page
 
 schema = {
     "description": (
-        "Read the raw markdown content of a wiki page by its wiki-relative "
-        "path. The path is resolved safely under the wiki root (path traversal "
-        "is rejected). Use this to fetch the source of an ADR, decision, or "
-        "concept page before quoting, editing, or linking it. Returns the page "
-        "content verbatim plus the resolved root for context."
+        "Fetch the raw markdown source of one wiki page by its wiki-relative "
+        "path. Path resolution is sandboxed under the wiki root — absolute "
+        "paths and `../` traversal are rejected at the storage layer. Read-"
+        "only; never mutates state. Use this to quote, link, or edit-prep an "
+        "ADR/spec/lesson page before further action. Distinct from `wiki_list` "
+        "which enumerates available pages, and from `wiki_export` which "
+        "renders a page through Pandoc to PDF/DOCX/HTML. Latency <10ms. "
+        "Returns {path, content (markdown verbatim), root} or {error}."
     ),
     "inputSchema": {
         "type": "object",
@@ -22,10 +25,15 @@ schema = {
             "path": {
                 "type": "string",
                 "description": (
-                    "Wiki-relative path of the page to read (no leading slash). "
-                    "Path traversal (../) is rejected at the storage layer."
+                    "Wiki-relative path of the page to read (no leading "
+                    "slash, no `..`). Must end in .md and resolve under the "
+                    "wiki root."
                 ),
-                "examples": ["adr/0042-pgvector.md", "concepts/wrrf-fusion.md"],
+                "examples": [
+                    "adr/0042-pgvector.md",
+                    "concepts/wrrf-fusion.md",
+                    "specs/cortex/recall-pipeline.md",
+                ],
             },
         },
     },

@@ -10,12 +10,16 @@ from mcp_server.infrastructure.wiki_store import list_pages
 
 schema = {
     "description": (
-        "List every authored wiki page under ~/.claude/methodology/wiki/, "
-        "optionally restricted to a single kind (adr, specs, guides, "
-        "reference, conventions, lessons, notes, journal, files). Use this to "
-        "browse what already exists before writing a new page or to feed a "
-        "downstream selector. Returns the wiki root, page count, and a list "
-        "of wiki-relative paths."
+        "Enumerate every authored wiki page under ~/.claude/methodology/wiki/, "
+        "filesystem-walked from the wiki root. Optionally restrict by kind "
+        "(adr, specs, guides, reference, conventions, lessons, notes, "
+        "journal, files). Use this to browse what already exists before "
+        "writing a new page, to feed a downstream selector, or to build a "
+        "manual cross-reference. Read-only; never modifies anything. Distinct "
+        "from `wiki_reindex` which generates the .generated/INDEX.md from the "
+        "same enumeration, and from `wiki_read` which fetches one page's "
+        "content. Latency <50ms even for thousands of pages. Returns "
+        "{root, count, pages: list[wiki-relative path]}."
     ),
     "inputSchema": {
         "type": "object",

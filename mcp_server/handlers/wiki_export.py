@@ -37,43 +37,78 @@ _ALLOWED_FORMATS = {
 
 schema = {
     "description": (
-        "Export a wiki page through Pandoc. Produces PDF/LaTeX/DOCX/HTML "
-        "with bibliography, figures, cross-refs, math. Phase 10."
+        "Render a wiki page (or an ad-hoc markdown body) to a publication-"
+        "quality artifact via Pandoc: PDF, LaTeX source, DOCX, or "
+        "standalone HTML. Resolves `[@key]` citations against "
+        "wiki/_bibliography/*.bib, honours frontmatter title/author/abstract, "
+        "and supports cross-references, figures, and math. Phase 10 of the "
+        "wiki redesign pipeline; the only path from the wiki to "
+        "human-shareable documents. Reads from disk; produces a base64-"
+        "encoded artifact in the response (no filesystem mutation). Distinct "
+        "from `wiki_read` (raw markdown) and `wiki_compile` (publish .md to "
+        "wiki tree). Requires pandoc on PATH; PDF additionally requires a "
+        "LaTeX engine. Pandoc args are validated against a safe-flag "
+        "allowlist to prevent subprocess injection. Latency varies "
+        "(~500ms-30s depending on format and document size). Returns "
+        "{ok, format, bytes, mime, content_base64, bibliography_used} or "
+        "{error}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
             "rel_path": {
                 "type": "string",
-                "description": "Wiki page path (e.g. 'specs/cortex/42-foo.md').",
+                "description": (
+                    "Wiki page path relative to the wiki root, e.g. "
+                    "'specs/cortex/42-foo.md'. Mutually exclusive with "
+                    "`body`."
+                ),
+                "examples": [
+                    "adr/0042-pgvector.md",
+                    "specs/cortex/recall-pipeline.md",
+                ],
             },
             "body": {
                 "type": "string",
                 "description": (
-                    "Inline markdown body (use instead of rel_path for "
-                    "ad-hoc exports). Frontmatter is honoured."
+                    "Inline markdown body to export instead of reading from "
+                    "the wiki tree. Frontmatter (title, author, "
+                    "bibliography) is parsed and honoured."
                 ),
+                "examples": ["# Quick Note\\n\\nSome content here."],
             },
             "format": {
                 "type": "string",
+                "description": (
+                    "Output format. 'pdf' requires a LaTeX engine "
+                    "(pdflatex/xelatex/lualatex/tectonic) on PATH; the "
+                    "others only need pandoc itself."
+                ),
                 "enum": list(_ALLOWED_FORMATS.keys()),
                 "default": "pdf",
+                "examples": ["pdf", "html", "docx", "tex"],
             },
             "bibliography": {
                 "type": "array",
-                "items": {"type": "string"},
                 "description": (
                     "Override the page's frontmatter bibliography list. "
-                    "Paths must be under _bibliography/."
+                    "Paths are resolved under wiki/_bibliography/ and may "
+                    "not escape it."
                 ),
+                "items": {"type": "string"},
+                "examples": [["refs.bib"], ["cortex.bib", "shared.bib"]],
             },
             "pandoc_args": {
                 "type": "array",
-                "items": {"type": "string"},
                 "description": (
-                    "Extra Pandoc args. Validated against a whitelist of "
-                    "safe flags (--toc, --number-sections, --template, …)."
+                    "Extra Pandoc arguments, filtered against a safe-flag "
+                    "allowlist (--toc, --number-sections, --standalone, "
+                    "--section-divs, --shift-heading-level-by=±1, "
+                    "--citeproc, --biblatex). Anything else is dropped."
                 ),
+                "items": {"type": "string"},
+                "examples": [["--toc", "--number-sections"]],
             },
         },
     },

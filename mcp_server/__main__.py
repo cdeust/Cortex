@@ -17,6 +17,7 @@ from fastmcp import FastMCP
 from mcp_server import (
     tool_registry_advanced,
     tool_registry_core,
+    tool_registry_ingest,
     tool_registry_manage,
     tool_registry_memory,
     tool_registry_nav,
@@ -47,6 +48,7 @@ tool_registry_manage.register(mcp)
 tool_registry_nav.register(mcp)
 tool_registry_advanced.register(mcp)
 tool_registry_wiki.register(mcp)
+tool_registry_ingest.register(mcp)
 
 # ── Lifecycle ──────────────────────────────────────────────────────────────
 

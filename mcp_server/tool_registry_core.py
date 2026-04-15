@@ -1,4 +1,4 @@
-"""Tool registration: Tier 1 core profiling tools (9 tools).
+"""Tool registration: Tier 1 core profiling tools (8 tools).
 
 Registers cognitive profiling, domain detection, and visualization tools.
 """
@@ -18,7 +18,6 @@ from mcp_server.handlers import (
     query_methodology,
     rebuild_profiles,
     record_session_end,
-    run_pipeline,
 )
 from mcp_server.tool_error_handler import safe_handler
 
@@ -33,7 +32,6 @@ def register(mcp: FastMCP) -> None:
     _register_get_methodology_graph(mcp)
     _register_open_visualization(mcp)
     _register_explore_features(mcp)
-    _register_run_pipeline(mcp)
 
 
 def _register_query_methodology(mcp: FastMCP) -> None:
@@ -179,32 +177,5 @@ def _register_explore_features(mcp: FastMCP) -> None:
                 "mode": mode,
                 "domain": domain,
                 "compare_domain": compare_domain,
-            },
-        )
-
-
-def _register_run_pipeline(mcp: FastMCP) -> None:
-    @mcp.tool(
-        name="run_pipeline",
-        description=run_pipeline.schema["description"],
-    )
-    async def tool_run_pipeline(
-        codebase_path: str,
-        task_path: str,
-        context_path: str | None = None,
-        github_repo: str | None = None,
-        server: str | None = None,
-        max_findings: int = 5,
-    ) -> str:
-        """Drive the ai-architect pipeline end-to-end."""
-        return await safe_handler(
-            run_pipeline.handler,
-            {
-                "codebase_path": codebase_path,
-                "task_path": task_path,
-                "context_path": context_path,
-                "github_repo": github_repo,
-                "server": server,
-                "max_findings": max_findings,
             },
         )

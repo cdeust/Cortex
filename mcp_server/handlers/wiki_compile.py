@@ -39,15 +39,52 @@ from mcp_server.infrastructure.wiki_store import write_page
 
 schema = {
     "description": (
-        "Compile approved drafts to .md files in the wiki folder and "
-        "upsert wiki.pages mirror rows. Phase 2.5 of the redesign."
+        "Publish approved wiki drafts: render each to a .md file under the "
+        "wiki folder (atomic write), upsert the wiki.pages mirror row, "
+        "transition the draft from approved → published, and log a memo. "
+        "Phase 2.5 of the wiki redesign pipeline; the gate between curated "
+        "drafts and human-readable pages. Mutates the filesystem (wiki/ "
+        "tree) and wiki.pages / wiki.drafts tables. Distinct from "
+        "`wiki_synthesize` (creates pending drafts), `wiki_curate` (gates "
+        "approval), and `wiki_export` (renders one page to PDF/DOCX). "
+        "Pass draft_id to publish one; omit to publish every approved draft. "
+        "Latency ~50ms per draft. Returns {drafts_published, results, "
+        "errors}."
     ),
     "inputSchema": {
         "type": "object",
+        "required": [],
         "properties": {
-            "draft_id": {"type": "integer"},
-            "dry_run": {"type": "boolean", "default": False},
-            "limit": {"type": "integer", "default": 100},
+            "draft_id": {
+                "type": "integer",
+                "description": (
+                    "Publish this single approved draft. Omit to publish "
+                    "every draft currently in status='approved'."
+                ),
+                "minimum": 1,
+                "examples": [42, 1024],
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": (
+                    "Compile drafts in memory and return their target rel_path "
+                    "+ markdown preview without writing files or mutating any "
+                    "DB rows."
+                ),
+                "default": False,
+                "examples": [False, True],
+            },
+            "limit": {
+                "type": "integer",
+                "description": (
+                    "Max approved drafts to publish per sweep. Ignored when "
+                    "draft_id is given."
+                ),
+                "default": 100,
+                "minimum": 1,
+                "maximum": 1000,
+                "examples": [50, 100, 500],
+            },
         },
     },
 }
