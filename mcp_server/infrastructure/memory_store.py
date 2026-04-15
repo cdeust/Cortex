@@ -77,11 +77,9 @@ class MemoryStore:
             # a loud warning. Real production users who have
             # configured Postgres will see the PG connect succeed;
             # only unset/unreachable installs trip this path.
-            allow_fallback = (
-                not url
-                or os.environ.get("CORTEX_ALLOW_SQLITE_FALLBACK", "").lower()
-                in ("1", "true", "yes")
-            )
+            allow_fallback = not url or os.environ.get(
+                "CORTEX_ALLOW_SQLITE_FALLBACK", ""
+            ).lower() in ("1", "true", "yes")
             if allow_fallback:
                 logger.warning(
                     "PostgreSQL unavailable (%s); falling back to SQLite. "
