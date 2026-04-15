@@ -70,13 +70,36 @@ class MemoryStore:
                 store, err = None, "DATABASE_URL not set"
             if store is not None:
                 return store
+            # Inspection-mode fallback — Glama's sandbox, CI smoke
+            # tests, and first-glance experimenters launch Cortex with
+            # no DATABASE_URL. Rather than hard-fail and leave them
+            # unable to even see the tool surface, drop to SQLite with
+            # a loud warning. Real production users who have
+            # configured Postgres will see the PG connect succeed;
+            # only unset/unreachable installs trip this path.
+            allow_fallback = (
+                not url
+                or os.environ.get("CORTEX_ALLOW_SQLITE_FALLBACK", "").lower()
+                in ("1", "true", "yes")
+            )
+            if allow_fallback:
+                logger.warning(
+                    "PostgreSQL unavailable (%s); falling back to SQLite. "
+                    "This is expected for inspection/sandbox launches; "
+                    "production installs should set DATABASE_URL.",
+                    err,
+                )
+                return _make_sqlite(
+                    db_path or settings.SQLITE_FALLBACK_PATH, embedding_dim
+                )
             raise RuntimeError(
                 f"PostgreSQL connection failed (url={url or '<unset>'}): {err}\n"
                 "Cortex requires PostgreSQL in CLI mode.\n"
                 "Run: bash setup.sh to configure PostgreSQL.\n"
                 "If DATABASE_URL is set, verify it points to a reachable Postgres instance "
                 "(host/port/credentials/database exists).\n"
-                "Or set CORTEX_RUNTIME=cowork to allow SQLite fallback."
+                "Or set CORTEX_RUNTIME=cowork (or CORTEX_ALLOW_SQLITE_FALLBACK=1) "
+                "to allow SQLite fallback."
             )
 
         # "auto" in cowork mode: try PG, fall back to SQLite
