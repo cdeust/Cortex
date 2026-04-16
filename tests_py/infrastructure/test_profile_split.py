@@ -68,9 +68,7 @@ def _make_profile(domain_id: str, tools: int) -> dict:
 class TestLegacyMigration:
     """On first load, a legacy single-file profiles.json is split."""
 
-    def test_legacy_file_is_split_into_per_domain_files(
-        self, isolated_methodology
-    ):
+    def test_legacy_file_is_split_into_per_domain_files(self, isolated_methodology):
         paths = isolated_methodology
         legacy = {
             "version": 2,
@@ -227,9 +225,7 @@ class TestListDomainsEquivalence:
         assert loaded["domains"]["cortex"] == legacy_data["domains"]["cortex"]
         assert loaded["domains"]["beam"] == legacy_data["domains"]["beam"]
 
-    def test_save_profiles_still_works_as_bulk_write(
-        self, isolated_methodology
-    ):
+    def test_save_profiles_still_works_as_bulk_write(self, isolated_methodology):
         """Legacy bulk save_profiles still produces per-domain files."""
         profiles = profile_store.empty_profiles()
         profiles["domains"]["one"] = _make_profile("one", 1)

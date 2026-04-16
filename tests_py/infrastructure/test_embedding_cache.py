@@ -92,7 +92,7 @@ class TestCacheKeyBounded:
         engine = EmbeddingEngine(dim=64)
         engine._unavailable = True
         for i in range(5):
-            big = (f"{i}" * 25_000)  # 25 K * 1 byte each = 25 KB; across
+            big = f"{i}" * 25_000  # 25 K * 1 byte each = 25 KB; across
             # the five calls the cache's accumulated raw-text bytes, if
             # stored as keys, would be 125 KB. With hashed keys it stays
             # at 5 * 16 = 80 bytes.

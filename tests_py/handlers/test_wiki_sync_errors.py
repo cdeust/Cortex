@@ -136,9 +136,7 @@ class TestRememberHandlerSurfacesWikiErrors:
 
         assert result["stored"] is True, "memory must still be stored"
         assert "warnings" in result, "wiki failure must be surfaced"
-        wiki_warnings = [
-            w for w in result["warnings"] if w.get("scope") == "wiki_sync"
-        ]
+        wiki_warnings = [w for w in result["warnings"] if w.get("scope") == "wiki_sync"]
         assert len(wiki_warnings) == 1
         w = wiki_warnings[0]
         assert w["error_type"] == "RuntimeError"

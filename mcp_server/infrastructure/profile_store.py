@@ -99,9 +99,7 @@ def _migrate_legacy_if_present() -> bool:
         "version": legacy.get("version", 2),
         "updatedAt": legacy.get("updatedAt"),
         "globalStyle": legacy.get("globalStyle"),
-        "domain_ids": sorted(
-            d for d in domains if isinstance(d, str) and "/" not in d
-        ),
+        "domain_ids": sorted(d for d in domains if isinstance(d, str) and "/" not in d),
     }
     write_json(INDEX_PATH, index)
     shutil.move(str(PROFILES_PATH), str(LEGACY_BACKUP_PATH))
@@ -215,8 +213,6 @@ def save_profiles(profiles: dict) -> None:
         "version": profiles.get("version", 2),
         "updatedAt": profiles["updatedAt"],
         "globalStyle": profiles.get("globalStyle"),
-        "domain_ids": sorted(
-            d for d in domains if isinstance(d, str) and "/" not in d
-        ),
+        "domain_ids": sorted(d for d in domains if isinstance(d, str) and "/" not in d),
     }
     write_json(INDEX_PATH, index)
