@@ -779,6 +779,130 @@ END;
 $$ LANGUAGE plpgsql;
 """
 
+# ── PL/pgSQL: effective_heat (A3 lazy-heat read path) ────────────────────
+#
+# Source: docs/program/phase-3-a3-migration-design.md §2.
+#
+# Single source of truth for I1, I5, I7, I8 post-A3. Pure-ish function:
+# STABLE (reads wall-clock via t_now arg — planner-constant within a
+# single query), PARALLEL SAFE (no session state). Output is
+# structurally bounded in [stage_floor, 1.0] — I8 becomes a property of
+# the formula, not a per-site LEAST guard.
+#
+# Semantics preserved from DECAY_MEMORIES_FN above (pg_schema.py:721):
+#   - Stage-dependent α (Kandel 2001; pg_schema.py:748-756)
+#   - Emotional damping β (Yonelinas & Ritchey 2015,
+#     Kleinsmith & Kaplan 1963; pg_schema.py:757-759)
+#   - Stage floors (Bahrick 1984 permastore, Benna & Fusi 2016;
+#     pg_schema.py:742-747)
+#   - p_factor (global decay rate per hour) = 0.95 default, matching
+#     DECAY_MEMORIES_FN.
+#
+# The function is added in step 2 of A3 but is NOT yet called from
+# recall_memories() — that happens in step 6 under the
+# CORTEX_MEMORY_A3_LAZY_HEAT flag (default false). Until the flag flips,
+# this function is unused; it can be dropped via rollback SQL without
+# disturbing any read path.
+
+EFFECTIVE_HEAT_FN = """
+CREATE OR REPLACE FUNCTION effective_heat(
+    m           memories,
+    t_now       TIMESTAMPTZ,
+    factor      REAL DEFAULT 1.0,
+    p_factor    REAL DEFAULT 0.95
+) RETURNS REAL AS $$
+DECLARE
+    hours_elapsed  REAL;
+    stage_hours    REAL;
+    alpha          REAL;
+    beta           REAL;
+    stage_floor    REAL;
+    base_scaled    REAL;
+    decayed        REAL;
+BEGIN
+    -- Pinned: protected or explicit no_decay. heat_base is authoritative;
+    -- factor still applies (homeostatic contraction affects even anchors
+    -- — LEAST(1.0, …) preserves I7: protected heat never exceeds its
+    -- heat_base=1.0 baseline).
+    IF m.is_protected OR COALESCE(m.no_decay, FALSE) THEN
+        RETURN LEAST(1.0, GREATEST(0.0, m.heat_base * factor));
+    END IF;
+
+    -- Hours since heat_base was last bumped (= last canonical touch).
+    -- Falls back to last_accessed then created_at for rows migrated from
+    -- pre-A3 without a heat_base_set_at value.
+    hours_elapsed := GREATEST(0.0, EXTRACT(EPOCH FROM
+        (t_now - COALESCE(m.heat_base_set_at, m.last_accessed, m.created_at)))
+        / 3600.0);
+
+    -- Hours since the row entered its current consolidation stage.
+    -- Used by the emotional-damping β term (larger Δt_stage → β closer
+    -- to 1 - 0.30·|valence|, per pg_schema.py:757-759).
+    stage_hours := GREATEST(0.0, EXTRACT(EPOCH FROM
+        (t_now - COALESCE(m.stage_entered_at, m.created_at))) / 3600.0);
+
+    -- α(stage) — Kandel 2001 stage-dependent decay exponent.
+    -- source: pg_schema.py:748-756
+    alpha := CASE m.consolidation_stage
+        WHEN 'labile'          THEN 2.0
+        WHEN 'early_ltp'       THEN 1.2
+        WHEN 'late_ltp'        THEN 0.8
+        WHEN 'consolidated'    THEN 0.5
+        WHEN 'reconsolidating' THEN 1.5
+        ELSE 1.0
+    END;
+
+    -- β(valence, Δt_stage) — Yonelinas & Ritchey 2015 emotional damping.
+    -- source: pg_schema.py:757-759
+    -- (stage_hours is already in hours — no /3600 fold needed)
+    beta := 1.0 - 0.30 * ABS(COALESCE(m.emotional_valence, 0.0))
+                * (1.0 - EXP(-stage_hours / 1.0));
+
+    -- Stage permastore floor — Bahrick 1984 + Benna & Fusi 2016.
+    -- source: pg_schema.py:742-747
+    stage_floor := CASE m.consolidation_stage
+        WHEN 'consolidated'    THEN 0.10
+        WHEN 'late_ltp'        THEN 0.05
+        WHEN 'reconsolidating' THEN 0.05
+        ELSE 0.0
+    END;
+
+    -- Scale base by homeostatic factor (Feynman first-principles: factor
+    -- is a scalar-per-domain gain, not a per-row mutation). Then apply
+    -- decay continuously across elapsed hours:
+    --   POWER(p_factor, α·β)^hours = POWER(p_factor, α·β·hours)
+    base_scaled := m.heat_base * factor;
+    decayed := base_scaled * POWER(p_factor, alpha * beta * hours_elapsed);
+
+    -- I1 + I8: structural clamp to [stage_floor, 1.0].
+    RETURN LEAST(1.0, GREATEST(stage_floor, decayed));
+END;
+$$ LANGUAGE plpgsql STABLE PARALLEL SAFE;
+"""
+
+# effective_heat_frozen — kill-switch alias returning heat_base directly.
+# When CORTEX_MEMORY_A3_LAZY_HEAT=false at step 9 rollback, callers that
+# were switched to effective_heat() can be redirected here via a runtime
+# DDL swap (the function signature matches). Equivalent to the pre-A3
+# eager-stored heat read.
+
+EFFECTIVE_HEAT_FROZEN_FN = """
+CREATE OR REPLACE FUNCTION effective_heat_frozen(
+    m           memories,
+    t_now       TIMESTAMPTZ,
+    factor      REAL DEFAULT 1.0,
+    p_factor    REAL DEFAULT 0.95
+) RETURNS REAL AS $$
+BEGIN
+    -- Return heat_base directly. No decay, no factor, no stage
+    -- adjustment — matches the pre-A3 stored-heat semantics exactly.
+    -- Used only as an emergency rollback target when the A3 flag is
+    -- flipped false but the schema has been migrated.
+    RETURN LEAST(1.0, GREATEST(0.0, m.heat_base));
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
+"""
+
 # ── PL/pgSQL: spread_activation ──────────────────────────────────────────
 
 SPREAD_ACTIVATION_FN = """
@@ -1121,6 +1245,8 @@ def get_all_ddl() -> list[str]:
         MIGRATIONS_DDL,
         RECALL_MEMORIES_FN,
         DECAY_MEMORIES_FN,
+        EFFECTIVE_HEAT_FN,
+        EFFECTIVE_HEAT_FROZEN_FN,
         SPREAD_ACTIVATION_FN,
         SPREAD_ACTIVATION_MEMORIES_FN,
         GET_HOT_EMBEDDINGS_FN,
