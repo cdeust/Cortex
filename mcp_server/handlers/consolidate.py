@@ -47,7 +47,10 @@ schema = {
         "lifecycle). Mutates memories + entities + relationships tables. "
         "Latency varies (~5-60s typical, deep mode minutes). Returns "
         "per-cycle counters, duration_ms per stage, status (ok|partial), "
-        "and failed_stages list."
+        "and failed_stages list. The `cls` and `memify` stages include "
+        "`reason_for_zero` / `reason_for_inaction` when the cycle "
+        "produces no mutations, distinguishing early-return from a "
+        "genuine quiet-store pass (issue #14 P2)."
     ),
     "inputSchema": {
         "type": "object",
