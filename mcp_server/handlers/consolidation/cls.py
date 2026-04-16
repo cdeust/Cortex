@@ -1,6 +1,10 @@
 """CLS cycle: episodic -> semantic pattern extraction.
 
 Includes causal edge discovery from entity co-occurrences via the PC algorithm.
+
+Returns include a diagnostic ``reason_for_zero`` field when the cycle
+produces no mutations (all mutational counters zero), distinguishing
+early-return from a genuine "nothing to do" pass (issue #14 P2, darval).
 """
 
 from __future__ import annotations
@@ -12,6 +16,7 @@ from mcp_server.core.causal_graph import (
     discover_causal_edges,
 )
 from mcp_server.core.consolidation_engine import plan_cls_consolidation
+from mcp_server.core.dual_store_cls_abstraction import cluster_by_similarity
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_store import MemoryStore
 
@@ -23,6 +28,12 @@ logger = logging.getLogger(__name__)
 # 10k-entity vocabulary.
 _EPISODIC_SAMPLE_CAP = 2000
 _SEMANTICS_SAMPLE_CAP = 2000
+
+# CLS clustering parameters — kept at module scope so the diagnostic
+# reclassification (Move 2 postcondition on `reason_for_zero`) reflects
+# the exact same pairing regime used by the plan.
+_MIN_PATTERN_SIZE = 3
+_CLUSTER_THRESHOLD = 0.6
 
 _EMPTY_CLS_STATS = {
     "patterns_found": 0,
@@ -46,18 +57,31 @@ def run_cls_cycle(
     memories each — raised from 500 after Feynman's audit of darval's
     66K run in issue #13 showed 500 sampled 2% of the episodic store
     and produced 0 patterns by construction.
+
+    Postcondition (issue #14 P2): the returned dict always carries the
+    6 numeric counters (`patterns_found`, `new_semantics_created`,
+    `skipped_inconsistent`, `skipped_duplicate`, `causal_edges_found`,
+    `episodic_scanned`). When every *mutational* counter is zero (all
+    except `episodic_scanned`), an additive ``reason_for_zero`` key
+    classifies the early-return path: one of ``empty_episodic_scan``,
+    ``below_min_pattern_size``, ``insufficient_pairs``,
+    ``no_qualifying_entities``, ``passed_through``. When any mutational
+    counter is non-zero, ``reason_for_zero`` is omitted.
     """
     episodic = store.get_episodic_memories(limit=_EPISODIC_SAMPLE_CAP)
     existing_semantics = store.get_semantic_memories(limit=_SEMANTICS_SAMPLE_CAP)
 
     if not episodic:
-        return _EMPTY_CLS_STATS.copy()
+        stats = _EMPTY_CLS_STATS.copy()
+        stats["reason_for_zero"] = "empty_episodic_scan"
+        _log_if_passed_through("cls", stats, duration_ms=0, scanned=0)
+        return stats
 
     plan = _compute_consolidation_plan(episodic, existing_semantics, embeddings)
     created = _create_semantic_memories(store, embeddings, plan)
-    causal_edges_found = _discover_causal_edges(store, episodic)
+    causal_edges_found, qualifying_count = _discover_causal_edges(store, episodic)
 
-    return {
+    stats = {
         "patterns_found": plan["patterns_found"],
         "new_semantics_created": created,
         "skipped_inconsistent": plan["skipped_inconsistent"],
@@ -65,6 +89,124 @@ def run_cls_cycle(
         "causal_edges_found": causal_edges_found,
         "episodic_scanned": len(episodic),
     }
+
+    reason = _classify_cls_zero_reason(stats, episodic, embeddings, qualifying_count)
+    if reason is not None:
+        stats["reason_for_zero"] = reason
+        _log_if_passed_through(
+            "cls", stats, duration_ms=0, scanned=len(episodic)
+        )
+
+    return stats
+
+
+def _classify_cls_zero_reason(
+    stats: dict,
+    episodic: list[dict],
+    embeddings: EmbeddingEngine,
+    qualifying_count: int,
+) -> str | None:
+    """Classify the early-return path when every mutational counter is zero.
+
+    Precondition: `stats` carries the 5 mutational counters plus
+    `episodic_scanned`; `qualifying_count` is the number of entities
+    that passed the PC observation threshold inside
+    `_discover_causal_edges`.
+
+    Postcondition: returns None when any mutational counter is non-zero
+    (the diagnostic is additive — absent whenever the cycle produced
+    output). Otherwise returns one of the enumerated reasons below.
+
+    Priority (first match wins — most informative signal takes precedence):
+      1. ``below_min_pattern_size`` — clustering produced ≥1 multi-member
+         cluster but none reached ``_MIN_PATTERN_SIZE`` (patterns are
+         forming, just not large enough for the min-occurrences gate).
+      2. ``insufficient_pairs`` — no embedding pair crossed the cluster
+         threshold AND no entity has enough mentions for the PC gate
+         (the store has no pair-level signal at all).
+      3. ``no_qualifying_entities`` — some entities qualify but fewer
+         than ``_MIN_ENTITIES_FOR_PC``; cluster pipeline also produced
+         no pairs.
+      4. ``passed_through`` — every branch ran to completion and found
+         nothing mutationally new (truly quiet store).
+    """
+    counters = (
+        stats["patterns_found"],
+        stats["new_semantics_created"],
+        stats["skipped_inconsistent"],
+        stats["skipped_duplicate"],
+        stats["causal_edges_found"],
+    )
+    if any(c != 0 for c in counters):
+        return None
+
+    # All mutational counters zero: recompute clustering to inspect
+    # pair-level signal. This path only runs when the stage produced no
+    # mutations, so the O(n^2) replay is bounded by the no-op case.
+    multi_member = _count_multi_member_clusters(episodic, embeddings)
+
+    if multi_member > 0:
+        # Clusters of size ≥ 2 formed but none reached _MIN_PATTERN_SIZE.
+        return "below_min_pattern_size"
+
+    # No multi-member clusters at all (no embedding pair crossed threshold).
+    if qualifying_count == 0:
+        return "insufficient_pairs"
+
+    if qualifying_count < _MIN_ENTITIES_FOR_PC:
+        return "no_qualifying_entities"
+
+    return "passed_through"
+
+
+def _count_multi_member_clusters(
+    episodic: list[dict],
+    embeddings: EmbeddingEngine,
+) -> int:
+    """Count clusters with ≥ 2 members by re-running greedy clustering.
+
+    Invariant: uses the same ``_CLUSTER_THRESHOLD`` as
+    ``_compute_consolidation_plan`` so the classification reflects the
+    same pairing regime the cycle actually ran under.
+    """
+
+    def similarity_fn(emb_a, emb_b) -> float:
+        if emb_a is None or emb_b is None:
+            return 0.0
+        return embeddings.similarity(emb_a, emb_b)
+
+    try:
+        clusters = cluster_by_similarity(
+            episodic, similarity_fn, threshold=_CLUSTER_THRESHOLD
+        )
+    except Exception:
+        return 0
+    return sum(1 for c in clusters if len(c) >= 2)
+
+
+def _log_if_passed_through(
+    stage_name: str,
+    stats: dict,
+    duration_ms: int,
+    scanned: int,
+) -> None:
+    """Emit an INFO log when the stage finished as a genuine no-op.
+
+    Issue #14 P2 (darval): operators need to grep
+    ``stage=<name> reason=passed_through`` to distinguish "quiet store"
+    runs from early-return runs. Only fires when the classified reason
+    is ``passed_through`` on either field (``reason_for_zero`` or
+    ``reason_for_inaction``).
+    """
+    reason = stats.get("reason_for_zero") or stats.get("reason_for_inaction")
+    if reason != "passed_through":
+        return
+    logger.info(
+        "stage=%s reason=passed_through scanned=%d duration_ms=%d",
+        stage_name,
+        scanned,
+        duration_ms,
+    )
 
 
 def _compute_consolidation_plan(
@@ -83,9 +225,9 @@ def _compute_consolidation_plan(
         episodic_memories=episodic,
         existing_semantics=existing_semantics,
         similarity_fn=similarity_fn,
-        cluster_threshold=0.6,
+        cluster_threshold=_CLUSTER_THRESHOLD,
         dedup_threshold=0.85,
-        min_occurrences=3,
+        min_occurrences=_MIN_PATTERN_SIZE,
         min_sessions=2,
     )
 
@@ -149,7 +291,7 @@ def _link_source_memories(
 def _discover_causal_edges(
     store: MemoryStore,
     episodic: list[dict],
-) -> int:
+) -> tuple[int, int]:
     """Discover causal edges from entity co-occurrences (PC algorithm).
 
     Gates on minimum signal before running the O(E²) independence tests:
@@ -157,18 +299,28 @@ def _discover_causal_edges(
     entity in the sample to distinguish correlation from chance, so if
     fewer than `_MIN_ENTITIES_FOR_PC` entities clear that threshold,
     skip the analysis entirely (issue #13 Phase D).
+
+    Returns
+    -------
+    (edges_stored, qualifying_count)
+        edges_stored — number of causal/correlation edges persisted.
+        qualifying_count — number of entities whose mention count
+        reached ``_PC_MIN_OBSERVATIONS``. Surfaced for issue #14 P2
+        diagnostics so the handler can distinguish "no entities mentioned
+        enough" (``insufficient_pairs``) from "a few qualify but below
+        ``_MIN_ENTITIES_FOR_PC``" (``no_qualifying_entities``).
     """
     try:
         all_entities = store.get_all_entities(min_heat=0.0)
         entity_names = [e["name"] for e in all_entities if e.get("name")]
         if not entity_names or not episodic:
-            return 0
+            return 0, 0
 
         entity_counts = _count_entity_mentions(entity_names, episodic)
         qualifying = sum(1 for c in entity_counts.values() if c >= _PC_MIN_OBSERVATIONS)
         if qualifying < _MIN_ENTITIES_FOR_PC:
             # Insufficient signal — don't run the full O(E^2) pass.
-            return 0
+            return 0, qualifying
 
         # Restrict the vocabulary to entities that meet the minimum, so
         # the co-occurrence matrix is E_qualifying^2, not E_all^2.
@@ -185,10 +337,10 @@ def _discover_causal_edges(
             min_observations=_PC_MIN_OBSERVATIONS,
             independence_threshold=0.5,
         )
-        return _store_causal_edges(store, all_entities, edges)
+        return _store_causal_edges(store, all_entities, edges), qualifying
     except Exception as exc:
         logger.warning("Causal discovery failed: %s", exc, exc_info=True)
-        return 0
+        return 0, 0
 
 
 # Source: PC algorithm lower bound — need ≥3 observations per variable
