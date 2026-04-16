@@ -36,7 +36,6 @@ when PG is not available (CI without PG → test becomes xfail-on-env).
 from __future__ import annotations
 
 import os
-from typing import Iterable
 
 import pytest
 
@@ -320,8 +319,7 @@ def _setup_fixture() -> tuple[list[dict], list[dict]]:
         for mid, content in zip(mem_ids, _FIXTURE_MEMORIES)
     ]
     entities = [
-        {"id": eid, "name": name}
-        for eid, (name, _) in zip(ent_ids, _FIXTURE_ENTITIES)
+        {"id": eid, "name": name} for eid, (name, _) in zip(ent_ids, _FIXTURE_ENTITIES)
     ]
     return memories, entities
 
@@ -441,15 +439,13 @@ class TestPhase2Parity:
         memories, entities = _setup_fixture()
         pairs = _co_accessed_via_substring(memories, entities)
 
-        short_entity_ids = {
-            e["id"] for e in entities if len(e["name"]) < 4
-        }
+        short_entity_ids = {e["id"] for e in entities if len(e["name"]) < 4}
         assert short_entity_ids, "fixture is missing short entities"
 
-        leaked = [p for p in pairs if p[0] in short_entity_ids or p[1] in short_entity_ids]
-        assert leaked == [], (
-            f"short entities leaked into substring pairs: {leaked[:3]}"
-        )
+        leaked = [
+            p for p in pairs if p[0] in short_entity_ids or p[1] in short_entity_ids
+        ]
+        assert leaked == [], f"short entities leaked into substring pairs: {leaked[:3]}"
 
     def test_join_scan_matches_substring_after_backfill(self):
         """Core parity assertion: after backfill, both scans agree ± 1%.

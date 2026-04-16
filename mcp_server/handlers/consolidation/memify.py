@@ -141,9 +141,7 @@ def _classify_memify_reason(
         m.get("access_count", 0) > 0 for m in memories
     ):
         return "below_access_threshold"
-    if not has_prune_candidates and any(
-        m.get("heat", 1.0) < 0.5 for m in memories
-    ):
+    if not has_prune_candidates and any(m.get("heat", 1.0) < 0.5 for m in memories):
         return "below_stale_threshold"
 
     return "passed_through"

@@ -112,8 +112,7 @@ class TestApplyCohortCorrection:
         after = compute_distribution_health(scaled, target_mean=0.4)
         assert after["std"] < before["std"]
         assert (
-            after["bimodality_coefficient"]
-            <= before["bimodality_coefficient"] + 1e-6
+            after["bimodality_coefficient"] <= before["bimodality_coefficient"] + 1e-6
         )
 
     def test_five_cycles_flatten_peak(self):
@@ -225,7 +224,4 @@ class TestRunHomeostaticCycleReturn:
         # correction provably narrows the distribution even when the
         # Pfister ratio is scale-invariant.
         assert result["std_heat"] > 0
-        assert (
-            result["bimodality_after"]
-            <= result["bimodality_before"] + 1e-6
-        )
+        assert result["bimodality_after"] <= result["bimodality_before"] + 1e-6
