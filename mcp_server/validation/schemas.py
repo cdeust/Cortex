@@ -87,7 +87,13 @@ SCHEMAS: dict[str, dict] = {
     },
     "remember": {
         "properties": {
-            "content": {"type": "string", "maxLength": 50000},
+            # ADR-0045 R2/R5 (fragility sweep v3.13.0 E3):
+            # content maxLength tightened from 50_000 → 10_000 chars.
+            # Taleb audit: a 100 KB content blob triggered ~100K fallback
+            # regex scans in entity extraction plus OOM on the knowledge
+            # graph path. 10 K is the bounded envelope; callers submitting
+            # larger content get a ValidationError and must split upstream.
+            "content": {"type": "string", "maxLength": 10000},
             "tags": {"type": "array"},
             "source": {"type": "string", "maxLength": 200},
             "domain": {"type": "string", "maxLength": 200},
