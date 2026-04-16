@@ -33,7 +33,7 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # ── Control constants (source: operational defaults, see module docstring) ──
 

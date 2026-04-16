@@ -80,9 +80,7 @@ def _compute_gate_decision(
     threshold = write_gate_calibration.effective_threshold(
         domain, default_threshold=base_threshold
     )
-    should_store, gate_reason = gate_decision(
-        score, threshold=threshold, bypass=bypass
-    )
+    should_store, gate_reason = gate_decision(score, threshold=threshold, bypass=bypass)
     if bypass_reason:
         gate_reason = bypass_reason
     return should_store, gate_reason, threshold

@@ -235,7 +235,9 @@ def rerank_results(
         return candidates
 
 
-def get_raw_ce_score(query: str, content: str, max_content_len: int = 1200) -> float | None:
+def get_raw_ce_score(
+    query: str, content: str, max_content_len: int = 1200
+) -> float | None:
     """Return a single raw FlashRank CE score for (query, content).
 
     Used by ``rate_memory`` to collect Platt training samples: when the

@@ -54,7 +54,9 @@ def record_rating(raw_score: float, useful: bool) -> None:
             >= MIN_SAMPLES, _PARAMS is refit via ``fit_platt``.
     """
     global _PARAMS, _SAMPLES_AT_LAST_FIT
-    _SAMPLES.append(TrainingSample(raw_score=float(raw_score), label=1 if useful else 0))
+    _SAMPLES.append(
+        TrainingSample(raw_score=float(raw_score), label=1 if useful else 0)
+    )
     if len(_SAMPLES) > MAX_SAMPLES:
         # FIFO trim — keep the most recent MAX_SAMPLES pairs.
         del _SAMPLES[: len(_SAMPLES) - MAX_SAMPLES]
