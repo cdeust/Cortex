@@ -93,9 +93,7 @@ def run_cls_cycle(
     reason = _classify_cls_zero_reason(stats, episodic, embeddings, qualifying_count)
     if reason is not None:
         stats["reason_for_zero"] = reason
-        _log_if_passed_through(
-            "cls", stats, duration_ms=0, scanned=len(episodic)
-        )
+        _log_if_passed_through("cls", stats, duration_ms=0, scanned=len(episodic))
 
     return stats
 

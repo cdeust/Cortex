@@ -294,7 +294,9 @@ class TestClsPassedThroughLog:
         ]
         store = _FakeStore(episodic=episodic, semantic=[], entities=entities)
 
-        with caplog.at_level(logging.INFO, logger="mcp_server.handlers.consolidation.cls"):
+        with caplog.at_level(
+            logging.INFO, logger="mcp_server.handlers.consolidation.cls"
+        ):
             result = run_cls_cycle(store, settings=None, embeddings=_FakeEmbeddings())
 
         if result.get("reason_for_zero") == "passed_through":
@@ -304,9 +306,7 @@ class TestClsPassedThroughLog:
                 for rec in caplog.records
             )
         else:
-            pytest.skip(
-                "Scenario did not deterministically land on passed_through"
-            )
+            pytest.skip("Scenario did not deterministically land on passed_through")
 
     def test_non_passed_through_does_not_emit_info_log(self, caplog):
         """Other reasons must NOT emit the grep-targeted INFO line."""
@@ -314,7 +314,9 @@ class TestClsPassedThroughLog:
 
         store = _FakeStore(episodic=[], semantic=[], entities=[])
 
-        with caplog.at_level(logging.INFO, logger="mcp_server.handlers.consolidation.cls"):
+        with caplog.at_level(
+            logging.INFO, logger="mcp_server.handlers.consolidation.cls"
+        ):
             result = run_cls_cycle(store, settings=None, embeddings=_FakeEmbeddings())
 
         assert result["reason_for_zero"] == "empty_episodic_scan"

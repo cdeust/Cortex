@@ -85,8 +85,10 @@ def _scan_heat_writers() -> set[tuple[str, int]]:
         for i, line in enumerate(lines, 1):
             up = line.upper().replace(" AS M", "").replace(" AS W", "")
             # Single-line: UPDATE memories SET ... heat ...
-            if "UPDATE MEMORIES" in up and "SET" in up and (
-                "HEAT" in up or "HEAT_BASE" in up
+            if (
+                "UPDATE MEMORIES" in up
+                and "SET" in up
+                and ("HEAT" in up or "HEAT_BASE" in up)
             ):
                 rel = str(py.relative_to(_MCP_ROOT)).replace("\\", "/")
                 offenders.add((rel, i))
@@ -121,9 +123,8 @@ def test_I2_no_unauthorized_heat_writes() -> None:
         msg_parts.append(
             "New heat writer(s) introduced — each must either route "
             "through the canonical writer OR be added to ALLOWED_WRITERS "
-            "with an ADR citation:\n  " + "\n  ".join(
-                f"{p}:{ln}" for p, ln in sorted(unexpected)
-            )
+            "with an ADR citation:\n  "
+            + "\n  ".join(f"{p}:{ln}" for p, ln in sorted(unexpected))
         )
     if stale:
         msg_parts.append(
