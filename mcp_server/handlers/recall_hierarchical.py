@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.core import fractal
+from mcp_server.errors import ValidationError
 from mcp_server.infrastructure.embedding_engine import (
     EmbeddingEngine,
     get_embedding_engine,
@@ -27,14 +28,18 @@ schema = {
         "memories, L1=topic clusters, L2=root clusters), with adaptive level "
         "weighting from query length: short queries weight toward broader L2 "
         "clusters (you're scanning a topic), long queries toward specific L0 "
-        "memories (you have a precise question). Use this instead of `recall` "
-        "when you want the topology of the memory space, not just a flat "
-        "ranked list. Distinct from `recall` (flat WRRF result, no hierarchy), "
-        "`drill_down` (consumer of this tool's output, navigates one level "
-        "deeper into a returned cluster), and `navigate_memory` (graph "
-        "traversal, not cluster tree). Mutates access_count on surfaced "
-        "memories. Latency ~150-300ms. Returns {hierarchy: [{cluster_id, "
-        "level, label, score, members?}], total_clusters}."
+        "memories (you have a precise question). REQUIRES either `domain` or "
+        "`memory_ids` to bound the tree build — the uncapped fallback was "
+        "removed in v3.13.0 because clustering is O(N^2) in the candidate set "
+        "(infeasible past ~5K memories, see ADR-0045 R3). Use this instead of "
+        "`recall` when you want the topology of the memory space, not just a "
+        "flat ranked list. Distinct from `recall` (flat WRRF result, no "
+        "hierarchy), `drill_down` (consumer of this tool's output, navigates "
+        "one level deeper into a returned cluster), and `navigate_memory` "
+        "(graph traversal, not cluster tree). Mutates access_count on "
+        "surfaced memories. Latency ~150-300ms on domain-scoped calls. "
+        "Returns {hierarchy: [{cluster_id, level, label, score, members?}], "
+        "total_clusters}."
     ),
     "inputSchema": {
         "type": "object",
@@ -50,8 +55,23 @@ schema = {
             },
             "domain": {
                 "type": "string",
-                "description": "Restrict the hierarchy to a single cognitive domain.",
+                "description": (
+                    "Restrict the hierarchy to a single cognitive domain. "
+                    "Either this OR memory_ids is REQUIRED (ADR-0045 R3)."
+                ),
                 "examples": ["cortex", "auth-service"],
+            },
+            "memory_ids": {
+                "type": "array",
+                "items": {"type": "integer", "minimum": 1},
+                "description": (
+                    "Explicit subset of memory IDs to cluster. Either this "
+                    "OR domain is REQUIRED (ADR-0045 R3). Use when you want "
+                    "the tree over a pre-filtered candidate set (e.g., "
+                    "output of `recall` or `navigate_memory`)."
+                ),
+                "examples": [[42, 43, 44, 45]],
+                "maxItems": 5000,
             },
             "max_results": {
                 "type": "integer",
@@ -103,14 +123,27 @@ def _get_store() -> MemoryStore:
 def _fetch_candidate_memories(
     store: MemoryStore,
     domain: str,
+    memory_ids: list[int],
     min_heat: float,
 ) -> list[dict]:
-    """Fetch memories eligible for hierarchy building."""
-    if domain:
-        return store.get_memories_for_domain(domain, min_heat=min_heat, limit=500)
+    """Fetch memories eligible for hierarchy building.
 
-    all_mems = store.get_all_memories_for_decay()
-    return [m for m in all_mems if m.get("heat", 0) >= min_heat]
+    Pre: exactly one of ``domain`` or ``memory_ids`` is non-empty (enforced
+         by the handler before this is called).
+    Post: returned list has ``heat >= min_heat`` for every element, and its
+         size is O(500) for domain mode or O(len(memory_ids)) for explicit
+         mode. The uncapped ``get_all_memories_for_decay()`` fallback was
+         removed in v3.13.0 (ADR-0045 R3 — build_hierarchy is O(N^2) and
+         infeasible past ~5K memories).
+    """
+    if memory_ids:
+        hydrated: list[dict] = []
+        for mid in memory_ids:
+            mem = store.get_memory(mid)
+            if mem and mem.get("heat", 0.0) >= min_heat:
+                hydrated.append(mem)
+        return hydrated
+    return store.get_memories_for_domain(domain, min_heat=min_heat, limit=500)
 
 
 def _enrich_results(
@@ -170,20 +203,40 @@ def _score_memories_against_hierarchy(
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Retrieve memories using fractal hierarchy scoring."""
+    """Retrieve memories using fractal hierarchy scoring.
+
+    Contract (v3.13.0+, ADR-0045 R3):
+      pre:  args.query is a non-empty string; exactly one of args.domain or
+            args.memory_ids is provided (both empty -> ValidationError).
+      post: returned dict has ``results`` bounded by max_results and
+            ``hierarchy`` built over at most 500 memories (domain mode) or
+            len(memory_ids) memories (explicit mode). No call path reaches
+            ``get_all_memories_for_decay()`` — the uncapped fallback that
+            OOM'd at darval's 66K-memory store (field report issue #14) is
+            removed by contract, not runtime check.
+    """
     if not args or not args.get("query"):
         return {"results": [], "total": 0, "hierarchy": {}}
 
     query = args["query"]
-    domain = args.get("domain", "")
+    domain = args.get("domain", "") or ""
+    memory_ids_raw = args.get("memory_ids") or []
+    memory_ids: list[int] = [int(mid) for mid in memory_ids_raw if mid is not None]
     max_results = args.get("max_results", 10)
     min_heat = args.get("min_heat", 0.05)
     cluster_threshold = float(args.get("cluster_threshold", 0.6))
 
+    if not domain and not memory_ids:
+        raise ValidationError(
+            "recall_hierarchical requires domain or memory_ids; the uncapped "
+            "fallback was removed in v3.13.0 because it is O(N^2) and "
+            "infeasible at production scale."
+        )
+
     store = _get_store()
     embeddings = get_embedding_engine()
 
-    memories = _fetch_candidate_memories(store, domain, min_heat)
+    memories = _fetch_candidate_memories(store, domain, memory_ids, min_heat)
     if not memories:
         return {"results": [], "total": 0, "hierarchy": {"stats": {}}}
 
