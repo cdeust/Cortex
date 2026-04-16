@@ -7,7 +7,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core import curation, thermodynamics, write_gate, write_post_store
+from mcp_server.core import (
+    curation,
+    thermodynamics,
+    write_gate,
+    write_gate_calibration,
+    write_post_store,
+)
 from mcp_server.core.dual_store_cls import classify_memory
 from mcp_server.core.predictive_coding_flat import (
     compute_embedding_novelty,
@@ -56,16 +62,30 @@ def _compute_gate_decision(
     force: bool,
     content: str,
     tags: list[str],
-) -> tuple[bool, str]:
-    """Determine whether to store based on novelty score and bypass rules."""
+    domain: str = "",
+) -> tuple[bool, str, float]:
+    """Determine whether to store based on novelty score and bypass rules.
+
+    Returns (should_store, gate_reason, effective_threshold). The threshold
+    is the calibration-adjusted value for the domain (Taleb AF-5 feedback
+    loop); callers that observe the decision should feed it back via
+    ``write_gate_calibration.record`` so the EMA converges to the target
+    acceptance rate.
+    """
     bypass, bypass_reason = write_gate.determine_bypass(force, content, tags)
     settings = get_memory_settings()
+    base_threshold = settings.WRITE_GATE_THRESHOLD
+    # Calibrated threshold overrides the static setting once the per-domain
+    # EMA has enough samples (see write_gate_calibration.effective_threshold).
+    threshold = write_gate_calibration.effective_threshold(
+        domain, default_threshold=base_threshold
+    )
     should_store, gate_reason = gate_decision(
-        score, threshold=settings.WRITE_GATE_THRESHOLD, bypass=bypass
+        score, threshold=threshold, bypass=bypass
     )
     if bypass_reason:
         gate_reason = bypass_reason
-    return should_store, gate_reason
+    return should_store, gate_reason, threshold
 
 
 def evaluate_gate(
@@ -75,8 +95,20 @@ def evaluate_gate(
     force: bool,
     store: MemoryStore,
     emb_engine: EmbeddingEngine,
+    domain: str = "",
 ) -> dict[str, Any]:
-    """Compute all novelty signals and gate decision."""
+    """Compute all novelty signals and gate decision.
+
+    Contract:
+      pre:  content is a non-empty string; embedding is either None or a
+            valid vector; ``domain`` is the resolved (normalised) domain
+            for this write path.
+      post: the returned dict contains ``should_store``, the observed
+            ``gate_reason``, and the ``gate_threshold`` actually used for
+            the decision. Side effect: the per-domain calibration EMA is
+            updated via ``write_gate_calibration.record`` when the decision
+            was NOT a bypass (bypasses are not informative for calibration).
+    """
     importance = thermodynamics.compute_importance(content, tags)
     sims, vec_hits = compute_similarities(embedding, store, emb_engine)
     emb_nov = compute_embedding_novelty(sims)
@@ -87,7 +119,26 @@ def evaluate_gate(
         content, [m["content"] for m in recent if m.get("content")]
     )
     score = compute_novelty_score(emb_nov, ent_nov, temp_nov, struct_nov)
-    should_store, gate_reason = _compute_gate_decision(score, force, content, tags)
+    should_store, gate_reason, threshold = _compute_gate_decision(
+        score, force, content, tags, domain=domain
+    )
+    # AF-5 feedback: record non-bypass decisions to drive the EMA. Bypasses
+    # (force, error, decision, important_tag) carry no calibration signal
+    # because the gate didn't actually decide on novelty.
+    settings = get_memory_settings()
+    is_bypass = gate_reason in {
+        "bypass",
+        "forced",
+        "bypass_error",
+        "bypass_decision",
+        "bypass_important_tag",
+    }
+    if not is_bypass:
+        write_gate_calibration.record(
+            domain,
+            accepted=should_store,
+            default_threshold=settings.WRITE_GATE_THRESHOLD,
+        )
     return {
         "importance": importance,
         "sims": sims,
@@ -102,6 +153,7 @@ def evaluate_gate(
         "score": score,
         "should_store": should_store,
         "gate_reason": gate_reason,
+        "gate_threshold": threshold,
     }
 
 

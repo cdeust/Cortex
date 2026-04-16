@@ -242,7 +242,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     embedding = emb_engine.encode(content)
     valence = thermodynamics.compute_valence(content)
 
-    gate = evaluate_gate(content, tags, embedding, force, store, emb_engine)
+    gate = evaluate_gate(
+        content, tags, embedding, force, store, emb_engine, domain=domain
+    )
     if not gate["should_store"]:
         return write_gate.build_rejection_response(
             gate["emb_nov"],
