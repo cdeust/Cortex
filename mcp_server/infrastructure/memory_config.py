@@ -137,6 +137,20 @@ class MemorySettings(BaseSettings):
     EMBEDDING_DIM: int = 384
     EMBEDDING_DEVICE: str = "cpu"  # "cpu" | "auto" | "cuda" | "mps"
 
+    # ── A3 lazy-heat (Phase 3 Scalability Program, v3.13.0) ───────────────
+    # When true, reads go through effective_heat() PL/pgSQL function and
+    # writes go through store.bump_heat_raw() canonical helper. When false,
+    # the pre-A3 eager decay + per-row heat UPDATE pattern is preserved as
+    # a kill-switch rollback path.
+    #
+    # Default flips to true once step 9 of the A3 migration passes the
+    # benchmark regression gate (LongMemEval R@10 ≥ 97.8%, LoCoMo R@10 ≥
+    # 92.6%, BEAM ≥ 0.543). Until then: false so the schema migration can
+    # land without changing runtime behaviour.
+    #
+    # Source: docs/program/phase-3-a3-migration-design.md §9.
+    A3_LAZY_HEAT: bool = False
+
     model_config = {"env_prefix": "CORTEX_MEMORY_"}
 
     @model_validator(mode="after")
