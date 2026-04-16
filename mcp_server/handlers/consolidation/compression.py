@@ -74,9 +74,20 @@ def _compress_memory(
 
     try:
         if target_level >= 1 and current_level == 0:
-            _compress_full_to_gist(store, embeddings, mem, stats)
+            # Preconditions:
+            #   - mem["content"] is the original full text.
+            #   - current_level == 0.
+            # Postconditions (if target_level == 1): memory written at level 1;
+            #   exactly 1 encode() call.
+            # Postconditions (if target_level >= 2): memory written at level 2;
+            #   archive row at level-1 (gist) reuses the gist embedding already
+            #   computed — no redundant re-encode. Exactly 2 encode() calls
+            #   (one for the gist, one for the tag).
+            gist, gist_emb = _compress_full_to_gist(store, embeddings, mem, stats)
             if target_level >= 2:
-                _compress_to_tag_from_gist(store, embeddings, mem, stats)
+                _compress_to_tag_from_gist(
+                    store, embeddings, mem, stats, gist=gist, gist_emb=gist_emb
+                )
         elif target_level >= 2 and current_level == 1:
             _compress_gist_to_tag(store, embeddings, mem, stats)
     except Exception:
@@ -88,8 +99,13 @@ def _compress_full_to_gist(
     embeddings: EmbeddingEngine,
     mem: dict,
     stats: dict,
-) -> None:
-    """Compress from full text (level 0) to gist (level 1)."""
+) -> tuple[str, list[float]]:
+    """Compress from full text (level 0) to gist (level 1).
+
+    Returns the freshly computed ``(gist, gist_embedding)`` so a caller
+    advancing straight to level 2 can reuse them instead of re-encoding
+    (see ``_compress_to_tag_from_gist``).
+    """
     original = mem["content"]
     gist = extract_gist(original)
     new_emb = embeddings.encode(gist)
@@ -110,6 +126,7 @@ def _compress_full_to_gist(
         original_content=original,
     )
     stats["compressed_to_gist"] += 1
+    return gist, new_emb
 
 
 def _compress_to_tag_from_gist(
@@ -117,9 +134,29 @@ def _compress_to_tag_from_gist(
     embeddings: EmbeddingEngine,
     mem: dict,
     stats: dict,
+    *,
+    gist: str | None = None,
+    gist_emb: list[float] | None = None,
 ) -> None:
-    """Continue compression from freshly created gist to tag (level 2)."""
-    gist = extract_gist(mem["content"])
+    """Continue compression from a freshly created gist to tag (level 2).
+
+    Precondition: either both ``gist`` and ``gist_emb`` are supplied by the
+    caller (threaded through from ``_compress_full_to_gist`` — fast path),
+    or neither is supplied (legacy path; we recompute the gist and encode it
+    for the archive row).
+
+    Postcondition — fast path: exactly **one** ``embeddings.encode()`` call
+    is made here (the one for the tag). The gist embedding is reused for
+    the archive row rather than being recomputed, eliminating the redundant
+    encode on the 0→2 transition (was 3 encodes total → now 2).
+
+    Postcondition — legacy path: behaviour is identical to the pre-change
+    implementation (two encodes: one for the gist archive, one for the tag).
+    """
+    if gist is None or gist_emb is None:
+        gist = extract_gist(mem["content"])
+        gist_emb = embeddings.encode(gist)
+
     tag = generate_tag(gist, mem)
     tag_emb = embeddings.encode(tag)
 
@@ -127,7 +164,7 @@ def _compress_to_tag_from_gist(
         {
             "original_memory_id": mem["id"],
             "content": gist,
-            "embedding": embeddings.encode(gist),
+            "embedding": gist_emb,
             "archive_reason": "compression_tag",
         }
     )
