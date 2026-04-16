@@ -54,7 +54,8 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Codebase-analyze stale marker — combined is_stale=TRUE + heat=0
     # for deleted source files. Acceptable pre-A3; post-A3 routes through
     # store.mark_memory_stale() which sets heat via canonical helper.
-    ("handlers/codebase_analyze_helpers.py", 111),
+    # Line moved 111 → 141 in v3.13.0 Phase 1 E6 (islice rglob refactor).
+    ("handlers/codebase_analyze_helpers.py", 141),
     # SQLite fallback backend mirrors the Postgres per-row and batch writers.
     # Sibling of pg_store.py:237, 255 — kept in lock-step by the backend
     # abstraction contract.

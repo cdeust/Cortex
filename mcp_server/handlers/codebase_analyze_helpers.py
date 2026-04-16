@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import sys
 from pathlib import Path
 
@@ -12,6 +13,12 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 CODEBASE_AGENT_CONTEXT = "codebase"
 FILE_TAG_PREFIX = "file:"
 HASH_TAG_PREFIX = "hash:"
+
+# Bounded-candidate multiplier: we take at most ``max_files * CANDIDATE_MULTIPLIER``
+# paths from ``rglob`` before sorting. Source: ADR-0045 §R2 — bounded streaming for
+# ingestion paths. The multiplier gives the sort a meaningful candidate set while
+# keeping peak memory O(max_files) instead of O(tree_size).
+CANDIDATE_MULTIPLIER = 10
 
 
 def _log(msg: str) -> None:
@@ -27,11 +34,34 @@ def collect_source_files(
     max_files: int,
     max_bytes: int,
 ) -> list[Path]:
-    """Walk directory and collect source files matching language filters."""
+    """Walk directory and collect source files matching language filters.
+
+    Preconditions:
+        - ``root`` is an existing directory.
+        - ``max_files > 0`` and ``max_bytes > 0``.
+
+    Postconditions:
+        - Returns at most ``max_files`` paths, each referring to a regular file
+          whose extension maps to a known language (and satisfies ``languages``
+          if supplied), and whose size is ``<= max_bytes``.
+        - Peak memory footprint is O(max_files * CANDIDATE_MULTIPLIER) paths,
+          not O(tree_size) — see ADR-0045 §R2. On a 10M-file monorepo with
+          ``max_files=5000`` we hold at most 50K Path objects during the sort,
+          not 10M.
+
+    Invariant (per iteration): ``len(files) <= max_files``.
+    """
     files: list[Path] = []
     lang_filter = set(languages) if languages else None
 
-    for path in sorted(root.rglob("*")):
+    # Bounded candidate set: take ``max_files * CANDIDATE_MULTIPLIER`` paths
+    # from the generator, then sort for deterministic ordering. The previous
+    # ``sorted(root.rglob("*"))`` materialised the entire tree before the
+    # ``max_files`` cap applied — OOM on large monorepos (ADR-0045 §R2).
+    candidate_cap = max(max_files * CANDIDATE_MULTIPLIER, max_files)
+    candidates = sorted(itertools.islice(root.rglob("*"), candidate_cap))
+
+    for path in candidates:
         if len(files) >= max_files:
             break
         if not path.is_file():
