@@ -48,11 +48,28 @@ class PgEntityMixin:
         return len(entity_ids)
 
     def insert_entity(self, data: dict[str, Any]) -> int:
+        """Insert an entity with case-canonical dedup.
+
+        If an entity with the same case-insensitive canonical name already
+        exists, return its id (idempotent upsert). Otherwise insert with
+        the canonicalized name. Source: Curie I4 audit (2026-04-16)
+        found 111 case-variant duplicate groups; policy defined in
+        `mcp_server/shared/entity_canonical.canonicalize_entity_name`.
+        """
+        from mcp_server.shared.entity_canonical import canonicalize_entity_name
+
+        canonical = canonicalize_entity_name(data["name"])
+        existing = self._execute(
+            "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1",
+            (canonical,),
+        ).fetchone()
+        if existing:
+            return existing["id"]
         row = self._execute(
             "INSERT INTO entities (name, type, domain, created_at, last_accessed, heat) "
             "VALUES (%s, %s, %s, COALESCE(%s, NOW()), NOW(), %s) RETURNING id",
             (
-                data["name"],
+                canonical,
                 data["type"],
                 data.get("domain", ""),
                 data.get("created_at"),
@@ -63,8 +80,13 @@ class PgEntityMixin:
         return row["id"]
 
     def get_entity_by_name(self, name: str) -> dict[str, Any] | None:
+        """Case-insensitive entity lookup (post-canonicalization policy).
+
+        Looks up by LOWER(name) so callers don't need to know the
+        canonical casing. Source: Curie I4 audit (2026-04-16).
+        """
         row = self._execute(
-            "SELECT * FROM entities WHERE name = %s", (name,)
+            "SELECT * FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1", (name,)
         ).fetchone()
         return dict(row) if row else None
 
