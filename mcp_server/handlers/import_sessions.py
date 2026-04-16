@@ -10,11 +10,20 @@ Supports:
   - Project filter: specific project directory
   - Domain filter: specific domain
   - Dry run: preview what would be imported without storing
+
+latency_class: long_running
+
+Memory discipline: this handler ONLY reads JSONL files via the streaming
+head+tail path (``read_head_tail`` in scanner.py). No whole-file accumulator
+list exists. See ADR-0045 R2 ("no ingestion path reads a whole file/store
+into Python memory"); the former ``full_read=True`` branch was removed in
+v3.13.0 Phase 1 because it materialised entire multi-GB JSONLs in a Python
+list before extraction, producing an OOM path that Taleb's audit flagged as
+a black-swan failure mode on large histories.
 """
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -87,14 +96,6 @@ schema = {
                 ),
                 "default": False,
             },
-            "full_read": {
-                "type": "boolean",
-                "description": (
-                    "Read entire JSONL files instead of head+tail sampling. "
-                    "Slower but catches mid-session decisions; use for thorough imports."
-                ),
-                "default": False,
-            },
         },
     },
 }
@@ -129,28 +130,19 @@ def _discover_jsonl_files(
     return results
 
 
-def _read_session_records(
-    file_path: Path,
-    full_read: bool,
-) -> list[dict]:
-    """Read JSONL records — full or head+tail."""
-    if not full_read:
-        return read_head_tail(file_path)
+def _read_session_records(file_path: Path) -> list[dict]:
+    """Read JSONL records via streaming head+tail only.
 
-    records: list[dict] = []
-    try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-            for line in f:
-                trimmed = line.strip()
-                if not trimmed:
-                    continue
-                try:
-                    records.append(json.loads(trimmed))
-                except (json.JSONDecodeError, ValueError):
-                    pass
-    except Exception:
-        pass
-    return records
+    precondition: ``file_path`` points to a (possibly multi-GB) JSONL file.
+    postcondition: returns a bounded list of parsed dict records whose total
+    on-disk span is ≤ HEAD_BYTES + TAIL_BYTES (~40 KB) regardless of file
+    size; the function never materialises the whole file in memory.
+
+    Source: ADR-0045 R2 — no ingestion path reads a whole file/store into
+    Python memory. The previous ``full_read`` branch was deleted in v3.13.0
+    Phase 1.
+    """
+    return read_head_tail(file_path)
 
 
 def _detect_domain_from_path(cwd: str) -> str:
@@ -275,12 +267,11 @@ async def _process_single_file(
     project_name: str,
     domain_filter: str,
     min_importance: float,
-    full_read: bool,
     dry_run: bool,
     preview_items: list[dict],
 ) -> tuple[int, int, int, bool]:
     """Process one JSONL file. Returns (imported, gated, skipped, scanned)."""
-    records = _read_session_records(file_path, full_read)
+    records = _read_session_records(file_path)
     if not records:
         return 0, 0, 0, False
 
@@ -311,7 +302,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     min_importance = args.get("min_importance", 0.4)
     max_sessions = args.get("max_sessions", 0)
     dry_run = args.get("dry_run", False)
-    full_read = args.get("full_read", False)
 
     jsonl_files = _discover_jsonl_files(project_filter)
     if not jsonl_files:
@@ -331,7 +321,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
                 project_name,
                 domain_filter,
                 min_importance,
-                full_read,
                 dry_run,
                 preview_items,
             )

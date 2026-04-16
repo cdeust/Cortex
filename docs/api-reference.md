@@ -259,7 +259,8 @@ Import conversation history into the memory store.
 | `min_importance` | float | No | `0.4` | Minimum importance threshold |
 | `max_sessions` | integer | No | `0` | Max sessions to import (0=unlimited) |
 | `dry_run` | boolean | No | `false` | Preview without importing |
-| `full_read` | boolean | No | `false` | Read full JSONL files (not head/tail) |
+
+JSONL files are always read via streaming head+tail (~40 KB max per file) — see ADR-0045 R2. The legacy `full_read` parameter was removed in v3.13.0 Phase 1 because it materialised whole JSONLs in Python memory.
 
 ---
 
