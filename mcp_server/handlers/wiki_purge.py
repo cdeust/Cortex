@@ -23,14 +23,18 @@ from mcp_server.shared.yaml_parser import parse_yaml_frontmatter
 
 schema = {
     "description": (
-        "Re-evaluate every authored wiki page against the current classifier "
-        "rules and delete the ones that no longer pass the admission gate. "
-        "Memories remain in the store (still available via recall); only the "
-        "wiki markdown files are removed. Use this after a backfill that "
-        "polluted the wiki with session artefacts (file access, URL access, "
-        "stage reports, code reviews), or after tightening classifier rules. "
-        "Returns keep/purge counts plus the list of purged relative paths. "
-        "Always runs a dry-run by default — pass apply=true to actually delete."
+        "Re-evaluate every authored wiki page against the current "
+        "classifier (`core/wiki_classifier`) and delete the ones that no "
+        "longer pass the admission gate. Memories remain in the store "
+        "(still surface via `recall`); only the wiki markdown files are "
+        "removed from disk. Use this after a backfill that polluted the "
+        "wiki with session artefacts (file access, URL access, stage "
+        "reports, code reviews), or after tightening classifier rules. "
+        "Distinct from `wiki_consolidate` (heat decay + lifecycle, doesn't "
+        "delete based on classifier), `forget` (deletes a memory, not a "
+        "wiki page), and `wiki_compile` (publishes drafts, doesn't "
+        "purge). Defaults to dry-run; pass apply=true to actually delete. "
+        "Latency ~200-500ms. Returns {kept, purged, paths_purged, dry_run}."
     ),
     "inputSchema": {
         "type": "object",

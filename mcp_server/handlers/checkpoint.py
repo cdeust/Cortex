@@ -21,13 +21,20 @@ logger = logging.getLogger(__name__)
 
 schema = {
     "description": (
-        "Hippocampal-replay-style save/restore of working state across context "
-        "compaction events. 'save' captures the current task, files being "
-        "edited, key decisions, open questions, planned next steps, and active "
-        "errors as a checkpoint row tied to the current epoch. 'restore' "
-        "reconstructs context after compaction by combining the latest "
-        "checkpoint with anchored + hot + directory-relevant memories. Use "
-        "'save' before risking compaction; use 'restore' immediately after."
+        "Hippocampal-replay-style save/restore of whole working state across "
+        "context compaction events (McClelland 1995). `save` writes a "
+        "checkpoint row capturing current task, files-being-edited, key "
+        "decisions, open questions, planned next steps, and active errors, "
+        "tied to the current epoch. `restore` reconstructs post-compaction "
+        "context by fusing the latest checkpoint with anchored + hot + "
+        "directory-relevant memories. Use `save` before risking compaction; "
+        "use `restore` immediately after. Distinct from `anchor` (per-"
+        "memory pinning, no task state), `remember` (creates one memory, "
+        "no whole-state snapshot), and `query_methodology` (cognitive "
+        "profile, not session state). Mutates the checkpoints table on "
+        "save; read-only on restore. Latency ~50ms (save) / ~100ms "
+        "(restore). Returns {action, checkpoint_id, restored_context?, "
+        "memories_attached}."
     ),
     "inputSchema": {
         "type": "object",

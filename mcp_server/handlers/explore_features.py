@@ -20,14 +20,21 @@ from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
     "description": (
-        "Explore interpretability features of the user's cognitive profile in "
-        "one of four modes: 'features' returns the active sparse-dictionary "
-        "behavioral features for a domain; 'attribution' traces which signals "
-        "drove a recent decision through the pipeline; 'persona' returns the "
-        "12D persona vector with drift-from-baseline; 'crosscoder' compares "
-        "two domains to detect persistent behavioral features. Use this when "
-        "facing an unfamiliar pattern and you want a behavioral explanation. "
-        "Inspired by Anthropic's mechanistic interpretability research."
+        "Inspect the user's cognitive profile through one of four "
+        "interpretability lenses (mechanistic-interpretability inspired, "
+        "Bricken et al. 2023): `features` returns the active sparse-"
+        "dictionary behavioral features for a domain; `attribution` "
+        "traces which signals drove a recent decision through the "
+        "pipeline; `persona` returns the 12D persona vector with "
+        "drift-from-baseline; `crosscoder` compares two domains to "
+        "detect persistent behavioral features. Use this when facing an "
+        "unfamiliar pattern and you want a behavioral explanation. "
+        "Distinct from `query_methodology` (full profile, not the "
+        "interpretability internals), `get_methodology_graph` (graph "
+        "for visualization, no per-feature inspection), and "
+        "`list_domains` (overview, no analysis). Read-only on "
+        "profiles.json. Latency <100ms. Returns mode-specific JSON: "
+        "{dictionary | graph | persona | comparison}."
     ),
     "inputSchema": {
         "type": "object",

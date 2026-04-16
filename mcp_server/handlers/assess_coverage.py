@@ -23,13 +23,20 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Evaluate how well the Cortex memory store covers a project across "
-        "five axes: file coverage (which key files are remembered), domain "
-        "balance, age distribution (fresh vs. stale), entity density "
-        "(richness signal), and compression ratio (loss signal). Returns a "
-        "0-100 coverage score plus actionable recommendations (e.g., 'run "
-        "codebase_analyze on src/api/', 'consolidate to recompress 12 cold "
-        "memories'). Use this before claiming Cortex 'knows' a codebase."
+        "Score how well the memory store covers a project across five "
+        "axes: file coverage (which key files are remembered), domain "
+        "balance (per-domain memory distribution), age distribution (fresh "
+        "vs stale), entity density (richness signal), and compression "
+        "ratio (loss signal). Combines into a 0-100 coverage score and "
+        "emits actionable recommendations (e.g., `run codebase_analyze on "
+        "src/api/`, `consolidate to recompress 12 cold memories`). Use "
+        "this before claiming Cortex `knows` a codebase, or as a "
+        "milestone-completion check. Distinct from `detect_gaps` (lists "
+        "specific missing connections, no aggregate score), `memory_stats` "
+        "(raw counts, no scoring), and `narrative` (prose summary, no "
+        "numeric coverage). Read-only. Latency ~500ms-1s. Returns "
+        "{coverage_score, axes: {file, domain, age, entity, compression}, "
+        "recommendations}."
     ),
     "inputSchema": {
         "type": "object",

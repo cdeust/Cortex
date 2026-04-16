@@ -20,14 +20,21 @@ logger = logging.getLogger(__name__)
 
 schema = {
     "description": (
-        "Return the user's cognitive profile for the current domain — thinking "
-        "style (Felder-Silverman), entry patterns, recurring patterns, blind "
-        "spots, cross-domain bridges, and behavioral feature activations — "
-        "enriched with hot memories and any fired prospective triggers matching "
-        "the current context. Pre-computed and cached, sub-50ms. MANDATORY at "
-        "session start so subsequent reasoning is calibrated to the user's "
-        "tendencies. Returns coldStart=true if no profile exists yet (call "
-        "rebuild_profiles first)."
+        "Read the user's cognitive profile for the current domain from "
+        "the cached profiles.json and enrich it with hot memories + any "
+        "fired prospective triggers matching the current cwd / "
+        "first_message. Profile fields: thinking style "
+        "(Felder-Silverman), entry patterns, recurring patterns, blind "
+        "spots, cross-domain bridges, behavioral feature activations. "
+        "MANDATORY at session start so subsequent reasoning is calibrated "
+        "to the user's tendencies. Distinct from `rebuild_profiles` "
+        "(full rescan from JSONL transcripts, much slower), "
+        "`detect_domain` (just classifies, no profile body), and "
+        "`list_domains` (overview across all domains). Read-only on "
+        "profiles.json; mutates triggered_count for any prospective "
+        "triggers that fire. Latency <50ms (cached). Returns the full "
+        "profile dict + hotMemories + firedTriggers, or coldStart=true "
+        "if no profile exists yet (then call `rebuild_profiles`)."
     ),
     "inputSchema": {
         "type": "object",

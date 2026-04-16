@@ -30,13 +30,20 @@ from mcp_server.infrastructure.scanner import read_head_tail
 
 schema = {
     "description": (
-        "Import Claude Code conversation history from ~/.claude/projects/ into "
-        "the Cortex memory store. Walks JSONL session files, extracts memorable "
-        "items (decisions, errors-and-fixes, architecture notes, key insights), "
-        "and routes each through the remember handler's full pipeline "
-        "(thermodynamics, write gate, knowledge graph, engram allocation). "
-        "Use this for an initial bootstrap or to ingest sessions from another "
-        "machine. Prefer backfill_memories for incremental hash-tracked re-runs."
+        "Import Claude Code conversation history from ~/.claude/projects/ "
+        "into the memory store. Walks JSONL session files, extracts "
+        "memorable items (decisions, errors-and-fixes, architecture notes, "
+        "key insights) via session_extractor, and routes each through the "
+        "`remember` write gate (thermodynamics, hierarchical predictive "
+        "coding, knowledge graph, engram allocation). Supports project / "
+        "domain filtering and dry-run preview. Use this for an initial "
+        "bootstrap or to ingest sessions from another machine. Distinct "
+        "from `backfill_memories` (preferred for incremental, hash-tracked "
+        "re-runs over the same source), `seed_project` (codebase "
+        "structure), and `codebase_analyze` (source files). Mutates "
+        "memories + entities + relationships tables. Latency varies "
+        "(~1-30min depending on history size). Returns "
+        "{sessions_processed, memories_imported, dry_run, errors}."
     ),
     "inputSchema": {
         "type": "object",

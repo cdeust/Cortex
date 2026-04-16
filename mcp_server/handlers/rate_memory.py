@@ -17,13 +17,19 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Rate a memory as useful or not after it surfaced in recall. Increments "
-        "useful_count when helpful and recomputes metamemory confidence "
-        "(useful_count / access_count). High-confidence memories resist heat "
-        "decay and rank higher in future recalls; persistently unhelpful "
-        "memories drift toward archival. Use this whenever a recalled memory "
-        "either solved the problem or wasted attention. Returns the updated "
-        "access_count, useful_count, and confidence."
+        "Record a usefulness verdict for a memory that just surfaced in "
+        "recall: increments useful_count when helpful and recomputes "
+        "metamemory confidence as useful_count / access_count "
+        "(Nelson & Narens 1990 framework). High-confidence memories resist "
+        "heat decay and rank higher in future recalls; persistently "
+        "unhelpful memories drift toward archival. Use this whenever a "
+        "recalled memory either solved the problem or wasted attention — "
+        "the feedback loop is what keeps recall accurate. Distinct from "
+        "`forget` (deletes), `anchor` (pins, doesn't score), and "
+        "`validate_memory` (filesystem-ref staleness, not user verdict). "
+        "Mutates the memories table (access_count, useful_count, "
+        "confidence). Latency ~20ms. Returns {rated, memory_id, useful, "
+        "access_count, useful_count, confidence, content_preview}."
     ),
     "inputSchema": {
         "type": "object",

@@ -6,12 +6,18 @@ from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
     "description": (
-        "Return an overview of every cognitive domain Cortex has profiled, "
-        "sorted by session count. For each domain: id, human label, session "
-        "count, confidence, last active timestamp, top-3 work categories with "
-        "ratios, and dominant session-shape mode. Use this to discover what "
-        "domains exist before scoping recall, narrate, or rebuild_profiles. "
-        "Sub-10ms latency. Takes no arguments."
+        "Read profiles.json and emit an overview row for every cognitive "
+        "domain Cortex has profiled, sorted by session count. Per domain: "
+        "id, human label, sessionCount, confidence, lastActive, top-3 "
+        "work categories with ratios, and dominantMode from the session "
+        "shape. Use this to discover what domains exist before scoping "
+        "`recall`, `narrate`, or `rebuild_profiles`. Distinct from "
+        "`query_methodology` (deep profile for ONE domain), "
+        "`detect_domain` (classifies the current context, no enumeration), "
+        "and `memory_stats` (memory-system counts, not domain profiles). "
+        "Read-only. Takes no arguments. Latency <10ms. Returns "
+        "{domains: [{id, label, sessionCount, confidence, lastActive, "
+        "topCategories, dominantMode}], totalDomains, globalStyle}."
     ),
     "inputSchema": {
         "type": "object",

@@ -30,9 +30,14 @@ schema = {
         "recency) followed by FlashRank cross-encoder reranking and "
         "production enrichments (prospective memory injection, Hebbian "
         "co-activation strengthening, neuro-symbolic rules, strategic ordering "
-        "to mitigate Lost-in-the-Middle). Use this before any non-trivial work "
-        "to check what Cortex already knows; running blind is unacceptable when "
-        "recall takes ~200ms. Returns ranked memories with scores, heat, and source."
+        "to mitigate Lost-in-the-Middle, Liu et al. 2023). Use this before "
+        "any non-trivial work to check what Cortex already knows; running "
+        "blind is unacceptable when recall takes ~200ms. Distinct from "
+        "`recall_hierarchical` (returns the L0/L1/L2 cluster topology, not "
+        "a flat ranked list), `navigate_memory` (graph BFS over co-access "
+        "edges from one seed memory), and `get_causal_chain` (entity-graph "
+        "traversal, not memory recall). Returns ranked memories with scores, "
+        "heat, and source."
     ),
     "inputSchema": {
         "type": "object",

@@ -19,12 +19,19 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Validate memories against the current filesystem state. Extracts file/"
-        "path references from each memory, checks whether they still exist, "
-        "computes a staleness score (fraction of refs missing), and marks "
-        "memories above the threshold as is_stale=true. Use this after large "
-        "refactors, file moves, or before a recall that must not return dead "
-        "links. Scope to a single memory, a domain, a directory, or all memories."
+        "Reconcile memory content against the current filesystem state: "
+        "extract file/path references from each memory (sandboxed under "
+        "base_dir), check whether they still exist, compute a staleness "
+        "score (fraction of refs missing), and mark memories above the "
+        "threshold as is_stale=true. Use this after large refactors, file "
+        "moves, or before a recall that must not return dead links. Scope "
+        "to one memory, a domain, a directory, or all memories. Distinct "
+        "from `forget` (deletes memories outright), `rate_memory` (user "
+        "verdict on usefulness, not filesystem reality), and `wiki_"
+        "consolidate` (wiki pages, not memories). Mutates is_stale unless "
+        "dry_run=true. Latency varies (~100ms-30s depending on scope and "
+        "ref count). Returns {validated, stale_found, stale_updated, "
+        "dry_run, reports: per-memory breakdown}."
     ),
     "inputSchema": {
         "type": "object",

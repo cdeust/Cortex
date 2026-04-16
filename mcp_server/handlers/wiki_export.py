@@ -49,7 +49,9 @@ schema = {
         "wiki tree). Requires pandoc on PATH; PDF additionally requires a "
         "LaTeX engine. Pandoc args are validated against a safe-flag "
         "allowlist to prevent subprocess injection. Latency varies "
-        "(~500ms-30s depending on format and document size). Returns "
+        "(~500ms-30s depending on format and document size). Use this "
+        "when handing a wiki page to humans (review, publication, "
+        "archival). Returns "
         "{ok, format, bytes, mime, content_base64, bibliography_used} or "
         "{error}."
     ),

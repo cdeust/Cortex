@@ -21,13 +21,18 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Mark a memory as compaction-resistant. Anchoring sets heat=1.0, "
-        "is_protected=true, importance=1.0, and adds an _anchor tag, so the "
-        "memory survives context compaction and heat decay and cannot be "
-        "deleted without force=true. The optional reason is stored as an "
-        "[ANCHOR: ...] prefix on the content for audit. Use this for critical "
-        "facts, active architectural decisions, and operating principles that "
-        "must persist across session boundaries."
+        "Mark a memory as compaction-resistant by setting heat=1.0, "
+        "is_protected=true, importance=1.0, and adding an `_anchor` tag — "
+        "so the memory survives context compaction, heat decay, and "
+        "consolidation pruning, and cannot be deleted without force=true. "
+        "The optional reason is stored as an `[ANCHOR: ...]` content prefix "
+        "for audit. Use this for critical facts, active architectural "
+        "decisions, and operating principles that must persist across "
+        "session boundaries. Distinct from `rate_memory` (raises confidence "
+        "via metamemory, doesn't pin), `remember` (creates memories, "
+        "doesn't pin), and `checkpoint` (whole-state snapshot, not per-"
+        "memory). Mutates the memories table. Latency ~20ms. Returns "
+        "{anchored, memory_id, content_preview} or {error}."
     ),
     "inputSchema": {
         "type": "object",

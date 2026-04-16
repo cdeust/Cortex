@@ -7,12 +7,19 @@ from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
     "description": (
-        "Lightweight domain classification from working directory, project ID, or "
-        "the user's first message. Combines three weighted signals (path tokens, "
-        "project ID match against known profiles, keyword overlap with stored "
-        "domain vocabularies) and returns the best-matching domain plus a "
-        "confidence score. Use this when switching codebases or contexts to "
-        "recalibrate Cortex's cognitive profile lookup. Sub-20ms latency."
+        "Classify the current working directory + first message into one "
+        "of the known cognitive domains via a 3-signal weighted score: "
+        "(1) path tokens (last 3 segments + git root), (2) project ID "
+        "match against known profiles, (3) keyword overlap with stored "
+        "domain vocabularies. Returns the best-matching domain plus "
+        "confidence and the runner-up alternatives. Use this when "
+        "switching codebases or contexts to recalibrate, or as a cheap "
+        "preflight before `query_methodology` / `recall`. Distinct from "
+        "`query_methodology` (returns the FULL profile body, not just "
+        "the domain id), `list_domains` (enumerates ALL domains), and "
+        "`rebuild_profiles` (rescans, doesn't classify). Read-only. "
+        "Latency <20ms. Returns {domain, confidence, "
+        "alternativeDomains, signals}."
     ),
     "inputSchema": {
         "type": "object",

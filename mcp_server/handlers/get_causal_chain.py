@@ -19,14 +19,18 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Trace entity relationships through the Cortex knowledge graph using "
-        "bounded BFS, starting from either a named entity or every entity "
-        "extracted from a given memory. Returns chains of causation, "
-        "dependency, and resolution useful for understanding why a bug "
-        "occurred, tracing the origin of a decision, or following imports "
-        "across modules. Use this when you have a symptom and want the "
-        "upstream cause, or a cause and want all downstream impact. Returns "
-        "{nodes, edges, paths} capped at max_edges."
+        "Walk the Cortex knowledge graph (entities + typed relationships "
+        "extracted from memory content) via bounded BFS from a seed entity "
+        "or from every entity in a given memory. Returns chains of "
+        "causation, dependency, and resolution — useful for understanding "
+        "why a bug occurred, tracing the origin of a decision, or "
+        "following imports across modules. Use this when you have a "
+        "symptom and want the upstream cause, or a cause and want all "
+        "downstream impact. Distinct from `navigate_memory` (memory-level "
+        "co-access SR graph, not entity relationships), `recall` (no "
+        "graph traversal), and `drill_down` (cluster tree, not graph). "
+        "Read-only. Latency ~100-300ms depending on max_depth/edges. "
+        "Returns {nodes, edges, paths} capped at max_edges."
     ),
     "inputSchema": {
         "type": "object",

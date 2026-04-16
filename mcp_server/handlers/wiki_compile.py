@@ -47,9 +47,10 @@ schema = {
         "tree) and wiki.pages / wiki.drafts tables. Distinct from "
         "`wiki_synthesize` (creates pending drafts), `wiki_curate` (gates "
         "approval), and `wiki_export` (renders one page to PDF/DOCX). "
-        "Pass draft_id to publish one; omit to publish every approved draft. "
-        "Latency ~50ms per draft. Returns {drafts_published, results, "
-        "errors}."
+        "Use this when drafts have accumulated in approved status and you "
+        "want them on disk. Pass draft_id to publish one; omit to publish "
+        "every approved draft. Latency ~50ms per draft. Returns "
+        "{drafts_published, results, errors}."
     ),
     "inputSchema": {
         "type": "object",

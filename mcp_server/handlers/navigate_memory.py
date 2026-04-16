@@ -25,13 +25,19 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Navigate the memory space using a Successor Representation built from "
-        "temporal co-access (memories accessed within window_hours of each "
-        "other). Starting from a memory ID, BFS outward and return co-accessed "
-        "neighbors with SR distances. Use this to follow a thread of thinking, "
-        "explore latent associations, or discover memories a topic touches that "
-        "you didn't know about. Optionally returns a 2D projection for "
-        "visualization."
+        "Traverse the memory space via a Successor Representation graph "
+        "(Dayan 1993) built from temporal co-access — pairs of memories "
+        "accessed within `window_hours` of each other become weighted "
+        "edges. Starting from a seed memory_id, BFS outward up to "
+        "`max_depth` (capped at 4) and return neighbors with SR distances. "
+        "Use this to follow a thread of thinking, explore latent "
+        "associations, or discover what a topic touches that you didn't "
+        "know about. Distinct from `recall` (semantic vector + lexical "
+        "search, no temporal-proximity edges), `get_causal_chain` (entity "
+        "knowledge-graph BFS, not memory-level co-access), and `drill_down` "
+        "(fractal cluster tree, not graph). Read-only. Latency ~100-300ms "
+        "depending on depth + 2D-map flag. Returns {seed, neighbors: "
+        "[{memory_id, distance, content_preview}], map_2d?: [{x, y, id}]}."
     ),
     "inputSchema": {
         "type": "object",
