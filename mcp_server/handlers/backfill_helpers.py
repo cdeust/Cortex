@@ -6,10 +6,89 @@ Extracted from backfill_memories.py to keep both files under 300 lines.
 from __future__ import annotations
 
 import hashlib
+import math
+from datetime import datetime, timezone
 from pathlib import Path
 
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.infrastructure.memory_store import MemoryStore
+
+# ── Age-decayed initial heat (Fix 1: issue #14 P1) ───────────────────────
+#
+# Pre-v3.12.2, every memory entered the store at heat=1.0, including backfills
+# of historical conversations. A 300+ session bulk import therefore produced
+# a sharp peak at heat ≈ 0.94-1.0 (after surprise boost + decay), which
+# Turrigiano multiplicative scaling (order-preserving by construction —
+# Tetzlaff et al. 2011 Eq. 3) cannot flatten into the target distribution.
+# User-visible symptom: recall pinned to the import cohort for 24+h.
+#
+# Fix: compute the initial heat of a backfilled memory from the age of the
+# source session via an Ebbinghaus-style exponential decay. A floor of 0.3
+# preserves semantic retrievability — old memories still surface via WRRF
+# when query intent matches, they just don't dominate purely on heat.
+#
+# source: Ebbinghaus, H. (1885). "Über das Gedächtnis." r(t) = exp(-t/S)
+# source: half-life tuned to the Cortex 30-day consolidation window
+#         (core/cascade.py, ADR-013 thermodynamic memory model)
+_DEFAULT_HALF_LIFE_DAYS = 30.0
+_DEFAULT_HEAT_FLOOR = 0.3
+_LN2 = math.log(2)
+
+
+def age_decayed_heat(
+    age_days: float,
+    half_life_days: float = _DEFAULT_HALF_LIFE_DAYS,
+    floor: float = _DEFAULT_HEAT_FLOOR,
+) -> float:
+    """Initial heat for a historical memory, decayed from its content age.
+
+    Pre: age_days is a float; negative values are clamped to 0.
+    Post: returns a value in [floor, 1.0]. Monotone non-increasing in
+    age_days. h(0)=1.0; h→floor as age_days→infinity.
+
+    Curve: h(t) = floor + (1 - floor) · exp(-t · ln(2) / half_life_days)
+
+    Reference points (floor=0.3, half_life=30d):
+        age=0   → 1.000
+        age=7   → 0.879
+        age=30  → 0.650
+        age=90  → 0.388
+        age=180 → 0.311
+        age=365 → 0.301
+
+    Source: Ebbinghaus (1885); half-life tuned to Cortex 30-day window.
+    """
+    clamped_age = max(0.0, float(age_days))
+    decay = math.exp(-clamped_age * _LN2 / half_life_days)
+    return floor + (1.0 - floor) * decay
+
+
+def compute_age_days(timestamp: str | None, now: datetime | None = None) -> float:
+    """Age in days between an ISO-8601 timestamp and `now` (default: utcnow).
+
+    Pre: timestamp is an ISO-8601 string or None/empty.
+    Post: returns age in days (≥ 0). Returns 0.0 on missing, unparseable,
+    or future-dated input (safe fallback: callers then get h(0)=1.0,
+    matching legacy behaviour).
+    """
+    if not timestamp:
+        return 0.0
+    try:
+        ts = timestamp.strip()
+        # datetime.fromisoformat pre-3.11 does not accept a trailing 'Z'.
+        if ts.endswith("Z"):
+            ts = ts[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(ts)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return 0.0
+    reference = now if now is not None else datetime.now(timezone.utc)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=timezone.utc)
+    delta = reference - parsed
+    return max(0.0, delta.total_seconds() / 86400.0)
+
 
 # Core concept keywords for entity linking
 _CORE_CONCEPTS = {

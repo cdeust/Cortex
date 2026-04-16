@@ -215,3 +215,90 @@ def apply_excitability_bounds(
         _MIN_GLOBAL_EXCITABILITY,
         min(_MAX_GLOBAL_EXCITABILITY, excitability + adjustment),
     )
+
+
+# ── Cohort Correction (bimodal distributions, Fix 2: issue #14 P1) ───────
+#
+# Turrigiano multiplicative scaling is order-preserving (Tetzlaff 2011
+# Eq. 3 — factor applied equally to all weights). Order preservation
+# implies it CANNOT merge two modes into one: both peaks shift together.
+# For bimodal heat distributions (typical after a batch backfill at
+# baseline heat=1.0), we need a mode-breaking primitive. Subtractive
+# cohort correction is the simplest one that preserves order WITHIN each
+# mode while collapsing the gap BETWEEN modes.
+#
+# source: Wilcox, R. R. (2012). "Modern Statistics for the Behavioral
+#         Sciences", ch. 4 — sigma-rule outlier detection for non-Gaussian
+#         distributions.
+# source: Hinton & Salakhutdinov (2006). "Reducing the Dimensionality of
+#         Data with Neural Networks." Science 313:504-507 — subtractive
+#         renormalization to break mode collapse is a general pattern in
+#         self-supervised / contrastive learning.
+
+# Sigma multiplier for hot-cohort detection. At sigma=0.5, roughly the top
+# ~30% of a unimodal distribution falls past the threshold; for a SYMMETRIC
+# bimodal distribution the midpoint sits at mean, so a full sigma=1.0
+# threshold lands exactly between the peaks and the hot peak is missed.
+# 0.5 comfortably separates the upper peak even when the two peaks have
+# equal mass and symmetric spread.
+_DEFAULT_COHORT_SIGMA = 0.5
+
+# Fraction of the (heat - target_mean) gap removed per cycle. 0.3 gives
+# gentle convergence: a heat=0.95 memory with target=0.4 drops to 0.785
+# after one cycle, 0.666 after two, 0.574 after three. Chosen to halve
+# the gap in ~2 cycles of consolidate (typical run cadence: daily).
+_DEFAULT_COHORT_STRENGTH = 0.3
+
+
+def detect_hot_cohort(
+    heats: list[float],
+    mean: float,
+    std: float,
+    cohort_threshold_sigma: float = _DEFAULT_COHORT_SIGMA,
+) -> list[int]:
+    """Return indices of memories in the hot cohort (heat > mean + sigma*std).
+
+    Pre: heats is a non-empty list of floats; mean/std describe its first
+    two moments.
+    Post: returns a (possibly empty) list of indices i such that
+    heats[i] > mean + sigma*std. Indices are unique and in input order.
+
+    Source: Wilcox (2012) sigma rule for non-Gaussian outlier identification.
+    """
+    if not heats or std <= 0:
+        return []
+    threshold = mean + cohort_threshold_sigma * std
+    return [i for i, h in enumerate(heats) if h > threshold]
+
+
+def apply_cohort_correction(
+    heats: list[float],
+    cohort_indices: list[int],
+    target_mean: float,
+    correction_strength: float = _DEFAULT_COHORT_STRENGTH,
+) -> list[float]:
+    """Subtractively pull the hot cohort toward target_mean; others untouched.
+
+    Pre: heats values are in [0, 1]; cohort_indices are valid indices into
+    heats; correction_strength in [0, 1]; target_mean in [0, 1].
+    Post: returned list has the same length as heats. For i in
+    cohort_indices: result[i] = clamp(heats[i] - strength*(heats[i] -
+    target_mean), 0, 1). For i not in cohort: result[i] == heats[i].
+
+    Unlike multiplicative scaling, this is NOT order-preserving across the
+    full set — that is the point: collapsing the upper mode toward the
+    target merges it with the lower mode over repeated cycles.
+
+    Source: Hinton & Salakhutdinov (2006); general pattern for breaking
+    mode collapse in self-supervised representation learning.
+    """
+    cohort_set = set(cohort_indices)
+    result: list[float] = []
+    for i, h in enumerate(heats):
+        if i in cohort_set:
+            delta = correction_strength * (h - target_mean)
+            new = max(0.0, min(1.0, h - delta))
+            result.append(new)
+        else:
+            result.append(h)
+    return result

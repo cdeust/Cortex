@@ -173,6 +173,10 @@ async def _store_memory(
     domain: str,
 ) -> bool:
     """Store a single extracted item via the remember handler."""
+    from mcp_server.handlers.backfill_helpers import (
+        age_decayed_heat,
+        compute_age_days,
+    )
     from mcp_server.handlers.remember import handler as remember_handler
 
     remember_args = {
@@ -182,10 +186,14 @@ async def _store_memory(
         "source": "import",
         "force": False,
     }
-    # Preserve original session timestamp if available
+    # Preserve original session timestamp AND compute age-decayed initial
+    # heat from it, so historical conversations don't form a bimodal cohort
+    # at heat=1.0 after import. Source: issue #14 P1.
     timestamp = item.get("timestamp")
     if timestamp:
         remember_args["created_at"] = str(timestamp)
+        age_days = compute_age_days(str(timestamp))
+        remember_args["initial_heat"] = age_decayed_heat(age_days)
     result = await remember_handler(remember_args)
 
     return bool(result and result.get("stored"))
