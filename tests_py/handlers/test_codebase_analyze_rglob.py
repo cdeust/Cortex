@@ -13,7 +13,6 @@ from __future__ import annotations
 import tracemalloc
 from pathlib import Path
 
-import pytest
 
 from mcp_server.handlers import codebase_analyze_helpers as helpers
 
