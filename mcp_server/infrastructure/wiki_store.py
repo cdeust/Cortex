@@ -262,6 +262,48 @@ def _try_reindex(root: Path) -> None:
         pass
 
 
+def sync_memory_strict(
+    root: Path | str,
+    *,
+    memory_id: int | str,
+    content: str,
+    tags: list[str] | None,
+    domain: str = "",
+) -> str | None:
+    """Strict variant of ``sync_memory`` — surfaces errors to the caller.
+
+    Preconditions:
+        - ``content`` is a non-empty string.
+        - ``memory_id`` has already been committed to the store.
+
+    Postconditions:
+        - On success: returns the relative path of the written wiki page.
+        - On classifier rejection: returns None (not an error — the memory
+          did not qualify for a wiki page).
+        - On I/O or classifier failure: raises the underlying exception.
+          The caller must decide whether the memory write + wiki failure
+          constitutes a partial failure.
+
+    This is the E8 fix path: the wiki sync is a post-write side effect and
+    must not destroy observability. Callers on the ``remember`` hot path
+    wrap this in a narrow try/except that surfaces the failure as a
+    ``warnings`` field in the response, rather than silently swallowing it.
+
+    Does NOT swallow the reindex failure either — reindex is best-effort
+    by design (see ``_try_reindex``), but the page write itself must
+    succeed or be reported.
+    """
+    built = build_from_memory(
+        memory_id=memory_id, content=content, tags=tags, domain=domain
+    )
+    if built is None:
+        return None
+    rel_path, markdown = built
+    write_page(root, rel_path, markdown, mode="replace")
+    _try_reindex(Path(root))
+    return rel_path
+
+
 def sync_memory(
     root: Path | str,
     *,
@@ -272,25 +314,22 @@ def sync_memory(
 ) -> str | None:
     """Promote a stored memory to a wiki page if it passes the classifier.
 
-    Uses the wiki classifier to determine page kind and reject noise.
-    Domain-scoped paths organize pages by project.
-
-    Never raises: swallows all exceptions and returns None, since this
-    runs on every ``remember`` call and must not break the write path.
+    Backwards-compatible wrapper: swallows exceptions and returns None on
+    error, for callers that cannot handle wiki-sync failure. New code
+    should prefer ``sync_memory_strict`` and surface failures explicitly
+    (see ADR-0045 / Taleb fragility audit: silent failure is worst-of-both).
 
     Returns the relative path of the written page, or None when the
     memory is rejected or on error.
     """
     try:
-        built = build_from_memory(
-            memory_id=memory_id, content=content, tags=tags, domain=domain
+        return sync_memory_strict(
+            root,
+            memory_id=memory_id,
+            content=content,
+            tags=tags,
+            domain=domain,
         )
-        if built is None:
-            return None
-        rel_path, markdown = built
-        write_page(root, rel_path, markdown, mode="replace")
-        _try_reindex(Path(root))
-        return rel_path
     except Exception:
         return None
 
