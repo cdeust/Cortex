@@ -39,10 +39,15 @@ _MCP_ROOT = _REPO_ROOT / "mcp_server"
 #   (a) route through the canonical helper, OR
 #   (b) be added here with a source-commented ADR justification.
 _ALLOWED_WRITERS: set[tuple[str, int]] = {
-    # Canonical per-row writer (deleted in A3).
-    ("infrastructure/pg_store.py", 237),
-    # Canonical batch UNNEST writer (deleted or collapsed in A3).
-    ("infrastructure/pg_store.py", 255),
+    # Pre-A3 per-row writer (dispatches to bump_heat_raw when A3 flag on).
+    # Line moved 237 → 257 in a3-step-4 when bump_heat_raw was added.
+    ("infrastructure/pg_store.py", 257),
+    # A3 canonical heat_base writer (bump_heat_raw). Post-A3 this is
+    # the ONE allowed site — all other writers will route through here.
+    ("infrastructure/pg_store.py", 277),
+    # Pre-A3 batch UNNEST writer (deleted in a3-step-5).
+    # Line moved 255 → 336 after bump_heat_raw + get/set_homeostatic_factor added.
+    ("infrastructure/pg_store.py", 336),
     # Anchor handler — sets heat=1.0 + is_protected=true for anchored memories.
     ("handlers/anchor.py", 134),
     # Preemptive context — +0.05 boost on citation (additive semantics,
