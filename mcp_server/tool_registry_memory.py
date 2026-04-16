@@ -188,9 +188,13 @@ def _register_import_sessions(mcp: FastMCP) -> None:
         min_importance: float = 0.4,
         max_sessions: int = 0,
         dry_run: bool = False,
-        full_read: bool = False,
     ) -> str:
-        """Import conversation history into the memory store."""
+        """Import conversation history into the memory store.
+
+        Always streams JSONL files via head+tail (ADR-0045 R2). The legacy
+        ``full_read`` parameter was removed in v3.13.0 Phase 1 because it
+        loaded entire JSONLs into Python memory (OOM path).
+        """
         return await safe_handler(
             import_sessions.handler,
             {
@@ -199,6 +203,5 @@ def _register_import_sessions(mcp: FastMCP) -> None:
                 "min_importance": min_importance,
                 "max_sessions": max_sessions,
                 "dry_run": dry_run,
-                "full_read": full_read,
             },
         )
