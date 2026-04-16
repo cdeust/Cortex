@@ -94,7 +94,17 @@ SCHEMAS: dict[str, dict] = {
             # graph path. 10 K is the bounded envelope; callers submitting
             # larger content get a ValidationError and must split upstream.
             "content": {"type": "string", "maxLength": 10000},
-            "tags": {"type": "array"},
+            # ADR-0045 R2 (fragility sweep v3.13.0 E4):
+            # Bounded tags envelope — at most 20 tags, each ≤ 80 chars.
+            # Prevents a caller from submitting a 10K-element tag list
+            # (each tag becomes a tsvector lexeme, an FTS dictionary
+            # entry, and a row in memory_entities) which would blow up
+            # indexing cost without bounded benefit.
+            "tags": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {"type": "string", "maxLength": 80},
+            },
             "source": {"type": "string", "maxLength": 200},
             "domain": {"type": "string", "maxLength": 200},
             "directory": {"type": "string", "maxLength": 500},
@@ -184,8 +194,67 @@ _TYPE_CHECKS: dict[str, type | tuple[type, ...]] = {
 }
 
 
+def _check_array_envelope(
+    tool_name: str, field: str, value: list, spec: dict[str, Any]
+) -> None:
+    """Enforce ``maxItems`` + per-item ``items`` spec for an array field.
+
+    precondition: ``value`` is a list (caller already type-checked).
+    postcondition: if the array length exceeds ``maxItems`` or any item
+    violates the per-item spec (type / maxLength), raises ValidationError
+    with ``details`` carrying the bound and, for item failures, the
+    offending index.
+
+    Source: ADR-0045 R2 (fragility sweep E4) — bounded envelopes on all
+    array inputs prevent pathological memory / indexing blowups.
+    """
+    max_items = spec.get("maxItems")
+    if max_items is not None and len(value) > max_items:
+        raise ValidationError(
+            f'Field "{field}" exceeds maxItems ({len(value)} > {max_items})',
+            {"tool": tool_name, "field": field, "maxItems": max_items},
+        )
+
+    item_spec = spec.get("items")
+    if not item_spec:
+        return
+
+    item_type_name = item_spec.get("type")
+    expected_item_type = _TYPE_CHECKS.get(item_type_name) if item_type_name else None
+    item_max_len = item_spec.get("maxLength")
+
+    for i, item in enumerate(value):
+        if expected_item_type is not None and not isinstance(item, expected_item_type):
+            got = type(item).__name__
+            raise ValidationError(
+                f'Field "{field}[{i}]" must be a {item_type_name}, got {got}',
+                {
+                    "tool": tool_name,
+                    "field": field,
+                    "index": i,
+                    "expected": item_type_name,
+                    "got": got,
+                },
+            )
+        if (
+            item_max_len is not None
+            and isinstance(item, str)
+            and len(item) > item_max_len
+        ):
+            raise ValidationError(
+                f'Field "{field}[{i}]" exceeds maximum length '
+                f"({len(item)} > {item_max_len})",
+                {
+                    "tool": tool_name,
+                    "field": field,
+                    "index": i,
+                    "maxLength": item_max_len,
+                },
+            )
+
+
 def _check_field_type(
-    tool_name: str, field: str, value: Any, spec: dict[str, str]
+    tool_name: str, field: str, value: Any, spec: dict[str, Any]
 ) -> None:
     """Validate a single field's type, raising ValidationError on mismatch."""
     expected_type = _TYPE_CHECKS.get(spec["type"])
@@ -210,6 +279,8 @@ def _check_field_type(
             f'Field "{field}" exceeds maximum length ({len(value)} > {max_len})',
             {"tool": tool_name, "field": field, "maxLength": max_len},
         )
+    if spec["type"] == "array" and isinstance(value, list):
+        _check_array_envelope(tool_name, field, value, spec)
 
 
 def validate_tool_args(tool_name: str, args: dict[str, Any] | None) -> dict[str, Any]:
