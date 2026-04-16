@@ -3,13 +3,18 @@
 Increments useful_count when a memory was helpful, then recomputes
 metamemory confidence (useful_count / access_count). High-confidence
 memories resist decay and rank higher in future recalls.
+
+When the caller supplies the ``query`` that surfaced the memory, the
+handler also records a (raw_ce_score, useful) training sample for the
+reranker's Platt calibrator (AF-2). Without ``query``, only the
+metamemory update happens — identical to the pre-AF-2 behaviour.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core import thermodynamics
+from mcp_server.core import reranker, reranker_calibration, thermodynamics
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
@@ -49,6 +54,17 @@ schema = {
                 ),
                 "examples": [True, False],
             },
+            "query": {
+                "type": "string",
+                "description": (
+                    "Optional: the query that surfaced this memory. When "
+                    "provided, the handler records a (raw_ce_score, useful) "
+                    "sample for the reranker's Platt calibrator "
+                    "(AF-2 feedback loop). Omit if the memory was not "
+                    "surfaced by a recall call."
+                ),
+                "examples": ["authentication middleware", "error retry logic"],
+            },
         },
     },
 }
@@ -69,8 +85,39 @@ def _get_store() -> MemoryStore:
 # ── Handler ───────────────────────────────────────────────────────────────
 
 
+def _record_platt_sample(query: str, content: str, useful: bool) -> bool:
+    """Record a (raw_ce_score, useful) sample for AF-2 calibration.
+
+    Returns True iff a sample was actually recorded. No-op (returns False)
+    when:
+      - query is empty (caller opted out)
+      - FlashRank is unavailable (cold environment)
+      - the cross-encoder fails to score the pair
+
+    Contract:
+      pre:  content is non-empty; useful is a bool.
+      post: on True, reranker_calibration._SAMPLES has one more entry and
+            a refit may have happened as a side effect of record_rating.
+    """
+    if not query or not content:
+        return False
+    raw_ce = reranker.get_raw_ce_score(query, content)
+    if raw_ce is None:
+        return False
+    reranker_calibration.record_rating(raw_ce, useful=useful)
+    return True
+
+
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Rate a memory and update its metamemory confidence."""
+    """Rate a memory and update its metamemory confidence.
+
+    Contract:
+      pre:  args.memory_id refers to an existing memory; args.useful is a bool.
+      post: the memory's (access_count, useful_count, confidence) is updated
+            via ``update_memory_metamemory``. IF args.query is provided AND
+            FlashRank is available, a Platt training pair is also recorded
+            via reranker_calibration.record_rating; this may trigger a refit.
+    """
     if not args or args.get("memory_id") is None:
         return {"rated": False, "reason": "no_memory_id"}
     if args.get("useful") is None:
@@ -78,6 +125,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     memory_id = int(args["memory_id"])
     useful = bool(args["useful"])
+    query = args.get("query", "") or ""
 
     store = _get_store()
     mem = store.get_memory(memory_id)
@@ -96,7 +144,11 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     store.update_memory_metamemory(memory_id, access_count, useful_count, confidence)
 
-    return {
+    # AF-2: collect Platt training sample when caller provided the surfacing
+    # query. Silent best-effort — metamemory update is the primary contract.
+    platt_recorded = _record_platt_sample(query, mem.get("content", ""), useful)
+
+    response: dict[str, Any] = {
         "rated": True,
         "memory_id": memory_id,
         "useful": useful,
@@ -105,3 +157,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "confidence": round(confidence, 4),
         "content_preview": mem["content"][:80],
     }
+    if platt_recorded:
+        response["platt_sample_recorded"] = True
+        response["platt_sample_count"] = reranker_calibration.sample_count()
+    return response

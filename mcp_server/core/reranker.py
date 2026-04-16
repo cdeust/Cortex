@@ -21,18 +21,15 @@ Sufficient Context gate (Joren et al., ICLR 2025):
     This implementation uses a binary threshold gate: if the max CE score
     falls below gate_threshold, all scores are suppressed by a fixed multiplier.
 
-    Platt sigmoid REJECTED (2026-04-03 ablation):
+    Platt sigmoid with BENCHMARK-DERIVED A,B — REJECTED (2026-04-03):
     Attempted replacing the binary gate with Platt-calibrated sigmoid
-    (P = 1/(1+exp(-(A*s+B))), Platt 1999). Even with steep slopes (A=30)
-    and low inflection (CE=0.05), any multiplicative suppression on mid-range
-    CE scores degrades retrieval. Results:
+    using hand-picked A, B tuned to max_CE on benchmark data. All benchmarks
+    regressed. See reranker_calibration.py for the follow-up: Platt params
+    FIT from user rate_memory feedback (different input distribution) are
+    applied opt-in via apply_platt=True, default False until benchmark
+    re-validation lands.
       A=10, B=-1.5 (inflection 0.15): BEAM 0.479 (-0.148), LoCoMo R@10 92.6% (-5.1pp)
       A=30, B=-1.5 (inflection 0.05): BEAM 0.442 (-0.185)
-    Root cause: valid retrievals with CE 0.15-0.30 get 1-5% suppression that
-    compounds across rankings. The binary gate (1.0 above threshold, 0.1 below)
-    is empirically optimal — scores either clearly match or they don't.
-    Proper Platt calibration would require collecting (max_CE, is_correct)
-    pairs from benchmark runs and fitting A, B via logistic regression.
 
     ENGINEERING DEFAULTS (not paper-prescribed):
     - alpha=0.70: Base blend weight for CE vs first-stage scores. Empirically
@@ -47,6 +44,8 @@ Pure business logic -- lazy-loaded singleton, no persistent I/O.
 from __future__ import annotations
 
 from typing import Any
+
+from mcp_server.core import platt_calibration, reranker_calibration
 
 _flashrank_instance: Any = None
 _flashrank_failed: bool = False
@@ -152,6 +151,7 @@ def _blend_scores(
     ce_scores: dict[int, float],
     alpha: float,
     adaptive: bool = True,
+    apply_platt: bool = False,
 ) -> list[tuple[int, float]]:
     """Blend WRRF scores with cross-encoder scores, scaled by confidence.
 
@@ -161,6 +161,13 @@ def _blend_scores(
 
     When adaptive=True, alpha is adjusted per-query based on CE score
     spread (Shtok et al., TOIS 2012 QPP principle).
+
+    When apply_platt=True AND fitted Platt parameters are available from
+    user rate_memory feedback, the CE scores used in the blend are
+    replaced by their calibrated probabilities P(useful | raw_score)
+    via ``platt_calibration.calibrate_score`` (Platt 1999). When no
+    parameters exist (cold start) or apply_platt=False, raw CE scores
+    are used unchanged — identical to the pre-AF-2 behaviour.
     """
     raw_ce_list = [ce_scores.get(i, 0.0) for i in range(len(candidates))]
     confidence = _compute_retrieval_confidence(raw_ce_list)
@@ -168,10 +175,16 @@ def _blend_scores(
     # Per-query adaptive alpha based on CE score distribution
     effective_alpha = _compute_adaptive_alpha(raw_ce_list, alpha) if adaptive else alpha
 
+    # Optional Platt calibration of the CE dimension of the blend. If the
+    # calibrator has no fitted params (cold start), calibrate_score is the
+    # identity — the blend matches the pre-AF-2 behaviour exactly.
+    platt_params = reranker_calibration.get_params() if apply_platt else None
+
     reranked = []
     for i, (mem_id, wrrf_score) in enumerate(candidates):
         ce = ce_scores.get(i, 0.0)
-        blended = (1 - effective_alpha) * wrrf_score + effective_alpha * ce
+        ce_for_blend = platt_calibration.calibrate_score(ce, platt_params)
+        blended = (1 - effective_alpha) * wrrf_score + effective_alpha * ce_for_blend
         reranked.append((mem_id, blended * confidence))
     reranked.sort(key=lambda x: x[1], reverse=True)
     return reranked
@@ -184,6 +197,7 @@ def rerank_results(
     alpha: float = 0.70,
     max_content_len: int = 1200,
     adaptive: bool = False,
+    apply_platt: bool = False,
 ) -> list[tuple[int, float]]:
     """Rerank candidates using FlashRank cross-encoder.
 
@@ -196,6 +210,11 @@ def rerank_results(
         adaptive: If True, adjust alpha per-query based on CE score spread
             (Shtok et al., TOIS 2012 QPP principle). Default False pending
             ablation validation.
+        apply_platt: If True AND fitted Platt parameters exist in
+            reranker_calibration (>=50 rate_memory pairs collected),
+            calibrate CE scores to P(useful|raw_ce) before blending.
+            Default False until benchmark re-validation lands — see
+            AF-2 ablation note in the module docstring.
     """
     ranker = _ensure_reranker()
     if ranker is None or not candidates:
@@ -209,6 +228,37 @@ def rerank_results(
         ]
         results = ranker.rerank(RerankRequest(query=query, passages=passages))
         ce_scores = {r["id"]: r["score"] for r in results}
-        return _blend_scores(candidates, ce_scores, alpha, adaptive=adaptive)
+        return _blend_scores(
+            candidates, ce_scores, alpha, adaptive=adaptive, apply_platt=apply_platt
+        )
     except Exception:
         return candidates
+
+
+def get_raw_ce_score(query: str, content: str, max_content_len: int = 1200) -> float | None:
+    """Return a single raw FlashRank CE score for (query, content).
+
+    Used by ``rate_memory`` to collect Platt training samples: when the
+    caller provides the query that surfaced a memory, we re-encode the
+    pair at rating time and record (raw_score, useful) for future fits.
+
+    Returns None if FlashRank is unavailable or encoding fails — the
+    caller must handle None (typically: skip the sample).
+    """
+    ranker = _ensure_reranker()
+    if ranker is None or not query or not content:
+        return None
+    try:
+        from flashrank import RerankRequest
+
+        results = ranker.rerank(
+            RerankRequest(
+                query=query,
+                passages=[{"id": 0, "text": content[:max_content_len]}],
+            )
+        )
+        if not results:
+            return None
+        return float(results[0].get("score", 0.0))
+    except Exception:
+        return None
