@@ -313,16 +313,39 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         result["global_reason"] = global_reason
 
     # Promote decision-shaped memories to the authored wiki layer.
-    # Delegated entirely to wiki_store.sync_memory, which never raises.
+    #
+    # Contract (E8, post-Taleb fragility audit):
+    #   - On success: ``result["wiki_page"]`` is the relative path.
+    #   - On classifier rejection: no field added (memory didn't qualify).
+    #   - On wiki I/O failure: memory write is already committed; we log
+    #     the failure to ``result["warnings"]`` so the caller can observe
+    #     the partial failure rather than silently losing the signal.
+    #
+    # The store write has succeeded by this point; a failure here is a
+    # partial-failure, not a total one. Documented in the schema.
     if result.get("stored") and result.get("memory_id") is not None:
-        wiki_path = wiki_store.sync_memory(
-            WIKI_ROOT,
-            memory_id=result["memory_id"],
-            content=content,
-            tags=tags,
-            domain=domain,
-        )
-        if wiki_path:
-            result["wiki_page"] = wiki_path
+        try:
+            wiki_path = wiki_store.sync_memory_strict(
+                WIKI_ROOT,
+                memory_id=result["memory_id"],
+                content=content,
+                tags=tags,
+                domain=domain,
+            )
+            if wiki_path:
+                result["wiki_page"] = wiki_path
+        except Exception as exc:
+            # Partial failure — memory is stored but wiki sync failed.
+            # Surfacing the exception type + message preserves the ability
+            # to diagnose recurring failures (e.g., disk full, path escape).
+            warnings = result.setdefault("warnings", [])
+            warnings.append(
+                {
+                    "scope": "wiki_sync",
+                    "memory_id": result["memory_id"],
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                }
+            )
 
     return result
