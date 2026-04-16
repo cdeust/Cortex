@@ -56,7 +56,17 @@ def reset_embedding_engine() -> None:
 
 
 class EmbeddingEngine:
-    """Lazy-loading embedding engine with graceful fallback."""
+    """Lazy-loading embedding engine with graceful fallback.
+
+    Cache key discipline (ADR-0045 R5): the LRU cache is keyed by
+    ``sha256(text)[:16]`` (16 hex chars = 8 bytes of entropy), never by
+    raw text. A 100 KB user memory yields a 16-byte key instead of
+    100 KB of key bytes — at ``_cache_max = 128`` this bounds cache key
+    memory to ~2 KB regardless of input size. A 16-char SHA256 prefix
+    has 2^64 possible values; the birthday-bound collision probability
+    at 128 cached entries is ~4.6e-16 (negligible). See
+    ``_cache_key`` for the single point of truth.
+    """
 
     def __init__(
         self,
@@ -70,8 +80,26 @@ class EmbeddingEngine:
         self._device: str | None = None  # resolved once, cached
         self._model: Any = None
         self._unavailable = False
+        # Cache keyed by sha256(text)[:16] — see class docstring / ADR-0045 R5.
         self._cache: OrderedDict[str, bytes] = OrderedDict()
         self._cache_max = 128
+
+    # ── Cache key (ADR-0045 R5) ───────────────────────────────────────
+
+    @staticmethod
+    def _cache_key(text: str) -> str:
+        """Return the SHA256[:16] cache key for ``text``.
+
+        precondition: ``text`` is a non-empty str.
+        postcondition: returns a 16-char lowercase hex string; the same
+        input always produces the same key; key length is independent of
+        ``len(text)``.
+
+        Source: ADR-0045 R5 — ``hashlib.sha256(text.encode()).hexdigest()[:16]``
+        is the mandated cache-key form for any memoization layer over
+        user-provided strings.
+        """
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
     @property
     def model_name(self) -> str:
@@ -251,13 +279,19 @@ class EmbeddingEngine:
         return arr.tobytes()
 
     def encode(self, text: str) -> bytes | None:
-        """Encode text to a float32 byte blob."""
+        """Encode text to a float32 byte blob.
+
+        The LRU cache is keyed by ``sha256(text)[:16]`` per ADR-0045 R5
+        — never by raw text — so a 100 KB memory contributes 16 bytes of
+        key storage, not 100 KB.
+        """
         if not text:
             return None
 
-        if text in self._cache:
-            self._cache.move_to_end(text)
-            return self._cache[text]
+        key = self._cache_key(text)
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
 
         self._ensure_model()
 
@@ -268,7 +302,7 @@ class EmbeddingEngine:
 
         if len(self._cache) >= self._cache_max:
             self._cache.popitem(last=False)  # evict LRU entry
-        self._cache[text] = result
+        self._cache[key] = result
         return result
 
     def encode_batch(self, texts: list[str]) -> list[bytes | None]:

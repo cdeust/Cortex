@@ -110,13 +110,17 @@ class TestSimilarity:
 
 
 class TestLRUCache:
+    """LRU cache membership is now keyed by ``sha256(text)[:16]`` per
+    ADR-0045 R5. Tests probe via ``_cache_key`` — never by raw text."""
+
     def test_cache_hit(self):
         engine = EmbeddingEngine(dim=32)
         engine._unavailable = True
         engine.encode("cached text")
-        assert "cached text" in engine._cache
+        key = EmbeddingEngine._cache_key("cached text")
+        assert key in engine._cache
         result = engine.encode("cached text")
-        assert result == engine._cache["cached text"]
+        assert result == engine._cache[key]
 
     def test_lru_eviction_removes_oldest(self):
         engine = EmbeddingEngine(dim=16)
@@ -128,10 +132,11 @@ class TestLRUCache:
         # Cache full: [text 0, text 1, text 2]
         engine.encode("text 3")
         # LRU eviction: text 0 evicted, [text 1, text 2, text 3]
-        assert "text 0" not in engine._cache
-        assert "text 1" in engine._cache
-        assert "text 2" in engine._cache
-        assert "text 3" in engine._cache
+        k = EmbeddingEngine._cache_key
+        assert k("text 0") not in engine._cache
+        assert k("text 1") in engine._cache
+        assert k("text 2") in engine._cache
+        assert k("text 3") in engine._cache
         assert len(engine._cache) == 3
 
     def test_lru_refresh_on_access(self):
@@ -145,10 +150,11 @@ class TestLRUCache:
         engine.encode("text 0")
         # Now add text 3 — text 1 should be evicted (oldest), not text 0
         engine.encode("text 3")
-        assert "text 0" in engine._cache  # refreshed, survives
-        assert "text 1" not in engine._cache  # oldest, evicted
-        assert "text 2" in engine._cache
-        assert "text 3" in engine._cache
+        k = EmbeddingEngine._cache_key
+        assert k("text 0") in engine._cache  # refreshed, survives
+        assert k("text 1") not in engine._cache  # oldest, evicted
+        assert k("text 2") in engine._cache
+        assert k("text 3") in engine._cache
 
     def test_no_full_flush(self):
         """Verify cache doesn't clear all entries at once."""
