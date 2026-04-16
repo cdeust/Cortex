@@ -98,9 +98,7 @@ class TestEncodeCount:
             "compressed_to_tag": 0,
         }
 
-        compression_handler._compress_memory(
-            store, settings, embeddings, mem, stats
-        )
+        compression_handler._compress_memory(store, settings, embeddings, mem, stats)
 
         # Exactly 2 encode calls — down from 3 before the fix.
         assert len(embeddings.calls) == 2, (
@@ -130,9 +128,7 @@ class TestEncodeCount:
             "compressed_to_tag": 0,
         }
 
-        compression_handler._compress_memory(
-            store, settings, embeddings, mem, stats
-        )
+        compression_handler._compress_memory(store, settings, embeddings, mem, stats)
 
         assert len(embeddings.calls) == 1, (
             f"expected 1 encode() call on 0 → 1, got {len(embeddings.calls)}"
@@ -154,9 +150,7 @@ class TestEncodeCount:
             "compressed_to_tag": 0,
         }
 
-        compression_handler._compress_memory(
-            store, settings, embeddings, mem, stats
-        )
+        compression_handler._compress_memory(store, settings, embeddings, mem, stats)
 
         assert len(embeddings.calls) == 1
         assert stats["compressed_to_gist"] == 0
@@ -174,9 +168,7 @@ class TestEncodeCount:
         mem = _mem(age_hours=2000.0)
         stats = {"compressed_to_tag": 0}
 
-        compression_handler._compress_to_tag_from_gist(
-            store, embeddings, mem, stats
-        )
+        compression_handler._compress_to_tag_from_gist(store, embeddings, mem, stats)
 
         assert len(embeddings.calls) == 2
         assert stats["compressed_to_tag"] == 1
