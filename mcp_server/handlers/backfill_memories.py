@@ -128,6 +128,10 @@ async def _import_single_item(
     project_slug: str,
 ) -> int | None:
     """Store one extracted item. Returns memory_id if stored, else None."""
+    from mcp_server.handlers.backfill_helpers import (
+        age_decayed_heat,
+        compute_age_days,
+    )
     from mcp_server.handlers.remember import handler as remember_handler
 
     content = item.get("content", "")
@@ -143,10 +147,15 @@ async def _import_single_item(
         "source": f"backfill:{project_slug[:40]}",
         "force": True,
     }
-    # Preserve original session timestamp if available
+    # Preserve original session timestamp AND compute age-decayed initial
+    # heat from it, so a 6-month-old conversation imports at heat ~0.3
+    # rather than the baseline 1.0 that would form a bimodal cohort after
+    # a bulk backfill. Source: issue #14 P1 root cause.
     timestamp = item.get("timestamp")
     if timestamp:
         remember_args["created_at"] = str(timestamp)
+        age_days = compute_age_days(str(timestamp))
+        remember_args["initial_heat"] = age_decayed_heat(age_days)
     result = await remember_handler(remember_args)
 
     if not result.get("stored"):

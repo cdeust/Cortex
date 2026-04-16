@@ -126,6 +126,21 @@ schema = {
                 "format": "date-time",
                 "examples": ["2026-04-14T10:23:00Z"],
             },
+            "initial_heat": {
+                "type": "number",
+                "description": (
+                    "Initial heat override [0.0, 1.0] used by backfill and "
+                    "import paths to reflect historical memory age. Defaults "
+                    "to 1.0 for live writes. Surprise boost still applies on "
+                    "top. Setting this below 1.0 keeps old memories out of "
+                    "the hot cohort so homeostatic scaling can rebalance "
+                    "the distribution (issue #14 P1)."
+                ),
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "default": 1.0,
+                "examples": [0.3, 0.65, 0.88, 1.0],
+            },
         },
     },
 }
@@ -179,8 +194,20 @@ def _enrich_mod_with_gate(mod: dict, gate: dict) -> None:
 
 def _parse_args(
     args: dict[str, Any],
-) -> tuple[str, list, str, str, bool, str, bool, str | None]:
-    """Extract and default handler arguments."""
+) -> tuple[str, list, str, str, bool, str, bool, str | None, float | None]:
+    """Extract and default handler arguments.
+
+    Last element `initial_heat` is the optional age-adjusted baseline used
+    by backfill / import paths (issue #14 P1). None = legacy 1.0 baseline.
+    Defensive clamp to [0, 1] — schema validation enforces the same bounds.
+    """
+    raw_initial = args.get("initial_heat")
+    initial_heat: float | None = None
+    if raw_initial is not None:
+        try:
+            initial_heat = max(0.0, min(1.0, float(raw_initial)))
+        except (TypeError, ValueError):
+            initial_heat = None
     return (
         args["content"],
         args.get("tags", []),
@@ -190,6 +217,7 @@ def _parse_args(
         args.get("agent_topic", ""),
         args.get("is_global", False),
         args.get("created_at"),
+        initial_heat,
     )
 
 
@@ -198,9 +226,17 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if not args or not args.get("content"):
         return {"stored": False, "reason": "no_content"}
 
-    content, tags, directory, source, force, agent_topic, is_global, created_at = (
-        _parse_args(args)
-    )
+    (
+        content,
+        tags,
+        directory,
+        source,
+        force,
+        agent_topic,
+        is_global,
+        created_at,
+        initial_heat,
+    ) = _parse_args(args)
     store, emb_engine = _get_store(), get_embedding_engine()
     domain = _resolve_domain(directory, args.get("domain", ""))
     embedding = emb_engine.encode(content)
@@ -218,8 +254,13 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             gate["importance"],
         )
 
+    # Baseline heat: live writes default to 1.0; backfill / import paths
+    # override via initial_heat to reflect content age (Ebbinghaus curve —
+    # see backfill_helpers.age_decayed_heat). Surprise boost applies on top.
+    # Source: issue #14 P1.
+    baseline_heat = initial_heat if initial_heat is not None else 1.0
     heat = thermodynamics.apply_surprise_boost(
-        1.0, gate["score"], get_memory_settings().SURPRISE_BOOST
+        baseline_heat, gate["score"], get_memory_settings().SURPRISE_BOOST
     )
     mod = apply_modulations(
         content,

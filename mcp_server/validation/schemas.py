@@ -94,6 +94,8 @@ SCHEMAS: dict[str, dict] = {
             "directory": {"type": "string", "maxLength": 500},
             "agent_topic": {"type": "string", "maxLength": 200},
             "importance": {"type": "number"},
+            "created_at": {"type": "string", "maxLength": 64},
+            "initial_heat": {"type": "number", "minimum": 0.0, "maximum": 1.0},
         },
         "required": ["content"],
     },
