@@ -15,12 +15,21 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Return aggregate diagnostics for the memory system: total/episodic/"
-        "semantic/active/archived/stale/protected memory counts, average heat, "
-        "entity and relationship totals, active prospective triggers, last "
-        "consolidation timestamp, and vector-search availability. Use this for "
-        "health checks, dashboards, or before/after a consolidation run to "
-        "verify cycles fired. Takes no arguments."
+        "Aggregate population diagnostics for the memory system: "
+        "total / episodic / semantic / active / archived / stale / "
+        "protected memory counts, average heat, entity and relationship "
+        "totals, active prospective triggers, last consolidation "
+        "timestamp, and vector-search availability (pgvector). Use this "
+        "for health checks, dashboards, or before/after a `consolidate` "
+        "run to verify cycles fired. Distinct from `assess_coverage` "
+        "(scored 0-100 with recommendations, this is raw counts), "
+        "`detect_gaps` (enumerates specific missing things), and "
+        "`list_domains` (per-domain profile rows, not memory counts). "
+        "Read-only. Takes no arguments. Latency ~50ms. Returns "
+        "{total_memories, episodic_count, semantic_count, active_count, "
+        "archived_count, stale_count, protected_count, avg_heat, "
+        "total_entities, total_relationships, active_triggers, "
+        "last_consolidation, has_vector_search}."
     ),
     "inputSchema": {
         "type": "object",

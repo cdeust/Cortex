@@ -25,12 +25,19 @@ logger = logging.getLogger(__name__)
 
 schema = {
     "description": (
-        "Record session-end signals and apply an incremental EMA update to the "
-        "matching domain's cognitive profile. Also stores an episodic session-"
-        "summary memory and runs a session self-critique (overall score + top "
-        "improvement suggestions). Normally invoked automatically by the "
-        "SessionEnd hook — call manually only when reconstructing offline "
-        "sessions. Sub-200ms latency."
+        "Record session-end signals (tools used, duration, turns, "
+        "keywords) and apply an incremental EMA update to the matching "
+        "domain's cognitive profile. Also stores an episodic session-"
+        "summary memory, runs a session self-critique (overall score + "
+        "top improvement suggestions), and creates prospective triggers "
+        "from any TODO/decision keywords detected in the message stream. "
+        "Normally invoked automatically by the SessionEnd hook — call "
+        "manually only when reconstructing offline sessions. Distinct "
+        "from `rebuild_profiles` (full rescan from scratch, throws away "
+        "the cache) and `query_methodology` (read-only profile retrieval). "
+        "Mutates profiles.json + session-log.json + memories table. "
+        "Latency <200ms. Returns {domain, profile_updated, "
+        "session_score, critique, memory_id?}."
     ),
     "inputSchema": {
         "type": "object",

@@ -24,12 +24,19 @@ from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
     "description": (
-        "Identify knowledge gaps in the memory store across four axes: "
-        "isolated entities (referenced but unconnected), sparse domains "
-        "(under-represented vs. global average), temporal drift (domains with "
-        "only stale memories), and low-heat topic clusters. Combines structural "
-        "gap detection with blindspot analysis to surface what to investigate "
-        "next. Use this when planning research priorities or auditing coverage."
+        "Surface knowledge gaps across four structural axes by walking the "
+        "memories+entities+relationships tables and the per-domain "
+        "blindspot detector: isolated entities (referenced but unconnected), "
+        "sparse domains (under-represented vs global average), temporal "
+        "drift (domains whose newest memory is old), and low-heat topic "
+        "clusters. Combines structural gap detection with cognitive "
+        "blindspot analysis to surface WHAT to investigate next. Use this "
+        "when planning research priorities or auditing coverage. Distinct "
+        "from `assess_coverage` (numeric coverage SCORE 0-100 per axis, no "
+        "specific gap list), and `memory_stats` (population counts only, "
+        "no gap interpretation). Read-only. Latency ~500ms-2s depending on "
+        "store size. Returns {isolated_entities, sparse_domains, "
+        "temporal_drift, low_heat_clusters, blindspots, recommendations}."
     ),
     "inputSchema": {
         "type": "object",

@@ -15,12 +15,16 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Delete a memory by integer ID. Supports two modes: hard delete "
-        "(permanent row removal — irreversible) and soft delete (mark is_stale "
-        "and zero out heat so it never surfaces in recall but can still be "
-        "audited). Protected/anchored memories are refused unless force=true. "
-        "Use this to remove genuinely-wrong memories or accidental captures; "
-        "prefer rate_memory(useful=false) for memories that are merely low-value."
+        "Delete a memory by integer ID via direct DELETE on the memories "
+        "table (hard) or by setting is_stale=true + heat=0 (soft, "
+        "recoverable via SQL). Protected/anchored memories are refused "
+        "unless force=true. Use this to remove genuinely-wrong memories or "
+        "accidental captures. Distinct from `rate_memory(useful=false)` "
+        "(downweights without removing — prefer for low-value memories), "
+        "`anchor` (protect from deletion), and `validate_memory` (mark "
+        "stale based on filesystem refs, not user verdict). Mutates the "
+        "memories table; hard delete is irreversible. Latency ~10ms. "
+        "Returns {deleted, method, memory_id, content_preview, reason?}."
     ),
     "inputSchema": {
         "type": "object",

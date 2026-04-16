@@ -22,13 +22,19 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Push the top hot memories for the current project directory into "
-        "CLAUDE.md as a '## Memory Insights' section. Reads the project's "
-        "decisions, patterns, conventions, and lessons from Cortex; adds or "
-        "refreshes the section in-place. Closes the loop between Cortex's "
-        "thermodynamic memory and the Claude Code instruction file loaded at "
-        "every session start. Use this after a productive session so the next "
-        "session begins informed."
+        "Render the project's top hot memories (decisions, patterns, "
+        "conventions, lessons) as bullets and write them into CLAUDE.md "
+        "between `<!-- cortex:memory-insights:start -->` markers — adding "
+        "the section if absent, refreshing it in-place if present. Closes "
+        "the loop between Cortex's thermodynamic memory and the Claude "
+        "Code instruction file loaded at every session start, so the next "
+        "session begins informed without manual querying. Use this after a "
+        "productive session, or on a periodic schedule. Distinct from "
+        "`recall` (transient API response, not persisted to file), "
+        "`narrative` (prose summary, not actionable bullets), and "
+        "`anchor` (per-memory pinning, no CLAUDE.md write). Mutates the "
+        "CLAUDE.md file in `directory`. Latency ~200ms. Returns "
+        "{written, path, insight_count, dry_run, preview?}."
     ),
     "inputSchema": {
         "type": "object",

@@ -10,7 +10,7 @@ import logging
 import time
 from typing import Any
 
-from mcp_server.core import emergence_tracker
+from mcp_server.core import emergence_metrics
 from mcp_server.handlers.consolidation.cascade import run_cascade_advancement
 from mcp_server.handlers.consolidation.cls import run_cls_cycle
 from mcp_server.handlers.consolidation.compression import run_compression_cycle
@@ -32,12 +32,22 @@ logger = logging.getLogger(__name__)
 
 schema = {
     "description": (
-        "Run scheduled memory-system maintenance cycles: thermodynamic heat "
-        "decay, full-text/gist compression, episodic→semantic CLS transfer, "
-        "synaptic plasticity (LTP/LTD), microglial pruning, homeostatic scaling, "
-        "and optional deep-sleep replay. Use this on a daily/weekly cadence (or "
-        "after large ingest bursts) to keep recall fast and the heat distribution "
-        "healthy. Returns per-cycle counters and total duration."
+        "Run scheduled memory-system maintenance cycles: thermodynamic "
+        "heat decay, full-text → gist → tag compression, episodic→semantic "
+        "CLS transfer (McClelland 1995), synaptic plasticity LTP/LTD "
+        "(Hebb 1949, Bi & Poo 1998), microglial pruning of orphan edges "
+        "(Wang 2020), homeostatic scaling (Turrigiano 2008), cascade "
+        "stage advancement (Kandel 2001), and optional deep-sleep replay. "
+        "Each cycle is delegated to a focused sub-module under "
+        "handlers/consolidation/; durations are tracked per stage with "
+        "partial-failure rollup. Use this on a daily/weekly cadence (or "
+        "after large ingest bursts) to keep recall fast and the heat "
+        "distribution healthy. Distinct from `wiki_consolidate` (operates "
+        "on wiki PAGES not memories) and `forget` (one-off deletion, no "
+        "lifecycle). Mutates memories + entities + relationships tables. "
+        "Latency varies (~5-60s typical, deep mode minutes). Returns "
+        "per-cycle counters, duration_ms per stage, status (ok|partial), "
+        "and failed_stages list."
     ),
     "inputSchema": {
         "type": "object",
@@ -201,7 +211,11 @@ def _run_always_cycles(
 
     def _run_emergence() -> dict[str, Any]:
         # Uses the consolidation-scoped memory list — no extra load.
-        return emergence_tracker.generate_emergence_report(memories) or {}
+        # Source: issue #13 (darval) — was importing emergence_tracker
+        # which doesn't define generate_emergence_report (lives in
+        # emergence_metrics). Same shape as the homeostatic_health
+        # AttributeError fixed in 69d81fb.
+        return emergence_metrics.generate_emergence_report(memories) or {}
 
     stats["emergence"] = _timed(_run_emergence)
 

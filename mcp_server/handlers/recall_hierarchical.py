@@ -23,13 +23,18 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Retrieve memories using the fractal three-level hierarchy "
-        "(L0=individual memories, L1=topic clusters, L2=root clusters). "
-        "Weighting is adaptive: short queries are weighted toward broader L2 "
+        "Retrieve memories via the fractal three-level hierarchy (L0=individual "
+        "memories, L1=topic clusters, L2=root clusters), with adaptive level "
+        "weighting from query length: short queries weight toward broader L2 "
         "clusters (you're scanning a topic), long queries toward specific L0 "
-        "memories (you have a precise question). Use this instead of recall "
+        "memories (you have a precise question). Use this instead of `recall` "
         "when you want the topology of the memory space, not just a flat "
-        "ranked list. Returns clustered hits annotated with their hierarchy level."
+        "ranked list. Distinct from `recall` (flat WRRF result, no hierarchy), "
+        "`drill_down` (consumer of this tool's output, navigates one level "
+        "deeper into a returned cluster), and `navigate_memory` (graph "
+        "traversal, not cluster tree). Mutates access_count on surfaced "
+        "memories. Latency ~150-300ms. Returns {hierarchy: [{cluster_id, "
+        "level, label, score, members?}], total_clusters}."
     ),
     "inputSchema": {
         "type": "object",

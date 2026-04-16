@@ -15,11 +15,15 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 schema = {
     "description": (
         "Generate a coherent project narrative from stored memories for a "
-        "directory or domain. Clusters memories by topic and time, identifies "
-        "the through-line, and produces a paragraph-level story (or a one-line "
-        "brief). Use this for status updates, README seeds, or to onboard a "
-        "new contributor with the project's actual history. Returns the "
-        "narrative text plus the memory count consulted."
+        "directory or domain. Clusters memories by topic + time, "
+        "identifies the through-line, and renders either a multi-section "
+        "story or (when `brief=true`) a one-paragraph executive summary. "
+        "Use this for status updates, README seeds, or to onboard a new "
+        "contributor with the project's actual history. Distinct from "
+        "`get_project_story` (period-bucketed chronological chapters with "
+        "explicit time ranges), `assess_coverage` (numeric score, no "
+        "prose), and `recall` (raw ranked memories). Read-only. Latency "
+        "~300-800ms. Returns {narrative, memory_count, themes}."
     ),
     "inputSchema": {
         "type": "object",

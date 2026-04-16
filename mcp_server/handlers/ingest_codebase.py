@@ -52,12 +52,20 @@ _DEFAULT_TOP_PROCESSES = 10
 
 schema = {
     "description": (
-        "Ingest a codebase analysis from the upstream ai-automatised-pipeline "
-        "MCP server into Cortex's store. Triggers analyze_codebase (or reuses "
-        "a cached graph), then materialises top-ranked symbols as memories + "
-        "knowledge-graph entities, and entry-point processes as wiki reference "
-        "pages. Use this to seed the Wiki / Board / Knowledge / Graph views "
-        "from a freshly-indexed or re-indexed codebase. Cortex only consumes "
+        "Ingest a codebase analysis from the upstream ai-automatised-"
+        "pipeline MCP server into Cortex's store. Triggers `analyze_"
+        "codebase` upstream (or reuses a cached graph_path memo), pulls "
+        "symbols + processes via `search_codebase`/`get_processes`, then "
+        "materialises top-ranked symbols as memories + KG entities + "
+        "edges, and entry-point processes as wiki reference pages under "
+        "specs/. Use this to seed the Wiki / Board / Knowledge / Graph "
+        "views from a freshly-indexed or re-indexed codebase. Distinct "
+        "from `codebase_analyze` (Cortex's OWN tree-sitter analyzer, "
+        "no upstream MCP), `seed_project` (5-stage shallow sweep, no "
+        "AST), and `wiki_seed_codebase` (consumes existing .md docs, "
+        "not analysis). Mutates wiki/, memories, entities, "
+        "relationships. Latency varies (10s-5min depending on cache "
+        "hit). Cortex only consumes "
         "upstream analysis — it does not drive the pipeline. Returns counts "
         "and the wiki paths written."
     ),

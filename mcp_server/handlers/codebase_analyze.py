@@ -37,14 +37,23 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Analyze a codebase using tree-sitter AST parsing and store its "
-        "structure as Cortex memories. Walks the project tree, parses each "
-        "source file (with regex fallback), stores one memory per file with "
-        "symbols as entities and imports as relationships, then runs cross-"
-        "file symbol resolution, call-graph extraction, and community detection. "
-        "Incremental by default — re-runs only re-process files whose content "
-        "hash changed since last run. Use this on first onboarding or after "
-        "major refactors. Returns counts of files analyzed and memories written."
+        "Walk a codebase and store its structure as memories using tree-"
+        "sitter AST parsing (with regex fallback for unsupported "
+        "languages). One memory per file, with symbols as entities and "
+        "imports as relationships; then cross-file symbol resolution, "
+        "call-graph extraction, and community detection over the call "
+        "graph. Incremental — only re-processes files whose content hash "
+        "changed since last run (tracked via HASH_TAG_PREFIX tags). Use "
+        "this on first onboarding to a serious codebase, or after a major "
+        "refactor that invalidates symbol assumptions. Distinct from "
+        "`seed_project` (5-stage shallow structural sweep, no AST), "
+        "`backfill_memories` (Claude Code conversations, not source "
+        "files), `wiki_seed_codebase` (seeds wiki pages from .md docs), "
+        "and `ingest_codebase` (downstream PRD-generator consumer). "
+        "Mutates memories + entities + relationships tables. Latency "
+        "varies (~10s-10min depending on tree size). Returns "
+        "{files_analyzed, files_skipped, memories_written, entities_"
+        "created, relationships_created}."
     ),
     "inputSchema": {
         "type": "object",

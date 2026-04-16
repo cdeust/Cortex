@@ -40,13 +40,22 @@ _UPSTREAM_SERVER = "prd-gen"
 
 schema = {
     "description": (
-        "Ingest a PRD document into Cortex's store. Source may be a file path, "
-        "raw markdown, or a prd-gen pipeline state id. Writes the PRD as a wiki "
-        "spec page, extracts decisions and requirements as separate tagged "
-        "memories, and optionally routes the document through prd-gen's "
-        "validate_prd_document to capture quality signals. Use this after a "
-        "PRD is authored or generated so Cortex's Wiki/Board/Knowledge views "
-        "reflect it."
+        "Ingest a PRD (Product Requirements Document) into Cortex's "
+        "store. Source: a file path, raw markdown, or a prd-gen pipeline "
+        "state id (fetched via upstream MCP). Writes the PRD as a wiki "
+        "spec page under specs/<slug>.md, extracts decisions and "
+        "requirements as separate tagged memories (`decision`, "
+        "`requirement`), and optionally routes the document through "
+        "prd-gen's `validate_prd_document` to capture quality signals. "
+        "Use this after a PRD is authored or generated so Cortex's "
+        "Wiki/Board/Knowledge views reflect it. Distinct from "
+        "`wiki_write` (manual single-page write, no decision/requirement "
+        "extraction), `ingest_codebase` (code symbols, not requirement "
+        "documents), and `remember` (one memory, no wiki page or "
+        "structured extraction). Mutates wiki/specs/ + memories table. "
+        "Latency varies (~500ms-3s depending on validation flag). "
+        "Returns {wiki_path, memories_created: {summary, decisions, "
+        "requirements}, validation?: stats}."
     ),
     "inputSchema": {
         "type": "object",

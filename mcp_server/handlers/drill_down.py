@@ -20,12 +20,19 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Navigate one level deeper into the fractal memory hierarchy returned "
-        "by recall_hierarchical. Drilling an L2 root cluster returns its "
-        "constituent L1 sub-clusters; drilling an L1 cluster returns the "
-        "individual memories it contains (with full content, heat, tags). "
-        "Use this for interactive exploration: top-down from a broad theme "
-        "to specific memories. Updates access counters for surfaced memories."
+        "Descend one level into a fractal memory cluster previously "
+        "returned by `recall_hierarchical`: an L2 root cluster expands to "
+        "its L1 sub-clusters; an L1 cluster expands to the individual "
+        "memories it contains (full content, heat, tags). Cluster IDs use "
+        "the form `L<level>-<index>`. Use this for interactive top-down "
+        "exploration — start broad with `recall_hierarchical`, then drill "
+        "the most-relevant cluster repeatedly until you reach memories. "
+        "Distinct from `recall` (flat ranked list, no hierarchy), "
+        "`navigate_memory` (graph BFS via co-access edges, not cluster "
+        "tree), and `recall_hierarchical` (entry point that builds the "
+        "tree). Mutates access_count on surfaced memories (drives "
+        "consolidation cascade). Latency <100ms. Returns {cluster_id, "
+        "level, children: [{id, label, members?, content?}]}."
     ),
     "inputSchema": {
         "type": "object",

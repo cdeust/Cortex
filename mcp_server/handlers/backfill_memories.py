@@ -31,13 +31,21 @@ from mcp_server.infrastructure.scanner import read_head_tail
 
 schema = {
     "description": (
-        "Auto-import prior Claude Code conversations from ~/.claude/projects/ "
-        "into the Cortex memory store. Walks JSONL session transcripts, "
-        "extracts memorable items (decisions, lessons, errors-and-fixes), "
-        "stores them with backfill tags, and links each to the auto-discovered "
-        "core concepts of the originating project. Idempotent — file hashes "
-        "are tracked in a backfill_log so re-runs only process new sessions. "
-        "Use this on first install or after long absences."
+        "Import prior Claude Code conversations from ~/.claude/projects/ "
+        "into the memory store. Walks JSONL session transcripts, extracts "
+        "memorable items (decisions, lessons, errors-and-fixes) via the "
+        "session_extractor, stores them with `backfill` tags through the "
+        "standard write gate, and links each to the auto-discovered core "
+        "concepts of the originating project. Idempotent — file hashes "
+        "tracked in backfill_log so re-runs only process new sessions. "
+        "Use this on first install, after long absences, or when migrating "
+        "to a new machine. Distinct from `import_sessions` (more granular "
+        "control, manual file selection), `seed_project` (codebase "
+        "structure, not conversation history), and `codebase_analyze` "
+        "(source files, not transcripts). Mutates memories + backfill_log "
+        "tables. Latency varies (~30s-10min depending on history size). "
+        "Returns {sessions_processed, sessions_skipped, memories_imported, "
+        "errors}."
     ),
     "inputSchema": {
         "type": "object",

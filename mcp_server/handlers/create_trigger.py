@@ -22,13 +22,20 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Create a prospective memory trigger — a future-oriented reminder that "
-        "Cortex auto-fires when its condition matches. Keyword triggers fire "
-        "when the user's message contains a string; time triggers fire after "
-        "an ISO datetime; file triggers fire when a path is accessed or "
-        "modified; domain triggers fire when that cognitive domain becomes "
-        "active. Use this to leave instructions for a future session ('next "
-        "time we touch X, remember Y'). Returns the trigger row id."
+        "Create a prospective-memory trigger that Cortex auto-fires when "
+        "its condition matches future context (Einstein & McDaniel 2005). "
+        "Trigger types: `keyword` (fires when user message contains "
+        "string), `time` (fires after ISO datetime), `file` (fires when "
+        "path is accessed/modified), `domain` (fires when that cognitive "
+        "domain becomes active). Triggers are checked at session start "
+        "(via `query_methodology`) and on demand. Use this to leave "
+        "instructions for a future session — `next time we touch X, "
+        "remember Y` — that you would otherwise forget. Distinct from "
+        "`add_rule` (passive recall filter applied to ALL queries, no "
+        "context-match firing), `anchor` (pins a memory but doesn't fire), "
+        "and `remember` (records a fact, doesn't activate on context). "
+        "Mutates the prospective_memories table. Latency ~30ms. Returns "
+        "{trigger_id, trigger_type, trigger_condition, content_preview}."
     ),
     "inputSchema": {
         "type": "object",

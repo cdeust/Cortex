@@ -15,12 +15,16 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "List active neuro-symbolic rules in the memory store, optionally "
-        "filtered by scope (global/domain/directory) or rule type "
-        "(hard/soft/tag). Hard rules filter recall results; soft rules "
-        "rerank; tag rules attach metadata. Use this to audit which rules "
-        "are shaping recall before adding a new one. Returns rule rows with "
-        "id, scope, type, condition, action, and active flag."
+        "Enumerate active neuro-symbolic rules in the memory_rules table, "
+        "optionally filtered by scope (global/domain/directory) or "
+        "rule_type (hard=filter, soft=rerank, tag=attach metadata). Use "
+        "this to audit which rules are shaping recall before adding a new "
+        "one or debugging unexpected results. Distinct from `add_rule` "
+        "(creates), `forget` (deletes a memory, not a rule), and "
+        "`get_methodology_graph` (cognitive graph, not the rules table). "
+        "Read-only. Latency ~30ms. Returns {rules: [{id, scope, "
+        "scope_value, rule_type, condition, action, priority, active, "
+        "created_at}]}."
     ),
     "inputSchema": {
         "type": "object",

@@ -25,13 +25,19 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Add a neuro-symbolic rule to the Cortex memory store. Rules apply "
-        "during recall to hard-filter (exclude), soft-rerank (boost/penalize), "
-        "or tag matching memories. Conditions match on tags, keywords, or "
-        "metadata; actions specify what to do when matched. Rules are scoped "
-        "globally, to a domain, or to a directory and ordered by priority. "
-        "Use this to encode operating principles like 'never surface "
-        "deprecated memories' or 'boost lessons in the recall pipeline'."
+        "Insert a neuro-symbolic rule into memory_rules so the "
+        "`apply_rules` engine applies it on every subsequent recall — "
+        "hard-filter (exclude), soft-rerank "
+        "(boost/penalize), or tag the matching memories. Conditions match "
+        "on tags / keywords / metadata; actions specify the effect. Scopes: "
+        "global, domain, directory; resolved by priority then specificity. "
+        "Use this to encode operating principles like `never surface "
+        "deprecated memories` or `boost lessons in the recall pipeline`. "
+        "Distinct from `create_trigger` (proactive prospective memory, "
+        "fires on context match — not a recall filter), and from `anchor` "
+        "(per-memory pin, not a population rule). Mutates the memory_rules "
+        "table; effect is visible at the next `recall` call. Latency "
+        "~20ms. Returns {rule_id, condition, action, scope, priority}."
     ),
     "inputSchema": {
         "type": "object",

@@ -43,8 +43,16 @@ def _get_store() -> MemoryStore:
 
 schema = {
     "description": (
-        "Bootstrap Cortex memory from an existing codebase by performing a "
-        "five-stage structural analysis: (1) config extraction (package.json, "
+        "Bootstrap the memory store from an existing codebase via a "
+        "five-stage structural sweep — each discovery is stored through "
+        "the standard `remember` write gate. Distinct from `codebase_"
+        "analyze` (tree-sitter AST per file, much deeper, slower), "
+        "`backfill_memories` (Claude Code conversation transcripts, not "
+        "the codebase itself), `wiki_seed_codebase` (seeds the wiki tree "
+        "from existing markdown, not memories), and `ingest_codebase` "
+        "(downstream consumer of analyzer output). Latency varies "
+        "(~5-60s depending on tree size). Stages: "
+        "(1) config extraction (package.json, "
         "pyproject.toml, Cargo.toml, go.mod...), (2) documentation harvesting "
         "(README, CLAUDE.md, docs/, ADRs, changelogs), (3) entry-point scan "
         "(main.py, index.js, cmd/, __main__.py), (4) CI/CD detection "

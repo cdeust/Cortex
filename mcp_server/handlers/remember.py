@@ -26,12 +26,19 @@ from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
     "description": (
-        "Store a memory through the hierarchical predictive-coding write gate "
-        "(Friston free-energy minimization across sensory/entity/schema levels). "
-        "Novel surprising content passes; redundant content is rejected or "
-        "merged with the most-similar existing memory via active curation. "
-        "Use this after any non-trivial discovery, fix, decision, or lesson — "
-        "if it would surprise a future session, store it. Returns "
+        "Store a memory through the hierarchical predictive-coding write "
+        "gate (Friston 2010 free-energy minimization across sensory / "
+        "entity / schema levels). Novel surprising content passes; "
+        "redundant content is rejected or merged with the most-similar "
+        "existing memory via active curation. After write: thermodynamic "
+        "tagging, knowledge-graph entity extraction, neuromodulation "
+        "(DA/NE/ACh/5-HT), engram allocation. Use this after any "
+        "non-trivial discovery, fix, decision, or lesson — if it would "
+        "surprise a future session, store it. Distinct from `anchor` "
+        "(pins an EXISTING memory, doesn't create), `wiki_write` "
+        "(creates an .md page, not a memory row), and `add_rule` "
+        "(recall-time filter, not stored content). Mutates memories + "
+        "entities + relationships tables. Latency ~50-100ms. Returns "
         "{stored, memory_id, action: stored|merged|rejected, reason}."
     ),
     "inputSchema": {

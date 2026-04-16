@@ -16,13 +16,20 @@ from mcp_server.infrastructure.scanner import (
 
 schema = {
     "description": (
-        "Full rescan of all Claude Code session data to rebuild methodology "
+        "Full rescan of Claude Code session data to rebuild methodology "
         "profiles from scratch. Walks ~/.claude/projects/, parses JSONL "
-        "transcripts, groups by project, and re-derives per-domain cognitive "
-        "style, entry patterns, blind spots, and bridges. Use this on first "
-        "install, after a major workflow change, or when query_methodology "
-        "returns coldStart=true. Skipped automatically if profiles are <1h old "
-        "unless force=true. Sub-10s on typical histories."
+        "transcripts, groups by project, and re-derives per-domain "
+        "cognitive style (Felder-Silverman), entry patterns, blind spots, "
+        "and cross-domain bridges via the profile_assembler pipeline. Use "
+        "this on first install, after a major workflow change, or when "
+        "`query_methodology` returns coldStart=true. Skipped automatically "
+        "if profiles are <1h old unless force=true. Distinct from "
+        "`query_methodology` (read the cached profile, no rescan), "
+        "`record_session_end` (incremental EMA update for one session, no "
+        "full rebuild), and `detect_domain` (just classifies, doesn't "
+        "rebuild). Mutates ~/.claude/methodology/profiles.json. Latency "
+        "<10s on typical histories. Returns {rebuilt_domains, "
+        "total_sessions, duration_ms}."
     ),
     "inputSchema": {
         "type": "object",

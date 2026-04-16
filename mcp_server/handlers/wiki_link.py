@@ -18,12 +18,16 @@ from mcp_server.infrastructure.wiki_store import (
 
 schema = {
     "description": (
-        "Add a bidirectional link between two wiki pages. Writes the forward "
-        "relation into the Related section of the source page and the inverse "
-        "relation into the target page in a single idempotent operation. "
-        "Use this to record dependencies, derivations, supersession chains, or "
-        "free-form 'see also' connections between knowledge artefacts. "
-        "Returns the relations written on each side and the wiki paths touched."
+        "Add a bidirectional link between two wiki pages: write the "
+        "forward relation into the `## Related` section of the source page "
+        "and the inverse relation into the target page, in one idempotent "
+        "operation. Use this to record dependencies, derivations, "
+        "supersession chains, or free-form `see also` connections between "
+        "knowledge artefacts. Distinct from `wiki_write` (authors a page, "
+        "doesn't link), `wiki_compile` (publishes drafts, doesn't link), "
+        "and graph-relationship tools (this writes markdown sections, not "
+        "DB edges). Mutates two .md files atomically. Latency ~30ms. "
+        "Returns {from_path, to_path, forward_relation, inverse_relation}."
     ),
     "inputSchema": {
         "type": "object",

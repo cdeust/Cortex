@@ -20,13 +20,17 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
     "description": (
-        "Generate a period-based autobiographical narrative of project activity. "
-        "Distinct from 'narrative' (generic summary): get_project_story buckets "
-        "memories chronologically into chapters within a time window (day/week/"
-        "month/all) and produces a timeline of what actually happened. Use this "
-        "for retrospectives, status updates, sprint reports, or to brief a "
-        "collaborator on what they missed. Returns ordered chapters with "
-        "timestamps, themes, and key decisions."
+        "Generate a period-based autobiographical narrative by bucketing "
+        "memories chronologically into chapters within a time window "
+        "(day / week / month / all) — produces a timeline of what actually "
+        "happened, in order. Use this for retrospectives, status updates, "
+        "sprint reports, or to brief a collaborator on what they missed. "
+        "Distinct from `narrative` (generic project summary, no time "
+        "buckets, no chronology), `assess_coverage` (numeric score, no "
+        "story), and `recall` (raw memory list, no narrative synthesis). "
+        "Read-only. Latency ~300-800ms depending on memory count and "
+        "period. Returns {period, chapters: [{time_range, theme, key_"
+        "decisions, memory_ids, summary}]}."
     ),
     "inputSchema": {
         "type": "object",
