@@ -72,6 +72,9 @@ packages = ["mcp_server"]
 [tool.pytest.ini_options]
 testpaths = ["tests_py"]
 pythonpath = ["."]
+markers = [
+    "invariants: Phase 0.3+ testable invariant predicates (I1/I2/I3/I4 and parity tests)",
+]
 
 [tool.coverage.run]
 source = ["mcp_server"]
