@@ -73,7 +73,7 @@ class TestResolveDomain:
 
 
 class TestProcessEvent:
-    @patch("mcp_server.hooks.session_lifecycle.save_profiles")
+    @patch("mcp_server.hooks.session_lifecycle.save_profile")
     @patch("mcp_server.hooks.session_lifecycle.save_session_log")
     @patch(
         "mcp_server.hooks.session_lifecycle.load_session_log",
@@ -100,7 +100,7 @@ class TestProcessEvent:
         assert saved_log["sessions"][0]["sessionId"] == "test-123"
         assert saved_log["sessions"][0]["domain"] == "my-project"
 
-    @patch("mcp_server.hooks.session_lifecycle.save_profiles")
+    @patch("mcp_server.hooks.session_lifecycle.save_profile")
     @patch("mcp_server.hooks.session_lifecycle.save_session_log")
     @patch(
         "mcp_server.hooks.session_lifecycle.load_session_log",
@@ -122,7 +122,7 @@ class TestProcessEvent:
     def test_skips_when_no_session_id(self):
         process_event({"cwd": "/tmp"})
 
-    @patch("mcp_server.hooks.session_lifecycle.save_profiles")
+    @patch("mcp_server.hooks.session_lifecycle.save_profile")
     @patch("mcp_server.hooks.session_lifecycle.save_session_log")
     @patch("mcp_server.hooks.session_lifecycle.load_session_log")
     @patch(
@@ -139,7 +139,7 @@ class TestProcessEvent:
         assert len(saved_log["sessions"]) == MAX_SESSION_LOG_ENTRIES
         assert saved_log["sessions"][-1]["sessionId"] == "overflow"
 
-    @patch("mcp_server.hooks.session_lifecycle.save_profiles")
+    @patch("mcp_server.hooks.session_lifecycle.save_profile")
     @patch("mcp_server.hooks.session_lifecycle.save_session_log")
     @patch(
         "mcp_server.hooks.session_lifecycle.load_session_log",
@@ -154,7 +154,7 @@ class TestProcessEvent:
         saved_log = mock_ssl.call_args[0][0]
         assert saved_log["sessions"][0]["category"] == "general"
 
-    @patch("mcp_server.hooks.session_lifecycle.save_profiles")
+    @patch("mcp_server.hooks.session_lifecycle.save_profile")
     @patch("mcp_server.hooks.session_lifecycle.save_session_log")
     @patch(
         "mcp_server.hooks.session_lifecycle.load_session_log",
@@ -169,7 +169,7 @@ class TestProcessEvent:
         saved_log = mock_ssl.call_args[0][0]
         assert saved_log["sessions"][0]["category"] == "bug-fix"
 
-    @patch("mcp_server.hooks.session_lifecycle.save_profiles")
+    @patch("mcp_server.hooks.session_lifecycle.save_profile")
     @patch("mcp_server.hooks.session_lifecycle.save_session_log")
     @patch(
         "mcp_server.hooks.session_lifecycle.load_session_log",

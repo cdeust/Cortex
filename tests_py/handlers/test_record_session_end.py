@@ -19,7 +19,7 @@ def _mock_io():
             return_value={"sessions": []},
         ),
         patch("mcp_server.handlers.record_session_end.save_session_log"),
-        patch("mcp_server.handlers.record_session_end.save_profiles"),
+        patch("mcp_server.handlers.record_session_end.save_profile"),
     )
 
 
@@ -126,7 +126,7 @@ class TestRecordSessionEndHandler:
             ),
             patch("mcp_server.handlers.record_session_end.save_session_log"),
             patch("mcp_server.handlers.record_session_end.apply_session_update"),
-            patch("mcp_server.handlers.record_session_end.save_profiles"),
+            patch("mcp_server.handlers.record_session_end.save_profile"),
         ):
             result = asyncio.run(
                 handler(

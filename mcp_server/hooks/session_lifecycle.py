@@ -40,7 +40,10 @@ from typing import Any
 
 try:
     from mcp_server.core.profile_builder import apply_session_update
-    from mcp_server.infrastructure.profile_store import load_profiles, save_profiles
+    from mcp_server.infrastructure.profile_store import (
+        load_profiles,
+        save_profile,
+    )
     from mcp_server.infrastructure.session_store import (
         load_session_log,
         save_session_log,
@@ -205,7 +208,8 @@ def process_event(event: dict[str, Any] | None) -> None:
                 "turn_count": event.get("turn_count"),
             },
         )
-        save_profiles(profiles)
+        # D5: targeted per-domain write — does not rewrite other domains.
+        save_profile(domain_id, dp)
         _log(f'Updated profile for domain "{domain_id}"')
     else:
         _log(f'No profile for domain "{domain_id}", logged session only')

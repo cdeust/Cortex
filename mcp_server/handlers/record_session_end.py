@@ -12,7 +12,10 @@ from typing import Any
 
 from mcp_server.core.profile_builder import apply_session_update
 from mcp_server.core.session_critique import generate_critique
-from mcp_server.infrastructure.profile_store import load_profiles, save_profiles
+from mcp_server.infrastructure.profile_store import (
+    load_profiles,
+    save_profile,
+)
 from mcp_server.infrastructure.session_store import load_session_log, save_session_log
 from mcp_server.shared.categorizer import categorize
 from mcp_server.shared.project_ids import (
@@ -281,7 +284,13 @@ def _update_profile(
     tools_used: list[str] | None,
     turn_count: int | None,
 ) -> tuple[bool, dict | None]:
-    """Apply incremental profile update. Returns (updated, domain_profile)."""
+    """Apply incremental profile update. Returns (updated, domain_profile).
+
+    D5: writes only the one changed domain file via ``save_profile``
+    rather than rewriting the whole profile store on every session end.
+    The ``profiles`` dict is mutated in-place so downstream code keeps
+    observing the updated shape.
+    """
     dp = (profiles.get("domains") or {}).get(domain_id)
     if not dp:
         return False, dp
@@ -293,7 +302,7 @@ def _update_profile(
             "turn_count": turn_count,
         },
     )
-    save_profiles(profiles)
+    save_profile(domain_id, dp)
     return True, dp
 
 
