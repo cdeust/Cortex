@@ -234,7 +234,88 @@ class PgMemoryStore(
         return self._normalize_memory_row(row)
 
     def update_memory_heat(self, memory_id: int, heat: float) -> None:
+        """Pre-A3: single-row heat writer.
+
+        Post-A3 (CORTEX_MEMORY_A3_LAZY_HEAT=true, schema-migrated): this
+        method dispatches to `bump_heat_raw` which writes `heat_base` +
+        refreshes `heat_base_set_at`. Pre-A3 (default, flag=false): the
+        legacy `SET heat` UPDATE.
+
+        Source: docs/program/phase-3-a3-migration-design.md §3.1.
+        The I2 invariant test (`tests_py/invariants/test_I2_canonical_writer.py`)
+        still allow-lists this site until step 5 refactors every caller
+        to invoke `bump_heat_raw` directly.
+        """
+        # Detect schema state: post-A3 columns present → dispatch.
+        # We could read the flag from settings, but inspecting the column
+        # is cheaper and correctly handles partially-migrated DBs.
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        settings = get_memory_settings()
+        if getattr(settings, "A3_LAZY_HEAT", False):
+            return self.bump_heat_raw(memory_id, heat)
         self._execute("UPDATE memories SET heat = %s WHERE id = %s", (heat, memory_id))
+        self._conn.commit()
+
+    def bump_heat_raw(self, memory_id: int, new_heat_base: float) -> None:
+        """A3 canonical single writer on `memories.heat_base` (invariant I2).
+
+        Writes heat_base AND refreshes heat_base_set_at so subsequent
+        effective_heat() reads compute decay from the bump timestamp,
+        not the row's previous anchor. Clamped to [0, 1] defensively —
+        the CHECK constraint enforces the same bound but a defensive
+        clamp avoids IntegrityError round-trips for callers computing
+        near-limit values.
+
+        Source: docs/program/phase-3-a3-migration-design.md §3.1.
+        Post-A3 this is the ONE canonical site that writes heat_base;
+        all other writers (anchor, preemptive_context, citation bump)
+        route through here.
+        """
+        clamped = max(0.0, min(1.0, float(new_heat_base)))
+        self._execute(
+            "UPDATE memories SET heat_base = %s, heat_base_set_at = NOW() "
+            "WHERE id = %s",
+            (clamped, memory_id),
+        )
+        self._conn.commit()
+
+    def get_homeostatic_factor(self, domain: str) -> float:
+        """A3: fetch per-domain homeostatic factor, defaulting to 1.0.
+
+        Readers MUST use this helper rather than querying the table
+        directly — new domains arrive between homeostatic runs and have
+        no row. The COALESCE-to-1.0 default preserves neutral scaling.
+
+        Source: docs/program/phase-3-a3-migration-design.md §5.
+        """
+        row = self._execute(
+            "SELECT COALESCE(MAX(factor), 1.0)::REAL AS factor "
+            "FROM homeostatic_state WHERE domain = %s",
+            (domain or "",),
+        ).fetchone()
+        if row is None:
+            return 1.0
+        try:
+            return float(row["factor"])
+        except (KeyError, TypeError):
+            return 1.0
+
+    def set_homeostatic_factor(self, domain: str, factor: float) -> None:
+        """A3: upsert per-domain homeostatic factor (Feynman scalar-state).
+
+        Replaces the per-row heat UPDATE pattern in the homeostatic cycle
+        — one row written per cycle instead of 66K. Clamped to the
+        CHECK bounds (0 < factor < 10).
+        """
+        clamped = max(0.01, min(9.99, float(factor)))
+        self._execute(
+            "INSERT INTO homeostatic_state (domain, factor, updated_at) "
+            "VALUES (%s, %s, NOW()) "
+            "ON CONFLICT (domain) DO UPDATE "
+            "SET factor = EXCLUDED.factor, updated_at = NOW()",
+            (domain or "", clamped),
+        )
         self._conn.commit()
 
     def update_memories_heat_batch(self, updates: list[tuple[int, float]]) -> int:
