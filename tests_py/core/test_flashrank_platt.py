@@ -44,7 +44,9 @@ class TestFitPlatt:
 
     def test_below_min_samples_returns_none(self):
         """Fewer than MIN_SAMPLES samples -> refuse to fit."""
-        samples = [pc.TrainingSample(raw_score=0.5, label=1) for _ in range(pc.MIN_SAMPLES - 1)]
+        samples = [
+            pc.TrainingSample(raw_score=0.5, label=1) for _ in range(pc.MIN_SAMPLES - 1)
+        ]
         assert pc.fit_platt(samples) is None
 
     def test_all_one_class_returns_none(self):
@@ -63,13 +65,9 @@ class TestFitPlatt:
         rng = random.Random(42)
         for _ in range(60):
             # High CE -> useful
-            samples.append(
-                pc.TrainingSample(raw_score=rng.uniform(0.5, 1.0), label=1)
-            )
+            samples.append(pc.TrainingSample(raw_score=rng.uniform(0.5, 1.0), label=1))
             # Low CE -> not useful
-            samples.append(
-                pc.TrainingSample(raw_score=rng.uniform(-1.0, 0.0), label=0)
-            )
+            samples.append(pc.TrainingSample(raw_score=rng.uniform(-1.0, 0.0), label=0))
         params = pc.fit_platt(samples)
         assert params is not None
         assert math.isfinite(params.A)
@@ -90,12 +88,8 @@ class TestCalibrateApply:
         rng = random.Random(0)
         samples = []
         for _ in range(60):
-            samples.append(
-                pc.TrainingSample(raw_score=rng.uniform(0.3, 1.0), label=1)
-            )
-            samples.append(
-                pc.TrainingSample(raw_score=rng.uniform(-0.8, 0.2), label=0)
-            )
+            samples.append(pc.TrainingSample(raw_score=rng.uniform(0.3, 1.0), label=1))
+            samples.append(pc.TrainingSample(raw_score=rng.uniform(-0.8, 0.2), label=0))
         params = pc.fit_platt(samples)
         assert params is not None
         for raw in [-0.9, -0.3, 0.1, 0.5, 0.9, 1.4]:
@@ -155,7 +149,7 @@ class TestReRankerCalibrationStore:
         needed = max(pc.MIN_SAMPLES, rc.REFIT_EVERY)
         for i in range(needed):
             # Alternate labels so the fit is non-degenerate.
-            useful = (i % 2 == 0)
+            useful = i % 2 == 0
             raw = rng.uniform(0.4, 1.0) if useful else rng.uniform(-0.5, 0.2)
             rc.record_rating(raw, useful=useful)
         # With alternating classes and linearly separable raw scores, a fit

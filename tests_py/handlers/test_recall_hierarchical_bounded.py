@@ -68,9 +68,7 @@ def test_memory_ids_scoped_call_works():
 def test_no_scope_raises_validation_error():
     """No domain, no memory_ids -> ValidationError (contract change)."""
     with pytest.raises(ValidationError) as exc_info:
-        asyncio.run(
-            recall_hierarchical.handler({"query": "dangerous unscoped query"})
-        )
+        asyncio.run(recall_hierarchical.handler({"query": "dangerous unscoped query"}))
 
     msg = str(exc_info.value)
     # The message must cite the removal rationale for future readers.
@@ -83,9 +81,7 @@ def test_empty_memory_ids_plus_empty_domain_raises():
     """Empty list memory_ids AND empty domain is the same failure mode."""
     with pytest.raises(ValidationError):
         asyncio.run(
-            recall_hierarchical.handler(
-                {"query": "q", "domain": "", "memory_ids": []}
-            )
+            recall_hierarchical.handler({"query": "q", "domain": "", "memory_ids": []})
         )
 
 
