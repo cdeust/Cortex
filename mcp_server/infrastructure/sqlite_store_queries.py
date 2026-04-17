@@ -21,7 +21,7 @@ class SqliteQueryMixin:
     ) -> list[dict[str, Any]]:
         rows = self._conn.execute(
             "SELECT * FROM memories WHERE (domain = ? OR is_global = 1) "
-            "AND heat >= ? ORDER BY heat DESC LIMIT ?",
+            "AND heat_base >= ? ORDER BY heat_base DESC LIMIT ?",
             (domain, min_heat, limit),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
@@ -31,7 +31,7 @@ class SqliteQueryMixin:
     ) -> list[dict[str, Any]]:
         rows = self._conn.execute(
             "SELECT * FROM memories WHERE (directory_context = ? OR is_global = 1) "
-            "AND heat >= ? ORDER BY heat DESC",
+            "AND heat_base >= ? ORDER BY heat_base DESC",
             (directory, min_heat),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
@@ -44,21 +44,21 @@ class SqliteQueryMixin:
     ) -> list[dict[str, Any]]:
         if include_benchmarks:
             rows = self._conn.execute(
-                "SELECT * FROM memories WHERE heat >= ? ORDER BY heat DESC LIMIT ?",
+                "SELECT * FROM memories WHERE heat_base >= ? ORDER BY heat_base DESC LIMIT ?",
                 (min_heat, limit),
             ).fetchall()
         else:
             rows = self._conn.execute(
-                "SELECT * FROM memories WHERE heat >= ? "
+                "SELECT * FROM memories WHERE heat_base >= ? "
                 "AND NOT COALESCE(is_benchmark, 0) "
-                "ORDER BY heat DESC LIMIT ?",
+                "ORDER BY heat_base DESC LIMIT ?",
                 (min_heat, limit),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_all_memories_with_embeddings(self) -> list[dict[str, Any]]:
         """Return memories that have embeddings in the vec table."""
-        rows = self._conn.execute("SELECT id, heat FROM memories").fetchall()
+        rows = self._conn.execute("SELECT id, heat_base FROM memories").fetchall()
         results = []
         for r in rows:
             d = dict(r)

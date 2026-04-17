@@ -1,10 +1,11 @@
-"""Tests for Fix 2 of issue #14 P1 — bimodality-aware homeostatic cycle.
+"""Tests for bimodality-aware homeostatic cycle (A3 single-path).
 
 Covers:
 - detect_hot_cohort unit behavior.
 - apply_cohort_correction unit behavior (non-order-preserving, mode-merging).
-- Integration with _maybe_apply_scaling: bimodal → cohort_correction,
-  unimodal-off-target → multiplicative (backward compat).
+- Integration with _dispatch: bimodal → cohort_correction (per-row
+  writes via bump_heat_raw), unimodal-off-target → scalar_update
+  (one homeostatic_state row), healthy → no-op.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from mcp_server.core.homeostatic_plasticity import (
     detect_hot_cohort,
 )
 from mcp_server.handlers.consolidation.homeostatic import (
-    _maybe_apply_scaling,
+    _dispatch,
     run_homeostatic_cycle,
 )
 
@@ -146,21 +147,37 @@ class TestApplyCohortCorrection:
 
 
 class _FakeStore:
-    """Minimal stand-in for MemoryStore (no DB; in-memory list)."""
+    """Minimal stand-in for MemoryStore (no DB; in-memory list).
 
-    def __init__(self, heats: list[float]) -> None:
+    Mirrors the A3 canonical heat writer ``bump_heat_raw`` and the
+    scalar-factor API (``get_homeostatic_factor`` / ``set_homeostatic_factor``).
+    """
+
+    def __init__(self, heats: list[float], factor: float = 1.0) -> None:
         self._heats = list(heats)
+        self._factor = factor
         self.updates: list[tuple[int, float]] = []
+        self.factor_writes: list[tuple[str, float]] = []
 
     def get_all_memories_for_decay(self) -> list[dict]:
-        return [{"id": i, "heat": h} for i, h in enumerate(self._heats)]
+        return [
+            {"id": i, "heat": h, "domain": "default", "is_protected": False}
+            for i, h in enumerate(self._heats)
+        ]
 
-    def update_memory_heat(self, memory_id: int, heat: float) -> None:
+    def bump_heat_raw(self, memory_id: int, heat: float) -> None:
         self.updates.append((memory_id, heat))
         self._heats[memory_id] = heat
 
+    def get_homeostatic_factor(self, domain: str) -> float:
+        return self._factor
 
-class TestMaybeApplyScalingBranching:
+    def set_homeostatic_factor(self, domain: str, factor: float) -> None:
+        self.factor_writes.append((domain, factor))
+        self._factor = factor
+
+
+class TestDispatchBranching:
     def test_bimodal_triggers_cohort_correction(self):
         heats = _jittered_bimodal(100, 100)
         store = _FakeStore(heats)
@@ -168,17 +185,18 @@ class TestMaybeApplyScalingBranching:
         health = compute_distribution_health(heats, target_mean=0.4)
         # Sanity: synthetic distribution triggers the 0.7 bimodality gate.
         assert health["bimodality_coefficient"] > 0.7
-        outcome = _maybe_apply_scaling(store, memories, heats, health)
+        outcome = _dispatch(store, memories, heats, health)
         assert outcome["scaling_kind"] == "cohort_correction"
         assert outcome["scaling_applied"] is True
         assert outcome["bimodality_after"] is not None
-        # bimodality non-increasing (see std-based test for strict metric).
         assert outcome["bimodality_after"] <= outcome["bimodality_before"] + 1e-6
         assert outcome["cohort_size"] == 100
-        # Only cohort members were written back.
+        # Only cohort members were written back via bump_heat_raw.
         assert all(mid < 100 for mid, _ in store.updates)
+        # No scalar factor write in the bimodal branch.
+        assert store.factor_writes == []
 
-    def test_unimodal_off_target_triggers_multiplicative(self):
+    def test_unimodal_off_target_triggers_scalar_update(self):
         # Narrow peak centered at 0.75 — unhealthy (off target=0.4) but
         # bimodality stays below trigger=0.7 (measured ~0.6 for mod-5).
         heats = [0.75 + 0.02 * ((i % 5) - 2) for i in range(100)]
@@ -186,19 +204,23 @@ class TestMaybeApplyScalingBranching:
         memories = store.get_all_memories_for_decay()
         health = compute_distribution_health(heats, target_mean=0.4)
         assert health["bimodality_coefficient"] <= 0.7
-        outcome = _maybe_apply_scaling(store, memories, heats, health)
-        assert outcome["scaling_kind"] == "multiplicative"
+        outcome = _dispatch(store, memories, heats, health)
+        assert outcome["scaling_kind"] == "scalar_update"
         assert outcome["scaling_applied"] is True
+        # A3: one factor write, zero per-row writes.
+        assert len(store.factor_writes) == 1
+        assert store.updates == []
 
     def test_healthy_distribution_is_noop(self):
         heats = [0.35, 0.38, 0.40, 0.42, 0.45, 0.40, 0.39, 0.41]
         store = _FakeStore(heats)
         memories = store.get_all_memories_for_decay()
         health = compute_distribution_health(heats, target_mean=0.4)
-        outcome = _maybe_apply_scaling(store, memories, heats, health)
+        outcome = _dispatch(store, memories, heats, health)
         assert outcome["scaling_kind"] == "none"
         assert outcome["scaling_applied"] is False
         assert store.updates == []
+        assert store.factor_writes == []
 
 
 class TestRunHomeostaticCycleReturn:

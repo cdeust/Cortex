@@ -171,9 +171,10 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
     """Fetch high-heat memories, excluding anchors."""
     try:
         rows = conn.execute(
-            "SELECT id, content, domain, heat, tags, is_global FROM memories "
-            "WHERE heat >= %s "
-            "ORDER BY heat DESC LIMIT %s",
+            "SELECT id, content, domain, heat_base AS heat, tags, is_global "
+            "FROM memories "
+            "WHERE heat_base >= %s "
+            "ORDER BY heat_base DESC LIMIT %s",
             (float(_MIN_HEAT), int(_HOT_LIMIT + len(exclude_ids))),
         ).fetchall()
     except Exception:

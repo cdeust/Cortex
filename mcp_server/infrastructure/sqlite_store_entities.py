@@ -140,7 +140,7 @@ class SqliteEntityMixin:
         rows = self._conn.execute(
             "SELECT m.* FROM memories m "
             "JOIN memory_entities me ON me.memory_id = m.id "
-            "WHERE me.entity_id = ? ORDER BY m.heat DESC",
+            "WHERE me.entity_id = ? ORDER BY m.heat_base DESC",
             (entity_id,),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
@@ -153,14 +153,14 @@ class SqliteEntityMixin:
             "SELECT m.* FROM memories m "
             "JOIN memories_fts f ON f.rowid = m.id "
             "WHERE memories_fts MATCH ? "
-            "ORDER BY m.heat DESC LIMIT ?",
+            "ORDER BY m.heat_base DESC LIMIT ?",
             (entity_name, limit),
         ).fetchall()
         if not rows:
             # Fallback to LIKE
             rows = self._conn.execute(
                 "SELECT * FROM memories WHERE content LIKE ? "
-                "AND NOT is_stale ORDER BY heat DESC LIMIT ?",
+                "AND NOT is_stale ORDER BY heat_base DESC LIMIT ?",
                 (f"%{entity_name}%", limit),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]

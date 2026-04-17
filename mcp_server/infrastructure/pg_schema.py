@@ -29,7 +29,10 @@ CREATE TABLE IF NOT EXISTS memories (
     directory_context TEXT DEFAULT '',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_accessed   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    heat            REAL DEFAULT 1.0,
+    heat_base       REAL NOT NULL DEFAULT 1.0
+                    CHECK (heat_base >= 0.0 AND heat_base <= 1.0),
+    heat_base_set_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    no_decay        BOOLEAN NOT NULL DEFAULT FALSE,
     surprise_score  REAL DEFAULT 0.0,
     importance      REAL DEFAULT 0.5,
     emotional_valence REAL DEFAULT 0.0,
@@ -74,6 +77,15 @@ CREATE TABLE IF NOT EXISTS entities (
     last_accessed   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     heat            REAL DEFAULT 1.0,
     archived        BOOLEAN DEFAULT FALSE
+);
+"""
+
+HOMEOSTATIC_STATE_DDL = """
+CREATE TABLE IF NOT EXISTS homeostatic_state (
+    domain     TEXT PRIMARY KEY,
+    factor     REAL NOT NULL DEFAULT 1.0
+               CHECK (factor > 0.0 AND factor < 10.0),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 """
 
@@ -479,8 +491,8 @@ CREATE INDEX IF NOT EXISTS idx_memories_content_tsv
     ON memories USING gin (content_tsv);
 CREATE INDEX IF NOT EXISTS idx_memories_content_trgm
     ON memories USING gin (content gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_memories_heat
-    ON memories (heat);
+CREATE INDEX IF NOT EXISTS idx_memories_heat_base
+    ON memories (heat_base);
 CREATE INDEX IF NOT EXISTS idx_memories_domain
     ON memories (domain);
 CREATE INDEX IF NOT EXISTS idx_memories_store_type
@@ -503,306 +515,22 @@ CREATE INDEX IF NOT EXISTS idx_memories_agent_context
     ON memories (agent_context);
 """
 
-# ── PL/pgSQL: recall_memories ─────────────────────────────────────────────
-
-RECALL_MEMORIES_FN = """
--- Migration: dropping the prior signature is required because adding a
--- column to RETURNS TABLE is rejected by CREATE OR REPLACE in Postgres.
--- The DROP is idempotent and only triggers when the old shape exists.
-DROP FUNCTION IF EXISTS recall_memories(
-    TEXT, vector, TEXT, TEXT, TEXT, TEXT, REAL, INT, INT,
-    REAL, REAL, REAL, REAL, REAL, BOOLEAN
-);
-CREATE OR REPLACE FUNCTION recall_memories(
-    p_query_text    TEXT,
-    p_query_emb     vector(384),
-    p_intent        TEXT DEFAULT 'general',
-    p_domain        TEXT DEFAULT NULL,
-    p_directory     TEXT DEFAULT NULL,
-    p_agent_topic   TEXT DEFAULT NULL,
-    p_min_heat      REAL DEFAULT 0.05,
-    p_max_results   INT DEFAULT 10,
-    p_wrrf_k        INT DEFAULT 60,
-    p_w_vector      REAL DEFAULT 1.0,
-    p_w_fts         REAL DEFAULT 0.5,
-    p_w_heat        REAL DEFAULT 0.3,
-    p_w_ngram       REAL DEFAULT 0.3,
-    p_w_recency     REAL DEFAULT 0.0,
-    p_include_globals BOOLEAN DEFAULT TRUE
-) RETURNS TABLE (
-    memory_id       INT,
-    content         TEXT,
-    score           REAL,
-    heat            REAL,
-    domain          TEXT,
-    created_at      TIMESTAMPTZ,
-    store_type      TEXT,
-    tags            JSONB,
-    importance      REAL,
-    surprise_score  REAL,
-    emotional_valence REAL,
-    source          TEXT
-) AS $$
-DECLARE
-    v_pool INT := p_max_results * 10;
-    v_words TEXT[] := regexp_split_to_array(
-        regexp_replace(lower(p_query_text), '[^a-z0-9 ]', ' ', 'g'),
-        '\\s+'
-    );
-    v_or_expr TEXT := array_to_string(
-        ARRAY(SELECT w FROM unnest(v_words) w WHERE length(w) > 1),
-        ' | '
-    );
-    v_tsq  tsquery := CASE WHEN v_or_expr = '' THEN plainto_tsquery('english', p_query_text)
-                            ELSE to_tsquery('english', v_or_expr) END;
-BEGIN
-    RETURN QUERY
-    WITH
-    -- Signal 1: Vector cosine similarity (pgvector)
-    -- Raw score: 1 - cosine_distance. Theoretical min = -1 (Bruch TMM)
-    vec AS (
-        SELECT m.id,
-               (1.0 - (m.embedding <=> p_query_emb))::REAL AS raw_score
-        FROM memories m
-        WHERE m.heat >= p_min_heat
-          AND NOT m.is_stale
-          AND m.embedding IS NOT NULL
-          AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
-          AND (p_directory IS NULL OR m.directory_context = p_directory)
-        ORDER BY m.embedding <=> p_query_emb
-        LIMIT v_pool
-    ),
-    -- Signal 2: Full-text search (ts_rank_cd). Theoretical min = 0
-    fts AS (
-        SELECT m.id,
-               ts_rank_cd(m.content_tsv, v_tsq)::REAL AS raw_score
-        FROM memories m
-        WHERE m.content_tsv @@ v_tsq
-          AND m.heat >= p_min_heat
-          AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
-          AND (p_directory IS NULL OR m.directory_context = p_directory)
-        ORDER BY ts_rank_cd(m.content_tsv, v_tsq) DESC
-        LIMIT v_pool
-    ),
-    -- Signal 3: Trigram similarity (pg_trgm). Theoretical min = 0
-    ngram AS (
-        SELECT m.id,
-               similarity(m.content, p_query_text)::REAL AS raw_score
-        FROM memories m
-        WHERE m.heat >= p_min_heat
-          AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
-          AND (p_directory IS NULL OR m.directory_context = p_directory)
-          AND similarity(m.content, p_query_text) > 0.1
-        ORDER BY similarity(m.content, p_query_text) DESC
-        LIMIT v_pool
-    ),
-    -- Signal 4: Heat. Theoretical min = 0
-    hot AS (
-        SELECT m.id,
-               m.heat::REAL AS raw_score
-        FROM memories m
-        WHERE m.heat >= p_min_heat
-          AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
-          AND (p_directory IS NULL OR m.directory_context = p_directory)
-        ORDER BY m.heat DESC
-        LIMIT v_pool
-    ),
-    -- Signal 5: Recency via exponential decay. Theoretical min = 0
-    -- Decay rate 0.01/day: engineering default. Standard exponential
-    -- recency decay; rate controls half-life (~69 days at 0.01).
-    -- Not paper-prescribed — needs ablation for optimal BEAM performance.
-    recency AS (
-        SELECT m.id,
-               EXP(-0.01 * EXTRACT(EPOCH FROM (NOW() - m.created_at)) / 86400.0)::REAL AS raw_score
-        FROM memories m
-        WHERE m.heat >= p_min_heat
-          AND NOT m.is_stale
-          AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
-          AND (p_directory IS NULL OR m.directory_context = p_directory)
-        ORDER BY m.created_at DESC
-        LIMIT v_pool
-    ),
-    -- Per-signal observed max (for TMM normalization per Bruch 2023)
-    vec_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM vec),
-    fts_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM fts),
-    ng_max   AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM ngram),
-    hot_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM hot),
-    rec_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM recency),
-    -- Convex combination with TMM normalization (Bruch et al., ACM TOIS 2023)
-    -- TMM(s) = (s - m_theoretical) / (M_query - m_theoretical)
-    -- Theoretical mins: vector=-1, fts=0, ngram=0, heat=0, recency=0
-    fused AS (
-        SELECT id, SUM(contribution) AS fused_score
-        FROM (
-            SELECT v.id,
-                   p_w_vector * (v.raw_score - (-1.0)) / GREATEST(b.hi - (-1.0), 0.001) AS contribution
-            FROM vec v, vec_max b
-            UNION ALL
-            SELECT f.id,
-                   p_w_fts * f.raw_score / GREATEST(b.hi, 0.001)
-            FROM fts f, fts_max b
-            UNION ALL
-            SELECT n.id,
-                   p_w_ngram * n.raw_score / GREATEST(b.hi, 0.001)
-            FROM ngram n, ng_max b
-            UNION ALL
-            SELECT h.id,
-                   p_w_heat * h.raw_score / GREATEST(b.hi, 0.001)
-            FROM hot h, hot_max b
-            UNION ALL
-            SELECT r.id,
-                   p_w_recency * r.raw_score / GREATEST(b.hi, 0.001)
-            FROM recency r, rec_max b
-            WHERE p_w_recency > 0
-        ) signals
-        GROUP BY id
-    ),
-    -- Signal 6: Agent topic boost (soft — boosts matching memories, never excludes)
-    agent_boosted AS (
-        SELECT f.id,
-               CASE WHEN p_agent_topic IS NOT NULL
-                         AND m.agent_context = p_agent_topic
-                    THEN f.fused_score + 0.3 * (p_w_vector / p_wrrf_k)
-                    ELSE f.fused_score
-               END AS boosted_score
-        FROM fused f
-        JOIN memories m ON m.id = f.id
-    ),
-    -- Signal 7: Emotional salience boost (Yonelinas & Ritchey 2015)
-    -- Emotional memories get a time-dependent retrieval advantage.
-    -- At t=0: no boost (crossover effect, Kleinsmith & Kaplan 1963).
-    -- At t>>1h: up to 15% boost (meta-analytic g=0.38 → ~15% hit rate gain).
-    -- Coefficient 0.15: Yonelinas & Ritchey 2015, 165-study meta-analysis.
-    -- Time constant tau=1h: adapted from 20-45min biological crossover.
-    emotional_boosted AS (
-        SELECT ab.id,
-               ab.boosted_score * (
-                   1.0 + ABS(COALESCE(m.emotional_valence, 0.0)) * 0.15
-                   * (1.0 - EXP(-EXTRACT(EPOCH FROM (NOW() - m.created_at)) / 3600.0))
-               ) AS emo_score
-        FROM agent_boosted ab
-        JOIN memories m ON m.id = ab.id
-    ),
-    -- Signal 8: Tag-type boost (ENGRAM, arxiv 2511.12960).
-    -- When intent matches a memory's type tag (preference, instruction),
-    -- boost that memory's score. Prevents typed memories from being
-    -- drowned out by the larger pool of episodic/semantic memories.
-    -- Weight 0.4: engineering default, needs ablation [0.2, 0.4, 0.6].
-    tag_boosted AS (
-        SELECT eb.id,
-               eb.emo_score * (
-                   1.0 + CASE
-                       WHEN p_intent IN ('preference', 'instruction')
-                            AND m.tags @> to_jsonb(p_intent::TEXT)
-                       THEN 0.4
-                       ELSE 0.0
-                   END
-               ) AS final_score
-        FROM emotional_boosted eb
-        JOIN memories m ON m.id = eb.id
-    )
-    SELECT tb.id, m.content, tb.final_score::REAL, m.heat,
-           m.domain, m.created_at, m.store_type,
-           m.tags, m.importance, m.surprise_score,
-           m.emotional_valence, m.source
-    FROM tag_boosted tb
-    JOIN memories m ON m.id = tb.id
-    ORDER BY tb.final_score DESC
-    LIMIT p_max_results * 3;
-END;
-$$ LANGUAGE plpgsql STABLE;
-"""
-
-# ── PL/pgSQL: decay_memories ─────────────────────────────────────────────
-
-DECAY_MEMORIES_FN = """
-CREATE OR REPLACE FUNCTION decay_memories(
-    p_factor    REAL DEFAULT 0.95,
-    p_threshold REAL DEFAULT 0.05
-) RETURNS INTEGER AS $$
-DECLARE
-    v_count INTEGER;
-BEGIN
-    -- Stage-adjusted decay: consolidated memories decay slower (Kandel 2001)
-    -- LABILE: factor^2.0, EARLY_LTP: factor^1.2, LATE_LTP: factor^0.8,
-    -- CONSOLIDATED: factor^0.5, RECONSOLIDATING: factor^1.5
-    --
-    -- Emotional damping (Yonelinas & Ritchey 2015):
-    -- Emotional memories decay slower. b_neutral=0.12, b_emotional=0.06
-    -- (2x ratio). The 0.30 coefficient reduces the exponent by up to 30%
-    -- at max |valence|, growing with time in the current stage
-    -- (crossover effect: Kleinsmith & Kaplan 1963).
-    UPDATE memories
-    SET heat = GREATEST(
-        -- Permastore floor by stage (Bahrick 1984, Benna & Fusi 2016):
-        -- CONSOLIDATED >= 0.10, LATE_LTP >= 0.05, others >= 0.0
-        CASE consolidation_stage
-            WHEN 'consolidated' THEN 0.10
-            WHEN 'late_ltp' THEN 0.05
-            WHEN 'reconsolidating' THEN 0.05
-            ELSE 0.0
-        END,
-        heat * POWER(p_factor,
-            CASE consolidation_stage
-                WHEN 'labile' THEN 2.0
-                WHEN 'early_ltp' THEN 1.2
-                WHEN 'late_ltp' THEN 0.8
-                WHEN 'consolidated' THEN 0.5
-                WHEN 'reconsolidating' THEN 1.5
-                ELSE 1.0
-            END
-            * (1.0 - ABS(COALESCE(emotional_valence, 0.0)) * 0.30
-               * (1.0 - EXP(-EXTRACT(EPOCH FROM
-                   (NOW() - COALESCE(stage_entered_at, created_at))) / 3600.0)))
-        )
-    )
-    WHERE NOT is_protected AND NOT is_stale AND heat >= p_threshold;
-
-    GET DIAGNOSTICS v_count = ROW_COUNT;
-
-    -- Only mark LABILE and EARLY_LTP memories as stale.
-    -- LATE_LTP, CONSOLIDATED, and RECONSOLIDATING have structural support
-    -- and must never be permanently removed (Kandel 2001).
-    UPDATE memories
-    SET is_stale = TRUE
-    WHERE heat < p_threshold
-      AND NOT is_protected
-      AND NOT is_stale
-      AND (consolidation_stage IS NULL
-           OR consolidation_stage IN ('labile', 'early_ltp'));
-
-    RETURN v_count;
-END;
-$$ LANGUAGE plpgsql;
-"""
 
 # ── PL/pgSQL: effective_heat (A3 lazy-heat read path) ────────────────────
 #
 # Source: docs/program/phase-3-a3-migration-design.md §2.
 #
-# Single source of truth for I1, I5, I7, I8 post-A3. Pure-ish function:
-# STABLE (reads wall-clock via t_now arg — planner-constant within a
-# single query), PARALLEL SAFE (no session state). Output is
-# structurally bounded in [stage_floor, 1.0] — I8 becomes a property of
-# the formula, not a per-site LEAST guard.
+# Single source of truth for I1, I5, I7, I8. Pure-ish function: STABLE
+# (reads wall-clock via t_now arg — planner-constant within a single
+# query), PARALLEL SAFE (no session state). Output is structurally
+# bounded in [stage_floor, 1.0] — I8 becomes a property of the formula,
+# not a per-site LEAST guard.
 #
-# Semantics preserved from DECAY_MEMORIES_FN above (pg_schema.py:721):
-#   - Stage-dependent α (Kandel 2001; pg_schema.py:748-756)
-#   - Emotional damping β (Yonelinas & Ritchey 2015,
-#     Kleinsmith & Kaplan 1963; pg_schema.py:757-759)
-#   - Stage floors (Bahrick 1984 permastore, Benna & Fusi 2016;
-#     pg_schema.py:742-747)
-#   - p_factor (global decay rate per hour) = 0.95 default, matching
-#     DECAY_MEMORIES_FN.
-#
-# The function is added in step 2 of A3 but is NOT yet called from
-# recall_memories() — that happens in step 6 under the
-# CORTEX_MEMORY_A3_LAZY_HEAT flag (default false). Until the flag flips,
-# this function is unused; it can be dropped via rollback SQL without
-# disturbing any read path.
+# Preserved semantics:
+#   - Stage-dependent α (Kandel 2001)
+#   - Emotional damping β (Yonelinas & Ritchey 2015, Kleinsmith & Kaplan 1963)
+#   - Stage floors (Bahrick 1984 permastore, Benna & Fusi 2016)
+#   - p_factor (global decay rate per hour) = 0.95 default
 
 EFFECTIVE_HEAT_FN = """
 CREATE OR REPLACE FUNCTION effective_heat(
@@ -903,13 +631,11 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
 """
 
-# ── PL/pgSQL: recall_memories_lazy (A3 lazy-heat read path) ──────────────
+# ── PL/pgSQL: recall_memories (A3 lazy-heat canonical read path) ─────────
 #
 # Source: docs/program/phase-3-a3-migration-design.md §4.
 #
-# Drop-in replacement for RECALL_MEMORIES_FN above. Identical signature +
-# output columns so Python callers need no changes. The body:
-#
+# Body:
 # 1. Fetches per-domain homeostatic factor via LEFT JOIN with default 1.0.
 # 2. Pre-filters a `candidates` CTE by heat_base >= p_min_heat / factor —
 #    monotonic threshold transform so idx_memories_*_heat_base stays
@@ -919,12 +645,12 @@ $$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
 # 5. Final SELECT returns `effective_heat(...)` as the `heat` output so
 #    downstream Python sees the same schema.
 #
-# Benchmark regression gate (spec §8): LongMemEval R@10 ≥ 97.8%,
-# LoCoMo R@10 ≥ 92.6%, BEAM ≥ 0.543. Because effective_heat() preserves
-# the order relation used by the hot CTE (positive factor + monotonic
-# decay curve), the top-N hot memories remain the same on fresh stores
-# where factor=1.0 and all memories have hours_elapsed=0 (benchmark
-# fixtures load memories with synthetic timestamps).
+# Benchmark regression gate: LongMemEval R@10 ≥ 97.8%, LoCoMo R@10 ≥ 92.6%,
+# BEAM ≥ 0.543 (scores from v3.11 pre-scalability baseline, README.md).
+# Because effective_heat() preserves the order relation used by the hot
+# CTE (positive factor + monotonic decay curve), the top-N hot memories
+# remain the same on fresh stores where factor=1.0 and all memories have
+# hours_elapsed=0 (benchmark fixtures load memories with synthetic timestamps).
 
 RECALL_MEMORIES_LAZY_FN = """
 DROP FUNCTION IF EXISTS recall_memories(
@@ -977,9 +703,9 @@ DECLARE
     v_min_heat_base REAL;
 BEGIN
     -- Resolve the homeostatic factor for this domain (1.0 default).
-    SELECT COALESCE(MAX(factor), 1.0) INTO v_factor
-    FROM homeostatic_state
-    WHERE domain = COALESCE(p_domain, '');
+    SELECT COALESCE(MAX(hs.factor), 1.0) INTO v_factor
+    FROM homeostatic_state hs
+    WHERE hs.domain = COALESCE(p_domain, '');
 
     -- Prefilter threshold: heat_base >= p_min_heat / factor is the
     -- monotonic transform that preserves ordering (Zhuangzi: positive
@@ -1241,7 +967,7 @@ BEGIN
         JOIN entities e ON e.id = ea.eid
         JOIN memories m
             ON m.content_tsv @@ phraseto_tsquery('english', e.name)
-        WHERE m.heat >= p_min_heat AND NOT m.is_stale
+        WHERE m.heat_base >= p_min_heat AND NOT m.is_stale
     )
     -- Return max activation per memory (entity with strongest path wins)
     SELECT em.mid, MAX(em.act)::REAL
@@ -1269,13 +995,13 @@ CREATE OR REPLACE FUNCTION get_hot_embeddings(
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT m.id, m.embedding, m.heat
+    SELECT m.id, m.embedding, effective_heat(m, NOW(), 1.0)
     FROM memories m
-    WHERE m.heat >= p_min_heat
+    WHERE m.heat_base >= p_min_heat
       AND NOT m.is_stale
       AND m.embedding IS NOT NULL
       AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
-    ORDER BY m.heat DESC
+    ORDER BY m.heat_base DESC
     LIMIT p_limit;
 END;
 $$ LANGUAGE plpgsql STABLE;
@@ -1326,6 +1052,39 @@ $$ LANGUAGE plpgsql STABLE;
 # ── Migrations ───────────────────────────────────────────────────────────
 
 MIGRATIONS_DDL = """
+-- A3 rename: heat column -> heat_base. Idempotent: only renames when
+-- the old column still exists. After rename, add heat_base_set_at +
+-- no_decay columns if missing. Source: docs/program/phase-3-a3-migration-design.md §1.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'heat'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'heat_base'
+    ) THEN
+        ALTER TABLE memories RENAME COLUMN heat TO heat_base;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'heat_base_set_at'
+    ) THEN
+        ALTER TABLE memories ADD COLUMN heat_base_set_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+        UPDATE memories SET heat_base_set_at = COALESCE(last_accessed, created_at, NOW());
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'no_decay'
+    ) THEN
+        ALTER TABLE memories ADD COLUMN no_decay BOOLEAN NOT NULL DEFAULT FALSE;
+    END IF;
+END $$;
+
 -- Add is_benchmark column (idempotent)
 DO $$
 BEGIN
@@ -1354,9 +1113,9 @@ WHERE is_benchmark = FALSE
     OR content = 'test memory for consolidation'
   );
 
--- Partial index for fast non-benchmark queries
+-- Partial index for fast non-benchmark queries (A3: heat_base ordered)
 CREATE INDEX IF NOT EXISTS idx_memories_not_benchmark
-    ON memories (heat DESC) WHERE NOT is_benchmark;
+    ON memories (heat_base DESC) WHERE NOT is_benchmark;
 
 -- Migration: add agent_context column for agent-scoped memory
 DO $$
@@ -1467,6 +1226,7 @@ def get_all_ddl() -> list[str]:
     blocks = [
         EXTENSIONS_DDL,
         MEMORIES_DDL,
+        HOMEOSTATIC_STATE_DDL,
         ENTITIES_DDL,
         RELATIONSHIPS_DDL,
         MEMORY_ENTITIES_DDL,
@@ -1474,16 +1234,16 @@ def get_all_ddl() -> list[str]:
         WIKI_TRIGGERS_DDL,
         WIKI_LINK_TRIGGER_DDL,
         SUPPORT_TABLES_DDL,
-        INDEXES_DDL,
+        # MIGRATIONS_DDL runs BEFORE INDEXES_DDL so the heat→heat_base
+        # rename lands before indexes on heat_base are created.
         MIGRATIONS_DDL,
-        RECALL_MEMORIES_FN,
-        DECAY_MEMORIES_FN,
+        INDEXES_DDL,
         EFFECTIVE_HEAT_FN,
         EFFECTIVE_HEAT_FROZEN_FN,
-        # Note: RECALL_MEMORIES_LAZY_FN replaces RECALL_MEMORIES_FN when
-        # CORTEX_MEMORY_A3_LAZY_HEAT=true AND schema has been migrated.
-        # Applied via get_a3_ddl() below; NOT included in default DDL so
-        # unmigrated deployments keep the legacy read path.
+        # A3 canonical read path: lazy effective_heat() computes decay at
+        # read time; RECALL_MEMORIES_LAZY_FN replaces the eager legacy
+        # recall_memories() + decay_memories() entirely.
+        RECALL_MEMORIES_LAZY_FN,
         SPREAD_ACTIVATION_FN,
         SPREAD_ACTIVATION_MEMORIES_FN,
         GET_HOT_EMBEDDINGS_FN,
@@ -1493,16 +1253,3 @@ def get_all_ddl() -> list[str]:
     for block in blocks:
         result.extend(_split_statements(block))
     return result
-
-
-def get_a3_ddl() -> list[str]:
-    """A3 lazy-heat DDL — replaces recall_memories with the lazy body.
-
-    Run after the schema migration SQL and ONLY when
-    CORTEX_MEMORY_A3_LAZY_HEAT=true. Superseded by the main DDL in
-    `get_all_ddl` post-migration (the RECALL_MEMORIES_LAZY_FN CREATE OR
-    REPLACE overwrites the legacy body).
-
-    Source: docs/program/phase-3-a3-migration-design.md §4, §9.
-    """
-    return _split_statements(RECALL_MEMORIES_LAZY_FN)

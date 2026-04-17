@@ -126,41 +126,22 @@ def _prime_file_memories(file_path: str) -> int:
         return 0
 
     filename = Path(file_path).name
-    # A3 writer refactor (Phase 3 step 5):
-    # Post-A3 (flag=true, schema migrated): boost heat_base and refresh
-    # heat_base_set_at. effective_heat() then reads the boost via the
-    # post-migration read path. Pre-A3: legacy heat column path.
+    # A3 canonical boost: heat_base + heat_base_set_at refresh. effective_heat()
+    # reads the boost at query time via the WRRF fusion path.
     # Source: phase-3-a3-migration-design.md §3.4.
-    from mcp_server.infrastructure.memory_config import get_memory_settings
-
-    settings = get_memory_settings()
-    a3_lazy = getattr(settings, "A3_LAZY_HEAT", False)
     try:
-        if a3_lazy:
-            result = conn.execute(
-                """
-                UPDATE memories
-                SET heat_base = LEAST(heat_base + %s, 1.0),
-                    heat_base_set_at = NOW(),
-                    last_accessed = NOW()
-                WHERE NOT is_benchmark
-                  AND heat_base < 1.0
-                  AND (content ILIKE %s OR content ILIKE %s)
-                """,
-                (_HEAT_BOOST, f"%{file_path}%", f"%{filename}%"),
-            )
-        else:
-            result = conn.execute(
-                """
-                UPDATE memories
-                SET heat = LEAST(heat + %s, 1.0),
-                    last_accessed = NOW()
-                WHERE NOT is_benchmark
-                  AND heat < 1.0
-                  AND (content ILIKE %s OR content ILIKE %s)
-                """,
-                (_HEAT_BOOST, f"%{file_path}%", f"%{filename}%"),
-            )
+        result = conn.execute(
+            """
+            UPDATE memories
+            SET heat_base = LEAST(heat_base + %s, 1.0),
+                heat_base_set_at = NOW(),
+                last_accessed = NOW()
+            WHERE NOT is_benchmark
+              AND heat_base < 1.0
+              AND (content ILIKE %s OR content ILIKE %s)
+            """,
+            (_HEAT_BOOST, f"%{file_path}%", f"%{filename}%"),
+        )
         count = result.rowcount if result else 0
     except Exception as exc:
         _log(f"prime failed: {exc}")

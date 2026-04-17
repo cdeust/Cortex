@@ -1,21 +1,40 @@
-"""Homeostatic cycle: synaptic scaling and BCM threshold updates.
+"""Homeostatic cycle: scalar factor + fold.
 
-Prevents runaway heat distributions by scaling memory heats toward a
-target mean. For bimodal distributions — typical after a batch backfill
-at baseline heat=1.0 — falls back to subtractive cohort correction
-because Turrigiano multiplicative scaling is order-preserving and
-cannot merge modes (Tetzlaff et al. 2011 Eq. 3).
+**A3 lazy-heat implementation**: heat is a *function*, not a *state vector*.
+The multiplicative scaling factor is stored as a single scalar per domain
+in ``homeostatic_state.factor`` and read by ``effective_heat()`` at query
+time:
 
-Source: issue #14 P1 — darval's v3.12.0 field report showed
-`scaling_applied: true` with `bimodality: 0.85`, recall pinned to the
-import cohort. Root cause: multiplicative scaling factor ≈ (1 ± 0.03)
-preserves relative ordering of two peaks; one cycle shifts them both
-equally and never merges them. Fix: detect bimodality, switch primitive.
+    effective_heat(m, t, factor) = LEAST(1.0, GREATEST(floor,
+        heat_base * factor * POWER(decay_factor, α·t)))
+
+One row written per cycle instead of 66K.
+
+**Fold trigger** (pre-filter fidelity): ``recall_memories()`` filters
+``heat_base >= min_heat / factor``. If ``factor`` drifts far from 1.0,
+this prefilter either admits too much (factor small) or cuts too much
+(factor large). When ``|log(factor)| > log(2.0)`` — i.e., factor
+∉ [0.5, 2.0] — we fold the scalar back into heat_base per-row (one
+batched UPDATE) and reset factor=1.0. Fold is amortized: expected once
+per month per domain under normal operation.
+
+**Bimodal branch**: subtractive cohort correction still needs per-row
+writes because subtraction on a scalar factor is not meaningful. The
+cohort UPDATE routes through ``bump_heat_raw`` (the I2 canonical writer)
+so bimodal handling preserves the single-writer invariant.
+
+References:
+    Turrigiano 2008 — multiplicative synaptic scaling (order-preserving)
+    Tetzlaff 2011 Eq. 3 — delta_w = alpha * w * (r_target - r_actual)
+    Pfister 2013 — bimodality coefficient
+    Hinton & Salakhutdinov 2006 — subtractive renormalization
+    docs/program/phase-3-a3-migration-design.md §5
 """
 
 from __future__ import annotations
 
 import logging
+import math
 
 from mcp_server.core import homeostatic_health, homeostatic_plasticity
 from mcp_server.infrastructure.memory_store import MemoryStore
@@ -38,26 +57,34 @@ _BIMODALITY_TRIGGER = 0.7
 # Homeostatic target mean (same as homeostatic_plasticity._TARGET_HEAT).
 _TARGET_HEAT = 0.4
 
+# Fold trigger: when |log(factor)| > log(2.0), the scalar has drifted
+# into prefilter-distorting territory.
+_FOLD_LOG_THRESHOLD = math.log(2.0)
+
+# Minimum mean-effective-heat before the scaling divisor is numerically
+# safe. Below this we skip the cycle rather than amplify noise.
+_MIN_SAFE_MEAN = 0.01
+
+# Per-cycle cap on the multiplicative step relative to the current factor.
+# Matches the legacy Turrigiano α=0.05 ceiling (~3% per cycle).
+_MAX_STEP = 0.03
+
 
 def run_homeostatic_cycle(
     store: MemoryStore,
     memories: list[dict] | None = None,
 ) -> dict:
-    """Apply the appropriate homeostatic primitive for the current distribution.
+    """Update the domain's homeostatic factor; fold if drift is too large.
 
-    Returns a dict with at least:
-      - scaling_applied: bool   (backward compat; True iff heats changed)
-      - scaling_kind: "none" | "multiplicative" | "cohort_correction"
-      - health_score: float | None
-      - bimodality_before: float
-      - bimodality_after: float | None  (only when cohort_correction ran)
-      - cohort_size: int | None         (only when cohort_correction ran)
+    Branching:
+      1. healthy AND unimodal → no-op
+      2. bimodal → cohort correction (per-row writes via bump_heat_raw)
+      3. off-target → scalar factor update, fold if drift > log(2.0)
 
-    See issue #14 and #13 for motivation: multiplicative scaling cannot
-    flatten the sharp peak produced by bulk backfills at baseline heat=1.0;
-    detect that case via bimodality coefficient and switch primitives.
-    Surfaces failures explicitly (same contract as pre-#14) — previous
-    versions silently swallowed exceptions with logger.debug.
+    Returns:
+        scaling_applied: bool
+        scaling_kind: "none" | "cohort_correction" | "scalar_update" | "fold"
+        health_score, mean_heat, std_heat, bimodality, memories_scanned
     """
     try:
         if memories is None:
@@ -77,22 +104,8 @@ def run_homeostatic_cycle(
             target_mean=_TARGET_HEAT,
         )
 
-        outcome = _maybe_apply_scaling(store, memories, heats, health)
-
-        # Diagnostic: cohort correction ran but did not reduce bimodality.
-        # That's a signal the primitive or thresholds need tuning.
-        if (
-            outcome.get("scaling_kind") == "cohort_correction"
-            and outcome.get("bimodality_after") is not None
-            and outcome["bimodality_after"] >= outcome["bimodality_before"]
-        ):
-            logger.warning(
-                "Cohort correction did not reduce bimodality: "
-                "before=%.3f after=%.3f cohort_size=%s",
-                outcome["bimodality_before"],
-                outcome["bimodality_after"],
-                outcome.get("cohort_size"),
-            )
+        outcome = _dispatch(store, memories, heats, health)
+        _log_diagnostics(outcome)
 
         return {
             **outcome,
@@ -112,36 +125,150 @@ def run_homeostatic_cycle(
         }
 
 
-def _apply_multiplicative(
+def _dispatch(
     store: MemoryStore,
     memories: list[dict],
     heats: list[float],
-    mean: float,
-    bimodality: float,
+    health: dict,
 ) -> dict:
-    """Classic Turrigiano scaling path. Unimodal, unhealthy distributions."""
-    factor = homeostatic_plasticity.compute_scaling_factor(
-        mean, target_heat=_TARGET_HEAT
-    )
-    if abs(factor - 1.0) <= 0.005:
+    """Pick the right primitive given distribution health."""
+    bimodality = health["bimodality_coefficient"]
+    mean = health["mean"]
+    std = health["std"]
+
+    if health["health_score"] >= 0.6 and bimodality <= _BIMODALITY_TRIGGER:
         return {
             "scaling_applied": False,
             "scaling_kind": "none",
             "bimodality_before": bimodality,
             "bimodality_after": None,
         }
-    scaled = homeostatic_plasticity.apply_synaptic_scaling(heats, factor)
-    # TODO(A3): lazy heat eliminates this per-row write
-    for mem, new_heat in zip(memories, scaled):
-        if abs(new_heat - mem.get("heat", 0)) > 0.001:
-            store.update_memory_heat(mem["id"], round(new_heat, 4))
+
+    if bimodality > _BIMODALITY_TRIGGER:
+        return _apply_cohort(store, memories, heats, mean, std, bimodality)
+
+    return _apply_scalar(store, memories, mean, bimodality)
+
+
+# ── Scalar + fold ────────────────────────────────────────────────────────
+
+
+def _apply_scalar(
+    store: MemoryStore,
+    memories: list[dict],
+    mean: float,
+    bimodality: float,
+) -> dict:
+    """One UPDATE on homeostatic_state.factor + optional fold.
+
+    Replaces the legacy N-row Turrigiano UPDATE with one scalar write.
+    Fold (factor ∉ [0.5, 2.0]) writes heat_base per-row and resets
+    factor=1.0 — expected ~once/month per domain.
+    """
+    if mean <= _MIN_SAFE_MEAN:
+        return {
+            "scaling_applied": False,
+            "scaling_kind": "none",
+            "bimodality_before": bimodality,
+            "bimodality_after": None,
+            "reason_for_zero": "mean_below_safety_floor",
+        }
+
+    domain = _dominant_domain(memories)
+    factor_old = _safe_get_factor(store, domain)
+    factor_new = factor_old * (_TARGET_HEAT / mean)
+    factor_new = _clamp_step(factor_old, factor_new, max_step=_MAX_STEP)
+
+    if abs(factor_new - factor_old) <= 0.005 * max(factor_old, 1e-6):
+        return {
+            "scaling_applied": False,
+            "scaling_kind": "none",
+            "bimodality_before": bimodality,
+            "bimodality_after": None,
+            "reason_for_zero": "factor_stable",
+            "factor": round(factor_old, 4),
+        }
+
+    if _fold_triggered(factor_new):
+        folded = _apply_fold(store, domain, factor_new)
+        return {
+            "scaling_applied": True,
+            "scaling_kind": "fold",
+            "bimodality_before": bimodality,
+            "bimodality_after": None,
+            "factor_pre_fold": round(factor_new, 4),
+            "rows_folded": folded,
+        }
+
+    store.set_homeostatic_factor(domain, factor_new)
     return {
         "scaling_applied": True,
-        "scaling_kind": "multiplicative",
+        "scaling_kind": "scalar_update",
         "bimodality_before": bimodality,
         "bimodality_after": None,
-        "scaling_factor": round(factor, 4),
+        "factor": round(factor_new, 4),
+        "factor_delta": round(factor_new - factor_old, 4),
     }
+
+
+def _fold_triggered(factor: float) -> bool:
+    """Fold when |log(factor)| > log(2.0) — factor ∉ [0.5, 2.0]."""
+    if factor <= 0.0:
+        return False
+    return abs(math.log(factor)) > _FOLD_LOG_THRESHOLD
+
+
+def _apply_fold(store: MemoryStore, domain: str, factor: float) -> int:
+    """Multiply heat_base by factor, reset homeostatic_state.factor=1.0.
+
+    Writes are bounded by the domain partition, skip protected/no_decay/stale.
+    Amortized once per month per domain under normal operation.
+    """
+    result = store._conn.execute(
+        "UPDATE memories "
+        "SET heat_base = LEAST(1.0, GREATEST(0.0, heat_base * %s)), "
+        "    heat_base_set_at = NOW() "
+        "WHERE domain = %s "
+        "  AND NOT is_protected "
+        "  AND NOT no_decay "
+        "  AND NOT is_stale",
+        (float(factor), domain or ""),
+    )
+    rows = int(getattr(result, "rowcount", 0) or 0)
+    store.set_homeostatic_factor(domain, 1.0)
+    store._conn.commit()
+    return rows
+
+
+def _dominant_domain(memories: list[dict]) -> str:
+    """Pick the most-frequent domain as the scaling key."""
+    counts: dict[str, int] = {}
+    for mem in memories:
+        d = mem.get("domain") or ""
+        counts[d] = counts.get(d, 0) + 1
+    if not counts:
+        return ""
+    return max(counts.items(), key=lambda kv: kv[1])[0]
+
+
+def _safe_get_factor(store: MemoryStore, domain: str) -> float:
+    try:
+        return float(store.get_homeostatic_factor(domain))
+    except Exception as exc:
+        logger.debug("get_homeostatic_factor(%r) failed: %s", domain, exc)
+        return 1.0
+
+
+def _clamp_step(old: float, new: float, max_step: float) -> float:
+    """Cap the per-cycle multiplicative step at ±max_step relative to old."""
+    if old <= 0.0:
+        return new
+    ratio = new / old
+    ratio = max(1.0 - max_step, min(1.0 + max_step, ratio))
+    return old * ratio
+
+
+# ── Bimodal cohort path ──────────────────────────────────────────────────
 
 
 def _apply_cohort(
@@ -152,7 +279,12 @@ def _apply_cohort(
     std: float,
     bimodality: float,
 ) -> dict:
-    """Bimodal path: pull the hot cohort toward the target mean."""
+    """Bimodal path: pull the hot cohort toward target_mean.
+
+    Per-row writes route through ``bump_heat_raw`` (the I2 canonical
+    writer). Subtraction is not meaningful on a scalar factor, so this
+    branch writes heat_base directly.
+    """
     cohort_idx = homeostatic_plasticity.detect_hot_cohort(heats, mean, std)
     if not cohort_idx:
         return {
@@ -160,7 +292,7 @@ def _apply_cohort(
             "scaling_kind": "none",
             "bimodality_before": bimodality,
             "bimodality_after": None,
-            "reason": "bimodal_but_no_cohort_detected",
+            "reason_for_zero": "bimodal_but_no_cohort_detected",
         }
     scaled = homeostatic_plasticity.apply_cohort_correction(
         heats, cohort_idx, target_mean=_TARGET_HEAT
@@ -168,10 +300,9 @@ def _apply_cohort(
     after = homeostatic_health.compute_distribution_health(
         scaled, target_mean=_TARGET_HEAT
     )
-    # TODO(A3): lazy heat eliminates this per-row write
     for i, new_heat in enumerate(scaled):
         if abs(new_heat - heats[i]) > 0.001:
-            store.update_memory_heat(memories[i]["id"], round(new_heat, 4))
+            store.bump_heat_raw(memories[i]["id"], round(new_heat, 4))
     return {
         "scaling_applied": True,
         "scaling_kind": "cohort_correction",
@@ -181,35 +312,22 @@ def _apply_cohort(
     }
 
 
-def _maybe_apply_scaling(
-    store: MemoryStore,
-    memories: list[dict],
-    heats: list[float],
-    health: dict,
-) -> dict:
-    """Pick the right primitive given distribution health.
-
-    Branching:
-      1. healthy AND unimodal → no-op
-      2. bimodal → cohort correction (Turrigiano cannot merge modes)
-      3. unimodal but off-target → classic multiplicative scaling
-    """
-    bimodality = health["bimodality_coefficient"]
-    mean = health["mean"]
-    std = health["std"]
-
-    # Branch 1: healthy and unimodal — no action.
-    if health["health_score"] >= 0.6 and bimodality <= _BIMODALITY_TRIGGER:
-        return {
-            "scaling_applied": False,
-            "scaling_kind": "none",
-            "bimodality_before": bimodality,
-            "bimodality_after": None,
-        }
-
-    # Branch 2: bimodal — cohort correction.
-    if bimodality > _BIMODALITY_TRIGGER:
-        return _apply_cohort(store, memories, heats, mean, std, bimodality)
-
-    # Branch 3: unimodal but off-target — classic multiplicative scaling.
-    return _apply_multiplicative(store, memories, heats, mean, bimodality)
+def _log_diagnostics(outcome: dict) -> None:
+    if (
+        outcome.get("scaling_kind") == "cohort_correction"
+        and outcome.get("bimodality_after") is not None
+        and outcome["bimodality_after"] >= outcome["bimodality_before"]
+    ):
+        logger.warning(
+            "Cohort correction did not reduce bimodality: "
+            "before=%.3f after=%.3f cohort_size=%s",
+            outcome["bimodality_before"],
+            outcome["bimodality_after"],
+            outcome.get("cohort_size"),
+        )
+    if outcome.get("scaling_kind") == "fold":
+        logger.info(
+            "Homeostatic fold triggered: factor_pre_fold=%.4f rows_folded=%d",
+            outcome.get("factor_pre_fold", 0.0),
+            outcome.get("rows_folded", 0),
+        )

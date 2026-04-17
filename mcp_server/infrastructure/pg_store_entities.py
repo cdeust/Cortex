@@ -155,13 +155,13 @@ class PgEntityMixin:
         rows = self._execute(
             "SELECT * FROM memories "
             "WHERE content_tsv @@ phraseto_tsquery('english', %s) "
-            "ORDER BY heat DESC LIMIT %s",
+            "ORDER BY heat_base DESC LIMIT %s",
             (entity_name, limit),
         ).fetchall()
         if not rows:
             rows = self._execute(
                 "SELECT * FROM memories WHERE content ILIKE %s "
-                "AND NOT is_stale ORDER BY heat DESC LIMIT %s",
+                "AND NOT is_stale ORDER BY heat_base DESC LIMIT %s",
                 (
                     "%{}%".format(
                         entity_name.replace("\\", "\\\\")
@@ -196,7 +196,7 @@ class PgEntityMixin:
         rows = self._execute(
             "SELECT m.* FROM memories m "
             "JOIN memory_entities me ON me.memory_id = m.id "
-            "WHERE me.entity_id = %s ORDER BY m.heat DESC",
+            "WHERE me.entity_id = %s ORDER BY m.heat_base DESC",
             (entity_id,),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
