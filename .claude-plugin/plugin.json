@@ -1,7 +1,7 @@
 {
   "name": "cortex",
   "description": "Persistent memory for Claude Code — remembers across sessions automatically. Install and forget. Scientific retrieval backed by 41 published papers.",
-  "version": "3.13.1",
+  "version": "3.13.2",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"
@@ -12,8 +12,8 @@
   "keywords": ["memory", "persistent", "mcp", "claude-code", "neuroscience", "agents"],
   "mcpServers": {
     "cortex": {
-      "command": "uvx",
-      "args": ["--python", "3.13", "--from", "neuro-cortex-memory[postgresql]==3.13.1", "neuro-cortex-memory"],
+      "command": "bash",
+      "args": ["-c", "PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server"],
       "env": {
         "DATABASE_URL": "postgresql://localhost:5432/cortex",
         "CORTEX_RUNTIME": ""
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uvx --python 3.13 --from 'neuro-cortex-memory[postgresql]==3.13.1' cortex-hook session_start",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.session_start'",
             "timeout": 10
           }
         ]
@@ -37,8 +37,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uvx --python 3.13 --from 'neuro-cortex-memory[postgresql]==3.13.1' cortex-hook auto_recall",
-            "timeout": 5
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.auto_recall'",
+            "timeout": 3
           }
         ]
       }
@@ -48,13 +48,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uvx --python 3.13 --from 'neuro-cortex-memory[postgresql]==3.13.1' cortex-hook post_tool_capture",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.post_tool_capture'",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "uvx --python 3.13 --from 'neuro-cortex-memory[postgresql]==3.13.1' cortex-hook preemptive_context",
-            "timeout": 5
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.preemptive_context'",
+            "timeout": 3
           }
         ]
       }
@@ -64,7 +64,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uvx --python 3.13 --from 'neuro-cortex-memory[postgresql]==3.13.1' cortex-hook session_lifecycle",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.session_lifecycle'",
             "timeout": 30
           }
         ]
@@ -76,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uvx --python 3.13 --from 'neuro-cortex-memory[postgresql]==3.13.1' cortex-hook compaction_checkpoint",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.compaction_checkpoint'",
             "timeout": 10
           }
         ]
@@ -87,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uvx --python 3.13 --from 'neuro-cortex-memory[postgresql]==3.13.1' cortex-hook agent_briefing",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.agent_briefing'",
             "timeout": 5
           }
         ]
