@@ -41,25 +41,44 @@ def _resolve_paths() -> tuple[str, str]:
 
 
 def _ensure_deps(deps_dir: str) -> None:
-    """Install minimal dependencies if missing."""
+    """Install minimal dependencies if missing.
+
+    Phase 5: psycopg_pool is a hard import at pg_store module load, so
+    a marketplace user without it gets an ImportError before the MCP
+    server even registers its tools. Install all three packages in
+    one pip-install call when any are missing so partial states
+    (e.g., psycopg present but psycopg_pool absent after an upgrade)
+    self-heal.
+    """
     os.makedirs(deps_dir, exist_ok=True)
+    missing: list[str] = []
     try:
         import psycopg  # noqa: F401
     except ImportError:
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "-q",
-                "--target",
-                deps_dir,
-                "psycopg[binary]>=3.1",
-                "pgvector>=0.3",
-            ],
-            capture_output=True,
-        )
+        missing.append("psycopg[binary]>=3.1")
+    try:
+        import psycopg_pool  # noqa: F401
+    except ImportError:
+        missing.append("psycopg_pool>=3.2")
+    try:
+        import pgvector  # noqa: F401
+    except ImportError:
+        missing.append("pgvector>=0.3")
+    if not missing:
+        return
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "--target",
+            deps_dir,
+            *missing,
+        ],
+        capture_output=True,
+    )
 
 
 def _ensure_all_deps(deps_dir: str) -> None:

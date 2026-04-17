@@ -23,6 +23,7 @@ readiness), I10 invariant.
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Callable
@@ -47,6 +48,24 @@ def _python_version() -> Check:
         False,
         f"Python {ver.major}.{ver.minor}.{ver.micro}",
         "Upgrade Python: `uvx --python 3.13 ...` (recommended) or install 3.10+.",
+    )
+
+
+def _uvx_available() -> Check:
+    """The marketplace install path uses ``uvx`` for both the MCP server
+    and the lifecycle hooks (plugin.json). If uvx is missing, Claude
+    Code cannot start the plugin. Users who get here via pip install
+    (server deployment) don't need uvx and can ignore this warning."""
+    uvx = shutil.which("uvx")
+    if uvx:
+        return Check("uvx (marketplace install path)", True, uvx)
+    return Check(
+        "uvx (marketplace install path)",
+        False,
+        "not found on PATH",
+        "Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh` (macOS/Linux) "
+        "or `powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"` (Windows). "
+        "Not needed if you installed via pip directly.",
     )
 
 
@@ -190,6 +209,7 @@ def _i10_config() -> Check:
 
 CHECKS: list[Callable[[], Check]] = [
     _python_version,
+    _uvx_available,
     _pg_driver,
     _database_url,
     _pg_connection,
