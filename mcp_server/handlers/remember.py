@@ -226,6 +226,14 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if not args or not args.get("content"):
         return {"stored": False, "reason": "no_content"}
 
+    # Phase 7: harden user-controlled content at the ingestion boundary
+    # (NFC normalization, control/bidi strip, byte cap).
+    from mcp_server.shared.content_hardening import harden_content
+
+    args["content"] = harden_content(args["content"])
+    if not args["content"]:
+        return {"stored": False, "reason": "no_content"}
+
     (
         content,
         tags,
