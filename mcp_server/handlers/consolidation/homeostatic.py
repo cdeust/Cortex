@@ -81,6 +81,13 @@ def run_homeostatic_cycle(
       2. bimodal → cohort correction (per-row writes via bump_heat_raw)
       3. off-target → scalar factor update, fold if drift > log(2.0)
 
+    Phase 4: when the caller passes ``memories=None`` we compute the
+    health metrics via a streaming server-side cursor
+    (``store.iter_memories_for_decay``) + Welford moments. Peak memory
+    is O(chunk_size) instead of O(N) — crucial at 66K+ memory stores.
+    When the caller passes a pre-loaded list (hot-path consolidate
+    sharing one snapshot across stages), we use it directly.
+
     Returns:
         scaling_applied: bool
         scaling_kind: "none" | "cohort_correction" | "scalar_update" | "fold"
@@ -88,22 +95,38 @@ def run_homeostatic_cycle(
     """
     try:
         if memories is None:
-            memories = store.get_all_memories_for_decay()
-        if not memories:
-            return {
-                "scaling_applied": False,
-                "scaling_kind": "none",
-                "health_score": None,
-                "reason": "no_memories",
-                "memories_scanned": 0,
-            }
+            # Streaming path: compute health without materializing.
+            health, count = _streaming_health(store)
+            if count == 0:
+                return {
+                    "scaling_applied": False,
+                    "scaling_kind": "none",
+                    "health_score": None,
+                    "reason": "no_memories",
+                    "memories_scanned": 0,
+                }
+            # For dispatch we still need the memory list for the cohort
+            # branch (needs ids + per-row heats). Only materialize when
+            # bimodality triggers cohort path.
+            if health["bimodality_coefficient"] > _BIMODALITY_TRIGGER:
+                memories = store.get_all_memories_for_decay()
+            else:
+                memories = []  # not needed for scalar / no-op paths
+        else:
+            if not memories:
+                return {
+                    "scaling_applied": False,
+                    "scaling_kind": "none",
+                    "health_score": None,
+                    "reason": "no_memories",
+                    "memories_scanned": 0,
+                }
+            heats = [m.get("heat", 0.5) for m in memories]
+            health = homeostatic_health.compute_distribution_health(
+                heats, target_mean=_TARGET_HEAT
+            )
 
-        heats = [m.get("heat", 0.5) for m in memories]
-        health = homeostatic_health.compute_distribution_health(
-            heats,
-            target_mean=_TARGET_HEAT,
-        )
-
+        heats = [m.get("heat", 0.5) for m in memories] if memories else []
         outcome = _dispatch(store, memories, heats, health)
         _log_diagnostics(outcome)
 
@@ -113,7 +136,7 @@ def run_homeostatic_cycle(
             "mean_heat": health["mean"],
             "std_heat": health["std"],
             "bimodality": health["bimodality_coefficient"],
-            "memories_scanned": len(memories),
+            "memories_scanned": len(memories) if memories else -1,
         }
     except Exception as exc:
         logger.warning("Homeostatic cycle failed: %s", exc, exc_info=True)
@@ -123,6 +146,29 @@ def run_homeostatic_cycle(
             "health_score": None,
             "error": f"{type(exc).__name__}: {exc}",
         }
+
+
+def _streaming_health(store: MemoryStore) -> tuple[dict, int]:
+    """Compute distribution health via server-side cursor + Welford moments.
+
+    Uses ``store.iter_memories_for_decay`` when available (Phase 4);
+    falls back to full materialization for SQLite / test fake stores.
+    """
+    if not hasattr(store, "iter_memories_for_decay"):
+        memories = store.get_all_memories_for_decay()
+        heats = [m.get("heat", 0.5) for m in memories]
+        health = homeostatic_health.compute_distribution_health(
+            heats, target_mean=_TARGET_HEAT
+        )
+        return health, len(heats)
+
+    def _heat_chunks():
+        for chunk in store.iter_memories_for_decay():
+            yield [m.get("heat", 0.5) for m in chunk]
+
+    return homeostatic_health.compute_distribution_health_streaming(
+        _heat_chunks(), target_mean=_TARGET_HEAT
+    )
 
 
 def _dispatch(
