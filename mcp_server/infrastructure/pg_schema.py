@@ -533,27 +533,32 @@ CREATE INDEX IF NOT EXISTS idx_memories_agent_context
 #   - p_factor (global decay rate per hour) = 0.95 default
 
 EFFECTIVE_HEAT_FN = """
+-- p_factor default: 0.95 per DAY (pre-A3 DECAY_MEMORIES_FN ran ~daily,
+-- each run applied factor 0.95 once). Converted to per-hour equivalent:
+-- 0.95^(1/24) ≈ 0.99787. This preserves the macroscopic decay rate while
+-- making the function continuous in elapsed hours. Source:
+-- docs/program/phase-3-a3-migration-design.md §2.
 CREATE OR REPLACE FUNCTION effective_heat(
     m           memories,
     t_now       TIMESTAMPTZ,
     factor      REAL DEFAULT 1.0,
-    p_factor    REAL DEFAULT 0.95
+    p_factor    REAL DEFAULT 0.99787
 ) RETURNS REAL AS $$
 DECLARE
-    hours_elapsed  REAL;
-    stage_hours    REAL;
-    alpha          REAL;
-    beta           REAL;
-    stage_floor    REAL;
-    base_scaled    REAL;
-    decayed        REAL;
+    hours_elapsed  DOUBLE PRECISION;
+    stage_hours    DOUBLE PRECISION;
+    alpha          DOUBLE PRECISION;
+    beta           DOUBLE PRECISION;
+    stage_floor    DOUBLE PRECISION;
+    base_scaled    DOUBLE PRECISION;
+    decayed        DOUBLE PRECISION;
 BEGIN
     -- Pinned: protected or explicit no_decay. heat_base is authoritative;
     -- factor still applies (homeostatic contraction affects even anchors
     -- — LEAST(1.0, …) preserves I7: protected heat never exceeds its
     -- heat_base=1.0 baseline).
     IF m.is_protected OR COALESCE(m.no_decay, FALSE) THEN
-        RETURN LEAST(1.0, GREATEST(0.0, m.heat_base * factor));
+        RETURN LEAST(1.0::REAL, GREATEST(0.0::REAL, m.heat_base * factor));
     END IF;
 
     -- Hours since heat_base was last bumped (= last canonical touch).
@@ -582,9 +587,13 @@ BEGIN
 
     -- β(valence, Δt_stage) — Yonelinas & Ritchey 2015 emotional damping.
     -- source: pg_schema.py:757-759
-    -- (stage_hours is already in hours — no /3600 fold needed)
+    --
+    -- (1 - EXP(-x)) saturates to 1 for x > ~80 (EXP(-80) < 1e-34).
+    -- Cap the argument at 80 to prevent EXP underflow on rows with
+    -- stage_hours in the tens of thousands (e.g. benchmark fixtures
+    -- with multi-year timestamps).
     beta := 1.0 - 0.30 * ABS(COALESCE(m.emotional_valence, 0.0))
-                * (1.0 - EXP(-stage_hours / 1.0));
+                * (1.0 - EXP(-LEAST(stage_hours / 1.0, 80.0)));
 
     -- Stage permastore floor — Bahrick 1984 + Benna & Fusi 2016.
     -- source: pg_schema.py:742-747
@@ -599,11 +608,25 @@ BEGIN
     -- is a scalar-per-domain gain, not a per-row mutation). Then apply
     -- decay continuously across elapsed hours:
     --   POWER(p_factor, α·β)^hours = POWER(p_factor, α·β·hours)
-    base_scaled := m.heat_base * factor;
-    decayed := base_scaled * POWER(p_factor, alpha * beta * hours_elapsed);
+    --
+    -- All intermediates are DOUBLE PRECISION (float8) to avoid REAL
+    -- underflow at ~1e-38. The clamp below pins output ≥ stage_floor,
+    -- and the final cast to REAL on RETURN lands in a safe range
+    -- because POWER values < 1e-38 collapse to 0 before the cast,
+    -- and GREATEST(stage_floor, 0) lifts the value back to stage_floor.
+    base_scaled := m.heat_base::DOUBLE PRECISION * factor::DOUBLE PRECISION;
+    decayed := base_scaled * POWER(p_factor::DOUBLE PRECISION,
+                                   alpha * beta * hours_elapsed);
 
-    -- I1 + I8: structural clamp to [stage_floor, 1.0].
-    RETURN LEAST(1.0, GREATEST(stage_floor, decayed));
+    -- I1 + I8: clamp to REAL-safe range BEFORE cast. REAL (float4)
+    -- cannot represent values below ~1.2e-38 even as sub-normals —
+    -- the cast raises NumericValueOutOfRange. stage_floor may be 0
+    -- (labile), so use 1e-38 as the hard floor; downstream WRRF
+    -- fusion treats 1e-38 as functionally zero (stable rank).
+    decayed := LEAST(1.0::DOUBLE PRECISION,
+                     GREATEST(GREATEST(stage_floor, 1e-38::DOUBLE PRECISION),
+                              decayed));
+    RETURN decayed::REAL;
 END;
 $$ LANGUAGE plpgsql STABLE PARALLEL SAFE;
 """
