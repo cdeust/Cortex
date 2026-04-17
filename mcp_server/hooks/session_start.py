@@ -479,8 +479,36 @@ def _build_cold_start_message(setup_result: dict | None) -> str:
 # ── Main ─────────────────────────────────────────────────────────────────
 
 
+def _auto_wire_pipeline() -> None:
+    """Best-effort: auto-add the ai-automatised-pipeline MCP server to
+    mcp-connections.json when detected. Non-blocking; failures go to
+    stderr only.
+
+    Idempotent — once the ``codebase`` server entry exists, subsequent
+    SessionStarts leave the config alone. Users who customized their
+    config keep their customization.
+    """
+    try:
+        from mcp_server.infrastructure.pipeline_discovery import (
+            ensure_pipeline_connection,
+        )
+
+        result = ensure_pipeline_connection()
+        action = result.get("action", "unknown")
+        if action in {"wrote_config", "added_codebase"}:
+            _log(
+                f"pipeline auto-wired ({result.get('binary')}) in {result.get('path')}"
+            )
+    except Exception as exc:
+        _log(f"pipeline auto-wire skipped: {exc}")
+
+
 def main() -> None:
     """Entry point — print context block to stdout."""
+
+    # Auto-discovery runs before the PG path so users see it work even
+    # on a fresh machine without a DB set up yet.
+    _auto_wire_pipeline()
 
     # Try connecting to PostgreSQL directly first
     conn = _connect_pg()
