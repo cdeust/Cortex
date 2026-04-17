@@ -75,15 +75,28 @@ def _classify_error(exc: Exception) -> tuple[str, str]:
 async def safe_handler(
     handler_fn: Callable[..., Coroutine[Any, Any, dict]],
     args: dict[str, Any],
+    tool_name: str | None = None,
 ) -> str:
     """Call a handler and return JSON, catching errors gracefully.
+
+    When ``tool_name`` is provided, the call is gated by the per-tool
+    admission semaphore (Phase 5). This bounds concurrency so one client
+    cannot DoS a tool by hammering it. When omitted, the call runs
+    unadmitted for backward compat with the pre-Phase-5 surface —
+    registries should always pass ``tool_name`` post-v3.13.0.
 
     On success: returns json.dumps(result).
     On DB errors: returns a friendly setup guide.
     On other errors: returns error type + message (no traceback).
     """
     try:
-        result = await handler_fn(args)
+        if tool_name:
+            from mcp_server.handlers.admission import admit
+
+            async with admit(tool_name):
+                result = await handler_fn(args)
+        else:
+            result = await handler_fn(args)
         return json.dumps(result, indent=2, default=str)
     except Exception as exc:
         error_type, message = _classify_error(exc)
