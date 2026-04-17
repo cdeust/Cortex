@@ -45,6 +45,9 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     ("handlers/anchor.py", 140),
     # Preemptive boost: heat_base += 0.1 on Read/Edit/Write hook.
     ("hooks/preemptive_context.py", 136),
+    # Pipeline-impact boost: heat_base += 0.15 for symbols touched by an
+    # edit, resolved via pipeline detect_changes (PostToolUse hook).
+    ("hooks/pipeline_impact_bump.py", 167),
 }
 
 
