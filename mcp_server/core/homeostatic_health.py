@@ -243,13 +243,15 @@ def compute_distribution_health_streaming(
         #   + 4·δ·(n_a·M3_b - n_b·M3_a) / n_ab
         # Factor δ⁴/n_ab³ = delta * delta_n³.
         m4_new = (
-            m4 + m4_b
+            m4
+            + m4_b
             + delta * delta_n * delta_n2 * na_nb * (n * n - na_nb + n_b * n_b)
             + 6 * delta_n2 * (n * n * m2_b + n_b * n_b * m2)
             + 4 * delta_n * (n * m3_b - n_b * m3)
         )
         m3_new = (
-            m3 + m3_b
+            m3
+            + m3_b
             + delta * delta_n2 * na_nb * (n - n_b)
             + 3 * delta_n * (n * m2_b - n_b * m2)
         )

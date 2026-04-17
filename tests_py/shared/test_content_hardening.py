@@ -11,7 +11,6 @@ CVE-2021-42574 (Trojan Source).
 
 from __future__ import annotations
 
-import pytest
 
 from mcp_server.shared.content_hardening import CONTENT_MAX_BYTES, harden_content
 

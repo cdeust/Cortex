@@ -203,9 +203,7 @@ class PgQueryMixin:
 
     # ── Phase 2: JOIN-based entity co-access / shared-entity queries ────
 
-    def find_co_accessed_pairs(
-        self, memory_ids: list[int]
-    ) -> list[tuple[int, int]]:
+    def find_co_accessed_pairs(self, memory_ids: list[int]) -> list[tuple[int, int]]:
         """Entity pairs that co-occur in any of the sampled memories.
 
         Replaces the Python O(N_mem × N_ent) substring scan in
@@ -237,9 +235,7 @@ class PgQueryMixin:
         ).fetchall()
         return [(int(r["a"]), int(r["b"])) for r in rows]
 
-    def find_shared_entities(
-        self, memory_id: int, entity_ids: list[int]
-    ) -> list[int]:
+    def find_shared_entities(self, memory_id: int, entity_ids: list[int]) -> list[int]:
         """Entity IDs from the candidate set that are linked to this memory.
 
         Replaces the Python substring scan in

@@ -137,9 +137,7 @@ def render() -> str:
         for name in hist_names:
             lines.append(f"# TYPE {name} histogram")
             # Emit buckets per label-set in ascending upper-bound order
-            label_sets = sorted(
-                {lt for (n, lt, _) in _hist_buckets if n == name}
-            )
+            label_sets = sorted({lt for (n, lt, _) in _hist_buckets if n == name})
             for lt in label_sets:
                 # Cumulative counts (Prometheus wants cumulative, and our
                 # observe_histogram already sums up; re-assert le order).

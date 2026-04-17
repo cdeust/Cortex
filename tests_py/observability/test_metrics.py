@@ -30,9 +30,7 @@ class TestCounter:
     def test_increment_default(self):
         metrics.inc_counter("cortex_tool_calls_total", {"tool": "recall"})
         out = metrics.render()
-        assert (
-            'cortex_tool_calls_total{tool="recall"} 1' in out
-        )
+        assert 'cortex_tool_calls_total{tool="recall"} 1' in out
 
     def test_increment_multiple(self):
         metrics.inc_counter("cortex_tool_calls_total", {"tool": "recall"})
@@ -67,12 +65,8 @@ class TestHistogram:
         metrics.observe_histogram("cortex_tool_duration_seconds", 0.05)
         out = metrics.render()
         # 0.05 falls into le=0.05 and above
-        assert (
-            'cortex_tool_duration_seconds_bucket{le="0.05"} 1' in out
-        )
-        assert (
-            'cortex_tool_duration_seconds_bucket{le="+Inf"} 1' in out
-        )
+        assert 'cortex_tool_duration_seconds_bucket{le="0.05"} 1' in out
+        assert 'cortex_tool_duration_seconds_bucket{le="+Inf"} 1' in out
         assert "cortex_tool_duration_seconds_count 1" in out
 
     def test_observe_accumulates_sum(self):

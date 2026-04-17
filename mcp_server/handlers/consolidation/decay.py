@@ -86,9 +86,7 @@ def _update_metabolic_state(settings: Any, memories: list[dict]) -> None:
                 synaptic_events=len(mems),
                 hours_elapsed=1.0,
             )
-            apply_metabolic_modulation(
-                settings.DECAY_FACTOR, territory.metabolic_rate
-            )
+            apply_metabolic_modulation(settings.DECAY_FACTOR, territory.metabolic_rate)
     except Exception as exc:
         logger.debug("Metabolic observability update failed: %s", exc)
 
