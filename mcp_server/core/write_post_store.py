@@ -149,18 +149,52 @@ def _find_shared_entities(
     entity_names: list[str],
     store: Any,
 ) -> set[str]:
-    """Find which entities a memory mentions."""
-    mem_ents: set[str] = set()
-    for ename in entity_names:
-        mentioning = store.get_memories_mentioning_entity(ename, limit=50)
-        if any(m["id"] == mem_id for m in mentioning):
-            mem_ents.add(ename.lower())
-    all_entities = store.get_all_entities(min_heat=0.0)
-    for ent in all_entities:
-        mentioning = store.get_memories_mentioning_entity(ent["name"], limit=50)
-        if any(m["id"] == mem_id for m in mentioning):
-            mem_ents.add(ent["name"].lower())
-    return mem_ents
+    """Find which entities a memory mentions.
+
+    Phase 2 B2: replaces the pre-Phase-2 O(N_candidates × 50) substring
+    scan (via get_memories_mentioning_entity) with a single JOIN query
+    on memory_entities. Requires the Phase 0.4.5 backfill (I4 coverage
+    ≥ 99%); pre-backfill the JOIN would miss pairs. Falls back to the
+    empty set on any error (caller handles "no shared entities").
+
+    Source: docs/program/phase-5-pool-admission-design.md (Phase 2 B2);
+            docs/invariants/cortex-invariants.md §I4.
+    """
+    if not mem_id:
+        return set()
+
+    # Resolve both the caller-supplied names and the full entity set
+    # to IDs once. We need the full entity set because the caller
+    # is asking "which entities does this memory mention from the
+    # entire catalog", not just "from entity_names".
+    id_to_name: dict[int, str] = {}
+    try:
+        for ename in entity_names or []:
+            ent = store.get_entity_by_name(ename)
+            if ent and ent.get("id") is not None:
+                id_to_name[int(ent["id"])] = ename
+        for ent in store.get_all_entities(min_heat=0.0) or []:
+            if ent.get("id") is not None and ent.get("name"):
+                id_to_name[int(ent["id"])] = ent["name"]
+    except Exception:
+        return set()
+
+    if not id_to_name:
+        return set()
+
+    try:
+        shared_ids = store.find_shared_entities(mem_id, list(id_to_name.keys()))
+    except AttributeError:
+        # SQLite stores without the JOIN method fall back to legacy scan.
+        shared_ids = []
+        for eid, ename in id_to_name.items():
+            mentioning = store.get_memories_mentioning_entity(ename, limit=50)
+            if any(m["id"] == mem_id for m in mentioning):
+                shared_ids.append(eid)
+    except Exception:
+        return set()
+
+    return {id_to_name[eid].lower() for eid in shared_ids}
 
 
 def _hours_since_creation(iso_str: str) -> float:

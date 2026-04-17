@@ -1108,6 +1108,61 @@ BEGIN
     END IF;
 END $$;
 
+-- Phase 2 B3 migration: canonicalize co_retrieval relationships so
+-- (min(source,target), max(source,target), 'co_retrieval') is unique.
+-- Step 1: rewrite reverse-direction rows to canonical order, summing
+-- weight with the canonical-direction row if present.
+-- Step 2: delete the now-duplicate reverse rows.
+-- Step 3: add the UNIQUE constraint. Idempotent via IF NOT EXISTS.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE indexname = 'uq_relationships_canonical_co_retrieval'
+    ) THEN
+        -- Step 1+2: dedup reverse direction rows.
+        WITH canonical AS (
+            SELECT LEAST(source_entity_id, target_entity_id) AS a,
+                   GREATEST(source_entity_id, target_entity_id) AS b,
+                   relationship_type,
+                   SUM(weight) AS total_weight,
+                   MAX(facilitation) AS max_facilitation,
+                   MAX(last_reinforced) AS last_reinforced,
+                   MIN(id) AS keep_id
+            FROM relationships
+            WHERE relationship_type = 'co_retrieval'
+            GROUP BY LEAST(source_entity_id, target_entity_id),
+                     GREATEST(source_entity_id, target_entity_id),
+                     relationship_type
+        )
+        UPDATE relationships r
+        SET source_entity_id = c.a,
+            target_entity_id = c.b,
+            weight = LEAST(2.0, c.total_weight),
+            facilitation = LEAST(1.0, c.max_facilitation),
+            last_reinforced = c.last_reinforced
+        FROM canonical c
+        WHERE r.id = c.keep_id;
+
+        DELETE FROM relationships r
+        USING (
+            SELECT id, relationship_type,
+                   LEAST(source_entity_id, target_entity_id) AS a,
+                   GREATEST(source_entity_id, target_entity_id) AS b
+            FROM relationships
+            WHERE relationship_type = 'co_retrieval'
+        ) dup
+        WHERE r.id = dup.id
+          AND r.relationship_type = 'co_retrieval'
+          AND (r.source_entity_id, r.target_entity_id) <> (dup.a, dup.b);
+
+        -- Step 3: UNIQUE constraint.
+        CREATE UNIQUE INDEX uq_relationships_canonical_co_retrieval
+            ON relationships (source_entity_id, target_entity_id, relationship_type)
+            WHERE relationship_type = 'co_retrieval';
+    END IF;
+END $$;
+
 -- Add is_benchmark column (idempotent)
 DO $$
 BEGIN

@@ -137,12 +137,21 @@ class PgRelationshipMixin:
         delta_weight: float = 0.1,
         rel_type: str = "co_retrieval",
     ) -> None:
-        """Dragon Hatchling Hebbian update: co-activation strengthens edges.
+        """Dragon Hatchling Hebbian update via single UPSERT.
 
-        If relationship exists, reinforce weight + facilitation.
-        If not, resolve entity IDs and create new relationship.
+        Phase 2 B3: collapses the pre-Phase-2 three-statement pattern
+        (UPDATE fwd / UPDATE reverse / INSERT if both miss) into one
+        INSERT ... ON CONFLICT DO UPDATE. For ``co_retrieval`` (a
+        symmetric edge), ``(source_entity_id, target_entity_id)`` is
+        canonicalized via LEAST/GREATEST so the UNIQUE partial index
+        ``uq_relationships_canonical_co_retrieval`` fires correctly.
+        Non-symmetric types (``causal``, etc.) keep the directional
+        semantics and fall through the three-step legacy path because
+        no UNIQUE constraint exists for them.
+
+        Source: docs/program/phase-5-pool-admission-design.md (Phase 2
+        B3 UPSERT); pg_schema.py migration for the UNIQUE constraint.
         """
-        # Resolve entity IDs
         src = self._execute(
             "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1",
             (source_name,),
@@ -153,16 +162,33 @@ class PgRelationshipMixin:
         ).fetchone()
         if not src or not tgt:
             return
-        sid, tid = src["id"], tgt["id"]
+        sid, tid = int(src["id"]), int(tgt["id"])
         # Touch entities: update last_accessed and warm heat on co-activation.
-        # This is what makes entity decay meaningful — active entities stay warm.
         self._execute(
             "UPDATE entities SET last_accessed = NOW(), "
             "heat = LEAST(1.0, heat + 0.05) "
             "WHERE id IN (%s, %s)",
             (sid, tid),
         )
-        # Try to reinforce existing relationship
+
+        if rel_type == "co_retrieval":
+            a, b = (sid, tid) if sid <= tid else (tid, sid)
+            self._execute(
+                "INSERT INTO relationships "
+                "(source_entity_id, target_entity_id, relationship_type, "
+                " weight, facilitation, last_reinforced) "
+                "VALUES (%s, %s, %s, %s, %s, NOW()) "
+                "ON CONFLICT (source_entity_id, target_entity_id, relationship_type) "
+                "WHERE relationship_type = 'co_retrieval' "
+                "DO UPDATE SET "
+                "  weight = LEAST(2.0, relationships.weight + EXCLUDED.weight), "
+                "  facilitation = LEAST(1.0, relationships.facilitation + 0.05), "
+                "  last_reinforced = NOW()",
+                (a, b, rel_type, delta_weight, 0.05),
+            )
+            return
+
+        # Non-symmetric types — preserve directional semantics.
         updated = self._execute(
             "UPDATE relationships SET "
             "weight = LEAST(2.0, weight + %s), "
@@ -173,18 +199,6 @@ class PgRelationshipMixin:
             (delta_weight, sid, tid, rel_type),
         ).rowcount
         if not updated:
-            # Also check reverse direction
-            updated = self._execute(
-                "UPDATE relationships SET "
-                "weight = LEAST(2.0, weight + %s), "
-                "facilitation = LEAST(1.0, facilitation + 0.05), "
-                "last_reinforced = NOW() "
-                "WHERE source_entity_id = %s AND target_entity_id = %s "
-                "AND relationship_type = %s",
-                (delta_weight, tid, sid, rel_type),
-            ).rowcount
-        if not updated:
-            # Create new relationship
             self._execute(
                 "INSERT INTO relationships "
                 "(source_entity_id, target_entity_id, relationship_type, weight) "
