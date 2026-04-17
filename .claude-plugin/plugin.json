@@ -55,6 +55,11 @@
             "type": "command",
             "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.preemptive_context'",
             "timeout": 3
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.pipeline_impact_bump'",
+            "timeout": 5
           }
         ]
       }
