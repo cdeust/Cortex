@@ -903,6 +903,239 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
 """
 
+# ── PL/pgSQL: recall_memories_lazy (A3 lazy-heat read path) ──────────────
+#
+# Source: docs/program/phase-3-a3-migration-design.md §4.
+#
+# Drop-in replacement for RECALL_MEMORIES_FN above. Identical signature +
+# output columns so Python callers need no changes. The body:
+#
+# 1. Fetches per-domain homeostatic factor via LEFT JOIN with default 1.0.
+# 2. Pre-filters a `candidates` CTE by heat_base >= p_min_heat / factor —
+#    monotonic threshold transform so idx_memories_*_heat_base stays
+#    usable for the prefilter.
+# 3. Every CTE reads from `candidates` instead of `memories`.
+# 4. Every `m.heat` reference becomes `effective_heat(m, NOW(), hs.factor)`.
+# 5. Final SELECT returns `effective_heat(...)` as the `heat` output so
+#    downstream Python sees the same schema.
+#
+# Benchmark regression gate (spec §8): LongMemEval R@10 ≥ 97.8%,
+# LoCoMo R@10 ≥ 92.6%, BEAM ≥ 0.543. Because effective_heat() preserves
+# the order relation used by the hot CTE (positive factor + monotonic
+# decay curve), the top-N hot memories remain the same on fresh stores
+# where factor=1.0 and all memories have hours_elapsed=0 (benchmark
+# fixtures load memories with synthetic timestamps).
+
+RECALL_MEMORIES_LAZY_FN = """
+DROP FUNCTION IF EXISTS recall_memories(
+    TEXT, vector, TEXT, TEXT, TEXT, TEXT, REAL, INT, INT,
+    REAL, REAL, REAL, REAL, REAL, BOOLEAN
+);
+CREATE OR REPLACE FUNCTION recall_memories(
+    p_query_text    TEXT,
+    p_query_emb     vector(384),
+    p_intent        TEXT DEFAULT 'general',
+    p_domain        TEXT DEFAULT NULL,
+    p_directory     TEXT DEFAULT NULL,
+    p_agent_topic   TEXT DEFAULT NULL,
+    p_min_heat      REAL DEFAULT 0.05,
+    p_max_results   INT DEFAULT 10,
+    p_wrrf_k        INT DEFAULT 60,
+    p_w_vector      REAL DEFAULT 1.0,
+    p_w_fts         REAL DEFAULT 0.5,
+    p_w_heat        REAL DEFAULT 0.3,
+    p_w_ngram       REAL DEFAULT 0.3,
+    p_w_recency     REAL DEFAULT 0.0,
+    p_include_globals BOOLEAN DEFAULT TRUE
+) RETURNS TABLE (
+    memory_id       INT,
+    content         TEXT,
+    score           REAL,
+    heat            REAL,
+    domain          TEXT,
+    created_at      TIMESTAMPTZ,
+    store_type      TEXT,
+    tags            JSONB,
+    importance      REAL,
+    surprise_score  REAL,
+    emotional_valence REAL,
+    source          TEXT
+) AS $$
+DECLARE
+    v_pool   INT := p_max_results * 10;
+    v_factor REAL;
+    v_words  TEXT[] := regexp_split_to_array(
+        regexp_replace(lower(p_query_text), '[^a-z0-9 ]', ' ', 'g'),
+        '\\s+'
+    );
+    v_or_expr TEXT := array_to_string(
+        ARRAY(SELECT w FROM unnest(v_words) w WHERE length(w) > 1),
+        ' | '
+    );
+    v_tsq  tsquery := CASE WHEN v_or_expr = '' THEN plainto_tsquery('english', p_query_text)
+                            ELSE to_tsquery('english', v_or_expr) END;
+    v_min_heat_base REAL;
+BEGIN
+    -- Resolve the homeostatic factor for this domain (1.0 default).
+    SELECT COALESCE(MAX(factor), 1.0) INTO v_factor
+    FROM homeostatic_state
+    WHERE domain = COALESCE(p_domain, '');
+
+    -- Prefilter threshold: heat_base >= p_min_heat / factor is the
+    -- monotonic transform that preserves ordering (Zhuangzi: positive
+    -- factor preserves the order relation on heat_base). Index usable.
+    v_min_heat_base := p_min_heat / GREATEST(v_factor, 0.001);
+
+    RETURN QUERY
+    WITH
+    -- Prefilter: narrow memories by cheap heat_base threshold + stale/
+    -- domain/directory gates. All downstream CTEs read `candidates` not
+    -- `memories` — that's where the WRRF fusion signal-processing happens.
+    candidates AS (
+        SELECT m.*
+        FROM memories m
+        WHERE m.heat_base >= v_min_heat_base
+          AND NOT m.is_stale
+          AND (p_domain IS NULL
+               OR m.domain = p_domain
+               OR (p_include_globals AND m.is_global = TRUE))
+          AND (p_directory IS NULL OR m.directory_context = p_directory)
+    ),
+    -- Signal 1: Vector cosine similarity (pgvector)
+    vec AS (
+        SELECT c.id,
+               (1.0 - (c.embedding <=> p_query_emb))::REAL AS raw_score
+        FROM candidates c
+        WHERE c.embedding IS NOT NULL
+          AND effective_heat(c, NOW(), v_factor) >= p_min_heat
+        ORDER BY c.embedding <=> p_query_emb
+        LIMIT v_pool
+    ),
+    -- Signal 2: Full-text search
+    fts AS (
+        SELECT c.id,
+               ts_rank_cd(c.content_tsv, v_tsq)::REAL AS raw_score
+        FROM candidates c
+        WHERE c.content_tsv @@ v_tsq
+          AND effective_heat(c, NOW(), v_factor) >= p_min_heat
+        ORDER BY ts_rank_cd(c.content_tsv, v_tsq) DESC
+        LIMIT v_pool
+    ),
+    -- Signal 3: Trigram similarity
+    ngram AS (
+        SELECT c.id,
+               similarity(c.content, p_query_text)::REAL AS raw_score
+        FROM candidates c
+        WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
+          AND similarity(c.content, p_query_text) > 0.1
+        ORDER BY similarity(c.content, p_query_text) DESC
+        LIMIT v_pool
+    ),
+    -- Signal 4: Heat (now lazy via effective_heat). Post-A3 the hot CTE
+    -- orders by effective_heat directly; the B-tree on heat_base is still
+    -- used by the prefilter, so this is NOT a full candidates scan —
+    -- candidates is already bounded.
+    hot AS (
+        SELECT c.id,
+               effective_heat(c, NOW(), v_factor) AS raw_score
+        FROM candidates c
+        WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
+        ORDER BY effective_heat(c, NOW(), v_factor) DESC
+        LIMIT v_pool
+    ),
+    -- Signal 5: Recency via exponential decay
+    recency AS (
+        SELECT c.id,
+               EXP(-0.01 * EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 86400.0)::REAL AS raw_score
+        FROM candidates c
+        WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
+        ORDER BY c.created_at DESC
+        LIMIT v_pool
+    ),
+    -- Per-signal observed max for TMM normalization (Bruch 2023)
+    vec_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM vec),
+    fts_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM fts),
+    ng_max   AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM ngram),
+    hot_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM hot),
+    rec_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM recency),
+    fused AS (
+        SELECT id, SUM(contribution) AS fused_score
+        FROM (
+            SELECT v.id,
+                   p_w_vector * (v.raw_score - (-1.0)) / GREATEST(b.hi - (-1.0), 0.001) AS contribution
+            FROM vec v, vec_max b
+            UNION ALL
+            SELECT f.id,
+                   p_w_fts * f.raw_score / GREATEST(b.hi, 0.001)
+            FROM fts f, fts_max b
+            UNION ALL
+            SELECT n.id,
+                   p_w_ngram * n.raw_score / GREATEST(b.hi, 0.001)
+            FROM ngram n, ng_max b
+            UNION ALL
+            SELECT h.id,
+                   p_w_heat * h.raw_score / GREATEST(b.hi, 0.001)
+            FROM hot h, hot_max b
+            UNION ALL
+            SELECT r.id,
+                   p_w_recency * r.raw_score / GREATEST(b.hi, 0.001)
+            FROM recency r, rec_max b
+            WHERE p_w_recency > 0
+        ) signals
+        GROUP BY id
+    ),
+    agent_boosted AS (
+        SELECT f.id,
+               CASE WHEN p_agent_topic IS NOT NULL
+                         AND c.agent_context = p_agent_topic
+                    THEN f.fused_score + 0.3 * (p_w_vector / p_wrrf_k)
+                    ELSE f.fused_score
+               END AS boosted_score
+        FROM fused f
+        JOIN candidates c ON c.id = f.id
+    ),
+    emotional_boosted AS (
+        SELECT ab.id,
+               ab.boosted_score * (
+                   1.0 + ABS(COALESCE(c.emotional_valence, 0.0)) * 0.15
+                   * (1.0 - EXP(-EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 3600.0))
+               ) AS emo_score
+        FROM agent_boosted ab
+        JOIN candidates c ON c.id = ab.id
+    ),
+    tag_boosted AS (
+        SELECT eb.id,
+               eb.emo_score * (
+                   1.0 + CASE
+                       WHEN p_intent IN ('preference', 'instruction')
+                            AND c.tags @> to_jsonb(p_intent::TEXT)
+                       THEN 0.4
+                       ELSE 0.0
+                   END
+               ) AS final_score
+        FROM emotional_boosted eb
+        JOIN candidates c ON c.id = eb.id
+    )
+    SELECT tb.id,
+           c.content,
+           tb.final_score::REAL,
+           effective_heat(c, NOW(), v_factor)::REAL AS heat,
+           c.domain,
+           c.created_at,
+           c.store_type,
+           c.tags,
+           c.importance,
+           c.surprise_score,
+           c.emotional_valence,
+           c.source
+    FROM tag_boosted tb
+    JOIN candidates c ON c.id = tb.id
+    ORDER BY tb.final_score DESC
+    LIMIT p_max_results * 3;
+END;
+$$ LANGUAGE plpgsql STABLE;
+"""
+
 # ── PL/pgSQL: spread_activation ──────────────────────────────────────────
 
 SPREAD_ACTIVATION_FN = """
@@ -1247,6 +1480,10 @@ def get_all_ddl() -> list[str]:
         DECAY_MEMORIES_FN,
         EFFECTIVE_HEAT_FN,
         EFFECTIVE_HEAT_FROZEN_FN,
+        # Note: RECALL_MEMORIES_LAZY_FN replaces RECALL_MEMORIES_FN when
+        # CORTEX_MEMORY_A3_LAZY_HEAT=true AND schema has been migrated.
+        # Applied via get_a3_ddl() below; NOT included in default DDL so
+        # unmigrated deployments keep the legacy read path.
         SPREAD_ACTIVATION_FN,
         SPREAD_ACTIVATION_MEMORIES_FN,
         GET_HOT_EMBEDDINGS_FN,
@@ -1256,3 +1493,16 @@ def get_all_ddl() -> list[str]:
     for block in blocks:
         result.extend(_split_statements(block))
     return result
+
+
+def get_a3_ddl() -> list[str]:
+    """A3 lazy-heat DDL — replaces recall_memories with the lazy body.
+
+    Run after the schema migration SQL and ONLY when
+    CORTEX_MEMORY_A3_LAZY_HEAT=true. Superseded by the main DDL in
+    `get_all_ddl` post-migration (the RECALL_MEMORIES_LAZY_FN CREATE OR
+    REPLACE overwrites the legacy body).
+
+    Source: docs/program/phase-3-a3-migration-design.md §4, §9.
+    """
+    return _split_statements(RECALL_MEMORIES_LAZY_FN)
