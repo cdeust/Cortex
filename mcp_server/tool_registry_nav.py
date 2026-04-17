@@ -49,6 +49,7 @@ def _register_recall_hierarchical(mcp: FastMCP) -> None:
                 "min_heat": min_heat,
                 "cluster_threshold": cluster_threshold,
             },
+            tool_name="recall_hierarchical",
         )
 
 
@@ -70,6 +71,7 @@ def _register_drill_down(mcp: FastMCP) -> None:
                 "domain": domain,
                 "min_heat": min_heat,
             },
+            tool_name="drill_down",
         )
 
 
@@ -93,6 +95,7 @@ def _register_navigate_memory(mcp: FastMCP) -> None:
                 "include_2d_map": include_2d_map,
                 "window_hours": window_hours,
             },
+            tool_name="navigate_memory",
         )
 
 
@@ -118,6 +121,7 @@ def _register_get_causal_chain(mcp: FastMCP) -> None:
                 "max_depth": max_depth,
                 "direction": direction,
             },
+            tool_name="get_causal_chain",
         )
 
 
@@ -143,4 +147,5 @@ def _register_detect_gaps(mcp: FastMCP) -> None:
                 "include_temporal_gaps": include_temporal_gaps,
                 "stale_threshold_days": stale_threshold_days,
             },
+            tool_name="detect_gaps",
         )

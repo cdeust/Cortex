@@ -3,16 +3,23 @@
 Wraps handler exceptions so users never see raw Python tracebacks.
 Database connection errors get a helpful setup guide instead.
 
+Phase 5 adds two transparent safety nets on top of error handling:
+  * per-tool admission semaphore (Phase 5 step 5)
+  * asyncio.to_thread offload so handler bodies (which call sync
+    DB methods) run on a worker thread instead of blocking the event
+    loop
+
 Usage in tool registries:
     from mcp_server.tool_error_handler import safe_handler
 
     async def tool_remember(...) -> str:
-        result = await safe_handler(remember.handler, {...})
+        result = await safe_handler(remember.handler, {...}, tool_name="remember")
         return result
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Callable, Coroutine
 
@@ -72,6 +79,30 @@ def _classify_error(exc: Exception) -> tuple[str, str]:
     return type(exc).__name__, str(exc)
 
 
+def _run_coroutine_on_thread(
+    handler_fn: Callable[..., Coroutine[Any, Any, dict]],
+    args: dict[str, Any],
+) -> dict:
+    """Run an async handler's coroutine on a fresh event loop in a worker thread.
+
+    Used by ``safe_handler`` under ``asyncio.to_thread`` to give real
+    parallelism when the handler body is effectively synchronous
+    (calls sync store methods inside an ``async def``).
+
+    Each worker thread gets its own event loop; no cross-thread loop
+    sharing. The loop is closed at the end so thread reuse doesn't
+    carry over state.
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(handler_fn(args))
+    finally:
+        try:
+            loop.close()
+        except Exception:
+            pass
+
+
 async def safe_handler(
     handler_fn: Callable[..., Coroutine[Any, Any, dict]],
     args: dict[str, Any],
@@ -79,11 +110,19 @@ async def safe_handler(
 ) -> str:
     """Call a handler and return JSON, catching errors gracefully.
 
-    When ``tool_name`` is provided, the call is gated by the per-tool
-    admission semaphore (Phase 5). This bounds concurrency so one client
-    cannot DoS a tool by hammering it. When omitted, the call runs
-    unadmitted for backward compat with the pre-Phase-5 surface —
-    registries should always pass ``tool_name`` post-v3.13.0.
+    When ``tool_name`` is provided:
+      * The call is gated by the per-tool admission semaphore (Phase 5
+        step 5). Bounds concurrency so one client cannot DoS a tool by
+        hammering it.
+      * The handler runs on a worker thread via ``asyncio.to_thread``
+        (Phase 5 step 4). The handler body — which calls sync DB
+        methods — no longer blocks the event loop, and two concurrent
+        tool invocations genuinely run in parallel (the pool gives each
+        worker its own DB connection).
+
+    When ``tool_name`` is omitted the call runs in-line on the caller's
+    event loop without admission (backward-compat for code paths not
+    yet migrated).
 
     On success: returns json.dumps(result).
     On DB errors: returns a friendly setup guide.
@@ -94,7 +133,9 @@ async def safe_handler(
             from mcp_server.handlers.admission import admit
 
             async with admit(tool_name):
-                result = await handler_fn(args)
+                result = await asyncio.to_thread(
+                    _run_coroutine_on_thread, handler_fn, args
+                )
         else:
             result = await handler_fn(args)
         return json.dumps(result, indent=2, default=str)

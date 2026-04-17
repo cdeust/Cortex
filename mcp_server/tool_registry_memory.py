@@ -56,6 +56,7 @@ def _register_remember(mcp: FastMCP) -> None:
                 "force": force,
                 "agent_topic": agent_topic or "",
             },
+            tool_name="remember",
         )
 
 
@@ -83,6 +84,7 @@ def _register_recall(mcp: FastMCP) -> None:
                 "min_heat": min_heat,
                 "agent_topic": agent_topic,
             },
+            tool_name="recall",
         )
 
 
@@ -93,7 +95,7 @@ def _register_memory_stats(mcp: FastMCP) -> None:
     )
     async def tool_memory_stats() -> str:
         """Memory system diagnostics."""
-        return await safe_handler(memory_stats.handler, {})
+        return await safe_handler(memory_stats.handler, {}, tool_name="memory_stats")
 
 
 def _register_checkpoint(mcp: FastMCP) -> None:
@@ -128,6 +130,7 @@ def _register_checkpoint(mcp: FastMCP) -> None:
                 "custom_context": custom_context or "",
                 "session_id": session_id or "default",
             },
+            tool_name="checkpoint",
         )
 
 
@@ -149,6 +152,7 @@ def _register_narrative(mcp: FastMCP) -> None:
                 "domain": domain,
                 "brief": brief,
             },
+            tool_name="narrative",
         )
 
 
@@ -174,6 +178,7 @@ def _register_consolidate(mcp: FastMCP) -> None:
                 "memify": memify,
                 "deep": deep,
             },
+            tool_name="consolidate",
         )
 
 
@@ -204,4 +209,5 @@ def _register_import_sessions(mcp: FastMCP) -> None:
                 "max_sessions": max_sessions,
                 "dry_run": dry_run,
             },
+            tool_name="import_sessions",
         )
