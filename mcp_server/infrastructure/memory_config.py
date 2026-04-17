@@ -138,18 +138,34 @@ class MemorySettings(BaseSettings):
     EMBEDDING_DEVICE: str = "cpu"  # "cpu" | "auto" | "cuda" | "mps"
 
     # ── A3 lazy-heat (Phase 3 Scalability Program, v3.13.0) ───────────────
-    # When true, reads go through effective_heat() PL/pgSQL function and
-    # writes go through store.bump_heat_raw() canonical helper. When false,
-    # the pre-A3 eager decay + per-row heat UPDATE pattern is preserved as
-    # a kill-switch rollback path.
+    # Kill-switch for the A3 refactor. After the main refactor landed,
+    # the Python layer assumes heat_base unconditionally — this flag is
+    # reserved for a future DDL-level swap of effective_heat() to
+    # effective_heat_frozen() per design doc §9. Kept on the settings
+    # object for forward compat with tests that still reference it.
+    A3_LAZY_HEAT: bool = True
+
+    # ── Phase 5: ConnectionPool latency classes ───────────────────────────
+    # Source: docs/program/phase-5-pool-admission-design.md §1.1.
     #
-    # Default flips to true once step 9 of the A3 migration passes the
-    # benchmark regression gate (LongMemEval R@10 ≥ 97.8%, LoCoMo R@10 ≥
-    # 92.6%, BEAM ≥ 0.543). Until then: false so the schema migration can
-    # land without changing runtime behaviour.
-    #
-    # Source: docs/program/phase-3-a3-migration-design.md §9.
-    A3_LAZY_HEAT: bool = False
+    # Interactive pool — hot path (recall, remember, anchor, etc.). Sized
+    # for concurrent MCP tool invocations. min=2 keeps two connections
+    # warm; max=8 ≥ cycle-workers + 1 satisfies invariant I10.
+    POOL_INTERACTIVE_MIN: int = 2
+    POOL_INTERACTIVE_MAX: int = 8
+    POOL_INTERACTIVE_TIMEOUT_S: float = 5.0
+
+    # Batch pool — long-running writers (consolidate, seed_project,
+    # wiki_pipeline, ingest_*). Separate resource so batch jobs cannot
+    # starve interactive calls.
+    POOL_BATCH_MIN: int = 1
+    POOL_BATCH_MAX: int = 2
+    POOL_BATCH_TIMEOUT_S: float = 1800.0  # 30 min — consolidate can run this long
+
+    # Emergency kill switch: if true, pools are bypassed and every
+    # `pool.connection()` returns a single shared connection (pre-Phase-5
+    # behavior). Default false post-merge.
+    POOL_DISABLED: bool = False
 
     model_config = {"env_prefix": "CORTEX_MEMORY_"}
 
