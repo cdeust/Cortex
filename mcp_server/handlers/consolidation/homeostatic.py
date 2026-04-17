@@ -347,15 +347,32 @@ def _apply_cohort(
     after = homeostatic_health.compute_distribution_health(
         scaled, target_mean=_TARGET_HEAT
     )
+
+    # Darval O1 instrumentation: report per-row heat movement so
+    # operators can see that cohort_correction DID pull rows down,
+    # even when bimodality (a global shape metric) barely moves.
+    # The bimodality metric is slow-converging; retrieval ranking cares
+    # about per-row heat, which heat_delta_* measures directly.
+    deltas_abs: list[float] = []
+    writes = 0
     for i, new_heat in enumerate(scaled):
-        if abs(new_heat - heats[i]) > 0.001:
+        delta = new_heat - heats[i]
+        if abs(delta) > 0.001:
             store.bump_heat_raw(memories[i]["id"], round(new_heat, 4))
+            writes += 1
+        if i in set(cohort_idx):
+            deltas_abs.append(abs(delta))
+    mean_delta = sum(deltas_abs) / max(len(deltas_abs), 1)
+    max_delta = max(deltas_abs) if deltas_abs else 0.0
     return {
         "scaling_applied": True,
         "scaling_kind": "cohort_correction",
         "bimodality_before": bimodality,
         "bimodality_after": after["bimodality_coefficient"],
         "cohort_size": len(cohort_idx),
+        "cohort_mean_heat_delta": round(mean_delta, 4),
+        "cohort_max_heat_delta": round(max_delta, 4),
+        "cohort_rows_written": writes,
     }
 
 
