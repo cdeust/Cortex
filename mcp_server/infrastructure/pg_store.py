@@ -50,6 +50,49 @@ def _get_database_url() -> str:
     return url
 
 
+class _MaterializedCursor:
+    """Lightweight cursor surrogate that pre-fetches rows.
+
+    Phase 5: connections are checked out from the pool per query and
+    returned at the end of ``_execute``. The original ``psycopg.Cursor``
+    becomes unusable once the connection is returned to the pool, so we
+    eagerly read all rows into memory here and expose the subset of the
+    Cursor API that production code actually uses: ``fetchone``,
+    ``fetchall``, and ``rowcount``.
+    """
+
+    __slots__ = ("_rows", "_idx", "_rowcount")
+
+    def __init__(self, cursor: psycopg.Cursor) -> None:
+        self._rowcount = cursor.rowcount
+        try:
+            self._rows = cursor.fetchall()
+        except (psycopg.ProgrammingError, TypeError):
+            # DDL / DML statements without a result set — fetchall raises.
+            self._rows = []
+        self._idx = 0
+
+    def fetchone(self) -> dict | None:
+        if self._idx >= len(self._rows):
+            return None
+        row = self._rows[self._idx]
+        self._idx += 1
+        return row
+
+    def fetchall(self) -> list:
+        remaining = self._rows[self._idx :]
+        self._idx = len(self._rows)
+        return remaining
+
+    @property
+    def rowcount(self) -> int:
+        return self._rowcount
+
+    def __iter__(self):
+        while (row := self.fetchone()) is not None:
+            yield row
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -200,23 +243,58 @@ class PgMemoryStore(
     ) -> psycopg.Cursor:
         """Execute a query with stale-plan recovery and reconnection.
 
+        Phase 5: borrows a connection from ``interactive_pool`` for each
+        call so concurrent ``asyncio.to_thread`` workers are safe. Because
+        the returned cursor's ``fetch*`` must complete before the
+        connection is returned to the pool, we read all rows eagerly
+        into an in-memory cursor surrogate.
+
         On 'cached plan must not change result type' (FeatureNotSupported):
-        deallocates all prepared statements and retries once.
-        On connection errors: reconnects and retries once.
+        deallocates all prepared statements on the pool connection and
+        retries once.
+        On connection errors: recycles the pool connection and retries.
+
+        When ``POOL_DISABLED`` is set (kill switch), falls back to the
+        persistent ``_conn`` — pre-Phase-5 behavior.
+        """
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        if get_memory_settings().POOL_DISABLED:
+            return self._execute_on_conn(self._conn, query, params, **kwargs)
+
+        with self.interactive_pool.connection() as conn:
+            return self._execute_on_conn(conn, query, params, **kwargs)
+
+    def _execute_on_conn(
+        self,
+        conn: psycopg.Connection,
+        query: str | psycopg.sql.Composable,
+        params: Any,
+        **kwargs: Any,
+    ) -> psycopg.Cursor:
+        """Run a query on a given connection with retry-on-stale-plan.
+
+        Returns a materialized cursor (rows pre-fetched) so callers can
+        keep using .fetchone() / .fetchall() after the connection is
+        returned to the pool.
         """
         try:
-            return self._conn.execute(query, params, **kwargs)
+            cur = conn.execute(query, params, **kwargs)
         except psycopg.errors.FeatureNotSupported:
-            # Stale prepared statement — invalidate all and retry
             logger.info("Stale prepared plan detected, deallocating and retrying")
-            self._conn.rollback()
-            self._deallocate_all()
-            return self._conn.execute(query, params, **kwargs)
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            try:
+                conn.execute("DEALLOCATE ALL")
+            except Exception:
+                pass
+            cur = conn.execute(query, params, **kwargs)
         except psycopg.OperationalError:
-            # Connection lost — reconnect and retry
-            logger.warning("Database connection lost, reconnecting")
-            self._reconnect()
-            return self._conn.execute(query, params, **kwargs)
+            logger.warning("Database connection lost on pool checkout, retrying")
+            cur = conn.execute(query, params, **kwargs)
+        return _MaterializedCursor(cur)
 
     def _init_schema(self) -> None:
         """Create all tables, indexes, and stored procedures.
