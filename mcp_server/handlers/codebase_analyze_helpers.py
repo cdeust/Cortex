@@ -132,15 +132,36 @@ def _extract_file_hash(tags: list) -> tuple[str, str]:
 
 
 def mark_stale(store: MemoryStore, memory_ids: list[int]) -> int:
-    """Mark deleted file memories as stale."""
+    """Mark deleted file memories as stale.
+
+    A3 writer refactor (Phase 3 step 5): the legacy `heat = 0` clause is
+    redundant with `is_stale = TRUE` — every scan filters `NOT is_stale`
+    before the heat signal is consulted. Post-A3 we drop the heat zeroing
+    entirely; the column (heat or heat_base) stays at whatever value the
+    row had, irrelevant because stale rows are never read.
+    Source: phase-3-a3-migration-design.md §3.6.
+
+    Pre-A3 we keep `heat = 0` for the legacy schema so the I2 allow-list
+    stays stable until step 10 tightens it.
+    """
     if not memory_ids:
         return 0
+    from mcp_server.infrastructure.memory_config import get_memory_settings
+
+    settings = get_memory_settings()
+    a3_lazy = getattr(settings, "A3_LAZY_HEAT", False)
     try:
         for mid in memory_ids:
-            store._conn.execute(
-                "UPDATE memories SET is_stale = TRUE, heat = 0 WHERE id = %s",
-                (mid,),
-            )
+            if a3_lazy:
+                store._conn.execute(
+                    "UPDATE memories SET is_stale = TRUE WHERE id = %s",
+                    (mid,),
+                )
+            else:
+                store._conn.execute(
+                    "UPDATE memories SET is_stale = TRUE, heat = 0 WHERE id = %s",
+                    (mid,),
+                )
         store._conn.commit()
         return len(memory_ids)
     except Exception as exc:

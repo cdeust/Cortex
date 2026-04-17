@@ -39,33 +39,32 @@ _MCP_ROOT = _REPO_ROOT / "mcp_server"
 #   (a) route through the canonical helper, OR
 #   (b) be added here with a source-commented ADR justification.
 _ALLOWED_WRITERS: set[tuple[str, int]] = {
-    # Pre-A3 per-row writer (dispatches to bump_heat_raw when A3 flag on).
-    # Line moved 237 → 257 in a3-step-4 when bump_heat_raw was added.
+    # Pre-A3 per-row writer (dispatches to bump_heat_raw when flag=true).
     ("infrastructure/pg_store.py", 257),
-    # A3 canonical heat_base writer (bump_heat_raw). Post-A3 this is
-    # the ONE allowed site — all other writers will route through here.
+    # A3 canonical heat_base writer (bump_heat_raw) — the ONE post-A3
+    # site once step 10 collapses the allow-list.
     ("infrastructure/pg_store.py", 277),
-    # Pre-A3 batch UNNEST writer (deleted in a3-step-5).
-    # Line moved 255 → 336 after bump_heat_raw + get/set_homeostatic_factor added.
+    # Pre-A3 batch UNNEST writer — deleted in a3-step-8 (homeostatic rewrite).
     ("infrastructure/pg_store.py", 336),
-    # Anchor handler — sets heat=1.0 + is_protected=true for anchored memories.
-    ("handlers/anchor.py", 134),
-    # Preemptive context — +0.05 boost on citation (additive semantics,
-    # incompatible with pure multiplicative A3 factor; refactored in A3).
-    ("hooks/preemptive_context.py", 135),
-    # Decay SQL — bulk decay UPDATE inside decay_memories() PL/pgSQL
-    # function. Deleted in A3 when decay becomes lazy-evaluated.
+    # Anchor handler, A3-branch (heat_base + no_decay post-migration).
+    ("handlers/anchor.py", 145),
+    # Anchor handler, legacy branch (heat column pre-migration).
+    ("handlers/anchor.py", 152),
+    # Preemptive context, A3-branch (heat_base + heat_base_set_at).
+    ("hooks/preemptive_context.py", 143),
+    # Preemptive context, legacy branch (heat column).
+    ("hooks/preemptive_context.py", 156),
+    # Decay SQL inside DECAY_MEMORIES_FN. Deleted in a3-step-7.
     ("infrastructure/pg_schema.py", 739),
-    # Codebase-analyze stale marker — combined is_stale=TRUE + heat=0
-    # for deleted source files. Acceptable pre-A3; post-A3 routes through
-    # store.mark_memory_stale() which sets heat via canonical helper.
-    # Line moved 111 → 141 in v3.13.0 Phase 1 E6 (islice rglob refactor).
-    ("handlers/codebase_analyze_helpers.py", 141),
-    # SQLite fallback backend mirrors the Postgres per-row and batch writers.
-    # Sibling of pg_store.py:237, 255 — kept in lock-step by the backend
-    # abstraction contract.
-    ("infrastructure/sqlite_store.py", 214),
-    ("infrastructure/sqlite_store.py", 230),
+    # Codebase-analyze stale marker, legacy branch only (A3 drops
+    # the heat=0 clause as redundant with is_stale=TRUE).
+    ("handlers/codebase_analyze_helpers.py", 162),
+    # SQLite fallback backend mirrors the Postgres writers.
+    # Line numbers shifted (214→224, 230→235) when bump_heat_raw +
+    # get/set_homeostatic_factor were added for A3 parity.
+    ("infrastructure/sqlite_store.py", 224),  # update_memory_heat legacy
+    ("infrastructure/sqlite_store.py", 235),  # bump_heat_raw (A3 canonical)
+    ("infrastructure/sqlite_store.py", 279),  # update_memories_heat_batch legacy
 }
 
 

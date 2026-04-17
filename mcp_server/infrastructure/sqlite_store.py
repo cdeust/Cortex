@@ -210,8 +210,57 @@ class SqliteMemoryStore(
         return self._normalize_memory_row(row)
 
     def update_memory_heat(self, memory_id: int, heat: float) -> None:
+        """Pre-A3 heat writer. Post-A3 dispatches to bump_heat_raw.
+
+        SQLite parity with PgMemoryStore.update_memory_heat. See
+        phase-3-a3-migration-design.md §3.7.
+        """
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        settings = get_memory_settings()
+        if getattr(settings, "A3_LAZY_HEAT", False):
+            return self.bump_heat_raw(memory_id, heat)
         self._conn.execute(
             "UPDATE memories SET heat = ? WHERE id = ?", (heat, memory_id)
+        )
+        self._conn.commit()
+
+    def bump_heat_raw(self, memory_id: int, new_heat_base: float) -> None:
+        """A3 canonical writer on memories.heat_base (SQLite parity).
+
+        Mirrors PgMemoryStore.bump_heat_raw. Defensive clamp to [0, 1].
+        """
+        clamped = max(0.0, min(1.0, float(new_heat_base)))
+        self._conn.execute(
+            "UPDATE memories SET heat_base = ?, heat_base_set_at = CURRENT_TIMESTAMP "
+            "WHERE id = ?",
+            (clamped, memory_id),
+        )
+        self._conn.commit()
+
+    def get_homeostatic_factor(self, domain: str) -> float:
+        """SQLite parity: default 1.0 when no row exists."""
+        row = self._conn.execute(
+            "SELECT COALESCE(MAX(factor), 1.0) AS factor "
+            "FROM homeostatic_state WHERE domain = ?",
+            (domain or "",),
+        ).fetchone()
+        if row is None:
+            return 1.0
+        try:
+            return float(row["factor"] if hasattr(row, "__getitem__") else row[0])
+        except (KeyError, TypeError, IndexError):
+            return 1.0
+
+    def set_homeostatic_factor(self, domain: str, factor: float) -> None:
+        """SQLite parity UPSERT on homeostatic_state."""
+        clamped = max(0.01, min(9.99, float(factor)))
+        self._conn.execute(
+            "INSERT INTO homeostatic_state (domain, factor, updated_at) "
+            "VALUES (?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(domain) DO UPDATE "
+            "SET factor = excluded.factor, updated_at = CURRENT_TIMESTAMP",
+            (domain or "", clamped),
         )
         self._conn.commit()
 
