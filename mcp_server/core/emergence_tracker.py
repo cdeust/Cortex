@@ -134,18 +134,40 @@ def compute_schema_acceleration_metric(
     """Measure schema acceleration: do schema-consistent memories consolidate faster?
 
     Compares average hours to reach CONSOLIDATED stage.
+
+    Darval's v3.13.2 P2 fix: when ``consistent_count == 0`` (bootstrap
+    state — no schemas have been promoted yet), the ratio is mathematically
+    1.0 but not a measurement. Report ``ratio_defined: false`` +
+    ``reason_for_undefined`` so consumers can distinguish "speedup absent"
+    from "metric not yet meaningful".
     """
+    consistent_count = len(schema_consistent_memories)
+    inconsistent_count = len(schema_inconsistent_memories)
+
     consistent_time = _avg_consolidation_time(schema_consistent_memories)
     inconsistent_time = _avg_consolidation_time(schema_inconsistent_memories)
 
-    if inconsistent_time > 0 and consistent_time < float("inf"):
+    ratio_defined = True
+    reason_for_undefined = ""
+
+    if consistent_count == 0:
+        ratio_defined = False
+        reason_for_undefined = "no_schemas_promoted_yet"
+        acceleration_ratio = 1.0
+    elif inconsistent_count == 0:
+        ratio_defined = False
+        reason_for_undefined = "no_baseline_population"
+        acceleration_ratio = 1.0
+    elif inconsistent_time > 0 and consistent_time < float("inf"):
         acceleration_ratio = inconsistent_time / max(consistent_time, 0.1)
     else:
+        ratio_defined = False
+        reason_for_undefined = "no_consolidated_memories"
         acceleration_ratio = 1.0
 
     return {
-        "consistent_count": len(schema_consistent_memories),
-        "inconsistent_count": len(schema_inconsistent_memories),
+        "consistent_count": consistent_count,
+        "inconsistent_count": inconsistent_count,
         "consistent_consolidated_fraction": round(
             _consolidated_fraction(schema_consistent_memories), 4
         ),
@@ -153,6 +175,12 @@ def compute_schema_acceleration_metric(
             _consolidated_fraction(schema_inconsistent_memories), 4
         ),
         "acceleration_ratio": round(acceleration_ratio, 4),
+        "ratio_defined": ratio_defined,
+        **(
+            {"reason_for_undefined": reason_for_undefined}
+            if reason_for_undefined
+            else {}
+        ),
     }
 
 

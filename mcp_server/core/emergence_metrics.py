@@ -42,6 +42,7 @@ def _bin_memories_by_age(
 _DEGENERATE_RESULT = {
     "curve_type": "degenerate",
     "r_squared": 0.0,
+    "fit_quality": "degenerate",
     "half_life_hours": 0.0,
     "retention_at_24h": 0.0,
 }
@@ -65,7 +66,9 @@ def _fit_log_linear(
     """Fit log-linear regression: log(heat) = log(a) - b * age via OLS.
 
     Returns dict with curve_type, r_squared, half_life_hours,
-    retention_at_24h, decay_rate, initial_retention.
+    retention_at_24h, decay_rate, initial_retention, and a
+    ``fit_quality`` flag (darval's v3.13.2 P3 — signal when r²
+    is too low to trust the derived metrics).
     """
     n, sum_x, sum_y, sum_xy, sum_x2 = _ols_sums(log_heats)
 
@@ -81,13 +84,15 @@ def _fit_log_linear(
     ss_tot = sum((y - mean_y) ** 2 for _, y in log_heats)
     ss_res = sum((y - (log_a - b * t)) ** 2 for t, y in log_heats)
     r2 = 1.0 - ss_res / max(ss_tot, 1e-10)
+    r2_clamped = max(0.0, r2)
 
     half_life = math.log(2) / max(b, 1e-10) if b > 0 else float("inf")
     retention_24h = a * math.exp(-b * 24) if b > 0 else a
 
     return {
         "curve_type": "exponential",
-        "r_squared": round(max(0.0, r2), 4),
+        "r_squared": round(r2_clamped, 4),
+        "fit_quality": _fit_quality_for(r2_clamped),
         "half_life_hours": round(min(half_life, 10000), 1),
         "retention_at_24h": round(max(0.0, min(1.0, retention_24h)), 4),
         "decay_rate": round(b, 6),
@@ -95,9 +100,31 @@ def _fit_log_linear(
     }
 
 
+def _fit_quality_for(r_squared: float) -> str:
+    """Bucket the fit r² into a consumer-friendly quality label.
+
+    Source: darval's v3.13.2 P3 — "should emergence.forgetting_curve
+    gate its derived metrics on a minimum r²?" Answer: emit a label,
+    let consumers decide whether to display/ignore.
+
+    Thresholds chosen to be conservative:
+      r² < 0.10 → "poor"     — the model explains < 10% of variance;
+                               half_life_hours is not meaningful.
+      r² < 0.50 → "weak"     — some signal, but a single exponential
+                               is an oversimplification.
+      else     → "good"      — explains ≥ 50% of variance.
+    """
+    if r_squared < 0.10:
+        return "poor"
+    if r_squared < 0.50:
+        return "weak"
+    return "good"
+
+
 _INSUFFICIENT = {
     "curve_type": "insufficient_data",
     "r_squared": 0.0,
+    "fit_quality": "insufficient_data",
     "half_life_hours": 0.0,
     "retention_at_24h": 0.0,
 }
@@ -126,6 +153,7 @@ def compute_forgetting_curve(
         return {
             "curve_type": "insufficient_bins",
             "r_squared": 0.0,
+            "fit_quality": "insufficient_data",
             "half_life_hours": 0.0,
             "retention_at_24h": 0.0,
         }
@@ -135,6 +163,7 @@ def compute_forgetting_curve(
         return {
             "curve_type": "no_fit",
             "r_squared": 0.0,
+            "fit_quality": "insufficient_data",
             "half_life_hours": 0.0,
             "retention_at_24h": 0.0,
         }
