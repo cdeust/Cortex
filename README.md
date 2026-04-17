@@ -6,8 +6,9 @@
   <a href="https://github.com/cdeust/Cortex/actions/workflows/ci.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/tests-2080_passing-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-2411_passing-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/citations-41_papers-orange.svg" alt="Citations">
+  <img src="https://img.shields.io/badge/version-3.13.0-brightgreen.svg" alt="Version 3.13.0">
   <a href="https://glama.ai/mcp/servers/cdeust/Cortex"><img src="https://glama.ai/mcp/servers/cdeust/Cortex/badges/score.svg" alt="Glama score: security A, license A"></a>
 </p>
 
@@ -29,6 +30,8 @@ Cortex is a persistent memory engine for Claude Code built on computational neur
 
 **20 biological mechanisms. 33 MCP tools. 7 automatic hooks. Runs entirely on your machine. PostgreSQL + pgvector.**
 
+**v3.13.0 scalability release**: heat is now a *function* computed at read time, not a stored state vector written on every cycle. Homeostatic cycle writes one scalar per domain per run (was: N rows). ConnectionPool + `asyncio.to_thread` + per-tool admission semaphore give genuine concurrency. JOIN-based co-access replaces O(N × M) substring scans. Zero retrieval regression vs v3.11 on all three public benchmarks. [Release notes →](https://github.com/cdeust/Cortex/releases/tag/v3.13.0)
+
 ## Getting Started
 
 ```bash
@@ -43,6 +46,14 @@ Restart your Claude Code session, then run:
 ```
 
 This handles everything: PostgreSQL + pgvector installation, database creation, embedding model download, cognitive profile building from session history, codebase seeding, conversation import, and hook registration. Zero manual steps.
+
+After install, verify everything is wired correctly:
+
+```bash
+uvx --python 3.13 --from 'neuro-cortex-memory[postgresql]' cortex-doctor
+```
+
+Eight checks in two seconds: Python, uvx, PG driver, DATABASE_URL, PG connection, extensions, writable methodology dir, I10 pool-capacity invariant. Exit 0 means ready.
 
 > **Using Claude Cowork?** Install [Cortex-cowork](https://github.com/cdeust/Cortex-cowork) instead — uses SQLite, no PostgreSQL required.
 
@@ -337,8 +348,11 @@ Clean Architecture with strict dependency rules. Inner layers never import outer
 | **infrastructure/** | PostgreSQL, embeddings, file I/O | 33 modules |
 | **handlers/** | MCP tools | 62 tools |
 | **hooks/** | Lifecycle automation | 7 hooks |
+| **observability/** | Prometheus text-format metrics | 1 module |
 
 **Storage:** PostgreSQL 15+ with pgvector (HNSW) and pg_trgm. All retrieval in PL/pgSQL stored procedures.
+
+**Concurrency (v3.13+):** `psycopg_pool.ConnectionPool` with two latency classes — `interactive_pool` (min=2, max=8) for recall/remember/anchor, `batch_pool` (min=1, max=2) for consolidate/ingest. Tool handlers run on worker threads via `asyncio.to_thread`; per-tool admission semaphores bound fan-out. Heat is a *function* computed at read time by `effective_heat()` — homeostatic writes one scalar per domain per run instead of N rows.
 
 **Configuration:** Set `DATABASE_URL` (default: `postgresql://localhost:5432/cortex`). All parameters use `CORTEX_MEMORY_` prefix — see `mcp_server/infrastructure/memory_config.py` for the full list (~40 parameters).
 
