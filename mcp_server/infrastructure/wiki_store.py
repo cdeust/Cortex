@@ -248,15 +248,43 @@ def list_pages(root: Path | str, *, kind: str | None = None) -> list[str]:
 
 
 def _try_reindex(root: Path) -> None:
-    """Best-effort index rebuild after wiki write."""
+    """Best-effort index rebuild after wiki write.
+
+    Produces three artefacts:
+      * ``<root>/.generated/INDEX.md`` — structured TOC grouped by
+        domain then kind (for tech readers).
+      * ``<root>/README.md``           — plain-language top-level
+        entry point (for non-tech readers). Only created if no
+        hand-written README exists at the root.
+    """
     try:
         from mcp_server.core.wiki_pages import build_index
+        from mcp_server.core.wiki_readme import build_plain_readme
 
         page_paths = list_pages(root)
         index_md = build_index(page_paths)
         gen_dir = root / ".generated"
         gen_dir.mkdir(exist_ok=True)
         (gen_dir / "INDEX.md").write_text(index_md)
+
+        # README: only overwrite if it doesn't exist OR it's
+        # auto-generated (marker line in the body). Never clobber a
+        # hand-written README.
+        readme_path = root / "README.md"
+        auto_marker = "<!-- cortex-wiki-readme: auto-generated -->"
+        should_write = True
+        if readme_path.exists():
+            try:
+                existing = readme_path.read_text()
+                if auto_marker not in existing:
+                    should_write = False  # hand-written, don't touch
+            except Exception:
+                pass
+        if should_write:
+            readme_md = build_plain_readme(page_paths)
+            readme_md += f"\n{auto_marker}\n"
+            readme_path.write_text(readme_md)
+
         cleanup_id_prefixed_pages(root)
     except Exception:
         pass
