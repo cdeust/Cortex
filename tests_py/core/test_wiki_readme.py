@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import pytest
 
 from mcp_server.core.wiki_readme import (
     _count_by_domain,

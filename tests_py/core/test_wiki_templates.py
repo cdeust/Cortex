@@ -11,7 +11,6 @@ import re
 from mcp_server.core.wiki_layout import PAGE_KINDS
 from mcp_server.core.wiki_templates import (
     REQUIRED_FRONTMATTER,
-    STATUS_VALUES,
     TEMPLATES,
     naming_convention,
     required_fields,
