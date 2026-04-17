@@ -90,9 +90,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     # Include inactive if requested
     if include_inactive and not scope_filter:
-        rows = store._conn.execute(
-            "SELECT * FROM memory_rules ORDER BY scope, priority DESC"
-        ).fetchall()
+        with store.acquire_interactive() as conn:
+            rows = conn.execute(
+                "SELECT * FROM memory_rules ORDER BY scope, priority DESC"
+            ).fetchall()
         rules = [dict(r) for r in rows]
 
     # Filter by rule_type if requested

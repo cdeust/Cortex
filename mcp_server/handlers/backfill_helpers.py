@@ -132,17 +132,20 @@ _CORE_CONCEPTS = {
 
 
 def ensure_backfill_log(store: MemoryStore) -> None:
-    """Create the backfill_log table if it doesn't exist."""
-    store._conn.execute(
-        """CREATE TABLE IF NOT EXISTS backfill_log (
-            id SERIAL PRIMARY KEY,
-            file_path TEXT NOT NULL UNIQUE,
-            file_hash TEXT NOT NULL,
-            memories_imported INTEGER DEFAULT 0,
-            processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )"""
-    )
-    store._conn.commit()
+    """Create the backfill_log table if it doesn't exist.
+
+    Phase 5: runs on the batch pool (bootstrap work for a batch job).
+    """
+    with store.acquire_batch() as conn:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS backfill_log (
+                id SERIAL PRIMARY KEY,
+                file_path TEXT NOT NULL UNIQUE,
+                file_hash TEXT NOT NULL,
+                memories_imported INTEGER DEFAULT 0,
+                processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )"""
+        )
 
 
 def file_hash(path: Path) -> str:
@@ -154,29 +157,36 @@ def file_hash(path: Path) -> str:
 
 
 def is_already_backfilled(store: MemoryStore, path: Path, current_hash: str) -> bool:
-    """Check whether a file has already been backfilled with this hash."""
-    row = store._conn.execute(
-        "SELECT file_hash FROM backfill_log WHERE file_path = %s",
-        (str(path),),
-    ).fetchone()
+    """Check whether a file has already been backfilled with this hash.
+
+    Phase 5: batch pool (part of a backfill job).
+    """
+    with store.acquire_batch() as conn:
+        row = conn.execute(
+            "SELECT file_hash FROM backfill_log WHERE file_path = %s",
+            (str(path),),
+        ).fetchone()
     if row is None:
         return False
     return row["file_hash"] == current_hash
 
 
 def mark_backfilled(store: MemoryStore, path: Path, fhash: str, count: int) -> None:
-    """Record that a file has been backfilled."""
-    store._conn.execute(
-        """INSERT INTO backfill_log (file_path, file_hash, memories_imported, processed_at)
-           VALUES (%s, %s, %s, NOW())
-           ON CONFLICT(file_path) DO UPDATE SET
-             file_hash = EXCLUDED.file_hash,
-             memories_imported = EXCLUDED.memories_imported,
-             processed_at = NOW()
-        """,
-        (str(path), fhash, count),
-    )
-    store._conn.commit()
+    """Record that a file has been backfilled.
+
+    Phase 5: batch pool.
+    """
+    with store.acquire_batch() as conn:
+        conn.execute(
+            """INSERT INTO backfill_log (file_path, file_hash, memories_imported, processed_at)
+               VALUES (%s, %s, %s, NOW())
+               ON CONFLICT(file_path) DO UPDATE SET
+                 file_hash = EXCLUDED.file_hash,
+                 memories_imported = EXCLUDED.memories_imported,
+                 processed_at = NOW()
+            """,
+            (str(path), fhash, count),
+        )
 
 
 # -- File discovery --

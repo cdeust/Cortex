@@ -40,9 +40,9 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     ("infrastructure/sqlite_store.py", 228),
     ("infrastructure/sqlite_store.py", 272),
     # Homeostatic fold (amortized ~once/month per domain).
-    ("handlers/consolidation/homeostatic.py", 229),
+    ("handlers/consolidation/homeostatic.py", 231),
     # Anchor pin: heat_base=1.0 + no_decay=TRUE preserves resist-decay.
-    ("handlers/anchor.py", 139),
+    ("handlers/anchor.py", 140),
     # Preemptive boost: heat_base += 0.1 on Read/Edit/Write hook.
     ("hooks/preemptive_context.py", 136),
 }

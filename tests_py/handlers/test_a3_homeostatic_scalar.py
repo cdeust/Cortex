@@ -37,12 +37,35 @@ def _unimodal_low(n: int = 40) -> list[dict]:
 
 
 def _stub_store(factor_return: float = 1.0) -> MagicMock:
+    """Stub a MemoryStore that mocks the Phase 5 pool API.
+
+    ``acquire_batch()`` / ``acquire_interactive()`` return context
+    managers whose ``__enter__`` yields a mock connection. The mock
+    connection's ``execute()`` returns a cursor-like object with a
+    configurable ``rowcount``.
+    """
     store = MagicMock()
     store.get_homeostatic_factor.return_value = factor_return
     store.set_homeostatic_factor.return_value = None
+
     conn_result = MagicMock()
     conn_result.rowcount = 0
-    store._conn.execute.return_value = conn_result
+    conn = MagicMock()
+    conn.execute.return_value = conn_result
+
+    # acquire_batch returns a context manager yielding `conn`.
+    batch_cm = MagicMock()
+    batch_cm.__enter__ = MagicMock(return_value=conn)
+    batch_cm.__exit__ = MagicMock(return_value=False)
+    store.acquire_batch.return_value = batch_cm
+
+    interactive_cm = MagicMock()
+    interactive_cm.__enter__ = MagicMock(return_value=conn)
+    interactive_cm.__exit__ = MagicMock(return_value=False)
+    store.acquire_interactive.return_value = interactive_cm
+
+    # Expose the inner conn for assertions
+    store._test_conn = conn
     return store
 
 
@@ -101,7 +124,9 @@ class TestScalarPath:
 
         assert result["scaling_kind"] == "fold"
         assert result["scaling_applied"] is True
-        store._conn.execute.assert_called_once()
+        # Phase 5: fold UPDATE runs on the batch pool's checked-out connection.
+        store.acquire_batch.assert_called_once()
+        store._test_conn.execute.assert_called_once()
         # Post-fold, factor reset to 1.0.
         args, _ = store.set_homeostatic_factor.call_args
         assert args[1] == pytest.approx(1.0)

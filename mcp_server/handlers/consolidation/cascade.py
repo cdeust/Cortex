@@ -184,12 +184,15 @@ def _try_advance(
 
 
 def _update_stage_entered(store: MemoryStore, memory_id: int, now: datetime) -> None:
-    """Set stage_entered_at to current time after a transition."""
+    """Set stage_entered_at to current time after a transition.
+
+    Phase 5: batch pool (consolidation stage advancement).
+    """
     try:
-        store._conn.execute(
-            "UPDATE memories SET stage_entered_at = %s WHERE id = %s",
-            (now, memory_id),
-        )
-        store._conn.commit()
+        with store.acquire_batch() as conn:
+            conn.execute(
+                "UPDATE memories SET stage_entered_at = %s WHERE id = %s",
+                (now, memory_id),
+            )
     except Exception:
         pass

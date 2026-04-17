@@ -14,6 +14,7 @@ Each reason value must be reachable via a realistic fake-store setup.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import Any
 
 from mcp_server.handlers.consolidation.memify import run_memify_cycle
@@ -25,9 +26,10 @@ from mcp_server.handlers.consolidation.memify import run_memify_cycle
 class _FakeStore:
     """Minimal MemoryStore stand-in driven by injected fixtures.
 
-    The real store's `_conn` attribute is exposed so the reweight path
-    can execute its raw SQL stub. Reweight is the only path that uses
-    `_conn`; everything else runs through public methods we stub.
+    Phase 5: the reweight path uses ``acquire_batch()`` — a context
+    manager yielding a mock connection. Reweight is the only path that
+    needs a connection; everything else runs through public methods we
+    stub directly.
     """
 
     def __init__(
@@ -54,6 +56,15 @@ class _FakeStore:
 
     def update_memory_importance(self, mid: int, new_importance: float) -> None:
         self.updated_importance.append((mid, new_importance))
+
+    @contextmanager
+    def acquire_batch(self):
+        """Phase 5 context manager: yields the fake connection."""
+        yield self._conn
+
+    @contextmanager
+    def acquire_interactive(self):
+        yield self._conn
 
 
 class _FakeConn:
