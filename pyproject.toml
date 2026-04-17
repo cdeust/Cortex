@@ -34,6 +34,7 @@ Repository = "https://github.com/cdeust/Cortex"
 [project.scripts]
 neuro-cortex-memory = "mcp_server.__main__:main"
 cortex-doctor = "mcp_server.doctor:run"
+cortex-hook = "mcp_server.hook_runner:run"
 
 [project.optional-dependencies]
 postgresql = [
