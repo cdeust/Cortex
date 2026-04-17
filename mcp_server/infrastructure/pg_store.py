@@ -4,7 +4,14 @@ Single storage backend for all memory operations.
 Retrieval logic lives in PL/pgSQL stored procedures.
 Benchmarks and production use the same code path.
 
-Requires: psycopg[binary]>=3.1, pgvector>=0.3
+Phase 5 connection pools (docs/program/phase-5-pool-admission-design.md):
+    * ``_interactive_pool`` — hot-path tools (recall, remember, etc.)
+    * ``_batch_pool`` — long-running writers (consolidate, wiki_pipeline)
+    * ``_conn`` — persistent single connection kept for backward compat
+      with 281 existing call sites. New code should use
+      ``acquire_interactive()`` / ``acquire_batch()`` context managers.
+
+Requires: psycopg[binary]>=3.1, psycopg_pool>=3.2, pgvector>=0.3
 """
 
 from __future__ import annotations
@@ -12,13 +19,15 @@ from __future__ import annotations
 import json
 import logging
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Iterator
 
 import numpy as np
 import psycopg
 from pgvector.psycopg import register_vector
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from mcp_server.infrastructure.pg_schema import get_all_ddl
 from mcp_server.infrastructure.pg_store_auxiliary import PgAuxiliaryMixin
@@ -63,10 +72,107 @@ class PgMemoryStore(
         # signatures may have changed, making cached plans stale.
         self._deallocate_all()
         register_vector(self._conn)
+        # Phase 5 pools — lazy-constructed; opening on first acquire
+        # avoids paying pool-open cost for short-lived usages (tests).
+        self._interactive_pool: ConnectionPool | None = None
+        self._batch_pool: ConnectionPool | None = None
 
     def _create_connection(self) -> psycopg.Connection:
         """Create a new database connection."""
         return psycopg.connect(self._url, row_factory=dict_row, autocommit=True)
+
+    # ── Phase 5: connection pools ────────────────────────────────────────
+
+    def _configure_pool_connection(self, conn: psycopg.Connection) -> None:
+        """Pool callback: set up each checked-out connection.
+
+        Registers the pgvector adapter so callers can bind `vector` params.
+        Idempotent across checkouts because the pool holds a dedicated
+        connection per worker thread.
+        """
+        register_vector(conn)
+
+    def _open_interactive_pool(self) -> ConnectionPool:
+        """Open the hot-path pool on first use."""
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        settings = get_memory_settings()
+        pool = ConnectionPool(
+            conninfo=self._url,
+            min_size=settings.POOL_INTERACTIVE_MIN,
+            max_size=settings.POOL_INTERACTIVE_MAX,
+            timeout=settings.POOL_INTERACTIVE_TIMEOUT_S,
+            configure=self._configure_pool_connection,
+            kwargs={"row_factory": dict_row, "autocommit": True},
+            open=True,
+        )
+        return pool
+
+    def _open_batch_pool(self) -> ConnectionPool:
+        """Open the batch/long-running pool on first use."""
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        settings = get_memory_settings()
+        pool = ConnectionPool(
+            conninfo=self._url,
+            min_size=settings.POOL_BATCH_MIN,
+            max_size=settings.POOL_BATCH_MAX,
+            timeout=settings.POOL_BATCH_TIMEOUT_S,
+            configure=self._configure_pool_connection,
+            kwargs={"row_factory": dict_row, "autocommit": True},
+            open=True,
+        )
+        return pool
+
+    @property
+    def interactive_pool(self) -> ConnectionPool:
+        """Hot-path ConnectionPool for recall / remember / anchor / etc.
+
+        See docs/program/phase-5-pool-admission-design.md §1.1 for the
+        full tool-class table.
+        """
+        if self._interactive_pool is None:
+            self._interactive_pool = self._open_interactive_pool()
+        return self._interactive_pool
+
+    @property
+    def batch_pool(self) -> ConnectionPool:
+        """Batch/long-running ConnectionPool for consolidate / wiki_pipeline /
+        ingest / seed_project / backfill_memories.
+
+        Separate resource so batch jobs cannot starve the interactive pool.
+        """
+        if self._batch_pool is None:
+            self._batch_pool = self._open_batch_pool()
+        return self._batch_pool
+
+    @contextmanager
+    def acquire_interactive(self) -> Iterator[psycopg.Connection]:
+        """Context manager borrowing a connection from the interactive pool.
+
+        Use this for short-lived hot-path operations. For long-running
+        batch work (consolidate, wiki_pipeline) use ``acquire_batch``.
+        When ``POOL_DISABLED=true`` the store's persistent ``_conn`` is
+        yielded instead (pre-Phase-5 behavior, kill switch per §6).
+        """
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        if get_memory_settings().POOL_DISABLED:
+            yield self._conn
+            return
+        with self.interactive_pool.connection() as conn:
+            yield conn
+
+    @contextmanager
+    def acquire_batch(self) -> Iterator[psycopg.Connection]:
+        """Context manager borrowing a connection from the batch pool."""
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        if get_memory_settings().POOL_DISABLED:
+            yield self._conn
+            return
+        with self.batch_pool.connection() as conn:
+            yield conn
 
     def _deallocate_all(self) -> None:
         """Invalidate all prepared statements on the current connection.
@@ -569,4 +675,16 @@ class PgMemoryStore(
     # ── Lifecycle ─────────────────────────────────────────────────────
 
     def close(self) -> None:
+        if self._interactive_pool is not None:
+            try:
+                self._interactive_pool.close()
+            except Exception:
+                pass
+            self._interactive_pool = None
+        if self._batch_pool is not None:
+            try:
+                self._batch_pool.close()
+            except Exception:
+                pass
+            self._batch_pool = None
         self._conn.close()

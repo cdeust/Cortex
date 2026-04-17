@@ -33,9 +33,9 @@ _MCP_ROOT = _REPO_ROOT / "mcp_server"
 # OR be added here with a source-commented ADR justification.
 _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Canonical single-row writer (all callers route through this).
-    ("infrastructure/pg_store.py", 264),
+    ("infrastructure/pg_store.py", 370),
     # A3 batched writer (homeostatic cohort branch + any other batch consumer).
-    ("infrastructure/pg_store.py", 324),
+    ("infrastructure/pg_store.py", 430),
     # SQLite parity.
     ("infrastructure/sqlite_store.py", 228),
     ("infrastructure/sqlite_store.py", 272),
