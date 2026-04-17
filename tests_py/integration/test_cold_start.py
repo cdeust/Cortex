@@ -82,7 +82,8 @@ class TestSessionStartHook:
 
         store = MemoryStore()
         store._conn.execute(
-            "UPDATE memories SET is_protected = TRUE, heat = 1.0 "
+            "UPDATE memories SET is_protected = TRUE, heat_base = 1.0, "
+            "heat_base_set_at = NOW() "
             "WHERE content LIKE '%Critical architecture%'"
         )
         store.close()

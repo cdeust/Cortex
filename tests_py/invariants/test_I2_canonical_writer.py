@@ -1,26 +1,21 @@
-"""Invariant I2 — canonical heat writer regression guard.
+"""Invariant I2 — canonical heat_base writer regression guard.
 
 Formal predicate (from docs/invariants/cortex-invariants.md):
-    |{call-sites that issue UPDATE ... SET heat ... ON memories}| = 1 post-A3
-    Pre-A3: the allow-list below is the frozen set of known writers; any
-    new writer outside the list fails this test.
+    The set of call-sites that issue ``UPDATE ... SET heat_base ...`` on
+    ``memories`` is tightly bounded. Post-A3, no code writes the legacy
+    ``heat`` column — all heat state is carried by ``heat_base``, and
+    ``effective_heat()`` computes the decayed value at read time.
 
-Why this test exists:
-    The emergence_tracker AttributeError bug (darval issue #13, fixed in
-    c5a1862) was a "split module, caller not updated" regression: when
-    emergence_tracker.py was split to satisfy the 300-line cap,
-    generate_emergence_report moved to emergence_metrics.py but the
-    caller in consolidate.py wasn't updated. The same class of risk
-    applies to any code that writes raw heat directly — if A3 introduces
-    a new canonical helper (store.bump_heat_raw) but a new site writes
-    UPDATE memories SET heat = X outside that helper, the invariant
-    silently drifts. This test catches that drift at CI time.
+Allow-list (post-A3 single-canonical-path):
+    - pg_store.py  bump_heat_raw              (canonical single-row writer)
+    - pg_store.py  update_memories_heat_batch (A3 batched writer)
+    - sqlite_store.py  bump_heat_raw          (SQLite parity single-row)
+    - sqlite_store.py  update_memories_heat_batch (SQLite parity batch)
+    - homeostatic.py _apply_fold              (rare amortized fold UPDATE)
+    - anchor.py    anchor handler              (heat_base=1.0, no_decay=TRUE)
+    - preemptive_context.py _prime_file_memories (heat_base boost on read/edit)
 
-Post-A3 evolution:
-    The ALLOWED_WRITERS set shrinks to exactly 1 (the canonical helper)
-    when the A3 migration (docs/program/) lands. The test is intentionally
-    strict: any addition requires explicit ADR justification and an update
-    to the allow-list with a source comment.
+Any new writer outside this list fails this test.
 """
 
 from __future__ import annotations
@@ -32,50 +27,41 @@ import pytest
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _MCP_ROOT = _REPO_ROOT / "mcp_server"
 
-# Pre-A3 allow-list (frozen 2026-04-16 after Curie I4 audit).
-# Each entry is a (relative_path, line_number) site that directly writes
-# memories.heat. Post-A3, this list collapses to exactly one canonical
-# helper (store.bump_heat_raw). Any new site must either:
-#   (a) route through the canonical helper, OR
-#   (b) be added here with a source-commented ADR justification.
+# Post-A3 canonical writer allow-list. Each entry is a (relative_path,
+# line_number) site that writes ``memories.heat_base``. Any new site must
+# either route through ``bump_heat_raw`` / ``update_memories_heat_batch``
+# OR be added here with a source-commented ADR justification.
 _ALLOWED_WRITERS: set[tuple[str, int]] = {
-    # Pre-A3 per-row writer (dispatches to bump_heat_raw when flag=true).
-    ("infrastructure/pg_store.py", 257),
-    # A3 canonical heat_base writer (bump_heat_raw) — the ONE post-A3
-    # site once step 10 collapses the allow-list.
-    ("infrastructure/pg_store.py", 277),
-    # Pre-A3 batch UNNEST writer — deleted in a3-step-8 (homeostatic rewrite).
-    ("infrastructure/pg_store.py", 336),
-    # Anchor handler, A3-branch (heat_base + no_decay post-migration).
-    ("handlers/anchor.py", 145),
-    # Anchor handler, legacy branch (heat column pre-migration).
-    ("handlers/anchor.py", 152),
-    # Preemptive context, A3-branch (heat_base + heat_base_set_at).
-    ("hooks/preemptive_context.py", 143),
-    # Preemptive context, legacy branch (heat column).
-    ("hooks/preemptive_context.py", 156),
-    # Decay SQL inside DECAY_MEMORIES_FN. Deleted in a3-step-7.
-    ("infrastructure/pg_schema.py", 739),
-    # Codebase-analyze stale marker, legacy branch only (A3 drops
-    # the heat=0 clause as redundant with is_stale=TRUE).
-    ("handlers/codebase_analyze_helpers.py", 162),
-    # SQLite fallback backend mirrors the Postgres writers.
-    # Line numbers shifted (214→224, 230→235) when bump_heat_raw +
-    # get/set_homeostatic_factor were added for A3 parity.
-    ("infrastructure/sqlite_store.py", 224),  # update_memory_heat legacy
-    ("infrastructure/sqlite_store.py", 235),  # bump_heat_raw (A3 canonical)
-    ("infrastructure/sqlite_store.py", 279),  # update_memories_heat_batch legacy
+    # Canonical single-row writer (all callers route through this).
+    ("infrastructure/pg_store.py", 264),
+    # A3 batched writer (homeostatic cohort branch + any other batch consumer).
+    ("infrastructure/pg_store.py", 324),
+    # SQLite parity.
+    ("infrastructure/sqlite_store.py", 228),
+    ("infrastructure/sqlite_store.py", 272),
+    # Homeostatic fold (amortized ~once/month per domain).
+    ("handlers/consolidation/homeostatic.py", 229),
+    # Anchor pin: heat_base=1.0 + no_decay=TRUE preserves resist-decay.
+    ("handlers/anchor.py", 139),
+    # Preemptive boost: heat_base += 0.1 on Read/Edit/Write hook.
+    ("hooks/preemptive_context.py", 136),
 }
 
 
 def _scan_heat_writers() -> set[tuple[str, int]]:
-    """Static scan: every site that issues UPDATE memories SET heat.
+    """Static scan: every site that issues UPDATE memories SET heat_base.
 
     Tolerates multi-line SQL (looks at current line + preceding 5 lines
-    to find the UPDATE MEMORIES clause associated with a SET HEAT line).
+    to find the UPDATE MEMORIES clause associated with a SET HEAT_BASE line).
     Returns {(relative_path, line_number), ...} normalised to forward
     slashes for stable assertions across OSes.
     """
+    import re
+
+    # Match SET heat_base followed by whitespace/assignment/comma — NOT
+    # heat_base_set_at (which is a timestamp we allow to be written freely).
+    heat_base_assign = re.compile(r"SET\s+HEAT_BASE\s*(=|,|\+)", re.IGNORECASE)
+
     offenders: set[tuple[str, int]] = set()
     for py in _MCP_ROOT.rglob("*.py"):
         if "worktree" in str(py):
@@ -84,23 +70,22 @@ def _scan_heat_writers() -> set[tuple[str, int]]:
             src = py.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
-        if "heat" not in src.lower() or "UPDATE" not in src.upper():
+        if "heat_base" not in src.lower() or "UPDATE" not in src.upper():
             continue
         lines = src.splitlines()
         for i, line in enumerate(lines, 1):
             up = line.upper().replace(" AS M", "").replace(" AS W", "")
-            # Single-line: UPDATE memories SET ... heat ...
+            # Single-line: UPDATE memories ... SET heat_base = ...
             if (
                 "UPDATE MEMORIES" in up
-                and "SET" in up
-                and ("HEAT" in up or "HEAT_BASE" in up)
+                and heat_base_assign.search(line)
             ):
                 rel = str(py.relative_to(_MCP_ROOT)).replace("\\", "/")
                 offenders.add((rel, i))
                 continue
-            # Multi-line: a SET heat line whose UPDATE memories clause
+            # Multi-line: a SET heat_base = line whose UPDATE memories clause
             # is in the preceding 5 lines.
-            if "SET HEAT" in up and "MEMORIES" not in up:
+            if heat_base_assign.search(line) and "MEMORIES" not in up:
                 window = " ".join(lines[max(0, i - 6) : i]).upper()
                 if "UPDATE MEMORIES" in window or '"MEMORIES"' in window:
                     rel = str(py.relative_to(_MCP_ROOT)).replace("\\", "/")
@@ -110,14 +95,13 @@ def _scan_heat_writers() -> set[tuple[str, int]]:
 
 @pytest.mark.invariants
 def test_I2_no_unauthorized_heat_writes() -> None:
-    """I2: every UPDATE memories SET heat site must be in ALLOWED_WRITERS.
+    """I2: every UPDATE memories SET heat_base site must be in ALLOWED_WRITERS.
 
     Fails if a new writer is introduced (regression risk: silent drift
-    from the canonical writer pattern A3 will enforce). Fails also if a
-    previously-listed writer has moved line number — update the
-    allow-list with a source comment and consider whether the move
-    reflects a refactor that should route through the canonical helper
-    instead.
+    from the canonical writer pattern). Fails also if a previously-listed
+    writer has moved line number — update the allow-list with a source
+    comment and consider whether the move reflects a refactor that should
+    route through the canonical helper instead.
     """
     found = _scan_heat_writers()
     unexpected = found - _ALLOWED_WRITERS
@@ -126,7 +110,7 @@ def test_I2_no_unauthorized_heat_writes() -> None:
     msg_parts: list[str] = []
     if unexpected:
         msg_parts.append(
-            "New heat writer(s) introduced — each must either route "
+            "New heat_base writer(s) introduced — each must either route "
             "through the canonical writer OR be added to ALLOWED_WRITERS "
             "with an ADR citation:\n  "
             + "\n  ".join(f"{p}:{ln}" for p, ln in sorted(unexpected))
@@ -142,15 +126,42 @@ def test_I2_no_unauthorized_heat_writes() -> None:
 
 
 @pytest.mark.invariants
-def test_I2_allow_list_not_empty() -> None:
-    """Sanity: the allow-list must be populated. A zero-length list would
-    make test_I2_no_unauthorized_heat_writes pass vacuously whenever
-    every writer site has been removed (good) OR whenever the scanner
-    breaks silently (bad). Explicit non-empty assertion keeps the test
-    honest across refactors.
+def test_I2_no_legacy_heat_column_writes() -> None:
+    """Post-A3: no code should write the legacy ``heat`` column.
+
+    The ``heat`` column was renamed to ``heat_base`` in the A3 migration.
+    Any ``UPDATE memories SET heat = ...`` that is NOT followed by
+    ``_base`` is a regression — the legacy writer has snuck back in.
     """
-    assert len(_ALLOWED_WRITERS) > 0, (
-        "ALLOWED_WRITERS is empty. If A3 has landed and collapsed all "
-        "writers to the canonical helper, this test should be updated "
-        "to assert exactly that one site — not left empty."
+    offenders: set[tuple[str, int]] = set()
+    for py in _MCP_ROOT.rglob("*.py"):
+        if "worktree" in str(py):
+            continue
+        try:
+            src = py.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        lines = src.splitlines()
+        for i, line in enumerate(lines, 1):
+            up = line.upper()
+            # Match "SET heat " (with trailing space/punct) but NOT "heat_base"
+            if "UPDATE MEMORIES" in up and (
+                "SET HEAT " in up
+                or "SET HEAT=" in up
+                or "SET HEAT =" in up
+                or "SET HEAT," in up
+            ):
+                rel = str(py.relative_to(_MCP_ROOT)).replace("\\", "/")
+                offenders.add((rel, i))
+
+    assert not offenders, (
+        "Legacy heat column writers found (should be heat_base post-A3):\n  "
+        + "\n  ".join(f"{p}:{ln}" for p, ln in sorted(offenders))
     )
+
+
+@pytest.mark.invariants
+def test_I2_allow_list_not_empty() -> None:
+    """Sanity: the allow-list must be populated — guards against scanner
+    breaking silently."""
+    assert len(_ALLOWED_WRITERS) > 0

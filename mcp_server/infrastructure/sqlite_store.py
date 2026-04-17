@@ -145,7 +145,7 @@ class SqliteMemoryStore(
             """INSERT INTO memories (
                 content, tags, source, domain,
                 directory_context, created_at, last_accessed,
-                heat, surprise_score, importance,
+                heat_base, surprise_score, importance,
                 emotional_valence, confidence, store_type,
                 is_protected, consolidation_stage,
                 theta_phase_at_encoding, encoding_strength,
@@ -210,20 +210,13 @@ class SqliteMemoryStore(
         return self._normalize_memory_row(row)
 
     def update_memory_heat(self, memory_id: int, heat: float) -> None:
-        """Pre-A3 heat writer. Post-A3 dispatches to bump_heat_raw.
+        """Canonical A3 single-row heat writer (SQLite parity).
 
-        SQLite parity with PgMemoryStore.update_memory_heat. See
-        phase-3-a3-migration-design.md §3.7.
+        Delegates to ``bump_heat_raw`` which writes heat_base + stamps
+        heat_base_set_at. Mirrors PgMemoryStore.update_memory_heat.
+        Source: docs/program/phase-3-a3-migration-design.md §3.7.
         """
-        from mcp_server.infrastructure.memory_config import get_memory_settings
-
-        settings = get_memory_settings()
-        if getattr(settings, "A3_LAZY_HEAT", False):
-            return self.bump_heat_raw(memory_id, heat)
-        self._conn.execute(
-            "UPDATE memories SET heat = ? WHERE id = ?", (heat, memory_id)
-        )
-        self._conn.commit()
+        self.bump_heat_raw(memory_id, heat)
 
     def bump_heat_raw(self, memory_id: int, new_heat_base: float) -> None:
         """A3 canonical writer on memories.heat_base (SQLite parity).
@@ -265,19 +258,20 @@ class SqliteMemoryStore(
         self._conn.commit()
 
     def update_memories_heat_batch(self, updates: list[tuple[int, float]]) -> int:
-        """Batch-update heat for many memories. executemany + single commit.
+        """A3 batch writer on heat_base (SQLite parity).
 
-        SQLite has no array types like PostgreSQL, so batching collapses
-        per-row commits into a single transaction rather than a single
-        statement. Still eliminates per-row fsync cost.
-
-        Source: issue #13.
+        ``executemany`` + single commit — SQLite has no array types so
+        batching collapses per-row commits into a single transaction.
+        Refreshes ``heat_base_set_at`` on every touched row so recall
+        sees a fresh bump timestamp.
+        Source: issue #13; docs/program/phase-3-a3-migration-design.md §3.8.
         """
         if not updates:
             return 0
         self._raw_conn.executemany(
-            "UPDATE memories SET heat = ? WHERE id = ?",
-            [(float(h), int(i)) for i, h in updates],
+            "UPDATE memories SET heat_base = ?, "
+            "heat_base_set_at = CURRENT_TIMESTAMP WHERE id = ?",
+            [(max(0.0, min(1.0, float(h))), int(i)) for i, h in updates],
         )
         self._conn.commit()
         return len(updates)
@@ -382,8 +376,14 @@ class SqliteMemoryStore(
     # ── Row normalization ─────────────────────────────────────────────
 
     def _normalize_memory_row(self, row: dict | sqlite3.Row) -> dict[str, Any]:
-        """Normalize a memory row for consistent API output."""
+        """Normalize a memory row for consistent API output.
+
+        A3: expose heat_base as heat for Python callers that expect
+        the pre-A3 dict key.
+        """
         d = dict(row)
+        if "heat" not in d and "heat_base" in d:
+            d["heat"] = d["heat_base"]
         if isinstance(d.get("tags"), str):
             try:
                 d["tags"] = json.loads(d["tags"])

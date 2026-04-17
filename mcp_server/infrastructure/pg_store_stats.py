@@ -24,8 +24,8 @@ class PgStatsMixin:
                 COUNT(*) AS total,
                 COUNT(*) FILTER (WHERE store_type = 'episodic') AS episodic,
                 COUNT(*) FILTER (WHERE store_type = 'semantic') AS semantic,
-                COUNT(*) FILTER (WHERE heat >= 0.05) AS active,
-                COUNT(*) FILTER (WHERE heat < 0.05) AS archived,
+                COUNT(*) FILTER (WHERE heat_base >= 0.05) AS active,
+                COUNT(*) FILTER (WHERE heat_base < 0.05) AS archived,
                 COUNT(*) FILTER (WHERE is_stale) AS stale,
                 COUNT(*) FILTER (WHERE is_protected) AS protected
             FROM memories
@@ -33,7 +33,9 @@ class PgStatsMixin:
         return dict(row) if row else {}
 
     def get_avg_heat(self) -> float:
-        row = self._execute("SELECT AVG(heat) AS avg_heat FROM memories").fetchone()
+        row = self._execute(
+            "SELECT AVG(heat_base) AS avg_heat FROM memories"
+        ).fetchone()
         return float(row["avg_heat"] or 0.0) if row else 0.0
 
     def get_domain_counts(self) -> dict[str, int]:

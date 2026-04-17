@@ -22,7 +22,7 @@ class PgQueryMixin:
     ) -> list[dict[str, Any]]:
         rows = self._execute(
             "SELECT * FROM memories WHERE (domain = %s OR is_global = TRUE) "
-            "AND heat >= %s ORDER BY heat DESC LIMIT %s",
+            "AND heat_base >= %s ORDER BY heat_base DESC LIMIT %s",
             (domain, min_heat, limit),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
@@ -32,7 +32,7 @@ class PgQueryMixin:
     ) -> list[dict[str, Any]]:
         rows = self._execute(
             "SELECT * FROM memories WHERE (directory_context = %s OR is_global = TRUE) "
-            "AND heat >= %s ORDER BY heat DESC",
+            "AND heat_base >= %s ORDER BY heat_base DESC",
             (directory, min_heat),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
@@ -48,21 +48,21 @@ class PgQueryMixin:
         )
         if limit > 0:
             rows = self._execute(
-                f"SELECT * FROM memories WHERE heat >= %s {bench_filter}"
-                "ORDER BY heat DESC LIMIT %s",
+                f"SELECT * FROM memories WHERE heat_base >= %s {bench_filter}"
+                "ORDER BY heat_base DESC LIMIT %s",
                 (min_heat, limit),
             ).fetchall()
         else:
             rows = self._execute(
-                f"SELECT * FROM memories WHERE heat >= %s {bench_filter}"
-                "ORDER BY heat DESC",
+                f"SELECT * FROM memories WHERE heat_base >= %s {bench_filter}"
+                "ORDER BY heat_base DESC",
                 (min_heat,),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_all_memories_with_embeddings(self) -> list[dict[str, Any]]:
         rows = self._execute(
-            "SELECT id, heat, embedding FROM memories WHERE embedding IS NOT NULL"
+            "SELECT id, heat_base, embedding FROM memories WHERE embedding IS NOT NULL"
         ).fetchall()
         results = []
         for r in rows:
@@ -132,7 +132,7 @@ class PgQueryMixin:
             rows = self._execute(
                 "SELECT *, (1.0 - (embedding <=> %s))::REAL AS score "
                 "FROM memories "
-                "WHERE tags @> %s::jsonb AND heat >= %s AND NOT is_stale "
+                "WHERE tags @> %s::jsonb AND heat_base >= %s AND NOT is_stale "
                 "AND embedding IS NOT NULL "
                 "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
                 "ORDER BY embedding <=> %s LIMIT %s",
@@ -140,11 +140,11 @@ class PgQueryMixin:
             ).fetchall()
         else:
             rows = self._execute(
-                "SELECT *, heat::REAL AS score "
+                "SELECT *, heat_base::REAL AS score "
                 "FROM memories "
-                "WHERE tags @> %s::jsonb AND heat >= %s AND NOT is_stale "
+                "WHERE tags @> %s::jsonb AND heat_base >= %s AND NOT is_stale "
                 "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
-                "ORDER BY heat DESC LIMIT %s",
+                "ORDER BY heat_base DESC LIMIT %s",
                 (json.dumps([tag]), min_heat, domain, domain, limit),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]

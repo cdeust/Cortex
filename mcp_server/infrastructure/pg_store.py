@@ -168,7 +168,7 @@ class PgMemoryStore(
             """INSERT INTO memories (
                 content, embedding, tags, source, domain,
                 directory_context, created_at, last_accessed,
-                heat, surprise_score, importance,
+                heat_base, surprise_score, importance,
                 emotional_valence, confidence, store_type,
                 is_protected, consolidation_stage,
                 theta_phase_at_encoding, encoding_strength,
@@ -234,28 +234,15 @@ class PgMemoryStore(
         return self._normalize_memory_row(row)
 
     def update_memory_heat(self, memory_id: int, heat: float) -> None:
-        """Pre-A3: single-row heat writer.
+        """Canonical A3 single-row heat writer. Delegates to bump_heat_raw.
 
-        Post-A3 (CORTEX_MEMORY_A3_LAZY_HEAT=true, schema-migrated): this
-        method dispatches to `bump_heat_raw` which writes `heat_base` +
-        refreshes `heat_base_set_at`. Pre-A3 (default, flag=false): the
-        legacy `SET heat` UPDATE.
-
+        Retained as a thin adapter so existing call sites don't need to
+        know about heat_base_set_at; the heat value semantics are
+        preserved because bump_heat_raw writes heat_base + stamps the
+        bump timestamp.
         Source: docs/program/phase-3-a3-migration-design.md §3.1.
-        The I2 invariant test (`tests_py/invariants/test_I2_canonical_writer.py`)
-        still allow-lists this site until step 5 refactors every caller
-        to invoke `bump_heat_raw` directly.
         """
-        # Detect schema state: post-A3 columns present → dispatch.
-        # We could read the flag from settings, but inspecting the column
-        # is cheaper and correctly handles partially-migrated DBs.
-        from mcp_server.infrastructure.memory_config import get_memory_settings
-
-        settings = get_memory_settings()
-        if getattr(settings, "A3_LAZY_HEAT", False):
-            return self.bump_heat_raw(memory_id, heat)
-        self._execute("UPDATE memories SET heat = %s WHERE id = %s", (heat, memory_id))
-        self._conn.commit()
+        self.bump_heat_raw(memory_id, heat)
 
     def bump_heat_raw(self, memory_id: int, new_heat_base: float) -> None:
         """A3 canonical single writer on `memories.heat_base` (invariant I2).
@@ -319,23 +306,24 @@ class PgMemoryStore(
         self._conn.commit()
 
     def update_memories_heat_batch(self, updates: list[tuple[int, float]]) -> int:
-        """Batch-update heat for many memories in one round-trip.
+        """A3 batch heat writer. Writes heat_base + refreshes heat_base_set_at.
 
-        Uses a single UPDATE ... FROM UNNEST() statement so 60k+ updates
-        become one round-trip and one commit instead of one of each per
-        row. Returns the number of rows updated.
+        Single ``UPDATE ... FROM UNNEST()`` statement so 60k+ updates
+        become one round-trip and one commit. The homeostatic cohort
+        branch is the main consumer post-A3 (decay is lazy). Returns
+        the number of rows written.
 
-        Source: issue #13 (darval) — per-row UPDATE + fsync amplification
-        was the dominant cost of consolidate on a 66K-memory store.
+        Source: issue #13 (darval); docs/program/phase-3-a3-migration-design.md §3.2.
         """
         if not updates:
             return 0
         ids = [int(u[0]) for u in updates]
-        heats = [float(u[1]) for u in updates]
+        heats = [max(0.0, min(1.0, float(u[1]))) for u in updates]
         self._execute(
-            "UPDATE memories AS m SET heat = v.new_heat "
+            "UPDATE memories AS m "
+            "SET heat_base = v.new_heat_base, heat_base_set_at = NOW() "
             "FROM (SELECT UNNEST(%s::int[]) AS id, "
-            "            UNNEST(%s::real[]) AS new_heat) AS v "
+            "            UNNEST(%s::real[]) AS new_heat_base) AS v "
             "WHERE m.id = v.id",
             (ids, heats),
         )
@@ -454,7 +442,7 @@ class PgMemoryStore(
         rows = self._execute(
             "SELECT id, embedding <=> %s AS distance "
             "FROM memories "
-            "WHERE heat >= %s AND NOT is_stale AND embedding IS NOT NULL "
+            "WHERE heat_base >= %s AND NOT is_stale AND embedding IS NOT NULL "
             "ORDER BY embedding <=> %s "
             "LIMIT %s",
             (emb, min_heat, emb, top_k),
@@ -491,8 +479,20 @@ class PgMemoryStore(
     # ── Row normalization ─────────────────────────────────────────────
 
     def _normalize_memory_row(self, row: dict[str, Any]) -> dict[str, Any]:
-        """Normalize a memory row for consistent API output."""
+        """Normalize a memory row for consistent API output.
+
+        Post-A3 the memories table stores ``heat_base``; Python callers
+        still read the dict key ``heat``. The normalizer exposes
+        ``heat`` as an alias for ``heat_base`` so downstream code does
+        not need to know whether the recall path went through
+        effective_heat() or a direct row select.
+        """
         d = dict(row)
+        # A3: expose heat_base as heat for Python callers that expect
+        # the pre-A3 dict key. recall_memories() already returns heat
+        # (via effective_heat); this handles direct SELECT paths.
+        if "heat" not in d and "heat_base" in d:
+            d["heat"] = d["heat_base"]
         # Convert embedding back to bytes
         if "embedding" in d and d["embedding"] is not None:
             d["embedding"] = self._vector_to_bytes(d["embedding"])
