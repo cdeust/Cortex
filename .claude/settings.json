@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ruff check *)",
+      "mcp__plugin_cortex_cortex__recall",
+      "mcp__plugin_cortex_cortex__query_methodology",
+      "mcp__codebase-intelligence__ai_architect_codebase_query",
+      "mcp__codebase-intelligence__ai_architect_codebase_list_repos",
+      "mcp__ai-architect__ai_architect_load_context",
+      "mcp__ai-codebase-intelligence__ai_architect_codebase_query"
+    ]
+  }
+}
