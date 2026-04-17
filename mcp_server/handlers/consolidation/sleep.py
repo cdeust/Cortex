@@ -77,27 +77,29 @@ def _fix_stale_embeddings(
     embeddings: EmbeddingEngine,
     stale_items: list[dict],
 ) -> int:
-    """Re-embed memories with stale or missing embeddings."""
+    """Re-embed memories with stale or missing embeddings.
+
+    Phase 5: batched UPDATEs run on the batch pool.
+    """
     count = 0
-    for item in stale_items:
-        try:
-            content = item["content"]
-            if not content:
-                continue
-            new_emb = embeddings.encode(content)
-            if new_emb:
-                store._conn.execute(
-                    "UPDATE memories SET embedding = %s WHERE id = %s",
-                    (new_emb, item["memory_id"]),
+    with store.acquire_batch() as conn:
+        for item in stale_items:
+            try:
+                content = item["content"]
+                if not content:
+                    continue
+                new_emb = embeddings.encode(content)
+                if new_emb:
+                    conn.execute(
+                        "UPDATE memories SET embedding = %s WHERE id = %s",
+                        (new_emb, item["memory_id"]),
+                    )
+                    count += 1
+            except Exception:
+                logger.exception(
+                    "Re-embedding failed for memory %s",
+                    item.get("memory_id"),
                 )
-                count += 1
-        except Exception:
-            logger.exception(
-                "Re-embedding failed for memory %s",
-                item.get("memory_id"),
-            )
-    if count:
-        store._conn.commit()
     return count
 
 

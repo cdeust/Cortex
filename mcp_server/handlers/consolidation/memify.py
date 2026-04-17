@@ -200,26 +200,29 @@ def _strengthen_memories(store: MemoryStore, memories: list[dict]) -> int:
 
 
 def _reweight_relationships(store: MemoryStore) -> int:
-    """Adjust relationship weights based on entity heat."""
+    """Adjust relationship weights based on entity heat.
+
+    Phase 5: runs on the batch pool (long-running consolidation stage).
+    """
     try:
         entities = store.get_all_entities(min_heat=0.0)
         entity_heats = {e["id"]: e.get("heat", 0.5) for e in entities}
 
-        rows = store._conn.execute(
-            "SELECT id, source_entity_id, target_entity_id, weight FROM relationships",
-        ).fetchall()
-        rels = [dict(r) for r in rows]
-        reweights = compute_relationship_reweights(rels, entity_heats)
+        with store.acquire_batch() as conn:
+            rows = conn.execute(
+                "SELECT id, source_entity_id, target_entity_id, weight "
+                "FROM relationships",
+            ).fetchall()
+            rels = [dict(r) for r in rows]
+            reweights = compute_relationship_reweights(rels, entity_heats)
 
-        count = 0
-        for rid, new_weight in reweights:
-            store._conn.execute(
-                "UPDATE relationships SET weight = %s WHERE id = %s",
-                (new_weight, rid),
-            )
-            count += 1
-        if count:
-            store._conn.commit()
+            count = 0
+            for rid, new_weight in reweights:
+                conn.execute(
+                    "UPDATE relationships SET weight = %s WHERE id = %s",
+                    (new_weight, rid),
+                )
+                count += 1
         return count
     except Exception:
         return 0

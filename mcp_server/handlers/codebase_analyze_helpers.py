@@ -101,13 +101,18 @@ def _parse_tags(raw: object) -> list:
 
 
 def load_existing_hashes(store: MemoryStore) -> dict[str, tuple[int, str]]:
-    """Load existing codebase memory hashes: {path: (id, hash)}."""
+    """Load existing codebase memory hashes: {path: (id, hash)}.
+
+    Phase 5: batch pool (part of a codebase-analyze job).
+    """
     hashes: dict[str, tuple[int, str]] = {}
     try:
-        rows = store._conn.execute(
-            "SELECT id, tags FROM memories WHERE agent_context = %s AND NOT is_stale",
-            (CODEBASE_AGENT_CONTEXT,),
-        ).fetchall()
+        with store.acquire_batch() as conn:
+            rows = conn.execute(
+                "SELECT id, tags FROM memories "
+                "WHERE agent_context = %s AND NOT is_stale",
+                (CODEBASE_AGENT_CONTEXT,),
+            ).fetchall()
         for row in rows:
             mem_id = row["id"]
             tags = _parse_tags(row["tags"])
@@ -143,12 +148,12 @@ def mark_stale(store: MemoryStore, memory_ids: list[int]) -> int:
     if not memory_ids:
         return 0
     try:
-        for mid in memory_ids:
-            store._conn.execute(
-                "UPDATE memories SET is_stale = TRUE WHERE id = %s",
-                (mid,),
-            )
-        store._conn.commit()
+        with store.acquire_batch() as conn:
+            for mid in memory_ids:
+                conn.execute(
+                    "UPDATE memories SET is_stale = TRUE WHERE id = %s",
+                    (mid,),
+                )
         return len(memory_ids)
     except Exception as exc:
         _log(f"mark stale failed: {exc}")
@@ -311,30 +316,31 @@ def persist_community_tags(
     store: MemoryStore,
     communities: dict[str, int],
 ) -> None:
-    """Tag codebase memories with their community cluster ID."""
+    """Tag codebase memories with their community cluster ID.
+
+    Phase 5: batch pool (part of a codebase-analyze job).
+    """
     import json
 
-    for file_path, cluster_id in communities.items():
-        try:
-            rows = store._conn.execute(
-                "SELECT id, tags FROM memories "
-                "WHERE agent_context = 'codebase' AND NOT is_stale "
-                "AND content LIKE %s",
-                (f"%{file_path}%",),
-            ).fetchall()
-            for row in rows:
-                tags = _parse_tags(row["tags"])
-                tag = f"cluster:{cluster_id}"
-                if tag not in tags:
-                    tags.append(tag)
-                    store._conn.execute(
-                        "UPDATE memories SET tags = %s WHERE id = %s",
-                        (json.dumps(tags), row["id"]),
-                    )
-        except Exception:
-            pass
-    if communities:
-        try:
-            store._conn.commit()
-        except Exception:
-            pass
+    if not communities:
+        return
+    with store.acquire_batch() as conn:
+        for file_path, cluster_id in communities.items():
+            try:
+                rows = conn.execute(
+                    "SELECT id, tags FROM memories "
+                    "WHERE agent_context = 'codebase' AND NOT is_stale "
+                    "AND content LIKE %s",
+                    (f"%{file_path}%",),
+                ).fetchall()
+                for row in rows:
+                    tags = _parse_tags(row["tags"])
+                    tag = f"cluster:{cluster_id}"
+                    if tag not in tags:
+                        tags.append(tag)
+                        conn.execute(
+                            "UPDATE memories SET tags = %s WHERE id = %s",
+                            (json.dumps(tags), row["id"]),
+                        )
+            except Exception:
+                pass

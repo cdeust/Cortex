@@ -223,20 +223,21 @@ def _apply_fold(store: MemoryStore, domain: str, factor: float) -> int:
 
     Writes are bounded by the domain partition, skip protected/no_decay/stale.
     Amortized once per month per domain under normal operation.
+    Phase 5: batched UPDATE runs on the batch pool.
     """
-    result = store._conn.execute(
-        "UPDATE memories "
-        "SET heat_base = LEAST(1.0, GREATEST(0.0, heat_base * %s)), "
-        "    heat_base_set_at = NOW() "
-        "WHERE domain = %s "
-        "  AND NOT is_protected "
-        "  AND NOT no_decay "
-        "  AND NOT is_stale",
-        (float(factor), domain or ""),
-    )
-    rows = int(getattr(result, "rowcount", 0) or 0)
+    with store.acquire_batch() as conn:
+        result = conn.execute(
+            "UPDATE memories "
+            "SET heat_base = LEAST(1.0, GREATEST(0.0, heat_base * %s)), "
+            "    heat_base_set_at = NOW() "
+            "WHERE domain = %s "
+            "  AND NOT is_protected "
+            "  AND NOT no_decay "
+            "  AND NOT is_stale",
+            (float(factor), domain or ""),
+        )
+        rows = int(getattr(result, "rowcount", 0) or 0)
     store.set_homeostatic_factor(domain, 1.0)
-    store._conn.commit()
     return rows
 
 

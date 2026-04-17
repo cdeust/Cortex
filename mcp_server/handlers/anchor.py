@@ -134,14 +134,14 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     # the anchor-resists-decay semantic via effective_heat(). heat_base_set_at
     # refreshes the bump timestamp so recall sees a fresh anchor even after
     # a long idle period.
-    # Source: phase-3-a3-migration-design.md §3.3.
-    store._conn.execute(
-        "UPDATE memories SET heat_base = 1.0, heat_base_set_at = NOW(), "
-        "no_decay = TRUE, is_protected = TRUE, importance = 1.0, "
-        "tags = %s::jsonb, content = %s, is_global = %s WHERE id = %s",
-        (_json.dumps(tags), content, is_global, memory_id),
-    )
-    store._conn.commit()
+    # Source: phase-3-a3-migration-design.md §3.3. Phase 5: pooled write.
+    with store.acquire_interactive() as conn:
+        conn.execute(
+            "UPDATE memories SET heat_base = 1.0, heat_base_set_at = NOW(), "
+            "no_decay = TRUE, is_protected = TRUE, importance = 1.0, "
+            "tags = %s::jsonb, content = %s, is_global = %s WHERE id = %s",
+            (_json.dumps(tags), content, is_global, memory_id),
+        )
 
     return {
         "anchored": True,
