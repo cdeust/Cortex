@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Iterator
 
 import psycopg
 
@@ -107,6 +107,49 @@ class PgQueryMixin:
     def get_all_memories_for_decay(self) -> list[dict[str, Any]]:
         rows = self._execute("SELECT * FROM memories WHERE NOT is_stale").fetchall()
         return [self._normalize_memory_row(r) for r in rows]
+
+    def iter_memories_for_decay(
+        self,
+        chunk_size: int = 1000,
+    ) -> "Iterator[list[dict[str, Any]]]":
+        """Stream active memories in chunks via server-side cursor.
+
+        Phase 4: replaces the single ``SELECT *`` that materialized 66K+
+        rows (multi-MB per chunk) into Python memory with a chunked
+        iterator. Each yielded chunk is a list of normalized memory
+        dicts; callers that compute streaming stats (Welford moments
+        for homeostatic) can discard each chunk before the next lands.
+
+        Uses ``itersize=chunk_size`` on a named cursor so psycopg fetches
+        rows from the server in batches rather than buffering all
+        results client-side. The connection stays borrowed for the
+        duration of iteration (the pool's ``with`` is held by the
+        caller via the yielded generator lifetime).
+
+        Source: docs/program/phase-5-pool-admission-design.md (Phase 4
+        chunked consolidate).
+        """
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        if get_memory_settings().POOL_DISABLED:
+            # Kill-switch path: materialize in one call for compat.
+            yield self.get_all_memories_for_decay()
+            return
+
+        # Batch pool: consolidate is the dominant caller; long-lived
+        # connection for cursor iteration.
+        with self.batch_pool.connection() as conn:
+            with conn.cursor(name="decay_stream") as cur:
+                cur.itersize = chunk_size
+                cur.execute("SELECT * FROM memories WHERE NOT is_stale")
+                chunk: list[dict[str, Any]] = []
+                for row in cur:
+                    chunk.append(self._normalize_memory_row(dict(row)))
+                    if len(chunk) >= chunk_size:
+                        yield chunk
+                        chunk = []
+                if chunk:
+                    yield chunk
 
     def search_by_tag_vector(
         self,

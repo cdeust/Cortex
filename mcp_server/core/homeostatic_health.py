@@ -161,6 +161,18 @@ def compute_distribution_health(
         return dict(_EMPTY_HEALTH)
 
     mean, std, skew, kurtosis = _compute_moments(values)
+    return _health_from_moments(mean, std, skew, kurtosis, target_mean)
+
+
+def _health_from_moments(
+    mean: float,
+    std: float,
+    skew: float,
+    kurtosis: float,
+    target_mean: float,
+) -> dict[str, float]:
+    """Build the health dict from pre-computed moments. Shared by the
+    list-based and streaming paths."""
     bimodality = (skew**2 + 1) / max(kurtosis + 3, 0.01)
     deviation = abs(mean - target_mean)
     health = _compute_health_score(deviation, bimodality, skew, std)
@@ -174,3 +186,119 @@ def compute_distribution_health(
         "bimodality_coefficient": round(bimodality, 4),
         "health_score": round(health, 4),
     }
+
+
+def compute_distribution_health_streaming(
+    value_chunks,
+    target_mean: float,
+) -> tuple[dict[str, float], int]:
+    """Streaming moments over chunks of values — never fully materializes.
+
+    Phase 4: used when the caller iterates values via a server-side
+    cursor (``store.iter_memories_for_decay``). Applies Pébay 2008
+    pairwise-combination formulas to merge chunk moments into running
+    totals — mathematically identical to ``_compute_moments`` on the
+    concatenated list, but peak memory is O(chunk) not O(total).
+
+    Args:
+        value_chunks: iterable yielding lists of floats.
+        target_mean: Desired mean value.
+
+    Returns:
+        (health_dict, total_count). Returns the empty-health dict with
+        count=0 when every chunk is empty.
+
+    Source: Pébay (2008). "Formulas for Robust, One-Pass Parallel
+    Computation of Covariances and Arbitrary-Order Statistical Moments."
+    Sandia Report SAND2008-6212. §3.1 (pairwise merge of moments).
+    """
+    import math
+
+    # Running aggregated moments (Pébay §3.1 notation).
+    n = 0
+    m1 = 0.0
+    m2 = 0.0
+    m3 = 0.0
+    m4 = 0.0
+
+    for chunk in value_chunks:
+        if not chunk:
+            continue
+        n_b, m1_b, m2_b, m3_b, m4_b = _chunk_raw_moments(chunk)
+        if n_b == 0:
+            continue
+        if n == 0:
+            n, m1, m2, m3, m4 = n_b, m1_b, m2_b, m3_b, m4_b
+            continue
+        # Pairwise combine running (a) and chunk (b) moments.
+        # Pébay 2008 §3.1 equations 2.1–2.4.
+        n_ab = n + n_b
+        delta = m1_b - m1
+        delta_n = delta / n_ab
+        delta_n2 = delta_n * delta_n
+        na_nb = n * n_b
+        # M4_ab = M4_a + M4_b
+        #   + δ^4 · n_a·n_b·(n_a² - n_a·n_b + n_b²) / n_ab^3
+        #   + 6·δ²·(n_a²·M2_b + n_b²·M2_a) / n_ab²
+        #   + 4·δ·(n_a·M3_b - n_b·M3_a) / n_ab
+        # Factor δ⁴/n_ab³ = delta * delta_n³.
+        m4_new = (
+            m4 + m4_b
+            + delta * delta_n * delta_n2 * na_nb * (n * n - na_nb + n_b * n_b)
+            + 6 * delta_n2 * (n * n * m2_b + n_b * n_b * m2)
+            + 4 * delta_n * (n * m3_b - n_b * m3)
+        )
+        m3_new = (
+            m3 + m3_b
+            + delta * delta_n2 * na_nb * (n - n_b)
+            + 3 * delta_n * (n * m2_b - n_b * m2)
+        )
+        m2_new = m2 + m2_b + delta * delta_n * na_nb
+        m1_new = m1 + delta_n * n_b
+        n, m1, m2, m3, m4 = n_ab, m1_new, m2_new, m3_new, m4_new
+
+    if n == 0:
+        return dict(_EMPTY_HEALTH), 0
+
+    variance = m2 / max(n - 1, 1)
+    std = math.sqrt(variance)
+    if std > 1e-10:
+        skew = m3 / (n * std**3)
+        kurtosis = m4 / (n * std**4) - 3.0
+    else:
+        skew = 0.0
+        kurtosis = 0.0
+    return _health_from_moments(m1, std, skew, kurtosis, target_mean), n
+
+
+def _chunk_raw_moments(
+    values: list[float],
+) -> tuple[int, float, float, float, float]:
+    """Raw (n, M1, M2, M3, M4) for a single chunk — inputs to the pairwise
+    merge formulas in ``compute_distribution_health_streaming``.
+
+    Uses the same single-pass update as ``_compute_moments`` but returns
+    the raw moment sums (M2, M3, M4) rather than converting to (std,
+    skew, kurtosis). Callers that merge chunks need the raw form.
+    """
+    n = 0
+    m1 = 0.0
+    m2 = 0.0
+    m3 = 0.0
+    m4 = 0.0
+    for x in values:
+        n1 = n
+        n += 1
+        delta = x - m1
+        delta_n = delta / n
+        delta_n2 = delta_n * delta_n
+        term1 = delta * delta_n * n1
+        m4 += (
+            term1 * delta_n2 * (n * n - 3 * n + 3)
+            + 6.0 * delta_n2 * m2
+            - 4.0 * delta_n * m3
+        )
+        m3 += term1 * delta_n * (n - 2) - 3.0 * delta_n * m2
+        m2 += term1
+        m1 += delta_n
+    return n, m1, m2, m3, m4

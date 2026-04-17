@@ -102,9 +102,10 @@ class TestScalarPath:
         """One set_homeostatic_factor call, zero per-row writes."""
         store = _stub_store(factor_return=1.0)
         memories = _unimodal_low(n=40)
-        store.get_all_memories_for_decay.return_value = memories
 
-        result = run_homeostatic_cycle(store)
+        # Pass memories explicitly (pre-loaded path) — Phase 4 streaming
+        # path is exercised in tests/core/test_homeostatic_streaming.py.
+        result = run_homeostatic_cycle(store, memories=memories)
 
         assert result["scaling_kind"] == "scalar_update"
         assert result["scaling_applied"] is True
@@ -118,9 +119,8 @@ class TestScalarPath:
         # at 3.0 * 1.03 = 3.09 — still past the 2.0 threshold.
         store = _stub_store(factor_return=3.0)
         memories = _unimodal_low(n=40)
-        store.get_all_memories_for_decay.return_value = memories
 
-        result = run_homeostatic_cycle(store)
+        result = run_homeostatic_cycle(store, memories=memories)
 
         assert result["scaling_kind"] == "fold"
         assert result["scaling_applied"] is True
