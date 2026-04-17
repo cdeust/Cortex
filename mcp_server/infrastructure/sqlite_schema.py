@@ -20,7 +20,10 @@ CREATE TABLE IF NOT EXISTS memories (
     directory_context       TEXT DEFAULT '',
     created_at              TEXT NOT NULL DEFAULT (datetime('now')),
     last_accessed           TEXT NOT NULL DEFAULT (datetime('now')),
-    heat                    REAL DEFAULT 1.0,
+    heat_base               REAL NOT NULL DEFAULT 1.0
+                            CHECK (heat_base >= 0.0 AND heat_base <= 1.0),
+    heat_base_set_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    no_decay                INTEGER NOT NULL DEFAULT 0,
     surprise_score          REAL DEFAULT 0.0,
     importance              REAL DEFAULT 0.5,
     emotional_valence       REAL DEFAULT 0.0,
@@ -52,6 +55,15 @@ CREATE TABLE IF NOT EXISTS memories (
     is_benchmark            INTEGER DEFAULT 0,
     agent_context           TEXT DEFAULT '',
     is_global               INTEGER DEFAULT 0
+);
+"""
+
+HOMEOSTATIC_STATE_DDL = """
+CREATE TABLE IF NOT EXISTS homeostatic_state (
+    domain      TEXT PRIMARY KEY,
+    factor      REAL NOT NULL DEFAULT 1.0
+                CHECK (factor > 0.0 AND factor < 10.0),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
 
@@ -256,6 +268,7 @@ def get_all_ddl() -> list[str]:
     """
     return [
         MEMORIES_DDL,
+        HOMEOSTATIC_STATE_DDL,
         MEMORIES_FTS_DDL,
         # MEMORIES_VEC_DDL is handled separately — requires sqlite-vec
         ENTITIES_DDL,

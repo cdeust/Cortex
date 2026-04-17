@@ -83,9 +83,65 @@ class SqliteMemoryStore(
 
     def _run_migrations(self) -> None:
         """Add columns that may be missing from older databases."""
+        self._migrate_heat_to_heat_base()
         for table, column, col_def in MIGRATIONS:
             try:
                 self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+            except sqlite3.OperationalError:
+                pass
+
+    def _migrate_heat_to_heat_base(self) -> None:
+        """Phase 3 A3 migration (SQLite parity): rename heat → heat_base,
+        add heat_base_set_at + no_decay. Idempotent: only runs when the
+        legacy heat column still exists AND heat_base does not.
+
+        SQLite supports ALTER TABLE ... RENAME COLUMN since 3.25 (2018);
+        all supported platforms ship well above that.
+        """
+        try:
+            cols = self._conn.execute(
+                "SELECT name FROM pragma_table_info('memories')"
+            ).fetchall()
+            names: set[str] = set()
+            for row in cols:
+                # Row can be sqlite3.Row (keyed), dict, or tuple — normalize.
+                try:
+                    names.add(row["name"])
+                except (TypeError, KeyError, IndexError):
+                    try:
+                        names.add(row[0])
+                    except (TypeError, IndexError):
+                        pass
+        except sqlite3.OperationalError:
+            return  # no memories table yet — new DB, DDL will create it with heat_base
+
+        if "heat_base" not in names and "heat" in names:
+            try:
+                self._conn.execute(
+                    "ALTER TABLE memories RENAME COLUMN heat TO heat_base"
+                )
+            except sqlite3.OperationalError:
+                pass
+        if "heat_base_set_at" not in names:
+            # SQLite rejects ALTER TABLE ADD COLUMN with non-constant
+            # defaults (e.g. datetime('now')). Add with empty default,
+            # then UPDATE to set the timestamp from existing anchors.
+            try:
+                self._conn.execute(
+                    "ALTER TABLE memories ADD COLUMN heat_base_set_at TEXT "
+                    "NOT NULL DEFAULT ''"
+                )
+                self._conn.execute(
+                    "UPDATE memories SET heat_base_set_at = "
+                    "COALESCE(last_accessed, created_at, datetime('now'))"
+                )
+            except sqlite3.OperationalError:
+                pass
+        if "no_decay" not in names:
+            try:
+                self._conn.execute(
+                    "ALTER TABLE memories ADD COLUMN no_decay INTEGER NOT NULL DEFAULT 0"
+                )
             except sqlite3.OperationalError:
                 pass
 
