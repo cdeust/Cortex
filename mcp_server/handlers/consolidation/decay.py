@@ -1,6 +1,29 @@
 """Decay cycle: cool all memories and entities based on elapsed time.
 
 Includes domain-aware astrocyte metabolic modulation via tripartite synapse.
+
+A3 writer refactor (Phase 3 step 7):
+    When ``A3_LAZY_HEAT=true``, per-row memory decay is **not executed**
+    here. The ``effective_heat()`` PL/pgSQL function (pg_schema.py)
+    computes the decayed value at read time — the heat is a *function*,
+    not a stored column update. Consequences:
+      - ``compute_decay_updates`` is skipped
+      - ``update_memories_heat_batch`` is skipped (I2: zero additional writers)
+      - The emergence_tracker counter drops because there is no longer
+        a per-row "decayed today" event — metric migrates to
+        ``effective_heat`` probe samples (tracked separately, see #14 P3).
+
+    Entity decay still runs (entities retain a stored heat column pre-D2)
+    and metabolic modulation still runs for observability even when its
+    heat updates are skipped (tripartite synapse territory state is still
+    a valid observability signal even if we don't write back per-row).
+
+    Flag=false path (legacy): unchanged. Full per-row decay write.
+
+    Source: docs/program/phase-3-a3-migration-design.md §6 ("Decay
+    cycle post-A3 — DELETE"). Adapted from hard-delete to flag-gated
+    no-op to keep both paths valid for benchmark comparison per user
+    directive (modify → benchmark → iterate).
 """
 
 from __future__ import annotations
@@ -17,6 +40,7 @@ from mcp_server.core.tripartite_synapse import (
     AstrocyteTerritory,
     update_territory,
 )
+from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
 logger = logging.getLogger(__name__)
@@ -31,10 +55,30 @@ def run_decay_cycle(
 
     `memories` may be pre-loaded by the consolidate handler to avoid
     reloading the full store across stages (issue #13 — Feynman audit).
+
+    Post-A3 (flag=true): memory heat decay is computed lazily in
+    ``effective_heat()``; this function skips the per-row memory update.
+    Entity decay and metabolic observability still run.
     """
     if memories is None:
         memories = store.get_all_memories_for_decay()
 
+    a3_lazy = getattr(get_memory_settings(), "A3_LAZY_HEAT", False)
+
+    if a3_lazy:
+        # Post-A3: decay is lazy. No per-row memory write.
+        # Entity heat still stored eagerly (D2 is out of scope for A3).
+        entity_updates = _decay_entities(store, settings)
+        return {
+            "memories_decayed": 0,
+            "metabolic_updates": 0,
+            "entities_decayed": len(entity_updates),
+            "total_memories": len(memories),
+            "mode": "a3_lazy",
+            "reason_for_zero": "lazy_decay_via_effective_heat",
+        }
+
+    # Pre-A3: legacy eager path.
     updates = compute_decay_updates(
         memories,
         decay_factor=settings.DECAY_FACTOR,
@@ -57,6 +101,7 @@ def run_decay_cycle(
         "metabolic_updates": metabolic_updates,
         "entities_decayed": len(entity_updates),
         "total_memories": len(memories),
+        "mode": "legacy_eager",
     }
 
 
