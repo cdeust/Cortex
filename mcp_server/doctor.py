@@ -30,13 +30,24 @@ from typing import Callable
 
 
 class Check:
-    __slots__ = ("name", "ok", "detail", "fix")
+    __slots__ = ("name", "ok", "detail", "fix", "optional")
 
-    def __init__(self, name: str, ok: bool, detail: str, fix: str = "") -> None:
+    def __init__(
+        self,
+        name: str,
+        ok: bool,
+        detail: str,
+        fix: str = "",
+        optional: bool = False,
+    ) -> None:
         self.name = name
         self.ok = ok
         self.detail = detail
         self.fix = fix
+        # optional=True means "capability probe" — failure warns but
+        # doesn't cause doctor to exit non-zero. Core checks (PG
+        # connection, Python version) stay required.
+        self.optional = optional
 
 
 def _python_version() -> Check:
@@ -187,6 +198,59 @@ def _methodology_dir() -> Check:
         )
 
 
+def _codebase_pipeline() -> Check:
+    """Optional: detect the ai-automatised-pipeline MCP server.
+
+    Cortex integrates with it to turn codebase analysis into wiki pages +
+    memories + KG entities via the ``ingest_codebase`` tool. Not required
+    for core memory operations — users who don't do codebase ingestion
+    can ignore this check. Gated to ``optional=True`` so doctor still
+    exits 0 on its absence.
+
+    Detection strategy (cheapest first):
+      1. ``cortex-pipeline`` or ``automatised-pipeline`` on PATH
+      2. A ``cargo`` install cache under ~/.cargo/bin
+      3. A sibling git clone at ../anthropic/ai-automatised-pipeline
+    """
+    candidates = [
+        "cortex-pipeline",
+        "automatised-pipeline",
+        "ai-automatised-pipeline",
+    ]
+    for cmd in candidates:
+        path = shutil.which(cmd)
+        if path:
+            return Check(
+                "codebase-pipeline (optional)",
+                True,
+                path,
+                optional=True,
+            )
+
+    # Sibling git checkout is a common dev layout.
+    sibling = Path.cwd().parent / "anthropic" / "ai-automatised-pipeline"
+    cargo_toml = sibling / "Cargo.toml"
+    if cargo_toml.exists():
+        return Check(
+            "codebase-pipeline (optional)",
+            True,
+            f"source checkout at {sibling} (run `cargo install --path .` to install)",
+            optional=True,
+        )
+
+    return Check(
+        "codebase-pipeline (optional)",
+        False,
+        "not installed (ingest_codebase tool will be disabled)",
+        "Optional — install only if you want codebase → wiki/memory/KG "
+        "ingestion. Clone + build:\n"
+        "       git clone https://github.com/cdeust/ai-automatised-pipeline\n"
+        "       cd ai-automatised-pipeline && cargo install --path .\n"
+        "     Cortex memory / recall works fine without this component.",
+        optional=True,
+    )
+
+
 def _i10_config() -> Check:
     """Verify pool config respects I10 invariant without opening a pool."""
     try:
@@ -220,36 +284,66 @@ CHECKS: list[Callable[[], Check]] = [
     _pg_extensions,
     _methodology_dir,
     _i10_config,
+    _codebase_pipeline,  # optional — doesn't fail doctor
 ]
 
 
 def run() -> int:
-    """Run all checks. Print a report. Return 0 on all-green, 1 otherwise."""
+    """Run all checks. Print a report. Return 0 on required-green, 1 otherwise.
+
+    Optional checks (``Check.optional=True``) warn on failure but do not
+    cause a non-zero exit. Only core-required checks (PG connection,
+    Python version, etc.) gate the exit code.
+    """
     checks = [c() for c in CHECKS]
     width = max(len(c.name) for c in checks) + 2
 
     print("Cortex doctor — setup verification")
     print("=" * 60)
-    fails: list[Check] = []
+    required_fails: list[Check] = []
+    optional_warnings: list[Check] = []
     for c in checks:
-        mark = "OK  " if c.ok else "FAIL"
+        if c.ok:
+            mark = "OK  "
+        elif c.optional:
+            mark = "WARN"
+        else:
+            mark = "FAIL"
         print(f"  [{mark}] {c.name.ljust(width)} {c.detail}")
         if not c.ok:
-            fails.append(c)
+            if c.optional:
+                optional_warnings.append(c)
+            else:
+                required_fails.append(c)
 
     print("=" * 60)
-    if not fails:
+    if not required_fails and not optional_warnings:
         print("All checks passed. Cortex is ready.")
         return 0
 
-    print(f"{len(fails)} check(s) failed. Fixes:")
-    for i, c in enumerate(fails, 1):
-        print(f"  {i}. {c.name}:")
-        if c.fix:
-            print(f"     → {c.fix}")
-        else:
-            print(f"     → Review output above: {c.detail}")
-    return 1
+    if required_fails:
+        print(f"{len(required_fails)} required check(s) failed. Fixes:")
+        for i, c in enumerate(required_fails, 1):
+            print(f"  {i}. {c.name}:")
+            if c.fix:
+                print(f"     → {c.fix}")
+            else:
+                print(f"     → Review output above: {c.detail}")
+
+    if optional_warnings:
+        print(
+            f"\n{len(optional_warnings)} optional capability "
+            f"{'is' if len(optional_warnings) == 1 else 'are'} unavailable "
+            "(Cortex core features still work):"
+        )
+        for i, c in enumerate(optional_warnings, 1):
+            print(f"  {i}. {c.name}:")
+            if c.fix:
+                print(f"     → {c.fix}")
+            else:
+                print(f"     → Review output above: {c.detail}")
+
+    return 1 if required_fails else 0
 
 
 if __name__ == "__main__":
