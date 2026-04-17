@@ -131,16 +131,35 @@ async def safe_handler(
     try:
         if tool_name:
             from mcp_server.handlers.admission import admit
+            from mcp_server.observability import metrics
 
             async with admit(tool_name):
-                result = await asyncio.to_thread(
-                    _run_coroutine_on_thread, handler_fn, args
-                )
+                with metrics.Timer(
+                    "cortex_tool_duration_seconds",
+                    {"tool": tool_name},
+                ):
+                    result = await asyncio.to_thread(
+                        _run_coroutine_on_thread, handler_fn, args
+                    )
+            metrics.inc_counter(
+                "cortex_tool_calls_total",
+                {"tool": tool_name, "status": "ok"},
+            )
         else:
             result = await handler_fn(args)
         return json.dumps(result, indent=2, default=str)
     except Exception as exc:
         error_type, message = _classify_error(exc)
+        if tool_name:
+            try:
+                from mcp_server.observability import metrics
+
+                metrics.inc_counter(
+                    "cortex_tool_calls_total",
+                    {"tool": tool_name, "status": "error"},
+                )
+            except Exception:
+                pass
         return json.dumps(
             {
                 "error": error_type,
