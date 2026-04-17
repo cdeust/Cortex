@@ -16,7 +16,6 @@ import io
 import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from mcp_server import hook_runner
 
@@ -55,7 +54,9 @@ class TestMainInvocation:
         fake_mod.main = _main
 
         with patch.object(sys, "argv", ["cortex-hook", "x"]):
-            with patch.object(hook_runner.importlib, "import_module", return_value=fake_mod):
+            with patch.object(
+                hook_runner.importlib, "import_module", return_value=fake_mod
+            ):
                 rc = hook_runner.run()
         assert called == [True]
         assert rc == 0
@@ -64,7 +65,9 @@ class TestMainInvocation:
         fake_mod = MagicMock()
         fake_mod.main = MagicMock(side_effect=SystemExit(7))
         with patch.object(sys, "argv", ["cortex-hook", "x"]):
-            with patch.object(hook_runner.importlib, "import_module", return_value=fake_mod):
+            with patch.object(
+                hook_runner.importlib, "import_module", return_value=fake_mod
+            ):
                 rc = hook_runner.run()
         assert rc == 7
 
@@ -80,7 +83,9 @@ class TestProcessEventFallback:
         fake_mod.process_event = _process_event
 
         with patch.object(sys, "argv", ["cortex-hook", "x"]):
-            with patch.object(hook_runner.importlib, "import_module", return_value=fake_mod):
+            with patch.object(
+                hook_runner.importlib, "import_module", return_value=fake_mod
+            ):
                 with patch.object(sys, "stdin", io.StringIO('{"tool_name": "Edit"}')):
                     rc = hook_runner.run()
         assert received == [{"tool_name": "Edit"}]
@@ -90,7 +95,9 @@ class TestProcessEventFallback:
         fake_mod = MagicMock(spec=["process_event"])
         fake_mod.process_event = MagicMock()
         with patch.object(sys, "argv", ["cortex-hook", "x"]):
-            with patch.object(hook_runner.importlib, "import_module", return_value=fake_mod):
+            with patch.object(
+                hook_runner.importlib, "import_module", return_value=fake_mod
+            ):
                 with patch.object(sys, "stdin", io.StringIO("")):
                     rc = hook_runner.run()
         assert rc == 0
@@ -115,6 +122,8 @@ class TestErrorPaths:
     def test_module_without_main_or_process_event_returns_4(self):
         fake_mod = MagicMock(spec=[])  # no main, no process_event
         with patch.object(sys, "argv", ["cortex-hook", "x"]):
-            with patch.object(hook_runner.importlib, "import_module", return_value=fake_mod):
+            with patch.object(
+                hook_runner.importlib, "import_module", return_value=fake_mod
+            ):
                 rc = hook_runner.run()
         assert rc == 4

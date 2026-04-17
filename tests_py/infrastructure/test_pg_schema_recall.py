@@ -19,9 +19,9 @@ def test_recall_memories_returns_source_column() -> None:
     assert "source          TEXT" in RECALL_MEMORIES_LAZY_FN, (
         "recall_memories() RETURNS TABLE must declare source TEXT"
     )
-    assert "c.source" in RECALL_MEMORIES_LAZY_FN or "m.source" in RECALL_MEMORIES_LAZY_FN, (
-        "recall_memories() final SELECT must include the source column"
-    )
+    assert (
+        "c.source" in RECALL_MEMORIES_LAZY_FN or "m.source" in RECALL_MEMORIES_LAZY_FN
+    ), "recall_memories() final SELECT must include the source column"
 
 
 def test_recall_memories_drop_guard_present() -> None:
@@ -49,6 +49,4 @@ def test_recall_memories_returns_known_columns() -> None:
         "source",
     )
     for col in required:
-        assert col in RECALL_MEMORIES_LAZY_FN, (
-            f"missing column in RETURNS TABLE: {col}"
-        )
+        assert col in RECALL_MEMORIES_LAZY_FN, f"missing column in RETURNS TABLE: {col}"

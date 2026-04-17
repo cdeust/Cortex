@@ -67,7 +67,6 @@ _LATENCY_CLASS: dict[str, LatencyClass] = {
     "wiki_link": "interactive",
     "wiki_write": "interactive",
     "wiki_adr": "interactive",
-
     # ── Batch (long-running) ──────────────────────────────────────────
     "consolidate": "batch",
     "seed_project": "batch",

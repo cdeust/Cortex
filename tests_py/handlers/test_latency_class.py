@@ -24,9 +24,7 @@ class TestRegistry:
     def test_every_registered_tool_classifies_to_valid_class(self):
         for tool in all_registered_tools():
             cls = classify(tool)
-            assert cls in ("interactive", "batch"), (
-                f"{tool}: unexpected class {cls!r}"
-            )
+            assert cls in ("interactive", "batch"), f"{tool}: unexpected class {cls!r}"
 
     def test_default_semaphore_covers_both_classes(self):
         assert "interactive" in DEFAULT_SEMAPHORE

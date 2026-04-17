@@ -58,14 +58,18 @@ def _register_wiki_read(mcp: FastMCP) -> None:
     @mcp.tool(name="wiki_read", description=wiki_read.schema["description"])
     async def tool_wiki_read(path: str) -> str:
         """Read the raw markdown of a wiki page by relative path."""
-        return await safe_handler(wiki_read.handler, {"path": path}, tool_name="wiki_read")
+        return await safe_handler(
+            wiki_read.handler, {"path": path}, tool_name="wiki_read"
+        )
 
 
 def _register_wiki_list(mcp: FastMCP) -> None:
     @mcp.tool(name="wiki_list", description=wiki_list.schema["description"])
     async def tool_wiki_list(kind: str | None = None) -> str:
         """List authored wiki pages, optionally filtered by kind."""
-        return await safe_handler(wiki_list.handler, {"kind": kind}, tool_name="wiki_list")
+        return await safe_handler(
+            wiki_list.handler, {"kind": kind}, tool_name="wiki_list"
+        )
 
 
 def _register_wiki_link(mcp: FastMCP) -> None:

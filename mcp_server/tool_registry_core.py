@@ -149,7 +149,11 @@ def _register_get_methodology_graph(mcp: FastMCP) -> None:
         domain: str | None = None,
     ) -> str:
         """Returns methodology map as graph data for 3D visualization."""
-        return await safe_handler(get_methodology_graph.handler, {"domain": domain}, tool_name="get_methodology_graph")
+        return await safe_handler(
+            get_methodology_graph.handler,
+            {"domain": domain},
+            tool_name="get_methodology_graph",
+        )
 
 
 def _register_open_visualization(mcp: FastMCP) -> None:
@@ -161,7 +165,11 @@ def _register_open_visualization(mcp: FastMCP) -> None:
         domain: str | None = None,
     ) -> str:
         """Launch the 3D methodology constellation map in the browser."""
-        return await safe_handler(open_visualization.handler, {"domain": domain}, tool_name="open_visualization")
+        return await safe_handler(
+            open_visualization.handler,
+            {"domain": domain},
+            tool_name="open_visualization",
+        )
 
 
 def _register_explore_features(mcp: FastMCP) -> None:

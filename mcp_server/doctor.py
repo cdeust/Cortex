@@ -42,7 +42,9 @@ class Check:
 def _python_version() -> Check:
     ver = sys.version_info
     if ver >= (3, 10):
-        return Check("Python >= 3.10", True, f"Python {ver.major}.{ver.minor}.{ver.micro}")
+        return Check(
+            "Python >= 3.10", True, f"Python {ver.major}.{ver.minor}.{ver.micro}"
+        )
     return Check(
         "Python >= 3.10",
         False,
@@ -64,7 +66,7 @@ def _uvx_available() -> Check:
         False,
         "not found on PATH",
         "Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh` (macOS/Linux) "
-        "or `powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"` (Windows). "
+        'or `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"` (Windows). '
         "Not needed if you installed via pip directly.",
     )
 
@@ -137,7 +139,9 @@ def _pg_extensions() -> Check:
     try:
         import psycopg
     except ImportError:
-        return Check("pgvector + pg_trgm extensions", False, "psycopg not installed", "")
+        return Check(
+            "pgvector + pg_trgm extensions", False, "psycopg not installed", ""
+        )
     url = os.environ.get("DATABASE_URL", "")
     if not url:
         return Check("pgvector + pg_trgm extensions", False, "DATABASE_URL not set", "")
@@ -195,8 +199,8 @@ def _i10_config() -> Check:
             and s.POOL_BATCH_MAX >= DEFAULT_SEMAPHORE["batch"] + 1
         )
         detail = (
-            f"interactive={s.POOL_INTERACTIVE_MAX} (>= {DEFAULT_SEMAPHORE['interactive']+1}), "
-            f"batch={s.POOL_BATCH_MAX} (>= {DEFAULT_SEMAPHORE['batch']+1})"
+            f"interactive={s.POOL_INTERACTIVE_MAX} (>= {DEFAULT_SEMAPHORE['interactive'] + 1}), "
+            f"batch={s.POOL_BATCH_MAX} (>= {DEFAULT_SEMAPHORE['batch'] + 1})"
         )
         fix = (
             "Increase CORTEX_MEMORY_POOL_INTERACTIVE_MAX or "

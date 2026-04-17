@@ -76,10 +76,7 @@ def _scan_heat_writers() -> set[tuple[str, int]]:
         for i, line in enumerate(lines, 1):
             up = line.upper().replace(" AS M", "").replace(" AS W", "")
             # Single-line: UPDATE memories ... SET heat_base = ...
-            if (
-                "UPDATE MEMORIES" in up
-                and heat_base_assign.search(line)
-            ):
+            if "UPDATE MEMORIES" in up and heat_base_assign.search(line):
                 rel = str(py.relative_to(_MCP_ROOT)).replace("\\", "/")
                 offenders.add((rel, i))
                 continue
