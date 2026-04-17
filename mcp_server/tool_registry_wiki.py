@@ -50,6 +50,7 @@ def _register_wiki_write(mcp: FastMCP) -> None:
                 "mode": mode,
                 "tags": tags or [],
             },
+            tool_name="wiki_write",
         )
 
 
@@ -57,14 +58,14 @@ def _register_wiki_read(mcp: FastMCP) -> None:
     @mcp.tool(name="wiki_read", description=wiki_read.schema["description"])
     async def tool_wiki_read(path: str) -> str:
         """Read the raw markdown of a wiki page by relative path."""
-        return await safe_handler(wiki_read.handler, {"path": path})
+        return await safe_handler(wiki_read.handler, {"path": path}, tool_name="wiki_read")
 
 
 def _register_wiki_list(mcp: FastMCP) -> None:
     @mcp.tool(name="wiki_list", description=wiki_list.schema["description"])
     async def tool_wiki_list(kind: str | None = None) -> str:
         """List authored wiki pages, optionally filtered by kind."""
-        return await safe_handler(wiki_list.handler, {"kind": kind})
+        return await safe_handler(wiki_list.handler, {"kind": kind}, tool_name="wiki_list")
 
 
 def _register_wiki_link(mcp: FastMCP) -> None:
@@ -74,6 +75,7 @@ def _register_wiki_link(mcp: FastMCP) -> None:
         return await safe_handler(
             wiki_link.handler,
             {"from_path": from_path, "to_path": to_path, "relation": relation},
+            tool_name="wiki_link",
         )
 
 
@@ -98,6 +100,7 @@ def _register_wiki_adr(mcp: FastMCP) -> None:
                 "status": status,
                 "tags": tags or [],
             },
+            tool_name="wiki_adr",
         )
 
 
@@ -105,7 +108,7 @@ def _register_wiki_reindex(mcp: FastMCP) -> None:
     @mcp.tool(name="wiki_reindex", description=wiki_reindex.schema["description"])
     async def tool_wiki_reindex() -> str:
         """Regenerate the wiki table of contents at .generated/INDEX.md."""
-        return await safe_handler(wiki_reindex.handler, {})
+        return await safe_handler(wiki_reindex.handler, {}, tool_name="wiki_reindex")
 
 
 def _register_wiki_purge(mcp: FastMCP) -> None:
@@ -118,4 +121,5 @@ def _register_wiki_purge(mcp: FastMCP) -> None:
         return await safe_handler(
             wiki_purge.handler,
             {"apply": apply, "kind": kind},
+            tool_name="wiki_purge",
         )

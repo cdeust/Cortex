@@ -48,6 +48,7 @@ def _register_forget(mcp: FastMCP) -> None:
                 "soft": soft,
                 "force": force,
             },
+            tool_name="forget",
         )
 
 
@@ -75,6 +76,7 @@ def _register_validate_memory(mcp: FastMCP) -> None:
                 "staleness_threshold": staleness_threshold,
                 "dry_run": dry_run,
             },
+            tool_name="validate_memory",
         )
 
 
@@ -94,6 +96,7 @@ def _register_rate_memory(mcp: FastMCP) -> None:
                 "memory_id": memory_id,
                 "useful": useful,
             },
+            tool_name="rate_memory",
         )
 
 
@@ -117,6 +120,7 @@ def _register_seed_project(mcp: FastMCP) -> None:
                 "max_file_size_kb": max_file_size_kb,
                 "dry_run": dry_run,
             },
+            tool_name="seed_project",
         )
 
 
@@ -136,6 +140,7 @@ def _register_anchor(mcp: FastMCP) -> None:
                 "memory_id": memory_id,
                 "reason": reason or "",
             },
+            tool_name="anchor",
         )
 
 
@@ -161,6 +166,7 @@ def _register_backfill_memories(mcp: FastMCP) -> None:
                 "dry_run": dry_run,
                 "force_reprocess": force_reprocess,
             },
+            tool_name="backfill_memories",
         )
 
 
@@ -190,4 +196,5 @@ def _register_codebase_analyze(mcp: FastMCP) -> None:
                 "dry_run": dry_run,
                 "domain": domain or "",
             },
+            tool_name="codebase_analyze",
         )

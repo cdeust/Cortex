@@ -43,6 +43,7 @@ def _register_ingest_codebase(mcp: FastMCP) -> None:
                 "top_symbols": top_symbols,
                 "top_processes": top_processes,
             },
+            tool_name="ingest_codebase",
         )
 
 
@@ -70,4 +71,5 @@ def _register_ingest_prd(mcp: FastMCP) -> None:
                 "validate": validate,
                 "domain": domain,
             },
+            tool_name="ingest_prd",
         )

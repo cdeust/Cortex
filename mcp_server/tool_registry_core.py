@@ -52,6 +52,7 @@ def _register_query_methodology(mcp: FastMCP) -> None:
                 "project": project,
                 "first_message": first_message,
             },
+            tool_name="query_methodology",
         )
 
 
@@ -73,6 +74,7 @@ def _register_detect_domain(mcp: FastMCP) -> None:
                 "project": project,
                 "first_message": first_message,
             },
+            tool_name="detect_domain",
         )
 
 
@@ -92,6 +94,7 @@ def _register_rebuild_profiles(mcp: FastMCP) -> None:
                 "domain": domain,
                 "force": force,
             },
+            tool_name="rebuild_profiles",
         )
 
 
@@ -102,7 +105,7 @@ def _register_list_domains(mcp: FastMCP) -> None:
     )
     async def tool_list_domains() -> str:
         """Overview of all detected cognitive domains."""
-        return await safe_handler(list_domains.handler, {})
+        return await safe_handler(list_domains.handler, {}, tool_name="list_domains")
 
 
 def _register_record_session_end(mcp: FastMCP) -> None:
@@ -133,6 +136,7 @@ def _register_record_session_end(mcp: FastMCP) -> None:
                 "cwd": cwd,
                 "project": project,
             },
+            tool_name="record_session_end",
         )
 
 
@@ -145,7 +149,7 @@ def _register_get_methodology_graph(mcp: FastMCP) -> None:
         domain: str | None = None,
     ) -> str:
         """Returns methodology map as graph data for 3D visualization."""
-        return await safe_handler(get_methodology_graph.handler, {"domain": domain})
+        return await safe_handler(get_methodology_graph.handler, {"domain": domain}, tool_name="get_methodology_graph")
 
 
 def _register_open_visualization(mcp: FastMCP) -> None:
@@ -157,7 +161,7 @@ def _register_open_visualization(mcp: FastMCP) -> None:
         domain: str | None = None,
     ) -> str:
         """Launch the 3D methodology constellation map in the browser."""
-        return await safe_handler(open_visualization.handler, {"domain": domain})
+        return await safe_handler(open_visualization.handler, {"domain": domain}, tool_name="open_visualization")
 
 
 def _register_explore_features(mcp: FastMCP) -> None:
@@ -178,4 +182,5 @@ def _register_explore_features(mcp: FastMCP) -> None:
                 "domain": domain,
                 "compare_domain": compare_domain,
             },
+            tool_name="explore_features",
         )

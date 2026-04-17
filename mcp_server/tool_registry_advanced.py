@@ -48,6 +48,7 @@ def _register_sync_instructions(mcp: FastMCP) -> None:
                 "min_heat": min_heat,
                 "dry_run": dry_run,
             },
+            tool_name="sync_instructions",
         )
 
 
@@ -71,6 +72,7 @@ def _register_create_trigger(mcp: FastMCP) -> None:
                 "trigger_type": trigger_type,
                 "target_directory": target_directory,
             },
+            tool_name="create_trigger",
         )
 
 
@@ -98,6 +100,7 @@ def _register_add_rule(mcp: FastMCP) -> None:
                 "scope_value": scope_value,
                 "priority": priority,
             },
+            tool_name="add_rule",
         )
 
 
@@ -119,6 +122,7 @@ def _register_get_rules(mcp: FastMCP) -> None:
                 "rule_type": rule_type,
                 "include_inactive": include_inactive,
             },
+            tool_name="get_rules",
         )
 
 
@@ -142,6 +146,7 @@ def _register_get_project_story(mcp: FastMCP) -> None:
                 "period": period,
                 "max_chapters": max_chapters,
             },
+            tool_name="get_project_story",
         )
 
 
@@ -163,4 +168,5 @@ def _register_assess_coverage(mcp: FastMCP) -> None:
                 "domain": domain or "",
                 "stale_days": stale_days,
             },
+            tool_name="assess_coverage",
         )
