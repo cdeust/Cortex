@@ -42,7 +42,12 @@ def run_plasticity_cycle(
 
         activities, thresholds = _build_entity_maps(entities)
         sample = _select_co_access_sample(store, memories)
-        co_accessed = _find_co_accessed_pairs(sample, entities)
+        # Phase 2 B1: JOIN replacement. Pre-Phase 2 did an O(N_mem × N_ent)
+        # Python substring scan; post-0.4.5 backfill we query
+        # memory_entities directly via JOIN (O(pairs)).
+        sample_ids = [m["id"] for m in sample if m.get("id") is not None]
+        co_accessed_list = store.find_co_accessed_pairs(sample_ids)
+        co_accessed: set[tuple[int, int]] = set(co_accessed_list)
         edge_dicts = _format_edges(relationships)
 
         results = apply_hebbian_update(
