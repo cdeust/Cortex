@@ -37,8 +37,8 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # A3 batched writer (homeostatic cohort branch + any other batch consumer).
     ("infrastructure/pg_store.py", 508),
     # SQLite parity.
-    ("infrastructure/sqlite_store.py", 228),
-    ("infrastructure/sqlite_store.py", 272),
+    ("infrastructure/sqlite_store.py", 284),
+    ("infrastructure/sqlite_store.py", 328),
     # Homeostatic fold (amortized ~once/month per domain).
     ("handlers/consolidation/homeostatic.py", 277),
     # Anchor pin: heat_base=1.0 + no_decay=TRUE preserves resist-decay.
