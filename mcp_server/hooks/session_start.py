@@ -503,12 +503,112 @@ def _auto_wire_pipeline() -> None:
         _log(f"pipeline auto-wire skipped: {exc}")
 
 
+def _maybe_background_reanalyze() -> None:
+    """Spawn background ``ingest_codebase`` when the graph is stale.
+
+    Runs detached (``subprocess.Popen`` with its own process group) so
+    SessionStart returns immediately — the next session sees a fresh
+    graph. Blocks NOTHING in the current session. Auto-stops if no
+    pipeline is configured or graph is fresh.
+
+    Gated by the TTL check in ``pipeline_graph_ttl.graph_is_stale``.
+    Project root is the user's CWD — Claude Code sets this to the
+    project Claude was started in.
+    """
+    try:
+        from mcp_server.infrastructure.pipeline_discovery import (
+            discover_pipeline_command,
+        )
+        from mcp_server.infrastructure.pipeline_graph_ttl import graph_is_stale
+
+        if discover_pipeline_command() is None:
+            return  # Pipeline not installed — nothing to do.
+
+        project_root = os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd()
+        cached_path = _lookup_cached_graph_path(project_root)
+        if not graph_is_stale(cached_path):
+            return  # Fresh enough; skip.
+
+        # Spawn background ingest. scripts/launcher.py handles PYTHONPATH
+        # + deps, then runs the ingest_codebase handler as a one-shot CLI.
+        plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT") or str(
+            Path(__file__).resolve().parents[2]
+        )
+        launcher = Path(plugin_root) / "scripts" / "launcher.py"
+        if not launcher.exists():
+            return
+
+        py = (
+            __import__("shutil").which("python3")
+            or __import__("shutil").which("python")
+            or sys.executable
+        )
+        cmd = [
+            py,
+            str(launcher),
+            "mcp_server.hooks.ingest_codebase_background",
+            project_root,
+        ]
+        # Detach: no stdin, redirect stdout/stderr to a log file so we
+        # can diagnose later.
+        log_path = Path.home() / ".claude" / "methodology" / "pipeline_reanalyze.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=open(log_path, "a"),
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        _log(f"background pipeline reanalysis spawned → {log_path}")
+    except Exception as exc:
+        _log(f"background pipeline reanalysis skipped: {exc}")
+
+
+def _lookup_cached_graph_path(project_root: str) -> str | None:
+    """Read the cached ``graph_path=...`` memo for this project, if any."""
+    try:
+        from mcp_server.handlers.ingest_helpers import (
+            code_graph_tag,
+        )
+    except Exception:
+        return None
+    conn = _connect_pg()
+    if conn is None:
+        return None
+    try:
+        tag = code_graph_tag(project_root)
+        rows = conn.execute(
+            "SELECT content FROM memories WHERE tags @> %s::jsonb "
+            "AND NOT is_stale ORDER BY heat_base_set_at DESC LIMIT 1",
+            (f'["{tag}"]',),
+        ).fetchall()
+        for row in rows:
+            content = row.get("content") or ""
+            if content.startswith("graph_path="):
+                return content[len("graph_path=") :].strip()
+    except Exception:
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return None
+
+
 def main() -> None:
     """Entry point — print context block to stdout."""
 
     # Auto-discovery runs before the PG path so users see it work even
     # on a fresh machine without a DB set up yet.
     _auto_wire_pipeline()
+
+    # Background re-analysis: fire-and-forget when the graph is stale.
+    # This happens BEFORE PG connection because the spawn itself doesn't
+    # need the DB — the spawned process will connect independently. If
+    # the pipeline isn't installed OR the graph is fresh, this is a no-op.
+    _maybe_background_reanalyze()
 
     # Try connecting to PostgreSQL directly first
     conn = _connect_pg()

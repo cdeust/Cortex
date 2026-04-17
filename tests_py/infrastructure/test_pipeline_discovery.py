@@ -8,10 +8,7 @@ readiness), user directive "detected and guided".
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 
 from mcp_server.infrastructure import pipeline_discovery
 
@@ -48,9 +45,7 @@ class TestDiscoverCommand:
         built.parent.mkdir(parents=True)
         built.write_text("#!/bin/sh\n")
         built.chmod(0o755)
-        monkeypatch.setattr(
-            pipeline_discovery, "_SOURCE_DIRS", (str(source),)
-        )
+        monkeypatch.setattr(pipeline_discovery, "_SOURCE_DIRS", (str(source),))
         cmd = pipeline_discovery.discover_pipeline_command()
         assert cmd == [str(built)]
 
@@ -70,12 +65,16 @@ class TestEnsureConnection:
         assert result["action"] == "wrote_config"
         assert config_path.exists()
         data = json.loads(config_path.read_text())
-        assert data["servers"]["codebase"]["command"] == "/usr/local/bin/ai-architect-mcp"
+        assert (
+            data["servers"]["codebase"]["command"] == "/usr/local/bin/ai-architect-mcp"
+        )
 
     def test_no_pipeline_leaves_config_untouched(self, tmp_path, monkeypatch):
         config_path = tmp_path / "mcp-connections.json"
         monkeypatch.setattr(pipeline_discovery, "MCP_CONNECTIONS_PATH", config_path)
-        monkeypatch.setattr(pipeline_discovery, "discover_pipeline_command", lambda: None)
+        monkeypatch.setattr(
+            pipeline_discovery, "discover_pipeline_command", lambda: None
+        )
         result = pipeline_discovery.ensure_pipeline_connection()
         assert result["action"] == "no_pipeline_found"
         assert not config_path.exists()
@@ -132,4 +131,6 @@ class TestEnsureConnection:
         data = json.loads(config_path.read_text())
         # Both entries preserved
         assert "prd-gen" in data["servers"]
-        assert data["servers"]["codebase"]["command"] == "/usr/local/bin/ai-architect-mcp"
+        assert (
+            data["servers"]["codebase"]["command"] == "/usr/local/bin/ai-architect-mcp"
+        )
