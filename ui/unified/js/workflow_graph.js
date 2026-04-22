@@ -14,6 +14,7 @@
   var KIND_RADIUS = {
     domain: 26, tool_hub: 14, agent: 10, skill: 10, command: 8,
     hook: 9, memory: 7, discussion: 8, entity: 6, file: 5, mcp: 12,
+    symbol: 2,
   };
   var KIND_COLOR = {
     domain: '#FCD34D',     // gold hub
@@ -27,6 +28,7 @@
     discussion: '#EF4444', // red
     entity: '#50B0C8',     // teal
     file: '#06B6D4',       // cyan fallback — primary-tool color overrides
+    symbol: '#64748B',     // slate — inherits parent-file color via node.color
   };
   // Radial hierarchy inside each domain cloud — FIVE concentric/sector levels:
   //   L1 setup  (skills/hooks/commands/agents)   @ r = SETUP_R   front sector
@@ -44,6 +46,12 @@
   var DISC_R  = 150;
   var MEM_R   = 150;
   var MCP_R   = 50;
+  // Symbols form a dense cloud JUST outside the file ring — this is the
+  // "petal" shell that gives the graph the screenshot look.  The cloud
+  // is anchored per-file so each file becomes a small satellite clump.
+  var SYM_R_OUTER = 290;    // outer edge of the symbol shell
+  var SYM_R_SPREAD = 32;    // radial jitter per-file-group
+  var SYM_CLUMP_R = 18;     // tight clumping distance around parent file
   var SECTOR_SETUP_HALF = Math.PI / 2.6;   // ~69°
   var SECTOR_SIDE_HALF  = Math.PI / 6.5;   // ~28°
   var SECTOR_SIDE_ANGLE = Math.PI * 0.72;  // ~130° from outward axis
@@ -51,9 +59,10 @@
   // per domain, plus disc/mem arcs). Level tokens consumed by the SVG
   // renderer to paint ring outlines + labels.
   var SHELL_LEVELS = [
-    { key: 'L1', r: SETUP_R, label: 'L1 setup' },
-    { key: 'L2', r: TOOL_R,  label: 'L2 tools' },
-    { key: 'L3', r: FILE_R,  label: 'L3 files' },
+    { key: 'L1', r: SETUP_R,     label: 'L1 setup' },
+    { key: 'L2', r: TOOL_R,      label: 'L2 tools' },
+    { key: 'L3', r: FILE_R,      label: 'L3 files' },
+    { key: 'L6', r: SYM_R_OUTER, label: 'L6 symbols' },
   ];
   // Per-tool angles (local to the domain's outward axis), in radians.
   var TOOL_LOCAL_ANGLE = {
@@ -76,6 +85,10 @@
     discussion_touched_file: 80,
     command_touched_file: 60,
     invoked_mcp: 90,
+    defined_in: 22,                      // symbol sits close to its file
+    calls: 24,                           // caller ↔ callee tight
+    imports: 60,                         // short effective length — gain-bounded
+    member_of: 10,                       // method ↔ class tight
   };
   var EDGE_STRENGTH = {
     in_domain: 0.0,                      // layout is slot-anchored; links = slack
@@ -88,6 +101,10 @@
     discussion_touched_file: 0.08,
     command_touched_file: 0.08,
     invoked_mcp: 0.04,                   // long springs — MCPs bridge domains
+    defined_in: 0.95,                    // dominant anchor
+    calls: 0.12,                         // halved
+    imports: 0.04,                       // 4.5× gain cut — no runaway resonance
+    member_of: 0.60,
   };
   var CROSS_DOMAIN_DISTANCE = 260;
   var CROSS_DOMAIN_STRENGTH = 0.02;
@@ -120,7 +137,38 @@
     var d3 = window.d3;
     var wfg = window.JUG._wfg;
     var nodes = (data.nodes || []).map(function (n) { return Object.assign({}, n); });
-    var edges = (data.edges || []).map(function (e) {
+    // For very large graphs (>15k nodes) skip the simulation-visible
+    // edges entirely — symbol→file/symbol→symbol edges number in the
+    // tens of thousands and d3.forceLink on that many pairs freezes
+    // the main thread. The slot layout already encodes containment
+    // geometrically, so the visual edge of every symbol→file pair is
+    // redundant. Keep only structural edges (domain hubs, tools,
+    // files ↔ tools, discussions ↔ files, memories) for rendering.
+    var HEAVY = nodes.length > 8000;
+    var _nidSet = {};
+    for (var _ni = 0; _ni < nodes.length; _ni++) _nidSet[nodes[_ni].id] = 1;
+    // Keep AST edges in the simulation — they carry real semantic
+    // meaning (symbol contained in file, symbol calls another symbol,
+    // file imports symbol, method belongs to class). Layout should
+    // REFLECT this connectivity, not randomize it. Only drop the
+    // really dense symbol↔symbol edges (`calls`) under extreme load
+    // to keep tick-rate manageable.
+    var EXTREME = nodes.length > 25000;
+    var renderedEdges;
+    if (EXTREME) {
+      renderedEdges = (data.edges || []).filter(function (e) {
+        return e.kind !== 'calls';
+      });
+    } else {
+      renderedEdges = data.edges || [];
+    }
+    // Drop dangling edges — endpoints must exist in the nodes array.
+    renderedEdges = renderedEdges.filter(function (e) {
+      var s = typeof e.source === 'object' ? e.source.id : e.source;
+      var t = typeof e.target === 'object' ? e.target.id : e.target;
+      return _nidSet[s] && _nidSet[t];
+    });
+    var edges = renderedEdges.map(function (e) {
       return Object.assign({}, e, {
         source: typeof e.source === 'object' ? e.source.id : e.source,
         target: typeof e.target === 'object' ? e.target.id : e.target,
@@ -129,21 +177,73 @@
     var width  = container.clientWidth  || window.innerWidth;
     var height = container.clientHeight || window.innerHeight;
 
-    var ctx = prepareTopology(nodes, edges, width, height);
+    // Topology prep uses the FULL edge set (parent-file map needs
+    // `defined_in` edges) but the simulation only sees the rendered set.
+    var ctx = prepareTopology(nodes, data.edges || [], width, height);
+    ctx.edges = edges;                // simulation edges (possibly filtered)
     ctx.KIND_RADIUS = KIND_RADIUS;
     ctx.KIND_COLOR  = KIND_COLOR;
+    // HEAVY: pin symbols at their slot positions so d3 treats them as
+    // immovable anchors (skip charge, skip link, skip collide for
+    // pinned nodes). The layout is already deterministic via slotOf;
+    // simulating 10k+ symbols adds no visual value, only CPU cost.
+    // Seed symbols ALONG THE OUTWARD RAY from the domain hub through
+    // their parent file, at a random distance past the file. This is
+    // the starting configuration that lets symbols flow naturally
+    // into the inter-domain gap space rather than orbiting the hub.
+    for (var pi = 0; pi < nodes.length; pi++) {
+      var pn = nodes[pi];
+      if (pn.kind !== 'symbol') continue;
+      var dId = ctx.domainOf[pn.id] || 'domain:__global__';
+      var anc = ctx.anchors[dId] || ctx.anchors['domain:__global__'];
+      var pfId = ctx.parentFile[pn.id];
+      var fileSlot = pfId ? ctx.slotOf[pfId] : null;
+      if (!anc) continue;
+      var origin = fileSlot || anc;
+      // Outward unit vector from domain anchor → origin.
+      var dx = origin.x - anc.x, dy = origin.y - anc.y;
+      var d = Math.hypot(dx, dy);
+      var ox, oy;
+      if (d < 1) {
+        // Fallback: pseudo-random outward ray.
+        var t = (pi * 0.37) % (Math.PI * 2);
+        ox = Math.cos(t); oy = Math.sin(t);
+      } else {
+        ox = dx / d; oy = dy / d;
+      }
+      var pastFile = 30 + Math.random() * 120;  // 30..150 px past file
+      var angJitter = (Math.random() - 0.5) * 0.15;  // ±4° lateral spread
+      var cs = Math.cos(angJitter), sn = Math.sin(angJitter);
+      var rx = ox * cs - oy * sn;
+      var ry = ox * sn + oy * cs;
+      pn.x = origin.x + rx * pastFile;
+      pn.y = origin.y + ry * pastFile;
+    }
     var panel = wfg.buildSidePanel(container);
 
+    // Maxwell-damped config: ζ ≈ 0.55 via velocityDecay 0.72, and
+    // local-range charge so long-distance repulsion doesn't oscillate.
+    var slotK    = HEAVY ? 1.2  : 0.85;
+    var chargeEn = true;
+    var collideI = HEAVY ? 2    : 3;
+    var alphaDK  = HEAVY ? 0.028 : 0.022;
+
     var sim = d3.forceSimulation(nodes)
-      .alpha(1.0).alphaDecay(0.022).velocityDecay(0.45)
+      .alpha(1.0).alphaDecay(alphaDK).velocityDecay(0.72)
       .force('link', d3.forceLink(edges).id(function (n) { return n.id; })
         .distance(linkDistance).strength(linkStrength))
-      .force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(700))
-      .force('slot',        slotForce(ctx, 0.85))
+      .force('slot',        slotForce(ctx, slotK))
       .force('interdomain', interDomainRepelForce(ctx, 0.08))
+      .force('symmulti', symbolMultiCenterForce(ctx))
       .force('collide', d3.forceCollide()
         .radius(function (n) { return collisionRadius(n, ctx); })
-        .strength(0.92).iterations(3));
+        .strength(0.92).iterations(collideI));
+    if (chargeEn) {
+      // Local charge (distanceMax 180) so symbol-symbol repulsion
+      // doesn't create long-range feedback with the multi-centroid
+      // attraction; domains still repel each other via interdomain.
+      sim.force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(180));
+    }
 
     var useCanvas = nodes.length > CANVAS_THRESHOLD;
     var renderer = useCanvas
@@ -217,6 +317,39 @@
       if (t.kind === 'domain' && !domainOf[s.id]) domainOf[s.id] = t.id;
     });
 
+    // Parent file per symbol — drives the symbol-petal clustering.
+    // Prefer `defined_in` edges; fall back to `path` string match.
+    var parentFile = {};
+    edges.forEach(function (e) {
+      if (e.kind !== 'defined_in') return;
+      var s = byId[e.source], t = byId[e.target];
+      if (!s || !t) return;
+      if (s.kind === 'symbol' && t.kind === 'file') parentFile[s.id] = t.id;
+      else if (t.kind === 'symbol' && s.kind === 'file') parentFile[t.id] = s.id;
+    });
+    var filesByPath = {};
+    nodes.forEach(function (n) {
+      if (n.kind === 'file' && n.path) filesByPath[n.path] = n.id;
+    });
+    nodes.forEach(function (n) {
+      if (n.kind !== 'symbol' || parentFile[n.id]) return;
+      if (n.path && filesByPath[n.path]) parentFile[n.id] = filesByPath[n.path];
+    });
+    // Every symbol MUST have a domain or the containment force can't
+    // constrain it. Priority:
+    //   1. Parent file's domain (derived from `defined_in` edge)
+    //   2. node.domain_id / node.domain (server already tags each
+    //      symbol with its project's domain id)
+    //   3. GLOBAL fallback if somehow neither resolves.
+    nodes.forEach(function (n) {
+      if (n.kind !== 'symbol') return;
+      var pf = parentFile[n.id];
+      if (pf && domainOf[pf]) { domainOf[n.id] = domainOf[pf]; return; }
+      var did = n.domain_id || (n.domain ? 'domain:' + n.domain : '');
+      if (did && byId[did]) { domainOf[n.id] = did; return; }
+      if (!domainOf[n.id]) domainOf[n.id] = 'domain:__global__';
+    });
+
     var primaryHub = {}, hubWeight = {};
     edges.forEach(function (e) {
       if (e.kind !== 'tool_used_file') return;
@@ -242,10 +375,11 @@
       adj[e.source][e.target] = true; adj[e.target][e.source] = true;
     });
 
-    var slotOf = computeSlots(nodes, domains, anchors, domainOf, primaryHub, cx, cy);
+    var slotOf = computeSlots(nodes, domains, anchors, domainOf, primaryHub, parentFile, cx, cy);
 
     return { byId: byId, nodes: nodes, edges: edges, domains: domains,
       anchors: anchors, domainOf: domainOf, primaryHub: primaryHub,
+      parentFile: parentFile,
       degree: degree, adj: adj, slotOf: slotOf,
       shells: SHELL_LEVELS, sideShells: [
         { key: 'L4', r: DISC_R, label: 'L4 discussions', angle: SECTOR_SIDE_ANGLE },
@@ -256,7 +390,7 @@
 
   // Assign each non-domain node a target (x,y) slot expressing the hierarchy:
   //   domain → L1 (setup) → L2 (tools) → L3 (files);  discussions lane;  memories lane.
-  function computeSlots(nodes, domains, anchors, domainOf, primaryHub, cx, cy) {
+  function computeSlots(nodes, domains, anchors, domainOf, primaryHub, parentFile, cx, cy) {
     // Group non-domain nodes by (domain, kind).
     var groups = {};
     for (var i = 0; i < nodes.length; i++) {
@@ -353,6 +487,14 @@
         slotOf[n.id] = { x: a.x + MCP_R * Math.cos(t + jitter),
                          y: a.y + MCP_R * Math.sin(t + jitter) };
       });
+
+      // L6 symbols intentionally have NO slot — their final position
+      // is determined by the codebase-analysis edges the force
+      // simulation operates on (`defined_in` pulls toward the parent
+      // file, `calls` pulls toward callers/callees, `imports` bridges
+      // files, `member_of` clusters methods with their class). The
+      // initial x/y seeding happens in mount() from the parent file's
+      // position, then the force simulation does the layout work.
     });
     return slotOf;
   }
@@ -371,6 +513,9 @@
     if (n.kind === 'domain')   return -620;
     if (n.kind === 'tool_hub') return -140;
     if (n.kind === 'agent' || n.kind === 'skill') return -80;
+    // Symbols: enough mutual repulsion to spread laterally in the
+    // interlock space (Maxwell: -22, local distanceMax).
+    if (n.kind === 'symbol')   return -22;
     return -28;
   }
   function slotForce(ctx, k) {
@@ -383,6 +528,64 @@
         if (!slot) continue;
         n.vx += (slot.x - n.x) * s;
         n.vy += (slot.y - n.y) * s;
+      }
+    };
+  }
+  // Multi-centroid attraction (Alexander's deep interlock): a symbol
+  // is pulled by EVERY domain it touches via its edges, weighted 1/N
+  // where N = number of distinct domains touched. Symbols connected
+  // only to their home domain sit near it; cross-domain symbols
+  // literally fall into the interlock space between two or more hubs.
+  // No containment — position emerges from connectivity alone.
+  function symbolMultiCenterForce(ctx) {
+    // Precompute each symbol's domain centroid list ONCE.
+    var symDomains = {};
+    for (var i = 0; i < ctx.nodes.length; i++) {
+      var n = ctx.nodes[i];
+      if (n.kind !== 'symbol') continue;
+      var set = {};
+      // Home domain (from parent file or node's own domain_id).
+      var home = ctx.domainOf[n.id];
+      if (home && ctx.anchors[home]) set[home] = 1;
+      symDomains[n.id] = set;
+    }
+    // Walk every AST edge; for each symbol endpoint, add the OTHER
+    // endpoint's domain to its centroid set.
+    ctx.edges.forEach(function (e) {
+      var k = e.kind;
+      if (k !== 'defined_in' && k !== 'calls' &&
+          k !== 'imports' && k !== 'member_of') return;
+      var sId = typeof e.source === 'object' ? e.source.id : e.source;
+      var tId = typeof e.target === 'object' ? e.target.id : e.target;
+      var sN = ctx.byId[sId], tN = ctx.byId[tId];
+      if (!sN || !tN) return;
+      if (sN.kind === 'symbol' && ctx.domainOf[tId] && ctx.anchors[ctx.domainOf[tId]]) {
+        symDomains[sId] = symDomains[sId] || {};
+        symDomains[sId][ctx.domainOf[tId]] = 1;
+      }
+      if (tN.kind === 'symbol' && ctx.domainOf[sId] && ctx.anchors[ctx.domainOf[sId]]) {
+        symDomains[tId] = symDomains[tId] || {};
+        symDomains[tId][ctx.domainOf[sId]] = 1;
+      }
+    });
+    ctx._symDomains = symDomains;
+
+    return function (alpha) {
+      var s = 0.06 * alpha;
+      for (var i = 0; i < ctx.nodes.length; i++) {
+        var n = ctx.nodes[i];
+        if (n.kind !== 'symbol') continue;
+        var set = symDomains[n.id];
+        if (!set) continue;
+        var keys = Object.keys(set);
+        if (!keys.length) continue;
+        var w = s / keys.length;
+        for (var j = 0; j < keys.length; j++) {
+          var a = ctx.anchors[keys[j]];
+          if (!a) continue;
+          n.vx += (a.x - n.x) * w;
+          n.vy += (a.y - n.y) * w;
+        }
       }
     };
   }

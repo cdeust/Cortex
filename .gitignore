@@ -26,3 +26,7 @@ benchmarks/spell_alteration/*.pdf
 
 # Runtime telemetry
 traces/
+
+# Claude Code ephemeral session state
+.claude/scheduled_tasks.lock
+.claude/session-cache.json

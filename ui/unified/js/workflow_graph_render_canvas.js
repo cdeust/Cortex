@@ -96,8 +96,21 @@
       }
     }
     function drawNodes(focusId, adj) {
+      // At low zoom, symbols blur into a cloud and drawing each one
+      // wastes ~10 ms per frame with 10k+ of them. Skip them below
+      // a threshold — the domain/file scaffolding conveys shape.
+      // Symbols form the dense cloud that makes the graph look "alive"
+      // in the target screenshot. Drawing 10k+ circles at 60 fps costs
+      // ~10 ms/frame on desktop — well within budget — so we always
+      // draw them regardless of zoom. (Skipping them at zoom<0.4 was
+      // hiding the entire cloud at default fit and making the graph
+      // look empty.)
+      var zoom = transform.k || 1;
+      var skipSymbols = zoom < 0.08;   // effectively always show
       for (var j = 0; j < ctx.nodes.length; j++) {
-        var n = ctx.nodes[j]; var r = wfg.nodeRadius(n);
+        var n = ctx.nodes[j];
+        if (skipSymbols && n.kind === 'symbol' && !focusId) continue;
+        var r = wfg.nodeRadius(n);
         var isFocus = focusId === n.id;
         var isDim = focusId && n.id !== focusId && !adj[n.id];
         g.globalAlpha = isDim ? 0.15 : 1.0;
@@ -226,8 +239,17 @@
     };
     drawNodes = function (focusId, adj) {
       if (!filterKeep) return origDrawNodes(focusId, adj);
+      // Symbols form the dense cloud that makes the graph look "alive"
+      // in the target screenshot. Drawing 10k+ circles at 60 fps costs
+      // ~10 ms/frame on desktop — well within budget — so we always
+      // draw them regardless of zoom. (Skipping them at zoom<0.4 was
+      // hiding the entire cloud at default fit and making the graph
+      // look empty.)
+      var zoom = transform.k || 1;
+      var skipSymbols = zoom < 0.08;   // effectively always show
       for (var j = 0; j < ctx.nodes.length; j++) {
         var n = ctx.nodes[j];
+        if (skipSymbols && n.kind === 'symbol' && !focusId) continue;
         var kept = !!filterKeep[n.id];
         var r = wfg.nodeRadius(n);
         var isFocus = focusId === n.id;

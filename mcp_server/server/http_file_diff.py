@@ -29,8 +29,7 @@ def serve_file_diff(handler) -> None:
     """
     name = _extract_name_param(handler.path)
     if not name:
-        handler.send_response(400)
-        handler.end_headers()
+        _json_response(handler, {"error": "missing 'name' parameter"}, 400)
         return
 
     from mcp_server.infrastructure.git_diff import (
@@ -111,10 +110,17 @@ def _extract_name_param(path: str) -> str:
 
 
 def _json_response(handler, data: dict, code: int = 200) -> None:
-    """Send a JSON response with CORS headers."""
+    """Send a JSON response with CORS headers.
+
+    MUST include a ``Content-Length`` header — the server runs HTTP/1.1
+    with keep-alive, and without Content-Length the browser's
+    ``fetch()`` never resolves (connection stays open waiting for more
+    bytes), which leaves the diff modal stuck on "Loading…".
+    """
     body = json.dumps(data, default=str).encode()
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
     # Strict-reflect CORS against the loopback allowlist (CWE-942). The
     # previous ``http://127.0.0.1`` string didn't match any browser's
     # Origin header (which always carries a port), so no origin ever

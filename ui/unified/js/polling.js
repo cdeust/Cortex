@@ -17,14 +17,24 @@
         if (signal.aborted) return;
 
         // Retry if server is still building the graph cache
-        if (data.meta && data.meta.warming) {
+        if (data.meta && (data.meta.warming || data.meta.stage === 'building')) {
           updateStatus('Building graph...');
           setTimeout(function() { if (!signal.aborted) fetchGraph(); }, 1000);
+          // Stats from progress meta so the panel isn't stuck at '--'
+          updateStats(data.meta || {});
           return;
         }
 
-        JUG.state.lastData = data;
-        JUG.buildGraph(data);
+        // Phase-driven loader owns `lastData` — don't clobber it if it's
+        // already been populated via /api/graph/phase appends. Only seed
+        // from the /api/graph snapshot when the phase loader hasn't
+        // landed anything yet (fast-boot case where the cache was warm).
+        var cur = JUG.state.lastData;
+        var phaseBootstrapped = cur && cur.nodes && cur.nodes.length > 0;
+        if (!phaseBootstrapped) {
+          JUG.state.lastData = data;
+          JUG.buildGraph(data);
+        }
         updateStats(data.meta || {});
         hideLoading();
         _loadDiscussionBatch(0);

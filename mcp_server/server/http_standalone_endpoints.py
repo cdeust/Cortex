@@ -124,6 +124,44 @@ def serve_graph(handler, store) -> None:
         send_json_error(handler, e)
 
 
+def serve_graph_progress(handler) -> None:
+    """GET /api/graph/progress — background-build progress snapshot."""
+    from mcp_server.server.http_standalone_graph import get_build_progress
+
+    try:
+        send_json_ok(handler, get_build_progress())
+    except Exception as e:
+        send_json_error(handler, e)
+
+
+def serve_graph_phase(handler) -> None:
+    """GET /api/graph/phase?name=<L0|L1|…|L6:proj|L6_CROSS>
+
+    Returns only the nodes + edges produced by that phase plus its
+    ``ready`` flag and dependency list. The client appends the
+    payload to its live scene when ``ready=true``; until then the
+    client skips it (guarantees it never appends an edge whose
+    endpoint is in a later phase).
+
+    Per-project keys contain a colon (``L6:Cortex``) — the browser
+    url-encodes that as ``L6%3ACortex``, so we MUST percent-decode
+    before lookup or every L6:<proj> fetch returns an empty payload.
+    """
+    from urllib.parse import unquote
+
+    from mcp_server.server.http_standalone_graph import get_phase_payload
+
+    try:
+        name = ""
+        if "?" in handler.path:
+            for p in handler.path.split("?", 1)[1].split("&"):
+                if p.startswith("name="):
+                    name = unquote(p[5:])
+        send_json_ok(handler, get_phase_payload(name))
+    except Exception as e:
+        send_json_error(handler, e)
+
+
 def serve_discussions(handler) -> None:
     """GET /api/discussions — paginated session list."""
     try:
@@ -166,6 +204,7 @@ def serve_static(handler, base_dir: Path, filename: str, content_type: str) -> N
     body = actual_files[safe_name].read_bytes()
     handler.send_response(200)
     handler.send_header("Content-Type", content_type + "; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
     handler.send_header("Cache-Control", "no-cache")
     handler.end_headers()
     handler.wfile.write(body)
@@ -222,14 +261,16 @@ def build_methodology_handler(ui_root: Path) -> type:
                 self._serve_html()
 
         def _serve_html(self):
+            try:
+                body = html_path.read_bytes()
+            except OSError:
+                body = html_bytes
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-cache")
             self.end_headers()
-            try:
-                self.wfile.write(html_path.read_bytes())
-            except OSError:
-                self.wfile.write(html_bytes)
+            self.wfile.write(body)
 
         def _serve_graph(self):
             try:
@@ -237,6 +278,7 @@ def build_methodology_handler(ui_root: Path) -> type:
                 body = json.dumps(data, default=str).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(body)

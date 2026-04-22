@@ -100,9 +100,40 @@
   function attach() {
     if (!window.JUG || !JUG.on) { setTimeout(attach, 50); return; }
     console.log(LOG, 'bridge attached');
+    // Debounce so a burst of phase-appends collapse into ONE
+    // destroy-and-recreate. With 10k+ symbol nodes a per-phase render
+    // freezes the browser; we wait until the stream quiets for 1.2 s
+    // before rebuilding the simulation. A safety deadline ensures a
+    // first render happens even if data keeps streaming.
+    var _pendingRender = null;
+    var _renderTimer = null;
+    var _firstRenderDone = false;
+    var _firstDeadline = null;
     JUG.on('state:lastData', function (ev) {
       var data = ev && ev.value;
-      if (isWorkflowGraph(data)) render(data);
+      if (!isWorkflowGraph(data)) return;
+      _pendingRender = data;
+      if (_renderTimer) clearTimeout(_renderTimer);
+      // 400 ms first render, 500 ms between per-project L6 appends.
+      // Low enough that each project visibly pops onto the graph.
+      var wait = _firstRenderDone ? 500 : 400;
+      _renderTimer = setTimeout(function(){
+        _renderTimer = null;
+        var d = _pendingRender; _pendingRender = null;
+        if (d) { render(d); _firstRenderDone = true; }
+      }, wait);
+      // Safety net: if appends keep coming faster than the debounce
+      // interval, force a render every 5 s so the user sees progress.
+      if (!_firstDeadline) {
+        _firstDeadline = setTimeout(function(){
+          _firstDeadline = null;
+          if (_pendingRender) {
+            var d = _pendingRender; _pendingRender = null;
+            if (_renderTimer) { clearTimeout(_renderTimer); _renderTimer = null; }
+            render(d); _firstRenderDone = true;
+          }
+        }, 5000);
+      }
     });
     if (JUG.state && isWorkflowGraph(JUG.state.lastData)) render(JUG.state.lastData);
 

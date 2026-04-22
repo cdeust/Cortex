@@ -29,7 +29,7 @@ class TestMain:
             mock_run.assert_called_once_with(transport="stdio")
 
     def test_mcp_server_has_tools(self):
-        """FastMCP instance should have all 17 tools registered."""
+        """FastMCP instance should have all 45 tools registered."""
         import asyncio
 
         tools = asyncio.run(mcp.list_tools())
@@ -59,7 +59,11 @@ class TestMain:
         assert "wiki_purge" in tool_names
         assert "ingest_codebase" in tool_names
         assert "ingest_prd" in tool_names
-        assert len(tool_names) == 42
+        # ADR-0046 — automatised-pipeline integration tools.
+        assert "wiki_verify" in tool_names
+        assert "unified_search" in tool_names
+        assert "change_impact" in tool_names
+        assert len(tool_names) == 45
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"

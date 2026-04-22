@@ -92,6 +92,65 @@
     return out;
   }
 
+  // Gather neighbors split by (edge-kind, direction, neighbor-kind) so
+  // we can show contextual lists like "Called from", "Uses", etc.
+  function collectNeighbors(n, ctx, filter) {
+    // filter(edge, isOutgoing, neighborNode) -> boolean (include?)
+    var out = [];
+    var seen = {};
+    for (var i = 0; i < ctx.edges.length; i++) {
+      var e = ctx.edges[i];
+      var sId = e.source.id || e.source;
+      var tId = e.target.id || e.target;
+      var isOut = sId === n.id;
+      var isIn  = tId === n.id;
+      if (!isOut && !isIn) continue;
+      var other = isOut ? ctx.byId[tId] : ctx.byId[sId];
+      if (!other) continue;
+      if (!filter(e, isOut, other)) continue;
+      if (seen[other.id]) continue;
+      seen[other.id] = 1;
+      out.push(other);
+    }
+    return out;
+  }
+
+  // Render a list of named neighbor nodes under a section title.
+  // Truncates to MAX; shows "+N more" footer if exceeded.
+  var NEIGHBOR_MAX = 24;
+  function renderNeighborList(body, sectionTitle, neighbors, ctx, onClickFactory) {
+    if (!neighbors || !neighbors.length) return;
+    var s = section(sectionTitle + ' (' + neighbors.length + ')');
+    var shown = neighbors.slice(0, NEIGHBOR_MAX);
+    shown.forEach(function (nb) {
+      var r = el('div', 'wfg-panel__row wfg-panel__row--clickable');
+      var k = el('div', 'wfg-panel__key');
+      k.textContent = nb.kind || '?';
+      var v = el('div', 'wfg-panel__val');
+      var a = el('a', 'wfg-panel__link');
+      a.textContent = nb.label || nb.path || nb.id;
+      a.href = '#';
+      a.title = nb.path || nb.id;
+      var onClick = onClickFactory ? onClickFactory(nb) : function (ev) {
+        ev.preventDefault();
+        if (window.JUG && JUG.wfgApplyFilter) {
+          // Focus this node in the graph by dispatching a selection.
+          if (typeof JUG.emit === 'function') JUG.emit('graph:selectNode', nb);
+        }
+      };
+      a.addEventListener('click', onClick);
+      v.appendChild(a);
+      r.appendChild(k); r.appendChild(v);
+      s.appendChild(r);
+    });
+    if (neighbors.length > NEIGHBOR_MAX) {
+      var more = el('div', 'wfg-panel__more');
+      more.textContent = '+' + (neighbors.length - NEIGHBOR_MAX) + ' more…';
+      s.appendChild(more);
+    }
+    body.appendChild(s);
+  }
+
   function renderCommon(body, n, ctx) {
     if (n.domain_id) body.appendChild(row('Domain', domainLabel(ctx, n.domain_id)));
     if (ctx.degree[n.id] != null) body.appendChild(row('Connections', ctx.degree[n.id]));
@@ -111,16 +170,20 @@
   function renderToolHub(body, n, ctx) {
     body.appendChild(row('Tool', n.tool || n.label));
     renderCommon(body, n, ctx);
-    var files = 0, weight = 0;
-    for (var i = 0; i < ctx.edges.length; i++) {
-      var e = ctx.edges[i];
-      if (e.kind !== 'tool_used_file') continue;
-      if (e.source.id !== n.id && e.target.id !== n.id) continue;
-      files += 1;
+    var weight = 0;
+    var files = collectNeighbors(n, ctx, function (e, isOut, other) {
+      if (e.kind !== 'tool_used_file') return false;
+      if (other.kind !== 'file') return false;
       weight += (e.weight || 1);
-    }
-    body.appendChild(row('Files touched', files));
+      return true;
+    });
+    body.appendChild(row('Files touched', files.length));
     body.appendChild(row('Total uses', Math.round(weight)));
+    renderNeighborList(body, 'Files accessed by this tool', files, ctx);
+    var cmds = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'command_in_hub' && other.kind === 'command';
+    });
+    renderNeighborList(body, 'Commands in this hub', cmds, ctx);
   }
 
   function renderFile(body, n, ctx) {
@@ -137,6 +200,30 @@
       });
       body.appendChild(s);
     }
+    // Tools that touched this file, by name.
+    var tools = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'tool_used_file' && other.kind === 'tool_hub';
+    });
+    renderNeighborList(body, 'Accessed by tools', tools, ctx);
+    // Symbols defined in this file.
+    var defined = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'defined_in' && other.kind === 'symbol';
+    });
+    renderNeighborList(body, 'Symbols defined here', defined, ctx);
+    // Discussions / commands that touched the file.
+    var discs = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'discussion_touched_file' && other.kind === 'discussion';
+    });
+    renderNeighborList(body, 'Discussions involving this file', discs, ctx);
+    var cmds = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'command_touched_file' && other.kind === 'command';
+    });
+    renderNeighborList(body, 'Commands that touched this file', cmds, ctx);
+    // Cross-file imports landing here.
+    var imps = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'imports';
+    });
+    renderNeighborList(body, 'Imports / imported by', imps, ctx);
     // Edit/Write files → diff button; read-only files → no diff.
     if (n.primary_cluster === 'edit_write' && n.path) {
       var ds = section('Diff');
@@ -178,6 +265,22 @@
     if (n.duration_ms != null)
       body.appendChild(row('Duration', humanDuration(n.duration_ms)));
     renderCommon(body, n, ctx);
+    var touched = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'discussion_touched_file' && other.kind === 'file';
+    });
+    renderNeighborList(body, 'Files touched in session', touched, ctx);
+    var usedTools = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'discussion_used_tool' && other.kind === 'tool_hub';
+    });
+    renderNeighborList(body, 'Tools used', usedTools, ctx);
+    var ranCmds = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'discussion_ran_command' && other.kind === 'command';
+    });
+    renderNeighborList(body, 'Commands run', ranCmds, ctx);
+    var spawnedAgents = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'discussion_spawned_agent' && other.kind === 'agent';
+    });
+    renderNeighborList(body, 'Agents spawned', spawnedAgents, ctx);
     if (n.session_id) {
       var ds = section('Conversation');
       ds.appendChild(actionBtn('View full conversation', function () {
@@ -217,12 +320,62 @@
       bs.appendChild(preview(n.body, 1000));
       body.appendChild(bs);
     }
+    var touched = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'command_touched_file' && other.kind === 'file';
+    });
+    renderNeighborList(body, 'Files this command touched', touched, ctx);
+    var parentHub = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'command_in_hub' && other.kind === 'tool_hub';
+    });
+    renderNeighborList(body, 'Part of tool hub', parentHub, ctx);
   }
 
   function renderAgent(body, n, ctx) {
     if (n.subagent_type) body.appendChild(row('Agent type', n.subagent_type));
     if (n.count != null) body.appendChild(row('Invocations', n.count));
     renderCommon(body, n, ctx);
+  }
+
+  function renderSymbol(body, n, ctx) {
+    // Identity.
+    if (n.symbol_type) body.appendChild(row('Type', n.symbol_type));
+    if (n.path) body.appendChild(row('File', n.path));
+    if (n.label) body.appendChild(row('Name', n.label));
+    renderCommon(body, n, ctx);
+
+    // Parent file (defined_in → file).
+    var parents = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'defined_in' && other.kind === 'file' && isOut;
+    });
+    renderNeighborList(body, 'Defined in file', parents, ctx);
+
+    // Class / module membership (member_of → class/module symbol).
+    var containers = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'member_of' && other.kind === 'symbol' && isOut;
+    });
+    renderNeighborList(body, 'Member of', containers, ctx);
+
+    // Methods of this class/module (member_of ← other symbols).
+    var members = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'member_of' && other.kind === 'symbol' && !isOut;
+    });
+    renderNeighborList(body, 'Methods / members', members, ctx);
+
+    // Calls: outgoing = "Calls these", incoming = "Called from".
+    var callsOut = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'calls' && isOut;
+    });
+    renderNeighborList(body, 'Calls these symbols', callsOut, ctx);
+    var callsIn = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'calls' && !isOut;
+    });
+    renderNeighborList(body, 'Called from', callsIn, ctx);
+
+    // Imports landing on this symbol (file → imports → symbol).
+    var importedBy = collectNeighbors(n, ctx, function (e, isOut, other) {
+      return e.kind === 'imports' && other.kind === 'file' && !isOut;
+    });
+    renderNeighborList(body, 'Imported by files', importedBy, ctx);
   }
 
   var RENDERERS = {
@@ -235,6 +388,7 @@
     hook: renderHook,
     command: renderCommand,
     agent: renderAgent,
+    symbol: renderSymbol,
   };
 
   function buildSidePanel(container) {

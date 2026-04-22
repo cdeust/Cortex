@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Persistent memory and cognitive profiling plugins for Claude Code",
-    "version": "3.13.2"
+    "version": "3.14.0"
   },
   "plugins": [
     {
       "name": "cortex",
       "source": "./",
       "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence, and cognitive profiling. 42 MCP tools with enriched schemas. PostgreSQL + pgvector in CLI mode; automatic SQLite fallback in Cowork/sandboxed mode. Curated wiki (ADRs, specs, lessons) with audit-artefact filtering. Consolidate is set-based SQL batched — decay/plasticity/pruning run 100-500× faster on large stores. Ingests codebase analysis (ai-automatised-pipeline) and PRDs (prd-spec-generator) into wiki + memory + knowledge graph. Docker image available.",
-      "version": "3.13.2",
+      "version": "3.14.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"

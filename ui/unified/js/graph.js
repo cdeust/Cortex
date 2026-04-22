@@ -181,6 +181,95 @@
     if (JUG.state.lastData) buildGraph(JUG.state.lastData);
   };
 
+  // Phase-append entry point used by the /api/graph/phase loader.
+  // Deduplicates on node.id and on (source,target,type) so repeated
+  // applies are a no-op. Coalesces rebuilds with requestAnimationFrame
+  // so a burst of phase applies yields at most one redraw per frame.
+  JUG._existingIdSet = null;
+  JUG._existingEdgeSet = null;
+  JUG._rebuildQueued = false;
+
+  function _edgeKey(e) {
+    var s = typeof e.source === 'object' ? e.source.id : e.source;
+    var t = typeof e.target === 'object' ? e.target.id : e.target;
+    return s + '' + t + '' + (e.type || e.kind || 'default');
+  }
+
+  function _seedSets() {
+    if (JUG._existingIdSet && JUG._existingEdgeSet) return;
+    JUG._existingIdSet = {};
+    JUG._existingEdgeSet = {};
+    var d = JUG.state.lastData || {};
+    (d.nodes || []).forEach(function(n){ JUG._existingIdSet[n.id] = true; });
+    (d.edges || []).forEach(function(e){ JUG._existingEdgeSet[_edgeKey(e)] = true; });
+  }
+
+  function _scheduleRebuild() {
+    if (JUG._rebuildQueued) return;
+    JUG._rebuildQueued = true;
+    var run = function() {
+      JUG._rebuildQueued = false;
+      if (JUG.state.lastData) buildGraph(JUG.state.lastData);
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+    else setTimeout(run, 16);
+  }
+
+  JUG.appendGraphDelta = function(nodes, edges) {
+    nodes = nodes || []; edges = edges || [];
+    if (!JUG.state.lastData) {
+      JUG.state.lastData = { nodes: [], edges: [], links: [], meta: { schema: 'workflow_graph.v1' } };
+    }
+    _seedSets();
+    var added = 0, addedE = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (!n || !n.id || JUG._existingIdSet[n.id]) continue;
+      JUG._existingIdSet[n.id] = true;
+      JUG.state.lastData.nodes.push(n);
+      added++;
+    }
+    for (var j = 0; j < edges.length; j++) {
+      var e = edges[j];
+      if (!e) continue;
+      var k = _edgeKey(e);
+      if (JUG._existingEdgeSet[k]) continue;
+      JUG._existingEdgeSet[k] = true;
+      JUG.state.lastData.edges.push(e);
+      JUG.state.lastData.links.push(e);
+      addedE++;
+    }
+    if (added || addedE) _scheduleRebuild();
+    // Recompute sidebar stats live from the cumulative nodes array.
+    // Without this the legend reads `meta.*_count` from the ONE
+    // /api/graph snapshot fetched at page load — which can race and
+    // report zero for categories that arrive later (memories land in
+    // L5, symbols in L6:*). Reading from lastData.nodes is always
+    // current regardless of which phases have landed.
+    try {
+      var nl = JUG.state.lastData.nodes;
+      var counts = { domain: 0, memory: 0, discussion: 0 };
+      for (var ci = 0; ci < nl.length; ci++) {
+        var k = nl[ci].kind || nl[ci].type || '';
+        counts[k] = (counts[k] || 0) + 1;
+      }
+      var entityCount = nl.length - (counts.domain || 0) - (counts.memory || 0);
+      var setTxt = function(id, v){ var el = document.getElementById(id); if(el) el.textContent = v; };
+      setTxt('s-dom',   counts.domain || 0);
+      setTxt('s-mem',   counts.memory || 0);
+      setTxt('s-ent',   entityCount);
+      setTxt('s-nodes', nl.length);
+      setTxt('s-edge',  JUG.state.lastData.edges.length);
+      setTxt('s-disc',  counts.discussion || 0);
+    } catch(_e){}
+    // Fire the legacy event bus so any listener (bridge, sidebar)
+    // sees the updated data without re-fetching. The reactive setter
+    // in state.js emits `{value, old}` — match that shape.
+    if (typeof JUG.emit === 'function') {
+      try { JUG.emit('state:lastData', { value: JUG.state.lastData, old: null }); } catch(_e){}
+    }
+  };
+
   JUG.buildGraph = buildGraph;
   JUG.addBatchToGraph = addBatchToGraph;
   JUG.getActiveEdges = function() { return JUG._activeEdges || []; };
