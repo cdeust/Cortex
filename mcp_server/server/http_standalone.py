@@ -28,8 +28,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from socketserver import ThreadingMixIn
 
-from mcp_server.server.http_common import (
-    _apply_cors_headers,
+from mcp_server.server.http_common import _apply_cors_headers
+from mcp_server.server.http_security import (
     enforce_same_origin_write,
     validate_host_header,
 )

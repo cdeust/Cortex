@@ -27,21 +27,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # Re-export enums + palette so existing callers (handlers, builder,
 # tests) keep importing from ``workflow_graph_schema`` unchanged.
-from mcp_server.core.workflow_graph_palette import (
-    AGENT_COLOR,
-    COMMAND_COLOR,
-    DISCUSSION_COLOR,
-    DOMAIN_COLOR,
-    ENTITY_COLOR,
-    HOOK_COLOR,
-    MCP_COLOR,
-    MEMORY_STAGE_COLORS,
-    PRIMARY_TOOL_COLORS,
-    SKILL_COLOR,
-    TOOL_HUB_COLORS,
-    classify_primary_tool,
-    primary_tool_color,
-)
 from mcp_server.core.workflow_graph_schema_enums import (
     EdgeKind,
     NodeKind,
