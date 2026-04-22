@@ -1,24 +1,37 @@
 """Git diff retrieval for file entities.
 
 Runs git commands to fetch diff data for files referenced in the
-knowledge graph. Uses a proper cascade: working tree -> staged ->
-last commit -> file content at HEAD.
+knowledge graph. Uses a proper cascade: working tree → staged → last
+commit → file content at HEAD → historical lookup.
 
-Infrastructure layer - I/O via subprocess.
+Infrastructure layer — I/O via subprocess. The subprocess boundary and
+argument sanitisation live in ``git_diff_exec``; the result-formatting
+helpers live in ``git_diff_format``; this module owns the cascade and
+the whitelist-matching policy.
 
-Security: All file paths are validated against git's own tracked file list.
-User-controlled paths are NEVER used directly in filesystem operations —
-they are matched against git ls-files output (the whitelist) first.
+Security: All file paths are validated against git's own tracked file
+list. User-controlled paths are NEVER used directly in filesystem
+operations — they are matched against ``git ls-files`` output (the
+whitelist) first, and for genuinely-new untracked files we resolve and
+then ``is_relative_to(git_root)`` to prevent traversal.
 """
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
-# Resolve git binary path once at import time — not from user input
-_GIT_BINARY = shutil.which("git") or "git"
+from mcp_server.infrastructure.git_diff_exec import (
+    _GIT_BINARY,
+    get_tracked_files,
+    git_cmd_safe,
+)
+from mcp_server.infrastructure.git_diff_format import (
+    build_result,
+    content_as_context,
+    content_as_delete,
+    content_as_new,
+)
 
 
 def find_git_root(start: Path | None = None) -> Path | None:
@@ -39,47 +52,24 @@ def find_git_root(start: Path | None = None) -> Path | None:
     return None
 
 
-def _get_tracked_files(git_root: Path) -> set[str]:
-    """Get the set of all git-tracked files (the whitelist).
-
-    This is the ONLY source of truth for valid file paths.
-    User-controlled paths must match an entry in this set.
-    """
-    raw = _git_cmd_safe("ls-files", [], git_root)
-    if not raw:
-        return set()
-    return set(raw.splitlines())
-
-
 def _match_in_whitelist(name: str, tracked: set[str]) -> str | None:
     """Match a user-provided name against the git-tracked whitelist.
 
-    Returns the canonical tracked path or None if no match.
-    This ensures we NEVER use the user's raw input as a path.
+    Returns the canonical tracked path or ``None`` if no match. This
+    ensures we NEVER use the user's raw input as a path.
     """
-    # Direct match
     if name in tracked:
         return name
-
-    # Basename match
     basename = name.rsplit("/", 1)[-1] if "/" in name else name
     for f in tracked:
         if f == basename or f.endswith("/" + basename):
             return f
-
     return None
 
 
 def resolve_file(name: str, git_root: Path) -> str | None:
-    """Resolve a file name/path to a repo-relative path.
-
-    Uses git ls-files as the whitelist — user input is matched
-    against tracked files, never used directly as a path.
-    """
-    # Strip quotes and normalize
+    """Resolve a file name to a repo-relative path via the tracked whitelist."""
     clean = name.strip().strip("\"'`")
-
-    # Make relative if absolute
     try:
         p = Path(clean)
         if p.is_absolute():
@@ -87,174 +77,200 @@ def resolve_file(name: str, git_root: Path) -> str | None:
     except (ValueError, OSError):
         pass
 
-    # Match against tracked files (whitelist)
-    tracked = _get_tracked_files(git_root)
+    tracked = get_tracked_files(git_root)
     match = _match_in_whitelist(clean, tracked)
     if match:
         return match
 
-    # Check staged files
-    staged = _git_cmd_safe("diff", ["--staged", "--name-only"], git_root)
+    staged = git_cmd_safe("diff", ["--staged", "--name-only"], git_root)
     if staged:
-        staged_files = set(staged.splitlines())
-        match = _match_in_whitelist(clean, staged_files)
-        if match:
-            return match
-
+        return _match_in_whitelist(clean, set(staged.splitlines()))
     return None
 
 
-def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
-    """Get diff for a file using proper git cascade.
-
-    Security: filepath is validated against git's tracked file list.
-    Direct filesystem reads only happen for files confirmed by git.
-    """
-    empty = {"file": filepath, "diff_type": "none", "lines": [], "truncated": False}
-
-    # Validate: filepath must exist in git's tracked/staged files
-    tracked = _get_tracked_files(git_root)
-    staged_raw = _git_cmd_safe("diff", ["--staged", "--name-only"], git_root)
-    staged_files = set(staged_raw.splitlines()) if staged_raw else set()
-    all_known = tracked | staged_files
-
-    # Match the user's path against known files
-    safe_path = _match_in_whitelist(filepath, all_known)
-
-    # If not in tracked/staged, check if git knows about it at all
-    if not safe_path:
-        # Last resort: check if git show HEAD:<path> works
-        # This is safe because git itself validates the path
-        test = _git_cmd_safe("show", ["HEAD:" + filepath], git_root)
-        if test:
-            safe_path = filepath
-        else:
-            return empty
-
-    # From here, safe_path came from git's own output — safe to use
-
-    # 1. Unstaged working tree changes
-    raw = _git_cmd_safe("diff", ["--", safe_path], git_root)
-    if raw:
-        return _build_result(safe_path, "uncommitted", raw, max_lines)
-
-    # 2. Staged changes
-    raw = _git_cmd_safe("diff", ["--staged", "--", safe_path], git_root)
-    if raw:
-        return _build_result(safe_path, "staged", raw, max_lines)
-
-    # 3. Most recent commit
-    raw = _git_cmd_safe("log", ["-1", "-p", "--format=", "--", safe_path], git_root)
-    if raw:
-        return _build_result(safe_path, "last_commit", raw, max_lines)
-
-    # 4. File content at HEAD
-    content = _git_cmd_safe("show", ["HEAD:" + safe_path], git_root)
-    if content:
-        return _content_as_new(safe_path, content, max_lines)
-
-    return empty
-
-
-# ── Safe git command execution ───────────────────────────────────────────
-
-
-_ALLOWED_SUBCOMMANDS = frozenset(
-    {
-        "rev-parse",
-        "ls-files",
-        "diff",
-        "log",
-        "show",
-    }
-)
-
-_DANGEROUS_CHARS = frozenset(";|&$`\n\r\x00")
-
-
-def _sanitize_arg(arg: str) -> str | None:
-    """Validate and return a sanitized git argument, or None if unsafe.
-
-    Rejects arguments containing shell metacharacters (CWE-78).
-    Returns a new string (not the original reference) so CodeQL can
-    verify the data flow is interrupted.
-    """
-    if any(c in arg for c in _DANGEROUS_CHARS):
-        return None
-    # Return a copy — breaks CodeQL taint tracking from the original
-    return str(arg)
-
-
-def _git_cmd_safe(subcommand: str, args: list[str], cwd: Path) -> str:
-    """Run a git command with strict validation.
-
-    Security (CWE-78 mitigation):
-      1. subcommand must be in _ALLOWED_SUBCOMMANDS (frozenset allowlist)
-      2. Each arg is validated by _sanitize_arg (rejects shell metacharacters)
-      3. Sanitized args are new str objects (breaks taint propagation)
-      4. shell=False (no shell interpretation)
-      5. _GIT_BINARY resolved at import time via shutil.which
-    """
+def _read_safe(git_root: Path, relative: str) -> str | None:
+    """Read a file inside ``git_root`` safely. None for anything outside."""
     try:
-        if subcommand not in _ALLOWED_SUBCOMMANDS:
-            return ""
-        safe_args: list[str] = []
-        for arg in args:
-            sanitized = _sanitize_arg(arg)
-            if sanitized is None:
-                return ""
-            safe_args.append(sanitized)
-        run_cmd = [_GIT_BINARY, subcommand, *safe_args]
-        result = subprocess.run(
-            run_cmd,  # noqa: S603 — all components validated above
-            capture_output=True,
-            text=True,
-            shell=False,
-            cwd=str(cwd),
-            timeout=10,
+        p = (git_root / relative).resolve()
+        root_r = git_root.resolve()
+        if not p.is_file():
+            return None
+        try:
+            p.relative_to(root_r)
+        except ValueError:
+            return None
+        return p.read_text(errors="replace")
+    except OSError:
+        return None
+
+
+def _cascade_for_tracked(
+    safe_path: str, tracked: set[str], staged_files: set[str],
+    git_root: Path, max_lines: int,
+) -> dict:
+    """Run the working-tree → staged → deleted → last-commit → clean cascade."""
+    raw = git_cmd_safe("diff", ["--", safe_path], git_root)
+    if raw:
+        return build_result(safe_path, "uncommitted", raw, max_lines)
+    raw = git_cmd_safe("diff", ["--staged", "--", safe_path], git_root)
+    if raw:
+        return build_result(safe_path, "staged", raw, max_lines)
+    abs_check = git_root / safe_path
+    if safe_path in tracked and not abs_check.exists():
+        content = git_cmd_safe("show", ["HEAD:" + safe_path], git_root)
+        if content:
+            return content_as_delete(safe_path, content, max_lines)
+    raw = git_cmd_safe(
+        "log", ["-1", "-p", "--format=", "--", safe_path], git_root
+    )
+    if raw:
+        return build_result(safe_path, "last_commit", raw, max_lines)
+    if safe_path in staged_files and safe_path not in tracked:
+        wt = _read_safe(git_root, safe_path)
+        if wt is not None:
+            return content_as_new(
+                safe_path, wt, max_lines, diff_type="staged"
+            )
+    content = git_cmd_safe("show", ["HEAD:" + safe_path], git_root)
+    if content:
+        return content_as_context(safe_path, content, max_lines)
+    return {
+        "file": safe_path, "diff_type": "unchanged",
+        "lines": [], "truncated": False,
+        "reason": (
+            "tracked by git but no content retrievable "
+            "(submodule or LFS pointer)"
+        ),
+    }
+
+
+def _staged_files_set(git_root: Path) -> set[str]:
+    """Return the set of paths currently staged for commit."""
+    staged_raw = git_cmd_safe("diff", ["--staged", "--name-only"], git_root)
+    return set(staged_raw.splitlines()) if staged_raw else set()
+
+
+def get_file_diff(
+    filepath: str, git_root: Path, max_lines: int = 80
+) -> dict:
+    """Cascade: tracked → untracked → historical; always non-empty result.
+
+    Security: ``filepath`` is validated against the tracked + staged
+    whitelist. Direct filesystem reads only happen for files confirmed
+    by git, or for untracked files inside ``git_root`` (``_read_safe``
+    uses ``Path.resolve()`` + ``is_relative_to`` to block traversal).
+    """
+    tracked = get_tracked_files(git_root)
+    staged_files = _staged_files_set(git_root)
+    safe_path = _match_in_whitelist(filepath, tracked | staged_files)
+    if safe_path:
+        return _cascade_for_tracked(
+            safe_path, tracked, staged_files, git_root, max_lines
         )
-        return result.stdout.strip() if result.returncode == 0 else ""
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return ""
-
-
-# ── Result formatting ────────────────────────────────────────────────────
-
-
-def _build_result(filepath: str, diff_type: str, raw: str, max_lines: int) -> dict:
-    lines = _parse_diff_lines(raw)
+    wt = _read_safe(git_root, filepath)
+    if wt is not None:
+        return content_as_new(filepath, wt, max_lines)
+    historical = _lookup_historical(filepath, git_root, max_lines)
+    if historical is not None:
+        return historical
     return {
-        "file": filepath,
-        "diff_type": diff_type,
-        "lines": lines[:max_lines],
-        "truncated": len(lines) > max_lines,
+        "file": filepath, "diff_type": "none",
+        "lines": [], "truncated": False,
+        "reason": (
+            "file not tracked, not present, "
+            "and absent from all git history"
+        ),
     }
 
 
-def _content_as_new(filepath: str, content: str, max_lines: int) -> dict:
-    raw_lines = content.splitlines()
-    lines = [{"text": "+" + ln, "type": "add"} for ln in raw_lines]
-    return {
-        "file": filepath,
-        "diff_type": "new_file",
-        "lines": lines[:max_lines],
-        "truncated": len(lines) > max_lines,
-    }
+def _tier1_candidates(sha: str) -> list[str]:
+    """Given the last commit touching the path, return it + its parent.
+
+    If the commit is the deletion, the file is absent in its tree but
+    present in the parent's tree (``<sha>^``).
+    """
+    if not sha:
+        return []
+    return [sha, sha + "^"]
 
 
-def _parse_diff_lines(raw: str) -> list[dict]:
-    result: list[dict] = []
-    for line in raw.splitlines():
-        if line.startswith("diff ") or line.startswith("index "):
+def _deleted_result(
+    filepath: str, content: str, max_lines: int, sha: str
+) -> dict:
+    r = content_as_delete(filepath, content, max_lines)
+    r["reason"] = f"deleted — recovered from commit {sha[:8]}"
+    return r
+
+
+def _try_historical_sha(
+    filepath: str, git_root: Path, sha: str, max_lines: int
+) -> dict | None:
+    """Return a deleted_result for ``sha:filepath`` if git can show it."""
+    content = git_cmd_safe("show", [sha + ":" + filepath], git_root)
+    if content:
+        return _deleted_result(filepath, content, max_lines, sha)
+    return None
+
+
+def _lookup_tier1(
+    filepath: str, git_root: Path, max_lines: int
+) -> tuple[dict | None, str]:
+    """Tier 1: last commit touching path (follow renames) + its parent."""
+    last_sha = git_cmd_safe(
+        "log",
+        ["-1", "--all", "--follow", "--format=%H", "--", filepath],
+        git_root,
+    )
+    for candidate in _tier1_candidates(last_sha):
+        hit = _try_historical_sha(filepath, git_root, candidate, max_lines)
+        if hit is not None:
+            return hit, last_sha
+    return None, last_sha
+
+
+def _lookup_tier2(
+    filepath: str, git_root: Path, last_sha: str, max_lines: int
+) -> dict | None:
+    """Tier 2: explicit last non-deletion commit (``!D`` filter)."""
+    alive_sha = git_cmd_safe(
+        "log",
+        ["-1", "--all", "--diff-filter=!D", "--format=%H", "--", filepath],
+        git_root,
+    )
+    if alive_sha and alive_sha != last_sha:
+        return _try_historical_sha(filepath, git_root, alive_sha, max_lines)
+    return None
+
+
+def _lookup_tier3(
+    filepath: str, git_root: Path, max_lines: int
+) -> dict | None:
+    """Tier 3: walk full history (cap 50) until one sha yields content."""
+    all_shas = git_cmd_safe(
+        "log",
+        ["--all", "--follow", "--format=%H", "--", filepath],
+        git_root,
+    )
+    if not all_shas:
+        return None
+    for sha_line in all_shas.splitlines()[:50]:
+        sha = sha_line.strip()
+        if not sha:
             continue
-        if line.startswith("+++") or line.startswith("---"):
-            continue
-        if line.startswith("@@"):
-            result.append({"text": line, "type": "hunk"})
-        elif line.startswith("+"):
-            result.append({"text": line, "type": "add"})
-        elif line.startswith("-"):
-            result.append({"text": line, "type": "del"})
-        else:
-            result.append({"text": line, "type": "ctx"})
-    return result
+        hit = _try_historical_sha(filepath, git_root, sha, max_lines)
+        if hit is not None:
+            return hit
+    return None
+
+
+def _lookup_historical(
+    filepath: str, git_root: Path, max_lines: int
+) -> dict | None:
+    """Three-tier historical lookup for deleted / renamed paths."""
+    hit, last_sha = _lookup_tier1(filepath, git_root, max_lines)
+    if hit is not None:
+        return hit
+    hit = _lookup_tier2(filepath, git_root, last_sha, max_lines)
+    if hit is not None:
+        return hit
+    return _lookup_tier3(filepath, git_root, max_lines)

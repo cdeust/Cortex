@@ -1,82 +1,475 @@
-/* Cortex Neural Graph — Theme */
+/* =======================================================================
+   Cortex — instrument-grade calm. Warm-neutral dark canvas, Inter Tight
+   for chrome, Newsreader for prose, JetBrains Mono for identifiers.
+   All color comes from data (heat, stage, valence), never from chrome.
+
+   This file carries the design tokens + chrome. It does NOT touch any
+   id/class the v2 JS reads — only re-skins existing ids (#info-panel,
+   #filter-bar, #status-bar, #loading, .view-btn, .filter-btn,
+   #search-box, .filter-select) and introduces the token cascade used by
+   the per-view stylesheets.
+   ======================================================================= */
+
 :root {
-  --void: #080810;
-  --card: #0C0C18;
-  --cyan: #50D0E8;
-  --cyan-mid: #40A8C0;
-  --cyan-dim: #205868;
-  --cyan-glow: rgba(80, 208, 232, 0.3);
-  --cyan-subtle: rgba(80, 208, 232, 0.06);
-  --green: #60D888;
-  --magenta: #C070D0;
-  --amber: #E0B840;
-  --red: #E07070;
-  --blue: #60A0E0;
-  --border: rgba(80, 208, 232, 0.12);
-  --border-bright: rgba(80, 208, 232, 0.3);
-  --text: #FFFFFF;
-  --text-dim: #A0B8C8;
-  --text-bright: #FFFFFF;
+  /* ── Warm-neutral greys (oklch, saturations ≤ 0.012) ─────────── */
+  --ink-0:  oklch(12% 0.006 60);   /* canvas */
+  --ink-1:  oklch(15% 0.008 60);   /* surface */
+  --ink-2:  oklch(18% 0.010 60);   /* elevated */
+  --ink-3:  oklch(22% 0.010 60);   /* chip */
+  --ink-4:  oklch(28% 0.010 60);   /* input */
+  --line:   oklch(30% 0.010 60 / 0.45);
+  --line-2: oklch(35% 0.010 60 / 0.22);
+  --hair:   oklch(45% 0.010 60 / 0.14);
+
+  --fg-0:   oklch(96% 0.005 80);   /* primary text */
+  --fg-1:   oklch(80% 0.006 70);   /* secondary */
+  --fg-2:   oklch(62% 0.006 70);   /* tertiary */
+  --fg-3:   oklch(48% 0.008 70);   /* quaternary */
+
+  /* ── Single discipline accent — warm amber, lab-notebook ink ─── */
+  --amber:      oklch(78% 0.13 75);
+  --amber-soft: oklch(78% 0.13 75 / 0.14);
+  --amber-glow: oklch(78% 0.13 75 / 0.35);
+
+  /* ── Data-only colors (chroma ~0.15, hue varies) ─────────────── */
+  --heat-0: oklch(78% 0.13 40);
+  --heat-m: oklch(74% 0.10 60);
+  --heat-c: oklch(64% 0.05 80);
+  --heat-f: oklch(48% 0.02 80);
+
+  --stage-labile:  oklch(78% 0.15 230);
+  --stage-early:   oklch(74% 0.14 190);
+  --stage-late:    oklch(78% 0.13 155);
+  --stage-cons:    oklch(80% 0.13 95);
+  --stage-recon:   oklch(72% 0.14 320);
+
+  --emo-urg:   oklch(68% 0.17 28);
+  --emo-fru:   oklch(72% 0.15 55);
+  --emo-sat:   oklch(76% 0.13 155);
+  --emo-dis:   oklch(74% 0.13 250);
+  --emo-con:   oklch(72% 0.13 310);
+
+  /* ── Typography ──────────────────────────────────────────────── */
+  --sans:  'Inter Tight', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --serif: 'Newsreader', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --mono:  'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+
+  /* ── Geometry + motion ───────────────────────────────────────── */
+  --rail-w:     240px;
+  --insp-w:     380px;
+  --topbar-h:   48px;
+  --substrip-h: 40px;
+  --r-sm:   4px;
+  --r-md:   6px;
+  --r-lg:   10px;
+  --ease:   cubic-bezier(.2,.7,.1,1);
+
+  /* ── Legacy v2 token aliases (keep v2 CSS cascading) ─────────── */
+  --void:           var(--ink-0);
+  --card:           var(--ink-1);
+  --cyan:           var(--amber);
+  --cyan-mid:       oklch(68% 0.11 70);
+  --cyan-dim:       oklch(45% 0.04 70);
+  --cyan-glow:      var(--amber-glow);
+  --cyan-subtle:    var(--amber-soft);
+  --border:         var(--line);
+  --border-bright:  var(--line-2);
+  --text:           var(--fg-0);
+  --text-dim:       var(--fg-2);
+  --text-bright:    var(--fg-0);
+  --green:          var(--stage-late);
+  --blue:           var(--stage-labile);
+  --magenta:        var(--stage-recon);
+  --amber-fallback: var(--stage-cons);
+  --red:            var(--emo-urg);
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: var(--void); color: var(--text); font-family: 'JetBrains Mono', monospace; overflow: hidden; width: 100vw; height: 100vh; }
-
-#graph-container { position: absolute; inset: 0; }
-
-/* Scanlines — very subtle for scientific look */
-#scanlines {
-  display: none;
+* , *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+body {
+  background: var(--ink-0);
+  color: var(--fg-0);
+  font-family: var(--sans);
+  font-feature-settings: "ss01","cv11","ss03";
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
-#vignette {
-  display: none;
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+input, select, textarea { font: inherit; color: inherit; }
+::selection { background: var(--amber-soft); color: var(--fg-0); }
+
+/* Ambient grain — subtle material warmth on the canvas */
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 1000;
+  background-image:
+    radial-gradient(circle at 50% 50%, transparent 0, transparent 60%, rgba(255, 240, 220, .012) 100%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='1' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .06 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+  opacity: .35;
 }
 
-/* HUD Panel */
+/* Scrollbars — narrow, uncolored */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--ink-3); border-radius: 999px;
+  border: 2px solid var(--ink-0);
+}
+
+/* View containers — JS toggles visibility via display: block/none.
+   Graph/sankey fill the whole viewport (they carry their own HUD).
+   Timeline/Knowledge/Wiki start BELOW the fixed filter-bar via `top`, not
+   padding — some child flex-layouts in those views don't honor container
+   padding, so we offset the entire absolute box instead. */
+#graph-container,
+#sankey-container {
+  position: absolute; inset: 0;
+}
+#timeline-container,
+#knowledge-container,
+#wiki-container {
+  position: absolute;
+  top: 84px;          /* 16px top gap + filter-bar (~60px) + 8px breathing room */
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+/* Scrollable-content views use symmetric gutters — info-panel is a floating
+   HUD card that sits over the top-left corner, it doesn't warrant a full
+   left-column reservation. */
+#knowledge-container,
+#wiki-container {
+  padding: 12px 24px 24px 24px;
+  overflow-y: auto;
+}
+/* Kanban view: internal columns scroll, not the container. */
+#timeline-container {
+  padding: 12px;
+  overflow: hidden;
+}
+@media (max-width: 1280px) {
+  #timeline-container,
+  #knowledge-container,
+  #wiki-container { top: 124px; }         /* filter-bar wraps to 2 rows */
+}
+
+/* Disable the legacy sci-fi raster overlays */
+#scanlines,
+#vignette { display: none !important; }
+
+/* ─────────────────────────────────────────────────────────────────
+   Shared HUD panel treatment (for #info-panel, #status-bar).
+   Soft dark card, thin hair border, no clip-path polygon.
+   ───────────────────────────────────────────────────────────────── */
 .hud-panel {
-  background: rgba(10,10,15,0.88);
+  background: color-mix(in oklab, var(--ink-1) 92%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  clip-path: none;
+}
+
+/* ─── Info panel (top-left stats card) ─────────────────────────── */
+#info-panel {
+  position: fixed; top: 16px; left: 16px;
+  width: 252px;
+  padding: 14px 16px 12px;
+  z-index: 100;
+  font-family: var(--sans);
+  color: var(--fg-1);
+}
+.panel-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--hair);
+}
+.reactor-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber-glow);
+  animation: dot-blink 2.2s ease-in-out infinite;
+}
+@keyframes dot-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.panel-title {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--fg-0);
+  text-shadow: none;
+}
+.panel-subtitle {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--fg-3);
+  margin-top: 2px;
+}
+
+.stat-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 0;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--fg-2);
+}
+.stat-row + .stat-row { border-top: 1px solid var(--hair); }
+.stat-row .val {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--fg-0);
+  text-shadow: none;
+}
+.stat-row .bench-val { font-size: 11px; font-weight: 500; letter-spacing: 0; }
+
+/* ─── Filter bar — compact pill that sizes to its content, centered.
+   Row 1: view toggle tabs + glossary (?) — always visible.
+   Row 2: filter chips + selects + search — only visible on Graph view
+          (controls.js hides them elsewhere). When visible, they wrap
+          naturally because .view-toggle claims the full first row.
+   max-width clamp prevents viewport overflow in Graph view; in practice
+   wrapping activates well before the clamp on normal screens. */
+#filter-bar {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap;
+  row-gap: 6px; column-gap: 8px;
+  padding: 6px 12px;
+  width: max-content;                /* shrink to fit tabs when chips hidden */
+  max-width: calc(100vw - 560px);    /* keep clear of info-panel + reset/log */
+  z-index: 100;
+  background: color-mix(in oklab, var(--ink-0) 88%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border);
-  clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0 calc(100% - 12px), 0 12px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-family: var(--sans);
+}
+/* View-toggle stays inline on a single row; filter chips wrap beneath when
+   total content exceeds max-width. */
+#filter-bar .view-toggle { display: inline-flex; gap: 2px; }
+#filter-bar .filter-sep  { display: inline-block; width: 1px; height: 14px; background: var(--line); margin: 0 4px; }
+
+@media (max-width: 1100px) {
+  #filter-bar { max-width: calc(100vw - 32px); }
 }
 
-/* Info panel */
-#info-panel { position: fixed; top: 24px; left: 24px; width: 260px; padding: 20px 22px 16px; z-index: 100; }
-.panel-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid rgba(0,255,255,0.08); }
-.reactor-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan), 0 0 15px var(--cyan-glow); animation: dot-blink 2s ease-in-out infinite; }
-@keyframes dot-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-.panel-title { font-family: 'Orbitron', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 5px; text-transform: uppercase; color: var(--cyan); text-shadow: 0 0 15px var(--cyan-glow); }
-.panel-subtitle { font-size: 8px; letter-spacing: 2px; color: var(--text-dim); margin-top: 2px; }
-.stat-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 9px; color: var(--text-dim); letter-spacing: 1.5px; text-transform: uppercase; }
-.stat-row + .stat-row { border-top: 1px solid rgba(0,255,255,0.04); }
-.stat-row .val { font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 600; color: var(--cyan); text-shadow: 0 0 8px var(--cyan-glow); }
-.stat-row .bench-val { font-size: 9px; font-weight: 500; letter-spacing: 0.5px; }
+.view-toggle { display: flex; gap: 2px; }
 
-/* Filter bar */
-#filter-bar {
-  position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px; padding: 8px 16px; z-index: 100;
-  background: rgba(10,10,15,0.85); border: 1px solid var(--border); backdrop-filter: blur(12px);
+/* View tab buttons — primary nav; match design's .view-tab */
+.view-btn {
+  position: relative;
+  background: transparent;
+  border: 0;
+  color: var(--fg-2);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  text-transform: none;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: color .14s var(--ease), background .14s var(--ease);
+  box-shadow: none; text-shadow: none;
 }
+.view-btn:hover { color: var(--fg-0); }
+.view-btn.active {
+  color: var(--fg-0);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none; text-shadow: none;
+}
+.view-btn.active::after {
+  content: "";
+  position: absolute; left: 10px; right: 10px; bottom: -2px;
+  height: 1px; background: var(--fg-0);
+}
+
+/* Filter chips — match design's .chip */
 .filter-btn {
-  background: none; border: 1px solid rgba(0,255,255,0.1); color: var(--text-dim);
-  font-family: 'Orbitron', sans-serif; font-size: 7px; font-weight: 600;
-  letter-spacing: 2px; text-transform: uppercase; padding: 6px 14px; cursor: pointer;
-  transition: all 0.3s;
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--fg-1);
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
+  box-shadow: none; text-shadow: none;
 }
-.filter-btn:hover { border-color: var(--border-bright); color: var(--text); }
-.filter-btn.active { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 10px var(--cyan-glow); text-shadow: 0 0 6px var(--cyan-glow); }
+.filter-btn:hover   { border-color: var(--line-2); color: var(--fg-0); }
+.filter-btn.active  { background: var(--ink-2); border-color: var(--line-2); color: var(--fg-0); box-shadow: none; text-shadow: none; }
 
-#search-box, .filter-select {
-  background: rgba(0,255,255,0.04); border: 1px solid rgba(0,255,255,0.1);
-  color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 8px;
-  padding: 6px 10px; outline: none; transition: border-color 0.3s;
+.filter-sep {
+  width: 1px; height: 16px; background: var(--line);
+  margin: 0 2px;
 }
-#search-box { width: 120px; }
-.filter-select { cursor: pointer; appearance: none; padding-right: 18px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23005566'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 6px center; }
-.filter-select option { background: #0D0D18; color: var(--text); }
-#search-box:focus, .filter-select:focus { border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan-glow); }
-#search-box::placeholder { color: var(--text-dim); }
+
+/* Selects + search input — match design cmdk aesthetic */
+#search-box,
+.filter-select {
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  color: var(--fg-0);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 5px 10px;
+  outline: none;
+  border-radius: var(--r-sm);
+  transition: border-color .14s var(--ease), background .14s var(--ease);
+}
+#search-box { width: 180px; }
+.filter-select {
+  cursor: pointer; appearance: none; padding-right: 22px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%238a8a8a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.filter-select option { background: var(--ink-2); color: var(--fg-0); }
+#search-box:focus,
+.filter-select:focus {
+  border-color: var(--amber);
+  background: var(--ink-1);
+  box-shadow: 0 0 0 2px var(--amber-soft);
+}
+#search-box::placeholder { color: var(--fg-3); }
+
+/* ─── Status bar (bottom-left) ────────────────────────────────── */
+#status-bar {
+  position: fixed; bottom: 14px; left: 16px;
+  padding: 6px 12px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--fg-2);
+  display: flex; align-items: center; gap: 8px;
+  background: color-mix(in oklab, var(--ink-1) 92%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  z-index: 100;
+}
+#status-bar .status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--stage-late);
+  box-shadow: 0 0 6px oklch(78% 0.13 155 / .5);
+  animation: dot-blink 2.2s ease-in-out infinite;
+}
+
+/* ─── Reset / Monitor toggle buttons (top-right) ──────────────── */
+#reset-btn,
+#monitor-toggle {
+  position: fixed; top: 16px;
+  padding: 6px 12px;
+  background: color-mix(in oklab, var(--ink-1) 92%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+  color: var(--fg-1);
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  z-index: 100;
+  transition: color .14s var(--ease), border-color .14s var(--ease), background .14s var(--ease);
+}
+#reset-btn       { right: 144px; }
+#monitor-toggle  { right: 16px; }
+#reset-btn:hover,
+#monitor-toggle:hover { color: var(--fg-0); border-color: var(--line-2); }
+#monitor-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  background: var(--ink-3);
+  color: var(--fg-2);
+  border-radius: 999px;
+}
+
+/* Glossary toggle "?" chip */
+#glossary-toggle {
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+/* ─── Loading overlay — calm, not neon ────────────────────────── */
+#loading {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ink-0); z-index: 9999;
+  transition: opacity .3s var(--ease);
+  flex-direction: column; gap: 14px;
+}
+#loading .loader-ring {
+  width: 38px; height: 38px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--amber);
+  animation: spin 1.1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#loading .loader-title {
+  font-family: var(--sans); font-size: 14px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--fg-0);
+}
+#loading .loader-sub {
+  font-family: var(--mono); font-size: 10.5px; color: var(--fg-3);
+  letter-spacing: 0.04em;
+}
+#loading.done { opacity: 0; pointer-events: none; }
+
+/* ─── Tooltip (inherits from panels.css but skin here) ────────── */
+#tooltip {
+  background: color-mix(in oklab, var(--ink-1) 92%, transparent) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-md) !important;
+  color: var(--fg-1) !important;
+  font-family: var(--mono) !important;
+  font-size: 11px !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* ─── Toast helper (design-style) ─────────────────────────────── */
+.toast {
+  position: fixed; bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--fg-0);
+  z-index: 1200;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s var(--ease);
+  font-family: var(--sans);
+}
+.toast.on { opacity: 1; }

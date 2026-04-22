@@ -4,11 +4,11 @@
 .kv-hidden { display: none !important; }
 
 /* ─── Knowledge View ─── */
+/* Geometry (position, overflow, padding) is owned by theme.css so the
+   view clears the fixed filter-bar and info-panel. */
 #knowledge-container {
-  position: absolute; inset: 0;
-  display: none; flex-direction: column;
-  overflow: hidden;
-  padding: 3% 4% 2%;
+  display: none;
+  flex-direction: column;
   background: #080810;
 }
 
@@ -134,15 +134,21 @@
   letter-spacing: 0.5px;
 }
 
-/* Cards list */
+/* Cards grid — responsive multi-column; rows stay short (card auto-height). */
 .kv-grid {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-auto-rows: max-content;
+  align-items: start;
+  gap: 12px;
   overflow-y: auto;
   padding-bottom: 24px;
 }
+/* Domain headers + global banner live inside the grid and must span all columns. */
+.kv-grid > .kv-domain-header,
+.kv-grid > .kv-global-banner,
+.kv-grid > .kv-empty { grid-column: 1 / -1; }
 .kv-grid::-webkit-scrollbar { width: 3px; }
 .kv-grid::-webkit-scrollbar-track { background: transparent; }
 .kv-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); }
@@ -499,11 +505,9 @@
 }
 
 /* ─── Wiki View — LaTeX Academic ─── */
+/* Geometry owned by theme.css — keep only cosmetic properties here. */
 #wiki-container {
-  position: absolute; inset: 0;
   display: none;
-  overflow: hidden;
-  padding: 3% 0 0 0;
   background: #111118;
 }
 
@@ -1741,4 +1745,625 @@ figure figcaption, .wiki-caption {
   .kv-expanded-title {
     font-size: 22px;
   }
+}
+
+
+/* =======================================================================
+   CORTEX DESIGN RE-SKIN — warm-neutral dark, Inter/Newsreader/JB-Mono.
+   Appended last so the token-driven aesthetic wins over the v2 hex
+   literals used throughout this file and its siblings (timeline.css,
+   sankey.css, panels.css, detail.css). Does NOT alter any id/class name
+   the v2 JS reads — only re-skins their visual treatment.
+   ======================================================================= */
+
+/* ─── Knowledge view canvas + domain bar ─────────────────────── */
+/* Padding is owned by theme.css so the view clears the fixed filter-bar
+   and info-panel. We only set background + font here. */
+#knowledge-container {
+  background: var(--ink-0) !important;
+  font-family: var(--sans) !important;
+}
+.kv-domain-bar {
+  border-bottom: 1px solid var(--hair) !important;
+  padding-bottom: 12px !important;
+  margin-bottom: 14px !important;
+  gap: 6px !important;
+}
+.kv-domain-pill {
+  background: transparent !important;
+  border: 1px solid var(--line) !important;
+  color: var(--fg-1) !important;
+  font-family: var(--sans) !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  padding: 4px 10px !important;
+  border-radius: 999px !important;
+  transition: background .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease) !important;
+}
+.kv-domain-pill:hover {
+  border-color: var(--line-2) !important;
+  color: var(--fg-0) !important;
+}
+.kv-domain-pill.active {
+  background: var(--ink-2) !important;
+  border-color: var(--line-2) !important;
+  color: var(--fg-0) !important;
+}
+.kv-domain-pill.kv-pill-global.active {
+  background: var(--amber-soft) !important;
+  border-color: color-mix(in oklab, var(--amber) 30%, transparent) !important;
+  color: var(--amber) !important;
+}
+
+/* Search row */
+.kv-search-row {
+  gap: 10px !important;
+  margin-bottom: 12px !important;
+}
+.kv-search {
+  background: var(--ink-2) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--fg-0) !important;
+  font-family: var(--mono) !important;
+  font-size: 11.5px !important;
+  padding: 7px 10px !important;
+  border-radius: var(--r-sm) !important;
+}
+.kv-search:focus {
+  border-color: var(--amber) !important;
+  background: var(--ink-1) !important;
+  box-shadow: 0 0 0 2px var(--amber-soft) !important;
+  outline: 0 !important;
+}
+.kv-search::placeholder { color: var(--fg-3) !important; }
+
+/* Sort buttons */
+.kv-sort-label {
+  font-family: var(--mono) !important;
+  font-size: 10.5px !important;
+  color: var(--fg-3) !important;
+  letter-spacing: 0.04em !important;
+}
+.kv-sort-btn {
+  background: transparent !important;
+  border: 1px solid var(--line) !important;
+  color: var(--fg-2) !important;
+  font-family: var(--sans) !important;
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+  border-radius: var(--r-sm) !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  transition: background .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease) !important;
+}
+.kv-sort-btn:hover  { border-color: var(--line-2) !important; color: var(--fg-0) !important; }
+.kv-sort-btn.active { background: var(--ink-2) !important; border-color: var(--line-2) !important; color: var(--fg-0) !important; }
+
+/* Stats bar */
+.kv-stats-bar {
+  border-bottom: 1px solid var(--hair) !important;
+  padding-bottom: 10px !important;
+  margin-bottom: 14px !important;
+  gap: 18px !important;
+}
+.kv-stat-val   { font-family: var(--mono) !important; color: var(--fg-0) !important; font-size: 13px !important; font-weight: 600 !important; }
+.kv-stat-label { font-family: var(--sans) !important; color: var(--fg-3) !important; font-size: 10.5px !important; text-transform: none !important; letter-spacing: 0 !important; }
+
+/* Global memory banner */
+.kv-global-banner {
+  background: var(--amber-soft) !important;
+  border: 1px solid color-mix(in oklab, var(--amber) 25%, transparent) !important;
+  border-radius: var(--r-md) !important;
+  padding: 10px 14px !important;
+}
+.kv-global-title {
+  font-family: var(--sans) !important;
+  color: var(--amber) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+/* Grid + cards — the design's memcard treatment */
+.kv-grid {
+  gap: 12px !important;
+  padding: 2px 0 60px !important;
+}
+.kv-domain-header {
+  font-family: var(--sans) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: var(--fg-2) !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  border-bottom: 1px solid var(--hair) !important;
+  padding: 14px 0 6px !important;
+  margin-top: 4px !important;
+}
+
+.kv-card {
+  position: relative;
+  background: var(--ink-1) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-md) !important;
+  padding: 14px 16px !important;
+  transition: border-color .15s var(--ease), background .15s var(--ease) !important;
+}
+.kv-card:hover {
+  border-color: var(--line-2) !important;
+  background: var(--ink-2) !important;
+  box-shadow: none !important;
+}
+.kv-card.kv-card-hot       { border-color: color-mix(in oklab, var(--amber) 25%, var(--line)) !important; }
+.kv-card.kv-card-hot:hover { border-color: color-mix(in oklab, var(--amber) 40%, var(--line-2)) !important; }
+.kv-card .kv-card-title,
+.kv-card h3,
+.kv-card .title {
+  font-family: var(--serif) !important;
+  font-size: 15.5px !important;
+  line-height: 1.35 !important;
+  color: var(--fg-0) !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.005em !important;
+}
+.kv-card .kv-card-body,
+.kv-card p {
+  font-family: var(--sans) !important;
+  font-size: 12.5px !important;
+  line-height: 1.55 !important;
+  color: var(--fg-1) !important;
+}
+.kv-card .kv-meta,
+.kv-card .kv-tag,
+.kv-card .kv-id,
+.kv-card .kv-time {
+  font-family: var(--mono) !important;
+  font-size: 10.5px !important;
+  color: var(--fg-3) !important;
+}
+
+/* Expanded modal */
+.kv-expanded,
+.kv-expanded-modal,
+#kv-expanded {
+  background: var(--ink-1) !important;
+  border: 1px solid var(--line-2) !important;
+  border-radius: var(--r-lg) !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
+}
+.kv-expanded-title {
+  font-family: var(--serif) !important;
+  color: var(--fg-0) !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+}
+#kv-backdrop { background: rgba(0,0,0,0.6) !important; backdrop-filter: blur(6px); }
+
+/* ─── Wiki view ───────────────────────────────────────────────── */
+#wiki-container {
+  background: var(--ink-0) !important;
+  color: var(--fg-0) !important;
+  font-family: var(--sans) !important;
+}
+.wiki-layout {
+  height: 100% !important;
+  display: grid !important;
+  grid-template-columns: 240px 1fr 240px !important;
+}
+.wiki-tree,
+#wiki-tree,
+.wiki-sidebar {
+  background: color-mix(in oklab, var(--ink-0) 96%, transparent) !important;
+  border-right: 1px solid var(--line) !important;
+  color: var(--fg-1) !important;
+  font-family: var(--sans) !important;
+  font-size: 13px !important;
+  padding: 16px 10px !important;
+}
+.wiki-tree .tree-item,
+.wiki-nav-item,
+.tree-item {
+  padding: 5px 8px !important;
+  border-radius: var(--r-sm) !important;
+  color: var(--fg-1) !important;
+  font-size: 12.5px !important;
+}
+.wiki-tree .tree-item:hover,
+.tree-item:hover {
+  background: var(--ink-2) !important;
+  color: var(--fg-0) !important;
+}
+.wiki-tree .tree-item.active,
+.tree-item.active {
+  background: var(--ink-2) !important;
+  color: var(--fg-0) !important;
+  position: relative;
+}
+.wiki-tree .tree-item.active::before,
+.tree-item.active::before {
+  content: ""; position: absolute; left: 0; top: 6px; bottom: 6px;
+  width: 2px; background: var(--amber); border-radius: 2px;
+}
+
+.wiki-doc,
+.wiki-main,
+#wiki-main,
+.wiki-content,
+.wiki-article {
+  background: var(--ink-0) !important;
+  color: var(--fg-0) !important;
+  font-family: var(--serif) !important;
+  font-size: 16px !important;
+  line-height: 1.7 !important;
+  padding: 44px 64px 120px !important;
+  overflow-y: auto !important;
+}
+.wiki-doc h1, .wiki-article h1, .wiki-main h1,
+.wiki-doc .doc-title, .wiki-main .doc-title,
+.wiki-title {
+  font-family: var(--serif) !important;
+  font-size: 34px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.15 !important;
+  color: var(--fg-0) !important;
+  margin-bottom: 14px !important;
+}
+.wiki-doc h2, .wiki-article h2, .wiki-main h2 {
+  font-family: var(--serif) !important;
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--fg-0) !important;
+  margin: 36px 0 12px !important;
+}
+.wiki-doc h3, .wiki-article h3, .wiki-main h3 {
+  font-family: var(--serif) !important;
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  color: var(--fg-0) !important;
+  margin: 24px 0 8px !important;
+}
+.wiki-doc p, .wiki-article p, .wiki-main p {
+  font-family: var(--serif) !important;
+  font-size: 16px !important;
+  line-height: 1.7 !important;
+  color: var(--fg-1) !important;
+}
+.wiki-doc a, .wiki-article a, .wiki-main a, .wiki-link {
+  color: var(--fg-0) !important;
+  text-decoration: none !important;
+  border-bottom: 1px solid var(--fg-3) !important;
+  transition: border-color .12s var(--ease) !important;
+}
+.wiki-doc a:hover, .wiki-article a:hover, .wiki-main a:hover, .wiki-link:hover {
+  border-bottom-color: var(--amber) !important;
+}
+.wiki-code-block, .wiki-doc pre, .wiki-doc code {
+  font-family: var(--mono) !important;
+  background: var(--ink-2) !important;
+  border: 1px solid var(--hair) !important;
+  border-radius: var(--r-sm) !important;
+  color: var(--fg-1) !important;
+}
+.wiki-doc pre { padding: 12px 14px !important; overflow-x: auto; }
+.wiki-doc code { padding: 1px 5px !important; font-size: 12.5px; }
+.wiki-doc pre code { padding: 0 !important; background: none !important; border: 0 !important; }
+
+/* Wiki right rail */
+.wiki-meta,
+#wiki-meta,
+.wiki-right,
+.wiki-toc {
+  border-left: 1px solid var(--line) !important;
+  background: var(--ink-0) !important;
+  padding: 44px 18px 40px !important;
+  overflow-y: auto !important;
+  font-size: 12px !important;
+  font-family: var(--sans) !important;
+  color: var(--fg-2) !important;
+}
+.toc-item {
+  display: block;
+  padding: 4px 0;
+  color: var(--fg-2);
+  font-size: 12px;
+  border-left: 1px solid var(--line);
+  padding-left: 10px;
+}
+.toc-item:hover { color: var(--fg-0); }
+.toc-item.active { color: var(--fg-0); border-left-color: var(--amber); }
+
+/* Breadcrumbs inside wiki */
+.wiki-breadcrumb-sep { color: var(--fg-3) !important; }
+
+/* ─── Board view (timeline/kanban) ────────────────────────────── */
+#timeline-container {
+  background: var(--ink-0) !important;
+  padding: 16px 20px 40px !important;
+  font-family: var(--sans) !important;
+}
+.kb-board, .board-grid {
+  display: grid !important;
+  gap: 10px !important;
+}
+.kb-col, .col {
+  background: var(--ink-1) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-md) !important;
+  overflow: hidden !important;
+}
+.kb-col-header, .col-head {
+  padding: 12px 14px 10px !important;
+  border-bottom: 1px solid var(--line) !important;
+  display: flex; align-items: center; gap: 8px;
+  background: transparent !important;
+}
+.kb-col-title, .col-head .name, .col-head .title {
+  font-family: var(--sans) !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: var(--fg-0) !important;
+  letter-spacing: -0.005em !important;
+  text-transform: none !important;
+}
+.kb-col-count, .col-head .cnt, .col-head .count {
+  font-family: var(--mono) !important;
+  font-size: 11px !important;
+  color: var(--fg-2) !important;
+  margin-left: auto !important;
+}
+.kb-col-cards, .col-body {
+  padding: 10px !important;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.kb-card, .bcard {
+  background: var(--ink-0) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-sm) !important;
+  padding: 10px 12px !important;
+  transition: border-color .15s var(--ease) !important;
+}
+.kb-card:hover, .bcard:hover { border-color: var(--line-2) !important; }
+.kb-card__title, .bcard-title, .kb-card .title {
+  font-family: var(--serif) !important;
+  font-size: 13.5px !important;
+  line-height: 1.35 !important;
+  color: var(--fg-0) !important;
+  font-weight: 500 !important;
+  margin-bottom: 4px !important;
+}
+.kb-card__meta, .bcard-meta {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--mono) !important;
+  font-size: 10px !important;
+  color: var(--fg-3) !important;
+}
+.kb-card__meta-badge, .em-tag, .bcard-meta .em-tag {
+  padding: 1px 5px !important;
+  border-radius: 2px !important;
+  border: 1px solid var(--hair) !important;
+  color: var(--fg-2) !important;
+  background: transparent !important;
+}
+.kb-card__bar, .kb-card__bar-track {
+  background: var(--ink-2) !important;
+  border-radius: 2px !important;
+}
+.kb-card__bar-fill, .kb-flow-metric-fill, .kb-flow-pct-fill {
+  background: linear-gradient(90deg, var(--heat-f), var(--heat-0)) !important;
+}
+
+/* Board flow header strip */
+.kb-flow-strip {
+  background: var(--ink-1) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-md) !important;
+  padding: 14px 16px !important;
+  margin-bottom: 14px !important;
+  font-family: var(--sans) !important;
+}
+.kb-flow-node {
+  background: var(--ink-0) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-sm) !important;
+}
+.kb-flow-label {
+  font-family: var(--sans) !important;
+  font-size: 11px !important;
+  color: var(--fg-2) !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+.kb-flow-count  { font-family: var(--mono) !important; color: var(--fg-0) !important; font-weight: 600 !important; }
+.kb-flow-pct    { font-family: var(--mono) !important; font-size: 10.5px !important; color: var(--fg-3) !important; }
+.kb-flow-arrow-line { background: var(--line-2) !important; }
+.kb-flow-arrow-line::after { border-color: var(--line-2) !important; }
+.kb-flow-bio-row span:first-child { color: var(--fg-2) !important; }
+.kb-flow-bio-row span:last-child  { color: var(--fg-0) !important; font-family: var(--mono) !important; }
+
+/* ─── Sankey / Pipeline view ─────────────────────────────────── */
+#sankey-container {
+  background: var(--ink-0) !important;
+  font-family: var(--sans) !important;
+}
+.pipe-wrap, .sankey-wrap {
+  background: var(--ink-0) !important;
+  padding: 18px 22px !important;
+}
+.pipe-stat, .sankey-stat {
+  background: var(--ink-1) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-md) !important;
+}
+.pipe-stat .v, .sankey-stat .v { font-family: var(--serif) !important; color: var(--fg-0) !important; font-weight: 500 !important; }
+.pipe-stat .k, .sankey-stat .k { font-family: var(--sans) !important; color: var(--fg-3) !important; text-transform: none !important; }
+.pipe-canvas, .sankey-canvas {
+  background: var(--ink-1) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-md) !important;
+}
+
+/* ─── Detail panel ────────────────────────────────────────────── */
+#detail-panel {
+  background: color-mix(in oklab, var(--ink-1) 96%, transparent) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-lg) var(--r-lg) 0 0 !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  font-family: var(--sans) !important;
+  color: var(--fg-0) !important;
+}
+#detail-panel h1,
+#detail-panel h2,
+#detail-panel h3,
+#detail-panel .detail-title {
+  font-family: var(--serif) !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--fg-0) !important;
+  text-transform: none !important;
+}
+#detail-panel h2 { font-size: 22px !important; }
+#detail-panel h3 { font-size: 17px !important; }
+#detail-panel .detail-meta,
+#detail-panel .detail-path,
+#detail-panel .detail-tag {
+  font-family: var(--mono) !important;
+  color: var(--fg-2) !important;
+}
+#detail-panel .detail-peek-bar {
+  font-family: var(--mono) !important;
+  color: var(--fg-2) !important;
+  border-bottom: 1px solid var(--line) !important;
+  letter-spacing: 0.04em !important;
+}
+.detail-window-btns button,
+#close-detail,
+#minimize-detail {
+  background: transparent !important;
+  border: 1px solid var(--line) !important;
+  color: var(--fg-2) !important;
+  border-radius: var(--r-sm) !important;
+  transition: color .12s, border-color .12s, background .12s !important;
+}
+.detail-window-btns button:hover,
+#close-detail:hover,
+#minimize-detail:hover {
+  color: var(--fg-0) !important;
+  border-color: var(--line-2) !important;
+  background: var(--ink-2) !important;
+}
+
+.tool-diff-btn {
+  font-family: var(--sans) !important;
+  font-size: 11.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--amber) !important;
+  background: var(--amber-soft) !important;
+  border: 1px solid color-mix(in oklab, var(--amber) 30%, transparent) !important;
+  padding: 5px 12px !important;
+  border-radius: var(--r-sm) !important;
+}
+.tool-diff-btn:hover {
+  background: color-mix(in oklab, var(--amber) 22%, transparent) !important;
+  border-color: var(--amber) !important;
+  box-shadow: none !important;
+}
+
+/* ─── Monitor / Glossary panels ──────────────────────────────── */
+#monitor-panel, #glossary-panel {
+  background: color-mix(in oklab, var(--ink-1) 96%, transparent) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-md) !important;
+  backdrop-filter: blur(18px) !important;
+  font-family: var(--sans) !important;
+  color: var(--fg-1) !important;
+}
+#monitor-panel::after, #glossary-panel::before { display: none !important; }
+
+.mon-header, .glossary-header {
+  border-bottom: 1px solid var(--hair) !important;
+  padding: 12px 14px !important;
+}
+.mon-title, .glossary-title {
+  font-family: var(--sans) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--fg-0) !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+.mon-tabs { border-bottom: 1px solid var(--hair) !important; gap: 4px; padding: 8px 12px !important; }
+.mon-tab {
+  background: transparent !important;
+  border: 1px solid var(--line) !important;
+  color: var(--fg-2) !important;
+  font-family: var(--sans) !important;
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+  border-radius: var(--r-sm) !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+.mon-tab:hover  { border-color: var(--line-2) !important; color: var(--fg-0) !important; }
+.mon-tab.active { background: var(--ink-2) !important; border-color: var(--line-2) !important; color: var(--fg-0) !important; }
+.mon-count {
+  font-family: var(--mono) !important;
+  font-size: 10px !important;
+  color: var(--fg-3) !important;
+  padding: 1px 5px !important;
+  margin-left: 4px !important;
+  background: var(--ink-0) !important;
+  border: 1px solid var(--hair) !important;
+  border-radius: 999px !important;
+}
+
+/* ─── Conversation + discussion modals ───────────────────────── */
+#conversation-modal .conv-modal-panel {
+  background: var(--ink-1) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--r-lg) !important;
+}
+.conv-modal-header { border-bottom: 1px solid var(--hair) !important; }
+.conv-modal-title {
+  font-family: var(--sans) !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: var(--fg-0) !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+.conv-msg       { border-left: 2px solid transparent !important; background: transparent !important; padding: 10px 14px !important; }
+.conv-msg-user      { border-left-color: var(--stage-labile) !important; background: color-mix(in oklab, var(--stage-labile) 6%, transparent) !important; }
+.conv-msg-assistant { border-left-color: var(--stage-late) !important; background: color-mix(in oklab, var(--stage-late) 4%, transparent) !important; }
+.conv-msg-role      { font-family: var(--mono) !important; color: var(--fg-3) !important; font-size: 10px !important; letter-spacing: 0.04em !important; text-transform: uppercase !important; }
+.conv-msg-time      { font-family: var(--mono) !important; color: var(--fg-3) !important; font-size: 10px !important; }
+.conv-msg-text      { font-family: var(--serif) !important; font-size: 14.5px !important; line-height: 1.65 !important; color: var(--fg-1) !important; }
+.conv-tool-call summary { font-family: var(--mono) !important; color: var(--amber) !important; font-size: 11px !important; letter-spacing: 0.04em !important; }
+.conv-tool-io { font-family: var(--mono) !important; font-size: 10.5px !important; background: var(--ink-2) !important; border: 1px solid var(--hair) !important; color: var(--fg-2) !important; }
+
+/* ─── Graph view deep-space canvas backdrop (match design) ───── */
+#graph-container {
+  background:
+    radial-gradient(1200px 800px at 50% 55%, oklch(14% 0.02 260) 0%, oklch(10% 0.015 265) 42%, oklch(7% 0.01 270) 78%, oklch(5% 0.008 270) 100%),
+    var(--ink-0) !important;
+}
+
+/* ─── Orbitron cleanup — everywhere it leaks in v2 CSS ───────── */
+[style*="Orbitron"],
+.panel-title,
+.mon-title,
+.glossary-title,
+#detail-panel h2,
+.conv-modal-title {
+  font-family: var(--sans) !important;
+  letter-spacing: -0.005em !important;
+  text-transform: none !important;
+  text-shadow: none !important;
 }

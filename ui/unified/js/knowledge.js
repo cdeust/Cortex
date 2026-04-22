@@ -305,12 +305,24 @@
     titleEl.textContent = title;
     card.appendChild(titleEl);
 
+    // Emotion chip — prominent, at top. Carries the affective signal.
+    if (window.JUG && JUG._memSci && typeof JUG._memSci.buildEmotionChip === 'function') {
+      var emoChip = JUG._memSci.buildEmotionChip(mem);
+      if (emoChip) card.appendChild(emoChip);
+    }
+
     // Body preview
     var preview = extractPreview(mem.content || mem.label || '', title);
     if (preview) {
       var bodyEl = el('div', 'kv-card-body');
       bodyEl.textContent = preview;
       card.appendChild(bodyEl);
+    }
+
+    // Meaning section — store type, schema alignment, semantic tags, gist.
+    if (window.JUG && JUG._memSci && typeof JUG._memSci.buildMeaningSection === 'function') {
+      var meaning = JUG._memSci.buildMeaningSection(mem);
+      if (meaning) card.appendChild(meaning);
     }
 
     // Metadata row: stage badge + domain + store type + heat + date
@@ -360,6 +372,14 @@
     }
 
     card.appendChild(metaRow);
+
+    // Scientific measurements — every instrumented field Cortex tracks
+    // per memory (heat, importance, surprise, valence, plasticity,
+    // hippo-dep, access/useful/replay counts, schema, flags, …).
+    if (JUG._memSci && typeof JUG._memSci.buildSciencePanel === 'function') {
+      var sci = JUG._memSci.buildSciencePanel(mem, 'full');
+      if (sci) card.appendChild(sci);
+    }
 
     // Tags
     var tags = mem.tags || [];
@@ -458,28 +478,32 @@
 
     panel.appendChild(metaRow);
 
+    // Prominent emotion + meaning (same as card, no duplication).
+    if (window.JUG && JUG._memSci) {
+      if (typeof JUG._memSci.buildEmotionChip === 'function') {
+        var detailEmo = JUG._memSci.buildEmotionChip(mem);
+        if (detailEmo) {
+          detailEmo.classList.add('ms-emotion--detail');
+          panel.appendChild(detailEmo);
+        }
+      }
+      if (typeof JUG._memSci.buildMeaningSection === 'function') {
+        var detailMeaning = JUG._memSci.buildMeaningSection(mem);
+        if (detailMeaning) panel.appendChild(detailMeaning);
+      }
+    }
+
     // Full content — rendered with basic markdown formatting
     var contentBlock = el('div', 'kv-expanded-content');
     contentBlock.innerHTML = renderMemoryContent(mem.content || mem.label || '');
     panel.appendChild(contentBlock);
 
-    // Metadata detail — all values colored
-    var metaSec = el('div', 'kv-expanded-section');
-    metaSec.textContent = 'Metadata';
-    metaSec.style.color = stageColor;
-    panel.appendChild(metaSec);
-
-    var meta = el('div', 'kv-expanded-meta');
-    addMetaColored(meta, 'Activity', heat >= 0.7 ? 'Hot' : heat >= 0.4 ? 'Warm' : heat >= 0.15 ? 'Cool' : 'Cold', nodeColor);
-    addMetaColored(meta, 'Importance', mem.importance >= 0.7 ? 'High' : mem.importance >= 0.4 ? 'Medium' : 'Low', mem.importance >= 0.7 ? '#f59e0b' : mem.importance >= 0.4 ? '#06b6d4' : '#60A0E0');
-    addMetaColored(meta, 'Stage', sm.label, stageColor);
-    addMeta(meta, 'Times recalled', '' + (mem.accessCount || 0));
-    if (mem.emotion && mem.emotion !== 'neutral') {
-      addMetaColored(meta, 'Mood', mem.emotion.charAt(0).toUpperCase() + mem.emotion.slice(1), EMO_COLORS[mem.emotion] || '#c0c8d8');
+    // Explained scientific panel — every instrumented field with a
+    // non-technical explanation. Superset of the summary card's grid.
+    if (window.JUG && JUG._memSci && typeof JUG._memSci.buildExplainedPanel === 'function') {
+      var explained = JUG._memSci.buildExplainedPanel(mem);
+      if (explained) panel.appendChild(explained);
     }
-    if (mem.createdAt) addMeta(meta, 'Created', formatDate(mem.createdAt));
-    if (mem.lastAccessed) addMeta(meta, 'Last accessed', formatDate(mem.lastAccessed));
-    panel.appendChild(meta);
 
     // Tags
     var allTags = mem.tags || [];

@@ -116,7 +116,13 @@
         body.innerHTML = renderConversation(data.messages || [], data);
       })
       .catch(function(err) {
-        body.innerHTML = '<div class="conv-error">Failed to load: ' + err.message + '</div>';
+        // XSS hardening (CWE-79): build the error node via textContent
+        // instead of concatenating err.message into an HTML string.
+        body.innerHTML = '';
+        var errDiv = document.createElement('div');
+        errDiv.className = 'conv-error';
+        errDiv.textContent = 'Failed to load: ' + (err && err.message ? err.message : 'unknown error');
+        body.appendChild(errDiv);
       });
   }
 

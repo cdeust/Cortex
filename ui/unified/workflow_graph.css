@@ -1,0 +1,308 @@
+/* Cortex — Workflow Graph view styles.
+   Matches theme.css tokens; mirrors the calm dark canvas + amber focus colorway.
+   All color comes from data (kind, weight, cross-domain); chrome is neutral. */
+
+.wfg-svg,
+.wfg-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: var(--ink-0, #080810);
+}
+
+/* ── Shells (radial level guides per domain) ──────────────────────── */
+.wfg-shell {
+  fill: none;
+  stroke: rgba(160, 150, 140, 0.08);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  pointer-events: none;
+}
+.wfg-shell--L1 { stroke: rgba(255, 180, 100, 0.12); }
+.wfg-shell--L2 { stroke: rgba(120, 220, 200, 0.12); }
+.wfg-shell--L3 { stroke: rgba(120, 180, 250, 0.10); }
+.wfg-shell--L4 { stroke: rgba(244, 63, 94, 0.35); stroke-width: 1.4; stroke-dasharray: none; fill: none; }
+.wfg-shell--L5 { stroke: rgba(192, 112, 208, 0.35); stroke-width: 1.4; stroke-dasharray: none; fill: none; }
+
+.wfg-shell-label {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  fill: rgba(160, 150, 140, 0.35);
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: rgba(8, 8, 16, 0.85);
+  stroke-width: 3px;
+}
+.wfg-shell-label--L1 { fill: rgba(255, 180, 100, 0.55); }
+.wfg-shell-label--L2 { fill: rgba(120, 220, 200, 0.55); }
+.wfg-shell-label--L3 { fill: rgba(120, 180, 250, 0.45); }
+.wfg-shell-label--L4 { fill: rgba(244, 63, 94, 0.72); }
+.wfg-shell-label--L5 { fill: rgba(192, 112, 208, 0.72); }
+
+/* ── Links ────────────────────────────────────────────────────── */
+/* Intra-domain: soft cyan threads. Cross-domain: thinner, violet, read as background. */
+.wfg-link {
+  stroke: rgba(120, 180, 200, 0.22);
+  stroke-linecap: round;
+  pointer-events: none;
+  transition: stroke 120ms var(--ease, ease-out), stroke-opacity 120ms var(--ease, ease-out);
+}
+.wfg-link--cross {
+  stroke: rgba(200, 150, 255, 0.18);  /* thin violet thread between clouds */
+  stroke-dasharray: 2 3;
+}
+.wfg-link--in_domain       { stroke: rgba(120, 200, 220, 0.28); }
+.wfg-link--tool_used_file  { stroke: rgba(150, 200, 180, 0.24); }
+.wfg-link--invoked_skill   { stroke: rgba(180, 210, 150, 0.22); }
+.wfg-link--triggered_hook  { stroke: rgba(200, 170, 220, 0.22); }
+.wfg-link--spawned_agent   { stroke: rgba(140, 220, 210, 0.24); }
+.wfg-link--about_entity    { stroke: rgba(130, 180, 220, 0.20); }
+
+.wfg-link--active {
+  stroke: var(--amber, #F0D870);
+  stroke-opacity: 0.92;
+}
+.wfg-link--dim {
+  stroke-opacity: 0.04;
+}
+
+/* ── Nodes ────────────────────────────────────────────────────── */
+.wfg-node circle {
+  stroke: rgba(10, 10, 14, 0.55);
+  stroke-width: 1;
+  transition: opacity 120ms var(--ease, ease-out),
+              filter  140ms var(--ease, ease-out);
+}
+/* Glows are rendered via a second, soft-stroke circle per node below —
+   SVG `filter: drop-shadow` inside a d3-zoom transform renders the filter
+   bounding box as a visible rectangle in Safari (Apple WebKit bug); we
+   avoid it entirely. */
+.wfg-node--domain   circle { stroke-width: 1.5; }
+
+.wfg-node.wfg-dim circle,
+.wfg-node.wfg-dim text {
+  opacity: 0.15;
+}
+/* Filter-applied nodes/edges fade way back but stay in place as context. */
+.wfg-node.wfg-filter-out circle,
+.wfg-node.wfg-filter-out text { opacity: 0.05; }
+.wfg-link.wfg-filter-out { stroke-opacity: 0.02; }
+.wfg-node.wfg-focus circle {
+  stroke: var(--amber, #F0D870);
+  stroke-width: 2;
+}
+
+/* ── Labels (levels of scale: domain > tool_hub > agent only) ── */
+.wfg-label {
+  font-family: var(--sans, 'Inter Tight', system-ui, sans-serif);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  fill: var(--fg-0, #E8E4D8);
+  paint-order: stroke;
+  stroke: rgba(8, 8, 16, 0.9);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+  user-select: none;
+}
+.wfg-node--domain .wfg-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  fill: var(--amber, #F0D870);
+}
+.wfg-node--tool_hub .wfg-label {
+  font-size: 10.5px;
+  fill: #E8C88A;
+}
+.wfg-node--agent .wfg-label {
+  font-size: 10px;
+  fill: #9EE4D8;
+}
+
+/* ── Side panel — anchored right, mirrors #detail-panel feel ── */
+.wfg-panel {
+  position: fixed;
+  top: 96px;
+  right: 16px;
+  width: 320px;
+  max-height: calc(100vh - 128px);
+  padding: 16px 18px 18px;
+  background: color-mix(in oklab, var(--ink-1, #14151a) 94%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line, rgba(120, 115, 108, 0.45));
+  border-radius: var(--r-md, 6px);
+  color: var(--fg-1, #C8C4B8);
+  font-family: var(--sans, 'Inter Tight', system-ui, sans-serif);
+  font-size: 12.5px;
+  line-height: 1.45;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(8px);
+  transition: opacity 160ms var(--ease, ease-out),
+              transform 180ms var(--ease, ease-out);
+  overflow-y: auto;
+}
+.wfg-panel--open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+.wfg-panel__close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--fg-3, #706860);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 120ms var(--ease, ease-out);
+}
+.wfg-panel__close:hover { color: var(--amber, #F0D870); }
+
+.wfg-panel__kind {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-3, #706860);
+  margin-bottom: 4px;
+}
+.wfg-panel__title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--fg-0, #E8E4D8);
+  margin-bottom: 12px;
+  word-break: break-word;
+}
+.wfg-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wfg-panel__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--hair, rgba(160, 150, 140, 0.14));
+}
+.wfg-panel__row:first-child { border-top: none; }
+.wfg-panel__key {
+  font-size: 11px;
+  color: var(--fg-2, #928A7E);
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+.wfg-panel__val {
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11.5px;
+  color: var(--fg-0, #E8E4D8);
+  text-align: right;
+  word-break: break-word;
+  max-width: 220px;
+}
+.wfg-panel__path {
+  display: block;
+  margin-top: 10px;
+  padding: 8px 10px;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 10.5px;
+  color: var(--fg-1, #C8C4B8);
+  background: var(--ink-2, #1b1c22);
+  border: 1px solid var(--hair, rgba(160, 150, 140, 0.14));
+  border-radius: var(--r-sm, 4px);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.wfg-panel__preview {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--fg-1, #C8C4B8);
+  background: var(--ink-2, #1b1c22);
+  border: 1px solid var(--hair, rgba(160, 150, 140, 0.14));
+  border-radius: var(--r-sm, 4px);
+  white-space: pre-wrap;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.wfg-panel__section { margin-top: 14px; }
+.wfg-panel__section-title {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-3, #706860);
+  margin-bottom: 6px;
+}
+.wfg-panel__chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.wfg-panel__chip {
+  display: inline-block;
+  padding: 2px 8px;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--fg-1, #C8C4B8);
+  background: var(--ink-2, #1b1c22);
+  border: 1px solid var(--hair, rgba(160, 150, 140, 0.14));
+  border-radius: 3px;
+}
+.wfg-panel__action {
+  margin-top: 6px;
+  padding: 8px 12px;
+  width: 100%;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--fg-0, #E8E4D8);
+  background: var(--ink-2, #1b1c22);
+  border: 1px solid var(--amber, #F0D870);
+  border-radius: var(--r-sm, 4px);
+  cursor: pointer;
+  transition: background 120ms var(--ease, ease-out), color 120ms var(--ease, ease-out);
+}
+.wfg-panel__action:hover {
+  background: var(--amber, #F0D870);
+  color: var(--ink-0, #080810);
+}
+
+/* Container — panel hidden on non-graph views should follow parent display */
+#graph-container:not([style*="display: none"]) .wfg-panel { /* noop guard */ }
+
+/* Hard-suppress the legacy force-graph renderer: once the workflow
+   graph has mounted its own wrapper (#wfg-container) inside
+   #graph-container, any other child — canvas, div, whatever the
+   `force-graph` library inserts — stays hidden. This removes the
+   ghost grey quadrilaterals the legacy canvas leaves behind. */
+#graph-container:has(#wfg-container) > *:not(#wfg-container):not(.wfg-panel) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+@media (max-width: 900px) {
+  .wfg-panel {
+    right: 8px;
+    left: 8px;
+    top: auto;
+    bottom: 8px;
+    width: auto;
+    max-height: 40vh;
+  }
+}

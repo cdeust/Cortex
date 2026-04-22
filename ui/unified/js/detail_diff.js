@@ -60,16 +60,26 @@
   }
 
   function renderFromGit(name, data) {
-    if (data.diff_type === 'none' || !data.lines || !data.lines.length) {
-      renderModal(name, 'No changes found', [], false);
+    var labels = {
+      uncommitted: 'Working-tree changes',
+      staged:      'Staged changes',
+      last_commit: 'Last commit that touched this file',
+      new_file:    'New file — full content as additions',
+      unchanged:   'Unchanged — HEAD content',
+      deleted:     'Deleted — last-known content',
+      untracked:   'Untracked new file — full content',
+      none:        'File not found in repo or history',
+    };
+    var subtitle = labels[data.diff_type] || data.diff_type || 'Diff';
+    if (data.reason) subtitle += ' — ' + data.reason;
+
+    if (!data.lines || !data.lines.length) {
+      // No line data — render an explicit empty state but keep the subtitle
+      // honest so the user knows *why* there's nothing to show.
+      renderModal(name, subtitle, [], false);
       return;
     }
-    var labels = {
-      uncommitted: 'Working changes',
-      last_commit: 'Last commit',
-      new_file: 'New file',
-    };
-    renderModal(name, labels[data.diff_type] || data.diff_type, data.lines, data.truncated);
+    renderModal(name, subtitle, data.lines, data.truncated);
   }
 
   // ── Unified diff from old/new strings ──

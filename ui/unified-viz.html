@@ -11,6 +11,8 @@
 <link rel="stylesheet" href="/css/timeline.css">
 <link rel="stylesheet" href="/css/sankey.css">
 <link rel="stylesheet" href="/css/knowledge.css">
+<link rel="stylesheet" href="/css/workflow_graph.css">
+<link rel="stylesheet" href="/css/memory_science.css">
 <!-- KaTeX for scientific math rendering (load early; math appears in view mode too) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
@@ -75,35 +77,30 @@
   </span>
   <button class="filter-btn" id="glossary-toggle" title="Glossary (?)">?</button>
   <span class="filter-sep"></span>
-  <button class="filter-btn active" data-filter="all">All</button>
-  <button class="filter-btn" data-filter="methodology">Methodology</button>
-  <button class="filter-btn" data-filter="memories">Memories</button>
-  <button class="filter-btn" data-filter="knowledge">Knowledge</button>
+  <!-- Layer filters — one click shows only the nodes of that hierarchy level. -->
+  <button class="filter-btn active" data-wfg-filter="all">All</button>
+  <button class="filter-btn" data-wfg-filter="L1" title="Skills · Hooks · Commands · Agents">L1 setup</button>
+  <button class="filter-btn" data-wfg-filter="L2" title="Tool hubs (Edit · Read · Grep · Bash · …)">L2 tools</button>
+  <button class="filter-btn" data-wfg-filter="L3" title="Files touched by tools">L3 files</button>
+  <button class="filter-btn" data-wfg-filter="L4">L4 discussions</button>
+  <button class="filter-btn" data-wfg-filter="L5">L5 memories</button>
   <span class="filter-sep"></span>
-  <button class="filter-btn" data-filter="emotional">Emotional</button>
-  <button class="filter-btn" data-filter="protected">Protected</button>
-  <button class="filter-btn" data-filter="hot">Hot</button>
-  <button class="filter-btn" data-filter="global">Global</button>
-  <button class="filter-btn" data-filter="discussions">Discussions</button>
+  <!-- Specific kinds / file clusters — finer than layer, for spotting one thing. -->
+  <button class="filter-btn" data-wfg-filter="kind:skill">Skills</button>
+  <button class="filter-btn" data-wfg-filter="kind:command">Commands</button>
+  <button class="filter-btn" data-wfg-filter="kind:hook">Hooks</button>
+  <button class="filter-btn" data-wfg-filter="kind:agent">Agents</button>
+  <button class="filter-btn" data-wfg-filter="kind:mcp">MCPs</button>
+  <span class="filter-sep"></span>
+  <button class="filter-btn" data-wfg-filter="file:edit_write" title="Files you edited/wrote">Edited</button>
+  <button class="filter-btn" data-wfg-filter="file:read" title="Files you only read">Read only</button>
+  <button class="filter-btn" data-wfg-filter="file:grep_glob" title="Files only matched by Grep/Glob">Searched</button>
+  <button class="filter-btn" data-wfg-filter="file:bash" title="Files only touched by Bash">Bash only</button>
+  <span class="filter-sep"></span>
+  <button class="filter-btn" data-wfg-filter="cross-domain" title="Files shared across domains">Cross-domain</button>
   <span class="filter-sep"></span>
   <select id="domain-select" class="filter-select"><option value="">All Domains</option></select>
-  <select id="emotion-select" class="filter-select">
-    <option value="">All Emotions</option>
-    <option value="urgency">Urgency</option>
-    <option value="frustration">Frustration</option>
-    <option value="satisfaction">Satisfaction</option>
-    <option value="discovery">Discovery</option>
-    <option value="confusion">Confusion</option>
-  </select>
-  <select id="stage-select" class="filter-select">
-    <option value="">All Stages</option>
-    <option value="labile">New</option>
-    <option value="early_ltp">Growing</option>
-    <option value="late_ltp">Strong</option>
-    <option value="consolidated">Stable</option>
-    <option value="reconsolidating">Updating</option>
-  </select>
-  <input type="text" id="search-box" placeholder="Search...">
+  <input type="text" id="search-box" placeholder="Search path, skill, command…">
 </div>
 
 <div id="status-bar" class="hud-panel">
@@ -185,26 +182,49 @@
 </div>
 
 <div id="legend">
-  <div class="leg-item"><div class="leg-dot" style="background:#FFFFFF;box-shadow:0 0 6px #FFFFFF60"></div>Root</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#8B5CF6;box-shadow:0 0 6px #8B5CF660"></div>Category</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#E8B840;box-shadow:0 0 6px #E8B84060"></div>Project</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#2DD4BF;box-shadow:0 0 6px #2DD4BF60"></div>Agent</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#64748B;box-shadow:0 0 6px #64748B60"></div>Group</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#60D8F0;box-shadow:0 0 6px #60D8F060"></div>Entry</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#70D880;box-shadow:0 0 6px #70D88060"></div>Pattern</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#E0A840;box-shadow:0 0 6px #E0A84060"></div>Tool</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#58D888;box-shadow:0 0 6px #58D88860"></div>Memory</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#50C8E0;box-shadow:0 0 6px #50C8E060"></div>Entity</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#F43F5E;box-shadow:0 0 6px #F43F5E60"></div>Discussion</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#8B6914;box-shadow:0 0 6px #8B691460"></div>Global</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#00D2FF;box-shadow:0 0 6px #00D2FF60"></div>New</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#60A0E0;box-shadow:0 0 6px #60A0E060"></div>Growing</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#40D870;box-shadow:0 0 6px #40D87060"></div>Strong</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#E8B840;box-shadow:0 0 6px #E8B84060"></div>Stable</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#C070D0;box-shadow:0 0 6px #C070D060"></div>Updating</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#40D870;box-shadow:0 0 6px #40D87060"></div>Quality ≥60%</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#E0B040;box-shadow:0 0 6px #E0B04060"></div>Quality ≥30%</div>
-  <div class="leg-item"><div class="leg-dot" style="background:#E05050;box-shadow:0 0 6px #E0505060"></div>Quality &lt;30%</div>
+  <div class="leg-section">Hierarchy — L1 setup</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#FCD34D;box-shadow:0 0 6px #FCD34D60"></div>Domain (hub)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#FB923C;box-shadow:0 0 6px #FB923C60"></div>Skill</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#FACC15;box-shadow:0 0 6px #FACC1560"></div>Command</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#A855F7;box-shadow:0 0 6px #A855F760"></div>Hook</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#EC4899;box-shadow:0 0 6px #EC489960"></div>Agent</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#6366F1;box-shadow:0 0 6px #6366F160"></div>MCP</div>
+
+  <div class="leg-section">Tools (L2)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#10B981;box-shadow:0 0 6px #10B98160"></div>Edit</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#059669;box-shadow:0 0 6px #05966960"></div>Write</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#06B6D4;box-shadow:0 0 6px #06B6D460"></div>Read</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#D946EF;box-shadow:0 0 6px #D946EF60"></div>Grep</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#C026D3;box-shadow:0 0 6px #C026D360"></div>Glob</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#F97316;box-shadow:0 0 6px #F9731660"></div>Bash</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#EC4899;box-shadow:0 0 6px #EC489960"></div>Task</div>
+
+  <div class="leg-section">Files (L3)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#10B981;box-shadow:0 0 6px #10B98160"></div>Edited / Written</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#06B6D4;box-shadow:0 0 6px #06B6D460"></div>Read only</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#D946EF;box-shadow:0 0 6px #D946EF60"></div>Grep / Glob</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#F97316;box-shadow:0 0 6px #F9731660"></div>Bash only</div>
+
+  <div class="leg-section">L4 discussions</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#EF4444;box-shadow:0 0 6px #EF444460"></div>Discussion</div>
+
+  <div class="leg-section">L5 memories</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#86EFAC;box-shadow:0 0 6px #86EFAC60"></div>Memory · labile</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#4ADE80;box-shadow:0 0 6px #4ADE8060"></div>Memory · early LTP</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#16A34A;box-shadow:0 0 6px #16A34A60"></div>Memory · late LTP</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#166534;box-shadow:0 0 6px #16653460"></div>Memory · consolidated</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#C070D0;box-shadow:0 0 6px #C070D060"></div>Memory · semantic</div>
+
+  <div class="leg-section">Edges</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(120,200,220,0.7)"></div>in domain</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(150,200,180,0.7)"></div>tool → file</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(180,210,150,0.7)"></div>invoked skill</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(200,170,220,0.7)"></div>triggered hook</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(140,220,210,0.7)"></div>spawned agent</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(244,63,94,0.65)"></div>discussion → file</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(224,168,64,0.65)"></div>command → file</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(138,107,255,0.65)"></div>invoked mcp</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(200,150,255,0.4);border-top:1px dashed rgba(200,150,255,0.6)"></div>cross-domain</div>
 </div>
 
 <div id="glossary-panel">
@@ -379,12 +399,19 @@
 <script src="/js/detail_diff.js"></script>
 <script src="/js/detail_panel.js"></script>
 <script src="/js/discussion_detail.js"></script>
+<script src="/js/memory_science.js"></script>
 <script src="/js/timeline.js"></script>
 <script src="/js/sankey.js"></script>
 <script src="/js/knowledge.js"></script>
 <script src="/js/wiki.js"></script>
 <script src="/js/controls.js"></script>
 <script src="/js/monitor.js"></script>
+<script src="/js/workflow_graph_panel.js"></script>
+<script src="/js/workflow_graph_render_svg.js"></script>
+<script src="/js/workflow_graph_render_canvas.js"></script>
+<script src="/js/workflow_graph.js"></script>
+<script src="/js/workflow_graph_bridge.js"></script>
+<script src="/js/workflow_graph_filters.js"></script>
 <script src="/js/polling.js"></script>
 
 </body>

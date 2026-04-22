@@ -96,7 +96,11 @@
     var groups = {};
     STAGES.forEach(function(s) { groups[s] = []; });
     memories.forEach(function(m) {
-      var s = m.consolidationStage || 'labile';
+      // Accept all shapes the backend has emitted over time:
+      //   m.stage                (current workflow_graph.v1 field)
+      //   m.consolidationStage   (legacy camelCase)
+      //   m.consolidation_stage  (snake_case from memory record)
+      var s = m.stage || m.consolidationStage || m.consolidation_stage || 'labile';
       if (!groups[s]) s = 'labile';
       groups[s].push(m);
     });
@@ -280,6 +284,15 @@
     label.textContent = (mem.label || mem.content || '').slice(0, 100);
     body.appendChild(label);
 
+    // Emotion chip — high-signal affective indicator under the label.
+    if (window.JUG && JUG._memSci && typeof JUG._memSci.buildEmotionChip === 'function') {
+      var emoChip = JUG._memSci.buildEmotionChip(mem);
+      if (emoChip) {
+        emoChip.classList.add('ms-emotion--compact');
+        body.appendChild(emoChip);
+      }
+    }
+
     // Meta row: domain pill + store type badge + relative age
     var meta = el('div', 'kb-card-meta');
 
@@ -304,6 +317,22 @@
       meta.appendChild(time);
     }
     body.appendChild(meta);
+
+    // Meaning — schema alignment, semantic tags, gist.
+    if (window.JUG && JUG._memSci && typeof JUG._memSci.buildMeaningSection === 'function') {
+      var meaning = JUG._memSci.buildMeaningSection(mem);
+      if (meaning) {
+        meaning.classList.add('ms-meaning--compact');
+        body.appendChild(meaning);
+      }
+    }
+
+    // Scientific measurements — compact variant keeps Kanban column
+    // cards dense (6 top rows max; bars + counters only, no text/age).
+    if (window.JUG && JUG._memSci && typeof JUG._memSci.buildSciencePanel === 'function') {
+      var sci = JUG._memSci.buildSciencePanel(mem, 'compact');
+      if (sci) body.appendChild(sci);
+    }
 
     // Tags — up to 2
     if (mem.tags && mem.tags.length > 0) {

@@ -2,6 +2,25 @@
 
 Provides ServerManager to eliminate duplicated singleton/timer/shutdown
 patterns across UI, dashboard, and unified visualization servers.
+
+Security primitives (hardened 2026-04-21):
+  - ``validate_host_header``: DNS-rebinding defense. Only accepts Host
+    headers that resolve to loopback (127.0.0.1 / localhost / [::1]).
+    The server binds to 127.0.0.1, but a malicious site that DNS-rebinds
+    its own hostname to 127.0.0.1 can still reach it; Host validation
+    closes this.  (CWE-350 / CWE-346 mitigation.)
+  - ``resolve_allowed_origin``: strict-reflection CORS. The Origin header
+    is compared against an allowlist of loopback origins; the response
+    echoes the exact origin only when it matches. Wildcard ``*`` is
+    never emitted. (CWE-942 mitigation.)
+  - ``enforce_same_origin_write``: CSRF defense for state-changing
+    requests. POST is rejected unless the Origin/Referer matches a
+    loopback origin. (CWE-352 mitigation.)
+  - ``send_error_response``: redacts the full exception text, returning
+    only the error class name. Details are logged server-side to stderr
+    so developers can still triage locally without leaking absolute
+    paths, DB DSNs, or stack traces to browser consoles on other tabs.
+    (CWE-209 mitigation.)
 """
 
 from __future__ import annotations
@@ -10,9 +29,21 @@ import json
 import os
 import sys
 import threading
+import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
+
+
+# Security primitives live in a dedicated module so this file stays
+# focused on server-manager + response helpers. Re-exported here for
+# backward-compatibility with existing import sites.
+from mcp_server.server.http_security import (  # noqa: E402
+    _apply_cors_headers,
+    enforce_same_origin_write,
+    resolve_allowed_origin,
+    validate_host_header,
+)
 
 
 class ServerManager:
@@ -163,23 +194,36 @@ def read_html_file(path: Path, error_label: str) -> str:
 def send_json_response(
     handler: BaseHTTPRequestHandler, data: Any, *, status: int = 200
 ) -> None:
-    """Send a JSON response with CORS and no-cache headers."""
+    """Send a JSON response with strict-reflect CORS + no-cache headers."""
     body = json.dumps(data, default=str).encode()
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    _apply_cors_headers(handler)
     handler.send_header("Cache-Control", "no-cache")
     handler.end_headers()
     handler.wfile.write(body)
 
 
 def send_error_response(handler: BaseHTTPRequestHandler, error: Exception) -> None:
-    """Send a 500 JSON error response."""
+    """Send a 500 JSON error response with REDACTED details.
+
+    Returns only the exception class name to the client. Full traceback
+    is printed to stderr for the developer running the server. This
+    prevents absolute filesystem paths, DB DSN fragments, and Python
+    stack traces from leaking into browser devtools on other origins
+    (CWE-209 — Information exposure through an error message).
+    """
+    print(
+        f"[cortex] HTTP handler error: {type(error).__name__}: {error}",
+        file=sys.stderr,
+    )
+    traceback.print_exc(file=sys.stderr)
+    body = json.dumps({"error": type(error).__name__}).encode()
     handler.send_response(500)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    _apply_cors_headers(handler)
     handler.end_headers()
-    handler.wfile.write(json.dumps({"error": str(error)}).encode())
+    handler.wfile.write(body)
 
 
 def send_html_response(
@@ -203,14 +247,40 @@ def serve_static_file(
     filename: str,
     content_type: str,
 ) -> None:
-    """Serve a static file from base_dir, sanitizing the filename."""
+    """Serve a static file from base_dir, sanitizing the filename.
+
+    Defense-in-depth against path traversal (CWE-22):
+      1. ``Path(filename).name`` strips all directory components.
+      2. The resolved path is required to remain under ``base_dir`` —
+         guards against symlinks that escape the root.
+      3. Only regular files are served.
+    """
+    import re
+
     safe_name = Path(filename).name
-    file_path = base_dir / safe_name
-    if not file_path.exists():
+    if (
+        not safe_name
+        or safe_name.startswith(".")
+        or "\x00" in safe_name
+        or not re.match(r"^[\w][\w.\-]*$", safe_name)
+    ):
+        handler.send_response(403)
+        handler.end_headers()
+        return
+    try:
+        resolved_base = base_dir.resolve()
+        candidate = (resolved_base / safe_name).resolve()
+        # Require the resolved file to live under the resolved base.
+        candidate.relative_to(resolved_base)
+    except (OSError, ValueError):
         handler.send_response(404)
         handler.end_headers()
         return
-    body = file_path.read_bytes()
+    if not candidate.is_file():
+        handler.send_response(404)
+        handler.end_headers()
+        return
+    body = candidate.read_bytes()
     handler.send_response(200)
     handler.send_header("Content-Type", content_type + "; charset=utf-8")
     handler.send_header("Cache-Control", "no-cache")
@@ -219,8 +289,14 @@ def serve_static_file(
 
 
 def send_cors_options(handler: BaseHTTPRequestHandler) -> None:
-    """Send a 204 CORS preflight response."""
+    """Send a 204 CORS preflight response with strict-reflect Origin.
+
+    Reflects the Origin header only when it names a loopback host;
+    cross-origin pages never receive a valid preflight, so the browser
+    blocks the subsequent request.
+    """
     handler.send_response(204)
-    handler.send_header("Access-Control-Allow-Origin", "*")
-    handler.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+    _apply_cors_headers(handler)
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    handler.send_header("Access-Control-Allow-Headers", "Content-Type")
     handler.end_headers()
