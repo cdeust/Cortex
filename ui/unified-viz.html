@@ -69,9 +69,9 @@
 
 <div id="filter-bar">
   <span class="view-toggle">
-    <button class="view-btn" data-view="graph">Graph</button>
+    <button class="view-btn active" data-view="graph">Graph</button>
     <button class="view-btn" data-view="knowledge">Knowledge</button>
-    <button class="view-btn active" data-view="wiki">Wiki</button>
+    <button class="view-btn" data-view="wiki">Wiki</button>
     <button class="view-btn" data-view="timeline">Board</button>
     <button class="view-btn" data-view="sankey">Pipeline</button>
   </span>
@@ -242,164 +242,158 @@
   <div class="gloss-title">Graph Glossary</div>
   <div class="gloss-subtitle">What each element represents</div>
 
-  <div class="gloss-section">Nodes</div>
-
+  <div class="gloss-section">Reading the map</div>
   <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#6366f1"></span><span class="gloss-name">Domain</span></div>
-    <div class="gloss-desc">A project or knowledge area you work in (e.g. "frontend", "devops"). Domains are the large hub nodes — everything else orbits around them. Size reflects how many sessions you've had in that domain.</div>
+    <div class="gloss-desc">Every project you work in becomes a <b>cloud of nodes</b> around one gold hub. Inside each cloud, nodes are arranged in five concentric levels by what Claude did: setup (L1), tools (L2), files (L3), discussions (L4), memories (L5). Thin violet threads between clouds mean the same file / skill / MCP is shared across domains.</div>
   </div>
 
+  <div class="gloss-section">L1 · Claude setup</div>
   <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#00d4ff"></span><span class="gloss-name">Entry Point</span></div>
-    <div class="gloss-desc">The typical way you start working in a domain — recurring first-message patterns clustered from your session history.</div>
+    <div class="gloss-header"><span class="gloss-dot" style="background:#FCD34D"></span><span class="gloss-name">Domain</span></div>
+    <div class="gloss-desc">The project hub — one big gold node per project you work in. Everything else in the cloud belongs to this domain.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#FB923C"></span><span class="gloss-name">Skill</span></div>
+    <div class="gloss-desc">A slash-command available to Claude (<code>/research-session</code>, <code>/loop</code>, plugin skills). Edge to domain = invoked at least once in that project.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#FACC15"></span><span class="gloss-name">Command</span></div>
+    <div class="gloss-desc">A distinct shell command executed in the Bash tool. Body = the command text; click for first-seen and last-invoked timestamps.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#A855F7"></span><span class="gloss-name">Hook</span></div>
+    <div class="gloss-desc">A hook script configured in <code>settings.json</code> (SessionStart, PostToolUse, etc.). Fires automatically around tool calls.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#EC4899"></span><span class="gloss-name">Agent</span></div>
+    <div class="gloss-desc">A subagent type spawned via the Task tool (Explore, Plan, a genius reasoning pattern, …). Edge to domain = spawned at least once.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#6366F1"></span><span class="gloss-name">MCP</span></div>
+    <div class="gloss-desc">An MCP server Claude called (cortex, ai-architect, …). When two domains share an MCP, a long indigo thread bridges them.</div>
   </div>
 
+  <div class="gloss-section">L2 · Tools</div>
   <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#10b981"></span><span class="gloss-name">Pattern</span></div>
-    <div class="gloss-desc">A recurring behavioral pattern detected across your sessions — keyword sequences that appear repeatedly.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#f59e0b"></span><span class="gloss-name">Tool</span></div>
-    <div class="gloss-desc">A Claude Code tool you frequently use in this domain (Read, Edit, Grep, Bash, etc.). Size reflects usage ratio.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#a855f7"></span><span class="gloss-name">Feature</span></div>
-    <div class="gloss-desc">A behavioral feature learned by sparse dictionary analysis of your session patterns.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#26de81"></span><span class="gloss-name">Memory</span></div>
-    <div class="gloss-desc">A piece of information stored by Cortex — decisions, facts, errors, or context. Memories have heat and importance.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#00d2ff"></span><span class="gloss-name">Entity</span></div>
-    <div class="gloss-desc">A named thing extracted from memories — functions, files, dependencies, technologies, errors, or decisions.</div>
-  </div>
-
-  <div class="gloss-section">Edges</div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-line" style="background:#FF00FF"></span><span class="gloss-name">Bridge</span></div>
-    <div class="gloss-desc">A cross-domain connection — shared patterns, vocabulary, or structural links between two different domains.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-line" style="background:#d946ef"></span><span class="gloss-name">Co-occurrence</span></div>
-    <div class="gloss-desc">Two entities that frequently appear together in the same memories.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-line" style="background:#ff4444"></span><span class="gloss-name">Causal (caused_by / resolved_by)</span></div>
-    <div class="gloss-desc">A cause-effect relationship between entities.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-line" style="background:#3b82f6"></span><span class="gloss-name">Imports / Calls</span></div>
-    <div class="gloss-desc">Code-level relationships — one module importing another, or one function calling another.</div>
-  </div>
-
-  <div class="gloss-section">Biological Mechanisms</div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#ff3366"></span><span class="gloss-name">Emotional Tagging</span></div>
-    <div class="gloss-desc">Memories with emotional charge get colored by their dominant emotion. Emotional memories have pulsing rings. Based on amygdala priority encoding (Wang & Bhatt 2024).</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#f59e0b"></span><span class="gloss-name">Neuromodulation</span></div>
-    <div class="gloss-desc">Four coupled channels modulate encoding strength: <b>DA</b> (reward/surprise, Schultz 1997), <b>NE</b> (arousal/salience), <b>ACh</b> (encoding gate, driven by theta phase), <b>5-HT</b> (exploration breadth). Baseline is 1.0; above excites, below suppresses.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#00d2ff"></span><span class="gloss-name">Synaptic Plasticity</span></div>
-    <div class="gloss-desc">LTP: edges strengthen on co-appearance. LTD: inactive edges weaken. STDP: temporal ordering builds causal direction (Bi & Poo 1998).</div>
-  </div>
-
-  <div class="gloss-section">Consolidation Stages</div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#00D2FF"></span><span class="gloss-name">New</span></div>
-    <div class="gloss-desc">Freshly encoded — unstable, vulnerable to interference, not yet protein-synthesis dependent. Shown as <b>dotted ring</b>. (Kandel 2001)</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#60A0E0"></span><span class="gloss-name">Growing</span></div>
-    <div class="gloss-desc">Synaptic strengthening has begun (1-6h). Tagged for potential long-term storage. Requires synaptic tagging (Frey & Morris 1997).</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#40D870"></span><span class="gloss-name">Strong</span></div>
-    <div class="gloss-desc">Protein synthesis-dependent consolidation (6-24h). Stronger resistance to interference and decay.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#E8B840"></span><span class="gloss-name">Stable</span></div>
-    <div class="gloss-desc">Fully cortically integrated (>24h). High stability, low hippocampal dependency. Shown as <b>solid thick ring</b>. (McClelland 1995)</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#C070D0"></span><span class="gloss-name">Updating</span></div>
-    <div class="gloss-desc">Reactivated memory temporarily returns to labile state for updating. Shown as <b>dashed ring</b>. Can be modified or strengthened.</div>
-  </div>
-
-  <div class="gloss-section">Node Indicators</div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#E07070"></span><span class="gloss-name">Interference Spikes</span></div>
-    <div class="gloss-desc">Red rotating spikes around memories with high interference scores (>50%). Indicates competing similar memories that may cause retrieval confusion.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#E8B840"></span><span class="gloss-name">Schema Badge</span></div>
-    <div class="gloss-desc">Small gold diamond on memories with strong schema match (>50%). Schema-consistent memories consolidate faster (Tse 2007).</div>
-  </div>
-
-  <div class="gloss-section">Quality Assessment</div>
-
-  <div class="gloss-entry">
-    <div class="gloss-header"><span class="gloss-dot" style="background:#40D870"></span><span class="gloss-name">Quality Ring</span></div>
-    <div class="gloss-desc">Every node has a quality score (0–100%) based on its type-specific signals. The arc ring around each node shows quality: <b style="color:#40D870">green ≥60%</b> (strong signal), <b style="color:#E0B040">amber ≥30%</b> (moderate), <b style="color:#E05050">red &lt;30%</b> (likely noise). Arc length is proportional to the score.</div>
-  </div>
-
-  <div class="gloss-entry">
-    <div class="gloss-desc">
-      <b>Domains</b> — scored by session count, confidence, connections.<br>
-      <b>Entries/Patterns</b> — scored by frequency, confidence.<br>
-      <b>Tools</b> — scored by usage ratio, average per session.<br>
-      <b>Features</b> — scored by activation magnitude.<br>
-      <b>Memories</b> — scored by heat, importance, access count, recall rank.<br>
-      <b>Entities</b> — scored by heat, connection count.
+    <div class="gloss-desc">One hub per Claude-native tool per domain. Color = the tool:
+      <b style="color:#10B981">Edit</b>, <b style="color:#059669">Write</b>,
+      <b style="color:#06B6D4">Read</b>,
+      <b style="color:#D946EF">Grep</b>, <b style="color:#C026D3">Glob</b>,
+      <b style="color:#F97316">Bash</b>,
+      <b style="color:#EC4899">Task</b>.
+      Files orbit the tool hub that most often touched them.
     </div>
   </div>
 
-  <div class="gloss-section">Visual Encoding</div>
-
+  <div class="gloss-section">L3 · Files</div>
   <div class="gloss-entry">
-    <div class="gloss-desc"><b>Node size</b> — reflects importance. <b>Node glow</b> — intensity reflects heat. <b>Quality arc</b> — colored ring shows quality score. <b>Edge brightness</b> — reflects weight. <b>Flow particles</b> — animated dots along edges.</div>
+    <div class="gloss-desc">Every file Claude ever opened, colored by the primary tool that touched it (priority: Edit/Write → Read → Grep/Glob → Bash-only). Click a file for its path, primary-tool cluster, <b>first-seen</b>, <b>last-accessed</b>, and <b>last-modified</b> timestamps, plus a <i>See diff against HEAD</i> button that renders new/modified/deleted/historical content inline.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#10B981"></span><span class="gloss-name">Edited / written</span></div>
+    <div class="gloss-desc">File was modified or created by Claude via Edit, Write, MultiEdit, or NotebookEdit.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#06B6D4"></span><span class="gloss-name">Read only</span></div>
+    <div class="gloss-desc">File was opened via Read or NotebookRead without being modified.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#D946EF"></span><span class="gloss-name">Grep / Glob</span></div>
+    <div class="gloss-desc">File was searched via Grep or Glob without being read or modified.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#F97316"></span><span class="gloss-name">Bash only</span></div>
+    <div class="gloss-desc">File was referenced only from a Bash command (<code>cat</code>, <code>tail</code>, pipelines, …).</div>
+  </div>
+
+  <div class="gloss-section">L4 · Discussions</div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#EF4444"></span><span class="gloss-name">Discussion</span></div>
+    <div class="gloss-desc">One Claude Code session. Click for started-at, last-activity, duration, message count, and a <i>View full conversation</i> button that replays every turn (including tool calls) inside the modal.</div>
+  </div>
+
+  <div class="gloss-section">L5 · Memories</div>
+  <div class="gloss-entry">
+    <div class="gloss-desc">Knowledge Cortex has stored. Color = consolidation stage:
+      <b style="color:#86EFAC">labile</b> (freshly encoded),
+      <b style="color:#4ADE80">early LTP</b> (1–6h),
+      <b style="color:#16A34A">late LTP</b> (6–24h),
+      <b style="color:#166534">consolidated</b> (&gt;24h),
+      <b style="color:#C070D0">semantic</b> (extracted schema). Node size reflects heat; click for full content, tags, and every scientific measurement (arousal, surprise, plasticity, …).
+    </div>
+  </div>
+
+  <div class="gloss-section">Edges</div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(120,200,220,0.7)"></span><span class="gloss-name">in domain</span></div>
+    <div class="gloss-desc">Structural edge pinning a node to its domain hub.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(150,200,180,0.7)"></span><span class="gloss-name">tool → file</span></div>
+    <div class="gloss-desc">Weight = number of times that tool touched the file.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(180,210,150,0.7)"></span><span class="gloss-name">invoked skill</span></div>
+    <div class="gloss-desc">Domain invoked a slash-command.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(200,170,220,0.7)"></span><span class="gloss-name">triggered hook</span></div>
+    <div class="gloss-desc">Hook script bound to an event in this domain.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(140,220,210,0.7)"></span><span class="gloss-name">spawned agent</span></div>
+    <div class="gloss-desc">Task hub spawned a subagent of this type.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(244,63,94,0.65)"></span><span class="gloss-name">discussion → file</span></div>
+    <div class="gloss-desc">That session touched this file. Weight = touches within the session.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(224,168,64,0.65)"></span><span class="gloss-name">command → file</span></div>
+    <div class="gloss-desc">The Bash command references this file path.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(138,107,255,0.65)"></span><span class="gloss-name">invoked mcp</span></div>
+    <div class="gloss-desc">Domain called an MCP server tool; label on the edge = the specific tool name.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(200,150,255,0.4);border-top:1px dashed rgba(200,150,255,0.6)"></span><span class="gloss-name">cross-domain</span></div>
+    <div class="gloss-desc">The same file, skill, or MCP is shared between two domains — renders as a long dashed thread.</div>
+  </div>
+
+  <div class="gloss-section">Filtering</div>
+  <div class="gloss-entry">
+    <div class="gloss-desc">Use the <b>grouped filter select</b> in the top bar to isolate one layer, kind (Skills / Commands / Hooks / Agents / MCPs), file cluster (Edited / Read-only / Searched / Bash-only), or cross-domain files. The <b>Reset</b> button restores every node.</div>
   </div>
 
   <div class="gloss-section">Controls</div>
-
   <div class="gloss-entry">
-    <div class="gloss-desc"><b>Click node</b> — select + details<br>
-    <b>Click background</b> — deselect<br>
-    <b>Scroll</b> — zoom<br>
-    <b>Drag</b> — pan<br>
-    <b>M</b> — toggle monitor<br>
-    <b>R</b> — reset view<br>
-    <b>Esc</b> — close panels</div>
+    <div class="gloss-desc">
+      <b>Click node</b> — open detail panel (rich per-kind metadata, dates, diff / conversation buttons).<br>
+      <b>Click background</b> — close detail.<br>
+      <b>Scroll</b> — zoom. At zoom &lt; 0.9 structural edges fade so clouds read cleanly.<br>
+      <b>Drag node</b> — reposition manually (domain hubs stay pinned).<br>
+      <b>R</b> — reset view · <b>M</b> — monitor · <b>Esc</b> — close panels.
+    </div>
   </div>
 </div>
 
-<!-- Force-graph 2D -->
-<script src="https://unpkg.com/force-graph"></script>
-
-<!-- Cortex Neural Graph modules (order matters) -->
+<!-- Force-graph CDN stays disabled — the legacy canvas it mounts was
+     the source of the persistent alpha rectangle. We stub the global
+     BEFORE renderer.js runs so ``ForceGraph()(container)`` chains on
+     an inert Proxy and mounts nothing, while renderer.js / graph.js
+     continue to expose the JUG API the other scripts expect. -->
+<!-- <script src="https://unpkg.com/force-graph"></script> -->
+<script>
+  window.ForceGraph = function () {
+    var noop = function () { return stub; };
+    var stub = new Proxy({}, { get: function () { return noop; } });
+    return function () { return stub; };
+  };
+</script>
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
+<script src="/js/workflow_graph_shims.js"></script>
 <script src="/js/draw.js"></script>
 <script src="/js/tooltip.js"></script>
 <script src="/js/renderer.js"></script>

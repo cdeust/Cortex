@@ -78,6 +78,11 @@
   // Tuned for ~1800 nodes. Collision force prevents overlap.
   // Strong hierarchy (category→domain→children) with generous spacing.
   function configureForces() {
+    // Guard: d3 is loaded lazily by the workflow_graph renderer and may not
+    // be on the page yet when this legacy configurator runs. The whole
+    // legacy `ForceGraph()` is stubbed anyway (see workflow_graph_shims.js),
+    // so skipping this is a no-op — we only avoid the noisy ReferenceError.
+    if (typeof d3 === 'undefined' || !d3.forceCollide) return;
     // Collision detection — the key to preventing overlap.
     // Radius = nodeRadius + padding. This guarantees minimum spacing.
     graph.d3Force('collide', d3.forceCollide(function(n) {

@@ -9,7 +9,11 @@
   width: 100%;
   height: 100%;
   display: block;
-  background: var(--ink-0, #080810);
+  /* Transparent — the black comes from #graph-container. A separate
+     background on the SVG/canvas creates a second compositing layer
+     that both browsers render as a visible rectangle under the
+     d3-zoom transform. */
+  background: transparent;
 }
 
 /* Filter bar: the grouped <select> widens to fit the longest optgroup label
@@ -52,24 +56,29 @@
 .wfg-shell-label--L4 { fill: rgba(244, 63, 94, 0.72); }
 .wfg-shell-label--L5 { fill: rgba(192, 112, 208, 0.72); }
 
-/* ── Links ────────────────────────────────────────────────────── */
-/* Intra-domain: soft cyan threads. Cross-domain: thinner, violet, read as background. */
+/* ── Links ──────────────────────────────────────────────────────
+   Structural in-domain edges (tool_hub → file, skill/hook/command → domain)
+   all originate at a single domain anchor and fan into a bounded angular
+   sector. When 100s of them overlap, additive alpha saturates the sector
+   into a solid-looking grey/cyan rectangle. Keep stroke alpha very low so
+   the fan reads as a soft wash rather than a box; cross-domain threads
+   stay slightly more visible because they are the storytelling signal. */
 .wfg-link {
-  stroke: rgba(120, 180, 200, 0.22);
+  stroke: rgba(120, 180, 200, 0.06);
   stroke-linecap: round;
   pointer-events: none;
   transition: stroke 120ms var(--ease, ease-out), stroke-opacity 120ms var(--ease, ease-out);
 }
 .wfg-link--cross {
-  stroke: rgba(200, 150, 255, 0.18);  /* thin violet thread between clouds */
+  stroke: rgba(200, 150, 255, 0.12);  /* thin violet thread between clouds */
   stroke-dasharray: 2 3;
 }
-.wfg-link--in_domain       { stroke: rgba(120, 200, 220, 0.28); }
-.wfg-link--tool_used_file  { stroke: rgba(150, 200, 180, 0.24); }
-.wfg-link--invoked_skill   { stroke: rgba(180, 210, 150, 0.22); }
-.wfg-link--triggered_hook  { stroke: rgba(200, 170, 220, 0.22); }
-.wfg-link--spawned_agent   { stroke: rgba(140, 220, 210, 0.24); }
-.wfg-link--about_entity    { stroke: rgba(130, 180, 220, 0.20); }
+.wfg-link--in_domain       { stroke: rgba(120, 200, 220, 0.06); }
+.wfg-link--tool_used_file  { stroke: rgba(150, 200, 180, 0.05); }
+.wfg-link--invoked_skill   { stroke: rgba(180, 210, 150, 0.05); }
+.wfg-link--triggered_hook  { stroke: rgba(200, 170, 220, 0.05); }
+.wfg-link--spawned_agent   { stroke: rgba(140, 220, 210, 0.06); }
+.wfg-link--about_entity    { stroke: rgba(130, 180, 220, 0.05); }
 
 .wfg-link--active {
   stroke: var(--amber, #F0D870);
@@ -137,7 +146,13 @@
   fill: #9EE4D8;
 }
 
-/* ── Side panel — anchored right, mirrors #detail-panel feel ── */
+/* ── Side panel — anchored right, mirrors #detail-panel feel ──
+   Safari + Chrome both composite ``backdrop-filter`` even on
+   opacity:0 elements, leaving a ghost rectangle of the panel's
+   bounding box behind the graph. We gate the filter (and the
+   rendered box itself) behind ``.wfg-panel--open`` so nothing paints
+   when the panel is closed. This is the same pattern used for
+   ``#detail-panel`` / ``#monitor-panel``. */
 .wfg-panel {
   position: fixed;
   top: 96px;
@@ -145,24 +160,32 @@
   width: 320px;
   max-height: calc(100vh - 128px);
   padding: 16px 18px 18px;
-  background: color-mix(in oklab, var(--ink-1, #14151a) 94%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--line, rgba(120, 115, 108, 0.45));
+  background: transparent;
+  border: none;
   border-radius: var(--r-md, 6px);
   color: var(--fg-1, #C8C4B8);
   font-family: var(--sans, 'Inter Tight', system-ui, sans-serif);
   font-size: 12.5px;
   line-height: 1.45;
   z-index: 200;
+  visibility: hidden;
   opacity: 0;
   pointer-events: none;
   transform: translateX(8px);
   transition: opacity 160ms var(--ease, ease-out),
-              transform 180ms var(--ease, ease-out);
+              transform 180ms var(--ease, ease-out),
+              visibility 0ms linear 180ms;
   overflow-y: auto;
 }
 .wfg-panel--open {
+  visibility: visible;
+  background: color-mix(in oklab, var(--ink-1, #14151a) 94%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line, rgba(120, 115, 108, 0.45));
+  transition: opacity 160ms var(--ease, ease-out),
+              transform 180ms var(--ease, ease-out),
+              visibility 0ms linear 0ms;
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);

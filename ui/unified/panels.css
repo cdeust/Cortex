@@ -20,7 +20,7 @@
   z-index: 200; overflow-y: auto; padding: 28px 32px;
 }
 #detail-panel.open,
-#detail-panel.minimized { visibility: visible; backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+#detail-panel.minimized { visibility: visible;  /* -webkit-backdrop-filter removed */ }
 /* Full open — panel fills from top to bottom */
 #detail-panel.open {
   transform: translateX(-50%) translateY(0);
@@ -81,7 +81,7 @@
 /* Quality, gauges, emotion, tool cards — see detail.css */
 
 /* Tooltip — rich card */
-#tooltip { position: fixed; pointer-events: none; background: rgba(8,8,14,0.96); border: 1px solid var(--border-bright); padding: 10px 14px 8px; z-index: 300; opacity: 0; transition: opacity 0.15s; max-width: 300px; min-width: 180px; backdrop-filter: blur(20px); }
+#tooltip { position: fixed; pointer-events: none; background: rgba(8,8,14,0.96); border: 1px solid var(--border-bright); padding: 10px 14px 8px; z-index: 300; opacity: 0; transition: opacity 0.15s; max-width: 300px; min-width: 180px;  }
 #tooltip::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--cyan),transparent); opacity:0.4; }
 #tooltip.visible { opacity: 1; }
 .tt-badge { display:inline-flex; align-items:center; gap:5px; font-family:'Orbitron'; font-size:7px; font-weight:600; letter-spacing:2px; text-transform:uppercase; padding:2px 8px; border:1px solid; margin-bottom:6px; }
@@ -110,7 +110,7 @@
 .tt-diff-truncated { color:var(--text-dim); font-style:italic; font-size:7px; margin-top:2px; }
 
 /* Legend */
-#legend { position: fixed; bottom: 24px; left: 24px; display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 3px 14px; padding: 10px 14px; max-height: 70vh; overflow-y: auto; z-index: 100; background: rgba(10,10,15,0.82); border: 1px solid var(--border); backdrop-filter: blur(12px); border-radius: 4px; }
+#legend { position: fixed; bottom: 24px; left: 24px; display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 3px 14px; padding: 10px 14px; max-height: 70vh; overflow-y: auto; z-index: 100; background: rgba(10,10,15,0.82); border: 1px solid var(--border);  border-radius: 4px; }
 .leg-section { grid-column: 1 / -1; margin-top: 6px; padding-top: 4px; font-size: 8px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-dim); border-top: 1px solid rgba(160,150,140,0.12); }
 .leg-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 .leg-item { display: flex; align-items: center; gap: 6px; font-size: 8.5px; color: var(--text-dim); letter-spacing: 0.6px; text-transform: none; cursor: default; }
@@ -121,7 +121,7 @@
 #glossary-panel {
   position: fixed; top: 60px; left: 50%; transform: translateX(-50%) scale(0.95);
   width: 66vw; max-height: calc(100vh - 100px); overflow-y: auto;
-  background: rgba(6,6,12,0.96); backdrop-filter: blur(24px);
+  background: rgba(6,6,12,0.96); 
   border: 1px solid var(--border); border-radius: 6px; z-index: 180;
   padding: 24px 28px 20px; display: none;
   opacity: 0; transition: transform 0.3s, opacity 0.3s;
@@ -153,7 +153,7 @@
   position: fixed; top: 24px; background: rgba(10,10,15,0.8); border: 1px solid var(--border);
   color: var(--cyan); font-family: 'Orbitron'; font-size: 8px; font-weight: 600;
   letter-spacing: 3px; text-transform: uppercase; padding: 10px 18px; cursor: pointer;
-  z-index: 150; transition: all 0.3s; backdrop-filter: blur(12px);
+  z-index: 150; transition: all 0.3s; 
 }
 #reset-btn { right: 24px; }
 #monitor-toggle { right: 110px; }
@@ -177,7 +177,7 @@
   transform: translateX(-100%); transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 250; display: flex; flex-direction: column;
 }
-#monitor-panel.open { transform: translateX(0); visibility: visible; backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); }
+#monitor-panel.open { transform: translateX(0); visibility: visible;  /* -webkit-backdrop-filter removed */ }
 #monitor-panel::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 1px; background: linear-gradient(180deg, transparent, var(--cyan), transparent); opacity: 0.3; }
 
 .mon-header {

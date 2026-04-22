@@ -12,6 +12,12 @@ import re
 from typing import Any, Iterable
 
 _FILE_LINE_RE = re.compile(r"\*\*(?:File|Read):\*\*\s*`([^`]+)`")
+# Grep / Glob memory bodies: ``**Grep:** `<pattern>` in `<path>`` and
+# ``**Glob:** `<pattern>` (root=`<path>`)``. We extract the search root
+# so at minimum the directory appears as a file node — the exact
+# matched files come through separately via JSONL tool_uses.
+_GREP_ROOT_RE = re.compile(r"\*\*Grep:\*\*\s*`[^`]*`\s+in\s+`([^`]+)`")
+_GLOB_ROOT_RE = re.compile(r"\*\*Glob:\*\*\s*`[^`]*`\s*\(root=`([^`]+)`\)")
 _COMMAND_LINE_RE = re.compile(r"\*\*Command:\*\*\s*`([^`]+)`")
 _PATH_TOKEN_RE = re.compile(r"(?:^|\s)((?:\.{1,2}/|~/|/)[^\s`'\"]{3,})")
 

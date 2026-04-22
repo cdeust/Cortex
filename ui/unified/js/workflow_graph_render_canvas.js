@@ -62,17 +62,35 @@
       return null;
     }
 
+    // Edge rendering — density-aware.
+    // Root cause of the "grey rectangle" users see: each domain has hundreds
+    // of in-domain tool_hub→file edges that originate at a single tool_hub
+    // point and fan into a bounded angular sector at FILE_R. Canvas 2D
+    // additively stacks the stroke alpha across the wedge, so the fan
+    // saturates into a solid-looking cyan trapezoid. With 16k+ edges across
+    // ~8 domains the trapezoids cover half the viewport. Fix:
+    //   (1) drop base alpha to 0.04 so stacking does NOT saturate;
+    //   (2) skip in-domain structural edges when zoomed out — the hierarchy
+    //       is already visible from the slot layout (node arrangement);
+    //   (3) keep cross-domain threads (they're the whole point of the map)
+    //       and keep active/focus highlighting so selection still works.
+    var STRUCTURAL_KINDS = { in_domain: 1, tool_used_file: 1, invoked_skill: 1,
+                             triggered_hook: 1, spawned_agent: 1, command_in_hub: 1 };
     function drawEdges(focusId) {
+      var k = transform.k || 1;
+      var hideStructural = k < 0.9 && !focusId;
       for (var i = 0; i < ctx.edges.length; i++) {
         var e = ctx.edges[i];
         var dim = focusId && e.source.id !== focusId && e.target.id !== focusId;
         var act = focusId && (e.source.id === focusId || e.target.id === focusId);
+        // When zoomed out and nothing is selected, skip the structural fan.
+        if (hideStructural && !e._crossDomain && STRUCTURAL_KINDS[e.kind]) continue;
         if (e._crossDomain) {
-          g.strokeStyle = act ? 'rgba(240,210,100,0.85)' : (dim ? 'rgba(200,150,255,0.04)' : 'rgba(200,150,255,0.18)');
-          g.lineWidth = act ? 1.2 : 0.5;
+          g.strokeStyle = act ? 'rgba(240,210,100,0.85)' : (dim ? 'rgba(200,150,255,0.03)' : 'rgba(200,150,255,0.12)');
+          g.lineWidth = act ? 1.2 : 0.4;
         } else {
-          g.strokeStyle = act ? 'rgba(240,210,100,0.9)' : (dim ? 'rgba(120,180,200,0.04)' : 'rgba(120,180,200,0.22)');
-          g.lineWidth = act ? 1.6 : (0.6 + (e.weight != null ? e.weight : 0.3) * 0.8);
+          g.strokeStyle = act ? 'rgba(240,210,100,0.9)' : (dim ? 'rgba(120,180,200,0.02)' : 'rgba(120,180,200,0.04)');
+          g.lineWidth = act ? 1.6 : (0.4 + (e.weight != null ? e.weight : 0.3) * 0.5);
         }
         g.beginPath(); g.moveTo(e.source.x, e.source.y); g.lineTo(e.target.x, e.target.y); g.stroke();
       }
@@ -187,17 +205,21 @@
     var origDrawEdges = drawEdges, origDrawNodes = drawNodes;
     drawEdges = function (focusId) {
       if (!filterKeep) return origDrawEdges(focusId);
+      var k = transform.k || 1;
+      var hideStructural = k < 0.9 && !focusId;
       for (var i = 0; i < ctx.edges.length; i++) {
         var e = ctx.edges[i];
         if (!(filterKeep[e.source.id] && filterKeep[e.target.id])) continue;
         var dim = focusId && e.source.id !== focusId && e.target.id !== focusId;
         var act = focusId && (e.source.id === focusId || e.target.id === focusId);
+        // Same structural-fan suppression as the unfiltered path.
+        if (hideStructural && !e._crossDomain && STRUCTURAL_KINDS[e.kind]) continue;
         if (e._crossDomain) {
-          g.strokeStyle = act ? 'rgba(240,210,100,0.85)' : (dim ? 'rgba(200,150,255,0.04)' : 'rgba(200,150,255,0.18)');
-          g.lineWidth = act ? 1.2 : 0.5;
+          g.strokeStyle = act ? 'rgba(240,210,100,0.85)' : (dim ? 'rgba(200,150,255,0.03)' : 'rgba(200,150,255,0.12)');
+          g.lineWidth = act ? 1.2 : 0.4;
         } else {
-          g.strokeStyle = act ? 'rgba(240,210,100,0.9)' : (dim ? 'rgba(120,180,200,0.04)' : 'rgba(120,180,200,0.22)');
-          g.lineWidth = act ? 1.6 : (0.6 + (e.weight != null ? e.weight : 0.3) * 0.8);
+          g.strokeStyle = act ? 'rgba(240,210,100,0.9)' : (dim ? 'rgba(120,180,200,0.02)' : 'rgba(120,180,200,0.04)');
+          g.lineWidth = act ? 1.6 : (0.4 + (e.weight != null ? e.weight : 0.3) * 0.5);
         }
         g.beginPath(); g.moveTo(e.source.x, e.source.y); g.lineTo(e.target.x, e.target.y); g.stroke();
       }

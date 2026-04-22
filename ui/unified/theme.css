@@ -103,16 +103,13 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 input, select, textarea { font: inherit; color: inherit; }
 ::selection { background: var(--amber-soft); color: var(--fg-0); }
 
-/* Ambient grain — subtle material warmth on the canvas */
+/* Ambient grain disabled — ``mix-blend-mode: overlay`` forces a
+   full-viewport compositing layer above the graph which Safari/Chrome
+   paint as a rectangular bounding box when combined with the SVG's
+   d3-zoom transform. The grain is decorative; removing it eliminates
+   the persistent alpha box over the graph. */
 body::before {
-  content: "";
-  position: fixed; inset: 0;
-  pointer-events: none; z-index: 1000;
-  background-image:
-    radial-gradient(circle at 50% 50%, transparent 0, transparent 60%, rgba(255, 240, 220, .012) 100%),
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='1' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .06 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  mix-blend-mode: overlay;
-  opacity: .35;
+  display: none;
 }
 
 /* Scrollbars — narrow, uncolored */
@@ -166,14 +163,15 @@ body::before {
 
 /* ─────────────────────────────────────────────────────────────────
    Shared HUD panel treatment (for #info-panel, #status-bar).
-   Soft dark card, thin hair border, no clip-path polygon.
+   ZERO background, ZERO border — the text floats directly over the
+   graph canvas. Any alpha/blur/border created a visible rectangle
+   even at 96% opacity; users want the container to be completely
+   invisible, only the numbers / labels showing.
    ───────────────────────────────────────────────────────────────── */
 .hud-panel {
-  background: color-mix(in oklab, var(--ink-1) 92%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  background: transparent;
+  border: none;
+  border-radius: 0;
   clip-path: none;
 }
 
@@ -255,8 +253,8 @@ body::before {
   max-width: calc(100vw - 560px);    /* keep clear of info-panel + reset/log */
   z-index: 100;
   background: color-mix(in oklab, var(--ink-0) 88%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  /* backdrop-filter removed: creates a GPU layer rectangle visible over the graph canvas. */
+
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   font-family: var(--sans);
@@ -366,8 +364,8 @@ body::before {
   color: var(--fg-2);
   display: flex; align-items: center; gap: 8px;
   background: color-mix(in oklab, var(--ink-1) 92%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* backdrop-filter removed: creates a GPU layer rectangle visible over the graph canvas. */
+
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   z-index: 100;
@@ -385,8 +383,8 @@ body::before {
   position: fixed; top: 16px;
   padding: 6px 12px;
   background: color-mix(in oklab, var(--ink-1) 92%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* backdrop-filter removed: creates a GPU layer rectangle visible over the graph canvas. */
+
   border: 1px solid var(--line);
   color: var(--fg-1);
   font-family: var(--sans);
@@ -453,8 +451,8 @@ body::before {
   color: var(--fg-1) !important;
   font-family: var(--mono) !important;
   font-size: 11px !important;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* backdrop-filter removed: creates a GPU layer rectangle visible over the graph canvas. */
+
 }
 
 /* ─── Toast helper (design-style) ─────────────────────────────── */
