@@ -45,16 +45,31 @@ def validate_host_header(handler: BaseHTTPRequestHandler) -> bool:
     return _host_only(host.strip()) in _LOOPBACK_HOSTS
 
 
+def _is_safe_header_value(value: str) -> bool:
+    """Reject control chars that would enable response-header splitting.
+
+    CWE-113. A request-derived header value must never contain CR, LF,
+    NUL, or any other control character below 0x20 — they let an
+    attacker inject fabricated headers into the response by stuffing
+    ``\\r\\n`` into the ``Origin`` request header. Python's
+    ``BaseHTTPRequestHandler.send_header`` does NOT filter these, so
+    we filter them here before any reflect-to-header use.
+    """
+    return all(ord(c) >= 0x20 and c != "\x7f" for c in value)
+
+
 def resolve_allowed_origin(handler: BaseHTTPRequestHandler) -> str | None:
     """Return the exact Origin if it's a loopback origin, else None.
 
     We reflect the value rather than responding with ``*`` so that
     credentials-bearing requests (if ever introduced) are also rejected
     by browsers, and so cross-site pages can never read responses from
-    this server.
+    this server. Before reflecting we reject any control characters so
+    that an ``Origin: http://127.0.0.1\\r\\nX-Injected: …`` request
+    cannot splice extra response headers (CWE-113).
     """
     origin = (handler.headers.get("Origin") or "").strip()
-    if not origin:
+    if not origin or not _is_safe_header_value(origin):
         return None
     for scheme in ("http://", "https://"):
         if origin.startswith(scheme):
