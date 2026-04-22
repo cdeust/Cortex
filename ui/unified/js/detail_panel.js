@@ -131,6 +131,29 @@
     }
 
     content.innerHTML = h;
+
+    // Memory nodes get the rich emotion + meaning + explained
+    // measurements panels (same components used in Knowledge cards) so
+    // Board ticket details match Knowledge card details information
+    // parity with plain-language explanations for every number.
+    if (data && data.type === 'memory' && window.JUG && JUG._memSci) {
+      if (typeof JUG._memSci.buildEmotionChip === 'function') {
+        var emo = JUG._memSci.buildEmotionChip(data);
+        if (emo) {
+          emo.classList.add('ms-emotion--detail');
+          content.appendChild(emo);
+        }
+      }
+      if (typeof JUG._memSci.buildMeaningSection === 'function') {
+        var meaning = JUG._memSci.buildMeaningSection(data);
+        if (meaning) content.appendChild(meaning);
+      }
+      if (typeof JUG._memSci.buildExplainedPanel === 'function') {
+        var explained = JUG._memSci.buildExplainedPanel(data);
+        if (explained) content.appendChild(explained);
+      }
+    }
+
     panel.classList.add('open');
     wireInteractions(content);
   }

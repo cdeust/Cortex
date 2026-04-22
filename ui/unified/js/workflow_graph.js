@@ -1,0 +1,427 @@
+// Cortex — Workflow Graph (D3 v7 force layout): orchestration + forces.
+// Target: many small brain-region clouds, each internally structured,
+// with thin long-range threads between clouds where files/entities are shared.
+// Schema: mcp_server/core/workflow_graph_schema.py
+//   node kinds: domain, skill, command, hook, agent, tool_hub, file, memory, discussion, entity
+//   edge kinds: in_domain, tool_used_file, command_in_hub, invoked_skill, triggered_hook, spawned_agent, about_entity
+// Public API: window.JUG.renderWorkflowGraph(container, data) -> { destroy, select, data }.
+// Renderers are provided by workflow_graph_render_svg.js / _canvas.js on JUG._wfg.
+(function () {
+  var D3_URL = 'https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js';
+  var CANVAS_THRESHOLD = 2000;
+
+  // Tokens — kind-driven radii, colors, edge distances, strengths.
+  var KIND_RADIUS = {
+    domain: 26, tool_hub: 14, agent: 10, skill: 10, command: 8,
+    hook: 9, memory: 7, discussion: 8, entity: 6, file: 5, mcp: 12,
+  };
+  var KIND_COLOR = {
+    domain: '#FCD34D',     // gold hub
+    tool_hub: '#F97316',   // fallback (per-tool colors override in node.color)
+    skill: '#FB923C',      // orange
+    command: '#FACC15',    // yellow — distinct from Bash-tool orange
+    hook: '#A855F7',       // purple
+    agent: '#EC4899',      // pink
+    mcp: '#6366F1',        // indigo
+    memory: '#10B981',     // emerald fallback
+    discussion: '#EF4444', // red
+    entity: '#50B0C8',     // teal
+    file: '#06B6D4',       // cyan fallback — primary-tool color overrides
+  };
+  // Radial hierarchy inside each domain cloud — FIVE concentric/sector levels:
+  //   L1 setup  (skills/hooks/commands/agents)   @ r = SETUP_R   front sector
+  //   L2 tools  (tool_hub)                        @ r = TOOL_R    front sector
+  //   L3 files  (primary-tool colored)            @ r = FILE_R    front sector
+  //   L4 discussions                              @ r = DISC_R    side sector A
+  //   L5 memories                                 @ r = MEM_R     side sector B
+  //   MCPs sit INWARD (between domains) and bridge out.
+  // Radii are sized so the rings are visually separated — each shell has
+  // a band of at least 40px between it and the next. Large enough that
+  // even dense domains keep their structure legible when zoomed out.
+  var SETUP_R = 70;
+  var TOOL_R  = 140;
+  var FILE_R  = 220;
+  var DISC_R  = 150;
+  var MEM_R   = 150;
+  var MCP_R   = 50;
+  var SECTOR_SETUP_HALF = Math.PI / 2.6;   // ~69°
+  var SECTOR_SIDE_HALF  = Math.PI / 6.5;   // ~28°
+  var SECTOR_SIDE_ANGLE = Math.PI * 0.72;  // ~130° from outward axis
+  // Shells drawn as faint guide arcs behind the nodes (one per L1/L2/L3
+  // per domain, plus disc/mem arcs). Level tokens consumed by the SVG
+  // renderer to paint ring outlines + labels.
+  var SHELL_LEVELS = [
+    { key: 'L1', r: SETUP_R, label: 'L1 setup' },
+    { key: 'L2', r: TOOL_R,  label: 'L2 tools' },
+    { key: 'L3', r: FILE_R,  label: 'L3 files' },
+  ];
+  // Per-tool angles (local to the domain's outward axis), in radians.
+  var TOOL_LOCAL_ANGLE = {
+    Edit:  0,
+    Write: -Math.PI / 12,
+    Read:   Math.PI / 12,
+    Grep:  -Math.PI /  6,
+    Glob:   Math.PI /  6,
+    Bash:  -Math.PI / 3.6,
+    Task:   Math.PI / 3.6,
+  };
+  var EDGE_DISTANCE = {
+    in_domain: 0,                        // satisfied by slot-anchoring, keep slack
+    tool_used_file: 0,
+    command_in_hub: 0,                   // bash_hub → command containment
+    invoked_skill: 0,
+    triggered_hook: 0,
+    spawned_agent: 0,
+    about_entity: 20,
+    discussion_touched_file: 80,
+    command_touched_file: 60,
+    invoked_mcp: 90,
+  };
+  var EDGE_STRENGTH = {
+    in_domain: 0.0,                      // layout is slot-anchored; links = slack
+    tool_used_file: 0.0,
+    command_in_hub: 0.0,                 // containment — zero extra pull
+    invoked_skill: 0.0,
+    triggered_hook: 0.0,
+    spawned_agent: 0.0,
+    about_entity: 0.2,
+    discussion_touched_file: 0.08,
+    command_touched_file: 0.08,
+    invoked_mcp: 0.04,                   // long springs — MCPs bridge domains
+  };
+  var CROSS_DOMAIN_DISTANCE = 260;
+  var CROSS_DOMAIN_STRENGTH = 0.02;
+
+  function ensureD3(cb) {
+    if (window.d3 && window.d3.forceSimulation) return cb();
+    var existing = document.querySelector('script[data-cortex-d3]');
+    if (existing) { existing.addEventListener('load', cb); return; }
+    var s = document.createElement('script');
+    s.src = D3_URL; s.async = true; s.defer = true;
+    s.setAttribute('data-cortex-d3', '1');
+    s.onload = cb;
+    s.onerror = function () { console.error('[cortex] failed to load d3 from ' + D3_URL); };
+    document.head.appendChild(s);
+  }
+
+  function renderWorkflowGraph(container, data) {
+    if (!container) throw new Error('renderWorkflowGraph: container required');
+    container.innerHTML = '';
+    var handle = { destroy: function () {}, select: function () {}, data: data };
+    ensureD3(function () {
+      var impl = mount(container, data || { nodes: [], edges: [] });
+      handle.destroy = impl.destroy;
+      handle.select = impl.select;
+    });
+    return handle;
+  }
+
+  function mount(container, data) {
+    var d3 = window.d3;
+    var wfg = window.JUG._wfg;
+    var nodes = (data.nodes || []).map(function (n) { return Object.assign({}, n); });
+    var edges = (data.edges || []).map(function (e) {
+      return Object.assign({}, e, {
+        source: typeof e.source === 'object' ? e.source.id : e.source,
+        target: typeof e.target === 'object' ? e.target.id : e.target,
+      });
+    });
+    var width  = container.clientWidth  || window.innerWidth;
+    var height = container.clientHeight || window.innerHeight;
+
+    var ctx = prepareTopology(nodes, edges, width, height);
+    ctx.KIND_RADIUS = KIND_RADIUS;
+    ctx.KIND_COLOR  = KIND_COLOR;
+    var panel = wfg.buildSidePanel(container);
+
+    var sim = d3.forceSimulation(nodes)
+      .alpha(1.0).alphaDecay(0.022).velocityDecay(0.45)
+      .force('link', d3.forceLink(edges).id(function (n) { return n.id; })
+        .distance(linkDistance).strength(linkStrength))
+      .force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(700))
+      .force('slot',        slotForce(ctx, 0.85))
+      .force('interdomain', interDomainRepelForce(ctx, 0.08))
+      .force('collide', d3.forceCollide()
+        .radius(function (n) { return collisionRadius(n, ctx); })
+        .strength(0.92).iterations(3));
+
+    var useCanvas = nodes.length > CANVAS_THRESHOLD;
+    var renderer = useCanvas
+      ? wfg.mountCanvas(container, ctx, sim, panel, width, height)
+      : wfg.mountSVG(container, ctx, sim, panel, width, height);
+
+    function onResize() {
+      var w = container.clientWidth || window.innerWidth;
+      var h = container.clientHeight || window.innerHeight;
+      renderer.resize(w, h);
+      sim.alpha(0.3).restart();
+    }
+    window.addEventListener('resize', onResize);
+
+    var handle = {
+      destroy: function () {
+        window.removeEventListener('resize', onResize);
+        sim.stop();
+        renderer.destroy();
+        if (panel.root && panel.root.parentNode) panel.root.parentNode.removeChild(panel.root);
+      },
+      select: function (id) { renderer.selectId(id); },
+      reflow: function () { onResize(); },
+      applyFilter: function (pred) {
+        if (typeof renderer.applyFilter === 'function') renderer.applyFilter(pred, ctx);
+      },
+    };
+    // Expose a stable hook so the filter-bar driver can reach us.
+    window.JUG.wfgApplyFilter = function (pred) { handle.applyFilter(pred); };
+    return handle;
+  }
+
+  // ── Topology: Fibonacci-spiral domain anchors; domainOf; primary tool_hub;
+  //    degree; adjacency; per-node slot (radial hierarchy).
+  function prepareTopology(nodes, edges, width, height) {
+    var byId = {};
+    nodes.forEach(function (n) { byId[n.id] = n; });
+    var domains = nodes.filter(function (n) { return n.kind === 'domain'; });
+
+    var cx = width / 2, cy = height / 2;
+    // Each domain's outer shell is roughly FILE_R + cushion; Fibonacci
+    // spiral average spacing is R·√(π/N). Pick baseR so the spacing
+    // exceeds the shell diameter — rings never collide.
+    var N = Math.max(domains.length, 1);
+    var shellDiameter = 2 * FILE_R + 60;
+    var baseR = Math.max(
+      Math.min(width, height) * 0.42,
+      shellDiameter * Math.sqrt(N / Math.PI) * 0.65,
+    );
+    var phi = Math.PI * (3 - Math.sqrt(5));  // golden angle
+    var anchors = {};
+    domains.forEach(function (d, i) {
+      var r = baseR * Math.sqrt((i + 0.5) / N);
+      var theta = i * phi;
+      anchors[d.id] = { x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) };
+      d.x = anchors[d.id].x; d.y = anchors[d.id].y;
+      d.fx = d.x; d.fy = d.y;                // pin domain anchors — L1/L2/L3 rings orbit them.
+    });
+
+    var domainOf = {};
+    nodes.forEach(function (n) {
+      if (n.kind === 'domain') { domainOf[n.id] = n.id; return; }
+      if (n.domain && byId[n.domain] && byId[n.domain].kind === 'domain') domainOf[n.id] = n.domain;
+      else if (n.domain_id && byId[n.domain_id]) domainOf[n.id] = n.domain_id;
+    });
+    edges.forEach(function (e) {
+      if (e.kind !== 'in_domain') return;
+      var s = byId[e.source], t = byId[e.target];
+      if (!s || !t) return;
+      if (s.kind === 'domain' && !domainOf[t.id]) domainOf[t.id] = s.id;
+      if (t.kind === 'domain' && !domainOf[s.id]) domainOf[s.id] = t.id;
+    });
+
+    var primaryHub = {}, hubWeight = {};
+    edges.forEach(function (e) {
+      if (e.kind !== 'tool_used_file') return;
+      var s = byId[e.source], t = byId[e.target];
+      if (!s || !t) return;
+      var hub = s.kind === 'tool_hub' ? s : (t.kind === 'tool_hub' ? t : null);
+      var f = s.kind === 'file' ? s : (t.kind === 'file' ? t : null);
+      if (!hub || !f) return;
+      if (domainOf[hub.id] && domainOf[hub.id] === domainOf[f.id]) {
+        var w = e.weight != null ? e.weight : 1;
+        if (!(f.id in hubWeight) || w > hubWeight[f.id]) { hubWeight[f.id] = w; primaryHub[f.id] = hub.id; }
+      }
+    });
+
+    var degree = {}, adj = {};
+    edges.forEach(function (e) {
+      degree[e.source] = (degree[e.source] || 0) + 1;
+      degree[e.target] = (degree[e.target] || 0) + 1;
+      var sd = domainOf[e.source], td = domainOf[e.target];
+      e._crossDomain = !!(sd && td && sd !== td);
+      if (!adj[e.source]) adj[e.source] = {};
+      if (!adj[e.target]) adj[e.target] = {};
+      adj[e.source][e.target] = true; adj[e.target][e.source] = true;
+    });
+
+    var slotOf = computeSlots(nodes, domains, anchors, domainOf, primaryHub, cx, cy);
+
+    return { byId: byId, nodes: nodes, edges: edges, domains: domains,
+      anchors: anchors, domainOf: domainOf, primaryHub: primaryHub,
+      degree: degree, adj: adj, slotOf: slotOf,
+      shells: SHELL_LEVELS, sideShells: [
+        { key: 'L4', r: DISC_R, label: 'L4 discussions', angle: SECTOR_SIDE_ANGLE },
+        { key: 'L5', r: MEM_R,  label: 'L5 memories',    angle: -SECTOR_SIDE_ANGLE },
+      ], cx: cx, cy: cy, baseR: baseR,
+      width: width, height: height };
+  }
+
+  // Assign each non-domain node a target (x,y) slot expressing the hierarchy:
+  //   domain → L1 (setup) → L2 (tools) → L3 (files);  discussions lane;  memories lane.
+  function computeSlots(nodes, domains, anchors, domainOf, primaryHub, cx, cy) {
+    // Group non-domain nodes by (domain, kind).
+    var groups = {};
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.kind === 'domain') continue;
+      var dom = domainOf[n.id];
+      if (!dom || !anchors[dom]) continue;
+      if (!groups[dom]) groups[dom] = {};
+      if (!groups[dom][n.kind]) groups[dom][n.kind] = [];
+      groups[dom][n.kind].push(n);
+    }
+    var slotOf = {};
+    var setupKinds = ['skill', 'hook', 'command', 'agent'];
+
+    Object.keys(groups).forEach(function (domId) {
+      var a = anchors[domId];
+      var outward = Math.atan2(a.y - cy, a.x - cx);  // radially outward from graph center
+      // For domains near the center the outward axis is unstable — bias upward.
+      if (Math.hypot(a.x - cx, a.y - cy) < 5) outward = -Math.PI / 2;
+      var g = groups[domId];
+
+      // L2: tool_hubs at fixed per-tool angles within the setup sector.
+      var hubAngle = {};
+      (g.tool_hub || []).forEach(function (h) {
+        var local = TOOL_LOCAL_ANGLE[h.tool];
+        if (local == null) local = 0;
+        var t = outward + local;
+        hubAngle[h.id] = t;
+        slotOf[h.id] = { x: a.x + TOOL_R * Math.cos(t),
+                         y: a.y + TOOL_R * Math.sin(t) };
+      });
+
+      // L3: files orbit their primary tool_hub (same angle + small jitter).
+      var filesByHub = {};
+      (g.file || []).forEach(function (f) {
+        var hid = primaryHub[f.id];
+        if (!filesByHub[hid]) filesByHub[hid] = [];
+        filesByHub[hid].push(f);
+      });
+      Object.keys(filesByHub).forEach(function (hid) {
+        var theta = hubAngle[hid];
+        if (theta == null) theta = outward;  // hub in another domain (cross-domain file)
+        var arr = filesByHub[hid];
+        var arc = Math.min(0.35, 0.08 + arr.length * 0.015);
+        arr.forEach(function (f, i) {
+          var t = theta + ((i + 0.5) / arr.length - 0.5) * arc;
+          var r = FILE_R + ((i % 3) - 1) * 4;  // radial stagger to reduce overlap
+          slotOf[f.id] = { x: a.x + r * Math.cos(t), y: a.y + r * Math.sin(t) };
+        });
+      });
+
+      // L1: skills, hooks, commands, agents — fanned inner ring.
+      var setup = [];
+      setupKinds.forEach(function (k) { (g[k] || []).forEach(function (x) { setup.push(x); }); });
+      if (setup.length) {
+        var arc1 = SECTOR_SETUP_HALF * 2;
+        setup.forEach(function (n, i) {
+          var t = outward + ((i + 0.5) / setup.length - 0.5) * arc1;
+          var r = SETUP_R + (i % 2) * 8;
+          slotOf[n.id] = { x: a.x + r * Math.cos(t), y: a.y + r * Math.sin(t) };
+        });
+      }
+
+      // Discussions lane (opposite side from setup, one side).
+      var disc = g.discussion || [];
+      if (disc.length) {
+        var center = outward + SECTOR_SIDE_ANGLE;
+        var arc2 = SECTOR_SIDE_HALF * 2 + Math.min(Math.PI / 3, disc.length * 0.04);
+        disc.forEach(function (n, i) {
+          var t = center + ((i + 0.5) / disc.length - 0.5) * arc2;
+          var r = DISC_R + (i % 3) * 6;
+          slotOf[n.id] = { x: a.x + r * Math.cos(t), y: a.y + r * Math.sin(t) };
+        });
+      }
+
+      // Memories lane (opposite side from setup, other side).
+      var mem = g.memory || [];
+      if (mem.length) {
+        var center2 = outward - SECTOR_SIDE_ANGLE;
+        var arc3 = SECTOR_SIDE_HALF * 2 + Math.min(Math.PI / 2.5, mem.length * 0.03);
+        mem.forEach(function (n, i) {
+          var t = center2 + ((i + 0.5) / mem.length - 0.5) * arc3;
+          var r = MEM_R + (i % 4) * 8;
+          slotOf[n.id] = { x: a.x + r * Math.cos(t), y: a.y + r * Math.sin(t) };
+        });
+      }
+
+      // MCPs sit INSIDE the domain (between the center of the graph and the
+      // domain anchor), so their long INVOKED_MCP edges fan visibly between
+      // domains that share the MCP.
+      (g.mcp || []).forEach(function (n, i) {
+        var t = outward + Math.PI;  // inward
+        var jitter = (i - (g.mcp.length - 1) / 2) * 0.25;
+        slotOf[n.id] = { x: a.x + MCP_R * Math.cos(t + jitter),
+                         y: a.y + MCP_R * Math.sin(t + jitter) };
+      });
+    });
+    return slotOf;
+  }
+
+  // ── Force helpers (pure closures) ──
+  function linkDistance(e) {
+    if (e._crossDomain) return CROSS_DOMAIN_DISTANCE;
+    return EDGE_DISTANCE[e.kind] != null ? EDGE_DISTANCE[e.kind] : 30;
+  }
+  function linkStrength(e) {
+    if (e._crossDomain) return CROSS_DOMAIN_STRENGTH;
+    var s = EDGE_STRENGTH[e.kind] != null ? EDGE_STRENGTH[e.kind] : 0.4;
+    return s * (e.weight != null ? Math.min(1, 0.3 + e.weight * 0.7) : 1);
+  }
+  function chargeStrength(n) {
+    if (n.kind === 'domain')   return -620;
+    if (n.kind === 'tool_hub') return -140;
+    if (n.kind === 'agent' || n.kind === 'skill') return -80;
+    return -28;
+  }
+  function slotForce(ctx, k) {
+    return function (alpha) {
+      var s = k * alpha;
+      for (var i = 0; i < ctx.nodes.length; i++) {
+        var n = ctx.nodes[i];
+        if (n.kind === 'domain') continue;
+        var slot = ctx.slotOf[n.id];
+        if (!slot) continue;
+        n.vx += (slot.x - n.x) * s;
+        n.vy += (slot.y - n.y) * s;
+      }
+    };
+  }
+  function interDomainRepelForce(ctx, k) {
+    return function (alpha) {
+      var doms = ctx.domains, strength = k * alpha * 8000;
+      for (var i = 0; i < doms.length; i++) {
+        var a = doms[i];
+        for (var j = i + 1; j < doms.length; j++) {
+          var b = doms[j];
+          var dx = b.x - a.x, dy = b.y - a.y;
+          var d2 = dx * dx + dy * dy + 1;
+          var f = strength / d2, inv = 1 / Math.sqrt(d2);
+          a.vx -= dx * inv * f; a.vy -= dy * inv * f;
+          b.vx += dx * inv * f; b.vy += dy * inv * f;
+        }
+      }
+    };
+  }
+  function collisionRadius(n, ctx) {
+    var base = KIND_RADIUS[n.kind] != null ? KIND_RADIUS[n.kind] : 6;
+    return base + Math.min(8, Math.sqrt(ctx.degree[n.id] || 0));
+  }
+
+  // Exposed shared utilities for renderer modules.
+  function nodeRadius(n) {
+    var base = KIND_RADIUS[n.kind] != null ? KIND_RADIUS[n.kind] : 6;
+    var bump = 0;
+    if (n.size != null) bump = Math.max(-2, Math.min(6, n.size - base));
+    else if (n.weight != null) bump = Math.min(4, n.weight * 2);
+    return base + bump;
+  }
+  function nodeColor(n) { return n.color || KIND_COLOR[n.kind] || '#50C8E0'; }
+  function labelOf(n) { return n.label || n.name || n.title || n.path || n.id || ''; }
+
+  window.JUG = window.JUG || {};
+  window.JUG._wfg = window.JUG._wfg || {};
+  window.JUG._wfg.nodeRadius = nodeRadius;
+  window.JUG._wfg.nodeColor  = nodeColor;
+  window.JUG._wfg.labelOf    = labelOf;
+  window.JUG.renderWorkflowGraph = renderWorkflowGraph;
+})();

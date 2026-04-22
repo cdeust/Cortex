@@ -69,6 +69,48 @@ def read_head_tail(file_path: str | Path) -> list[dict]:
         return []
 
 
+def iter_tool_uses(file_path: str | Path):
+    """Stream every assistant ``tool_use`` block from a JSONL session.
+
+    Unlike :func:`read_head_tail`, this scans the WHOLE file line-by-line,
+    so it captures tool invocations that occur in the middle of a long
+    session (the vast majority of Task/Bash/Edit usage).
+
+    Yields dicts with keys ``{"name", "input", "line"}``. Invalid JSON
+    lines are skipped silently — matching the existing parser contract.
+    """
+    fp = Path(file_path)
+    if not fp.exists():
+        return
+    try:
+        with open(fp, "r", encoding="utf-8", errors="replace") as f:
+            for line_no, raw in enumerate(f, start=1):
+                s = raw.strip()
+                if not s:
+                    continue
+                try:
+                    rec = json.loads(s)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if rec.get("type") != "assistant":
+                    continue
+                content = (rec.get("message") or {}).get("content")
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") != "tool_use":
+                        continue
+                    yield {
+                        "name": block.get("name") or "",
+                        "input": block.get("input") or {},
+                        "line": line_no,
+                    }
+    except OSError:
+        return
+
+
 def _format_timestamp(st: Any, attr: str) -> str | None:
     """Format a stat timestamp attribute as an ISO-8601 Z string."""
     if not st:

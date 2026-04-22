@@ -1,14 +1,14 @@
 /* Cortex Memory Board — Kanban by consolidation stage */
 
 #timeline-container {
-  position: absolute;
-  top: 55px; left: 0; right: 0; bottom: 0;
+  /* Geometry (position, top/left/right/bottom, padding, overflow) owned by
+     theme.css so the view clears the fixed filter-bar. Keep only the
+     display behavior + cosmetic properties here. */
   display: none;
   flex-direction: column;
   background: var(--void, #080810);
   z-index: 0;
   font-family: 'JetBrains Mono', monospace;
-  overflow: hidden;
 }
 
 /* View toggle */
@@ -189,22 +189,26 @@
    BOARD — 5 columns side by side
    ═══════════════════════════════════ */
 .kb-board {
-  flex: 1;
-  display: flex;
-  gap: 6px;
+  flex: 1 1 0;
+  min-height: 0;                     /* allow grid children to scroll */
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-flow: column;
+  gap: 8px;
   padding: 4px 8px 8px;
   overflow: hidden;
 }
 
 /* ── Column ── */
 .kb-col {
-  flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
   background: rgba(255,255,255,0.02);
   border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.06);
+  overflow: hidden;
 }
 
 /* Column header */
