@@ -23,6 +23,7 @@ from collections import Counter, defaultdict
 from typing import Iterable
 
 from mcp_server.core.workflow_graph_builder_relational import (
+    ingest_ast_edge,
     ingest_command_file,
     ingest_discussion_agent,
     ingest_discussion_command,
@@ -30,25 +31,28 @@ from mcp_server.core.workflow_graph_builder_relational import (
     ingest_discussion_tool,
     ingest_mcp_usage,
     ingest_skill_usage,
+    ingest_symbol,
 )
-from mcp_server.core.workflow_graph_schema import (
+from mcp_server.core.workflow_graph_palette import (
     AGENT_COLOR,
     COMMAND_COLOR,
     DISCUSSION_COLOR,
     DOMAIN_COLOR,
-    GLOBAL_DOMAIN_ID,
     HOOK_COLOR,
     MEMORY_STAGE_COLORS,
     SKILL_COLOR,
     TOOL_HUB_COLORS,
+    classify_primary_tool,
+    primary_tool_color,
+)
+from mcp_server.core.workflow_graph_schema import (
+    GLOBAL_DOMAIN_ID,
     EdgeKind,
     NodeIdFactory,
     NodeKind,
     ToolKind,
     WorkflowEdge,
     WorkflowNode,
-    classify_primary_tool,
-    primary_tool_color,
 )
 
 _TOOL_NAME_TO_ENUM = {t.value: t for t in ToolKind}
@@ -110,6 +114,8 @@ class WorkflowGraphBuilder:
         discussion_tool_events=None,
         discussion_agent_events=None,
         discussion_command_events=None,
+        ast_symbols=None,
+        ast_edges=None,
     ):
         self._ensure_domain(GLOBAL_DOMAIN_ID, "global")
         # Phase 1: node ingestion (self-bound).
@@ -138,6 +144,15 @@ class WorkflowGraphBuilder:
         ):
             for ev in events or []:
                 fn(self, ev)
+        # Phase 3 (ADR-0046): AST enrichment. Symbols attach to files,
+        # AST edges attach to symbols — both phases skip silently when
+        # their parent is missing (e.g. AP indexed a file Cortex doesn't
+        # track). Feature-flag-gated at the handler layer so these
+        # sequences are empty by default.
+        for sym in ast_symbols or []:
+            ingest_symbol(self, sym)
+        for edge in ast_edges or []:
+            ingest_ast_edge(self, edge)
         return self._dedupe_and_link(self._nodes.values(), self._edges)
 
     # ── al-jabr: fill missing domain / classify file tool mix ─────────

@@ -13,11 +13,15 @@ to these functions instead of owning the method bodies.
 
 from __future__ import annotations
 
-from mcp_server.core.workflow_graph_schema import (
+from mcp_server.core.workflow_graph_palette import (
     AGENT_COLOR,
     COMMAND_COLOR,
     MCP_COLOR,
     SKILL_COLOR,
+    SYMBOL_COLOR_DEFAULT,
+    SYMBOL_COLORS,
+)
+from mcp_server.core.workflow_graph_schema import (
     EdgeKind,
     NodeIdFactory,
     NodeKind,
@@ -262,5 +266,123 @@ def ingest_mcp_usage(b, mue: dict) -> None:
             kind=EdgeKind.INVOKED_MCP,
             weight=float(count),
             label=tool_name or None,
+        )
+    )
+
+
+# ── AST ingestion (ADR-0046) ─────────────────────────────────────────────
+
+
+def ingest_symbol(b, sym: dict) -> None:
+    """Create a SYMBOL node + its DEFINED_IN edge anchoring it to a
+    FILE node. Synthesises the parent file node on-demand so AST
+    symbols from files Claude Code sessions never touched still show
+    up in the graph — this is what ``cortex-visualize`` wants: the
+    whole indexed codebase, not just the session-touched slice.
+    Idempotent by symbol id."""
+    file_path = _require(sym, "file_path", "symbol")
+    qname = _require(sym, "qualified_name", "symbol")
+    fid = NodeIdFactory.file_id(str(file_path))
+    if fid not in b._nodes:
+        # Synthesise a minimal file node anchored to the global domain.
+        # The builder's ``_finalize_files`` has already run, so we add
+        # the file directly; colour via the default file palette.
+        from mcp_server.core.workflow_graph_palette import (
+            primary_tool_color,
+        )
+        from mcp_server.core.workflow_graph_schema_enums import (
+            PrimaryToolCluster,
+        )
+
+        b._nodes[fid] = WorkflowNode(
+            id=fid,
+            kind=NodeKind.FILE,
+            label=str(file_path).rsplit("/", 1)[-1],
+            color=primary_tool_color(PrimaryToolCluster.READ),
+            domain_id=b._GLOBAL_DOMAIN_ID
+            if hasattr(b, "_GLOBAL_DOMAIN_ID")
+            else "domain:__global__",
+            size=0.8,
+            path=str(file_path),
+            extra_domain_ids=[],
+        )
+        # Anchor the synthesised file to the global domain so the graph
+        # schema invariant (every non-domain node has >= 1 in_domain edge)
+        # still holds.
+        from mcp_server.core.workflow_graph_schema import (
+            EdgeKind as _Ek,
+        )
+
+        b._edges.append(
+            WorkflowEdge(
+                source=fid,
+                target=b._nodes[fid].domain_id,
+                kind=_Ek.IN_DOMAIN,
+            )
+        )
+    sid = NodeIdFactory.symbol_id(str(file_path), str(qname))
+    if sid in b._nodes:
+        return
+    stype = str(sym.get("symbol_type") or "function")
+    color = SYMBOL_COLORS.get(stype, SYMBOL_COLOR_DEFAULT)
+    parent = b._nodes[fid]
+    b._nodes[sid] = WorkflowNode(
+        id=sid,
+        kind=NodeKind.SYMBOL,
+        label=str(qname).rsplit(".", 1)[-1] or str(qname),
+        color=color,
+        domain_id=parent.domain_id,
+        size=0.9,
+        symbol_type=stype,
+        signature=sym.get("signature"),
+        language=sym.get("language"),
+        line=sym.get("line"),
+        path=str(file_path),
+    )
+    b._edges.append(
+        WorkflowEdge(
+            source=sid,
+            target=fid,
+            kind=EdgeKind.DEFINED_IN,
+        )
+    )
+
+
+def ingest_ast_edge(b, edge: dict) -> None:
+    """Create a CALLS / IMPORTS / MEMBER_OF edge between two symbols
+    (or a file→symbol IMPORTS edge). Skipped silently when either
+    endpoint is absent from the graph."""
+    kind = str(edge.get("kind") or "")
+    src_file = str(edge.get("src_file") or "")
+    dst_file = str(edge.get("dst_file") or "")
+    dst_name = str(edge.get("dst_name") or "")
+    if not dst_file or not dst_name:
+        return
+    dst_id = NodeIdFactory.symbol_id(dst_file, dst_name)
+    if dst_id not in b._nodes:
+        return
+
+    if kind == "imports":
+        # File → imported symbol.
+        if not src_file:
+            return
+        src_id = NodeIdFactory.file_id(src_file)
+        if src_id not in b._nodes:
+            return
+        edge_kind = EdgeKind.IMPORTS
+    else:
+        src_name = str(edge.get("src_name") or "")
+        if not src_file or not src_name:
+            return
+        src_id = NodeIdFactory.symbol_id(src_file, src_name)
+        if src_id not in b._nodes:
+            return
+        edge_kind = EdgeKind.CALLS if kind == "calls" else EdgeKind.MEMBER_OF
+
+    b._edges.append(
+        WorkflowEdge(
+            source=src_id,
+            target=dst_id,
+            kind=edge_kind,
         )
     )

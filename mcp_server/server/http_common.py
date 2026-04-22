@@ -191,10 +191,16 @@ def read_html_file(path: Path, error_label: str) -> str:
 def send_json_response(
     handler: BaseHTTPRequestHandler, data: Any, *, status: int = 200
 ) -> None:
-    """Send a JSON response with strict-reflect CORS + no-cache headers."""
+    """Send a JSON response with strict-reflect CORS + no-cache headers.
+
+    ``Content-Length`` is required for HTTP/1.1 keep-alive: without it
+    the browser treats the connection as open-ended and every fetch()
+    hangs until keep-alive idle expires.
+    """
     body = json.dumps(data, default=str).encode()
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
     _apply_cors_headers(handler)
     handler.send_header("Cache-Control", "no-cache")
     handler.end_headers()
@@ -218,6 +224,7 @@ def send_error_response(handler: BaseHTTPRequestHandler, error: Exception) -> No
     body = json.dumps({"error": type(error).__name__}).encode()
     handler.send_response(500)
     handler.send_header("Content-Type", "application/json")
+    handler.send_header("Content-Length", str(len(body)))
     _apply_cors_headers(handler)
     handler.end_headers()
     handler.wfile.write(body)

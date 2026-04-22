@@ -26,6 +26,103 @@
   <div class="loader-sub">Initializing neural map</div>
 </div>
 
+<!-- Non-blocking progress bar wired to /api/graph/progress. Shows
+     the server's layered build status (L0 domains → L1 … L6 AST)
+     without ever taking the graph away from the user. Fades in when
+     the server is mid-build; fades out the instant full_ready=true. -->
+<div id="build-progress" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);padding:10px 16px;background:rgba(10,16,28,0.9);border:1px solid rgba(120,200,220,0.24);border-radius:4px;font-size:11px;line-height:1.5;z-index:300;min-width:340px;max-width:540px;display:none;box-shadow:0 0 24px rgba(80,210,235,0.12);font-family:-apple-system,Inter,system-ui,sans-serif;color:#c4d4dc">
+  <div id="bp-phase" style="color:#80d2e0;font-weight:600;letter-spacing:1.5px;margin-bottom:4px;font-size:10px">LOADING</div>
+  <div id="bp-msg" style="color:#a3b4c1;margin-bottom:8px;min-height:1.4em">starting…</div>
+  <div style="position:relative;height:4px;background:rgba(120,200,220,0.1);border-radius:2px;overflow:hidden">
+    <div id="bp-fill" style="position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,#50d2eb 0%,#8af5ff 100%);border-radius:2px;transition:width 300ms ease;box-shadow:0 0 10px rgba(80,210,235,0.45)"></div>
+  </div>
+  <div style="text-align:right;margin-top:4px;color:#7a8e9c;font-size:10px;font-variant-numeric:tabular-nums"><span id="bp-pct">0%</span><span id="bp-elapsed" style="color:#5a6e7c;margin-left:6px"></span></div>
+</div>
+<script>
+// Phase-driven append-only loader.
+// Polls /api/graph/progress; when a phase flips to `ready`, fetches
+// /api/graph/phase?name=<key> ONCE and appends its nodes+edges to the
+// live scene via JUG.appendGraphDelta. Never re-fetches the whole
+// graph — matches the user's requirement: each phase pops new nodes
+// when the previous one is done.
+(function(){
+  // Phases are now DYNAMIC: L0..L5 are fixed, then one phase per
+  // project (L6:<name>) then L6_CROSS. We discover the full set from
+  // /api/graph/progress's `phases` dict. The server inserts keys in
+  // DAG order so iteration order matches publish order; the client's
+  // appendGraphDelta dedup handles any slack.
+  var applied = {};   // phaseKey → true once appended
+  var inflight = {};  // phaseKey → true while fetching
+
+  function applyPhase(key){
+    if(applied[key] || inflight[key]) return Promise.resolve();
+    inflight[key] = true;
+    return fetch('/api/graph/phase?name='+encodeURIComponent(key))
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(p){
+        if(!p || !p.ready) return;
+        if(typeof JUG.appendGraphDelta === 'function'){
+          // Seed lastData if this is the very first append — the
+          // bridge/graph modules expect it to exist.
+          if(!JUG.state.lastData){
+            JUG.state.lastData = {
+              nodes: [], edges: [], links: [],
+              meta: { schema: 'workflow_graph.v1' }
+            };
+          }
+          JUG.appendGraphDelta(p.nodes || [], p.edges || []);
+        }
+        applied[key] = true;
+        console.log('[phase] applied', key, '+'+((p.nodes||[]).length)+'N', '+'+((p.edges||[]).length)+'E');
+      })
+      .catch(function(err){ console.warn('[phase] '+key+' failed:', err); })
+      .then(function(){ inflight[key] = false; });
+  }
+
+  function refreshBar(p){
+    var box = document.getElementById('build-progress');
+    if(!box) return;
+    if(p.phase === 'idle' || p.full_ready){
+      box.style.opacity = '0';
+      setTimeout(function(){ box.style.display='none'; }, 400);
+      return;
+    }
+    box.style.display = 'block';
+    box.style.opacity = '1';
+    var pct = Math.max(0, Math.min(1, p.pct || 0));
+    document.getElementById('bp-fill').style.width = (pct*100).toFixed(1)+'%';
+    document.getElementById('bp-pct').firstChild.nodeValue = (pct*100).toFixed(0)+'%';
+    document.getElementById('bp-phase').textContent = (p.phase||'LOADING').toUpperCase();
+    document.getElementById('bp-msg').textContent = p.message || '…';
+    if(p.elapsed) document.getElementById('bp-elapsed').textContent = ' · '+p.elapsed.toFixed(1)+'s';
+  }
+
+  function poll(){
+    fetch('/api/graph/progress').then(function(r){ return r.ok ? r.json() : null; }).then(function(p){
+      if(p){
+        refreshBar(p);
+        // Sequential append: iterate the server's phases dict in
+        // insertion order (L0..L5, then L6:<proj1>..<projN>, then
+        // L6_CROSS). Apply each one whose `ready` flag is true.
+        var seq = Promise.resolve();
+        var keys = Object.keys(p.phases || {});
+        keys.forEach(function(k){
+          if(!applied[k] && p.phases[k]){
+            seq = seq.then(function(){ return applyPhase(k); });
+          }
+        });
+        if(p.full_ready){
+          var allDone = keys.every(function(k){ return applied[k] || !p.phases[k]; });
+          if(allDone){ return; }
+        }
+      }
+      setTimeout(poll, 400);
+    }).catch(function(){ setTimeout(poll, 1200); });
+  }
+  setTimeout(poll, 200);
+})();
+</script>
+
 <div id="scanlines"></div>
 <div id="vignette"></div>
 <div id="graph-container"></div>
@@ -225,6 +322,10 @@
   <div class="leg-item"><div class="leg-dot" style="background:#166534;box-shadow:0 0 6px #16653460"></div>Memory · consolidated</div>
   <div class="leg-item"><div class="leg-dot" style="background:#C070D0;box-shadow:0 0 6px #C070D060"></div>Memory · semantic</div>
 
+  <div class="leg-section">L6 AST symbols</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#64748B;box-shadow:0 0 6px #64748B60"></div>Symbol (function / method / class)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#50B0C8;box-shadow:0 0 6px #50B0C860"></div>Entity (knowledge graph)</div>
+
   <div class="leg-section">Edges</div>
   <div class="leg-item"><div class="leg-line" style="background:rgba(120,200,220,0.7)"></div>in domain</div>
   <div class="leg-item"><div class="leg-line" style="background:rgba(150,200,180,0.7)"></div>tool → file</div>
@@ -234,6 +335,11 @@
   <div class="leg-item"><div class="leg-line" style="background:rgba(244,63,94,0.65)"></div>discussion → file</div>
   <div class="leg-item"><div class="leg-line" style="background:rgba(224,168,64,0.65)"></div>command → file</div>
   <div class="leg-item"><div class="leg-line" style="background:rgba(138,107,255,0.65)"></div>invoked mcp</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(100,116,139,0.7)"></div>symbol → file (defined_in)</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(120,180,200,0.7)"></div>calls (symbol → symbol)</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(200,150,100,0.65)"></div>imports (file → symbol)</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(150,200,150,0.7)"></div>member_of (method → class)</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(80,176,200,0.65)"></div>about entity</div>
   <div class="leg-item"><div class="leg-line" style="background:rgba(200,150,255,0.4);border-top:1px dashed rgba(200,150,255,0.6)"></div>cross-domain</div>
 </div>
 

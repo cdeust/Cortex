@@ -341,3 +341,21 @@
     max-height: 40vh;
   }
 }
+
+/* Named-neighbor lists inside the detail panel. Each row shows
+   [kind] [clickable link to the neighbor node] so users get the
+   actual names of files / callers / etc instead of a bare count. */
+.wfg-panel__row--clickable { cursor: pointer; }
+.wfg-panel__row--clickable:hover { background: rgba(120,200,220,0.06); }
+.wfg-panel__link {
+  color: #8af5ff;
+  text-decoration: none;
+  word-break: break-all;
+}
+.wfg-panel__link:hover { text-decoration: underline; color: #b4fbff; }
+.wfg-panel__more {
+  font-size: 10px;
+  color: #7a8e9c;
+  padding: 4px 6px 0;
+  font-style: italic;
+}

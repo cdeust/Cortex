@@ -15,6 +15,7 @@ from mcp_server.handlers import (
     narrative,
     recall,
     remember,
+    unified_search,
 )
 from mcp_server.tool_error_handler import safe_handler
 
@@ -28,6 +29,7 @@ def register(mcp: FastMCP) -> None:
     _register_narrative(mcp)
     _register_consolidate(mcp)
     _register_import_sessions(mcp)
+    _register_unified_search(mcp)
 
 
 def _register_remember(mcp: FastMCP) -> None:
@@ -210,4 +212,28 @@ def _register_import_sessions(mcp: FastMCP) -> None:
                 "dry_run": dry_run,
             },
             tool_name="import_sessions",
+        )
+
+
+def _register_unified_search(mcp: FastMCP) -> None:
+    @mcp.tool(
+        name="unified_search",
+        description=unified_search.schema["description"],
+    )
+    async def tool_unified_search(
+        query: str,
+        domain: str | None = None,
+        max_results: int = 10,
+        k: int = 60,
+    ) -> str:
+        """RRF-fuse Cortex memory recall with AP code search (ADR-0046 P3)."""
+        return await safe_handler(
+            unified_search.handler,
+            {
+                "query": query,
+                "domain": domain,
+                "max_results": max_results,
+                "k": k,
+            },
+            tool_name="unified_search",
         )

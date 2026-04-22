@@ -25,6 +25,10 @@ class NodeKind(str, Enum):
     # palette includes it so the schema stays forward-compatible.
     ENTITY = "entity"
     MCP = "mcp"
+    # SYMBOL — function / class / module / import extracted from the
+    # AST by the ``automatised-pipeline`` sibling plugin (ADR-0046).
+    # ``symbol_type`` on the node body carries the sub-kind.
+    SYMBOL = "symbol"
 
 
 class EdgeKind(str, Enum):
@@ -46,6 +50,14 @@ class EdgeKind(str, Enum):
     DISCUSSION_RAN_COMMAND = "discussion_ran_command"
     COMMAND_TOUCHED_FILE = "command_touched_file"
     INVOKED_MCP = "invoked_mcp"
+    # AST edges produced by the ``automatised-pipeline`` bridge
+    # (ADR-0046). All source-symbols must resolve to a SYMBOL node;
+    # targets resolve to a SYMBOL (CALLS, MEMBER_OF) or a FILE
+    # (DEFINED_IN) or a SYMBOL import (IMPORTS).
+    DEFINED_IN = "defined_in"  # symbol → file
+    CALLS = "calls"  # caller symbol → callee symbol
+    IMPORTS = "imports"  # file → imported symbol or file
+    MEMBER_OF = "member_of"  # function → class / class → module
 
 
 class ToolKind(str, Enum):

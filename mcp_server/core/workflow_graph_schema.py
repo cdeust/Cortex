@@ -71,6 +71,15 @@ class WorkflowNode(BaseModel):
     event: str | None = None
     subagent_type: str | None = None
     created_at: str | None = None
+    # AST-derived fields (ADR-0046, populated by the automatised-pipeline
+    # bridge). ``symbol_type`` is one of function/class/module/import;
+    # ``signature`` is the source-captured function signature;
+    # ``language`` is rust/python/typescript; ``line`` is 1-based source
+    # location in the parent file.
+    symbol_type: str | None = None
+    signature: str | None = None
+    language: str | None = None
+    line: int | None = None
 
 
 class WorkflowEdge(BaseModel):
@@ -132,6 +141,17 @@ class NodeIdFactory:
     @staticmethod
     def mcp_id(server_name: str) -> str:
         return f"mcp:{server_name}"
+
+    @staticmethod
+    def symbol_id(file_abs_path: str, qualified_name: str) -> str:
+        """Stable id across indexing runs: hash of ``<file>::<qualified>``.
+
+        ``qualified_name`` is AP's fully-qualified symbol name
+        (``module.ClassName.method``). Including the file disambiguates
+        identical names across modules in different languages.
+        """
+        key = f"{file_abs_path}::{qualified_name}"
+        return f"symbol:{_short_hash(key, width=12)}"
 
 
 # ── Validation (meta-rules that decide well-formedness) ────────────────
@@ -196,10 +216,13 @@ def _count_in_domain(edge_list: list[WorkflowEdge]) -> Counter[str]:
 def _check_in_domain_counts(
     node_list: list[WorkflowNode], in_domain_counts: Counter[str]
 ) -> None:
-    """Invariant 3: exactly one in_domain edge per non-domain node (≥1 for file/mcp/skill)."""
+    """Invariant 3: exactly one in_domain edge per non-domain node
+    (≥1 for file/mcp/skill). SYMBOL nodes (ADR-0046) are exempt — they
+    are anchored to their parent FILE via a DEFINED_IN edge instead
+    of a domain edge, which is enforced by ``_check_symbol_anchor``."""
     for node in node_list:
         kind = _nk(node.kind)
-        if kind is NodeKind.DOMAIN:
+        if kind is NodeKind.DOMAIN or kind is NodeKind.SYMBOL:
             continue
         count = in_domain_counts.get(node.id, 0)
         if kind in _MULTI_DOMAIN_KINDS:
@@ -211,6 +234,27 @@ def _check_in_domain_counts(
             raise GraphValidationError(
                 f"node {node.id} ({kind.value}) must have exactly one "
                 f"in_domain edge, got {count}"
+            )
+
+
+def _check_symbol_anchor(
+    node_list: list[WorkflowNode], edge_list: list[WorkflowEdge]
+) -> None:
+    """Invariant 6 (AST): every SYMBOL node must have at least one
+    DEFINED_IN edge pointing to a FILE node. Without that anchor the
+    layout has nowhere to place the symbol inside its file cluster."""
+    file_ids = {n.id for n in node_list if _nk(n.kind) is NodeKind.FILE}
+    anchors: Counter[str] = Counter()
+    for edge in edge_list:
+        ek = edge.kind if isinstance(edge.kind, EdgeKind) else EdgeKind(edge.kind)
+        if ek is EdgeKind.DEFINED_IN and edge.target in file_ids:
+            anchors[edge.source] += 1
+    for node in node_list:
+        if _nk(node.kind) is not NodeKind.SYMBOL:
+            continue
+        if anchors.get(node.id, 0) < 1:
+            raise GraphValidationError(
+                f"symbol node {node.id} has no defined_in edge to a file"
             )
 
 
@@ -251,6 +295,7 @@ def validate_graph(
       3. ``in_domain`` counts       → ``_check_in_domain_counts``
       4. tool_hub well-formedness   → ``_check_tool_hub_pairs``
       5. id prefix matches kind     → ``_check_unique_ids_and_prefix``
+      6. symbol has ≥1 defined_in   → ``_check_symbol_anchor`` (ADR-0046)
     """
     node_list = list(nodes)
     edge_list = list(edges)
@@ -258,6 +303,7 @@ def validate_graph(
     _check_edge_endpoints(edge_list, seen)
     _check_in_domain_counts(node_list, _count_in_domain(edge_list))
     _check_tool_hub_pairs(node_list)
+    _check_symbol_anchor(node_list, edge_list)
 
 
 # ``__all__`` intentionally omitted: every symbol imported above is

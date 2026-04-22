@@ -33,6 +33,23 @@ DISCUSSION_COLOR = "#EF4444"  # red — session anchors
 ENTITY_COLOR = "#50B0C8"  # teal — extracted entities
 MCP_COLOR = "#6366F1"  # indigo — MCP servers (distinct from hook)
 
+# Symbol kinds produced by the ``automatised-pipeline`` AST bridge
+# (ADR-0046). Sit inside the Authorship / structural hue range so a
+# symbol cluster reads as "code you wrote" rather than something new.
+SYMBOL_COLORS: dict[str, str] = {
+    "function": "#22D3EE",  # sky — verbs
+    # ``method`` gets a lighter sky so method vs free-function is visible
+    # at a glance, matching the legend's dedicated entry for methods.
+    "method": "#38BDF8",  # sky/blue — methods (receiver-bound functions)
+    "class": "#8B5CF6",  # violet — types (also Rust struct/enum/trait)
+    "module": "#FBBF24",  # amber — boxes / packages / namespaces
+    # ``constant`` covers language-level consts, fields, typedefs, type
+    # aliases — values rather than behaviour.
+    "constant": "#94A3B8",  # slate — structural values
+    "import": "#94A3B8",  # slate — structural, de-emphasised
+}
+SYMBOL_COLOR_DEFAULT = "#A1A1AA"  # zinc fallback
+
 TOOL_HUB_COLORS: dict[ToolKind, str] = {
     ToolKind.EDIT: "#10B981",  # emerald
     ToolKind.WRITE: "#059669",  # dark emerald — paired with Edit

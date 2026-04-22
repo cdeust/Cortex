@@ -15,6 +15,9 @@ from mcp_server.core.workflow_graph_schema import (
     validate_graph,
 )
 from mcp_server.infrastructure.workflow_graph_source import WorkflowGraphSource
+from mcp_server.infrastructure.workflow_graph_source_ast import (
+    WorkflowGraphASTSource,
+)
 
 
 _GLOBAL_DOMAIN_TOKEN = "__global__"
@@ -99,6 +102,7 @@ def build_workflow_graph(
     domain_filter: str | None = None,
     min_memory_heat: float = 0.0,
     memory_limit: int = 0,  # 0 = unbounded (pg_store convention)
+    stage: str = "full",
 ) -> dict[str, Any]:
     """Load sources, build the graph, validate, and return JSON payload.
 
@@ -106,24 +110,88 @@ def build_workflow_graph(
     (``{nodes, edges, meta}``) so the existing bridge in
     workflow_graph_bridge.js can auto-detect it and route to the new
     renderer.
+
+    Progressive-reveal stages so the first response comes back
+    instantly and heavy data streams in as it becomes available:
+
+      * ``skeleton`` — domains, skills, hooks, agents, tool hubs, MCPs,
+        memories, discussions, commands. **No file nodes, no AST.**
+        This is what the client sees on the very first request.
+      * ``files``    — skeleton plus the file nodes derived from
+        Claude-session tool events and command-file attribution.
+      * ``full``     — everything including AST symbols + edges from
+        every indexed AP graph. Used for the final steady-state cache.
+
+    The background enricher in ``http_standalone_graph`` drives this
+    sequence: it publishes a skeleton within ~500ms, then republishes
+    files, then republishes with AST. The client polls every 4s and
+    renders the deltas so projects / files / symbols fade in instead of
+    popping in all at once.
     """
     source = WorkflowGraphSource()
-    tool_events = source.load_tool_events(store)
-    skills = source.load_skills()
-    hooks = source.load_hooks()
-    agents = source.load_agent_events()
-    commands = source.load_command_events(store)
-    memories = source.load_memories(store, min_heat=min_memory_heat, limit=memory_limit)
-    discussions = source.load_discussions()
-    skill_usage = source.load_skill_usage()
-    mcp_usage = source.load_mcp_usage()
-    discussion_files = source.load_discussion_files()
-    discussion_tools = source.load_discussion_tool_uses()
-    discussion_agents = source.load_discussion_agents()
-    discussion_commands = source.load_discussion_commands()
+    # Skeleton stage is the first paint — it must be lightweight. Only
+    # load the L1 structural skeleton (domains + skills + hooks, at
+    # most a few dozen nodes). Tool events, agents, commands, memories,
+    # discussions, skill / MCP usage, and discussion-scoped relations
+    # all stream in as live-tail deltas (``_emit_memory_deltas``,
+    # ``_emit_file_deltas``, ``_emit_roster_deltas``) so the first
+    # paint lands before the browser ever asks for data.
+    if stage == "skeleton":
+        skills = source.load_skills()
+        hooks = source.load_hooks()
+        agents = []
+        commands = []
+        memories = []
+        discussions = []
+        skill_usage = []
+        mcp_usage = []
+        discussion_tools = []
+        discussion_agents = []
+        discussion_commands = []
+    else:
+        skills = source.load_skills()
+        hooks = source.load_hooks()
+        agents = source.load_agent_events()
+        commands = source.load_command_events(store)
+        memories = source.load_memories(
+            store, min_heat=min_memory_heat, limit=memory_limit
+        )
+        discussions = source.load_discussions()
+        skill_usage = source.load_skill_usage()
+        mcp_usage = source.load_mcp_usage()
+        discussion_tools = source.load_discussion_tool_uses()
+        discussion_agents = source.load_discussion_agents()
+        discussion_commands = source.load_discussion_commands()
+
+    # File-derived sources are deferred until ``stage`` reaches files.
+    if stage in ("files", "full"):
+        tool_events = source.load_tool_events(store)
+        discussion_files = source.load_discussion_files()
+    else:
+        tool_events = []
+        discussion_files = []
 
     known_paths = {e.get("file_path") for e in tool_events if e.get("file_path")}
-    command_files = source.load_command_files(store, known_paths)
+    command_files = (
+        source.load_command_files(store, known_paths)
+        if stage in ("files", "full")
+        else []
+    )
+
+    # AP AST enrichment — loaded synchronously at the ``full`` stage
+    # so the WebGL renderer sees every indexed symbol on the first
+    # ``/api/graph`` fetch. The Rust/WASM frontend (``/viz``) can
+    # absorb 100k+ instanced point-sprites at 60 fps, so the size
+    # that used to stall the d3/canvas path is now normal. Empty
+    # lists when AP isn't configured — the rest of the builder runs
+    # unchanged.
+    if stage == "full":
+        ast_source = WorkflowGraphASTSource()
+        ast_symbols = ast_source.load_symbols([]) if ast_source.enabled() else []
+        ast_edges = ast_source.load_ast_edges([]) if ast_source.enabled() else []
+    else:
+        ast_symbols = []
+        ast_edges = []
 
     if domain_filter:
 
@@ -156,6 +224,8 @@ def build_workflow_graph(
         discussion_tool_events=discussion_tools,
         discussion_agent_events=discussion_agents,
         discussion_command_events=discussion_commands,
+        ast_symbols=ast_symbols,
+        ast_edges=ast_edges,
     )
 
     validate_graph(nodes, edges)
@@ -164,6 +234,7 @@ def build_workflow_graph(
     memory_count = sum(1 for n in nodes if n.kind == "memory")
     file_count = sum(1 for n in nodes if n.kind == "file")
     discussion_count = sum(1 for n in nodes if n.kind == "discussion")
+    symbol_count = sum(1 for n in nodes if n.kind == "symbol")
 
     return {
         "nodes": [_node_to_dict(n) for n in nodes],
@@ -190,7 +261,17 @@ def build_workflow_graph(
                 "memories": len(memories),
                 "discussions": len(discussions),
                 "files": file_count,
+                "symbols": symbol_count,
+                "ast_edges": len(ast_edges),
             },
+            # ``ast_source`` is only constructed at the ``full`` stage;
+            # earlier stages report ast_enabled based on the env flag
+            # so the client can show "enabled, not yet loaded" state.
+            "ast_enabled": (
+                WorkflowGraphASTSource().enabled()
+                if stage == "full"
+                else (stage == "full")
+            ),
         },
     }
 

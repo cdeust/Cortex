@@ -17,6 +17,7 @@ from mcp_server.handlers import (
     wiki_purge,
     wiki_read,
     wiki_reindex,
+    wiki_verify,
     wiki_write,
 )
 from mcp_server.tool_error_handler import safe_handler
@@ -31,6 +32,7 @@ def register(mcp: FastMCP) -> None:
     _register_wiki_adr(mcp)
     _register_wiki_reindex(mcp)
     _register_wiki_purge(mcp)
+    _register_wiki_verify(mcp)
 
 
 def _register_wiki_write(mcp: FastMCP) -> None:
@@ -126,4 +128,15 @@ def _register_wiki_purge(mcp: FastMCP) -> None:
             wiki_purge.handler,
             {"apply": apply, "kind": kind},
             tool_name="wiki_purge",
+        )
+
+
+def _register_wiki_verify(mcp: FastMCP) -> None:
+    @mcp.tool(name="wiki_verify", description=wiki_verify.schema["description"])
+    async def tool_wiki_verify(path: str | None = None) -> str:
+        """Verify wiki-page symbol citations against AP's code graph (ADR-0046 Phase 2)."""
+        return await safe_handler(
+            wiki_verify.handler,
+            {"path": path} if path else {},
+            tool_name="wiki_verify",
         )

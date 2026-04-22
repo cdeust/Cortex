@@ -42,7 +42,6 @@ from mcp_server.server.http_standalone_endpoints import (
     serve_sankey,
     serve_static,
 )
-from mcp_server.server.http_standalone_graph import build_and_cache_graph
 from mcp_server.server.http_standalone_state import (
     IDLE_TIMEOUT,
     seconds_since_last_request,
@@ -124,6 +123,16 @@ def _route_unified_get(
     """Resolve a GET request for the unified server."""
     path = handler.path
     path_no_qs = path.split("?")[0]
+    if path_no_qs == "/api/graph/progress":
+        from mcp_server.server.http_standalone_endpoints import serve_graph_progress
+
+        serve_graph_progress(handler)
+        return
+    if path_no_qs == "/api/graph/phase":
+        from mcp_server.server.http_standalone_endpoints import serve_graph_phase
+
+        serve_graph_phase(handler)
+        return
     if path == "/api/graph" or path.startswith("/api/graph?"):
         serve_graph(handler, store)
     elif path == "/api/discussions" or path.startswith("/api/discussions?"):
@@ -147,11 +156,35 @@ def _route_unified_get(
     elif path.startswith("/css/") and path_no_qs.endswith(".css"):
         serve_static(handler, css_dir, path_no_qs[5:], "text/css")
     else:
+        # Cache-bust every local JS/CSS load in the HTML so hard-reloads
+        # actually fetch fresh code. Without this, Chrome / Safari will
+        # happily reuse the old graph.js / polling.js that was cached
+        # on the first visit even when the server is serving new bytes.
+        raw = html_path.read_bytes()
+        import re as _re
+        import time as _time
+
+        cb = str(int(_time.time()))
+        text = raw.decode("utf-8", errors="replace")
+        text = _re.sub(
+            r'(<script\s+[^>]*src="/js/[^"]+?)(")',
+            r"\1?v=" + cb + r"\2",
+            text,
+        )
+        text = _re.sub(
+            r'(<link\s+[^>]*href="/css/[^"]+?)(")',
+            r"\1?v=" + cb + r"\2",
+            text,
+        )
+        body = text.encode("utf-8")
         handler.send_response(200)
         handler.send_header("Content-Type", "text/html; charset=utf-8")
-        handler.send_header("Cache-Control", "no-cache")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.send_header("Cache-Control", "no-store, must-revalidate")
+        handler.send_header("Pragma", "no-cache")
+        handler.send_header("Expires", "0")
         handler.end_headers()
-        handler.wfile.write(html_path.read_bytes())
+        handler.wfile.write(body)
 
 
 def _build_unified_handler(ui_root: Path, store) -> type:
@@ -161,6 +194,12 @@ def _build_unified_handler(ui_root: Path, store) -> type:
     css_dir = ui_root / "unified"
 
     class Handler(BaseHTTPRequestHandler):
+        # HTTP/1.1 — required for Server-Sent Events. BaseHTTPRequestHandler
+        # defaults to HTTP/1.0 which closes the connection after each
+        # response, killing any streaming endpoint. Chunked transfer +
+        # keep-alive land automatically once protocol_version is 1.1.
+        protocol_version = "HTTP/1.1"
+
         def _guard_host(self) -> bool:
             if validate_host_header(self):
                 return True
@@ -222,11 +261,110 @@ def _announce(url: str) -> None:
     sys.stdout.close()
 
 
+def _auto_enable_ap() -> None:
+    """ADR-0046 — make the AST overlay always-on when AP is available.
+
+    Runs at standalone startup so every spawn of the unified viz server
+    enables AP enrichment automatically. No-op when the binary isn't
+    installed or when the user has already set the env vars.
+
+    Side effects (written to ``os.environ`` of THIS process only):
+      * ``CORTEX_ENABLE_AP`` = "1"
+      * ``CORTEX_AP_COMMAND`` = JSON spec pointing at a built binary
+      * ``CORTEX_AP_GRAPH_PATH`` = ``~/.cortex/ap_graph/graph`` when
+        a prior index exists. If missing, a background index is kicked
+        off against ``CLAUDE_PROJECT_DIR`` (or cwd) so the next
+        reload shows the AST layer.
+    """
+    bin_path = None
+    if not os.environ.get("CORTEX_AP_COMMAND"):
+        dev = (
+            Path.home()
+            / "Documents/Developments/automatised-pipeline"
+            / "target/release/ai-architect-mcp"
+        )
+        if dev.is_file() and os.access(dev, os.X_OK):
+            bin_path = str(dev)
+        else:
+            import shutil as _sh
+
+            bin_path = _sh.which("ai-architect-mcp")
+    if bin_path is None and not os.environ.get("CORTEX_AP_COMMAND"):
+        return
+    os.environ.setdefault("CORTEX_ENABLE_AP", "1")
+    if bin_path and not os.environ.get("CORTEX_AP_COMMAND"):
+        os.environ["CORTEX_AP_COMMAND"] = json.dumps(
+            {"command": bin_path, "args": []},
+        )
+
+    # Multi-project roster. ``~/.cortex/ap_graphs/<project>/graph`` is
+    # one LadybugDB per git repo under ``~/Documents/Developments/``.
+    # The resolver (ap_bridge.resolve_graph_paths) sweeps them all so
+    # the visualization shows every indexed project at once. We kick
+    # off a background indexer that walks the roster sequentially
+    # (AP is single-client per process) sorted by mtime so the
+    # user's most-recently-touched projects appear first and later
+    # ones fade in as they finish.
+    roster_root = Path.home() / ".cortex" / "ap_graphs"
+    roster_root.mkdir(parents=True, exist_ok=True)
+
+    def _bg_index():
+        try:
+            import asyncio as _asyncio
+
+            from mcp_server.infrastructure.ap_bridge import APBridge
+
+            projects_root = Path.home() / "Documents" / "Developments"
+            projects = [
+                p
+                for p in projects_root.iterdir()
+                if p.is_dir() and (p / ".git").exists()
+            ]
+            # Most-recently-touched first.
+            projects.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+            async def _run():
+                b = APBridge()
+                try:
+                    for proj in projects:
+                        outdir = roster_root / proj.name
+                        graph_file = outdir / "graph"
+                        # Skip projects already indexed — cheap recovery
+                        # on a re-launch and avoids paying the cost of a
+                        # 5 000-file codebase every visualize call.
+                        if graph_file.exists() and graph_file.stat().st_size > 10000:
+                            continue
+                        outdir.mkdir(parents=True, exist_ok=True)
+                        try:
+                            await b.index_codebase(
+                                str(proj),
+                                output_dir=str(outdir),
+                                language="auto",
+                            )
+                        except Exception:
+                            # Any single failure must not break the roster
+                            # — the user still wants the other projects.
+                            continue
+                finally:
+                    await b.close()
+
+            _asyncio.run(_run())
+        except Exception:
+            pass
+
+    threading.Thread(target=_bg_index, name="ap-bg-index", daemon=True).start()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Cortex standalone HTTP server")
     parser.add_argument("--type", required=True, choices=["unified", "methodology"])
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
+
+    # AST overlay auto-wiring (ADR-0046). Silent no-op when AP isn't
+    # installed or when the user has pre-configured the env.
+    if args.type == "unified":
+        _auto_enable_ap()
 
     ui_root = _get_ui_root()
     store = None
@@ -247,11 +385,16 @@ def main() -> None:
     ).start()
 
     if args.type == "unified" and store is not None:
-        threading.Thread(
-            target=build_and_cache_graph,
-            args=(store, None),
-            daemon=True,
-        ).start()
+        # Kick the two-phase background builder (baseline → AST) so
+        # ``/api/graph`` can serve the baseline within seconds and the
+        # AST overlay becomes available minutes later without
+        # blocking the first paint. Progress surfaces at
+        # ``/api/graph/progress``.
+        from mcp_server.server.http_standalone_graph import (
+            _kick_background_build,
+        )
+
+        _kick_background_build(store, None)
 
     print(f"[cortex] Standalone {args.type} server at {url}", file=sys.stderr)
     server.serve_forever()
