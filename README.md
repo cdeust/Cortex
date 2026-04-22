@@ -281,7 +281,7 @@ Launch with `/cortex-visualize`. The default landing view is **Graph** — a liv
 <img src="docs/assets/cortex-workflow-graph.png" width="100%" alt="Cortex workflow graph — many brain-region clouds, one per project, with inner radial shells grouping nodes by Claude surface (setup → tools → files → discussions → memories)" />
 </p>
 
-**Graph View — the Claude workflow map.** Each project becomes a **cloud of nodes** around one gold domain hub. Inside every cloud, nodes are arranged in five concentric levels by the Claude surface that produced them:
+**Graph View — the Claude workflow map.** Each project becomes a **cloud of nodes** around one gold domain hub. Inside every cloud, nodes are arranged in six concentric levels by the Claude surface (or the code itself) that produced them:
 
 | Level | What's there | How to click through |
 |---|---|---|
@@ -290,8 +290,11 @@ Launch with `/cortex-visualize`. The default landing view is **Graph** — a liv
 | **L3 · Files** | Every file Claude ever opened, read, edited, searched, or referenced in a Bash command — colored by primary tool (green edited / cyan read / fuchsia searched / orange bash-only) | Click for `first_seen`, `last_accessed`, `last_modified`, and a **See diff against HEAD** button that renders new/modified/deleted/historical content inline |
 | **L4 · Discussions** | One node per Claude Code session | Click for `started_at`, duration, message count, and a **View full conversation** button that replays every turn (including tool calls) |
 | **L5 · Memories** | Persistent memories, colored by consolidation stage (labile → early LTP → late LTP → consolidated → semantic) | Click for full content, tags, and every scientific measurement |
+| **L6 · AST symbols** | The code itself — functions (cyan), methods (sky), classes/structs/enums/traits/protocols (violet), modules/packages/namespaces (amber), constants/fields/properties (slate) — parsed from 27 languages and laid out as petals around their parent file in L3 | Click for qualified name, symbol type, parent file, and the named edges: `defined_in`, `calls`, `imports`, `member_of`. A symbol imported by two projects sits in the space between their clouds, making `what connects to what` literally the shape of the code |
 
-Thin dashed **violet threads** between clouds mark cross-domain files and shared MCPs. A single **grouped filter select** (`All` / `L1–L5` / by kind / by file cluster / `Cross-domain`) isolates any slice; a text search narrows within that slice.
+**What L6 is for.** L5 and below tell you *what Claude did*; L6 tells you *what the code is*. Once AST symbols are on the map, three things become visible for free: (1) **shared code** — any function, class or module referenced by two projects drifts into the inter-project gap, so reused primitives reveal themselves without a dependency audit; (2) **impact** — clicking a symbol surfaces every caller, importer, and member edge, so "if I change this, what breaks?" is a graph neighbourhood, not a grep; (3) **the picture of the codebase itself** — because the forces come from real `defined_in` / `calls` / `imports` / `member_of` edges, a dense petal around a file means a fat internal API and a thin one means a leaf module. Click any node and the side panel lists the *named* callers, imports, and members instead of a bare count. L6 nodes are the only ones without a fixed radial slot — they orbit their parent file, so the layer collapses cleanly when you filter it out.
+
+Thin dashed **violet threads** between clouds mark cross-domain files and shared MCPs. A single **grouped filter select** (`All` / `L1–L6` / by kind / by file cluster / by AST edge kind / `Cross-domain`) isolates any slice; a text search narrows within that slice.
 
 Everything Claude touches live is visible: Edit, Write, Read, Grep, Glob, NotebookRead, NotebookEdit, and Bash paths inside commands — captured via the `PostToolUse` hook with compact markers so the graph rebuilds every ~2 minutes with fresh data.
 
