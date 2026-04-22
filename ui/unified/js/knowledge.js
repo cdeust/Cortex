@@ -302,22 +302,29 @@
     // Cache by data-identity so repeated card renders reuse the index.
     var key = data.nodes.length + ':' + (data.edges ? data.edges.length : 0);
     if (_symIndexCache && _symIndexKey === key) return _symIndexCache;
-    var byPath = {};     // path/basename → [symbol nodes]
-    var byLabel = {};    // lowercase-label → [symbol nodes]
+    // Object.create(null) — no prototype, so a key like "constructor"
+    // or "toString" doesn't short-circuit to the builtin function.
+    var byPath = Object.create(null);
+    var byLabel = Object.create(null);
     data.nodes.forEach(function (n) {
       if (n.kind !== 'symbol' && n.type !== 'symbol') return;
       var p = n.path || '';
       if (p) {
-        (byPath[p] = byPath[p] || []).push(n);
+        if (!byPath[p]) byPath[p] = [];
+        byPath[p].push(n);
         var base = p.split('/').pop();
-        if (base && base !== p) (byPath[base] = byPath[base] || []).push(n);
+        if (base && base !== p) {
+          if (!byPath[base]) byPath[base] = [];
+          byPath[base].push(n);
+        }
       }
       // Case-sensitive key — function names in memories are usually
       // written with their original casing (`appendGraphDelta`), and
       // case-sensitive matching avoids "do" matching every "Do" verb.
       var lbl = (n.label || '').trim();
       if (lbl && lbl.length >= 4) {
-        (byLabel[lbl] = byLabel[lbl] || []).push(n);
+        if (!byLabel[lbl]) byLabel[lbl] = [];
+        byLabel[lbl].push(n);
       }
     });
     _symIndexCache = { byPath: byPath, byLabel: byLabel };
@@ -347,7 +354,7 @@
     var idx = _buildSymbolIndex();
     if (!idx) return [];
     var refs = [];
-    var seen = {};
+    var seen = Object.create(null);
     // File-based matches (cheap, exact).
     var fileRefs = [];
     if (mem.path) fileRefs.push(mem.path);
