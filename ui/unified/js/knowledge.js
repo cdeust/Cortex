@@ -312,55 +312,81 @@
         var base = p.split('/').pop();
         if (base && base !== p) (byPath[base] = byPath[base] || []).push(n);
       }
+      // Case-sensitive key — function names in memories are usually
+      // written with their original casing (`appendGraphDelta`), and
+      // case-sensitive matching avoids "do" matching every "Do" verb.
       var lbl = (n.label || '').trim();
-      if (lbl && lbl.length >= 3) {
-        var k = lbl.toLowerCase();
-        (byLabel[k] = byLabel[k] || []).push(n);
+      if (lbl && lbl.length >= 4) {
+        (byLabel[lbl] = byLabel[lbl] || []).push(n);
       }
     });
     _symIndexCache = { byPath: byPath, byLabel: byLabel };
     _symIndexKey = key;
     return _symIndexCache;
   }
+  function _isWordChar(ch) {
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+           (ch >= '0' && ch <= '9') || ch === '_';
+  }
+  function _hasWordMatch(hay, needle) {
+    // Case-sensitive indexOf + manual word-boundary check — avoids
+    // the 4000-per-card RegExp churn that was freezing the tab.
+    if (!needle) return false;
+    var idx = 0;
+    while (true) {
+      var pos = hay.indexOf(needle, idx);
+      if (pos === -1) return false;
+      var before = pos === 0 ? '' : hay.charAt(pos - 1);
+      var after = pos + needle.length >= hay.length ? '' : hay.charAt(pos + needle.length);
+      if (!_isWordChar(before) && !_isWordChar(after)) return true;
+      idx = pos + 1;
+    }
+  }
+
   function resolveMemorySymbols(mem, maxN) {
     var idx = _buildSymbolIndex();
     if (!idx) return [];
     var refs = [];
-    // File-based matches.
+    var seen = {};
+    // File-based matches (cheap, exact).
     var fileRefs = [];
     if (mem.path) fileRefs.push(mem.path);
     if (Array.isArray(mem.file_refs)) fileRefs = fileRefs.concat(mem.file_refs);
     if (Array.isArray(mem.fileRefs)) fileRefs = fileRefs.concat(mem.fileRefs);
-    var seen = {};
-    fileRefs.forEach(function (fp) {
-      if (!fp) return;
+    for (var f = 0; f < fileRefs.length && refs.length < (maxN || 12); f++) {
+      var fp = fileRefs[f];
+      if (!fp) continue;
       var hits = idx.byPath[fp] || [];
       var base = fp.split('/').pop();
-      if (base && base !== fp) hits = hits.concat(idx.byPath[base] || []);
-      hits.forEach(function (s) {
-        if (seen[s.id]) return;
+      if (base && base !== fp && idx.byPath[base]) hits = hits.concat(idx.byPath[base]);
+      for (var h = 0; h < hits.length && refs.length < (maxN || 12); h++) {
+        var s = hits[h];
+        if (seen[s.id]) continue;
         seen[s.id] = 1;
         refs.push({ node: s, via: 'file' });
-      });
-    });
-    // Label-based matches in body / content / tags.
-    var hay = ((mem.content || mem.body || '') + ' ' +
-               ((mem.tags || []).join(' '))).toLowerCase();
+      }
+    }
+    if (refs.length >= (maxN || 12)) return refs.slice(0, maxN || 12);
+
+    // Label-based matches — iterate labels, not characters. Cap at
+    // 1500 labels and stop as soon as we've filled maxN to keep the
+    // per-card cost bounded on 10k-symbol graphs.
+    var hay = (mem.content || mem.body || '') + ' ' +
+              ((mem.tags || []).join(' '));
     if (hay.length > 4) {
       var labelKeys = Object.keys(idx.byLabel);
-      // Guard — avoid O(N·M) on very large inventories; cap the scan.
-      var cap = Math.min(labelKeys.length, 4000);
+      var cap = Math.min(labelKeys.length, 1500);
       for (var i = 0; i < cap && refs.length < (maxN || 12); i++) {
         var k = labelKeys[i];
-        if (hay.indexOf(k) === -1) continue;
-        // Word-boundary sanity — avoid matching "set" inside "setup".
-        var re = new RegExp('(^|[^A-Za-z0-9_])' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z0-9_]|$)');
-        if (!re.test(hay)) continue;
-        idx.byLabel[k].forEach(function (s) {
-          if (seen[s.id]) return;
-          seen[s.id] = 1;
-          refs.push({ node: s, via: 'label' });
-        });
+        if (hay.indexOf(k) === -1) continue;   // cheap pre-filter
+        if (!_hasWordMatch(hay, k)) continue;  // word-boundary check
+        var syms = idx.byLabel[k];
+        for (var j = 0; j < syms.length && refs.length < (maxN || 12); j++) {
+          var sym = syms[j];
+          if (seen[sym.id]) continue;
+          seen[sym.id] = 1;
+          refs.push({ node: sym, via: 'label' });
+        }
       }
     }
     return refs.slice(0, maxN || 12);
