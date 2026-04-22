@@ -11,12 +11,37 @@
 
   var SETUP_KINDS = { skill: 1, hook: 1, command: 1, agent: 1 };
   var LAYER_KINDS = {
-    L1: { skill: 1, hook: 1, command: 1, agent: 1, domain: 1 },
+    L1: { skill: 1, hook: 1, command: 1, agent: 1, mcp: 1, domain: 1 },
     L2: { tool_hub: 1, domain: 1 },
     L3: { file: 1, domain: 1 },
     L4: { discussion: 1, domain: 1 },
     L5: { memory: 1, domain: 1 },
+    L6: { symbol: 1, entity: 1, domain: 1 },
   };
+  // Edge-kind filter → include every node that is a source or target
+  // of an edge of this kind (and domain anchors for scaffolding).
+  var AST_EDGE_KINDS = { defined_in: 1, calls: 1, imports: 1, member_of: 1 };
+
+  // Precomputed on each filter change: for edge-based filters, the
+  // set of node ids that touch the chosen edge kind. Rebuilt lazily.
+  var _edgeHits = null;
+  var _edgeHitsKey = '';
+
+  function rebuildEdgeHits(edgeKind, ctx) {
+    var key = edgeKind + '@' + (ctx.edges ? ctx.edges.length : 0);
+    if (_edgeHits && _edgeHitsKey === key) return _edgeHits;
+    var hits = {};
+    var edges = ctx.edges || [];
+    for (var i = 0; i < edges.length; i++) {
+      var e = edges[i];
+      if (e.kind !== edgeKind) continue;
+      var sId = (typeof e.source === 'object') ? e.source.id : e.source;
+      var tId = (typeof e.target === 'object') ? e.target.id : e.target;
+      hits[sId] = 1; hits[tId] = 1;
+    }
+    _edgeHits = hits; _edgeHitsKey = key;
+    return hits;
+  }
 
   function predicate(n, ctx) {
     // Domain filter: include the node if it belongs to the selected
@@ -45,6 +70,14 @@
           // keep domain anchors so the cloud still has its hub.
         } else if (n.kind !== 'file' || n.primary_cluster !== f.slice(5)) {
           return false;
+        }
+      } else if (f.indexOf('edge:') === 0) {
+        var ek = f.slice(5);
+        if (n.kind === 'domain') {
+          // keep domain hubs so context remains readable.
+        } else if (AST_EDGE_KINDS[ek]) {
+          var hits = rebuildEdgeHits(ek, ctx);
+          if (!hits[n.id]) return false;
         }
       } else if (f === 'cross-domain') {
         if (n.kind === 'domain') {

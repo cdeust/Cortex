@@ -110,7 +110,9 @@
 .tt-diff-truncated { color:var(--text-dim); font-style:italic; font-size:7px; margin-top:2px; }
 
 /* Legend */
-#legend { position: fixed; bottom: 24px; left: 24px; display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 3px 14px; padding: 10px 14px; max-height: 70vh; overflow-y: auto; z-index: 100; background: rgba(10,10,15,0.82); border: 1px solid var(--border);  border-radius: 4px; }
+#legend { position: fixed; bottom: 24px; left: 24px; display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 3px 14px; padding: 10px 14px; max-height: 85vh; overflow-y: auto; z-index: 100; background: rgba(10,10,15,0.82); border: 1px solid var(--border);  border-radius: 4px; scrollbar-width: thin; scrollbar-color: rgba(120,200,220,0.25) transparent; }
+#legend::-webkit-scrollbar { width: 6px; }
+#legend::-webkit-scrollbar-thumb { background: rgba(120,200,220,0.25); border-radius: 3px; }
 .leg-section { grid-column: 1 / -1; margin-top: 6px; padding-top: 4px; font-size: 8px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-dim); border-top: 1px solid rgba(160,150,140,0.12); }
 .leg-section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 .leg-item { display: flex; align-items: center; gap: 6px; font-size: 8.5px; color: var(--text-dim); letter-spacing: 0.6px; text-transform: none; cursor: default; }

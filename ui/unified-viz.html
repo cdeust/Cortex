@@ -187,6 +187,7 @@
       <option value="L3">L3 — files touched by tools</option>
       <option value="L4">L4 — discussions</option>
       <option value="L5">L5 — memories</option>
+      <option value="L6">L6 — AST symbols (functions · methods · classes)</option>
     </optgroup>
     <optgroup label="By kind">
       <option value="kind:skill">Skills only</option>
@@ -194,12 +195,20 @@
       <option value="kind:hook">Hooks only</option>
       <option value="kind:agent">Agents only</option>
       <option value="kind:mcp">MCPs only</option>
+      <option value="kind:symbol">Symbols only</option>
+      <option value="kind:entity">Entities only</option>
     </optgroup>
     <optgroup label="By file cluster">
       <option value="file:edit_write">Files edited / written</option>
       <option value="file:read">Files read only</option>
       <option value="file:grep_glob">Files matched by Grep / Glob</option>
       <option value="file:bash">Files touched only by Bash</option>
+    </optgroup>
+    <optgroup label="By AST edge">
+      <option value="edge:defined_in">defined_in — symbol ↔ file</option>
+      <option value="edge:calls">calls — symbol ↔ symbol</option>
+      <option value="edge:imports">imports — file ↔ symbol</option>
+      <option value="edge:member_of">member_of — method ↔ class</option>
     </optgroup>
     <optgroup label="Structural">
       <option value="cross-domain">Cross-domain (shared)</option>
