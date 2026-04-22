@@ -19,7 +19,8 @@
 <p align="center">
   <strong>Companion projects:</strong><br>
   <a href="https://github.com/cdeust/cortex-know-when-to-stop-training-model">cortex-beam-abstain</a> — community-trained retrieval abstention model for RAG systems<br>
-  <a href="https://github.com/cdeust/zetetic-team-subagents">zetetic-team-subagents</a> — specialist Claude Code agents Cortex orchestrates with
+  <a href="https://github.com/cdeust/zetetic-team-subagents">zetetic-team-subagents</a> — specialist Claude Code agents Cortex orchestrates with<br>
+  <a href="https://github.com/cdeust/ai-architect">ai-architect</a> — automated 11-stage pipeline (findings → PRs) that Cortex drives via <code>run_pipeline</code>
 </p>
 
 ---
