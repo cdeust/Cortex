@@ -483,7 +483,7 @@
   position: fixed; inset: 0;
   background: rgba(4,4,8,0.75);
   z-index: 299;
-  backdrop-filter: blur(6px);
+  
 }
 
 /* Empty state */
@@ -1939,7 +1939,7 @@ figure figcaption, .wiki-caption {
   font-weight: 500 !important;
   letter-spacing: -0.01em !important;
 }
-#kv-backdrop { background: rgba(0,0,0,0.6) !important; backdrop-filter: blur(6px); }
+#kv-backdrop { background: rgba(0,0,0,0.6) !important;  }
 
 /* ─── Wiki view ───────────────────────────────────────────────── */
 #wiki-container {
@@ -2212,8 +2212,8 @@ figure figcaption, .wiki-caption {
   background: color-mix(in oklab, var(--ink-1) 96%, transparent) !important;
   border: 1px solid var(--line) !important;
   border-radius: var(--r-lg) var(--r-lg) 0 0 !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
+  
+  -webkit-
   font-family: var(--sans) !important;
   color: var(--fg-0) !important;
 }
@@ -2281,7 +2281,7 @@ figure figcaption, .wiki-caption {
   background: color-mix(in oklab, var(--ink-1) 96%, transparent) !important;
   border: 1px solid var(--line) !important;
   border-radius: var(--r-md) !important;
-  backdrop-filter: blur(18px) !important;
+  
   font-family: var(--sans) !important;
   color: var(--fg-1) !important;
 }
@@ -2348,11 +2348,12 @@ figure figcaption, .wiki-caption {
 .conv-tool-call summary { font-family: var(--mono) !important; color: var(--amber) !important; font-size: 11px !important; letter-spacing: 0.04em !important; }
 .conv-tool-io { font-family: var(--mono) !important; font-size: 10.5px !important; background: var(--ink-2) !important; border: 1px solid var(--hair) !important; color: var(--fg-2) !important; }
 
-/* ─── Graph view deep-space canvas backdrop (match design) ───── */
+/* Graph container — pure ``--ink-0`` black. The former radial gradient
+   created a brightness bias from center to edge that, combined with
+   the d3-zoom transform on the SVG/canvas child, left a visible
+   rectangular compositing edge over the simulation. */
 #graph-container {
-  background:
-    radial-gradient(1200px 800px at 50% 55%, oklch(14% 0.02 260) 0%, oklch(10% 0.015 265) 42%, oklch(7% 0.01 270) 78%, oklch(5% 0.008 270) 100%),
-    var(--ink-0) !important;
+  background: var(--ink-0) !important;
 }
 
 /* ─── Orbitron cleanup — everywhere it leaks in v2 CSS ───────── */

@@ -46,7 +46,11 @@
       if (node.nodeType !== 1) continue;
       if (node.id === _wrapperId) continue;
       if (node.classList && node.classList.contains('wfg-panel')) continue;
-      node.style.display = 'none';
+      // display:none leaves the element in the DOM and (in Safari) can
+      // still produce a compositing layer while it's detached-rendering.
+      // remove() evicts the element entirely so there's no hidden box.
+      if (node.parentNode) node.parentNode.removeChild(node);
+      i--;
     }
     if (window.JUG && typeof JUG.getGraph === 'function') {
       var g = JUG.getGraph();
@@ -54,6 +58,18 @@
         try { g.pauseAnimation(); } catch (_) {}
       }
     }
+  }
+
+  // Continuously evict legacy children that re-materialise after first
+  // render (the force-graph library and JUG.setGraphData both re-mount
+  // canvases asynchronously). Run while the workflow graph is the
+  // active renderer.
+  var _observer = null;
+  function watchLegacy() {
+    var host = document.getElementById('graph-container');
+    if (!host || _observer) return;
+    _observer = new MutationObserver(function () { hideLegacyRenderer(); });
+    _observer.observe(host, { childList: true });
   }
 
   function render(data) {
@@ -71,6 +87,7 @@
       }
       _handle = JUG.renderWorkflowGraph(wrapper, data);
       _lastPayload = data;
+      watchLegacy();
       console.log(LOG, 'rendered', (data.nodes || []).length, 'nodes /',
                   (data.edges || data.links || []).length, 'edges');
       return true;

@@ -13,11 +13,13 @@
       });
     });
 
-    // Set Wiki as default view on load — force emit by toggling
+    // Graph is the default landing view — the wiki is still under
+    // active restructuring and the workflow graph is the canonical
+    // answer to "what did Claude do in this project".
     setTimeout(function() {
       JUG.state.activeView = '_init';
-      JUG.state.activeView = 'wiki';
-      toggleFilterBarVisibility('wiki');
+      JUG.state.activeView = 'graph';
+      toggleFilterBarVisibility('graph');
     }, 0);
 
     // ── Filter buttons (source type) ──
