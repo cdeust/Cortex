@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/cortex-workflow-graph.png" alt="Cortex workflow graph — every project becomes a brain-region cloud; nodes cluster by the Claude surface that touched them (skills, hooks, commands, agents, tools, files, memories, discussions); thin long-range threads mark shared files and shared MCPs between clouds" width="100%"/>
+  <img src="docs/assets/cortex-workflow-graph.png" alt="Cortex workflow graph — each project becomes a dense brain-region cloud whose shape IS its code: files, commands, agents, memories and AST symbols (functions, methods, classes, modules, constants across 27 languages) are pulled into position by the real edges between them (defined_in, calls, imports, member_of, tool_used_file). Symbols touched by two projects sit in the inter-project space between their hubs; long threads mark shared files and MCPs." width="100%"/>
 </p>
 
 <p align="center">
@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/tests-2500_passing-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/citations-41_papers-orange.svg" alt="Citations">
-  <img src="https://img.shields.io/badge/version-3.14.0-brightgreen.svg" alt="Version 3.14.0">
+  <img src="https://img.shields.io/badge/version-3.14.1-brightgreen.svg" alt="Version 3.14.1">
   <a href="https://glama.ai/mcp/servers/cdeust/Cortex"><img src="https://glama.ai/mcp/servers/cdeust/Cortex/badges/score.svg" alt="Glama score: security A, license A"></a>
 </p>
 
