@@ -78,22 +78,41 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
     then runs ``git rev-parse --show-toplevel`` from there. If nothing
     along the ancestry exists, falls back to the server's cwd repo so
     that a tracked-then-deleted file can still be recovered from history.
+
+    Security: ``name`` is user-controlled (via ``?name=`` query param).
+    We normalize it with ``os.path.normpath`` (collapses ``..`` and
+    ``//``), reject null bytes and empty input, and cap the ancestor
+    walk at 64 levels to block pathological inputs. The walk only
+    performs ``is_dir()`` / ``rev-parse`` on the normalized ancestry —
+    never reads file content — and any read against the resulting root
+    goes through ``git_diff._safe_join`` (CWE-22 mitigation).
     """
+    import os
     from pathlib import Path
 
     try:
-        p = Path(name.strip().strip("\"'`"))
+        clean = name.strip().strip("\"'`")
+        if not clean or "\x00" in clean:
+            return find_git_root()
+        # Normalize to collapse ``..`` / ``//`` segments before use.
+        p = Path(os.path.normpath(clean))
     except (ValueError, OSError):
         return find_git_root()
 
     if p.is_absolute():
         # Walk up the ancestry until we hit an existing directory.
+        # Cap depth to 64 — far deeper than any real filesystem.
         cursor = p.parent
-        while cursor != cursor.parent:
-            if cursor.exists() and cursor.is_dir():
-                root = find_git_root(cursor)
-                if root is not None:
-                    return root
+        for _ in range(64):
+            if cursor == cursor.parent:
+                break
+            try:
+                if cursor.is_dir():
+                    root = find_git_root(cursor)
+                    if root is not None:
+                        return root
+                    break
+            except OSError:
                 break
             cursor = cursor.parent
     return find_git_root()

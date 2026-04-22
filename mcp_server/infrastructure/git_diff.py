@@ -88,16 +88,28 @@ def resolve_file(name: str, git_root: Path) -> str | None:
     return None
 
 
+def _safe_join(root: Path, relative: str) -> Path | None:
+    """Join ``relative`` onto ``root`` and confirm the result stays inside.
+
+    Returns the resolved absolute path or ``None`` if the join would
+    escape ``root``. Used to prove path-containment to static analyzers
+    (CodeQL ``py/path-injection``) even when ``relative`` originated
+    from git's own tracked-file list — the check is defensive: a
+    successful return means the path is provably inside the repo.
+    """
+    try:
+        joined = (root / relative).resolve()
+        joined.relative_to(root.resolve())
+        return joined
+    except (OSError, ValueError):
+        return None
+
+
 def _read_safe(git_root: Path, relative: str) -> str | None:
     """Read a file inside ``git_root`` safely. None for anything outside."""
     try:
-        p = (git_root / relative).resolve()
-        root_r = git_root.resolve()
-        if not p.is_file():
-            return None
-        try:
-            p.relative_to(root_r)
-        except ValueError:
+        p = _safe_join(git_root, relative)
+        if p is None or not p.is_file():
             return None
         return p.read_text(errors="replace")
     except OSError:
@@ -118,7 +130,18 @@ def _cascade_for_tracked(
     raw = git_cmd_safe("diff", ["--staged", "--", safe_path], git_root)
     if raw:
         return build_result(safe_path, "staged", raw, max_lines)
-    abs_check = git_root / safe_path
+    # ``safe_path`` is already whitelisted against ``git ls-files``, but
+    # ``_safe_join`` re-validates containment so the path-probe below is
+    # provably inside the repo root (silences py/path-injection).
+    abs_check = _safe_join(git_root, safe_path)
+    if abs_check is None:
+        return {
+            "file": safe_path,
+            "diff_type": "none",
+            "lines": [],
+            "truncated": False,
+            "reason": "path escaped repo root — refusing to resolve",
+        }
     if safe_path in tracked and not abs_check.exists():
         content = git_cmd_safe("show", ["HEAD:" + safe_path], git_root)
         if content:
