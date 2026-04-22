@@ -32,11 +32,23 @@ from mcp_server.core.workflow_graph_builder_relational import (
     ingest_skill_usage,
 )
 from mcp_server.core.workflow_graph_schema import (
-    AGENT_COLOR, COMMAND_COLOR, DISCUSSION_COLOR, DOMAIN_COLOR,
-    GLOBAL_DOMAIN_ID, HOOK_COLOR, MEMORY_STAGE_COLORS,
-    SKILL_COLOR, TOOL_HUB_COLORS, EdgeKind, NodeIdFactory, NodeKind,
-    ToolKind, WorkflowEdge, WorkflowNode,
-    classify_primary_tool, primary_tool_color,
+    AGENT_COLOR,
+    COMMAND_COLOR,
+    DISCUSSION_COLOR,
+    DOMAIN_COLOR,
+    GLOBAL_DOMAIN_ID,
+    HOOK_COLOR,
+    MEMORY_STAGE_COLORS,
+    SKILL_COLOR,
+    TOOL_HUB_COLORS,
+    EdgeKind,
+    NodeIdFactory,
+    NodeKind,
+    ToolKind,
+    WorkflowEdge,
+    WorkflowNode,
+    classify_primary_tool,
+    primary_tool_color,
 )
 
 _TOOL_NAME_TO_ENUM = {t.value: t for t in ToolKind}
@@ -44,15 +56,17 @@ _TOOL_NAME_LOWER = {t.value.lower(): t for t in ToolKind}
 
 # Scientific-measurement fields forwarded verbatim to memory nodes so
 # the Knowledge / Board cards can render them without a second PG hop.
-_MEMORY_SCIENTIFIC_KEYS = tuple((
-    "heat_base arousal emotional_valence dominant_emotion importance "
-    "surprise_score confidence access_count useful_count replay_count "
-    "reconsolidation_count plasticity stability excitability "
-    "hippocampal_dependency schema_match_score schema_id separation_index "
-    "interference_score encoding_strength hours_in_stage stage_entered_at "
-    "last_accessed no_decay is_protected is_stale is_benchmark is_global "
-    "store_type compression_level compressed"
-).split())
+_MEMORY_SCIENTIFIC_KEYS = tuple(
+    (
+        "heat_base arousal emotional_valence dominant_emotion importance "
+        "surprise_score confidence access_count useful_count replay_count "
+        "reconsolidation_count plasticity stability excitability "
+        "hippocampal_dependency schema_match_score schema_id separation_index "
+        "interference_score encoding_strength hours_in_stage stage_entered_at "
+        "last_accessed no_decay is_protected is_stale is_benchmark is_global "
+        "store_type compression_level compressed"
+    ).split()
+)
 
 
 def _require(rec: dict, key: str, ctx: str):
@@ -80,22 +94,33 @@ class WorkflowGraphBuilder:
         self._file_domains: dict[str, set[str]] = defaultdict(set)
         self._file_timestamps: dict[str, dict[str, str | None]] = {}
 
-    def build(self, tool_events, skill_paths, hook_defs, agent_events,
-              command_events, memories, discussions,
-              discussion_file_events=None, skill_usage_events=None,
-              command_file_events=None, mcp_usage_events=None,
-              discussion_tool_events=None, discussion_agent_events=None,
-              discussion_command_events=None):
+    def build(
+        self,
+        tool_events,
+        skill_paths,
+        hook_defs,
+        agent_events,
+        command_events,
+        memories,
+        discussions,
+        discussion_file_events=None,
+        skill_usage_events=None,
+        command_file_events=None,
+        mcp_usage_events=None,
+        discussion_tool_events=None,
+        discussion_agent_events=None,
+        discussion_command_events=None,
+    ):
         self._ensure_domain(GLOBAL_DOMAIN_ID, "global")
         # Phase 1: node ingestion (self-bound).
         for events, fn in (
-            (tool_events,    self._ingest_tool_event),
-            (skill_paths,    self._ingest_skill),
-            (hook_defs,      self._ingest_hook),
-            (agent_events,   self._ingest_agent),
+            (tool_events, self._ingest_tool_event),
+            (skill_paths, self._ingest_skill),
+            (hook_defs, self._ingest_hook),
+            (agent_events, self._ingest_agent),
             (command_events, self._ingest_command),
-            (memories,       self._ingest_memory),
-            (discussions,    self._ingest_discussion),
+            (memories, self._ingest_memory),
+            (discussions, self._ingest_discussion),
         ):
             for ev in events or []:
                 fn(ev)
@@ -103,12 +128,12 @@ class WorkflowGraphBuilder:
         # Phase 2: relational edges (builder-bound helpers — see
         # ``workflow_graph_builder_relational``; all assume file nodes exist).
         for events, fn in (
-            (discussion_file_events,    ingest_discussion_file),
-            (command_file_events,       ingest_command_file),
-            (skill_usage_events,        ingest_skill_usage),
-            (mcp_usage_events,          ingest_mcp_usage),
-            (discussion_tool_events,    ingest_discussion_tool),
-            (discussion_agent_events,   ingest_discussion_agent),
+            (discussion_file_events, ingest_discussion_file),
+            (command_file_events, ingest_command_file),
+            (skill_usage_events, ingest_skill_usage),
+            (mcp_usage_events, ingest_mcp_usage),
+            (discussion_tool_events, ingest_discussion_tool),
+            (discussion_agent_events, ingest_discussion_agent),
             (discussion_command_events, ingest_discussion_command),
         ):
             for ev in events or []:
@@ -130,9 +155,12 @@ class WorkflowGraphBuilder:
     def _ensure_domain(self, domain_id, label=None):
         if domain_id not in self._nodes:
             self._nodes[domain_id] = WorkflowNode(
-                id=domain_id, kind=NodeKind.DOMAIN,
+                id=domain_id,
+                kind=NodeKind.DOMAIN,
                 label=label or domain_id.replace("domain:", ""),
-                color=DOMAIN_COLOR, domain_id=domain_id, size=5.0,
+                color=DOMAIN_COLOR,
+                domain_id=domain_id,
+                size=5.0,
             )
         return domain_id
 
@@ -143,9 +171,13 @@ class WorkflowGraphBuilder:
             if hub_id in self._nodes:
                 continue
             node = WorkflowNode(
-                id=hub_id, kind=NodeKind.TOOL_HUB, label=tool.value,
-                color=TOOL_HUB_COLORS[tool], domain_id=domain_id,
-                size=2.5, tool=tool,
+                id=hub_id,
+                kind=NodeKind.TOOL_HUB,
+                label=tool.value,
+                color=TOOL_HUB_COLORS[tool],
+                domain_id=domain_id,
+                size=2.5,
+                tool=tool,
             )
             self._nodes[hub_id] = node
             self._edges.append(self._in_domain(hub_id, domain_id))
@@ -161,8 +193,13 @@ class WorkflowGraphBuilder:
         if node_id in self._nodes:
             return False
         self._nodes[node_id] = WorkflowNode(
-            id=node_id, kind=kind, label=label, color=color,
-            domain_id=domain_id, size=size, **extra,
+            id=node_id,
+            kind=kind,
+            label=label,
+            color=color,
+            domain_id=domain_id,
+            size=size,
+            **extra,
         )
         self._edges.append(self._in_domain(node_id, domain_id))
         return True
@@ -181,11 +218,14 @@ class WorkflowGraphBuilder:
         self._file_tool_counts[path][tool] += count
         self._file_domains[path].add(dom)
         self._track_file_timestamp(path, tool, ev)
-        self._edges.append(WorkflowEdge(
-            source=NodeIdFactory.tool_hub_id(dom, tool),
-            target=NodeIdFactory.file_id(path),
-            kind=EdgeKind.TOOL_USED_FILE, weight=float(count),
-        ))
+        self._edges.append(
+            WorkflowEdge(
+                source=NodeIdFactory.tool_hub_id(dom, tool),
+                target=NodeIdFactory.file_id(path),
+                kind=EdgeKind.TOOL_USED_FILE,
+                weight=float(count),
+            )
+        )
 
     def _track_file_timestamp(self, path: str, tool: ToolKind, ev: dict) -> None:
         """Accumulate per-file first_seen / last_accessed / last_modified.
@@ -199,18 +239,17 @@ class WorkflowGraphBuilder:
         if not first_ts and not last_ts:
             return
         slot = self._file_timestamps.setdefault(
-            path, {"first_seen": None, "last_accessed": None,
-                   "last_modified": None},
+            path,
+            {"first_seen": None, "last_accessed": None, "last_modified": None},
         )
-        if first_ts and (slot["first_seen"] is None
-                         or first_ts < slot["first_seen"]):
+        if first_ts and (slot["first_seen"] is None or first_ts < slot["first_seen"]):
             slot["first_seen"] = first_ts
-        if last_ts and (slot["last_accessed"] is None
-                        or last_ts > slot["last_accessed"]):
+        if last_ts and (
+            slot["last_accessed"] is None or last_ts > slot["last_accessed"]
+        ):
             slot["last_accessed"] = last_ts
         if tool in (ToolKind.EDIT, ToolKind.WRITE) and last_ts:
-            if (slot["last_modified"] is None
-                    or last_ts > slot["last_modified"]):
+            if slot["last_modified"] is None or last_ts > slot["last_modified"]:
                 slot["last_modified"] = last_ts
 
     def _finalize_files(self):
@@ -222,11 +261,14 @@ class WorkflowGraphBuilder:
                 raise ValueError(f"file {path} has no domain membership")
             ts = self._file_timestamps.get(path, {})
             self._nodes[fid] = WorkflowNode(
-                id=fid, kind=NodeKind.FILE,
+                id=fid,
+                kind=NodeKind.FILE,
                 label=path.rsplit("/", 1)[-1] or path,
                 color=primary_tool_color(cluster),
-                domain_id=doms[0], size=1.5,
-                primary_cluster=cluster, path=path,
+                domain_id=doms[0],
+                size=1.5,
+                primary_cluster=cluster,
+                path=path,
                 extra_domain_ids=doms[1:],
                 first_seen=ts.get("first_seen"),
                 last_accessed=ts.get("last_accessed"),
@@ -243,16 +285,24 @@ class WorkflowGraphBuilder:
         heat = float(mem.get("heat") or mem.get("heat_base") or 0.0)
         content = mem.get("content") or ""
         tags = mem.get("tags") if isinstance(mem.get("tags"), list) else []
-        science = {k: mem[k] for k in _MEMORY_SCIENTIFIC_KEYS
-                   if k in mem and mem[k] is not None}
+        science = {
+            k: mem[k]
+            for k in _MEMORY_SCIENTIFIC_KEYS
+            if k in mem and mem[k] is not None
+        }
         self._add_child(
-            NodeIdFactory.memory_id(pg_id), NodeKind.MEMORY,
+            NodeIdFactory.memory_id(pg_id),
+            NodeKind.MEMORY,
             content[:60].replace("\n", " ") or f"memory {pg_id}",
             MEMORY_STAGE_COLORS.get(stage, MEMORY_STAGE_COLORS["episodic"]),
-            dom, 1.0 + min(3.0, heat * 3.0), stage=stage,
+            dom,
+            1.0 + min(3.0, heat * 3.0),
+            stage=stage,
             body=content[:4000] if content else None,
-            heat=heat, tags=[str(t) for t in tags][:20],
-            created_at=mem.get("created_at"), **science,
+            heat=heat,
+            tags=[str(t) for t in tags][:20],
+            created_at=mem.get("created_at"),
+            **science,
         )
 
     def _ingest_discussion(self, dc):
@@ -261,10 +311,14 @@ class WorkflowGraphBuilder:
         self._ensure_domain(dom)
         mc = int(dc.get("message_count") or 0)
         self._add_child(
-            f"discussion:{sid}", NodeKind.DISCUSSION,
+            f"discussion:{sid}",
+            NodeKind.DISCUSSION,
             dc.get("title") or sid[:8],
-            DISCUSSION_COLOR, dom, 1.0 + min(3.0, mc * 0.02),
-            session_id=sid, count=mc,
+            DISCUSSION_COLOR,
+            dom,
+            1.0 + min(3.0, mc * 0.02),
+            session_id=sid,
+            count=mc,
             started_at=dc.get("started_at"),
             last_activity=dc.get("last_activity"),
             duration_ms=dc.get("duration_ms"),
@@ -273,18 +327,31 @@ class WorkflowGraphBuilder:
     def _ingest_skill(self, sk):
         name = str(_require(sk, "name", "skill"))
         path = str(_require(sk, "path", "skill"))
-        doms = [self._assign_domain(d) for d in (sk.get("domains") or [])] \
-            or [GLOBAL_DOMAIN_ID]
+        doms = [self._assign_domain(d) for d in (sk.get("domains") or [])] or [
+            GLOBAL_DOMAIN_ID
+        ]
         for d in doms:
             self._ensure_domain(d)
         node_id = NodeIdFactory.skill_id(name)
-        self._add_child(node_id, NodeKind.SKILL, name, SKILL_COLOR,
-                        doms[0], 2.0, path=path, extra_domain_ids=doms[1:],
-                        body=sk.get("body"))
+        self._add_child(
+            node_id,
+            NodeKind.SKILL,
+            name,
+            SKILL_COLOR,
+            doms[0],
+            2.0,
+            path=path,
+            extra_domain_ids=doms[1:],
+            body=sk.get("body"),
+        )
         for d in doms:
-            self._edges.append(WorkflowEdge(
-                source=d, target=node_id, kind=EdgeKind.INVOKED_SKILL,
-            ))
+            self._edges.append(
+                WorkflowEdge(
+                    source=d,
+                    target=node_id,
+                    kind=EdgeKind.INVOKED_SKILL,
+                )
+            )
 
     def _ingest_hook(self, hk):
         event = str(_require(hk, "event", "hook"))
@@ -294,13 +361,18 @@ class WorkflowGraphBuilder:
         node_id = NodeIdFactory.hook_id(event, cmd)
         matcher = hk.get("matcher") or ""
         label = f"{event}:{matcher}" if matcher else event
-        if not self._add_child(node_id, NodeKind.HOOK, label, HOOK_COLOR,
-                               dom, 1.5, path=cmd, event=event):
+        if not self._add_child(
+            node_id, NodeKind.HOOK, label, HOOK_COLOR, dom, 1.5, path=cmd, event=event
+        ):
             return
-        self._edges.append(WorkflowEdge(
-            source=dom, target=node_id,
-            kind=EdgeKind.TRIGGERED_HOOK, label=event,
-        ))
+        self._edges.append(
+            WorkflowEdge(
+                source=dom,
+                target=node_id,
+                kind=EdgeKind.TRIGGERED_HOOK,
+                label=event,
+            )
+        )
 
     def _ingest_agent(self, ag):
         sub = str(_require(ag, "subagent_type", "agent"))
@@ -310,12 +382,24 @@ class WorkflowGraphBuilder:
         hub = NodeIdFactory.tool_hub_id(dom, ToolKind.TASK)
         node_id = NodeIdFactory.agent_id(dom, sub)
         count = int(ag.get("count") or 1)
-        self._add_child(node_id, NodeKind.AGENT, sub, AGENT_COLOR, dom, 2.0,
-                        subagent_type=sub, count=count)
-        self._edges.append(WorkflowEdge(
-            source=hub, target=node_id,
-            kind=EdgeKind.SPAWNED_AGENT, weight=float(count),
-        ))
+        self._add_child(
+            node_id,
+            NodeKind.AGENT,
+            sub,
+            AGENT_COLOR,
+            dom,
+            2.0,
+            subagent_type=sub,
+            count=count,
+        )
+        self._edges.append(
+            WorkflowEdge(
+                source=hub,
+                target=node_id,
+                kind=EdgeKind.SPAWNED_AGENT,
+                weight=float(count),
+            )
+        )
 
     def _ingest_command(self, cm):
         cmd = str(_require(cm, "cmd", "command"))
@@ -326,25 +410,36 @@ class WorkflowGraphBuilder:
         hub = NodeIdFactory.tool_hub_id(dom, ToolKind.BASH)
         node_id = NodeIdFactory.command_id(h)
         count = int(cm.get("count") or 1)
-        if not self._add_child(node_id, NodeKind.COMMAND, cmd[:80],
-                               COMMAND_COLOR, dom,
-                               1.0 + min(3.0, count * 0.1),
-                               body=cmd, count=count,
-                               first_seen=cm.get("first_ts"),
-                               last_accessed=cm.get("last_ts")):
+        if not self._add_child(
+            node_id,
+            NodeKind.COMMAND,
+            cmd[:80],
+            COMMAND_COLOR,
+            dom,
+            1.0 + min(3.0, count * 0.1),
+            body=cmd,
+            count=count,
+            first_seen=cm.get("first_ts"),
+            last_accessed=cm.get("last_ts"),
+        ):
             return
         # Bash hub → command containment. Uses COMMAND_IN_HUB (not
         # TOOL_USED_FILE) so workflow_graph_panel.js renderToolHub's
         # "Files touched" counter isn't inflated by the command count.
-        self._edges.append(WorkflowEdge(
-            source=hub, target=node_id,
-            kind=EdgeKind.COMMAND_IN_HUB, weight=float(count),
-        ))
+        self._edges.append(
+            WorkflowEdge(
+                source=hub,
+                target=node_id,
+                kind=EdgeKind.COMMAND_IN_HUB,
+                weight=float(count),
+            )
+        )
 
     # ── al-muqabala: dedupe by (src, tgt, kind); sum weights ──────────
 
-    def _dedupe_and_link(self, nodes: Iterable[WorkflowNode],
-                         edges: Iterable[WorkflowEdge]):
+    def _dedupe_and_link(
+        self, nodes: Iterable[WorkflowNode], edges: Iterable[WorkflowEdge]
+    ):
         node_list = list(nodes)
         seen: dict[tuple[str, str, str], WorkflowEdge] = {}
         for e in edges:

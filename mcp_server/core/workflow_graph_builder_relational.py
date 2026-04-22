@@ -53,11 +53,14 @@ def ingest_discussion_file(b, dfe: dict) -> None:
     disc_id = f"discussion:{sid}"
     if disc_id not in b._nodes:
         return
-    b._edges.append(WorkflowEdge(
-        source=disc_id, target=fid,
-        kind=EdgeKind.DISCUSSION_TOUCHED_FILE,
-        weight=float(int(dfe.get("count") or 1)),
-    ))
+    b._edges.append(
+        WorkflowEdge(
+            source=disc_id,
+            target=fid,
+            kind=EdgeKind.DISCUSSION_TOUCHED_FILE,
+            weight=float(int(dfe.get("count") or 1)),
+        )
+    )
 
 
 def ingest_command_file(b, cfe: dict) -> None:
@@ -68,11 +71,14 @@ def ingest_command_file(b, cfe: dict) -> None:
     fid = NodeIdFactory.file_id(path)
     if cmd_id not in b._nodes or fid not in b._nodes:
         return
-    b._edges.append(WorkflowEdge(
-        source=cmd_id, target=fid,
-        kind=EdgeKind.COMMAND_TOUCHED_FILE,
-        weight=float(int(cfe.get("count") or 1)),
-    ))
+    b._edges.append(
+        WorkflowEdge(
+            source=cmd_id,
+            target=fid,
+            kind=EdgeKind.COMMAND_TOUCHED_FILE,
+            weight=float(int(cfe.get("count") or 1)),
+        )
+    )
 
 
 def ingest_discussion_tool(b, dte: dict) -> None:
@@ -91,10 +97,14 @@ def ingest_discussion_tool(b, dte: dict) -> None:
     b._build_tool_hubs(dom, [tool])
     hub = NodeIdFactory.tool_hub_id(dom, tool)
     count = int(dte.get("count") or 1)
-    b._edges.append(WorkflowEdge(
-        source=disc_id, target=hub,
-        kind=EdgeKind.DISCUSSION_USED_TOOL, weight=float(count),
-    ))
+    b._edges.append(
+        WorkflowEdge(
+            source=disc_id,
+            target=hub,
+            kind=EdgeKind.DISCUSSION_USED_TOOL,
+            weight=float(count),
+        )
+    )
 
 
 def ingest_discussion_agent(b, dae: dict) -> None:
@@ -109,30 +119,53 @@ def ingest_discussion_agent(b, dae: dict) -> None:
     agent_id = NodeIdFactory.agent_id(dom, sub)
     if agent_id not in b._nodes:
         b._build_tool_hubs(dom, [ToolKind.TASK])
-        b._add_child(agent_id, NodeKind.AGENT, sub, AGENT_COLOR,
-                     dom, 2.0, subagent_type=sub, count=0)
+        b._add_child(
+            agent_id,
+            NodeKind.AGENT,
+            sub,
+            AGENT_COLOR,
+            dom,
+            2.0,
+            subagent_type=sub,
+            count=0,
+        )
     count = int(dae.get("count") or 1)
-    b._edges.append(WorkflowEdge(
-        source=disc_id, target=agent_id,
-        kind=EdgeKind.DISCUSSION_SPAWNED_AGENT, weight=float(count),
-    ))
+    b._edges.append(
+        WorkflowEdge(
+            source=disc_id,
+            target=agent_id,
+            kind=EdgeKind.DISCUSSION_SPAWNED_AGENT,
+            weight=float(count),
+        )
+    )
 
 
-def _materialize_discussion_command(b, cmd_id: str, cmd: str, h: str,
-                                     disc_id: str, count0: int) -> None:
+def _materialize_discussion_command(
+    b, cmd_id: str, cmd: str, h: str, disc_id: str, count0: int
+) -> None:
     """Create a minimal command node for a discussion-only Bash invocation."""
     dom = b._nodes[disc_id].domain_id
     b._ensure_domain(dom)
     b._build_tool_hubs(dom, [ToolKind.BASH])
     hub = NodeIdFactory.tool_hub_id(dom, ToolKind.BASH)
-    if b._add_child(cmd_id, NodeKind.COMMAND, (cmd or h)[:80],
-                    COMMAND_COLOR, dom,
-                    1.0 + min(3.0, count0 * 0.1),
-                    body=cmd or h, count=count0):
-        b._edges.append(WorkflowEdge(
-            source=hub, target=cmd_id,
-            kind=EdgeKind.COMMAND_IN_HUB, weight=float(count0),
-        ))
+    if b._add_child(
+        cmd_id,
+        NodeKind.COMMAND,
+        (cmd or h)[:80],
+        COMMAND_COLOR,
+        dom,
+        1.0 + min(3.0, count0 * 0.1),
+        body=cmd or h,
+        count=count0,
+    ):
+        b._edges.append(
+            WorkflowEdge(
+                source=hub,
+                target=cmd_id,
+                kind=EdgeKind.COMMAND_IN_HUB,
+                weight=float(count0),
+            )
+        )
 
 
 def ingest_discussion_command(b, dce: dict) -> None:
@@ -147,10 +180,14 @@ def ingest_discussion_command(b, dce: dict) -> None:
     count0 = int(dce.get("count") or 1)
     if cmd_id not in b._nodes:
         _materialize_discussion_command(b, cmd_id, cmd, h, disc_id, count0)
-    b._edges.append(WorkflowEdge(
-        source=disc_id, target=cmd_id,
-        kind=EdgeKind.DISCUSSION_RAN_COMMAND, weight=float(count0),
-    ))
+    b._edges.append(
+        WorkflowEdge(
+            source=disc_id,
+            target=cmd_id,
+            kind=EdgeKind.DISCUSSION_RAN_COMMAND,
+            weight=float(count0),
+        )
+    )
 
 
 def ingest_skill_usage(b, sue: dict) -> None:
@@ -161,21 +198,31 @@ def ingest_skill_usage(b, sue: dict) -> None:
     sid = NodeIdFactory.skill_id(name)
     if sid not in b._nodes:
         b._nodes[sid] = WorkflowNode(
-            id=sid, kind=NodeKind.SKILL, label=name,
-            color=SKILL_COLOR, domain_id=dom, size=2.0,
+            id=sid,
+            kind=NodeKind.SKILL,
+            label=name,
+            color=SKILL_COLOR,
+            domain_id=dom,
+            size=2.0,
         )
         b._edges.append(b._in_domain(sid, dom))
     else:
         existing = b._nodes[sid]
         if existing.domain_id != dom and dom not in existing.extra_domain_ids:
-            b._nodes[sid] = existing.model_copy(update={
-                "extra_domain_ids": list(existing.extra_domain_ids) + [dom],
-            })
+            b._nodes[sid] = existing.model_copy(
+                update={
+                    "extra_domain_ids": list(existing.extra_domain_ids) + [dom],
+                }
+            )
             b._edges.append(b._in_domain(sid, dom))
-    b._edges.append(WorkflowEdge(
-        source=dom, target=sid, kind=EdgeKind.INVOKED_SKILL,
-        weight=float(int(sue.get("count") or 1)),
-    ))
+    b._edges.append(
+        WorkflowEdge(
+            source=dom,
+            target=sid,
+            kind=EdgeKind.INVOKED_SKILL,
+            weight=float(int(sue.get("count") or 1)),
+        )
+    )
 
 
 def ingest_mcp_usage(b, mue: dict) -> None:
@@ -188,20 +235,32 @@ def ingest_mcp_usage(b, mue: dict) -> None:
     count = int(mue.get("count") or 1)
     if mcp_id not in b._nodes:
         b._nodes[mcp_id] = WorkflowNode(
-            id=mcp_id, kind=NodeKind.MCP, label=server,
-            color=MCP_COLOR, domain_id=dom, size=2.2,
-            subagent_type=tool_name or None, count=count,
+            id=mcp_id,
+            kind=NodeKind.MCP,
+            label=server,
+            color=MCP_COLOR,
+            domain_id=dom,
+            size=2.2,
+            subagent_type=tool_name or None,
+            count=count,
         )
         b._edges.append(b._in_domain(mcp_id, dom))
     else:
         existing = b._nodes[mcp_id]
         if dom != existing.domain_id and dom not in existing.extra_domain_ids:
-            b._nodes[mcp_id] = existing.model_copy(update={
-                "extra_domain_ids": list(existing.extra_domain_ids) + [dom],
-                "count": (existing.count or 0) + count,
-            })
+            b._nodes[mcp_id] = existing.model_copy(
+                update={
+                    "extra_domain_ids": list(existing.extra_domain_ids) + [dom],
+                    "count": (existing.count or 0) + count,
+                }
+            )
             b._edges.append(b._in_domain(mcp_id, dom))
-    b._edges.append(WorkflowEdge(
-        source=dom, target=mcp_id, kind=EdgeKind.INVOKED_MCP,
-        weight=float(count), label=tool_name or None,
-    ))
+    b._edges.append(
+        WorkflowEdge(
+            source=dom,
+            target=mcp_id,
+            kind=EdgeKind.INVOKED_MCP,
+            weight=float(count),
+            label=tool_name or None,
+        )
+    )

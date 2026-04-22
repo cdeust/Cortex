@@ -24,30 +24,30 @@ from mcp_server.core.workflow_graph_schema_enums import (
     ToolKind,
 )
 
-DOMAIN_COLOR = "#FCD34D"       # gold — hub
-SKILL_COLOR = "#FB923C"        # orange — slash commands / skills
-COMMAND_COLOR = "#FACC15"      # yellow — distinct from Bash-tool orange
-HOOK_COLOR = "#A855F7"         # purple — settings hooks
-AGENT_COLOR = "#EC4899"        # bright pink — subagents
-DISCUSSION_COLOR = "#EF4444"   # red — session anchors
-ENTITY_COLOR = "#50B0C8"       # teal — extracted entities
-MCP_COLOR = "#6366F1"          # indigo — MCP servers (distinct from hook)
+DOMAIN_COLOR = "#FCD34D"  # gold — hub
+SKILL_COLOR = "#FB923C"  # orange — slash commands / skills
+COMMAND_COLOR = "#FACC15"  # yellow — distinct from Bash-tool orange
+HOOK_COLOR = "#A855F7"  # purple — settings hooks
+AGENT_COLOR = "#EC4899"  # bright pink — subagents
+DISCUSSION_COLOR = "#EF4444"  # red — session anchors
+ENTITY_COLOR = "#50B0C8"  # teal — extracted entities
+MCP_COLOR = "#6366F1"  # indigo — MCP servers (distinct from hook)
 
 TOOL_HUB_COLORS: dict[ToolKind, str] = {
-    ToolKind.EDIT: "#10B981",   # emerald
+    ToolKind.EDIT: "#10B981",  # emerald
     ToolKind.WRITE: "#059669",  # dark emerald — paired with Edit
-    ToolKind.READ: "#06B6D4",   # cyan — far from every green
-    ToolKind.GREP: "#D946EF",   # fuchsia
-    ToolKind.GLOB: "#C026D3",   # deeper fuchsia — paired with Grep
-    ToolKind.BASH: "#F97316",   # orange — shell band
-    ToolKind.TASK: "#EC4899",   # pink — paired with Agent
+    ToolKind.READ: "#06B6D4",  # cyan — far from every green
+    ToolKind.GREP: "#D946EF",  # fuchsia
+    ToolKind.GLOB: "#C026D3",  # deeper fuchsia — paired with Grep
+    ToolKind.BASH: "#F97316",  # orange — shell band
+    ToolKind.TASK: "#EC4899",  # pink — paired with Agent
 }
 
 PRIMARY_TOOL_COLORS: dict[PrimaryToolCluster, str] = {
-    PrimaryToolCluster.EDIT_WRITE: "#10B981",   # emerald — files you author
-    PrimaryToolCluster.READ: "#06B6D4",         # cyan — files you only read
-    PrimaryToolCluster.GREP_GLOB: "#D946EF",    # fuchsia — files you only searched
-    PrimaryToolCluster.BASH: "#F97316",         # orange — files touched only by shell
+    PrimaryToolCluster.EDIT_WRITE: "#10B981",  # emerald — files you author
+    PrimaryToolCluster.READ: "#06B6D4",  # cyan — files you only read
+    PrimaryToolCluster.GREP_GLOB: "#D946EF",  # fuchsia — files you only searched
+    PrimaryToolCluster.BASH: "#F97316",  # orange — files touched only by shell
 }
 
 MEMORY_STAGE_COLORS: dict[str, str] = {

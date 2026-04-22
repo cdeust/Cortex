@@ -26,23 +26,35 @@ _MCP_NAME_RE = re.compile(r"^mcp__([A-Za-z0-9_]+)__([A-Za-z0-9_]+)$")
 # Claude surfaces several tool names that collapse to a single hub.
 # The value ``""`` means "not a graph hub"; callers skip those.
 _TOOL_NORMALIZE: dict[str, str] = {
-    "Edit": "Edit", "MultiEdit": "Edit", "NotebookEdit": "Edit",
+    "Edit": "Edit",
+    "MultiEdit": "Edit",
+    "NotebookEdit": "Edit",
     "Write": "Write",
-    "Read": "Read", "NotebookRead": "Read",
+    "Read": "Read",
+    "NotebookRead": "Read",
     "Grep": "Grep",
     "Glob": "Glob",
     "Bash": "Bash",
-    "Task": "Task", "Agent": "Task",
+    "Task": "Task",
+    "Agent": "Task",
 }
 _AGENT_TOOL_NAMES = frozenset({"Task", "Agent"})
 # Every Claude tool whose ``input`` carries a file path we can surface.
 # The read/search tools (Grep/Glob/NotebookRead) open files just as much
 # as Edit/Write — the user asked for full visibility on everything
 # Claude touched, not just authorship.
-_FILE_INPUT_TOOLS = frozenset({
-    "Edit", "Write", "Read", "MultiEdit", "NotebookEdit", "NotebookRead",
-    "Glob", "Grep",
-})
+_FILE_INPUT_TOOLS = frozenset(
+    {
+        "Edit",
+        "Write",
+        "Read",
+        "MultiEdit",
+        "NotebookEdit",
+        "NotebookRead",
+        "Glob",
+        "Grep",
+    }
+)
 # Path-like tokens inside Bash commands (cat / tail / less / head / vim …)
 # that implicitly open a file. Matches /abs or ~/rel or ./rel paths with
 # at least one separator, at least 3 chars past the prefix.
@@ -54,9 +66,7 @@ def normalize_tool_name(name: str) -> str:
     return _TOOL_NORMALIZE.get(name, "")
 
 
-def iter_session_paths(domain_from_project_dir) -> Iterable[
-    tuple[str, str, Path]
-]:
+def iter_session_paths(domain_from_project_dir) -> Iterable[tuple[str, str, Path]]:
     """Yield ``(session_id, domain_id, jsonl_path)`` for every session
     transcript under ``CLAUDE_DIR/projects/<project>/*.jsonl``.
 
@@ -71,9 +81,7 @@ def iter_session_paths(domain_from_project_dir) -> Iterable[
         if not pdir.is_dir():
             continue
         domain = domain_from_project_dir(pdir.name)
-        for entry in list_dir(
-            projects_dir / pdir.name, with_file_types=True
-        ) or []:
+        for entry in list_dir(projects_dir / pdir.name, with_file_types=True) or []:
             if not entry.is_file() or not entry.name.endswith(".jsonl"):
                 continue
             stem = entry.name.rsplit(".", 1)[0]
@@ -98,8 +106,7 @@ def load_agent_events(domain_from_project_dir) -> list[dict[str, Any]]:
             key = (str(sub), domain)
             buckets[key] = buckets.get(key, 0) + 1
     return [
-        {"subagent_type": s, "domain": d, "count": n}
-        for (s, d), n in buckets.items()
+        {"subagent_type": s, "domain": d, "count": n} for (s, d), n in buckets.items()
     ]
 
 
@@ -142,7 +149,9 @@ def load_discussion_agents(
 
 
 def load_discussion_commands(
-    domain_from_project_dir, cmd_hash, first_line,
+    domain_from_project_dir,
+    cmd_hash,
+    first_line,
 ) -> list[dict[str, Any]]:
     """Per-session Bash commands: session → (cmd, cmd_hash, count)."""
     buckets: dict[tuple[str, str, str], int] = {}
@@ -184,13 +193,11 @@ def load_discussion_files(
         for tu in iter_tool_uses(path):
             _collect_tool_file_touches(tu, sid, buckets)
     return [
-        {"session_id": s, "file_path": f, "count": n}
-        for (s, f), n in buckets.items()
+        {"session_id": s, "file_path": f, "count": n} for (s, f), n in buckets.items()
     ]
 
 
-def _collect_tool_file_touches(tu: dict, sid: str,
-                               buckets: dict) -> None:
+def _collect_tool_file_touches(tu: dict, sid: str, buckets: dict) -> None:
     """Emit ``(sid, file_path)`` tuples for every file reference in ``tu``."""
     name = tu.get("name") or ""
     inp = tu.get("input") or {}
@@ -228,10 +235,7 @@ def load_skill_usage(domain_from_project_dir) -> list[dict[str, Any]]:
                 continue
             key = (skill, domain)
             buckets[key] = buckets.get(key, 0) + 1
-    return [
-        {"name": s, "domain": d, "count": n}
-        for (s, d), n in buckets.items()
-    ]
+    return [{"name": s, "domain": d, "count": n} for (s, d), n in buckets.items()]
 
 
 def _extract_user_text(rec: dict) -> str:
@@ -307,8 +311,14 @@ def load_file_access_events(
                     if ts and (slot[2] is None or ts > slot[2]):
                         slot[2] = ts
     return [
-        {"tool": t, "file_path": fp, "domain": d,
-         "count": n, "first_ts": first, "last_ts": last}
+        {
+            "tool": t,
+            "file_path": fp,
+            "domain": d,
+            "count": n,
+            "first_ts": first,
+            "last_ts": last,
+        }
         for (t, fp, d), (n, first, last) in buckets.items()
     ]
 

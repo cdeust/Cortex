@@ -98,7 +98,7 @@ def build_workflow_graph(
     *,
     domain_filter: str | None = None,
     min_memory_heat: float = 0.0,
-    memory_limit: int = 0,          # 0 = unbounded (pg_store convention)
+    memory_limit: int = 0,  # 0 = unbounded (pg_store convention)
 ) -> dict[str, Any]:
     """Load sources, build the graph, validate, and return JSON payload.
 
@@ -113,9 +113,7 @@ def build_workflow_graph(
     hooks = source.load_hooks()
     agents = source.load_agent_events()
     commands = source.load_command_events(store)
-    memories = source.load_memories(
-        store, min_heat=min_memory_heat, limit=memory_limit
-    )
+    memories = source.load_memories(store, min_heat=min_memory_heat, limit=memory_limit)
     discussions = source.load_discussions()
     skill_usage = source.load_skill_usage()
     mcp_usage = source.load_mcp_usage()
@@ -128,6 +126,7 @@ def build_workflow_graph(
     command_files = source.load_command_files(store, known_paths)
 
     if domain_filter:
+
         def _matches(ev):
             return (ev.get("domain") or "") == domain_filter
 

@@ -39,9 +39,7 @@ from mcp_server.shared.project_ids import (
 )
 
 _TOOL_TAG_RE = re.compile(r"^tool:([a-z]+)$")
-_TOOL_NAMES = frozenset(
-    {"edit", "write", "bash", "read", "grep", "glob", "task"}
-)
+_TOOL_NAMES = frozenset({"edit", "write", "bash", "read", "grep", "glob", "task"})
 
 
 def _cmd_hash(cmd: str) -> str:
@@ -118,8 +116,11 @@ class WorkflowGraphSource:
         ``(tool, file, domain)`` rows are merged by the builder's
         ``_dedupe_and_link`` pass — counts sum, timestamp bounds widen."""
         pg_rows = _pg.load_tool_events(
-            pg_store, _tool_from_tags, _domain_from_directory,
-            _cmd_hash, _first_line,
+            pg_store,
+            _tool_from_tags,
+            _domain_from_directory,
+            _cmd_hash,
+            _first_line,
         )
         jsonl_rows = _jsonl.load_file_access_events(_domain_from_project_dir)
         return pg_rows + jsonl_rows
@@ -152,10 +153,14 @@ class WorkflowGraphSource:
                         cmd = h.get("command")
                         if not cmd:
                             continue
-                        out.append({
-                            "event": event, "matcher": matcher,
-                            "command": cmd, "domain": domain,
-                        })
+                        out.append(
+                            {
+                                "event": event,
+                                "matcher": matcher,
+                                "command": cmd,
+                                "domain": domain,
+                            }
+                        )
         return out
 
     # ── 4. Agents (JSONL) ─────────────────────────────────────────────
@@ -165,12 +170,16 @@ class WorkflowGraphSource:
     # ── 5. Commands (PG) ──────────────────────────────────────────────
     def load_command_events(self, pg_store) -> list[dict[str, Any]]:
         return _pg.load_command_events(
-            pg_store, _domain_from_directory, _cmd_hash, _first_line,
+            pg_store,
+            _domain_from_directory,
+            _cmd_hash,
+            _first_line,
         )
 
     # ── 6. Memories (PG) ──────────────────────────────────────────────
-    def load_memories(self, pg_store, min_heat: float = 0.0,
-                      limit: int = 10000) -> list[dict[str, Any]]:
+    def load_memories(
+        self, pg_store, min_heat: float = 0.0, limit: int = 10000
+    ) -> list[dict[str, Any]]:
         return _pg.load_memories(pg_store, min_heat=min_heat, limit=limit)
 
     # ── 7. Discussions (JSONL metadata) ───────────────────────────────
@@ -187,17 +196,23 @@ class WorkflowGraphSource:
 
     def load_discussion_commands(self) -> list[dict[str, Any]]:
         return _jsonl.load_discussion_commands(
-            _domain_from_project_dir, _cmd_hash, _first_line,
+            _domain_from_project_dir,
+            _cmd_hash,
+            _first_line,
         )
 
     def load_discussion_files(self) -> list[dict[str, Any]]:
         return _jsonl.load_discussion_files(_domain_from_project_dir)
 
     # ── 9. Command → file (PG) ────────────────────────────────────────
-    def load_command_files(self, pg_store,
-                           known_paths: Iterable[str]) -> list[dict[str, Any]]:
+    def load_command_files(
+        self, pg_store, known_paths: Iterable[str]
+    ) -> list[dict[str, Any]]:
         return _pg.load_command_files(
-            pg_store, known_paths, _cmd_hash, _first_line,
+            pg_store,
+            known_paths,
+            _cmd_hash,
+            _first_line,
         )
 
     # ── 10. Skill usage + 11. MCP usage (JSONL) ───────────────────────

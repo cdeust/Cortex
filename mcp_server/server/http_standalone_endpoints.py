@@ -100,8 +100,7 @@ def serve_sankey(handler, store) -> None:
     """GET /api/sankey — consolidation-pipeline Sankey dataset."""
     try:
         total = store._conn.execute(
-            "SELECT COUNT(*) as c FROM memories "
-            "WHERE NOT is_benchmark AND NOT is_stale"
+            "SELECT COUNT(*) as c FROM memories WHERE NOT is_benchmark AND NOT is_stale"
         ).fetchone()
         send_json_ok(
             handler,
@@ -141,9 +140,7 @@ def serve_discussion_detail(handler, path_no_qs: str) -> None:
         send_json_error(handler, e)
 
 
-def serve_static(
-    handler, base_dir: Path, filename: str, content_type: str
-) -> None:
+def serve_static(handler, base_dir: Path, filename: str, content_type: str) -> None:
     """Sandboxed read-only static-file reader for ``/js/`` and ``/css/``.
 
     Security: strip directory components, reject hidden files / null
@@ -212,9 +209,7 @@ def build_methodology_handler(ui_root: Path) -> type:
             touch()
             if self.path == "/graph":
                 self._serve_graph()
-            elif self.path.startswith("/methodology/js/") and self.path.endswith(
-                ".js"
-            ):
+            elif self.path.startswith("/methodology/js/") and self.path.endswith(".js"):
                 serve_static(
                     self, meth_dir / "js", self.path[16:], "application/javascript"
                 )

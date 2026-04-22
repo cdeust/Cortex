@@ -59,6 +59,7 @@ def _to_repo_rel(name: str, git_root) -> str:
     """Best-effort repo-relative path — strip quotes; make relative if
     absolute and inside git_root; otherwise pass through."""
     from pathlib import Path
+
     clean = name.strip().strip("\"'`")
     try:
         p = Path(clean)

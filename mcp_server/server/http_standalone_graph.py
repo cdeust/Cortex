@@ -142,9 +142,7 @@ def build_and_cache_graph(store, domain_filter: str | None) -> None:
     try:
         data = build_workflow_graph(store, domain_filter=domain_filter)
         data["meta"]["system_vitals"] = _compute_memory_vitals(store)
-        data["meta"]["session_counts"] = _session_counts_from_profiles(
-            load_profiles()
-        )
+        data["meta"]["session_counts"] = _session_counts_from_profiles(load_profiles())
         _cached_domain_hub_ids = extract_domain_hub_ids(data.get("nodes", []))
         _graph_cache = {"data": data, "domain_filter": domain_filter}
         _graph_cache_ts = time.monotonic()
@@ -162,11 +160,14 @@ def build_and_cache_graph(store, domain_filter: str | None) -> None:
         # silent wrong (Feynman integrity audit 2026-04-22).
         _graph_cache = {
             "data": {
-                "nodes": [], "edges": [], "links": [],
+                "nodes": [],
+                "edges": [],
+                "links": [],
                 "meta": {
                     "schema": "workflow_graph.v1",
                     "error": type(exc).__name__,
-                    "node_count": 0, "edge_count": 0,
+                    "node_count": 0,
+                    "edge_count": 0,
                 },
             },
             "domain_filter": domain_filter,

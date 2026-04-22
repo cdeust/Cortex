@@ -98,15 +98,11 @@ def _dispatch_wiki_db(op: str, qs: dict[str, str]) -> dict:
     if op == "views":
         return wiki_api.list_views()
     if op == "view":
-        return wiki_api.execute_view(
-            qs.get("name") or None, qs.get("query") or None
-        )
+        return wiki_api.execute_view(qs.get("name") or None, qs.get("query") or None)
     if op == "bibliography":
         return wiki_api.list_bibliography(METHODOLOGY_DIR / "wiki")
     if op == "bibliography_read":
-        return wiki_api.read_bibliography(
-            METHODOLOGY_DIR / "wiki", qs.get("path", "")
-        )
+        return wiki_api.read_bibliography(METHODOLOGY_DIR / "wiki", qs.get("path", ""))
     return {"error": f"unknown op: {op}"}
 
 
@@ -123,9 +119,7 @@ def _send_export_download(handler, result: dict, data: bytes) -> None:
     """Emit the Content-Disposition download headers + body."""
     from mcp_server.server.http_common import _apply_cors_headers
 
-    safe_filename = _EXPORT_FILENAMES.get(
-        result.get("format", ""), "cortex-export.bin"
-    )
+    safe_filename = _EXPORT_FILENAMES.get(result.get("format", ""), "cortex-export.bin")
     handler.send_response(200)
     handler.send_header("Content-Type", result["mime"])
     handler.send_header(
