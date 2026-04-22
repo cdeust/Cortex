@@ -6,9 +6,9 @@
   <a href="https://github.com/cdeust/Cortex/actions/workflows/ci.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/tests-2411_passing-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-2500_passing-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/citations-41_papers-orange.svg" alt="Citations">
-  <img src="https://img.shields.io/badge/version-3.13.0-brightgreen.svg" alt="Version 3.13.0">
+  <img src="https://img.shields.io/badge/version-3.14.0-brightgreen.svg" alt="Version 3.14.0">
   <a href="https://glama.ai/mcp/servers/cdeust/Cortex"><img src="https://glama.ai/mcp/servers/cdeust/Cortex/badges/score.svg" alt="Glama score: security A, license A"></a>
 </p>
 
@@ -30,7 +30,7 @@ Cortex is a persistent memory engine for Claude Code built on computational neur
 
 **20 biological mechanisms. 33 MCP tools. 7 automatic hooks. Runs entirely on your machine. PostgreSQL + pgvector.**
 
-**v3.13.0 scalability release**: heat is now a *function* computed at read time, not a stored state vector written on every cycle. Homeostatic cycle writes one scalar per domain per run (was: N rows). ConnectionPool + `asyncio.to_thread` + per-tool admission semaphore give genuine concurrency. JOIN-based co-access replaces O(N × M) substring scans. Zero retrieval regression vs v3.11 on all three public benchmarks. [Release notes →](https://github.com/cdeust/Cortex/releases/tag/v3.13.0)
+**v3.14.0 neural-graph & AST-integration release**: the workflow graph now builds progressively through a phase state machine (L0 domains → L1 setup → L2 tools → L3 files → L4 discussions → L5 memories → L6 per-project AST symbols → L6_CROSS). Symbols, calls, imports and member-of edges are pulled live from `automatised-pipeline`'s tree-sitter index (27 languages) and persist in a SHA-256-keyed on-disk cache — re-opens hydrate in milliseconds, only unchanged projects are re-queried. Detail panels show NAMED neighbors (callers, imported-by, defined-in file) instead of bare counts. Layout combines Alexander deep-interlock multi-centroid forces with Maxwell-damped springs so cross-domain symbols settle in the interlock space. [Release notes →](https://github.com/cdeust/Cortex/releases/tag/v3.14.0)
 
 ## Getting Started
 
