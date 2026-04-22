@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="Cortex — persistent memory for Claude Code" width="100%"/>
+  <img src="docs/assets/cortex-workflow-graph.png" alt="Cortex workflow graph — every project becomes a brain-region cloud; nodes cluster by the Claude surface that touched them (skills, hooks, commands, agents, tools, files, memories, discussions); thin long-range threads mark shared files and shared MCPs between clouds" width="100%"/>
 </p>
 
 <p align="center">
@@ -263,7 +263,7 @@ Anchored memories get maximum protection. They always survive compaction, no mat
 Every time you store a memory, Cortex doesn't just save text — it extracts entities, builds relationships, detects schemas, and links the new memory into a growing knowledge graph. Over time, this becomes a **living wiki of your project**: decisions and their rationale, patterns that emerged, lessons learned, architectural constraints, and how they all connect.
 
 Explore it through:
-- **`/cortex-visualize`** — interactive neural graph in your browser
+- **`/cortex-visualize`** — opens the interactive workflow graph in your browser (Graph is the default view; Knowledge / Wiki / Board / Pipeline tabs over the same data)
 - **`get_causal_chain`** — trace how one decision led to another
 - **`get_project_story`** — auto-generated narrative of your project's evolution
 - **`detect_gaps`** — find areas where knowledge is thin or isolated
@@ -274,17 +274,39 @@ This isn't documentation you write. It's documentation that writes itself from h
 
 ## Neural Graph
 
-Launch with `/cortex-visualize`. Five views wired over the same data:
+Launch with `/cortex-visualize`. The default landing view is **Graph** — a live, radial-hierarchical map of everything Claude has ever done in your projects. Knowledge / Wiki / Board / Pipeline tabs sit over the same data for different reading angles.
 
 <p align="center">
-<img src="docs/neural-graph-overview.png" width="100%" alt="Cortex Neural Graph — force-directed view with domain clusters, memories, entities, and discussions" />
+<img src="docs/assets/cortex-workflow-graph.png" width="100%" alt="Cortex workflow graph — many brain-region clouds, one per project, with inner radial shells grouping nodes by Claude surface (setup → tools → files → discussions → memories)" />
 </p>
 
-**Graph View** — force-directed neural graph showing domain clusters, memories, entities, and discussions connected by typed edges. Click any node for full context.
+**Graph View — the Claude workflow map.** Each project becomes a **cloud of nodes** around one gold domain hub. Inside every cloud, nodes are arranged in five concentric levels by the Claude surface that produced them:
+
+| Level | What's there | How to click through |
+|---|---|---|
+| **L1 · Claude setup** | Skills · Commands · Hooks · Agents · MCPs | Click a skill for its file path; click an MCP to see which domains share it (thin indigo threads bridge clouds) |
+| **L2 · Tools** | One hub per Claude tool per domain (Edit · Write · Read · Grep · Glob · Bash · Task) | Click a hub for files touched + total uses |
+| **L3 · Files** | Every file Claude ever opened, read, edited, searched, or referenced in a Bash command — colored by primary tool (green edited / cyan read / fuchsia searched / orange bash-only) | Click for `first_seen`, `last_accessed`, `last_modified`, and a **See diff against HEAD** button that renders new/modified/deleted/historical content inline |
+| **L4 · Discussions** | One node per Claude Code session | Click for `started_at`, duration, message count, and a **View full conversation** button that replays every turn (including tool calls) |
+| **L5 · Memories** | Persistent memories, colored by consolidation stage (labile → early LTP → late LTP → consolidated → semantic) | Click for full content, tags, and every scientific measurement |
+
+Thin dashed **violet threads** between clouds mark cross-domain files and shared MCPs. A single **grouped filter select** (`All` / `L1–L5` / by kind / by file cluster / `Cross-domain`) isolates any slice; a text search narrows within that slice.
+
+Everything Claude touches live is visible: Edit, Write, Read, Grep, Glob, NotebookRead, NotebookEdit, and Bash paths inside commands — captured via the `PostToolUse` hook with compact markers so the graph rebuilds every ~2 minutes with fresh data.
 
 <p align="center">
-<img src="docs/neural-graph-wiki.png?v=3" width="100%" alt="Cortex Wiki — a Convention page rendered with LaTeX typography showing Edit + Export toolbar (PDF/TEX/DOCX/HTML), active lifecycle pill, heat bar, structured numbered sections authored via the in-browser editor" />
+<img src="docs/assets/cortex-consolidation-board.png" width="100%" alt="Cortex Board view — five columns for labile, early LTP, late LTP, consolidated, and reconsolidating memories, each column header showing total count and per-bucket stage metrics (decay, vulnerability, plasticity, heat, importance, encoding, interference, hippo, replay) plus cards grouped by stage" />
 </p>
+
+**Board View** — consolidation stages as kanban columns (`labile` · `early_ltp` · `late_ltp` · `consolidated` · `reconsolidating`). Each column header reads live bucket metrics: **decay rate**, **vulnerability**, **plasticity**, **heat / importance / encoding / interference** medians, **hippocampal dependency**, and **replay count** — with the advancement rule (`replay ≥ 3`, `DA ≥ 1 or imp > 0.3`, etc.) printed under the bar. "At-risk" counter flags memories near promotion or decay. Cards inside each column carry heat, importance, surprise, valence, arousal, and the exact tool that created the memory.
+
+<p align="center">
+<img src="docs/assets/cortex-memory-detail.png" width="100%" alt="Cortex memory detail modal — stage pill, tags, valence chip, full body, then a Scientific measurements grid with plain-language explanations of consolidation stage, activity (heat), baseline activity, importance, surprise, emotional tone, emotional intensity, confidence, plasticity, stability" />
+</p>
+
+**Detail panel — every measurement explained.** Clicking a memory (or a file, skill, command, agent, hook, MCP, discussion) opens a modal with the raw value **and** a one-line plain-language explanation. Consolidation stage, activity (heat), baseline activity, importance, surprise, emotional tone, emotional intensity, confidence, plasticity, stability — each is a labeled bar with a sentence like *"How unexpected this memory was when it arrived. Surprises stick in the mind better than routine events."* No more staring at opaque numbers.
+
+**Knowledge View** — curated memory cards with heat-based left border, emotion tag, consolidation stage, and evidence file references. Filter by domain or emotion; click any card for a full-screen detail panel with Markdown + JSON pretty-print.
 
 **Wiki View** — every memory admitted by the grounded-theory pipeline lands here as a structured page (ADR / spec / lesson / convention / note) with:
 
@@ -294,22 +316,6 @@ Launch with `/cortex-visualize`. Five views wired over the same data:
 - **Inline CodeMirror 6 editor** + live preview with KaTeX math (see [Write Papers in Cortex](#write-papers-in-cortex) above)
 - **BibTeX citations**, figure/equation/table auto-numbering, cross-references
 - **Pandoc export** → PDF / LaTeX / DOCX / HTML
-
-<p align="center">
-<img src="docs/neural-graph-knowledge.png" width="100%" alt="Cortex Knowledge — card list of curated memories with emotion and consolidation colors" />
-</p>
-
-**Knowledge View** — curated memory cards with heat-based left border, emotion tag, consolidation stage, and evidence file references. Filter by domain or emotion; click any card for a full-screen detail panel with Markdown + JSON pretty-print.
-
-<p align="center">
-<img src="docs/neural-graph-board.png" width="100%" alt="Cortex Board View — kanban columns for consolidation stages" />
-</p>
-
-**Board View** — memories arranged across the four biological consolidation stages (`labile` → `early_ltp` → `late_ltp` → `consolidated`). Each card carries domain, heat, importance, and emotional tags so you can see what's hardening and what's still fragile.
-
-<p align="center">
-<img src="docs/neural-graph-pipeline.png" width="100%" alt="Cortex Pipeline View — Sankey flow through consolidation stages" />
-</p>
 
 **Pipeline View** — horizontal Sankey flow from domains through the write gate into consolidation stages. Width of each ribbon = memory volume. Makes retention and drop-off across stages visible at a glance.
 
