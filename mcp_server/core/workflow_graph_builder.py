@@ -78,6 +78,7 @@ class WorkflowGraphBuilder:
         self._edges: list[WorkflowEdge] = []
         self._file_tool_counts: dict[str, Counter[ToolKind]] = defaultdict(Counter)
         self._file_domains: dict[str, set[str]] = defaultdict(set)
+        self._file_timestamps: dict[str, dict[str, str | None]] = {}
 
     def build(self, tool_events, skill_paths, hook_defs, agent_events,
               command_events, memories, discussions,
@@ -179,11 +180,38 @@ class WorkflowGraphBuilder:
         count = int(ev.get("count") or 1)
         self._file_tool_counts[path][tool] += count
         self._file_domains[path].add(dom)
+        self._track_file_timestamp(path, tool, ev)
         self._edges.append(WorkflowEdge(
             source=NodeIdFactory.tool_hub_id(dom, tool),
             target=NodeIdFactory.file_id(path),
             kind=EdgeKind.TOOL_USED_FILE, weight=float(count),
         ))
+
+    def _track_file_timestamp(self, path: str, tool: ToolKind, ev: dict) -> None:
+        """Accumulate per-file first_seen / last_accessed / last_modified.
+
+        first_seen  = earliest access of any kind.
+        last_accessed = latest access of any kind (incl. Read/Grep/Glob).
+        last_modified = latest Edit or Write access only.
+        """
+        first_ts = ev.get("first_ts")
+        last_ts = ev.get("last_ts")
+        if not first_ts and not last_ts:
+            return
+        slot = self._file_timestamps.setdefault(
+            path, {"first_seen": None, "last_accessed": None,
+                   "last_modified": None},
+        )
+        if first_ts and (slot["first_seen"] is None
+                         or first_ts < slot["first_seen"]):
+            slot["first_seen"] = first_ts
+        if last_ts and (slot["last_accessed"] is None
+                        or last_ts > slot["last_accessed"]):
+            slot["last_accessed"] = last_ts
+        if tool in (ToolKind.EDIT, ToolKind.WRITE) and last_ts:
+            if (slot["last_modified"] is None
+                    or last_ts > slot["last_modified"]):
+                slot["last_modified"] = last_ts
 
     def _finalize_files(self):
         for path, tc in self._file_tool_counts.items():
@@ -192,6 +220,7 @@ class WorkflowGraphBuilder:
             doms = sorted(self._file_domains[path])
             if not doms:
                 raise ValueError(f"file {path} has no domain membership")
+            ts = self._file_timestamps.get(path, {})
             self._nodes[fid] = WorkflowNode(
                 id=fid, kind=NodeKind.FILE,
                 label=path.rsplit("/", 1)[-1] or path,
@@ -199,6 +228,9 @@ class WorkflowGraphBuilder:
                 domain_id=doms[0], size=1.5,
                 primary_cluster=cluster, path=path,
                 extra_domain_ids=doms[1:],
+                first_seen=ts.get("first_seen"),
+                last_accessed=ts.get("last_accessed"),
+                last_modified=ts.get("last_modified"),
             )
             for d in doms:
                 self._edges.append(self._in_domain(fid, d))
@@ -233,6 +265,9 @@ class WorkflowGraphBuilder:
             dc.get("title") or sid[:8],
             DISCUSSION_COLOR, dom, 1.0 + min(3.0, mc * 0.02),
             session_id=sid, count=mc,
+            started_at=dc.get("started_at"),
+            last_activity=dc.get("last_activity"),
+            duration_ms=dc.get("duration_ms"),
         )
 
     def _ingest_skill(self, sk):
@@ -294,7 +329,9 @@ class WorkflowGraphBuilder:
         if not self._add_child(node_id, NodeKind.COMMAND, cmd[:80],
                                COMMAND_COLOR, dom,
                                1.0 + min(3.0, count * 0.1),
-                               body=cmd, count=count):
+                               body=cmd, count=count,
+                               first_seen=cm.get("first_ts"),
+                               last_accessed=cm.get("last_ts")):
             return
         # Bash hub → command containment. Uses COMMAND_IN_HUB (not
         # TOOL_USED_FILE) so workflow_graph_panel.js renderToolHub's

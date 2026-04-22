@@ -77,14 +77,26 @@ def _idle_watchdog(server: HTTPServer) -> None:
 
 
 def _get_ui_root() -> Path:
-    """Resolve the UI root whether run from the pip install or dev checkout."""
+    """Resolve the UI root whether run from the pip install, plugin cache,
+    or dev checkout.
+
+    The canonical marker is ``unified-viz.html`` — we require it to exist,
+    otherwise the resolver falls through. An empty ``mcp_server/ui/``
+    directory (left behind by an earlier sync) previously won this lookup
+    and crashed every request when the HTML was missing.
+    """
     pkg_dir = Path(__file__).parent.parent
-    if (pkg_dir / "ui").is_dir():
-        return pkg_dir / "ui"
-    project_root = pkg_dir.parent
-    if (project_root / "ui").is_dir():
-        return project_root / "ui"
-    raise RuntimeError("UI files not found")
+    candidates = [
+        pkg_dir / "ui",                  # pip-installed layout
+        pkg_dir.parent / "ui",           # plugin cache + dev checkout
+        Path.cwd() / "ui",               # last-resort when cwd is plugin root
+    ]
+    for ui in candidates:
+        if (ui / "unified-viz.html").is_file():
+            return ui
+    raise RuntimeError(
+        f"UI files not found — looked in {[str(c) for c in candidates]}"
+    )
 
 
 def _get_store():

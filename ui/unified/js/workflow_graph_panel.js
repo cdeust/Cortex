@@ -23,6 +23,33 @@
     return r;
   }
 
+  function humanDate(iso) {
+    if (!iso) return '—';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso);
+      var now = Date.now();
+      var diff = Math.floor((now - d.getTime()) / 1000);
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + ' h ago';
+      if (diff < 604800) return Math.floor(diff / 86400) + ' d ago';
+      return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {
+        hour: '2-digit', minute: '2-digit',
+      });
+    } catch (_) { return String(iso); }
+  }
+
+  function humanDuration(ms) {
+    var v = Number(ms);
+    if (!v || isNaN(v)) return '—';
+    if (v < 60000) return Math.round(v / 1000) + ' s';
+    if (v < 3600000) return Math.round(v / 60000) + ' min';
+    var h = Math.floor(v / 3600000);
+    var m = Math.round((v % 3600000) / 60000);
+    return h + ' h ' + m + ' min';
+  }
+
   function section(title) {
     var s = el('div', 'wfg-panel__section');
     var h = el('div', 'wfg-panel__section-title'); h.textContent = title;
@@ -99,6 +126,9 @@
   function renderFile(body, n, ctx) {
     if (n.path) body.appendChild(row('Path', n.path));
     if (n.primary_cluster) body.appendChild(row('Primary tool', n.primary_cluster));
+    if (n.first_seen) body.appendChild(row('First seen', humanDate(n.first_seen)));
+    if (n.last_accessed) body.appendChild(row('Last access', humanDate(n.last_accessed)));
+    if (n.last_modified) body.appendChild(row('Last modified', humanDate(n.last_modified)));
     renderCommon(body, n, ctx);
     if (n.extra_domain_ids && n.extra_domain_ids.length) {
       var s = section('Also in domains');
@@ -143,6 +173,10 @@
   function renderDiscussion(body, n, ctx) {
     if (n.session_id) body.appendChild(row('Session', n.session_id));
     if (n.count != null) body.appendChild(row('Messages', n.count));
+    if (n.started_at) body.appendChild(row('Started', humanDate(n.started_at)));
+    if (n.last_activity) body.appendChild(row('Last activity', humanDate(n.last_activity)));
+    if (n.duration_ms != null)
+      body.appendChild(row('Duration', humanDuration(n.duration_ms)));
     renderCommon(body, n, ctx);
     if (n.session_id) {
       var ds = section('Conversation');
@@ -175,6 +209,8 @@
 
   function renderCommand(body, n, ctx) {
     if (n.count != null) body.appendChild(row('Invocations', n.count));
+    if (n.first_seen) body.appendChild(row('First seen', humanDate(n.first_seen)));
+    if (n.last_accessed) body.appendChild(row('Last invoked', humanDate(n.last_accessed)));
     renderCommon(body, n, ctx);
     if (n.body) {
       var bs = section('Command line');

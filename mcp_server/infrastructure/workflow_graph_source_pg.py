@@ -28,13 +28,16 @@ _MEMORY_PASSTHROUGH_KEYS = tuple((
 
 def load_tool_events(pg_store, tool_from_tags, domain_from_directory,
                      cmd_hash, first_line) -> list[dict[str, Any]]:
-    """Parse post_tool_capture memories → (tool, file_path, domain, count)."""
+    """Parse post_tool_capture memories → one row per (tool, file_path,
+    domain) with count + first/last timestamps so file nodes can expose
+    a full access history."""
     _ = cmd_hash; _ = first_line   # unused here, present for loader parity
     rows = pg_store.search_by_tag_vector(
         query_embedding=None, tag="auto-captured",
-        domain=None, min_heat=0.0, limit=10000,
+        domain=None, min_heat=0.0, limit=10 ** 9,   # effectively unbounded
     )
-    buckets: dict[tuple[str, str | None, str], int] = {}
+    # bucket value: [count, first_ts, last_ts]  (ts = ISO string)
+    buckets: dict[tuple[str, str | None, str], list] = {}
     for mem in rows:
         tool = tool_from_tags(mem.get("tags") or [])
         if not tool:
@@ -48,22 +51,45 @@ def load_tool_events(pg_store, tool_from_tags, domain_from_directory,
             m = _FILE_LINE_RE.search(content)
             if m:
                 file_path = m.group(1).strip() or None
+        ts = _iso(mem.get("created_at"))
         key = (tool, file_path, domain)
-        buckets[key] = buckets.get(key, 0) + 1
+        slot = buckets.get(key)
+        if slot is None:
+            buckets[key] = [1, ts, ts]
+        else:
+            slot[0] += 1
+            if ts and (slot[1] is None or ts < slot[1]):
+                slot[1] = ts
+            if ts and (slot[2] is None or ts > slot[2]):
+                slot[2] = ts
     return [
-        {"tool": t, "file_path": fp, "domain": d, "count": n}
-        for (t, fp, d), n in buckets.items()
+        {"tool": t, "file_path": fp, "domain": d,
+         "count": n, "first_ts": first, "last_ts": last}
+        for (t, fp, d), (n, first, last) in buckets.items()
     ]
+
+
+def _iso(ts) -> str | None:
+    """Render a timestamp-ish value as an ISO string, or None."""
+    if ts is None:
+        return None
+    if hasattr(ts, "isoformat"):
+        try:
+            return ts.isoformat()
+        except (TypeError, ValueError):
+            return None
+    return str(ts)
 
 
 def load_command_events(pg_store, domain_from_directory,
                         cmd_hash, first_line) -> list[dict[str, Any]]:
-    """Parse Bash command memories; cmd_hash = sha1[:12] of first line."""
+    """Parse Bash command memories; one row per (cmd, hash, domain) with
+    count + first/last timestamps."""
     rows = pg_store.search_by_tag_vector(
         query_embedding=None, tag="tool:bash",
-        domain=None, min_heat=0.0, limit=5000,
+        domain=None, min_heat=0.0, limit=10 ** 9,
     )
-    buckets: dict[tuple[str, str, str], int] = {}
+    buckets: dict[tuple[str, str, str], list] = {}
     for mem in rows:
         m = _COMMAND_LINE_RE.search(mem.get("content") or "")
         if not m:
@@ -75,11 +101,21 @@ def load_command_events(pg_store, domain_from_directory,
         dom = mem.get("domain") or domain_from_directory(
             mem.get("directory_context")
         ) or ""
+        ts = _iso(mem.get("created_at"))
         key = (cmd, h, dom)
-        buckets[key] = buckets.get(key, 0) + 1
+        slot = buckets.get(key)
+        if slot is None:
+            buckets[key] = [1, ts, ts]
+        else:
+            slot[0] += 1
+            if ts and (slot[1] is None or ts < slot[1]):
+                slot[1] = ts
+            if ts and (slot[2] is None or ts > slot[2]):
+                slot[2] = ts
     return [
-        {"cmd": c, "cmd_hash": h, "domain": d, "count": n}
-        for (c, h, d), n in buckets.items()
+        {"cmd": c, "cmd_hash": h, "domain": d,
+         "count": n, "first_ts": first, "last_ts": last}
+        for (c, h, d), (n, first, last) in buckets.items()
     ]
 
 
@@ -92,7 +128,7 @@ def load_command_files(pg_store, known_paths: Iterable[str],
         return []
     rows = pg_store.search_by_tag_vector(
         query_embedding=None, tag="tool:bash",
-        domain=None, min_heat=0.0, limit=5000,
+        domain=None, min_heat=0.0, limit=10 ** 9,
     )
     buckets: dict[tuple[str, str], int] = {}
     for mem in rows:
