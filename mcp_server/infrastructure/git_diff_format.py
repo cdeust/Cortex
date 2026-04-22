@@ -33,9 +33,7 @@ def parse_diff_lines(raw: str) -> list[dict]:
     return result
 
 
-def build_result(
-    filepath: str, diff_type: str, raw: str, max_lines: int
-) -> dict:
+def build_result(filepath: str, diff_type: str, raw: str, max_lines: int) -> dict:
     """Standard diff response from raw ``git diff`` output."""
     lines = parse_diff_lines(raw)
     return {
@@ -47,7 +45,9 @@ def build_result(
 
 
 def content_as_new(
-    filepath: str, content: str, max_lines: int,
+    filepath: str,
+    content: str,
+    max_lines: int,
     diff_type: str = "new_file",
 ) -> dict:
     """Render raw file content as an all-add diff (new-file view)."""
@@ -73,9 +73,7 @@ def content_as_delete(filepath: str, content: str, max_lines: int) -> dict:
     }
 
 
-def content_as_context(
-    filepath: str, content: str, max_lines: int
-) -> dict:
+def content_as_context(filepath: str, content: str, max_lines: int) -> dict:
     """Render raw file content as an unchanged / context-only view."""
     raw_lines = content.splitlines()
     lines = [{"text": " " + ln, "type": "ctx"} for ln in raw_lines]

@@ -131,16 +131,23 @@ def _reference_line(tool_name: str, tool_input: dict) -> str | None:
         fp = tool_input.get("file_path") or tool_input.get("notebook_path")
         return f"**Read:** `{fp}`" if fp else None
     if tool_name == "Glob":
-        return (f"**Glob:** `{tool_input.get('pattern') or ''}` "
-                f"(root=`{tool_input.get('path') or ''}`)")
+        return (
+            f"**Glob:** `{tool_input.get('pattern') or ''}` "
+            f"(root=`{tool_input.get('path') or ''}`)"
+        )
     if tool_name == "Grep":
-        return (f"**Grep:** `{tool_input.get('pattern') or ''}` "
-                f"in `{tool_input.get('path') or ''}`")
+        return (
+            f"**Grep:** `{tool_input.get('pattern') or ''}` "
+            f"in `{tool_input.get('path') or ''}`"
+        )
     return None
 
 
 def _build_memory_content(
-    tool_name: str, tool_input: dict, output: str, cwd: str,
+    tool_name: str,
+    tool_input: dict,
+    output: str,
+    cwd: str,
 ) -> str:
     """Build a structured memory string. Light-value tools record only
     the input reference to keep writes <200ms."""
@@ -190,6 +197,7 @@ def _load_remember():
     try:
         import asyncio
         from mcp_server.handlers.remember import handler
+
         return asyncio, handler
     except ImportError as exc:
         missing = str(exc).replace("No module named ", "").strip("'")
@@ -204,10 +212,17 @@ def _load_remember():
 def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> None:
     """Store a memory via the remember handler."""
     asyncio, remember_handler = _load_remember()
-    result = asyncio.run(remember_handler({
-        "content": content, "tags": tags, "directory": cwd,
-        "source": "post_tool_capture", "force": False,
-    }))
+    result = asyncio.run(
+        remember_handler(
+            {
+                "content": content,
+                "tags": tags,
+                "directory": cwd,
+                "source": "post_tool_capture",
+                "force": False,
+            }
+        )
+    )
     if result.get("stored"):
         _log(
             f"captured {tool_name} → memory_id={result.get('memory_id')} "

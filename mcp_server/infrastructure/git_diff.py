@@ -105,8 +105,11 @@ def _read_safe(git_root: Path, relative: str) -> str | None:
 
 
 def _cascade_for_tracked(
-    safe_path: str, tracked: set[str], staged_files: set[str],
-    git_root: Path, max_lines: int,
+    safe_path: str,
+    tracked: set[str],
+    staged_files: set[str],
+    git_root: Path,
+    max_lines: int,
 ) -> dict:
     """Run the working-tree → staged → deleted → last-commit → clean cascade."""
     raw = git_cmd_safe("diff", ["--", safe_path], git_root)
@@ -120,26 +123,23 @@ def _cascade_for_tracked(
         content = git_cmd_safe("show", ["HEAD:" + safe_path], git_root)
         if content:
             return content_as_delete(safe_path, content, max_lines)
-    raw = git_cmd_safe(
-        "log", ["-1", "-p", "--format=", "--", safe_path], git_root
-    )
+    raw = git_cmd_safe("log", ["-1", "-p", "--format=", "--", safe_path], git_root)
     if raw:
         return build_result(safe_path, "last_commit", raw, max_lines)
     if safe_path in staged_files and safe_path not in tracked:
         wt = _read_safe(git_root, safe_path)
         if wt is not None:
-            return content_as_new(
-                safe_path, wt, max_lines, diff_type="staged"
-            )
+            return content_as_new(safe_path, wt, max_lines, diff_type="staged")
     content = git_cmd_safe("show", ["HEAD:" + safe_path], git_root)
     if content:
         return content_as_context(safe_path, content, max_lines)
     return {
-        "file": safe_path, "diff_type": "unchanged",
-        "lines": [], "truncated": False,
+        "file": safe_path,
+        "diff_type": "unchanged",
+        "lines": [],
+        "truncated": False,
         "reason": (
-            "tracked by git but no content retrievable "
-            "(submodule or LFS pointer)"
+            "tracked by git but no content retrievable (submodule or LFS pointer)"
         ),
     }
 
@@ -150,9 +150,7 @@ def _staged_files_set(git_root: Path) -> set[str]:
     return set(staged_raw.splitlines()) if staged_raw else set()
 
 
-def get_file_diff(
-    filepath: str, git_root: Path, max_lines: int = 80
-) -> dict:
+def get_file_diff(filepath: str, git_root: Path, max_lines: int = 80) -> dict:
     """Cascade: tracked → untracked → historical; always non-empty result.
 
     Security: ``filepath`` is validated against the tracked + staged
@@ -174,12 +172,11 @@ def get_file_diff(
     if historical is not None:
         return historical
     return {
-        "file": filepath, "diff_type": "none",
-        "lines": [], "truncated": False,
-        "reason": (
-            "file not tracked, not present, "
-            "and absent from all git history"
-        ),
+        "file": filepath,
+        "diff_type": "none",
+        "lines": [],
+        "truncated": False,
+        "reason": ("file not tracked, not present, and absent from all git history"),
     }
 
 
@@ -194,9 +191,7 @@ def _tier1_candidates(sha: str) -> list[str]:
     return [sha, sha + "^"]
 
 
-def _deleted_result(
-    filepath: str, content: str, max_lines: int, sha: str
-) -> dict:
+def _deleted_result(filepath: str, content: str, max_lines: int, sha: str) -> dict:
     r = content_as_delete(filepath, content, max_lines)
     r["reason"] = f"deleted — recovered from commit {sha[:8]}"
     return r
@@ -242,9 +237,7 @@ def _lookup_tier2(
     return None
 
 
-def _lookup_tier3(
-    filepath: str, git_root: Path, max_lines: int
-) -> dict | None:
+def _lookup_tier3(filepath: str, git_root: Path, max_lines: int) -> dict | None:
     """Tier 3: walk full history (cap 50) until one sha yields content."""
     all_shas = git_cmd_safe(
         "log",
@@ -263,9 +256,7 @@ def _lookup_tier3(
     return None
 
 
-def _lookup_historical(
-    filepath: str, git_root: Path, max_lines: int
-) -> dict | None:
+def _lookup_historical(filepath: str, git_root: Path, max_lines: int) -> dict | None:
     """Three-tier historical lookup for deleted / renamed paths."""
     hit, last_sha = _lookup_tier1(filepath, git_root, max_lines)
     if hit is not None:

@@ -87,16 +87,14 @@ def _get_ui_root() -> Path:
     """
     pkg_dir = Path(__file__).parent.parent
     candidates = [
-        pkg_dir / "ui",                  # pip-installed layout
-        pkg_dir.parent / "ui",           # plugin cache + dev checkout
-        Path.cwd() / "ui",               # last-resort when cwd is plugin root
+        pkg_dir / "ui",  # pip-installed layout
+        pkg_dir.parent / "ui",  # plugin cache + dev checkout
+        Path.cwd() / "ui",  # last-resort when cwd is plugin root
     ]
     for ui in candidates:
         if (ui / "unified-viz.html").is_file():
             return ui
-    raise RuntimeError(
-        f"UI files not found — looked in {[str(c) for c in candidates]}"
-    )
+    raise RuntimeError(f"UI files not found — looked in {[str(c) for c in candidates]}")
 
 
 def _get_store():
@@ -120,8 +118,9 @@ _WIKI_DB_OPS = {
 }
 
 
-def _route_unified_get(handler, store, js_dir: Path, css_dir: Path,
-                      html_path: Path) -> None:
+def _route_unified_get(
+    handler, store, js_dir: Path, css_dir: Path, html_path: Path
+) -> None:
     """Resolve a GET request for the unified server."""
     path = handler.path
     path_no_qs = path.split("?")[0]
@@ -225,9 +224,7 @@ def _announce(url: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Cortex standalone HTTP server")
-    parser.add_argument(
-        "--type", required=True, choices=["unified", "methodology"]
-    )
+    parser.add_argument("--type", required=True, choices=["unified", "methodology"])
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
 
@@ -244,7 +241,9 @@ def main() -> None:
     _announce(url)
 
     threading.Thread(
-        target=_idle_watchdog, args=(server,), daemon=True,
+        target=_idle_watchdog,
+        args=(server,),
+        daemon=True,
     ).start()
 
     if args.type == "unified" and store is not None:
