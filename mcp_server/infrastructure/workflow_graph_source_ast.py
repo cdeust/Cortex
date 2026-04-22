@@ -163,6 +163,7 @@ def _as_list(payload: Any) -> list[dict]:
 # stage-3 tree-sitter extractors; see
 # ``automatised-pipeline/src/clustering.rs`` for the canonical list.
 _SYMBOL_LABELS = (
+    # Core — Rust + Python (original set)
     "Function",
     "Method",
     "Struct",
@@ -170,25 +171,50 @@ _SYMBOL_LABELS = (
     "Trait",
     "Constant",
     "TypeAlias",
+    # JVM family — Java, Kotlin
+    "Class",
+    "Interface",
+    "Field",
+    "Property",
+    # Swift / ObjC family
+    "Protocol",
+    "Extension",
+    # C / C++
+    "Union",
+    "Typedef",
+    "Macro",
+    # Go / general
+    "Module",
+    "Package",
+    "Namespace",
+    "Variable",
 )
 
 
 def _symbol_type_from_label(label: str) -> str:
     """Map AP's label → workflow-graph symbol_type.
 
-    Keeps the value set small (function/method/class/constant) so the
-    palette (``SYMBOL_COLORS``) remains stable. Rust-specific labels
-    (Struct/Enum/Trait) collapse to ``class``; ``TypeAlias`` becomes
-    ``constant``.
+    Keeps the value set small so the palette (``SYMBOL_COLORS``) stays
+    compact. Every AP label from every supported language collapses
+    into one of: function · method · class · module · constant.
     """
     low = label.lower()
-    if low in ("function",):
+    if low == "function":
         return "function"
-    if low in ("method",):
+    if low == "method":
         return "method"
-    if low in ("struct", "enum", "trait"):
+    # All type-like constructs → class. Covers Rust (struct/enum/trait),
+    # Java/Kotlin (class/interface), Swift/ObjC (protocol/extension),
+    # C/C++ (union).
+    if low in ("struct", "enum", "trait", "class", "interface",
+              "protocol", "extension", "union"):
         return "class"
-    if low in ("constant", "typealias"):
+    # Module-ish containers → module (amber).
+    if low in ("module", "package", "namespace"):
+        return "module"
+    # Value-ish / alias-ish → constant (slate).
+    if low in ("constant", "typealias", "typedef", "macro",
+              "field", "property", "variable"):
         return "constant"
     return low
 
