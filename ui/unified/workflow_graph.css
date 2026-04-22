@@ -12,6 +12,13 @@
   background: var(--ink-0, #080810);
 }
 
+/* Filter bar: the grouped <select> widens to fit the longest optgroup label
+   so it stays readable. Reset button shares the `.filter-btn` look. */
+#wfg-filter-select {
+  min-width: 200px;
+  max-width: 320px;
+}
+
 /* ── Shells (radial level guides per domain) ──────────────────────── */
 .wfg-shell {
   fill: none;
@@ -26,6 +33,9 @@
 .wfg-shell--L4 { stroke: rgba(244, 63, 94, 0.35); stroke-width: 1.4; stroke-dasharray: none; fill: none; }
 .wfg-shell--L5 { stroke: rgba(192, 112, 208, 0.35); stroke-width: 1.4; stroke-dasharray: none; fill: none; }
 
+/* Shell tokens (L1/L2/L3/L4/L5) — no stroke halo; a 2-letter token
+   with a 3px dark stroke unions into a solid box. We rely on the
+   color contrast + letter-spacing to stay readable. */
 .wfg-shell-label {
   font-family: var(--mono, 'JetBrains Mono', monospace);
   font-size: 9px;
@@ -33,9 +43,8 @@
   text-transform: uppercase;
   fill: rgba(160, 150, 140, 0.35);
   pointer-events: none;
-  paint-order: stroke;
-  stroke: rgba(8, 8, 16, 0.85);
-  stroke-width: 3px;
+  paint-order: fill;
+  stroke: none;
 }
 .wfg-shell-label--L1 { fill: rgba(255, 180, 100, 0.55); }
 .wfg-shell-label--L2 { fill: rgba(120, 220, 200, 0.55); }
@@ -96,17 +105,20 @@
   stroke-width: 2;
 }
 
-/* ── Labels (levels of scale: domain > tool_hub > agent only) ── */
+/* ── Labels (levels of scale: domain > tool_hub > agent only) ──
+   No `paint-order:stroke` / `stroke` pair — a 3px glyph-halo around a
+   long domain name like "dcp-apps-wealth-android" unions across glyphs
+   into a solid rectangular patch that reads as a grey box behind the
+   node. We drop the halo entirely; label fills are vivid enough on
+   the #080810 canvas, and the reference design doesn't use it. */
 .wfg-label {
   font-family: var(--sans, 'Inter Tight', system-ui, sans-serif);
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.01em;
   fill: var(--fg-0, #E8E4D8);
-  paint-order: stroke;
-  stroke: rgba(8, 8, 16, 0.9);
-  stroke-width: 3px;
-  stroke-linejoin: round;
+  paint-order: fill;
+  stroke: none;
   pointer-events: none;
   user-select: none;
 }

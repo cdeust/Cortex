@@ -77,27 +77,37 @@
   </span>
   <button class="filter-btn" id="glossary-toggle" title="Glossary (?)">?</button>
   <span class="filter-sep"></span>
-  <!-- Layer filters — one click shows only the nodes of that hierarchy level. -->
-  <button class="filter-btn active" data-wfg-filter="all">All</button>
-  <button class="filter-btn" data-wfg-filter="L1" title="Skills · Hooks · Commands · Agents">L1 setup</button>
-  <button class="filter-btn" data-wfg-filter="L2" title="Tool hubs (Edit · Read · Grep · Bash · …)">L2 tools</button>
-  <button class="filter-btn" data-wfg-filter="L3" title="Files touched by tools">L3 files</button>
-  <button class="filter-btn" data-wfg-filter="L4">L4 discussions</button>
-  <button class="filter-btn" data-wfg-filter="L5">L5 memories</button>
-  <span class="filter-sep"></span>
-  <!-- Specific kinds / file clusters — finer than layer, for spotting one thing. -->
-  <button class="filter-btn" data-wfg-filter="kind:skill">Skills</button>
-  <button class="filter-btn" data-wfg-filter="kind:command">Commands</button>
-  <button class="filter-btn" data-wfg-filter="kind:hook">Hooks</button>
-  <button class="filter-btn" data-wfg-filter="kind:agent">Agents</button>
-  <button class="filter-btn" data-wfg-filter="kind:mcp">MCPs</button>
-  <span class="filter-sep"></span>
-  <button class="filter-btn" data-wfg-filter="file:edit_write" title="Files you edited/wrote">Edited</button>
-  <button class="filter-btn" data-wfg-filter="file:read" title="Files you only read">Read only</button>
-  <button class="filter-btn" data-wfg-filter="file:grep_glob" title="Files only matched by Grep/Glob">Searched</button>
-  <button class="filter-btn" data-wfg-filter="file:bash" title="Files only touched by Bash">Bash only</button>
-  <span class="filter-sep"></span>
-  <button class="filter-btn" data-wfg-filter="cross-domain" title="Files shared across domains">Cross-domain</button>
+  <!-- Single grouped select replaces 14 individual buttons — same
+       vocabulary, one row. "Reset" restores ``all``. -->
+  <button class="filter-btn" id="wfg-filter-reset"
+          title="Clear the graph filter (show everything)">Reset</button>
+  <select id="wfg-filter-select" class="filter-select"
+          aria-label="Workflow graph filter">
+    <option value="all" selected>All nodes</option>
+    <optgroup label="By layer">
+      <option value="L1">L1 — Claude setup (skills · hooks · commands · agents)</option>
+      <option value="L2">L2 — tools (Edit · Read · Grep · Glob · Bash · Write · Task)</option>
+      <option value="L3">L3 — files touched by tools</option>
+      <option value="L4">L4 — discussions</option>
+      <option value="L5">L5 — memories</option>
+    </optgroup>
+    <optgroup label="By kind">
+      <option value="kind:skill">Skills only</option>
+      <option value="kind:command">Commands only</option>
+      <option value="kind:hook">Hooks only</option>
+      <option value="kind:agent">Agents only</option>
+      <option value="kind:mcp">MCPs only</option>
+    </optgroup>
+    <optgroup label="By file cluster">
+      <option value="file:edit_write">Files edited / written</option>
+      <option value="file:read">Files read only</option>
+      <option value="file:grep_glob">Files matched by Grep / Glob</option>
+      <option value="file:bash">Files touched only by Bash</option>
+    </optgroup>
+    <optgroup label="Structural">
+      <option value="cross-domain">Cross-domain (shared)</option>
+    </optgroup>
+  </select>
   <span class="filter-sep"></span>
   <select id="domain-select" class="filter-select"><option value="">All Domains</option></select>
   <input type="text" id="search-box" placeholder="Search path, skill, command…">

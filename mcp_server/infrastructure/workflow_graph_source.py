@@ -109,12 +109,20 @@ class WorkflowGraphSource:
     """Facade over the per-stream loaders. Every method returns plain
     dicts that the core ``WorkflowGraphBuilder`` ingests verbatim."""
 
-    # ── 1. Tool events (PG) ───────────────────────────────────────────
+    # ── 1. Tool events (PG memories + JSONL tool_uses union) ──────────
     def load_tool_events(self, pg_store) -> list[dict[str, Any]]:
-        return _pg.load_tool_events(
+        """Every file touch Claude ever performed, across both the
+        post_tool_capture memory stream (covers Edit/Write/Read) AND
+        session JSONL tool_uses (covers Grep/Glob/NotebookRead/Bash
+        paths and subagent transcripts Explore/Plan used). Duplicate
+        ``(tool, file, domain)`` rows are merged by the builder's
+        ``_dedupe_and_link`` pass — counts sum, timestamp bounds widen."""
+        pg_rows = _pg.load_tool_events(
             pg_store, _tool_from_tags, _domain_from_directory,
             _cmd_hash, _first_line,
         )
+        jsonl_rows = _jsonl.load_file_access_events(_domain_from_project_dir)
+        return pg_rows + jsonl_rows
 
     # ── 2. Skills (filesystem scan) ───────────────────────────────────
     def load_skills(self) -> list[dict[str, Any]]:

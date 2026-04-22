@@ -98,7 +98,7 @@ def build_workflow_graph(
     *,
     domain_filter: str | None = None,
     min_memory_heat: float = 0.0,
-    memory_limit: int = 10000,
+    memory_limit: int = 0,          # 0 = unbounded (pg_store convention)
 ) -> dict[str, Any]:
     """Load sources, build the graph, validate, and return JSON payload.
 

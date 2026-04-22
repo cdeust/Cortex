@@ -70,16 +70,34 @@
   }
 
   function bindButtons() {
+    // Grouped select — one control replaces 14 buttons.
+    var sel = document.getElementById('wfg-filter-select');
+    if (sel) {
+      sel.addEventListener('change', function () {
+        state.wfgFilter = sel.value || 'all';
+        apply();
+      });
+    }
+    // Reset button: back to "all".
+    var reset = document.getElementById('wfg-filter-reset');
+    if (reset) {
+      reset.addEventListener('click', function () {
+        state.wfgFilter = 'all';
+        if (sel) sel.value = 'all';
+        apply();
+      });
+    }
+    // Backward-compat: old ``data-wfg-filter`` buttons (if any remain).
     document.body.addEventListener('click', function (ev) {
       var btn = ev.target && ev.target.closest
         ? ev.target.closest('.filter-btn[data-wfg-filter]')
         : null;
       if (!btn) return;
       state.wfgFilter = btn.dataset.wfgFilter;
-      // Visual active-state toggle scoped to wfg filter buttons.
       var all = document.querySelectorAll('.filter-btn[data-wfg-filter]');
       for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
       btn.classList.add('active');
+      if (sel) sel.value = state.wfgFilter;
       apply();
     });
   }

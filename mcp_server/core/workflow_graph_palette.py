@@ -55,7 +55,10 @@ MEMORY_STAGE_COLORS: dict[str, str] = {
     "early_ltp": "#4ADE80",
     "late_ltp": "#16A34A",
     "consolidated": "#166534",
-    "episodic": "#58D888",
+    # episodic is the default PG stage before LTP promotion — paint it
+    # with the same green as early_ltp so the legend's green band covers
+    # every non-semantic memory and there's no "unexplained green".
+    "episodic": "#4ADE80",
     "semantic": "#C070D0",
 }
 
