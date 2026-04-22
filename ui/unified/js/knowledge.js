@@ -288,6 +288,88 @@
     }
   }
 
+  // ── Symbol ↔ memory impact resolution ──
+  // A memory is "impacted by" a code symbol when (a) a file touched by
+  // the memory (path / file_refs / file_path) is the symbol's parent
+  // file, or (b) the symbol's label appears verbatim in the memory's
+  // body or tags. We resolve this purely from the already-loaded graph
+  // data so no extra server round-trip is needed.
+  var _symIndexCache = null;
+  var _symIndexKey = 0;
+  function _buildSymbolIndex() {
+    var data = window.JUG && JUG.state && JUG.state.lastData;
+    if (!data || !Array.isArray(data.nodes)) return null;
+    // Cache by data-identity so repeated card renders reuse the index.
+    var key = data.nodes.length + ':' + (data.edges ? data.edges.length : 0);
+    if (_symIndexCache && _symIndexKey === key) return _symIndexCache;
+    var byPath = {};     // path/basename → [symbol nodes]
+    var byLabel = {};    // lowercase-label → [symbol nodes]
+    data.nodes.forEach(function (n) {
+      if (n.kind !== 'symbol' && n.type !== 'symbol') return;
+      var p = n.path || '';
+      if (p) {
+        (byPath[p] = byPath[p] || []).push(n);
+        var base = p.split('/').pop();
+        if (base && base !== p) (byPath[base] = byPath[base] || []).push(n);
+      }
+      var lbl = (n.label || '').trim();
+      if (lbl && lbl.length >= 3) {
+        var k = lbl.toLowerCase();
+        (byLabel[k] = byLabel[k] || []).push(n);
+      }
+    });
+    _symIndexCache = { byPath: byPath, byLabel: byLabel };
+    _symIndexKey = key;
+    return _symIndexCache;
+  }
+  function resolveMemorySymbols(mem, maxN) {
+    var idx = _buildSymbolIndex();
+    if (!idx) return [];
+    var refs = [];
+    // File-based matches.
+    var fileRefs = [];
+    if (mem.path) fileRefs.push(mem.path);
+    if (Array.isArray(mem.file_refs)) fileRefs = fileRefs.concat(mem.file_refs);
+    if (Array.isArray(mem.fileRefs)) fileRefs = fileRefs.concat(mem.fileRefs);
+    var seen = {};
+    fileRefs.forEach(function (fp) {
+      if (!fp) return;
+      var hits = idx.byPath[fp] || [];
+      var base = fp.split('/').pop();
+      if (base && base !== fp) hits = hits.concat(idx.byPath[base] || []);
+      hits.forEach(function (s) {
+        if (seen[s.id]) return;
+        seen[s.id] = 1;
+        refs.push({ node: s, via: 'file' });
+      });
+    });
+    // Label-based matches in body / content / tags.
+    var hay = ((mem.content || mem.body || '') + ' ' +
+               ((mem.tags || []).join(' '))).toLowerCase();
+    if (hay.length > 4) {
+      var labelKeys = Object.keys(idx.byLabel);
+      // Guard — avoid O(N·M) on very large inventories; cap the scan.
+      var cap = Math.min(labelKeys.length, 4000);
+      for (var i = 0; i < cap && refs.length < (maxN || 12); i++) {
+        var k = labelKeys[i];
+        if (hay.indexOf(k) === -1) continue;
+        // Word-boundary sanity — avoid matching "set" inside "setup".
+        var re = new RegExp('(^|[^A-Za-z0-9_])' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^A-Za-z0-9_]|$)');
+        if (!re.test(hay)) continue;
+        idx.byLabel[k].forEach(function (s) {
+          if (seen[s.id]) return;
+          seen[s.id] = 1;
+          refs.push({ node: s, via: 'label' });
+        });
+      }
+    }
+    return refs.slice(0, maxN || 12);
+  }
+
+  // Shared export so timeline.js (Board) reuses the same resolver.
+  window.JUG = window.JUG || {};
+  window.JUG._kvResolve = resolveMemorySymbols;
+
   // ── Build a memory card ──
   function buildCard(mem, allMems) {
     var heat = mem.heat || 0;
@@ -396,6 +478,26 @@
         tagsRow.appendChild(more);
       }
       card.appendChild(tagsRow);
+    }
+
+    // Code impact — symbols whose file or name connects to this memory.
+    // Clicking a chip focuses the symbol in the Graph view.
+    var syms = resolveMemorySymbols(mem, 8);
+    if (syms.length) {
+      var symRow = el('div', 'kv-card-tags');
+      symRow.title = 'Code symbols that impact this memory';
+      syms.forEach(function (ref) {
+        var chip = el('span', 'kv-card-tag kv-card-symchip');
+        chip.textContent = (ref.via === 'file' ? 'in ' : '') + (ref.node.label || ref.node.id);
+        chip.style.cursor = 'pointer';
+        chip.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          if (window.JUG && JUG.emit) JUG.emit('graph:selectNode', ref.node);
+          if (JUG.state) JUG.state.activeView = 'graph';
+        });
+        symRow.appendChild(chip);
+      });
+      card.appendChild(symRow);
     }
 
     // Click to expand
@@ -534,6 +636,28 @@
         entRow.appendChild(chip);
       });
       panel.appendChild(entRow);
+    }
+
+    // Code impact — AST symbols that connect to this memory.
+    var symRefs = resolveMemorySymbols(mem, 30);
+    if (symRefs.length > 0) {
+      var symSec = el('div', 'kv-expanded-section');
+      symSec.textContent = 'Code impact';
+      panel.appendChild(symSec);
+      var symRow = el('div', 'kv-expanded-entities');
+      symRefs.forEach(function (ref) {
+        var chip = el('span', 'kv-entity-chip');
+        var pfx = ref.via === 'file' ? 'in ' : '';
+        chip.textContent = pfx + (ref.node.label || ref.node.id);
+        chip.title = (ref.node.path || '') + (ref.node.symbol_type ? ' · ' + ref.node.symbol_type : '');
+        chip.style.cursor = 'pointer';
+        chip.addEventListener('click', function () {
+          if (window.JUG && JUG.emit) JUG.emit('graph:selectNode', ref.node);
+          if (JUG.state) JUG.state.activeView = 'graph';
+        });
+        symRow.appendChild(chip);
+      });
+      panel.appendChild(symRow);
     }
 
     // Related memories (same domain, high similarity by shared tags)

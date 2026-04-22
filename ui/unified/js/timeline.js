@@ -345,6 +345,27 @@
       body.appendChild(tagsRow);
     }
 
+    // Code impact — AST symbols that touch this memory (by file-ref
+    // or verbatim label mention). Cap at 3 chips here to keep Kanban
+    // cards compact; the Knowledge-view expanded modal shows more.
+    var _kvSyms = (window.JUG && JUG._kvResolve) ? JUG._kvResolve(mem, 3) : null;
+    if (_kvSyms && _kvSyms.length) {
+      var symRow = el('div', 'kb-card-tags');
+      symRow.title = 'Code symbols connected to this memory';
+      _kvSyms.forEach(function (ref) {
+        var chip = el('span', 'kb-card-tag');
+        chip.textContent = '⟨/⟩ ' + (ref.node.label || ref.node.id);
+        chip.style.cursor = 'pointer';
+        chip.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          if (window.JUG && JUG.emit) JUG.emit('graph:selectNode', ref.node);
+          if (JUG.state) JUG.state.activeView = 'graph';
+        });
+        symRow.appendChild(chip);
+      });
+      body.appendChild(symRow);
+    }
+
     // Protected badge
     if (mem.isProtected) {
       var shield = el('span', 'kb-badge kb-badge-protected');
