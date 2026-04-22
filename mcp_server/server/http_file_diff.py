@@ -33,8 +33,6 @@ def serve_file_diff(handler) -> None:
         handler.end_headers()
         return
 
-    from pathlib import Path
-
     from mcp_server.infrastructure.git_diff import (
         find_git_root,
         get_file_diff,

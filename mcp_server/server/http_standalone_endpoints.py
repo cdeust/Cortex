@@ -19,7 +19,8 @@ import re
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-from mcp_server.server.http_common import _apply_cors_headers, validate_host_header
+from mcp_server.server.http_common import _apply_cors_headers
+from mcp_server.server.http_security import validate_host_header
 from mcp_server.server.http_standalone_graph import (
     build_discussion_detail,
     build_discussions_response,

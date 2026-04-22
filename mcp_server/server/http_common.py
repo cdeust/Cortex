@@ -40,9 +40,6 @@ from typing import Any
 # backward-compatibility with existing import sites.
 from mcp_server.server.http_security import (  # noqa: E402
     _apply_cors_headers,
-    enforce_same_origin_write,
-    resolve_allowed_origin,
-    validate_host_header,
 )
 
 
