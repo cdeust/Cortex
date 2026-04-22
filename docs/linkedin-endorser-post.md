@@ -18,7 +18,7 @@ Other benchmark results:
 • 97.8% Recall@10 on LongMemEval (vs 78.4% paper best)
 • 92.6% Recall@10 on LoCoMo
 • 41 paper citations, 20 neuroscience mechanisms with faithful implementations
-• 2080 tests passing
+• 2500+ tests passing
 
 The paper was reviewed by three independent reasoning agents (Einstein operational-definition audit, Feynman cargo-cult detector, Shannon information-theoretic analysis) and revised based on their findings — including running the temporal-detection experiment they demanded. Every limitation is disclosed. Every constant traces to a paper or measured ablation.
 

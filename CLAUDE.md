@@ -314,7 +314,7 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 ## Testing
 
 ```bash
-pytest                                      # All tests (1826+ passing)
+pytest                                      # All tests (2500+ passing)
 pytest --cov=mcp_server --cov-report=term-missing  # With coverage
 pytest tests_py/core/                       # Core layer only
 pytest tests_py/shared/                     # Shared layer only

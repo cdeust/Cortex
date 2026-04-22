@@ -377,7 +377,7 @@ Runs **100% locally** — MCP over stdio, PostgreSQL on localhost, visualization
 ## Development
 
 ```bash
-pytest                    # 2080 tests
+pytest                    # 2500+ tests
 ruff check .              # Lint
 ruff format --check .     # Format
 ```
