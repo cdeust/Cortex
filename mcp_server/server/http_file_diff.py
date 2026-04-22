@@ -70,6 +70,41 @@ def _to_repo_rel(name: str, git_root) -> str:
     return clean
 
 
+def _allowed_probe_roots() -> "list[str]":
+    """Real-path roots under which ancestor-walking probes are allowed.
+
+    CWE-22 containment: we only probe directories that the user could
+    legitimately own (home, temp, current workdir). Anything outside
+    falls back to the server's CWD git root. This gives CodeQL an
+    explicit boundary on ``name``-derived path operations without
+    breaking the "repo on this laptop" use-case.
+    """
+    import os
+    from pathlib import Path
+
+    roots: list[str] = []
+    for candidate in (str(Path.home()), os.getcwd(), "/tmp", "/var/folders"):
+        try:
+            roots.append(os.path.realpath(candidate))
+        except (OSError, ValueError):
+            continue
+    return roots
+
+
+def _under_allowed_root(p: "Path") -> bool:  # noqa: F821
+    """True iff ``p`` realpath-resolves inside any allowed probe root."""
+    import os
+
+    try:
+        target = os.path.realpath(str(p))
+    except (OSError, ValueError):
+        return False
+    for root in _allowed_probe_roots():
+        if target == root or target.startswith(root + os.sep):
+            return True
+    return False
+
+
 def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
     """Resolve git root from the file's own path, then fall back to CWD.
 
@@ -79,13 +114,18 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
     along the ancestry exists, falls back to the server's cwd repo so
     that a tracked-then-deleted file can still be recovered from history.
 
-    Security: ``name`` is user-controlled (via ``?name=`` query param).
-    We normalize it with ``os.path.normpath`` (collapses ``..`` and
-    ``//``), reject null bytes and empty input, and cap the ancestor
-    walk at 64 levels to block pathological inputs. The walk only
-    performs ``is_dir()`` / ``rev-parse`` on the normalized ancestry —
-    never reads file content — and any read against the resulting root
-    goes through ``git_diff._safe_join`` (CWE-22 mitigation).
+    Security (CWE-22): ``name`` is user-controlled (via ``?name=``
+    query parameter). Defences:
+
+      * Strip surrounding quotes, reject empty/null-byte inputs.
+      * ``os.path.normpath`` collapses ``..`` and ``//`` segments.
+      * Require absolute paths — relative inputs go straight to CWD.
+      * ``_under_allowed_root`` constrains the probe surface to the
+        user's ``$HOME``, server CWD, and system temp directories —
+        attackers cannot probe ``/etc``, ``/root``, etc.
+      * Ancestor walk capped at 64 levels.
+      * Only ``is_dir()`` / ``git rev-parse`` run against the
+        ancestry — no file content is read in this function.
     """
     import os
     from pathlib import Path
@@ -94,27 +134,26 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
         clean = name.strip().strip("\"'`")
         if not clean or "\x00" in clean:
             return find_git_root()
-        # Normalize to collapse ``..`` / ``//`` segments before use.
         p = Path(os.path.normpath(clean))
     except (ValueError, OSError):
         return find_git_root()
 
-    if p.is_absolute():
-        # Walk up the ancestry until we hit an existing directory.
-        # Cap depth to 64 — far deeper than any real filesystem.
-        cursor = p.parent
-        for _ in range(64):
-            if cursor == cursor.parent:
+    if not p.is_absolute() or not _under_allowed_root(p):
+        return find_git_root()
+
+    cursor = p.parent
+    for _ in range(64):
+        if cursor == cursor.parent or not _under_allowed_root(cursor):
+            break
+        try:
+            if cursor.is_dir():
+                root = find_git_root(cursor)
+                if root is not None:
+                    return root
                 break
-            try:
-                if cursor.is_dir():
-                    root = find_git_root(cursor)
-                    if root is not None:
-                        return root
-                    break
-            except OSError:
-                break
-            cursor = cursor.parent
+        except OSError:
+            break
+        cursor = cursor.parent
     return find_git_root()
 
 

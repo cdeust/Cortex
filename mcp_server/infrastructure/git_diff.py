@@ -9,15 +9,24 @@ argument sanitisation live in ``git_diff_exec``; the result-formatting
 helpers live in ``git_diff_format``; this module owns the cascade and
 the whitelist-matching policy.
 
-Security: All file paths are validated against git's own tracked file
-list. User-controlled paths are NEVER used directly in filesystem
-operations — they are matched against ``git ls-files`` output (the
-whitelist) first, and for genuinely-new untracked files we resolve and
-then ``is_relative_to(git_root)`` to prevent traversal.
+Security (CWE-22 / path-injection):
+
+  * ``_match_in_whitelist`` always returns a string drawn from the
+    ``tracked`` set (``git ls-files`` output). It never returns the
+    user-supplied name, even when they are ``==``. This explicitly
+    breaks the taint flow so downstream uses of the returned path are
+    sanitised — static analysers (CodeQL ``py/path-injection``) see
+    that the returned object is not derived from user input.
+  * ``_safe_join`` uses ``os.path.realpath`` + ``startswith(root +
+    sep)`` containment — the canonical pattern CodeQL recognises as a
+    sanitiser for path-injection.
+  * Every direct filesystem probe (``is_file``, ``read_text``,
+    ``exists``) goes through ``_safe_join``.
 """
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -55,15 +64,17 @@ def find_git_root(start: Path | None = None) -> Path | None:
 def _match_in_whitelist(name: str, tracked: set[str]) -> str | None:
     """Match a user-provided name against the git-tracked whitelist.
 
-    Returns the canonical tracked path or ``None`` if no match. This
-    ensures we NEVER use the user's raw input as a path.
+    Returns the canonical tracked path or ``None`` if no match. To
+    break the taint flow from the caller's user-controlled ``name``,
+    every return path yields a string drawn from ``tracked`` (the
+    output of ``git ls-files``) — never ``name`` itself, even when
+    equality holds. This is what allows static analysers to see the
+    whitelist as a proper sanitiser.
     """
-    if name in tracked:
-        return name
     basename = name.rsplit("/", 1)[-1] if "/" in name else name
-    for f in tracked:
-        if f == basename or f.endswith("/" + basename):
-            return f
+    for t in tracked:
+        if t == name or t == basename or t.endswith("/" + basename):
+            return t
     return None
 
 
@@ -91,18 +102,20 @@ def resolve_file(name: str, git_root: Path) -> str | None:
 def _safe_join(root: Path, relative: str) -> Path | None:
     """Join ``relative`` onto ``root`` and confirm the result stays inside.
 
-    Returns the resolved absolute path or ``None`` if the join would
-    escape ``root``. Used to prove path-containment to static analyzers
-    (CodeQL ``py/path-injection``) even when ``relative`` originated
-    from git's own tracked-file list — the check is defensive: a
-    successful return means the path is provably inside the repo.
+    Uses ``os.path.realpath`` on both arguments and checks the
+    canonical containment ``startswith(root + os.sep)``. This is the
+    pattern CodeQL's ``py/path-injection`` query recognises as a
+    sanitiser. Returns the resolved ``Path`` or ``None`` when the join
+    would escape ``root`` (or raises on unresolvable input).
     """
     try:
-        joined = (root / relative).resolve()
-        joined.relative_to(root.resolve())
-        return joined
+        root_real = os.path.realpath(str(root))
+        joined_real = os.path.realpath(os.path.join(root_real, relative))
     except (OSError, ValueError):
         return None
+    if joined_real != root_real and not joined_real.startswith(root_real + os.sep):
+        return None
+    return Path(joined_real)
 
 
 def _read_safe(git_root: Path, relative: str) -> str | None:
