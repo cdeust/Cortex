@@ -206,15 +206,30 @@ def _symbol_type_from_label(label: str) -> str:
     # All type-like constructs → class. Covers Rust (struct/enum/trait),
     # Java/Kotlin (class/interface), Swift/ObjC (protocol/extension),
     # C/C++ (union).
-    if low in ("struct", "enum", "trait", "class", "interface",
-              "protocol", "extension", "union"):
+    if low in (
+        "struct",
+        "enum",
+        "trait",
+        "class",
+        "interface",
+        "protocol",
+        "extension",
+        "union",
+    ):
         return "class"
     # Module-ish containers → module (amber).
     if low in ("module", "package", "namespace"):
         return "module"
     # Value-ish / alias-ish → constant (slate).
-    if low in ("constant", "typealias", "typedef", "macro",
-              "field", "property", "variable"):
+    if low in (
+        "constant",
+        "typealias",
+        "typedef",
+        "macro",
+        "field",
+        "property",
+        "variable",
+    ):
         return "constant"
     return low
 
