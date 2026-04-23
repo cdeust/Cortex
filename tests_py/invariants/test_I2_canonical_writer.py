@@ -42,7 +42,7 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Homeostatic fold (amortized ~once/month per domain).
     ("handlers/consolidation/homeostatic.py", 277),
     # Anchor pin: heat_base=1.0 + no_decay=TRUE preserves resist-decay.
-    ("handlers/anchor.py", 140),
+    ("handlers/anchor.py", 143),
     # Preemptive boost: heat_base += 0.1 on Read/Edit/Write hook.
     ("hooks/preemptive_context.py", 136),
     # Pipeline-impact boost: heat_base += 0.15 for symbols touched by an
