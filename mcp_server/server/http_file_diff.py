@@ -127,52 +127,43 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
       * Only ``is_dir()`` / ``git rev-parse`` run against the
         ancestry — no file content is read in this function.
     """
-    import os
     from pathlib import Path
 
     try:
         clean = name.strip().strip("\"'`")
         if not clean or "\x00" in clean:
             return find_git_root()
-        # Werkzeug-style whitelist: reject ``..`` traversal segments.
-        # After this check the only way ``fullpath`` can escape its
-        # base is via an absolute segment, which ``os.path.join``
-        # itself promotes to the start of the path — blocked by the
-        # ``startswith(base_path)`` check below.
-        if ".." in clean.replace("\\", "/").split("/"):
+        # Werkzeug-style whitelist: reject ``..`` traversal and absolute
+        # inputs before any FS work. After this, ``clean`` cannot
+        # escape any base it's joined to.
+        parts = [p for p in clean.replace("\\", "/").split("/") if p]
+        if any(p == ".." for p in parts) or clean.startswith(("/", "\\")):
             return find_git_root()
     except (ValueError, OSError):
         return find_git_root()
 
-    # CWE-22 — CodeQL canonical pattern.
-    # For each base in a whitelist of safe roots we compute
-    #     fullpath = os.path.normpath(os.path.join(base_path, clean))
-    # then check
-    #     if not fullpath.startswith(base_path): continue
-    # and only then run any FS call. The FS call is in the same
-    # function, same branch, same local scope — py/path-injection
-    # terminates at the startswith check.
-    for base_path in _allowed_probe_roots():
-        fullpath = os.path.normpath(os.path.join(base_path, clean))
-        # GOOD: verify with normalised version of path.
-        if fullpath != base_path and not fullpath.startswith(base_path + os.sep):
+    # CWE-22 containment via Path.resolve() + Path.is_relative_to().
+    # No Python-level ancestor loop — git's own ``rev-parse
+    # --show-toplevel`` walks the ancestry internally, so we hand
+    # it a single sanitised directory and let git do the climb.
+    for base_root in _allowed_probe_roots():
+        try:
+            base = Path(base_root).resolve(strict=False)
+            target = (base / Path(*parts)).resolve(strict=False)
+        except (OSError, ValueError):
             continue
-        cursor = fullpath
-        for _ in range(64):
-            parent = os.path.dirname(cursor)
-            if not parent or parent == cursor:
-                break
-            if parent != base_path and not parent.startswith(base_path + os.sep):
-                break
-            cursor = parent
-            try:
-                if os.path.isdir(cursor):
-                    root = find_git_root(Path(cursor))
-                    if root is not None:
-                        return root
-                    break
-            except OSError:
-                break
+        # Canonical CodeQL-recognised sanitiser.
+        if not (target == base or target.is_relative_to(base)):
+            continue
+        try:
+            start = target if target.is_dir() else target.parent
+        except OSError:
+            continue
+        if not (start == base or start.is_relative_to(base)):
+            continue
+        root = find_git_root(start)
+        if root is not None:
+            return root
         break
     return find_git_root()
 

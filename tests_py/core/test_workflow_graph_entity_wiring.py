@@ -14,7 +14,10 @@ Verifies the contract documented in
 
 from __future__ import annotations
 
+import pytest
+
 from mcp_server.core.workflow_graph_builder import WorkflowGraphBuilder
+from mcp_server.core.workflow_graph_inputs import WorkflowBuildInputs
 from mcp_server.core.workflow_graph_schema import (
     EdgeKind,
     NodeIdFactory,
@@ -24,17 +27,14 @@ from mcp_server.core.workflow_graph_schema import (
 
 
 def _build(**kwargs):
+    """Construct WorkflowBuildInputs from kwargs and run the builder."""
     b = WorkflowGraphBuilder()
     return b.build(
-        tool_events=[],
-        skill_paths=[],
-        hook_defs=[],
-        agent_events=[],
-        command_events=[],
-        memories=kwargs.pop("memories", []),
-        discussions=[],
-        entities=kwargs.pop("entities", []),
-        memory_entity_edges=kwargs.pop("memory_entity_edges", []),
+        WorkflowBuildInputs(
+            memories=kwargs.pop("memories", []),
+            entities=kwargs.pop("entities", []),
+            memory_entity_edges=kwargs.pop("memory_entity_edges", []),
+        )
     )
 
 
@@ -163,3 +163,23 @@ class TestAboutEntityEdge:
         about = [e for e in edges if e.kind == EdgeKind.ABOUT_ENTITY.value]
         assert about == []
         validate_graph(nodes, edges)
+
+
+class TestEntityIngestValidation:
+    def test_entity_without_id_raises(self):
+        """An entity row missing the mandatory ``id`` key must raise a
+        ValueError in ``_require`` — no silent node without a stable
+        id, since the whole downstream pipeline keys on
+        ``NodeIdFactory.entity_id(id)``.
+        """
+        with pytest.raises(ValueError, match="entity: missing key 'id'"):
+            _build(
+                entities=[
+                    {
+                        "name": "orphan",
+                        "type": "concept",
+                        "domain": "cortex",
+                        "heat": 0.5,
+                    }
+                ]
+            )
