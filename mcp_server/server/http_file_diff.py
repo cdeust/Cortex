@@ -138,22 +138,45 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
     except (ValueError, OSError):
         return find_git_root()
 
-    if not p.is_absolute() or not _under_allowed_root(p):
+    if not p.is_absolute():
         return find_git_root()
 
-    cursor = p.parent
+    # CWE-22 inline proof: resolve realpath once and confirm the walk
+    # only ever visits realpaths that start with a realpath-allowed
+    # root. Inlining the ``startswith`` check (rather than going through
+    # ``_under_allowed_root``) is what CodeQL's py/path-injection
+    # dataflow recognises as a terminating sanitiser.
+    try:
+        p_real = os.path.realpath(str(p))
+    except (OSError, ValueError):
+        return find_git_root()
+    real_roots = _allowed_probe_roots()
+
+    def _inside_allowed(realpath_str: str) -> bool:
+        for r in real_roots:
+            if realpath_str == r or realpath_str.startswith(r + os.sep):
+                return True
+        return False
+
+    if not _inside_allowed(p_real):
+        return find_git_root()
+
+    cursor_real = os.path.dirname(p_real)
     for _ in range(64):
-        if cursor == cursor.parent or not _under_allowed_root(cursor):
+        if not cursor_real or cursor_real == os.path.dirname(cursor_real):
+            break
+        if not _inside_allowed(cursor_real):
             break
         try:
-            if cursor.is_dir():
-                root = find_git_root(cursor)
+            safe_cursor = Path(cursor_real)
+            if safe_cursor.is_dir():
+                root = find_git_root(safe_cursor)
                 if root is not None:
                     return root
                 break
         except OSError:
             break
-        cursor = cursor.parent
+        cursor_real = os.path.dirname(cursor_real)
     return find_git_root()
 
 
