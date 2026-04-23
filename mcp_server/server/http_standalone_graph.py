@@ -485,7 +485,11 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                 ("L2", "L2 tools", ["tool_hub"], 0.14),
                 ("L3", "L3 files", ["file"], 0.18),
                 ("L4", "L4 discussions", ["discussion"], 0.22),
-                ("L5", "L5 memories", ["memory"], 0.28),
+                # Entities publish alongside memories: the only edge they
+                # carry is ``about_entity`` (MEMORY → ENTITY), so both
+                # endpoints must land in the same phase or ``_edges_for``
+                # drops the edge for lack of a visible target.
+                ("L5", "L5 memories", ["memory", "entity"], 0.28),
             ]
             for phase_key, label, kinds, pct in LAYER_ORDER:
                 # State-machine gate: block until every prerequisite
@@ -904,6 +908,17 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                 for e in cur["edges"]
                 if (e.get("kind") or "")
                 in ("defined_in", "calls", "imports", "member_of")
+            )
+            # Knowledge-graph entities + their MEMORY→ENTITY links
+            # (ADR-0046 Gap 10 wiring). Counted at the finalisation step
+            # so the stat panel's ``entities`` and
+            # ``memory_entity_edges`` fields stay in sync with what the
+            # renderer actually shows.
+            counts["entities"] = sum(
+                1 for n in cur["nodes"] if n.get("kind") == "entity"
+            )
+            counts["memory_entity_edges"] = sum(
+                1 for e in cur["edges"] if (e.get("kind") or "") == "about_entity"
             )
             cur["meta"]["counts"] = counts
             _set_progress(

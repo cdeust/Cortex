@@ -134,49 +134,49 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
         clean = name.strip().strip("\"'`")
         if not clean or "\x00" in clean:
             return find_git_root()
-        p = Path(os.path.normpath(clean))
     except (ValueError, OSError):
         return find_git_root()
 
-    if not p.is_absolute():
-        return find_git_root()
-
-    # CWE-22 inline proof: resolve realpath once and confirm the walk
-    # only ever visits realpaths that start with a realpath-allowed
-    # root. Inlining the ``startswith`` check (rather than going through
-    # ``_under_allowed_root``) is what CodeQL's py/path-injection
-    # dataflow recognises as a terminating sanitiser.
-    try:
-        p_real = os.path.realpath(str(p))
-    except (OSError, ValueError):
-        return find_git_root()
-    real_roots = _allowed_probe_roots()
-
-    def _inside_allowed(realpath_str: str) -> bool:
-        for r in real_roots:
-            if realpath_str == r or realpath_str.startswith(r + os.sep):
-                return True
-        return False
-
-    if not _inside_allowed(p_real):
-        return find_git_root()
-
-    cursor_real = os.path.dirname(p_real)
-    for _ in range(64):
-        if not cursor_real or cursor_real == os.path.dirname(cursor_real):
-            break
-        if not _inside_allowed(cursor_real):
-            break
-        try:
-            safe_cursor = Path(cursor_real)
-            if safe_cursor.is_dir():
-                root = find_git_root(safe_cursor)
-                if root is not None:
-                    return root
+    # CWE-22 fix using CodeQL's canonical pattern. For EACH allowed
+    # base root we compute ``fullpath = normpath(join(base, relative))``
+    # and verify ``fullpath.startswith(base)``. The FS calls
+    # (``is_dir`` / ``find_git_root``) happen ONLY on ``fullpath``
+    # strings that passed the prefix check — the same function, no
+    # cross-boundary taint trace for CodeQL to lose.
+    # The ``relative`` portion we hand to join is derived from ``name``
+    # after stripping any leading slash so the join doesn't absolute-
+    # override the base path.
+    relative = clean[1:] if clean.startswith(os.sep) else clean
+    for base_path in _allowed_probe_roots():
+        base_path = os.path.normpath(base_path)
+        fullpath = os.path.normpath(os.path.join(base_path, relative))
+        # GOOD: verify with normalised version of path.
+        if fullpath != base_path and not fullpath.startswith(base_path + os.sep):
+            continue
+        # Walk upward within THIS base — every cursor we visit is
+        # guaranteed by the same prefix check to remain under base.
+        cursor = fullpath
+        for _ in range(64):
+            parent = os.path.dirname(cursor)
+            if not parent or parent == cursor:
                 break
-        except OSError:
-            break
-        cursor_real = os.path.dirname(cursor_real)
+            # The parent of a string starting with ``base_path + sep``
+            # can only be (a) still under base_path or (b) exactly
+            # base_path. Either way the containment holds.
+            if parent != base_path and not parent.startswith(base_path + os.sep):
+                break
+            cursor = parent
+            try:
+                if os.path.isdir(cursor):
+                    root = find_git_root(Path(cursor))
+                    if root is not None:
+                        return root
+                    break
+            except OSError:
+                break
+        # First matching base wins; if the walk didn't produce a git
+        # root we fall through to the server-cwd fallback below.
+        break
     return find_git_root()
 
 

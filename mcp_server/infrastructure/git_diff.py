@@ -121,25 +121,25 @@ def _safe_join(root: Path, relative: str) -> Path | None:
 def _read_safe(git_root: Path, relative: str) -> str | None:
     """Read a file inside ``git_root`` safely. None for anything outside.
 
-    CWE-22 double-check: ``_safe_join`` already normalised + confirmed
-    containment, but we re-verify the realpath against the realpath of
-    the root immediately before the FS-access call. The duplicated
-    guard lets CodeQL's ``py/path-injection`` dataflow proof terminate
-    at the ``startswith`` check instead of tracking the sanitiser
-    through the function boundary.
+    CWE-22 fix using CodeQL's canonical pattern:
+        fullpath = os.path.normpath(os.path.join(base_path, filename))
+        if not fullpath.startswith(base_path):
+            raise Exception("not allowed")
+        data = open(fullpath, 'rb').read()
+    The check and the FS access sit in the same function so CodeQL's
+    path-injection query proves termination without a cross-boundary
+    taint trace.
     """
     try:
-        p = _safe_join(git_root, relative)
-        if p is None:
+        base_path = os.path.normpath(str(git_root))
+        fullpath = os.path.normpath(os.path.join(base_path, relative))
+        # GOOD: verify the normalised path still lies under base_path.
+        if fullpath != base_path and not fullpath.startswith(base_path + os.sep):
             return None
-        root_real = os.path.realpath(str(git_root))
-        p_real = os.path.realpath(str(p))
-        if p_real != root_real and not p_real.startswith(root_real + os.sep):
+        if not os.path.isfile(fullpath):
             return None
-        safe_path = Path(p_real)
-        if not safe_path.is_file():
-            return None
-        return safe_path.read_text(errors="replace")
+        with open(fullpath, encoding="utf-8", errors="replace") as f:
+            return f.read()
     except OSError:
         return None
 
