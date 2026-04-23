@@ -20,6 +20,7 @@ from mcp_server.core.workflow_graph_palette import (
     SKILL_COLOR,
     SYMBOL_COLOR_DEFAULT,
     SYMBOL_COLORS,
+    primary_tool_color,
 )
 from mcp_server.core.workflow_graph_schema import (
     EdgeKind,
@@ -29,6 +30,7 @@ from mcp_server.core.workflow_graph_schema import (
     WorkflowEdge,
     WorkflowNode,
 )
+from mcp_server.core.workflow_graph_schema_enums import PrimaryToolCluster
 
 
 def _require(rec: dict, key: str, ctx: str):
@@ -287,13 +289,6 @@ def ingest_symbol(b, sym: dict) -> None:
         # Synthesise a minimal file node anchored to the global domain.
         # The builder's ``_finalize_files`` has already run, so we add
         # the file directly; colour via the default file palette.
-        from mcp_server.core.workflow_graph_palette import (
-            primary_tool_color,
-        )
-        from mcp_server.core.workflow_graph_schema_enums import (
-            PrimaryToolCluster,
-        )
-
         b._nodes[fid] = WorkflowNode(
             id=fid,
             kind=NodeKind.FILE,
@@ -309,15 +304,11 @@ def ingest_symbol(b, sym: dict) -> None:
         # Anchor the synthesised file to the global domain so the graph
         # schema invariant (every non-domain node has >= 1 in_domain edge)
         # still holds.
-        from mcp_server.core.workflow_graph_schema import (
-            EdgeKind as _Ek,
-        )
-
         b._edges.append(
             WorkflowEdge(
                 source=fid,
                 target=b._nodes[fid].domain_id,
-                kind=_Ek.IN_DOMAIN,
+                kind=EdgeKind.IN_DOMAIN,
             )
         )
     sid = NodeIdFactory.symbol_id(str(file_path), str(qname))

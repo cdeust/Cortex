@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.core.workflow_graph_builder import WorkflowGraphBuilder
+from mcp_server.core.workflow_graph_inputs import WorkflowBuildInputs
 from mcp_server.core.workflow_graph_schema import (
     GraphValidationError,
     validate_graph,
@@ -219,24 +220,26 @@ def build_workflow_graph(
 
     builder = WorkflowGraphBuilder()
     nodes, edges = builder.build(
-        tool_events=tool_events,
-        skill_paths=skills,
-        hook_defs=hooks,
-        agent_events=agents,
-        command_events=commands,
-        memories=memories,
-        discussions=discussions,
-        discussion_file_events=discussion_files,
-        skill_usage_events=skill_usage,
-        command_file_events=command_files,
-        mcp_usage_events=mcp_usage,
-        discussion_tool_events=discussion_tools,
-        discussion_agent_events=discussion_agents,
-        discussion_command_events=discussion_commands,
-        ast_symbols=ast_symbols,
-        ast_edges=ast_edges,
-        entities=entities,
-        memory_entity_edges=memory_entity_edges,
+        WorkflowBuildInputs(
+            tool_events=tool_events,
+            skill_paths=skills,
+            hook_defs=hooks,
+            agent_events=agents,
+            command_events=commands,
+            memories=memories,
+            discussions=discussions,
+            entities=entities,
+            discussion_file_events=discussion_files,
+            skill_usage_events=skill_usage,
+            command_file_events=command_files,
+            mcp_usage_events=mcp_usage,
+            discussion_tool_events=discussion_tools,
+            discussion_agent_events=discussion_agents,
+            discussion_command_events=discussion_commands,
+            memory_entity_edges=memory_entity_edges,
+            ast_symbols=ast_symbols,
+            ast_edges=ast_edges,
+        )
     )
 
     validate_graph(nodes, edges)
