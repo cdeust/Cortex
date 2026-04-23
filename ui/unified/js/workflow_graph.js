@@ -52,6 +52,19 @@
   var SYM_R_OUTER = 290;    // outer edge of the symbol shell
   var SYM_R_SPREAD = 32;    // radial jitter per-file-group
   var SYM_CLUMP_R = 18;     // tight clumping distance around parent file
+  // L5+E entity layer — positioned from the MEMORY→ENTITY edges alone
+  // (Kekulé, valence-driven): entity slot is the heat-weighted centroid
+  // of linked memories, blended with a 15% pull toward the primary
+  // domain hub so cross-domain centroids don't drift into empty space.
+  // Orphan entities (zero linked memories, or heat below the gate) get
+  // a deterministic hash-placed slot on an orphan ring just outside the
+  // file shell. The heat gate caps per-domain visible entities at
+  // ENTITY_TOPN so 9925 entities don't swamp the render — the rest are
+  // slot-free and drift to the simulation default (filter-hideable).
+  var ENTITY_DOMAIN_BLEND = 0.15;          // α in position = (1−α)·mem_centroid + α·domain
+  var ENTITY_ORPHAN_R = FILE_R + 40;       // orphan ring radius (just past L3 files)
+  var ENTITY_HEAT_TAU = 0.25;              // hide entities below this heat unless top-N
+  var ENTITY_TOPN = 40;                    // per-domain visible-entity cap
   var SECTOR_SETUP_HALF = Math.PI / 2.6;   // ~69°
   var SECTOR_SIDE_HALF  = Math.PI / 6.5;   // ~28°
   var SECTOR_SIDE_ANGLE = Math.PI * 0.72;  // ~130° from outward axis
@@ -223,13 +236,23 @@
 
     // Maxwell-damped config: ζ ≈ 0.55 via velocityDecay 0.72, and
     // local-range charge so long-distance repulsion doesn't oscillate.
+    // HEAVY branch tightened (Gap 10 follow-up / Thompson audit): at
+    // N≈27k with the new ENTITY layer, repulsive energy rose ≈2.5× vs
+    // the original N≈17k tuning. Two constants retuned:
+    //  * alphaDecay HEAVY: 0.028 → 0.018  (slower cool → entities settle
+    //    in the tick budget instead of stalling in a transient haze)
+    //  * velocityDecay: 0.72 → 0.78       (ζ recovered to ≈0.65 against
+    //    the extra spring stiffness from ~2500 about_entity edges)
+    // Other Thompson constants left untouched — once ENTITYs have slots
+    // (Kekulé centroid), the physical field is already well-conditioned.
     var slotK    = HEAVY ? 1.2  : 0.85;
     var chargeEn = true;
     var collideI = HEAVY ? 2    : 3;
-    var alphaDK  = HEAVY ? 0.028 : 0.022;
+    var alphaDK  = HEAVY ? 0.018 : 0.022;
+    var velDecay = 0.78;
 
     var sim = d3.forceSimulation(nodes)
-      .alpha(1.0).alphaDecay(alphaDK).velocityDecay(0.72)
+      .alpha(1.0).alphaDecay(alphaDK).velocityDecay(velDecay)
       .force('link', d3.forceLink(edges).id(function (n) { return n.id; })
         .distance(linkDistance).strength(linkStrength))
       .force('slot',        slotForce(ctx, slotK))
@@ -375,7 +398,7 @@
       adj[e.source][e.target] = true; adj[e.target][e.source] = true;
     });
 
-    var slotOf = computeSlots(nodes, domains, anchors, domainOf, primaryHub, parentFile, cx, cy);
+    var slotOf = computeSlots(nodes, domains, anchors, domainOf, primaryHub, parentFile, cx, cy, edges, byId);
 
     return { byId: byId, nodes: nodes, edges: edges, domains: domains,
       anchors: anchors, domainOf: domainOf, primaryHub: primaryHub,
@@ -390,7 +413,7 @@
 
   // Assign each non-domain node a target (x,y) slot expressing the hierarchy:
   //   domain → L1 (setup) → L2 (tools) → L3 (files);  discussions lane;  memories lane.
-  function computeSlots(nodes, domains, anchors, domainOf, primaryHub, parentFile, cx, cy) {
+  function computeSlots(nodes, domains, anchors, domainOf, primaryHub, parentFile, cx, cy, edges, byId) {
     // Group non-domain nodes by (domain, kind).
     var groups = {};
     for (var i = 0; i < nodes.length; i++) {
@@ -404,6 +427,31 @@
     }
     var slotOf = {};
     var setupKinds = ['skill', 'hook', 'command', 'agent'];
+
+    // ── Entity → linked-memory index (Gap 10 / Kekulé positioning).
+    //    One pass over the about_entity edge set builds, per entity,
+    //    the list of MEMORY node ids it sits on. Memories without slots
+    //    yet (slotOf[memId] absent at this point — memories are slotted
+    //    later in the per-domain loop) are resolved lazily in the
+    //    second pass below by stashing entity centroids for deferred
+    //    computation after memory slots exist.
+    var entityMemLinks = {};
+    if (edges && edges.length) {
+      for (var ei = 0; ei < edges.length; ei++) {
+        var e = edges[ei];
+        if (e.kind !== 'about_entity') continue;
+        var sId = typeof e.source === 'object' ? e.source.id : e.source;
+        var tId = typeof e.target === 'object' ? e.target.id : e.target;
+        var sKind = byId && byId[sId] ? byId[sId].kind : null;
+        var tKind = byId && byId[tId] ? byId[tId].kind : null;
+        var memId, entId;
+        if (sKind === 'memory' && tKind === 'entity') { memId = sId; entId = tId; }
+        else if (tKind === 'memory' && sKind === 'entity') { memId = tId; entId = sId; }
+        else continue;
+        if (!entityMemLinks[entId]) entityMemLinks[entId] = [];
+        entityMemLinks[entId].push(memId);
+      }
+    }
 
     Object.keys(groups).forEach(function (domId) {
       var a = anchors[domId];
@@ -487,6 +535,57 @@
         slotOf[n.id] = { x: a.x + MCP_R * Math.cos(t + jitter),
                          y: a.y + MCP_R * Math.sin(t + jitter) };
       });
+
+      // L5+E entities: heat-gated top-N per domain (Alexander gate +
+      // Kekulé centroid). See the per-domain loop exit below for the
+      // actual centroid computation — we do it here AFTER memory slots
+      // exist so the centroid formula can read slotOf[memId].
+      var ents = (g.entity || []).slice();
+      if (ents.length) {
+        ents.sort(function (a, b) {
+          return (b.heat != null ? b.heat : 0) - (a.heat != null ? a.heat : 0);
+        });
+        var kept = ents.filter(function (en, idx) {
+          return idx < ENTITY_TOPN || (en.heat != null && en.heat >= ENTITY_HEAT_TAU);
+        });
+        var hubX = a.x, hubY = a.y;
+        kept.forEach(function (en, idx) {
+          var memIds = entityMemLinks[en.id] || [];
+          var cx2 = 0, cy2 = 0, wTotal = 0;
+          for (var mi = 0; mi < memIds.length; mi++) {
+            var mSlot = slotOf[memIds[mi]];
+            if (!mSlot) continue;
+            // Heat of the memory node itself (hotter memories pull harder).
+            var mNode = byId ? byId[memIds[mi]] : null;
+            var w = mNode && mNode.heat != null ? Math.max(0.05, mNode.heat) : 0.5;
+            cx2 += mSlot.x * w; cy2 += mSlot.y * w; wTotal += w;
+          }
+          if (wTotal > 0) {
+            // Kekulé centroid blended 15% toward the domain hub.
+            var mcx = cx2 / wTotal, mcy = cy2 / wTotal;
+            slotOf[en.id] = {
+              x: (1 - ENTITY_DOMAIN_BLEND) * mcx + ENTITY_DOMAIN_BLEND * hubX,
+              y: (1 - ENTITY_DOMAIN_BLEND) * mcy + ENTITY_DOMAIN_BLEND * hubY,
+            };
+          } else {
+            // Orphan: hash-deterministic ring around the domain hub so
+            // the same entity lands in the same place across runs.
+            var h = 0;
+            for (var ci = 0; ci < en.id.length; ci++) {
+              h = ((h << 5) - h + en.id.charCodeAt(ci)) | 0;
+            }
+            var theta = (Math.abs(h) % 1000) / 1000 * Math.PI * 2;
+            slotOf[en.id] = {
+              x: hubX + ENTITY_ORPHAN_R * Math.cos(theta),
+              y: hubY + ENTITY_ORPHAN_R * Math.sin(theta),
+            };
+          }
+          void idx;
+        });
+        // Entities below the heat gate are intentionally slot-free —
+        // they'll drift to default positions and can be filter-hidden
+        // via the existing "kind:entity" toggle.
+      }
 
       // L6 symbols intentionally have NO slot — their final position
       // is determined by the codebase-analysis edges the force

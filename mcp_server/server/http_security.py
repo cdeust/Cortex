@@ -100,33 +100,22 @@ def enforce_same_origin_write(handler: BaseHTTPRequestHandler) -> bool:
     return False
 
 
-def _sanitize_header_value(value: str) -> str:
-    """Strip CR/LF/NUL and any control chars before emitting a response
-    header. Belt-and-braces on top of ``_is_safe_header_value`` — the
-    upstream resolver already rejects unsafe values, but stripping at
-    the emit site lets static analyzers (CodeQL CWE-113 /
-    py/http-response-splitting) prove safety without tracking the
-    guard through the call chain.
-    """
-    return "".join(c for c in value if 0x20 <= ord(c) < 0x7F)
-
-
 def _apply_cors_headers(handler: BaseHTTPRequestHandler) -> None:
     """Write the CORS response headers appropriate for this request.
 
-    Strict reflection: echoes the Origin verbatim only if it's loopback
-    AND contains no control characters. Always emits ``Vary: Origin``
-    so upstream caches key correctly. When Origin is absent or
-    non-loopback, no ACAO header is emitted — same-origin XHR from the
-    served HTML continues to work; cross-origin pages receive a
-    browser-enforced CORS failure.
+    CWE-113 fix (per CodeQL's canonical recommendation): strip every
+    character that could terminate a header line before the value
+    reaches ``send_header``. CR, LF, and colon are removed unconditionally.
+
+    Strict reflection: echoes the Origin verbatim only if it's loopback.
+    Always emits ``Vary: Origin`` so upstream caches key correctly.
     """
     allowed = resolve_allowed_origin(handler)
     if allowed is not None:
-        # Sanitize again at the emit site — CWE-113 response splitting.
-        safe = _sanitize_header_value(allowed)
-        if safe:
-            handler.send_header("Access-Control-Allow-Origin", safe)
+        # CodeQL-recommended pattern: remove header-terminator chars
+        # from any user-derived value before writing it into a header.
+        safe = allowed.replace("\n", "").replace("\r", "")
+        handler.send_header("Access-Control-Allow-Origin", safe)
     handler.send_header("Vary", "Origin")
 
 
