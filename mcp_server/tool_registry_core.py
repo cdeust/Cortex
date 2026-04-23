@@ -16,6 +16,7 @@ from mcp_server.handlers import (
     list_domains,
     open_visualization,
     query_methodology,
+    query_workflow_graph,
     rebuild_profiles,
     record_session_end,
 )
@@ -31,6 +32,7 @@ def register(mcp: FastMCP) -> None:
     _register_list_domains(mcp)
     _register_record_session_end(mcp)
     _register_get_methodology_graph(mcp)
+    _register_query_workflow_graph(mcp)
     _register_open_visualization(mcp)
     _register_explore_features(mcp)
 
@@ -154,6 +156,38 @@ def _register_get_methodology_graph(mcp: FastMCP) -> None:
             get_methodology_graph.handler,
             {"domain": domain},
             tool_name="get_methodology_graph",
+        )
+
+
+def _register_query_workflow_graph(mcp: FastMCP) -> None:
+    # Composition-root wrapper — schema surface, not a domain function.
+    # §4.4 allows the param-count exception here (6 kwargs) because
+    # these are the tool's advertised filter parameters; wrapping them
+    # in a DTO would obscure the MCP schema the client reads.
+    @mcp.tool(
+        name="query_workflow_graph",
+        **tool_kwargs(query_workflow_graph.schema),
+    )
+    async def tool_query_workflow_graph(
+        node_kind: str | list[str] | None = None,
+        edge_kind: str | list[str] | None = None,
+        neighbour_of: str | None = None,
+        depth: int | None = None,
+        domain: str | None = None,
+        limit_nodes: int | None = None,
+    ) -> str:
+        """Return a typed subgraph of the unified workflow graph."""
+        return await safe_handler(
+            query_workflow_graph.handler,
+            {
+                "node_kind": node_kind,
+                "edge_kind": edge_kind,
+                "neighbour_of": neighbour_of,
+                "depth": depth,
+                "domain": domain,
+                "limit_nodes": limit_nodes,
+            },
+            tool_name="query_workflow_graph",
         )
 
 

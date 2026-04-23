@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/tests-2500_passing-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/citations-41_papers-orange.svg" alt="Citations">
-  <img src="https://img.shields.io/badge/version-3.14.1-brightgreen.svg" alt="Version 3.14.1">
+  <img src="https://img.shields.io/badge/version-3.14.2-brightgreen.svg" alt="Version 3.14.2">
   <a href="https://glama.ai/mcp/servers/cdeust/Cortex"><img src="https://glama.ai/mcp/servers/cdeust/Cortex/badges/score.svg" alt="Glama score: security A, license A"></a>
 </p>
 
@@ -29,9 +29,11 @@ Claude Code forgets you every time you close the tab. Every architecture decisio
 
 Cortex is a persistent memory engine for Claude Code built on computational neuroscience. It remembers what you worked on, how you think, what you decided and why. Not as a dumb text dump shoved into context, but as a living memory system that consolidates, forgets intelligently, and reconstructs the right context at the right time.
 
-**20 biological mechanisms. 33 MCP tools. 7 automatic hooks. Runs entirely on your machine. PostgreSQL + pgvector.**
+**20 biological mechanisms. 47 MCP tools. 9 automatic hooks. Runs entirely on your machine. PostgreSQL + pgvector.**
 
-**v3.14.0 neural-graph & AST-integration release**: the workflow graph now reveals itself one layer at a time — first your projects, then their tools, then the files those tools touched, then the code itself (functions, methods, classes) parsed from 10 languages (Rust, Python, TypeScript, Java, Kotlin, Swift, Objective-C, C, C++, Go) via the [automatised-pipeline](https://github.com/cdeust/automatised-pipeline) Rust AST backend. A symbol that is imported by two projects literally sits in the space between those two projects on the map, so the picture of *what connects to what* is the picture of your codebase. Each project is indexed once and cached on disk; reopening the graph hydrates in milliseconds, and only projects whose source actually changed are re-read. Click any node — a file, a function, a command — and the side panel lists the *named* things it is connected to (callers, imports, the files that used it) instead of a bare count. [Release notes →](https://github.com/cdeust/Cortex/releases/tag/v3.14.0)
+**v3.14.2 — call graph lit + queryable**: the workflow graph now renders the actual call and import edges between symbols — not just the AST shells. Every edge carries a *confidence* (0.0–1.0) and a *reason* tag (`direct-ast`, `import-scope-lookup`, `memory-entities-link`, …) so you can tell a resolved call from a same-name guess at a glance. Knowledge-graph entities ship as a first-class layer: ~10k entities extracted from memory text land between the memory ring and the file shell, heat-weighted centroid-placed near the memories that mention them. And a new `query_workflow_graph` MCP tool returns typed subgraphs on demand — filter by `node_kind`, `edge_kind`, `neighbour_of <id> + depth`, or `domain`, so downstream agents can reason over graph slices without rebuilding from scratch.
+
+**v3.14.0 — neural graph & AST integration**: the workflow graph reveals itself one layer at a time — first your projects, then their tools, then the files those tools touched, then the code itself (functions, methods, classes) parsed from 10 languages (Rust, Python, TypeScript, Java, Kotlin, Swift, Objective-C, C, C++, Go) via the [automatised-pipeline](https://github.com/cdeust/automatised-pipeline) Rust AST backend. A symbol that is imported by two projects literally sits in the space between those two projects on the map, so the picture of *what connects to what* is the picture of your codebase. Each project is indexed once and cached on disk; reopening the graph hydrates in milliseconds, and only projects whose source actually changed are re-read. Click any node — a file, a function, a command — and the side panel lists the *named* things it is connected to (callers, imports, the files that used it) instead of a bare count. [Release notes →](https://github.com/cdeust/Cortex/releases/tag/v3.14.0)
 
 ## Getting Started
 
