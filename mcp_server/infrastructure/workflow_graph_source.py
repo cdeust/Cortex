@@ -222,5 +222,16 @@ class WorkflowGraphSource:
     def load_mcp_usage(self) -> list[dict[str, Any]]:
         return _jsonl.load_mcp_usage(_domain_from_project_dir)
 
+    # ── 12. Entities + memory-entity links (PG) ───────────────────────
+    def load_entities(self, pg_store, min_heat: float = 0.05) -> list[dict[str, Any]]:
+        """Knowledge-graph entities projected into workflow-graph ENTITY
+        nodes. See ``workflow_graph_source_pg.load_entities``."""
+        return _pg.load_entities(pg_store, min_heat=min_heat)
+
+    def load_memory_entity_edges(self, pg_store) -> list[dict[str, Any]]:
+        """Rows from the ``memory_entities`` join table, one per
+        MEMORY→ENTITY ``about_entity`` edge."""
+        return _pg.load_memory_entity_edges(pg_store)
+
 
 __all__ = ["WorkflowGraphSource"]

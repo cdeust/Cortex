@@ -25,7 +25,11 @@ from mcp_server.infrastructure.wiki_store import (
     write_page,
 )
 
+from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+
 schema = {
+    "title": "Wiki — write page",
+    "annotations": IDEMPOTENT_WRITE,
     "description": (
         "Author a new wiki page or append/replace content on an existing "
         "one (kind inferred from the first path segment: adr, specs, "

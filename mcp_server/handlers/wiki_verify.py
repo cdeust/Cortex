@@ -30,9 +30,12 @@ from mcp_server.infrastructure.wiki_store import list_pages, read_page
 from mcp_server.infrastructure.workflow_graph_source_ast import (
     WorkflowGraphASTSource,
 )
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 
 schema = {
+    "title": "Wiki — verify symbols",
+    "annotations": READ_ONLY,
     "description": (
         "Verify that code symbols cited by wiki pages still resolve in "
         "the AST (via the automatised-pipeline MCP server, ADR-0046 "

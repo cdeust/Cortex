@@ -14,12 +14,38 @@ import logging
 from typing import Any
 
 from mcp_server.core.replay import format_restoration
+from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
 logger = logging.getLogger(__name__)
 
 schema = {
+    "title": "Checkpoint (save / restore working state)",
+    "annotations": IDEMPOTENT_WRITE,
+    "outputSchema": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+            "action": {"type": "string", "enum": ["save", "restore"]},
+            "checkpoint_id": {
+                "type": "string",
+                "description": "UUID of the saved or restored checkpoint row.",
+            },
+            "restored_context": {
+                "type": "string",
+                "description": "Human-readable reconstruction of prior session state. Present on restore.",
+            },
+            "memories_attached": {
+                "type": "integer",
+                "description": "Count of hot + anchored + directory-relevant memories fused into the restore payload.",
+            },
+            "epoch": {
+                "type": "integer",
+                "description": "Session epoch counter the checkpoint ties to.",
+            },
+        },
+    },
     "description": (
         "Hippocampal-replay-style save/restore of whole working state across "
         "context compaction events (McClelland 1995). `save` writes a "

@@ -18,10 +18,13 @@ from typing import Any
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Assess coverage",
+    "annotations": READ_ONLY,
     "description": (
         "Score how well the memory store covers a project across five "
         "axes: file coverage (which key files are remembered), domain "

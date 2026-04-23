@@ -15,10 +15,13 @@ from typing import Any
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Get project story",
+    "annotations": READ_ONLY,
     "description": (
         "Generate a period-based autobiographical narrative by bucketing "
         "memories chronologically into chapters within a time window "

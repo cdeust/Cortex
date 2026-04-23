@@ -10,10 +10,13 @@ from typing import Any
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Get rules",
+    "annotations": READ_ONLY,
     "description": (
         "Enumerate active neuro-symbolic rules in the memory_rules table, "
         "optionally filtered by scope (global/domain/directory) or "

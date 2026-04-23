@@ -20,9 +20,12 @@ class NodeKind(str, Enum):
     FILE = "file"
     MEMORY = "memory"
     DISCUSSION = "discussion"
-    # ENTITY is reserved for the future knowledge-graph entity projection.
-    # No ingest path currently produces entity nodes; the JS renderer
-    # palette includes it so the schema stays forward-compatible.
+    # ENTITY — projects a knowledge-graph entity (entities table row)
+    # into the workflow graph. Produced by
+    # ``workflow_graph_source_pg.load_entities`` and ingested by
+    # ``WorkflowGraphBuilder._ingest_entity``. Linked to memories via
+    # the ``about_entity`` edge. Colour comes from the legacy palette
+    # (ENTITY_COLORS) matched on ``entityType``.
     ENTITY = "entity"
     MCP = "mcp"
     # SYMBOL — function / class / module / import extracted from the
@@ -41,8 +44,10 @@ class EdgeKind(str, Enum):
     INVOKED_SKILL = "invoked_skill"
     TRIGGERED_HOOK = "triggered_hook"
     SPAWNED_AGENT = "spawned_agent"
-    # ABOUT_ENTITY — paired with NodeKind.ENTITY. Reserved for the
-    # future knowledge-graph entity projection; no current producer.
+    # ABOUT_ENTITY — MEMORY → ENTITY link. Produced by
+    # ``WorkflowGraphBuilder._ingest_memory_entity_edge`` which reads
+    # the ``memory_entities`` join table. Styled in
+    # ``ui/unified/workflow_graph.css`` (``.wfg-link--about_entity``).
     ABOUT_ENTITY = "about_entity"
     DISCUSSION_TOUCHED_FILE = "discussion_touched_file"
     DISCUSSION_USED_TOOL = "discussion_used_tool"

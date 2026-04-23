@@ -16,6 +16,7 @@ from mcp_server.handlers import (
     sync_instructions,
 )
 from mcp_server.tool_error_handler import safe_handler
+from mcp_server.handlers._tool_meta import tool_kwargs
 
 
 def register(mcp: FastMCP) -> None:
@@ -31,7 +32,7 @@ def register(mcp: FastMCP) -> None:
 def _register_sync_instructions(mcp: FastMCP) -> None:
     @mcp.tool(
         name="sync_instructions",
-        description=sync_instructions.schema["description"],
+        **tool_kwargs(sync_instructions.schema),
     )
     async def tool_sync_instructions(
         directory: str | None = None,
@@ -55,7 +56,7 @@ def _register_sync_instructions(mcp: FastMCP) -> None:
 def _register_create_trigger(mcp: FastMCP) -> None:
     @mcp.tool(
         name="create_trigger",
-        description=create_trigger.schema["description"],
+        **tool_kwargs(create_trigger.schema),
     )
     async def tool_create_trigger(
         content: str,
@@ -79,7 +80,7 @@ def _register_create_trigger(mcp: FastMCP) -> None:
 def _register_add_rule(mcp: FastMCP) -> None:
     @mcp.tool(
         name="add_rule",
-        description=add_rule.schema["description"],
+        **tool_kwargs(add_rule.schema),
     )
     async def tool_add_rule(
         condition: str,
@@ -107,7 +108,7 @@ def _register_add_rule(mcp: FastMCP) -> None:
 def _register_get_rules(mcp: FastMCP) -> None:
     @mcp.tool(
         name="get_rules",
-        description=get_rules.schema["description"],
+        **tool_kwargs(get_rules.schema),
     )
     async def tool_get_rules(
         scope: str | None = None,
@@ -129,7 +130,7 @@ def _register_get_rules(mcp: FastMCP) -> None:
 def _register_get_project_story(mcp: FastMCP) -> None:
     @mcp.tool(
         name="get_project_story",
-        description=get_project_story.schema["description"],
+        **tool_kwargs(get_project_story.schema),
     )
     async def tool_get_project_story(
         directory: str | None = None,
@@ -153,7 +154,7 @@ def _register_get_project_story(mcp: FastMCP) -> None:
 def _register_assess_coverage(mcp: FastMCP) -> None:
     @mcp.tool(
         name="assess_coverage",
-        description=assess_coverage.schema["description"],
+        **tool_kwargs(assess_coverage.schema),
     )
     async def tool_assess_coverage(
         directory: str | None = None,

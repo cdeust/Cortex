@@ -25,9 +25,12 @@ from mcp_server.infrastructure.ap_bridge import is_enabled
 from mcp_server.infrastructure.workflow_graph_source_ast import (
     WorkflowGraphASTSource,
 )
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 
 schema = {
+    "title": "Unified search",
+    "annotations": READ_ONLY,
     "description": (
         "Unified search across Cortex memories and the automatised-"
         "pipeline code graph (ADR-0046 Phase 3). Runs cortex.recall and "

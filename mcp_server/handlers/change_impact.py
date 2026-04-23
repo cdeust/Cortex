@@ -30,6 +30,7 @@ from mcp_server.infrastructure.ap_bridge import (
     is_enabled,
     resolve_graph_path,
 )
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 
 _IMPACT_BOOST = 0.15  # matches hooks/pipeline_impact_bump.py
@@ -38,6 +39,8 @@ _MAX_MEMORIES_SCANNED = 1000
 
 
 schema = {
+    "title": "Change impact",
+    "annotations": READ_ONLY,
     "description": (
         "Report which Cortex memories reference code that changed in a "
         "commit (ADR-0046 Phase 4). Uses automatised-pipeline's "

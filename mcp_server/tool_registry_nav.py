@@ -16,6 +16,7 @@ from mcp_server.handlers import (
     recall_hierarchical,
 )
 from mcp_server.tool_error_handler import safe_handler
+from mcp_server.handlers._tool_meta import tool_kwargs
 
 
 def register(mcp: FastMCP) -> None:
@@ -30,7 +31,7 @@ def register(mcp: FastMCP) -> None:
 def _register_recall_hierarchical(mcp: FastMCP) -> None:
     @mcp.tool(
         name="recall_hierarchical",
-        description=recall_hierarchical.schema["description"],
+        **tool_kwargs(recall_hierarchical.schema),
     )
     async def tool_recall_hierarchical(
         query: str,
@@ -56,7 +57,7 @@ def _register_recall_hierarchical(mcp: FastMCP) -> None:
 def _register_drill_down(mcp: FastMCP) -> None:
     @mcp.tool(
         name="drill_down",
-        description=drill_down.schema["description"],
+        **tool_kwargs(drill_down.schema),
     )
     async def tool_drill_down(
         cluster_id: str,
@@ -78,7 +79,7 @@ def _register_drill_down(mcp: FastMCP) -> None:
 def _register_navigate_memory(mcp: FastMCP) -> None:
     @mcp.tool(
         name="navigate_memory",
-        description=navigate_memory.schema["description"],
+        **tool_kwargs(navigate_memory.schema),
     )
     async def tool_navigate_memory(
         memory_id: int,
@@ -102,7 +103,7 @@ def _register_navigate_memory(mcp: FastMCP) -> None:
 def _register_get_causal_chain(mcp: FastMCP) -> None:
     @mcp.tool(
         name="get_causal_chain",
-        description=get_causal_chain.schema["description"],
+        **tool_kwargs(get_causal_chain.schema),
     )
     async def tool_get_causal_chain(
         entity_name: str | None = None,
@@ -128,7 +129,7 @@ def _register_get_causal_chain(mcp: FastMCP) -> None:
 def _register_detect_gaps(mcp: FastMCP) -> None:
     @mcp.tool(
         name="detect_gaps",
-        description=detect_gaps.schema["description"],
+        **tool_kwargs(detect_gaps.schema),
     )
     async def tool_detect_gaps(
         domain: str | None = None,

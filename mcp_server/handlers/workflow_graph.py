@@ -148,6 +148,8 @@ def build_workflow_graph(
         discussion_tools = []
         discussion_agents = []
         discussion_commands = []
+        entities = []
+        memory_entity_edges = []
     else:
         skills = source.load_skills()
         hooks = source.load_hooks()
@@ -162,6 +164,12 @@ def build_workflow_graph(
         discussion_tools = source.load_discussion_tool_uses()
         discussion_agents = source.load_discussion_agents()
         discussion_commands = source.load_discussion_commands()
+        # Knowledge-graph entities + their memory-link table. Both are
+        # bounded by memory-heat (archived / cold memories don't land
+        # in the graph, so their links silently drop in
+        # ``ingest_about_entity``).
+        entities = source.load_entities(store)
+        memory_entity_edges = source.load_memory_entity_edges(store)
 
     # File-derived sources are deferred until ``stage`` reaches files.
     if stage in ("files", "full"):
@@ -207,6 +215,7 @@ def build_workflow_graph(
         mcp_usage = [m for m in mcp_usage if _matches(m)]
         discussion_tools = [e for e in discussion_tools if _matches(e)]
         discussion_agents = [e for e in discussion_agents if _matches(e)]
+        entities = [e for e in entities if _matches(e)]
 
     builder = WorkflowGraphBuilder()
     nodes, edges = builder.build(
@@ -226,6 +235,8 @@ def build_workflow_graph(
         discussion_command_events=discussion_commands,
         ast_symbols=ast_symbols,
         ast_edges=ast_edges,
+        entities=entities,
+        memory_entity_edges=memory_entity_edges,
     )
 
     validate_graph(nodes, edges)
@@ -235,6 +246,7 @@ def build_workflow_graph(
     file_count = sum(1 for n in nodes if n.kind == "file")
     discussion_count = sum(1 for n in nodes if n.kind == "discussion")
     symbol_count = sum(1 for n in nodes if n.kind == "symbol")
+    entity_node_count = sum(1 for n in nodes if n.kind == "entity")
 
     return {
         "nodes": [_node_to_dict(n) for n in nodes],
@@ -263,6 +275,8 @@ def build_workflow_graph(
                 "files": file_count,
                 "symbols": symbol_count,
                 "ast_edges": len(ast_edges),
+                "entities": entity_node_count,
+                "memory_entity_edges": len(memory_entity_edges),
             },
             # ``ast_source`` is only constructed at the ``full`` stage;
             # earlier stages report ast_enabled based on the env flag

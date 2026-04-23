@@ -18,10 +18,13 @@ from typing import Any
 from mcp_server.core.wiki_classifier import classify_memory
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.shared.yaml_parser import parse_yaml_frontmatter
+from mcp_server.handlers._tool_meta import DESTRUCTIVE
 
 # ── Schema ─────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Wiki — purge stale",
+    "annotations": DESTRUCTIVE,
     "description": (
         "Re-evaluate every authored wiki page against the current "
         "classifier (`core/wiki_classifier`) and delete the ones that no "

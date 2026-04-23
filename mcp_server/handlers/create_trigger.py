@@ -17,10 +17,13 @@ from typing import Any
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Create trigger",
+    "annotations": IDEMPOTENT_WRITE,
     "description": (
         "Create a prospective-memory trigger that Cortex auto-fires when "
         "its condition matches future context (Einstein & McDaniel 2005). "

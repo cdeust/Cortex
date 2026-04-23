@@ -17,8 +17,11 @@ import sys
 from pathlib import Path
 
 from mcp_server.server.http_launcher import launch_server, open_in_browser
+from mcp_server.handlers._tool_meta import READ_ONLY_EXTERNAL
 
 schema = {
+    "title": "Open visualization",
+    "annotations": READ_ONLY_EXTERNAL,
     "description": (
         "Open the bundled Cortex visualization in the user's default "
         "browser — a force-directed neural graph combining methodology "

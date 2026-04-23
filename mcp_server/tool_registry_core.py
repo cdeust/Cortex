@@ -20,6 +20,7 @@ from mcp_server.handlers import (
     record_session_end,
 )
 from mcp_server.tool_error_handler import safe_handler
+from mcp_server.handlers._tool_meta import tool_kwargs
 
 
 def register(mcp: FastMCP) -> None:
@@ -37,7 +38,7 @@ def register(mcp: FastMCP) -> None:
 def _register_query_methodology(mcp: FastMCP) -> None:
     @mcp.tool(
         name="query_methodology",
-        description=query_methodology.schema["description"],
+        **tool_kwargs(query_methodology.schema),
     )
     async def tool_query_methodology(
         cwd: str | None = None,
@@ -59,7 +60,7 @@ def _register_query_methodology(mcp: FastMCP) -> None:
 def _register_detect_domain(mcp: FastMCP) -> None:
     @mcp.tool(
         name="detect_domain",
-        description=detect_domain_handler.schema["description"],
+        **tool_kwargs(detect_domain_handler.schema),
     )
     async def tool_detect_domain(
         cwd: str | None = None,
@@ -81,7 +82,7 @@ def _register_detect_domain(mcp: FastMCP) -> None:
 def _register_rebuild_profiles(mcp: FastMCP) -> None:
     @mcp.tool(
         name="rebuild_profiles",
-        description=rebuild_profiles.schema["description"],
+        **tool_kwargs(rebuild_profiles.schema),
     )
     async def tool_rebuild_profiles(
         domain: str | None = None,
@@ -101,7 +102,7 @@ def _register_rebuild_profiles(mcp: FastMCP) -> None:
 def _register_list_domains(mcp: FastMCP) -> None:
     @mcp.tool(
         name="list_domains",
-        description=list_domains.schema["description"],
+        **tool_kwargs(list_domains.schema),
     )
     async def tool_list_domains() -> str:
         """Overview of all detected cognitive domains."""
@@ -111,7 +112,7 @@ def _register_list_domains(mcp: FastMCP) -> None:
 def _register_record_session_end(mcp: FastMCP) -> None:
     @mcp.tool(
         name="record_session_end",
-        description=record_session_end.schema["description"],
+        **tool_kwargs(record_session_end.schema),
     )
     async def tool_record_session_end(
         session_id: str,
@@ -143,7 +144,7 @@ def _register_record_session_end(mcp: FastMCP) -> None:
 def _register_get_methodology_graph(mcp: FastMCP) -> None:
     @mcp.tool(
         name="get_methodology_graph",
-        description=get_methodology_graph.schema["description"],
+        **tool_kwargs(get_methodology_graph.schema),
     )
     async def tool_get_methodology_graph(
         domain: str | None = None,
@@ -159,7 +160,7 @@ def _register_get_methodology_graph(mcp: FastMCP) -> None:
 def _register_open_visualization(mcp: FastMCP) -> None:
     @mcp.tool(
         name="open_visualization",
-        description=open_visualization.schema["description"],
+        **tool_kwargs(open_visualization.schema),
     )
     async def tool_open_visualization(
         domain: str | None = None,
@@ -175,7 +176,7 @@ def _register_open_visualization(mcp: FastMCP) -> None:
 def _register_explore_features(mcp: FastMCP) -> None:
     @mcp.tool(
         name="explore_features",
-        description=explore_features.schema["description"],
+        **tool_kwargs(explore_features.schema),
     )
     async def tool_explore_features(
         mode: str,

@@ -386,3 +386,31 @@ def ingest_ast_edge(b, edge: dict) -> None:
             kind=edge_kind,
         )
     )
+
+
+# ── Knowledge-graph entity edges ────────────────────────────────────────
+
+
+def ingest_about_entity(b, link: dict) -> None:
+    """Create an ABOUT_ENTITY edge from a MEMORY to an ENTITY node.
+
+    ``link`` carries ``memory_id`` + ``entity_id`` (both PG primary keys
+    — the same format as the ``memory_entities`` join table). Silently
+    skips any link whose endpoints are not already present in the graph
+    (a memory under ``min_heat`` or an archived entity), matching the
+    existing relational helpers' "skip-missing-endpoint" contract."""
+    mem_pg = link.get("memory_id")
+    ent_pg = link.get("entity_id")
+    if mem_pg is None or ent_pg is None:
+        return
+    mem_id = NodeIdFactory.memory_id(mem_pg)
+    ent_id = NodeIdFactory.entity_id(ent_pg)
+    if mem_id not in b._nodes or ent_id not in b._nodes:
+        return
+    b._edges.append(
+        WorkflowEdge(
+            source=mem_id,
+            target=ent_id,
+            kind=EdgeKind.ABOUT_ENTITY,
+        )
+    )

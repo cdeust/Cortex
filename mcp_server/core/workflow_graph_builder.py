@@ -22,7 +22,9 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Iterable
 
+from mcp_server.core.graph_builder_nodes import ENTITY_COLORS
 from mcp_server.core.workflow_graph_builder_relational import (
+    ingest_about_entity,
     ingest_ast_edge,
     ingest_command_file,
     ingest_discussion_agent,
@@ -116,6 +118,8 @@ class WorkflowGraphBuilder:
         discussion_command_events=None,
         ast_symbols=None,
         ast_edges=None,
+        entities=None,
+        memory_entity_edges=None,
     ):
         self._ensure_domain(GLOBAL_DOMAIN_ID, "global")
         # Phase 1: node ingestion (self-bound).
@@ -127,6 +131,7 @@ class WorkflowGraphBuilder:
             (command_events, self._ingest_command),
             (memories, self._ingest_memory),
             (discussions, self._ingest_discussion),
+            (entities, self._ingest_entity),
         ):
             for ev in events or []:
                 fn(ev)
@@ -141,6 +146,7 @@ class WorkflowGraphBuilder:
             (discussion_tool_events, ingest_discussion_tool),
             (discussion_agent_events, ingest_discussion_agent),
             (discussion_command_events, ingest_discussion_command),
+            (memory_entity_edges, ingest_about_entity),
         ):
             for ev in events or []:
                 fn(self, ev)
@@ -318,6 +324,30 @@ class WorkflowGraphBuilder:
             tags=[str(t) for t in tags][:20],
             created_at=mem.get("created_at"),
             **science,
+        )
+
+    def _ingest_entity(self, ent):
+        """Project a knowledge-graph entity row into the workflow graph.
+
+        Each entity becomes a single ENTITY node anchored to its domain
+        via ``IN_DOMAIN`` (satisfying the "exactly one in_domain edge"
+        invariant). Size tracks heat; colour comes from the shared
+        ``ENTITY_COLORS`` palette keyed on ``entityType``.
+        """
+        pg_id = _require(ent, "id", "entity")
+        dom = self._assign_domain(ent.get("domain"))
+        self._ensure_domain(dom)
+        ent_type = ent.get("type") or "concept"
+        heat = float(ent.get("heat") or 0.0)
+        self._add_child(
+            NodeIdFactory.entity_id(pg_id),
+            NodeKind.ENTITY,
+            ent.get("name") or f"entity {pg_id}",
+            ENTITY_COLORS.get(ent_type, "#50B0C8"),
+            dom,
+            1.0 + min(3.0, heat * 3.0),
+            entityType=ent_type,
+            heat=heat,
         )
 
     def _ingest_discussion(self, dc):

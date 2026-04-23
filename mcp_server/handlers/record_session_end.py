@@ -12,6 +12,7 @@ from typing import Any
 
 from mcp_server.core.profile_builder import apply_session_update
 from mcp_server.core.session_critique import generate_critique
+from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.infrastructure.profile_store import (
     load_profiles,
     save_profile,
@@ -27,6 +28,34 @@ from mcp_server.shared.project_ids import (
 logger = logging.getLogger(__name__)
 
 schema = {
+    "title": "Record session end (incremental profile update)",
+    "annotations": NON_IDEMPOTENT_WRITE,
+    "outputSchema": {
+        "type": "object",
+        "required": ["domain", "updated"],
+        "properties": {
+            "domain": {
+                "type": "string",
+                "description": "Domain id the session was attributed to.",
+            },
+            "updated": {
+                "type": "boolean",
+                "description": "True if the profile was mutated.",
+            },
+            "session_memory_id": {
+                "type": "string",
+                "description": "UUID of the episodic memory summarising this session.",
+            },
+            "triggers_created": {
+                "type": "integer",
+                "description": "Count of prospective triggers extracted from session TODOs/decisions.",
+            },
+            "critique": {
+                "type": "string",
+                "description": "Post-session improvement suggestions (may be empty).",
+            },
+        },
+    },
     "description": (
         "Record session-end signals (tools used, duration, turns, "
         "keywords) and apply an incremental EMA update to the matching "

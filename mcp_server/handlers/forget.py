@@ -10,10 +10,13 @@ from typing import Any
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import DESTRUCTIVE
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Forget memory",
+    "annotations": DESTRUCTIVE,
     "description": (
         "Delete a memory by integer ID via direct DELETE on the memories "
         "table (hard) or by setting is_stale=true + heat=0 (soft, "

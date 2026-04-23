@@ -15,10 +15,13 @@ from mcp_server.core.context_generator import generate_context
 from mcp_server.core.domain_detector import detect_domain
 from mcp_server.core.prospective import check_trigger
 from mcp_server.infrastructure.profile_store import load_profiles
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 logger = logging.getLogger(__name__)
 
 schema = {
+    "title": "Query methodology",
+    "annotations": READ_ONLY,
     "description": (
         "Read the user's cognitive profile for the current domain from "
         "the cached profiles.json and enrich it with hot memories + any "

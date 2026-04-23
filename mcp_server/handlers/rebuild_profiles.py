@@ -13,8 +13,11 @@ from mcp_server.infrastructure.scanner import (
     discover_conversations,
     group_by_project,
 )
+from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 
 schema = {
+    "title": "Rebuild profiles",
+    "annotations": IDEMPOTENT_WRITE,
     "description": (
         "Full rescan of Claude Code session data to rebuild methodology "
         "profiles from scratch. Walks ~/.claude/projects/, parses JSONL "

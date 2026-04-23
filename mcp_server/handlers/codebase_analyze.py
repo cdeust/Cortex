@@ -32,10 +32,13 @@ from mcp_server.handlers.codebase_analyze_helpers import (
 from mcp_server.handlers.remember import handler as remember_handler
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Codebase analyze",
+    "annotations": READ_ONLY,
     "description": (
         "Walk a codebase and store its structure as memories using tree-"
         "sitter AST parsing (with regex fallback for unsupported "

@@ -27,10 +27,13 @@ from mcp_server.infrastructure.embedding_engine import (
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 
 logger = logging.getLogger(__name__)
 
 schema = {
+    "title": "Consolidate memories",
+    "annotations": IDEMPOTENT_WRITE,
     "description": (
         "Run scheduled memory-system maintenance cycles: thermodynamic "
         "heat decay, full-text → gist → tag compression, episodic→semantic "

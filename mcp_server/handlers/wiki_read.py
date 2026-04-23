@@ -6,8 +6,11 @@ from typing import Any
 
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.wiki_store import read_page
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 schema = {
+    "title": "Wiki — read page",
+    "annotations": READ_ONLY,
     "description": (
         "Fetch the raw markdown source of one wiki page by its wiki-relative "
         "path. Path resolution is sandboxed under the wiki root — absolute "
