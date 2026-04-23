@@ -77,13 +77,12 @@ Handlers are the **composition roots**: they wire infrastructure (I/O) to core (
 - `profile_assembler.py` — Profile assembly from extracted components
 - `blindspot_patterns.py` — Blind spot pattern definitions
 - `session_shape.py` — Session shape analysis
-- `graph_builder.py` — Graph node/edge construction for visualization
+- `graph_builder.py` — Graph node/edge construction for MCP `get_methodology_graph` tool
 - `graph_builder_nodes.py` — Node construction for graph
 - `graph_builder_edges.py` — Edge construction for graph
-- `graph_builder_memory.py` — Memory node construction
 - `graph_builder_dedup.py` — Graph deduplication logic
 - `graph_quality_scorer.py` — Per-node quality scoring
-- `unified_graph_builder.py` — Unified graph construction orchestrator
+- `unified_graph_builder.py` — REMOVED in Gap 10 (was dead since workflow_graph.v1 replaced it)
 
 *Behavioral Interpretability:*
 - `sparse_dictionary.py` — Behavioral feature dictionary learning (OMP sparse coding, K-SVD)

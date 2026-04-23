@@ -22,9 +22,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Iterable
 
-from mcp_server.core.graph_builder_nodes import ENTITY_COLORS
 from mcp_server.core.workflow_graph_builder_relational import (
-    ingest_about_entity,
     ingest_ast_edge,
     ingest_command_file,
     ingest_discussion_agent,
@@ -35,6 +33,11 @@ from mcp_server.core.workflow_graph_builder_relational import (
     ingest_skill_usage,
     ingest_symbol,
 )
+from mcp_server.core.workflow_graph_entity import (
+    ingest_about_entity,
+    ingest_entity,
+)
+from mcp_server.core.workflow_graph_inputs import WorkflowBuildInputs
 from mcp_server.core.workflow_graph_palette import (
     AGENT_COLOR,
     COMMAND_COLOR,
@@ -100,64 +103,54 @@ class WorkflowGraphBuilder:
         self._file_domains: dict[str, set[str]] = defaultdict(set)
         self._file_timestamps: dict[str, dict[str, str | None]] = {}
 
-    def build(
-        self,
-        tool_events,
-        skill_paths,
-        hook_defs,
-        agent_events,
-        command_events,
-        memories,
-        discussions,
-        discussion_file_events=None,
-        skill_usage_events=None,
-        command_file_events=None,
-        mcp_usage_events=None,
-        discussion_tool_events=None,
-        discussion_agent_events=None,
-        discussion_command_events=None,
-        ast_symbols=None,
-        ast_edges=None,
-        entities=None,
-        memory_entity_edges=None,
-    ):
+    def build(self, inputs: WorkflowBuildInputs):
+        """Ingest every stream in ``inputs`` and return (nodes, edges).
+
+        Signature satisfies the §4.4 parameter-count rule (≤4): single
+        DTO parameter holds all the data streams. See
+        ``workflow_graph_inputs.WorkflowBuildInputs`` for the shape.
+        """
         self._ensure_domain(GLOBAL_DOMAIN_ID, "global")
-        # Phase 1: node ingestion (self-bound).
-        for events, fn in (
-            (tool_events, self._ingest_tool_event),
-            (skill_paths, self._ingest_skill),
-            (hook_defs, self._ingest_hook),
-            (agent_events, self._ingest_agent),
-            (command_events, self._ingest_command),
-            (memories, self._ingest_memory),
-            (discussions, self._ingest_discussion),
-            (entities, self._ingest_entity),
-        ):
+        # Phase 1: node ingestion. Mix of self-bound builder methods
+        # (for kinds the builder owns) and free functions that take
+        # the builder as first arg (for externalised kinds like
+        # ENTITY). The dispatch shape is the same for both.
+        phase1: tuple[tuple[list, object], ...] = (
+            (inputs.tool_events, self._ingest_tool_event),
+            (inputs.skill_paths, self._ingest_skill),
+            (inputs.hook_defs, self._ingest_hook),
+            (inputs.agent_events, self._ingest_agent),
+            (inputs.command_events, self._ingest_command),
+            (inputs.memories, self._ingest_memory),
+            (inputs.discussions, self._ingest_discussion),
+        )
+        for events, fn in phase1:
             for ev in events or []:
                 fn(ev)
+        for ev in inputs.entities or []:
+            ingest_entity(self, ev)
         self._finalize_files()
-        # Phase 2: relational edges (builder-bound helpers — see
-        # ``workflow_graph_builder_relational``; all assume file nodes exist).
-        for events, fn in (
-            (discussion_file_events, ingest_discussion_file),
-            (command_file_events, ingest_command_file),
-            (skill_usage_events, ingest_skill_usage),
-            (mcp_usage_events, ingest_mcp_usage),
-            (discussion_tool_events, ingest_discussion_tool),
-            (discussion_agent_events, ingest_discussion_agent),
-            (discussion_command_events, ingest_discussion_command),
-            (memory_entity_edges, ingest_about_entity),
-        ):
+        # Phase 2: relational edges. Every helper takes the builder
+        # as first arg, assumes file nodes exist.
+        phase2: tuple[tuple[list, object], ...] = (
+            (inputs.discussion_file_events, ingest_discussion_file),
+            (inputs.command_file_events, ingest_command_file),
+            (inputs.skill_usage_events, ingest_skill_usage),
+            (inputs.mcp_usage_events, ingest_mcp_usage),
+            (inputs.discussion_tool_events, ingest_discussion_tool),
+            (inputs.discussion_agent_events, ingest_discussion_agent),
+            (inputs.discussion_command_events, ingest_discussion_command),
+            (inputs.memory_entity_edges, ingest_about_entity),
+        )
+        for events, fn in phase2:
             for ev in events or []:
                 fn(self, ev)
         # Phase 3 (ADR-0046): AST enrichment. Symbols attach to files,
-        # AST edges attach to symbols — both phases skip silently when
-        # their parent is missing (e.g. AP indexed a file Cortex doesn't
-        # track). Feature-flag-gated at the handler layer so these
-        # sequences are empty by default.
-        for sym in ast_symbols or []:
+        # AST edges attach to symbols — silently skip when their parent
+        # is missing. Empty lists when AP isn't configured.
+        for sym in inputs.ast_symbols or []:
             ingest_symbol(self, sym)
-        for edge in ast_edges or []:
+        for edge in inputs.ast_edges or []:
             ingest_ast_edge(self, edge)
         return self._dedupe_and_link(self._nodes.values(), self._edges)
 
@@ -324,30 +317,6 @@ class WorkflowGraphBuilder:
             tags=[str(t) for t in tags][:20],
             created_at=mem.get("created_at"),
             **science,
-        )
-
-    def _ingest_entity(self, ent):
-        """Project a knowledge-graph entity row into the workflow graph.
-
-        Each entity becomes a single ENTITY node anchored to its domain
-        via ``IN_DOMAIN`` (satisfying the "exactly one in_domain edge"
-        invariant). Size tracks heat; colour comes from the shared
-        ``ENTITY_COLORS`` palette keyed on ``entityType``.
-        """
-        pg_id = _require(ent, "id", "entity")
-        dom = self._assign_domain(ent.get("domain"))
-        self._ensure_domain(dom)
-        ent_type = ent.get("type") or "concept"
-        heat = float(ent.get("heat") or 0.0)
-        self._add_child(
-            NodeIdFactory.entity_id(pg_id),
-            NodeKind.ENTITY,
-            ent.get("name") or f"entity {pg_id}",
-            ENTITY_COLORS.get(ent_type, "#50B0C8"),
-            dom,
-            1.0 + min(3.0, heat * 3.0),
-            entityType=ent_type,
-            heat=heat,
         )
 
     def _ingest_discussion(self, dc):

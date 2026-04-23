@@ -19,7 +19,7 @@ reverse dependency injection, factory injection, no dead code.
 9. `core/synaptic_plasticity.py` (568) — Split: LTP/LTD, STDP, stochastic transmission
 10. `handlers/remember.py` (560) — Split: write gate, storage, neuromodulation integration
 11. `core/oscillatory_clock.py` (547) — Split: theta/gamma/SWR state, phase logic
-12. `core/unified_graph_builder.py` (500) — Split: node builders, edge builders, layout
+12. ~~`core/unified_graph_builder.py` (500) — Split~~ — REMOVED in Gap 10 (dead code, zero importers)
 
 ### Medium (300-500 lines)
 13. `handlers/recall.py` (460) — Split: WRRF fusion, reranking, recency/ordering

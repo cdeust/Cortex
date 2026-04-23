@@ -52,19 +52,14 @@
   var SYM_R_OUTER = 290;    // outer edge of the symbol shell
   var SYM_R_SPREAD = 32;    // radial jitter per-file-group
   var SYM_CLUMP_R = 18;     // tight clumping distance around parent file
-  // L5+E entity layer — positioned from the MEMORY→ENTITY edges alone
-  // (Kekulé, valence-driven): entity slot is the heat-weighted centroid
-  // of linked memories, blended with a 15% pull toward the primary
-  // domain hub so cross-domain centroids don't drift into empty space.
-  // Orphan entities (zero linked memories, or heat below the gate) get
-  // a deterministic hash-placed slot on an orphan ring just outside the
-  // file shell. The heat gate caps per-domain visible entities at
-  // ENTITY_TOPN so 9925 entities don't swamp the render — the rest are
-  // slot-free and drift to the simulation default (filter-hideable).
-  var ENTITY_DOMAIN_BLEND = 0.15;          // α in position = (1−α)·mem_centroid + α·domain
-  var ENTITY_ORPHAN_R = FILE_R + 40;       // orphan ring radius (just past L3 files)
-  var ENTITY_HEAT_TAU = 0.25;              // hide entities below this heat unless top-N
-  var ENTITY_TOPN = 40;                    // per-domain visible-entity cap
+  // L5+E entity layer — see docs/adr/ADR-0047-entity-positioning-gap10.md
+  // for the full provenance of every constant below (Kekulé centroid +
+  // Alexander heat gate + Thompson physics retune, each tied to a
+  // specific live-data measurement on 2026-04-23).
+  var ENTITY_DOMAIN_BLEND = 0.15;          // ADR-0047: α in (1−α)·mem_centroid + α·domain_hub
+  var ENTITY_ORPHAN_R = FILE_R + 40;       // ADR-0047: orphan-ring radius (just past L3 files)
+  var ENTITY_HEAT_TAU = 0.25;              // ADR-0047: heat threshold below which entities are slot-free
+  var ENTITY_TOPN = 40;                    // ADR-0047: per-domain visible-entity floor (NOT a ceiling — OR-gated with TAU)
   var SECTOR_SETUP_HALF = Math.PI / 2.6;   // ~69°
   var SECTOR_SIDE_HALF  = Math.PI / 6.5;   // ~28°
   var SECTOR_SIDE_ANGLE = Math.PI * 0.72;  // ~130° from outward axis
@@ -234,17 +229,12 @@
     }
     var panel = wfg.buildSidePanel(container);
 
-    // Maxwell-damped config: ζ ≈ 0.55 via velocityDecay 0.72, and
-    // local-range charge so long-distance repulsion doesn't oscillate.
-    // HEAVY branch tightened (Gap 10 follow-up / Thompson audit): at
-    // N≈27k with the new ENTITY layer, repulsive energy rose ≈2.5× vs
-    // the original N≈17k tuning. Two constants retuned:
-    //  * alphaDecay HEAVY: 0.028 → 0.018  (slower cool → entities settle
-    //    in the tick budget instead of stalling in a transient haze)
-    //  * velocityDecay: 0.72 → 0.78       (ζ recovered to ≈0.65 against
-    //    the extra spring stiffness from ~2500 about_entity edges)
-    // Other Thompson constants left untouched — once ENTITYs have slots
-    // (Kekulé centroid), the physical field is already well-conditioned.
+    // Maxwell-damped config: see ADR-0047 for the full tuning rationale
+    // (Thompson scaling audit on the Gap 10 N≈17k → N≈27k jump).
+    //  * alphaDecay HEAVY: 0.028 → 0.018  (repulsive energy ∝ N²)
+    //  * velocityDecay: 0.72 → 0.78       (ζ recovered to ~0.65)
+    // Other force constants unchanged — slots from computeSlots carry
+    // the positioning burden; physics just needs time to converge.
     var slotK    = HEAVY ? 1.2  : 0.85;
     var chargeEn = true;
     var collideI = HEAVY ? 2    : 3;
@@ -536,10 +526,12 @@
                          y: a.y + MCP_R * Math.sin(t + jitter) };
       });
 
-      // L5+E entities: heat-gated top-N per domain (Alexander gate +
-      // Kekulé centroid). See the per-domain loop exit below for the
-      // actual centroid computation — we do it here AFTER memory slots
-      // exist so the centroid formula can read slotOf[memId].
+      // L5+E entities: see ADR-0047. Slot = heat-weighted memory
+      // centroid blended 15% to domain hub (Kekulé valence analysis).
+      // Heat gate is OR-semantic by design: entity is kept if within
+      // top-N OR above heat threshold. `ENTITY_TOPN` therefore acts as
+      // a per-domain *floor* on visibility (cold domains still show
+      // their top-40), not a ceiling on hot ones.
       var ents = (g.entity || []).slice();
       if (ents.length) {
         ents.sort(function (a, b) {
@@ -549,7 +541,7 @@
           return idx < ENTITY_TOPN || (en.heat != null && en.heat >= ENTITY_HEAT_TAU);
         });
         var hubX = a.x, hubY = a.y;
-        kept.forEach(function (en, idx) {
+        kept.forEach(function (en) {
           var memIds = entityMemLinks[en.id] || [];
           var cx2 = 0, cy2 = 0, wTotal = 0;
           for (var mi = 0; mi < memIds.length; mi++) {
@@ -580,7 +572,6 @@
               y: hubY + ENTITY_ORPHAN_R * Math.sin(theta),
             };
           }
-          void idx;
         });
         // Entities below the heat gate are intentionally slot-free —
         // they'll drift to default positions and can be filter-hidden

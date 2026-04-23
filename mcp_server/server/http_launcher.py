@@ -15,9 +15,10 @@ import sys
 import urllib.request
 from pathlib import Path
 
-# Port assignments — one per server type
+# Port assignments — one per server type. The ``methodology``
+# entry was removed in Gap 10 along with the broken
+# ``build_methodology_handler`` it depended on.
 PORTS = {
-    "methodology": 3456,
     "unified": 3458,
 }
 
@@ -250,7 +251,8 @@ def launch_server(server_type: str) -> str:
     """Launch a standalone server, reusing if already running. Returns URL.
 
     Args:
-        server_type: One of 'dashboard', 'unified', 'methodology'.
+        server_type: Currently only 'unified' is supported; older
+            'methodology' type was removed in Gap 10.
 
     Returns:
         The URL where the server is listening.

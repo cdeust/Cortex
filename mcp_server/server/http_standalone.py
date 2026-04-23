@@ -34,7 +34,6 @@ from mcp_server.server.http_security import (
     validate_host_header,
 )
 from mcp_server.server.http_standalone_endpoints import (
-    build_methodology_handler,
     serve_discussion_detail,
     serve_discussions,
     serve_file_diff,
@@ -357,22 +356,21 @@ def _auto_enable_ap() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Cortex standalone HTTP server")
-    parser.add_argument("--type", required=True, choices=["unified", "methodology"])
+    # The ``methodology`` type was removed in Gap 10 — its handler
+    # imported ``build_methodology_graph`` (never existed) so it could
+    # never start. The MCP tool ``get_methodology_graph`` covers the
+    # same need without the broken HTTP surface.
+    parser.add_argument("--type", required=True, choices=["unified"])
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
 
     # AST overlay auto-wiring (ADR-0046). Silent no-op when AP isn't
     # installed or when the user has pre-configured the env.
-    if args.type == "unified":
-        _auto_enable_ap()
+    _auto_enable_ap()
 
     ui_root = _get_ui_root()
-    store = None
-    if args.type == "unified":
-        store = _get_store()
-        handler_cls = _build_unified_handler(ui_root, store)
-    else:
-        handler_cls = build_methodology_handler(ui_root)
+    store = _get_store()
+    handler_cls = _build_unified_handler(ui_root, store)
 
     server = _bind_server(handler_cls, args.port)
     url = f"http://127.0.0.1:{server.server_address[1]}"

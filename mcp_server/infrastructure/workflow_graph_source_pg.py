@@ -241,20 +241,11 @@ def load_entities(pg_store, min_heat: float = 0.05) -> list[dict[str, Any]]:
 def load_memory_entity_edges(pg_store) -> list[dict[str, Any]]:
     """Bulk-fetch every row in ``memory_entities``.
 
-    Shape: ``[{memory_id: int, entity_id: int}, ...]``. The builder
-    synthesises one ``ABOUT_ENTITY`` edge per row after verifying that
-    both endpoints are already in the graph (memories below
-    ``min_heat`` and archived entities are silently skipped)."""
-    if not hasattr(pg_store, "_execute"):
+    Delegates to ``pg_store.list_memory_entity_edges`` (public API — no
+    reaching into ``_execute``). Shape: ``[{memory_id, entity_id}, ...]``.
+    The builder synthesises one ABOUT_ENTITY edge per row, skipping any
+    whose endpoints are not in the graph (memories below ``min_heat``
+    or archived entities)."""
+    if not hasattr(pg_store, "list_memory_entity_edges"):
         return []
-    try:
-        rows = pg_store._execute(
-            "SELECT memory_id, entity_id FROM memory_entities"
-        ).fetchall()
-    except Exception:
-        return []
-    return [
-        {"memory_id": r["memory_id"], "entity_id": r["entity_id"]}
-        for r in rows
-        if r.get("memory_id") is not None and r.get("entity_id") is not None
-    ]
+    return pg_store.list_memory_entity_edges()
