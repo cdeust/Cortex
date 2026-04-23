@@ -119,12 +119,27 @@ def _safe_join(root: Path, relative: str) -> Path | None:
 
 
 def _read_safe(git_root: Path, relative: str) -> str | None:
-    """Read a file inside ``git_root`` safely. None for anything outside."""
+    """Read a file inside ``git_root`` safely. None for anything outside.
+
+    CWE-22 double-check: ``_safe_join`` already normalised + confirmed
+    containment, but we re-verify the realpath against the realpath of
+    the root immediately before the FS-access call. The duplicated
+    guard lets CodeQL's ``py/path-injection`` dataflow proof terminate
+    at the ``startswith`` check instead of tracking the sanitiser
+    through the function boundary.
+    """
     try:
         p = _safe_join(git_root, relative)
-        if p is None or not p.is_file():
+        if p is None:
             return None
-        return p.read_text(errors="replace")
+        root_real = os.path.realpath(str(git_root))
+        p_real = os.path.realpath(str(p))
+        if p_real != root_real and not p_real.startswith(root_real + os.sep):
+            return None
+        safe_path = Path(p_real)
+        if not safe_path.is_file():
+            return None
+        return safe_path.read_text(errors="replace")
     except OSError:
         return None
 
