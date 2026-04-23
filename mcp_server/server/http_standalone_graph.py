@@ -543,7 +543,10 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                 SYMBOL_COLOR_DEFAULT,
                 SYMBOL_COLORS,
             )
-            from mcp_server.core.workflow_graph_schema import NodeIdFactory
+            from mcp_server.core.workflow_graph_schema import (
+                NodeIdFactory,
+                edge_provenance_defaults,
+            )
             from mcp_server.infrastructure.ap_bridge import (
                 is_enabled as _ap_enabled,
                 resolve_graph_paths,
@@ -807,6 +810,8 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                     )
                     parent = file_id_by_path.get(fp)
                     if parent:
+                        # Gap 6: shared provenance defaults.
+                        di_conf, di_reason = edge_provenance_defaults("defined_in")
                         proj_edges.append(
                             {
                                 "source": sid,
@@ -814,6 +819,8 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                                 "kind": "defined_in",
                                 "type": "defined_in",
                                 "weight": 1.0,
+                                "confidence": di_conf,
+                                "reason": di_reason,
                             }
                         )
                 for e in edgs:
@@ -833,12 +840,20 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                         if not sf or not sn:
                             continue
                         sid = NodeIdFactory.symbol_id(sf, sn)
+                    # Gap 6: single source-of-truth defaults.
+                    conf, reason_v = edge_provenance_defaults(
+                        kind,
+                        ap_confidence=e.get("confidence"),
+                        ap_reason=e.get("reason"),
+                    )
                     edge = {
                         "source": sid,
                         "target": did,
                         "kind": kind,
                         "type": kind,
                         "weight": 1.0,
+                        "confidence": conf,
+                        "reason": reason_v,
                     }
                     # Intra-project iff both endpoints (where they are
                     # symbols) belong to THIS project. For `imports`

@@ -537,15 +537,38 @@ class WorkflowGraphASTSource:
                 for p in path_tails
             )
 
-        async def _run_edge(kind: str, table: str, src_lbl: str, dst_lbl: str):
+        async def _run_edge(
+            kind: str,
+            table: str,
+            src_lbl: str,
+            dst_lbl: str,
+            has_provenance: bool,
+        ):
+            """Query AP for edges of ``kind`` in ``table``.
+
+            ``has_provenance`` gates whether to fetch ``r.confidence`` +
+            ``r.resolution_method``: Kuzu raises a Binder exception on
+            missing-property access, so we only request those columns
+            for rel tables the AP resolver actually annotates (Calls_*
+            / Imports_* / Implements_* / Extends_* / Uses_*). Structural
+            tables (HasMethod_* / Defines_*) have no such columns —
+            callers default confidence to 1.0 for those kinds instead.
+            """
             if src_lbl == "File":
                 select_src = "src.id AS src_name"
             else:
                 select_src = "src.qualified_name AS src_name"
+            if has_provenance:
+                return_tail = (
+                    "       dst.qualified_name AS dst_name, "
+                    "       r.confidence       AS confidence, "
+                    "       r.resolution_method AS reason"
+                )
+            else:
+                return_tail = "       dst.qualified_name AS dst_name"
             query = (
-                f"MATCH (src:{src_lbl})-[:{table}]->(dst:{dst_lbl}) "
-                f"RETURN {select_src}, "
-                "       dst.qualified_name AS dst_name"
+                f"MATCH (src:{src_lbl})-[r:{table}]->(dst:{dst_lbl}) "
+                f"RETURN {select_src}, {return_tail}"
             )
             rows = await self._bridge.call(
                 "query_graph",
@@ -570,6 +593,21 @@ class WorkflowGraphASTSource:
                 else:
                     if not (_match(src_file) and _match(dst_file)):
                         continue
+                # AP stores ``resolution_method`` wrapped in literal
+                # single quotes (see ``automatised-pipeline``
+                # resolver.rs:183 — ``format!("'{method}'")``), so the
+                # value comes back INCLUDING quotes. Strip them here at
+                # the infrastructure boundary. Remove this strip once
+                # AP fixes the upstream quoting.
+                conf_raw = r.get("confidence") if has_provenance else None
+                try:
+                    confidence = float(conf_raw) if conf_raw is not None else None
+                except (TypeError, ValueError):
+                    confidence = None
+                reason_raw = r.get("reason") if has_provenance else None
+                reason_str = (
+                    str(reason_raw).strip("'\"") or None if reason_raw else None
+                )
                 out.append(
                     {
                         "kind": kind,
@@ -577,15 +615,19 @@ class WorkflowGraphASTSource:
                         "src_name": src_qn,
                         "dst_file": dst_file,
                         "dst_name": dst,
+                        "confidence": confidence,
+                        "reason": reason_str,
                     }
                 )
 
         for s, d in calls_rels:
-            await _run_edge("calls", f"Calls_{s}_{d}", s, d)
+            await _run_edge("calls", f"Calls_{s}_{d}", s, d, has_provenance=True)
         for s, d in imports_rels:
-            await _run_edge("imports", f"Imports_{s}_{d}", s, d)
+            await _run_edge("imports", f"Imports_{s}_{d}", s, d, has_provenance=True)
         for s, d in member_rels:
-            await _run_edge("member_of", f"HasMethod_{s}_{d}", s, d)
+            await _run_edge(
+                "member_of", f"HasMethod_{s}_{d}", s, d, has_provenance=False
+            )
         return out
 
 

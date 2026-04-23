@@ -26,6 +26,7 @@ from mcp_server.core.workflow_graph_schema import (
     NodeIdFactory,
     NodeKind,
     WorkflowEdge,
+    edge_provenance_defaults,
 )
 
 
@@ -82,11 +83,15 @@ def ingest_about_entity(b, link: dict) -> None:
     ent_id = NodeIdFactory.entity_id(ent_pg)
     if mem_id not in b._nodes or ent_id not in b._nodes:
         return
+    # Gap 6: shared provenance defaults.
+    conf, reason = edge_provenance_defaults(EdgeKind.ABOUT_ENTITY.value)
     b._edges.append(
         WorkflowEdge(
             source=mem_id,
             target=ent_id,
             kind=EdgeKind.ABOUT_ENTITY,
+            confidence=conf,
+            reason=reason,
         )
     )
 
