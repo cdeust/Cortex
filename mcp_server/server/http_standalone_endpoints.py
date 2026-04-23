@@ -5,7 +5,6 @@ Owns:
 * ``serve_sankey`` — /api/sankey dashboard query
 * ``serve_graph`` / ``serve_discussions`` / ``serve_discussion_detail``
 * ``serve_static`` — sandboxed static-file reader for ``/js/`` + ``/css/``
-* ``build_methodology_handler`` — the methodology viz HTTPHandler factory
 * ``serve_file_diff`` — thin delegate to ``http_file_diff``
 
 All response shaping flows through ``http_standalone_response`` so the
@@ -14,13 +13,9 @@ HTTP boilerplate lives in one place.
 
 from __future__ import annotations
 
-import json
 import re
-from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-from mcp_server.server.http_common import _apply_cors_headers
-from mcp_server.server.http_security import validate_host_header
 from mcp_server.server.http_standalone_graph import (
     build_discussion_detail,
     build_discussions_response,
@@ -31,7 +26,6 @@ from mcp_server.server.http_standalone_response import (
     send_json_ok,
     send_plain_error,
 )
-from mcp_server.server.http_standalone_state import touch
 
 _STAGES = (
     "labile",
@@ -217,75 +211,8 @@ def serve_file_diff(handler) -> None:
     _serve(handler)
 
 
-def build_methodology_handler(ui_root: Path) -> type:
-    """HTTPHandler factory for the methodology viz server."""
-    from mcp_server.core.graph_builder import build_methodology_graph
-    from mcp_server.infrastructure.profile_store import load_profiles
-
-    html_path = ui_root / "methodology-viz.html"
-    html_bytes = html_path.read_bytes()
-    meth_dir = ui_root / "methodology"
-
-    class Handler(BaseHTTPRequestHandler):
-        def _guard_host(self) -> bool:
-            if validate_host_header(self):
-                return True
-            self.send_response(421)
-            self.end_headers()
-            return False
-
-        def do_OPTIONS(self):
-            if not self._guard_host():
-                return
-            touch()
-            self.send_response(204)
-            _apply_cors_headers(self)
-            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-            self.end_headers()
-
-        def do_GET(self):
-            if not self._guard_host():
-                return
-            touch()
-            if self.path == "/graph":
-                self._serve_graph()
-            elif self.path.startswith("/methodology/js/") and self.path.endswith(".js"):
-                serve_static(
-                    self, meth_dir / "js", self.path[16:], "application/javascript"
-                )
-            elif self.path.startswith("/methodology/css/") and self.path.endswith(
-                ".css"
-            ):
-                serve_static(self, meth_dir / "css", self.path[17:], "text/css")
-            else:
-                self._serve_html()
-
-        def _serve_html(self):
-            try:
-                body = html_path.read_bytes()
-            except OSError:
-                body = html_bytes
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _serve_graph(self):
-            try:
-                data = build_methodology_graph(load_profiles())
-                body = json.dumps(data, default=str).encode()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                self.wfile.write(body)
-            except Exception as e:
-                send_json_error(self, e)
-
-        def log_message(self, format, *args):
-            pass
-
-    return Handler
+# ``build_methodology_handler`` removed in Gap 10 — it imported a
+# symbol (``build_methodology_graph``) that never existed in
+# ``graph_builder.py``, so ``http_standalone --type methodology`` was
+# broken-on-start. The MCP tool ``get_methodology_graph`` now covers
+# the same use case without a separate HTTP surface.

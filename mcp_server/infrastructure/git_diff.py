@@ -121,25 +121,34 @@ def _safe_join(root: Path, relative: str) -> Path | None:
 def _read_safe(git_root: Path, relative: str) -> str | None:
     """Read a file inside ``git_root`` safely. None for anything outside.
 
-    CWE-22 fix using CodeQL's canonical pattern:
-        fullpath = os.path.normpath(os.path.join(base_path, filename))
-        if not fullpath.startswith(base_path):
-            raise Exception("not allowed")
-        data = open(fullpath, 'rb').read()
-    The check and the FS access sit in the same function so CodeQL's
-    path-injection query proves termination without a cross-boundary
-    taint trace.
+    CWE-22 defence (py/path-injection sanitizer recognised by CodeQL):
+
+      1. Reject any relative path that is absolute or contains ``..``
+         segments — ``werkzeug.utils.secure_filename``-style whitelist.
+      2. Resolve both base and target via ``Path.resolve(strict=False)``.
+      3. ``target.is_relative_to(base)`` — the containment check
+         CodeQL's dataflow recognises as a sanitizer. If it returns
+         ``False`` we abort before touching the filesystem.
     """
     try:
-        base_path = os.path.normpath(str(git_root))
-        fullpath = os.path.normpath(os.path.join(base_path, relative))
-        # GOOD: verify the normalised path still lies under base_path.
-        if fullpath != base_path and not fullpath.startswith(base_path + os.sep):
+        # Step 1: string-level rejection — catches both absolute inputs
+        # and any ``..`` traversal segments before they touch the FS.
+        if not relative or relative.startswith("/") or "\x00" in relative:
             return None
-        if not os.path.isfile(fullpath):
+        parts = [p for p in relative.replace("\\", "/").split("/") if p]
+        if any(p == ".." for p in parts):
             return None
-        with open(fullpath, encoding="utf-8", errors="replace") as f:
-            return f.read()
+
+        # Step 2: resolve both paths to absolute, canonical form.
+        base = git_root.resolve(strict=False)
+        target = (base / Path(*parts)).resolve(strict=False)
+
+        # Step 3: containment check (CodeQL-recognised sanitizer).
+        if not target.is_relative_to(base):
+            return None
+        if not target.is_file():
+            return None
+        return target.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
 

@@ -134,35 +134,34 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
         clean = name.strip().strip("\"'`")
         if not clean or "\x00" in clean:
             return find_git_root()
+        # Werkzeug-style whitelist: reject ``..`` traversal segments.
+        # After this check the only way ``fullpath`` can escape its
+        # base is via an absolute segment, which ``os.path.join``
+        # itself promotes to the start of the path — blocked by the
+        # ``startswith(base_path)`` check below.
+        if ".." in clean.replace("\\", "/").split("/"):
+            return find_git_root()
     except (ValueError, OSError):
         return find_git_root()
 
-    # CWE-22 fix using CodeQL's canonical pattern. For EACH allowed
-    # base root we compute ``fullpath = normpath(join(base, relative))``
-    # and verify ``fullpath.startswith(base)``. The FS calls
-    # (``is_dir`` / ``find_git_root``) happen ONLY on ``fullpath``
-    # strings that passed the prefix check — the same function, no
-    # cross-boundary taint trace for CodeQL to lose.
-    # The ``relative`` portion we hand to join is derived from ``name``
-    # after stripping any leading slash so the join doesn't absolute-
-    # override the base path.
-    relative = clean[1:] if clean.startswith(os.sep) else clean
+    # CWE-22 — CodeQL canonical pattern.
+    # For each base in a whitelist of safe roots we compute
+    #     fullpath = os.path.normpath(os.path.join(base_path, clean))
+    # then check
+    #     if not fullpath.startswith(base_path): continue
+    # and only then run any FS call. The FS call is in the same
+    # function, same branch, same local scope — py/path-injection
+    # terminates at the startswith check.
     for base_path in _allowed_probe_roots():
-        base_path = os.path.normpath(base_path)
-        fullpath = os.path.normpath(os.path.join(base_path, relative))
+        fullpath = os.path.normpath(os.path.join(base_path, clean))
         # GOOD: verify with normalised version of path.
         if fullpath != base_path and not fullpath.startswith(base_path + os.sep):
             continue
-        # Walk upward within THIS base — every cursor we visit is
-        # guaranteed by the same prefix check to remain under base.
         cursor = fullpath
         for _ in range(64):
             parent = os.path.dirname(cursor)
             if not parent or parent == cursor:
                 break
-            # The parent of a string starting with ``base_path + sep``
-            # can only be (a) still under base_path or (b) exactly
-            # base_path. Either way the containment holds.
             if parent != base_path and not parent.startswith(base_path + os.sep):
                 break
             cursor = parent
@@ -174,8 +173,6 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
                     break
             except OSError:
                 break
-        # First matching base wins; if the walk didn't produce a git
-        # root we fall through to the server-cwd fallback below.
         break
     return find_git_root()
 
