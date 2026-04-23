@@ -328,14 +328,29 @@ def _auto_enable_ap() -> None:
                     for proj in projects:
                         outdir = roster_root / proj.name
                         graph_file = outdir / "graph"
-                        # Skip projects already indexed — cheap recovery
-                        # on a re-launch and avoids paying the cost of a
-                        # 5 000-file codebase every visualize call.
+                        # Graph already indexed. We still attempt a
+                        # resolve_graph pass because older Cortex
+                        # versions only ran index_codebase — their
+                        # graphs have zero Calls_* / Imports_* rows.
+                        # resolve_graph is idempotent: when edges are
+                        # already present it no-ops quickly.
                         if graph_file.exists() and graph_file.stat().st_size > 10000:
+                            try:
+                                await b.call(
+                                    "resolve_graph",
+                                    {"graph_path": str(graph_file)},
+                                )
+                            except Exception:
+                                pass
                             continue
                         outdir.mkdir(parents=True, exist_ok=True)
                         try:
-                            await b.index_codebase(
+                            # analyze_codebase runs index + resolve + cluster
+                            # in one pass so Calls_* / Imports_* / Extends_*
+                            # / Implements_* rel tables get populated. Using
+                            # index_codebase alone leaves those tables empty
+                            # and the viz filter has nothing to match.
+                            await b.analyze_codebase(
                                 str(proj),
                                 output_dir=str(outdir),
                                 language="auto",

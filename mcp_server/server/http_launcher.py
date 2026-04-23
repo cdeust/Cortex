@@ -178,7 +178,11 @@ def _ensure_ap_graph(dev_src: Path | None, env: dict) -> None:
         async def _index():
             b = APBridge()
             try:
-                await b.index_codebase(
+                # analyze_codebase = index + resolve + cluster. Using
+                # the composed tool so Calls_* / Imports_* / Extends_*
+                # rel tables land populated; index_codebase alone
+                # leaves them empty (matched to the viz filter bug).
+                await b.analyze_codebase(
                     target,
                     output_dir=str(cache_dir),
                     language="auto",
