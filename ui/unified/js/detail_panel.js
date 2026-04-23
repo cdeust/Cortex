@@ -65,7 +65,14 @@
       if (!other) return;
       var t = e.type || 'related';
       if (!byType[t]) byType[t] = [];
-      byType[t].push({ node: other, weight: e.weight || 0 });
+      // Gap 6: preserve edge-level confidence + reason so the detail
+      // panel can show WHY an edge exists and how trustworthy it is.
+      byType[t].push({
+        node: other,
+        weight: e.weight || 0,
+        confidence: typeof e.confidence === 'number' ? e.confidence : null,
+        reason: e.reason || null,
+      });
     });
 
     var friendlyEdge = {
@@ -92,9 +99,32 @@
       items.forEach(function(item) {
         var c = JUG.getNodeColor(item.node);
         var name = JUG._fmt.fullLabel(item.node.label || item.node.id);
+        // Gap 6: show confidence + reason chips ONLY for heuristic
+        // edges (calls / imports / unresolved). Structural defaults
+        // ("100% direct-ast" / "100% memory-entities-link") are
+        // tautological — rendering them on 8000 defined_in rows adds
+        // pure visual noise. Suppress if both values match a known
+        // structural default.
+        var meta = '';
+        var isStructuralDefault =
+          item.confidence === 1.0 &&
+          (item.reason === 'direct-ast' ||
+           item.reason === 'memory-entities-link');
+        if (!isStructuralDefault) {
+          if (item.confidence != null) {
+            var pct = Math.round(item.confidence * 100);
+            meta += ' <span class="conn-confidence" title="Edge confidence">'
+              + pct + '%</span>';
+          }
+          if (item.reason) {
+            meta += ' <span class="conn-reason" title="Edge reason">'
+              + JUG._fmt.esc(item.reason) + '</span>';
+          }
+        }
         h += '<div class="conn-item" data-node-id="' + item.node.id + '">' +
           '<span class="conn-dot" style="background:' + c + '"></span>' +
-          '<span class="conn-label">' + JUG._fmt.esc(name) + '</span></div>';
+          '<span class="conn-label">' + JUG._fmt.esc(name) + '</span>' +
+          meta + '</div>';
       });
       h += '</div>';
     });

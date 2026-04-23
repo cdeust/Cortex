@@ -29,6 +29,7 @@ from mcp_server.core.workflow_graph_schema import (
     ToolKind,
     WorkflowEdge,
     WorkflowNode,
+    edge_provenance_defaults,
 )
 from mcp_server.core.workflow_graph_schema_enums import PrimaryToolCluster
 
@@ -330,11 +331,15 @@ def ingest_symbol(b, sym: dict) -> None:
         line=sym.get("line"),
         path=str(file_path),
     )
+    # Gap 6: defaults from the central provenance table.
+    conf, reason = edge_provenance_defaults(EdgeKind.DEFINED_IN.value)
     b._edges.append(
         WorkflowEdge(
             source=sid,
             target=fid,
             kind=EdgeKind.DEFINED_IN,
+            confidence=conf,
+            reason=reason,
         )
     )
 
@@ -370,11 +375,19 @@ def ingest_ast_edge(b, edge: dict) -> None:
             return
         edge_kind = EdgeKind.CALLS if kind == "calls" else EdgeKind.MEMBER_OF
 
+    # Gap 6: central provenance defaults — single source of truth.
+    conf, reason = edge_provenance_defaults(
+        edge_kind.value,
+        ap_confidence=edge.get("confidence"),
+        ap_reason=edge.get("reason"),
+    )
     b._edges.append(
         WorkflowEdge(
             source=src_id,
             target=dst_id,
             kind=edge_kind,
+            confidence=conf,
+            reason=reason,
         )
     )
 

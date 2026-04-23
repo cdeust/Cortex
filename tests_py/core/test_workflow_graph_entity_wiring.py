@@ -115,6 +115,9 @@ class TestAboutEntityEdge:
         assert len(about) == 1
         assert about[0].source == NodeIdFactory.memory_id(42)
         assert about[0].target == NodeIdFactory.entity_id(7)
+        # Gap 6: about_entity edges must carry confidence + reason.
+        assert about[0].confidence == 1.0
+        assert about[0].reason == "memory-entities-link"
         validate_graph(nodes, edges)
 
     def test_orphan_link_is_dropped_silently(self):

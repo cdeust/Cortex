@@ -83,7 +83,20 @@ class WorkflowNode(BaseModel):
 
 
 class WorkflowEdge(BaseModel):
-    """A directed edge in the workflow graph."""
+    """A directed edge in the workflow graph.
+
+    ``confidence`` (0.0–1.0) signals how trustworthy the edge is: 1.0 for
+    edges derived from direct AST facts (``defined_in``, ``member_of``),
+    ≤0.9 for heuristic resolution (unqualified call target), and lower
+    for inferred or cross-file edges. Callers that don't compute a
+    confidence leave the field ``None``.
+
+    ``reason`` is a short free-form tag describing WHY the edge was
+    emitted — e.g. ``"direct-ast"``, ``"import-scope-lookup"``,
+    ``"same-file-fallback"``, ``"heat-link"``. The renderer surfaces it
+    in the detail panel so a reader can tell a structural fact from a
+    statistical hint without opening the source.
+    """
 
     model_config = ConfigDict(extra="ignore", use_enum_values=True)
 
@@ -92,6 +105,11 @@ class WorkflowEdge(BaseModel):
     kind: EdgeKind
     weight: float = 1.0
     label: str | None = None
+    # ``ge=0.0, le=1.0`` is a contract the renderer relies on — any
+    # producer emitting a value outside [0, 1] is a bug and pydantic
+    # raises at construction so the drift is caught immediately.
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    reason: str | None = None
 
 
 # ── Deterministic ID factory ───────────────────────────────────────────
@@ -160,6 +178,50 @@ class NodeIdFactory:
         memory→entity ``about_entity`` edges stay stable across runs.
         """
         return f"entity:{pg_id}"
+
+
+# ── Edge provenance defaults (Gap 6) ──────────────────────────────────
+
+
+# Convention — NOT measured constants. Structural AST facts (symbol →
+# file definition, method-of-class containment) are ground-truth by
+# definition: the parser either sees them or it doesn't. ``about_entity``
+# links are materialised from the persisted ``memory_entities`` join
+# table so they are equally definitive. Heuristic edges (``calls`` /
+# ``imports``) carry the resolver's actual confidence score or ``None``
+# when AP didn't emit one.
+_STRUCTURAL_DEFAULTS: dict[str, tuple[float, str]] = {
+    "defined_in": (1.0, "direct-ast"),
+    "member_of": (1.0, "direct-ast"),
+    "about_entity": (1.0, "memory-entities-link"),
+}
+
+
+def edge_provenance_defaults(
+    edge_kind: str,
+    ap_confidence: float | None = None,
+    ap_reason: str | None = None,
+) -> tuple[float | None, str | None]:
+    """Return the (confidence, reason) pair for an edge of ``edge_kind``.
+
+    Producer-supplied AP values win: if ``ap_confidence`` or
+    ``ap_reason`` is given, they are preserved verbatim. Otherwise the
+    structural defaults in ``_STRUCTURAL_DEFAULTS`` apply. Edges whose
+    kind isn't in that table (currently ``calls`` / ``imports``) keep
+    ``None`` when AP didn't annotate — they are heuristic and their
+    absence of confidence is itself information.
+
+    An empty-string reason is normalised to ``None`` so the builder
+    path and the parallel inline path in ``http_standalone_graph``
+    never disagree on its shape.
+    """
+    kind_str = str(edge_kind)
+    default_conf, default_reason = _STRUCTURAL_DEFAULTS.get(kind_str, (None, None))
+    confidence = ap_confidence if ap_confidence is not None else default_conf
+    reason = ap_reason if ap_reason else default_reason
+    if reason == "":
+        reason = None
+    return confidence, reason
 
 
 # ── Validation (meta-rules that decide well-formedness) ────────────────
