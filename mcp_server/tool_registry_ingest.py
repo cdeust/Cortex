@@ -12,6 +12,7 @@ from fastmcp import FastMCP
 
 from mcp_server.handlers import change_impact, ingest_codebase, ingest_prd
 from mcp_server.tool_error_handler import safe_handler
+from mcp_server.handlers._tool_meta import tool_kwargs
 
 
 def register(mcp: FastMCP) -> None:
@@ -23,7 +24,7 @@ def register(mcp: FastMCP) -> None:
 def _register_ingest_codebase(mcp: FastMCP) -> None:
     @mcp.tool(
         name="ingest_codebase",
-        description=ingest_codebase.schema["description"],
+        **tool_kwargs(ingest_codebase.schema),
     )
     async def tool_ingest_codebase(
         project_path: str,
@@ -51,7 +52,7 @@ def _register_ingest_codebase(mcp: FastMCP) -> None:
 def _register_change_impact(mcp: FastMCP) -> None:
     @mcp.tool(
         name="change_impact",
-        description=change_impact.schema["description"],
+        **tool_kwargs(change_impact.schema),
     )
     async def tool_change_impact(
         base: str = "HEAD~1",
@@ -75,7 +76,7 @@ def _register_change_impact(mcp: FastMCP) -> None:
 def _register_ingest_prd(mcp: FastMCP) -> None:
     @mcp.tool(
         name="ingest_prd",
-        description=ingest_prd.schema["description"],
+        **tool_kwargs(ingest_prd.schema),
     )
     async def tool_ingest_prd(
         path: str | None = None,

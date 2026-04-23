@@ -16,9 +16,46 @@ from mcp_server.core.persona_vector import (
     compose_personas,
 )
 from mcp_server.core.sparse_dictionary import build_seed_dictionary
+from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
+    "title": "Explore features (interpretability lens)",
+    "annotations": READ_ONLY,
+    "outputSchema": {
+        "type": "object",
+        "required": ["mode"],
+        "properties": {
+            "mode": {
+                "type": "string",
+                "enum": ["features", "attribution", "persona", "crosscoder"],
+            },
+            "features": {
+                "type": "array",
+                "description": "Active sparse-dictionary behavioral features (mode=features).",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "activation": {"type": "number"},
+                    },
+                },
+            },
+            "attribution": {
+                "type": "array",
+                "description": "Signal → decision attribution edges (mode=attribution).",
+                "items": {"type": "object"},
+            },
+            "persona": {
+                "type": "object",
+                "description": "12-dimensional persona vector + drift-from-baseline (mode=persona).",
+            },
+            "crosscoder": {
+                "type": "object",
+                "description": "Cross-domain persistent-feature comparison (mode=crosscoder).",
+            },
+        },
+    },
     "description": (
         "Inspect the user's cognitive profile through one of four "
         "interpretability lenses (mechanistic-interpretability inspired, "

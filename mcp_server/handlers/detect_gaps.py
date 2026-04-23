@@ -19,10 +19,13 @@ from mcp_server.core.blindspot_detector import detect_blind_spots
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.profile_store import load_profiles
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Detect gaps",
+    "annotations": READ_ONLY,
     "description": (
         "Surface knowledge gaps across four structural axes by walking the "
         "memories+entities+relationships tables and the per-domain "

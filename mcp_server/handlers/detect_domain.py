@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from mcp_server.core.domain_detector import detect_domain
 from mcp_server.infrastructure.profile_store import load_profiles
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 schema = {
+    "title": "Detect domain",
+    "annotations": READ_ONLY,
     "description": (
         "Classify the current working directory + first message into one "
         "of the known cognitive domains via a 3-signal weighted score: "

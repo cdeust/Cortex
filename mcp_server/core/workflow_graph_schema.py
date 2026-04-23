@@ -153,6 +153,14 @@ class NodeIdFactory:
         key = f"{file_abs_path}::{qualified_name}"
         return f"symbol:{_short_hash(key, width=12)}"
 
+    @staticmethod
+    def entity_id(pg_id: str | int) -> str:
+        """Deterministic id for a knowledge-graph entity, keyed on the
+        entities-table primary key. Used by the ``_entity`` loader so
+        memory→entity ``about_entity`` edges stay stable across runs.
+        """
+        return f"entity:{pg_id}"
+
 
 # ── Validation (meta-rules that decide well-formedness) ────────────────
 

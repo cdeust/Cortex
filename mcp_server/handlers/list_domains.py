@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from mcp_server.infrastructure.profile_store import load_profiles
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 schema = {
+    "title": "List domains",
+    "annotations": READ_ONLY,
     "description": (
         "Read profiles.json and emit an overview row for every cognitive "
         "domain Cortex has profiled, sorted by session count. Per domain: "

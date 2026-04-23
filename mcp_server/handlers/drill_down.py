@@ -15,10 +15,13 @@ from mcp_server.core import fractal
 from mcp_server.infrastructure.embedding_engine import get_embedding_engine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Drill down",
+    "annotations": READ_ONLY,
     "description": (
         "Descend one level into a fractal memory cluster previously "
         "returned by `recall_hierarchical`: an L2 root cluster expands to "

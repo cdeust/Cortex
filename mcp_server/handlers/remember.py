@@ -10,6 +10,7 @@ from typing import Any
 from mcp_server.core import thermodynamics, write_gate
 from mcp_server.core.domain_detector import detect_domain
 from mcp_server.core.global_detector import detect_global
+from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers.remember_helpers import (
     apply_modulations,
     evaluate_gate,
@@ -25,6 +26,39 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
+    "title": "Remember (store a memory)",
+    "annotations": IDEMPOTENT_WRITE,
+    "outputSchema": {
+        "type": "object",
+        "required": ["stored", "action"],
+        "properties": {
+            "stored": {
+                "type": "boolean",
+                "description": "True if content landed in the memory store (as new row or a merge into an existing one).",
+            },
+            "memory_id": {
+                "type": "string",
+                "description": "UUID of the resulting memory row. Present when stored=true.",
+            },
+            "action": {
+                "type": "string",
+                "enum": ["stored", "merged", "rejected"],
+                "description": "stored=new row; merged=folded into the most-similar existing memory; rejected=redundant per the predictive-coding gate.",
+            },
+            "reason": {
+                "type": "string",
+                "description": "Human-readable explanation of the gate decision (e.g. 'low surprise', 'high entity overlap').",
+            },
+            "merged_with": {
+                "type": "string",
+                "description": "UUID of the existing memory when action=merged.",
+            },
+            "heat": {
+                "type": "number",
+                "description": "Final heat assigned to the new/merged memory.",
+            },
+        },
+    },
     "description": (
         "Store a memory through the hierarchical predictive-coding write "
         "gate (Friston 2010 free-energy minimization across sensory / "

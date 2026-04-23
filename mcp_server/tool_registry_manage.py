@@ -17,6 +17,7 @@ from mcp_server.handlers import (
     validate_memory,
 )
 from mcp_server.tool_error_handler import safe_handler
+from mcp_server.handlers._tool_meta import tool_kwargs
 
 
 def register(mcp: FastMCP) -> None:
@@ -33,7 +34,7 @@ def register(mcp: FastMCP) -> None:
 def _register_forget(mcp: FastMCP) -> None:
     @mcp.tool(
         name="forget",
-        description=forget.schema["description"],
+        **tool_kwargs(forget.schema),
     )
     async def tool_forget(
         memory_id: int,
@@ -55,7 +56,7 @@ def _register_forget(mcp: FastMCP) -> None:
 def _register_validate_memory(mcp: FastMCP) -> None:
     @mcp.tool(
         name="validate_memory",
-        description=validate_memory.schema["description"],
+        **tool_kwargs(validate_memory.schema),
     )
     async def tool_validate_memory(
         memory_id: int | None = None,
@@ -83,7 +84,7 @@ def _register_validate_memory(mcp: FastMCP) -> None:
 def _register_rate_memory(mcp: FastMCP) -> None:
     @mcp.tool(
         name="rate_memory",
-        description=rate_memory.schema["description"],
+        **tool_kwargs(rate_memory.schema),
     )
     async def tool_rate_memory(
         memory_id: int,
@@ -103,7 +104,7 @@ def _register_rate_memory(mcp: FastMCP) -> None:
 def _register_seed_project(mcp: FastMCP) -> None:
     @mcp.tool(
         name="seed_project",
-        description=seed_project.schema["description"],
+        **tool_kwargs(seed_project.schema),
     )
     async def tool_seed_project(
         directory: str | None = None,
@@ -127,7 +128,7 @@ def _register_seed_project(mcp: FastMCP) -> None:
 def _register_anchor(mcp: FastMCP) -> None:
     @mcp.tool(
         name="anchor",
-        description=anchor.schema["description"],
+        **tool_kwargs(anchor.schema),
     )
     async def tool_anchor(
         memory_id: int,
@@ -147,7 +148,7 @@ def _register_anchor(mcp: FastMCP) -> None:
 def _register_backfill_memories(mcp: FastMCP) -> None:
     @mcp.tool(
         name="backfill_memories",
-        description=backfill_memories.schema["description"],
+        **tool_kwargs(backfill_memories.schema),
     )
     async def tool_backfill_memories(
         project: str | None = None,
@@ -173,7 +174,7 @@ def _register_backfill_memories(mcp: FastMCP) -> None:
 def _register_codebase_analyze(mcp: FastMCP) -> None:
     @mcp.tool(
         name="codebase_analyze",
-        description=codebase_analyze.schema["description"],
+        **tool_kwargs(codebase_analyze.schema),
     )
     async def tool_codebase_analyze(
         directory: str | None = None,

@@ -209,3 +209,52 @@ def load_memories(
                 row_dict[k] = r[k]
         out.append(row_dict)
     return out
+
+
+def load_entities(pg_store, min_heat: float = 0.05) -> list[dict[str, Any]]:
+    """Return knowledge-graph entity rows suitable for ENTITY-node ingest.
+
+    Uses ``get_all_entities`` with ``include_archived=False`` so archived
+    entities stay out of the graph. Each row carries ``id / name / type
+    / domain / heat`` at minimum; extra columns pass through so the
+    panel renderer can surface them.
+    """
+    if not hasattr(pg_store, "get_all_entities"):
+        return []
+    rows = pg_store.get_all_entities(min_heat=min_heat, include_archived=False)
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if r.get("id") is None or not r.get("name"):
+            continue
+        out.append(
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "type": r.get("type") or "concept",
+                "domain": r.get("domain") or "",
+                "heat": float(r.get("heat") or 0.0),
+            }
+        )
+    return out
+
+
+def load_memory_entity_edges(pg_store) -> list[dict[str, Any]]:
+    """Bulk-fetch every row in ``memory_entities``.
+
+    Shape: ``[{memory_id: int, entity_id: int}, ...]``. The builder
+    synthesises one ``ABOUT_ENTITY`` edge per row after verifying that
+    both endpoints are already in the graph (memories below
+    ``min_heat`` and archived entities are silently skipped)."""
+    if not hasattr(pg_store, "_execute"):
+        return []
+    try:
+        rows = pg_store._execute(
+            "SELECT memory_id, entity_id FROM memory_entities"
+        ).fetchall()
+    except Exception:
+        return []
+    return [
+        {"memory_id": r["memory_id"], "entity_id": r["entity_id"]}
+        for r in rows
+        if r.get("memory_id") is not None and r.get("entity_id") is not None
+    ]

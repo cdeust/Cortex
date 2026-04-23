@@ -15,6 +15,7 @@ from mcp_server.core import memory_rules
 from mcp_server.core.knowledge_graph import extract_entities
 from mcp_server.core.pg_recall import recall as pg_recall
 from mcp_server.core.query_intent import QueryIntent, classify_query_intent
+from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.handlers.recall_helpers import (
     build_enhancements,
     inject_triggered_memories,
@@ -24,6 +25,50 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 
 schema = {
+    "title": "Recall (retrieve memories)",
+    "annotations": READ_ONLY,
+    "outputSchema": {
+        "type": "object",
+        "required": ["memories"],
+        "properties": {
+            "memories": {
+                "type": "array",
+                "description": "Ranked list of matching memories. Best result is index 0.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "description": "Memory UUID."},
+                        "content": {"type": "string", "description": "Memory body."},
+                        "score": {
+                            "type": "number",
+                            "description": "Final fused + reranked score.",
+                        },
+                        "heat": {
+                            "type": "number",
+                            "description": "Current thermodynamic heat [0,1].",
+                        },
+                        "domain": {"type": "string"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "created_at": {"type": "string", "format": "date-time"},
+                        "source": {"type": "string"},
+                    },
+                },
+            },
+            "intent": {
+                "type": "string",
+                "enum": [
+                    "temporal",
+                    "causal",
+                    "semantic",
+                    "entity",
+                    "knowledge_update",
+                    "multi_hop",
+                ],
+                "description": "Classified query intent that drove the signal-weight profile.",
+            },
+            "count": {"type": "integer", "description": "Number of memories returned."},
+        },
+    },
     "description": (
         "Retrieve memories from the Cortex store using intent-adaptive PG "
         "recall (server-side WRRF fusion of vector + FTS + trigram + heat + "

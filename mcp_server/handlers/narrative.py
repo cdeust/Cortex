@@ -11,8 +11,11 @@ from typing import Any
 from mcp_server.core.narrative import generate_brief_summary, generate_narrative
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 schema = {
+    "title": "Narrative",
+    "annotations": READ_ONLY,
     "description": (
         "Generate a coherent project narrative from stored memories for a "
         "directory or domain. Clusters memories by topic + time, "

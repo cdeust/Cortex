@@ -7,8 +7,11 @@ from typing import Any
 from mcp_server.core.wiki_layout import PAGE_KINDS
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.wiki_store import list_pages
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 schema = {
+    "title": "Wiki — list pages",
+    "annotations": READ_ONLY,
     "description": (
         "Enumerate every authored wiki page under ~/.claude/methodology/wiki/, "
         "filesystem-walked from the wiki root. Optionally restrict by kind "

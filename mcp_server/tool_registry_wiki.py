@@ -21,6 +21,7 @@ from mcp_server.handlers import (
     wiki_write,
 )
 from mcp_server.tool_error_handler import safe_handler
+from mcp_server.handlers._tool_meta import tool_kwargs
 
 
 def register(mcp: FastMCP) -> None:
@@ -36,7 +37,7 @@ def register(mcp: FastMCP) -> None:
 
 
 def _register_wiki_write(mcp: FastMCP) -> None:
-    @mcp.tool(name="wiki_write", description=wiki_write.schema["description"])
+    @mcp.tool(name="wiki_write", **tool_kwargs(wiki_write.schema))
     async def tool_wiki_write(
         path: str,
         content: str,
@@ -57,7 +58,7 @@ def _register_wiki_write(mcp: FastMCP) -> None:
 
 
 def _register_wiki_read(mcp: FastMCP) -> None:
-    @mcp.tool(name="wiki_read", description=wiki_read.schema["description"])
+    @mcp.tool(name="wiki_read", **tool_kwargs(wiki_read.schema))
     async def tool_wiki_read(path: str) -> str:
         """Read the raw markdown of a wiki page by relative path."""
         return await safe_handler(
@@ -66,7 +67,7 @@ def _register_wiki_read(mcp: FastMCP) -> None:
 
 
 def _register_wiki_list(mcp: FastMCP) -> None:
-    @mcp.tool(name="wiki_list", description=wiki_list.schema["description"])
+    @mcp.tool(name="wiki_list", **tool_kwargs(wiki_list.schema))
     async def tool_wiki_list(kind: str | None = None) -> str:
         """List authored wiki pages, optionally filtered by kind."""
         return await safe_handler(
@@ -75,7 +76,7 @@ def _register_wiki_list(mcp: FastMCP) -> None:
 
 
 def _register_wiki_link(mcp: FastMCP) -> None:
-    @mcp.tool(name="wiki_link", description=wiki_link.schema["description"])
+    @mcp.tool(name="wiki_link", **tool_kwargs(wiki_link.schema))
     async def tool_wiki_link(from_path: str, to_path: str, relation: str) -> str:
         """Add a bidirectional link between two wiki pages (Related section)."""
         return await safe_handler(
@@ -86,7 +87,7 @@ def _register_wiki_link(mcp: FastMCP) -> None:
 
 
 def _register_wiki_adr(mcp: FastMCP) -> None:
-    @mcp.tool(name="wiki_adr", description=wiki_adr.schema["description"])
+    @mcp.tool(name="wiki_adr", **tool_kwargs(wiki_adr.schema))
     async def tool_wiki_adr(
         title: str,
         context: str,
@@ -111,14 +112,14 @@ def _register_wiki_adr(mcp: FastMCP) -> None:
 
 
 def _register_wiki_reindex(mcp: FastMCP) -> None:
-    @mcp.tool(name="wiki_reindex", description=wiki_reindex.schema["description"])
+    @mcp.tool(name="wiki_reindex", **tool_kwargs(wiki_reindex.schema))
     async def tool_wiki_reindex() -> str:
         """Regenerate the wiki table of contents at .generated/INDEX.md."""
         return await safe_handler(wiki_reindex.handler, {}, tool_name="wiki_reindex")
 
 
 def _register_wiki_purge(mcp: FastMCP) -> None:
-    @mcp.tool(name="wiki_purge", description=wiki_purge.schema["description"])
+    @mcp.tool(name="wiki_purge", **tool_kwargs(wiki_purge.schema))
     async def tool_wiki_purge(
         apply: bool = False,
         kind: str | None = None,
@@ -132,7 +133,7 @@ def _register_wiki_purge(mcp: FastMCP) -> None:
 
 
 def _register_wiki_verify(mcp: FastMCP) -> None:
-    @mcp.tool(name="wiki_verify", description=wiki_verify.schema["description"])
+    @mcp.tool(name="wiki_verify", **tool_kwargs(wiki_verify.schema))
     async def tool_wiki_verify(path: str | None = None) -> str:
         """Verify wiki-page symbol citations against AP's code graph (ADR-0046 Phase 2)."""
         return await safe_handler(

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from mcp_server.core.graph_builder import build_graph
 from mcp_server.infrastructure.profile_store import load_profiles
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 schema = {
+    "title": "Get methodology graph",
+    "annotations": READ_ONLY,
     "description": (
         "Build the methodology map as JSON graph data {nodes, edges, "
         "meta} suitable for force-directed visualization. Nodes: "

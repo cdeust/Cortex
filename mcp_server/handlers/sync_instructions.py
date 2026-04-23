@@ -17,10 +17,13 @@ from typing import Any
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Sync instructions",
+    "annotations": IDEMPOTENT_WRITE,
     "description": (
         "Render the project's top hot memories (decisions, patterns, "
         "conventions, lessons) as bullets and write them into CLAUDE.md "

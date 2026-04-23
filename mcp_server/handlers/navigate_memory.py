@@ -20,10 +20,13 @@ from mcp_server.core.cognitive_map import (
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import READ_ONLY
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Navigate memory",
+    "annotations": READ_ONLY,
     "description": (
         "Traverse the memory space via a Successor Representation graph "
         "(Dayan 1993) built from temporal co-access — pairs of memories "

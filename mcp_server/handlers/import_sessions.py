@@ -34,10 +34,13 @@ from mcp_server.core.session_extractor import (
 )
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.infrastructure.scanner import read_head_tail
+from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Import sessions",
+    "annotations": NON_IDEMPOTENT_WRITE,
     "description": (
         "Import Claude Code conversation history from ~/.claude/projects/ "
         "into the memory store. Walks JSONL session files, extracts "

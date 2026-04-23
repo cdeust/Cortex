@@ -27,6 +27,7 @@ from mcp_server.handlers.seed_project_stages import (
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 
 _store: MemoryStore | None = None
 
@@ -42,6 +43,8 @@ def _get_store() -> MemoryStore:
 # -- Schema --
 
 schema = {
+    "title": "Seed project",
+    "annotations": NON_IDEMPOTENT_WRITE,
     "description": (
         "Bootstrap the memory store from an existing codebase via a "
         "five-stage structural sweep — each discovery is stored through "

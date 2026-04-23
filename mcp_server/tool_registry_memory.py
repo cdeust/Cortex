@@ -18,6 +18,7 @@ from mcp_server.handlers import (
     unified_search,
 )
 from mcp_server.tool_error_handler import safe_handler
+from mcp_server.handlers._tool_meta import tool_kwargs
 
 
 def register(mcp: FastMCP) -> None:
@@ -35,7 +36,7 @@ def register(mcp: FastMCP) -> None:
 def _register_remember(mcp: FastMCP) -> None:
     @mcp.tool(
         name="remember",
-        description=remember.schema["description"],
+        **tool_kwargs(remember.schema),
     )
     async def tool_remember(
         content: str,
@@ -65,7 +66,7 @@ def _register_remember(mcp: FastMCP) -> None:
 def _register_recall(mcp: FastMCP) -> None:
     @mcp.tool(
         name="recall",
-        description=recall.schema["description"],
+        **tool_kwargs(recall.schema),
     )
     async def tool_recall(
         query: str,
@@ -93,7 +94,7 @@ def _register_recall(mcp: FastMCP) -> None:
 def _register_memory_stats(mcp: FastMCP) -> None:
     @mcp.tool(
         name="memory_stats",
-        description=memory_stats.schema["description"],
+        **tool_kwargs(memory_stats.schema),
     )
     async def tool_memory_stats() -> str:
         """Memory system diagnostics."""
@@ -103,7 +104,7 @@ def _register_memory_stats(mcp: FastMCP) -> None:
 def _register_checkpoint(mcp: FastMCP) -> None:
     @mcp.tool(
         name="checkpoint",
-        description=checkpoint.schema["description"],
+        **tool_kwargs(checkpoint.schema),
     )
     async def tool_checkpoint(
         action: str,
@@ -139,7 +140,7 @@ def _register_checkpoint(mcp: FastMCP) -> None:
 def _register_narrative(mcp: FastMCP) -> None:
     @mcp.tool(
         name="narrative",
-        description=narrative.schema["description"],
+        **tool_kwargs(narrative.schema),
     )
     async def tool_narrative(
         directory: str | None = None,
@@ -161,7 +162,7 @@ def _register_narrative(mcp: FastMCP) -> None:
 def _register_consolidate(mcp: FastMCP) -> None:
     @mcp.tool(
         name="consolidate",
-        description=consolidate.schema["description"],
+        **tool_kwargs(consolidate.schema),
     )
     async def tool_consolidate(
         decay: bool = True,
@@ -187,7 +188,7 @@ def _register_consolidate(mcp: FastMCP) -> None:
 def _register_import_sessions(mcp: FastMCP) -> None:
     @mcp.tool(
         name="import_sessions",
-        description=import_sessions.schema["description"],
+        **tool_kwargs(import_sessions.schema),
     )
     async def tool_import_sessions(
         project: str | None = None,
@@ -218,7 +219,7 @@ def _register_import_sessions(mcp: FastMCP) -> None:
 def _register_unified_search(mcp: FastMCP) -> None:
     @mcp.tool(
         name="unified_search",
-        description=unified_search.schema["description"],
+        **tool_kwargs(unified_search.schema),
     )
     async def tool_unified_search(
         query: str,

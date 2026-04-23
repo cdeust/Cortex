@@ -15,8 +15,11 @@ from mcp_server.infrastructure.wiki_store import (
     read_page,
     write_page,
 )
+from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 
 schema = {
+    "title": "Wiki — link pages",
+    "annotations": IDEMPOTENT_WRITE,
     "description": (
         "Add a bidirectional link between two wiki pages: write the "
         "forward relation into the `## Related` section of the source page "

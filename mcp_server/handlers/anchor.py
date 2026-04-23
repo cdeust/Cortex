@@ -16,10 +16,13 @@ from typing import Any
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 schema = {
+    "title": "Anchor memory",
+    "annotations": IDEMPOTENT_WRITE,
     "description": (
         "Mark a memory as compaction-resistant by setting heat=1.0, "
         "is_protected=true, importance=1.0, and adding an `_anchor` tag — "

@@ -26,10 +26,13 @@ from mcp_server.handlers.backfill_helpers import (
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.scanner import read_head_tail
+from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 
 # -- Schema --
 
 schema = {
+    "title": "Backfill memories",
+    "annotations": NON_IDEMPOTENT_WRITE,
     "description": (
         "Import prior Claude Code conversations from ~/.claude/projects/ "
         "into the memory store. Walks JSONL session transcripts, extracts "
