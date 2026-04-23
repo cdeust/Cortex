@@ -29,7 +29,7 @@ class TestMain:
             mock_run.assert_called_once_with(transport="stdio")
 
     def test_mcp_server_has_tools(self):
-        """FastMCP instance should have all 45 tools registered."""
+        """FastMCP instance should have all 46 tools registered."""
         import asyncio
 
         tools = asyncio.run(mcp.list_tools())
@@ -63,7 +63,9 @@ class TestMain:
         assert "wiki_verify" in tool_names
         assert "unified_search" in tool_names
         assert "change_impact" in tool_names
-        assert len(tool_names) == 45
+        # Gap 1 — typed subgraph query over the workflow graph.
+        assert "query_workflow_graph" in tool_names
+        assert len(tool_names) == 46
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"
