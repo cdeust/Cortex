@@ -6,9 +6,13 @@ AP is a Rust MCP server that indexes codebases into a property graph
 queries, symbol lookup, search — to add AST-level depth to its
 workflow graph.
 
-Feature-flagged by ``CORTEX_ENABLE_AP``. When the flag is off (the
-default), no connection is attempted, every call returns an empty
-result, and the workflow graph behaves exactly as before.
+Enabled by default (``MemorySettings.AP_ENABLED = True``) so the L6
+symbol ring has depth out of the box. Users cut token / subprocess
+cost by setting ``CORTEX_MEMORY_AP_ENABLED=0`` in their MCP config.
+The legacy ``CORTEX_ENABLE_AP`` env var is still honoured when set
+(explicit override always wins). When off, no connection is
+attempted, every call returns an empty result, and the workflow
+graph falls back to the native in-process AST source.
 
 Infrastructure layer only. No core imports.
 """
@@ -41,13 +45,34 @@ _AP_TOOLS = frozenset(
 
 
 def is_enabled() -> bool:
-    """Return True only when the integration is explicitly turned on.
+    """Return True when AP enrichment is active. Three-way precedence:
 
-    Default is off so the AP plugin is optional. Users flip the switch
-    once ``automatised-pipeline`` is installed and indexed.
+      1. Legacy env ``CORTEX_ENABLE_AP`` — explicit override that always
+         wins when set (empty string = unset). Accepts
+         {1,true,yes,on} → on, {0,false,no,off} → off.
+      2. ``MemorySettings.AP_ENABLED`` — MCP-config-settable, reads
+         ``CORTEX_MEMORY_AP_ENABLED`` via pydantic-settings.
+      3. Hardcoded default — ``True`` (on). AP absence still degrades
+         gracefully: ``APBridge.connect()`` returns False silently and
+         every tool call short-circuits to [].
+
+    Users who want to cut token / subprocess cost set
+    ``CORTEX_MEMORY_AP_ENABLED=0`` in their MCP server env block.
     """
-    val = (os.environ.get("CORTEX_ENABLE_AP") or "").strip().lower()
-    return val in {"1", "true", "yes", "on"}
+    raw = (os.environ.get("CORTEX_ENABLE_AP") or "").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    # No explicit env override — consult MemorySettings.
+    try:
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        return bool(get_memory_settings().AP_ENABLED)
+    except Exception:
+        # Config system unavailable (e.g. test import-order edge case):
+        # fall back to the on-by-default contract.
+        return True
 
 
 def resolve_graph_path() -> str | None:
