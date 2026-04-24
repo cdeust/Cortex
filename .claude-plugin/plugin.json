@@ -16,7 +16,8 @@
       "args": ["-c", "PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server"],
       "env": {
         "DATABASE_URL": "postgresql://localhost:5432/cortex",
-        "CORTEX_RUNTIME": ""
+        "CORTEX_RUNTIME": "",
+        "CORTEX_MEMORY_AP_ENABLED": "1"
       }
     }
   },
