@@ -41,7 +41,10 @@ from typing import Any, Iterable
 
 from mcp_server.core.ast_parser import is_available as ast_available
 from mcp_server.core.ast_parser import parse_file_ast
-from mcp_server.core.codebase_graph import resolve_all_imports
+from mcp_server.core.codebase_graph import (
+    build_resolved_call_edges,
+    resolve_all_imports,
+)
 from mcp_server.core.codebase_parser import FileAnalysis, detect_language, parse_file
 
 logger = logging.getLogger(__name__)
@@ -97,14 +100,16 @@ class WorkflowGraphNativeASTSource:
     def load_ast_edges(
         self, file_paths: Iterable[str]
     ) -> list[dict[str, Any]]:
-        """Return IMPORTS, MEMBER_OF edges for the given files.
+        """Return CALLS, IMPORTS, and MEMBER_OF edges for the given files.
 
-        CALLS edges require per-function call-site attribution which the
-        in-house extractors don't expose yet (only file-level lists via
-        `extract_calls_generic`). Until that lands, callers get empty
-        CALLS from this source — AP fills the gap when enabled, and the
-        L6 ring is still populated via DEFINED_IN (auto-emitted by
-        `ingest_symbol`) + MEMBER_OF + IMPORTS.
+        CALLS are now caller-qualified: ``src_name`` is the enclosing
+        function/method qualified name (e.g. ``Foo.bar``), not just the
+        file. This is what renders the full dependency chain between
+        methods as part of a file in the L6 ring.
+
+        Unresolved callees (stdlib, external deps, dynamic lookups)
+        are dropped silently — the resolver only emits edges where the
+        target basename corresponds to a known SYMBOL.
         """
         analyses = self._parse_all(file_paths)
         if not analyses:
@@ -112,7 +117,30 @@ class WorkflowGraphNativeASTSource:
         edges: list[dict[str, Any]] = []
         edges.extend(self._member_of_edges(analyses))
         edges.extend(self._import_edges(analyses))
+        edges.extend(self._call_edges(analyses))
         return edges
+
+    def _call_edges(
+        self, analyses: list[FileAnalysis]
+    ) -> list[dict[str, Any]]:
+        """Caller-qualified CALLS edges via
+        ``codebase_graph.build_resolved_call_edges``."""
+        out: list[dict[str, Any]] = []
+        for caller_file, caller_qname, callee_file, callee_name in (
+            build_resolved_call_edges(analyses)
+        ):
+            out.append(
+                {
+                    "kind": "calls",
+                    "src_file": caller_file,
+                    "src_name": caller_qname,
+                    "dst_file": callee_file,
+                    "dst_name": callee_name,
+                    "confidence": 1.0,
+                    "reason": "native-ast:call",
+                }
+            )
+        return out
 
     # ── internals ────────────────────────────────────────────────────
 

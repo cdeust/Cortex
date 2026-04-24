@@ -168,6 +168,56 @@ def build_call_edges(
     return edges
 
 
+def build_resolved_call_edges(
+    analyses: list[FileAnalysis],
+) -> list[tuple[str, str, str, str]]:
+    """Caller-qualified CALLS edges resolved against the known-files set.
+
+    Uses ``FileAnalysis.calls_per_function`` (populated by the
+    tree-sitter path in ``ast_parser.parse_file_ast``) to emit edges
+    where the SOURCE is a specific function/method — not just the file.
+    That is what lets the workflow graph render the full dependency
+    chain between methods as part of a file.
+
+    Returns:
+        ``[(caller_file, caller_qname, callee_file, callee_basename),
+        ...]``. Self-calls (caller and callee in the same file) are
+        emitted — they carry the intra-file method-to-method structure
+        that the L6 ring renders as short arcs. Unresolved callees
+        (stdlib, external deps, dynamic lookups) are dropped silently.
+    """
+    # Build basename → first-defining-file lookup. First-wins matches
+    # the existing `build_call_edges` semantics; collisions across files
+    # are rare for user code and intentional for resolution.
+    symbol_to_file: dict[str, str] = {}
+    for analysis in analyses:
+        for sym in analysis.definitions:
+            base = sym.name.rsplit(".", 1)[-1]
+            symbol_to_file.setdefault(base, analysis.path)
+
+    edges: list[tuple[str, str, str, str]] = []
+    for analysis in analyses:
+        per_fn = getattr(analysis, "calls_per_function", None) or {}
+        for caller_qname, callees in per_fn.items():
+            seen_pair: set[tuple[str, str]] = set()
+            for call_name in callees:
+                base = call_name.rsplit(".", 1)[-1]
+                for c in "([<":
+                    base = base.split(c, 1)[0]
+                base = base.strip()
+                if not base:
+                    continue
+                target_file = symbol_to_file.get(base)
+                if target_file is None:
+                    continue
+                key = (target_file, base)
+                if key in seen_pair:
+                    continue
+                seen_pair.add(key)
+                edges.append((analysis.path, caller_qname, target_file, base))
+    return edges
+
+
 # ── Community detection ───────────────────────────────────────────────────
 
 

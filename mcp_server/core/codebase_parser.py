@@ -44,6 +44,12 @@ class FileAnalysis:
     definitions: list[SymbolDef] = field(default_factory=list)
     docstring: str = ""
     line_count: int = 0
+    # Per-function call map: {caller_qualified_name: [callee_basename, ...]}.
+    # Populated by the tree-sitter path (`ast_parser.parse_file_ast`) and
+    # consumed by `codebase_graph.build_resolved_call_edges` to produce
+    # caller-qualified CALLS edges for the workflow graph. Empty when
+    # parsing via regex fallback.
+    calls_per_function: dict = field(default_factory=dict)
 
 
 # ── Language detection ────────────────────────────────────────────────────
