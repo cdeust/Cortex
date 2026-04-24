@@ -289,8 +289,9 @@
   // Output is plain text (rendered via .textContent). Backticks used to
   // frame identifiers get rendered literally and look like stray ASCII
   // noise to non-tech readers (Eco + Feynman audit). We drop them and
-  // use plain quotes where disambiguation helps.
-  function plainDescription(n, ctx) {
+  // use plain quotes where disambiguation helps. The previous ``ctx``
+  // parameter was dead (Dijkstra §9 audit) and has been removed.
+  function plainDescription(n) {
     if (!n) return '';
     var kind = n.kind;
     var name = n.label || n.id || '';

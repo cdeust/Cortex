@@ -96,9 +96,7 @@ class TestLoadASTEdges:
         path = _write(
             tmp_path,
             "a.py",
-            "class Foo:\n"
-            "    def bar(self): ...\n"
-            "    def baz(self): ...\n",
+            "class Foo:\n    def bar(self): ...\n    def baz(self): ...\n",
         )
         edges = source.load_ast_edges([path])
         member_of = [e for e in edges if e["kind"] == "member_of"]
@@ -121,8 +119,7 @@ class TestLoadASTEdges:
         caller = _write(
             tmp_path,
             "user.py",
-            "from lib import helper\n\n"
-            "def go():\n    return helper()\n",
+            "from lib import helper\n\ndef go():\n    return helper()\n",
         )
         lib = str(tmp_path / "lib.py")
         edges = source.load_ast_edges([str(tmp_path / "user.py"), lib])
@@ -196,16 +193,13 @@ class TestCallEdges:
         caller_path = _write(
             tmp_path,
             "user.py",
-            "from lib import helper\n\n"
-            "def go():\n    return helper()\n",
+            "from lib import helper\n\ndef go():\n    return helper()\n",
         )
         lib_path = str(tmp_path / "lib.py")
         edges = source.load_ast_edges([caller_path, lib_path])
         calls = [e for e in edges if e["kind"] == "calls"]
         match = [
-            e
-            for e in calls
-            if e["src_name"] == "go" and e["dst_name"] == "helper"
+            e for e in calls if e["src_name"] == "go" and e["dst_name"] == "helper"
         ]
         assert match, f"expected go → helper call edge, got {calls}"
         e = match[0]
@@ -219,8 +213,7 @@ class TestCallEdges:
         path = _write(
             tmp_path,
             "a.py",
-            "def go():\n"
-            "    return os.path.join('a', 'b')  # external\n",
+            "def go():\n    return os.path.join('a', 'b')  # external\n",
         )
         edges = source.load_ast_edges([path])
         calls = [e for e in edges if e["kind"] == "calls"]
@@ -304,9 +297,7 @@ class TestEndToEndContract:
         calls = [
             e
             for e in builder._edges
-            if e.kind == EdgeKind.CALLS
-            and e.source == bar_id
-            and e.target == baz_id
+            if e.kind == EdgeKind.CALLS and e.source == bar_id and e.target == baz_id
         ]
         assert calls, (
             "Foo.bar → Foo.baz CALLS edge did not land in the builder. "
@@ -333,8 +324,7 @@ class TestEndToEndContract:
         user_path = _write(
             tmp_path,
             "user.py",
-            "from lib import helper\n\n"
-            "def go():\n    return helper()\n",
+            "from lib import helper\n\ndef go():\n    return helper()\n",
         )
 
         syms = source.load_symbols([lib_path, user_path])
@@ -355,9 +345,7 @@ class TestEndToEndContract:
         calls = [
             e
             for e in builder._edges
-            if e.kind == EdgeKind.CALLS
-            and e.source == go_id
-            and e.target == helper_id
+            if e.kind == EdgeKind.CALLS and e.source == go_id and e.target == helper_id
         ]
         assert calls, "cross-file go → helper CALLS edge did not land"
 
@@ -368,9 +356,7 @@ class TestFileCap:
         import mcp_server.infrastructure.workflow_graph_source_native_ast as mod
 
         monkeypatch.setattr(mod, "_MAX_FILES_PER_CALL", 3)
-        paths = [
-            _write(tmp_path, f"f{i}.py", "def a(): ...\n") for i in range(10)
-        ]
+        paths = [_write(tmp_path, f"f{i}.py", "def a(): ...\n") for i in range(10)]
         syms = source.load_symbols(paths)
         # 3 files × 1 symbol each = 3 symbols max.
         assert len(syms) == 3

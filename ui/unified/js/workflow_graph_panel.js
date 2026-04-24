@@ -77,10 +77,10 @@
   }
 
   // One-line plain-English description at the top of the panel.
-  function renderPlainDescription(body, n, ctx) {
+  function renderPlainDescription(body, n) {
     var h = hum();
     if (!h.plainDescription) return;
-    var text = h.plainDescription(n, ctx);
+    var text = h.plainDescription(n);
     if (!text) return;
     var p = el('p', 'wfg-panel__plain');
     p.textContent = text;
@@ -276,251 +276,34 @@
     if (ctx.degree[n.id] != null) body.appendChild(row('Connections', ctx.degree[n.id]));
   }
 
-  function renderDomain(body, n, ctx) {
-    renderCommon(body, n, ctx);
-    var kinds = countNeighborsByKind(n, ctx);
-    var s = section('Cloud contents');
-    var order = ['tool_hub', 'file', 'skill', 'hook', 'agent', 'command', 'memory', 'discussion'];
-    for (var i = 0; i < order.length; i++) {
-      if (kinds[order[i]]) s.appendChild(row(order[i], kinds[order[i]]));
-    }
-    body.appendChild(s);
-  }
-
-  function renderToolHub(body, n, ctx) {
-    body.appendChild(row('Tool', n.tool || n.label));
-    renderCommon(body, n, ctx);
-    var weight = 0;
-    var files = collectNeighbors(n, ctx, function (e, isOut, other) {
-      if (e.kind !== 'tool_used_file') return false;
-      if (other.kind !== 'file') return false;
-      weight += (e.weight || 1);
-      return true;
-    });
-    body.appendChild(row('Files touched', files.length));
-    body.appendChild(row('Total uses', Math.round(weight)));
-    renderNeighborList(body, 'Files accessed by this tool', files, ctx);
-    var cmds = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'command_in_hub' && other.kind === 'command';
-    });
-    renderNeighborList(body, 'Commands in this hub', cmds, ctx);
-  }
-
-  function renderFile(body, n, ctx) {
-    if (n.path) body.appendChild(row('Path', n.path));
-    if (n.primary_cluster) {
-      var h = hum();
-      var c = (h.primaryClusterLabel && h.primaryClusterLabel(n.primary_cluster))
-        || n.primary_cluster;
-      body.appendChild(row('How it was used', c));
-    }
-    if (n.first_seen) body.appendChild(row('First seen', humanDate(n.first_seen)));
-    if (n.last_accessed) body.appendChild(row('Last access', humanDate(n.last_accessed)));
-    if (n.last_modified) body.appendChild(row('Last modified', humanDate(n.last_modified)));
-    renderCommon(body, n, ctx);
-    if (n.extra_domain_ids && n.extra_domain_ids.length) {
-      var s = section('Also in domains');
-      n.extra_domain_ids.forEach(function (d) {
-        s.appendChild(row('', domainLabel(ctx, d)));
-      });
-      body.appendChild(s);
-    }
-    // Tools that touched this file, by name.
-    var tools = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'tool_used_file' && other.kind === 'tool_hub';
-    });
-    renderNeighborList(body, 'Accessed by tools', tools, ctx);
-    // Symbols defined in this file.
-    var defined = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'defined_in' && other.kind === 'symbol';
-    });
-    renderNeighborList(body, 'Symbols defined here', defined, ctx);
-    // Discussions / commands that touched the file.
-    var discs = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'discussion_touched_file' && other.kind === 'discussion';
-    });
-    renderNeighborList(body, 'Discussions involving this file', discs, ctx);
-    var cmds = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'command_touched_file' && other.kind === 'command';
-    });
-    renderNeighborList(body, 'Commands that touched this file', cmds, ctx);
-    // Cross-file imports landing here.
-    var imps = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'imports';
-    });
-    renderNeighborList(body, 'Imports / imported by', imps, ctx);
-    // Edit/Write files → diff button; read-only files → no diff.
-    if (n.primary_cluster === 'edit_write' && n.path) {
-      var ds = section('Diff');
-      ds.appendChild(actionBtn('See diff against HEAD', function () {
-        if (window.JUG && JUG._diff && typeof JUG._diff.show === 'function') {
-          JUG._diff.show(n.path, false);
-        } else {
-          console.warn('[wfg] diff modal unavailable');
-        }
-      }));
-      body.appendChild(ds);
-    }
-  }
-
-  function renderMemory(body, n, ctx) {
-    // Plain-language stage ("Just learned" instead of "LABILE") + hint.
-    stageRows(n.stage).forEach(function (r) { body.appendChild(r); });
-    // Visual heat badge (Hot/Warm/Cool/Cold) — raw 0.xxx is in Technical.
-    if (n.heat != null) body.appendChild(heatRow(n.heat));
-    if (n.created_at) body.appendChild(row('Created', humanDate(n.created_at)));
-    renderCommon(body, n, ctx);
-    if (n.tags && n.tags.length) {
-      var tagWrap = section('Tags');
-      var chips = el('div', 'wfg-panel__chips');
-      n.tags.forEach(function (t) { chips.appendChild(tagChip(t)); });
-      tagWrap.appendChild(chips);
-      body.appendChild(tagWrap);
-    }
-    if (n.body) {
-      var bs = section('What was remembered');
-      bs.appendChild(preview(n.body, 4000));
-      body.appendChild(bs);
-    }
-  }
-
-  function renderDiscussion(body, n, ctx) {
-    if (n.session_id) body.appendChild(row('Session', n.session_id));
-    if (n.count != null) body.appendChild(row('Messages', n.count));
-    if (n.started_at) body.appendChild(row('Started', humanDate(n.started_at)));
-    if (n.last_activity) body.appendChild(row('Last activity', humanDate(n.last_activity)));
-    if (n.duration_ms != null)
-      body.appendChild(row('Duration', humanDuration(n.duration_ms)));
-    renderCommon(body, n, ctx);
-    var touched = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'discussion_touched_file' && other.kind === 'file';
-    });
-    renderNeighborList(body, 'Files touched in session', touched, ctx);
-    var usedTools = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'discussion_used_tool' && other.kind === 'tool_hub';
-    });
-    renderNeighborList(body, 'Tools used', usedTools, ctx);
-    var ranCmds = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'discussion_ran_command' && other.kind === 'command';
-    });
-    renderNeighborList(body, 'Commands run', ranCmds, ctx);
-    var spawnedAgents = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'discussion_spawned_agent' && other.kind === 'agent';
-    });
-    renderNeighborList(body, 'Agents spawned', spawnedAgents, ctx);
-    if (n.session_id) {
-      var ds = section('Conversation');
-      ds.appendChild(actionBtn('View full conversation', function () {
-        if (window.JUG && JUG._disc && typeof JUG._disc.openConversationModal === 'function') {
-          JUG._disc.openConversationModal(n.session_id);
-        } else {
-          console.warn('[wfg] conversation modal unavailable');
-        }
-      }));
-      body.appendChild(ds);
-    }
-  }
-
-  function renderSkill(body, n, ctx) {
-    if (n.path) body.appendChild(row('File', n.path));
-    renderCommon(body, n, ctx);
-    if (n.body) {
-      var bs = section('Definition');
-      bs.appendChild(preview(n.body, 2000));
-      body.appendChild(bs);
-    }
-  }
-
-  function renderHook(body, n, ctx) {
-    if (n.event) body.appendChild(row('Event', n.event));
-    if (n.path) body.appendChild(row('Command', n.path));
-    renderCommon(body, n, ctx);
-  }
-
-  function renderCommand(body, n, ctx) {
-    if (n.count != null) body.appendChild(row('Invocations', n.count));
-    if (n.first_seen) body.appendChild(row('First seen', humanDate(n.first_seen)));
-    if (n.last_accessed) body.appendChild(row('Last invoked', humanDate(n.last_accessed)));
-    renderCommon(body, n, ctx);
-    if (n.body) {
-      var bs = section('Command line');
-      bs.appendChild(preview(n.body, 1000));
-      body.appendChild(bs);
-    }
-    var touched = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'command_touched_file' && other.kind === 'file';
-    });
-    renderNeighborList(body, 'Files this command touched', touched, ctx);
-    var parentHub = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'command_in_hub' && other.kind === 'tool_hub';
-    });
-    renderNeighborList(body, 'Part of tool hub', parentHub, ctx);
-  }
-
-  function renderAgent(body, n, ctx) {
-    if (n.subagent_type) body.appendChild(row('Agent type', n.subagent_type));
-    if (n.count != null) body.appendChild(row('Invocations', n.count));
-    renderCommon(body, n, ctx);
-  }
-
-  function renderSymbol(body, n, ctx) {
-    // Identity — use plain-language type labels.
-    var h = hum();
-    if (n.symbol_type) {
-      var t = (h.symbolTypeLabel && h.symbolTypeLabel(n.symbol_type)) || n.symbol_type;
-      body.appendChild(row('Type', t));
-    }
-    if (n.path) body.appendChild(row('File', n.path));
-    if (n.label) body.appendChild(row('Name', n.label));
-    renderCommon(body, n, ctx);
-
-    // Parent file (defined_in → file).
-    var parents = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'defined_in' && other.kind === 'file' && isOut;
-    });
-    renderNeighborList(body, 'Defined in file', parents, ctx);
-
-    // Class / module membership (member_of → class/module symbol).
-    var containers = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'member_of' && other.kind === 'symbol' && isOut;
-    });
-    renderNeighborList(body, 'Member of', containers, ctx);
-
-    // Methods of this class/module (member_of ← other symbols).
-    var members = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'member_of' && other.kind === 'symbol' && !isOut;
-    });
-    renderNeighborList(body, 'Methods / members', members, ctx);
-
-    // Calls: outgoing = "Calls these", incoming = "Called from".
-    var callsOut = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'calls' && isOut;
-    });
-    renderNeighborList(body, 'Calls these symbols', callsOut, ctx);
-    var callsIn = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'calls' && !isOut;
-    });
-    renderNeighborList(body, 'Called from', callsIn, ctx);
-
-    // Imports landing on this symbol (file → imports → symbol).
-    var importedBy = collectNeighbors(n, ctx, function (e, isOut, other) {
-      return e.kind === 'imports' && other.kind === 'file' && !isOut;
-    });
-    renderNeighborList(body, 'Imported by files', importedBy, ctx);
-  }
-
-  var RENDERERS = {
-    domain: renderDomain,
-    tool_hub: renderToolHub,
-    file: renderFile,
-    memory: renderMemory,
-    discussion: renderDiscussion,
-    skill: renderSkill,
-    hook: renderHook,
-    command: renderCommand,
-    agent: renderAgent,
-    symbol: renderSymbol,
+  // Per-kind render<Kind> functions + the dispatch table live in
+  // workflow_graph_panel_renderers.js (Dijkstra §4.1 split, 2026-04-24).
+  // Publish the primitives renderers consume so they can access them
+  // without reaching into private panel state.
+  window.JUG = window.JUG || {};
+  window.JUG._wfgPanelHelpers = {
+    el: el,
+    row: row,
+    section: section,
+    preview: preview,
+    tagChip: tagChip,
+    actionBtn: actionBtn,
+    humanDate: humanDate,
+    humanDuration: humanDuration,
+    domainLabel: domainLabel,
+    collectNeighbors: collectNeighbors,
+    renderNeighborList: renderNeighborList,
+    countNeighborsByKind: countNeighborsByKind,
+    renderCommon: renderCommon,
+    heatRow: heatRow,
+    stageRows: stageRows,
   };
+
+
+  function rendererFor(kind) {
+    var r = (window.JUG && window.JUG._wfgRenderers);
+    return r && typeof r.get === 'function' ? r.get(kind) : null;
+  }
 
   function buildSidePanel(container) {
     var wfg = window.JUG._wfg;
@@ -549,8 +332,8 @@
       body.innerHTML = '';
       // Plain-language one-sentence description at the very top, before
       // any field table. This is the non-tech reader's entry point.
-      renderPlainDescription(body, n, ctx);
-      var fn = RENDERERS[n.kind];
+      renderPlainDescription(body, n);
+      var fn = rendererFor(n.kind);
       if (fn) fn(body, n, ctx);
       else {
         // Unknown kind — fall back to raw JSON dump (never fail silently).

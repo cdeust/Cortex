@@ -62,9 +62,7 @@ class TestLegacyEnvRemoved:
     Setting it must not influence is_enabled() at all — only
     ``CORTEX_MEMORY_AP_ENABLED`` / ``MemorySettings.AP_ENABLED`` do."""
 
-    def test_legacy_env_has_no_effect_when_memory_setting_off(
-        self, monkeypatch
-    ):
+    def test_legacy_env_has_no_effect_when_memory_setting_off(self, monkeypatch):
         monkeypatch.setenv("CORTEX_ENABLE_AP", "1")  # used to force on
         monkeypatch.setenv("CORTEX_MEMORY_AP_ENABLED", "0")  # real flag says off
         from mcp_server.infrastructure import memory_config
