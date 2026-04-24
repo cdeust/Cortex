@@ -261,14 +261,15 @@ def _announce(url: str) -> None:
 
 
 def _auto_enable_ap() -> None:
-    """ADR-0046 — make the AST overlay always-on when AP is available.
+    """ADR-0046 — discover the AP binary location at standalone startup.
 
-    Runs at standalone startup so every spawn of the unified viz server
-    enables AP enrichment automatically. No-op when the binary isn't
-    installed or when the user has already set the env vars.
+    AP enrichment is on by default (MemorySettings.AP_ENABLED); this
+    function only locates the binary and publishes it via
+    ``CORTEX_AP_COMMAND`` so the bridge can spawn it. No-op when the
+    binary isn't installed — ``APBridge.connect()`` then fails quietly
+    and the native AST source fills the L6 ring.
 
     Side effects (written to ``os.environ`` of THIS process only):
-      * ``CORTEX_ENABLE_AP`` = "1"
       * ``CORTEX_AP_COMMAND`` = JSON spec pointing at a built binary
       * ``CORTEX_AP_GRAPH_PATH`` = ``~/.cortex/ap_graph/graph`` when
         a prior index exists. If missing, a background index is kicked
@@ -290,7 +291,6 @@ def _auto_enable_ap() -> None:
             bin_path = _sh.which("ai-architect-mcp")
     if bin_path is None and not os.environ.get("CORTEX_AP_COMMAND"):
         return
-    os.environ.setdefault("CORTEX_ENABLE_AP", "1")
     if bin_path and not os.environ.get("CORTEX_AP_COMMAND"):
         os.environ["CORTEX_AP_COMMAND"] = json.dumps(
             {"command": bin_path, "args": []},

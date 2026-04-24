@@ -38,7 +38,8 @@ schema = {
         "Rank Fusion (k=60, Cormack 2009). Returns a single ranked "
         "list with ``source_ranks`` on every record so the UI can "
         "explain where each hit came from. Falls back to Cortex-only "
-        "when CORTEX_ENABLE_AP is unset (status=partial)."
+        "when AP is disabled (CORTEX_MEMORY_AP_ENABLED=0) or "
+        "unreachable (status=partial)."
     ),
     "inputSchema": {
         "type": "object",

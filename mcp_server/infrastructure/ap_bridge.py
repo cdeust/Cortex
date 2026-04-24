@@ -9,10 +9,9 @@ workflow graph.
 Enabled by default (``MemorySettings.AP_ENABLED = True``) so the L6
 symbol ring has depth out of the box. Users cut token / subprocess
 cost by setting ``CORTEX_MEMORY_AP_ENABLED=0`` in their MCP config.
-The legacy ``CORTEX_ENABLE_AP`` env var is still honoured when set
-(explicit override always wins). When off, no connection is
-attempted, every call returns an empty result, and the workflow
-graph falls back to the native in-process AST source.
+When off, no connection is attempted, every call returns an empty
+result, and the workflow graph falls back to the native in-process
+AST source.
 
 Infrastructure layer only. No core imports.
 """
@@ -45,26 +44,18 @@ _AP_TOOLS = frozenset(
 
 
 def is_enabled() -> bool:
-    """Return True when AP enrichment is active. Three-way precedence:
+    """Return True when AP enrichment is active.
 
-      1. Legacy env ``CORTEX_ENABLE_AP`` — explicit override that always
-         wins when set (empty string = unset). Accepts
-         {1,true,yes,on} → on, {0,false,no,off} → off.
-      2. ``MemorySettings.AP_ENABLED`` — MCP-config-settable, reads
-         ``CORTEX_MEMORY_AP_ENABLED`` via pydantic-settings.
-      3. Hardcoded default — ``True`` (on). AP absence still degrades
-         gracefully: ``APBridge.connect()`` returns False silently and
-         every tool call short-circuits to [].
-
+    Single source of truth: ``MemorySettings.AP_ENABLED`` (reads
+    ``CORTEX_MEMORY_AP_ENABLED`` via pydantic-settings env prefix).
+    Default is ``True`` — the L6 symbol ring has depth out of the box.
     Users who want to cut token / subprocess cost set
     ``CORTEX_MEMORY_AP_ENABLED=0`` in their MCP server env block.
+
+    AP absence still degrades gracefully: ``APBridge.connect()`` returns
+    False silently and every tool call short-circuits to []; the native
+    in-process AST source fills the L6 ring.
     """
-    raw = (os.environ.get("CORTEX_ENABLE_AP") or "").strip().lower()
-    if raw in {"1", "true", "yes", "on"}:
-        return True
-    if raw in {"0", "false", "no", "off"}:
-        return False
-    # No explicit env override — consult MemorySettings.
     try:
         from mcp_server.infrastructure.memory_config import get_memory_settings
 

@@ -123,8 +123,10 @@ def _find_ap_binary() -> str | None:
 def _ensure_ap_graph(dev_src: Path | None, env: dict) -> None:
     """If AP is available, ensure a graph exists and point env at it.
 
+    AP is on by default via ``MemorySettings.AP_ENABLED``; this function
+    only locates the binary + graph path for the spawned server.
+
     Sets these env vars (which the spawned server reads):
-      * ``CORTEX_ENABLE_AP``        — turned on when AP binary found.
       * ``CORTEX_AP_COMMAND``       — JSON spec the bridge consumes.
       * ``CORTEX_AP_GRAPH_PATH``    — LadybugDB graph dir.
 
@@ -139,8 +141,6 @@ def _ensure_ap_graph(dev_src: Path | None, env: dict) -> None:
     bin_path = _find_ap_binary()
     if bin_path is None and not os.environ.get("CORTEX_AP_COMMAND"):
         return
-    # Flag + command.
-    env.setdefault("CORTEX_ENABLE_AP", "1")
     if bin_path and not env.get("CORTEX_AP_COMMAND"):
         env["CORTEX_AP_COMMAND"] = json.dumps(
             {"command": bin_path, "args": []},
@@ -203,8 +203,9 @@ def _ensure_ap_graph(dev_src: Path | None, env: dict) -> None:
         ).start()
         env["CORTEX_AP_GRAPH_PATH"] = str(graph_file)
     except Exception:
-        # Best-effort — launch proceeds without AP enrichment.
-        env.pop("CORTEX_ENABLE_AP", None)
+        # Best-effort — launch proceeds; APBridge.connect() will fail
+        # quietly and the native AST source fills the L6 ring.
+        env.pop("CORTEX_AP_COMMAND", None)
 
 
 def _sync_dev_source(src_root: Path, pkg_root: Path) -> None:

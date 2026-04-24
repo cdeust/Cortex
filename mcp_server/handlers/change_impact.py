@@ -47,8 +47,9 @@ schema = {
         "detect_changes and optionally get_impact to compute the "
         "symbol/file impact set, then matches against recent memories. "
         "Read-only by default; pass apply_heat_bump=true to nudge heat "
-        "on the top 20 matches by +0.15. Requires CORTEX_ENABLE_AP; "
-        "returns status=skipped otherwise."
+        "on the top 20 matches by +0.15. Requires AP enabled "
+        "(CORTEX_MEMORY_AP_ENABLED=1, the default); returns "
+        "status=skipped otherwise."
     ),
     "inputSchema": {
         "type": "object",
@@ -155,7 +156,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "status": "skipped",
             "reason": "ap_disabled",
             "detail": (
-                "Set CORTEX_ENABLE_AP=1 and install automatised-pipeline "
+                "AP is disabled. Set CORTEX_MEMORY_AP_ENABLED=1 in your "
+                "MCP config (default) and install automatised-pipeline "
                 "to compute change impact."
             ),
         }

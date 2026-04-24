@@ -170,8 +170,7 @@ class MemorySettings(BaseSettings):
     # automatised-pipeline (ADR-0046) — on by default so the L6 symbol
     # ring has depth out of the box. Users who want to cut token /
     # subprocess cost override via CORTEX_MEMORY_AP_ENABLED=0 in their
-    # MCP config. The legacy ``CORTEX_ENABLE_AP`` env var still wins
-    # when set (explicit-override-always-wins).
+    # MCP config.
     AP_ENABLED: bool = True
 
     model_config = {"env_prefix": "CORTEX_MEMORY_"}
