@@ -91,11 +91,13 @@
   // Non-tech users see "Hot 78%"; the raw 0.78 stays in Technical details.
   function heatRow(value) {
     var h = hum();
-    if (!h.heatBadge) return row('Heat', value);
+    if (!h.heatBadge) return row('Priority', value);
     var b = h.heatBadge(value);
-    if (!b) return row('Heat', '—');
+    if (!b) return row('Priority', '—');
     var r = el('div', 'wfg-panel__row');
-    var k = el('div', 'wfg-panel__key'); k.textContent = 'Activity';
+    // Eco audit: the value is retrieval PRIORITY, not CPU activity.
+    // "Activity" invited "CPU %" misreading.
+    var k = el('div', 'wfg-panel__key'); k.textContent = 'Priority';
     var v = el('div', 'wfg-panel__val');
     var badge = el('span', 'wfg-panel__badge');
     badge.textContent = b.label + ' · ' + b.pct + '%';
@@ -154,11 +156,28 @@
     sum.textContent = 'Technical details';
     d.appendChild(sum);
     var wrap = el('div', 'wfg-panel__advanced-body');
+    // Vygotsky ZPD bridge: show both the plain label AND the raw key
+    // so a growing reader can build the mapping (e.g.
+    // "Priority (raw) · heat_base"). Raw key rendered dim/mono so
+    // the plain label remains the primary anchor.
     keys.sort().forEach(function (k) {
       var v = n[k];
       if (typeof v === 'object') v = JSON.stringify(v);
       if (typeof v === 'number' && !Number.isInteger(v)) v = v.toFixed(4);
-      wrap.appendChild(row(pretty(k), v));
+      var r = el('div', 'wfg-panel__row');
+      var keyCell = el('div', 'wfg-panel__key');
+      keyCell.textContent = pretty(k);
+      // Only attach the raw-key bridge when pretty(k) is actually
+      // a translation (not when it falls through to the titleizer).
+      if (pretty(k) !== k && pretty(k).toLowerCase() !== k.replace(/_/g, ' ')) {
+        var raw = el('span', 'wfg-panel__raw-key');
+        raw.textContent = ' · ' + k;
+        keyCell.appendChild(raw);
+      }
+      var valCell = el('div', 'wfg-panel__val');
+      valCell.textContent = v == null ? '—' : String(v);
+      r.appendChild(keyCell); r.appendChild(valCell);
+      wrap.appendChild(r);
     });
     d.appendChild(wrap);
     body.appendChild(d);
@@ -219,7 +238,11 @@
     shown.forEach(function (nb) {
       var r = el('div', 'wfg-panel__row wfg-panel__row--clickable');
       var k = el('div', 'wfg-panel__key');
-      k.textContent = nb.kind || '?';
+      // Vygotsky audit: this bypassed the humanizer and showed the raw
+      // kind string ("symbol", "tool_hub") on every neighbor row. Go
+      // through kindLabel for consistent lay-vocabulary.
+      var h = (window.JUG && window.JUG._wfgHumanize) || {};
+      k.textContent = (h.kindLabel ? h.kindLabel(nb.kind) : (nb.kind || '?'));
       var v = el('div', 'wfg-panel__val');
       var a = el('a', 'wfg-panel__link');
       a.textContent = nb.label || nb.path || nb.id;
@@ -246,7 +269,10 @@
   }
 
   function renderCommon(body, n, ctx) {
-    if (n.domain_id) body.appendChild(row('Domain', domainLabel(ctx, n.domain_id)));
+    // Vygotsky audit: "Domain" is internal vocabulary; KIND_LABELS
+    // translates the node kind to "Project". Use the same word here
+    // for consistency across the panel.
+    if (n.domain_id) body.appendChild(row('Project', domainLabel(ctx, n.domain_id)));
     if (ctx.degree[n.id] != null) body.appendChild(row('Connections', ctx.degree[n.id]));
   }
 

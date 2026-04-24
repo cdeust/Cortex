@@ -435,3 +435,14 @@
   color: #b4c8d0;
   word-break: break-all;
 }
+
+/* Raw key bridge (Vygotsky ZPD): dim secondary display of the
+   underlying field name, so a growing reader can map "Priority (raw)"
+   → "heat_base". Monospace signals "this is code, not English." */
+.wfg-panel__raw-key {
+  margin-left: 4px;
+  color: #6a7b87;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  opacity: 0.7;
+}
