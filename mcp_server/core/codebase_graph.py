@@ -225,9 +225,7 @@ def build_resolved_call_edges(
                 if key in seen_pair:
                     continue
                 seen_pair.add(key)
-                edges.append(
-                    (analysis.path, caller_qname, target_file, target_qname)
-                )
+                edges.append((analysis.path, caller_qname, target_file, target_qname))
     return edges
 
 

@@ -74,9 +74,7 @@ class WorkflowGraphNativeASTSource:
         """Tree-sitter proper is installed (deeper extraction)."""
         return ast_available()
 
-    def load_symbols(
-        self, file_paths: Iterable[str]
-    ) -> list[dict[str, Any]]:
+    def load_symbols(self, file_paths: Iterable[str]) -> list[dict[str, Any]]:
         """Return one symbol row per function/class/method definition
         found in each readable file. Skips unreadable files silently.
         """
@@ -97,9 +95,7 @@ class WorkflowGraphNativeASTSource:
                 )
         return symbols
 
-    def load_ast_edges(
-        self, file_paths: Iterable[str]
-    ) -> list[dict[str, Any]]:
+    def load_ast_edges(self, file_paths: Iterable[str]) -> list[dict[str, Any]]:
         """Return CALLS, IMPORTS, and MEMBER_OF edges for the given files.
 
         CALLS are now caller-qualified: ``src_name`` is the enclosing
@@ -120,9 +116,7 @@ class WorkflowGraphNativeASTSource:
         edges.extend(self._call_edges(analyses))
         return edges
 
-    def _call_edges(
-        self, analyses: list[FileAnalysis]
-    ) -> list[dict[str, Any]]:
+    def _call_edges(self, analyses: list[FileAnalysis]) -> list[dict[str, Any]]:
         """Caller-qualified CALLS edges via
         ``codebase_graph.build_resolved_call_edges``.
 
@@ -134,9 +128,12 @@ class WorkflowGraphNativeASTSource:
         exactly what happened before the Wu audit caught it.
         """
         out: list[dict[str, Any]] = []
-        for caller_file, caller_qname, callee_file, callee_qname in (
-            build_resolved_call_edges(analyses)
-        ):
+        for (
+            caller_file,
+            caller_qname,
+            callee_file,
+            callee_qname,
+        ) in build_resolved_call_edges(analyses):
             out.append(
                 {
                     "kind": "calls",
@@ -197,18 +194,14 @@ class WorkflowGraphNativeASTSource:
                     content_hash="",
                 )
 
-    def _member_of_edges(
-        self, analyses: list[FileAnalysis]
-    ) -> list[dict[str, Any]]:
+    def _member_of_edges(self, analyses: list[FileAnalysis]) -> list[dict[str, Any]]:
         """method → class MEMBER_OF. The parser emits method names as
         ``ClassName.method``; we split on ``.`` and attach the method
         symbol to the class symbol in the same file."""
         out: list[dict[str, Any]] = []
         for a in analyses:
             # class names defined in THIS file (MEMBER_OF is intra-file).
-            classes_in_file = {
-                d.name for d in a.definitions if d.kind == "class"
-            }
+            classes_in_file = {d.name for d in a.definitions if d.kind == "class"}
             for sym in a.definitions:
                 if sym.kind != "method":
                     continue
@@ -230,9 +223,7 @@ class WorkflowGraphNativeASTSource:
                 )
         return out
 
-    def _import_edges(
-        self, analyses: list[FileAnalysis]
-    ) -> list[dict[str, Any]]:
+    def _import_edges(self, analyses: list[FileAnalysis]) -> list[dict[str, Any]]:
         """File → imported-symbol IMPORTS. Resolves each import's target
         file via ``resolve_all_imports``; then, for every imported name
         that corresponds to a SYMBOL defined in the target file, emit
@@ -269,9 +260,7 @@ class WorkflowGraphNativeASTSource:
         # Map target-file path (ABSOLUTE) → set of top-level symbol names.
         symbols_in_file: dict[str, set[str]] = {}
         for a in analyses:
-            names: set[str] = {
-                sym.name for sym in a.definitions if "." not in sym.name
-            }
+            names: set[str] = {sym.name for sym in a.definitions if "." not in sym.name}
             symbols_in_file[a.path] = names
 
         out: list[dict[str, Any]] = []

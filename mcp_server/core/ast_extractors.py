@@ -301,9 +301,7 @@ def extract_calls_per_function(
                 fn_name = _text(name_node, source) if name_node else ""
                 body = child.child_by_field_name("body") or child
                 if fn_name:
-                    qname = (
-                        f"{class_scope}.{fn_name}" if class_scope else fn_name
-                    )
+                    qname = f"{class_scope}.{fn_name}" if class_scope else fn_name
                     calls: list[str] = []
                     seen: set[str] = set()
                     for call_type in _CALL_NODE_TYPES:
