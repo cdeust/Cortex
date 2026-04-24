@@ -348,60 +348,66 @@ def ingest_symbol(b, sym: dict) -> None:
     )
 
 
-def ingest_ast_edge(b, edge: dict) -> None:
-    """Create a CALLS / IMPORTS / MEMBER_OF edge between two symbols
-    (or a file→symbol IMPORTS edge). Skipped silently when either
-    endpoint is absent from the graph."""
+def _resolve_ast_edge_endpoints(b, edge: dict):
+    """Resolve (src_id, dst_id, edge_kind) for an AST edge dict, or
+    return ``None`` when either endpoint is absent from the builder.
+
+    Contract violations on the emitter side (dst_name must be the exact
+    qualified_name used at ``ingest_symbol`` time — Wu audit 2026-04-24)
+    log at debug so diagnostics can expose silent drops.
+    """
     kind = str(edge.get("kind") or "")
     src_file = str(edge.get("src_file") or "")
     dst_file = str(edge.get("dst_file") or "")
     dst_name = str(edge.get("dst_name") or "")
     if not dst_file or not dst_name:
-        return
+        return None
     dst_id = NodeIdFactory.symbol_id(dst_file, dst_name)
     if dst_id not in b._nodes:
-        # Contract violation on the emitter side: dst_name must be the
-        # EXACT qualified_name used at ingest_symbol time. Emitters that
-        # hand over a basename (e.g. "baz" when the SYMBOL was ingested
-        # as "Foo.baz") produce a different sha1 and land here. We log
-        # at debug so CI / diagnostics expose the drop instead of
-        # silently flattening the graph. See Wu audit 2026-04-24.
         logger.debug(
             "ingest_ast_edge drop: no SYMBOL node for dst (%s, %r) kind=%s",
             dst_file,
             dst_name,
             kind,
         )
-        return
+        return None
 
     if kind == "imports":
-        # File → imported symbol.
         if not src_file:
-            return
+            return None
         src_id = NodeIdFactory.file_id(src_file)
         if src_id not in b._nodes:
             logger.debug(
                 "ingest_ast_edge drop: no FILE node for IMPORTS src=%s",
                 src_file,
             )
-            return
-        edge_kind = EdgeKind.IMPORTS
-    else:
-        src_name = str(edge.get("src_name") or "")
-        if not src_file or not src_name:
-            return
-        src_id = NodeIdFactory.symbol_id(src_file, src_name)
-        if src_id not in b._nodes:
-            logger.debug(
-                "ingest_ast_edge drop: no SYMBOL node for src (%s, %r) kind=%s",
-                src_file,
-                src_name,
-                kind,
-            )
-            return
-        edge_kind = EdgeKind.CALLS if kind == "calls" else EdgeKind.MEMBER_OF
+            return None
+        return src_id, dst_id, EdgeKind.IMPORTS
 
-    # Gap 6: central provenance defaults — single source of truth.
+    src_name = str(edge.get("src_name") or "")
+    if not src_file or not src_name:
+        return None
+    src_id = NodeIdFactory.symbol_id(src_file, src_name)
+    if src_id not in b._nodes:
+        logger.debug(
+            "ingest_ast_edge drop: no SYMBOL node for src (%s, %r) kind=%s",
+            src_file,
+            src_name,
+            kind,
+        )
+        return None
+    edge_kind = EdgeKind.CALLS if kind == "calls" else EdgeKind.MEMBER_OF
+    return src_id, dst_id, edge_kind
+
+
+def ingest_ast_edge(b, edge: dict) -> None:
+    """Create a CALLS / IMPORTS / MEMBER_OF edge between two symbols
+    (or a file→symbol IMPORTS edge). Skipped silently when either
+    endpoint is absent from the graph."""
+    resolved = _resolve_ast_edge_endpoints(b, edge)
+    if resolved is None:
+        return
+    src_id, dst_id, edge_kind = resolved
     conf, reason = edge_provenance_defaults(
         edge_kind.value,
         ap_confidence=edge.get("confidence"),

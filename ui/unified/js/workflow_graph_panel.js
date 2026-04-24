@@ -127,145 +127,33 @@
     return out;
   }
 
-  // Collapsible "Technical details" section holding every raw field the
-  // backend surfaced. Hidden by default; one click reveals it. Users who
-  // want to debug, copy IDs, or check the raw heat float get it one tap
-  // away; everyone else never sees the jargon.
+  // renderTechnicalDetails + actionBtn live in
+  // workflow_graph_panel_helpers.js — proxied here so the rest of the
+  // file keeps its local names.
   function renderTechnicalDetails(body, n) {
-    var h = hum();
-    var pretty = h.prettyFieldKey || function (k) { return k; };
-    // Pick field set: everything except what we've already shown
-    // humanized, and except fields that are structural (body, tags).
-    var SKIP = {
-      id: 1, kind: 1, label: 1, color: 1, size: 1,
-      body: 1, tags: 1, is_protected: 1, is_stale: 1,
-    };
-    var keys = Object.keys(n).filter(function (k) {
-      if (SKIP[k]) return false;
-      var v = n[k];
-      if (v == null) return false;
-      if (Array.isArray(v) && v.length === 0) return false;
-      if (typeof v === 'object' && Object.keys(v).length === 0) return false;
-      return true;
-    });
-    if (!keys.length) return;
-    // Collapsible <details> — native HTML, no JS needed.
-    var d = document.createElement('details');
-    d.className = 'wfg-panel__advanced';
-    var sum = document.createElement('summary');
-    sum.textContent = 'Technical details';
-    d.appendChild(sum);
-    var wrap = el('div', 'wfg-panel__advanced-body');
-    // Vygotsky ZPD bridge: show both the plain label AND the raw key
-    // so a growing reader can build the mapping (e.g.
-    // "Priority (raw) · heat_base"). Raw key rendered dim/mono so
-    // the plain label remains the primary anchor.
-    keys.sort().forEach(function (k) {
-      var v = n[k];
-      if (typeof v === 'object') v = JSON.stringify(v);
-      if (typeof v === 'number' && !Number.isInteger(v)) v = v.toFixed(4);
-      var r = el('div', 'wfg-panel__row');
-      var keyCell = el('div', 'wfg-panel__key');
-      keyCell.textContent = pretty(k);
-      // Only attach the raw-key bridge when pretty(k) is actually
-      // a translation (not when it falls through to the titleizer).
-      if (pretty(k) !== k && pretty(k).toLowerCase() !== k.replace(/_/g, ' ')) {
-        var raw = el('span', 'wfg-panel__raw-key');
-        raw.textContent = ' · ' + k;
-        keyCell.appendChild(raw);
-      }
-      var valCell = el('div', 'wfg-panel__val');
-      valCell.textContent = v == null ? '—' : String(v);
-      r.appendChild(keyCell); r.appendChild(valCell);
-      wrap.appendChild(r);
-    });
-    d.appendChild(wrap);
-    body.appendChild(d);
+    return _neighbors().renderTechnicalDetails(body, n, hum());
   }
-
   function actionBtn(label, onClick) {
-    var b = el('button', 'wfg-panel__action');
-    b.type = 'button'; b.textContent = label;
-    b.addEventListener('click', onClick);
-    return b;
+    return _neighbors().actionBtn(label, onClick);
   }
 
+  // Neighbor traversal + rendering lives in
+  // workflow_graph_panel_helpers.js (Dijkstra §4.1 split 2026-04-24).
+  // We proxy here so callers inside this file keep working.
+  function _neighbors() {
+    return (window.JUG && window.JUG._wfgPanelNeighbors) || {};
+  }
   function domainLabel(ctx, domain_id) {
-    var d = ctx.byId[domain_id];
-    return d ? (d.label || d.id.replace('domain:', '')) : (domain_id || '—');
+    return _neighbors().domainLabel(ctx, domain_id);
   }
-
   function countNeighborsByKind(n, ctx) {
-    var out = {};
-    var adj = ctx.adj[n.id] || {};
-    for (var id in adj) {
-      var kind = (ctx.byId[id] && ctx.byId[id].kind) || '?';
-      out[kind] = (out[kind] || 0) + 1;
-    }
-    return out;
+    return _neighbors().countNeighborsByKind(n, ctx);
   }
-
-  // Gather neighbors split by (edge-kind, direction, neighbor-kind) so
-  // we can show contextual lists like "Called from", "Uses", etc.
   function collectNeighbors(n, ctx, filter) {
-    // filter(edge, isOutgoing, neighborNode) -> boolean (include?)
-    var out = [];
-    var seen = {};
-    for (var i = 0; i < ctx.edges.length; i++) {
-      var e = ctx.edges[i];
-      var sId = e.source.id || e.source;
-      var tId = e.target.id || e.target;
-      var isOut = sId === n.id;
-      var isIn  = tId === n.id;
-      if (!isOut && !isIn) continue;
-      var other = isOut ? ctx.byId[tId] : ctx.byId[sId];
-      if (!other) continue;
-      if (!filter(e, isOut, other)) continue;
-      if (seen[other.id]) continue;
-      seen[other.id] = 1;
-      out.push(other);
-    }
-    return out;
+    return _neighbors().collectNeighbors(n, ctx, filter);
   }
-
-  // Render a list of named neighbor nodes under a section title.
-  // Truncates to MAX; shows "+N more" footer if exceeded.
-  var NEIGHBOR_MAX = 24;
-  function renderNeighborList(body, sectionTitle, neighbors, ctx, onClickFactory) {
-    if (!neighbors || !neighbors.length) return;
-    var s = section(sectionTitle + ' (' + neighbors.length + ')');
-    var shown = neighbors.slice(0, NEIGHBOR_MAX);
-    shown.forEach(function (nb) {
-      var r = el('div', 'wfg-panel__row wfg-panel__row--clickable');
-      var k = el('div', 'wfg-panel__key');
-      // Vygotsky audit: this bypassed the humanizer and showed the raw
-      // kind string ("symbol", "tool_hub") on every neighbor row. Go
-      // through kindLabel for consistent lay-vocabulary.
-      var h = (window.JUG && window.JUG._wfgHumanize) || {};
-      k.textContent = (h.kindLabel ? h.kindLabel(nb.kind) : (nb.kind || '?'));
-      var v = el('div', 'wfg-panel__val');
-      var a = el('a', 'wfg-panel__link');
-      a.textContent = nb.label || nb.path || nb.id;
-      a.href = '#';
-      a.title = nb.path || nb.id;
-      var onClick = onClickFactory ? onClickFactory(nb) : function (ev) {
-        ev.preventDefault();
-        if (window.JUG && JUG.wfgApplyFilter) {
-          // Focus this node in the graph by dispatching a selection.
-          if (typeof JUG.emit === 'function') JUG.emit('graph:selectNode', nb);
-        }
-      };
-      a.addEventListener('click', onClick);
-      v.appendChild(a);
-      r.appendChild(k); r.appendChild(v);
-      s.appendChild(r);
-    });
-    if (neighbors.length > NEIGHBOR_MAX) {
-      var more = el('div', 'wfg-panel__more');
-      more.textContent = '+' + (neighbors.length - NEIGHBOR_MAX) + ' more…';
-      s.appendChild(more);
-    }
-    body.appendChild(s);
+  function renderNeighborList(body, title, neighbors, ctx, onClickFactory) {
+    return _neighbors().renderNeighborList(body, title, neighbors, ctx, onClickFactory);
   }
 
   function renderCommon(body, n, ctx) {

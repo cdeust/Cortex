@@ -1,31 +1,9 @@
 // Cortex — Workflow Graph: per-kind detail-panel renderers.
-//
-// Extracted from workflow_graph_panel.js (Dijkstra §4.1/§4.3 compliance
-// audit — original file was 579 LOC, breaching both the global 500-line
-// and project 300-line rules). This module owns the ten per-kind render
-// functions plus the dispatch table that workflow_graph_panel.show()
-// consumes.
-//
-// Contract — every render<Kind>(body, n, ctx) function:
-//   * mutates ``body`` in place with DOM nodes via the framework
-//     primitives exported by JUG._wfg (row / section / el / preview /
-//     actionBtn / tagChip / humanDate / humanDuration / domainLabel /
-//     collectNeighbors / renderNeighborList / countNeighborsByKind /
-//     renderCommon / heatRow / stageRows) — see workflow_graph_panel.js
-//   * Never reads/writes state outside ``body`` and the passed ``n``/
-//     ``ctx``. Pure DOM composition, no I/O, no side effects on the
-//     shared registry.
-//
-// Exports JUG._wfgRenderers = {
-//   byKind: { domain, tool_hub, file, memory, discussion, skill, hook,
-//             command, agent, symbol },
-//   get(kind) -> fn(body, n, ctx) | null,
-// };
+// Each render<Kind>(body, n, ctx) mutates `body` via primitives from
+// JUG._wfgPanelHelpers. Pure DOM composition, no I/O. Dispatch table
+// lives at the bottom of this file (JUG._wfgRenderers).
 
 (function () {
-  // Pull the framework primitives from the panel module. panel.js is
-  // loaded first (see unified-viz.html script order) and publishes its
-  // helpers on ``window.JUG._wfgPanelHelpers`` for renderers to consume.
   function P() {
     return (window.JUG && window.JUG._wfgPanelHelpers) || {};
   }
@@ -33,7 +11,6 @@
     return (window.JUG && window.JUG._wfgHumanize) || {};
   }
 
-  // ── renderDomain ─────────────────────────────────────────────────────
   function renderDomain(body, n, ctx) {
     var p = P();
     p.renderCommon(body, n, ctx);
@@ -49,7 +26,6 @@
     body.appendChild(s);
   }
 
-  // ── renderToolHub ────────────────────────────────────────────────────
   function renderToolHub(body, n, ctx) {
     var p = P();
     body.appendChild(p.row('Tool', n.tool || n.label));
@@ -70,8 +46,6 @@
     p.renderNeighborList(body, 'Commands in this hub', cmds, ctx);
   }
 
-  // ── renderFile ───────────────────────────────────────────────────────
-  // Split into helpers to stay under the project 40-line method rule.
   function _renderFileIdentity(body, n) {
     var p = P();
     var h = H();
@@ -136,15 +110,13 @@
   }
 
   function renderFile(body, n, ctx) {
-    var p = P();
     _renderFileIdentity(body, n);
-    p.renderCommon(body, n, ctx);
+    P().renderCommon(body, n, ctx);
     _renderFileDomains(body, n, ctx);
     _renderFileRelationships(body, n, ctx);
     _renderFileDiffButton(body, n);
   }
 
-  // ── renderMemory ─────────────────────────────────────────────────────
   function renderMemory(body, n, ctx) {
     var p = P();
     p.stageRows(n.stage).forEach(function (r) { body.appendChild(r); });
@@ -165,7 +137,6 @@
     }
   }
 
-  // ── renderDiscussion ─────────────────────────────────────────────────
   function _renderDiscussionMeta(body, n) {
     var p = P();
     if (n.session_id)    body.appendChild(p.row('Session',       n.session_id));
@@ -210,9 +181,8 @@
   }
 
   function renderDiscussion(body, n, ctx) {
-    var p = P();
     _renderDiscussionMeta(body, n);
-    p.renderCommon(body, n, ctx);
+    P().renderCommon(body, n, ctx);
     _renderDiscussionRelationships(body, n, ctx);
     _renderDiscussionOpenButton(body, n);
   }
@@ -264,7 +234,6 @@
     p.renderCommon(body, n, ctx);
   }
 
-  // ── renderSymbol ─────────────────────────────────────────────────────
   function _renderSymbolIdentity(body, n, ctx) {
     var p = P();
     var h = H();
@@ -325,8 +294,5 @@
   };
 
   window.JUG = window.JUG || {};
-  window.JUG._wfgRenderers = {
-    byKind: BY_KIND,
-    get: function (kind) { return BY_KIND[kind] || null; },
-  };
+  window.JUG._wfgRenderers = { byKind: BY_KIND, get: function (k) { return BY_KIND[k] || null; } };
 })();
