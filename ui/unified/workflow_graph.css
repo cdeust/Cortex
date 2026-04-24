@@ -359,3 +359,79 @@
   padding: 4px 6px 0;
   font-style: italic;
 }
+
+/* ── Plain-language layer (non-technical users) ───────────────────────
+   The humanization layer adds:
+     .wfg-panel__plain    — the one-sentence description at the top
+     .wfg-panel__badge    — visual heat indicator (Hot/Warm/Cool/Cold)
+     .wfg-panel__hint     — follow-up hint under a row (stage hints)
+     .wfg-panel__advanced — collapsible "Technical details" block
+
+   Calm + readable; technical details are dimmed/subordinate so
+   non-tech users aren't overwhelmed. */
+
+.wfg-panel__plain {
+  margin: 0 0 12px 0;
+  padding: 10px 12px;
+  background: rgba(120, 200, 220, 0.05);
+  border-left: 3px solid rgba(120, 200, 220, 0.4);
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #cbe3ea;
+}
+
+.wfg-panel__badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.wfg-panel__hint {
+  padding: 2px 8px 8px;
+  font-size: 11px;
+  color: #8a9ba4;
+  line-height: 1.45;
+  font-style: italic;
+}
+
+.wfg-panel__advanced {
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(120, 200, 220, 0.15);
+}
+
+.wfg-panel__advanced > summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: #7a8e9c;
+  padding: 6px 0;
+  user-select: none;
+}
+
+.wfg-panel__advanced > summary:hover {
+  color: #a2b8c2;
+}
+
+.wfg-panel__advanced[open] > summary {
+  color: #cbe3ea;
+}
+
+.wfg-panel__advanced-body {
+  padding-top: 6px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+}
+
+.wfg-panel__advanced-body .wfg-panel__key {
+  color: #8a9ba4;
+}
+
+.wfg-panel__advanced-body .wfg-panel__val {
+  color: #b4c8d0;
+  word-break: break-all;
+}
