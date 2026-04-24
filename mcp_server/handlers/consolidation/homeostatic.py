@@ -187,7 +187,8 @@ def _dispatch(
             "scaling_applied": False,
             "scaling_kind": "none",
             "bimodality_before": bimodality,
-            "bimodality_after": None,
+            # Scale-invariant branch: no writes → shape unchanged.
+            "bimodality_after": bimodality,
         }
 
     if bimodality > _BIMODALITY_TRIGGER:
@@ -216,7 +217,7 @@ def _apply_scalar(
             "scaling_applied": False,
             "scaling_kind": "none",
             "bimodality_before": bimodality,
-            "bimodality_after": None,
+            "bimodality_after": bimodality,
             "reason_for_zero": "mean_below_safety_floor",
         }
 
@@ -230,10 +231,17 @@ def _apply_scalar(
             "scaling_applied": False,
             "scaling_kind": "none",
             "bimodality_before": bimodality,
-            "bimodality_after": None,
+            "bimodality_after": bimodality,
             "reason_for_zero": "factor_stable",
             "factor": round(factor_old, 4),
         }
+
+    # Scalar multiplication and fold are shape-preserving: multiplying every
+    # heat by the same factor leaves the bimodality coefficient unchanged
+    # (bimodality is scale-invariant by construction). Emitting
+    # bimodality_after = bimodality_before is therefore mathematically honest
+    # on these paths; null was previously ambiguous (consumer couldn't tell
+    # "no work done" from "work done but not measured"). See issue #14 OB4.
 
     if _fold_triggered(factor_new):
         folded = _apply_fold(store, domain, factor_new)
@@ -241,7 +249,7 @@ def _apply_scalar(
             "scaling_applied": True,
             "scaling_kind": "fold",
             "bimodality_before": bimodality,
-            "bimodality_after": None,
+            "bimodality_after": bimodality,
             "factor_pre_fold": round(factor_new, 4),
             "rows_folded": folded,
         }
@@ -251,7 +259,7 @@ def _apply_scalar(
         "scaling_applied": True,
         "scaling_kind": "scalar_update",
         "bimodality_before": bimodality,
-        "bimodality_after": None,
+        "bimodality_after": bimodality,
         "factor": round(factor_new, 4),
         "factor_delta": round(factor_new - factor_old, 4),
     }
@@ -338,7 +346,8 @@ def _apply_cohort(
             "scaling_applied": False,
             "scaling_kind": "none",
             "bimodality_before": bimodality,
-            "bimodality_after": None,
+            # Empty cohort → no writes → shape unchanged.
+            "bimodality_after": bimodality,
             "reason_for_zero": "bimodal_but_no_cohort_detected",
         }
     scaled = homeostatic_plasticity.apply_cohort_correction(

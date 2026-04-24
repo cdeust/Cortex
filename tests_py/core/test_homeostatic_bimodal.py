@@ -222,6 +222,32 @@ class TestDispatchBranching:
         assert store.updates == []
         assert store.factor_writes == []
 
+    def test_scalar_and_noop_paths_emit_bimodality_after_equal_to_before(self):
+        """Issue #14 OB4 — scale-invariant branches must not emit null.
+
+        Scalar multiplication leaves the bimodality coefficient unchanged,
+        so ``bimodality_after == bimodality_before`` on scalar/fold/no-op
+        paths. Returning ``null`` was ambiguous (consumer couldn't
+        distinguish "no work" from "work done but not measured").
+        """
+        # Scalar path
+        heats = [0.75 + 0.02 * ((i % 5) - 2) for i in range(100)]
+        store = _FakeStore(heats)
+        memories = store.get_all_memories_for_decay()
+        health = compute_distribution_health(heats, target_mean=0.4)
+        outcome = _dispatch(store, memories, heats, health)
+        assert outcome["scaling_kind"] == "scalar_update"
+        assert outcome["bimodality_after"] == outcome["bimodality_before"]
+
+        # No-op path
+        healthy = [0.35, 0.38, 0.40, 0.42, 0.45, 0.40, 0.39, 0.41]
+        store2 = _FakeStore(healthy)
+        mems2 = store2.get_all_memories_for_decay()
+        health2 = compute_distribution_health(healthy, target_mean=0.4)
+        out2 = _dispatch(store2, mems2, healthy, health2)
+        assert out2["scaling_kind"] == "none"
+        assert out2["bimodality_after"] == out2["bimodality_before"]
+
 
 class TestRunHomeostaticCycleReturn:
     def test_empty_store_backward_compat(self):
