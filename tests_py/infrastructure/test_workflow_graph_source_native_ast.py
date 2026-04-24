@@ -134,6 +134,98 @@ class TestLoadASTEdges:
         assert source.load_ast_edges([]) == []
 
 
+class TestCallEdges:
+    """Caller-qualified CALLS: ``src_name`` is the enclosing method's
+    qualified name, so the L6 ring can render the full method-to-method
+    chain inside and across files."""
+
+    def test_intra_file_method_to_method_call(self, tmp_path, source):
+        path = _write(
+            tmp_path,
+            "a.py",
+            "class Foo:\n"
+            "    def bar(self):\n"
+            "        return self.baz()\n"
+            "    def baz(self):\n"
+            "        return 1\n",
+        )
+        edges = source.load_ast_edges([path])
+        calls = [e for e in edges if e["kind"] == "calls"]
+        # Foo.bar calls Foo.baz (resolved via basename "baz" → same file).
+        match = [
+            e
+            for e in calls
+            if e["src_name"] == "Foo.bar" and e["dst_name"] == "baz"
+        ]
+        assert match, f"expected Foo.bar → baz call edge, got {calls}"
+        e = match[0]
+        assert e["src_file"] == path
+        assert e["dst_file"] == path
+        assert e["confidence"] == 1.0
+        assert "native-ast:call" in e["reason"]
+
+    def test_cross_file_call_resolved(self, tmp_path, source):
+        _write(
+            tmp_path,
+            "lib.py",
+            "def helper():\n    return 1\n",
+        )
+        caller_path = _write(
+            tmp_path,
+            "user.py",
+            "from lib import helper\n\n"
+            "def go():\n    return helper()\n",
+        )
+        lib_path = str(tmp_path / "lib.py")
+        edges = source.load_ast_edges([caller_path, lib_path])
+        calls = [e for e in edges if e["kind"] == "calls"]
+        match = [
+            e
+            for e in calls
+            if e["src_name"] == "go" and e["dst_name"] == "helper"
+        ]
+        assert match, f"expected go → helper call edge, got {calls}"
+        e = match[0]
+        assert e["src_file"] == caller_path
+        assert e["dst_file"] == lib_path
+
+    def test_unresolved_callee_dropped(self, tmp_path, source):
+        """Calls to symbols we don't know about (stdlib, external
+        deps, dynamic lookups) are silently dropped — we emit only
+        edges where both endpoints exist as known SYMBOL nodes."""
+        path = _write(
+            tmp_path,
+            "a.py",
+            "def go():\n"
+            "    return os.path.join('a', 'b')  # external\n",
+        )
+        edges = source.load_ast_edges([path])
+        calls = [e for e in edges if e["kind"] == "calls"]
+        # "os", "path", "join" are all unknown — no edges emitted.
+        assert not calls, f"expected no call edges, got {calls}"
+
+    def test_dedup_within_caller(self, tmp_path, source):
+        """A caller that invokes the same callee N times yields one edge."""
+        path = _write(
+            tmp_path,
+            "a.py",
+            "class Foo:\n"
+            "    def bar(self):\n"
+            "        self.baz(); self.baz(); self.baz()\n"
+            "    def baz(self):\n"
+            "        return 1\n",
+        )
+        edges = source.load_ast_edges([path])
+        calls = [
+            e
+            for e in edges
+            if e["kind"] == "calls"
+            and e["src_name"] == "Foo.bar"
+            and e["dst_name"] == "baz"
+        ]
+        assert len(calls) == 1
+
+
 class TestFileCap:
     def test_max_files_cap_honored(self, tmp_path, source, monkeypatch):
         """Runaway callers get bounded work, not a freeze."""

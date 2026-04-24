@@ -80,6 +80,14 @@ def parse_file_ast(path: str, content: bytes) -> FileAnalysis:
     extractor, tree = result
     imports, definitions, calls = extractor(tree.root_node, content)
     docstring = _extract_module_doc(tree.root_node, language, content)
+    # Caller-qualified call map — works across every language the
+    # extractor covers because it targets tree-sitter node types shared
+    # across grammars (function_definition, function_declaration,
+    # method_definition, call, call_expression). Empty on regex fallback
+    # or when a grammar doesn't expose those names.
+    from mcp_server.core.ast_extractors import extract_calls_per_function
+
+    calls_per_function = extract_calls_per_function(tree.root_node, content)
 
     return FileAnalysis(
         path=path,
@@ -89,6 +97,7 @@ def parse_file_ast(path: str, content: bytes) -> FileAnalysis:
         definitions=definitions,
         docstring=docstring,
         line_count=text.count("\n") + 1,
+        calls_per_function=calls_per_function,
     )
 
 

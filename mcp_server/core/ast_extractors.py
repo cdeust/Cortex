@@ -222,3 +222,102 @@ def extract_calls_generic(root: Node, source: bytes) -> list[str]:
                 calls.append(name)
                 seen.add(name)
     return calls
+
+
+# ── Per-function call extraction (caller-qualified) ─────────────────────
+
+# Tree-sitter node types that represent a function/method definition
+# across the grammars we support (Python/JS/TS/Go/Rust/Swift). We walk
+# into each one and record the calls made inside its body, keyed by a
+# qualified name that includes the enclosing class when applicable. The
+# workflow graph's CALLS edges use this to surface WHICH caller made
+# each call, not just that the call happened somewhere in the file.
+
+_FUNCTION_NODE_TYPES = frozenset(
+    {
+        "function_definition",  # Python, Rust, Swift
+        "function_declaration",  # JS, TS, Go, Swift
+        "method_definition",  # JS, TS (class bodies)
+        "method_declaration",  # TS interfaces, Go method receivers
+        "function_signature",  # TS interfaces, Swift protocols
+    }
+)
+
+# Class/impl-block containers whose children should carry a prefix.
+_CLASS_NODE_TYPES = frozenset(
+    {
+        "class_definition",  # Python
+        "class_declaration",  # JS, TS, Java, Kotlin
+        "impl_item",  # Rust impl ClassName { ... }
+    }
+)
+
+# Call-expression node types per grammar.
+_CALL_NODE_TYPES = ("call", "call_expression")
+
+
+def _callee_basename(call_node: Node, source: bytes) -> str:
+    """Best-effort callee basename for resolution via symbol_to_file.
+
+    Strategy: take the dotted/attribute chain's last segment and strip
+    anything after the first ``(``, ``[``, or ``<`` (generics, subscripts,
+    argument lists that slip into tree-sitter's surface text)."""
+    fn_ref = call_node.child_by_field_name("function")
+    if fn_ref is None:
+        return ""
+    text = _text(fn_ref, source).strip()
+    base = text.rsplit(".", 1)[-1]
+    for c in "([<":
+        base = base.split(c, 1)[0]
+    return base.strip()
+
+
+def extract_calls_per_function(
+    root: Node,
+    source: bytes,
+) -> dict[str, list[str]]:
+    """Return ``{qualified_name: [callee_basename, ...]}``.
+
+    Walks every function/method definition reachable from ``root``.
+    Methods inside a class get ``ClassName.method`` as their qname
+    (matching the shape ``extract_python_definitions`` already emits).
+    Anonymous functions (lambdas, unnamed arrows) are skipped — no
+    qname means we can't attach edges to them.
+    """
+    out: dict[str, list[str]] = {}
+
+    def walk(node: Node, class_scope: str) -> None:
+        for child in node.children:
+            ntype = child.type
+            if ntype in _CLASS_NODE_TYPES:
+                name_node = child.child_by_field_name("name")
+                cls = _text(name_node, source) if name_node else class_scope
+                body = child.child_by_field_name("body") or child
+                walk(body, cls or class_scope)
+            elif ntype == "decorated_definition":
+                walk(child, class_scope)
+            elif ntype in _FUNCTION_NODE_TYPES:
+                name_node = child.child_by_field_name("name")
+                fn_name = _text(name_node, source) if name_node else ""
+                body = child.child_by_field_name("body") or child
+                if fn_name:
+                    qname = (
+                        f"{class_scope}.{fn_name}" if class_scope else fn_name
+                    )
+                    calls: list[str] = []
+                    seen: set[str] = set()
+                    for call_type in _CALL_NODE_TYPES:
+                        for call in _walk_type(body, call_type):
+                            base = _callee_basename(call, source)
+                            if base and base not in seen and len(base) < 100:
+                                calls.append(base)
+                                seen.add(base)
+                    out[qname] = calls
+                # Recurse into body for nested definitions (inner
+                # functions, closures that define named functions).
+                walk(body, class_scope)
+            else:
+                walk(child, class_scope)
+
+    walk(root, "")
+    return out
