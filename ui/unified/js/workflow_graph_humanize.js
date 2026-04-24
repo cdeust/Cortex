@@ -34,9 +34,12 @@
     discussion: 'Conversation',
     skill:      'Skill',
     hook:       'Automation',
-    agent:      'Helper',
+    // Eco audit: "Helper" reads as a human (support contact / assistant
+    // person). Use "Sub-assistant" to block that wrong reading — it is
+    // unambiguously an AI/software construct.
+    agent:      'Sub-assistant',
     command:    'Slash command',
-    tool_hub:   'Tool',
+    tool_hub:   'Tool group',
     symbol:     'Code item',
     entity:     'Thing mentioned',
     mcp:        'External tool',
@@ -46,22 +49,27 @@
   var KIND_INTROS = {
     domain:     'a project Cortex is tracking',
     file:       'a file Claude worked on',
-    memory:     'something Cortex decided was worth remembering',
+    memory:     'something Cortex stored for later',
     discussion: 'a conversation Claude had in this project',
     skill:      'a reusable skill Claude can invoke',
     hook:       'an automation that runs at specific moments',
-    agent:      'a specialist helper Claude spawned',
+    agent:      'a sub-assistant Claude spawned to help with a task',
     command:    'a slash command that was run',
-    tool_hub:   'a group of related tools (read, edit, search, etc.)',
+    tool_hub:   'a group of related tools Claude used',
     symbol:     'a piece of code inside a file',
-    entity:     'a thing (person, project, concept) mentioned across memories',
+    entity:     'something mentioned across memories',
     mcp:        'an external tool Claude can call',
   };
 
   // ── Symbol sub-types ─────────────────────────────────────────────────
+  // Feynman audit: parenthetical definitions ("Method (a function inside
+  // a class)", "Enum (a set of named values)") introduce further
+  // undefined terms to define the first. Net jargon delta is positive.
+  // Keep the short noun; the Technical details footer carries the raw
+  // type code if a reader needs to dig.
   var SYMBOL_TYPE_LABELS = {
     function:  'Function',
-    method:    'Method (a function inside a class)',
+    method:    'Method',
     class:     'Class',
     interface: 'Interface',
     module:    'Module',
@@ -69,30 +77,37 @@
     type:      'Type definition',
     protocol:  'Protocol',
     trait:     'Trait',
-    enum:      'Enum (a set of named values)',
-    struct:    'Struct (a data shape)',
+    enum:      'Enum',
+    struct:    'Struct',
   };
 
   // ── Memory consolidation stages (cascade.py) ────────────────────────
   // The backend uses neuroscience jargon (LABILE → EARLY_LTP → LATE_LTP
   // → CONSOLIDATED, after Kandel 2001). Translated to plain English.
 
+  // Feynman audit: "Just learned" attributes the learning to the USER,
+  // which is wrong — Cortex captured it. "Stabilizing" contradicts the
+  // LATE_LTP state (near-permanent) by using an -izing verb. Both
+  // corrected to match the hint text semantics.
   var STAGE_LABELS = {
-    labile:        'Just learned',
+    labile:        'Newly captured',
     early_ltp:     'Forming',
-    late_ltp:      'Stabilizing',
+    late_ltp:      'Well-held',
     consolidated: 'Solidly remembered',
   };
 
   var STAGE_HINTS = {
     labile:       'Fresh — still fragile, can be updated or forgotten easily.',
     early_ltp:    'Starting to stick. A few more recalls and it will stabilize.',
-    late_ltp:     'Well-held. It would take active forgetting to lose this.',
+    late_ltp:     'Settled. It would take active forgetting to lose this.',
     consolidated: 'Baked in. This is part of the long-term picture.',
   };
 
   // ── Edge kinds — what the relationship means in English ──────────────
 
+  // Eco audit: parenthetical jargon ("uses (calls)", "brings in (imports)")
+  // contradicts the lay-audience contract. Keep only the plain verb here;
+  // the raw edge kind is visible in Technical details.
   var EDGE_VERBS = {
     in_domain:                'belongs to',
     tool_used_file:           'edited with',
@@ -103,60 +118,69 @@
     about_entity:             'is about',
     discussion_touched_file:  'worked on file',
     discussion_used_tool:     'used tool',
-    discussion_spawned_agent: 'called helper',
+    discussion_spawned_agent: 'called sub-assistant',
     discussion_ran_command:   'ran command',
     command_touched_file:     'touched file',
     invoked_mcp:              'called external tool',
     defined_in:               'lives in file',
-    calls:                    'uses (calls)',
-    imports:                  'brings in (imports)',
+    calls:                    'uses',
+    imports:                  'brings in',
     member_of:                'belongs to',
   };
 
   // ── Field-key prettifiers (for the Advanced section) ────────────────
 
+  // Eco audit: the previous table spoke Neuroscience vocabulary
+  // (Hippocampal dependency, Plasticity, Encoding strength, Schema
+  // match, Interference) in a panel advertised to non-tech users.
+  // Translated to outcome-oriented phrases a PM can read. Where a field
+  // is genuinely only meaningful to a researcher, the entry is marked
+  // with a research-only prefix so the collapsible Technical details
+  // footer can visually de-emphasise them.
   var FIELD_LABELS = {
     domain_id:          'Project ID',
     session_id:         'Conversation ID',
-    consolidation_stage: 'Memory stage',
-    heat_base:          'Heat (raw)',
-    arousal:            'Emotional arousal',
-    emotional_valence:  'Emotional tone',
-    dominant_emotion:   'Dominant emotion',
-    importance:         'Importance score',
-    surprise_score:     'Surprise score',
+    consolidation_stage: 'How settled it is',
+    heat_base:          'Priority (raw)',
+    arousal:            'Emotional intensity',
+    emotional_valence:  'Emotional tone (−1 to 1)',
+    dominant_emotion:   'Main emotion',
+    importance:         'How important',
+    surprise_score:     'How surprising',
     confidence:         'Confidence',
     access_count:       'Times accessed',
     useful_count:       'Times marked useful',
     replay_count:       'Times replayed',
     reconsolidation_count: 'Times updated',
-    plasticity:         'Plasticity',
-    stability:          'Stability',
-    excitability:       'Excitability',
-    hippocampal_dependency: 'Hippocampal dependency',
-    schema_match_score: 'Schema match',
-    schema_id:          'Schema',
-    separation_index:   'Distinctiveness',
-    interference_score: 'Interference',
-    encoding_strength:  'Encoding strength',
-    hours_in_stage:     'Hours in current stage',
-    stage_entered_at:   'Entered stage at',
+    plasticity:         'How easily it changes (research)',
+    stability:          'How hard to dislodge (research)',
+    excitability:       'How readily it activates (research)',
+    hippocampal_dependency: 'Still needs short-term memory (research)',
+    schema_match_score: 'Fits a known pattern (score)',
+    schema_id:          'Pattern it fits',
+    separation_index:   'How unique among memories',
+    interference_score: 'Conflicts with other memories',
+    encoding_strength:  'How strongly recorded',
+    decay_rate:         'Fading speed',
+    decay_last_applied_at: 'Last faded',
+    hours_in_stage:     'Hours in current state',
+    stage_entered_at:   'Entered this state at',
     last_accessed:      'Last accessed',
-    no_decay:           'Decay-proof',
-    is_protected:       'Protected',
-    is_stale:           'Stale',
+    no_decay:           "Won't fade (pinned)",
+    is_protected:       'Pinned',
+    is_stale:           'File missing on disk',
     is_benchmark:       'Benchmark data',
-    is_global:          'Global scope',
-    store_type:         'Storage type',
-    compression_level:  'Compression level',
+    is_global:          'Available in every project',
+    store_type:         'Storage kind',
+    compression_level:  'Compression',
     compressed:         'Compressed',
     first_seen:         'First seen',
     last_modified:      'Last modified',
-    primary_cluster:    'Primary use',
+    primary_cluster:    'How it was used',
     symbol_type:        'Code-item type',
     qualified_name:     'Full name',
     extra_domain_ids:   'Also in projects',
-    subagent_type:      'Helper type',
+    subagent_type:      'Sub-assistant type',
     created_at:         'Created',
     duration_ms:        'Duration',
     message_count:      'Messages',
@@ -167,15 +191,27 @@
     language:           'Language',
     line:               'Line number',
     path:               'File path',
+    engram_id:          'Memory trace ID',
+    dg_pattern_id:      'Distinct-pattern ID',
+    pattern_separation_score: 'How unique (score)',
+    cluster_id:         'Group ID',
+    cluster_level:      'Zoom level (detail→summary)',
+    valence_score:      'Emotional tone (−1 to 1)',
+    arousal_score:      'Emotional intensity (0 to 1)',
+    defined_line_start: 'Starts at line',
+    defined_line_end:   'Ends at line',
   };
 
-  // Primary-cluster (tool-use classification) labels.
+  // Feynman audit: edit_write collapsed "created" and "modified". Keep
+  // one label but make it accurate ("Edited or created"). Eco: "Only
+  // read (never edited)" was accurate but verbose — "Read only" reads
+  // the same and takes half the width.
   var PRIMARY_CLUSTER_LABELS = {
-    read_only:   'Only read (never edited)',
-    edit_write:  'Edited',
+    read_only:   'Read only',
+    edit_write:  'Edited or created',
     search:      'Searched',
     run:         'Executed',
-    mixed:       'Mixed use',
+    mixed:       'Used in multiple ways',
   };
 
   // ── Public helpers ──────────────────────────────────────────────────
@@ -228,27 +264,38 @@
   //   ≥0.40 : Warm   — active in the last few days.
   //   ≥0.15 : Cool   — not top-of-mind but still relevant.
   //   <0.15 : Cold   — fading; may be compressed or pruned soon.
+  // Eco + Feynman audit:
+  //   - "Cold" projects "broken / offline / unavailable". Real meaning:
+  //     faded but intact. Rename to "Dormant".
+  //   - "Hot" + red projects "danger / error / CPU overload". Rename
+  //     the hottest band to "Active" with amber-red.
+  //   - The % should read as "priority" not "activity level" — the
+  //     value is retrieval priority, not CPU activity.
   function heatBadge(value) {
     var v = Number(value);
     if (isNaN(v)) return null;
     var pct = Math.max(0, Math.min(100, Math.round(v * 100)));
     var label, color;
-    if (v >= 0.70)      { label = 'Hot';  color = '#E07070'; }
-    else if (v >= 0.40) { label = 'Warm'; color = '#E0B040'; }
-    else if (v >= 0.15) { label = 'Cool'; color = '#70B0E0'; }
-    else                { label = 'Cold'; color = '#8090A0'; }
+    if (v >= 0.70)      { label = 'Active';  color = '#E08A50'; }
+    else if (v >= 0.40) { label = 'Warm';    color = '#E0B040'; }
+    else if (v >= 0.15) { label = 'Quiet';   color = '#70B0E0'; }
+    else                { label = 'Dormant'; color = '#8090A0'; }
     return { label: label, color: color, pct: pct, value: v };
   }
 
   // Compose a one-sentence plain-language description of the node.
   // ``ctx`` is the graph context (byId, edges, adj, degree) passed to
   // the panel renderer so we can fetch e.g. the parent file of a symbol.
+  // Output is plain text (rendered via .textContent). Backticks used to
+  // frame identifiers get rendered literally and look like stray ASCII
+  // noise to non-tech readers (Eco + Feynman audit). We drop them and
+  // use plain quotes where disambiguation helps.
   function plainDescription(n, ctx) {
     if (!n) return '';
     var kind = n.kind;
     var name = n.label || n.id || '';
 
-    // Symbol: "A method named `validate` that lives inside the `User` class in `auth.py`."
+    // Symbol: "Method named bar, inside the Foo class, in auth.py."
     if (kind === 'symbol') {
       var sym = symbolTypeLabel(n.symbol_type) || 'Code item';
       var base = String(name).split('.').pop();
@@ -256,34 +303,31 @@
         ? String(name).slice(0, String(name).lastIndexOf('.'))
         : null;
       var file = n.path ? String(n.path).split('/').pop() : null;
-      var parts = [sym + ' called `' + base + '`'];
+      var parts = [sym + ' named ' + base];
       if (parent)
-        parts.push('inside the `' + parent + '` class');
+        parts.push('inside ' + parent);
       if (file)
         parts.push('in ' + file);
-      return parts.join(' ') + '.';
+      return parts.join(', ') + '.';
     }
 
-    // File: "A file at mcp_server/core/thermodynamics.py, mostly edited this week."
+    // File: "File cascade.py — edited or created."
     if (kind === 'file') {
       var p = n.path ? String(n.path).split('/').pop() : name;
       var usage = primaryClusterLabel(n.primary_cluster);
-      return 'A file called `' + p + '`' +
-        (usage ? ' — ' + usage.toLowerCase() : '') + '.';
+      return 'File ' + p + (usage ? ' — ' + usage.toLowerCase() : '') + '.';
     }
 
-    // Memory: stage + first line of body.
+    // Memory: first line of what's stored; stage rendered as the row
+    // label above, not inline in the sentence (Feynman: lowercase
+    // inlined stage reads as a verb phrase).
     if (kind === 'memory') {
-      var stg = stageLabel(n.stage);
       var body = n.body ? String(n.body).split('\n')[0].slice(0, 140) : '';
-      var sent = 'A memory';
-      if (stg) sent += ' (' + stg.toLowerCase() + ')';
-      if (body) sent += ': "' + body + '"';
-      else sent += '.';
-      return sent;
+      if (body) return 'Cortex remembered: "' + body + '"';
+      return 'A memory Cortex captured.';
     }
 
-    // Discussion: session + message count + recency.
+    // Discussion: session + message count.
     if (kind === 'discussion') {
       var msg = (n.count || n.message_count);
       var parts2 = ['A conversation'];
@@ -291,9 +335,10 @@
       return parts2.join(' ') + '.';
     }
 
-    // Tool hub: "Group of tools for reading files — used 124 times on 18 files."
+    // Tool hub: name alone is cleaner than "a group of related tools (Read)"
+    // which misleads when the label is singular (Feynman).
     if (kind === 'tool_hub') {
-      return 'A group of related tools (' + (n.tool || name) + ').';
+      return 'A set of Claude tool uses grouped under ' + (n.tool || name) + '.';
     }
 
     // Skill, Hook, Agent, Command, Domain: simple intro + name.
