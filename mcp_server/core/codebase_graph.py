@@ -180,20 +180,30 @@ def build_resolved_call_edges(
     chain between methods as part of a file.
 
     Returns:
-        ``[(caller_file, caller_qname, callee_file, callee_basename),
-        ...]``. Self-calls (caller and callee in the same file) are
-        emitted — they carry the intra-file method-to-method structure
-        that the L6 ring renders as short arcs. Unresolved callees
-        (stdlib, external deps, dynamic lookups) are dropped silently.
+        ``[(caller_file, caller_qname, callee_file, callee_qname),
+        ...]``. The fourth position is the **full qualified name** of
+        the resolved callee (e.g. ``Foo.baz``), NOT the basename. This
+        matches the shape ``ingest_symbol`` uses to mint SYMBOL node
+        ids and the shape AP emits for its CALLS edges; if we returned
+        a basename instead, ``ingest_ast_edge`` would hash a different
+        ``symbol_id`` for ``dst`` than the one stored for the target
+        SYMBOL, and the edge would be dropped silently. See Wu error
+        archaeology 2026-04-24 and the boundary-crossing regression
+        test in tests_py/infrastructure.
     """
-    # Build basename → first-defining-file lookup. First-wins matches
-    # the existing `build_call_edges` semantics; collisions across files
-    # are rare for user code and intentional for resolution.
-    symbol_to_file: dict[str, str] = {}
+    # Build basename → (first-defining-file, full-qname) lookup. We key
+    # by basename because the tree-sitter call sites produce "baz", not
+    # "Foo.baz" — we resolve the basename to the known symbol, then
+    # emit the symbol's full qname so the edge endpoints carry the
+    # same string the ingester hashed at ingest_symbol time.
+    #
+    # First-wins collision semantics on basename match ``build_call_edges``
+    # (documented / intentional).
+    symbol_to_qname: dict[str, tuple[str, str]] = {}
     for analysis in analyses:
         for sym in analysis.definitions:
             base = sym.name.rsplit(".", 1)[-1]
-            symbol_to_file.setdefault(base, analysis.path)
+            symbol_to_qname.setdefault(base, (analysis.path, sym.name))
 
     edges: list[tuple[str, str, str, str]] = []
     for analysis in analyses:
@@ -207,14 +217,17 @@ def build_resolved_call_edges(
                 base = base.strip()
                 if not base:
                     continue
-                target_file = symbol_to_file.get(base)
-                if target_file is None:
+                hit = symbol_to_qname.get(base)
+                if hit is None:
                     continue
-                key = (target_file, base)
+                target_file, target_qname = hit
+                key = (target_file, target_qname)
                 if key in seen_pair:
                     continue
                 seen_pair.add(key)
-                edges.append((analysis.path, caller_qname, target_file, base))
+                edges.append(
+                    (analysis.path, caller_qname, target_file, target_qname)
+                )
     return edges
 
 

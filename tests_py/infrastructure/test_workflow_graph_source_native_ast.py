@@ -151,13 +151,17 @@ class TestCallEdges:
         )
         edges = source.load_ast_edges([path])
         calls = [e for e in edges if e["kind"] == "calls"]
-        # Foo.bar calls Foo.baz (resolved via basename "baz" → same file).
+        # Foo.bar calls Foo.baz — dst_name is the FULL qualified name
+        # "Foo.baz" so ingest_ast_edge hashes the same symbol_id as
+        # ingest_symbol did. The pre-v3.14.2 contract (basename "baz")
+        # passed unit tests but silently dropped every edge in the
+        # builder. See Wu audit 2026-04-24.
         match = [
             e
             for e in calls
-            if e["src_name"] == "Foo.bar" and e["dst_name"] == "baz"
+            if e["src_name"] == "Foo.bar" and e["dst_name"] == "Foo.baz"
         ]
-        assert match, f"expected Foo.bar → baz call edge, got {calls}"
+        assert match, f"expected Foo.bar → Foo.baz call edge, got {calls}"
         e = match[0]
         assert e["src_file"] == path
         assert e["dst_file"] == path
@@ -221,9 +225,119 @@ class TestCallEdges:
             for e in edges
             if e["kind"] == "calls"
             and e["src_name"] == "Foo.bar"
-            and e["dst_name"] == "baz"
+            and e["dst_name"] == "Foo.baz"
         ]
         assert len(calls) == 1
+
+
+class TestEndToEndContract:
+    """Boundary-crossing regression test — the exact one Wu and Feynman
+    audits called out as missing. Unit tests above check the DICT shape
+    emitted by the source; this test drives the full pipeline through
+    ``WorkflowGraphBuilder`` and asserts the edge actually LANDS in
+    the output graph. Prevents the silent-drop failure mode where dict
+    shape looks right but ``ingest_ast_edge`` hashes a different
+    ``symbol_id`` and returns early at the ``dst_id not in b._nodes``
+    guard."""
+
+    def test_calls_edge_lands_in_builder_output(self, tmp_path, source):
+        from mcp_server.core.workflow_graph_builder import (
+            WorkflowGraphBuilder,
+        )
+        from mcp_server.core.workflow_graph_inputs import WorkflowBuildInputs
+        from mcp_server.core.workflow_graph_schema import (
+            EdgeKind,
+            NodeIdFactory,
+        )
+
+        path = _write(
+            tmp_path,
+            "a.py",
+            "class Foo:\n"
+            "    def bar(self):\n"
+            "        return self.baz()\n"
+            "    def baz(self):\n"
+            "        return 1\n",
+        )
+
+        # Exact pipeline the handler runs at stage=="full".
+        syms = source.load_symbols([path])
+        edges = source.load_ast_edges([path])
+
+        builder = WorkflowGraphBuilder()
+        builder.build(
+            WorkflowBuildInputs(
+                ast_symbols=syms,
+                ast_edges=edges,
+            )
+        )
+
+        # SYMBOL nodes materialised as expected.
+        bar_id = NodeIdFactory.symbol_id(path, "Foo.bar")
+        baz_id = NodeIdFactory.symbol_id(path, "Foo.baz")
+        assert bar_id in builder._nodes
+        assert baz_id in builder._nodes
+
+        # The CALLS edge lands with matching src/target ids — NOT
+        # silently dropped by the dst_id-not-in-b._nodes guard.
+        calls = [
+            e
+            for e in builder._edges
+            if e.kind == EdgeKind.CALLS
+            and e.source == bar_id
+            and e.target == baz_id
+        ]
+        assert calls, (
+            "Foo.bar → Foo.baz CALLS edge did not land in the builder. "
+            "Likely a dst_name vs qname contract mismatch."
+        )
+        assert len(calls) == 1
+
+    def test_cross_file_calls_edge_lands(self, tmp_path, source):
+        from mcp_server.core.workflow_graph_builder import (
+            WorkflowGraphBuilder,
+        )
+        from mcp_server.core.workflow_graph_inputs import WorkflowBuildInputs
+        from mcp_server.core.workflow_graph_schema import (
+            EdgeKind,
+            NodeIdFactory,
+        )
+
+        lib_path = _write(
+            tmp_path,
+            "lib.py",
+            "def helper():\n    return 1\n",
+        )
+        user_path = _write(
+            tmp_path,
+            "user.py",
+            "from lib import helper\n\n"
+            "def go():\n    return helper()\n",
+        )
+
+        syms = source.load_symbols([lib_path, user_path])
+        edges = source.load_ast_edges([lib_path, user_path])
+
+        builder = WorkflowGraphBuilder()
+        builder.build(
+            WorkflowBuildInputs(
+                ast_symbols=syms,
+                ast_edges=edges,
+            )
+        )
+
+        go_id = NodeIdFactory.symbol_id(user_path, "go")
+        helper_id = NodeIdFactory.symbol_id(lib_path, "helper")
+        assert go_id in builder._nodes
+        assert helper_id in builder._nodes
+        calls = [
+            e
+            for e in builder._edges
+            if e.kind == EdgeKind.CALLS
+            and e.source == go_id
+            and e.target == helper_id
+        ]
+        assert calls, "cross-file go → helper CALLS edge did not land"
 
 
 class TestFileCap:

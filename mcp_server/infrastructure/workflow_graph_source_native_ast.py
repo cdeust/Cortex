@@ -124,9 +124,17 @@ class WorkflowGraphNativeASTSource:
         self, analyses: list[FileAnalysis]
     ) -> list[dict[str, Any]]:
         """Caller-qualified CALLS edges via
-        ``codebase_graph.build_resolved_call_edges``."""
+        ``codebase_graph.build_resolved_call_edges``.
+
+        Both ``src_name`` and ``dst_name`` are the FULL qualified names
+        (``"Foo.bar"`` / ``"Foo.baz"``), matching the shape
+        ``ingest_symbol`` uses to mint SYMBOL ids. A basename shape
+        (``"baz"``) would hash a different ``symbol_id`` and the edge
+        would be silently dropped by ``ingest_ast_edge`` — which is
+        exactly what happened before the Wu audit caught it.
+        """
         out: list[dict[str, Any]] = []
-        for caller_file, caller_qname, callee_file, callee_name in (
+        for caller_file, caller_qname, callee_file, callee_qname in (
             build_resolved_call_edges(analyses)
         ):
             out.append(
@@ -135,7 +143,7 @@ class WorkflowGraphNativeASTSource:
                     "src_file": caller_file,
                     "src_name": caller_qname,
                     "dst_file": callee_file,
-                    "dst_name": callee_name,
+                    "dst_name": callee_qname,
                     "confidence": 1.0,
                     "reason": "native-ast:call",
                 }

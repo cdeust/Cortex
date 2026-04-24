@@ -13,6 +13,8 @@ to these functions instead of owning the method bodies.
 
 from __future__ import annotations
 
+import logging
+
 from mcp_server.core.workflow_graph_palette import (
     AGENT_COLOR,
     COMMAND_COLOR,
@@ -32,6 +34,8 @@ from mcp_server.core.workflow_graph_schema import (
     edge_provenance_defaults,
 )
 from mcp_server.core.workflow_graph_schema_enums import PrimaryToolCluster
+
+logger = logging.getLogger(__name__)
 
 
 def _require(rec: dict, key: str, ctx: str):
@@ -356,6 +360,18 @@ def ingest_ast_edge(b, edge: dict) -> None:
         return
     dst_id = NodeIdFactory.symbol_id(dst_file, dst_name)
     if dst_id not in b._nodes:
+        # Contract violation on the emitter side: dst_name must be the
+        # EXACT qualified_name used at ingest_symbol time. Emitters that
+        # hand over a basename (e.g. "baz" when the SYMBOL was ingested
+        # as "Foo.baz") produce a different sha1 and land here. We log
+        # at debug so CI / diagnostics expose the drop instead of
+        # silently flattening the graph. See Wu audit 2026-04-24.
+        logger.debug(
+            "ingest_ast_edge drop: no SYMBOL node for dst (%s, %r) kind=%s",
+            dst_file,
+            dst_name,
+            kind,
+        )
         return
 
     if kind == "imports":
@@ -364,6 +380,10 @@ def ingest_ast_edge(b, edge: dict) -> None:
             return
         src_id = NodeIdFactory.file_id(src_file)
         if src_id not in b._nodes:
+            logger.debug(
+                "ingest_ast_edge drop: no FILE node for IMPORTS src=%s",
+                src_file,
+            )
             return
         edge_kind = EdgeKind.IMPORTS
     else:
@@ -372,6 +392,12 @@ def ingest_ast_edge(b, edge: dict) -> None:
             return
         src_id = NodeIdFactory.symbol_id(src_file, src_name)
         if src_id not in b._nodes:
+            logger.debug(
+                "ingest_ast_edge drop: no SYMBOL node for src (%s, %r) kind=%s",
+                src_file,
+                src_name,
+                kind,
+            )
             return
         edge_kind = EdgeKind.CALLS if kind == "calls" else EdgeKind.MEMBER_OF
 
