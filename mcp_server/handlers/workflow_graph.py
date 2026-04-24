@@ -19,6 +19,9 @@ from mcp_server.infrastructure.workflow_graph_source import WorkflowGraphSource
 from mcp_server.infrastructure.workflow_graph_source_ast import (
     WorkflowGraphASTSource,
 )
+from mcp_server.infrastructure.workflow_graph_source_native_ast import (
+    WorkflowGraphNativeASTSource,
+)
 
 
 _GLOBAL_DOMAIN_TOKEN = "__global__"
@@ -187,17 +190,35 @@ def build_workflow_graph(
         else []
     )
 
-    # AP AST enrichment — loaded synchronously at the ``full`` stage
-    # so the WebGL renderer sees every indexed symbol on the first
-    # ``/api/graph`` fetch. The Rust/WASM frontend (``/viz``) can
-    # absorb 100k+ instanced point-sprites at 60 fps, so the size
-    # that used to stall the d3/canvas path is now normal. Empty
-    # lists when AP isn't configured — the rest of the builder runs
-    # unchanged.
+    # AST enrichment — loaded synchronously at the ``full`` stage so
+    # the WebGL renderer sees every indexed symbol on the first
+    # ``/api/graph`` fetch. Two sources feed the L6 ring:
+    #
+    #   1. AP (automatised-pipeline, when enabled) — 5-layer resolver
+    #      with LSP, macro expansion, stdlib indexing. Broad and deep
+    #      but requires a prior re-index.
+    #   2. Native in-house tree-sitter (always available) — parses the
+    #      exact files Claude touched this session. Narrower scope but
+    #      zero setup and zero staleness.
+    #
+    # We UNION the two (Von Neumann §4 transfer: one structural graph
+    # with multiple providers). `_dedupe_and_link` in the builder sums
+    # weights on (src, tgt, kind) collisions so overlap is idempotent.
+    # Files AP hasn't indexed still show symbol depth via native AST.
     if stage == "full":
         ast_source = WorkflowGraphASTSource()
         ast_symbols = ast_source.load_symbols([]) if ast_source.enabled() else []
         ast_edges = ast_source.load_ast_edges([]) if ast_source.enabled() else []
+        # Native fallback / complement: parses files Claude touched this
+        # session. De-duplicates against AP output via NodeIdFactory in
+        # `ingest_symbol`; AP's richer symbols win because they are
+        # loaded first and `ingest_symbol` returns early on existing id.
+        native_source = WorkflowGraphNativeASTSource()
+        if known_paths:
+            native_symbols = native_source.load_symbols(list(known_paths))
+            native_edges = native_source.load_ast_edges(list(known_paths))
+            ast_symbols.extend(native_symbols)
+            ast_edges.extend(native_edges)
     else:
         ast_symbols = []
         ast_edges = []
