@@ -236,12 +236,13 @@ def _apply_scalar(
             "factor": round(factor_old, 4),
         }
 
-    # Scalar multiplication and fold are shape-preserving: multiplying every
-    # heat by the same factor leaves the bimodality coefficient unchanged
-    # (bimodality is scale-invariant by construction). Emitting
-    # bimodality_after = bimodality_before is therefore mathematically honest
-    # on these paths; null was previously ambiguous (consumer couldn't tell
-    # "no work done" from "work done but not measured"). See issue #14 OB4.
+    # scalar_update: heat_base is NOT rewritten — only homeostatic_state.factor
+    # changes. Stored-heat distribution is literally identical → bimodality
+    # coefficient is unchanged. fold: heat_base IS rewritten per-row with
+    # [0.0, 1.0] clipping; when many rows saturate the shape can shift, so
+    # on fold we report the pre-fold value as a bounded estimate and flag
+    # that the post-fold value would require a re-scan to compute exactly.
+    # See issue #14 OB4 — null was previously ambiguous.
 
     if _fold_triggered(factor_new):
         folded = _apply_fold(store, domain, factor_new)
@@ -249,7 +250,13 @@ def _apply_scalar(
             "scaling_applied": True,
             "scaling_kind": "fold",
             "bimodality_before": bimodality,
+            # fold clips heats at 0/1 — shape can shift slightly when many
+            # rows saturate. We do NOT re-scan post-fold (would cost another
+            # 66 k row scan at steady state); the returned value is the
+            # pre-fold shape, treated as a bounded estimate. Next consolidate
+            # will measure exactly.
             "bimodality_after": bimodality,
+            "bimodality_after_is_estimate": True,
             "factor_pre_fold": round(factor_new, 4),
             "rows_folded": folded,
         }
