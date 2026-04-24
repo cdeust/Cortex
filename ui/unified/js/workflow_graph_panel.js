@@ -70,6 +70,100 @@
     return c;
   }
 
+  // ── Plain-language helpers (delegated to workflow_graph_humanize.js) ─
+
+  function hum() {
+    return (window.JUG && window.JUG._wfgHumanize) || {};
+  }
+
+  // One-line plain-English description at the top of the panel.
+  function renderPlainDescription(body, n, ctx) {
+    var h = hum();
+    if (!h.plainDescription) return;
+    var text = h.plainDescription(n, ctx);
+    if (!text) return;
+    var p = el('p', 'wfg-panel__plain');
+    p.textContent = text;
+    body.appendChild(p);
+  }
+
+  // Visual heat badge: "Hot" / "Warm" / "Cool" / "Cold" + colored bar.
+  // Non-tech users see "Hot 78%"; the raw 0.78 stays in Technical details.
+  function heatRow(value) {
+    var h = hum();
+    if (!h.heatBadge) return row('Heat', value);
+    var b = h.heatBadge(value);
+    if (!b) return row('Heat', '—');
+    var r = el('div', 'wfg-panel__row');
+    var k = el('div', 'wfg-panel__key'); k.textContent = 'Activity';
+    var v = el('div', 'wfg-panel__val');
+    var badge = el('span', 'wfg-panel__badge');
+    badge.textContent = b.label + ' · ' + b.pct + '%';
+    badge.style.background = b.color + '22';
+    badge.style.borderColor = b.color + '60';
+    badge.style.color = b.color;
+    v.appendChild(badge);
+    r.appendChild(k); r.appendChild(v);
+    return r;
+  }
+
+  // Memory stage with plain-language label + hint.
+  function stageRows(stage) {
+    var h = hum();
+    var out = [];
+    if (!stage) return out;
+    var label = h.stageLabel ? h.stageLabel(stage) : stage;
+    out.push(row('Status', label));
+    if (h.stageHint) {
+      var hint = h.stageHint(stage);
+      if (hint) {
+        var r = el('div', 'wfg-panel__hint');
+        r.textContent = hint;
+        out.push(r);
+      }
+    }
+    return out;
+  }
+
+  // Collapsible "Technical details" section holding every raw field the
+  // backend surfaced. Hidden by default; one click reveals it. Users who
+  // want to debug, copy IDs, or check the raw heat float get it one tap
+  // away; everyone else never sees the jargon.
+  function renderTechnicalDetails(body, n) {
+    var h = hum();
+    var pretty = h.prettyFieldKey || function (k) { return k; };
+    // Pick field set: everything except what we've already shown
+    // humanized, and except fields that are structural (body, tags).
+    var SKIP = {
+      id: 1, kind: 1, label: 1, color: 1, size: 1,
+      body: 1, tags: 1, is_protected: 1, is_stale: 1,
+    };
+    var keys = Object.keys(n).filter(function (k) {
+      if (SKIP[k]) return false;
+      var v = n[k];
+      if (v == null) return false;
+      if (Array.isArray(v) && v.length === 0) return false;
+      if (typeof v === 'object' && Object.keys(v).length === 0) return false;
+      return true;
+    });
+    if (!keys.length) return;
+    // Collapsible <details> — native HTML, no JS needed.
+    var d = document.createElement('details');
+    d.className = 'wfg-panel__advanced';
+    var sum = document.createElement('summary');
+    sum.textContent = 'Technical details';
+    d.appendChild(sum);
+    var wrap = el('div', 'wfg-panel__advanced-body');
+    keys.sort().forEach(function (k) {
+      var v = n[k];
+      if (typeof v === 'object') v = JSON.stringify(v);
+      if (typeof v === 'number' && !Number.isInteger(v)) v = v.toFixed(4);
+      wrap.appendChild(row(pretty(k), v));
+    });
+    d.appendChild(wrap);
+    body.appendChild(d);
+  }
+
   function actionBtn(label, onClick) {
     var b = el('button', 'wfg-panel__action');
     b.type = 'button'; b.textContent = label;
@@ -188,7 +282,12 @@
 
   function renderFile(body, n, ctx) {
     if (n.path) body.appendChild(row('Path', n.path));
-    if (n.primary_cluster) body.appendChild(row('Primary tool', n.primary_cluster));
+    if (n.primary_cluster) {
+      var h = hum();
+      var c = (h.primaryClusterLabel && h.primaryClusterLabel(n.primary_cluster))
+        || n.primary_cluster;
+      body.appendChild(row('How it was used', c));
+    }
     if (n.first_seen) body.appendChild(row('First seen', humanDate(n.first_seen)));
     if (n.last_accessed) body.appendChild(row('Last access', humanDate(n.last_accessed)));
     if (n.last_modified) body.appendChild(row('Last modified', humanDate(n.last_modified)));
@@ -239,9 +338,11 @@
   }
 
   function renderMemory(body, n, ctx) {
-    if (n.stage) body.appendChild(row('Stage', n.stage));
-    if (n.heat != null) body.appendChild(row('Heat', (+n.heat).toFixed(3)));
-    if (n.created_at) body.appendChild(row('Created', n.created_at));
+    // Plain-language stage ("Just learned" instead of "LABILE") + hint.
+    stageRows(n.stage).forEach(function (r) { body.appendChild(r); });
+    // Visual heat badge (Hot/Warm/Cool/Cold) — raw 0.xxx is in Technical.
+    if (n.heat != null) body.appendChild(heatRow(n.heat));
+    if (n.created_at) body.appendChild(row('Created', humanDate(n.created_at)));
     renderCommon(body, n, ctx);
     if (n.tags && n.tags.length) {
       var tagWrap = section('Tags');
@@ -251,7 +352,7 @@
       body.appendChild(tagWrap);
     }
     if (n.body) {
-      var bs = section('Content');
+      var bs = section('What was remembered');
       bs.appendChild(preview(n.body, 4000));
       body.appendChild(bs);
     }
@@ -337,8 +438,12 @@
   }
 
   function renderSymbol(body, n, ctx) {
-    // Identity.
-    if (n.symbol_type) body.appendChild(row('Type', n.symbol_type));
+    // Identity — use plain-language type labels.
+    var h = hum();
+    if (n.symbol_type) {
+      var t = (h.symbolTypeLabel && h.symbolTypeLabel(n.symbol_type)) || n.symbol_type;
+      body.appendChild(row('Type', t));
+    }
     if (n.path) body.appendChild(row('File', n.path));
     if (n.label) body.appendChild(row('Name', n.label));
     renderCommon(body, n, ctx);
@@ -410,9 +515,15 @@
     function show(n, ctx) {
       root.classList.add('wfg-panel--open');
       root.setAttribute('aria-hidden', 'false');
-      kind.textContent = n.kind || '—';
+      // Humanized kind label ("Memory" not "memory", "Code item" not
+      // "symbol") — falls back to raw kind when humanizer absent.
+      var h = (window.JUG && window.JUG._wfgHumanize) || {};
+      kind.textContent = (h.kindLabel ? h.kindLabel(n.kind) : n.kind) || '—';
       title.textContent = wfg.labelOf(n);
       body.innerHTML = '';
+      // Plain-language one-sentence description at the very top, before
+      // any field table. This is the non-tech reader's entry point.
+      renderPlainDescription(body, n, ctx);
       var fn = RENDERERS[n.kind];
       if (fn) fn(body, n, ctx);
       else {
@@ -422,6 +533,10 @@
         catch (_) { pre.textContent = String(n); }
         body.appendChild(pre);
       }
+      // Collapsible "Technical details" footer — every raw field the
+      // backend emitted, one click away. Hidden by default so non-tech
+      // users never confront the jargon.
+      renderTechnicalDetails(body, n);
     }
 
     function hide() {
