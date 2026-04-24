@@ -67,7 +67,7 @@ jobs:
           key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
 
       - name: Install dependencies
-        run: pip install -e ".[dev,postgresql]"
+        run: pip install -e ".[dev,postgresql,codebase]"
 
       - name: Pre-download embedding model
         run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"

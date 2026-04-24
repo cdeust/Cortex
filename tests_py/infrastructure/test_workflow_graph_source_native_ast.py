@@ -12,8 +12,21 @@ from pathlib import Path
 
 import pytest
 
+from mcp_server.core.ast_parser import is_available as _ast_available
 from mcp_server.infrastructure.workflow_graph_source_native_ast import (
     WorkflowGraphNativeASTSource,
+)
+
+# Tree-sitter is an optional extra (``pip install -e ".[codebase]"``).
+# Without it, ``parse_file_ast`` falls back to the regex path in
+# ``codebase_parser.parse_file``, which produces basename-only symbol
+# names (e.g. ``"bar"``) and does not populate ``calls_per_function``.
+# The feature this module tests — dotted qnames, MEMBER_OF, and CALLS
+# chains — requires tree-sitter. Skip cleanly when it isn't installed
+# so CI configs that omit the [codebase] extra don't fail spuriously.
+requires_tree_sitter = pytest.mark.skipif(
+    not _ast_available(),
+    reason="tree-sitter not installed — install the [codebase] extra",
 )
 
 
@@ -44,6 +57,7 @@ class TestLoadSymbols:
     def test_unreadable_paths_are_skipped(self, source):
         assert source.load_symbols(["/no/such/file.py"]) == []
 
+    @requires_tree_sitter
     def test_python_class_and_method_emit_symbol_rows(self, tmp_path, source):
         path = _write(
             tmp_path,
@@ -77,6 +91,7 @@ class TestLoadSymbols:
 
 
 class TestLoadASTEdges:
+    @requires_tree_sitter
     def test_member_of_emitted_for_method(self, tmp_path, source):
         path = _write(
             tmp_path,
@@ -96,6 +111,7 @@ class TestLoadASTEdges:
             assert e["confidence"] == 1.0
             assert "native-ast" in e["reason"]
 
+    @requires_tree_sitter
     def test_imports_resolve_to_sibling_symbol(self, tmp_path, source):
         _write(
             tmp_path,
@@ -137,8 +153,10 @@ class TestLoadASTEdges:
 class TestCallEdges:
     """Caller-qualified CALLS: ``src_name`` is the enclosing method's
     qualified name, so the L6 ring can render the full method-to-method
-    chain inside and across files."""
+    chain inside and across files. All tests here require tree-sitter
+    (the regex fallback cannot produce caller-qualified names)."""
 
+    @requires_tree_sitter
     def test_intra_file_method_to_method_call(self, tmp_path, source):
         path = _write(
             tmp_path,
@@ -168,6 +186,7 @@ class TestCallEdges:
         assert e["confidence"] == 1.0
         assert "native-ast:call" in e["reason"]
 
+    @requires_tree_sitter
     def test_cross_file_call_resolved(self, tmp_path, source):
         _write(
             tmp_path,
@@ -208,6 +227,7 @@ class TestCallEdges:
         # "os", "path", "join" are all unknown — no edges emitted.
         assert not calls, f"expected no call edges, got {calls}"
 
+    @requires_tree_sitter
     def test_dedup_within_caller(self, tmp_path, source):
         """A caller that invokes the same callee N times yields one edge."""
         path = _write(
@@ -240,6 +260,7 @@ class TestEndToEndContract:
     ``symbol_id`` and returns early at the ``dst_id not in b._nodes``
     guard."""
 
+    @requires_tree_sitter
     def test_calls_edge_lands_in_builder_output(self, tmp_path, source):
         from mcp_server.core.workflow_graph_builder import (
             WorkflowGraphBuilder,
@@ -293,6 +314,7 @@ class TestEndToEndContract:
         )
         assert len(calls) == 1
 
+    @requires_tree_sitter
     def test_cross_file_calls_edge_lands(self, tmp_path, source):
         from mcp_server.core.workflow_graph_builder import (
             WorkflowGraphBuilder,
