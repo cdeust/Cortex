@@ -9,9 +9,10 @@ Constrained to the Cortex-known file set: AP may have indexed files
 that Cortex doesn't know about (e.g. vendored dependencies); we filter
 so the graph stays focused on what the user's sessions actually touch.
 
-Pure infrastructure — no core imports. When ``CORTEX_ENABLE_AP`` is
-off (default) or AP is unreachable, every loader returns ``[]`` so
-the workflow graph degrades to the baseline.
+Pure infrastructure — no core imports. When AP is disabled
+(``CORTEX_MEMORY_AP_ENABLED=0``) or unreachable, every loader returns
+``[]`` so the workflow graph degrades to the native in-process AST
+source in ``workflow_graph_source_native_ast``.
 """
 
 from __future__ import annotations

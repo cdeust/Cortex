@@ -5,9 +5,9 @@ Composition root: filesystem wiki → symbol extractor (core) → AP bridge
 verification (infrastructure) → verdict (core). Returns a structured
 report per page.
 
-When AP is disabled (``CORTEX_ENABLE_AP`` unset), the handler returns
-``status: skipped`` with an explanation — never a staleness claim.
-Graceful degradation is the invariant.
+When AP is disabled (``CORTEX_MEMORY_AP_ENABLED=0``), the handler
+returns ``status: skipped`` with an explanation — never a staleness
+claim. Graceful degradation is the invariant.
 
 A single page or the entire wiki can be verified in one call. The
 handler only READS the wiki; any flag persistence is the caller's
@@ -42,8 +42,9 @@ schema = {
         "Phase 2). Takes an optional path (verify one page) or no args "
         "(verify every authored page) and returns per-page verdicts: "
         "{page, symbol_refs, missing_refs, is_symbol_stale, rationale}. "
-        "Requires the CORTEX_ENABLE_AP flag; when disabled the handler "
-        "returns status=skipped and never produces a stale verdict. "
+        "Requires AP enabled (CORTEX_MEMORY_AP_ENABLED=1, the default); "
+        "when disabled the handler returns status=skipped and never "
+        "produces a stale verdict. "
         "Read-only — never mutates wiki or memory state."
     ),
     "inputSchema": {
@@ -123,7 +124,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "status": "skipped",
             "reason": "ap_disabled",
             "detail": (
-                "Set CORTEX_ENABLE_AP=1 and install automatised-pipeline "
+                "AP is disabled. Set CORTEX_MEMORY_AP_ENABLED=1 in your "
+                "MCP config (default) and install automatised-pipeline "
                 "to run symbol verification."
             ),
         }

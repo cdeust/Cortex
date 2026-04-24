@@ -440,15 +440,28 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
             # ``build_workflow_graph`` call; we can't easily partition
             # those. So we run baseline first (fast — a few seconds)
             # and merge the whole thing, then tag the phase.
-            saved_flag = os.environ.get("CORTEX_ENABLE_AP")
-            os.environ.pop("CORTEX_ENABLE_AP", None)
-            baseline = build_workflow_graph(
-                store,
-                domain_filter=domain_filter,
-                stage="full",
-            )
-            if saved_flag is not None:
-                os.environ["CORTEX_ENABLE_AP"] = saved_flag
+            # Temporarily disable AP for the baseline build so L0-L5
+            # land before the (slower) AST ring is streamed in L6.
+            # Uses the MemorySettings flag; cache-clear picks up the
+            # new env value for the duration of this build, then we
+            # restore the previous setting.
+            from mcp_server.infrastructure import memory_config
+
+            saved_flag = os.environ.get("CORTEX_MEMORY_AP_ENABLED")
+            os.environ["CORTEX_MEMORY_AP_ENABLED"] = "0"
+            memory_config.get_memory_settings.cache_clear()
+            try:
+                baseline = build_workflow_graph(
+                    store,
+                    domain_filter=domain_filter,
+                    stage="full",
+                )
+            finally:
+                if saved_flag is None:
+                    os.environ.pop("CORTEX_MEMORY_AP_ENABLED", None)
+                else:
+                    os.environ["CORTEX_MEMORY_AP_ENABLED"] = saved_flag
+                memory_config.get_memory_settings.cache_clear()
 
             # Partition baseline nodes by kind so we can publish one
             # layer at a time with a small delay — the client sees the

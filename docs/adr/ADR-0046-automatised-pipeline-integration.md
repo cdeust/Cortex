@@ -169,8 +169,12 @@ degrades gracefully to its current behaviour.
 6. Phase 3 unified search.
 7. Phase 4 impact pulse.
 
-Each phase ships behind a feature flag (`CORTEX_ENABLE_AP=1`) so the
-main graph path never regresses while the bridge matures.
+Originally each phase shipped behind the env-var flag
+`CORTEX_ENABLE_AP=1`; v3.14.2 replaced it with
+`MemorySettings.AP_ENABLED` (settable via `CORTEX_MEMORY_AP_ENABLED`
+in the MCP config), defaulting to on. The legacy env var was removed.
+Users who want to cut token / subprocess cost set
+`CORTEX_MEMORY_AP_ENABLED=0`.
 
 ## References
 
