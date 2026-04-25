@@ -89,30 +89,45 @@ def resolve_graph_path() -> str | None:
 def resolve_graph_paths() -> list[str]:
     """Return every LadybugDB graph the visualization should query.
 
-    Multi-project layout: Cortex keeps one graph per project under
-    ``$HOME/.cortex/ap_graphs/<project-name>/graph``. Each directory
-    holds an independent AP index (one for Cortex, one for
-    dcp-wealth-android, one for automatised-pipeline, …). The
-    workflow graph loader sweeps every path so the visualization
-    shows AST symbols from every project at once — no limitation,
-    no hard-coded selection.
+    Cortex keeps AP-indexed graphs under TWO directory schemes — the
+    legacy ``~/.cortex/ap_graphs/<project>/graph`` (predates the AP CLI
+    rename) and the current ``~/.cache/cortex/code-graphs/<project>-<hash>/graph``
+    (where the in-tree ``ingest_codebase`` handler writes them). Both
+    must be scanned so a fresh install with no manual setup discovers
+    every graph the user already has.
+
+    Each candidate must exist (file or directory — AP's LadybugDB is a
+    single ``graph`` file with a ``graph.wal`` sibling, NOT a directory;
+    earlier filtering on ``is_dir`` silently dropped every valid graph).
     """
     paths: list[str] = []
+    seen: set[str] = set()
+
+    def _add(p) -> None:
+        s = str(p)
+        if s in seen or not p.exists():
+            return
+        paths.append(s)
+        seen.add(s)
+
     raw = (os.environ.get("CORTEX_AP_GRAPH_PATH") or "").strip()
     if raw:
-        # Honour an explicit single-graph override if the user set it.
-        paths.append(raw)
+        from pathlib import Path
+
+        _add(Path(raw))
+
     from pathlib import Path
 
     legacy = Path.home() / ".cortex" / "ap_graph" / "graph"
-    if legacy.exists() and str(legacy) not in paths:
-        paths.append(str(legacy))
-    roster = Path.home() / ".cortex" / "ap_graphs"
-    if roster.is_dir():
-        for project_dir in sorted(roster.iterdir()):
-            g = project_dir / "graph"
-            if g.exists() and str(g) not in paths:
-                paths.append(str(g))
+    _add(legacy)
+
+    for roster in (
+        Path.home() / ".cortex" / "ap_graphs",
+        Path.home() / ".cache" / "cortex" / "code-graphs",
+    ):
+        if roster.is_dir():
+            for project_dir in sorted(roster.iterdir()):
+                _add(project_dir / "graph")
     return paths
 
 

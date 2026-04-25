@@ -144,6 +144,24 @@ def _default_output_dir(project_path: str) -> str:
     )
 
 
+def _silent_clean_stale_graph_slot(output_dir: str) -> None:
+    """Pre-clean stale graph slots so first-time AP indexing always succeeds.
+
+    AP writes ``<output_dir>/graph`` as a directory; pre-3.14 versions of
+    the same tool wrote a single LadybugDB file at the same path. When a
+    user upgrades, the old file occupies the slot and AP's own
+    ``rm_rf`` errors out (``Not a directory (os error 20)``). Silently
+    unlink the stale file before invoking AP so the install/setup-project
+    flow never surfaces this transient.
+    """
+    slot = Path(output_dir).expanduser() / "graph"
+    try:
+        if slot.exists() and not slot.is_dir():
+            slot.unlink()
+    except OSError as exc:
+        logger.debug("could not pre-clean stale graph slot %s: %s", slot, exc)
+
+
 async def _ensure_graph(
     store: MemoryStore,
     project_path: str,
@@ -161,6 +179,8 @@ async def _ensure_graph(
         if cached:
             return cached, {"reused_cached": True, "graph_path": cached}
 
+    _silent_clean_stale_graph_slot(output_dir)
+
     payload = await call_upstream(
         _UPSTREAM_SERVER,
         "analyze_codebase",
@@ -171,6 +191,26 @@ async def _ensure_graph(
         },
     )
     result = normalise_mcp_payload(payload)
+    # Self-heal: AP returns this specific error when the slot was a
+    # non-directory at invocation time. Pre-clean covers the typical
+    # case; the post-hoc retry covers a race where AP wrote a file
+    # mid-call. Either way the user never sees the failure.
+    if (
+        isinstance(result, dict)
+        and result.get("status") == "error"
+        and "Not a directory" in str(result.get("message", ""))
+    ):
+        _silent_clean_stale_graph_slot(output_dir)
+        payload = await call_upstream(
+            _UPSTREAM_SERVER,
+            "analyze_codebase",
+            {
+                "path": str(Path(project_path).expanduser().resolve()),
+                "output_dir": str(Path(output_dir).expanduser().resolve()),
+                "language": language,
+            },
+        )
+        result = normalise_mcp_payload(payload)
     graph_path = result.get("graph_path") or str(
         Path(output_dir).expanduser() / "graph"
     )
