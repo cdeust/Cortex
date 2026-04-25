@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/cdeust/Cortex/security/advisories/new
+    about: Do NOT use public issues for security reports. Open a private advisory.
+  - name: Companion projects
+    url: https://github.com/cdeust
+    about: Cortex (memory) · zetetic-team-subagents (agents) · automatised-pipeline (codebase intel)

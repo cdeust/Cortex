@@ -1,0 +1,62 @@
+name: Feature request
+description: Propose a new capability or a substantive enhancement.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feature requests need a problem statement, not just a solution.
+        State what you're trying to do, why current behavior doesn't
+        support it, and what you've considered.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to accomplish? What blocks you today?
+      placeholder: |
+        I'm trying to ___ but the current ___ doesn't support ___.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        Concrete proposal. Include API shape, data shape, or behavioral
+        contract if applicable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: |
+        What else have you tried or thought about? Why is your proposal
+        better than each alternative?
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope assessment
+      description: |
+        Is this a CRITICAL gap, HIGH-impact improvement, MEDIUM convenience,
+        or LOW polish? Be honest — most things are MEDIUM or LOW.
+      placeholder: "MEDIUM — convenience for users with X workflow."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you willing to implement this yourself?
+      options:
+        - label: I'd like to implement this myself.
+        - label: I can review a PR for this.
+        - label: I'm requesting that someone else implement it.

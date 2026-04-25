@@ -1,0 +1,75 @@
+name: Audit finding
+description: Report a coding-standard, source-discipline, or correctness violation surfaced by an audit.
+title: "[audit] "
+labels: ["audit-finding"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is for findings from the project's audit cycle —
+        a reviewer (human or agent) caught something that violates the
+        coding standards, source discipline, or correctness contracts.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - CRITICAL (must fix before merge / release)
+        - HIGH (blocks public release; should fix before merge if possible)
+        - MEDIUM (defer is OK with explicit follow-up)
+        - LOW (note for future work)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: lens
+    attributes:
+      label: Audit lens
+      description: Which audit perspective surfaced this?
+      options:
+        - feynman (integrity / claim verification)
+        - curie (measurement discipline)
+        - popper (falsifiability / test risk)
+        - dijkstra (correctness / contracts)
+        - code-reviewer (rules/coding-standards.md compliance)
+        - test-engineer (mutation survival / coverage)
+        - architect (decomposition / dependency direction)
+        - security-auditor (STRIDE / supply chain)
+        - other (specify in finding)
+    validations:
+      required: true
+
+  - type: textarea
+    id: finding
+    attributes:
+      label: Finding
+      description: |
+        State the violation precisely. Include file:line citation. Cite
+        the rule (§ from rules/coding-standards.md, or the contract that
+        was violated).
+      placeholder: |
+        File: packages/foo/bar.ts:42
+        Rule: §4.2 (function size)
+        Finding: handleX is 87 lines (37 over the 50-line cap).
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence required to close
+      description: |
+        What concrete artifact would refute or confirm this finding?
+        A test that catches the mutation? A measured benchmark? An
+        ADR justifying the exception?
+    validations:
+      required: true
+
+  - type: textarea
+    id: remedy
+    attributes:
+      label: Suggested remedy
+      description: Optional. The fix shape, if you have one in mind.
+    validations:
+      required: false

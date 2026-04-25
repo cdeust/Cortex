@@ -1,0 +1,222 @@
+\begin{thebibliography}{31}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Beyer et~al.(1999)Beyer, Goldstein, Ramakrishnan, and
+  Shaft]{Beyer1999}
+Kevin Beyer, Jonathan Goldstein, Raghu Ramakrishnan, and Uri Shaft.
+\newblock When is ``nearest neighbor'' meaningful?
+\newblock In \emph{Proceedings of the 7th International Conference on Database
+  Theory (ICDT)}, pages 217--235, 1999.
+
+\bibitem[Brin and Page(1998)]{Brin1998}
+Sergey Brin and Lawrence Page.
+\newblock The anatomy of a large-scale hypertextual web search engine.
+\newblock \emph{Computer Networks and ISDN Systems}, 30\penalty0
+  (1--7):\penalty0 107--117, 1998.
+\newblock \doi{10.1016/S0169-7552(98)00110-X}.
+
+\bibitem[Carbonell and Goldstein(1998)]{Carbonell1998}
+Jaime Carbonell and Jade Goldstein.
+\newblock The use of {MMR}, diversity-based reranking for reordering documents
+  and producing summaries.
+\newblock In \emph{Proceedings of the 21st Annual International ACM SIGIR
+  Conference}, pages 335--336, 1998.
+\newblock \doi{10.1145/290941.291025}.
+
+\bibitem[Chheda et~al.(2024)]{Chheda2024}
+Deshraj Chheda et~al.
+\newblock mem0: The memory layer for {AI} agents.
+\newblock \emph{arXiv preprint}, 2024.
+
+\bibitem[Collins and Loftus(1975)]{Collins1975}
+Allan~M. Collins and Elizabeth~F. Loftus.
+\newblock A spreading-activation theory of semantic processing.
+\newblock \emph{Psychological Review}, 82\penalty0 (6):\penalty0 407--428,
+  1975.
+\newblock \doi{10.1037/0033-295X.82.6.407}.
+
+\bibitem[Cormack et~al.(2009)Cormack, Clarke, and Buettcher]{Cormack2009}
+Gordon~V. Cormack, Charles L.~A. Clarke, and Stefan Buettcher.
+\newblock Reciprocal rank fusion outperforms {C}ondorcet and individual rank
+  learning methods.
+\newblock In \emph{Proceedings of the 32nd International ACM SIGIR Conference},
+  pages 758--759, 2009.
+\newblock \doi{10.1145/1571941.1572114}.
+
+\bibitem[Gutierrez et~al.(2024)Gutierrez, Shu, Gu, Yasunaga, and
+  Su]{Gutierrez2024}
+Bernal~Jim\'{e}nez Gutierrez, Yiheng Shu, Yu~Gu, Michihiro Yasunaga, and Yu~Su.
+\newblock {HippoRAG}: Neurobiologically inspired long-term memory for large
+  language models.
+\newblock In \emph{Advances in Neural Information Processing Systems
+  (NeurIPS)}, 2024.
+
+\bibitem[{Jina AI}(2025)]{JinaAI2025}
+{Jina AI}.
+\newblock Late chunking: Contextual chunk embeddings using long-context
+  embedding models, 2025.
+\newblock Technical Report.
+
+\bibitem[Karpukhin et~al.(2020)Karpukhin, Oguz, Min, Lewis, Wu, Edunov, Chen,
+  and Yih]{Karpukhin2020}
+Vladimir Karpukhin, Barlas Oguz, Sewon Min, Patrick Lewis, Ledell Wu, Sergey
+  Edunov, Danqi Chen, and Wen-tau Yih.
+\newblock Dense passage retrieval for open-domain question answering.
+\newblock In \emph{Proceedings of the 2020 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, pages 6769--6781, 2020.
+\newblock \doi{10.18653/v1/2020.emnlp-main.550}.
+
+\bibitem[Khattab and Zaharia(2020)]{Khattab2020}
+Omar Khattab and Matei Zaharia.
+\newblock {ColBERT}: Efficient and effective passage search via contextualized
+  late interaction over {BERT}.
+\newblock In \emph{Proceedings of the 43rd International ACM SIGIR Conference},
+  pages 39--48, 2020.
+\newblock \doi{10.1145/3397271.3401075}.
+
+\bibitem[Krause and Guestrin(2008)]{Krause2008}
+Andreas Krause and Carlos Guestrin.
+\newblock Near-optimal sensor placements in {G}aussian processes.
+\newblock \emph{Journal of Machine Learning Research}, 9:\penalty0 235--284,
+  2008.
+
+\bibitem[Langville and Meyer(2005)]{Langville2005}
+Amy~N. Langville and Carl~D. Meyer.
+\newblock A survey of eigenvector methods for web information retrieval.
+\newblock \emph{SIAM Review}, 47\penalty0 (1):\penalty0 135--161, 2005.
+\newblock \doi{10.1137/S0036144503424786}.
+
+\bibitem[Larsen and Nelson(2017)]{Larsen2017}
+Kasper~Green Larsen and Jelani Nelson.
+\newblock Optimality of the {J}ohnson-{L}indenstrauss lemma.
+\newblock In \emph{Proceedings of the 58th Annual IEEE Symposium on Foundations
+  of Computer Science (FOCS)}, pages 633--638, 2017.
+\newblock \doi{10.1109/FOCS.2017.64}.
+
+\bibitem[Lin and Bilmes(2011)]{Lin2011}
+Hui Lin and Jeff Bilmes.
+\newblock A class of submodular functions for document summarization.
+\newblock In \emph{Proceedings of the 49th Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, pages 510--520, 2011.
+
+\bibitem[Maharana et~al.(2024)]{Maharana2024}
+Adyasha Maharana et~al.
+\newblock {LoCoMo}: Long-context conversation memory benchmark.
+\newblock In \emph{Proceedings of the 62nd Annual Meeting of the Association
+  for Computational Linguistics (ACL)}, 2024.
+
+\bibitem[McClelland et~al.(1995)McClelland, McNaughton, and
+  O'Reilly]{McClelland1995}
+James~L. McClelland, Bruce~L. McNaughton, and Randall~C. O'Reilly.
+\newblock Why there are complementary learning systems in the hippocampus and
+  neocortex.
+\newblock \emph{Psychological Review}, 102\penalty0 (3):\penalty0 419--457,
+  1995.
+\newblock \doi{10.1037/0033-295X.102.3.419}.
+
+\bibitem[Minoux(1978)]{Minoux1978}
+Michel Minoux.
+\newblock Accelerated greedy algorithms for maximizing submodular set
+  functions.
+\newblock In \emph{Optimization Techniques}, volume~7 of \emph{Lecture Notes in
+  Control and Information Sciences}, pages 234--243. 1978.
+
+\bibitem[Muennighoff et~al.(2023)]{Muennighoff2023}
+Niklas Muennighoff et~al.
+\newblock {MTEB}: Massive text embedding benchmark.
+\newblock In \emph{Proceedings of the 17th Conference of the European Chapter
+  of the Association for Computational Linguistics (EACL)}, pages 2014--2037,
+  2023.
+
+\bibitem[Packer et~al.(2024)]{Packer2024}
+Charles Packer et~al.
+\newblock Letta: An operating system for {AI} agents with long-term memory.
+\newblock \emph{arXiv preprint}, 2024.
+
+\bibitem[Radovanovi\'{c} et~al.(2010)Radovanovi\'{c}, Nanopoulos, and
+  Ivanovi\'{c}]{Radovanovic2010}
+Milo\v{s} Radovanovi\'{c}, Alexandros Nanopoulos, and Mirjana Ivanovi\'{c}.
+\newblock Hubs in space: Popular nearest neighbors in high-dimensional data.
+\newblock \emph{Journal of Machine Learning Research}, 11:\penalty0 2487--2531,
+  2010.
+
+\bibitem[Reimers and Gurevych(2019)]{Reimers2019}
+Nils Reimers and Iryna Gurevych.
+\newblock Sentence-{BERT}: Sentence embeddings using {S}iamese {BERT}-networks.
+\newblock In \emph{Proceedings of the 2019 Conference on Empirical Methods in
+  Natural Language Processing (EMNLP)}, pages 3982--3992, 2019.
+\newblock \doi{10.18653/v1/D19-1410}.
+
+\bibitem[Sarthi et~al.(2024)]{Sarthi2024}
+Parth Sarthi et~al.
+\newblock {RAPTOR}: Recursive abstractive processing for tree-organized
+  retrieval.
+\newblock In \emph{Proceedings of the International Conference on Learning
+  Representations (ICLR)}, 2024.
+
+\bibitem[Stensola et~al.(2012)Stensola, Stensola, Solstad, Fr{\o}land, Moser,
+  and Moser]{Stensola2012}
+Hanne Stensola, Tor Stensola, Trygve Solstad, Kristian Fr{\o}land, May-Britt
+  Moser, and Edvard~I. Moser.
+\newblock The entorhinal grid map is discretized.
+\newblock \emph{Nature}, 492:\penalty0 72--78, 2012.
+\newblock \doi{10.1038/nature11649}.
+
+\bibitem[Tavakoli et~al.(2026)]{Tavakoli2026}
+Arash Tavakoli et~al.
+\newblock {BEAM}: Beyond a million tokens --- benchmarking long-term memory in
+  {AI} agents.
+\newblock In \emph{Proceedings of the International Conference on Learning
+  Representations (ICLR)}, 2026.
+
+\bibitem[Teyler and Rudy(2007)]{Teyler2007}
+Timothy~J. Teyler and Jerry~W. Rudy.
+\newblock The hippocampal indexing theory and episodic memory: Updating the
+  index.
+\newblock \emph{Hippocampus}, 17\penalty0 (12):\penalty0 1158--1169, 2007.
+\newblock \doi{10.1002/hipo.20350}.
+
+\bibitem[Thakur et~al.(2021)Thakur, Reimers, R\"{u}ckl\'{e}, Srivastava, and
+  Gurevych]{Thakur2021}
+Nandan Thakur, Nils Reimers, Andreas R\"{u}ckl\'{e}, Abhishek Srivastava, and
+  Iryna Gurevych.
+\newblock {BEIR}: A heterogeneous benchmark for zero-shot evaluation of
+  information retrieval models.
+\newblock In \emph{Advances in Neural Information Processing Systems
+  (NeurIPS)}, 2021.
+
+\bibitem[Tse et~al.(2007)Tse, Langston, Kakeyama, Bethus, Spooner, Wood,
+  Witter, and Morris]{Tse2007}
+Dorothy Tse, Rosamund~F. Langston, Masaki Kakeyama, Ingrid Bethus, Patrick~A.
+  Spooner, Emma~R. Wood, Menno~P. Witter, and Richard G.~M. Morris.
+\newblock Schemas and memory consolidation.
+\newblock \emph{Science}, 316\penalty0 (5821):\penalty0 76--82, 2007.
+\newblock \doi{10.1126/science.1135935}.
+
+\bibitem[Wang and Chen(2025)]{Wang2025}
+Cheng Wang and Jian Chen.
+\newblock {MIRIX}: Multi-agent memory system for {LLM}-based agents.
+\newblock \emph{arXiv preprint}, 2025.
+
+\bibitem[Wu et~al.(2025)]{Wu2025}
+Yucheng Wu et~al.
+\newblock {LongMemEval}: Benchmarking long-term memory in {AI} assistants.
+\newblock In \emph{Proceedings of the International Conference on Learning
+  Representations (ICLR)}, 2025.
+
+\bibitem[Xu et~al.(2025)]{Xu2025}
+Boyuan Xu et~al.
+\newblock {A-MEM}: Agentic memory for {LLM} agents.
+\newblock In \emph{Advances in Neural Information Processing Systems
+  (NeurIPS)}, 2025.
+
+\bibitem[Zhu et~al.(2024)]{Zhu2024}
+Dawei Zhu et~al.
+\newblock {LongEmbed}: Extending embedding models for long context retrieval.
+\newblock \emph{arXiv preprint}, 2024.
+
+\end{thebibliography}

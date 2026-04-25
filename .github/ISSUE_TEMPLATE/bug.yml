@@ -1,0 +1,76 @@
+name: Bug report
+description: Something is broken or behaves differently from documentation.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please give enough context that the bug
+        is reproducible without back-and-forth.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: One paragraph. State the observed behavior, not the expected.
+      placeholder: When I do X, the system does Y.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Numbered steps. Include version / commit SHA.
+      placeholder: |
+        1. Run `pnpm install --frozen-lockfile`
+        2. Set FOO=bar in .env
+        3. Call the start_pipeline tool with feature_description="..."
+        4. Observe Y
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        OS, runtime version (Node / Python / Rust), package versions,
+        anything load-bearing.
+      placeholder: |
+        - OS: macOS 15.0
+        - Runtime: Node 22.x
+        - Project version / commit: v0.2.0 / abc1234
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      description: Paste relevant error output. Use a fenced code block.
+      render: shell
+    validations:
+      required: false
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Your assessment — maintainer may reclassify.
+      options:
+        - Critical (data loss, RCE, crash on supported input)
+        - High (core feature broken, no workaround)
+        - Medium (feature broken, workaround exists)
+        - Low (cosmetic, edge case)
+    validations:
+      required: true
