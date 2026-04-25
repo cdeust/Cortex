@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.session_start'",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && ROOT=\"${CLAUDE_PLUGIN_ROOT:-$PWD}\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.session_start'",
             "timeout": 30
           }
         ]
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.auto_recall'",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && ROOT=\"${CLAUDE_PLUGIN_ROOT:-$PWD}\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.auto_recall'",
             "timeout": 5
           }
         ]
@@ -46,17 +46,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.post_tool_capture'",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && ROOT=\"${CLAUDE_PLUGIN_ROOT:-$PWD}\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.post_tool_capture'",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.preemptive_context'",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && ROOT=\"${CLAUDE_PLUGIN_ROOT:-$PWD}\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.preemptive_context'",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.pipeline_impact_bump'",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && ROOT=\"${CLAUDE_PLUGIN_ROOT:-$PWD}\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.pipeline_impact_bump'",
             "timeout": 5
           }
         ]
@@ -67,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.session_lifecycle'",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && ROOT=\"${CLAUDE_PLUGIN_ROOT:-$PWD}\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.session_lifecycle'",
             "timeout": 30
           }
         ]
@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.compaction_checkpoint'",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && ROOT=\"${CLAUDE_PLUGIN_ROOT:-$PWD}\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.compaction_checkpoint'",
             "timeout": 10
           }
         ]
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server.hooks.agent_briefing'",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && ROOT=\"${CLAUDE_PLUGIN_ROOT:-$PWD}\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.agent_briefing'",
             "timeout": 5
           }
         ]

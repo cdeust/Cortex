@@ -4,7 +4,7 @@
       "command": "bash",
       "args": [
         "-c",
-        "PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server"
+        "PY=$(command -v python3 || command -v python) && ROOT=\"${CLAUDE_PLUGIN_ROOT:-$PWD}\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server"
       ],
       "env": {
         "DATABASE_URL": "postgresql://localhost:5432/cortex",
