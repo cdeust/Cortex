@@ -1,0 +1,307 @@
+{
+  "_schema": "scope-registry v2",
+  "_docs": "See memory/contract.md \u00a75-\u00a77 and memory/ADR-001-scope-coverage.md. Curator maintains this file. Special agent ids: '*' = any agent, '_user' = interactive user, '_curator' = designated curator agent (resolved via curator_agents list). Coverage map: memory/scope-coverage.md.",
+  "curator_agents": [
+    "_user",
+    "orchestrator"
+  ],
+  "strict_unknown_scope": true,
+  "defaults": {
+    "owners": [
+      "_user"
+    ],
+    "readers": [
+      "*"
+    ],
+    "ttl_days": 30,
+    "max_file_kb": 100
+  },
+  "scopes": {
+    "global": {
+      "description": "Cross-project ground truth. Curator-maintained. Never auto-loaded at spawn.",
+      "owners": [
+        "_user",
+        "_curator"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": null,
+      "max_file_kb": 100
+    },
+    "lessons": {
+      "description": "Rules learned from corrections. Written by user or curator (orchestrator under review). Read-only for other agents.",
+      "owners": [
+        "_user",
+        "_curator"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": null,
+      "max_file_kb": 50
+    },
+    "quarantine": {
+      "description": "Memory derived from untrusted sources (PR bodies, issue text, web content). Never auto-loaded. Short TTL. Any agent may write; only user/curator may read for triage.",
+      "owners": [
+        "*"
+      ],
+      "readers": [
+        "_user",
+        "_curator"
+      ],
+      "ttl_days": 7,
+      "max_file_kb": 100
+    },
+    "session": {
+      "description": "Current-session working memory. Shared scratch. Purged by TTL.",
+      "owners": [
+        "*"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 1,
+      "max_file_kb": 100
+    },
+    "project": {
+      "description": "Per-project durable context (decisions, architecture notes, open questions).",
+      "owners": [
+        "*"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 90,
+      "max_file_kb": 100
+    },
+    "research": {
+      "description": "Shared scope for research-scientist and experiment-runner. Hypotheses, experiment logs, dataset notes.",
+      "owners": [
+        "research-scientist",
+        "experiment-runner",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 60,
+      "max_file_kb": 100
+    },
+    "genius": {
+      "description": "Shared scope for the 97 genius agents under agents/genius/ (excluding INDEX.md). Per-agent isolation enforced by SUBPATH CONVENTION (NOT by ACL): every genius agent MUST write under /memories/genius/<agent-slug>/ and SHOULD read primarily its own subpath. Cross-genius reads are permitted by design (cross-pollination is the point of the genius pool). See memory/ADR-001-scope-coverage.md and memory/scope-coverage.md.",
+      "owners": [
+        "*"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 60,
+      "max_file_kb": 100
+    },
+    "engineer": {
+      "description": "engineer team agent's working memory.",
+      "owners": [
+        "engineer",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "architect": {
+      "description": "architect team agent's working memory.",
+      "owners": [
+        "architect",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "code-reviewer": {
+      "description": "code-reviewer team agent's working memory.",
+      "owners": [
+        "code-reviewer",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "data-scientist": {
+      "description": "data-scientist team agent's working memory.",
+      "owners": [
+        "data-scientist",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "dba": {
+      "description": "dba team agent's working memory.",
+      "owners": [
+        "dba",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "devops-engineer": {
+      "description": "devops-engineer team agent's working memory.",
+      "owners": [
+        "devops-engineer",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "frontend-engineer": {
+      "description": "frontend-engineer team agent's working memory.",
+      "owners": [
+        "frontend-engineer",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "latex-engineer": {
+      "description": "latex-engineer team agent's working memory.",
+      "owners": [
+        "latex-engineer",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "mlops": {
+      "description": "mlops team agent's working memory.",
+      "owners": [
+        "mlops",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "orchestrator": {
+      "description": "orchestrator team agent's working memory. Note: orchestrator is also the designated curator (see curator_agents).",
+      "owners": [
+        "orchestrator",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "paper-writer": {
+      "description": "paper-writer team agent's working memory.",
+      "owners": [
+        "paper-writer",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "professor": {
+      "description": "professor team agent's working memory.",
+      "owners": [
+        "professor",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "refactorer": {
+      "description": "refactorer team agent's working memory.",
+      "owners": [
+        "refactorer",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "reviewer-academic": {
+      "description": "reviewer-academic team agent's working memory.",
+      "owners": [
+        "reviewer-academic",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "security-auditor": {
+      "description": "security-auditor team agent's working memory.",
+      "owners": [
+        "security-auditor",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "test-engineer": {
+      "description": "test-engineer team agent's working memory.",
+      "owners": [
+        "test-engineer",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    },
+    "ux-designer": {
+      "description": "ux-designer team agent's working memory.",
+      "owners": [
+        "ux-designer",
+        "_user"
+      ],
+      "readers": [
+        "*"
+      ],
+      "ttl_days": 30,
+      "max_file_kb": 100
+    }
+  }
+}

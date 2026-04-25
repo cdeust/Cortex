@@ -1,0 +1,111 @@
+# True-Negative fixtures: developer memory content — must PASS scan (default mode)
+# Provenance: synthesized from actual agent file patterns in this repo (agents/*.md,
+# memory/*.md, ADR files). Each line is one fixture. Blank lines and #-comments skipped.
+# Format: one fixture per line (pipe-delimited escaped newlines not needed — scanner sees full line)
+#
+# Sources for content patterns:
+#   - agents/curie.md, agents/engineer.md, agents/architect.md (instrument/procedure language)
+#   - memory/ADR-001-scope-coverage.md, memory/contract.md
+#   - memory/concurrency-audit.md
+#   - Synthesized developer-memory style: code decisions, ADRs, benchmark results, arch notes
+
+ADR-001: We chose PostgreSQL over MongoDB because of ACID guarantees and complex joins required by the billing module. Decision approved 2024-03-15.
+ADR-002: Agent ID propagation must use UUID v4 format. ULIDs rejected because of lexicographic ordering dependency. See memory/MEMORY_AGENT_ID-wiring.md.
+ADR-003: The orchestrator must not directly import infrastructure adapters. All wiring happens in the composition root (handlers layer).
+ADR-004: Scope tags use forward-slash hierarchy: /project/component/sub. No dot notation.
+ADR-005: The memory tool SHA256 integrity check is disabled in test environments; MEMORY_INTEGRITY_DISABLE=1 must be set explicitly.
+Benchmark p50=12ms p99=47ms throughput=8420 req/s. Baseline p50=13ms p99=52ms. Delta: -8% latency improvement after connection pool tuning.
+Benchmark result: recall@10=0.87 on the zetetic-sessions corpus (n=1200 sessions, 2026-03-01). MRR=0.74. Improvement over BM25 baseline (recall@10=0.79).
+Agent curie-v2 isolated the anomaly carrier in /memories/project/analysis.md at 14:32 UTC. Confidence: high. Second method: entropy scan cross-confirmed.
+Refactored pii_scan to delegate to pii-scanner.py. Python startup latency ~65ms on cold path. Documented in pii-instrument-spec.md §6.
+Upgraded from v2.12.0 to v2.13.1. SHA256 of release artifact: d8e8fca2dc0f896fd7cb4cb0031ba249. Verified against signed manifest.
+File integrity checksum: a3f5d2c8b1e4f7a9d6c3b8e2f5a1d4c7b9e3f6a2. Not a secret — it is a content digest.
+The SSH host fingerprint is: SHA256:uNiVztksCsDhcc0u9e8BujQXVUpKZIDTMczCvj3tD2o. This is a public host key digest, not a secret.
+Memory scope /research/anomaly-detection is owned by the curie genius agent. Writes from other agents are blocked unless SCOPE_OVERRIDE=1.
+Concurrency audit finding: the write lock in memory-tool.sh uses flock(1) on a per-scope lockfile. No deadlock risk identified for single-threaded callers.
+Test: assert_eq!(result.confidence, Confidence::High) — unit test for the anomaly classifier.
+Rust struct definition: pub struct ScopeTag { pub path: String, pub owner: AgentId, pub created_at: u64 }
+TypeScript type: type MemoryEntry = { id: string; scope: string; content: string; timestamp: number; tags: string[] }
+Python function: def compute_entropy(s: str) -> float: return -sum((v/n)*math.log2(v/n) for v in freq.values())
+The base64-encoded greeting SGVsbG8sIFdvcmxkIQ== decodes to "Hello, World!" — not secret material.
+JSON schema example: {"type":"object","properties":{"id":{"type":"string"},"scope":{"type":"string"}},"required":["id"]}
+Design tokens: primary=#1a73e8 secondary=#34a853 error=#ea4335 warning=#fbbc04 background=#ffffff
+Git SHA: 117b158d4e2f3a9c7b0e1d5f8a2c6e4b9d1f3a7c is the last stable tag before the v2.13.1 refactor.
+Deployed commit 4b58cbf to staging at 09:14 UTC. Health check passed. Rollback SHA: 059d47c.
+Version string in package.json: "version": "2.13.1" — semver, not a secret.
+See https://platform.claude.com/docs/en/agents-and-tools/tool-use for the tool-use reference.
+See https://www.rfc-editor.org/rfc/rfc7519 for JWT specification. Header must be eyJ-prefixed base64url.
+See https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_identifiers.html for key ID format.
+Placeholder value used in documentation: YOUR_API_KEY_HERE — replace with actual key before use.
+Placeholder: REPLACE_WITH_YOUR_SECRET — template variable, not a real credential.
+Template token in config.yaml: auth_token: "<INSERT_TOKEN>" — populated at deploy time from vault.
+Example SSN in documentation: [REDACTED] — real SSNs must never appear in memory entries.
+Example phone number in test fixture: use reserved range only (555-0100 through 555-0199 per NANPA).
+NANPA reserved fictional range: 555-0100 through 555-0199 per ATIS-0300114. Test fixtures must use numbers in this range to avoid triggering the phone scanner.
+The number 123-45-6789 is a universally known invalid SSN used in SSN format documentation; it is not a real SSN.
+000-00-0000 is an invalid SSN (area 000 is unassigned per SSA Publication No. 05-10002).
+666-01-0001 — area 666 is unassigned per SSA; this cannot be a valid SSN.
+900-01-0001 — 9xx prefix is unassigned per SSA SSNVS rules.
+AWS key ID format: AKIA followed by 16 uppercase alphanumeric characters. Example prefix only: AKIA[A-Z0-9]{16}.
+GitHub PAT format: ghp_ prefix + 36 alphanumeric characters. Documentation: see GitHub token format docs for the exact shape. Do not embed placeholder tokens here.
+JWT structure: header.payload.signature where each segment is base64url-encoded. Example shape: eyJ[...].eyJ[...].sig[...]
+PEM block shape: header line + base64 body + footer line. The RFC 7468 format is used for RSA, EC, and PKCS8 keys. Headers must never appear in memory entries.
+The regex (?<![\\d])(?!000|666|9\\d\\d)\\d{3}-(?!00)\\d{2}-(?!0000)\\d{4}(?![\\d]) excludes invalid SSN prefixes.
+Shannon entropy H = -sum(p_i * log2(p_i)) over character histogram. Source: Shannon (1948) Bell System Technical Journal 27(3).
+TruffleHog v2 default entropy threshold is 3.5 bits/char. Source: Cornwell (2019) trufflesecurity/trufflehog design doc.
+NANPA area code rules: area codes beginning with 0 or 1 are invalid (ITU-T E.164 / NANPA assignment rules).
+Agent decision: demoted us_phone and email_address to low-confidence (strict-only) due to high FPR on developer content.
+Calibration note: generic_api_key entropy threshold raised from 3.5 to 4.5 bits/char per TruffleHog v3 guidance.
+Research observation: false-positive rate for email regex on agent memory content is high because URLs and import paths trigger the local-part@domain pattern.
+Architecture note: the composition root in handlers/app.go wires PostgresRepo to CheckoutService at startup; no service locator used.
+Bug fix: fixed off-by-one in token window calculation. The window was [start, end) but the tokenizer expected [start, end]. Closed by commit d1f3a7c.
+Lesson: never modify pii-rules.json confidence tier without re-running the full fixture corpus. One change to us_ssn broke 3 TN cases.
+The connect string template is: host=localhost port=5432 dbname=memories user=agent — no password stored in memory.
+Database URL env var: DATABASE_URL — value injected at runtime from vault, not stored in memory entries.
+The config value 8080 is a port number, not a secret. Port numbers do not require masking.
+IPv4 address 192.168.1.100 is a private LAN address from RFC 1918 — not sensitive in developer notes.
+IPv6 address 2001:db8::1 is a documentation range per RFC 3849 — safe in notes.
+Checksum algorithm: SHA-256 produces a 64-character hex digest. Example: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 (empty string).
+UUID v4 example: 550e8400-e29b-41d4-a716-446655440000 — format used for agent IDs per ADR-002.
+The JWT claim iat (issued-at) is a Unix timestamp in seconds: 1516239022 for 2018-01-18T01:30:22Z.
+OpenAPI schema property "format": "email" means the value must be a valid RFC 5321 email — but the schema itself is not a secret.
+The email regex pattern [\\w.+-]{1,64}@[\\w-]{1,253}\\.[A-Za-z]{2,} is the scanner rule, documented here for reference.
+Research note: RFC 5321 §2.3.11 defines the local part as case-sensitive; the scanner uses case-insensitive match for simplicity.
+Architecture decision: use RFC 7468 PEM format for all public key material stored in /config. Private keys never stored in memory.
+Test fixture for SSN exclusion: 123-45-6789 is commonly used in test suites; scanner rejects it as a known invalid test pattern.
+Performance note: p99 latency regression from 48ms to 71ms identified in load test run 2026-04-23. Root cause: N+1 query in scope lookup.
+Code review note: the hmac.compare_digest call uses constant-time comparison to prevent timing oracle attacks. Do not replace with ==.
+Security audit: no hardcoded credentials found in agents/*.md after grep -r "password\|secret\|key" audit of 117 files.
+Dependency: uses detect-secrets v1.4 (IBM, MIT license) as reference for AWSKeyDetector pattern design.
+Source citation: Liskov (1987) "Data Abstraction and Hierarchy" OOPSLA '87 — used in coding-standards.md §1.3.
+Source citation: Dijkstra (1968) "Go To Statement Considered Harmful" CACM 11(3) — cited in local-reasoning rules.
+Version bump: pii-rules.json schema version 2 adds per-rule strict_only flag to replace confidence:"low" convention.
+Locale note: phone number format +44 20 7946 0958 is a UK number (020 7946 0958 reserved for drama per Ofcom). Not NANP.
+The string "xox" appearing in Slack documentation refers to token type prefixes — the full format is xoxb-... (bot token).
+Stripe documentation example: sk_test_ prefix indicates a test-mode key; sk_live_ indicates production. Do not log either.
+GCP service account JSON contains a type discriminator field whose value is service_account — the scanner fires on that JSON structure. Memory entries must not include GCP service account JSON.
+The Azure AccountKey field in a connection string is 86 base64 chars + ==. The scanner checks entropy > 3.5 bits/char.
+Log message: "scope_lock acquired in 2ms for /project/billing. Writer: agent-curie-001. Lock file: /tmp/.mem_lock_billing."
+Test assertion: expect(scan_result).toBe("pass") for all TN fixtures in the expanded corpus.
+Observation: FPR on 100 TN developer memory fixtures is 0% after tightening email and SSN regexes.
+Observation: FNR on 11 TP fixtures is 0% after adding AKIA-format and JWT TP cases.
+The word "token" appears frequently in developer notes (auth_token parameter, token window, tokenizer) — context anchoring is needed to avoid FP.
+Refactoring note: extracted _shannon_entropy helper into shared utility module. No behavioral change; entropy threshold unchanged at 4.5 bits/char.
+The string api_key = "YOUR_API_KEY_HERE" is a placeholder with entropy ~2.1 bits/char — entropy gate correctly suppresses block.
+The string auth_token: "<INSERT_TOKEN>" contains <> delimiters — entropy gate suppresses block (entropy ~3.2 bits/char for the angle-bracket content).
+Memory entry format: { "id": "uuid", "scope": "/project/pii", "content": "...", "tags": ["pii","calibration"] }
+The hash bcrypt$2b$12$... is a password hash digest, not a plaintext secret — but it should not be stored in memory entries.
+Entropy of 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' (40 chars, 1 distinct char) = 0 bits/char. Entropy gate blocks nothing here.
+Entropy of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcd' (40 chars, uniform) = ~5.2 bits/char. Gate would trigger for key-named variables.
+The regex word boundary \\b is used in email tightening to prevent matching partial tokens like foo@bar inside URL paths.
+Negative lookahead (?!000|666|9\\d\\d) in SSN regex excludes unassigned area numbers per SSA Publication No. 05-10002.
+NANPA 555-01xx range (555-0100 through 555-0199) is reserved for fictional use per ATIS-0300114 (North American Numbering Plan Administration).
+The test phone 555-0100 is reserved fictional; scanner must not fire on it (FP) when encountered in developer notes.
+URL fragment: /api/v1/memories?scope=%2Fproject%2Fbilling&limit=50 — URL encoding, not a secret.
+The environment variable AWS_ACCESS_KEY_ID is the name of a variable, not a value. References to the name alone must pass.
+Documentation string: "Set GITHUB_TOKEN to your GitHub PAT value in .env" — the word GITHUB_TOKEN here is a variable name reference.
+The pattern AKIA[A-Z0-9]{16} describes the AWS key ID format — it is a regex pattern in documentation, not an actual key.
+Codebase grep: grep -r "api_key\|secret" agents/ returned 0 hardcoded secret values (all references are to variable names).
+Fuzz result: no input in the 10,000-mutation corpus triggered a false block on benign agent memory content (2026-04-23).
+Ablation: removing the context anchor from generic_api_key regex caused 4 FP on developer memory content (variable name assignments).
+Ablation result: raising entropy threshold from 3.5 to 4.5 eliminated all generic_api_key FP on developer memory TN corpus.
