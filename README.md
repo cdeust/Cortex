@@ -53,18 +53,14 @@ This handles everything: PostgreSQL + pgvector installation, database creation, 
 After install, verify everything is wired correctly:
 
 ```bash
-uvx --python 3.13 --from 'neuro-cortex-memory[postgresql]' cortex-doctor
+python3 -m mcp_server.doctor
 ```
 
-Eight checks in two seconds: Python, uvx, PG driver, DATABASE_URL, PG connection, extensions, writable methodology dir, I10 pool-capacity invariant. Exit 0 means ready.
+(or, from inside the marketplace clone: `python3 ~/.claude/plugins/cache/cortex-plugins/cortex/*/mcp_server/doctor.py`)
+
+Seven checks in two seconds: Python, PG driver, DATABASE_URL, PG connection, extensions, writable methodology dir, I10 pool-capacity invariant. Exit 0 means ready.
 
 > **Using Claude Cowork?** Install [Cortex-cowork](https://github.com/cdeust/Cortex-cowork) instead — uses SQLite, no PostgreSQL required.
-
-Or add as a standalone MCP server (no hooks, no skills — just the 33 tools):
-
-```bash
-claude mcp add cortex -- uvx --from "neuro-cortex-memory[postgresql]" neuro-cortex-memory
-```
 
 <details>
 <summary><strong>More options</strong> (Clone, Docker, Manual setup)</summary>

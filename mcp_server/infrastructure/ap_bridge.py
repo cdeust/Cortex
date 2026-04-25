@@ -138,14 +138,16 @@ def _resolve_command() -> dict | None:
       1. ``CORTEX_AP_COMMAND`` env var — full shell-free invocation
          spec (JSON: ``{"command": "...", "args": [...]}``).
       2. Methodology bin symlink — ``~/.claude/methodology/bin/mcp-server``
-         set up by ``cortex setup-project``; basename ``mcp-server``
-         matches the MCPClient allowlist.
-      3. Plugin-cache probe — ``automatised-pipeline`` installed as
-         a sibling plugin exposes its MCP entrypoint via
-         ``~/.claude/plugins/cache/<mp>/automatised-pipeline/*``.
-      4. ``uvx`` fallback for when upstream publishes the package
-         (currently a no-op until upstream ships a uvx-runnable
-         entrypoint).
+         set up by Cortex's silent installer (pipeline_installer.py).
+         Basename ``mcp-server`` matches the MCPClient allowlist.
+      3. Plugin-cache probe — ``automatised-pipeline`` installed as a
+         sibling marketplace plugin exposes its MCP entrypoint via
+         ``~/.claude/plugins/cache/<marketplace>/automatised-pipeline/
+         */bin/*``.
+
+    Returns None when no AP install can be discovered; callers treat
+    that as graceful degradation (ingest_codebase fails with the
+    standard McpConnectionError).
     """
     raw = os.environ.get("CORTEX_AP_COMMAND")
     if raw:
@@ -171,12 +173,7 @@ def _resolve_command() -> dict | None:
     for root in (home / ".claude/plugins/cache").glob("*/automatised-pipeline/*/bin/*"):
         if root.is_file() and os.access(root, os.X_OK):
             return {"command": "node", "args": [str(root)]}
-    # uvx fallback (placeholder — requires upstream to publish a
-    # uvx-runnable package; tracked upstream as packaging work).
-    return {
-        "command": "uvx",
-        "args": ["--from", "automatised-pipeline", "automatised-pipeline"],
-    }
+    return None
 
 
 class APBridge:
@@ -227,11 +224,10 @@ class APBridge:
                 self._client = MCPClient(cfg)
                 # AP's binary is not in the default allowlist.
                 # ``ai-architect-mcp`` is the crate name in
-                # automatised-pipeline; the others are fallbacks for
-                # the plugin-cache / uvx resolution paths.
+                # automatised-pipeline; ``node`` is for the
+                # plugin-cache resolution path.
                 self._client._extra_allowed_commands = {
                     "node",
-                    "uvx",
                     "automatised-pipeline",
                     "ai-architect-mcp",
                 }

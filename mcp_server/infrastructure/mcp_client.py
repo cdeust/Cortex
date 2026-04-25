@@ -64,8 +64,6 @@ class MCPClient:
             "npx",
             "python",
             "python3",
-            "uvx",
-            "uv",
             "cortex",
             "mcp-server",
         }

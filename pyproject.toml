@@ -32,9 +32,15 @@ Homepage = "https://github.com/cdeust/Cortex"
 Repository = "https://github.com/cdeust/Cortex"
 
 [project.scripts]
-neuro-cortex-memory = "mcp_server.__main__:main"
+# Cortex's only supported install path is Anthropic's plugin marketplace
+# (`/plugin install cortex@cortex-plugins`). The marketplace clones this
+# repo into ~/.claude/plugins/cache/cortex-plugins/cortex/<version>/ and
+# Claude Code spawns the MCP server + hooks via scripts/launcher.py
+# (see .mcp.json + .claude-plugin/plugin.json). Cortex is NOT published
+# to PyPI and uvx-based invocation is NOT supported.
+# The single console script below is for local CLI use of the doctor
+# from a checkout (not from a PyPI install).
 cortex-doctor = "mcp_server.doctor:run"
-cortex-hook = "mcp_server.hook_runner:run"
 
 [project.optional-dependencies]
 postgresql = [

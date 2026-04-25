@@ -108,7 +108,11 @@ def _verify_and_extract(tar_path: str, expected_sha: str, dest_dir: str) -> Opti
             if not str(target).startswith(str(dest) + os.sep) and target != dest:
                 return None
             if member.isfile() and Path(member.name).name == "ai-architect-mcp":
-                tar.extract(member, dest_dir)
+                # filter="data" enforces safe extraction (no symlinks
+                # outside dest, no special files, no setuid bits) —
+                # required default in Python 3.14, opt-in earlier.
+                # PEP 706 / CVE-2007-4559.
+                tar.extract(member, dest_dir, filter="data")
                 extracted = dest / member.name
                 os.chmod(extracted, 0o755)
                 return str(extracted)

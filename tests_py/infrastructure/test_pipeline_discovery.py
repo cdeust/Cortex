@@ -259,6 +259,14 @@ class TestInstallPipeline:
         for k in pipeline_installer._CI_ENV_VARS:
             monkeypatch.delenv(k, raising=False)
         monkeypatch.setenv("CORTEX_AUTO_INSTALL_RUST", "0")
+        # Disable the GitHub-Releases fast-path so the missing-toolchain
+        # branch is reachable. (Without this, the test pulls the real
+        # release binary and short-circuits at installed_prebuilt.)
+        monkeypatch.setattr(
+            pipeline_installer,
+            "try_install_prebuilt",
+            lambda *a, **kw: {"action": "prebuilt_disabled"},
+        )
         # No cargo on PATH and no ~/.cargo/bin — should fall through
         # to missing_toolchain rather than short-circuit.
         monkeypatch.setattr(pipeline_installer.shutil, "which", lambda n: None)
@@ -313,6 +321,13 @@ class TestInstallPipeline:
             tmp_path / "nonexistent" / "mcp-server",
         )
         from mcp_server.infrastructure import pipeline_install_rust
+        # Disable the GitHub-Releases fast-path so the missing-toolchain
+        # branch is reachable.
+        monkeypatch.setattr(
+            pipeline_installer,
+            "try_install_prebuilt",
+            lambda *a, **kw: {"action": "prebuilt_disabled"},
+        )
         monkeypatch.setattr(pipeline_installer.shutil, "which", lambda n: None)
         monkeypatch.setattr(pipeline_install_rust.shutil, "which", lambda n: None)
         monkeypatch.setattr(
