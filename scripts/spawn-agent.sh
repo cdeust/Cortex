@@ -65,6 +65,13 @@ git -C "$TARGET_REPO" worktree add -b "$BRANCH" "$WORKTREE"
 cd "$WORKTREE"
 
 echo "→ launching claude as '$AGENT' (permissions bypassed)"
+
+# Set MEMORY_AGENT_ID so memory-tool.sh audit log and ACL use the correct
+# identity. AGENT is the slug (basename of the agent file without .md).
+# Identity MUST come from the spawn site, not the subagent: the subagent
+# cannot forge its own id.
+export MEMORY_AGENT_ID="$AGENT"
+
 if [[ -n "$TASK" ]]; then
   exec claude \
     --permission-mode bypassPermissions \

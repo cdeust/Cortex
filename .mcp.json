@@ -8,6 +8,13 @@
         "CORTEX_RUNTIME": "",
         "CORTEX_MEMORY_AP_ENABLED": "1"
       }
+    },
+    "memory": {
+      "command": "python3",
+      "args": [".claude/tools/memory-mcp-server.py"],
+      "env": {
+        "MEMORY_AGENT_ID": "${MEMORY_AGENT_ID:-unknown}"
+      }
     }
   }
 }
