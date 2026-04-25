@@ -1,26 +1,30 @@
 {
   "_comment": "PII/secret detection rule table for memory-tool.sh pii_scan helper.",
   "_sources": {
-    "aws_access_key":      "AWS docs: access key IDs begin AKIA, ABIA, ACCA, ASIA + 16 uppercase alphanum. https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_identifiers.html",
-    "aws_secret_key":      "40-char base64 value following AWS_SECRET patterns; pattern from detect-secrets v1.4 (IBM/detect-secrets, MIT license) — class AWSKeyDetector.",
-    "github_pat":          "GitHub PAT format: ghp_|gho_|ghu_|ghs_|ghr_ prefix + 36 alphanum. https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-to-github#githubs-token-formats",
-    "generic_api_key":     "Heuristic: assignment of a 32–64 char [A-Za-z0-9_/+=\\-] string to a key-named variable. Derived from detect-secrets HexHighEntropyString + KeywordDetector patterns.",
-    "private_key_header":  "PEM block header per RFC 7468 (IETF). https://www.rfc-editor.org/rfc/rfc7468",
-    "jwt":                 "RFC 7519 §3.1: three base64url segments separated by dots. https://www.rfc-editor.org/rfc/rfc7519",
-    "ssh_private_key":     "OpenSSH private key header per https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.key",
+    "aws_access_key": "AWS docs: access key IDs begin AKIA, ABIA, ACCA, ASIA + 16 uppercase alphanum. https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_identifiers.html",
+    "aws_secret_key": "40-char base64 value following AWS_SECRET patterns; pattern from detect-secrets v1.4 (IBM/detect-secrets, MIT license) \u2014 class AWSKeyDetector.",
+    "github_pat": "GitHub PAT format: ghp_|gho_|ghu_|ghs_|ghr_ prefix + 36 alphanum. https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-to-github#githubs-token-formats",
+    "generic_api_key": "Heuristic: assignment of a 32\u201364 char [A-Za-z0-9_/+=\\-] string to a key-named variable. Derived from detect-secrets HexHighEntropyString + KeywordDetector patterns.",
+    "private_key_header": "PEM block header per RFC 7468 (IETF). https://www.rfc-editor.org/rfc/rfc7468",
+    "jwt": "RFC 7519 \u00a73.1: three base64url segments separated by dots. https://www.rfc-editor.org/rfc/rfc7519",
+    "ssh_private_key": "OpenSSH private key header per https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.key",
     "gcp_service_account": "GCP service-account JSON key always contains type=service_account + private_key fields. https://cloud.google.com/iam/docs/creating-managing-service-account-keys",
-    "azure_connection_str":"Azure Storage connection string format: AccountName=...;AccountKey=<86-char base64>=. https://learn.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string",
-    "email_address":       "RFC 5321 §2.3.11 local-part@domain; simplified to [\\w.+-]+@[\\w-]+\\.[\\w.]{2,}. https://www.rfc-editor.org/rfc/rfc5321",
-    "us_ssn":              "SSN format per US Social Security Administration: NNN-NN-NNNN where first segment != 000|666|9xx. Simplified regex for false-negative reduction.",
-    "us_phone":            "NANP format per https://www.nanpa.com — optional +1 country code, various delimiters.",
-    "slack_token":         "Slack API token prefixes xoxb-|xoxp-|xoxs-|xoxo-. https://api.slack.com/authentication/token-types",
-    "stripe_key":          "Stripe key prefixes sk_live_|pk_live_|sk_test_|pk_test_. https://stripe.com/docs/keys"
+    "azure_connection_str": "Azure Storage connection string format: AccountName=...;AccountKey=<86-char base64>=. https://learn.microsoft.com/en-us/azure/storage/common/storage-configure-connection-string",
+    "email_address": "RFC 5321 \u00a72.3.11 local-part@domain; simplified to [\\w.+-]+@[\\w-]+\\.[\\w.]{2,}. https://www.rfc-editor.org/rfc/rfc5321",
+    "us_ssn": "SSN format per US Social Security Administration: NNN-NN-NNNN where first segment != 000|666|9xx. Simplified regex for false-negative reduction.",
+    "us_phone": "NANP format per https://www.nanpa.com \u2014 optional +1 country code, various delimiters.",
+    "slack_token": "Slack API token prefixes xoxb-|xoxp-|xoxs-|xoxo-. https://api.slack.com/authentication/token-types",
+    "stripe_key": "Stripe key prefixes sk_live_|pk_live_|sk_test_|pk_test_. https://stripe.com/docs/keys"
   },
   "_entropy_threshold": {
     "value": 3.5,
     "unit": "bits/char (Shannon H = -sum p_i log2 p_i over character histogram)",
-    "source": "Cornwell, T. (2019). 'Detecting secrets in source code.' trufflesecurity/trufflehog design doc; also: Shannon, C.E. (1948). 'A Mathematical Theory of Communication.' Bell System Technical Journal 27(3), 379-423. Threshold of 3.5 bits/char is the trufflehog v2 default for high-confidence secret strings, chosen empirically to exclude placeholder strings (entropy ~1.5–2.5) while catching real keys (entropy ~4.5–6.0). NOTE: generic_api_key uses a per-rule override of 4.5 bits/char (trufflehog v3 calibration) — see rule entry.",
-    "applies_to_classes": ["aws_secret_key", "azure_connection_str", "gcp_service_account"]
+    "source": "Cornwell, T. (2019). 'Detecting secrets in source code.' trufflesecurity/trufflehog design doc; also: Shannon, C.E. (1948). 'A Mathematical Theory of Communication.' Bell System Technical Journal 27(3), 379-423. Threshold of 3.5 bits/char is the trufflehog v2 default for high-confidence secret strings, chosen empirically to exclude placeholder strings (entropy ~1.5\u20132.5) while catching real keys (entropy ~4.5\u20136.0). NOTE: generic_api_key uses a per-rule override of 4.5 bits/char (trufflehog v3 calibration) \u2014 see rule entry.",
+    "applies_to_classes": [
+      "aws_secret_key",
+      "azure_connection_str",
+      "gcp_service_account"
+    ]
   },
   "rules": [
     {
@@ -60,7 +64,7 @@
     },
     {
       "id": "jwt",
-      "description": "JSON Web Token (three base64url segments, RFC 7519 §3.1)",
+      "description": "JSON Web Token (three base64url segments, RFC 7519 \u00a73.1)",
       "pattern": "eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_/+=\\-]{10,}",
       "confidence": "high",
       "entropy_check": false
@@ -75,7 +79,7 @@
     {
       "id": "stripe_key",
       "description": "Stripe live or test key",
-      "pattern": "(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{20,}",
+      "pattern": "(?:FIXTURE_)?(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{20,}",
       "confidence": "high",
       "entropy_check": false
     },
@@ -104,7 +108,7 @@
     },
     {
       "id": "email_address",
-      "description": "Email address per RFC 5321 (simplified). Path Y: added \\b word boundaries on both sides to prevent partial-token matches inside URL paths, import statements, or variable names that contain @ as a non-email separator. Local-part length cap 1-64 per RFC 5321 §4.5.3.1. TLD 2+ alphabetic chars. Stays low-confidence (strict-only) because developer notes legitimately reference email addresses in documentation and example configs. Source: RFC 5321 §2.3.11.",
+      "description": "Email address per RFC 5321 (simplified). Path Y: added \\b word boundaries on both sides to prevent partial-token matches inside URL paths, import statements, or variable names that contain @ as a non-email separator. Local-part length cap 1-64 per RFC 5321 \u00a74.5.3.1. TLD 2+ alphabetic chars. Stays low-confidence (strict-only) because developer notes legitimately reference email addresses in documentation and example configs. Source: RFC 5321 \u00a72.3.11.",
       "pattern": "\\b[\\w.+\\-]{1,64}@[\\w\\-]{1,253}\\.[A-Za-z]{2,}\\b",
       "confidence": "low",
       "entropy_check": false,
@@ -112,7 +116,7 @@
     },
     {
       "id": "us_ssn",
-      "description": "US Social Security Number NNN-NN-NNNN. Path Y: added negative lookahead for 123-45-6789 (universally known invalid test pattern used in SSN format documentation — SSA Publication No. 05-10002). Existing lookaheads already exclude 000/666/9xx area codes per SSA assignment rules. Demoted to strict-only (Path Z) because NNN-NN-NNNN patterns appear in developer notes as benchmark identifiers, version triplets formatted with dashes, and test fixture labels. FPR on 100 TN developer memory fixtures was >5% at medium confidence.",
+      "description": "US Social Security Number NNN-NN-NNNN. Path Y: added negative lookahead for 123-45-6789 (universally known invalid test pattern used in SSN format documentation \u2014 SSA Publication No. 05-10002). Existing lookaheads already exclude 000/666/9xx area codes per SSA assignment rules. Demoted to strict-only (Path Z) because NNN-NN-NNNN patterns appear in developer notes as benchmark identifiers, version triplets formatted with dashes, and test fixture labels. FPR on 100 TN developer memory fixtures was >5% at medium confidence.",
       "pattern": "(?<![\\d])(?!000|666|9\\d\\d)(?!123-45-6789)\\d{3}-(?!00)\\d{2}-(?!0000)\\d{4}(?![\\d])",
       "confidence": "low",
       "entropy_check": false,

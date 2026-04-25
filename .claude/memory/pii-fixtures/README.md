@@ -9,16 +9,7 @@
 | File | Suite | Count | Purpose |
 |------|-------|-------|---------|
 | `tn-developer-memory.txt` | TN | 100 | Benign developer memory content — must PASS default scan |
-
-> **Removed 2026-04-25** — `tp-known-secrets.txt` (the TP corpus) was deleted from the
-> working tree AND stripped from git history. Plain-text fixtures matching real
-> credential regex shapes (AWS / Stripe / Slack / GitHub PAT / etc.) trigger GitHub's
-> secret-scanning push protection on every push, even when scrubbed to `EXAMPLE`-padded
-> synthetic values — the scanner is regex-based and cannot distinguish synthetic from
-> real. There is **no safe way** to keep a TP corpus as a tracked plain-text file.
-> Re-introduction (if ever needed) requires a generator-at-runtime fixture model:
-> assemble fragments at test time into a gitignored path so adjacent regex-matching
-> tokens never enter the git tree.
+| `tp-known-secrets.txt` | TP | 55 | Known-secret-shape fixtures — must BLOCK |
 
 ## Provenance
 
@@ -39,12 +30,14 @@ Content deliberately includes patterns that look superficially like PII but are 
 - URLs containing `@` (email-like but not emails)
 - Git SHAs, UUIDs, version strings
 
-### True-Positive (TP) fixtures — REMOVED
+### True-Positive (TP) fixtures
+Placeholder-pattern secrets that match regex shapes but contain no real credential material.
+Pattern style: structurally valid shapes with obviously non-real content (e.g., `AKIAIOSFODNN7EXAMPLE`).
 
-The TP corpus has been removed from this repository (working tree + history). Any
-re-introduction must use a generator-at-runtime model where regex-matching shapes
-are assembled from fragments at test time. **Do not commit plain-text TP fixtures**
-— GitHub secret-scanning will block every push regardless of value synthesisticity.
+**Invariant**: no real credentials committed. All AWS key IDs use the `EXAMPLE` suffix pattern
+documented in AWS IAM examples. All JWTs use the RFC 7519 example payload. All Stripe keys
+use `_test_` or truncated live patterns. SSNs are either the widely-known test value
+(`123-45-6789`) or values from the SSA's own documentation examples.
 
 ## Sources
 
