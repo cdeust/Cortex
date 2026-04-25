@@ -36,7 +36,9 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
-_RELEASES_URL = "https://api.github.com/repos/cdeust/automatised-pipeline/releases/latest"
+_RELEASES_URL = (
+    "https://api.github.com/repos/cdeust/automatised-pipeline/releases/latest"
+)
 _REQUEST_TIMEOUT = 30  # seconds
 _DISABLE_ENV = "CORTEX_DISABLE_PREBUILT"
 
@@ -46,7 +48,12 @@ def _platform_tag() -> Optional[str]:
     sys = platform.system().lower()
     mach = platform.machine().lower()
     os_tag = {"darwin": "macos", "linux": "linux"}.get(sys)
-    arch_tag = {"x86_64": "x86_64", "amd64": "x86_64", "arm64": "aarch64", "aarch64": "aarch64"}.get(mach)
+    arch_tag = {
+        "x86_64": "x86_64",
+        "amd64": "x86_64",
+        "arm64": "aarch64",
+        "aarch64": "aarch64",
+    }.get(mach)
     if not os_tag or not arch_tag:
         return None
     return f"{os_tag}-{arch_tag}"
@@ -88,7 +95,9 @@ def _find_assets(release: dict, tag: str) -> Optional[tuple[str, str]]:
     return None
 
 
-def _verify_and_extract(tar_path: str, expected_sha: str, dest_dir: str) -> Optional[str]:
+def _verify_and_extract(
+    tar_path: str, expected_sha: str, dest_dir: str
+) -> Optional[str]:
     """Verify SHA256, extract ``ai-architect-mcp`` to dest_dir, return path.
 
     Refuses tar entries that escape dest_dir (path-traversal guard).
@@ -158,11 +167,17 @@ def try_install_prebuilt(symlink_dest: Path) -> dict:
         digest_text = sha_bytes.decode("utf-8", errors="replace").strip()
         expected_sha = digest_text.split()[0] if digest_text else ""
         if len(expected_sha) != 64:
-            return {"action": "prebuilt_unavailable", "detail": "malformed sha256 manifest"}
+            return {
+                "action": "prebuilt_unavailable",
+                "detail": "malformed sha256 manifest",
+            }
 
         binary = _verify_and_extract(str(tar_path), expected_sha, str(work))
         if not binary:
-            return {"action": "prebuilt_unavailable", "detail": "hash mismatch or no binary in archive"}
+            return {
+                "action": "prebuilt_unavailable",
+                "detail": "hash mismatch or no binary in archive",
+            }
 
         # Move the verified binary into the methodology bin dir under a
         # versioned name so subsequent fast-path installs don't clash.

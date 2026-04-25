@@ -27,7 +27,6 @@ import hashlib
 import os
 import shlex
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -114,7 +113,11 @@ def install_rust_toolchain() -> dict:
     if not curl:
         return {"action": "rust_curl_missing"}
 
-    pin_disabled = os.environ.get(_DISABLE_HASH_PIN_ENV, "").strip() in {"0", "false", "no"}
+    pin_disabled = os.environ.get(_DISABLE_HASH_PIN_ENV, "").strip() in {
+        "0",
+        "false",
+        "no",
+    }
     pinned_hash = None if pin_disabled else _read_pinned_hash()
 
     if pinned_hash:
@@ -139,7 +142,16 @@ def _install_with_hash_pin(curl: str, pinned_hash: str) -> dict:
         tmp_path = tmp.name
     try:
         rc, tail = _run_quiet(
-            [curl, "--proto", "=https", "--tlsv1.2", "-sSf", "-o", tmp_path, _RUSTUP_URL],
+            [
+                curl,
+                "--proto",
+                "=https",
+                "--tlsv1.2",
+                "-sSf",
+                "-o",
+                tmp_path,
+                _RUSTUP_URL,
+            ],
             timeout=120,
         )
         if rc != 0:

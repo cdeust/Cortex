@@ -147,17 +147,24 @@ class TestEnsureConnection:
         purged so the install path can re-run instead of silently
         breaking ingest_codebase."""
         config_path = tmp_path / "mcp-connections.json"
-        config_path.write_text(json.dumps({
-            "servers": {
-                "codebase": {"command": "/nonexistent/mcp", "args": []},
-                "other": {"command": "node", "args": ["/x.js"]},
-            }
-        }))
+        config_path.write_text(
+            json.dumps(
+                {
+                    "servers": {
+                        "codebase": {"command": "/nonexistent/mcp", "args": []},
+                        "other": {"command": "node", "args": ["/x.js"]},
+                    }
+                }
+            )
+        )
         monkeypatch.setattr(pipeline_discovery, "MCP_CONNECTIONS_PATH", config_path)
         # Simulate fresh discovery finding nothing (no install attempted
         # because we monkeypatch install_pipeline import).
-        monkeypatch.setattr(pipeline_discovery, "discover_pipeline_command", lambda: None)
+        monkeypatch.setattr(
+            pipeline_discovery, "discover_pipeline_command", lambda: None
+        )
         from mcp_server.infrastructure import pipeline_installer
+
         monkeypatch.setattr(
             pipeline_installer,
             "install_pipeline",
@@ -321,6 +328,7 @@ class TestInstallPipeline:
             tmp_path / "nonexistent" / "mcp-server",
         )
         from mcp_server.infrastructure import pipeline_install_rust
+
         # Disable the GitHub-Releases fast-path so the missing-toolchain
         # branch is reachable.
         monkeypatch.setattr(
@@ -384,7 +392,9 @@ class TestInstallPipeline:
         from mcp_server.infrastructure import pipeline_install_release
 
         monkeypatch.delenv("CORTEX_DISABLE_PREBUILT", raising=False)
-        monkeypatch.setattr(pipeline_install_release.platform, "system", lambda: "OpenBSD")
+        monkeypatch.setattr(
+            pipeline_install_release.platform, "system", lambda: "OpenBSD"
+        )
         result = pipeline_install_release.try_install_prebuilt(Path("/tmp/symlink"))
         assert result["action"] == "prebuilt_unsupported_platform"
 
@@ -432,7 +442,9 @@ class TestInstallPipeline:
 
         config_path = tmp_path / "mcp-connections.json"
         monkeypatch.setattr(pipeline_discovery, "MCP_CONNECTIONS_PATH", config_path)
-        monkeypatch.setattr(pipeline_discovery, "discover_pipeline_command", lambda: None)
+        monkeypatch.setattr(
+            pipeline_discovery, "discover_pipeline_command", lambda: None
+        )
         monkeypatch.setattr(
             pipeline_installer,
             "install_pipeline",

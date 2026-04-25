@@ -74,7 +74,9 @@ def _is_ci_environment() -> bool:
     return any(os.environ.get(name) for name in _CI_ENV_VARS)
 
 
-def install_pipeline(force_rebuild: bool = False, git_url: Optional[str] = None) -> dict:
+def install_pipeline(
+    force_rebuild: bool = False, git_url: Optional[str] = None
+) -> dict:
     """Best-effort silent install of the upstream pipeline binary.
 
     Returns audit dict with one of these actions:
@@ -109,7 +111,9 @@ def _install_locked(force_rebuild: bool, git_url: Optional[str]) -> dict:
     # falls through to the source-build path below.
     if not force_rebuild:
         prebuilt = try_install_prebuilt(_INSTALL_SYMLINK)
-        if prebuilt.get("action") == "installed_prebuilt" and _binary_is_usable(_INSTALL_SYMLINK):
+        if prebuilt.get("action") == "installed_prebuilt" and _binary_is_usable(
+            _INSTALL_SYMLINK
+        ):
             return prebuilt
 
     cargo = resolve_cargo()
@@ -156,7 +160,9 @@ def _install_locked(force_rebuild: bool, git_url: Optional[str]) -> dict:
     return _swap_symlink(binary)
 
 
-def _ensure_source(src: Path, url: str, git: str, force_rebuild: bool) -> Optional[dict]:
+def _ensure_source(
+    src: Path, url: str, git: str, force_rebuild: bool
+) -> Optional[dict]:
     """Clone or refresh the source tree. Return None on success, or
     a structured failure dict."""
     # Validate any existing checkout. A half-cloned dir leaves
@@ -166,14 +172,19 @@ def _ensure_source(src: Path, url: str, git: str, force_rebuild: bool) -> Option
         try:
             _rmtree_quiet(src)
         except OSError as exc:
-            return {"action": "clone_failed", "detail": f"stale partial src cleanup: {exc}"}
+            return {
+                "action": "clone_failed",
+                "detail": f"stale partial src cleanup: {exc}",
+            }
 
     if not src.exists():
         # Clone into a .partial sibling, atomic-rename on success.
         partial = src.with_name(src.name + ".partial")
         if partial.exists():
             _rmtree_quiet(partial)
-        rc, tail = _run_quiet([git, "clone", "--depth=1", url, str(partial)], timeout=1800)
+        rc, tail = _run_quiet(
+            [git, "clone", "--depth=1", url, str(partial)], timeout=1800
+        )
         if rc != 0 or not (partial / "Cargo.toml").is_file():
             _rmtree_quiet(partial)
             return {"action": "clone_failed", "detail": tail}

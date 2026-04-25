@@ -57,7 +57,9 @@ _BUILT_RELATIVE = ("target/release/ai-architect-mcp",)
 
 # Where the silent installer clones and builds the upstream source.
 # Living next to other methodology artefacts means cleanup is one rm -rf.
-_INSTALL_SRC_DIR = Path.home() / ".claude" / "methodology" / "src" / "automatised-pipeline"
+_INSTALL_SRC_DIR = (
+    Path.home() / ".claude" / "methodology" / "src" / "automatised-pipeline"
+)
 _INSTALL_BIN_DIR = Path.home() / ".claude" / "methodology" / "bin"
 _INSTALL_SYMLINK = _INSTALL_BIN_DIR / "mcp-server"
 
@@ -112,7 +114,11 @@ def ensure_pipeline_connection() -> dict:
         # may have rm-rf'd the install dir, deleted the symlink, or
         # moved the source repo. Stale entries silently break ingest;
         # purge them so the install path can re-run.
-        if configured_cmd and Path(configured_cmd).exists() and os.access(configured_cmd, os.X_OK):
+        if (
+            configured_cmd
+            and Path(configured_cmd).exists()
+            and os.access(configured_cmd, os.X_OK)
+        ):
             return {
                 "action": "already_configured",
                 "path": str(path),
@@ -126,7 +132,9 @@ def ensure_pipeline_connection() -> dict:
         try:
             write_json(path, existing)
         except Exception as exc:
-            logger.warning("Failed to purge stale codebase entry from %s: %s", path, exc)
+            logger.warning(
+                "Failed to purge stale codebase entry from %s: %s", path, exc
+            )
 
     # Auto-install path. If discovery fails, attempt a silent
     # git-clone + cargo build (and rustup bootstrap if cargo missing)
