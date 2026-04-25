@@ -216,9 +216,18 @@ def discover_files(project_filter: str, max_files: int) -> list[tuple[Path, str]
 
 
 def slug_to_domain(slug: str) -> str:
-    """Convert a project slug like '-Users-you-project-name' to a domain hint."""
-    parts = [p for p in slug.split("-") if p and len(p) > 2]
-    return parts[-1] if parts else slug[:20]
+    """Convert a project slug like '-Users-you-project-name' to a canonical domain.
+
+    Delegates to ``shared.domain_mapping.resolve_domain`` which handles
+    git-derived canonicalisation, worktree-suffix stripping, and fragment
+    matching. Previously this took ``parts[-1]`` of the slug, which for a
+    slug like ``-Users-...-worktrees-pipeline-academic-research-…-body``
+    returned ``"body"`` — every truncated slug tail polluted memory.domain
+    with a single noise word ("for", "via", "voice", "few", "large", …).
+    """
+    from mcp_server.shared.domain_mapping import resolve_domain
+
+    return resolve_domain(slug)
 
 
 # -- Concept linking --

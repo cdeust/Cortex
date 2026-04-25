@@ -32,6 +32,7 @@ from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.infrastructure.file_io import read_text_file
 from mcp_server.infrastructure import workflow_graph_source_jsonl as _jsonl
 from mcp_server.infrastructure import workflow_graph_source_pg as _pg
+from mcp_server.shared.domain_mapping import resolve_cwd, resolve_domain
 from mcp_server.shared.project_ids import (
     cwd_to_project_id,
     domain_id_from_label,
@@ -57,14 +58,20 @@ def _first_line(text: str) -> str:
 def _domain_from_directory(directory: str | None) -> str | None:
     if not directory:
         return None
+    canonical = resolve_cwd(directory) or resolve_domain(directory)
+    if canonical and not canonical.startswith("-"):
+        return canonical
     label = project_id_to_label(cwd_to_project_id(directory))
     return domain_id_from_label(label) or None
 
 
 def _domain_from_project_dir(project_dir: str) -> str:
-    """Claude's mangled project dir name → kebab-case domain id."""
+    """Claude's mangled project dir name → canonical kebab-case domain id."""
     if not project_dir:
         return ""
+    canonical = resolve_domain(project_dir)
+    if canonical and not canonical.startswith("-"):
+        return canonical
     return domain_id_from_label(project_id_to_label(project_dir))
 
 

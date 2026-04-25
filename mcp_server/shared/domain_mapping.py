@@ -324,7 +324,27 @@ def resolve_domain(input_str: str) -> str:
     if best_frag:
         return best_frag
 
-    # 5. No match — return lowercased as-is
+    # 5. No match. For raw slugs (e.g. "-Users-cdeust-Developments-jarvis")
+    # returning the whole path-encoded string pollutes domain ids; strip the
+    # canonical "-Users-…-Developments-" / "-Documents-" prefix and return
+    # the trailing meaningful segment instead.
+    if clean.startswith("-"):
+        stripped = lower
+        for prefix in (
+            "-users-cdeust-developments-",
+            "-users-cdeust-documents-",
+            "-users-cdeust-",
+        ):
+            if stripped.startswith(prefix):
+                stripped = stripped[len(prefix):]
+                break
+        # Strip worktree suffixes that survived (no slug match found above).
+        if "-worktrees-" in stripped:
+            stripped = stripped[: stripped.index("-worktrees-")]
+        # First hyphen-segment is the most meaningful tail (e.g. "jarvis"
+        # from "-Users-cdeust-Developments-jarvis"). Multi-segment tails
+        # (e.g. "ai-architect-prd-builder") collapse via earlier slug match.
+        return stripped.split("-", 1)[0] if stripped else lower
     return lower
 
 

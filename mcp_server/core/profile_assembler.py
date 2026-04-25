@@ -16,6 +16,7 @@ from mcp_server.core.persona_vector import build_persona_vector
 from mcp_server.core.sparse_dictionary import encode_session, learn_dictionary
 from mcp_server.core.style_classifier import classify_style
 from mcp_server.shared.categorizer import categorize_with_scores
+from mcp_server.shared.domain_mapping import resolve_domain
 from mcp_server.shared.project_ids import domain_id_from_label, project_id_to_label
 
 
@@ -30,9 +31,14 @@ def _build_project_domain_map(
             project_domains[proj] = domain_id
 
     for proj in by_project:
-        if proj not in project_domains:
-            label = project_id_to_label(proj)
-            project_domains[proj] = domain_id_from_label(label)
+        if proj in project_domains:
+            continue
+        canonical = resolve_domain(proj)
+        if canonical and not canonical.startswith("-"):
+            project_domains[proj] = canonical
+            continue
+        label = project_id_to_label(proj)
+        project_domains[proj] = domain_id_from_label(label)
 
     return project_domains
 
@@ -117,7 +123,15 @@ def _build_single_domain(
 
     data_quality = min(len(convs) / 10, 1.0)
     confidence = round(min(len(convs) / 50, 1.0) * data_quality * 100) / 100
-    label = project_id_to_label(next(iter(data["projects"])))
+    # When a canonical (git-derived) domain_id grouped multiple projects,
+    # the label should reflect that canonical name, not a random member's
+    # stripped path tail. Bare lower-case domain_ids (e.g. "ai-architect")
+    # title-case to a clean human label; otherwise fall back to the legacy
+    # per-project derivation for un-resolved single-project domains.
+    if domain_id and "-" in domain_id and not domain_id.startswith("-"):
+        label = domain_id.replace("-", " ").title()
+    else:
+        label = project_id_to_label(next(iter(data["projects"])))
 
     return {
         "id": domain_id,

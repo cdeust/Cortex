@@ -162,7 +162,24 @@ class WorkflowGraphBuilder:
             return GLOBAL_DOMAIN_ID
         if domain_id.startswith("domain:"):
             return domain_id
-        return NodeIdFactory.domain_id(domain_id)
+        # Canonicalise via the git-derived registry. This collapses
+        # worktree-path slugs (e.g. "…-worktrees-pipeline-…-body") and
+        # known aliases (subagents → zetetic-team-subagents,
+        # cowork → cortex) so the viz never emits a hub for free-text
+        # noise. Pure-noise leftovers from legacy backfills — single-word
+        # slug tails like "voice", "for", "via" — round-trip through
+        # ``resolve_domain`` unchanged, signalling "no canonical match";
+        # those are bucketed to GLOBAL_DOMAIN_ID rather than allowed to
+        # spawn an orphan hub with no real meaning.
+        from mcp_server.shared.domain_mapping import _build_registry, resolve_domain
+
+        resolved = resolve_domain(domain_id) or domain_id
+        if resolved.startswith("-"):
+            return GLOBAL_DOMAIN_ID
+        canonicals = set(_build_registry().name_to_canonical.values())
+        if resolved not in canonicals and "-" not in resolved:
+            return GLOBAL_DOMAIN_ID
+        return NodeIdFactory.domain_id(resolved)
 
     # ── Node constructors ─────────────────────────────────────────────
 
