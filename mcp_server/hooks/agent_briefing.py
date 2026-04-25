@@ -78,7 +78,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
+from pathlib import Path
 from typing import Any
 
 _LOG_PREFIX = "[cortex-agent-briefing]"
@@ -86,19 +88,62 @@ _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cort
 _MAX_MEMORIES = 3
 _MIN_HEAT = 0.2
 
-# Known specialist agents that benefit from briefing
-_SPECIALIST_AGENTS = {
-    "engineer",
-    "tester",
-    "reviewer",
-    "architect",
-    "dba",
-    "devops",
-    "frontend",
-    "security",
-    "researcher",
-    "ux",
-}
+# Fallback set used when ~/.claude/agents/ is missing (e.g., CI without install).
+_FALLBACK_AGENTS: frozenset[str] = frozenset({
+    "engineer", "tester", "reviewer", "architect", "dba", "devops",
+    "frontend", "security", "researcher", "ux",
+})
+
+# Matches `name: <slug>` or `name: "<slug>"` in agent-file YAML frontmatter.
+_YAML_NAME_RE = re.compile(r"^name:\s*['\"]?([A-Za-z0-9_.-]+)['\"]?\s*$", re.MULTILINE)
+
+
+def _parse_frontmatter_name(path: Path) -> str | None:
+    """Extract the `name:` field from an agent file's YAML frontmatter.
+
+    Reads up to 4 KB (frontmatter always fits) and regex-matches the first
+    top-level `name:` line. Returns None if the file is unreadable or has
+    no name field. No side effects.
+    """
+    try:
+        head = path.read_text(errors="ignore")[:4096]
+    except OSError:
+        return None
+    m = _YAML_NAME_RE.search(head)
+    return m.group(1).strip() if m else None
+
+
+def _load_specialist_agents() -> frozenset[str]:
+    """Dynamically load agent slugs from ~/.claude/agents/ at module import.
+
+    Scans ~/.claude/agents/*.md and ~/.claude/agents/genius/*.md, parses the
+    `name:` frontmatter field of each, and returns the frozen set. Falls back
+    to _FALLBACK_AGENTS if the directory is absent. Result is cached for the
+    process lifetime — agents added after import are not picked up until
+    restart (acceptable for a hook process).
+
+    Each zetetic agent declares `memory_scope:` in frontmatter; that scope
+    equals the name used as `agent_context` in Cortex memory rows. When the
+    /session:memory-sync drainer sets `agent_topic=<scope>`, the briefing
+    hook can filter by `agent_context = %s` and inject the right memories.
+    """
+    root = Path.home() / ".claude" / "agents"
+    if not root.is_dir():
+        return _FALLBACK_AGENTS
+    names: set[str] = set()
+    for pattern in ("*.md", "genius/*.md"):
+        for md in root.glob(pattern):
+            if md.name == "INDEX.md":
+                continue
+            name = _parse_frontmatter_name(md)
+            if name:
+                names.add(name)
+    return frozenset(names) if names else _FALLBACK_AGENTS
+
+
+# Known specialist agents that benefit from briefing — dynamic load from
+# ~/.claude/agents/ (116+ zetetic agents when installed).
+_SPECIALIST_AGENTS = _load_specialist_agents()
 
 
 def _log(msg: str) -> None:
