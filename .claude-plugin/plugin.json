@@ -1,7 +1,7 @@
 {
   "name": "cortex",
   "description": "Persistent memory for Claude Code — remembers across sessions automatically. Install and forget. Scientific retrieval backed by 41 published papers.",
-  "version": "3.14.2",
+  "version": "3.14.3",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"
@@ -10,17 +10,7 @@
   "repository": "https://github.com/cdeust/Cortex",
   "license": "MIT",
   "keywords": ["memory", "persistent", "mcp", "claude-code", "neuroscience", "agents"],
-  "mcpServers": {
-    "cortex": {
-      "command": "bash",
-      "args": ["-c", "PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server"],
-      "env": {
-        "DATABASE_URL": "postgresql://localhost:5432/cortex",
-        "CORTEX_RUNTIME": "",
-        "CORTEX_MEMORY_AP_ENABLED": "1"
-      }
-    }
-  },
+  "mcpServers": "./.mcp.json",
   "hooks": {
     "SessionStart": [
       {
