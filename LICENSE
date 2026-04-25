@@ -1,6 +1,22 @@
 MIT License
 
-Copyright (c) 2025 Clement Deust
+Cortex — a persistent memory engine for Claude Code built on computational
+neuroscience. Twenty biological mechanisms (rate-distortion forgetting,
+predictive-coding gating, retrieval-induced reconsolidation, pattern
+separation, sleep-cycle consolidation, emotional-valence weighting, and
+others) implemented over PostgreSQL + pgvector. Forty-seven MCP tools,
+nine automatic hooks, runs entirely on the user's machine. Forty-one
+academic citations across the cognitive-science and information-retrieval
+literature anchor the algorithms. Part of the ai-architect ecosystem
+(https://github.com/cdeust/zetetic-team-subagents,
+ https://github.com/cdeust/automatised-pipeline,
+ https://github.com/cdeust/prd-spec-generator).
+
+Copyright (c) 2025 Clément Deust
+
+This software is the independent work of Clément Deust. It was developed
+outside any employment relationship and is not affiliated with, endorsed
+by, or owned by any past or present employer.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -9,13 +25,22 @@ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+The neuroscience and information-retrieval algorithms encoded in this
+software are derived from published academic work cited in `docs/science.md`
+and inline in the source via `# source:` annotations (Friston on predictive
+coding, Anderson & Lebiere on rate-distortion forgetting, Nader et al. on
+retrieval-induced lability, McClelland et al. on consolidation, and others).
+The MIT license covers this implementation; it does not assert ownership
+over the underlying mechanisms, which remain attributable to their
+original authors and publications.
