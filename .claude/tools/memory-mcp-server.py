@@ -195,6 +195,7 @@ MEMORY_EXTENSIONS_TOOL = {
 
 # ── JSON-RPC 2.0 helpers ──────────────────────────────────────────────────────
 
+
 def _response(req_id, result):
     return {"jsonrpc": "2.0", "id": req_id, "result": result}
 
@@ -209,6 +210,7 @@ def write_msg(obj):
 
 
 # ── subprocess helper ────────────────────────────────────────────────────────
+
 
 def _inherit_env():
     """Build subprocess env: inherit everything, ensure MEMORY_AGENT_ID is set."""
@@ -256,6 +258,7 @@ def run_backend(args):
 
 
 # ── argument mapping: tool input → backend argv ──────────────────────────────
+
 
 def _map_memory(params):
     """Map memory_20250818 tool input dict → memory-tool.sh argv list."""
@@ -347,6 +350,7 @@ def _map_extensions(params):
 
 # ── tool_result builder ──────────────────────────────────────────────────────
 
+
 def _tool_result(text, is_error):
     result = {
         "content": [{"type": "text", "text": text}],
@@ -358,18 +362,25 @@ def _tool_result(text, is_error):
 
 # ── MCP method handlers ───────────────────────────────────────────────────────
 
+
 def handle_initialize(req_id, params):
-    return _response(req_id, {
-        "protocolVersion": PROTOCOL_VERSION,
-        "serverInfo": SERVER_INFO,
-        "capabilities": {"tools": {}},
-    })
+    return _response(
+        req_id,
+        {
+            "protocolVersion": PROTOCOL_VERSION,
+            "serverInfo": SERVER_INFO,
+            "capabilities": {"tools": {}},
+        },
+    )
 
 
 def handle_tools_list(req_id, params):
-    return _response(req_id, {
-        "tools": [MEMORY_TOOL, MEMORY_EXTENSIONS_TOOL],
-    })
+    return _response(
+        req_id,
+        {
+            "tools": [MEMORY_TOOL, MEMORY_EXTENSIONS_TOOL],
+        },
+    )
 
 
 def handle_tools_call(req_id, params):
@@ -379,18 +390,25 @@ def handle_tools_call(req_id, params):
     if tool_name == "memory":
         args = _map_memory(tool_input)
         if args is None:
-            return _response(req_id, _tool_result(
-                f"Error: unknown command '{tool_input.get('command')}'", True
-            ))
+            return _response(
+                req_id,
+                _tool_result(
+                    f"Error: unknown command '{tool_input.get('command')}'", True
+                ),
+            )
         text, is_error = run_backend(args)
         return _response(req_id, _tool_result(text, is_error))
 
     if tool_name == "memory_extensions":
         args = _map_extensions(tool_input)
         if args is None:
-            return _response(req_id, _tool_result(
-                f"Error: unknown extension command '{tool_input.get('command')}'", True
-            ))
+            return _response(
+                req_id,
+                _tool_result(
+                    f"Error: unknown extension command '{tool_input.get('command')}'",
+                    True,
+                ),
+            )
         text, is_error = run_backend(args)
         return _response(req_id, _tool_result(text, is_error))
 
@@ -407,6 +425,7 @@ _HANDLERS = {
 
 
 # ── main loop ─────────────────────────────────────────────────────────────────
+
 
 def main():
     for raw_line in sys.stdin:

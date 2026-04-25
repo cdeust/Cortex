@@ -60,17 +60,17 @@ import pathlib
 
 # ── constants ─────────────────────────────────────────────────────────────────
 
-IDLE_TIMEOUT   = 30.0   # seconds without any request before self-shutdown
-BACKLOG        = 8      # max pending connections in accept queue
-MAX_MSG_BYTES  = 2 * 1024 * 1024  # 2 MB hard cap per request (DoS guard)
+IDLE_TIMEOUT = 30.0  # seconds without any request before self-shutdown
+BACKLOG = 8  # max pending connections in accept queue
+MAX_MSG_BYTES = 2 * 1024 * 1024  # 2 MB hard cap per request (DoS guard)
 
 # ── state (module-level, daemon is single-process single-threaded) ─────────────
 
-_rules_path:   str   = ""
-_rules_mtime:  float = 0.0
+_rules_path: str = ""
+_rules_mtime: float = 0.0
 _entropy_thresh: float = 3.5
-_compiled_high:  list = []   # (pattern, rule_dict) for confidence != low
-_compiled_all:   list = []   # all rules, including low-confidence
+_compiled_high: list = []  # (pattern, rule_dict) for confidence != low
+_compiled_all: list = []  # all rules, including low-confidence
 
 
 def _load_rules(path: str) -> None:
@@ -109,8 +109,8 @@ def _load_rules(path: str) -> None:
             high.append(entry)
 
     _compiled_high = high
-    _compiled_all  = all_rules
-    _rules_mtime   = pathlib.Path(path).stat().st_mtime
+    _compiled_all = all_rules
+    _rules_mtime = pathlib.Path(path).stat().st_mtime
 
 
 def _maybe_reload(path: str) -> None:
@@ -166,11 +166,7 @@ def _scan(content: str, strict: bool) -> str:
         if m is None:
             continue
         if rule.get("entropy_check"):
-            matched_str = (
-                m.group(1)
-                if m.lastindex and m.lastindex >= 1
-                else m.group(0)
-            )
+            matched_str = m.group(1) if m.lastindex and m.lastindex >= 1 else m.group(0)
             if _shannon_entropy(matched_str) <= _entropy_thresh:
                 continue  # placeholder string (low entropy); pass through
         # Confirmed match — return rule ID only, never the matched text.
@@ -194,7 +190,7 @@ def _handle_request(raw: bytes) -> str:
     try:
         req = json.loads(raw.decode("utf-8", errors="replace"))
         content = req["content"]
-        strict  = bool(req.get("strict", False)) or (
+        strict = bool(req.get("strict", False)) or (
             os.environ.get("MEMORY_PII_STRICT", "") == "1"
         )
     except Exception:
@@ -208,6 +204,7 @@ def _handle_request(raw: bytes) -> str:
 
 
 # ── server loop ───────────────────────────────────────────────────────────────
+
 
 def _serve(sock_path: str) -> None:
     """
@@ -287,8 +284,8 @@ def main() -> None:
 
     global _rules_path
     _rules_path = sys.argv[1]
-    sock_path   = sys.argv[2]
-    pid_path    = sock_path + ".pid"
+    sock_path = sys.argv[2]
+    pid_path = sock_path + ".pid"
 
     try:
         _load_rules(_rules_path)
@@ -305,7 +302,7 @@ def main() -> None:
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, _sighandler)
-    signal.signal(signal.SIGINT,  _sighandler)
+    signal.signal(signal.SIGINT, _sighandler)
 
     try:
         _serve(sock_path)

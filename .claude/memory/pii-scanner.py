@@ -19,6 +19,7 @@ Sources:
   Threshold value 3.5 bits/char: TruffleHog v2 design (Cornwell, T., 2019).
   Rule patterns: pii-rules.json (curator-editable).
 """
+
 import sys
 import re
 import json
@@ -26,6 +27,7 @@ import math
 import os
 
 # Back-action invariant: matched bytes MUST NOT be written to any output.
+
 
 def main():
     if os.environ.get("MEMORY_PII_SCAN_DISABLE"):
@@ -38,10 +40,9 @@ def main():
 
     rules_path = sys.argv[1]
     # Strict mode: argv[2] == "1" OR env var.
-    strict_mode = (
-        (len(sys.argv) > 2 and sys.argv[2] == "1")
-        or os.environ.get("MEMORY_PII_STRICT", "") == "1"
-    )
+    strict_mode = (len(sys.argv) > 2 and sys.argv[2] == "1") or os.environ.get(
+        "MEMORY_PII_STRICT", ""
+    ) == "1"
 
     try:
         content = sys.stdin.read()
@@ -78,11 +79,7 @@ def main():
         # per TruffleHog v3 calibration — Cornwell 2019 updated design).
         if rule.get("entropy_check"):
             rule_threshold = rule.get("entropy_threshold_override", entropy_threshold)
-            matched_str = (
-                m.group(1)
-                if m.lastindex and m.lastindex >= 1
-                else m.group(0)
-            )
+            matched_str = m.group(1) if m.lastindex and m.lastindex >= 1 else m.group(0)
             if _shannon_entropy(matched_str) <= rule_threshold:
                 continue  # Low entropy: likely placeholder; pass through.
         # Confirmed match.
