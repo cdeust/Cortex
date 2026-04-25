@@ -3,135 +3,75 @@ ai-automatised-pipeline MCP server into Cortex's store.
 
 Flow
 ----
-1. Resolve the project's graph path. If Cortex already has a cached
-   graph_path memoised for this project, skip re-indexing; otherwise
-   call the upstream ``analyze_codebase`` tool (which runs index +
-   resolve + cluster).
-2. Pull symbols, processes, and a handful of top symbols via
-   ``search_codebase``/``get_processes``.
-3. Project those upstream artefacts into Cortex's native stores:
-     - Wiki pages: one reference page per detected process entry point
-     - Memories:   one per top-N symbol (classifier-friendly text)
-     - KG entities + edges: symbols as entities, calls/imports as edges
-4. Return an ingestion summary (counts + sample page paths).
+1. Resolve the project's graph path (cache hit or upstream analyze).
+2. Pull the FULL chain hierarchy from the Kuzu graph via Cypher:
+   every Function/Method/Struct, every File, every call edge between
+   symbols, every File→symbol containment edge.
+3. Project upstream artefacts into Cortex's stores: memories + KG
+   entities + KG edges + wiki reference pages per process.
+4. Return an ingestion summary.
 
-Cortex is the CONSUMER in this relationship — upstream owns analysis,
-Cortex owns documentation and knowledge-graph state.
+Cortex is the CONSUMER — upstream owns analysis, Cortex owns
+documentation and knowledge-graph state.
+
+This file is the composition root. Implementation is split:
+  - ingest_codebase_schema.py    — MCP tool schema
+  - ingest_codebase_graph.py     — graph-path resolution + analyze
+  - ingest_codebase_cypher.py    — Kuzu fetchers
+  - ingest_codebase_writers.py   — MemoryStore writers
+  - ingest_codebase_pages.py     — process wiki rendering
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import Any
 
 from mcp_server.errors import McpConnectionError
-from mcp_server.handlers.ingest_helpers import (
-    call_upstream,
-    find_cached_graph,
-    memoise_graph_path,
-    normalise_mcp_payload,
-)
-from mcp_server.infrastructure.config import WIKI_ROOT
+from mcp_server.handlers import ingest_codebase_cypher as cypher
+from mcp_server.handlers import ingest_codebase_graph as graphmod
+from mcp_server.handlers import ingest_codebase_pages as pages
+from mcp_server.handlers import ingest_codebase_writers as writers
+from mcp_server.handlers.ingest_codebase_schema import schema  # re-exported
+from mcp_server.handlers.ingest_helpers import call_upstream, normalise_mcp_payload
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
-from mcp_server.infrastructure.wiki_store import write_page
 
 logger = logging.getLogger(__name__)
 
 # Upstream MCP server name in mcp-connections.json.
 _UPSTREAM_SERVER = "codebase"
 
-# How many top-ranked symbols to materialise as memories + KG nodes.
-_DEFAULT_TOP_SYMBOLS = 50
+# Symbol/process caps. ``None`` means "no LIMIT clause" — pull every
+# Function/Method/Struct, every call edge, every process. The Rust
+# pipeline already did the AST work; Cortex's job is to project the
+# whole graph, not a tip-of-the-iceberg sample. Callers may still pass
+# ``top_symbols`` / ``top_processes`` to cap explicitly.
+_DEFAULT_TOP_SYMBOLS: int | None = None
+_DEFAULT_TOP_PROCESSES: int | None = None
 
-# Max processes to materialise as wiki pages.
-_DEFAULT_TOP_PROCESSES = 10
-
-# ── Schema ──────────────────────────────────────────────────────────────
-
-schema = {
-    "description": (
-        "Ingest a codebase analysis from the upstream ai-automatised-"
-        "pipeline MCP server into Cortex's store. Triggers `analyze_"
-        "codebase` upstream (or reuses a cached graph_path memo), pulls "
-        "symbols + processes via `search_codebase`/`get_processes`, then "
-        "materialises top-ranked symbols as memories + KG entities + "
-        "edges, and entry-point processes as wiki reference pages under "
-        "specs/. Use this to seed the Wiki / Board / Knowledge / Graph "
-        "views from a freshly-indexed or re-indexed codebase. Distinct "
-        "from `codebase_analyze` (Cortex's OWN tree-sitter analyzer, "
-        "no upstream MCP), `seed_project` (5-stage shallow sweep, no "
-        "AST), and `wiki_seed_codebase` (consumes existing .md docs, "
-        "not analysis). Mutates wiki/, memories, entities, "
-        "relationships. Latency varies (10s-5min depending on cache "
-        "hit). Cortex only consumes "
-        "upstream analysis — it does not drive the pipeline. Returns counts "
-        "and the wiki paths written."
-    ),
-    "inputSchema": {
-        "type": "object",
-        "required": ["project_path"],
-        "properties": {
-            "project_path": {
-                "type": "string",
-                "description": (
-                    "Absolute path to the codebase root to analyse. Used both "
-                    "as the pipeline input and to memoise the resulting graph "
-                    "path so subsequent ingests are idempotent."
-                ),
-                "examples": ["/Users/alice/code/cortex"],
-            },
-            "output_dir": {
-                "type": "string",
-                "description": (
-                    "Directory where the code graph is stored. Defaults to "
-                    "~/.cache/cortex/code-graphs/<project-key>/."
-                ),
-                "examples": ["/Users/alice/.cache/cortex/code-graphs/cortex-ab12cd34"],
-            },
-            "language": {
-                "type": "string",
-                "description": "Language filter passed to analyze_codebase.",
-                "enum": ["auto", "rust", "python", "typescript"],
-                "default": "auto",
-            },
-            "force_reindex": {
-                "type": "boolean",
-                "description": (
-                    "If true, call analyze_codebase even when a cached graph "
-                    "path exists for this project."
-                ),
-                "default": False,
-            },
-            "top_symbols": {
-                "type": "integer",
-                "description": "Max number of top-ranked symbols to materialise as memories + KG nodes.",
-                "default": _DEFAULT_TOP_SYMBOLS,
-                "minimum": 0,
-                "maximum": 1000,
-                "examples": [25, 50, 200],
-            },
-            "top_processes": {
-                "type": "integer",
-                "description": "Max number of entry-point processes to materialise as wiki pages.",
-                "default": _DEFAULT_TOP_PROCESSES,
-                "minimum": 0,
-                "maximum": 200,
-                "examples": [5, 10, 25],
-            },
-        },
-    },
-}
+__all__ = ["schema", "handler"]
 
 _store: MemoryStore | None = None
+_store_lock = threading.Lock()
 
 
 def _get_store() -> MemoryStore:
+    """Lazy MemoryStore singleton.
+
+    Lock-guarded for the worker-thread case (asyncio coroutines on one
+    loop don't preempt mid-init, but if any caller invokes the handler
+    from a thread pool — e.g., a sync hook running on an executor — the
+    fast double-checked init below prevents racing on construction.
+    """
     global _store
     if _store is None:
-        settings = get_memory_settings()
-        _store = MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+        with _store_lock:
+            if _store is None:
+                settings = get_memory_settings()
+                _store = MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
     return _store
 
 
@@ -144,321 +84,118 @@ def _default_output_dir(project_path: str) -> str:
     )
 
 
-def _silent_clean_stale_graph_slot(output_dir: str) -> None:
-    """Pre-clean stale graph slots so first-time AP indexing always succeeds.
+def _parse_int_or_none(raw: Any) -> int | None:
+    return int(raw) if raw is not None else None
 
-    AP writes ``<output_dir>/graph`` as a directory; pre-3.14 versions of
-    the same tool wrote a single LadybugDB file at the same path. When a
-    user upgrades, the old file occupies the slot and AP's own
-    ``rm_rf`` errors out (``Not a directory (os error 20)``). Silently
-    unlink the stale file before invoking AP so the install/setup-project
-    flow never surfaces this transient.
+
+def _attribute_files_to_symbols(
+    symbols: list[dict[str, Any]],
+    file_edges: list[tuple[str, str]],
+    known_files: set[str],
+) -> list[str]:
+    """Assign ``sym["file"]`` from the authoritative File→symbol
+    containment edges. Returns diagnostic strings for symbols that
+    fell through to the qn-split fallback (so non-Python indexers
+    that don't emit containment edges are visible to the user).
+
+    The qn-split fallback is only trusted when its derived path
+    appears in ``known_files`` — otherwise we leave file=None rather
+    than fabricating a Rust crate/module name as a file path.
     """
-    slot = Path(output_dir).expanduser() / "graph"
-    try:
-        if slot.exists() and not slot.is_dir():
-            slot.unlink()
-    except OSError as exc:
-        logger.debug("could not pre-clean stale graph slot %s: %s", slot, exc)
-
-
-async def _ensure_graph(
-    store: MemoryStore,
-    project_path: str,
-    output_dir: str,
-    language: str,
-    force_reindex: bool,
-) -> tuple[str, dict[str, Any]]:
-    """Return (graph_path, analyze_stats).
-
-    Reuses the cached graph when available, otherwise calls upstream
-    analyze_codebase and memoises the resulting graph path.
-    """
-    if not force_reindex:
-        cached = find_cached_graph(store, project_path)
-        if cached:
-            return cached, {"reused_cached": True, "graph_path": cached}
-
-    _silent_clean_stale_graph_slot(output_dir)
-
-    payload = await call_upstream(
-        _UPSTREAM_SERVER,
-        "analyze_codebase",
-        {
-            "path": str(Path(project_path).expanduser().resolve()),
-            "output_dir": str(Path(output_dir).expanduser().resolve()),
-            "language": language,
-        },
-    )
-    result = normalise_mcp_payload(payload)
-    # Self-heal: AP returns this specific error when the slot was a
-    # non-directory at invocation time. Pre-clean covers the typical
-    # case; the post-hoc retry covers a race where AP wrote a file
-    # mid-call. Either way the user never sees the failure.
-    if (
-        isinstance(result, dict)
-        and result.get("status") == "error"
-        and "Not a directory" in str(result.get("message", ""))
-    ):
-        _silent_clean_stale_graph_slot(output_dir)
-        payload = await call_upstream(
-            _UPSTREAM_SERVER,
-            "analyze_codebase",
-            {
-                "path": str(Path(project_path).expanduser().resolve()),
-                "output_dir": str(Path(output_dir).expanduser().resolve()),
-                "language": language,
-            },
+    qn_to_file: dict[str, str] = {qn: f for (f, qn) in file_edges}
+    fallback_used = 0
+    fallback_unverified = 0
+    for sym in symbols:
+        qn = sym.get("qualified_name")
+        if not qn:
+            continue
+        authoritative = qn_to_file.get(qn)
+        if authoritative is not None:
+            sym["file"] = authoritative
+            continue
+        # No containment edge — try the qn-split fallback, but only
+        # accept it when the result corresponds to an actual File node.
+        candidate = cypher.file_path_from_qn(qn)
+        if candidate and candidate in known_files:
+            sym["file"] = candidate
+            fallback_used += 1
+        else:
+            sym["file"] = None
+            if candidate:
+                fallback_unverified += 1
+    diagnostics: list[str] = []
+    if fallback_used:
+        diagnostics.append(
+            f"file-attribution: {fallback_used} symbols had no "
+            f"(:File)-[]->(:symbol) edge; used qn-split fallback "
+            f"(verified against known files)"
         )
-        result = normalise_mcp_payload(payload)
-    graph_path = result.get("graph_path") or str(
-        Path(output_dir).expanduser() / "graph"
-    )
-    memoise_graph_path(store, project_path, graph_path)
-    result["graph_path"] = graph_path
-    result["reused_cached"] = False
-    return graph_path, result
+    if fallback_unverified:
+        diagnostics.append(
+            f"file-attribution: {fallback_unverified} symbols had no "
+            f"containment edge AND the qn-split fallback didn't match a "
+            f"known file (likely non-Python indexer); file=None"
+        )
+    return diagnostics
 
 
-def _short_symbol_summary(sym: dict[str, Any]) -> str:
-    """Compact one-line summary for a ranked symbol."""
-    qn = sym.get("qualified_name") or sym.get("name") or "<anon>"
-    kind = sym.get("kind") or sym.get("label") or "symbol"
-    community = sym.get("community")
-    process = sym.get("process")
-    parts = [f"{kind} {qn}"]
-    if community is not None:
-        parts.append(f"community={community}")
-    if process:
-        parts.append(f"process={process}")
-    return " | ".join(parts)
-
-
-async def _fetch_top_symbols_via_cypher(
+async def _pull_symbols_and_files(
     graph_path: str,
-    limit: int,
-) -> list[dict[str, Any]]:
-    """Fallback: enumerate top symbols by line span when BM25 search yields
-    nothing (e.g. when the caller has no keyword query).
-
-    Upstream's ``search_codebase`` requires a non-empty query (see
-    ai-automatised-pipeline/src/search/mod.rs:149). For seeding, we want
-    a structural sample: top-N public Functions/Methods/Structs ranked
-    by line span (proxy for code volume / importance).
-
-    Uses Kuzu Cypher via upstream's ``query_graph`` tool. Returns rows
-    shaped like ``search_codebase`` results so the rest of the pipeline
-    is uniform.
-    """
-    rows: list[dict[str, Any]] = []
-    per_label = max(1, limit // 3)
-    label_kinds = (
-        ("Function", "Function"),
-        ("Method", "Method"),
-        ("Struct", "Struct"),
-    )
-    field_order = ("qualified_name", "name", "start_line", "end_line", "visibility")
-    for label, kind in label_kinds:
-        cypher = (
-            f"MATCH (n:{label}) "
-            f"RETURN n.qualified_name AS qualified_name, n.name AS name, "
-            f"n.start_line AS start_line, n.end_line AS end_line, "
-            f"n.visibility AS visibility "
-            f"ORDER BY (n.end_line - n.start_line) DESC "
-            f"LIMIT {per_label}"
-        )
-        try:
-            payload = await call_upstream(
-                _UPSTREAM_SERVER,
-                "query_graph",
-                {"graph_path": graph_path, "query": cypher},
-            )
-            result = normalise_mcp_payload(payload)
-            # Upstream returns rows as positional lists paired with
-            # ``columns`` (Kuzu's standard JSON shape per
-            # ai-automatised-pipeline/src/main.rs::do_query_graph).
-            columns = result.get("columns") or list(field_order)
-            for row in result.get("rows") or []:
-                record = dict(zip(columns, row))
-                qn = record.get("qualified_name") or record.get("name")
-                if not qn:
-                    continue
-                rows.append(
-                    {
-                        "qualified_name": qn,
-                        "name": record.get("name") or qn,
-                        "kind": kind,
-                        "start_line": record.get("start_line"),
-                        "end_line": record.get("end_line"),
-                        "visibility": record.get("visibility"),
-                    }
-                )
-        except Exception as exc:
-            logger.debug("query_graph fallback failed for %s: %s", label, exc)
-    return rows[:limit]
-
-
-def _write_symbol_memories(
-    store: MemoryStore,
-    symbols: list[dict[str, Any]],
-    project_path: str,
-    domain: str,
-) -> list[int]:
-    """Persist symbols as standalone memories. Returns new memory ids."""
-    ids: list[int] = []
-    for sym in symbols:
-        qn = sym.get("qualified_name") or sym.get("name")
-        if not qn:
-            continue
-        summary = _short_symbol_summary(sym)
-        content = f"Code symbol: {qn}\n\n{summary}"
-        if sym.get("file"):
-            content += f"\nFile: {sym['file']}"
-        record = {
-            "content": content,
-            "tags": ["code-reference", "ingest", sym.get("kind", "symbol")],
-            "source": "ingest_codebase",
-            "domain": domain,
-            "directory_context": project_path,
-            "importance": float(sym.get("relevance_score", 0.5) or 0.5),
-            "heat": 0.8,
-            "is_protected": False,
-        }
-        try:
-            mem_id = store.insert_memory(record)
-            ids.append(mem_id)
-        except Exception as exc:
-            logger.debug("symbol memory insert failed for %s: %s", qn, exc)
-    return ids
-
-
-def _write_symbol_entities(
-    store: MemoryStore,
-    symbols: list[dict[str, Any]],
-    domain: str,
-) -> dict[str, int]:
-    """Persist symbols as KG entities. Returns {qualified_name: entity_id}."""
-    name_to_id: dict[str, int] = {}
-    for sym in symbols:
-        qn = sym.get("qualified_name") or sym.get("name")
-        if not qn:
-            continue
-        try:
-            eid = store.insert_entity(
-                {
-                    "name": qn,
-                    "type": sym.get("kind", "symbol"),
-                    "domain": domain,
-                    "heat": 0.8,
-                }
-            )
-            name_to_id[qn] = eid
-        except Exception as exc:
-            logger.debug("symbol entity insert failed for %s: %s", qn, exc)
-    return name_to_id
-
-
-def _write_symbol_relationships(
-    store: MemoryStore,
-    symbols: list[dict[str, Any]],
-    name_to_id: dict[str, int],
-) -> int:
-    """Persist calls/imports/implements edges between known entities.
-
-    Only edges where BOTH endpoints are present in name_to_id are
-    materialised — anything else would be a dangling reference.
-    """
-    written = 0
-    for sym in symbols:
-        src_name = sym.get("qualified_name") or sym.get("name")
-        if not src_name or src_name not in name_to_id:
-            continue
-        src_id = name_to_id[src_name]
-        for rel_type, key in (
-            ("calls", "calls"),
-            ("imports", "imports"),
-            ("implements", "implements"),
-            ("uses", "uses"),
-        ):
-            targets = sym.get(key) or []
-            for target in targets:
-                target_name = (
-                    target if isinstance(target, str) else target.get("qualified_name")
-                )
-                if not target_name or target_name not in name_to_id:
-                    continue
-                try:
-                    store.insert_relationship(
-                        {
-                            "source_entity_id": src_id,
-                            "target_entity_id": name_to_id[target_name],
-                            "relationship_type": rel_type,
-                            "weight": 1.0,
-                            "confidence": 0.9,
-                        }
-                    )
-                    written += 1
-                except Exception as exc:
-                    logger.debug(
-                        "edge insert failed (%s → %s): %s", src_name, target_name, exc
-                    )
-    return written
-
-
-def _render_process_page(process: dict[str, Any]) -> tuple[str, str]:
-    """Return (relative_wiki_path, markdown) for a process page."""
-    entry = process.get("entry_point") or process.get("name") or "unknown"
-    kind = process.get("entry_kind") or "entry"
-    depth = process.get("bfs_depth") or process.get("depth") or 0
-    symbol_count = process.get("symbol_count") or len(process.get("symbols", []) or [])
-    slug = _slug(entry) or "process"
-    rel_path = f"reference/codebase/{slug}.md"
-    lines = [
-        "---",
-        f"title: Process — {entry}",
-        "kind: reference",
-        f"tags: [code-reference, process, {kind}]",
-        "---",
-        "",
-        f"# Process — `{entry}`",
-        "",
-        f"- **Entry kind:** {kind}",
-        f"- **BFS depth:** {depth}",
-        f"- **Symbols in flow:** {symbol_count}",
-        "",
-    ]
-    symbols = process.get("symbols") or []
+    top_symbols: int | None,
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[tuple[str, str]],
+    list[tuple[str, str]],
+    list[str],
+]:
+    """Project the full chain hierarchy: symbols, files, call edges,
+    file-containment edges. Returns the four artefacts plus a flat
+    diagnostics list (one entry per failed sub-query)."""
+    diagnostics: list[str] = []
+    symbols, sym_diag = await cypher.fetch_top_symbols(graph_path, top_symbols)
+    diagnostics.extend(sym_diag)
+    files, file_diag = await cypher.fetch_files(graph_path, limit=top_symbols)
+    diagnostics.extend(file_diag)
+    call_edges: list[tuple[str, str]] = []
+    file_edges: list[tuple[str, str]] = []
     if symbols:
-        lines.append("## Symbols reached")
-        for sym in symbols[:50]:
-            qn = sym if isinstance(sym, str) else sym.get("qualified_name", "")
-            if qn:
-                lines.append(f"- `{qn}`")
-        if len(symbols) > 50:
-            lines.append(f"- … and {len(symbols) - 50} more.")
-        lines.append("")
-    return rel_path, "\n".join(lines)
+        known_symbols = {
+            s["qualified_name"] for s in symbols if s.get("qualified_name")
+        }
+        call_edges, call_diag = await cypher.fetch_call_edges(
+            graph_path, known_symbols
+        )
+        diagnostics.extend(call_diag)
+        known_files = {f["path"] for f in files if f.get("path")}
+        if known_files:
+            file_edges, contain_diag = await cypher.fetch_file_containment(
+                graph_path, known_files, known_symbols
+            )
+            diagnostics.extend(contain_diag)
+        else:
+            known_files = set()
+        diagnostics.extend(_attribute_files_to_symbols(symbols, file_edges, known_files))
+    return symbols, files, call_edges, file_edges, diagnostics
 
 
-def _slug(text: str) -> str:
-    """Light slugifier for process page filenames."""
-    import re
-
-    s = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-    return s[:80]
-
-
-def _write_process_pages(processes: list[dict[str, Any]]) -> list[str]:
-    """Create wiki reference pages for each process. Returns paths written."""
-    written: list[str] = []
-    for proc in processes:
-        try:
-            rel_path, markdown = _render_process_page(proc)
-            write_page(WIKI_ROOT, rel_path, markdown, mode="replace")
-            written.append(rel_path)
-        except Exception as exc:
-            logger.debug("process page write failed: %s", exc)
-    return written
+async def _pull_processes(
+    graph_path: str,
+    top_processes: int | None,
+) -> list[dict[str, Any]]:
+    """Pull processes via upstream get_processes; respect optional cap."""
+    try:
+        proc_payload = await call_upstream(
+            _UPSTREAM_SERVER,
+            "get_processes",
+            {"graph_path": graph_path},
+        )
+        proc_result = normalise_mcp_payload(proc_payload)
+        all_procs = proc_result.get("processes") or []
+        return all_procs if top_processes is None else all_procs[:top_processes]
+    except Exception as exc:
+        logger.debug("get_processes failed: %s", exc)
+        return []
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -471,19 +208,17 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     output_dir = args.get("output_dir") or _default_output_dir(project_path)
     language = args.get("language", "auto") or "auto"
     force_reindex = bool(args.get("force_reindex", False))
-    top_symbols = int(args.get("top_symbols", _DEFAULT_TOP_SYMBOLS))
-    top_processes = int(args.get("top_processes", _DEFAULT_TOP_PROCESSES))
+    top_symbols = _parse_int_or_none(args.get("top_symbols", _DEFAULT_TOP_SYMBOLS))
+    top_processes = _parse_int_or_none(
+        args.get("top_processes", _DEFAULT_TOP_PROCESSES)
+    )
 
     store = _get_store()
     domain = f"code:{Path(project_path).name}"
 
     try:
-        graph_path, analyze_stats = await _ensure_graph(
-            store,
-            project_path,
-            output_dir,
-            language,
-            force_reindex,
+        graph_path, analyze_stats = await graphmod.ensure_graph(
+            store, project_path, output_dir, language, force_reindex
         )
     except McpConnectionError as exc:
         return {
@@ -499,58 +234,42 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "error": f"{type(exc).__name__}: {exc}",
         }
 
-    symbols_raw: list[dict[str, Any]] = []
-    processes_raw: list[dict[str, Any]] = []
+    if top_symbols is None or top_symbols > 0:
+        symbols, files, call_edges, file_edges, diagnostics = (
+            await _pull_symbols_and_files(graph_path, top_symbols)
+        )
+    else:
+        symbols, files, call_edges, file_edges, diagnostics = [], [], [], [], []
 
-    if top_symbols > 0:
-        # Upstream BM25 returns nothing for empty queries
-        # (search/mod.rs:149). Use the project name as the keyword when
-        # available, then fall back to a Cypher structural sample.
-        project_name = Path(project_path).name
-        try:
-            search_payload = await call_upstream(
-                _UPSTREAM_SERVER,
-                "search_codebase",
-                {
-                    "graph_path": graph_path,
-                    "query": project_name,
-                    "limit": top_symbols,
-                },
-            )
-            search_result = normalise_mcp_payload(search_payload)
-            symbols_raw = (
-                search_result.get("results") or search_result.get("symbols") or []
-            )
-        except Exception as exc:
-            logger.debug("search_codebase failed: %s", exc)
-        if not symbols_raw:
-            symbols_raw = await _fetch_top_symbols_via_cypher(graph_path, top_symbols)
+    processes = (
+        await _pull_processes(graph_path, top_processes)
+        if (top_processes is None or top_processes > 0)
+        else []
+    )
 
-    if top_processes > 0:
-        try:
-            proc_payload = await call_upstream(
-                _UPSTREAM_SERVER,
-                "get_processes",
-                {"graph_path": graph_path},
-            )
-            proc_result = normalise_mcp_payload(proc_payload)
-            processes_raw = (proc_result.get("processes") or [])[:top_processes]
-        except Exception as exc:
-            logger.debug("get_processes failed: %s", exc)
+    sym_mem = writers.write_symbol_memories(store, symbols, project_path, domain)
+    file_mem = writers.write_file_memories(store, files, project_path, domain)
+    sym_ent, ent_diag = writers.write_symbol_entities(store, symbols, domain)
+    diagnostics.extend(ent_diag)
+    file_ent = writers.write_file_entities(store, files, domain)
+    call_count = writers.write_symbol_relationships(store, call_edges, sym_ent)
+    contain_count = writers.write_file_relationships(
+        store, file_edges, file_ent, sym_ent
+    )
+    wiki_paths = pages.write_process_pages(processes)
 
-    memory_ids = _write_symbol_memories(store, symbols_raw, project_path, domain)
-    entity_ids = _write_symbol_entities(store, symbols_raw, domain)
-    edge_count = _write_symbol_relationships(store, symbols_raw, entity_ids)
-    wiki_paths = _write_process_pages(processes_raw)
-
-    return {
+    response: dict[str, Any] = {
         "ingested": True,
         "graph_path": graph_path,
         "analyze": analyze_stats,
-        "memories_written": len(memory_ids),
-        "entities_written": len(entity_ids),
-        "edges_written": edge_count,
+        "memories_written": len(sym_mem) + len(file_mem),
+        "entities_written": len(sym_ent) + len(file_ent),
+        "edges_written": call_count + contain_count,
         "wiki_pages_written": wiki_paths,
-        "symbol_count_seen": len(symbols_raw),
-        "process_count_seen": len(processes_raw),
+        "symbol_count_seen": len(symbols),
+        "file_count_seen": len(files),
+        "process_count_seen": len(processes),
     }
+    if diagnostics:
+        response["diagnostics"] = diagnostics
+    return response

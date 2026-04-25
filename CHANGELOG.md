@@ -6,17 +6,82 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-
-- Public-readiness baseline: CONTRIBUTING.md, CODE_OF_CONDUCT.md,
-  SECURITY.md.
-- GitHub issue templates (bug / feature / audit-finding) and PR template
-  with audit-cycle checklist.
-- LICENSE expanded with ecosystem-context preamble + explicit
-  independent-authorship statement (no employer affiliation).
-- `prd-spec-generator` cross-link in companion-projects section.
+## [3.14.8] — ingest_codebase full-chain extraction + audit fixes
 
 ### Fixed
+
+- **`ingest_codebase` extracted only the tip of the iceberg.** BM25
+  keyword search (`search_codebase`) was the primary symbol-extraction
+  path, returning 2 hits when invoked with the project name as query.
+  The Cypher fallback was gated on empty results (`if not symbols_raw`),
+  so a 2-hit BM25 response prevented the structural pull. Even when
+  the fallback ran it didn't extract `file_path` (Function nodes carry
+  no such property — it's encoded in `qualified_name`) or any edges
+  (BM25 result rows have no `calls` / `imports` keys). User-visible
+  result on a 6 000-symbol codebase: 2 symbols, 0 edges, 0 files.
+  Replaced with a Cypher-driven projection that pulls every
+  Function / Method / Struct, every File node, every
+  (`Function`/`Method`/`Struct`)→(`Function`/`Method`/`Struct`) call
+  edge, and every File→symbol containment edge. Live measurement on
+  the Cortex codebase: 50 150 symbols, 4 072 files, 30 818 calls,
+  19 297 contains.
+- **Cache poisoning in `ensure_graph`.** When `analyze_codebase`
+  returned `status=error` after the self-heal retry, the handler
+  synthesised `<output_dir>/graph` and memoised it as success. Future
+  ingests reused the bogus path and silently projected an empty graph,
+  indistinguishable from "empty codebase". Now raises
+  `McpConnectionError` and refuses to memoise on persistent error.
+- **Broad `except Exception → return []`** swallowed every transport,
+  parse, and schema error in cypher fetchers as an empty result —
+  indistinguishable from "graph genuinely has zero rows". Narrowed to
+  `(McpConnectionError, ValueError, KeyError, TypeError)`. Per-query
+  failures now surface as a `diagnostics` array in the handler
+  response.
+- **qualified_name overload collisions** silently dropped legitimate
+  cross-overload call edges via the `src_id == dst_id` self-loop
+  guard. `write_symbol_entities` now detects collisions and surfaces
+  them as diagnostics (the upstream graph itself is the dedupe
+  boundary, so downstream disambiguation requires signature data the
+  upstream does not emit).
+- **Hardcoded `top_symbols=50` / `top_processes=10` caps.** Defaults
+  are now `null` ⇒ pull every symbol / every process. Callers can
+  still cap explicitly.
+
+### Changed
+
+- **File attribution is now language-agnostic.** Symbol → file mapping
+  is derived from authoritative `(:File)-[]->(:symbol)` containment
+  edges; the `qn.split("::")[0]` heuristic is demoted to a fallback
+  validated against the known-files set, so Rust qualified_names
+  (`crate::module::Type::method`) cannot fabricate fake "crate" file
+  paths.
+- **Server-side filter pushdown** in cypher fetchers: label-OR pattern
+  `(b:Function|Method|Struct)` removes Function→Process /
+  Function→Community noise from the wire. Single label-OR query for
+  containment instead of three round-trips.
+- **Stable ordering** for unbounded fetches (`ORDER BY qualified_name`)
+  and bounded fetches (`ORDER BY (end-start) DESC`).
+- `ingest_codebase.py` split into six modules to fit the project's
+  300-line cap: `_cypher` (Kuzu fetchers), `_writers` (MemoryStore
+  writers), `_graph` (analyze + cache resolution), `_pages` (process
+  wiki rendering), `_schema` (MCP tool schema), and the composition
+  root.
+
+### Added
+
+- `_store` singleton lock-guarded for thread-pool callers.
+- New tests: `test_persistent_upstream_error_does_not_poison_cache`,
+  `test_cypher_error_surfaces_as_diagnostic`,
+  `test_file_attribution_uses_containment_not_qn_split`. Mock routing
+  rewritten to use regex patterns instead of substring keys
+  (substring-prefix collisions silently routed wrong replies).
+- Public-readiness baseline (carried from Unreleased): CONTRIBUTING.md,
+  CODE_OF_CONDUCT.md, SECURITY.md, GitHub issue/PR templates, expanded
+  LICENSE with ecosystem-context preamble + explicit
+  independent-authorship statement.
+- `prd-spec-generator` cross-link in companion-projects section.
+
+### Fixed (carried)
 
 - `.mcp.json` + `plugin.json` hooks resilient to project-scoped launch.
 
