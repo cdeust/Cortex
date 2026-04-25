@@ -1,5 +1,13 @@
 name: Release
 
+# Cortex's only supported install path is Anthropic's plugin marketplace
+# (`/plugin install cortex@cortex-plugins`). The marketplace consumes the
+# git tree directly via ``${CLAUDE_PLUGIN_ROOT}`` — no PyPI, no uvx,
+# no separate package channel. See ADR-0050.
+#
+# This workflow runs the test matrix on tag push and creates a GitHub
+# Release with auto-generated notes. It does NOT publish to PyPI.
+
 on:
   push:
     tags:
@@ -7,7 +15,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   test:
@@ -59,63 +66,14 @@ jobs:
       - name: Run tests
         run: pytest --tb=short -q
 
-  build:
-    name: Build
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install build tools
-        run: pip install build
-
-      - name: Build sdist and wheel
-        run: python -m build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-  publish-pypi:
-    name: Publish to PyPI
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/neuro-cortex-memory
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          verbose: true
-
   github-release:
     name: GitHub Release
-    needs: build
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
 
       - name: Generate changelog
         id: changelog
@@ -134,5 +92,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body_path: changelog.txt
-          files: dist/*
           generate_release_notes: true
