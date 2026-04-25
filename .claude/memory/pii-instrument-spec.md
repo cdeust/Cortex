@@ -102,7 +102,10 @@ For any class whose FPR > 5% on the benign corpus:
 
 ### Baseline (2026-04-24, after expanded calibration)
 
-Expanded corpus: 100 TN developer memory fixtures + 53 TP known-secret fixtures (total 172 + 30 original = 202 fixtures). See `memory/pii-fixtures/` for fixture files and provenance. Run `bash scripts/test-memory-pii-expanded.sh` for the full calibration suite.
+Expanded corpus: 100 TN developer memory fixtures only. The TP corpus
+(`tp-known-secrets.txt`) was removed 2026-04-25 — see `memory/pii-fixtures/README.md`
+for rationale. FNR calibration is currently OPEN; re-introduction requires a
+generator-at-runtime model that never lands regex-matching tokens in tracked files.
 
 Previously-uncalibratable classes are now resolved: see table below.
 
