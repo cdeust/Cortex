@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "cortex": {
-      "command": "uvx",
-      "args": ["--python", "3.13", "--from", "neuro-cortex-memory[postgresql]", "neuro-cortex-memory"],
+      "command": "bash",
+      "args": [
+        "-c",
+        "PY=$(command -v python3 || command -v python) && \"$PY\" \"${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py\" mcp_server"
+      ],
       "env": {
         "DATABASE_URL": "postgresql://localhost:5432/cortex",
         "CORTEX_RUNTIME": "",

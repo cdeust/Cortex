@@ -137,10 +137,15 @@ def _resolve_command() -> dict | None:
     Priority:
       1. ``CORTEX_AP_COMMAND`` env var — full shell-free invocation
          spec (JSON: ``{"command": "...", "args": [...]}``).
-      2. Plugin-cache probe — ``automatised-pipeline`` installed as
+      2. Methodology bin symlink — ``~/.claude/methodology/bin/mcp-server``
+         set up by ``cortex setup-project``; basename ``mcp-server``
+         matches the MCPClient allowlist.
+      3. Plugin-cache probe — ``automatised-pipeline`` installed as
          a sibling plugin exposes its MCP entrypoint via
          ``~/.claude/plugins/cache/<mp>/automatised-pipeline/*``.
-      3. ``uvx`` fallback for the pip-published crate.
+      4. ``uvx`` fallback for when upstream publishes the package
+         (currently a no-op until upstream ships a uvx-runnable
+         entrypoint).
     """
     raw = os.environ.get("CORTEX_AP_COMMAND")
     if raw:
@@ -152,14 +157,22 @@ def _resolve_command() -> dict | None:
             return None
         if isinstance(cfg, dict) and "command" in cfg:
             return cfg
-    # Plugin-cache probe.
     from pathlib import Path
 
     home = Path.home()
+    # Methodology bin symlink (preferred — same path the live MCP
+    # server uses via mcp-connections.json).
+    bin_path = home / ".claude/methodology/bin/mcp-server"
+    if bin_path.is_file() and os.access(bin_path, os.X_OK):
+        # Full path is fine — MCPClient validates by basename against
+        # the command allowlist (which contains "mcp-server").
+        return {"command": str(bin_path), "args": []}
+    # Plugin-cache probe.
     for root in (home / ".claude/plugins/cache").glob("*/automatised-pipeline/*/bin/*"):
         if root.is_file() and os.access(root, os.X_OK):
             return {"command": "node", "args": [str(root)]}
-    # uvx fallback.
+    # uvx fallback (placeholder — requires upstream to publish a
+    # uvx-runnable package; tracked upstream as packaging work).
     return {
         "command": "uvx",
         "args": ["--from", "automatised-pipeline", "automatised-pipeline"],
@@ -206,11 +219,11 @@ class APBridge:
                 self._unavailable_reason = "no_command_resolved"
                 return False
             try:
-                # Indexing a large mobile codebase (tens of thousands of
-                # files) can take longer than the default 120 s call
-                # timeout; raise to 10 minutes so ``index_codebase`` and
-                # ``analyze_codebase`` don't get cut short.
-                cfg = {**cfg, "callTimeoutMs": 600000}
+                # Disable the per-call timeout for AP. Fresh indexing of
+                # large codebases can exceed any fixed bound; liveness is
+                # governed by the child process and explicit cancellation.
+                # See mcp_client.py: callTimeoutMs=0 -> no asyncio.wait_for.
+                cfg = {**cfg, "callTimeoutMs": 0}
                 self._client = MCPClient(cfg)
                 # AP's binary is not in the default allowlist.
                 # ``ai-architect-mcp`` is the crate name in

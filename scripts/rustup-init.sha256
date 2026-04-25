@@ -1,0 +1,19 @@
+# SHA256 manifest for the rustup bootstrap script (sh.rustup.rs).
+#
+# When this file contains a valid 64-char hex digest on a non-comment
+# line, pipeline_install_rust verifies the downloaded installer
+# against it BEFORE piping the contents to /bin/sh. A mismatch
+# refuses the install with action=rust_hash_mismatch.
+#
+# Refresh procedure (run after auditing the upstream script change):
+#
+#   curl -sSf https://sh.rustup.rs | shasum -a 256 \
+#     | awk '{print $1}' >> scripts/rustup-init.sha256
+#   # then edit this file to keep only the comments + the new digest.
+#
+# Empty / commented-out manifest = hash pinning OFF (legacy curl|sh
+# path with TLS-only trust). Override at runtime with
+# CORTEX_RUSTUP_PIN_HASH=0.
+#
+# Add the hex digest below as a single line (no prefix, no whitespace).
+6c30b75a75b28a96fd913a037c8581b580080b6ee9b8169a3c0feb1af7fe8caf

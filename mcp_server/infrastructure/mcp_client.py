@@ -29,7 +29,15 @@ class MCPClient:
         self._negotiated_version: str | None = None
         self._connected = False
         self._connect_timeout_ms = config.get("connectTimeoutMs") or 10000
-        self._call_timeout_ms = config.get("callTimeoutMs") or 120000
+        # callTimeoutMs: positive int = ms, 0 or None = no per-call timeout
+        # (used for long-running upstream indexing).
+        raw_call_timeout = config.get("callTimeoutMs")
+        if raw_call_timeout is None:
+            self._call_timeout_ms: int | None = 120000
+        elif raw_call_timeout == 0:
+            self._call_timeout_ms = None
+        else:
+            self._call_timeout_ms = int(raw_call_timeout)
         self._idle_timeout_ms = config.get("idleTimeoutMs") or 300000
         self._last_activity = 0.0
         self._idle_task: asyncio.Task | None = None
@@ -244,6 +252,8 @@ class MCPClient:
         self._proc.stdin.write((msg + "\n").encode())  # type: ignore
         await self._proc.stdin.drain()  # type: ignore
 
+        if self._call_timeout_ms is None:
+            return await future
         try:
             return await asyncio.wait_for(future, timeout=self._call_timeout_ms / 1000)
         except asyncio.TimeoutError:
@@ -295,19 +305,54 @@ class MCPClient:
             pass
 
     async def _stderr_loop(self) -> None:
+        log_fh = self._open_stderr_log()
         try:
             while True:
                 line = await self._proc.stderr.readline()  # type: ignore
                 if not line:
                     break
+                decoded = line.decode("utf-8", errors="replace").rstrip()
                 print(
-                    f"[mcp-client] {self._config['command']}: {line.decode('utf-8', errors='replace').rstrip()}",
+                    f"[mcp-client] {self._config['command']}: {decoded}",
                     file=sys.stderr,
                 )
+                if log_fh is not None:
+                    try:
+                        log_fh.write(decoded + "\n")
+                        log_fh.flush()
+                    except Exception:
+                        pass
         except asyncio.CancelledError:
             pass
         except Exception:
             pass
+        finally:
+            if log_fh is not None:
+                try:
+                    log_fh.close()
+                except Exception:
+                    pass
+
+    def _open_stderr_log(self):
+        """Open a per-server stderr log file under ~/.cache/cortex/mcp-logs/.
+
+        Persists upstream MCP stderr (e.g. ai-architect-mcp indexer progress)
+        for post-hoc investigation. Returns None on any error — logging
+        failure must not break the connection.
+        """
+        import os
+        import pathlib
+
+        try:
+            base = pathlib.Path.home() / ".cache" / "cortex" / "mcp-logs"
+            base.mkdir(parents=True, exist_ok=True)
+            raw = self._config.get("command") or "unknown"
+            stem = raw.split("/")[-1] or "unknown"
+            safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in stem)
+            pid = os.getpid()
+            return open(base / f"{safe}.{pid}.log", "a", encoding="utf-8")
+        except Exception:
+            return None
 
     async def _idle_loop(self) -> None:
         try:

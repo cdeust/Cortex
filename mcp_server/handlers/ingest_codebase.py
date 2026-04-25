@@ -234,6 +234,70 @@ def _short_symbol_summary(sym: dict[str, Any]) -> str:
     return " | ".join(parts)
 
 
+async def _fetch_top_symbols_via_cypher(
+    graph_path: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Fallback: enumerate top symbols by line span when BM25 search yields
+    nothing (e.g. when the caller has no keyword query).
+
+    Upstream's ``search_codebase`` requires a non-empty query (see
+    ai-automatised-pipeline/src/search/mod.rs:149). For seeding, we want
+    a structural sample: top-N public Functions/Methods/Structs ranked
+    by line span (proxy for code volume / importance).
+
+    Uses Kuzu Cypher via upstream's ``query_graph`` tool. Returns rows
+    shaped like ``search_codebase`` results so the rest of the pipeline
+    is uniform.
+    """
+    rows: list[dict[str, Any]] = []
+    per_label = max(1, limit // 3)
+    label_kinds = (
+        ("Function", "Function"),
+        ("Method", "Method"),
+        ("Struct", "Struct"),
+    )
+    field_order = ("qualified_name", "name", "start_line", "end_line", "visibility")
+    for label, kind in label_kinds:
+        cypher = (
+            f"MATCH (n:{label}) "
+            f"RETURN n.qualified_name AS qualified_name, n.name AS name, "
+            f"n.start_line AS start_line, n.end_line AS end_line, "
+            f"n.visibility AS visibility "
+            f"ORDER BY (n.end_line - n.start_line) DESC "
+            f"LIMIT {per_label}"
+        )
+        try:
+            payload = await call_upstream(
+                _UPSTREAM_SERVER,
+                "query_graph",
+                {"graph_path": graph_path, "query": cypher},
+            )
+            result = normalise_mcp_payload(payload)
+            # Upstream returns rows as positional lists paired with
+            # ``columns`` (Kuzu's standard JSON shape per
+            # ai-automatised-pipeline/src/main.rs::do_query_graph).
+            columns = result.get("columns") or list(field_order)
+            for row in result.get("rows") or []:
+                record = dict(zip(columns, row))
+                qn = record.get("qualified_name") or record.get("name")
+                if not qn:
+                    continue
+                rows.append(
+                    {
+                        "qualified_name": qn,
+                        "name": record.get("name") or qn,
+                        "kind": kind,
+                        "start_line": record.get("start_line"),
+                        "end_line": record.get("end_line"),
+                        "visibility": record.get("visibility"),
+                    }
+                )
+        except Exception as exc:
+            logger.debug("query_graph fallback failed for %s: %s", label, exc)
+    return rows[:limit]
+
+
 def _write_symbol_memories(
     store: MemoryStore,
     symbols: list[dict[str, Any]],
@@ -314,6 +378,7 @@ def _write_symbol_relationships(
             ("calls", "calls"),
             ("imports", "imports"),
             ("implements", "implements"),
+            ("uses", "uses"),
         ):
             targets = sym.get(key) or []
             for target in targets:
@@ -438,11 +503,19 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     processes_raw: list[dict[str, Any]] = []
 
     if top_symbols > 0:
+        # Upstream BM25 returns nothing for empty queries
+        # (search/mod.rs:149). Use the project name as the keyword when
+        # available, then fall back to a Cypher structural sample.
+        project_name = Path(project_path).name
         try:
             search_payload = await call_upstream(
                 _UPSTREAM_SERVER,
                 "search_codebase",
-                {"graph_path": graph_path, "query": "", "limit": top_symbols},
+                {
+                    "graph_path": graph_path,
+                    "query": project_name,
+                    "limit": top_symbols,
+                },
             )
             search_result = normalise_mcp_payload(search_payload)
             symbols_raw = (
@@ -450,6 +523,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             )
         except Exception as exc:
             logger.debug("search_codebase failed: %s", exc)
+        if not symbols_raw:
+            symbols_raw = await _fetch_top_symbols_via_cypher(graph_path, top_symbols)
 
     if top_processes > 0:
         try:

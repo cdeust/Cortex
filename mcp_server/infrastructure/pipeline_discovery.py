@@ -24,6 +24,7 @@ use of it". Pipeline is optional.
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -52,6 +53,14 @@ _SOURCE_DIRS = (
 
 _BUILT_RELATIVE = ("target/release/ai-architect-mcp",)
 
+# ── Install paths (shared with pipeline_installer) ──────────────────────
+
+# Where the silent installer clones and builds the upstream source.
+# Living next to other methodology artefacts means cleanup is one rm -rf.
+_INSTALL_SRC_DIR = Path.home() / ".claude" / "methodology" / "src" / "automatised-pipeline"
+_INSTALL_BIN_DIR = Path.home() / ".claude" / "methodology" / "bin"
+_INSTALL_SYMLINK = _INSTALL_BIN_DIR / "mcp-server"
+
 
 def discover_pipeline_command() -> Optional[list[str]]:
     """Return [command, *args] for the pipeline MCP server, or None.
@@ -60,6 +69,10 @@ def discover_pipeline_command() -> Optional[list[str]]:
     config alone and let ingest_codebase fail with the standard
     McpConnectionError when invoked (ingestion is explicitly opt-in).
     """
+    # Auto-installed location — preferred when present.
+    if _INSTALL_SYMLINK.exists() and os.access(_INSTALL_SYMLINK, os.X_OK):
+        return [str(_INSTALL_SYMLINK)]
+
     for name in _BINARY_CANDIDATES:
         path = shutil.which(name)
         if path:
@@ -92,12 +105,39 @@ def ensure_pipeline_connection() -> dict:
     command = discover_pipeline_command()
     existing = read_json(path) or {}
 
-    if existing.get("servers", {}).get("codebase"):
-        return {
-            "action": "already_configured",
-            "path": str(path),
-            "binary": existing["servers"]["codebase"].get("command"),
-        }
+    existing_codebase = existing.get("servers", {}).get("codebase")
+    if existing_codebase:
+        configured_cmd = existing_codebase.get("command") or ""
+        # Validate that the configured binary still exists. A user
+        # may have rm-rf'd the install dir, deleted the symlink, or
+        # moved the source repo. Stale entries silently break ingest;
+        # purge them so the install path can re-run.
+        if configured_cmd and Path(configured_cmd).exists() and os.access(configured_cmd, os.X_OK):
+            return {
+                "action": "already_configured",
+                "path": str(path),
+                "binary": configured_cmd,
+            }
+        # Stale entry: drop it so the discovery+install path runs.
+        # Other server entries (if any) are preserved.
+        servers = dict(existing.get("servers") or {})
+        servers.pop("codebase", None)
+        existing = {**existing, "servers": servers}
+        try:
+            write_json(path, existing)
+        except Exception as exc:
+            logger.warning("Failed to purge stale codebase entry from %s: %s", path, exc)
+
+    # Auto-install path. If discovery fails, attempt a silent
+    # git-clone + cargo build (and rustup bootstrap if cargo missing)
+    # before giving up. Lazy import to avoid a module-load cycle —
+    # pipeline_installer imports from this module.
+    if command is None:
+        from mcp_server.infrastructure.pipeline_installer import install_pipeline
+
+        install_result = install_pipeline()
+        if install_result.get("action") == "installed":
+            command = discover_pipeline_command()
 
     if command is None:
         return {"action": "no_pipeline_found", "path": str(path)}
@@ -109,6 +149,10 @@ def ensure_pipeline_connection() -> dict:
         "command": command[0],
         "args": command[1:],
         "env": {},
+        # 0 = no per-call timeout; fresh-codebase indexing of large
+        # trees can legitimately exceed any fixed bound. Liveness is
+        # governed by the child process and explicit cancellation.
+        "callTimeoutMs": 0,
     }
     config["servers"] = servers
     config.setdefault(
