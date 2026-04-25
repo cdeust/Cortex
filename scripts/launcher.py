@@ -43,15 +43,36 @@ def _resolve_paths() -> tuple[str, str]:
 def _ensure_deps(deps_dir: str) -> None:
     """Install minimal dependencies if missing.
 
-    Phase 5: psycopg_pool is a hard import at pg_store module load, so
-    a marketplace user without it gets an ImportError before the MCP
-    server even registers its tools. Install all three packages in
-    one pip-install call when any are missing so partial states
-    (e.g., psycopg present but psycopg_pool absent after an upgrade)
-    self-heal.
+    The plugin's MCP server, hooks, and handlers all transitively import
+    the full base runtime (fastmcp, pydantic, pydantic-settings, numpy)
+    plus the postgres trio (psycopg, psycopg_pool, pgvector). When the
+    plugin runs against system python (the marketplace install path),
+    none of these are guaranteed to be present, so any missing one
+    causes an ImportError before the MCP server registers tools or a
+    hook can read its payload. Install whatever's missing in a single
+    pip call so partial states (e.g., pydantic present but fastmcp
+    absent after a python upgrade) self-heal.
     """
     os.makedirs(deps_dir, exist_ok=True)
     missing: list[str] = []
+    # Base runtime — required by every entry point.
+    try:
+        import fastmcp  # noqa: F401
+    except ImportError:
+        missing.append("fastmcp>=2.0.0")
+    try:
+        import pydantic  # noqa: F401
+    except ImportError:
+        missing.append("pydantic>=2.0.0")
+    try:
+        import pydantic_settings  # noqa: F401
+    except ImportError:
+        missing.append("pydantic-settings>=2.0.0")
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        missing.append("numpy>=1.24.0")
+    # Postgres extras — required because pg_store hard-imports at module load.
     try:
         import psycopg  # noqa: F401
     except ImportError:
@@ -133,11 +154,15 @@ def main() -> None:
     if "DATABASE_URL" not in os.environ:
         os.environ["DATABASE_URL"] = "postgresql://localhost:5432/cortex"
 
-    # Install deps if requested or if this is the MCP server / SessionStart
-    if install_deps or module == "mcp_server":
-        _ensure_deps(deps_dir)
-    elif module == "mcp_server.hooks.session_start":
+    # Install deps. The base-deps check is a tight no-op when everything
+    # is already present, so we always run it — every entry point (server,
+    # hooks, doctor) imports the same base stack and crashes the same way
+    # if anything is missing. SessionStart additionally needs the heavy
+    # ML stack (sentence-transformers, flashrank).
+    if module == "mcp_server.hooks.session_start" or install_deps:
         _ensure_all_deps(deps_dir)
+    else:
+        _ensure_deps(deps_dir)
 
     # Change to plugin root
     os.chdir(plugin_root)
