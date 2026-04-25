@@ -31,6 +31,7 @@ if str(repo_root) not in sys.path:
 # Stub psycopg so agent_briefing imports cleanly without a live PG connection.
 # ---------------------------------------------------------------------------
 
+
 def _make_psycopg_stub(stub_rows: list[dict]) -> types.ModuleType:
     """Build a minimal psycopg stub returning stub_rows on any execute().
 
@@ -57,6 +58,7 @@ def _make_psycopg_stub(stub_rows: list[dict]) -> types.ModuleType:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _run_process_event(event: dict, stub_rows: list[dict]) -> tuple[str, str, int]:
     """Run process_event() in isolation, capturing stdout/stderr and exit code.
 
@@ -71,7 +73,9 @@ def _run_process_event(event: dict, stub_rows: list[dict]) -> tuple[str, str, in
 
     exit_code = 0
 
-    with patch.dict(sys.modules, {"psycopg": psycopg_stub, "psycopg.rows": psycopg_stub.rows}):
+    with patch.dict(
+        sys.modules, {"psycopg": psycopg_stub, "psycopg.rows": psycopg_stub.rows}
+    ):
         # Force re-import so patched psycopg is visible inside _fetch_agent_context.
         if "mcp_server.hooks.agent_briefing" in sys.modules:
             del sys.modules["mcp_server.hooks.agent_briefing"]
@@ -90,8 +94,8 @@ def _run_process_event(event: dict, stub_rows: list[dict]) -> tuple[str, str, in
 # Test cases
 # ---------------------------------------------------------------------------
 
-class TestAgentBriefing(unittest.TestCase):
 
+class TestAgentBriefing(unittest.TestCase):
     def test_feynman_with_matching_memory_produces_briefing(self) -> None:
         """Genius agent feynman + matching memory → stdout contains Cortex Briefing.
 
@@ -99,7 +103,11 @@ class TestAgentBriefing(unittest.TestCase):
         Post-condition: exit 0, stdout contains '## Cortex Briefing'.
         """
         stub_rows = [
-            {"content": "feynman past lesson: always verify sources", "heat": 0.8, "agent_context": "feynman"},
+            {
+                "content": "feynman past lesson: always verify sources",
+                "heat": 0.8,
+                "agent_context": "feynman",
+            },
         ]
         event = {
             "session_id": "test-session-001",
@@ -110,7 +118,11 @@ class TestAgentBriefing(unittest.TestCase):
         }
         stdout, stderr, code = _run_process_event(event, stub_rows)
         self.assertEqual(code, 0, f"Expected exit 0, got {code}. stderr: {stderr}")
-        self.assertIn("Cortex Briefing", stdout, f"Expected 'Cortex Briefing' in stdout.\nstdout: {stdout!r}\nstderr: {stderr!r}")
+        self.assertIn(
+            "Cortex Briefing",
+            stdout,
+            f"Expected 'Cortex Briefing' in stdout.\nstdout: {stdout!r}\nstderr: {stderr!r}",
+        )
 
     def test_nonexistent_agent_skips_gracefully(self) -> None:
         """Unknown agent name → exit 0 with skip log, no briefing emitted.
@@ -128,7 +140,9 @@ class TestAgentBriefing(unittest.TestCase):
         stdout, stderr, code = _run_process_event(event, [])
         self.assertEqual(code, 0, f"Expected exit 0, got {code}. stderr: {stderr}")
         self.assertEqual(stdout.strip(), "", f"Expected empty stdout, got: {stdout!r}")
-        self.assertIn("skip", stderr.lower(), f"Expected 'skip' in stderr. stderr: {stderr!r}")
+        self.assertIn(
+            "skip", stderr.lower(), f"Expected 'skip' in stderr. stderr: {stderr!r}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -144,5 +158,7 @@ if __name__ == "__main__":
         print("\nPASS: all agent-briefing tests passed.")
         sys.exit(0)
     else:
-        print(f"\nFAIL: {len(result.failures)} failure(s), {len(result.errors)} error(s).")
+        print(
+            f"\nFAIL: {len(result.failures)} failure(s), {len(result.errors)} error(s)."
+        )
         sys.exit(1)

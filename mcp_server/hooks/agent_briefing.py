@@ -89,10 +89,20 @@ _MAX_MEMORIES = 3
 _MIN_HEAT = 0.2
 
 # Fallback set used when ~/.claude/agents/ is missing (e.g., CI without install).
-_FALLBACK_AGENTS: frozenset[str] = frozenset({
-    "engineer", "tester", "reviewer", "architect", "dba", "devops",
-    "frontend", "security", "researcher", "ux",
-})
+_FALLBACK_AGENTS: frozenset[str] = frozenset(
+    {
+        "engineer",
+        "tester",
+        "reviewer",
+        "architect",
+        "dba",
+        "devops",
+        "frontend",
+        "security",
+        "researcher",
+        "ux",
+    }
+)
 
 # Matches `name: <slug>` or `name: "<slug>"` in agent-file YAML frontmatter.
 _YAML_NAME_RE = re.compile(r"^name:\s*['\"]?([A-Za-z0-9_.-]+)['\"]?\s*$", re.MULTILINE)

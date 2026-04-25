@@ -336,7 +336,7 @@ def resolve_domain(input_str: str) -> str:
             "-users-cdeust-",
         ):
             if stripped.startswith(prefix):
-                stripped = stripped[len(prefix):]
+                stripped = stripped[len(prefix) :]
                 break
         # Strip worktree suffixes that survived (no slug match found above).
         if "-worktrees-" in stripped:

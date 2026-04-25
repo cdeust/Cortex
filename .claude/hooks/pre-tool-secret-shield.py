@@ -131,8 +131,7 @@ def bash_blocked(cmd: str) -> tuple[bool, str | None]:
         is_b, pattern = is_blocked_path(candidate)
         if is_b:
             return True, (
-                f"read of credential-bearing path '{candidate}' "
-                f"(pattern '{pattern}')"
+                f"read of credential-bearing path '{candidate}' (pattern '{pattern}')"
             )
     m = BLOCKED_PATTERNS_EMBEDDED.search(cmd)
     if m:
@@ -156,21 +155,24 @@ def main() -> int:
         path = tin.get("file_path", "")
         is_blocked, pattern = is_blocked_path(path)
         if is_blocked:
-            blocked_reason = f"Read blocked: {path} matches credential pattern '{pattern}'"
+            blocked_reason = (
+                f"Read blocked: {path} matches credential pattern '{pattern}'"
+            )
     elif tool == "Bash":
         cmd = tin.get("command", "")
         is_blocked, reason = bash_blocked(cmd)
         if is_blocked:
-            blocked_reason = (
-                f"Bash blocked: {reason}. Command: {cmd[:160]}"
-                + ("…" if len(cmd) > 160 else "")
+            blocked_reason = f"Bash blocked: {reason}. Command: {cmd[:160]}" + (
+                "…" if len(cmd) > 160 else ""
             )
     elif tool == "Grep":
         for key in ("path", "include"):
             v = tin.get(key, "")
             is_blocked, pattern = is_blocked_path(v) if v else (False, None)
             if is_blocked:
-                blocked_reason = f"Grep blocked: {key}={v} matches credential pattern '{pattern}'"
+                blocked_reason = (
+                    f"Grep blocked: {key}={v} matches credential pattern '{pattern}'"
+                )
                 break
     elif tool in ("Edit", "Write", "NotebookEdit"):
         path = tin.get("file_path", "")
