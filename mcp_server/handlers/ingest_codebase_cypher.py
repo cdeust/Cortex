@@ -71,7 +71,9 @@ def file_path_from_qn(qn: str) -> str | None:
     return head or None
 
 
-async def _run_query(graph_path: str, cypher: str) -> tuple[dict[str, Any] | None, str | None]:
+async def _run_query(
+    graph_path: str, cypher: str
+) -> tuple[dict[str, Any] | None, str | None]:
     """Run a single cypher query. Returns (result_dict, error_message).
 
     On upstream-reported errors (status=error), result is None and the
@@ -192,9 +194,7 @@ async def fetch_call_edges(
         try:
             result, err = await _run_query(graph_path, cypher)
         except _TRANSPORT_ERRORS as exc:
-            diagnostics.append(
-                f"call-edges/{src_label}: {type(exc).__name__}: {exc}"
-            )
+            diagnostics.append(f"call-edges/{src_label}: {type(exc).__name__}: {exc}")
             continue
         if err is not None:
             diagnostics.append(f"call-edges/{src_label}: {err}")

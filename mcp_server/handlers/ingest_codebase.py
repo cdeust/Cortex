@@ -163,9 +163,7 @@ async def _pull_symbols_and_files(
         known_symbols = {
             s["qualified_name"] for s in symbols if s.get("qualified_name")
         }
-        call_edges, call_diag = await cypher.fetch_call_edges(
-            graph_path, known_symbols
-        )
+        call_edges, call_diag = await cypher.fetch_call_edges(graph_path, known_symbols)
         diagnostics.extend(call_diag)
         known_files = {f["path"] for f in files if f.get("path")}
         if known_files:
@@ -175,7 +173,9 @@ async def _pull_symbols_and_files(
             diagnostics.extend(contain_diag)
         else:
             known_files = set()
-        diagnostics.extend(_attribute_files_to_symbols(symbols, file_edges, known_files))
+        diagnostics.extend(
+            _attribute_files_to_symbols(symbols, file_edges, known_files)
+        )
     return symbols, files, call_edges, file_edges, diagnostics
 
 
@@ -235,9 +235,13 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         }
 
     if top_symbols is None or top_symbols > 0:
-        symbols, files, call_edges, file_edges, diagnostics = (
-            await _pull_symbols_and_files(graph_path, top_symbols)
-        )
+        (
+            symbols,
+            files,
+            call_edges,
+            file_edges,
+            diagnostics,
+        ) = await _pull_symbols_and_files(graph_path, top_symbols)
     else:
         symbols, files, call_edges, file_edges, diagnostics = [], [], [], [], []
 

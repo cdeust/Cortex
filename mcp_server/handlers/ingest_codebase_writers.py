@@ -135,9 +135,7 @@ def write_symbol_relationships(
             )
             written += 1
         except (ValueError, KeyError, TypeError) as exc:
-            logger.debug(
-                "edge insert failed (%s → %s): %s", src_name, target_name, exc
-            )
+            logger.debug("edge insert failed (%s → %s): %s", src_name, target_name, exc)
     return written
 
 
