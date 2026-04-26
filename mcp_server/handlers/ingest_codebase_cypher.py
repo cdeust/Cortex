@@ -81,10 +81,7 @@ def file_path_from_qn(qn: str) -> list[str]:
     head = qn.split("::", 1)[0]
     head_is_path = bool(head) and ("/" in head or head.endswith(code_exts))
     head_is_dotted_module = (
-        bool(head)
-        and "." in head
-        and "/" not in head
-        and not head.endswith(code_exts)
+        bool(head) and "." in head and "/" not in head and not head.endswith(code_exts)
     )
 
     # (1) head already looks like a file path — trust it as-is.
