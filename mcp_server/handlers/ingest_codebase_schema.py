@@ -59,27 +59,6 @@ schema = {
                 ),
                 "default": False,
             },
-            "top_symbols": {
-                "type": ["integer", "null"],
-                "description": (
-                    "Optional explicit cap on symbols materialised as memories "
-                    "+ KG nodes. Default null = pull every Function/Method/"
-                    "Struct in the graph (full chain hierarchy)."
-                ),
-                "default": None,
-                "minimum": 0,
-                "examples": [None, 200, 1000],
-            },
-            "top_processes": {
-                "type": ["integer", "null"],
-                "description": (
-                    "Optional explicit cap on processes materialised as wiki "
-                    "pages. Default null = pull every entry-point process."
-                ),
-                "default": None,
-                "minimum": 0,
-                "examples": [None, 25, 100],
-            },
         },
     },
 }

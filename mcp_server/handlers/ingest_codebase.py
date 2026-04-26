@@ -114,14 +114,17 @@ def _attribute_files_to_symbols(
             sym["file"] = authoritative
             continue
         # No containment edge — try the qn-split fallback, but only
-        # accept it when the result corresponds to an actual File node.
-        candidate = cypher.file_path_from_qn(qn)
-        if candidate and candidate in known_files:
-            sym["file"] = candidate
+        # accept candidates that correspond to actual File nodes.
+        # ``file_path_from_qn`` returns a priority-ordered list; pick
+        # the first candidate present in ``known_files``.
+        candidates = cypher.file_path_from_qn(qn)
+        match = next((c for c in candidates if c in known_files), None)
+        if match is not None:
+            sym["file"] = match
             fallback_used += 1
         else:
             sym["file"] = None
-            if candidate:
+            if candidates:
                 fallback_unverified += 1
     diagnostics: list[str] = []
     if fallback_used:
@@ -133,8 +136,9 @@ def _attribute_files_to_symbols(
     if fallback_unverified:
         diagnostics.append(
             f"file-attribution: {fallback_unverified} symbols had no "
-            f"containment edge AND the qn-split fallback didn't match a "
-            f"known file (likely non-Python indexer); file=None"
+            f"containment edge AND no qn-split candidate matched a "
+            f"known file; file=None (orphan symbols or qn format the "
+            f"fallback heuristics don't cover)"
         )
     return diagnostics
 
@@ -155,7 +159,13 @@ async def _pull_symbols_and_files(
     diagnostics: list[str] = []
     symbols, sym_diag = await cypher.fetch_top_symbols(graph_path, top_symbols)
     diagnostics.extend(sym_diag)
-    files, file_diag = await cypher.fetch_files(graph_path, limit=top_symbols)
+    # Files are pulled UNCAPPED regardless of ``top_symbols``. The
+    # File→symbol containment join (cypher.fetch_file_containment)
+    # filters by the known-files set; if files are truncated to a slice
+    # smaller than the symbols' file population, the join collapses to
+    # near-zero edges. Decouple: always pull every File node so
+    # containment edges resolve. ``top_symbols`` only caps symbols.
+    files, file_diag = await cypher.fetch_files(graph_path, limit=None)
     diagnostics.extend(file_diag)
     call_edges: list[tuple[str, str]] = []
     file_edges: list[tuple[str, str]] = []

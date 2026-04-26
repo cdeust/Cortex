@@ -50,25 +50,68 @@ _TRANSPORT_ERRORS: tuple[type[Exception], ...] = (
 )
 
 
-def file_path_from_qn(qn: str) -> str | None:
-    """Last-resort heuristic: derive a file-path-shaped string from a
-    qualified_name when the graph has no (:File)-[]->(:symbol) edge
-    for it.
+def file_path_from_qn(qn: str) -> list[str]:
+    """Last-resort heuristic: derive plausible file-path candidates
+    from a qualified_name when the graph has no (:File)-[]->(:symbol)
+    edge for it.
 
-    Many language indexers emit ``qualified_name = "<file>::<sym>"``
-    (Python via the AP indexer does this), in which case splitting on
-    ``::`` and taking the first segment yields the file path. Other
-    languages (e.g., Rust ``crate::module::Type::method``) do NOT
-    encode a file path here — the head segment will be a crate or
-    module name, not a real path. Callers should prefer the
-    containment-edge mapping; only use this fallback when no edge
-    exists, and then validate against the known-files set before
-    trusting the result.
+    Returns a list of candidate paths (zero or more), in priority
+    order. Callers MUST validate each candidate against the
+    known-files set before trusting it — the qn alone cannot
+    distinguish a Python module from a Rust crate path.
+
+    Heuristics applied (priority order):
+      1. ``<path/with/extension>::<sym>`` — head already a file path
+         (Python via `<file>::<sym>`, e.g. ``deps/aiofile/aio.py::AIOFile``).
+      2. ``<dotted.module>::<sym>`` — convert dots to slashes and
+         append ``.py`` (e.g. ``my.pkg.mod::C`` ⇒ ``my/pkg/mod.py``).
+      3. ``<a::b::c>::<sym>`` — convert ``::`` separators to slashes
+         and append ``.py`` (Rust-style module path used by some
+         Python indexers, e.g. ``mcp_server::handlers::x::handler``
+         ⇒ ``mcp_server/handlers/x.py`` or ``mcp_server/handlers/x/handler.py``).
+      4. Same as (3) but treating the trailing segment as a method
+         on a class — drop the last two segments and use ``.py``.
+
+    Returns an empty list when the qn is empty or has no ``::``.
     """
     if not qn or "::" not in qn:
-        return None
+        return []
+    candidates: list[str] = []
+    code_exts = (".py", ".ts", ".tsx", ".rs", ".js")
     head = qn.split("::", 1)[0]
-    return head or None
+    head_is_path = bool(head) and ("/" in head or head.endswith(code_exts))
+    head_is_dotted_module = (
+        bool(head)
+        and "." in head
+        and "/" not in head
+        and not head.endswith(code_exts)
+    )
+
+    # (1) head already looks like a file path — trust it as-is.
+    if head_is_path:
+        candidates.append(head)
+        return candidates
+
+    # (2) dotted-module head (classic Python ``pkg.mod::Sym``).
+    if head_is_dotted_module:
+        candidates.append(head.replace(".", "/") + ".py")
+        return candidates
+
+    # (3,4) Rust-style ``a::b::c::sym`` module path. Try progressively
+    # shorter prefixes so both ``module::function`` (drop 1) and
+    # ``module::Class::method`` (drop 2) resolve.
+    parts = qn.split("::")
+    for drop in (1, 2, 3):
+        if len(parts) - drop < 1:
+            break
+        prefix = parts[: len(parts) - drop]
+        if not prefix:
+            continue
+        cand = "/".join(prefix) + ".py"
+        if cand not in candidates:
+            candidates.append(cand)
+
+    return candidates
 
 
 async def _run_query(

@@ -6,6 +6,47 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.14.9] — ingest_codebase: no caps + Rust-style qn fallback
+
+### Fixed
+
+- **Hardcoded `top_symbols=50` / `top_processes=10` caps in the FastMCP
+  wrapper** (`mcp_server/tool_registry_ingest.py`) silently truncated
+  every ingest to the longest 50 symbols across Function/Method/Struct,
+  regardless of the schema's documented `null = unlimited` default. On
+  the Cortex codebase this collapsed an upstream graph of 197 646
+  nodes / 95 185 edges to **98 memories / 98 entities / 3 edges**.
+  Removed both parameters from the tool wrapper signature; the
+  composition root now always passes `None` so the handler pulls every
+  Function/Method/Struct/process the upstream graph holds.
+- **`fetch_files` shared the symbol cap.**
+  `cypher.fetch_files(graph_path, limit=top_symbols)` truncated File
+  nodes to the same slice as the symbol cap. With `top_symbols=50`,
+  only 50 of thousands of files came back; the
+  `(:File)-[]->(:symbol)` containment join filtered by
+  `known_files` and dropped every edge whose file wasn't in that
+  50-file slice. Decoupled: files are pulled unconditionally
+  (`limit=None`); only symbols may be capped (and even that path is
+  no longer reachable from the public tool).
+- **`file_path_from_qn` couldn't resolve Rust-style qualified names.**
+  First-party Python in this codebase emits
+  `mcp_server::handlers::ingest_codebase::handler`, which the previous
+  fallback split on `::` and returned `"mcp_server"` — not a real
+  file path, so containment failed and the diagnostic blamed a
+  "non-Python indexer". Rewritten to return a priority-ordered list
+  of candidates covering three qn formats:
+  `<file.py>::<sym>`, `<dotted.module>::<sym>`, and
+  `<a::b::c>::<sym>` (Rust-style module paths). The handler picks the
+  first candidate present in `known_files`; the diagnostic now
+  describes the actual cause when no candidate matches.
+
+### Changed
+
+- `ingest_codebase` MCP schema no longer advertises `top_symbols` or
+  `top_processes` properties. The handler still accepts them as
+  programmatic kwargs for tests, but they are not part of the public
+  tool surface.
+
 ## [3.14.8] — ingest_codebase full-chain extraction + audit fixes
 
 ### Fixed

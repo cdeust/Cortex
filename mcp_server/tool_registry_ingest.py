@@ -31,10 +31,12 @@ def _register_ingest_codebase(mcp: FastMCP) -> None:
         output_dir: str | None = None,
         language: str = "auto",
         force_reindex: bool = False,
-        top_symbols: int = 50,
-        top_processes: int = 10,
     ) -> str:
-        """Ingest upstream codebase analysis into Cortex."""
+        """Ingest upstream codebase analysis into Cortex.
+
+        No caps. Pulls every Function/Method/Struct/process the upstream
+        graph holds, projects them all into Cortex memories + KG.
+        """
         return await safe_handler(
             ingest_codebase.handler,
             {
@@ -42,8 +44,8 @@ def _register_ingest_codebase(mcp: FastMCP) -> None:
                 "output_dir": output_dir,
                 "language": language,
                 "force_reindex": force_reindex,
-                "top_symbols": top_symbols,
-                "top_processes": top_processes,
+                "top_symbols": None,
+                "top_processes": None,
             },
             tool_name="ingest_codebase",
         )
