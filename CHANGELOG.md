@@ -6,6 +6,35 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.14.12] — fix MCP client deadlock on long upstream responses
+
+### Fixed
+
+- **`ingest_codebase` hung indefinitely on polyglot repos.** Two
+  deadlock vectors in `mcp_client.py`:
+
+  1. `_read_loop`'s `except Exception: pass` silently swallowed any
+     stream-level failure (`LimitOverrunError`, `IncompleteReadError`,
+     `ConnectionResetError`, `BrokenPipeError`, JSON-side bugs). When
+     the reader exited, every pending request future stayed pending
+     forever — `_send`'s `await future` blocked the caller indefinitely.
+     Reader now rejects every pending future with a
+     `McpConnectionError` carrying the terminal cause, so callers
+     surface a clear error instead of hanging.
+
+  2. `_send` honoured `callTimeoutMs: 0` as "no timeout at all"
+     and called `await future` unbounded. Combined with the silent
+     reader death, this guaranteed deadlock on any upstream that
+     emitted >limit bytes on a single line or terminated without
+     responding. We now enforce a 60-minute hard ceiling even when
+     the operator opts into "no timeout" — well above any legitimate
+     codebase indexing job (largest observed production runs are
+     ~12 minutes), low enough that a wedged upstream surfaces.
+
+- `_read_loop` now logs non-JSON lines instead of silently dropping
+  them, so future protocol-level mismatches become visible without
+  crashing the loop.
+
 ## [3.14.11] — track automatised-pipeline binary rename + fix pool allowlist
 
 ### Fixed

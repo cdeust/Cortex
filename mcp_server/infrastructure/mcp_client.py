@@ -250,14 +250,24 @@ class MCPClient:
         self._proc.stdin.write((msg + "\n").encode())  # type: ignore
         await self._proc.stdin.drain()  # type: ignore
 
-        if self._call_timeout_ms is None:
-            return await future
+        # Even when the operator opted into "no per-call timeout"
+        # (callTimeoutMs == 0), enforce a hard ceiling so a wedged
+        # upstream cannot deadlock the caller forever. 60 minutes is
+        # well above any legitimate codebase indexing job (the
+        # largest production runs we have observed are ~12 minutes).
+        # source: deadlock observed 2026-04-27 — ingest_codebase hung
+        # for >8 minutes with both Cortex and the upstream sleeping
+        # at 0% CPU on a polyglot Android repo. Reader had exited
+        # silently and ``await future`` was unbounded.
+        effective_timeout = (
+            self._call_timeout_ms / 1000 if self._call_timeout_ms else 3600.0
+        )
         try:
-            return await asyncio.wait_for(future, timeout=self._call_timeout_ms / 1000)
+            return await asyncio.wait_for(future, timeout=effective_timeout)
         except asyncio.TimeoutError:
             self._pending.pop(req_id, None)
             raise McpConnectionError(
-                f"Timeout after {self._call_timeout_ms}ms: {method}"
+                f"Timeout after {int(effective_timeout * 1000)}ms: {method}"
             )
 
     def _notify(self, method: str, params: dict | None = None) -> None:
@@ -273,10 +283,15 @@ class MCPClient:
             pass
 
     async def _read_loop(self) -> None:
+        # Track terminal cause so all pending futures get a real error
+        # instead of hanging forever when the reader exits.
+        terminal_exc: BaseException | None = None
         try:
             while True:
                 line = await self._proc.stdout.readline()  # type: ignore
                 if not line:
+                    # EOF — child closed stdout. Fall through to fail
+                    # pending futures so callers do not block forever.
                     break
                 decoded = line.decode("utf-8").strip()
                 if not decoded or decoded.startswith("Content-Length"):
@@ -296,11 +311,49 @@ class MCPClient:
                             else:
                                 future.set_result(msg.get("result"))
                 except (json.JSONDecodeError, ValueError):
-                    pass
+                    # Bad payload from the upstream is recoverable —
+                    # log and continue rather than killing the loop.
+                    print(
+                        f"[mcp-client] non-JSON line dropped: {decoded[:200]}",
+                        file=sys.stderr,
+                    )
+                    continue
         except asyncio.CancelledError:
-            pass
-        except Exception:
-            pass
+            terminal_exc = None
+        except (
+            asyncio.LimitOverrunError,
+            asyncio.IncompleteReadError,
+            ConnectionResetError,
+            BrokenPipeError,
+        ) as exc:
+            # Stream-level failure: most often a single response line
+            # exceeded the configured ``limit`` bytes. Surface it as
+            # the terminal cause for every pending future, so callers
+            # see a clear McpConnectionError instead of hanging.
+            terminal_exc = exc
+            print(
+                f"[mcp-client] reader stream error: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
+        except Exception as exc:  # noqa: BLE001
+            terminal_exc = exc
+            print(
+                f"[mcp-client] reader unexpected error: {type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
+        finally:
+            # Reader is exiting — wake every pending caller. Without
+            # this, ``_send``'s ``await future`` blocks forever
+            # (deadlock observed on long upstream responses).
+            for fut in list(self._pending.values()):
+                if not fut.done():
+                    fut.set_exception(
+                        McpConnectionError(
+                            f"Upstream reader terminated: "
+                            f"{type(terminal_exc).__name__ if terminal_exc else 'EOF'}"
+                        )
+                    )
+            self._pending.clear()
 
     async def _stderr_loop(self) -> None:
         log_fh = self._open_stderr_log()
