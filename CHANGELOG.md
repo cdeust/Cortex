@@ -6,6 +6,45 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.14.11] — track automatised-pipeline binary rename + fix pool allowlist
+
+### Fixed
+
+- **`ingest_codebase` failed with `Command 'ai-architect-mcp' not in
+  allowed list`.** The pool path in `mcp_client_pool.get_client()`
+  instantiated `MCPClient` without injecting `_extra_allowed_commands`,
+  while the bridge path in `ap_bridge.py` injected `{"node",
+  "automatised-pipeline", "ai-architect-mcp"}` before connecting. The
+  `ingest_codebase` codepath went through the pool, so the upstream
+  binary was rejected by the base allowlist
+  (`['cortex', 'mcp-server', 'node', 'npx', 'python', 'python3']`).
+  Pool now mirrors the bridge's extension.
+
+### Changed
+
+- **Track upstream binary rename** (`automatised-pipeline` ≥ v0.0.7):
+  the upstream Rust binary is now named `automatised-pipeline` (was
+  `ai-architect-mcp`). Updated:
+  - `pipeline_installer.py`: `--bin automatised-pipeline` and
+    `_BUILT_BINARY_REL = "target/release/automatised-pipeline"`.
+  - `pipeline_discovery.py`: dropped legacy `ai-architect-mcp` from
+    `_BINARY_CANDIDATES`; `_BUILT_RELATIVE` updated.
+  - `pipeline_install_release.py`: release-asset naming convention
+    follows upstream (`automatised-pipeline-{os}-{arch}.tar.gz`).
+  - `ap_bridge.py`: dropped `ai-architect-mcp` from
+    `_extra_allowed_commands` (only `automatised-pipeline` + `node`).
+  - `http_launcher.py`, `http_standalone.py`: binary discovery uses
+    the new name.
+
+### Migration notes
+
+- Users running the upstream pipeline must update to v0.0.7 of
+  `cdeust/automatised-pipeline` (binary renamed). Cortex's source
+  build path (`pipeline_installer`) and prebuilt fast-path
+  (`pipeline_install_release`) both target the new name.
+- Existing installs at `~/.claude/methodology/bin/mcp-server` keep
+  working — the symlink target is rebuilt on next install.
+
 ## [3.14.10] — self-locating plugin MCP launcher
 
 ### Fixed

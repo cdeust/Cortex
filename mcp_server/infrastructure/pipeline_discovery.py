@@ -39,7 +39,6 @@ _BINARY_CANDIDATES = (
     "cortex-pipeline",
     "automatised-pipeline",
     "ai-automatised-pipeline",
-    "ai-architect-mcp",
 )
 
 # Common source-checkout locations. Relative to each user's working dir

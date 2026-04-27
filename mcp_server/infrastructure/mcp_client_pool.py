@@ -64,6 +64,14 @@ async def get_client(server_name: str) -> MCPClient:
     config = _load_server_config(server_name)
     client = MCPClient(config)
 
+    # Upstream MCP servers ship binaries that are not in the default
+    # allowlist. Mirror the extension that ap_bridge.py applies on its
+    # bridge path so the pool path is not silently rejected. Without
+    # this, ingest_codebase fails with "Command not in allowed list"
+    # even when mcp-connections.json correctly points at the binary.
+    # source: ap_bridge.py L226-L233 — same set, same reason.
+    client._extra_allowed_commands = {"node", "automatised-pipeline"}
+
     await client.connect()
     _pool[server_name] = client
 

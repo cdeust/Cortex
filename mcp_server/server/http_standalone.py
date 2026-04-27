@@ -281,14 +281,14 @@ def _auto_enable_ap() -> None:
         dev = (
             Path.home()
             / "Documents/Developments/automatised-pipeline"
-            / "target/release/ai-architect-mcp"
+            / "target/release/automatised-pipeline"
         )
         if dev.is_file() and os.access(dev, os.X_OK):
             bin_path = str(dev)
         else:
             import shutil as _sh
 
-            bin_path = _sh.which("ai-architect-mcp")
+            bin_path = _sh.which("automatised-pipeline")
     if bin_path is None and not os.environ.get("CORTEX_AP_COMMAND"):
         return
     if bin_path and not os.environ.get("CORTEX_AP_COMMAND"):

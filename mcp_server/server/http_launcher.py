@@ -97,12 +97,12 @@ def _detect_dev_source() -> Path | None:
 
 
 def _find_ap_binary() -> str | None:
-    """Locate a built ``ai-architect-mcp`` (automatised-pipeline).
+    """Locate a built ``automatised-pipeline`` (automatised-pipeline).
 
     Checks, in order:
       1. ``CORTEX_AP_COMMAND`` already set — caller knows the path.
-      2. A sibling dev checkout: ``~/Documents/Developments/automatised-pipeline/target/release/ai-architect-mcp``.
-      3. ``ai-architect-mcp`` on ``PATH``.
+      2. A sibling dev checkout: ``~/Documents/Developments/automatised-pipeline/target/release/automatised-pipeline``.
+      3. ``automatised-pipeline`` on ``PATH``.
 
     Returns the absolute binary path, or ``None`` if not buildable. We
     do NOT build here — building requires Rust + cmake and can take
@@ -112,11 +112,11 @@ def _find_ap_binary() -> str | None:
         return None  # caller explicitly configured it — leave alone
     dev = (
         Path.home()
-        / "Documents/Developments/automatised-pipeline/target/release/ai-architect-mcp"
+        / "Documents/Developments/automatised-pipeline/target/release/automatised-pipeline"
     )
     if dev.is_file() and os.access(dev, os.X_OK):
         return str(dev)
-    path_hit = shutil.which("ai-architect-mcp")
+    path_hit = shutil.which("automatised-pipeline")
     return path_hit
 
 
@@ -162,7 +162,7 @@ def _ensure_ap_graph(dev_src: Path | None, env: dict) -> None:
     try:
         subprocess.Popen(  # noqa: S603
             [
-                bin_path or "ai-architect-mcp",
+                bin_path or "automatised-pipeline",
             ],
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,

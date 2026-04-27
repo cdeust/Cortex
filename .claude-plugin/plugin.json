@@ -1,7 +1,7 @@
 {
   "name": "cortex",
   "description": "Persistent memory for Claude Code — remembers across sessions automatically. Install and forget. Scientific retrieval backed by 41 published papers.",
-  "version": "3.14.10",
+  "version": "3.14.11",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"

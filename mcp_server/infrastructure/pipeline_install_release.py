@@ -16,9 +16,9 @@ path. Failure here is NEVER fatal — it's a fast path, not a substitute.
 
 Asset naming convention (upstream contract)
 -------------------------------------------
-- ``ai-architect-mcp-{os}-{arch}.tar.gz`` containing the binary at
-  the archive root as ``ai-architect-mcp``.
-- ``ai-architect-mcp-{os}-{arch}.tar.gz.sha256`` carrying the hex digest.
+- ``automatised-pipeline-{os}-{arch}.tar.gz`` containing the binary at
+  the archive root as ``automatised-pipeline``.
+- ``automatised-pipeline-{os}-{arch}.tar.gz.sha256`` carrying the hex digest.
 - ``{os}`` ∈ {macos, linux}; ``{arch}`` ∈ {x86_64, aarch64}.
 """
 
@@ -98,7 +98,7 @@ def _find_assets(release: dict, tag: str) -> Optional[tuple[str, str]]:
 def _verify_and_extract(
     tar_path: str, expected_sha: str, dest_dir: str
 ) -> Optional[str]:
-    """Verify SHA256, extract ``ai-architect-mcp`` to dest_dir, return path.
+    """Verify SHA256, extract ``automatised-pipeline`` to dest_dir, return path.
 
     Refuses tar entries that escape dest_dir (path-traversal guard).
     """
@@ -116,7 +116,7 @@ def _verify_and_extract(
             target = (dest / member.name).resolve()
             if not str(target).startswith(str(dest) + os.sep) and target != dest:
                 return None
-            if member.isfile() and Path(member.name).name == "ai-architect-mcp":
+            if member.isfile() and Path(member.name).name == "automatised-pipeline":
                 # filter="data" enforces safe extraction (no symlinks
                 # outside dest, no special files, no setuid bits) —
                 # required default in Python 3.14, opt-in earlier.
@@ -182,7 +182,7 @@ def try_install_prebuilt(symlink_dest: Path) -> dict:
         # Move the verified binary into the methodology bin dir under a
         # versioned name so subsequent fast-path installs don't clash.
         symlink_dest.parent.mkdir(parents=True, exist_ok=True)
-        final = symlink_dest.parent / "ai-architect-mcp.prebuilt"
+        final = symlink_dest.parent / "automatised-pipeline.prebuilt"
         shutil.move(binary, str(final))
         os.chmod(final, 0o755)
 

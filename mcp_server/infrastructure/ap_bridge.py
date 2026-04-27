@@ -223,13 +223,12 @@ class APBridge:
                 cfg = {**cfg, "callTimeoutMs": 0}
                 self._client = MCPClient(cfg)
                 # AP's binary is not in the default allowlist.
-                # ``ai-architect-mcp`` is the crate name in
-                # automatised-pipeline; ``node`` is for the
-                # plugin-cache resolution path.
+                # ``automatised-pipeline`` is the bin name shipped by
+                # cdeust/automatised-pipeline ≥ v0.0.7; ``node`` is for
+                # the plugin-cache resolution path.
                 self._client._extra_allowed_commands = {
                     "node",
                     "automatised-pipeline",
-                    "ai-architect-mcp",
                 }
                 await self._client.connect()
                 self._connected = True
