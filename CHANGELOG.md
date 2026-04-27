@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.14.10] — self-locating plugin MCP launcher
+
+### Fixed
+
+- **`plugin:cortex:cortex` failed to connect from any non-Cortex CWD.**
+  The plugin's `.mcp.json` relied on Claude Code injecting
+  `CLAUDE_PLUGIN_ROOT`, which was not happening reliably; the
+  `${CLAUDE_PLUGIN_ROOT:-$PWD}` fallback resolved to the user's project
+  directory, where `scripts/launcher.py` does not exist. Replaced the
+  bash command with a Python one-liner that reads
+  `~/.claude/plugins/installed_plugins.json` (always at a fixed absolute
+  path) to discover the plugin install path, then `execvp`s
+  `launcher.py`. No CWD or env dependency. Users in any project now get
+  Cortex on plugin update — no per-project configuration required.
+
 ## [3.14.9] — ingest_codebase: no caps + Rust-style qn fallback
 
 ### Fixed
