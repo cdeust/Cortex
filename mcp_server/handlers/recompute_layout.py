@@ -76,6 +76,28 @@ def run_recompute(store) -> dict[str, Any]:
     from mcp_server.infrastructure import layout_pg_store
 
     fp = layout_engine.topology_fingerprint(node_ids, edges)
+
+    # Skip-if-fresh: if the cached layout's fingerprint matches the
+    # current graph's, nothing has changed topologically and the
+    # existing coordinates are still valid. This makes the handler
+    # idempotent — every cortex-visualize call can invoke it safely
+    # and only pays the layout cost on the very first run (or after
+    # a topology change).
+    try:
+        existing = layout_pg_store.read_layout_version(store)
+    except Exception:
+        existing = None
+    if existing and existing.get("fingerprint") == fp:
+        return {
+            "status": "ok",
+            "node_count": existing["count"],
+            "edge_count": len(edges),
+            "elapsed_ms": 0,
+            "topology_fingerprint": fp,
+            "layout_version": existing["version"],
+            "cached": True,
+        }
+
     started = time.monotonic()
     try:
         coords = layout_engine.layout(node_ids, edges)
@@ -92,6 +114,7 @@ def run_recompute(store) -> dict[str, Any]:
         "elapsed_ms": elapsed_ms,
         "topology_fingerprint": fp,
         "layout_version": layout_version,
+        "cached": False,
     }
 
 

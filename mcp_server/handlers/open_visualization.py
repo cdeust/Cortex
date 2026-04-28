@@ -200,13 +200,104 @@ async def handler(args: dict | None = None) -> dict:
             _auto_sync_all_caches(dev_src)
             _kill_port(3458)
 
-    # Regardless of how we got here, launch + open the browser.
+    # Regardless of how we got here, launch the standalone server.
     url = launch_server("unified")
-    open_in_browser(url)
 
+    # Drive the full prepare-then-render flow from this single entry
+    # point so the user never has to know the pipeline exists. Steps:
+    #   1. Wait for the graph build to reach full_ready (else the
+    #      layout pass has nothing to chew on).
+    #   2. Trigger /api/recompute_layout on the standalone — it skips
+    #      itself when the fingerprint already matches PG.
+    #   3. Surface extras-missing / errors as the MCP message so the
+    #      user sees them in Claude Code's response.
+    #   4. Only then open the browser at ?viz=tilemap.
+    layout_status = _prepare_layout(url)
+    extras_missing = layout_status.get("reason") == "igraph_missing"
+    if extras_missing:
+        # Skip opening the new viz — fall back to legacy URL so the
+        # user still sees a graph. Surface the install hint clearly.
+        target_url = url
+        message = (
+            f"Legacy viz opened at {target_url}. "
+            "The high-scale tilemap path requires the optional "
+            "'viz-tile' extra:\n"
+            "    pip install -e '.[viz-tile]'   (or)\n"
+            "    uv pip install '.[viz-tile]'"
+        )
+    else:
+        target_url = url.rstrip("/") + "/?viz=tilemap"
+        if layout_status.get("status") == "ok":
+            cached = layout_status.get("cached")
+            stamp = (
+                "cached"
+                if cached
+                else (f"computed in {layout_status.get('elapsed_ms', 0)} ms")
+            )
+            message = (
+                f"Tilemap viz opened at {target_url} — "
+                f"{layout_status.get('node_count', 0)} nodes ({stamp})."
+            )
+        else:
+            message = (
+                f"Tilemap viz opened at {target_url} (layout status: "
+                f"{layout_status.get('reason', 'unknown')})."
+            )
+
+    open_in_browser(target_url)
     return {
-        "url": url,
-        "message": f"Unified neural graph opened at {url}",
+        "url": target_url,
+        "message": message,
         "dev_source": str(dev_src) if dev_src else None,
         "bootstrap": bootstrap_status,
+        "layout": layout_status,
     }
+
+
+def _prepare_layout(server_url: str, timeout_s: int = 600) -> dict:
+    """Wait for the graph build, then drive /api/recompute_layout.
+
+    Both endpoints belong to the spawned standalone server; we reach
+    them via plain HTTP from this MCP-process handler so the standalone
+    owns the only ``MemoryStore`` connection. Returns the JSON status
+    dict /api/recompute_layout produced, or an error stub if the
+    pipeline never completed in ``timeout_s``.
+    """
+    import json as _json
+    import time as _time
+    import urllib.error as _ue
+    import urllib.request as _ur
+
+    base = server_url.rstrip("/")
+
+    # Step 1: wait for graph build to be full_ready (the standalone
+    # builds the graph in a background thread on first /api/graph hit).
+    deadline = _time.monotonic() + timeout_s
+    last_progress: dict = {}
+    # Kick the build off — first /api/graph fetch starts the background
+    # builder if it's not already running.
+    try:
+        _ur.urlopen(f"{base}/api/graph", timeout=5).read(1024)
+    except Exception:
+        pass
+    while _time.monotonic() < deadline:
+        try:
+            with _ur.urlopen(f"{base}/api/graph/progress", timeout=5) as r:
+                last_progress = _json.loads(r.read().decode("utf-8"))
+        except Exception:
+            last_progress = {}
+        if last_progress.get("full_ready") or last_progress.get("baseline_ready"):
+            break
+        _time.sleep(2)
+
+    # Step 2: recompute_layout (idempotent — skips if fingerprint matches).
+    try:
+        with _ur.urlopen(f"{base}/api/recompute_layout", timeout=timeout_s) as r:
+            return _json.loads(r.read().decode("utf-8"))
+    except _ue.HTTPError as exc:
+        try:
+            return _json.loads(exc.read().decode("utf-8"))
+        except Exception:
+            return {"status": "error", "reason": "http_error", "detail": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "reason": "exception", "detail": str(exc)}

@@ -46,8 +46,19 @@
   // browser decompresses gzip transparently when the response
   // declares Content-Encoding: gzip — fetch returns the inflated
   // bytes already.
+  //
+  // ``no_layout`` (HTTP 503 with reason="no_layout") surfaces as a
+  // distinct error class so the caller can drive the auto-recompute
+  // path without re-parsing the body.
   async function fetchQuadtree() {
     var resp = await fetch('/api/quadtree');
+    if (resp.status === 503) {
+      var detail = await resp.json().catch(function () { return {}; });
+      var err = new Error('quadtree 503: ' + (detail.reason || 'unknown'));
+      err.reason = detail.reason || 'unknown';
+      err.detail = detail.detail || null;
+      throw err;
+    }
     if (!resp.ok) throw new Error('quadtree fetch failed: ' + resp.status);
     var buf = await resp.arrayBuffer();
     var Arrow = window.Arrow || window.apacheArrow || (window['arrow'] || {});
