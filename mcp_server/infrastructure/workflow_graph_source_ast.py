@@ -28,8 +28,9 @@ from mcp_server.infrastructure.ap_bridge import (
     resolve_graph_paths,
 )
 
-# A paranoid cap so a bad Cypher can't drag in the world. Matches
-# AP's default page size for ``query_graph``.
+# Per-file paranoid cap, applied ONLY when the caller specifies paths.
+# Load-all callers (paths=[]) get an uncapped query — the L6 viz pipeline
+# legitimately needs every symbol the AP graph holds.
 _MAX_SYMBOLS_PER_FILE = 500
 
 
@@ -189,7 +190,18 @@ _SYMBOL_LABELS = (
     "Package",
     "Namespace",
     "Variable",
+    # Import statements (one node per ``import`` site). AP wires every
+    # file to its imports via the ``Defines_File_Import`` rel table; the
+    # nodes themselves carry ``id`` (``<file>::<modpath>``), ``path``,
+    # ``alias``, ``is_glob``. Loaded via a custom property mapping in
+    # ``_load_symbols_async`` because imports lack ``qualified_name``.
+    "Import",
 )
+
+# Labels whose nodes don't expose ``qualified_name`` / ``name``. The
+# load query falls back to ``id`` / ``path`` (or whatever the node
+# DOES carry) so they still flow into the graph.
+_NON_QUALIFIED_LABELS = {"Import"}
 
 
 def _symbol_type_from_label(label: str) -> str:
@@ -337,12 +349,28 @@ class WorkflowGraphASTSource:
             for i in range(1, len(parts)):
                 path_tails.add("/".join(parts[i:]))
         for label in _SYMBOL_LABELS:
-            query = (
-                f"MATCH (s:{label}) "
-                "RETURN s.qualified_name AS qualified_name, "
-                "       s.name           AS name "
-                f"LIMIT {_MAX_SYMBOLS_PER_FILE * max(len(paths), 1)}"
-            )
+            # Import nodes don't carry qualified_name / name — they use
+            # ``id`` (``<file>::<modpath>``) and ``path`` (the imported
+            # module). Use those as the qualified_name / name surrogate.
+            if label in _NON_QUALIFIED_LABELS:
+                base_query = (
+                    f"MATCH (s:{label}) "
+                    "RETURN s.id   AS qualified_name, "
+                    "       s.path AS name"
+                )
+            else:
+                base_query = (
+                    f"MATCH (s:{label}) "
+                    "RETURN s.qualified_name AS qualified_name, "
+                    "       s.name           AS name"
+                )
+            # No LIMIT in load-all mode (paths=[]). When paths are given,
+            # apply a per-path paranoid cap so a stray query can't drag
+            # in the world.
+            if paths:
+                query = base_query + f" LIMIT {_MAX_SYMBOLS_PER_FILE * len(paths)}"
+            else:
+                query = base_query
             rows = await self._bridge.call(
                 "query_graph",
                 {"graph_path": graph_path, "query": query},
@@ -510,25 +538,25 @@ class WorkflowGraphASTSource:
             parts = p.split("/")
             for i in range(1, len(parts)):
                 path_tails.add("/".join(parts[i:]))
-        calls_rels = [
-            ("Function", "Function"),
-            ("Function", "Method"),
-            ("Method", "Function"),
-            ("Method", "Method"),
-        ]
-        imports_rels = [
-            ("File", "Function"),
-            ("File", "Struct"),
-            ("File", "Enum"),
-            ("File", "Trait"),
-            ("File", "Method"),
-            ("File", "Constant"),
-        ]
-        member_rels = [
-            ("Struct", "Method"),
-            ("Enum", "Method"),
-            ("Trait", "Method"),
-        ]
+        # Enumerate the full Cartesian product of label kinds AP could
+        # have produced rel tables for. AP rejects queries against rel
+        # tables that don't exist by returning empty rows, so the over-
+        # enumeration is safe — it just costs extra round-trips against
+        # missing tables. The narrower prior lists were the reason the
+        # cortex viz showed ~4k imports instead of the tens of thousands
+        # the codebase actually contains: every File→Class / File→
+        # Interface / File→TypeAlias / File→Macro etc. edge was being
+        # silently dropped because its rel table was never queried.
+        _CALL_LABELS    = ("Function", "Method", "Macro")
+        _IMPORT_TARGETS = _SYMBOL_LABELS  # File can import any symbol kind
+        _CONTAINER_LBLS = (
+            "Struct", "Enum", "Trait",
+            "Class", "Interface", "Protocol", "Extension", "Union",
+        )
+        _MEMBER_LBLS    = ("Method", "Field", "Property", "Constant", "TypeAlias")
+        calls_rels   = [(s, d) for s in _CALL_LABELS    for d in _CALL_LABELS]
+        imports_rels = [("File", t) for t in _IMPORT_TARGETS]
+        member_rels  = [(s, d) for s in _CONTAINER_LBLS for d in _MEMBER_LBLS]
 
         def _match(file_part: str) -> bool:
             if not path_tails:
@@ -557,16 +585,26 @@ class WorkflowGraphASTSource:
             """
             if src_lbl == "File":
                 select_src = "src.id AS src_name"
+            elif src_lbl in _NON_QUALIFIED_LABELS:
+                select_src = "src.id AS src_name"
             else:
                 select_src = "src.qualified_name AS src_name"
+            # Import nodes (and any other ``_NON_QUALIFIED_LABELS`` kind)
+            # carry ``id`` instead of ``qualified_name``. Selecting the
+            # missing property would raise a Kuzu Binder exception.
+            dst_qn = (
+                "dst.id AS dst_name"
+                if dst_lbl in _NON_QUALIFIED_LABELS
+                else "dst.qualified_name AS dst_name"
+            )
             if has_provenance:
                 return_tail = (
-                    "       dst.qualified_name AS dst_name, "
+                    f"       {dst_qn}, "
                     "       r.confidence       AS confidence, "
                     "       r.resolution_method AS reason"
                 )
             else:
-                return_tail = "       dst.qualified_name AS dst_name"
+                return_tail = f"       {dst_qn}"
             query = (
                 f"MATCH (src:{src_lbl})-[r:{table}]->(dst:{dst_lbl}) "
                 f"RETURN {select_src}, {return_tail}"
@@ -629,6 +667,27 @@ class WorkflowGraphASTSource:
             await _run_edge(
                 "member_of", f"HasMethod_{s}_{d}", s, d, has_provenance=False
             )
+        # File → Import node. AP wires every ``import`` statement to its
+        # file via this rel table; counts in the tens of thousands per
+        # project. Without this, the cortex viz captures only the small
+        # subset that AP managed to RESOLVE to in-graph symbols (the
+        # ``Imports_File_*`` tables, totalling ~5k vs ~36k actual).
+        await _run_edge(
+            "imports", "Defines_File_Import", "File", "Import",
+            has_provenance=False,
+        )
+        # Type-usage edges (Method/Function uses Struct/Class/etc).
+        # Captured by AP's resolver and exposed as ``Uses_<src>_<dst>``.
+        _USES_SRC = ("Method", "Function")
+        _USES_DST = (
+            "Struct", "Enum", "Trait", "Class", "Interface",
+            "Protocol", "Extension", "Union", "TypeAlias",
+        )
+        for s in _USES_SRC:
+            for d in _USES_DST:
+                await _run_edge(
+                    "uses", f"Uses_{s}_{d}", s, d, has_provenance=True
+                )
         return out
 
 

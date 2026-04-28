@@ -84,7 +84,12 @@ class MCPClient:
         cwd = self._config.get("cwd")
         env = self._config.get("env")
         merged_env = {**os.environ, **(env or {})}
-        line_limit = 10 * 1024 * 1024
+        # Stream-buffer cap per JSON-RPC frame. Sized for the L6 path,
+        # where AP responses with 100k+ symbols + edges legitimately
+        # exceed 100MB. Keep an upper bound large enough that we never
+        # cap real workloads; OS-level subprocess pipe buffering still
+        # provides backpressure.
+        line_limit = 1024 * 1024 * 1024  # 1 GB
 
         # Validate command against allowlist (CWE-78 mitigation).
         # In test/dev, extra commands can be allowed via _extra_allowed_commands.
