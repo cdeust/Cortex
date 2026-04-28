@@ -547,16 +547,22 @@ class WorkflowGraphASTSource:
         # the codebase actually contains: every File→Class / File→
         # Interface / File→TypeAlias / File→Macro etc. edge was being
         # silently dropped because its rel table was never queried.
-        _CALL_LABELS    = ("Function", "Method", "Macro")
+        _CALL_LABELS = ("Function", "Method", "Macro")
         _IMPORT_TARGETS = _SYMBOL_LABELS  # File can import any symbol kind
         _CONTAINER_LBLS = (
-            "Struct", "Enum", "Trait",
-            "Class", "Interface", "Protocol", "Extension", "Union",
+            "Struct",
+            "Enum",
+            "Trait",
+            "Class",
+            "Interface",
+            "Protocol",
+            "Extension",
+            "Union",
         )
-        _MEMBER_LBLS    = ("Method", "Field", "Property", "Constant", "TypeAlias")
-        calls_rels   = [(s, d) for s in _CALL_LABELS    for d in _CALL_LABELS]
+        _MEMBER_LBLS = ("Method", "Field", "Property", "Constant", "TypeAlias")
+        calls_rels = [(s, d) for s in _CALL_LABELS for d in _CALL_LABELS]
         imports_rels = [("File", t) for t in _IMPORT_TARGETS]
-        member_rels  = [(s, d) for s in _CONTAINER_LBLS for d in _MEMBER_LBLS]
+        member_rels = [(s, d) for s in _CONTAINER_LBLS for d in _MEMBER_LBLS]
 
         def _match(file_part: str) -> bool:
             if not path_tails:
@@ -673,21 +679,29 @@ class WorkflowGraphASTSource:
         # subset that AP managed to RESOLVE to in-graph symbols (the
         # ``Imports_File_*`` tables, totalling ~5k vs ~36k actual).
         await _run_edge(
-            "imports", "Defines_File_Import", "File", "Import",
+            "imports",
+            "Defines_File_Import",
+            "File",
+            "Import",
             has_provenance=False,
         )
         # Type-usage edges (Method/Function uses Struct/Class/etc).
         # Captured by AP's resolver and exposed as ``Uses_<src>_<dst>``.
         _USES_SRC = ("Method", "Function")
         _USES_DST = (
-            "Struct", "Enum", "Trait", "Class", "Interface",
-            "Protocol", "Extension", "Union", "TypeAlias",
+            "Struct",
+            "Enum",
+            "Trait",
+            "Class",
+            "Interface",
+            "Protocol",
+            "Extension",
+            "Union",
+            "TypeAlias",
         )
         for s in _USES_SRC:
             for d in _USES_DST:
-                await _run_edge(
-                    "uses", f"Uses_{s}_{d}", s, d, has_provenance=True
-                )
+                await _run_edge("uses", f"Uses_{s}_{d}", s, d, has_provenance=True)
         return out
 
 
