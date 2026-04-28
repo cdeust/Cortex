@@ -21,6 +21,12 @@ class TestOpenVisualizationSchema:
 
 
 class TestOpenVisualizationHandler:
+    """The handler now drives the full prepare-then-render pipeline:
+    after launching the standalone server it polls /api/graph/progress,
+    invokes /api/recompute_layout, and only then opens the browser at
+    the ``?viz=tilemap`` path. Tests stub ``_prepare_layout`` so they
+    don't issue real HTTP traffic."""
+
     def test_returns_url(self):
         with (
             patch(
@@ -28,10 +34,14 @@ class TestOpenVisualizationHandler:
                 return_value="http://localhost:3458",
             ),
             patch("mcp_server.handlers.open_visualization.open_in_browser"),
+            patch(
+                "mcp_server.handlers.open_visualization._prepare_layout",
+                return_value={"status": "ok", "node_count": 0, "cached": True},
+            ),
         ):
             result = asyncio.run(handler({}))
 
-        assert result["url"] == "http://localhost:3458"
+        assert result["url"] == "http://localhost:3458/?viz=tilemap"
         assert "localhost" in result["message"]
 
     def test_default_args_none(self):
@@ -41,9 +51,13 @@ class TestOpenVisualizationHandler:
                 return_value="http://localhost:3458",
             ),
             patch("mcp_server.handlers.open_visualization.open_in_browser"),
+            patch(
+                "mcp_server.handlers.open_visualization._prepare_layout",
+                return_value={"status": "ok", "node_count": 0, "cached": True},
+            ),
         ):
             result = asyncio.run(handler(None))
-        assert result["url"] == "http://localhost:3458"
+        assert result["url"] == "http://localhost:3458/?viz=tilemap"
 
     def test_launches_unified_server_type(self):
         mock_launch = MagicMock(return_value="http://localhost:3458")
@@ -53,12 +67,17 @@ class TestOpenVisualizationHandler:
                 mock_launch,
             ),
             patch("mcp_server.handlers.open_visualization.open_in_browser"),
+            patch(
+                "mcp_server.handlers.open_visualization._prepare_layout",
+                return_value={"status": "ok", "node_count": 0, "cached": True},
+            ),
         ):
             asyncio.run(handler({}))
 
         mock_launch.assert_called_once_with("unified")
 
-    def test_opens_browser(self):
+    def test_opens_browser_at_tilemap_url(self):
+        """When extras are present the browser opens at the tilemap URL."""
         with (
             patch(
                 "mcp_server.handlers.open_visualization.launch_server",
@@ -67,6 +86,29 @@ class TestOpenVisualizationHandler:
             patch(
                 "mcp_server.handlers.open_visualization.open_in_browser",
             ) as mock_open,
+            patch(
+                "mcp_server.handlers.open_visualization._prepare_layout",
+                return_value={"status": "ok", "node_count": 0, "cached": True},
+            ),
         ):
             asyncio.run(handler({}))
+        mock_open.assert_called_once_with("http://localhost:5555/?viz=tilemap")
+
+    def test_opens_browser_at_legacy_url_when_extras_missing(self):
+        """``viz-tile`` extras unavailable falls back to the legacy URL."""
+        with (
+            patch(
+                "mcp_server.handlers.open_visualization.launch_server",
+                return_value="http://localhost:5555",
+            ),
+            patch(
+                "mcp_server.handlers.open_visualization.open_in_browser",
+            ) as mock_open,
+            patch(
+                "mcp_server.handlers.open_visualization._prepare_layout",
+                return_value={"status": "error", "reason": "igraph_missing"},
+            ),
+        ):
+            result = asyncio.run(handler({}))
         mock_open.assert_called_once_with("http://localhost:5555")
+        assert "viz-tile" in result["message"]
