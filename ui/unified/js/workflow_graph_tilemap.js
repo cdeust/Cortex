@@ -131,14 +131,59 @@
       return;
     }
 
+    // Self-healing layout pass: if /api/quadtree returns 503 with
+    // ``no_layout``, the page itself triggers /api/recompute_layout
+    // and retries. Covers direct-URL access where the MCP entry point
+    // didn't pre-prepare the layout.
     status.textContent = 'Fetching quadtree…';
     var qt;
     try {
       qt = await fetchQuadtree();
     } catch (err) {
-      status.textContent = 'No layout in PG yet — visit /api/recompute_layout first. (' + err.message + ')';
-      status.style.color = '#ffb86b';
-      return;
+      if (err && err.reason === 'no_layout') {
+        status.textContent = 'No layout in PG. Computing now (≈90 s for 1M nodes)…';
+        status.style.color = '#ffb86b';
+        var recompute;
+        try {
+          var rr = await fetch('/api/recompute_layout');
+          recompute = await rr.json();
+        } catch (e2) {
+          status.textContent = 'Layout request failed: ' + e2.message;
+          status.style.color = '#ff8888';
+          return;
+        }
+        if (recompute && recompute.status === 'ok') {
+          status.textContent = 'Layout ready (' + recompute.node_count + ' nodes); fetching quadtree…';
+          try {
+            qt = await fetchQuadtree();
+          } catch (e3) {
+            status.textContent = 'Quadtree refetch failed: ' + e3.message;
+            status.style.color = '#ff8888';
+            return;
+          }
+        } else if (recompute && recompute.reason === 'igraph_missing') {
+          status.innerHTML =
+            '<div style="margin-bottom:6px;color:#ffb86b">'
+            + '<b>viz-tile extras required</b></div>'
+            + '<div style="color:#9aa4b2;font:11px JetBrains Mono,monospace">'
+            + 'Install with one of:<br>'
+            + '&nbsp;&nbsp;pip install -e \'.[viz-tile]\'<br>'
+            + '&nbsp;&nbsp;uv pip install \'.[viz-tile]\'</div>';
+          return;
+        } else if (recompute && recompute.reason === 'no_graph_cached') {
+          status.textContent = 'Graph not built yet. Visit /api/graph first then retry.';
+          status.style.color = '#ffb86b';
+          return;
+        } else {
+          status.textContent = 'Layout failed: ' + JSON.stringify(recompute || {});
+          status.style.color = '#ff8888';
+          return;
+        }
+      } else {
+        status.textContent = 'Quadtree fetch failed: ' + err.message;
+        status.style.color = '#ff8888';
+        return;
+      }
     }
     if (!qt.count) {
       status.textContent = 'Layout empty. Run /api/recompute_layout to populate.';
