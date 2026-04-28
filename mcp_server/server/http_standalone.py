@@ -150,6 +150,21 @@ def _route_unified_get(
         serve_sankey(handler, store)
     elif path.startswith("/api/file-diff?"):
         serve_file_diff(handler)
+    elif path_no_qs == "/api/recompute_layout":
+        # GET-triggered for v1 simplicity (no body to receive). Runs
+        # synchronously; the response carries timing + the new
+        # layout_version. PR 2 moves this off the request thread.
+        from mcp_server.handlers.recompute_layout import serve as serve_recompute
+
+        serve_recompute(handler, store)
+    elif path_no_qs.startswith("/api/tile/") and path_no_qs.endswith(".png"):
+        from mcp_server.handlers.tile_handler import serve as serve_tile
+
+        serve_tile(handler, store)
+    elif path_no_qs == "/api/quadtree":
+        from mcp_server.handlers.quadtree_handler import serve as serve_quadtree
+
+        serve_quadtree(handler, store)
     elif path.startswith("/js/") and path_no_qs.endswith(".js"):
         serve_static(handler, js_dir, path_no_qs[4:], "application/javascript")
     elif path.startswith("/css/") and path_no_qs.endswith(".css"):

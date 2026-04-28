@@ -56,6 +56,18 @@ codebase = [
     "tree-sitter-language-pack>=0.24.0",
     "networkx>=3.0",
 ]
+# CPU-only graph viz path: precomputed igraph layout + Datashader tile
+# rendering + Apache Arrow streaming for client-side hit-test. Enables
+# the /api/tile + /api/quadtree + /api/recompute_layout endpoints. No
+# GPU dependency. Install size ≈ 200 MB (numba + llvmlite dominate).
+viz-tile = [
+    "igraph>=0.11",              # CPU layout (DrL / FR), MIT-licensed wheels
+    "datashader>=0.16.3",        # tile rasterization, O(viewport pixels)
+    "pyarrow>=15.0",             # Arrow IPC for the quadtree endpoint
+    "pandas>=2.2",               # Datashader's native frame format
+    "cachetools>=5.0",           # L1 in-memory tile LRU
+    "Pillow>=10.0",              # PNG encode
+]
 benchmarks = [
     "datasets>=2.14.0",          # HuggingFace dataset loader (BEAM, LoCoMo, LongMemEval)
     "sentence-transformers>=2.2.0",  # all-MiniLM-L6-v2 embeddings

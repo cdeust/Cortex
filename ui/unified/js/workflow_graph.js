@@ -133,6 +133,20 @@
     if (!container) throw new Error('renderWorkflowGraph: container required');
     container.innerHTML = '';
     var handle = { destroy: function () {}, select: function () {}, data: data };
+    // Tilemap gate — query string ``?viz=tilemap`` swaps the entire
+    // d3-force pipeline for the deck.gl + Datashader server-tile path.
+    // The legacy renderer stays as the default until the new path is
+    // hardened. The tilemap module handles its own data fetching
+    // (/api/quadtree, /api/tile/*) so we don't pass the cached graph.
+    var qs = (window.location && window.location.search) || '';
+    if (qs.indexOf('viz=tilemap') !== -1
+        && window.JUG && typeof window.JUG.mountTilemap === 'function') {
+      var p = window.JUG.mountTilemap(container);
+      Promise.resolve(p).then(function (impl) {
+        if (impl && impl.destroy) handle.destroy = impl.destroy;
+      });
+      return handle;
+    }
     ensureD3(function () {
       var impl = mount(container, data || { nodes: [], edges: [] });
       handle.destroy = impl.destroy;

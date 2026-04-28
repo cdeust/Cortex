@@ -480,6 +480,24 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
     id          INTEGER PRIMARY KEY CHECK (id = 1),
     state_json  TEXT NOT NULL DEFAULT '{}'
 );
+
+-- Precomputed (x, y) coordinates for every workflow-graph node. The
+-- layout pass runs out-of-band (handlers/recompute_layout.py via
+-- igraph DrL on CPU) and persists the result here so the viz can ship
+-- coordinates with each node — eliminating the d3-force tick cost in
+-- the browser. ``topology_fingerprint`` tracks which graph build the
+-- coordinates were computed against; the tile + quadtree endpoints
+-- read them by ``layout_version`` so a stale layout never serves
+-- alongside fresh nodes.
+CREATE TABLE IF NOT EXISTS workflow_graph_layout (
+    node_id              TEXT PRIMARY KEY,
+    x                    REAL NOT NULL,
+    y                    REAL NOT NULL,
+    kind                 TEXT NOT NULL,
+    topology_fingerprint TEXT NOT NULL,
+    layout_version       BIGINT NOT NULL,
+    computed_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 """
 
 # ── Indexes ───────────────────────────────────────────────────────────────
@@ -513,6 +531,12 @@ CREATE INDEX IF NOT EXISTS idx_rel_pair_type
     ON relationships (source_entity_id, target_entity_id, relationship_type);
 CREATE INDEX IF NOT EXISTS idx_memories_agent_context
     ON memories (agent_context);
+CREATE INDEX IF NOT EXISTS idx_workflow_graph_layout_version
+    ON workflow_graph_layout (layout_version);
+CREATE INDEX IF NOT EXISTS idx_workflow_graph_layout_kind
+    ON workflow_graph_layout (kind);
+CREATE INDEX IF NOT EXISTS idx_workflow_graph_layout_xy
+    ON workflow_graph_layout (x, y);
 """
 
 
