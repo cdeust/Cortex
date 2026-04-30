@@ -52,6 +52,18 @@ def run_cls_cycle(
 ) -> dict:
     """Run CLS consolidation: episodic → semantic pattern extraction.
 
+    Verification ablation hook: when ``CORTEX_CONSOLIDATION_DISABLED=1``
+    is set (E2 N-scan condition `cortex_flat`), this returns the zero
+    state immediately. No episodic-to-semantic abstraction runs; the
+    flat-importance store is never enriched with patterns. Source:
+    tasks/verification-protocol.md E2; benchmarks/lib/n_scan_runner.py.
+    """
+    import os as _os
+
+    if _os.environ.get("CORTEX_CONSOLIDATION_DISABLED") == "1":
+        return dict(_EMPTY_CLS_STATS)
+
+
     Pattern extraction (`plan_cls_consolidation`) and causal-edge
     discovery (`_discover_causal_edges`) sample up to 2000 episodic
     memories each — raised from 500 after Feynman's audit of darval's

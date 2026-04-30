@@ -131,7 +131,21 @@ def compute_pg_weights(
 
     Derives base weights from core_weights (from query_intent) when available,
     then applies intent-specific PG overrides.
+
+    Verification ablation hooks (Popper C2 — operator-disablable mechanism):
+    - ``CORTEX_DECAY_DISABLED=1``: forces heat weight to 0.0 so the
+      thermodynamic decay signal cannot enter the WRRF fusion. Disabling
+      heat is equivalent to "flat heat" for ranking purposes — Cortex
+      degenerates to vector + FTS + ngram, the flat-importance baseline.
+    - ``CORTEX_HEAT_CONSTANT=<float>``: same effect on the weight (heat
+      cannot discriminate when constant), kept as a separate var so the
+      n_scan harness can force a specific constant heat at write time and
+      confirm the ranker reproduces flat baseline at read time.
+    Source: tasks/verification-protocol.md E2 (N-scan); env vars defined
+    by benchmarks/lib/n_scan_runner.py:_apply_condition.
     """
+    import os as _os
+
     cw = core_weights or {}
     # Vector is always 1.0 in the PG path — it's the primary discovery signal.
     # Other signals derived from core_weights (intent system) when available,
@@ -146,6 +160,10 @@ def compute_pg_weights(
     overrides = _PG_INTENT_OVERRIDES.get(intent)
     if overrides:
         base.update(overrides)
+    if _os.environ.get("CORTEX_DECAY_DISABLED") == "1" or _os.environ.get(
+        "CORTEX_HEAT_CONSTANT"
+    ):
+        base["heat"] = 0.0
     return base
 
 
