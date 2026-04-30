@@ -345,7 +345,7 @@ python3 benchmarks/episodic/run_benchmark.py --events 20           # Episodic Me
 | LongMemEval MRR | **0.882** | -- |
 | LoCoMo R@10 | **92.6%** | -- |
 | LoCoMo MRR | **0.794** | -- |
-| BEAM Overall | **0.543** | 0.329 |
+| BEAM Overall | **0.591** | 0.329 |
 
 ## Research-Driven Improvement Workflow
 
