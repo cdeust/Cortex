@@ -32,64 +32,97 @@ Why Long-Term Retrieval Collapses Without Decay}
 External memory for large language models is dominated by
 \emph{flat-importance} stores: vector indexes, BM25 corpora, and
 long-context buffers in which every item carries the same long-term
-retrieval prior.  We argue this design is asymptotically broken.
-As the corpus grows, top-$k$ retrieval over an undifferentiated pool
-degenerates into near-arbitrary tie-breaking among items with
-comparable surface similarity, and the discriminative information
-delivered to the consumer LLM approaches zero---a failure mode that
-compounds the position bias of long-context decoding
-\citep{Liu2023}.  We formalise the flat-importance failure, then
-describe Cortex, a memory architecture that maintains a non-flat
-priority distribution across $N$ by coupling four mechanisms:
-(i)~continuously decaying \emph{heat} on every item
-\citep{Ebbinghaus1885}, (ii)~a hierarchical predictive-coding write
-gate \citep{Friston2010}, (iii)~consolidation cascades that compress
-episodic into semantic memory \citep{Kandel2001,McClelland1995}, and
-(iv)~WRRF fusion with heat as a tie-breaker.  On three independent
-long-term-memory benchmarks, Cortex reaches
-LongMemEval R@10\,$=$\,97.8\% (vs.\ 78.4\% paper-best),
-LoCoMo R@10\,$=$\,92.6\%, and BEAM Overall\,$=$\,0.543
-(vs.\ 0.329 paper-best).  We discuss when flat memory remains adequate
-(small $N$, single-session contexts), the calibration cost of decay,
-and the per-write overhead of biological consolidation.  Code, data,
-and benchmark harness are publicly available.\footnote{\url{https://github.com/cdeust/Cortex}}
+retrieval prior.  This design is asymptotically broken.  As the
+corpus grows, top-$k$ retrieval degenerates into near-arbitrary
+tie-breaking among items with comparable surface similarity, and
+the discriminative information delivered to the consumer LLM
+approaches zero---a failure mode that compounds the position bias
+of long-context decoding \citep{Liu2023}.  We formalise this
+collapse, then describe Cortex, a memory architecture that
+maintains a non-flat priority distribution across $N$ by coupling
+four mechanisms: (i)~continuously decaying \emph{heat}
+\citep{Ebbinghaus1885}, (ii)~a hierarchical predictive-coding
+write gate \citep{Friston2010}, (iii)~consolidation cascades that
+compress episodic into semantic memory
+\citep{Kandel2001,McClelland1995}, and (iv)~WRRF fusion with heat
+as a tie-breaker.  On three independent long-term-memory
+benchmarks, Cortex reaches LongMemEval R@10\,$=$\,97.8\%
+(vs.\ 78.4\% paper-best), LoCoMo R@10\,$=$\,92.6\%, and BEAM
+Overall\,$=$\,0.591 (vs.\ 0.329 paper-best).  We characterise when
+flat memory remains adequate, quantify the calibration cost of
+decay, and bound the per-write overhead of biological
+consolidation.  Code, data, and benchmark harness are publicly
+available.\footnote{\url{https://github.com/cdeust/Cortex}}
 \end{abstract}
 
 %----------------------------------------------------------------------
 \section{Introduction}
 \label{sec:intro}
 
-The default external memory for LLM agents is some variant of the
-same recipe: embed the input, write to a vector index, and at query
-time retrieve the top-$k$ nearest neighbours, optionally re-ranked.
-This recipe has succeeded at the document-retrieval scale it was
-designed for \citep{Lewis2020}.  It does not scale to the use case
-agentic systems are pushing it toward---open-ended, multi-month,
-mixed-content memory across thousands of conversations.
-
-The reason is not retrieval speed but \emph{retrieval semantics}.
-A vector store treats every entry as equally important in the long
-term.  There is no mechanism by which a fact mentioned in passing
-six months ago is given less retrieval weight than a decision the
-user explicitly anchored last week.  As $N$ grows, the top-$k$ for a
+The default external memory for LLM agents is a variant of the same
+recipe: embed the input, write to a vector index, and at query time
+retrieve the top-$k$ nearest neighbours, optionally re-ranked.  This
+recipe succeeds at the document-retrieval scale it was designed for
+\citep{Lewis2020}, but it does not scale to what agentic systems
+are now demanding of it---open-ended, multi-month, mixed-content
+memory across thousands of conversations.  The bottleneck is not
+retrieval speed but \emph{retrieval semantics}: a vector store
+treats every entry as equally important in the long term, with no
+mechanism to weight a fact mentioned six months ago against a
+decision anchored last week.  As $N$ grows, the top-$k$ for a
 typical query fills with semantically plausible but contextually
-irrelevant items---and the downstream LLM, subject to the position
-bias documented in \emph{Lost in the Middle} \citep{Liu2023},
-processes them in an order uncorrelated with their actual usefulness.
+irrelevant items, and the downstream LLM---subject to the position
+bias documented in \emph{Lost in the Middle} \citep{Liu2023}---then
+processes those items in an order uncorrelated with their actual
+usefulness.
 
-This paper argues that the missing mechanism is decay, and that
-decay is not a heuristic but a structural requirement: it is what
-keeps the priority distribution over memories non-flat at any $N$.
-We characterise the flat-importance failure mode, describe Cortex's
-thermodynamic architecture, and report empirical results on three
-published long-term-memory benchmarks.
+We argue that the missing mechanism is decay, and that decay is not
+a heuristic but a structural requirement: it is what keeps the
+priority distribution over memories non-flat at any $N$.  This paper
+characterises the flat-importance failure mode, describes Cortex's
+thermodynamic architecture, and reports empirical results on three
+published long-term-memory benchmarks.  The headline numbers preview
+the argument: on LongMemEval \citep{Wu2025}, Cortex reaches
+R@10\,$=$\,97.8\% versus 78.4\% paper-best; on BEAM
+\citep{Tavakoli2026}, 0.591 Overall versus 0.329 paper-best; on
+LoCoMo \citep{Maharana2024}, R@10\,$=$\,92.6\%.  All numbers are
+produced by the production PL/pgSQL retrieval code path,
+single-process, on a clean database seeded only with each
+benchmark's data.
 
-\paragraph{Teaser.}
-On LongMemEval \citep{Wu2025}, Cortex reaches Recall@10 of 97.8\%,
-vs.\ the paper-best of 78.4\%.  On BEAM \citep{Tavakoli2026}, Cortex
-reaches 0.543 Overall, vs.\ 0.329 paper-best.  All numbers are from
-runs against Cortex's production database, single-process, with the
-exact PL/pgSQL retrieval code path used in deployment.
+\subsection{Contributions}
+\label{sec:contributions}
+
+\begin{enumerate}
+  \item A formal statement of the \emph{flat-importance failure
+        mode} (\S\ref{sec:flat-failure}): an asymptotic argument
+        for why uniform retrieval priors collapse top-$k$
+        discriminability as $N$ grows, independent of LLM
+        consumption.
+  \item A \emph{thermodynamic memory architecture}
+        (\S\ref{sec:thermodynamic}) coupling Ebbinghaus heat decay,
+        a Friston predictive-coding write gate, coupled
+        neuromodulation, synaptic/emotional tagging, and a
+        Kandel/McClelland consolidation cascade---each module
+        traceable to a primary source and a Cortex implementation
+        file.
+  \item A \emph{three-form argument} (\S\ref{sec:why-decay}) that
+        decay prevents collapse: information-theoretic, operational
+        (WRRF tie-breaking), and curation-by-attrition.
+  \item Empirical results on three long-term-memory benchmarks
+        (\S\ref{sec:empirical}): R@10\,$=$\,97.8\% on LongMemEval
+        ($+19.4$\,pp over paper-best), R@10\,$=$\,92.6\% on LoCoMo,
+        and 0.591 Overall on BEAM ($+79.6\%$ relative).
+\end{enumerate}
+
+\S\ref{sec:related} positions the work against prior systems;
+\S\ref{sec:flat-failure} formalises the failure mode;
+\S\ref{sec:thermodynamic} describes the architecture;
+\S\ref{sec:why-decay} states the load-bearing argument;
+\S\ref{sec:empirical} reports benchmarks;
+\S\ref{sec:discussion} documents limitations.  Appendices give
+Shannon, Erd\H{o}s, Popper, and Feynman treatments of the same
+claims at progressively shorter length.
 
 %----------------------------------------------------------------------
 \section{Background and Related Work}
@@ -142,6 +175,9 @@ memories to code symbols; \emph{prd-spec-generator}
 justifies the per-write cost; \emph{zetetic-team-subagents}
 \citep{Deust2026d} is the 116-agent reasoning library that drives
 the workload distribution.  \S\ref{sec:ecosystem} expands on each.
+
+None of the prior work establishes when flat-importance retrieval
+\emph{must} fail.  We supply that argument next.
 
 %----------------------------------------------------------------------
 \section{The Flat-Importance Failure Mode}
@@ -205,7 +241,9 @@ middle and is effectively ignored.
 
 This is why na\"{i}ve ``stuff more into context'' approaches plateau,
 and why ``raise $k$'' is not a fix at large $N$: the information
-density of retrieved tokens has dropped in proportion.
+density of retrieved tokens has dropped in proportion.  The next
+section describes the architecture by which Cortex preserves a
+non-flat priority distribution and so avoids this regime.
 
 %----------------------------------------------------------------------
 \section{Cortex's Thermodynamic Memory Model}
@@ -327,6 +365,10 @@ orthogonalises near-duplicate items so they remain distinguishable.
 Cortex's \texttt{microglial\_pruning.py} prunes the lowest-utility
 edges of the entity graph, reclaiming structure rather than mass.
 
+Together these mechanisms instantiate a non-flat priority field over
+the corpus.  We now explain why that field is what prevents
+asymptotic collapse.
+
 %----------------------------------------------------------------------
 \section{Why Decay Prevents Collapse}
 \label{sec:why-decay}
@@ -425,6 +467,10 @@ learned abstention.  The two mechanisms are complementary: the
 0.926 figure is direct empirical evidence that flat-importance
 $+$ score-based-threshold retrieval is fundamentally insufficient.
 
+We turn next to the question this argument forces: do the
+mechanisms predicted to preserve discriminability actually do so on
+benchmarks designed to defeat flat retrieval?
+
 %----------------------------------------------------------------------
 \section{Empirical Evidence}
 \label{sec:empirical}
@@ -448,12 +494,12 @@ LongMemEval & ICLR 2025 & R@10    & \textbf{97.8\%} & 78.4\% \\
 LongMemEval & ICLR 2025 & MRR     & \textbf{0.882}  & ---    \\
 LoCoMo      & ACL 2024  & R@10    & \textbf{92.6\%} & ---    \\
 LoCoMo      & ACL 2024  & MRR     & \textbf{0.794}  & ---    \\
-BEAM        & ICLR 2026 & Overall & \textbf{0.543}  & 0.329  \\
+BEAM        & ICLR 2026 & Overall & \textbf{0.591}  & 0.329  \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The $+19.4$\,pp absolute gain on LongMemEval R@10 and the $+65\%$
+The $+19.4$\,pp absolute gain on LongMemEval R@10 and the $+79.6\%$
 relative gain on BEAM Overall are the headline results.  Both
 benchmarks include question categories specifically designed to
 defeat flat retrieval---multi-session reasoning (LongMemEval),
@@ -485,6 +531,11 @@ paper-reported number on each benchmark.
 end-task accuracy with a specific LLM may differ.
 (iii)~BEAM's Overall is a composite of seven sub-metrics---see
 \texttt{benchmarks/beam/} for the per-subset breakdown.
+
+These results are consistent with the \S\ref{sec:why-decay}
+argument; they do not establish that the argument is the only
+explanation.  We now examine the conditions under which the result
+might fail to generalise.
 
 %----------------------------------------------------------------------
 \section{Discussion}
@@ -564,6 +615,11 @@ indefinitely}.
         paper it draws on and where it deviates.
 \end{itemize}
 
+The model's calibration is not workload-independent.  The next
+section makes the workload explicit by describing the four
+software components that shape what Cortex's memory must be good
+at.
+
 %----------------------------------------------------------------------
 \section{The Cortex Ecosystem: Where This Memory Model Fits}
 \label{sec:ecosystem}
@@ -634,7 +690,9 @@ to sandboxed environments lacking PostgreSQL---client-side fusion
 replaces PL/pgSQL, \texttt{sqlite-vec} flat scan replaces pgvector
 HNSW---but the decay model and consolidation pipeline are
 unchanged, consistent with the claim that the model is
-implementation-independent.
+implementation-independent.  We close by summarising what the
+argument and the measurements jointly support, and what they do
+not.
 
 %----------------------------------------------------------------------
 \section{Conclusion}
@@ -1256,7 +1314,7 @@ C6 read/write 100:1             & low      & UNTESTED         & One week of prod
 
 No claim in the paper is currently CONFIRMED in the strict
 Popperian sense (survived a severe test designed to refute it).
-The 97.8\% / 92.6\% / 0.543 numbers are corroborations of the
+The 97.8\% / 92.6\% / 0.591 numbers are corroborations of the
 system as configured, not corroborations of the causal claims
 (C1--C6) about \emph{why} it performs.
 
