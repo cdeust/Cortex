@@ -1,7 +1,9 @@
 # BEAM-10M LLM Head-to-Head Protocol — Pre-Registration (Fisher-style)
 
 **Author:** research-scientist (designed); experiment-runner executes; curie audits before Stage 2.
-**Status:** PRE-REGISTERED DRAFT v2 (lightweight-tier rewrite, 2026-04-30) — freezes on commit `<TBD>` (the commit that lands this file plus the harness skeleton at `benchmarks/llm_head_to_head/`).  Changes from v1: generator panel switched from Sonnet 4.6 + Opus 4.7-1M to Haiku 4.5 + GPT-4o mini + Gemini 2.0 Flash; judge mode now cross-vendor; cost drop ~30× on full panel.
+**Status:** PRE-REGISTERED DRAFT v3 (Haiku-then-Gemini sequencing, 2026-04-30) — freezes on commit `<TBD>` (the commit that lands this file plus the harness skeleton at `benchmarks/llm_head_to_head/`).
+- v1 → v2: generator panel switched from Sonnet 4.6 + Opus 4.7-1M to Haiku 4.5 + GPT-4o mini + Gemini 2.0 Flash; judge mode now cross-vendor; cost drop ~30× on full panel.
+- v2 → v3: GPT-4o mini dropped (user lock-in to Anthropic + Google).  Stage 2 now runs **sequentially**: Stage 2.1 Haiku 4.5 (primary, production claim), Stage 2.2 Gemini 2.0 Flash (cross-vendor validation, fires only after 2.1 reviewed).  Combined Stage 2 cost ~$40–55.
 **Companions:** `tasks/verification-protocol.md` (Fisher template), `tasks/verification-measurement-discipline.md` (Curie HARD-STOP), `tasks/hnsw-determinism-playbook.md` (DB reproducibility), `docs/papers/thermodynamic-memory-vs-flat-importance.md` (paper under validation), `docs/arxiv/main.tex` (prior BEAM-10M assembler claim: MRR 0.471 vs flat 0.353).
 **Critique this protocol closes:** *"You measured retrieval quality without an LLM in the loop, so you can't claim you're better."*  This protocol is the LLM-stage extension that converts retrieval-quality numbers into end-to-end answer accuracy.
 **Pre-registration discipline:** OSF-style. After freeze, the analysis is locked. Post-hoc analyses are reported separately as **exploratory**, never relabelled confirmatory.
@@ -274,6 +276,28 @@ Before the full run:
 4. Total pilot cost within ±50% of estimate.
 
 **NO-GO** if any of those fail.  Triggers an addendum file (`tasks/beam-10m-llm-h2h-addendum-001.md`) with diagnosis + revised estimates.  This protocol does NOT auto-edit on no-go.
+
+### Stage 2 sequencing — Haiku then Gemini (user-locked, 2026-04-30)
+Per user directive, Stage 2 runs **sequentially**, NOT all generators in parallel.
+
+**Stage 2.1 — Haiku 4.5 (primary):**
+- All 4 conditions × 196 items.  Judge: GPT-4o (cross-vendor per §3 table).
+- Decisive run for the production claim (the model class actually deployed at 1500-user scale).
+- If H1 lands here (C beats A by ≥10 pp at α=0.01), the paper has its core result.
+- Cost: ~$30–40 (slim run, lightweight tier).
+
+**Stage 2.2 — Gemini 2.0 Flash (cross-vendor validation):**
+- Fires only AFTER Stage 2.1 lands and is reviewed.
+- Same 4 conditions × 196 items.  Judge: Claude Opus 4.7-1M (cross-vendor per §3 table).
+- Defends two reviewer critiques the single-vendor Haiku run cannot:
+  1. *"You only beat naive context because the model couldn't fit it"* → refuted by Gemini 2.0 Flash's 1M context window
+  2. *"You only beat RAG because of Anthropic vendor bias"* → refuted by an entirely Google-side generator
+- Cost: ~$10–15 (Gemini Flash rate card $0.10/M input, $0.40/M output).
+- Pre-registered comparison: H1 must hold *directionally* on Gemini Flash (C > A).  Failure to replicate directionally on Gemini → flag as model-bias finding in paper §7 limitations; do NOT retract the Haiku claim.
+
+**Sequencing rationale.**  Haiku-first lets the production claim land cleanly before adding the cross-vendor robustness layer.  If Stage 2.1 fails the GO gate, Stage 2.2 is cancelled (no point validating a non-result across vendors).  Combined Stage 2 cost: **~$40–55** total.
+
+GPT-4o mini is **deprecated from this protocol** by user lock-in.  Re-introduction would require an addendum.
 
 ---
 
