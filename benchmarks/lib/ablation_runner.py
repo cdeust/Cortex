@@ -31,7 +31,8 @@ if str(_ROOT) not in sys.path:
 from mcp_server.core import ablation as _ablation  # noqa: E402
 from mcp_server.core.ablation import Mechanism  # noqa: E402
 from benchmarks.lib.db_snapshot import (  # noqa: E402
-    fingerprint, restore_snapshot,
+    fingerprint,
+    restore_snapshot,
 )
 from benchmarks.lib import db_setup  # noqa: E402
 
@@ -73,16 +74,18 @@ def _patches_for(mech: Mechanism) -> list[PatchSpec]:
     no_decay: PatchSpec = (
         "mcp_server.core.thermodynamics",
         "compute_decay",
-        lambda: (lambda current_heat, *a, **k: current_heat),
+        lambda: lambda current_heat, *a, **k: current_heat,
     )
     table: dict[Mechanism, list[PatchSpec]] = {
         Mechanism.OSCILLATORY_CLOCK: [no_decay],
         Mechanism.ADAPTIVE_DECAY: [no_decay],
-        Mechanism.HOMEOSTATIC_PLASTICITY: [(
-            "mcp_server.core.ablation",
-            "neutral_scaling_factor",
-            lambda: _ablation.neutral_scaling_factor,
-        )],
+        Mechanism.HOMEOSTATIC_PLASTICITY: [
+            (
+                "mcp_server.core.ablation",
+                "neutral_scaling_factor",
+                lambda: _ablation.neutral_scaling_factor,
+            )
+        ],
     }
     return table.get(mech, [])
 
@@ -126,11 +129,11 @@ def _parse_metrics(stdout: str) -> BenchMetrics:
     """
     r10 = mrr = 0.0
     n = 0
-    if (m := _RE_R10.search(stdout)):
+    if m := _RE_R10.search(stdout):
         r10 = float(m.group(1)) / 100.0
-    if (m := _RE_MRR_LINE.search(stdout)):
+    if m := _RE_MRR_LINE.search(stdout):
         mrr = float(m.group(1))
-    if (m := _RE_OVERALL.search(stdout)):
+    if m := _RE_OVERALL.search(stdout):
         mrr = float(m.group(1))
         r10 = float(m.group(3)) / 100.0
         n = int(m.group(4))
@@ -146,16 +149,19 @@ def _resolve_benchmark(bench_id: str, quick: bool) -> tuple[Callable[[], None], 
     """Return (callable that runs the benchmark, declared n_queries-or-0)."""
     if bench_id == "longmemeval-s":
         from benchmarks.longmemeval.run_benchmark import run_benchmark as r
+
         data_path = _ROOT / "benchmarks" / "longmemeval" / "longmemeval_s.json"
         limit = QUICK_LIMIT if quick else 0
         return (lambda: r(str(data_path), limit=limit, verbose=False), limit)
     if bench_id == "locomo":
         from benchmarks.locomo.run_benchmark import run_benchmark as r
+
         data_path = _ROOT / "benchmarks" / "locomo" / "locomo10.json"
         limit = max(1, QUICK_LIMIT // 10) if quick else None
         return (lambda: r(str(data_path), limit=limit, verbose=False), limit or 0)
     if bench_id == "beam-100K":
         from benchmarks.beam.run_benchmark import run_benchmark as r
+
         limit = max(1, QUICK_LIMIT // 10) if quick else None
         return (lambda: r(split="100K", limit=limit, verbose=False), limit or 0)
     raise ValueError(f"unknown benchmark: {bench_id}")
@@ -310,19 +316,23 @@ def _select_mechanisms(args: argparse.Namespace) -> list[Mechanism]:
 
 
 def _maybe_restore(
-    snapshot_path: Path | None, target_db_url: str | None,
-    *, run_id: str = "ablation",
+    snapshot_path: Path | None,
+    target_db_url: str | None,
+    *,
+    run_id: str = "ablation",
 ) -> dict | str:
     """Restore snapshot (if any), apply deterministic DB+session config,
     ANALYZE, return db_seed payload (playbook §4.3, §4.10, §4.15)."""
     if snapshot_path is None or target_db_url is None:
         return "not-snapshotted"
     sha = fingerprint(snapshot_path)
-    print(f"  [snapshot] restoring {snapshot_path.name} (sha8={sha[:8]}) -> "
-          f"{target_db_url} ...")
+    print(
+        f"  [snapshot] restoring {snapshot_path.name} (sha8={sha[:8]}) -> "
+        f"{target_db_url} ..."
+    )
     report = restore_snapshot(target_db_url, snapshot_path)
     if not report.success:
-        msg = '; '.join(report.mismatch + report.version_drift)
+        msg = "; ".join(report.mismatch + report.version_drift)
         raise RuntimeError(f"snapshot restore failed: {msg}")
     os.environ["DATABASE_URL"] = target_db_url
     # Post-restore deterministic setup (playbook §8 SRP split).
@@ -348,8 +358,11 @@ def _maybe_restore(
 
 
 def _run_baseline_if_needed(
-    benchmark: str, quick: bool, force: bool,
-    snapshot: Path | None, target_db: str | None,
+    benchmark: str,
+    quick: bool,
+    force: bool,
+    snapshot: Path | None,
+    target_db: str | None,
 ) -> BenchMetrics:
     cached = None if force else _load_baseline(benchmark)
     if cached is not None:
@@ -358,8 +371,9 @@ def _run_baseline_if_needed(
     print(f"  [baseline] running ({benchmark}, quick={quick}) ...")
     run_id = f"{benchmark}_BASELINE"
     db_seed = _maybe_restore(snapshot, target_db, run_id=run_id)
-    metrics, wall, rss, _ = run_one(benchmark, None, quick=quick,
-                                    run_id=run_id if snapshot else None)
+    metrics, wall, rss, _ = run_one(
+        benchmark, None, quick=quick, run_id=run_id if snapshot else None
+    )
     _save(benchmark, None, metrics, None, wall, rss, db_seed=db_seed)
     print(
         f"  [baseline] r@10={metrics.r_at_10:.3f} mrr={metrics.mrr:.3f} "
@@ -376,10 +390,18 @@ def main() -> int:
     p.add_argument("--baseline-only", action="store_true")
     p.add_argument("--quick", action="store_true")
     p.add_argument("--force", action="store_true")
-    p.add_argument("--from-snapshot", dest="from_snapshot", default=None,
-                   help="path to a custom-format pg_dump; restored before each trial")
-    p.add_argument("--target-db", dest="target_db", default=None,
-                   help="benchmark-only DB URL/name to restore the snapshot into")
+    p.add_argument(
+        "--from-snapshot",
+        dest="from_snapshot",
+        default=None,
+        help="path to a custom-format pg_dump; restored before each trial",
+    )
+    p.add_argument(
+        "--target-db",
+        dest="target_db",
+        default=None,
+        help="benchmark-only DB URL/name to restore the snapshot into",
+    )
     args = p.parse_args()
 
     snapshot = Path(args.from_snapshot) if args.from_snapshot else None
@@ -387,15 +409,24 @@ def main() -> int:
     if snapshot is not None:
         if not args.target_db:
             raise SystemExit("--from-snapshot requires --target-db")
-        target_db = (args.target_db if "://" in args.target_db
-                     else f"postgresql://localhost:5432/{args.target_db}")
+        target_db = (
+            args.target_db
+            if "://" in args.target_db
+            else f"postgresql://localhost:5432/{args.target_db}"
+        )
     else:
-        print("WARNING: --from-snapshot not set; results lack DB-state determinism. "
-              "HNSW non-determinism + ingest order will leak into the deltas.")
+        print(
+            "WARNING: --from-snapshot not set; results lack DB-state determinism. "
+            "HNSW non-determinism + ingest order will leak into the deltas."
+        )
 
     print(f"== ablation runner :: benchmark={args.benchmark} quick={args.quick} ==")
     baseline = _run_baseline_if_needed(
-        args.benchmark, args.quick, args.force, snapshot, target_db,
+        args.benchmark,
+        args.quick,
+        args.force,
+        snapshot,
+        target_db,
     )
     if args.baseline_only:
         return 0
@@ -413,9 +444,12 @@ def main() -> int:
         try:
             run_id = f"{args.benchmark}_{mech.name}"
             db_seed = _maybe_restore(snapshot, target_db, run_id=run_id)
-            metrics, wall, rss, _ = run_one(args.benchmark, mech,
-                                            quick=args.quick,
-                                            run_id=run_id if snapshot else None)
+            metrics, wall, rss, _ = run_one(
+                args.benchmark,
+                mech,
+                quick=args.quick,
+                run_id=run_id if snapshot else None,
+            )
         except Exception as exc:  # source: ablation must be fail-soft per mech
             print(f"  [{mech.name}] FAILED: {exc!r}")
             continue

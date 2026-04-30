@@ -31,27 +31,33 @@ def _scalar(conn: psycopg.Connection, sql: str) -> str:
         row = cur.fetchone()
     return "" if row is None else str(row[0])
 
+
 # Frozen GUC values; every line cites tasks/hnsw-determinism-playbook.md.
-_WORK_MEM = "64MB"                          # source: playbook §4.6
-_MAINTENANCE_WORK_MEM = "512MB"             # source: playbook §4.7
-_MAX_PARALLEL_WORKERS_PER_GATHER = 0        # source: playbook §4.5
-_MAX_PARALLEL_MAINTENANCE_WORKERS = 0       # source: playbook §4.4
-_EFFECTIVE_IO_CONCURRENCY = 0               # source: playbook §4.8
-_ENABLE_SEQSCAN = "on"                      # source: playbook §4.9
-_ENABLE_HASHAGG = "on"                      # source: playbook §4.9
-_ENABLE_INDEXSCAN = "on"                    # source: playbook §4.9
-_ENABLE_BITMAPSCAN = "on"                   # source: playbook §4.9
-_JIT = "off"                                # source: playbook §5 manifest
+_WORK_MEM = "64MB"  # source: playbook §4.6
+_MAINTENANCE_WORK_MEM = "512MB"  # source: playbook §4.7
+_MAX_PARALLEL_WORKERS_PER_GATHER = 0  # source: playbook §4.5
+_MAX_PARALLEL_MAINTENANCE_WORKERS = 0  # source: playbook §4.4
+_EFFECTIVE_IO_CONCURRENCY = 0  # source: playbook §4.8
+_ENABLE_SEQSCAN = "on"  # source: playbook §4.9
+_ENABLE_HASHAGG = "on"  # source: playbook §4.9
+_ENABLE_INDEXSCAN = "on"  # source: playbook §4.9
+_ENABLE_BITMAPSCAN = "on"  # source: playbook §4.9
+_JIT = "off"  # source: playbook §5 manifest
 # source: playbook §7 Q4; pgvector default per https://github.com/pgvector/pgvector#hnsw
 _HNSW_EF_SEARCH = 40
 
 # Must stay in sync with db_snapshot.SnapshotMeta.pg_settings_relevant.
 # source: playbook §5 manifest field list.
 _SNAPSHOT_TRACKED_SETTINGS = (
-    "work_mem", "maintenance_work_mem",
-    "max_parallel_workers_per_gather", "max_parallel_maintenance_workers",
+    "work_mem",
+    "maintenance_work_mem",
+    "max_parallel_workers_per_gather",
+    "max_parallel_maintenance_workers",
     "effective_io_concurrency",
-    "enable_seqscan", "enable_hashagg", "enable_indexscan", "enable_bitmapscan",
+    "enable_seqscan",
+    "enable_hashagg",
+    "enable_indexscan",
+    "enable_bitmapscan",
     "jit",
 )
 
@@ -59,11 +65,18 @@ _SNAPSHOT_TRACKED_SETTINGS = (
 # state too, but SHOW reports them via different keys, so handle separately.
 # Numeric ef_search comparison must tolerate '40' vs 40 mismatch.
 _SELF_CHECK_KEYS = (
-    "work_mem", "maintenance_work_mem",
-    "max_parallel_workers_per_gather", "max_parallel_maintenance_workers",
+    "work_mem",
+    "maintenance_work_mem",
+    "max_parallel_workers_per_gather",
+    "max_parallel_maintenance_workers",
     "effective_io_concurrency",
-    "enable_seqscan", "enable_hashagg", "enable_indexscan", "enable_bitmapscan",
-    "jit", "hnsw.ef_search", "application_name",
+    "enable_seqscan",
+    "enable_hashagg",
+    "enable_indexscan",
+    "enable_bitmapscan",
+    "jit",
+    "hnsw.ef_search",
+    "application_name",
 )
 
 
@@ -180,10 +193,10 @@ def _self_check_settings(conn: psycopg.Connection, out: SessionApplied) -> None:
 # source: PG docs https://www.postgresql.org/docs/current/config-setting.html
 # §"Numeric with Unit" — full set of memory unit suffixes PG may echo.
 _MEM_UNITS_BYTES: tuple[tuple[str, int], ...] = (
-    ("pb", 1024 ** 5),
-    ("tb", 1024 ** 4),
-    ("gb", 1024 ** 3),
-    ("mb", 1024 ** 2),
+    ("pb", 1024**5),
+    ("tb", 1024**4),
+    ("gb", 1024**3),
+    ("mb", 1024**2),
     ("kb", 1024),
     ("b", 1),
 )
@@ -197,17 +210,31 @@ _TIME_UNITS_MS: tuple[tuple[str, int], ...] = (
     ("us", 0),  # sub-ms; collapsed to 0 (PG echoes via min unit anyway)
 )
 # Memory-typed GUCs we may compare. source: PG docs §"Resource Consumption".
-_MEMORY_GUCS = frozenset({
-    "work_mem", "maintenance_work_mem", "shared_buffers",
-    "effective_cache_size", "temp_buffers", "wal_buffers",
-    "autovacuum_work_mem", "logical_decoding_work_mem",
-})
+_MEMORY_GUCS = frozenset(
+    {
+        "work_mem",
+        "maintenance_work_mem",
+        "shared_buffers",
+        "effective_cache_size",
+        "temp_buffers",
+        "wal_buffers",
+        "autovacuum_work_mem",
+        "logical_decoding_work_mem",
+    }
+)
 # Duration-typed GUCs we may compare. source: PG docs §"Connections and Auth".
-_TIME_GUCS = frozenset({
-    "statement_timeout", "lock_timeout", "idle_in_transaction_session_timeout",
-    "deadlock_timeout", "checkpoint_timeout", "vacuum_cost_delay",
-    "autovacuum_vacuum_cost_delay", "wal_writer_delay",
-})
+_TIME_GUCS = frozenset(
+    {
+        "statement_timeout",
+        "lock_timeout",
+        "idle_in_transaction_session_timeout",
+        "deadlock_timeout",
+        "checkpoint_timeout",
+        "vacuum_cost_delay",
+        "autovacuum_vacuum_cost_delay",
+        "wal_writer_delay",
+    }
+)
 
 
 def _guc_equal(name: str, want: str, live: str) -> bool:
@@ -297,9 +324,7 @@ def _format_value(val: str) -> str:
     return "'" + val.replace("'", "''") + "'"
 
 
-def apply_deterministic_database(
-    db_url: str, *, run_id: str
-) -> DatabaseApplied:
+def apply_deterministic_database(db_url: str, *, run_id: str) -> DatabaseApplied:
     """Idempotent ALTER TABLE — autovacuum off for benchmark tables (playbook §4.3).
 
     Note: ``autovacuum`` is a postmaster-global GUC. ALTER DATABASE …
@@ -313,7 +338,7 @@ def apply_deterministic_database(
     """
     out = DatabaseApplied(run_id=run_id)
     stmts = [
-        'ALTER TABLE memories SET (autovacuum_enabled = false)',
+        "ALTER TABLE memories SET (autovacuum_enabled = false)",
     ]
     with psycopg.connect(db_url, autocommit=True) as conn:
         for sql in stmts:

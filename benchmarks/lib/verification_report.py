@@ -42,37 +42,43 @@ HYPOTHESES: dict[str, dict[str, Any]] = {
         "name": "Ablation — each claimed component contributes",
         "claim": "Removing any single load-bearing module reduces overall MRR by ≥0.01.",
         "threshold": "every ablated module shows ΔMRR ≥ +0.01 vs baseline",
-        "pass_op": ">=", "pass_value": 0.01,
+        "pass_op": ">=",
+        "pass_value": 0.01,
     },
     "E2": {
         "name": "N-scan — retrieval scales with corpus size",
         "claim": "MRR does not collapse (>20% relative drop) as N grows from 100K to 1M.",
         "threshold": "MRR(1M) ≥ 0.80 × MRR(100K)",
-        "pass_op": ">=", "pass_value": 0.80,
+        "pass_op": ">=",
+        "pass_value": 0.80,
     },
     "E3": {
         "name": "Decay sweep — heat decay is not the dominant signal",
         "claim": "Sweeping decay λ from 0.85 to 0.999 changes overall MRR by <0.05 absolute.",
         "threshold": "MRR_max - MRR_min < 0.05 across the sweep",
-        "pass_op": "<", "pass_value": 0.05,
+        "pass_op": "<",
+        "pass_value": 0.05,
     },
     "E4": {
         "name": "Longitudinal — no drift over a 30-day window",
         "claim": "Repeated calibration over 30 simulated days holds MRR within ±0.02 of day-1.",
         "threshold": "|MRR(day=k) - MRR(day=1)| < 0.02 for all k",
-        "pass_op": "<", "pass_value": 0.02,
+        "pass_op": "<",
+        "pass_value": 0.02,
     },
     "E5": {
         "name": "Cross-benchmark — config calibrated on LongMemEval transfers to LoCoMo",
         "claim": "Phase-B (LongMemEval-tuned, AS-IS to LoCoMo) MRR ≥ 0.92 × Phase-C ceiling.",
         "threshold": "Phase-B MRR / Phase-C MRR ≥ 0.92",
-        "pass_op": ">=", "pass_value": 0.92,
+        "pass_op": ">=",
+        "pass_value": 0.92,
     },
     "E6": {
         "name": "Telemetry — production p95 latency stays bounded",
         "claim": "p95 recall latency over the last 1000 sessions is <200ms.",
         "threshold": "p95(recall_ms) < 200",
-        "pass_op": "<", "pass_value": 200.0,
+        "pass_op": "<",
+        "pass_value": 200.0,
     },
 }
 
@@ -100,19 +106,28 @@ class ExpResult:
             return "INCONCLUSIVE"
         h = HYPOTHESES[self.exp_id]
         op, val = h["pass_op"], h["pass_value"]
-        cmp = {">=": self.observed >= val, "<": self.observed < val,
-               ">": self.observed > val, "<=": self.observed <= val}
+        cmp = {
+            ">=": self.observed >= val,
+            "<": self.observed < val,
+            ">": self.observed > val,
+            "<=": self.observed <= val,
+        }
         return "PASS" if cmp.get(op, False) else "FAIL"
 
 
-def _bootstrap_ci(values: list[float], n_resamples: int = 1000) -> tuple[float, float] | None:
+def _bootstrap_ci(
+    values: list[float], n_resamples: int = 1000
+) -> tuple[float, float] | None:
     """Percentile bootstrap 95% CI for the mean. None if <10 values."""
     if not values or len(values) < 10:
         return None
     import random
+
     rng = random.Random(42)
     n = len(values)
-    means = [sum(values[rng.randrange(n)] for _ in range(n)) / n for _ in range(n_resamples)]
+    means = [
+        sum(values[rng.randrange(n)] for _ in range(n)) / n for _ in range(n_resamples)
+    ]
     means.sort()
     return (means[int(0.025 * n_resamples)], means[int(0.975 * n_resamples)])
 
@@ -148,11 +163,14 @@ def _read_e1(results_dir: Path) -> ExpResult:
     out.raw_path = str(run / "result.json")
     out.observed = min(deltas)  # tightest constraint — the worst component
     out.detail_md = "| Component | ΔMRR |\n|---|---|\n" + "\n".join(
-        f"| {r.get('component', '?')} | {r.get('delta_mrr', 0):+.3f} |" for r in rows)
+        f"| {r.get('component', '?')} | {r.get('delta_mrr', 0):+.3f} |" for r in rows
+    )
     return out
 
 
-def _read_simple(exp_id: str, results_dir: Path, subdir: str, metric_key: str) -> ExpResult:
+def _read_simple(
+    exp_id: str, results_dir: Path, subdir: str, metric_key: str
+) -> ExpResult:
     """Generic reader for E2/E3/E4 — single scalar at result.json[metric_key]."""
     out = ExpResult(exp_id=exp_id)
     run = _latest_run(results_dir / subdir)
@@ -169,9 +187,13 @@ def _read_simple(exp_id: str, results_dir: Path, subdir: str, metric_key: str) -
         keys = list(head[0].keys())[:4]
         out.detail_md = (
             "| " + " | ".join(keys) + " |\n"
-            "|" + "|".join(["---"] * len(keys)) + "|\n"
-            + "\n".join("| " + " | ".join(str(r.get(k, "")) for k in keys) + " |"
-                        for r in head))
+            "|"
+            + "|".join(["---"] * len(keys))
+            + "|\n"
+            + "\n".join(
+                "| " + " | ".join(str(r.get(k, "")) for k in keys) + " |" for r in head
+            )
+        )
     return out
 
 
@@ -196,11 +218,15 @@ def _read_e5(results_dir: Path) -> ExpResult:
         f"- Phase A winner cell: `{eval_p.get('winner_cell')}`\n"
         f"- Phase B MRR (no retune on LoCoMo): {b:.3f}\n"
         f"- Phase C best MRR (LoCoMo-tuned): {c:.3f}\n"
-        f"- Ratio B/C: {b / c:.3f}")
+        f"- Ratio B/C: {b / c:.3f}"
+    )
     summary = run / "summary.md"
     if summary.exists():
-        out.detail_md += ("\n\n<details><summary>Phase summary</summary>\n\n"
-                          + summary.read_text() + "\n</details>")
+        out.detail_md += (
+            "\n\n<details><summary>Phase summary</summary>\n\n"
+            + summary.read_text()
+            + "\n</details>"
+        )
     return out
 
 
@@ -228,7 +254,9 @@ def _read_e6(telemetry_path: Path) -> ExpResult:
     if len(latencies) < 100:
         return out
     latencies.sort()
-    p95 = latencies[max(0, min(len(latencies) - 1, math.ceil(0.95 * len(latencies)) - 1))]
+    p95 = latencies[
+        max(0, min(len(latencies) - 1, math.ceil(0.95 * len(latencies)) - 1))
+    ]
     p99 = latencies[max(0, math.ceil(0.99 * len(latencies)) - 1)]
     out.found = True
     out.raw_path = str(telemetry_path)
@@ -237,21 +265,25 @@ def _read_e6(telemetry_path: Path) -> ExpResult:
         f"- Samples: {len(latencies)}\n"
         f"- p50: {latencies[len(latencies) // 2]:.1f}ms\n"
         f"- p95: {p95:.1f}ms\n"
-        f"- p99: {p99:.1f}ms")
+        f"- p99: {p99:.1f}ms"
+    )
     return out
 
 
 def _render_section(r: ExpResult) -> str:
     h = HYPOTHESES[r.exp_id]
     if not r.found:
-        return (f"## {r.exp_id} — {r.name}\n\n"
-                f"- **Hypothesis:** {h['claim']}\n"
-                f"- **Threshold:** {r.threshold}\n"
-                f"- **Result:** `// TODO: not yet run`\n")
+        return (
+            f"## {r.exp_id} — {r.name}\n\n"
+            f"- **Hypothesis:** {h['claim']}\n"
+            f"- **Threshold:** {r.threshold}\n"
+            f"- **Result:** `// TODO: not yet run`\n"
+        )
     obs_str = f"{r.observed:.4f}" if r.observed is not None else "N/A"
     ci_str = f"\n- **95% CI:** [{r.ci95[0]:.4f}, {r.ci95[1]:.4f}]" if r.ci95 else ""
     parts = [
-        f"## {r.exp_id} — {r.name}", "",
+        f"## {r.exp_id} — {r.name}",
+        "",
         f"- **Hypothesis:** {h['claim']}",
         f"- **Threshold:** {r.threshold}",
         f"- **Observed:** {obs_str}{ci_str}",
@@ -264,8 +296,10 @@ def _render_section(r: ExpResult) -> str:
 
 
 def _render_summary(results: list[ExpResult]) -> str:
-    lines = ["| Exp | Claim | Threshold | Observed | Verdict |",
-             "|-----|-------|-----------|----------|---------|"]
+    lines = [
+        "| Exp | Claim | Threshold | Observed | Verdict |",
+        "|-----|-------|-----------|----------|---------|",
+    ]
     for r in results:
         h = HYPOTHESES[r.exp_id]
         claim = h["claim"][:60] + ("…" if len(h["claim"]) > 60 else "")
@@ -289,10 +323,14 @@ def build_report(results_dir: Path, telemetry_path: Path) -> str:
         _read_e6(telemetry_path),
     ]
     parts = [
-        "# Verification results — paper Limitations update", "",
+        "# Verification results — paper Limitations update",
+        "",
         "Auto-generated by `benchmarks/lib/verification_report.py`. Do NOT hand-edit.",
-        "", "## Summary", "",
-        _render_summary(results), "",
+        "",
+        "## Summary",
+        "",
+        _render_summary(results),
+        "",
     ]
     for r in results:
         parts += [_render_section(r), ""]
@@ -302,12 +340,19 @@ def build_report(results_dir: Path, telemetry_path: Path) -> str:
 def main() -> int:
     repo = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--out", type=str,
-                        default=str(repo / "docs" / "papers" / "verification-results.md"))
-    parser.add_argument("--results-dir", type=str,
-                        default=str(repo / "benchmarks" / "results"))
-    parser.add_argument("--telemetry", type=str,
-                        default=str(Path.home() / ".claude" / "methodology" / "telemetry.jsonl"))
+    parser.add_argument(
+        "--out",
+        type=str,
+        default=str(repo / "docs" / "papers" / "verification-results.md"),
+    )
+    parser.add_argument(
+        "--results-dir", type=str, default=str(repo / "benchmarks" / "results")
+    )
+    parser.add_argument(
+        "--telemetry",
+        type=str,
+        default=str(Path.home() / ".claude" / "methodology" / "telemetry.jsonl"),
+    )
     args = parser.parse_args()
 
     report = build_report(Path(args.results_dir), Path(args.telemetry))

@@ -29,10 +29,12 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from benchmarks.lib.ablation_runner import (  # noqa: E402
-    BENCHMARK_IDS, run_one,
+    BENCHMARK_IDS,
+    run_one,
 )
 from benchmarks.lib.db_snapshot import (  # noqa: E402
-    fingerprint, restore_snapshot,
+    fingerprint,
+    restore_snapshot,
 )
 from benchmarks.lib import db_setup  # noqa: E402
 
@@ -45,6 +47,7 @@ SDE_SIGMA_MULTIPLIER = 2.0
 @dataclass
 class RunSample:
     """Single rerun outcome."""
+
     r_at_10: float
     mrr: float
     n_queries: int
@@ -71,14 +74,15 @@ def _restore_target(snapshot_path: Path, target_db_url: str, *, run_id: str) -> 
     """Restore + apply deterministic config (playbook §4.3, §4.10)."""
     report = restore_snapshot(target_db_url, snapshot_path)
     if not report.success:
-        msg = '; '.join(report.mismatch + report.version_drift)
+        msg = "; ".join(report.mismatch + report.version_drift)
         raise RuntimeError(f"snapshot restore failed: {msg}")
     db_setup.apply_deterministic_database(target_db_url, run_id=run_id)
     db_setup.analyze_after_restore(target_db_url)
 
 
-def _run_once(benchmark: str, target_db_url: str, quick: bool,
-              *, run_id: str) -> RunSample:
+def _run_once(
+    benchmark: str, target_db_url: str, quick: bool, *, run_id: str
+) -> RunSample:
     """Run one benchmark trial against target_db_url."""
     saved = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = target_db_url
@@ -90,8 +94,10 @@ def _run_once(benchmark: str, target_db_url: str, quick: bool,
         else:
             os.environ["DATABASE_URL"] = saved
     return RunSample(
-        r_at_10=metrics.r_at_10, mrr=metrics.mrr,
-        n_queries=metrics.n_queries, wall_seconds=wall,
+        r_at_10=metrics.r_at_10,
+        mrr=metrics.mrr,
+        n_queries=metrics.n_queries,
+        wall_seconds=wall,
     )
 
 
@@ -117,15 +123,17 @@ def measure_noise_floor(
     sha = fingerprint(snapshot_path)
     samples: list[RunSample] = []
     for i in range(n_reruns):
-        run_id = f"noise_{benchmark}_r{i+1}"
-        print(f"  [rerun {i+1}/{n_reruns}] restoring snapshot ...")
+        run_id = f"noise_{benchmark}_r{i + 1}"
+        print(f"  [rerun {i + 1}/{n_reruns}] restoring snapshot ...")
         _restore_target(snapshot_path, target_db_url, run_id=run_id)
-        print(f"  [rerun {i+1}/{n_reruns}] running {benchmark} (quick={quick}) ...")
+        print(f"  [rerun {i + 1}/{n_reruns}] running {benchmark} (quick={quick}) ...")
         t0 = time.monotonic()
         sample = _run_once(benchmark, target_db_url, quick, run_id=run_id)
         wall = time.monotonic() - t0
-        print(f"  [rerun {i+1}/{n_reruns}] r@10={sample.r_at_10:.4f} "
-              f"mrr={sample.mrr:.4f} wall={wall:.1f}s")
+        print(
+            f"  [rerun {i + 1}/{n_reruns}] r@10={sample.r_at_10:.4f} "
+            f"mrr={sample.mrr:.4f} wall={wall:.1f}s"
+        )
         samples.append(sample)
     r10 = _stats([s.r_at_10 for s in samples])
     mrr = _stats([s.mrr for s in samples])
@@ -162,19 +170,29 @@ def main() -> int:
     p.add_argument("--n", type=int, default=5)
     p.add_argument("--quick", action="store_true")
     args = p.parse_args()
-    target_url = (args.target_db if "://" in args.target_db
-                  else f"postgresql://localhost:5432/{args.target_db}")
+    target_url = (
+        args.target_db
+        if "://" in args.target_db
+        else f"postgresql://localhost:5432/{args.target_db}"
+    )
     report = measure_noise_floor(
-        args.benchmark, Path(args.snapshot), target_url,
-        n_reruns=args.n, quick=args.quick,
+        args.benchmark,
+        Path(args.snapshot),
+        target_url,
+        n_reruns=args.n,
+        quick=args.quick,
     )
     out = _save(report)
     sde = report["smallest_detectable_effect"]
     print(f"\nnoise floor: {out.relative_to(_ROOT)}")
-    print(f"  r@10: mean={report['metrics']['r_at_10']['mean']:.4f} "
-          f"σ={report['metrics']['r_at_10']['std']:.4f} 2σ={sde['r_at_10']:.4f}")
-    print(f"  mrr:  mean={report['metrics']['mrr']['mean']:.4f} "
-          f"σ={report['metrics']['mrr']['std']:.4f} 2σ={sde['mrr']:.4f}")
+    print(
+        f"  r@10: mean={report['metrics']['r_at_10']['mean']:.4f} "
+        f"σ={report['metrics']['r_at_10']['std']:.4f} 2σ={sde['r_at_10']:.4f}"
+    )
+    print(
+        f"  mrr:  mean={report['metrics']['mrr']['mean']:.4f} "
+        f"σ={report['metrics']['mrr']['std']:.4f} 2σ={sde['mrr']:.4f}"
+    )
     return 0
 
 

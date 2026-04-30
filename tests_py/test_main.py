@@ -65,7 +65,9 @@ class TestMain:
         assert "change_impact" in tool_names
         # Gap 1 — typed subgraph query over the workflow graph.
         assert "query_workflow_graph" in tool_names
-        assert len(tool_names) == 46
+        # Verification campaign — read/write ratio telemetry (Popper C6).
+        assert "get_telemetry" in tool_names
+        assert len(tool_names) == 47
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"

@@ -225,9 +225,7 @@ def _register_get_telemetry(mcp: FastMCP) -> None:
     )
     async def tool_get_telemetry() -> str:
         """Return per-op counters + read/write ratio (Popper C6)."""
-        return await safe_handler(
-            get_telemetry.handler, {}, tool_name="get_telemetry"
-        )
+        return await safe_handler(get_telemetry.handler, {}, tool_name="get_telemetry")
 
 
 def _register_unified_search(mcp: FastMCP) -> None:

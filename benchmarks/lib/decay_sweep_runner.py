@@ -61,8 +61,9 @@ def _build_effective_heat_ddl(p_factor: float) -> str:
     """
     from mcp_server.infrastructure.pg_schema import EFFECTIVE_HEAT_FN
 
-    replaced = _PFACTOR_RE.sub(f"p_factor    REAL DEFAULT {p_factor!r}",
-                               EFFECTIVE_HEAT_FN, count=1)
+    replaced = _PFACTOR_RE.sub(
+        f"p_factor    REAL DEFAULT {p_factor!r}", EFFECTIVE_HEAT_FN, count=1
+    )
     if replaced == EFFECTIVE_HEAT_FN:
         raise RuntimeError("Could not locate p_factor DEFAULT in EFFECTIVE_HEAT_FN")
     return replaced
@@ -133,10 +134,16 @@ def _parse_beam_output(out: str) -> dict:
         if name == "OVERALL":
             overall = {"mrr": mrr, "r5": r5, "r10": r10}
         elif name in {
-            "abstention", "contradiction_resolution", "event_ordering",
-            "information_extraction", "instruction_following",
-            "knowledge_update", "multi_hop_reasoning",
-            "preference_following", "summarization", "temporal_reasoning",
+            "abstention",
+            "contradiction_resolution",
+            "event_ordering",
+            "information_extraction",
+            "instruction_following",
+            "knowledge_update",
+            "multi_hop_reasoning",
+            "preference_following",
+            "summarization",
+            "temporal_reasoning",
         }:
             abilities[name] = {"mrr": mrr, "r5": r5, "r10": r10}
     return {"overall": overall, "abilities": abilities, "raw_output": out}
@@ -151,9 +158,14 @@ def analyze_curve(points: list[tuple[float, float]]) -> dict:
     points: list of (lambda, mrr) sorted by lambda.
     """
     if not points:
-        return {"optimum_lambda": None, "optimum_mrr": 0.0,
-                "plateau_lo": None, "plateau_hi": None,
-                "slope_left": None, "slope_right": None}
+        return {
+            "optimum_lambda": None,
+            "optimum_mrr": 0.0,
+            "plateau_lo": None,
+            "plateau_hi": None,
+            "slope_left": None,
+            "slope_right": None,
+        }
     pts = sorted(points)
     opt = max(pts, key=lambda p: p[1])
     opt_lambda, opt_mrr = opt
@@ -205,8 +217,11 @@ def run_sweep(lambdas: list[float], quick: bool) -> Path:
                 metrics = run_beam(quick=quick)
             except Exception as exc:
                 print(f"[sweep] λ={lam} FAILED: {exc!r}")
-                metrics = {"overall": {"mrr": 0.0, "r5": 0.0, "r10": 0.0},
-                           "abilities": {}, "error": repr(exc)}
+                metrics = {
+                    "overall": {"mrr": 0.0, "r5": 0.0, "r10": 0.0},
+                    "abilities": {},
+                    "error": repr(exc),
+                }
             elapsed = time.time() - t0
             mrr = metrics["overall"]["mrr"]
             r10 = metrics["overall"]["r10"]
@@ -219,13 +234,15 @@ def run_sweep(lambdas: list[float], quick: bool) -> Path:
             }
             (out_dir / f"lambda_{lam}.json").write_text(json.dumps(payload, indent=2))
             points.append((lam, mrr))
-            summary_rows.append({
-                "lambda": lam,
-                "mrr": mrr,
-                "r5": metrics["overall"]["r5"],
-                "r10": r10,
-                "elapsed_seconds": round(elapsed, 1),
-            })
+            summary_rows.append(
+                {
+                    "lambda": lam,
+                    "mrr": mrr,
+                    "r5": metrics["overall"]["r5"],
+                    "r10": r10,
+                    "elapsed_seconds": round(elapsed, 1),
+                }
+            )
     finally:
         print("\n[sweep] restoring production p_factor…")
         try:
@@ -240,7 +257,9 @@ def run_sweep(lambdas: list[float], quick: bool) -> Path:
 
     summary_csv = out_dir / "summary.csv"
     with summary_csv.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["lambda", "mrr", "r5", "r10", "elapsed_seconds"])
+        w = csv.DictWriter(
+            f, fieldnames=["lambda", "mrr", "r5", "r10", "elapsed_seconds"]
+        )
         w.writeheader()
         w.writerows(summary_rows)
     (out_dir / "analysis.json").write_text(json.dumps(analysis, indent=2))
@@ -250,15 +269,24 @@ def run_sweep(lambdas: list[float], quick: bool) -> Path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Decay dose-response sweep")
     parser.add_argument(
-        "--lambda", dest="lambdas", nargs="+", type=float, required=True,
+        "--lambda",
+        dest="lambdas",
+        nargs="+",
+        type=float,
+        required=True,
         help="One or more p_factor values (per-hour Ebbinghaus rate).",
     )
     parser.add_argument(
-        "--benchmark", default="beam", choices=["beam"],
+        "--benchmark",
+        default="beam",
+        choices=["beam"],
         help="Benchmark to drive (only beam wired).",
     )
-    parser.add_argument("--quick", action="store_true",
-                        help="Cap to 3 BEAM conversations for smoke testing.")
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Cap to 3 BEAM conversations for smoke testing.",
+    )
     args = parser.parse_args(argv)
 
     out_dir = run_sweep(args.lambdas, quick=args.quick)

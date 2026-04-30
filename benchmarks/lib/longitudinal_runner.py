@@ -154,19 +154,24 @@ def insert_memories(
         jitter = rng.uniform(-15.0, 15.0)
         age = max(0.5, center + jitter)
         age_days.append(age)
-        payloads.append({
-            "content": memory_content(uid),
-            "tags": [TAG, f"bucket_{bucket}"],
-            "source": "longitudinal",
-            "created_at": (
-                datetime.now(timezone.utc) - timedelta(days=age)
-            ).isoformat(),
-        })
+        payloads.append(
+            {
+                "content": memory_content(uid),
+                "tags": [TAG, f"bucket_{bucket}"],
+                "source": "longitudinal",
+                "created_at": (
+                    datetime.now(timezone.utc) - timedelta(days=age)
+                ).isoformat(),
+            }
+        )
 
     print("[long] inserting via ingest_memories_batch…")
     t0 = time.time()
     mem_ids, _ = bench_db.load_memories(
-        payloads, domain="longitudinal", batch_embed=True, decompose=False,
+        payloads,
+        domain="longitudinal",
+        batch_embed=True,
+        decompose=False,
     )
     print(f"[long] insert done ({time.time() - t0:.1f}s, {len(mem_ids)} rows)")
 
@@ -197,14 +202,21 @@ def evaluate_buckets(
     for b, items in by_bucket.items():
         if not items:
             continue
-        sample = items if len(items) <= queries_per_bucket else rng.sample(items, queries_per_bucket)
+        sample = (
+            items
+            if len(items) <= queries_per_bucket
+            else rng.sample(items, queries_per_bucket)
+        )
         hits1 = 0
         hits10 = 0
         latencies = []
         for uid, expected_id in sample:
             t0 = time.time()
             recalled = bench_db.recall(
-                query_for(uid), top_k=10, domain="longitudinal", min_heat=0.0,
+                query_for(uid),
+                top_k=10,
+                domain="longitudinal",
+                min_heat=0.0,
             )
             latencies.append(time.time() - t0)
             ranks = [r.get("memory_id") or r.get("id") for r in recalled]
@@ -219,8 +231,7 @@ def evaluate_buckets(
             "r_at_1": hits1 / total if total else 0.0,
             "r_at_10": hits10 / total if total else 0.0,
             "median_latency_ms": (
-                sorted(latencies)[len(latencies) // 2] * 1000.0
-                if latencies else 0.0
+                sorted(latencies)[len(latencies) // 2] * 1000.0 if latencies else 0.0
             ),
         }
         print(
@@ -237,8 +248,10 @@ def run(n_memories: int, queries_per_bucket: int, seed: int, quick: bool) -> Pat
     if quick:
         n_memories = min(n_memories, 5000)
         queries_per_bucket = min(queries_per_bucket, 100)
-    print(f"[long] config: N={n_memories}  Q/bucket={queries_per_bucket}  "
-          f"seed={seed}  quick={quick}")
+    print(
+        f"[long] config: N={n_memories}  Q/bucket={queries_per_bucket}  "
+        f"seed={seed}  quick={quick}"
+    )
 
     rng = random.Random(seed)
     np.random.seed(seed)
@@ -259,7 +272,11 @@ def run(n_memories: int, queries_per_bucket: int, seed: int, quick: bool) -> Pat
     with BenchmarkDB() as db:
         triples = insert_memories(db, n_memories, rng, n_buckets)
         bucket_results = evaluate_buckets(
-            db, triples, queries_per_bucket, rng, n_buckets,
+            db,
+            triples,
+            queries_per_bucket,
+            rng,
+            n_buckets,
         )
 
     # Pass criterion: R@10 at 360d ≥ R@10 at 30d − 0.05.
@@ -287,8 +304,10 @@ def run(n_memories: int, queries_per_bucket: int, seed: int, quick: bool) -> Pat
     out_path = out_dir / "results.json"
     out_path.write_text(json.dumps(payload, indent=2))
 
-    print(f"\n[long] pass criterion: oldest({oldest:.3f}) "
-          f"vs youngest({youngest:.3f})  →  {'PASS' if passed else 'FAIL'}")
+    print(
+        f"\n[long] pass criterion: oldest({oldest:.3f}) "
+        f"vs youngest({youngest:.3f})  →  {'PASS' if passed else 'FAIL'}"
+    )
     print(f"[long] results → {out_path}")
     return out_path
 
@@ -298,8 +317,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--n-memories", type=int, default=100_000)
     parser.add_argument("--queries-per-bucket", type=int, default=1_000)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--quick", action="store_true",
-                        help="N=5000, 100 queries/bucket")
+    parser.add_argument(
+        "--quick", action="store_true", help="N=5000, 100 queries/bucket"
+    )
     args = parser.parse_args(argv)
     run(args.n_memories, args.queries_per_bucket, args.seed, args.quick)
     return 0

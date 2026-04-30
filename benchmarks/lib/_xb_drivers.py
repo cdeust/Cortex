@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 def _drive_longmemeval(data_path: str, limit: int) -> dict:
     from benchmarks.longmemeval.run_benchmark import run_benchmark
+
     r = run_benchmark(data_path, limit=limit)
     return {
         "mrr": r["overall_mrr"],
@@ -67,7 +68,9 @@ def _drive_locomo(data_path: str, limit: int) -> dict:
     n = len(all_rs)
     mrr = sum(1.0 / r["hit_rank"] for r in all_rs if r["hit_rank"]) / n if n else 0.0
     r10 = (
-        sum(1 for r in all_rs if r["hit_rank"] and r["hit_rank"] <= 10) / n if n else 0.0
+        sum(1 for r in all_rs if r["hit_rank"] and r["hit_rank"] <= 10) / n
+        if n
+        else 0.0
     )
     cat_mrr: dict[str, float] = {}
     cat_r10: dict[str, float] = {}
@@ -76,9 +79,7 @@ def _drive_locomo(data_path: str, limit: int) -> dict:
             continue
         m = len(rs)
         cat_mrr[cat] = sum(1.0 / r["hit_rank"] for r in rs if r["hit_rank"]) / m
-        cat_r10[cat] = sum(
-            1 for r in rs if r["hit_rank"] and r["hit_rank"] <= 10
-        ) / m
+        cat_r10[cat] = sum(1 for r in rs if r["hit_rank"] and r["hit_rank"] <= 10) / m
     return {
         "mrr": mrr,
         "recall_at_10": r10,
@@ -91,8 +92,10 @@ def _drive_locomo(data_path: str, limit: int) -> dict:
 
 def main() -> int:
     if len(sys.argv) != 4:
-        print("usage: _xb_drivers.py <longmemeval|locomo> <data_path> <limit>",
-              file=sys.stderr)
+        print(
+            "usage: _xb_drivers.py <longmemeval|locomo> <data_path> <limit>",
+            file=sys.stderr,
+        )
         return 2
     bench, data_path, limit_s = sys.argv[1], sys.argv[2], sys.argv[3]
     limit = int(limit_s)

@@ -42,10 +42,24 @@ DEFAULT_DB_URL = "postgresql://localhost:5432/cortex_n_scan"
 ENTITIES = [f"Entity{i:03d}" for i in range(50)]
 TOOLS = ["psql", "ruff", "mypy", "pytest", "uv", "git", "docker", "make"]
 FILES = [f"src/module_{i:02d}.py" for i in range(20)]
-ERRORS = ["ConnectionRefused", "TypeError", "ValueError", "DeadlockDetected",
-          "TimeoutError", "NullPointerException", "AssertionError"]
-ACTIONS = ["deployment", "migration", "rollout", "import", "indexing",
-           "validation", "benchmarking"]
+ERRORS = [
+    "ConnectionRefused",
+    "TypeError",
+    "ValueError",
+    "DeadlockDetected",
+    "TimeoutError",
+    "NullPointerException",
+    "AssertionError",
+]
+ACTIONS = [
+    "deployment",
+    "migration",
+    "rollout",
+    "import",
+    "indexing",
+    "validation",
+    "benchmarking",
+]
 COMPONENTS = ["core", "infra", "handlers", "shared", "server", "hooks"]
 VALUES = ["10", "25", "50", "100", "1.5", "2x", "0.95", "5"]
 
@@ -105,9 +119,15 @@ def _query_for(text: str, slots: dict[str, str], rng: random.Random) -> str:
     return "What do we know about " + " and ".join(parts) + "?"
 
 
-_PARAPHRASE_SWAPS = [("because", "since"), ("Decided to", "We decided to"),
-                     ("Chose", "Picked"), ("Encountered", "Hit"),
-                     ("Approved", "Greenlit"), ("Standardized on", "Settled on")]
+_PARAPHRASE_SWAPS = [
+    ("because", "since"),
+    ("Decided to", "We decided to"),
+    ("Chose", "Picked"),
+    ("Encountered", "Hit"),
+    ("Approved", "Greenlit"),
+    ("Standardized on", "Settled on"),
+]
+
 
 def _paraphrase(text: str) -> str:
     """Generate a near-duplicate distractor by light surface edits."""
@@ -134,9 +154,14 @@ def synth_corpus(n: int, seed: int) -> list[CorpusItem]:
         kind, tmpl = rng.choice(templates)
         text, slots = _fill(tmpl, rng)
         query = _query_for(text, slots, rng)
-        items.append(CorpusItem(
-            text=text, metadata={"kind": kind, "slots": slots, "synth_idx": i},
-            query=query, ground_truth_idx=i))
+        items.append(
+            CorpusItem(
+                text=text,
+                metadata={"kind": kind, "slots": slots, "synth_idx": i},
+                query=query,
+                ground_truth_idx=i,
+            )
+        )
     # Replace ~5% with paraphrases of an earlier item; original stays at gt_idx.
     n_distract = max(0, int(n * DISTRACTOR_FRACTION))
     positions = rng.sample(range(1, n), min(n_distract, n - 1)) if n > 1 else []
@@ -145,7 +170,9 @@ def synth_corpus(n: int, seed: int) -> list[CorpusItem]:
         items[pos] = CorpusItem(
             text=_paraphrase(items[src].text),
             metadata={"kind": "distractor", "of": src, "synth_idx": pos},
-            query=items[pos].query, ground_truth_idx=items[pos].ground_truth_idx)
+            query=items[pos].query,
+            ground_truth_idx=items[pos].ground_truth_idx,
+        )
     return items
 
 
@@ -176,7 +203,9 @@ def _restore_env(saved: dict[str, str | None]) -> None:
 
 def _heat_for(condition: str, default: float = 1.0) -> float:
     """Heat for inserted memories (flat=0.5 forces observable effect)."""
-    return 0.5 if condition == "cortex_flat" else default  # source: spec CORTEX_HEAT_CONSTANT=0.5
+    return (
+        0.5 if condition == "cortex_flat" else default
+    )  # source: spec CORTEX_HEAT_CONSTANT=0.5
 
 
 # ── Run one (n, condition) trial ────────────────────────────────────────
@@ -204,14 +233,25 @@ def _select_query_indices(n_corpus: int, n_queries: int, seed: int) -> list[int]
 
 def _build_memories(corpus: list[CorpusItem], heat: float) -> list[dict]:
     now = datetime.now(timezone.utc).isoformat()
-    return [{"content": item.text, "user_content": item.text, "created_at": now,
-             "heat": heat, "source": f"synth_{item.metadata['synth_idx']}",
-             "tags": ["n_scan", item.metadata["kind"]]} for item in corpus]
+    return [
+        {
+            "content": item.text,
+            "user_content": item.text,
+            "created_at": now,
+            "heat": heat,
+            "source": f"synth_{item.metadata['synth_idx']}",
+            "tags": ["n_scan", item.metadata["kind"]],
+        }
+        for item in corpus
+    ]
 
 
-def _evaluate(db: BenchmarkDB, corpus: list[CorpusItem],
-              source_map: dict[int, str],
-              query_indices: list[int]) -> tuple[float, float, float, float]:
+def _evaluate(
+    db: BenchmarkDB,
+    corpus: list[CorpusItem],
+    source_map: dict[int, str],
+    query_indices: list[int],
+) -> tuple[float, float, float, float]:
     """Return (r_at_10, r_at_1, mrr, wall_per_query_ms)."""
     hits10 = hits1 = 0
     rr_sum = 0.0
@@ -233,7 +273,9 @@ def _evaluate(db: BenchmarkDB, corpus: list[CorpusItem],
     return hits10 / n, hits1 / n, rr_sum / n, wall_sum / n
 
 
-def run_trial(n: int, condition: str, seed: int, n_queries: int, db_url: str) -> TrialResult:
+def run_trial(
+    n: int, condition: str, seed: int, n_queries: int, db_url: str
+) -> TrialResult:
     """Run one (n, condition) trial.
 
     Pre: n>=1, condition in {full,flat}, n_queries>=1, db_url is benchmark-only.
@@ -266,9 +308,17 @@ def run_trial(n: int, condition: str, seed: int, n_queries: int, db_url: str) ->
         f"  [n={n} cond={condition}] r@10={r10:.3f} r@1={r1:.3f} mrr={mrr:.3f} "
         f"({wall_per_q:.1f}ms/q wall_total={wall_total:.1f}s)"
     )
-    return TrialResult(n=n, condition=condition, r_at_10=r10, r_at_1=r1, mrr=mrr,
-                       wall_per_query_ms=wall_per_q, rss_peak_mb=peak / (1024 * 1024),
-                       seed=seed, n_queries=len(query_indices))
+    return TrialResult(
+        n=n,
+        condition=condition,
+        r_at_10=r10,
+        r_at_1=r1,
+        mrr=mrr,
+        wall_per_query_ms=wall_per_q,
+        rss_peak_mb=peak / (1024 * 1024),
+        seed=seed,
+        n_queries=len(query_indices),
+    )
 
 
 # ── Output ──────────────────────────────────────────────────────────────
@@ -278,9 +328,12 @@ def _save_trial(out_dir: Path, result: TrialResult) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{result.n}_{result.condition}.json"
     payload = {
-        "n": result.n, "condition": result.condition, "seed": result.seed,
+        "n": result.n,
+        "condition": result.condition,
+        "seed": result.seed,
         "n_queries": result.n_queries,
-        "r_at_10": round(result.r_at_10, 6), "r_at_1": round(result.r_at_1, 6),
+        "r_at_10": round(result.r_at_10, 6),
+        "r_at_1": round(result.r_at_1, 6),
         "mrr": round(result.mrr, 6),
         "wall_per_query_ms": round(result.wall_per_query_ms, 3),
         "rss_peak_mb": round(result.rss_peak_mb, 3),
@@ -294,14 +347,32 @@ def _save_trial(out_dir: Path, result: TrialResult) -> Path:
 
 def _write_summary_csv(out_dir: Path, results: list[TrialResult]) -> Path:
     path = out_dir / "summary.csv"
-    cols = ["n", "condition", "r_at_10", "r_at_1", "mrr",
-            "wall_per_query_ms", "rss_peak_mb", "seed"]
+    cols = [
+        "n",
+        "condition",
+        "r_at_10",
+        "r_at_1",
+        "mrr",
+        "wall_per_query_ms",
+        "rss_peak_mb",
+        "seed",
+    ]
     with path.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(cols)
         for r in results:
-            w.writerow([r.n, r.condition, r.r_at_10, r.r_at_1, r.mrr,
-                        r.wall_per_query_ms, r.rss_peak_mb, r.seed])
+            w.writerow(
+                [
+                    r.n,
+                    r.condition,
+                    r.r_at_10,
+                    r.r_at_1,
+                    r.mrr,
+                    r.wall_per_query_ms,
+                    r.rss_peak_mb,
+                    r.seed,
+                ]
+            )
     return path
 
 

@@ -106,7 +106,7 @@ def _run_cell(
         return payload
     for line in proc.stdout.splitlines():
         if line.startswith("__JSON__"):
-            payload.update(json.loads(line[len("__JSON__"):]))
+            payload.update(json.loads(line[len("__JSON__") :]))
             return payload
     payload["error"] = "no __JSON__ line in driver stdout"
     return payload
@@ -122,8 +122,11 @@ def _grid_run(
     for i, cell in enumerate(cells, 1):
         print(f"  [{i:>2}/{len(cells)}] {_cell_id(cell)} ...", flush=True)
         r = _run_cell(benchmark, data_path, cell, seed, limit)
-        msg = (f"MRR={r['mrr']:.3f}" if r.get("mrr") is not None
-               else f"ERROR: {r.get('error', 'unknown')[:120]}")
+        msg = (
+            f"MRR={r['mrr']:.3f}"
+            if r.get("mrr") is not None
+            else f"ERROR: {r.get('error', 'unknown')[:120]}"
+        )
         print(f"    {msg}")
         results.append(r)
     valid = [r for r in results if r.get("mrr") is not None]
@@ -135,8 +138,12 @@ def _grid_run(
 
 
 def _summary_md(
-    winner: dict[str, Any], eval_b: dict[str, Any], ref_best: dict[str, Any],
-    out_dir: Path, seed: int, limits: dict[str, int],
+    winner: dict[str, Any],
+    eval_b: dict[str, Any],
+    ref_best: dict[str, Any],
+    out_dir: Path,
+    seed: int,
+    limits: dict[str, int],
 ) -> str:
     b, c = eval_b.get("mrr"), ref_best.get("mrr")
     if b is None or c is None or c == 0:
@@ -145,60 +152,82 @@ def _summary_md(
         ratio = b / c
         verdict = "PASS" if ratio >= PASS_RATIO else "FAIL"
         ratio_str = f"{ratio:.3f}"
-    return "\n".join([
-        "# Cross-benchmark generalization (Popper C5)",
-        "",
-        f"- Run timestamp: {out_dir.name}",
-        f"- Seed: {seed}",
-        f"- LongMemEval limit: {limits['lm']}",
-        f"- LoCoMo limit: {limits['loc']}",
-        f"- Pass criterion: Phase-B MRR ≥ {PASS_RATIO} × Phase-C MRR",
-        "",
-        "## Phase A — Calibration winner (LongMemEval-S)",
-        f"- Cell: `{winner['cell_id']}`",
-        f"- MRR: {winner['mrr']:.3f}",
-        f"- R@10: {winner.get('recall_at_10', 'N/A')}",
-        "",
-        "## Phase B — LongMemEval-tuned applied AS-IS to LoCoMo",
-        f"- MRR: {b if b is not None else 'ERROR'}",
-        f"- R@10: {eval_b.get('recall_at_10', 'N/A')}",
-        "",
-        "## Phase C — LoCoMo-tuned ceiling",
-        f"- Best cell: `{ref_best['cell_id']}`",
-        f"- MRR: {c if c is not None else 'ERROR'}",
-        f"- R@10: {ref_best.get('recall_at_10', 'N/A')}",
-        "",
-        "## Verdict",
-        f"- Ratio Phase-B / Phase-C: {ratio_str}",
-        f"- **{verdict}**",
-        "",
-    ])
+    return "\n".join(
+        [
+            "# Cross-benchmark generalization (Popper C5)",
+            "",
+            f"- Run timestamp: {out_dir.name}",
+            f"- Seed: {seed}",
+            f"- LongMemEval limit: {limits['lm']}",
+            f"- LoCoMo limit: {limits['loc']}",
+            f"- Pass criterion: Phase-B MRR ≥ {PASS_RATIO} × Phase-C MRR",
+            "",
+            "## Phase A — Calibration winner (LongMemEval-S)",
+            f"- Cell: `{winner['cell_id']}`",
+            f"- MRR: {winner['mrr']:.3f}",
+            f"- R@10: {winner.get('recall_at_10', 'N/A')}",
+            "",
+            "## Phase B — LongMemEval-tuned applied AS-IS to LoCoMo",
+            f"- MRR: {b if b is not None else 'ERROR'}",
+            f"- R@10: {eval_b.get('recall_at_10', 'N/A')}",
+            "",
+            "## Phase C — LoCoMo-tuned ceiling",
+            f"- Best cell: `{ref_best['cell_id']}`",
+            f"- MRR: {c if c is not None else 'ERROR'}",
+            f"- R@10: {ref_best.get('recall_at_10', 'N/A')}",
+            "",
+            "## Verdict",
+            f"- Ratio Phase-B / Phase-C: {ratio_str}",
+            f"- **{verdict}**",
+            "",
+        ]
+    )
 
 
 def _write_artifacts(
-    out_dir: Path, calibration: list[dict[str, Any]], winner: dict[str, Any],
-    eval_b: dict[str, Any], reference: list[dict[str, Any]], ref_best: dict[str, Any],
-    seed: int, limits: dict[str, int],
+    out_dir: Path,
+    calibration: list[dict[str, Any]],
+    winner: dict[str, Any],
+    eval_b: dict[str, Any],
+    reference: list[dict[str, Any]],
+    ref_best: dict[str, Any],
+    seed: int,
+    limits: dict[str, int],
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     sidecar = {
-        "seed": seed, "limits": limits, "grid": GRID,
-        "pass_ratio": PASS_RATIO, "timestamp": out_dir.name,
+        "seed": seed,
+        "limits": limits,
+        "grid": GRID,
+        "pass_ratio": PASS_RATIO,
+        "timestamp": out_dir.name,
     }
-    (out_dir / "calibration.json").write_text(json.dumps(
-        {"sidecar": sidecar, "winner": winner, "cells": calibration}, indent=2))
-    (out_dir / "evaluation.json").write_text(json.dumps(
-        {"sidecar": sidecar, "winner_cell": winner["cell"], "result": eval_b}, indent=2))
-    (out_dir / "reference.json").write_text(json.dumps(
-        {"sidecar": sidecar, "best": ref_best, "cells": reference}, indent=2))
+    (out_dir / "calibration.json").write_text(
+        json.dumps(
+            {"sidecar": sidecar, "winner": winner, "cells": calibration}, indent=2
+        )
+    )
+    (out_dir / "evaluation.json").write_text(
+        json.dumps(
+            {"sidecar": sidecar, "winner_cell": winner["cell"], "result": eval_b},
+            indent=2,
+        )
+    )
+    (out_dir / "reference.json").write_text(
+        json.dumps({"sidecar": sidecar, "best": ref_best, "cells": reference}, indent=2)
+    )
     (out_dir / "summary.md").write_text(
-        _summary_md(winner, eval_b, ref_best, out_dir, seed, limits))
+        _summary_md(winner, eval_b, ref_best, out_dir, seed, limits)
+    )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--quick", action="store_true",
-                        help="Tiny limits (lm=20, loc=2 conv) for smoke-tests")
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Tiny limits (lm=20, loc=2 conv) for smoke-tests",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--out-dir", type=str, default=None)
     parser.add_argument("--lm-limit", type=int, default=200)
@@ -217,21 +246,29 @@ def main() -> int:
             return 2
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_root = Path(args.out_dir) if args.out_dir else (
-        repo / "benchmarks" / "results" / "cross_benchmark")
+    out_root = (
+        Path(args.out_dir)
+        if args.out_dir
+        else (repo / "benchmarks" / "results" / "cross_benchmark")
+    )
     out_dir = out_root / timestamp
     limits = {"lm": args.lm_limit, "loc": args.loc_limit}
 
-    calibration, winner = _grid_run("Phase A", "longmemeval", lm_path, args.lm_limit, args.seed)
+    calibration, winner = _grid_run(
+        "Phase A", "longmemeval", lm_path, args.lm_limit, args.seed
+    )
     print("[Phase B] Evaluating LongMemEval-tuned config on LoCoMo (no retune)")
     eval_b = _run_cell("locomo", loc_path, winner["cell"], args.seed, args.loc_limit)
     if eval_b.get("mrr") is not None:
         print(f"  MRR={eval_b['mrr']:.3f}, R@10={eval_b.get('recall_at_10', 0):.3f}")
     else:
         print(f"  ERROR: {eval_b.get('error', 'unknown')[:120]}")
-    reference, ref_best = _grid_run("Phase C", "locomo", loc_path, args.loc_limit, args.seed)
-    _write_artifacts(out_dir, calibration, winner, eval_b, reference, ref_best,
-                     args.seed, limits)
+    reference, ref_best = _grid_run(
+        "Phase C", "locomo", loc_path, args.loc_limit, args.seed
+    )
+    _write_artifacts(
+        out_dir, calibration, winner, eval_b, reference, ref_best, args.seed, limits
+    )
     print(f"\nArtifacts written to: {out_dir}")
     print((out_dir / "summary.md").read_text())
     return 0

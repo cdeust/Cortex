@@ -32,8 +32,10 @@ class BenchmarkDB:
     """
 
     def __init__(
-        self, database_url: str | None = None,
-        *, on_connection_open: Callable[[Any], None] | None = None,
+        self,
+        database_url: str | None = None,
+        *,
+        on_connection_open: Callable[[Any], None] | None = None,
     ) -> None:
         self._url = database_url or os.environ.get(
             "DATABASE_URL", "postgresql://localhost:5432/cortex"
@@ -54,6 +56,7 @@ class BenchmarkDB:
         run_id = os.environ.get("CORTEX_BENCH_DETERMINISTIC_RUN_ID")
         if run_id and self._on_connection_open is None:
             from benchmarks.lib import db_setup
+
             db_setup.apply_deterministic_session(self._store._conn, run_id=run_id)
         elif self._on_connection_open is not None:
             self._on_connection_open(self._store._conn)
