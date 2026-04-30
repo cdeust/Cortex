@@ -3,34 +3,23 @@
   document.addEventListener('DOMContentLoaded', function() {
     // ── View toggle (Graph / Timeline) ──
     var viewBtns = document.querySelectorAll('.view-toggle .view-btn[data-view]');
-    function _toggleGraphWarn(view) {
-      var w = document.getElementById('cortex-graph-warn');
-      if (!w) return;
-      // Show the experimental-graph banner only when the Graph tab is
-      // active. Other views hide it; the in-banner × button hides it
-      // permanently for the session.
-      if (view === 'graph') w.style.display = '';
-      else w.style.display = 'none';
-    }
     viewBtns.forEach(function(btn) {
       btn.addEventListener('click', function() {
-        // Disabled tabs (Pipeline) ignore clicks entirely.
-        if (btn.disabled || btn.hasAttribute('disabled')) return;
         viewBtns.forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
-        var view = btn.dataset.view || 'knowledge';
+        var view = btn.dataset.view || 'graph';
         JUG.state.activeView = view;
         toggleFilterBarVisibility(view);
-        _toggleGraphWarn(view);
       });
     });
 
-    // Graph disabled. Knowledge is the landing tab — paged
-    // /api/memories scales to any N.
+    // Graph is the default landing view — the wiki is still under
+    // active restructuring and the workflow graph is the canonical
+    // answer to "what did Claude do in this project".
     setTimeout(function() {
       JUG.state.activeView = '_init';
-      JUG.state.activeView = 'knowledge';
-      toggleFilterBarVisibility('knowledge');
+      JUG.state.activeView = 'graph';
+      toggleFilterBarVisibility('graph');
     }, 0);
 
     // ── Filter buttons (source type) ──

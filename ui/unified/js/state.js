@@ -17,7 +17,7 @@
     selectedId: null,
     zoomLevel: 'L0',
     lastData: null,
-    activeView: 'knowledge',
+    activeView: 'graph',
     domainFilter: '',
     emotionFilter: '',
     stageFilter: '',

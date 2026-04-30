@@ -3,21 +3,11 @@
   var abortController = null;
 
   function fetchGraph() {
-    // Graph re-enabled (experimental). Knowledge is still the default
-    // landing tab so this fetch only matters once the user clicks the
-    // Graph tab — the warning banner above the view tells them what
-    // they're getting into. d3-force is gone (workflow_graph.js
-    // mounts a static-position renderer) but JSON.parse + buildGraph
-    // are still O(N+E) each and may freeze the browser at high N.
-    if (JUG.state && JUG.state.activeView !== 'graph') {
-      // Don't pay the cost unless the user actually wants the graph.
-      updateStatus('Online — graph standby');
-      hideLoading();
-      return;
-    }
     if (abortController) abortController.abort();
     abortController = new AbortController();
     var signal = abortController.signal;
+
+    // Single fetch — no batching. Domain dedup keeps node count manageable.
     fetch(JUG.API_URL, { signal: signal })
       .then(function(res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -144,9 +134,7 @@
       .map(function(v) { return String(v).padStart(2, '0'); }).join(':');
   }, 1000);
 
-  // Boot — delay initial fetch. fetchGraph() short-circuits when the
-  // Graph tab isn't active, so this is cheap on Knowledge / Board /
-  // Wiki landings.
+  // Boot — delay initial fetch to let Three.js scene fully initialize
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       setTimeout(fetchGraph, 500);
@@ -155,19 +143,8 @@
     setTimeout(fetchGraph, 500);
   }
 
-  // Trigger the heavy graph fetch only when the user actually
-  // switches to the Graph tab (lazy-load semantics).
-  if (window.JUG && JUG.on) {
-    JUG.on('state:activeView', function(ev) {
-      if (ev && ev.value === 'graph') setTimeout(fetchGraph, 50);
-    });
-  }
-
   function _loadDiscussionBatch(batch) {
-    // Discussion batches were merged into JUG.state.lastData — at high
-    // N this also accumulates hundreds of MB. Skip until we add a
-    // dedicated Discussions tab with its own paged path.
-    return;
+    var batchSize = 500;
     fetch(JUG.API_URL.replace('/api/graph', '/api/discussions') + '?batch=' + batch + '&batch_size=' + batchSize)
       .then(function(r) { return r.json(); })
       .then(function(data) {
