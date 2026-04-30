@@ -66,35 +66,41 @@ def serve(handler, store) -> None:
         agg = dict(agg) if not isinstance(agg, dict) else agg
 
         domains = [
-            {"name": dict(r)["dom"] if not isinstance(r, dict) else r["dom"],
-             "count": int(dict(r)["c"] if not isinstance(r, dict) else r["c"])}
+            {
+                "name": dict(r)["dom"] if not isinstance(r, dict) else r["dom"],
+                "count": int(dict(r)["c"] if not isinstance(r, dict) else r["c"]),
+            }
             for r in domain_rows
         ]
 
         payload = {
-            "total":     int(agg.get("total") or 0),
-            "domains":   domains,
+            "total": int(agg.get("total") or 0),
+            "domains": domains,
             "stages": {
-                "labile":          int(agg.get("s_labile") or 0),
-                "early_ltp":       int(agg.get("s_early") or 0),
-                "late_ltp":        int(agg.get("s_late") or 0),
-                "consolidated":    int(agg.get("s_cons") or 0),
+                "labile": int(agg.get("s_labile") or 0),
+                "early_ltp": int(agg.get("s_early") or 0),
+                "late_ltp": int(agg.get("s_late") or 0),
+                "consolidated": int(agg.get("s_cons") or 0),
                 "reconsolidating": int(agg.get("s_recon") or 0),
             },
             "emotions": {
-                "urgent":   int(agg.get("e_urgent") or 0),
+                "urgent": int(agg.get("e_urgent") or 0),
                 "positive": int(agg.get("e_pos") or 0),
                 "negative": int(agg.get("e_neg") or 0),
-                "neutral":  int(agg.get("e_neutral") or 0),
+                "neutral": int(agg.get("e_neutral") or 0),
             },
-            "global":    int(agg.get("n_global") or 0),
+            "global": int(agg.get("n_global") or 0),
             "protected": int(agg.get("n_protected") or 0),
-            "hot":       int(agg.get("n_hot") or 0),
+            "hot": int(agg.get("n_hot") or 0),
         }
         _send_json(handler, 200, payload)
     except Exception as exc:
-        _send_json(handler, 500, {
-            "status": "error",
-            "reason": "facets_query_failed",
-            "detail": f"{type(exc).__name__}: {exc}",
-        })
+        _send_json(
+            handler,
+            500,
+            {
+                "status": "error",
+                "reason": "facets_query_failed",
+                "detail": f"{type(exc).__name__}: {exc}",
+            },
+        )

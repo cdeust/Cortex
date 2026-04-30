@@ -37,17 +37,17 @@ from urllib.parse import parse_qs, urlsplit
 _SORT_ORDER_BY = {
     # heat_base is the persisted base heat; effective_heat is a function
     # call that we skip here for listing speed.
-    "heat":   "heat_base DESC, id DESC",
+    "heat": "heat_base DESC, id DESC",
     "recent": "created_at DESC, id DESC",
     "oldest": "created_at ASC,  id ASC",
 }
 _SORT_KEY_COLUMN = {
-    "heat":   "heat_base",
+    "heat": "heat_base",
     "recent": "created_at",
     "oldest": "created_at",
 }
 _SORT_DIRECTION = {
-    "heat":   "<",   # next page has smaller heat or same heat with smaller id
+    "heat": "<",  # next page has smaller heat or same heat with smaller id
     "recent": "<",
     "oldest": ">",
 }
@@ -102,31 +102,31 @@ def _row_to_node(row: Any) -> dict:
     if d.get("importance") and d["importance"] >= 0.75:
         emotion = "urgency"
     return {
-        "id":                 "memory:" + str(d.get("id")),
-        "memory_id":          d.get("id"),
-        "type":               "memory",
-        "kind":               "memory",
-        "label":              d.get("content") or "",
-        "content":            d.get("content") or "",
-        "domain":             d.get("domain") or "",
-        "domain_id":          "domain:" + (d.get("domain") or "__global__"),
-        "tags":               d.get("tags") or [],
-        "heat":               float(d.get("heat_base") or 0.0),
-        "importance":         float(d.get("importance") or 0.0),
-        "stage":              d.get("consolidation_stage") or "labile",
+        "id": "memory:" + str(d.get("id")),
+        "memory_id": d.get("id"),
+        "type": "memory",
+        "kind": "memory",
+        "label": d.get("content") or "",
+        "content": d.get("content") or "",
+        "domain": d.get("domain") or "",
+        "domain_id": "domain:" + (d.get("domain") or "__global__"),
+        "tags": d.get("tags") or [],
+        "heat": float(d.get("heat_base") or 0.0),
+        "importance": float(d.get("importance") or 0.0),
+        "stage": d.get("consolidation_stage") or "labile",
         "consolidationStage": d.get("consolidation_stage") or "labile",
         "consolidation_stage": d.get("consolidation_stage") or "labile",
-        "createdAt":          d.get("created_at"),
-        "lastAccessed":       d.get("last_accessed"),
-        "isProtected":        bool(d.get("is_protected")),
-        "is_protected":       bool(d.get("is_protected")),
-        "isGlobal":           bool(d.get("is_global")),
-        "is_global":          bool(d.get("is_global")),
-        "emotion":            emotion,
-        "emotional_valence":  float(val) if val is not None else 0.0,
-        "store_type":         d.get("store_type") or "episodic",
-        "access_count":       int(d.get("access_count") or 0),
-        "useful_count":       int(d.get("useful_count") or 0),
+        "createdAt": d.get("created_at"),
+        "lastAccessed": d.get("last_accessed"),
+        "isProtected": bool(d.get("is_protected")),
+        "is_protected": bool(d.get("is_protected")),
+        "isGlobal": bool(d.get("is_global")),
+        "is_global": bool(d.get("is_global")),
+        "emotion": emotion,
+        "emotional_valence": float(val) if val is not None else 0.0,
+        "store_type": d.get("store_type") or "episodic",
+        "access_count": int(d.get("access_count") or 0),
+        "useful_count": int(d.get("useful_count") or 0),
     }
 
 
@@ -212,7 +212,9 @@ def serve(handler, store) -> None:
     if emotion not in ("urgent", "positive", "negative", "neutral", None):
         emotion = None
     try:
-        min_heat = float(qs.get("min_heat", [""])[0]) if qs.get("min_heat", [""])[0] else None
+        min_heat = (
+            float(qs.get("min_heat", [""])[0]) if qs.get("min_heat", [""])[0] else None
+        )
     except (TypeError, ValueError):
         min_heat = None
     protected_only = qs.get("protected", ["0"])[0] in ("1", "true", "yes")
@@ -252,11 +254,15 @@ def serve(handler, store) -> None:
         cur = store._execute(sql, tuple(params))
         rows = cur.fetchall()
     except Exception as exc:
-        _send_json(handler, 500, {
-            "status": "error",
-            "reason": "query_failed",
-            "detail": f"{type(exc).__name__}: {exc}",
-        })
+        _send_json(
+            handler,
+            500,
+            {
+                "status": "error",
+                "reason": "query_failed",
+                "detail": f"{type(exc).__name__}: {exc}",
+            },
+        )
         return
 
     has_more = len(rows) > limit
@@ -267,16 +273,22 @@ def serve(handler, store) -> None:
         last = dict(items[-1]) if not isinstance(items[-1], dict) else items[-1]
         sort_value: Any
         if sort == "heat":
-            sort_value = float(last["heat_base"]) if last.get("heat_base") is not None else 0.0
+            sort_value = (
+                float(last["heat_base"]) if last.get("heat_base") is not None else 0.0
+            )
         else:
             ts = last.get("created_at")
             sort_value = ts.isoformat() if hasattr(ts, "isoformat") else ts
         next_cursor = _encode_cursor({"k": sort_value, "id": last["id"]})
 
     nodes = [_row_to_node(r) for r in items]
-    _send_json(handler, 200, {
-        "items": nodes,
-        "next_cursor": next_cursor,
-        "page_count": len(nodes),
-        "sort": sort,
-    })
+    _send_json(
+        handler,
+        200,
+        {
+            "items": nodes,
+            "next_cursor": next_cursor,
+            "page_count": len(nodes),
+            "sort": sort,
+        },
+    )
