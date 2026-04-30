@@ -26,6 +26,57 @@
   <div class="loader-sub">Initializing neural map</div>
 </div>
 
+<!-- Performance-notice toast. Banner at the top of the page explaining
+     why Graph + Pipeline are disabled and that Wiki is still draft.
+     Auto-dismissable via the close button. -->
+<div id="cortex-perf-toast" role="status"
+     style="position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:5000;
+            max-width:780px;padding:10px 44px 10px 18px;
+            background:linear-gradient(90deg,rgba(20,28,42,0.95),rgba(28,36,52,0.95));
+            border:1px solid rgba(224,176,64,0.45);border-radius:6px;
+            color:#E8E4D8;font:12px/1.5 -apple-system,Inter,system-ui,sans-serif;
+            letter-spacing:0.2px;box-shadow:0 6px 22px rgba(0,0,0,0.45);
+            backdrop-filter:blur(6px)">
+  <div style="display:flex;align-items:flex-start;gap:10px">
+    <div style="color:#E0B040;font-size:14px;line-height:1;margin-top:1px">⚠</div>
+    <div>
+      <div style="color:#E0B040;font-weight:600;margin-bottom:3px;letter-spacing:0.6px;font-size:11px;text-transform:uppercase">
+        Performance notice
+      </div>
+      <div style="color:#c4d4dc">
+        <strong>Graph</strong> and <strong>Pipeline</strong> views are temporarily
+        deactivated due to performance issues at scale. They will return once we
+        solve the rendering bottleneck. <strong>Knowledge</strong> and
+        <strong>Board</strong> are the recommended views — both lazy-load and
+        scale to any number of memories. <strong>Wiki</strong> remains visible
+        but is still <em>under construction</em> — not the final version.
+      </div>
+    </div>
+  </div>
+  <button id="cortex-perf-toast-close" aria-label="Dismiss notice"
+          style="position:absolute;top:6px;right:8px;width:24px;height:24px;
+                 background:transparent;border:none;color:#7a8e9c;font-size:16px;
+                 cursor:pointer;line-height:1;padding:0">×</button>
+</div>
+<script>
+(function(){
+  var t = document.getElementById('cortex-perf-toast');
+  var b = document.getElementById('cortex-perf-toast-close');
+  if (!t || !b) return;
+  // Restore the dismissed state from localStorage so the toast doesn't
+  // re-appear on every reload once the user has acknowledged it.
+  try {
+    if (localStorage.getItem('cortexPerfToastDismissed') === '1') {
+      t.style.display = 'none';
+    }
+  } catch (_) {}
+  b.addEventListener('click', function(){
+    t.style.display = 'none';
+    try { localStorage.setItem('cortexPerfToastDismissed', '1'); } catch (_) {}
+  });
+})();
+</script>
+
 <!-- Non-blocking progress bar wired to /api/graph/progress. Shows
      the server's layered build status (L0 domains → L1 … L6 AST)
      without ever taking the graph away from the user. Fades in when
@@ -39,12 +90,10 @@
   <div style="text-align:right;margin-top:4px;color:#7a8e9c;font-size:10px;font-variant-numeric:tabular-nums"><span id="bp-pct">0%</span><span id="bp-elapsed" style="color:#5a6e7c;margin-left:6px"></span></div>
 </div>
 <script>
-// Phase-driven append-only loader.
-// Polls /api/graph/progress; when a phase flips to `ready`, fetches
-// /api/graph/phase?name=<key> ONCE and appends its nodes+edges to the
-// live scene via JUG.appendGraphDelta. Never re-fetches the whole
-// graph — matches the user's requirement: each phase pops new nodes
-// when the previous one is done.
+// Phase-driven append-only loader. Active ONLY when the Graph tab
+// is the current view — switching away from Graph stops the polling
+// loop so its cost (each phase append re-runs buildGraph) doesn't
+// hit Knowledge / Board users.
 (function(){
   // Phases are now DYNAMIC: L0..L5 are fixed, then one phase per
   // project (L6:<name>) then L6_CROSS. We discover the full set from
@@ -97,13 +146,19 @@
     if(p.elapsed) document.getElementById('bp-elapsed').textContent = ' · '+p.elapsed.toFixed(1)+'s';
   }
 
+  function _activeViewIsGraph() {
+    return window.JUG && JUG.state && JUG.state.activeView === 'graph';
+  }
   function poll(){
+    // Only do graph-build work while the user is on the Graph tab.
+    // Knowledge / Board / Wiki users don't pay the cost.
+    if (!_activeViewIsGraph()) {
+      setTimeout(poll, 1500);
+      return;
+    }
     fetch('/api/graph/progress').then(function(r){ return r.ok ? r.json() : null; }).then(function(p){
       if(p){
         refreshBar(p);
-        // Sequential append: iterate the server's phases dict in
-        // insertion order (L0..L5, then L6:<proj1>..<projN>, then
-        // L6_CROSS). Apply each one whose `ready` flag is true.
         var seq = Promise.resolve();
         var keys = Object.keys(p.phases || {});
         keys.forEach(function(k){
@@ -166,11 +221,18 @@
 
 <div id="filter-bar">
   <span class="view-toggle">
-    <button class="view-btn active" data-view="graph">Graph</button>
-    <button class="view-btn" data-view="knowledge">Knowledge</button>
-    <button class="view-btn" data-view="wiki">Wiki</button>
+    <!-- Graph re-enabled but flagged with a warning banner below
+         (#cortex-graph-warn) shown when the user activates it.
+         Knowledge stays the default landing tab. Pipeline still off
+         pending its own paged rewrite. Wiki keeps the DRAFT chip. -->
+    <button class="view-btn" data-view="graph"
+            title="Graph view — currently unstable at scale; see the warning below">Graph <span style="font-size:9px;color:#E0B040;letter-spacing:0.6px;margin-left:4px">EXPERIMENTAL</span></button>
+    <button class="view-btn active" data-view="knowledge">Knowledge</button>
+    <button class="view-btn" data-view="wiki" title="Wiki — under construction; not the final version">Wiki <span style="font-size:9px;color:#E0B040;letter-spacing:0.6px;margin-left:4px">DRAFT</span></button>
     <button class="view-btn" data-view="timeline">Board</button>
-    <button class="view-btn" data-view="sankey">Pipeline</button>
+    <button class="view-btn" data-view="sankey" disabled
+            title="Pipeline view temporarily disabled — performance issue at scale"
+            style="opacity:0.35;cursor:not-allowed">Pipeline</button>
   </span>
   <button class="filter-btn" id="glossary-toggle" title="Glossary (?)">?</button>
   <span class="filter-sep"></span>
@@ -218,6 +280,39 @@
   <select id="domain-select" class="filter-select"><option value="">All Domains</option></select>
   <input type="text" id="search-box" placeholder="Search path, skill, command…">
 </div>
+
+<!-- Graph-only warning banner. Shown directly below the view-toggle
+     row when the Graph tab is active. The Graph view is enabled but
+     can be unresponsive at scale — explain the situation in-line so
+     users aren't confused if their browser hangs. Hidden by default;
+     controls.js toggles display on view change. -->
+<div id="cortex-graph-warn" role="status"
+     style="display:none;position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:200;
+            max-width:760px;padding:8px 36px 8px 14px;
+            background:linear-gradient(90deg,rgba(48,28,12,0.92),rgba(64,40,16,0.92));
+            border:1px solid rgba(224,140,64,0.5);border-radius:5px;
+            color:#FFE3B5;font:11.5px/1.45 -apple-system,Inter,system-ui,sans-serif;
+            letter-spacing:0.2px;box-shadow:0 4px 14px rgba(0,0,0,0.4)">
+  <span style="color:#FFB060;margin-right:6px">⚠</span>
+  <strong>Graph may be unusable at this scale.</strong>
+  Due to performance issues we are currently investigating, opening the Graph
+  view can freeze the browser when memory counts are high. We are actively
+  working on it. Use <strong>Knowledge</strong> or <strong>Board</strong> for
+  reliable browsing while we land the rewrite.
+  <button id="cortex-graph-warn-close" aria-label="Dismiss"
+          style="position:absolute;top:4px;right:6px;width:22px;height:22px;
+                 background:transparent;border:none;color:#FFB060;font-size:14px;
+                 cursor:pointer;line-height:1;padding:0">×</button>
+</div>
+<script>
+(function(){
+  var b = document.getElementById('cortex-graph-warn-close');
+  if (b) b.addEventListener('click', function() {
+    var w = document.getElementById('cortex-graph-warn');
+    if (w) w.style.display = 'none';
+  });
+})();
+</script>
 
 <div id="status-bar" class="hud-panel">
   <div class="status-dot"></div>

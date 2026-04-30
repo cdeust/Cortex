@@ -249,28 +249,61 @@
     //  * velocityDecay: 0.72 → 0.78       (ζ recovered to ~0.65)
     // Other force constants unchanged — slots from computeSlots carry
     // the positioning burden; physics just needs time to converge.
-    var slotK    = HEAVY ? 1.2  : 0.85;
-    var chargeEn = true;
-    var collideI = HEAVY ? 2    : 3;
-    var alphaDK  = HEAVY ? 0.018 : 0.022;
-    var velDecay = 0.78;
-
-    var sim = d3.forceSimulation(nodes)
-      .alpha(1.0).alphaDecay(alphaDK).velocityDecay(velDecay)
-      .force('link', d3.forceLink(edges).id(function (n) { return n.id; })
-        .distance(linkDistance).strength(linkStrength))
-      .force('slot',        slotForce(ctx, slotK))
-      .force('interdomain', interDomainRepelForce(ctx, 0.08))
-      .force('symmulti', symbolMultiCenterForce(ctx))
-      .force('collide', d3.forceCollide()
-        .radius(function (n) { return collisionRadius(n, ctx); })
-        .strength(0.92).iterations(collideI));
-    if (chargeEn) {
-      // Local charge (distanceMax 180) so symbol-symbol repulsion
-      // doesn't create long-range feedback with the multi-centroid
-      // attraction; domains still repel each other via interdomain.
-      sim.force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(180));
-    }
+    // ── d3-force simulation REMOVED ─────────────────────────────────
+    //
+    // The simulation was the dominant cost driver at high N: per tick
+    //    O(N log N) charge + O(E) link + O(N) collide + O(N) center
+    // = ~5M ops/tick × 60 fps = 300M ops/sec on the main thread for a
+    // 240k-node graph. Plus warmup 100 ticks + cooldown 400 ticks per
+    // mount. That's what froze the browser.
+    //
+    // Positions are now FINAL once `prepareTopology` has placed each
+    // node into its slot (slotOf[id]). The renderer paints once at
+    // those positions and stops — no tick loop, no continuous physics.
+    // Drag handlers move the node directly and call `renderer.refresh()`
+    // for a single repaint.
+    //
+    // We expose a `sim` shim so the existing renderers
+    // (workflow_graph_render_canvas.js / _svg.js) — which call
+    // `sim.on('tick', draw)`, `sim.alphaTarget(...).restart()` etc.
+    // for drag handling — keep working without modification.
+    nodes.forEach(function (n) {
+      var slot = ctx.slotOf && ctx.slotOf[n.id];
+      if (slot) { n.x = slot.x; n.y = slot.y; }
+      else if (n.x == null) { n.x = ctx.cx || width / 2; n.y = ctx.cy || height / 2; }
+    });
+    var _tickCb = function () {};
+    var sim = {
+      _nodes: nodes,
+      _scheduled: false,
+      nodes: function (n) { if (n) { this._nodes = n; } return this._nodes; },
+      force: function () { return sim; },     // no-op chainable
+      alpha: function () { return sim; },     // no-op chainable
+      alphaDecay: function () { return sim; },
+      alphaTarget: function () { return sim; },
+      velocityDecay: function () { return sim; },
+      restart: function () {
+        // Coalesce repaints to one per animation frame even under
+        // drag-storm — without this the SVG renderer redraws ~120
+        // times/sec while the user drags one node.
+        if (sim._scheduled) return sim;
+        sim._scheduled = true;
+        requestAnimationFrame(function () {
+          sim._scheduled = false;
+          try { _tickCb(); } catch (_) {}
+        });
+        return sim;
+      },
+      stop: function () { return sim; },
+      on: function (ev, cb) {
+        if (ev === 'tick' && typeof cb === 'function') {
+          _tickCb = cb;
+          // Single initial paint at the static slot positions.
+          try { cb(); } catch (_) {}
+        }
+        return sim;
+      },
+    };
 
     var useCanvas = nodes.length > CANVAS_THRESHOLD;
     var renderer = useCanvas
@@ -281,7 +314,8 @@
       var w = container.clientWidth || window.innerWidth;
       var h = container.clientHeight || window.innerHeight;
       renderer.resize(w, h);
-      sim.alpha(0.3).restart();
+      // No simulation to restart — just repaint at the new viewport.
+      sim.restart();
     }
     window.addEventListener('resize', onResize);
 

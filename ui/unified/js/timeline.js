@@ -1,11 +1,37 @@
 // Cortex Memory Board — Kanban by consolidation stage with flow header
-// Shows consolidated vs dropped memories in a tree-like view
+// Shows consolidated vs dropped memories in a tree-like view.
+//
+// Data source: /api/memories (paged endpoint). Lazy-loads pages on
+// scroll; never holds the full memory set in memory. Sort = recent so
+// the freshest activity lands first.
 (function() {
   var container = null;
   var visible = false;
   var currentData = null;
   var selectedId = null;
   var _emitting = false;
+
+  // Paged-fetch state. ONE page on open, all subsequent pages gated
+  // on actual user scroll.
+  var BOARD_PAGE_LIMIT = 100;
+  var boardAccum = [];
+  var boardSeenIds = Object.create(null);
+  var boardCursor = null;
+  var boardLoading = false;
+  var boardDone = false;
+  var boardPagesFetched = 0;
+  var boardFetchToken = 0;
+  var boardScrolledSinceFetch = false;
+
+  // Server-known facets + active filters (mirror Knowledge tab).
+  var boardFacets = null;
+  var boardFilterDomain = 'all';     // 'all' | 'global' | <domain name>
+  var boardFilterStage = null;       // null = all stages
+  var boardFilterEmotion = null;
+  var boardFilterMinHeat = null;
+  var boardFilterProtected = false;
+  var boardSearchQuery = '';
+  var boardSort = 'recent';           // 'recent' | 'heat'
 
   var STAGES = ['labile', 'early_ltp', 'late_ltp', 'consolidated', 'reconsolidating'];
   var STAGE_COLORS = JUG.CONSOLIDATION_COLORS;
@@ -53,33 +79,235 @@
     if (!container) return;
     container.style.display = 'flex';
     visible = true;
-    if (JUG.state.lastData) { currentData = JUG.state.lastData; rebuild(); }
+    if (!boardFacets) {
+      _boardFetchFacets().then(function() { _boardResetAndFetch(); });
+    } else {
+      _boardResetAndFetch();
+    }
     if (JUG.state.selectedId) highlightMemory(JUG.state.selectedId);
 
-    // 30s poll for live updates
+    // 60s poll for live updates: refetch the first page (heat may have
+    // shifted, new memories landed). Cheap because the page is paged.
     if (!window._boardPollInterval) {
       window._boardPollInterval = setInterval(function() {
-        if (document.querySelector('.kb-board')) {
-          fetch('/api/graph').then(function(r) { return r.json(); }).then(function(data) {
-            JUG._events.emit('data:loaded', data);
-          }).catch(function() {});
-        }
-      }, 30000);
+        if (visible && document.querySelector('.kb-board')) _boardResetAndFetch();
+      }, 60000);
     }
+  }
+
+  function _boardFetchFacets() {
+    return fetch('/api/memories/facets')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) { if (d) boardFacets = d; })
+      .catch(function(err) { console.warn('[board] facets fetch failed:', err); });
   }
   function hide() {
     visible = false;
     if (container) container.style.display = 'none';
   }
-  function rebuildIfVisible() { if (visible && currentData) rebuild(); }
+  function rebuildIfVisible() { if (visible) rebuild(); }
+
+  // ── Lazy-load paged memories from /api/memories ──
+  function _boardResetAndFetch() {
+    boardAccum = [];
+    boardSeenIds = Object.create(null);
+    boardCursor = null;
+    boardDone = false;
+    boardLoading = false;
+    boardPagesFetched = 0;
+    boardFetchToken++;
+    boardScrolledSinceFetch = true;  // allow the very first page
+    currentData = { nodes: [], edges: [], links: [] };
+    rebuild();
+    _boardFetchPage();
+  }
+
+  function _boardFetchPage() {
+    if (boardDone || boardLoading) return;
+    // Gate: every page after the first must be triggered by a genuine
+    // user scroll. Without this the sentinel inside the initial
+    // viewport keeps firing the IntersectionObserver in a loop.
+    if (!boardScrolledSinceFetch) return;
+    boardScrolledSinceFetch = false;
+    boardLoading = true;
+    var token = boardFetchToken;
+    var qs = '?limit=' + BOARD_PAGE_LIMIT + '&sort=' + encodeURIComponent(boardSort);
+    if (boardCursor) qs += '&cursor=' + encodeURIComponent(boardCursor);
+    if (boardFilterDomain === 'global') qs += '&global=1';
+    else if (boardFilterDomain !== 'all') qs += '&domain=' + encodeURIComponent(boardFilterDomain);
+    if (boardFilterStage) qs += '&stage=' + encodeURIComponent(boardFilterStage);
+    if (boardFilterEmotion) qs += '&emotion=' + encodeURIComponent(boardFilterEmotion);
+    if (boardFilterMinHeat != null) qs += '&min_heat=' + encodeURIComponent(boardFilterMinHeat);
+    if (boardFilterProtected) qs += '&protected=1';
+    if (boardSearchQuery) qs += '&search=' + encodeURIComponent(boardSearchQuery);
+    fetch('/api/memories' + qs)
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(data) {
+        if (token !== boardFetchToken) return;
+        var items = data.items || [];
+        for (var i = 0; i < items.length; i++) {
+          var m = items[i];
+          if (boardSeenIds[m.id]) continue;
+          boardSeenIds[m.id] = true;
+          m._ts = parseTs(m.createdAt) || 0;
+          boardAccum.push(m);
+        }
+        boardCursor = data.next_cursor || null;
+        boardDone = !boardCursor;
+        boardPagesFetched++;
+        boardLoading = false;
+        currentData = { nodes: boardAccum, edges: [], links: [] };
+        rebuild();
+        // No auto-prefetch — every subsequent page is gated on user
+        // scroll via boardScrolledSinceFetch. The first page is enough
+        // to populate the columns; user scrolls to load more.
+      })
+      .catch(function(err) {
+        console.warn('[board] /api/memories fetch failed:', err);
+        boardLoading = false;
+      });
+  }
 
   function extractMemories(data) {
-    var nodes = data.nodes ? data.nodes.filter(function(n) {
-      return n.type === 'memory';
-    }) : [];
+    var nodes = (data && data.nodes) ? data.nodes : [];
     if (JUG._applyExtraFilters) nodes = JUG._applyExtraFilters(nodes);
-    nodes.forEach(function(n) { n._ts = parseTs(n.createdAt) || 0; });
     return nodes;
+  }
+
+  function _boardChip(label, active, onClick, accent) {
+    var b = el('button');
+    b.textContent = label;
+    var fg = active ? '#04080F' : (accent || '#c4d4dc');
+    var bg = active ? (accent || '#80d2e0') : 'rgba(120,200,220,0.06)';
+    var bd = active ? (accent || '#80d2e0') : 'rgba(120,200,220,0.25)';
+    b.style.cssText =
+      'background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';' +
+      'padding:3px 10px;border-radius:11px;cursor:pointer;font:inherit;font-size:11px;letter-spacing:0.4px;' +
+      (active ? 'font-weight:600;' : '');
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function _boardFilterBar() {
+    var wrap = el('div', 'kb-filter-wrap');
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;padding:10px 14px;border-bottom:1px solid rgba(120,180,200,0.08);background:rgba(8,12,20,0.3)';
+
+    // Row 1: search + sort + clear-all.
+    var row1 = el('div');
+    row1.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+    var searchInput = el('input');
+    searchInput.type = 'text'; searchInput.placeholder = 'Search…';
+    searchInput.value = boardSearchQuery;
+    searchInput.style.cssText = 'flex:1;min-width:180px;background:rgba(10,16,28,0.6);border:1px solid rgba(120,200,220,0.25);color:#c4d4dc;padding:5px 10px;border-radius:3px;font:inherit;font-size:12px';
+    var sDeb = null;
+    searchInput.addEventListener('input', function() {
+      clearTimeout(sDeb);
+      sDeb = setTimeout(function() {
+        boardSearchQuery = searchInput.value;
+        _boardResetAndFetch();
+      }, 250);
+    });
+    row1.appendChild(searchInput);
+
+    [['recent', 'Recent'], ['heat', 'Heat']].forEach(function(s) {
+      row1.appendChild(_boardChip(s[1], boardSort === s[0],
+        function() { boardSort = s[0]; _boardResetAndFetch(); }));
+    });
+
+    var anyActive = boardFilterDomain !== 'all' || boardFilterStage || boardFilterEmotion
+      || boardFilterMinHeat != null || boardFilterProtected || boardSearchQuery;
+    if (anyActive) {
+      var clr = el('button'); clr.textContent = 'Clear all';
+      clr.style.cssText = 'background:transparent;border:1px solid rgba(224,176,64,0.4);color:#E0B040;padding:3px 10px;border-radius:3px;cursor:pointer;font:inherit;letter-spacing:0.6px;text-transform:uppercase;font-size:9px';
+      clr.addEventListener('click', function() {
+        boardFilterDomain = 'all'; boardFilterStage = null; boardFilterEmotion = null;
+        boardFilterMinHeat = null; boardFilterProtected = false; boardSearchQuery = '';
+        _boardResetAndFetch();
+      });
+      row1.appendChild(clr);
+    }
+    wrap.appendChild(row1);
+
+    // Row 2: domain chips (server-known facets).
+    var row2 = el('div');
+    row2.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center';
+    var domLabel = el('span'); domLabel.textContent = 'Domain';
+    domLabel.style.cssText = 'color:#7a8e9c;letter-spacing:1px;text-transform:uppercase;font-size:9px;margin-right:4px';
+    row2.appendChild(domLabel);
+    row2.appendChild(_boardChip('All' + (boardFacets ? ' (' + boardFacets.total + ')' : ''),
+      boardFilterDomain === 'all',
+      function() { boardFilterDomain = 'all'; _boardResetAndFetch(); }));
+    if (boardFacets && boardFacets.global > 0) {
+      row2.appendChild(_boardChip('Global (' + boardFacets.global + ')',
+        boardFilterDomain === 'global',
+        function() { boardFilterDomain = 'global'; _boardResetAndFetch(); }, '#FF4081'));
+    }
+    var domains = boardFacets && boardFacets.domains ? boardFacets.domains : [];
+    domains.slice(0, 30).forEach(function(d) {
+      row2.appendChild(_boardChip(_boardShortDomain(d.name) + ' (' + d.count + ')',
+        boardFilterDomain === d.name,
+        function() { boardFilterDomain = d.name; _boardResetAndFetch(); }));
+    });
+    wrap.appendChild(row2);
+
+    // Row 3: stage + emotion + heat + protected.
+    var row3 = el('div');
+    row3.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center';
+    var fLabel = el('span'); fLabel.textContent = 'Filter';
+    fLabel.style.cssText = 'color:#7a8e9c;letter-spacing:1px;text-transform:uppercase;font-size:9px;margin-right:4px';
+    row3.appendChild(fLabel);
+    var stageOpts = [
+      { v: null,              t: 'Any stage' },
+      { v: 'labile',          t: 'New' },
+      { v: 'early_ltp',       t: 'Growing' },
+      { v: 'late_ltp',        t: 'Strong' },
+      { v: 'consolidated',    t: 'Stable' },
+      { v: 'reconsolidating', t: 'Updating' },
+    ];
+    stageOpts.forEach(function(opt) {
+      var c = boardFacets && opt.v ? boardFacets.stages[opt.v]
+            : (opt.v == null && boardFacets ? boardFacets.total : '');
+      row3.appendChild(_boardChip(opt.t + (c !== '' ? ' (' + c + ')' : ''),
+        boardFilterStage === opt.v,
+        function() { boardFilterStage = opt.v; _boardResetAndFetch(); },
+        STAGE_COLORS && opt.v ? STAGE_COLORS[opt.v] : null));
+    });
+    var sep = el('span'); sep.textContent = '·';
+    sep.style.cssText = 'color:#5a6e7c;margin:0 6px';
+    row3.appendChild(sep);
+    var emoOpts = [
+      { v: null,       t: 'Any feel' },
+      { v: 'urgent',   t: 'Urgent',   color: '#ff3366' },
+      { v: 'positive', t: 'Positive', color: '#22c55e' },
+      { v: 'negative', t: 'Negative', color: '#ef4444' },
+      { v: 'neutral',  t: 'Neutral' },
+    ];
+    emoOpts.forEach(function(opt) {
+      var c = boardFacets && opt.v ? boardFacets.emotions[opt.v] : '';
+      row3.appendChild(_boardChip(opt.t + (c !== '' ? ' (' + c + ')' : ''),
+        boardFilterEmotion === opt.v,
+        function() { boardFilterEmotion = opt.v; _boardResetAndFetch(); }, opt.color));
+    });
+    var sep2 = el('span'); sep2.textContent = '·';
+    sep2.style.cssText = 'color:#5a6e7c;margin:0 6px';
+    row3.appendChild(sep2);
+    row3.appendChild(_boardChip('Hot' + (boardFacets ? ' (' + boardFacets.hot + ')' : ''),
+      boardFilterMinHeat != null,
+      function() { boardFilterMinHeat = boardFilterMinHeat != null ? null : 0.5; _boardResetAndFetch(); },
+      '#E07070'));
+    row3.appendChild(_boardChip('Protected' + (boardFacets ? ' (' + boardFacets.protected + ')' : ''),
+      boardFilterProtected,
+      function() { boardFilterProtected = !boardFilterProtected; _boardResetAndFetch(); },
+      '#E0B040'));
+    wrap.appendChild(row3);
+
+    return wrap;
+  }
+
+  function _boardShortDomain(d) {
+    if (!d) return 'unknown';
+    var parts = d.replace(/\\/g, '/').split('/').filter(Boolean);
+    return parts.length > 0 ? parts[parts.length - 1] : d;
   }
 
   function parseTs(val) {
@@ -199,6 +427,9 @@
     });
     container.appendChild(flowStrip);
 
+    // Filter chips — same shape as Knowledge tab.
+    container.appendChild(_boardFilterBar());
+
     // ── Board columns ──
     var board = el('div', 'kb-board');
 
@@ -238,6 +469,62 @@
     });
 
     container.appendChild(board);
+
+    // Sentinel + manual "Load more" button — same triple-trigger
+    // pattern as Knowledge: IntersectionObserver, scroll/wheel
+    // backstop, and an explicit click button. Without this the user
+    // sees the first ~500 memories and the Board feels capped.
+    var sentinel = el('div', 'kb-load-sentinel');
+    sentinel.id = 'kb-load-sentinel';
+    sentinel.style.cssText = 'min-height:60px;display:flex;align-items:center;justify-content:center;gap:12px;color:#7a8e9c;font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:24px';
+    var sText = el('span'); sText.id = 'kb-load-text';
+    sText.textContent = boardDone
+      ? '— end of board — ' + boardAccum.length + ' memories loaded'
+      : (boardLoading
+          ? 'Loading more memories… (' + boardAccum.length + ' so far)'
+          : 'Scroll for more · ' + boardAccum.length + ' loaded');
+    sentinel.appendChild(sText);
+    if (!boardDone) {
+      var sBtn = el('button', 'kb-load-more');
+      sBtn.id = 'kb-load-more';
+      sBtn.style.cssText = 'background:rgba(80,210,235,0.15);border:1px solid rgba(120,200,220,0.4);color:#80d2e0;padding:6px 14px;border-radius:3px;cursor:pointer;font:inherit;letter-spacing:1.2px';
+      sBtn.textContent = 'Load more';
+      sBtn.addEventListener('click', function(){
+        boardScrolledSinceFetch = true;  // explicit user intent
+        _boardFetchPage();
+      });
+      sentinel.appendChild(sBtn);
+    }
+    container.appendChild(sentinel);
+    _boardAttachIntersectionObserver(sentinel);
+    _boardAttachScrollBackstop(sentinel);
+  }
+
+  function _boardAttachIntersectionObserver(sentinel) {
+    if (!('IntersectionObserver' in window)) return;
+    var io = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) { if (e.isIntersecting) _boardFetchPage(); });
+    }, { root: null, rootMargin: '400px' });
+    io.observe(sentinel);
+  }
+
+  function _boardAttachScrollBackstop(sentinel) {
+    if (window._boardScrollBackstopAttached) return;
+    window._boardScrollBackstopAttached = true;
+    var maybeFetch = function() {
+      if (!visible || boardLoading || boardDone) return;
+      // Mark that the user has actually scrolled — only NOW does the
+      // gate in _boardFetchPage allow another fetch.
+      boardScrolledSinceFetch = true;
+      var s = document.getElementById('kb-load-sentinel');
+      if (!s) return;
+      var rect = s.getBoundingClientRect();
+      var vh = window.innerHeight || document.documentElement.clientHeight;
+      if (rect.top < vh + 400) _boardFetchPage();
+    };
+    container.addEventListener('scroll', maybeFetch, { passive: true });
+    window.addEventListener('scroll', maybeFetch, { passive: true });
+    container.addEventListener('wheel', maybeFetch, { passive: true });
   }
 
   function buildCard(mem, stageColor) {

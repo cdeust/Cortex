@@ -132,6 +132,21 @@ def _route_unified_get(
 
         serve_graph_phase(handler)
         return
+    if path_no_qs == "/api/memories":
+        # Keyset-paged memory listing for the Knowledge + Board tabs.
+        # Scales to any N because nothing is held in memory client-side.
+        from mcp_server.handlers.memories_page import serve as serve_memories_page
+
+        serve_memories_page(handler, store)
+        return
+    if path_no_qs == "/api/memories/facets":
+        # Aggregate counts (per-domain, per-stage, hot/protected/global,
+        # emotion buckets) so the filter chips show ALL options up-front
+        # rather than only what's been paged through.
+        from mcp_server.handlers.memories_facets import serve as serve_memories_facets
+
+        serve_memories_facets(handler, store)
+        return
     if path == "/api/graph" or path.startswith("/api/graph?"):
         serve_graph(handler, store)
     elif path == "/api/discussions" or path.startswith("/api/discussions?"):

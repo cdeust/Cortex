@@ -369,15 +369,13 @@
 .kb-card__store-badge--episodic { background: rgba(88, 216, 136, 0.15); color: #58D888; }
 .kb-card__store-badge--semantic { background: rgba(192, 112, 208, 0.15); color: #C070D0; }
 
-/* Hover-expand scan tier */
+/* Always-visible scan tier — cards are full-size at first paint so
+   no hover/click expansion shifts the layout. The hover-grow used to
+   drag the bottom sentinel into the IntersectionObserver's view,
+   which triggered an unintended next-page fetch. */
 .kb-card__scan {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease, padding 0.3s ease;
-  padding: 0;
-}
-.kb-card:hover .kb-card__scan {
-  max-height: 120px;
+  max-height: none;
+  overflow: visible;
   padding: 6px 0 0;
   border-top: 1px solid rgba(80, 208, 232, 0.1);
 }

@@ -1,5 +1,9 @@
 // Cortex — Knowledge View
-// Readable memory cards organized by domain with search, sort, and filtering
+// Readable memory cards organized by domain with search, sort, and filtering.
+//
+// Data source: /api/memories (keyset-paged endpoint backed by Postgres).
+// Lazy-loads pages on scroll; never holds the full memory set in memory,
+// so it works at any N. Filter / sort / search are server-side params.
 (function() {
   var container = null;
   var visible = false;
@@ -7,6 +11,27 @@
   var currentDomain = 'all';
   var searchQuery = '';
   var expandedCardId = null;
+
+  // Paged-fetch state. Reset on every show()/filter change. Each page
+  // after the first is gated on a genuine user scroll.
+  var PAGE_LIMIT = 50;
+  var memoriesAccum = [];          // accumulated rows across pages
+  var seenIds = Object.create(null);
+  var nextCursor = null;
+  var pageLoading = false;
+  var pageDone = false;
+  var lastFetchToken = 0;
+  var scrolledSinceFetch = false;
+
+  // Server-known filter facets. Loaded once on first show() so chips
+  // can show ALL options up-front (not only what's been paged).
+  var facets = null;
+
+  // Active filters (server-side params).
+  var filterStage = null;         // 'labile' | 'early_ltp' | 'late_ltp' | 'consolidated' | 'reconsolidating'
+  var filterEmotion = null;       // 'urgent' | 'positive' | 'negative' | 'neutral'
+  var filterMinHeat = null;       // 0.5 when "Hot" toggle on
+  var filterProtected = false;    // true when "Protected" toggle on
 
   var STAGE_MAP = {
     labile:          { label: 'New',      cls: 'kv-badge-new' },
@@ -82,16 +107,28 @@
     JUG.on('state:activeView', function(ev) {
       if (ev.value === 'knowledge') show(); else hide();
     });
-    JUG.on('state:lastData', function() {
-      if (visible) rebuild();
-    });
+    // Re-render counters if the legacy lastData arrives, but we no
+    // longer depend on it for the actual memory list — that comes
+    // from the paged /api/memories endpoint.
+    JUG.on('state:lastData', function() { /* no-op */ });
   }
 
   function show() {
     if (!container) return;
     container.style.display = 'flex';
     visible = true;
-    rebuild();
+    if (!facets) {
+      _fetchFacets().then(function() { _resetAndFetch(); });
+    } else {
+      _resetAndFetch();
+    }
+  }
+
+  function _fetchFacets() {
+    return fetch('/api/memories/facets')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) { if (d) facets = d; })
+      .catch(function(err) { console.warn('[knowledge] facets fetch failed:', err); });
   }
 
   function hide() {
@@ -100,74 +137,103 @@
     closeExpanded();
   }
 
-  // ── Extract memories from graph data ──
-  function getMemories() {
-    var data = JUG.state.lastData;
-    if (!data || !data.nodes) return [];
-    return data.nodes.filter(function(n) { return n.type === 'memory'; });
+  // ── Lazy-load paged memories from /api/memories ──
+  function _serverSort() {
+    if (currentSort === 'recency') return 'recent';
+    if (currentSort === 'importance') return 'heat'; // server has no importance index; fall back to heat (client-side reorder is per-page)
+    return 'heat';
   }
 
-  function getDomains(mems) {
-    var set = {};
-    mems.forEach(function(m) {
-      var d = m.domain || 'unknown';
-      set[d] = (set[d] || 0) + 1;
-    });
-    return Object.keys(set).sort();
+  function _resetAndFetch() {
+    memoriesAccum = [];
+    seenIds = Object.create(null);
+    nextCursor = null;
+    pageDone = false;
+    pageLoading = false;
+    domainsSeen = Object.create(null);
+    globalCount = 0;
+    hotCount = 0;
+    lastFetchToken++;
+    scrolledSinceFetch = true;  // allow the very first page on open/filter
+    rebuild();
+    _fetchPage();
   }
 
-  // ── Filter + sort ──
-  function filterAndSort(mems) {
-    var result = mems;
-
-    // Domain filter
+  function _fetchPage() {
+    if (pageDone || pageLoading) return;
+    // Gate: subsequent pages require a real user scroll since the
+    // last fetch. Without it, the IntersectionObserver on a sentinel
+    // that's already in-view loops forever.
+    if (!scrolledSinceFetch) return;
+    scrolledSinceFetch = false;
+    pageLoading = true;
+    var token = lastFetchToken;
+    var qs = '?limit=' + PAGE_LIMIT + '&sort=' + encodeURIComponent(_serverSort());
+    if (nextCursor) qs += '&cursor=' + encodeURIComponent(nextCursor);
     if (currentDomain === 'global') {
-      result = result.filter(function(m) { return m.isGlobal; });
+      qs += '&global=1';
     } else if (currentDomain !== 'all') {
-      result = result.filter(function(m) { return m.domain === currentDomain; });
+      qs += '&domain=' + encodeURIComponent(currentDomain);
     }
-
-    // Search
-    if (searchQuery) {
-      var q = searchQuery.toLowerCase();
-      result = result.filter(function(m) {
-        return (m.content || '').toLowerCase().indexOf(q) >= 0 ||
-               (m.label || '').toLowerCase().indexOf(q) >= 0 ||
-               (m.domain || '').toLowerCase().indexOf(q) >= 0 ||
-               ((m.tags || []).join(' ')).toLowerCase().indexOf(q) >= 0;
+    if (searchQuery) qs += '&search=' + encodeURIComponent(searchQuery);
+    if (filterStage) qs += '&stage=' + encodeURIComponent(filterStage);
+    if (filterEmotion) qs += '&emotion=' + encodeURIComponent(filterEmotion);
+    if (filterMinHeat != null) qs += '&min_heat=' + encodeURIComponent(filterMinHeat);
+    if (filterProtected) qs += '&protected=1';
+    fetch('/api/memories' + qs)
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(data) {
+        if (token !== lastFetchToken) return; // superseded by newer fetch
+        var items = data.items || [];
+        for (var i = 0; i < items.length; i++) {
+          var m = items[i];
+          if (seenIds[m.id]) continue;
+          seenIds[m.id] = true;
+          if (currentDomain === 'global' && !m.isGlobal) continue;
+          memoriesAccum.push(m);
+          if (m.domain) domainsSeen[m.domain] = (domainsSeen[m.domain] || 0) + 1;
+          if (m.isGlobal) globalCount++;
+          if ((m.heat || 0) >= 0.5) hotCount++;
+        }
+        nextCursor = data.next_cursor || null;
+        pageDone = !nextCursor;
+        pageLoading = false;
+        _renderPagedGrid();
+      })
+      .catch(function(err) {
+        console.warn('[knowledge] /api/memories fetch failed:', err);
+        pageLoading = false;
+        if (memoriesAccum.length === 0) {
+          var grid = document.getElementById('kv-grid');
+          if (grid) {
+            grid.innerHTML = '';
+            var empty = el('div', 'kv-empty');
+            var t = el('div', 'kv-empty-title'); t.textContent = 'Failed to load memories';
+            empty.appendChild(t);
+            var s = el('div', 'kv-empty-sub'); s.textContent = String(err.message || err);
+            empty.appendChild(s);
+            grid.appendChild(empty);
+          }
+        }
       });
-    }
-
-    // Sort
-    result.sort(function(a, b) {
-      if (currentSort === 'heat') return (b.heat || 0) - (a.heat || 0);
-      if (currentSort === 'recency') {
-        var ta = a.createdAt || a.lastAccessed || '';
-        var tb = b.createdAt || b.lastAccessed || '';
-        return tb.localeCompare(ta);
-      }
-      if (currentSort === 'importance') return (b.importance || 0) - (a.importance || 0);
-      return 0;
-    });
-
-    return result;
   }
 
-  // ── Build the view ──
+  // Compatibility shim: old call sites expected an in-memory list.
+  // After lazy-load, "all memories" is what we've fetched so far.
+  function getMemories() { return memoriesAccum; }
+
+  function getDomains() { return Object.keys(domainsSeen).sort(); }
+
+  // ── Build the view (chrome only — grid populated by _renderPagedGrid) ──
   function rebuild() {
     if (!container) return;
     container.innerHTML = '';
-    var allMems = getMemories();
-    var domains = getDomains(allMems);
 
-    // Domain pills
+    // Domain pills (rebuilt on demand from domainsSeen as pages arrive).
     var domainBar = el('div', 'kv-domain-bar');
-    domainBar.appendChild(domainPill('All', 'all'));
-    domainBar.appendChild(domainPill('Global', 'global', true));
-    domains.forEach(function(d) {
-      domainBar.appendChild(domainPill(shortDomain(d), d));
-    });
+    domainBar.id = 'kv-domain-bar';
     container.appendChild(domainBar);
+    _refreshDomainBar();
 
     // Search + sort row
     var searchRow = el('div', 'kv-search-row');
@@ -180,7 +246,7 @@
       clearTimeout(debounce);
       debounce = setTimeout(function() {
         searchQuery = searchInput.value;
-        rebuildGrid();
+        _resetAndFetch();
       }, 250);
     });
     searchRow.appendChild(searchInput);
@@ -196,39 +262,265 @@
       if (s === currentSort) btn.classList.add('active');
       btn.addEventListener('click', function() {
         currentSort = s;
-        rebuild();
+        _resetAndFetch();
       });
       sortGroup.appendChild(btn);
     });
     searchRow.appendChild(sortGroup);
     container.appendChild(searchRow);
 
-    // Stats bar
-    var filtered = filterAndSort(allMems);
-    var statsBar = el('div', 'kv-stats-bar');
-    statsBar.appendChild(statEl(filtered.length, 'memories'));
-    statsBar.appendChild(statEl(domains.length, 'domains'));
-    var globalCount = allMems.filter(function(m) { return m.isGlobal; }).length;
-    if (globalCount > 0) statsBar.appendChild(statEl(globalCount, 'global rules'));
-    var hotCount = allMems.filter(function(m) { return (m.heat || 0) >= 0.5; }).length;
-    if (hotCount > 0) statsBar.appendChild(statEl(hotCount, 'hot'));
-    container.appendChild(statsBar);
+    // Filter chip row (server-side facets). Rebuilt once facets load.
+    var filterRow = el('div', 'kv-filter-row');
+    filterRow.id = 'kv-filter-row';
+    filterRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:0 14px 10px;font-size:11px';
+    container.appendChild(filterRow);
+    _refreshFilterRow();
 
-    // Grid container (separate so we can rebuild just this)
+    // Stats bar (live: counters update as pages stream in)
+    var statsBar = el('div', 'kv-stats-bar');
+    statsBar.id = 'kv-stats-bar';
+    container.appendChild(statsBar);
+    _refreshStatsBar();
+
+    // Grid container — items appended page-by-page, sentinel at bottom
+    // triggers next-page fetch via IntersectionObserver.
     var grid = el('div', 'kv-grid');
     grid.id = 'kv-grid';
     container.appendChild(grid);
 
-    populateGrid(grid, filtered, allMems);
+    var sentinel = el('div', 'kv-load-sentinel');
+    sentinel.id = 'kv-load-sentinel';
+    sentinel.style.cssText = 'min-height:60px;display:flex;align-items:center;justify-content:center;gap:12px;color:#7a8e9c;font-size:11px;letter-spacing:1px;text-transform:uppercase';
+    var sentinelText = el('span'); sentinelText.id = 'kv-load-text'; sentinelText.textContent = 'Loading more memories…';
+    sentinel.appendChild(sentinelText);
+    var loadMoreBtn = el('button', 'kv-load-more');
+    loadMoreBtn.id = 'kv-load-more';
+    loadMoreBtn.style.cssText = 'background:rgba(80,210,235,0.15);border:1px solid rgba(120,200,220,0.4);color:#80d2e0;padding:6px 14px;border-radius:3px;cursor:pointer;font:inherit;letter-spacing:1.2px';
+    loadMoreBtn.textContent = 'Load more';
+    loadMoreBtn.addEventListener('click', function(){
+      scrolledSinceFetch = true;   // explicit user intent
+      _fetchPage();
+    });
+    sentinel.appendChild(loadMoreBtn);
+    container.appendChild(sentinel);
+    _attachIntersectionObserver(sentinel);
+    _attachScrollBackstop(sentinel);
   }
 
-  function rebuildGrid() {
-    var grid = document.getElementById('kv-grid');
-    if (!grid) return;
-    var allMems = getMemories();
-    var filtered = filterAndSort(allMems);
-    populateGrid(grid, filtered, allMems);
+  function _attachScrollBackstop(sentinel) {
+    var maybeFetch = function() {
+      if (!visible || pageLoading || pageDone) return;
+      // Arm the gate — the user has now genuinely scrolled.
+      scrolledSinceFetch = true;
+      var rect = sentinel.getBoundingClientRect();
+      var vh = window.innerHeight || document.documentElement.clientHeight;
+      if (rect.top < vh + 400) _fetchPage();
+    };
+    container.addEventListener('scroll', maybeFetch, { passive: true });
+    window.addEventListener('scroll', maybeFetch, { passive: true });
+    container.addEventListener('wheel', maybeFetch, { passive: true });
   }
+
+  function _refreshDomainBar() {
+    var bar = document.getElementById('kv-domain-bar');
+    if (!bar) return;
+    bar.innerHTML = '';
+    bar.appendChild(domainPill('All' + (facets ? ' (' + facets.total + ')' : ''), 'all'));
+    if (!facets || facets.global > 0) {
+      bar.appendChild(domainPill('Global' + (facets ? ' (' + facets.global + ')' : ''), 'global', true));
+    }
+    // Server-known domains beat the accumulated set — even if you've
+    // only paged through 50 of 179k memories, every domain pill is
+    // available with its full count.
+    var serverDomains = facets && facets.domains
+      ? facets.domains.map(function(d) { return d; })
+      : Object.keys(domainsSeen).sort().map(function(name) {
+          return { name: name, count: domainsSeen[name] };
+        });
+    serverDomains.forEach(function(d) {
+      bar.appendChild(domainPill(shortDomain(d.name) + ' (' + d.count + ')', d.name));
+    });
+  }
+
+  // Build the filter chip row: stage, emotion, hot, protected.
+  function _refreshFilterRow() {
+    var row = document.getElementById('kv-filter-row');
+    if (!row) return;
+    row.innerHTML = '';
+
+    var label = el('span'); label.textContent = 'Filter:';
+    label.style.cssText = 'color:#7a8e9c;letter-spacing:1px;text-transform:uppercase;font-size:9px;margin-right:4px';
+    row.appendChild(label);
+
+    // Stage chips (consolidation pipeline).
+    var stageOpts = [
+      { v: null,              t: 'Any stage' },
+      { v: 'labile',          t: 'New' },
+      { v: 'early_ltp',       t: 'Growing' },
+      { v: 'late_ltp',        t: 'Strong' },
+      { v: 'consolidated',    t: 'Stable' },
+      { v: 'reconsolidating', t: 'Updating' },
+    ];
+    stageOpts.forEach(function(opt) {
+      var c = facets && opt.v ? facets.stages[opt.v] : (opt.v == null ? (facets ? facets.total : '') : '');
+      row.appendChild(_chip(opt.t + (c !== '' ? ' (' + c + ')' : ''),
+        filterStage === opt.v,
+        function() { filterStage = opt.v; _resetAndFetch(); }));
+    });
+
+    var sep1 = el('span'); sep1.textContent = '·';
+    sep1.style.cssText = 'color:#5a6e7c;margin:0 6px';
+    row.appendChild(sep1);
+
+    // Emotion chips.
+    var emoOpts = [
+      { v: null,       t: 'Any feel' },
+      { v: 'urgent',   t: 'Urgent', color: '#ff3366' },
+      { v: 'positive', t: 'Positive', color: '#22c55e' },
+      { v: 'negative', t: 'Negative', color: '#ef4444' },
+      { v: 'neutral',  t: 'Neutral' },
+    ];
+    emoOpts.forEach(function(opt) {
+      var c = facets && opt.v ? facets.emotions[opt.v] : '';
+      row.appendChild(_chip(opt.t + (c !== '' ? ' (' + c + ')' : ''),
+        filterEmotion === opt.v,
+        function() { filterEmotion = opt.v; _resetAndFetch(); }, opt.color));
+    });
+
+    var sep2 = el('span'); sep2.textContent = '·';
+    sep2.style.cssText = 'color:#5a6e7c;margin:0 6px';
+    row.appendChild(sep2);
+
+    // Boolean toggles.
+    row.appendChild(_chip(
+      'Hot' + (facets ? ' (' + facets.hot + ')' : ''),
+      filterMinHeat != null,
+      function() { filterMinHeat = filterMinHeat != null ? null : 0.5; _resetAndFetch(); },
+      '#E07070'));
+    row.appendChild(_chip(
+      'Protected' + (facets ? ' (' + facets.protected + ')' : ''),
+      filterProtected,
+      function() { filterProtected = !filterProtected; _resetAndFetch(); },
+      '#E0B040'));
+
+    // Reset button if anything is active.
+    if (filterStage || filterEmotion || filterMinHeat != null || filterProtected
+        || currentDomain !== 'all' || searchQuery) {
+      var clr = el('button'); clr.textContent = 'Clear all';
+      clr.style.cssText = 'margin-left:auto;background:transparent;border:1px solid rgba(224,176,64,0.4);color:#E0B040;padding:3px 10px;border-radius:3px;cursor:pointer;font:inherit;letter-spacing:0.6px;text-transform:uppercase;font-size:9px';
+      clr.addEventListener('click', function() {
+        filterStage = null; filterEmotion = null; filterMinHeat = null;
+        filterProtected = false; currentDomain = 'all'; searchQuery = '';
+        _resetAndFetch();
+      });
+      row.appendChild(clr);
+    }
+  }
+
+  function _chip(label, active, onClick, accent) {
+    var b = el('button');
+    b.textContent = label;
+    var fg = active ? '#04080F' : (accent || '#c4d4dc');
+    var bg = active ? (accent || '#80d2e0') : 'rgba(120,200,220,0.06)';
+    var bd = active ? (accent || '#80d2e0') : 'rgba(120,200,220,0.25)';
+    b.style.cssText =
+      'background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';' +
+      'padding:3px 10px;border-radius:11px;cursor:pointer;font:inherit;font-size:11px;letter-spacing:0.4px;' +
+      (active ? 'font-weight:600;' : '');
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function _refreshStatsBar() {
+    var bar = document.getElementById('kv-stats-bar');
+    if (!bar) return;
+    bar.innerHTML = '';
+    bar.appendChild(statEl(memoriesAccum.length + (pageDone ? '' : '+'), 'loaded'));
+    bar.appendChild(statEl(getDomains().length, 'domains'));
+    if (globalCount > 0) bar.appendChild(statEl(globalCount, 'global rules'));
+    if (hotCount > 0) bar.appendChild(statEl(hotCount, 'hot'));
+  }
+
+  function _attachIntersectionObserver(sentinel) {
+    if (!('IntersectionObserver' in window)) return;  // scroll-backstop covers it
+    // Use the viewport (root: null) — the kv-grid scrolls inside the
+    // body in the unified-viz layout, NOT inside container. Anchoring
+    // root to container made the sentinel always count as "inside the
+    // root" so isIntersecting was permanently true (or permanently
+    // false depending on overflow), and pagination stalled.
+    var io = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) { if (e.isIntersecting) _fetchPage(); });
+    }, { root: null, rootMargin: '400px' });
+    io.observe(sentinel);
+  }
+
+  function _renderPagedGrid() {
+    var grid = document.getElementById('kv-grid');
+    var sentinel = document.getElementById('kv-load-sentinel');
+    if (!grid) return;
+
+    // Group into globals + by-domain on the cumulative accumulated set.
+    var globals = [];
+    var byDomain = {};
+    for (var i = 0; i < memoriesAccum.length; i++) {
+      var m = memoriesAccum[i];
+      if (m.isGlobal) { globals.push(m); continue; }
+      if (currentDomain !== 'all' && currentDomain !== 'global'
+          && m.domain !== currentDomain) continue;
+      var d = m.domain || 'unknown';
+      if (!byDomain[d]) byDomain[d] = [];
+      byDomain[d].push(m);
+    }
+
+    grid.innerHTML = '';
+    if (globals.length > 0 && (currentDomain === 'all' || currentDomain === 'global')) {
+      var banner = el('div', 'kv-global-banner');
+      var bannerTitle = el('div', 'kv-global-title');
+      bannerTitle.textContent = 'Rules That Apply Everywhere';
+      banner.appendChild(bannerTitle);
+      grid.appendChild(banner);
+      globals.forEach(function(m) { grid.appendChild(buildCard(m, memoriesAccum)); });
+    }
+    if (currentDomain === 'all' || currentDomain === 'global') {
+      var keys = Object.keys(byDomain).sort();
+      keys.forEach(function(d) {
+        var header = el('div', 'kv-domain-header');
+        header.textContent = shortDomain(d) + ' (' + byDomain[d].length + ')';
+        grid.appendChild(header);
+        byDomain[d].forEach(function(m) { grid.appendChild(buildCard(m, memoriesAccum)); });
+      });
+    } else {
+      var arr = byDomain[currentDomain] || [];
+      arr.forEach(function(m) { grid.appendChild(buildCard(m, memoriesAccum)); });
+    }
+
+    if (memoriesAccum.length === 0 && pageDone) {
+      var empty = el('div', 'kv-empty');
+      var t = el('div', 'kv-empty-title'); t.textContent = 'No memories found';
+      empty.appendChild(t);
+      var s = el('div', 'kv-empty-sub');
+      s.textContent = searchQuery ? 'No memories match "' + searchQuery + '"' : 'No memories yet';
+      empty.appendChild(s);
+      grid.appendChild(empty);
+    }
+
+    var sText = document.getElementById('kv-load-text');
+    var sBtn = document.getElementById('kv-load-more');
+    if (sText) {
+      sText.textContent = pageDone
+        ? '— end of memories — ' + memoriesAccum.length + ' loaded'
+        : (pageLoading
+            ? 'Loading more memories… (' + memoriesAccum.length + ' so far)'
+            : 'Scroll for more · ' + memoriesAccum.length + ' loaded');
+    }
+    if (sBtn) sBtn.style.display = pageDone ? 'none' : 'inline-block';
+
+    _refreshDomainBar();
+    _refreshStatsBar();
+  }
+
+  // Legacy alias kept for anything still calling it.
+  function rebuildGrid() { _renderPagedGrid(); }
 
   function populateGrid(grid, filtered, allMems) {
     grid.innerHTML = '';
@@ -961,7 +1253,7 @@
     pill.textContent = label;
     pill.addEventListener('click', function() {
       currentDomain = value;
-      rebuild();
+      _resetAndFetch();
     });
     return pill;
   }
