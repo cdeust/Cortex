@@ -3,23 +3,40 @@
   document.addEventListener('DOMContentLoaded', function() {
     // ── View toggle (Graph / Timeline) ──
     var viewBtns = document.querySelectorAll('.view-toggle .view-btn[data-view]');
+    function _toggleGraphWarn(view) {
+      var w = document.getElementById('cortex-graph-warn');
+      if (!w) return;
+      if (view === 'graph' && w.dataset.dismissed !== '1') {
+        w.style.display = '';
+      } else {
+        w.style.display = 'none';
+      }
+    }
     viewBtns.forEach(function(btn) {
       btn.addEventListener('click', function() {
         viewBtns.forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
-        var view = btn.dataset.view || 'graph';
+        var view = btn.dataset.view || 'knowledge';
         JUG.state.activeView = view;
         toggleFilterBarVisibility(view);
+        _toggleGraphWarn(view);
       });
     });
 
-    // Graph is the default landing view — the wiki is still under
-    // active restructuring and the workflow graph is the canonical
-    // answer to "what did Claude do in this project".
+    // Knowledge is the default landing view — at high N the graph
+    // payload + force simulation can freeze the browser, so we land
+    // on the lazy-loaded Knowledge tab. Users can still click Graph;
+    // the in-page warning banner above explains the trade-off.
     setTimeout(function() {
       JUG.state.activeView = '_init';
-      JUG.state.activeView = 'graph';
-      toggleFilterBarVisibility('graph');
+      JUG.state.activeView = 'knowledge';
+      toggleFilterBarVisibility('knowledge');
+      _toggleGraphWarn('knowledge');
+      // Sync the active class on the buttons (HTML hard-codes
+      // active=graph; flip it to match the runtime default).
+      viewBtns.forEach(function(b) {
+        b.classList.toggle('active', b.dataset.view === 'knowledge');
+      });
     }, 0);
 
     // ── Filter buttons (source type) ──

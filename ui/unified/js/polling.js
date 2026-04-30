@@ -3,11 +3,18 @@
   var abortController = null;
 
   function fetchGraph() {
+    // Lazy-load: only pay the multi-MB /api/graph cost when the
+    // user is actually on the Graph tab. Knowledge / Board / Wiki
+    // each own their own paged data path and don't need this.
+    if (window.JUG && JUG.state && JUG.state.activeView !== 'graph') {
+      updateStatus('Online — graph standby');
+      hideLoading();
+      return;
+    }
     if (abortController) abortController.abort();
     abortController = new AbortController();
     var signal = abortController.signal;
 
-    // Single fetch — no batching. Domain dedup keeps node count manageable.
     fetch(JUG.API_URL, { signal: signal })
       .then(function(res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -134,13 +141,23 @@
       .map(function(v) { return String(v).padStart(2, '0'); }).join(':');
   }, 1000);
 
-  // Boot — delay initial fetch to let Three.js scene fully initialize
+  // Boot — delay initial fetch. fetchGraph() short-circuits unless
+  // activeView === 'graph', so this is cheap on Knowledge / Board /
+  // Wiki landings.
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       setTimeout(fetchGraph, 500);
     });
   } else {
     setTimeout(fetchGraph, 500);
+  }
+
+  // Trigger the graph fetch when the user actually switches to the
+  // Graph tab (lazy-load semantics).
+  if (window.JUG && JUG.on) {
+    JUG.on('state:activeView', function(ev) {
+      if (ev && ev.value === 'graph') setTimeout(fetchGraph, 50);
+    });
   }
 
   function _loadDiscussionBatch(batch) {

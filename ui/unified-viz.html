@@ -97,13 +97,19 @@
     if(p.elapsed) document.getElementById('bp-elapsed').textContent = ' · '+p.elapsed.toFixed(1)+'s';
   }
 
+  function _activeViewIsGraph() {
+    return window.JUG && JUG.state && JUG.state.activeView === 'graph';
+  }
   function poll(){
+    // Only do graph-build work while the user is on the Graph tab.
+    // Knowledge / Board / Wiki users don't pay the cost.
+    if (!_activeViewIsGraph()) {
+      setTimeout(poll, 1500);
+      return;
+    }
     fetch('/api/graph/progress').then(function(r){ return r.ok ? r.json() : null; }).then(function(p){
       if(p){
         refreshBar(p);
-        // Sequential append: iterate the server's phases dict in
-        // insertion order (L0..L5, then L6:<proj1>..<projN>, then
-        // L6_CROSS). Apply each one whose `ready` flag is true.
         var seq = Promise.resolve();
         var keys = Object.keys(p.phases || {});
         keys.forEach(function(k){
@@ -166,8 +172,8 @@
 
 <div id="filter-bar">
   <span class="view-toggle">
-    <button class="view-btn active" data-view="graph">Graph</button>
-    <button class="view-btn" data-view="knowledge">Knowledge</button>
+    <button class="view-btn" data-view="graph">Graph</button>
+    <button class="view-btn active" data-view="knowledge">Knowledge</button>
     <button class="view-btn" data-view="wiki">Wiki</button>
     <button class="view-btn" data-view="timeline">Board</button>
     <button class="view-btn" data-view="sankey">Pipeline</button>
@@ -218,6 +224,39 @@
   <select id="domain-select" class="filter-select"><option value="">All Domains</option></select>
   <input type="text" id="search-box" placeholder="Search path, skill, command…">
 </div>
+
+<!-- Graph-only warning banner. Shown directly below the view-toggle
+     row when the Graph tab is active. The Graph view is enabled but
+     can be unresponsive at scale — explain the situation in-line so
+     users aren't confused if their browser hangs. Hidden by default;
+     controls.js toggles display on view change. -->
+<div id="cortex-graph-warn" role="status"
+     style="display:none;position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:200;
+            max-width:760px;padding:8px 36px 8px 14px;
+            background:linear-gradient(90deg,rgba(48,28,12,0.92),rgba(64,40,16,0.92));
+            border:1px solid rgba(224,140,64,0.5);border-radius:5px;
+            color:#FFE3B5;font:11.5px/1.45 -apple-system,Inter,system-ui,sans-serif;
+            letter-spacing:0.2px;box-shadow:0 4px 14px rgba(0,0,0,0.4)">
+  <span style="color:#FFB060;margin-right:6px">⚠</span>
+  <strong>Graph may be unusable at this scale.</strong>
+  Due to performance issues we are currently investigating, opening the Graph
+  view can freeze the browser when memory counts are high. We are actively
+  working on it. Use <strong>Knowledge</strong> or <strong>Board</strong> for
+  reliable browsing while we land the rewrite.
+  <button id="cortex-graph-warn-close" aria-label="Dismiss"
+          style="position:absolute;top:4px;right:6px;width:22px;height:22px;
+                 background:transparent;border:none;color:#FFB060;font-size:14px;
+                 cursor:pointer;line-height:1;padding:0">×</button>
+</div>
+<script>
+(function(){
+  var b = document.getElementById('cortex-graph-warn-close');
+  if (b) b.addEventListener('click', function() {
+    var w = document.getElementById('cortex-graph-warn');
+    if (w) { w.style.display = 'none'; w.dataset.dismissed = '1'; }
+  });
+})();
+</script>
 
 <div id="status-bar" class="hud-panel">
   <div class="status-dot"></div>
