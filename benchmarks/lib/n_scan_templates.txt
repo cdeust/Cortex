@@ -1,0 +1,39 @@
+# N-scan synthetic corpus templates.
+# Each line: <kind>|<template>
+# Placeholders: {entity}, {tool}, {file}, {error}, {action}, {value}, {component}
+# Kinds: decision, error, lesson, fact, observation
+decision|Chose {tool} over the alternative when working on {component} because {value} mattered more than raw speed.
+decision|Decided to keep {file} in the {component} layer; moving it broke import boundaries.
+decision|Approved the migration of {entity} from {tool} to a stricter typed interface in {component}.
+decision|Rejected the proposal to merge {entity} and {component}; their failure modes are uncorrelated.
+decision|Standardized on {tool} for {action} after benchmarking against three alternatives.
+error|Encountered {error} while running {action} on {file}; root cause was a stale {entity} reference.
+error|{tool} crashed during {action} because {component} held an exclusive lock on {entity}.
+error|Saw repeated {error} in production when {component} retried {action} more than {value} times.
+error|{file} raised {error} during boot when {entity} was missing from the registry.
+error|Race condition between {tool} and {component} produced {error} under concurrent {action}.
+lesson|When debugging {error}, always check {file} before assuming the bug lives in {component}.
+lesson|Never call {tool} on {entity} while holding the {component} mutex; it deadlocks under load.
+lesson|Run {action} against a clean DB; otherwise {value} from the previous run pollutes {component}.
+lesson|If {tool} returns no rows for {entity}, fall back to {component} only after logging the miss.
+lesson|Document every {value} threshold added to {component}; otherwise the next reader will tune it blindly.
+fact|{entity} was added to {file} on the day we shipped the {component} rewrite.
+fact|The {tool} CLI accepts {value} as a flag for {action}; this is undocumented but stable.
+fact|{file} contains the canonical implementation of {action} for the {component} layer.
+fact|{entity} depends transitively on {tool}; removing {tool} breaks {component}.
+fact|The {component} layer has exactly {value} public entry points, all in {file}.
+observation|During {action} the {tool} latency drifted from baseline by more than {value} percent on {file}.
+observation|{component} memory usage spiked when {entity} was loaded with batch size > {value}.
+observation|Logs from {file} show {entity} being re-read during every {action}; caching would help.
+observation|{tool} silently swallowed errors from {component} when {action} timed out under {value} seconds.
+observation|The {entity} table grew faster than expected after {tool} started writing during {action}.
+decision|Pinned {tool} to the version that ships with {component} to avoid {error} during {action}.
+error|{action} on {file} raises {error} when {entity} is null but {component} expected a default.
+lesson|Treat {tool} output for {entity} as untrusted; validate before storing in {component}.
+fact|{file} was last touched during the {component} migration and has not been modified since.
+observation|{action} performance regressed by {value}x after {tool} was upgraded; revert pending.
+decision|Adopted {tool} as the default for {action}; alternatives failed on {entity} with corpora over {value} rows.
+error|Calling {action} from {file} while {component} is reloading triggers {error} every time.
+lesson|Whenever {entity} appears in {file}, it must be paired with a {tool} call inside {component}.
+fact|{component} owns the lifecycle of {entity}; no other layer may instantiate it.
+observation|{tool} CPU usage during {action} on {file} stays below {value} percent on idle systems.

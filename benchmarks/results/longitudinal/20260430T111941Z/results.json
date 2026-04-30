@@ -1,0 +1,59 @@
+{
+  "config": {
+    "n_memories": 5000,
+    "queries_per_bucket": 100,
+    "seed": 42,
+    "quick": true,
+    "buckets_days": [
+      30,
+      90,
+      180,
+      270,
+      360
+    ]
+  },
+  "results": {
+    "0": {
+      "age_days": 30,
+      "n_queries": 100,
+      "r_at_1": 0.97,
+      "r_at_10": 0.99,
+      "median_latency_ms": 187.8819465637207
+    },
+    "1": {
+      "age_days": 90,
+      "n_queries": 100,
+      "r_at_1": 0.97,
+      "r_at_10": 0.99,
+      "median_latency_ms": 167.0362949371338
+    },
+    "2": {
+      "age_days": 180,
+      "n_queries": 100,
+      "r_at_1": 0.97,
+      "r_at_10": 0.99,
+      "median_latency_ms": 166.52917861938477
+    },
+    "3": {
+      "age_days": 270,
+      "n_queries": 100,
+      "r_at_1": 0.98,
+      "r_at_10": 0.98,
+      "median_latency_ms": 169.94309425354004
+    },
+    "4": {
+      "age_days": 360,
+      "n_queries": 100,
+      "r_at_1": 0.97,
+      "r_at_10": 1.0,
+      "median_latency_ms": 167.54794120788574
+    }
+  },
+  "pass_criterion": {
+    "rule": "R@10(oldest) >= R@10(youngest) - 0.05",
+    "youngest_r_at_10": 0.99,
+    "oldest_r_at_10": 1.0,
+    "delta": 0.010000000000000009,
+    "passed": true
+  }
+}

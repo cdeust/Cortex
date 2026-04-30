@@ -1,0 +1,2 @@
+n,condition,r_at_10,r_at_1,mrr,wall_per_query_ms,rss_peak_mb,seed
+1000,cortex_full,0.08,0.04,0.045,206.66978504508734,237.81364822387695,42

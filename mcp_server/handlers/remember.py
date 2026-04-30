@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.core import thermodynamics, write_gate
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.core.domain_detector import detect_domain
 from mcp_server.core.global_detector import detect_global
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
@@ -255,7 +256,7 @@ def _parse_args(
     )
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Store a memory with thermodynamic properties and predictive coding gate."""
     if not args or not args.get("content"):
         return {"stored": False, "reason": "no_content"}
@@ -393,3 +394,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             )
 
     return result
+
+
+# Telemetry-instrumented public entry. Records latency, byte volume,
+# and write success/fail per call (Popper C6 read/write ratio audit).
+handler = instrument("remember", _handler_impl, result_count_key=None)

@@ -10,6 +10,7 @@ from fastmcp import FastMCP
 from mcp_server.handlers import (
     checkpoint,
     consolidate,
+    get_telemetry,
     import_sessions,
     memory_stats,
     narrative,
@@ -31,6 +32,7 @@ def register(mcp: FastMCP) -> None:
     _register_consolidate(mcp)
     _register_import_sessions(mcp)
     _register_unified_search(mcp)
+    _register_get_telemetry(mcp)
 
 
 def _register_remember(mcp: FastMCP) -> None:
@@ -213,6 +215,18 @@ def _register_import_sessions(mcp: FastMCP) -> None:
                 "dry_run": dry_run,
             },
             tool_name="import_sessions",
+        )
+
+
+def _register_get_telemetry(mcp: FastMCP) -> None:
+    @mcp.tool(
+        name="get_telemetry",
+        **tool_kwargs(get_telemetry.schema),
+    )
+    async def tool_get_telemetry() -> str:
+        """Return per-op counters + read/write ratio (Popper C6)."""
+        return await safe_handler(
+            get_telemetry.handler, {}, tool_name="get_telemetry"
         )
 
 

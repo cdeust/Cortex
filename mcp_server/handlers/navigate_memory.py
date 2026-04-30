@@ -21,6 +21,7 @@ from mcp_server.core.cognitive_map import (
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -160,7 +161,7 @@ def _attach_2d_coordinates(
     result["coordinates_2d"] = {str(mid): list(xy) for mid, xy in coords.items()}
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Navigate memory space from a starting memory using SR co-access."""
     if not args or args.get("memory_id") is None:
         return {"neighbors": [], "total": 0}
@@ -204,3 +205,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         _attach_2d_coordinates(result, sr_graph, start_id, neighbors)
 
     return result
+
+
+# Telemetry-instrumented public entry. Records latency / byte volume
+# / result count per call (Popper C6 read/write ratio audit).
+handler = instrument("navigate_memory", _handler_impl, result_count_key="neighbors")

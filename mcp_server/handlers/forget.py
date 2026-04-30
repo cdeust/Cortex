@@ -11,6 +11,7 @@ from typing import Any
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ def _get_store() -> MemoryStore:
 # ── Handler ───────────────────────────────────────────────────────────────
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Delete or soft-delete a memory."""
     if not args or args.get("memory_id") is None:
         return {"deleted": False, "reason": "no_memory_id"}
@@ -115,3 +116,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "memory_id": memory_id,
         "content_preview": mem["content"][:80],
     }
+
+
+# Telemetry-instrumented public entry. Records latency / byte volume
+# / result count per call (Popper C6 read/write ratio audit).
+handler = instrument("forget", _handler_impl, result_count_key=None)

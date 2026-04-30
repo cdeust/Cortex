@@ -284,13 +284,18 @@ CREATE INDEX IF NOT EXISTS idx_wiki_claim_events_memory
     ON wiki.claim_events (memory_id);
 CREATE INDEX IF NOT EXISTS idx_wiki_claim_events_session
     ON wiki.claim_events (session_id);
+-- HNSW reloptions pinned for determinism: same (m, ef_construction) as
+-- memories.embedding so benchmark reproducibility doesn't drift on
+-- pgvector default changes. source: tasks/hnsw-determinism-playbook.md §1
 CREATE INDEX IF NOT EXISTS idx_wiki_claim_events_embedding
-    ON wiki.claim_events USING hnsw (embedding vector_cosine_ops);
+    ON wiki.claim_events USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
 
 CREATE INDEX IF NOT EXISTS idx_wiki_concepts_status
     ON wiki.concepts (status) WHERE status IN ('candidate','saturating');
 CREATE INDEX IF NOT EXISTS idx_wiki_concepts_embedding
-    ON wiki.concepts USING hnsw (centroid_embedding vector_cosine_ops);
+    ON wiki.concepts USING hnsw (centroid_embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
 
 CREATE INDEX IF NOT EXISTS idx_wiki_drafts_status
     ON wiki.drafts (status) WHERE status = 'pending';
@@ -305,7 +310,8 @@ CREATE INDEX IF NOT EXISTS idx_wiki_pages_heat
 CREATE INDEX IF NOT EXISTS idx_wiki_pages_tags_gin
     ON wiki.pages USING gin (tags);
 CREATE INDEX IF NOT EXISTS idx_wiki_pages_embedding
-    ON wiki.pages USING hnsw (embedding vector_cosine_ops);
+    ON wiki.pages USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
 
 CREATE INDEX IF NOT EXISTS idx_wiki_links_dst
     ON wiki.links (dst_page_id) WHERE dst_page_id IS NOT NULL;

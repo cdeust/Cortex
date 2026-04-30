@@ -1,0 +1,24 @@
+{
+  "mechanism": "ADAPTIVE_DECAY",
+  "benchmark": "longmemeval-s",
+  "n_queries": 0,
+  "baseline": {
+    "r_at_10": 0.85,
+    "mrr": 0.721
+  },
+  "ablated": {
+    "r_at_10": 0.85,
+    "mrr": 0.721
+  },
+  "delta": {
+    "r_at_10": 0.0,
+    "mrr": 0.0
+  },
+  "wall_seconds": 88.391,
+  "rss_peak_mb": 584.691,
+  "timestamp": "2026-04-30T11:20:50.739170+00:00",
+  "git_sha": "18b4be4478c42989645744d766d606741e940239",
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_dim": 384,
+  "db_seed": "not-snapshotted"
+}

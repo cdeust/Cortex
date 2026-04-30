@@ -15,6 +15,7 @@ from mcp_server.core.staleness import assess_staleness, collect_all_refs
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -191,7 +192,7 @@ def _assess_memories(
 # ── Handler ───────────────────────────────────────────────────────────────
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Validate memory or memories against current filesystem state."""
     args = args or {}
     base_dir = args.get("base_dir", "") or os.getcwd()
@@ -221,3 +222,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "dry_run": dry_run,
         "reports": reports,
     }
+
+
+# Telemetry-instrumented public entry. Records latency / byte volume
+# / result count per call (Popper C6 read/write ratio audit).
+handler = instrument("validate_memory", _handler_impl, result_count_key=None)

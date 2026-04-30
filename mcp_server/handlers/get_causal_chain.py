@@ -15,6 +15,7 @@ from typing import Any
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -244,7 +245,7 @@ def _get_related_memory_previews(
 # ── Handler ───────────────────────────────────────────────────────────────
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Trace causal/dependency chain from an entity or memory."""
     args = args or {}
 
@@ -283,3 +284,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "max_depth": max_depth,
         "direction": direction,
     }
+
+
+# Telemetry-instrumented public entry. Records latency / byte volume
+# / result count per call (Popper C6 read/write ratio audit).
+handler = instrument("get_causal_chain", _handler_impl, result_count_key="chain")

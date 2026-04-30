@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.core import memory_rules
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.core.knowledge_graph import extract_entities
 from mcp_server.core.pg_recall import recall as pg_recall
 from mcp_server.core.query_intent import QueryIntent, classify_query_intent
@@ -238,7 +239,7 @@ def _track_recall_replay(results: list[dict], store: Any) -> None:
             pass
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Retrieve memories: pg_recall base + production enrichments."""
     if not args or not args.get("query"):
         return {"results": [], "total": 0}
@@ -285,3 +286,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "signals": {},
         "enhancements": build_enhancements(query, intent, "pg", settings),
     }
+
+
+# Telemetry-instrumented public entry. Wrapper records latency, byte
+# volume, and result count per call (Popper C6 read/write ratio audit).
+handler = instrument("recall", _handler_impl, result_count_key="results")

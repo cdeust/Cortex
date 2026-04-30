@@ -20,6 +20,7 @@ from mcp_server.infrastructure.embedding_engine import (
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -205,7 +206,7 @@ def _score_memories_against_hierarchy(
     return raw_results, hierarchy
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Retrieve memories using fractal hierarchy scoring.
 
     Contract (v3.13.0+, ADR-0045 R3):
@@ -284,3 +285,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         ),
         "hierarchy": {"stats": hierarchy.get("stats", {})},
     }
+
+
+# Telemetry-instrumented public entry. Records latency / byte volume
+# / result count per call (Popper C6 read/write ratio audit).
+handler = instrument("recall_hierarchical", _handler_impl, result_count_key="results")

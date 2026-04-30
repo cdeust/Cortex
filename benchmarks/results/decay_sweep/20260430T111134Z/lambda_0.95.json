@@ -1,0 +1,60 @@
+{
+  "lambda": 0.95,
+  "elapsed_seconds": 257.7453088760376,
+  "quick": true,
+  "metrics": {
+    "overall": {
+      "mrr": 0.671,
+      "r5": 0.833,
+      "r10": 0.867
+    },
+    "abilities": {
+      "abstention": {
+        "mrr": 0.333,
+        "r5": 0.33299999999999996,
+        "r10": 0.33299999999999996
+      },
+      "contradiction_resolution": {
+        "mrr": 0.806,
+        "r5": 1.0,
+        "r10": 1.0
+      },
+      "event_ordering": {
+        "mrr": 0.467,
+        "r5": 0.667,
+        "r10": 0.833
+      },
+      "information_extraction": {
+        "mrr": 0.889,
+        "r5": 1.0,
+        "r10": 1.0
+      },
+      "instruction_following": {
+        "mrr": 0.496,
+        "r5": 0.667,
+        "r10": 0.833
+      },
+      "knowledge_update": {
+        "mrr": 0.833,
+        "r5": 1.0,
+        "r10": 1.0
+      },
+      "preference_following": {
+        "mrr": 0.597,
+        "r5": 1.0,
+        "r10": 1.0
+      },
+      "summarization": {
+        "mrr": 0.375,
+        "r5": 0.667,
+        "r10": 0.667
+      },
+      "temporal_reasoning": {
+        "mrr": 1.0,
+        "r5": 1.0,
+        "r10": 1.0
+      }
+    },
+    "raw_output": "Loading BEAM dataset (split=100K)...\nRunning benchmark on 3 conversations (PostgreSQL backend)...\n  [1/3] avg_MRR=0.654 questions=20 (171.2s/conv)\n\n========================================================================\nBEAM Benchmark Results \u2014 Cortex (PostgreSQL)\n========================================================================\n\nAbility                         MRR    R@5   R@10   Qs   LIGHT\n----------------------------------------------------------------------\nabstention                    0.333 33.3% 33.3%    6   0.750\ncontradiction_resolution      0.806 100.0% 100.0%    6   0.050\nevent_ordering                0.467 66.7% 83.3%    6   0.266\ninformation_extraction        0.889 100.0% 100.0%    6   0.375\ninstruction_following         0.496 66.7% 83.3%    6   0.500\nknowledge_update              0.833 100.0% 100.0%    6   0.375\nmulti_session_reasoning       0.917 100.0% 100.0%    6   0.000\npreference_following          0.597 100.0% 100.0%    6   0.483\nsummarization                 0.375 66.7% 66.7%    6   0.277\ntemporal_reasoning            1.000 100.0% 100.0%    6   0.075\n----------------------------------------------------------------------\nOVERALL                       0.671 83.3% 86.7%   60   0.329\n\nTotal time: 250.3s (83.4s/conversation)\nConversations: 3, Split: 100K\n\nNote: LIGHT scores are full QA (LLM-as-judge), not retrieval-only.\n      Cortex scores here are retrieval MRR/Recall \u2014 not directly comparable\n      but show retrieval quality that feeds downstream QA.\n"
+  }
+}

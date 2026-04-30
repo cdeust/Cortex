@@ -13,7 +13,7 @@ Usage:
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Callable
 
 from mcp_server.core.memory_ingest import ingest_memories_batch
 from mcp_server.core.pg_recall import assemble_context as pg_assemble_context
@@ -23,9 +23,18 @@ from mcp_server.infrastructure.pg_store import PgMemoryStore
 
 
 class BenchmarkDB:
-    """Thin passthrough to the production PG pipeline."""
+    """Thin passthrough to the production PG pipeline.
 
-    def __init__(self, database_url: str | None = None) -> None:
+    on_connection_open: optional callback(connection) invoked once after
+    the underlying psycopg connection is created. Used by the ablation
+    runner to apply deterministic per-session GUCs (playbook §8). Must
+    NOT be wired in production callers — this is benchmark-only.
+    """
+
+    def __init__(
+        self, database_url: str | None = None,
+        *, on_connection_open: Callable[[Any], None] | None = None,
+    ) -> None:
         self._url = database_url or os.environ.get(
             "DATABASE_URL", "postgresql://localhost:5432/cortex"
         )
@@ -34,11 +43,20 @@ class BenchmarkDB:
         self._memory_ids: list[int] = []
         self._content_lookup: dict[int, str] = {}
         self._momentum_state: dict = {"momentum": 0.5}
+        self._on_connection_open = on_connection_open
 
     # ── Lifecycle ─────────────────────────────────────────────────
 
     def open(self) -> BenchmarkDB:
         self._store = PgMemoryStore(database_url=self._url)
+        # Auto-apply deterministic session when the runner has set the env
+        # var (playbook §8); benchmarks/lib/ablation_runner sets it per row.
+        run_id = os.environ.get("CORTEX_BENCH_DETERMINISTIC_RUN_ID")
+        if run_id and self._on_connection_open is None:
+            from benchmarks.lib import db_setup
+            db_setup.apply_deterministic_session(self._store._conn, run_id=run_id)
+        elif self._on_connection_open is not None:
+            self._on_connection_open(self._store._conn)
         self._purge_stale_benchmark_data()
         if self._embeddings is None:
             self._embeddings = EmbeddingEngine()

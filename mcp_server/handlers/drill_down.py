@@ -16,6 +16,7 @@ from mcp_server.infrastructure.embedding_engine import get_embedding_engine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -155,7 +156,7 @@ def _build_hierarchy_from_store(
 # ── Handler ───────────────────────────────────────────────────────────────
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Drill into a fractal memory cluster."""
     if not args or not args.get("cluster_id"):
         return {"children": [], "cluster_id": None}
@@ -196,3 +197,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "children": children,
         "child_count": len(children),
     }
+
+
+# Telemetry-instrumented public entry. Records latency / byte volume
+# / result count per call (Popper C6 read/write ratio audit).
+handler = instrument("drill_down", _handler_impl, result_count_key="children")

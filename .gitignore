@@ -30,3 +30,4 @@ traces/
 # Claude Code ephemeral session state
 .claude/scheduled_tasks.lock
 .claude/session-cache.json
+benchmarks/snapshots/

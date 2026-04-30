@@ -18,6 +18,7 @@ from mcp_server.core import reranker, reranker_calibration, thermodynamics
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -111,7 +112,7 @@ def _record_platt_sample(query: str, content: str, useful: bool) -> bool:
     return True
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Rate a memory and update its metamemory confidence.
 
     Contract:
@@ -164,3 +165,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         response["platt_sample_recorded"] = True
         response["platt_sample_count"] = reranker_calibration.sample_count()
     return response
+
+
+# Telemetry-instrumented public entry. Records latency / byte volume
+# / result count per call (Popper C6 read/write ratio audit).
+handler = instrument("rate_memory", _handler_impl, result_count_key=None)

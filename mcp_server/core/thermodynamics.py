@@ -33,12 +33,23 @@ Citations:
 from __future__ import annotations
 
 import math
-
+import os
 import re
 from collections import Counter
 from datetime import datetime, timezone
 
 from mcp_server.shared.vader import vader_compound
+
+# Dose-response sweep override for the Python-side hourly decay factor
+# (Ebbinghaus λ in heat(t) = heat(0)·λ^t). The SQL-side analogue is
+# ``p_factor`` in ``effective_heat()`` which drives BEAM retrieval; this
+# env var only affects code paths that call ``compute_decay()`` directly
+# (reconsolidation, sleep compute). Falls back to the calibrated default.
+# Source: benchmarks/lib/decay_sweep_runner.py (verification protocol).
+_DECAY_FACTOR_OVERRIDE = os.environ.get("CORTEX_DECAY_LAMBDA")
+_DECAY_FACTOR_DEFAULT = (
+    float(_DECAY_FACTOR_OVERRIDE) if _DECAY_FACTOR_OVERRIDE else 0.95
+)
 
 # ── Edmundson cue word sets ───────────────────────────────────────────────
 # Bonus words: domain-specific high-importance indicators (positive cue)
@@ -240,7 +251,7 @@ def compute_decay(
     valence: float = 0.0,
     confidence: float = 1.0,
     *,
-    decay_factor: float = 0.95,
+    decay_factor: float = _DECAY_FACTOR_DEFAULT,
     importance_decay_factor: float = 0.998,
     emotional_decay_resistance: float = 0.5,
 ) -> float:
