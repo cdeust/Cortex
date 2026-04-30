@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "benchmark": "longmemeval-s",
+  "n": 100,
+  "condition": "cortex_flat",
+  "seed": 42,
+  "n_queries": 3,
+  "r_at_1": 1.0,
+  "r_at_10": 1.0,
+  "mrr": 1.0,
+  "wall_per_query_ms": 1418.249,
+  "rss_peak_mb": 8.858,
+  "timestamp": "2026-04-30T23:17:00.276404+00:00",
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_dim": 384
+}

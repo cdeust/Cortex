@@ -1,0 +1,3 @@
+benchmark,n,condition,n_queries,r_at_1,r_at_10,mrr,wall_per_query_ms,rss_peak_mb,seed
+longmemeval-s,100,cortex_full,3,1.0,1.0,1.0,1406.0704583340946,237.29272556304932,42
+longmemeval-s,100,cortex_flat,3,1.0,1.0,1.0,1418.2485973190826,8.85755443572998,42

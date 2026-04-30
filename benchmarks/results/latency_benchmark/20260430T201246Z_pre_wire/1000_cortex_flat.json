@@ -1,0 +1,14 @@
+{
+  "n": 1000,
+  "condition": "cortex_flat",
+  "seed": 42,
+  "n_queries": 100,
+  "r_at_10": 0.15,
+  "r_at_1": 0.11,
+  "mrr": 0.11475,
+  "wall_per_query_ms": 212.195,
+  "rss_peak_mb": 9.21,
+  "timestamp": "2026-04-30T20:14:12.100187+00:00",
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_dim": 384
+}

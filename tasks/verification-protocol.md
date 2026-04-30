@@ -94,49 +94,101 @@ python3 benchmarks/<bench>/run_benchmark.py \
 
 ## E2 — N-scan curve (resolves C1)
 
-**Hypothesis (confirmatory).** The R@10 gap (Cortex − flat-importance baseline) is
-**monotonically non-decreasing** in N over N ∈ {10³, 10⁴, 10⁵, 10⁶}, with strict
-increase ≥ 1.0 pp between at least one consecutive (10×) tier.
+**Status (post-pre-registration revision).** Initial E2 design used a synthetic
+corpus generator at varying N. Empirical finding (see
+`benchmarks/results/latency_benchmark/20260430T201246Z_pre_wire/` and
+`20260430T204157Z/`): cortex_full and cortex_flat produced **identical** R@10
+and MRR at N≥10k because the synthetic corpus carries no thermodynamic
+structure for heat to discriminate. The original synthetic harness has been
+repurposed as the **latency-only** benchmark (`benchmarks/lib/latency_runner.py`,
+results under `benchmarks/results/latency_benchmark/`); its retrieval scores
+are not claim-bearing.
 
-**Falsification.** If the gap is constant within ±2 pp across all four tiers, OR shrinks
-at any tier (gap(N_{i+1}) < gap(N_i) − 2 pp), C1 is refuted.
+The E2 retrieval claim is now resolved by **two complementary runners**:
+**E2a** (real-benchmark subsampling — primary) and **E2b** (Zipf synthetic —
+extension past 1M). The original hypothesis below stands; the design is
+re-pointed at these runners.
+
+### E2a — Real-benchmark subsampling (primary)
+
+**Runner.** `benchmarks/lib/e2_subsample_runner.py`.
+
+**Hypothesis (confirmatory).** The MRR gap (cortex_full − cortex_flat) is
+non-decreasing in N when subsampling each of {LongMemEval-S, LoCoMo,
+BEAM-100K} from a small prefix up to the benchmark's full corpus, with at
+least one consecutive (10×) tier showing a ≥1.0 pp strict increase.
+
+**Falsification.** The gap between cortex_full and cortex_flat MRR on every
+one of {LongMemEval-S, LoCoMo, BEAM-100K} at N=full is < 5 pp → the
+thermodynamic-structure-matters claim is refuted; paper drops C1 in its
+present form.
 
 **Design.**
-- Factors: 2 — system ∈ {full Cortex, flat-importance baseline} × N ∈ {1k, 10k, 100k, 1M}.
-- Levels: 2 × 4 = 8 cells. Seeds: 3 → 24 runs.
-- Zero-cell: flat baseline at N=1k (smallest, fastest, anchors effect scale).
-- Flat baseline definition (locked here): Cortex with `ADAPTIVE_DECAY`, `EMOTIONAL_DECAY`,
-  `EMOTIONAL_RETRIEVAL`, `MOOD_CONGRUENT_RERANK`, `SYNAPTIC_TAGGING` disabled; heat
-  constant = 0.5; no consolidation cycle; WRRF heat term coefficient = 0.0. The exact
-  AblationConfig and the WRRF-weight overrides are committed at protocol freeze.
-- Synthetic corpus generator: text passages with controlled lexical overlap (cosine
-  overlap distribution N(μ=0.4, σ=0.1) on MiniLM embeddings — pre-validated). 100 fixed
-  query-target pairs reused at every N (the larger N corpora are supersets of the
-  smaller). Generator seed = 20260428.
-- Blocking: same DB, same embedding cache; corpora sequentially loaded smallest→largest.
-- Randomization: query order within each N is shuffled per seed.
+- Factors: 3 (benchmark) × 2 (condition: cortex_full / cortex_flat) ×
+  ≥4 (N tiers per benchmark, ramp 10× until full).
+- Subsampling: deterministic seed-stable shuffle, then prefix-of-length-N.
+  Probes filtered to those whose target source keys remain in the subsample,
+  then `--queries` of them sampled (seed-stable).
+- Conditions toggled via `benchmarks/lib/_e2_conditions.py` (cortex_flat sets
+  `CORTEX_DECAY_DISABLED=1`, `CORTEX_HEAT_CONSTANT=0.5`,
+  `CORTEX_CONSOLIDATION_DISABLED=1`; loaded memories forced to heat=0.5).
+- Production write/read paths exercised via `BenchmarkDB` — same code as the
+  standalone benchmark runners.
 
-**Sample size / power.** Per cell: 100 fixed queries, binary R@10. Paired test across
-systems within each N. Detectable effect (paired McNemar, α=0.05) ≈ 6 pp at N=100 Q.
-For monotonicity, Jonckheere-Terpstra trend test across the 4 N levels on the
-per-query gap (one-sided), α=0.05.
+**Stopping rule.** Per-benchmark, halts at 12h wall-clock OR full N reached.
 
-**Primary metric.** R@10 gap = R@10(Cortex) − R@10(flat) at each N. Pass = gap is
-non-decreasing AND J-T p < 0.05.
+**Reproducibility manifest.** seed, schema_version (1), embedding_model,
+embedding_dim, n_queries actually scored, condition, N. One JSON per
+(benchmark, N, condition) plus `summary.csv` per timestamped run.
 
-**Secondary.** MRR gap; absolute R@10 of each system; latency p50/p95.
+### E2b — Zipfian synthetic corpus (extension)
 
-**Pre-registered analysis.** Paired McNemar per N; Jonckheere-Terpstra for trend across
-N; bootstrap 95% CI on each gap (10 000 resamples). No multiple-comparison correction
-across N (single trend test).
+**Runner.** `benchmarks/lib/e2_zipf_runner.py`.
 
-**Stopping rule.** N=1M run halts at 12 wall-clock hours OR completion. If N=1M does not
-complete, report N ∈ {1k,10k,100k} only and label C1 as "tested up to 100k; 1M
-unresolved." 10M tier from the appendix is **out of scope** for this protocol — opened
-as future work.
+**Hypothesis (confirmatory).** Adding the Zipfian access pattern produces
+the missing thermodynamic structure: at N ∈ {10⁵, 10⁶, 10⁷}, MRR gap
+(cortex_full − cortex_flat) ≥ 5 pp.
 
-**Reproducibility manifest:** corpus generator seed, generator version commit SHA,
-SHA-256 of each N-tier corpus manifest, query set SHA.
+**Falsification.** Even with explicit Zipf(α=1.5) access pattern routed through
+the production write-back-on-recall, no detectable gap → the thermodynamic
+account does not generalize past native benchmarks; demote E2b to descriptive.
+
+**Design.**
+- Synthetic corpus: N memories across 50 topic clusters (semantic continuity
+  within topic so embeddings cluster).
+- K access events drawn from Zipf(α). Each access invokes `db.recall()` —
+  heat-update is performed by the production write-back hook (no direct
+  heat assignment).
+  - source: Zipf, G. K. (1949). *Human Behavior and the Principle of Least
+    Effort.* Addison-Wesley.
+  - source: Mandelbrot, B. (1953). *An Informational Theory of the
+    Statistical Structure of Language.* α=1.5 is the natural-language
+    empirical default.
+- Queries biased toward high-access topics (drawn from same Zipf
+  distribution).
+- Conditions identical to E2a via `_e2_conditions.py`.
+
+**Stopping rule.** Per N tier halts at 12h OR completion. The 10⁷ tier is
+**stretch**; report partial results if budget exhausts.
+
+**Reproducibility manifest.** seed, schema_version (1), zipf_alpha,
+access_events, n_queries, condition, N. One JSON per (N, condition) plus
+`summary.csv` per timestamped run.
+
+### E2-latency — Synthetic-corpus latency sibling
+
+**Runner.** `benchmarks/lib/latency_runner.py` (retains import alias
+`benchmarks.lib.n_scan_runner` for in-flight callers).
+
+**Status.** **NOT** claim-bearing for retrieval. Only `wall_per_query_ms` and
+`rss_peak_mb` from this runner inform paper claims. Its R@1 / R@10 / MRR
+fields are written to the JSON for parity with the other runners but
+explicitly disclaimed by the `latency_only: true` field in each result and
+by the stderr banner emitted at startup.
+
+**Design.** Same synthetic generator as the original E2 harness; same conditions
+(cortex_full / cortex_flat) so latency under both is recorded; results live
+under `benchmarks/results/latency_benchmark/`.
 
 ---
 
