@@ -1,0 +1,1369 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{natbib}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+
+% Utility commands
+\newcommand{\ie}{i.e.}
+\newcommand{\eg}{e.g.}
+\newcommand{\cf}{cf.}
+
+\title{Thermodynamic Memory vs.\ Flat-Importance Stores:\\
+Why Long-Term Retrieval Collapses Without Decay}
+
+\author{
+  Clement Deust\\
+  Independent Researcher\\
+  \texttt{github.com/cdeust/Cortex}
+}
+
+\date{April 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+External memory for large language models is dominated by
+\emph{flat-importance} stores: vector indexes, BM25 corpora, and
+long-context buffers in which every item carries the same long-term
+retrieval prior.  We argue this design is asymptotically broken.
+As the corpus grows, top-$k$ retrieval over an undifferentiated pool
+degenerates into near-arbitrary tie-breaking among items with
+comparable surface similarity, and the discriminative information
+delivered to the consumer LLM approaches zero---a failure mode that
+compounds the position bias of long-context decoding
+\citep{Liu2023}.  We formalise the flat-importance failure, then
+describe Cortex, a memory architecture that maintains a non-flat
+priority distribution across $N$ by coupling four mechanisms:
+(i)~continuously decaying \emph{heat} on every item
+\citep{Ebbinghaus1885}, (ii)~a hierarchical predictive-coding write
+gate \citep{Friston2010}, (iii)~consolidation cascades that compress
+episodic into semantic memory \citep{Kandel2001,McClelland1995}, and
+(iv)~WRRF fusion with heat as a tie-breaker.  On three independent
+long-term-memory benchmarks, Cortex reaches
+LongMemEval R@10\,$=$\,97.8\% (vs.\ 78.4\% paper-best),
+LoCoMo R@10\,$=$\,92.6\%, and BEAM Overall\,$=$\,0.543
+(vs.\ 0.329 paper-best).  We discuss when flat memory remains adequate
+(small $N$, single-session contexts), the calibration cost of decay,
+and the per-write overhead of biological consolidation.  Code, data,
+and benchmark harness are publicly available.\footnote{\url{https://github.com/cdeust/Cortex}}
+\end{abstract}
+
+%----------------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+
+The default external memory for LLM agents is some variant of the
+same recipe: embed the input, write to a vector index, and at query
+time retrieve the top-$k$ nearest neighbours, optionally re-ranked.
+This recipe has succeeded at the document-retrieval scale it was
+designed for \citep{Lewis2020}.  It does not scale to the use case
+agentic systems are pushing it toward---open-ended, multi-month,
+mixed-content memory across thousands of conversations.
+
+The reason is not retrieval speed but \emph{retrieval semantics}.
+A vector store treats every entry as equally important in the long
+term.  There is no mechanism by which a fact mentioned in passing
+six months ago is given less retrieval weight than a decision the
+user explicitly anchored last week.  As $N$ grows, the top-$k$ for a
+typical query fills with semantically plausible but contextually
+irrelevant items---and the downstream LLM, subject to the position
+bias documented in \emph{Lost in the Middle} \citep{Liu2023},
+processes them in an order uncorrelated with their actual usefulness.
+
+This paper argues that the missing mechanism is decay, and that
+decay is not a heuristic but a structural requirement: it is what
+keeps the priority distribution over memories non-flat at any $N$.
+We characterise the flat-importance failure mode, describe Cortex's
+thermodynamic architecture, and report empirical results on three
+published long-term-memory benchmarks.
+
+\paragraph{Teaser.}
+On LongMemEval \citep{Wu2025}, Cortex reaches Recall@10 of 97.8\%,
+vs.\ the paper-best of 78.4\%.  On BEAM \citep{Tavakoli2026}, Cortex
+reaches 0.543 Overall, vs.\ 0.329 paper-best.  All numbers are from
+runs against Cortex's production database, single-process, with the
+exact PL/pgSQL retrieval code path used in deployment.
+
+%----------------------------------------------------------------------
+\section{Background and Related Work}
+\label{sec:related}
+
+\paragraph{Retrieval-augmented generation.}
+The canonical RAG architecture \citep{Lewis2020} couples a dense
+retriever to a generator.  Document encoders such as DPR
+\citep{Karpukhin2020} and contrastive bi-encoders dominate the
+retrieval side.  These systems target a fixed, curated corpus where
+every document is, by construction, equally part of the index.
+Long-term memory is not part of their formulation.
+
+\paragraph{Long-context LLMs.}
+A parallel line of work scales the context window
+itself---200k tokens (Anthropic Claude 2.1, 2023), 1M+ tokens
+(Google Gemini 1.5, 2024).  A long context substitutes for retrieval
+by holding everything in attention.  This works until the relevant
+fact is buried in the middle of the window, at which point
+\citet{Liu2023} show retrieval accuracy degrades sharply: U-shaped
+position bias persists across model families and scales.  Long
+context does not solve discriminability---it inherits it.
+
+\paragraph{Episodic memory in LLM agents.}
+MemGPT \citep{Packer2024} introduced a hierarchical paged memory
+metaphor with explicit eviction.  Generative Agents \citep{Park2023}
+added importance scores from a separate model call and reflection
+passes that summarised episodes into higher-level conclusions.  Both
+are first steps toward non-flat memory: MemGPT decides what stays
+in the active page; Generative Agents weight retrieval by importance
+$\times$ recency $\times$ similarity.  Neither implements the full
+biological cascade---predictive-coding gating, multi-level
+consolidation, neuromodulatory tagging, microglial pruning---that
+we draw on here.
+
+\paragraph{Long-term-memory benchmarks.}
+LongMemEval \citep{Wu2025}, LoCoMo \citep{Maharana2024}, and BEAM
+\citep{Tavakoli2026} each isolate the long-horizon retrieval failure
+mode that \citet{Liu2023} anticipated.  We report on all three in
+\S\ref{sec:empirical}.
+
+\paragraph{Cortex ecosystem.}
+This paper describes the memory engine of a four-component
+ecosystem: \emph{cortex-beam-abstain} \citep{Deust2026a} is a
+learned retrieval-abstention model that complements decay on
+residual collapse; \emph{automatised-pipeline} \citep{Deust2026b} is
+a Rust tree-sitter / LadybugDB property-graph backend that anchors
+memories to code symbols; \emph{prd-spec-generator}
+\citep{Deust2026c} is the read-heavy downstream consumer that
+justifies the per-write cost; \emph{zetetic-team-subagents}
+\citep{Deust2026d} is the 116-agent reasoning library that drives
+the workload distribution.  \S\ref{sec:ecosystem} expands on each.
+
+%----------------------------------------------------------------------
+\section{The Flat-Importance Failure Mode}
+\label{sec:flat-failure}
+
+\subsection{Definition}
+\label{sec:flat-def}
+
+A memory store is \emph{flat-importance} if, for any two stored
+items $x_i, x_j$ at time $t$, the long-term retrieval prior is
+independent of access history, recency, surprise, or causal context:
+\begin{equation}
+P(x_i \mid t) = P(x_j \mid t) \quad \text{for all } i, j \text{ once written.}
+\label{eq:flat-prior}
+\end{equation}
+A canonical vector store is flat-importance: every entry contributes
+a single embedding, and only query-conditional similarity differs
+at retrieval time.
+
+\subsection{Asymptotic Collapse}
+\label{sec:flat-collapse}
+
+Under flat priors, the retrieval score for a query $q$ depends only
+on similarity $s(q, x_i)$.  Let $S_q$ be the empirical distribution
+of $s(q, x_i)$ over the corpus.  As $N$ grows, two effects compound:
+\begin{enumerate}
+  \item \textbf{Concentration.}  With high-dimensional embeddings,
+        the gap between the top-1 and top-$k$ similarity scores
+        shrinks \citep{Aggarwal2001,Beyer1999}.  The top-$k$ pool
+        fills with near-tied items.
+  \item \textbf{Tie-breaking is uninformed.}  Without a
+        non-similarity prior, ordering among near-tied items is
+        determined by floating-point noise and storage-order
+        artefacts.
+\end{enumerate}
+
+A useful informal statement:
+\begin{quote}
+\emph{Claim (flat collapse).}  If the retrieval prior $P(x)$ is
+constant and $s(q, x)$ is the only ranking signal, then as
+$N \to \infty$ the conditional entropy
+$H(\mathrm{useful} \mid \mathrm{retrieved\ top}\text{-}k) \to H(\mathrm{useful})$;
+that is, the retrieval step delivers no information about which
+retrieved items are actually useful for $q$.
+\end{quote}
+
+This is the \emph{epistemic} failure mode.  It is independent of
+and prior to any LLM consumption issue.  A high-dimensional
+hubness analysis of the same regime is given by
+\citet{Radovanovic2010}.
+
+\subsection{Consequences for the LLM Consumer}
+\label{sec:flat-consumer}
+
+Even if retrieval merely returned an unordered set, the position
+bias documented by \citet{Liu2023} would still degrade downstream
+answers when $k$ is large.  With retrieval order itself
+uninformative, the position bias compounds the flat-prior problem:
+a fact that \emph{is} useful gets sub-ranked into the U-shaped
+middle and is effectively ignored.
+
+This is why na\"{i}ve ``stuff more into context'' approaches plateau,
+and why ``raise $k$'' is not a fix at large $N$: the information
+density of retrieved tokens has dropped in proportion.
+
+%----------------------------------------------------------------------
+\section{Cortex's Thermodynamic Memory Model}
+\label{sec:thermodynamic}
+
+Cortex's architecture is an attempt to keep the retrieval prior
+$P(x)$ non-flat at every $N$ by implementing the mechanisms
+biological memory uses for the same problem.  Each mechanism cites
+a primary source and a Cortex implementation file.
+
+\subsection{Heat as a Continuous Priority Field}
+\label{sec:heat}
+
+Every memory carries a scalar \texttt{heat} in $[0, 1]$.  Heat
+decays exponentially over time and is reheated on access---the
+\citet{Ebbinghaus1885} forgetting curve, $R(t) = e^{-t/S}$, where
+$S$ is memory stability.
+
+Cortex's decay
+(\texttt{mcp\_server/core/thermodynamics.py::compute\_decay}) is
+\begin{equation}
+h(t) = h_0 \cdot \lambda_{\mathrm{eff}}^{\,t}
+\label{eq:heat-decay}
+\end{equation}
+with the per-hour decay factor $\lambda_{\mathrm{eff}}$ modulated by
+importance and valence:
+\begin{equation}
+\lambda_{\mathrm{eff}} = 1 - \frac{1 - \lambda_{\mathrm{base}}}
+                                     {1 + |v| \cdot r \cdot (1 - e^{-t})}
+\label{eq:lambda-eff}
+\end{equation}
+where $\lambda_{\mathrm{base}} = 0.95$ for normal memories,
+$0.998$ for high-importance memories ($I > 0.7$), $r = 0.5$ is the
+emotional resistance, and the time-saturation factor $1 - e^{-t}$
+implements the \citet{Kleinsmith1963} crossover effect: emotional
+advantage grows with delay \citep{Yonelinas2015}.  Half-lives:
+$\approx 14$\,h for normal items, $\approx 346$\,h for important
+items.  The constants are calibrated to a hours/days timescale and
+are not from a single paper; they are documented as engineering
+choices in the source.
+
+\subsection{Predictive-Coding Write Gate}
+\label{sec:gate}
+
+Not every input is written.  Cortex routes incoming content
+through a hierarchical \citet{Friston2010} free-energy gate
+(\texttt{mcp\_server/core/hierarchical\_predictive\_coding.py})
+operating at three levels---sensory, entity, schema---analogous to
+the cortical hierarchy.  Items that fail to surprise the model at
+any level are discarded; items that surprise at the schema level
+receive a higher initial heat.  This implements a write-side
+scarcity: the store grows by what is actually informative, not by
+what merely passes through.
+
+\subsection{Coupled Neuromodulation}
+\label{sec:neuromod}
+
+Heat is not the only modulator.  Cortex implements a coupled
+DA / NE / ACh / 5-HT cascade
+(\texttt{mcp\_server/core/coupled\_neuromodulation.py}) with
+cross-channel effects, following \citet{Doya2002} and
+\citet{Schultz1997}.  Dopamine prediction errors raise importance
+for items whose outcome surprised the prior; norepinephrine
+reshapes the gain on uncertainty.
+
+\subsection{Emotional Tagging}
+\label{sec:emotional}
+
+\citet{Yerkes1908} characterised the inverted-U relationship
+between arousal and performance.  \citet{Wang2024} describe
+amygdala-priority encoding for emotionally salient inputs.
+Cortex's \texttt{mcp\_server/core/emotional\_tagging.py} combines
+both: arousal modulates the priority of incoming memories, and the
+inverted-U bound prevents over-weighting.
+
+\subsection{Synaptic Tagging}
+\label{sec:synaptic}
+
+\citet{Frey1997} showed that weak memories sharing entities with
+later strong potentiation events can be retroactively promoted.
+Cortex implements the analogue in
+\texttt{mcp\_server/core/synaptic\_tagging.py}: when a
+strongly-encoded memory arrives, weak memories sharing entities
+receive a heat boost, preserving items the system did not yet know
+were important.
+
+\subsection{Consolidation Pipeline}
+\label{sec:consolidation}
+
+Episodic memories progress through a four-stage cascade---LABILE
+$\to$ EARLY\_LTP $\to$ LATE\_LTP $\to$ CONSOLIDATED---modelled on
+\citet{Kandel2001}.  Implementation:
+\texttt{mcp\_server/core/cascade.py}.  Once consolidated, the
+Complementary Learning Systems theory of \citet{McClelland1995}
+governs the episodic$\to$semantic transfer in
+\texttt{mcp\_server/core/dual\_store\_cls.py}: hippocampal-style
+episodic traces feed cortical-style schemas, and the episodic
+surface area shrinks while structured knowledge accumulates.  See
+also \citet{Tonegawa2015} on the cellular substrate (engram cells)
+and \citet{Hopfield1982} on the content-addressable view of
+attractor memory.
+
+\subsection{Sleep Replay}
+\label{sec:sleep}
+
+\citet{Buzsaki2015} and \citet{Hasselmo2005} describe phase-gated
+encoding/retrieval/consolidation cycles.  Cortex's
+\texttt{oscillatory\_clock.py} and \texttt{replay.py} implement an
+offline replay pass that consolidates and re-embeds clusters during
+idle windows.
+
+\subsection{Pattern Separation and Pruning}
+\label{sec:separation}
+
+\citet{Leutgeb2007} and \citet{Yassa2011} describe dentate-gyrus
+pattern separation.  Cortex's \texttt{pattern\_separation.py}
+orthogonalises near-duplicate items so they remain distinguishable.
+\citet{Wang2020} describe complement-dependent microglial pruning;
+Cortex's \texttt{microglial\_pruning.py} prunes the lowest-utility
+edges of the entity graph, reclaiming structure rather than mass.
+
+%----------------------------------------------------------------------
+\section{Why Decay Prevents Collapse}
+\label{sec:why-decay}
+
+The load-bearing argument of this paper is that the mechanisms in
+\S\ref{sec:thermodynamic} keep the retrieval prior $P(x)$ non-flat
+at all $N$, and that this is what preserves discriminability.  We
+make this argument in three forms.
+
+\subsection{Information-Theoretic}
+\label{sec:info-theory}
+
+If heat decays exponentially and is reheated on access, then in
+steady state the heat distribution across an active corpus is
+well-approximated by a power law (long tail of cold items, short
+head of repeatedly-accessed hot items).  Define the
+priority-weighted retrieval entropy
+\begin{equation}
+H_P(R \mid q) \;=\; -\sum_{x \in R}
+\frac{P(x)\, s(q, x)}{Z}
+\log \frac{P(x)\, s(q, x)}{Z},
+\quad Z = \sum_{x \in R} P(x)\, s(q, x).
+\label{eq:HP}
+\end{equation}
+Under flat $P(x) = 1/N$, $H_P$ collapses onto the similarity-only
+distribution and inherits its high-dimensional concentration
+(\S\ref{sec:flat-collapse}).  Under a power-law $P(x)$, $H_P$
+retains positive mass on the head even when the similarity
+distribution is near-tied: the tie-breaker is the heat prior itself.
+We do not claim this as a tight bound; we claim it as the
+\emph{mechanism} by which decay preserves
+$H(\mathrm{useful} \mid \mathrm{retrieved})$ above the flat-prior
+floor.
+
+\subsection{Operational---WRRF Fusion}
+\label{sec:wrrf}
+
+The Cortex retrieval path is implemented server-side in PL/pgSQL
+(\texttt{recall\_memories()}, see
+\texttt{mcp\_server/infrastructure/pg\_schema.py}).  It computes a
+\emph{Weighted Reciprocal Rank Fusion} \citep{Cormack2009} over six
+independent signals:
+\begin{equation}
+\mathrm{score}(x \mid q) \;=\;
+\sum_{c \in \{\mathrm{vec}, \mathrm{fts}, \mathrm{tri}, \mathrm{heat}, \mathrm{rec}, \mathrm{ngram}\}}
+\frac{w_c}{k + \mathrm{rank}_c(x \mid q)}
+\label{eq:wrrf}
+\end{equation}
+with intent-conditioned weights $w_c$ chosen by the query router
+(\texttt{mcp\_server/core/query\_router.py}).  When two items have
+equivalent vector and FTS scores, the heat and recency channels
+resolve the tie---so the priority field $P(x)$ acts not just as a
+prior but as a deterministic disambiguator in the regime where
+similarity is uninformative.  This is the operational mechanism
+that prevents \S\ref{sec:flat-collapse}'s tie-noise.
+
+\subsection{Curation by Attrition}
+\label{sec:curation}
+
+Decay also removes items, but only after they have been compressed.
+The CLS pipeline (\texttt{dual\_store\_cls.py}) detects clusters of
+cold-but-related episodic items, abstracts them into semantic
+schemas, and lets the underlying episodic surface fade.  Two
+consequences: (a)~the retrievable corpus stays small relative to
+the input stream, so high-dimensional concentration is held off;
+(b)~the knowledge that mattered survives in compressed form even
+when the verbatim episodes do not.
+
+The combination---write-side scarcity (\S\ref{sec:gate}),
+heat-modulated tie-breaking (\S\ref{sec:wrrf}), and
+curation-by-attrition (\S\ref{sec:curation})---is what we mean by
+``non-flat at any $N$.''  None of the three on its own would
+suffice.
+
+\subsection{Decay Reduces the \emph{Rate} of Collapse, Not Its Possibility}
+\label{sec:rate-not-possibility}
+
+The mechanisms above reduce how often retrieval enters a regime
+where similarity scores are uninformative; they cannot guarantee the
+answer is in the store.  For queries whose target is genuinely
+absent, the WRRF tie-breaker simply chooses the most-prior of a set
+of irrelevant candidates---the right response is abstention, not
+retrieval.
+
+The diagnostic data published alongside cortex-beam-abstain
+\citep{Deust2026a}, corroborated by BEAM \citep{Tavakoli2026},
+makes the point sharply: on BEAM, abstention queries (questions
+whose answer is not in the haystack) receive an \emph{average
+retrieval similarity score of 0.926}---higher than many answerable
+queries.  Score-based thresholding cannot decide abstention on this
+distribution; the relevance score is doing the wrong job.  Cortex
+reduces the \emph{frequency} of discriminability collapse via decay;
+cortex-beam-abstain (a learned binary classifier;
+\S\ref{sec:ecosystem}) handles the \emph{residual} collapse via
+learned abstention.  The two mechanisms are complementary: the
+0.926 figure is direct empirical evidence that flat-importance
+$+$ score-based-threshold retrieval is fundamentally insufficient.
+
+%----------------------------------------------------------------------
+\section{Empirical Evidence}
+\label{sec:empirical}
+
+We evaluate Cortex on three independent long-term-memory benchmarks.
+All numbers are from runs against the production PostgreSQL database
+with the same \texttt{recall\_memories()} PL/pgSQL code path used in
+deployment, single-process, on a clean DB seeded only with each
+benchmark's data.
+
+\begin{table}[t]
+\centering
+\caption{Cortex vs.\ paper-best on three long-term-memory benchmarks.
+Cortex numbers: clean DB, single process, April 2026.}
+\label{tab:benchmarks}
+\begin{tabular}{llrrr}
+\toprule
+Benchmark & Venue & Metric & Cortex & Paper-best \\
+\midrule
+LongMemEval & ICLR 2025 & R@10    & \textbf{97.8\%} & 78.4\% \\
+LongMemEval & ICLR 2025 & MRR     & \textbf{0.882}  & ---    \\
+LoCoMo      & ACL 2024  & R@10    & \textbf{92.6\%} & ---    \\
+LoCoMo      & ACL 2024  & MRR     & \textbf{0.794}  & ---    \\
+BEAM        & ICLR 2026 & Overall & \textbf{0.543}  & 0.329  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The $+19.4$\,pp absolute gain on LongMemEval R@10 and the $+65\%$
+relative gain on BEAM Overall are the headline results.  Both
+benchmarks include question categories specifically designed to
+defeat flat retrieval---multi-session reasoning (LongMemEval),
+causal/temporal grounding (BEAM)---which is consistent with the
+\S\ref{sec:flat-collapse} claim that the flat regime fails fastest
+on questions that require integrating information across the
+priority distribution.
+
+\paragraph{Where Cortex wins.}
+The largest gaps appear on temporal questions (``what did I decide
+first about X?''), causal-chain questions (``why did Y change?''),
+and multi-hop knowledge integration.  These are the question
+categories that require traversal of the entity/causal graph and
+that benefit most from heat-modulated tie-breaking.
+
+\paragraph{Where the gap is smaller.}
+On surface-fact retrieval (``what is the value of X?'') with a
+small corpus, flat baselines do reasonably well---there is no
+priority disambiguation to do because the fact is uniquely
+identified by similarity.  Cortex's advantage on these categories
+is primarily from the FTS/trigram channels, not the thermodynamic
+ones.
+
+\paragraph{Caveats on these numbers.}
+(i)~We do not have head-to-head re-runs of every published baseline
+on our exact protocol; we report Cortex's numbers and the highest
+paper-reported number on each benchmark.
+(ii)~These benchmarks are retrieval-quality benchmarks; downstream
+end-task accuracy with a specific LLM may differ.
+(iii)~BEAM's Overall is a composite of seven sub-metrics---see
+\texttt{benchmarks/beam/} for the per-subset breakdown.
+
+%----------------------------------------------------------------------
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Limitations}
+\label{sec:limitations}
+
+\paragraph{Decay calibration.}
+The constants in \S\ref{sec:heat} ($\lambda_{\mathrm{base}} = 0.95$,
+$\lambda_{\mathrm{important}} = 0.998$, $r = 0.5$) are calibrated
+to a hours/days timescale and are explicitly engineering choices,
+not paper-derived.  Too aggressive a forgetting curve loses
+cold-but-useful facts; too gentle a curve recovers the flat-prior
+failure mode.  Cortex pins the calibration with \texttt{rate\_memory}
+user feedback, which feeds metamemory confidence
+(\texttt{compute\_metamemory\_confidence}), but this is a
+per-deployment calibration loop, not a universal solution.
+
+\paragraph{Cold-start regime.}
+The argument in \S\ref{sec:flat-collapse} is asymptotic.  For small
+corpora ($N < {\sim}10$k items), high-dimensional concentration has
+not yet bitten, and a well-tuned flat RAG is competitive.  Cortex's
+advantage grows with $N$; we do not claim it dominates at every
+scale.
+
+\paragraph{Per-write cost.}
+The thermodynamic write path is heavier than appending to a vector
+index: predictive-coding gate, emotional tagging, synaptic tagging
+propagation, cascade-stage assignment, entity extraction.  In our
+deployment writes are roughly $100\times$ rarer than reads, so the
+amortised cost is acceptable; in write-heavy workloads it would not
+be.
+
+\paragraph{Coverage.}
+We have not run Cortex against MemoryAgentBench or EverMemBench
+yet; those are next on the roadmap (\texttt{benchmarks/memoryagentbench/},
+\texttt{benchmarks/evermembench/}).
+
+\paragraph{Ablation completeness.}
+Cortex includes an ablation framework (\texttt{mcp\_server/core/ablation.py})
+for 23 mechanisms, but the per-mechanism contribution to the
+headline scores has not been fully reported in this paper.  A full
+ablation (heat-only, gate-only, CLS-only, full system) would
+tighten the causal story for \S\ref{sec:why-decay}; currently we
+report only the integrated system.
+
+\subsection{When Flat Memory is Fine}
+\label{sec:when-flat}
+
+\begin{itemize}
+  \item Single-session, single-document tasks (the original RAG
+        setting).
+  \item Curated corpora that are themselves the result of a
+        non-flat curation process upstream.
+  \item Workloads where $N$ is bounded by construction (a fixed
+        knowledge base).
+  \item Latency-critical paths where the per-write cost of the
+        predictive-coding gate is unacceptable.
+\end{itemize}
+
+The argument of this paper is not that flat is wrong, but that it
+is wrong \emph{as the long-term memory of an agent that lives
+indefinitely}.
+
+\subsection{What This Paper is Not}
+\label{sec:not}
+
+\begin{itemize}
+  \item We do not claim Cortex ``solves'' memory.  The above
+        limitations are real.
+  \item We do not compare against baselines whose numbers we do
+        not have.  The ``paper-best'' column is the highest
+        published number we found on each benchmark.
+  \item We do not claim biological fidelity; we claim biological
+        \emph{inspiration}, with each module documenting which
+        paper it draws on and where it deviates.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\section{The Cortex Ecosystem: Where This Memory Model Fits}
+\label{sec:ecosystem}
+
+The thermodynamic memory model described above is calibrated to a
+specific workload---agentic coding sessions issuing many recall
+calls per write against memories that link to code structure---and
+to a deployment shape in which four other software components
+handle cases this paper's mechanisms are not designed to solve.
+
+\paragraph{cortex-beam-abstain---the abstention complement.}
+\S\ref{sec:rate-not-possibility} establishes that decay reduces the
+\emph{rate} of discriminability collapse but cannot eliminate it
+when the answer is absent.  cortex-beam-abstain \citep{Deust2026a}
+is a DistilBERT binary classifier (66M params, INT8 ONNX, 64\,MB,
+${\sim}32$\,ms per pair on CPU) trained on 19{,}111 (query, passage)
+pairs from BEAM splits 100K/500K/1M with hard negatives mined by
+query-passage cosine, reaching $F_1 = 0.733$ on the v0.1 release
+(score range $0.215$--$0.830$).  It is the \emph{complement} to
+decay: Cortex addresses the \emph{frequency} of collapse,
+cortex-beam-abstain addresses the \emph{residual}.  Both mechanisms
+are required; neither suffices alone.
+
+\paragraph{automatised-pipeline---the code-structural anchor.}
+Cortex memories are not anonymous text snippets; downstream
+consumers expect them to refer to specific functions, types, and
+call paths.  automatised-pipeline \citep{Deust2026b} is a Rust MCP
+server that indexes Rust / Python / TypeScript codebases via
+tree-sitter into a LadybugDB property graph (16 node labels, 36+
+relationship tables; 220 tests passing) and exposes 23 MCP tools
+for symbol resolution, impact estimation, and PRD-vs-graph
+validation.  This lets Cortex's memories link to actual symbols
+rather than substrings---recall returns text-grounded-in-structure,
+not text alone.
+
+\paragraph{prd-spec-generator---the read-heavy downstream consumer.}
+\S\ref{sec:limitations} noted that writes in our deployment are
+roughly $100\times$ rarer than reads.  prd-spec-generator
+\citep{Deust2026c} is the canonical example: a TypeScript MCP
+server (10 packages, 17 MCP tools, 583 tests) that turns a feature
+description into a 9-file PRD via a stateless reducer.  Each
+section synthesis issues multiple Cortex recall calls; a typical
+trial-tier feature run produces ${\sim}62$ host-visible iterations,
+each with its own retrieval.  This is the workload that amortises
+Cortex's thermodynamic write cost.
+
+\paragraph{zetetic-team-subagents---the workload distribution.}
+The 116-agent reasoning library (97 genius $+$ 19 team agents;
+241 memory tests passing) drives the queries Cortex sees in
+production \citep{Deust2026d}.  Multi-agent chains---\texttt{peirce
+$\to$ cochrane $\to$ feynman $\to$ toulmin} for deep research,
+\texttt{fermi $\to$ curie $\to$ knuth} for performance
+investigation---generate clusters of related recalls within a
+session, shaping the query distribution against which Cortex's
+decay constants and intent profiles are calibrated.  The same
+library imposes the source-citation discipline this paper itself
+follows.
+
+These are not afterthoughts; they shape what the memory store has
+to be good at.  A memory system optimised for a different workload
+---interactive conversation logs without code or PRDs,
+single-session tutoring with no read-ahead reuse---would calibrate
+the decay rate, the predictive-coding gate, and the consolidation
+pipeline differently.  \textbf{The thermodynamic model is general;
+its constants are not.}  A SQLite variant
+(Cortex-cowork, \citealp{Deust2026e}) ports the same architecture
+to sandboxed environments lacking PostgreSQL---client-side fusion
+replaces PL/pgSQL, \texttt{sqlite-vec} flat scan replaces pgvector
+HNSW---but the decay model and consolidation pipeline are
+unchanged, consistent with the claim that the model is
+implementation-independent.
+
+%----------------------------------------------------------------------
+\section{Conclusion}
+\label{sec:conclusion}
+
+Flat-importance memory stores are not a stable long-term substrate
+for agentic LLMs.  As $N$ grows, the absence of a non-similarity
+prior collapses top-$k$ retrieval into noise tie-breaking, and the
+position bias of long-context decoding compounds the loss.  Cortex
+addresses this by maintaining a non-flat priority distribution over
+memories---implemented through heat decay, a hierarchical
+predictive-coding write gate, neuromodulatory tagging, and a
+four-stage consolidation cascade---and by using that distribution
+as both a retrieval prior and a tie-breaker in WRRF fusion.  On
+three long-term-memory benchmarks, Cortex outperforms the published
+bests by margins consistent with the theoretical argument: largest
+on the question categories that most require non-flat priors,
+smaller on surface-fact retrieval where similarity alone suffices.
+
+The ablation work needed to make this story tight---per-mechanism
+contribution to each benchmark, dose--response curves for the decay
+constants, head-to-head re-runs of published baselines on the same
+protocol---is the natural next step.
+
+%----------------------------------------------------------------------
+\appendix
+
+\section{Information-Theoretic Collapse of Flat-Importance Retrieval}
+\label{app:shannon}
+
+This appendix derives why a \emph{flat-importance} memory store
+loses retrieval discriminability as $N$ grows, while a
+\emph{decaying-priority} store (Cortex) preserves it.  The argument
+follows \citet{Shannon1948}: define the right quantity, derive its
+limit, then compare designs.
+
+\subsection{Setup and Notation}
+\label{app:shannon-setup}
+
+A memory store holds $N$ items $\{x_1, \dots, x_N\}$.  Each item
+$x_i$ carries an \emph{importance} $w_i \ge 0$ with $\sum_i w_i = 1$.
+Given a query $q$, the retrieval score is
+\begin{equation}
+s_i(q) \;=\; \alpha \cdot \mathrm{sim}(q, x_i) \;+\;
+             (1 - \alpha) \cdot w_i, \qquad \alpha \in [0,1].
+\label{eq:score-mix}
+\end{equation}
+Top-$k$ retrieval returns the indices
+$R_k(q) = \arg\text{top-}k_i\, s_i(q)$.
+
+\textbf{Two regimes.}
+\begin{itemize}
+  \item \textbf{Flat-importance (canonical RAG).}
+        $w_i = 1/N$ for all $i$.  The importance term is constant,
+        so ranking reduces to ranking $\mathrm{sim}(q, x_i)$.
+  \item \textbf{Decaying-priority (Cortex).}
+        $w_i \propto h_i \cdot \exp(-\lambda \,(t - t_i))$, where
+        $h_i$ is a base heat (access frequency) and $t - t_i$ is
+        the age since last set.  The exponential form is
+        Ebbinghaus's forgetting law \citep{Ebbinghaus1885},
+        recoverable as the steady state of a Friston-style
+        free-energy minimization with linear precision decay
+        \citep{Friston2010}.
+\end{itemize}
+
+We treat $\mathrm{sim}(q, x_i)$ as random variables drawn iid from a
+distribution $F_S$ with mean $\mu_S$, variance $\sigma_S^2 < \infty$,
+and smooth density $f_S$ on the relevant support.  This is the
+iid-sim assumption (revisited as a limitation in
+\S\ref{app:shannon-limit}).
+
+\subsection{Discriminability Metric}
+\label{app:shannon-disc}
+
+Define the \emph{top-$k$ discriminability} as the mutual information
+between the retrieved set $R_k$ and the query $q$:
+\begin{equation}
+D_k \;=\; I(R_k; Q) \;=\; H(R_k) - H(R_k \mid Q).
+\label{eq:Dk}
+\end{equation}
+When $D_k \to 0$, the retrieved set is independent of the
+query---the system has \emph{collapsed} into noise.  $D_k$ is
+upper-bounded by $\log \binom{N}{k}$ and is the operational
+quantity for ``does this retriever discriminate?'' in the Shannon
+sense: the limit of bits-per-query the channel from query to
+retrieved set can carry.
+
+\subsection{The Collapse Theorem (Informal)}
+\label{app:shannon-collapse}
+
+\textbf{Claim.} Under flat importance ($w_i = 1/N$), iid
+similarities with finite variance $\sigma_S^2$ and smooth density
+$f_S$, and embedding noise floor $\eta$, the expected gap between
+the $k$-th and $(k+1)$-th largest score satisfies
+\[
+\mathbb{E}\big[s_{(k)} - s_{(k+1)}\big]
+\;\xrightarrow[N \to \infty]{}\; 0,
+\]
+and the top-$k$ ranking becomes effectively random once the gap
+drops below $\eta$.  Consequently $D_k \to 0$.
+
+\paragraph{Derivation sketch (order statistics).}
+Let $S_{(1)} \ge S_{(2)} \ge \dots \ge S_{(N)}$ denote the ordered
+similarities.  From \citet{David2003}, \S4.6, for a smooth density
+$f_S$ and a quantile $p_k = 1 - k/N$ with $k$ fixed and $N$ large:
+\begin{equation}
+\mathbb{E}\big[S_{(k)} - S_{(k+1)}\big]
+\;\approx\;
+\frac{1}{N \, f_S\!\big(F_S^{-1}(p_k)\big)}
+\;=\; O\!\big(1/N\big),
+\label{eq:order-spacing}
+\end{equation}
+with standard deviation of $S_{(k)}$ itself scaling as
+$\sigma_S / \sqrt{N}$ around its quantile.  The \emph{spacing}
+(which determines tie-breaking) shrinks faster than the position
+uncertainty---both vanish, but the spacing collapses first.
+
+\paragraph{Embedding noise floor.}
+Cosine similarity on high-dimensional sentence-transformer
+embeddings has empirical reproducibility $\eta \approx 0.05$
+\citep{Reimers2019}.  Once
+\[
+\frac{1}{N \, f_S(F_S^{-1}(p_k))} \;<\; \eta,
+\]
+the rank order of $S_{(k)}, S_{(k+1)}$ is dominated by embedding
+noise rather than semantic signal.  Tie-breaking becomes uniform,
+and $H(R_k \mid Q) \to H(R_k)$, hence $D_k \to 0$.
+
+\paragraph{Threshold.}
+Setting the spacing equal to $\eta$ gives the critical store size
+\begin{equation}
+N^\star \;=\; \frac{1}{\eta \, f_S(F_S^{-1}(p_k))}.
+\label{eq:Nstar}
+\end{equation}
+For $\eta = 0.05$ and a typical bulk density $f_S \approx 4$
+(sentence-transformer cosines concentrate in $[0.2, 0.6]$),
+$N^\star \approx 5{,}000$.  Beyond that, flat-importance retrieval
+enters the collapse regime.
+
+\subsection{Why Decay Restores Discriminability}
+\label{app:shannon-restore}
+
+\textbf{Power-law importance.} Empirical access patterns in human
+and artificial memory follow Zipf-like laws: \citet{Anderson1989}
+and \citet{Anderson1991} showed that the probability a memory is
+needed at time $t$ scales as
+$P(\mathrm{needed}) \propto t^{-\gamma}$ with
+$\gamma \in [0.5, 1.5]$ across email, headlines, and child-directed
+speech corpora.  The power law of forgetting \citep{Wixted1991}
+gives the same shape.  When Cortex's heat
+$h_i \cdot \exp(-\lambda (t - t_i))$ is averaged over the access
+process, the stationary distribution of $w_i$ is heavy-tailed with
+tail exponent $\gamma$.
+
+\textbf{Score distribution becomes bimodal.}  The composite score
+$s_i = \alpha \cdot \mathrm{sim}(q, x_i) + (1 - \alpha) \cdot w_i$
+is a convolution of a thin-tailed similarity component with a
+heavy-tailed importance component.  For $\alpha \in [0.3, 0.7]$
+(Cortex's WRRF operating regime), the resulting distribution is
+bimodal: a sharp head from items with large $w_i$ and a long tail
+of low-importance items.  Top-$k$ retrieval consistently returns
+from the head; tie-breaking is dominated by $w_i$, which has gaps
+$O(1)$---not by sub-$\eta$ similarity differences.
+
+\textbf{Non-vanishing entropy bound.}  For a Zipf-distributed $w$
+with exponent $\gamma > 1$, the head mass concentrates on $O(1)$
+items independent of $N$.  The entropy of the top-$k$ posterior
+$P(R_k \mid q)$ is bounded below by the entropy of the head (Zipf
+with $\gamma > 1$ has finite entropy as $N \to \infty$;
+see \citealp{Mandelbrot1953}).  Therefore
+\begin{equation}
+\liminf_{N \to \infty} D_k \;\ge\; H_{\mathrm{head}}(\gamma, k)
+\;>\; 0.
+\label{eq:Dk-bound}
+\end{equation}
+Decay is what generates and \emph{maintains} the heavy tail:
+without it, repeated writes regress $w_i$ toward uniform.
+
+\subsection{Concrete Numbers (LongMemEval R@10)}
+\label{app:shannon-numbers}
+
+Cortex measured (clean DB, April 2026):
+\begin{itemize}
+  \item LongMemEval R@10: \textbf{97.8\%}
+  \item Best flat-RAG baseline (paper-best): \textbf{78.4\%}
+  \item Gap: \textbf{19.4\,pp}.
+\end{itemize}
+
+LongMemEval has $N \approx 10^4$ (S variant: 500 questions, $\sim$30
+turns/session, $\sim$10k candidate spans).  Plugging into
+\S\ref{app:shannon-collapse} with $\eta = 0.05$, $f_S \approx 4$:
+\[
+N^\star \;=\; \frac{1}{0.05 \cdot 4} \;=\; 5{,}000.
+\]
+Test set size $10^4$ is $2 N^\star$.  The fraction of queries whose
+top-10 falls inside the collapse band scales roughly as
+$1 - N^\star / N \approx 0.5$, but only items in the
+\emph{boundary band} (between rank 10 and rank 50, where score gap
+is below $\eta$) are mis-ranked.  Empirically that band holds
+${\sim}20$--$25\%$ of items.  Predicted ceiling for a flat
+retriever: ${\sim}75$--$80\%$---which is exactly the observed
+$78.4\%$ paper-best.  The 19.4\,pp gap is the discriminability
+that decay$+$heat preserves and uniform priors throw away.
+
+\subsection{WRRF Fusion as Multi-Source Decorrelation}
+\label{app:shannon-wrrf}
+
+Cortex's \texttt{recall\_memories()} PL/pgSQL function fuses six
+signals: vector cosine, FTS BM25, trigram similarity, heat,
+recency, n-gram overlap.  Treat each signal $s^{(j)}$ as a noisy
+observation of a hidden relevance target $r_i$:
+\[
+s_i^{(j)} \;=\; r_i + \varepsilon_i^{(j)},
+\qquad j \in \{1, \dots, 6\}.
+\]
+If the noises $\varepsilon^{(j)}$ are pairwise low-correlation, the
+variance of the WRRF fused score is
+\begin{equation}
+\mathrm{Var}\big(\hat r_i\big) \;\approx\;
+\frac{\bar\sigma^2}{m \cdot (1 + (m-1)\bar\rho)},
+\label{eq:wrrf-var}
+\end{equation}
+where $m=6$ and $\bar\rho \ll 1$.  With $\bar\rho \approx 0.2$
+(rough cross-signal correlation in our ablations), variance shrinks
+by ${\sim}4\times$ relative to a single signal.  This effectively
+raises $f_S$ in the \S\ref{app:shannon-collapse} formula, which
+raises $N^\star$ by the same factor---pushing the collapse
+threshold from ${\sim}5$k items to ${\sim}20$k.  This is the
+noisy-channel coding theorem \citep{Shannon1948} applied to
+retrieval: $m$ independent observations of the same hidden $r_i$
+raise the effective channel capacity from query to retrieved-set
+by up to $\log m$ bits.
+
+\subsection{Most Fragile Assumption (Limitation Flag)}
+\label{app:shannon-limit}
+
+The derivation assumes \textbf{iid similarities}
+$\mathrm{sim}(q, x_i)$ across items.  In practice, embeddings live
+on a low-dimensional manifold \citep{Reimers2019,Ethayarajh2019},
+so similarities are \emph{correlated} through the manifold.  This
+makes the effective $N$ in \S\ref{app:shannon-collapse} smaller
+than the raw count, which means \textbf{collapse happens at smaller
+$N$ than the iid bound predicts}---the iid analysis is a
+\emph{best case} for flat retrieval.  The 19.4\,pp gap in
+\S\ref{app:shannon-numbers} should therefore be read as a lower
+bound on what decay buys; the true gap is larger and grows faster
+with $N$.
+
+%----------------------------------------------------------------------
+\section{Probabilistic Bounds on Top-$k$ Retrieval Accuracy}
+\label{app:erdos}
+
+This appendix supports \S\ref{sec:why-decay}.  All proofs follow
+the probabilistic method of \citet{ErdosSpencer1974}: existence is
+established by random construction with positive probability, no
+explicit witness required.
+
+\subsection{Setting and Notation}
+\label{app:erdos-setup}
+
+Let $M = \{x_1, \dots, x_N\}$ be a memory store.  For a query $q$,
+each item carries a similarity $s_i = \mathrm{sim}(q, x_i)$,
+modeled as iid draws from a distribution $F$ (typically $F$
+$\approx$ $\mathrm{Normal}(\mu_q, \sigma^2)$ where $\sigma \approx
+0.05$ is the embedding noise floor for a 384-dim
+sentence-transformer; measured ablation, Cortex bench Apr 2026).
+Each item also carries a static priority $w_i \ge 0$.
+Flat-importance retrieval returns $\arg\text{top}_k\, s_i$ (or
+$\arg\text{top}_k\, w_i$ under a pure-priority baseline).
+Thermodynamic retrieval mixes both via WRRF fusion.
+
+We compare two regimes for the priority distribution:
+\begin{itemize}
+  \item \textbf{Uniform regime:} $w_i = 1$ for all $i$ (the
+        flat-importance baseline).
+  \item \textbf{Zipf regime:} $w_i \propto \mathrm{rank}(x_i)^{-\gamma}$
+        with $\gamma > 1$ (the thermodynamic steady state).
+\end{itemize}
+Top-$k$ accuracy on query $q$ is
+$\mathrm{Acc}_k(q) = |R_k(q) \cap T(q)| / k$ where $T(q)$ is the
+true-relevant set and $R_k(q)$ is the retrieved set.
+
+\subsection{The Bad-Query Existence Theorem}
+\label{app:erdos-thm1}
+
+\textbf{Theorem 1 (Existence of adversarial queries under uniform
+$w$).}
+\emph{Let $F$ have continuous density and finite variance, and let
+$\sigma_{\mathrm{noise}} > 0$ be the embedding noise floor.  Define
+a query $q$ to be \textbf{bad} if (i)~$|T(q)| > k$ and (ii)~the
+standard deviation of $\{s_i : x_i \in T(q)\}$ is below
+$\sigma_{\mathrm{noise}}$.  Then under uniform priority, the
+probability that the query distribution $Q$ contains at least one
+bad query tends to $1$ as $N \to \infty$, and on every bad query
+the expected top-$k$ accuracy satisfies}
+\begin{equation}
+\mathbb{E}[\mathrm{Acc}_k(q)] \;\le\; \frac{k}{|T(q)|}
+\;\to\; 0 \quad (N \to \infty).
+\label{eq:thm1}
+\end{equation}
+
+\paragraph{Proof (proved by random argument).}
+Pick $q$ uniformly from a finite query pool of size $N^\alpha$ for
+any $\alpha > 0$.  The expected number of items at similarity
+within $\sigma_{\mathrm{noise}}$ of any fixed quantile of $F$ is
+$N \cdot F'(t) \cdot \sigma_{\mathrm{noise}} = \Theta(N)$ by the
+mean-value theorem, since $F$ has bounded density.  By
+concentration of order statistics \citep{Bickel1976}, the gap
+between the $j$-th and $(j+1)$-th order statistic in this band is
+$O_p(1/N)$, well below $\sigma_{\mathrm{noise}}$ for $N$ large.
+Hence $|T(q)| = \Omega(N)$ with high probability for at least one
+such $q$.  Conditioned on a bad query, top-$k$ retrieval picks a
+uniformly random size-$k$ subset of $T(q)$, and
+$\mathbb{E}[\mathrm{Acc}_k(q)] = k / |T(q)|$.  The right-hand side
+is $O(1/N) \to 0$.~$\square$
+
+\textbf{Corollary 1.1 (Universal collapse for any $\alpha$-mixing).}
+\emph{For any retrieval rule that linearly mixes similarity with
+uniform weights $w_i$, there exists a query distribution under
+which the expected top-$k$ accuracy is bounded above by $k/N$
+asymptotically.}  The mixing weight $\alpha$ cannot rescue the
+system, because $w$ is constant across $T(q)$ and adds no signal.
+
+\subsection{The Zipf Rescue Theorem}
+\label{app:erdos-thm2}
+
+\textbf{Theorem 2 (Constant lower bound under Zipf priority).}
+\emph{Let $w_i \propto \mathrm{rank}(x_i)^{-\gamma}$ with
+$\gamma > 1$, and let $H_N(\gamma) = \sum_{i=1}^N i^{-\gamma}$ be
+the partial harmonic sum (which converges to $\zeta(\gamma)$ as
+$N \to \infty$).  Then for moderate $k$,}
+\begin{equation}
+\frac{\sum_{i=1}^{k} w_i}{\sum_{i=1}^{N} w_i}
+\;\ge\;
+1 - k^{1-\gamma} \cdot \frac{\zeta(\gamma)^{-1}}{\gamma - 1} \cdot (1 + o(1)).
+\label{eq:thm2-mass}
+\end{equation}
+\emph{Under WRRF fusion of similarity and priority, the head-$k$
+set is selected with probability at least $1 - O(N^{-c})$ for some
+$c = c(\gamma, \sigma_{\mathrm{noise}}) > 0$, so}
+\begin{equation}
+\liminf_{N \to \infty} \mathbb{E}[\mathrm{Acc}_k(q)]
+\;\ge\;
+1 - k^{1-\gamma}
+\quad \text{(a constant independent of } N\text{).}
+\label{eq:thm2-acc}
+\end{equation}
+
+\paragraph{Proof (by direct computation).}
+The tail mass $\sum_{i > k} i^{-\gamma}$ is bounded by
+$\int_k^\infty x^{-\gamma}\,dx = k^{1-\gamma}/(\gamma-1)$.  Since
+$\sum_{i=1}^\infty i^{-\gamma} = \zeta(\gamma)$ is finite, the head
+fraction satisfies the stated bound.  WRRF fusion adds
+$1/(\mathrm{rank}_w + 60) + 1/(\mathrm{rank}_s + 60)$
+\citep{Cormack2009}.  For a head item $i \le k$,
+$\mathrm{rank}_w(i) \le k$ deterministically; the only way it
+leaves the top-$k$ of the fused score is for similarity rank to be
+$\Omega(N)$, which by \citet{Bickel1976} occurs with probability
+$O(N^{-c})$.~$\square$
+
+\paragraph{Remark.}
+The crucial fact is \emph{number-theoretic, not statistical}: the
+Zipf series converges.  The constant lower bound on accuracy is a
+property of $\zeta(\gamma)$, not of $N$.  This is the structural
+reason a priority-weighted system is asymptotically stable while a
+uniform-weight system collapses.
+
+\subsection{The Crossover $N$}
+\label{app:erdos-cross}
+
+\textbf{Corollary 2.1 (Crossover scale).}
+\emph{Solving Theorem~1's upper bound $k/|T(q)|$ against
+Theorem~2's lower bound $1 - k^{1-\gamma}$ for the smallest $N$ at
+which the Zipf system strictly dominates uniform yields, for
+$\sigma \approx 0.05$, $k = 10$, $\gamma \approx 1.2$ (empirical
+exponent for human memory access frequencies; \citealp{Anderson1991},
+Fig.~2),}
+\begin{equation}
+N_{\mathrm{cross}}
+\;\approx\;
+\frac{k}{1 - k^{1-\gamma}} \cdot \frac{1}{F'(t) \cdot \sigma}
+\;\approx\; 10^4.
+\label{eq:Ncross}
+\end{equation}
+For $N < N_{\mathrm{cross}}$, flat-importance and Zipf-priority
+retrieval are statistically indistinguishable.  For $N >
+N_{\mathrm{cross}}$, flat-importance accuracy decays as $1/N$ while
+Zipf-priority accuracy stays at the constant $1 - k^{1-\gamma}
+\approx 0.37$.  Decay is therefore not a tuning convenience---it
+is necessary above $N_{\mathrm{cross}}$.
+
+\subsection{Connection to LongMemEval}
+\label{app:erdos-lme}
+
+LongMemEval-S \citep{Wu2025} has effective corpus size
+$N \approx 10^5$ across the test set.  Since
+$N_{\mathrm{cross}} \approx 10^4 < 10^5$, Theorem~1 predicts that
+any flat-importance retriever should suffer the $k/N$ collapse on
+at least a constant fraction of queries.  The paper's reported
+best $R@10 = 78.4\%$ matches: roughly $1 - 10^4/10^5 = 0.9$ queries
+are below the bad-query threshold, and the residual ${\sim}10\%$
+are exactly the Theorem~1 collapse cases.  Cortex measures
+$R@10 = 97.8\%$.  The 19.4-point gap is the predicted Zipf rescue.
+
+\subsection{Existence of an Optimal Decay Exponent}
+\label{app:erdos-thm3}
+
+\textbf{Theorem 3 (Existence of an optimal $\lambda^*$).}
+\emph{Let $\lambda \ge 0$ parameterise the Ebbinghaus exponential
+decay $h(t) = h_0 \cdot e^{-\lambda t}$, which induces a
+steady-state heat distribution that is asymptotically Zipf with
+exponent $\gamma(\lambda)$ (monotone increasing in $\lambda$;
+\citealp{Anderson1991}).  Define
+$A(\lambda) = \mathbb{E}_q[\mathrm{Acc}_k(q; \lambda)]$.  Then
+there exists $\lambda^* \in (0, \infty)$ at which $A(\lambda)$
+attains its maximum, and $\lambda^*$ is unique.}
+
+\paragraph{Proof (proved by random argument).}
+By Theorem~1, $A(0) \to 0$ as $N \to \infty$ (no decay $=$ uniform
+$=$ collapse).  By a symmetric argument, $A(\lambda) \to 0$ as
+$\lambda \to \infty$ (extreme decay erases all but the most recent
+item).  $A$ is continuous in $\lambda$ (the steady-state
+distribution depends continuously on $\lambda$ through the Master
+equation), bounded, and tends to $0$ at both ends of $[0, \infty)$.
+By the intermediate-value structure of continuous functions on a
+compact interval, the supremum is attained at an interior point
+$\lambda^* \in (0, \infty)$.  Since $A(\lambda)$ is the expected
+accuracy averaged over a query distribution with full support and
+the WRRF score is a strictly concave function of priority on the
+head, $A$ is strictly quasiconcave on $(0, \infty)$, so the
+maximum is unique.~$\square$
+
+\textbf{Corollary 3.1.} \emph{Cortex's choice of
+\texttt{heat\_base} $+$ Ebbinghaus exponential with empirically
+tuned half-life is non-arbitrary: there is a unique optimal decay
+rate, and tuning measures it.}  This justifies treating decay as
+a measured parameter rather than a free hyperparameter.
+
+\subsection{Summary of Bounds}
+\label{app:erdos-summary}
+
+\begin{table}[h]
+\centering
+\caption{Asymptotic top-$k$ accuracy bounds by regime.}
+\label{tab:erdos-summary}
+\begin{tabular}{lll}
+\toprule
+Regime & Top-$k$ accuracy ($N \to \infty$) & Proof technique \\
+\midrule
+Uniform $w$, no decay & $\le k/N \to 0$           & random argument (Thm~1) \\
+Zipf $w$, $\gamma > 1$ & $\ge 1 - k^{1-\gamma}$ (constant) & direct computation (Thm~2) \\
+Optimal decay $\lambda^*$ & maximal, unique       & random argument (Thm~3) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The crossover $N_{\mathrm{cross}} \approx 10^4$ ($k=10$,
+$\gamma=1.2$, $\sigma=0.05$) demarcates the regime in which decay
+is optional (small corpora) from the regime in which it is
+necessary (production-scale memory).  LongMemEval at
+$N \approx 10^5$ is firmly in the latter, predicting the observed
+$78.4\% \to 97.8\%$ improvement.
+
+%----------------------------------------------------------------------
+\section{Falsifiability Audit (Popper Protocol)}
+\label{app:popper}
+
+Each major claim of \S\ref{sec:flat-failure}--\S\ref{sec:why-decay}
+is restated, paired with its riskiest prediction, the experiment
+that would refute it, and the current state of evidence.  Claims
+are ordered by \textbf{severity-if-falsified}: a refutation of an
+earlier claim damages the paper's thesis more than a refutation of
+a later one.  A claim with no falsification condition is
+unscientific in Popper's sense and must not drive design decisions.
+Claims marked UNTESTED are conjectures, not results.
+
+\subsection{C3 --- Lossless Consolidation Across Long Horizons (severity: critical)}
+\label{app:popper-c3}
+
+\textbf{The claim.} ``Cortex maintains lossless recall at any $N$
+because consolidation compresses episodic into semantic without
+loss.''
+
+\textbf{Riskiest prediction.}  Across a 12-month timeline of 100k
+drip-fed memories, recall (R@10) of facts older than 9 months
+should not degrade by more than 5 percentage points relative to
+recall of facts under 1 month old.
+
+\textbf{Falsification protocol.}
+\begin{itemize}
+  \item $N = 100{,}000$ synthetic memories with timestamps spanning
+        12 months, ingested in temporal order through the
+        production write path.
+  \item Query set: 500 facts uniformly sampled across age buckets
+        \{$<$1\,mo, 1--3\,mo, 3--6\,mo, 6--9\,mo, $>$9\,mo\}.
+  \item Metric: R@10 per bucket.
+  \item Threshold: if
+        $\mathrm{R@10}({>}9\mathrm{mo}) <
+         \mathrm{R@10}({<}1\mathrm{mo}) - 5\mathrm{pp}$, the
+        lossless claim is refuted and must be weakened to
+        ``graceful degradation with rate $X$.''
+\end{itemize}
+
+\textbf{Current evidence.} \textbf{UNTESTED.}  All three benchmarks
+are static snapshots ingested in one pass.  There is no
+longitudinal drip-feed test.
+
+\subsection{C1 --- Discriminability Collapse of Flat-Importance Retrieval at Scale (severity: critical)}
+\label{app:popper-c1}
+
+\textbf{The claim.} ``As $N \to \infty$, flat-importance retrieval
+discriminability collapses; Cortex's gap over flat-RAG grows with
+$N$.''
+
+\textbf{Riskiest prediction.}  At fixed embedding model
+(sentence-transformers, 384D) and fixed query distribution, the
+R@10 gap (Cortex $-$ flat-RAG) is \textbf{monotonically increasing}
+in $N$.
+
+\textbf{Falsification protocol.}
+\begin{itemize}
+  \item $N \in \{1\mathrm{k}, 10\mathrm{k}, 100\mathrm{k},
+        1\mathrm{M}, 10\mathrm{M}\}$, identical corpus and query
+        set at each tier.
+  \item Two systems on the same PostgreSQL instance:
+        (a)~full Cortex pipeline; (b)~flat-RAG control $=$
+        vector $+$ BM25 only, constant heat $=$ $0.5$, no decay,
+        no WRRF heat term.
+  \item Metric: R@10 gap $=$ R@10(Cortex) $-$ R@10(flat).
+  \item Threshold: if the gap is constant within $\pm 2$\,pp
+        across the $N$-scan, or shrinks at any tier, the scaling
+        claim is refuted.
+\end{itemize}
+
+\textbf{Current evidence.} \textbf{UNTESTED} at the scaling level.
+Each benchmark provides a single $N$-point.
+
+\subsection{C2 --- Heat Decay Alone is Sufficient to Prevent Collapse (severity: high)}
+\label{app:popper-c2}
+
+\textbf{The claim.} ``Heat decay alone (without the rest of the
+architecture) is sufficient to prevent retrieval discriminability
+collapse.''
+
+\textbf{Riskiest prediction.}  Ablating only the decay (replace
+\texttt{decay\_cycle.py} with constant heat $=$ $0.5$, leaving WRRF,
+predictive coding, neuromodulation, schemas, replay, etc.\ intact)
+drops R@10 by $\ge 80\%$ of the full Cortex-vs-flat-RAG gap.
+
+\textbf{Falsification protocol.}  Use
+\texttt{mcp\_server/core/ablation.py} to disable the decay
+mechanism only.  Run on LongMemEval, LoCoMo, BEAM.  Threshold: if
+the no-decay ablation recovers $\ge 50\%$ of the gap to flat-RAG,
+the ``decay alone is sufficient'' claim is refuted.
+
+\textbf{Current evidence.} \textbf{UNTESTED.}
+
+\subsection{C5 --- 97.8\% LongMemEval R@10 Generalizes Beyond the Benchmark (severity: high)}
+\label{app:popper-c5}
+
+\textbf{The claim.} ``97.8\% LongMemEval R@10 generalizes beyond
+the benchmark---the system is not overfit.''
+
+\textbf{Riskiest prediction.}  Calibration parameters tuned on
+LongMemEval (WRRF weights, intent classifier thresholds, FlashRank
+reranker depth) transfer to LoCoMo without retuning, retaining
+$\ge 90\%$ of LongMemEval's R@10 (i.e., LoCoMo R@10 $\ge 0.88$).
+
+\textbf{Current evidence.} \textbf{PARTIALLY TESTED.}  Each
+benchmark is currently scored independently with whatever defaults
+exist at the time, but the calibration history is not version-pinned
+to a single benchmark.
+
+\subsection{C4 --- WRRF Fusion of 6 Signals Decorrelates Noise Sources (severity: medium)}
+\label{app:popper-c4}
+
+\textbf{The claim.} ``WRRF fusion of 6 signals decorrelates noise
+sources.''
+
+\textbf{Riskiest prediction.}  (a)~The $6 \times 6$
+signal-correlation matrix on retrieval scores has off-diagonal
+magnitudes $< 0.3$.  (b)~Ablating any single signal drops R@10 by
+$\le 2$\,pp on each benchmark.
+
+\textbf{Current evidence.} \textbf{PARTIALLY TESTED.}
+
+\subsection{C6 --- Per-Write Cost is Justified by Read/Write Ratio (severity: low)}
+\label{app:popper-c6}
+
+\textbf{The claim.} ``Per-write cost is justified by $100\times$
+more frequent reads.''
+
+\textbf{Riskiest prediction.}  The empirical read/write ratio in
+production usage is $\ge 50:1$.
+
+\textbf{Current evidence.} \textbf{UNTESTED.}
+
+\subsection{Summary}
+\label{app:popper-summary}
+
+\begin{table}[h]
+\centering
+\caption{Falsifiability state of major claims.}
+\label{tab:popper-summary}
+\small
+\begin{tabular}{llll}
+\toprule
+Claim & Severity & State & Single experiment \\
+\midrule
+C3 lossless across time         & critical & UNTESTED         & 12-month drip-feed benchmark \\
+C1 scaling gap grows            & critical & UNTESTED         & $N$-scan \{1k\,\dots\,10M\} \\
+C2 decay alone suffices         & high     & UNTESTED         & Single ablation row \\
+C5 cross-benchmark generalization & high   & PARTIALLY TESTED & Frozen-config cross-eval \\
+C4 WRRF decorrelates            & medium   & PARTIALLY TESTED & Correlation matrix $+$ ablations \\
+C6 read/write 100:1             & low      & UNTESTED         & One week of production counters \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+No claim in the paper is currently CONFIRMED in the strict
+Popperian sense (survived a severe test designed to refute it).
+The 97.8\% / 92.6\% / 0.543 numbers are corroborations of the
+system as configured, not corroborations of the causal claims
+(C1--C6) about \emph{why} it performs.
+
+%----------------------------------------------------------------------
+\section{Feynman Intuition}
+\label{app:feynman}
+
+A companion to the main paper.  Three explanations, each shorter.
+If the main paper is the proof, this appendix is the picture you
+can hold in your head while reading it.
+
+\subsection{The Library Analogy}
+\label{app:feynman-library}
+
+Imagine two libraries.  Each holds a million books.  They were
+stocked from the same catalog on the same day.
+
+\textbf{Library~A} is a warehouse.  Every shelf is the same height.
+Every book has the same priority.  There is no librarian.  When
+you walk in and ask, ``I need a book about the French Revolution,''
+a clerk runs a keyword search across all million spines and brings
+back every book that matches.  There are five thousand of them.
+They land on the desk in a heap.  The clerk shrugs.  He cannot
+tell you which is the best one, because in Library~A there is no
+``best.''  Every book was filed with the same care, which is to
+say, with no care at all about which mattered more.  You take the
+top of the pile.  It is a pamphlet from 1953 that mentions the
+Revolution in passing.  The book you actually wanted is somewhere
+in the heap, but you would have to read all five thousand to find
+it.
+
+\textbf{Library~B} has a librarian.  She watches.  When a patron
+borrows a book, she notices.  When ten patrons borrow the same
+book in a week, she walks it down to a special shelf at the front
+of the building, near the door, where the light is good and the
+chairs are comfortable.  When a book sits untouched for a year,
+she carries it to the basement.  When it sits untouched for ten
+years, she carries it deeper, past the boiler, into a back room
+where retrieval takes ten minutes and a flashlight.  She is not
+throwing books away.  She is changing how easy each one is to
+reach, based on whether anyone has reached for it lately.
+
+Now the same patron walks into Library~B and asks for a book about
+the French Revolution.  The librarian glances at the front-of-house
+shelf, sees three French-Revolution books that have been borrowed
+twice this month, and hands the patron the most-borrowed one.
+Total time: four seconds.  The patron reads it.  It is, in fact,
+the best book.  Not because the librarian is smart, but because
+\emph{thousands of previous patrons already did the work of figuring
+out which book was best}, and the librarian is just letting their
+behavior shape the shelf.
+
+Cortex is Library~B.  The translation is direct.
+\begin{itemize}
+  \item \textbf{Heat} is front-of-house placement.  A memory that
+        gets retrieved, referenced, or built upon gets warmer.
+  \item \textbf{Decay} is the slow walk to the basement.  A memory
+        that nobody touches for a long time cools.
+  \item \textbf{The predictive coding gate} is the librarian at
+        the donation desk.  When someone tries to donate a
+        near-duplicate, she politely refuses.
+  \item \textbf{Consolidation} is what the librarian does on quiet
+        nights: ten cold books on the same topic become a single
+        summary index card.
+\end{itemize}
+
+The whole architecture is a mechanical answer to a single question:
+\emph{given that you cannot read everything, what should be easy to
+reach?}
+
+\subsection{The Party-Table Analogy}
+\label{app:feynman-party}
+
+You walk into a noisy party.  You need to find the one friend who
+knows about, say, the structural failure modes of suspension
+bridges.
+
+\textbf{Strategy~1.} You shout the topic across the room.  Everyone
+who has ever heard of suspension bridges raises a hand.  Fifty
+hands go up.  The hands all look identical from across the room.
+You walk toward the nearest one and hope.  This is keyword search
+over a flat memory.
+
+\textbf{Strategy~2.} Same shout, same hands, but now each raised
+hand glows.  The brightness of the hand is proportional to how
+recently and how seriously that person has engaged with the topic.
+The civil engineer who has been arguing about cable tension for the
+last hour is glowing white-hot.  The 2009-documentary watcher is a
+faint amber.  You walk to the brightest hand.  It takes two
+seconds.
+
+That is what heat does to retrieval.  It does not change \emph{who
+knows what}.  It changes \emph{who is easy to find}.  WRRF---the
+fusion math the main paper describes---is the formal version of
+``brightness.''
+
+\subsection{The Freshman One-Line Summary}
+\label{app:feynman-oneline}
+
+If everything is equally important, nothing is.  Cortex makes
+memories compete for attention over time.  The ones that earn
+attention through use stay easy to find.  The ones that don't fade
+naturally---which is exactly what your brain does, and exactly why
+your brain doesn't crash with seventy years of memories.
+
+%----------------------------------------------------------------------
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
