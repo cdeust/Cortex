@@ -62,7 +62,7 @@ A new mechanism PR must include:
 
 1. **Primary citation.** What published neuroscience or cognitive-science
    work motivates this mechanism? Include the paper's bibliographic
-   reference in `docs/science.md`.
+   reference in `docs/papers/science.md`.
 2. **The mathematical form.** Equations or pseudocode showing the exact
    computation. If you're adapting an algorithm from the literature,
    call out the divergence and justify it.

@@ -4,7 +4,7 @@
 **Status:** PRE-REGISTERED DRAFT v3 (Haiku-then-Gemini sequencing, 2026-04-30) — freezes on commit `<TBD>` (the commit that lands this file plus the harness skeleton at `benchmarks/llm_head_to_head/`).
 - v1 → v2: generator panel switched from Sonnet 4.6 + Opus 4.7-1M to Haiku 4.5 + GPT-4o mini + Gemini 2.0 Flash; judge mode now cross-vendor; cost drop ~30× on full panel.
 - v2 → v3: GPT-4o mini dropped (user lock-in to Anthropic + Google).  Stage 2 now runs **sequentially**: Stage 2.1 Haiku 4.5 (primary, production claim), Stage 2.2 Gemini 2.0 Flash (cross-vendor validation, fires only after 2.1 reviewed).  Combined Stage 2 cost ~$40–55.
-**Companions:** `tasks/verification-protocol.md` (Fisher template), `tasks/verification-measurement-discipline.md` (Curie HARD-STOP), `tasks/hnsw-determinism-playbook.md` (DB reproducibility), `docs/papers/thermodynamic-memory-vs-flat-importance.md` (paper under validation), `docs/arxiv/main.tex` (prior BEAM-10M assembler claim: MRR 0.471 vs flat 0.353).
+**Companions:** `tasks/verification-protocol.md` (Fisher template), `tasks/verification-measurement-discipline.md` (Curie HARD-STOP), `tasks/hnsw-determinism-playbook.md` (DB reproducibility), `docs/papers/thermodynamic-memory-vs-flat-importance.md` (paper under validation), `docs/arxiv-context-assembly/main.tex` (prior BEAM-10M assembler claim: MRR 0.471 vs flat 0.353).
 **Critique this protocol closes:** *"You measured retrieval quality without an LLM in the loop, so you can't claim you're better."*  This protocol is the LLM-stage extension that converts retrieval-quality numbers into end-to-end answer accuracy.
 **Pre-registration discipline:** OSF-style. After freeze, the analysis is locked. Post-hoc analyses are reported separately as **exploratory**, never relabelled confirmatory.
 
@@ -140,7 +140,7 @@ n=100 stratified items (10 per ability, seed `20260502`).  3 raters score blindl
 ## 5. Sample size and minimum detectable effect (MDE)
 
 ### Population size
-**BEAM-10M total questions = 196** (Tavakoli et al. 2026, Table 2 / `docs/arxiv/main.tex` line 1219: "Each conversation is probed with 20 questions (196 total at 10M due to ...)" ; reproduced in `benchmarks/beam/run_benchmark.py`).  Stratified by 10 abilities (~20 per ability, with abstention skewed lower).
+**BEAM-10M total questions = 196** (Tavakoli et al. 2026, Table 2 / `docs/arxiv-context-assembly/main.tex` line 1219: "Each conversation is probed with 20 questions (196 total at 10M due to ...)" ; reproduced in `benchmarks/beam/run_benchmark.py`).  Stratified by 10 abilities (~20 per ability, with abstention skewed lower).
 
 This is the universe.  We do not subsample for the full run — we use all 196 items.  This is unusual luxury vs the task brief's assumption of 6 000 questions; the protocol exploits it.
 
@@ -428,7 +428,7 @@ Each appendix is a separate file owned by the engineer agent; this protocol lock
 - Lewis, P., et al. (2020). *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*. NeurIPS.  (Condition B reference architecture.)
 - Landis, J. R. & Koch, G. G. (1977). *The measurement of observer agreement for categorical data*. Biometrics 33:159–174.  (κ ≥ 0.70 substantial-agreement threshold.)
 - Popper, K. (1959). *The Logic of Scientific Discovery*. Routledge.  (Falsifiability framing of §9.)
-- Cortex prior work: `docs/papers/thermodynamic-memory-vs-flat-importance.md`; `docs/arxiv/main.tex` §BEAM-10M (assembler MRR 0.471 vs flat 0.353).
+- Cortex prior work: `docs/papers/thermodynamic-memory-vs-flat-importance.md`; `docs/arxiv-context-assembly/main.tex` §BEAM-10M (assembler MRR 0.471 vs flat 0.353).
 
 ---
 

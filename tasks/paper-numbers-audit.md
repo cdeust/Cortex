@@ -3,7 +3,7 @@
 **Audited:** 2026-04-30
 **Auditor:** data-scientist agent
 **Scope:** every numerical benchmark claim in `docs/arxiv-thermodynamic/main.tex`,
-cross-referenced against `benchmarks/results/`, `CLAUDE.md`, `docs/papers/thermodynamic-memory-vs-flat-importance.md`, and `docs/arxiv/main.tex`.
+cross-referenced against `benchmarks/results/`, `CLAUDE.md`, `docs/papers/thermodynamic-memory-vs-flat-importance.md`, and `docs/arxiv-context-assembly/main.tex`.
 
 ## Summary
 
@@ -13,7 +13,7 @@ cross-referenced against `benchmarks/results/`, `CLAUDE.md`, `docs/papers/thermo
 - **STALE / WITHIN TOLERANCE:** 4 (post-refactor benchmarks deviate by ≤0.5pp from cited values; all PASS the project's own ≤0.5pp design-doc tolerance, but cited number predates the refactor)
 - **UNVERIFIABLE:** 1 (LongMemEval paper-best 78.4% — external citation, not a Cortex result)
 - **SMOKE-TEST FLAGGED:** 0 numbers from smoke-test artifacts found in this paper
-- **NOT FOUND in this paper:** the 27pp decay-sweep claim and the BEAM-10M 0.471 / 0.353 / +33.4% claims (those live in `docs/arxiv/main.tex`, not in arxiv-thermodynamic). Verified separately for cross-paper consistency.
+- **NOT FOUND in this paper:** the 27pp decay-sweep claim and the BEAM-10M 0.471 / 0.353 / +33.4% claims (those live in `docs/arxiv-context-assembly/main.tex`, not in arxiv-thermodynamic). Verified separately for cross-paper consistency.
 
 ## Audit Table
 
@@ -34,15 +34,15 @@ cross-referenced against `benchmarks/results/`, `CLAUDE.md`, `docs/papers/thermo
 | 13 | LongMemEval-S N≈10⁴ corpus, 500 questions | main.tex:826, 1032 | LongMemEval paper (Wu 2025) standard parameters | 500 questions standard | VERIFIED | Matches public benchmark spec. |
 | 14 | C5 generalization claim: LoCoMo R@10 ≥ 0.88 | main.tex:1204 | `CLAUDE.md:346` (92.6%) → 0.926 ≥ 0.88 | satisfied | VERIFIED | Predicted threshold met. |
 
-## Cross-paper consistency check (`docs/arxiv/main.tex`, prior paper)
+## Cross-paper consistency check (`docs/arxiv-context-assembly/main.tex`, prior paper)
 
 The user requested verification of BEAM-10M numbers cited in the prior paper:
 
 | Claim | Prior-paper line | Source | Source value | Status |
 |---|---|---|---|---|
-| BEAM-10M MRR 0.471 (assembler) | `docs/arxiv/main.tex:46, 1448, 1684, 1691, 2295` | `a3_locomo_post_refactor.md:49` (README floor ≥0.471); `a3_beam_100k_post_refactor.md:68` (README floor 0.471) | 0.471 floor | VERIFIED (consistent with floor) — note: this is the floor, not a freshly-measured number; prior paper treats it as the headline assembler result. |
-| BEAM-10M flat MRR 0.353 | `docs/arxiv/main.tex:35, 148, 1448` | `docs/arxiv/main.tex` self-reports | 0.353 | UNVERIFIABLE LOCALLY (no `benchmarks/results/beam_10m/...` artifact present in this audit's scope; prior paper's measurement) |
-| +33.4% improvement | `docs/arxiv/main.tex:46, 225, 1448, 2004` | Derived: (0.471−0.353)/0.353 = 33.4% | 33.4% | VERIFIED (arithmetic) given the two source values. |
+| BEAM-10M MRR 0.471 (assembler) | `docs/arxiv-context-assembly/main.tex:46, 1448, 1684, 1691, 2295` | `a3_locomo_post_refactor.md:49` (README floor ≥0.471); `a3_beam_100k_post_refactor.md:68` (README floor 0.471) | 0.471 floor | VERIFIED (consistent with floor) — note: this is the floor, not a freshly-measured number; prior paper treats it as the headline assembler result. |
+| BEAM-10M flat MRR 0.353 | `docs/arxiv-context-assembly/main.tex:35, 148, 1448` | `docs/arxiv-context-assembly/main.tex` self-reports | 0.353 | UNVERIFIABLE LOCALLY (no `benchmarks/results/beam_10m/...` artifact present in this audit's scope; prior paper's measurement) |
+| +33.4% improvement | `docs/arxiv-context-assembly/main.tex:46, 225, 1448, 2004` | Derived: (0.471−0.353)/0.353 = 33.4% | 33.4% | VERIFIED (arithmetic) given the two source values. |
 
 ## 27pp decay-sweep claim
 

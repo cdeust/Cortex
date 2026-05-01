@@ -11,7 +11,7 @@ The result that matters: the architecture works **without oracle labels**. Using
 The architecture was designed in September 2025 for generating 9-page PRDs on Apple Intelligence's 4096-token context window. Publicly verifiable commit: github.com/cdeust/ai-prd-builder, commit 462de01 — one month before the BEAM paper existed.
 
 **Paper:** "Stage-Aware Context Assembly for Long-Context Memory Retrieval"
-**LaTeX source ready:** github.com/cdeust/Cortex/docs/arxiv/
+**LaTeX source ready:** github.com/cdeust/Cortex/docs/arxiv-context-assembly/
 **Repo (MIT, open source):** github.com/cdeust/Cortex
 
 Other benchmark results:
@@ -37,7 +37,7 @@ Looking for an **arxiv endorser** for cs.IR.
 Built a memory system that scores +33.4% on BEAM-10M (ICLR 2026) — without oracle labels, using only timestamps. The architecture was designed in Sept 2025, one month before BEAM existed.
 
 Paper: "Stage-Aware Context Assembly for Long-Context Memory Retrieval"
-Repo: github.com/cdeust/Cortex (MIT, LaTeX source in docs/arxiv/)
+Repo: github.com/cdeust/Cortex (MIT, LaTeX source in docs/arxiv-context-assembly/)
 
 97.8% R@10 LongMemEval | 92.6% R@10 LoCoMo | 0.471 MRR BEAM-10M
 

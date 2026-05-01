@@ -222,7 +222,7 @@ All scores on fresh database (DROP + CREATE per run), TRUNCATE between conversat
 
 Cortex doesn't store memories the way a database stores rows. It treats them more like a brain treats experiences.
 
-**Memories have temperature.** Every memory starts hot. Access it and it stays hot. Ignore it and it cools. Below a threshold, it compresses: full text → summary → keywords → fades entirely. This isn't a bug — it's [rate-distortion optimal forgetting](docs/science.md), the same mathematical framework your brain uses to decide what's worth keeping. Important memories resist compression. Surprising ones get a heat boost. Boring, redundant ones quietly disappear. *(Anderson & Lebiere 1998; Ebbinghaus 1885)*
+**Memories have temperature.** Every memory starts hot. Access it and it stays hot. Ignore it and it cools. Below a threshold, it compresses: full text → summary → keywords → fades entirely. This isn't a bug — it's [rate-distortion optimal forgetting](docs/papers/science.md), the same mathematical framework your brain uses to decide what's worth keeping. Important memories resist compression. Surprising ones get a heat boost. Boring, redundant ones quietly disappear. *(Anderson & Lebiere 1998; Ebbinghaus 1885)*
 
 **Storage has a gatekeeper.** Not everything deserves to be remembered. Cortex maintains a predictive model of what it already knows, and only stores information that violates its expectations. Tell it the same thing twice and the write gate blocks the second attempt. This is predictive coding — the same mechanism your neocortex uses to filter sensory input. Only prediction errors get through. *(Friston 2005; Bastos et al. 2012)*
 
@@ -234,7 +234,7 @@ Cortex doesn't store memories the way a database stores rows. It treats them mor
 
 **Similar memories stay distinct.** Pattern separation — modeled on the dentate gyrus, which keeps "Tuesday's standup" separate from "Wednesday's standup" even though they're almost identical. Without this, retrieval returns the same generic match for every similar query. *(Leutgeb et al. 2007; Yassa & Stark 2011)*
 
-**41 papers total.** Every algorithm, constant, and threshold traces to a published source. Full citations, equations, ablation data, and per-module implementation audit: **[docs/science.md](docs/science.md)** | **[Research post on structured context assembly](docs/research-post-context-assembly.md)**
+**41 papers total.** Every algorithm, constant, and threshold traces to a published source. Full citations, equations, ablation data, and per-module implementation audit: **[docs/papers/science.md](docs/papers/science.md)** | **[Research post on structured context assembly](docs/research-post-context-assembly.md)**
 
 ---
 
