@@ -492,7 +492,7 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
 -- igraph DrL on CPU) and persists the result here so the viz can ship
 -- coordinates with each node — eliminating the d3-force tick cost in
 -- the browser. ``topology_fingerprint`` tracks which graph build the
--- coordinates were computed against; the tile + quadtree endpoints
+-- coordinates were computed against. The tile and quadtree endpoints
 -- read them by ``layout_version`` so a stale layout never serves
 -- alongside fresh nodes.
 CREATE TABLE IF NOT EXISTS workflow_graph_layout (
