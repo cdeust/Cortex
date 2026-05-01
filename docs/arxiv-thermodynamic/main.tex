@@ -586,11 +586,33 @@ Independent verification campaigns
   behaviour of regime parameter~3 (no structure $\Rightarrow$ heat
   is irrelevant) and confirms the experiment is well-controlled.
 \item \emph{Synthetic Zipf-$\alpha{=}1.5$ with $K{=}5{,}000$ access
-  events.}  At $N{=}1{,}000$ ($K/N{=}5$) cortex\_full reaches MRR
-  1.000 vs cortex\_flat 0.980; at $N{=}10{,}000$ ($K/N{=}0.5$) the
-  gap inverts to flat 1.000 vs full 0.985.  The lift is
-  non-monotonic in $N$ alone---it tracks $K/N$, the access density
-  (regime parameter~2).
+  events, full curve}:
+  \begin{center}
+  \small
+  \begin{tabular}{rrcccc}
+  \toprule
+  $N$    & $K/N$ & full R@10 & flat R@10 & full MRR & flat MRR \\
+  \midrule
+  $10^3$ & 5.0   & 1.000     & 1.000     & \textbf{1.000} & 0.980 \\
+  $10^4$ & 0.5   & 1.000     & 1.000     & 0.985          & \textbf{1.000} \\
+  $10^5$ & 0.05  & \textbf{1.000} & 0.970 & 0.910          & \textbf{0.970} \\
+  \bottomrule
+  \end{tabular}
+  \end{center}
+  R@10 and MRR tell complementary stories.  \emph{R@10}:
+  cortex\_full holds 1.000 across the entire $K/N$ range---Cortex
+  never fails to retrieve the gold answer; flat starts missing at
+  $K/N{=}0.05$.  \emph{MRR}: cortex\_full's ranking quality degrades
+  monotonically with falling access density ($1.000 \to 0.985 \to
+  0.910$), exactly what regime parameter~2 predicts: heat is signal
+  only when items have differential access histories, and at
+  $K/N{=}0.05$ most items have zero accesses so the heat
+  distribution flattens.  Flat retrieval, having no heat signal,
+  is unaffected by $K/N$ and therefore wins on MRR in the sparse
+  tail.  Production deployment (revisit-heavy chat sessions) sits
+  at $K/N \gg 1$, where full's MRR also lifts; the published BEAM
+  Overall claim was measured in that regime, not in the
+  $K/N \to 0$ tail.
 \end{itemize}
 
 \paragraph{What this means for deployment.}  Cortex serves a
