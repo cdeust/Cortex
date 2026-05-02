@@ -560,6 +560,123 @@ def emotional_retrieval_rerank(
     return _rrf_blend(candidates, mech_ranks, blend_beta)
 
 
+# ── RECONSOLIDATION stage ──────────────────────────────────────────────
+# Nader, Schafe & LeDoux (2000), Nature 406(6797). On retrieval a memory
+# becomes labile and may be re-stored with modifications. Wired here as
+# the final post-WRRF stage so the mutation reflects the FINAL ranking
+# (i.e., what the user actually saw), not the raw WRRF output.
+#
+# This stage MUTATES the store (heat bump + last_accessed update +
+# optional valence shift). All other post-WRRF stages are pure ranking.
+# The mutation is bounded (heat_delta ∈ [-0.10, +0.05], valence_delta ∈
+# [-0.10, +0.10] — see reconsolidation.compute_reconsolidation_action)
+# and idempotent within a recall: each candidate is touched at most once.
+
+
+def reconsolidation_apply(
+    candidates: list[dict[str, Any]],
+    query: str,
+    store: Any,
+    *,
+    top_k: int | None = None,
+) -> list[dict[str, Any]]:
+    """Apply Nader-2000 reconsolidation to the top-K retrieved candidates.
+
+    For each candidate (up to ``top_k``, default = all): compute the
+    reconsolidation action via `compute_reconsolidation_action`, then
+    apply the resulting heat / valence / last_accessed deltas to the
+    store. The candidate list itself is returned unchanged in shape;
+    in-place mutation of the candidate dicts reflects the new heat /
+    valence values so downstream consumers see consistent state.
+
+    Disabled when ``CORTEX_ABLATE_RECONSOLIDATION=1`` — returns input
+    unchanged with zero store writes. The same env var is also honored
+    inside `decide_action`; this top-level guard skips the per-candidate
+    iteration and store calls entirely when ablated.
+
+    Store contract — uses only methods already on ``PgMemoryStore``:
+      - ``bump_heat_raw(memory_id, new_heat_base)`` for the heat delta
+      - ``update_memory_access(memory_id)`` for last_accessed + access_count
+      - ``update_memory_emotional_valence(memory_id, valence)`` (optional)
+
+    A store stub lacking any of these methods → that mutation is silently
+    skipped (test fixtures don't all implement the full A3 surface).
+    Failures inside individual store calls are caught per-candidate so
+    one bad row never fails the whole recall.
+
+    Source: Nader, Schafe & LeDoux (2000), Nature 406(6797). Bower (1981)
+    Am. Psychologist 36(2). Engineering defaults documented in
+    `reconsolidation.compute_reconsolidation_action`.
+    """
+    if is_mechanism_disabled(Mechanism.RECONSOLIDATION):
+        return candidates
+    if not candidates:
+        return candidates
+    if store is None:
+        return candidates
+
+    from mcp_server.core.reconsolidation import compute_reconsolidation_action
+    from mcp_server.shared.vader import vader_compound
+
+    q_valence = vader_compound(query) if query else 0.0
+    q_tokens: set[str] = {
+        t.strip(".,!?;:()[]{}\"'`").lower() for t in (query or "").split() if len(t) > 2
+    }
+
+    limit = len(candidates) if top_k is None else min(top_k, len(candidates))
+    has_bump = hasattr(store, "bump_heat_raw")
+    has_access = hasattr(store, "update_memory_access")
+    has_valence = hasattr(store, "update_memory_emotional_valence")
+
+    for c in candidates[:limit]:
+        try:
+            outcome = compute_reconsolidation_action(
+                c,
+                query,
+                embedding_similarity=None,
+                current_directory="",
+                context_tokens=q_tokens,
+                query_valence=q_valence,
+            )
+        except Exception:  # noqa: BLE001 — non-load-bearing per-candidate
+            continue
+
+        if outcome.action == "none" and outcome.heat_delta == 0.0:
+            continue
+
+        # Heat: read current heat_base (best-effort from candidate dict),
+        # apply delta, clamp to [0, 1], write through bump_heat_raw.
+        if has_bump and outcome.heat_delta != 0.0:
+            try:
+                cur_heat = float(c.get("heat", 0.5) or 0.5)
+                new_heat = max(0.0, min(1.0, cur_heat + outcome.heat_delta))
+                store.bump_heat_raw(c["memory_id"], new_heat)
+                c["heat"] = new_heat  # reflect in candidate for downstream use
+            except Exception:  # noqa: BLE001
+                pass
+
+        # last_accessed + access_count refresh.
+        if has_access and outcome.update_last_accessed:
+            try:
+                store.update_memory_access(c["memory_id"])
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Optional valence shift (only when the store supports it AND the
+        # outcome carries a non-zero shift — Bower 1981 mood-congruent
+        # re-storage). Clamped to [-1, +1].
+        if has_valence and outcome.valence_delta != 0.0:
+            try:
+                cur_val = float(c.get("emotional_valence", 0.0) or 0.0)
+                new_val = max(-1.0, min(1.0, cur_val + outcome.valence_delta))
+                store.update_memory_emotional_valence(c["memory_id"], new_val)
+                c["emotional_valence"] = new_val
+            except Exception:  # noqa: BLE001
+                pass
+
+    return candidates
+
+
 # ── MOOD_CONGRUENT_RERANK stage ────────────────────────────────────────
 # Bower (1981) mood-state-dependent recall: a person in a given mood
 # preferentially recalls memories acquired (or stored) in that same mood.

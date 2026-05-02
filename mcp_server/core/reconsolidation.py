@@ -206,3 +206,173 @@ def update_stability(
     if access_count > 5:
         return max(current_stability - increment * 0.5, 0.0)
     return current_stability
+
+
+# ── Recall-time reconsolidation action ─────────────────────────────────
+#
+# Recall-time bridge between the retrieval candidate dict (heat, content,
+# emotional_valence, last_accessed) and the labile-rewrite decision logic
+# (compute_mismatch + decide_action). This is the function the post-WRRF
+# RECONSOLIDATION stage in `recall_pipeline.py` calls per top-K candidate.
+#
+# Source: Nader, Schafe & LeDoux (2000) Nature 406(6797): retrieval renders
+# a memory labile for a window during which it can be re-stored with
+# modifications. Bower (1981) Am. Psychologist 36(2): retrieval context's
+# affective valence biases the re-stored emotional tag.
+#
+# Engineering defaults — heat / valence step magnitudes are not paper-
+# prescribed (the papers establish the *qualitative* mechanism, not numeric
+# step sizes for a tag-and-vector memory store). Defaults are conservative
+# and labelled "engineering default, calibration pending" per the source-
+# discipline rule (CLAUDE.md §8). Calibration belongs to the same blend-
+# weight grid that owns HOPFIELD/HDC/SA/DENDRITIC/EMOTIONAL betas
+# (tasks/blend-weight-calibration.md).
+
+
+@dataclass
+class ReconsolidationOutcome:
+    """Result of evaluating one retrieved candidate for reconsolidation.
+
+    Fields:
+      action: from `decide_action` — "none" / "update" / "archive".
+      heat_delta: signed change to apply to the memory's heat_base.
+        Positive on successful retrieval (Nader 2000 — re-storage
+        strengthens), negative on archive (extinction regime).
+      valence_delta: signed change to emotional_valence; non-zero only
+        when the query carries a Bower-style affective load and the
+        action is "update".
+      update_last_accessed: whether the store should refresh
+        last_accessed (typically True on any non-no-op outcome).
+      mismatch: the multi-signal mismatch in [0, 1] for diagnostics.
+      prediction_error: PE-gated mismatch from `decide_action`.
+    """
+
+    action: Literal["none", "update", "archive"]
+    heat_delta: float = 0.0
+    valence_delta: float = 0.0
+    update_last_accessed: bool = False
+    mismatch: float = 0.0
+    prediction_error: float = 0.0
+
+
+# Engineering defaults (calibration pending — see tasks/blend-weight-calibration.md).
+# Bounded so the recall-time bump can never dominate the thermodynamic decay
+# signal that drives the heat WRRF weight; these are tie-breakers, not filters.
+_RECONS_HEAT_BUMP_UPDATE: float = 0.05
+_RECONS_HEAT_BUMP_NONE: float = 0.02  # successful passive retrieval
+_RECONS_HEAT_BUMP_ARCHIVE: float = -0.10
+_RECONS_VALENCE_STEP: float = 0.10  # |Δvalence| per "update" with non-neutral query
+_RECONS_QUERY_VALENCE_FLOOR: float = 0.10  # below this, query is treated as neutral
+
+
+def compute_reconsolidation_action(
+    memory: dict,
+    query: str,
+    *,
+    embedding_similarity: float | None = None,
+    current_directory: str = "",
+    context_tokens: set[str] | None = None,
+    query_valence: float = 0.0,
+) -> ReconsolidationOutcome:
+    """Decide what to do to a memory given the current retrieval context.
+
+    Pure: takes the memory dict (as produced by recall) + query context,
+    returns a ReconsolidationOutcome the caller applies via the store.
+    Composes `compute_mismatch` + `decide_action` and translates the
+    abstract action into concrete heat / valence / timestamp deltas.
+
+    Preconditions: memory is a non-None dict containing at least
+    ``memory_id``; query is a string (may be empty).
+    Postconditions: returns a ReconsolidationOutcome whose action is one of
+    {"none", "update", "archive"}; heat_delta is bounded to
+    [-0.10, +0.05]; valence_delta is bounded to [-0.10, +0.10].
+
+    Source: Nader, Schafe & LeDoux (2000), Nature 406(6797). Retrieval
+    triggers a labile window during which the memory is re-stored with
+    modifications. Bower (1981) Am. Psychologist 36(2): mood-congruent
+    re-storage. Yonelinas & Ritchey (2015) emotional gain.
+
+    Honors `CORTEX_ABLATE_RECONSOLIDATION=1` via `decide_action`'s
+    internal gate (returns action="none"). The stage-level guard in
+    `recall_pipeline.reconsolidation_apply` short-circuits earlier so this
+    function is not even called when ablated, but the deeper guard means
+    direct callers (e.g. tests) also see the no-op behavior.
+    """
+    if memory is None:
+        return ReconsolidationOutcome(action="none")
+
+    tags_raw = memory.get("tags") or []
+    if isinstance(tags_raw, str):
+        memory_tags: set[str] = {tags_raw}
+    else:
+        memory_tags = {str(t) for t in tags_raw}
+
+    ctx_tokens = context_tokens if context_tokens is not None else set()
+
+    mismatch = compute_mismatch(
+        embedding_similarity=embedding_similarity,
+        memory_directory=memory.get("directory", "") or "",
+        current_directory=current_directory or "",
+        memory_last_accessed=memory.get("last_accessed"),
+        memory_tags=memory_tags,
+        context_tokens=ctx_tokens,
+    )
+
+    decision = decide_action(
+        mismatch,
+        stability=float(memory.get("stability", 0.0) or 0.0),
+        plasticity=float(memory.get("plasticity", 1.0) or 1.0),
+        is_protected=bool(memory.get("is_protected", False)),
+        emotional_arousal=abs(float(memory.get("emotional_valence", 0.0) or 0.0)),
+        age_days=float(memory.get("age_days", 0.0) or 0.0),
+    )
+
+    if decision.action == "archive":
+        return ReconsolidationOutcome(
+            action="archive",
+            heat_delta=_RECONS_HEAT_BUMP_ARCHIVE,
+            valence_delta=0.0,
+            update_last_accessed=True,
+            mismatch=mismatch,
+            prediction_error=decision.prediction_error,
+        )
+
+    if decision.action == "update":
+        # Re-storage in the labile window. Heat bump scaled by
+        # emotional_multiplier (Yonelinas & Ritchey 2015) so emotionally-
+        # loaded memories receive proportionally larger reconsolidation
+        # gain (≤ 1.8x at full arousal).
+        heat_delta = _RECONS_HEAT_BUMP_UPDATE * decision.emotional_multiplier
+        # Cap the bump at the same magnitude as the bound documented in
+        # ReconsolidationOutcome's contract — Yonelinas multiplier can push
+        # us above _RECONS_HEAT_BUMP_UPDATE alone.
+        heat_delta = min(heat_delta, _RECONS_HEAT_BUMP_UPDATE * 2.0)
+        valence_delta = 0.0
+        if abs(query_valence) >= _RECONS_QUERY_VALENCE_FLOOR:
+            # Bower (1981): the retrieval context's affective load shifts
+            # the re-stored emotional tag toward the current mood. Step
+            # bounded so a single retrieval cannot flip valence sign.
+            sign = 1.0 if query_valence > 0 else -1.0
+            valence_delta = sign * _RECONS_VALENCE_STEP
+        return ReconsolidationOutcome(
+            action="update",
+            heat_delta=heat_delta,
+            valence_delta=valence_delta,
+            update_last_accessed=True,
+            mismatch=mismatch,
+            prediction_error=decision.prediction_error,
+        )
+
+    # action == "none" — passive retrieval, small thermodynamic touch.
+    # Below mismatch threshold the memory is not re-stored, but the
+    # retrieval event still updates last_accessed (Nader 2000 implies
+    # access tracking even without re-storage, since the labile window
+    # opens regardless).
+    return ReconsolidationOutcome(
+        action="none",
+        heat_delta=_RECONS_HEAT_BUMP_NONE,
+        valence_delta=0.0,
+        update_last_accessed=True,
+        mismatch=mismatch,
+        prediction_error=decision.prediction_error,
+    )

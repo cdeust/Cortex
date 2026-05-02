@@ -39,6 +39,12 @@ class _Store:
 
     def __init__(self, n: int = 12) -> None:
         self.n = n
+        # RECONSOLIDATION write counters — set by bump_heat_raw /
+        # update_memory_access so the smoke test can observe the active
+        # vs ablated delta as N store calls vs 0.
+        self.bump_calls: int = 0
+        self.access_calls: int = 0
+        self.last_heats: dict[int, float] = {}
         self._mems: dict[int, dict] = {}
         for i in range(n):
             tokens = ["alpha", "beta", "gamma", "delta", "epsilon"]
@@ -115,6 +121,16 @@ class _Store:
     def search_by_tag_vector(self, *args, **kwargs):
         return []
 
+    # RECONSOLIDATION-stage write surface (see reconsolidation_apply).
+    # Real PgMemoryStore exposes the same names; here we count calls and
+    # record the new heat so the smoke test can observe the active delta.
+    def bump_heat_raw(self, memory_id: int, new_heat_base: float) -> None:
+        self.bump_calls += 1
+        self.last_heats[memory_id] = float(new_heat_base)
+
+    def update_memory_access(self, memory_id: int) -> None:
+        self.access_calls += 1
+
 
 @contextmanager
 def _ablate(env_name: str | None):
@@ -132,7 +148,9 @@ def _ablate(env_name: str | None):
             os.environ[env_name] = prev
 
 
-def _run(env_name: str | None) -> tuple[list[int], list[float], float]:
+def _run(
+    env_name: str | None,
+) -> tuple[list[int], list[float], float, int, int]:
     store = _Store()
     embs = _Embeddings()
     t0 = time.perf_counter()
@@ -149,15 +167,22 @@ def _run(env_name: str | None) -> tuple[list[int], list[float], float]:
             rerank=False,  # disable FlashRank to isolate pipeline effects
         )
     dt = time.perf_counter() - t0
-    return [c["memory_id"] for c in out], [round(c["score"], 6) for c in out], dt
+    return (
+        [c["memory_id"] for c in out],
+        [round(c["score"], 6) for c in out],
+        dt,
+        store.bump_calls,
+        store.access_calls,
+    )
 
 
 def main() -> None:
     print("=== Recall pipeline smoke ===")
-    base_ids, base_scores, base_dt = _run(None)
+    base_ids, base_scores, base_dt, base_bumps, base_accesses = _run(None)
     print(f"baseline ids: {base_ids}")
     print(f"baseline scores: {base_scores}")
     print(f"baseline latency: {base_dt * 1000:.2f} ms")
+    print(f"baseline reconsolidation bumps: {base_bumps}, accesses: {base_accesses}")
 
     mechs = [
         "CORTEX_ABLATE_HOPFIELD",
@@ -166,26 +191,43 @@ def main() -> None:
         "CORTEX_ABLATE_DENDRITIC_CLUSTERS",
         "CORTEX_ABLATE_EMOTIONAL_RETRIEVAL",
         "CORTEX_ABLATE_MOOD_CONGRUENT_RERANK",
+        "CORTEX_ABLATE_RECONSOLIDATION",
     ]
     deltas = {}
     for env in mechs:
-        ids, scores, dt = _run(env)
+        ids, scores, dt, bumps, accesses = _run(env)
         ids_diff = ids != base_ids
         scores_diff = scores != base_scores
+        # RECONSOLIDATION's observable signal is store-side (heat bumps +
+        # last_accessed updates), not ranking. Ablating it must drop both
+        # counters to 0; not ablating it must produce N>0 calls.
+        if env == "CORTEX_ABLATE_RECONSOLIDATION":
+            store_diff = bumps != base_bumps or accesses != base_accesses
+        else:
+            store_diff = False
         deltas[env] = {
             "ids_changed": ids_diff,
             "scores_changed": scores_diff,
+            "store_writes_changed": store_diff,
+            "bumps": bumps,
+            "accesses": accesses,
             "latency_ms": round(dt * 1000, 2),
             "ids": ids,
             "scores": scores,
         }
-        print(f"\n{env}: ids_changed={ids_diff} scores_changed={scores_diff}")
+        print(
+            f"\n{env}: ids_changed={ids_diff} scores_changed={scores_diff}"
+            f" store_writes_changed={store_diff}"
+            f" (bumps {bumps} vs {base_bumps}, accesses {accesses} vs {base_accesses})"
+        )
         print(f"  ids: {ids}")
         print(f"  latency: {dt * 1000:.2f} ms")
 
-    # All six must produce a non-trivial delta.
+    # All seven must produce a non-trivial delta (ranking OR store writes).
     failures = [
-        k for k, v in deltas.items() if not (v["ids_changed"] or v["scores_changed"])
+        k
+        for k, v in deltas.items()
+        if not (v["ids_changed"] or v["scores_changed"] or v["store_writes_changed"])
     ]
     print("\n=== Summary ===")
     print(
@@ -196,7 +238,7 @@ def main() -> None:
     if failures:
         print(f"\nFAIL: zero-delta mechanisms (wiring bug): {failures}")
         raise SystemExit(1)
-    print("\nPASS: all 6 mechanisms produce observable deltas.")
+    print(f"\nPASS: all {len(mechs)} mechanisms produce observable deltas.")
 
 
 if __name__ == "__main__":

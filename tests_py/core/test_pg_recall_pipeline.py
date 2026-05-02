@@ -27,6 +27,7 @@ from mcp_server.core.recall_pipeline import (
     hdc_rerank,
     hopfield_complete,
     mood_congruent_rerank,
+    reconsolidation_apply,
     spreading_activation_expand,
 )
 
@@ -447,6 +448,67 @@ def test_mood_congruent_active_promotes_congruent_valence():
     out_ids = [c["memory_id"] for c in out]
     # Candidate 0 (+0.8) is closest to mood +0.7 → must rank above 3 (-0.8).
     assert out_ids.index(0) < out_ids.index(3)
+
+
+# ── RECONSOLIDATION (Nader 2000) ───────────────────────────────────────
+
+
+class _ReconsStore:
+    """Store stub recording reconsolidation_apply's mutation surface."""
+
+    def __init__(self) -> None:
+        self.bumps: list[tuple[int, float]] = []
+        self.accesses: list[int] = []
+        self.valences: list[tuple[int, float]] = []
+
+    def bump_heat_raw(self, memory_id: int, new_heat_base: float) -> None:
+        self.bumps.append((memory_id, float(new_heat_base)))
+
+    def update_memory_access(self, memory_id: int) -> None:
+        self.accesses.append(memory_id)
+
+    def update_memory_emotional_valence(self, memory_id: int, valence: float) -> None:
+        self.valences.append((memory_id, float(valence)))
+
+
+def test_reconsolidation_disabled_writes_nothing():
+    """CORTEX_ABLATE_RECONSOLIDATION=1 → identity, zero store writes."""
+    cands = _make_candidates(3)
+    store = _ReconsStore()
+    with _ablate("CORTEX_ABLATE_RECONSOLIDATION"):
+        out = reconsolidation_apply(cands, "any query text", store)
+    assert out == cands
+    assert store.bumps == []
+    assert store.accesses == []
+    assert store.valences == []
+
+
+def test_reconsolidation_active_bumps_heat_and_access():
+    """Active path must call bump_heat_raw + update_memory_access for top-K."""
+    cands = _make_candidates(3)
+    store = _ReconsStore()
+    out = reconsolidation_apply(cands, "shared retrieval candidate", store)
+    # Same shape: returned list is the input list (in-place mutation).
+    assert len(out) == len(cands)
+    # Every candidate should have triggered at least one access call;
+    # heat bumps fire whenever the engineering-default heat_delta is nonzero
+    # (action="none" still produces a small +0.02 bump).
+    assert len(store.accesses) == 3
+    assert len(store.bumps) == 3
+    # New heat must be strictly within [0, 1] and >= original (small bump).
+    for mid, new_heat in store.bumps:
+        original = next(c for c in cands if c["memory_id"] == mid)["heat"]
+        assert 0.0 <= new_heat <= 1.0
+        assert new_heat >= original  # heat is non-decreasing for non-archive paths
+
+
+def test_reconsolidation_empty_candidates_returns_identity():
+    """Empty input → empty output, no store writes."""
+    store = _ReconsStore()
+    out = reconsolidation_apply([], "any query", store)
+    assert out == []
+    assert store.bumps == []
+    assert store.accesses == []
 
 
 if __name__ == "__main__":

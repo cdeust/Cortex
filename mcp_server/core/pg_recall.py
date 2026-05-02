@@ -288,6 +288,7 @@ def recall(
         hdc_rerank,
         hopfield_complete,
         mood_congruent_rerank,
+        reconsolidation_apply,
         spreading_activation_expand,
     )
 
@@ -310,6 +311,14 @@ def recall(
     # using the USER's session-level mood. Returns identity when no mood
     # signal exists; we do not fabricate one.
     candidates = mood_congruent_rerank(candidates, _get_user_mood(store))
+
+    # 4g. RECONSOLIDATION — Nader, Schafe & LeDoux (2000), Nature 406(6797).
+    # Retrieval renders memories labile; the act of reading re-stores them
+    # with modifications (heat bump, last_accessed refresh, optional Bower-
+    # style valence shift). MUST be the final post-WRRF stage so the
+    # mutation reflects the FINAL ranking the user will see, not the raw
+    # WRRF output. Ablation-guarded inside the stage.
+    candidates = reconsolidation_apply(candidates, query=query, store=store)
 
     # 5. Client-side FlashRank reranking
     if rerank and len(candidates) > 1:
