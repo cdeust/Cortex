@@ -247,6 +247,31 @@ def recall(
     if not candidates:
         return []
 
+    # 4a-4d. Post-WRRF paper-mechanism pipeline. Each stage is gated by
+    # ``CORTEX_ABLATE_<MECH>=1`` (returns input unchanged when ablated).
+    # Order: HOPFIELD (Ramsauer 2021 attention), HDC (Kanerva 2009 bipolar
+    # algebra), SPREADING_ACTIVATION (Collins & Loftus 1975 BFS over the
+    # entity graph — may inject NEW candidates absent from WRRF top-K),
+    # DENDRITIC_CLUSTERS (Poirazi 2003 multiplicative modulation).
+    # See mcp_server/core/recall_pipeline.py for the per-stage RRF blend
+    # constants and citations.
+    from mcp_server.core.recall_pipeline import (
+        dendritic_modulate,
+        hdc_rerank,
+        hopfield_complete,
+        spreading_activation_expand,
+    )
+
+    candidates = hopfield_complete(
+        candidates,
+        q_emb,
+        store,
+        embedding_dim=embeddings.dimensions if embeddings else 0,
+    )
+    candidates = hdc_rerank(candidates, query)
+    candidates = spreading_activation_expand(candidates, query, store)
+    candidates = dendritic_modulate(candidates, query)
+
     # 5. Client-side FlashRank reranking
     if rerank and len(candidates) > 1:
         ranked_pairs = [(c["memory_id"], c.get("score", 0.0)) for c in candidates]
