@@ -95,6 +95,11 @@ def retrieve(
     Computes: attention = softmax(beta * X * query)
     Returns top_k (memory_id, attention_weight) sorted descending.
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.HOPFIELD):
+        # No-op: no Hopfield-attention contribution.
+        return []
     if pattern_matrix.size == 0:
         return []
 

@@ -73,6 +73,12 @@ def find_best_slot(
     Returns:
         (best_slot_index, best_excitability).
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.ENGRAM_ALLOCATION):
+        # No-op: baseline allocation -- always slot 0 with neutral excitability.
+        return 0, 0.5
+
     best_slot = 0
     best_exc = -1.0
 

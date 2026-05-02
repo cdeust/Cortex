@@ -165,6 +165,11 @@ def apply_hebbian_update(
     ltd_rate: float = _LTD_RATE,
 ) -> list[dict[str, Any]]:
     """Apply Hebbian LTP/LTD to a batch of edges."""
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.SYNAPTIC_PLASTICITY):
+        # No-op: identity, no LTP/LTD weight changes.
+        return list(edges)
     return [
         _hebbian_single(
             edge,

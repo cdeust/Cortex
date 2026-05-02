@@ -143,6 +143,11 @@ def orthogonalize_embedding(
         Tuple of (orthogonalized_embedding, separation_index).
         separation_index = 1.0 - cosine_similarity(original, orthogonalized).
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.PATTERN_SEPARATION):
+        # No-op: identity, zero separation.
+        return list(new_embedding), 0.0
     if not interfering_embeddings:
         return list(new_embedding), 0.0
 

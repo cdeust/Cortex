@@ -157,6 +157,17 @@ def orthogonalize_pair(
     One step of gradual rotation per call. Multiple sleep cycles
     achieve full separation. Returns (new_a, new_b, remaining_sim).
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.INTERFERENCE):
+        # No-op: identity; no orthogonalization.
+        return (
+            list(embedding_a),
+            list(embedding_b),
+            cosine_similarity(embedding_a, embedding_b)
+            if len(embedding_a) == len(embedding_b)
+            else 0.0,
+        )
     if len(embedding_a) != len(embedding_b):
         return list(embedding_a), list(embedding_b), 0.0
 
@@ -213,6 +224,11 @@ def compute_retrieval_suppression(
     Returns:
         Suppressed retrieval score [0, target_score].
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.INTERFERENCE):
+        # No-op: no lateral suppression at retrieval.
+        return target_score
     if not competitor_scores:
         return target_score
 

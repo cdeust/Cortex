@@ -103,6 +103,11 @@ def identify_prunable_edges(
 
     Returns list of edge dicts augmented with prune_reason metadata.
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.MICROGLIAL_PRUNING):
+        # No-op: never prune edges.
+        return []
     if not edges:
         return []
 

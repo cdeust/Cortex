@@ -10,13 +10,39 @@ Each mechanism has an enable/disable flag. When disabled:
 - Other mechanisms continue operating normally
 - System-level metrics are tracked for comparison
 
-Pure business logic -- no I/O.
+Pure business logic -- no I/O (the env-var read is a single os.environ
+lookup, performed only when an E1 verification campaign sets it; in
+production the var is never set so the lookup is a constant-time miss).
 """
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from enum import Enum
+
+
+def is_mechanism_disabled(mechanism: "Mechanism | str") -> bool:
+    """True iff CORTEX_ABLATE_<NAME>=1 is set for this mechanism.
+
+    Production hot-paths call this at the entry point and short-circuit to
+    a no-op when True. Used by the E1 verification campaign
+    (benchmarks/lib/ablation_runner.py) to produce per-mechanism causal
+    deltas; in production the env var is never set so every check is a
+    single dict lookup.
+
+    Reads os.environ on every call -- callers are not in a tight loop;
+    test env varies per-run; production env never changes mid-process.
+    DO NOT memoize.
+
+    Accepts either a Mechanism enum (uses .name -> e.g. "OSCILLATORY_CLOCK")
+    or a string (upper-cased, hyphens normalized).
+    """
+    if hasattr(mechanism, "name"):
+        name = mechanism.name
+    else:
+        name = str(mechanism).upper().replace("-", "_")
+    return os.environ.get(f"CORTEX_ABLATE_{name}") == "1"
 
 
 class Mechanism(Enum):

@@ -352,6 +352,12 @@ def apply_synaptic_tags(
     3. Compute bistable consolidation z for each (Luboeinski model).
     4. Apply PRP-modulated boosts to importance and heat.
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.SYNAPTIC_TAGGING):
+        # No-op: no retroactive promotion of weak memories.
+        return []
+
     candidates = find_tagging_candidates(
         new_memory_entities=new_memory_entities,
         new_memory_importance=new_memory_importance,

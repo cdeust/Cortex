@@ -122,6 +122,12 @@ def find_best_matching_schema(
     Returns:
         (best_schema, match_score). None if no schema scores above 0.1.
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.SCHEMA_ENGINE):
+        # No-op: never match a schema.
+        return None, 0.0
+
     best_schema: Schema | None = None
     best_score = 0.0
 

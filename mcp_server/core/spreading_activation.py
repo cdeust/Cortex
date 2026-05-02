@@ -92,6 +92,12 @@ def spread_activation(
 
     Returns dict of {entity_id: activation_score} for all reached entities.
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.SPREADING_ACTIVATION):
+        # No-op: only seeds activated, no propagation.
+        return _initialize_seeds(graph, seed_entity_ids, initial_activation)
+
     activation = _initialize_seeds(graph, seed_entity_ids, initial_activation)
     if not activation:
         return {}

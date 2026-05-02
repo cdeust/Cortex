@@ -224,6 +224,11 @@ def compute_hdc_scores(
         List of (memory_id, similarity_score) sorted descending.
         Scores are in [-1, 1] but practically [0, 1] for relevant results.
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.HDC):
+        # No-op: no HDC contribution to recall.
+        return []
     if not memory_contents:
         return []
 

@@ -160,6 +160,12 @@ def compute_advancement_readiness(
 
     Returns (is_ready, next_stage_name, readiness_score_0_to_1).
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.CASCADE):
+        # No-op: never advance the consolidation stage; memories remain LABILE.
+        return False, current_stage, 0.0
+
     try:
         stage = ConsolidationStage(current_stage)
     except ValueError:

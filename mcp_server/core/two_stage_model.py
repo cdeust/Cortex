@@ -130,6 +130,11 @@ def should_release_hippocampal_trace(
     - Consolidated stage
     - Not currently hot (not being actively used)
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.TWO_STAGE_MODEL):
+        # No-op: never release the hippocampal trace; no transfer.
+        return False
     return (
         hippocampal_dependency <= _HIPPOCAMPAL_RELEASE_THRESHOLD
         and consolidation_stage == "consolidated"

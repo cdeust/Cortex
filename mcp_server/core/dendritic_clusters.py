@@ -80,6 +80,12 @@ def find_best_branch(
     Returns:
         (best_branch, affinity_score). None if no branch qualifies.
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.DENDRITIC_CLUSTERS):
+        # No-op: no branch-based modulation; no cluster match.
+        return None, 0.0
+
     best: DendriticBranch | None = None
     best_score = 0.0
 

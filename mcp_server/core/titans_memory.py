@@ -163,6 +163,12 @@ class TitansMemory:
 
         Returns the surprise value (gradient magnitude).
         """
+        from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+        if is_mechanism_disabled(Mechanism.SURPRISE_MOMENTUM):
+            # No-op: no momentum update; returns 0 so downstream uses
+            # detect "no surprise signal".
+            return 0.0
         if self._disabled or not query_emb or not result_embs:
             return 0.5
 

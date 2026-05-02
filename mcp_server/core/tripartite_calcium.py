@@ -201,6 +201,11 @@ def compute_ltp_modulation(
     No parametric dose-response exists; linear ramps are engineering choices.
     Returns multiplier: >1 facilitated, <1 depressed.
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.TRIPARTITE_SYNAPSE):
+        # No-op: base LTP factor 1.0 (no astrocytic facilitation/depression).
+        return 1.0
     regime = classify_calcium_regime(calcium)
     if regime == "quiescent":
         return 1.0

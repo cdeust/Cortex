@@ -114,6 +114,11 @@ def decide_action(
     Returns ReconsolidationResult with action, prediction_error,
     strength_delta, and emotional_multiplier.
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.RECONSOLIDATION):
+        # No-op: never reconsolidate; memory left unchanged.
+        return ReconsolidationResult(action="none")
     if is_protected:
         return ReconsolidationResult(action="none")
 

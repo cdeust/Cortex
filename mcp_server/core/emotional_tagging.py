@@ -186,6 +186,12 @@ def compute_importance_boost(
 
     Returns multiplier in [1.0, 2.0].
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.EMOTIONAL_TAGGING):
+        # No-op: base priority (no Yerkes-Dodson modulation).
+        return 1.0
+
     # Smooth Yerkes-Dodson: f(a) = c * a * exp(-b * a) + 1.0
     # b = 1/0.7 ≈ 1.4286 => peak at arousal = 0.7
     # c chosen so peak value ≈ 1.57: c = 1.57 / (0.7 * exp(-1)) ≈ 6.094 * 0.57 ... let me compute
@@ -216,6 +222,11 @@ def compute_decay_resistance(
 
     Returns multiplier in [1.0, 2.0].
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.EMOTIONAL_DECAY):
+        # No-op: no emotion-modulated decay slowdown.
+        return 1.0
     if arousal < 0.1:
         return 1.0
 

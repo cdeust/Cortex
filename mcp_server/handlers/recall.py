@@ -183,6 +183,11 @@ def _apply_co_activation(
     results: list[dict], store: MemoryStore, settings: Any
 ) -> None:
     """Dragon Hatchling Hebbian: co-retrieved entities strengthen edges."""
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.CO_ACTIVATION):
+        # No-op: do not strengthen co-retrieved entity edges.
+        return
     if not settings.CO_ACTIVATION_ENABLED or len(results) < 2:
         return
     min_score = settings.CO_ACTIVATION_MIN_SCORE

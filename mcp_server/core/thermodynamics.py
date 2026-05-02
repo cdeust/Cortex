@@ -272,6 +272,13 @@ def compute_decay(
     if hours_elapsed <= 0:
         return current_heat
 
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.ADAPTIVE_DECAY):
+        # No-op: constant lambda (decay_factor), no importance/valence/confidence
+        # adaptation; classic Ebbinghaus exponential.
+        return current_heat * (decay_factor**hours_elapsed)
+
     base = importance_decay_factor if importance > 0.7 else decay_factor
 
     # Emotional resistance: time-dependent (Yonelinas & Ritchey 2015).
