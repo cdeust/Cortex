@@ -290,8 +290,12 @@ def write_manifest(out_dir: Path, args: argparse.Namespace, n_cells: int,
     code_hash = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=str(REPO_ROOT), text=True
     ).strip()
+    # Dirtiness measured against TRACKED files only (matches the pre-registration
+    # definition in tasks/blend-weight-calibration.md §Reproducibility manifest).
+    # Untracked files (benchmark result archives, agent caches, node_modules) do
+    # not contaminate the source tree being measured.
     dirty = bool(subprocess.check_output(
-        ["git", "status", "--porcelain"], cwd=str(REPO_ROOT), text=True
+        ["git", "diff", "--stat", "HEAD"], cwd=str(REPO_ROOT), text=True
     ).strip())
     manifest = {
         "code_hash": code_hash,
