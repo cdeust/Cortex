@@ -106,8 +106,19 @@ def hopfield_complete(
     """Reorder candidates by Hopfield attention rank, RRF-blended with WRRF.
 
     The Hopfield pattern matrix is built from the candidates' own embeddings
-    (fetched from the store). Hopfield attention then ranks them by
-    softmax(beta * X · query); we blend that rank with the WRRF rank.
+    (fetched from the store in **one bulk PG call**, not N per-candidate
+    round-trips). Hopfield attention then ranks them by
+    ``softmax(beta * X · query)``; we blend that rank with the WRRF rank.
+
+    Bulk fetch path: ``store.get_embeddings_for_memories(ids)`` →
+    ``WHERE id = ANY(%s)`` single SELECT, returns ``{id: embedding}``.
+    Falls back to per-id ``get_memory`` only if the bulk method is absent
+    (e.g., older store stub in tests). At top_k=30 this turns 30 round
+    trips into 1 — paper-claim-bearing because Hopfield wall-time was
+    untracked under production load before this refactor.
+
+    Source: Ramsauer et al. (2021), "Hopfield Networks Is All You Need."
+    ICLR 2021 — softmax attention as modern Hopfield retrieval.
 
     Disabled when ``CORTEX_ABLATE_HOPFIELD=1`` — returns input
     unchanged. The same env var is also checked inside
@@ -121,13 +132,20 @@ def hopfield_complete(
 
     from mcp_server.core import hopfield
 
-    # Fetch embeddings for the candidate set (single round trip).
+    # Single bulk round trip when the store supports it; else fall back.
+    ids = [c["memory_id"] for c in candidates]
     pairs: list[tuple[int, bytes]] = []
-    for c in candidates:
-        mid = c["memory_id"]
-        mem = store.get_memory(mid) if hasattr(store, "get_memory") else None
-        if mem and mem.get("embedding"):
-            pairs.append((mid, mem["embedding"]))
+    if hasattr(store, "get_embeddings_for_memories"):
+        emb_by_id = store.get_embeddings_for_memories(ids)
+        for mid in ids:
+            emb = emb_by_id.get(mid)
+            if emb:
+                pairs.append((mid, emb))
+    elif hasattr(store, "get_memory"):
+        for mid in ids:
+            mem = store.get_memory(mid)
+            if mem and mem.get("embedding"):
+                pairs.append((mid, mem["embedding"]))
 
     if not pairs:
         return candidates
@@ -292,20 +310,62 @@ def _candidate_tags(c: dict[str, Any]) -> set[str]:
     return {str(t) for t in tags}
 
 
+def _resolve_query_entity_ids(query: str, store: Any) -> set[int]:
+    """Resolve query entities (CamelCase / paths / backticks) to entity_ids.
+
+    Constant-cost per recall (typical query has 0-5 such entities), so
+    this stays a small loop of ``get_entity_by_name`` calls, not a
+    per-candidate scan. Returns the empty set if nothing resolves —
+    callers must then fall back to the token-Jaccard proxy.
+    """
+    from mcp_server.core.query_decomposition import extract_query_entities
+
+    if not hasattr(store, "get_entity_by_name"):
+        return set()
+    ids: set[int] = set()
+    for name in extract_query_entities(query):
+        row = store.get_entity_by_name(name)
+        if row and row.get("id") is not None:
+            ids.add(int(row["id"]))
+    return ids
+
+
 def dendritic_modulate(
     candidates: list[dict[str, Any]],
     query: str,
+    store: Any = None,
     *,
     delta: float = _DENDRITIC_DELTA,
 ) -> list[dict[str, Any]]:
     """Apply branch-affinity multiplicative modulation to candidate scores.
 
-    Treats the query's entity/tag set as the prime cluster signature,
-    then computes weighted Jaccard affinity (0.7 entity + 0.3 tag —
-    same weights as ``dendritic_clusters.compute_branch_affinity``).
+    Computes weighted Jaccard affinity (0.7 entity + 0.3 tag — same
+    weights as ``dendritic_clusters.compute_branch_affinity``).
     The score is multiplied by ``1 + delta * (2 * affinity - 1)`` so
     affinity 0.0 → factor 1 - delta, affinity 0.5 → factor 1.0,
     affinity 1.0 → factor 1 + delta.
+
+    **Entity-set source.** When ``store`` exposes
+    ``get_entity_ids_for_memories`` AND the query resolves to ≥1 known
+    ``entity_id``, the affinity is computed on the **real entity graph**
+    (the ``memory_entities`` join) — Jaccard 1912 set similarity over
+    integer ids. This is the faithful model of Kastellakis (2015) branch
+    admission. One bulk PG round trip; no per-candidate query.
+
+    Falls back to the prior content-token Jaccard proxy when (a) the
+    store lacks the bulk method (test stub), or (b) the query has zero
+    resolvable entities — natural-language queries with no CamelCase /
+    paths / backticks. The fallback is documented in
+    ``dendritic_clusters.compute_branch_affinity`` as an engineering
+    proxy.
+
+    Sources:
+      - Poirazi, Brannon & Mel (2003). *Pyramidal Neuron as a Two-Layer
+        Neural Network.* Neuron 37:989-999. (Multiplicative soma.)
+      - Jaccard, P. (1912). *The Distribution of the Flora in the Alpine
+        Zone.* New Phytologist 11(2):37-50. (Set similarity.)
+      - Kastellakis et al. (2015). *Synaptic Clustering within Dendrites.*
+        Prog. Neurobiol. 126:19-35. (Cluster admission via overlap.)
 
     Disabled when ``CORTEX_ABLATE_DENDRITIC_CLUSTERS=1`` — returns input
     unchanged. Bounded perturbation: max ±delta per candidate, so the
@@ -317,20 +377,36 @@ def dendritic_modulate(
     if not candidates or delta <= 0.0:
         return candidates
 
-    q_entities = {
+    from mcp_server.shared.similarity import jaccard_similarity
+
+    # Try the real entity-graph path first. q_eids is non-empty only
+    # when both the store supports bulk-by-id AND the query resolves.
+    q_eids: set[int] = set()
+    ent_id_by_mem: dict[int, set[int]] = {}
+    if store is not None and hasattr(store, "get_entity_ids_for_memories"):
+        q_eids = _resolve_query_entity_ids(query, store)
+        if q_eids:
+            ids = [c["memory_id"] for c in candidates]
+            ent_id_by_mem = store.get_entity_ids_for_memories(ids)
+
+    # Token-proxy query set, used both as primary signal in the fallback
+    # path and as the tag-Jaccard signal in the entity-graph path.
+    q_tokens = {
         t.strip(".,!?;:()[]{}\"'`").lower() for t in query.split() if len(t) > 2
     }
-    if not q_entities:
+    if not q_tokens and not q_eids:
         return candidates
-
-    from mcp_server.shared.similarity import jaccard_similarity
 
     modulated: list[dict[str, Any]] = []
     for c in candidates:
-        c_entities = _candidate_entities(c)
+        if q_eids:
+            c_eids = ent_id_by_mem.get(c["memory_id"], set())
+            ent_sim = jaccard_similarity(q_eids, c_eids) if c_eids else 0.0
+        else:
+            c_entities = _candidate_entities(c)
+            ent_sim = jaccard_similarity(q_tokens, c_entities) if c_entities else 0.0
         c_tags = _candidate_tags(c)
-        ent_sim = jaccard_similarity(q_entities, c_entities) if c_entities else 0.0
-        tag_sim = jaccard_similarity(q_entities, c_tags) if c_tags else 0.0
+        tag_sim = jaccard_similarity(q_tokens, c_tags) if c_tags and q_tokens else 0.0
         affinity = 0.7 * ent_sim + 0.3 * tag_sim
         factor = 1.0 + delta * (2.0 * affinity - 1.0)
         c_out = dict(c)

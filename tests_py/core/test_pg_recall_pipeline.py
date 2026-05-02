@@ -263,5 +263,107 @@ def test_pipeline_all_disabled_is_identity():
     assert out == cands
 
 
+# ── Bulk-fetch path: Hopfield uses store.get_embeddings_for_memories ────
+
+
+class _BulkStore(_FakeStore):
+    """Store stub that exposes the bulk embedding API (single round trip)."""
+
+    def __init__(self, memories, sa_response=None):
+        super().__init__(memories, sa_response)
+        self.bulk_calls = 0
+        self.per_id_calls = 0
+
+    def get_memory(self, mid):
+        self.per_id_calls += 1
+        return super().get_memory(mid)
+
+    def get_embeddings_for_memories(self, ids):
+        self.bulk_calls += 1
+        return {
+            mid: m["embedding"]
+            for mid in ids
+            if (m := self._mems.get(mid)) and m.get("embedding")
+        }
+
+
+def test_hopfield_uses_bulk_embedding_api_when_available():
+    """Hopfield must call the bulk API exactly once and never per-id."""
+    cands = _make_candidates(5)
+    q_emb = _make_emb(384, 7)
+    store = _BulkStore(
+        {
+            c["memory_id"]: {**c, "embedding": _make_emb(384, c["memory_id"])}
+            for c in cands
+        }
+    )
+    out = hopfield_complete(cands, q_emb, store, embedding_dim=384)
+    assert store.bulk_calls == 1, "expected exactly one bulk PG round trip"
+    assert store.per_id_calls == 0, "must not fall back to per-id get_memory"
+    # Sanity: pipeline still produced a list of the same length.
+    assert len(out) == len(cands)
+
+
+# ── Real entity-set Jaccard for the dendritic stage ─────────────────────
+
+
+class _EntityStore:
+    """Store stub for dendritic_modulate's real entity-graph path."""
+
+    def __init__(
+        self, query_entity_ids: dict[str, int], memory_entity_ids: dict[int, set[int]]
+    ):
+        self._q_ent = query_entity_ids
+        self._mem_ent = memory_entity_ids
+
+    def get_entity_by_name(self, name):
+        eid = self._q_ent.get(name)
+        return {"id": eid} if eid is not None else None
+
+    def get_entity_ids_for_memories(self, ids):
+        return {mid: self._mem_ent[mid] for mid in ids if mid in self._mem_ent}
+
+
+def test_dendritic_uses_real_entity_jaccard_when_store_supports_it():
+    """Candidate sharing the resolved query entity must rank above a peer."""
+    cands = _make_candidates(3)
+    # Query has one CamelCase entity ("FooBar"), resolved to entity_id=42.
+    # Candidate 1 shares it; candidate 0 has no entities; candidate 2 has
+    # an unrelated entity (99).
+    store = _EntityStore(
+        query_entity_ids={"FooBar": 42},
+        memory_entity_ids={0: set(), 1: {42}, 2: {99}},
+    )
+    out = dendritic_modulate(cands, "search for FooBar implementation", store)
+    out_by_id = {c["memory_id"]: c for c in out}
+    cands_by_id = {c["memory_id"]: c for c in cands}
+    # Candidate 1's score must be strictly bumped above its starting score
+    # (entity Jaccard = 1.0 / 1.0 = 1.0 → factor 1 + DELTA).
+    assert out_by_id[1]["score"] > cands_by_id[1]["score"]
+    # Candidates 0 and 2 must NOT receive a positive bump
+    # (entity Jaccard with query is 0).
+    assert out_by_id[0]["score"] <= cands_by_id[0]["score"]
+    assert out_by_id[2]["score"] <= cands_by_id[2]["score"]
+    # Same-shape contract: every key on the input candidate is preserved.
+    for c_out in out:
+        assert set(cands_by_id[c_out["memory_id"]]) <= set(c_out)
+
+
+def test_dendritic_falls_back_to_token_jaccard_when_query_unresolvable():
+    """Natural-language query (no CamelCase) → token-Jaccard fallback."""
+    cands = _make_candidates(4)
+    # Store supports the bulk API but query has nothing to resolve.
+    store = _EntityStore(query_entity_ids={}, memory_entity_ids={})
+    out = dendritic_modulate(cands, "shared token retrieval candidate", store)
+    # Same-shape result; modulation produced the same bounded ratio
+    # documented in test_dendritic_enabled_perturbs_score_within_bounds.
+    by_id = {c["memory_id"]: c for c in cands}
+    for c_out in out:
+        old = by_id[c_out["memory_id"]]["score"]
+        new = c_out["score"]
+        if old > 0:
+            assert 0.9 - 1e-6 <= new / old <= 1.1 + 1e-6
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

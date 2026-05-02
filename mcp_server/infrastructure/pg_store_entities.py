@@ -207,6 +207,33 @@ class PgEntityMixin:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_entity_ids_for_memories(self, memory_ids: list[int]) -> dict[int, set[int]]:
+        """Bulk fetch entity-id sets for many memories in one round trip.
+
+        Replaces N per-candidate ``get_entities_for_memory`` calls in the
+        dendritic-cluster stage with a single ``WHERE memory_id = ANY(%s)``
+        scan of ``memory_entities``. Returns ``{memory_id: {entity_id, ...}}``;
+        memories with no linked entities are absent from the dict (callers
+        should default to the empty set).
+
+        Source: refactor of ``recall_pipeline.dendritic_modulate`` to use
+        real entity-set Jaccard (Jaccard 1912 set similarity) instead of
+        the content-token proxy.
+        """
+        if not memory_ids:
+            return {}
+        rows = self._execute(
+            "SELECT memory_id, entity_id FROM memory_entities "
+            "WHERE memory_id = ANY(%s::int[])",
+            ([int(m) for m in memory_ids],),
+        ).fetchall()
+        out: dict[int, set[int]] = {}
+        for r in rows:
+            mid = int(r["memory_id"])
+            eid = int(r["entity_id"])
+            out.setdefault(mid, set()).add(eid)
+        return out
+
     def get_memories_for_entity(self, entity_id: int) -> list[dict[str, Any]]:
         """Return all memories linked to an entity via the join table."""
         rows = self._execute(

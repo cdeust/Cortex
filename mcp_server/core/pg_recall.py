@@ -270,7 +270,7 @@ def recall(
     )
     candidates = hdc_rerank(candidates, query)
     candidates = spreading_activation_expand(candidates, query, store)
-    candidates = dendritic_modulate(candidates, query)
+    candidates = dendritic_modulate(candidates, query, store)
 
     # 5. Client-side FlashRank reranking
     if rerank and len(candidates) > 1:

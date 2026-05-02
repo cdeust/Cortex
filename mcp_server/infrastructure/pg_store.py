@@ -734,6 +734,30 @@ class PgMemoryStore(
             for r in rows
         ]
 
+    def get_embeddings_for_memories(self, memory_ids: list[int]) -> dict[int, bytes]:
+        """Bulk fetch embeddings for a known set of memory ids.
+
+        Single ``WHERE id = ANY(%s)`` round trip; replaces the per-id
+        ``get_memory`` loop in the post-WRRF Hopfield stage. Returns a
+        dict so callers can index by id without preserving order.
+
+        NULL embeddings are filtered out — Hopfield can't use them.
+        Source: refactor of ``recall_pipeline.hopfield_complete`` to
+        bound PG round-trips at top_k=30.
+        """
+        if not memory_ids:
+            return {}
+        rows = self._execute(
+            "SELECT id, embedding FROM memories "
+            "WHERE id = ANY(%s::int[]) AND embedding IS NOT NULL",
+            ([int(m) for m in memory_ids],),
+        ).fetchall()
+        return {
+            int(r["id"]): self._vector_to_bytes(r["embedding"])
+            for r in rows
+            if r.get("embedding") is not None
+        }
+
     def get_temporal_co_access(
         self,
         window_hours: float = 2.0,
