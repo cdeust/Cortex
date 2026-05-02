@@ -27,6 +27,7 @@ abstractions used by ``pg_recall.recall``.
 
 from __future__ import annotations
 
+import os as _os
 from typing import Any
 
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
@@ -36,21 +37,49 @@ from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 # used elsewhere in pg_recall (_chronological_rerank).
 _RRF_K: int = 60
 
+
+def _env_float(name: str, default: float) -> float:
+    """Read a float from ``os.environ[name]`` falling back to ``default``.
+
+    Used by the blend-weight calibration sweep (`benchmarks/lib/blend_weight_sweep.py`)
+    to override per-cell without rebuilding the module. Source: standard
+    benchmark-time config injection per `tasks/verification-protocol.md`
+    §reproducibility (manifest sidecar). Malformed values fall back to the
+    default — a calibration cell with `CORTEX_HOPFIELD_BETA=foo` is a bug,
+    not a runtime crash, and the manifest will record what was *actually*
+    used (logged separately by the harness).
+    """
+    raw = _os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
 # Per-mechanism blend weights. Small enough that WRRF still dominates;
 # large enough that the new signal breaks ties and surfaces near-misses.
 # These are engineering defaults, not paper-prescribed — they bound the
 # perturbation each post-WRRF stage can inflict on the candidate order.
 # When a mechanism's smoke test shows zero delta on a real corpus, raise
 # its beta in 0.05 increments and re-run; do NOT remove the wiring.
-_HOPFIELD_BETA: float = 0.30
-_HDC_BETA: float = 0.20
-_SA_BETA: float = 0.25
+#
+# CALIBRATION OVERRIDE. The five blend constants and the dendritic delta
+# below are env-var-overridable via ``CORTEX_<NAME>``. The harness at
+# ``benchmarks/lib/blend_weight_sweep.py`` sets these per cell and runs
+# LongMemEval-S to pick the optima documented in
+# ``tasks/blend-weight-calibration.md``. If unset, the engineering defaults
+# below stand.
+_HOPFIELD_BETA: float = _env_float("CORTEX_HOPFIELD_BETA", 0.30)
+_HDC_BETA: float = _env_float("CORTEX_HDC_BETA", 0.20)
+_SA_BETA: float = _env_float("CORTEX_SA_BETA", 0.25)
 
 # Dendritic multiplicative range — bounded perturbation from Poirazi (2003)
 # soma scale of 0.96. We use [1 - DELTA, 1 + DELTA] so a 1.0 baseline
 # (no cluster match) leaves the score unchanged, while high-affinity
 # matches get a +DELTA bump and conflicting branches get -DELTA.
-_DENDRITIC_DELTA: float = 0.10
+_DENDRITIC_DELTA: float = _env_float("CORTEX_DENDRITIC_DELTA", 0.10)
 
 # Emotional / mood-congruent rerank blend weights.
 # source: engineering default; calibration in tasks/blend-weight-calibration.md
@@ -59,8 +88,8 @@ _DENDRITIC_DELTA: float = 0.10
 # does not prescribe a numeric blend weight; the paper's claim is qualitative
 # (mood-congruent recall is faster/more accurate than incongruent), so the
 # magnitude is set conservatively below the perception-side stages.
-_EMOTIONAL_RETRIEVAL_BETA: float = 0.20
-_MOOD_CONGRUENT_BETA: float = 0.15
+_EMOTIONAL_RETRIEVAL_BETA: float = _env_float("CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.20)
+_MOOD_CONGRUENT_BETA: float = _env_float("CORTEX_MOOD_CONGRUENT_BETA", 0.15)
 
 # Below this absolute compound-valence value the query is treated as
 # emotionally neutral and the EMOTIONAL_RETRIEVAL stage no-ops. VADER
