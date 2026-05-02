@@ -90,6 +90,31 @@ python3 benchmarks/<bench>/run_benchmark.py \
   --seed <s> --variant s --emit-manifest results/E1/<bench>/<mech>/<seed>.json
 ```
 
+**Consolidation-only mechanism ablation requires `--with-consolidation`.**
+Nine mechanisms are wired into the production write/maintenance path but never
+exercised by the LME-S harness in its default mode (corpus load → recall, no
+`consolidate()` call): CASCADE, INTERFERENCE, HOMEOSTATIC_PLASTICITY,
+SYNAPTIC_PLASTICITY, MICROGLIAL_PRUNING, TWO_STAGE_MODEL, EMOTIONAL_DECAY,
+TRIPARTITE_SYNAPSE, SCHEMA_ENGINE. Ablating any of them in default mode
+yields ΔMRR ≈ +0.000, which is a benchmark-coverage artifact, not evidence
+that the mechanism is inert. For E1 v3 these nine rows on LongMemEval-S
+MUST be run with `--with-consolidation --ablate <MECH>`; the harness exports
+`CORTEX_ABLATE_<MECH>=1` BEFORE the consolidation pass and the recall loop,
+so the ablation guard fires inside the affected stage and the rest of the
+consolidation pipeline still runs. Wall time of the consolidation pass is
+recorded separately in the result manifest (`consolidation_total_wall_s`,
+`consolidation_call_count`) and is NOT charged against per-question
+latency. Default mode (no flag) preserves historical run reproducibility
+unchanged.
+
+```
+# E1 v3 row for a consolidation-only mechanism on LME-S:
+PYTHONHASHSEED=0 CUDA_VISIBLE_DEVICES="" \
+uv run python benchmarks/longmemeval/run_benchmark.py \
+  --variant s --with-consolidation --ablate CASCADE \
+  --results-out results/E1v3/lme-s/CASCADE/<seed>.json
+```
+
 ---
 
 ## E2 — N-scan curve (resolves C1)

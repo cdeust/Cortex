@@ -19,6 +19,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import os
 import re
@@ -119,8 +120,44 @@ def recall_at_k_binary(
 # ── Main Benchmark ───────────────────────────────────────────────────────────
 
 
-def run_benchmark(data_path: str, limit: int = 0, verbose: bool = False) -> dict:
-    """Run the full LongMemEval benchmark using production PG retrieval."""
+def _run_consolidation_pass() -> float:
+    """Invoke the production consolidate handler once. Returns wall seconds.
+
+    Precondition: corpus already loaded into PG via BenchmarkDB; CORTEX_ABLATE_*
+    env vars (if any) already set so the ablation guard fires inside the
+    handler's stages.
+    Postcondition: returns elapsed seconds; raises only on hard handler errors.
+    Source: handler defaults run decay+plasticity+pruning, compress, cls,
+    memify, cascade, homeostatic, emergence — exactly the consolidation-only
+    mechanisms the Feynman audit identified as never-exercised on LME-S.
+    """
+    # Imported lazily so callers that never pass --with-consolidation don't
+    # incur the import cost (and can't be broken by handler-side changes).
+    from mcp_server.handlers import consolidate as consolidate_handler
+
+    t0 = time.monotonic()
+    asyncio.run(consolidate_handler.handler({}))
+    return time.monotonic() - t0
+
+
+def run_benchmark(
+    data_path: str,
+    limit: int = 0,
+    verbose: bool = False,
+    *,
+    with_consolidation: bool = False,
+    ablate_mechanism: str | None = None,
+) -> dict:
+    """Run the full LongMemEval benchmark using production PG retrieval.
+
+    Precondition: PG schema initialized; if `ablate_mechanism` is given it must
+    match a Mechanism enum NAME (e.g. "CASCADE"); CORTEX_ABLATE_<NAME>=1
+    must already be exported by caller (see __main__).
+    Postcondition: returns metric dict with keys: overall_mrr, overall_recall10,
+    category_mrr, category_recall10, elapsed_s, consolidation_total_wall_s,
+    consolidation_call_count, manifest. Manifest fields are sufficient for
+    paper-claim reproducibility (Feynman audit fix).
+    """
 
     print(f"Loading dataset from {data_path}...")
     with open(data_path) as f:
@@ -130,6 +167,12 @@ def run_benchmark(data_path: str, limit: int = 0, verbose: bool = False) -> dict
         dataset = dataset[:limit]
 
     print(f"Running benchmark on {len(dataset)} questions (PostgreSQL backend)...")
+    if with_consolidation:
+        print(
+            "  consolidation: ON (per-question warmup pass between load and recall)"
+        )
+    if ablate_mechanism:
+        print(f"  ablation: CORTEX_ABLATE_{ablate_mechanism}=1")
     print()
 
     # Per-category metrics
@@ -138,6 +181,9 @@ def run_benchmark(data_path: str, limit: int = 0, verbose: bool = False) -> dict
 
     all_mrr: list[float] = []
     all_recall10: list[float] = []
+
+    consolidation_total_wall_s = 0.0
+    consolidation_call_count = 0
 
     t0 = time.monotonic()
 
@@ -185,6 +231,17 @@ def run_benchmark(data_path: str, limit: int = 0, verbose: bool = False) -> dict
                 )
 
             mem_ids, source_map = db.load_memories(memories, domain="longmemeval")
+
+            # Consolidation warmup pass (Feynman audit fix). Off by default to
+            # preserve historical run reproducibility. When ON, exercises the 9
+            # consolidation-only mechanisms (CASCADE, INTERFERENCE,
+            # HOMEOSTATIC_PLASTICITY, SYNAPTIC_PLASTICITY, MICROGLIAL_PRUNING,
+            # TWO_STAGE_MODEL, EMOTIONAL_DECAY, TRIPARTITE_SYNAPSE, SCHEMA_ENGINE)
+            # so per-mechanism ablation deltas become attributable on LME-S.
+            # Wall time tracked separately so per-question stats stay clean.
+            if with_consolidation:
+                consolidation_total_wall_s += _run_consolidation_pass()
+                consolidation_call_count += 1
 
             # Run production retrieval
             results = db.recall(question, top_k=10, domain="longmemeval")
@@ -257,7 +314,29 @@ def run_benchmark(data_path: str, limit: int = 0, verbose: bool = False) -> dict
         f"Total time: {elapsed:.1f}s ({elapsed / len(dataset) * 1000:.1f}ms/question)"
     )
     print(f"Questions: {len(dataset)}")
+    if with_consolidation:
+        avg_ms = (
+            consolidation_total_wall_s / consolidation_call_count * 1000
+            if consolidation_call_count
+            else 0.0
+        )
+        print(
+            f"Consolidation: {consolidation_call_count} calls, "
+            f"total {consolidation_total_wall_s:.1f}s "
+            f"(avg {avg_ms:.1f}ms/call) — excluded from per-question stats"
+        )
     print()
+
+    manifest = {
+        "with_consolidation": with_consolidation,
+        "ablate_mechanism": ablate_mechanism,
+        "ablate_env_var": (
+            f"CORTEX_ABLATE_{ablate_mechanism}=1" if ablate_mechanism else None
+        ),
+        "n_questions": len(dataset),
+        "consolidation_call_count": consolidation_call_count,
+        "consolidation_total_wall_s": consolidation_total_wall_s,
+    }
 
     return {
         "overall_mrr": overall_mrr,
@@ -265,6 +344,9 @@ def run_benchmark(data_path: str, limit: int = 0, verbose: bool = False) -> dict
         "category_mrr": {k: sum(v) / len(v) for k, v in category_mrr.items()},
         "category_recall10": {k: sum(v) / len(v) for k, v in category_recall10.items()},
         "elapsed_s": elapsed,
+        "consolidation_total_wall_s": consolidation_total_wall_s,
+        "consolidation_call_count": consolidation_call_count,
+        "manifest": manifest,
     }
 
 
@@ -280,7 +362,47 @@ if __name__ == "__main__":
         help="Dataset variant: oracle (evidence only) or s (~40 sessions)",
     )
     parser.add_argument("--verbose", action="store_true", help="Show missed questions")
+    parser.add_argument(
+        "--with-consolidation",
+        action="store_true",
+        help=(
+            "After loading each question's haystack and BEFORE recall, invoke "
+            "the production consolidate handler so consolidation-only "
+            "mechanisms (CASCADE, INTERFERENCE, HOMEOSTATIC_PLASTICITY, "
+            "SYNAPTIC_PLASTICITY, MICROGLIAL_PRUNING, TWO_STAGE_MODEL, "
+            "EMOTIONAL_DECAY, TRIPARTITE_SYNAPSE, SCHEMA_ENGINE) are "
+            "exercised. Off by default to preserve reproducibility of prior "
+            "runs. Required for honest per-mechanism ablation on LME-S."
+        ),
+    )
+    parser.add_argument(
+        "--ablate",
+        type=str,
+        default=None,
+        metavar="MECH",
+        help=(
+            "Set CORTEX_ABLATE_<MECH>=1 BEFORE consolidation and recall. MECH "
+            "is the Mechanism enum NAME (e.g. CASCADE, SCHEMA_ENGINE, "
+            "MICROGLIAL_PRUNING). Combine with --with-consolidation for "
+            "consolidation-only mechanisms."
+        ),
+    )
+    parser.add_argument(
+        "--results-out",
+        type=str,
+        default=None,
+        help="Optional path to write the result+manifest JSON.",
+    )
     args = parser.parse_args()
+
+    # Export ablation env var BEFORE any handler/store import touches it. The
+    # consolidate handler imports its sub-modules at call time, but
+    # mcp_server.core.ablation.is_disabled reads os.environ on every call, so
+    # setting it here is sufficient as long as we do it before run_benchmark.
+    ablate_mech: str | None = None
+    if args.ablate:
+        ablate_mech = args.ablate.strip().upper()
+        os.environ[f"CORTEX_ABLATE_{ablate_mech}"] = "1"
 
     data_dir = Path(__file__).parent
     if args.variant == "oracle":
@@ -296,4 +418,17 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
-    results = run_benchmark(str(data_path), limit=args.limit, verbose=args.verbose)
+    results = run_benchmark(
+        str(data_path),
+        limit=args.limit,
+        verbose=args.verbose,
+        with_consolidation=args.with_consolidation,
+        ablate_mechanism=ablate_mech,
+    )
+
+    if args.results_out:
+        out_path = Path(args.results_out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w") as f:
+            json.dump(results, f, indent=2, default=str)
+        print(f"Results written to {out_path}")
