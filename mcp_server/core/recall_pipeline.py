@@ -311,22 +311,60 @@ def _candidate_tags(c: dict[str, Any]) -> set[str]:
 
 
 def _resolve_query_entity_ids(query: str, store: Any) -> set[int]:
-    """Resolve query entities (CamelCase / paths / backticks) to entity_ids.
+    """Resolve query entities to entity_ids.
 
-    Constant-cost per recall (typical query has 0-5 such entities), so
-    this stays a small loop of ``get_entity_by_name`` calls, not a
-    per-candidate scan. Returns the empty set if nothing resolves —
-    callers must then fall back to the token-Jaccard proxy.
+    Two-stage resolution so dendritic Jaccard fires on natural-language
+    queries (not just CamelCase / path / backtick patterns):
+
+    1. ``extract_query_entities()`` — high-precision extraction of
+       CamelCase, slash paths, backtick code spans (Poirazi et al.
+       compatible: these are typically the entity-anchors a user writes).
+    2. **Token fallback** — for every alphabetic token of length ≥ 4
+       not already extracted, attempt ``get_entity_by_name(token)``.
+       This catches natural-language anchors like "authentication" or
+       "deployment" which the regex-extractor misses but which often
+       canonicalize to a real entity_id in the production graph.
+
+    Constant cost per recall (typical query: ≤30 candidate tokens
+    after stopword filter; each is one indexed lookup against the
+    ``entities`` table's name index — sub-millisecond). Returns the
+    empty set if nothing resolves; callers fall back to the
+    token-Jaccard proxy.
     """
     from mcp_server.core.query_decomposition import extract_query_entities
+    from mcp_server.shared.text import extract_keywords
 
     if not hasattr(store, "get_entity_by_name"):
         return set()
     ids: set[int] = set()
+    seen_names: set[str] = set()
+
+    # Stage 1: high-precision extractor (CamelCase / paths / backticks).
     for name in extract_query_entities(query):
+        if not name or name in seen_names:
+            continue
+        seen_names.add(name)
         row = store.get_entity_by_name(name)
         if row and row.get("id") is not None:
             ids.add(int(row["id"]))
+
+    # Stage 2: natural-language token fallback. Use the existing
+    # stopword-aware keyword extractor (`shared/text.py::extract_keywords`)
+    # which already filters function words; only try tokens of length ≥ 4
+    # to avoid swamping the entity index with junk lookups.
+    try:
+        for token in extract_keywords(query):
+            if len(token) < 4 or token in seen_names:
+                continue
+            seen_names.add(token)
+            row = store.get_entity_by_name(token)
+            if row and row.get("id") is not None:
+                ids.add(int(row["id"]))
+    except Exception:  # noqa: BLE001
+        # Fallback path is non-load-bearing; if the keyword extractor
+        # ever fails on a malformed query we still have the stage-1 ids.
+        pass
+
     return ids
 
 
