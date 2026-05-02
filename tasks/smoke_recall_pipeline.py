@@ -43,6 +43,11 @@ class _Store:
         for i in range(n):
             tokens = ["alpha", "beta", "gamma", "delta", "epsilon"]
             content = f"mem {i} " + " ".join(tokens[: (i % 5) + 1])
+            # Spread emotional_valence across [-0.9, +0.9] so the
+            # EMOTIONAL_RETRIEVAL / MOOD_CONGRUENT_RERANK stages have a
+            # non-degenerate signal to act on. Without varied valence the
+            # rerank is a uniform-distance no-op even when enabled.
+            valence = round(((i % 7) / 3.0) - 1.0, 3)  # ∈ [-1.0, +1.0]
             self._mems[i] = {
                 "id": i,
                 "memory_id": i,
@@ -55,6 +60,7 @@ class _Store:
                 "importance": 0.5,
                 "surprise_score": 0.0,
                 "store_type": "episodic",
+                "emotional_valence": valence,
             }
         # SA returns a memory NOT in the WRRF top-K to test injection
         self._mems[99] = {
@@ -88,9 +94,16 @@ class _Store:
                 "importance": 0.5,
                 "surprise_score": 0.0,
                 "store_type": "episodic",
+                "emotional_valence": self._mems[i]["emotional_valence"],
             }
             for rank, i in enumerate(ids)
         ]
+
+    # Session-level mood for MOOD_CONGRUENT_RERANK smoke. Real production
+    # PgMemoryStore does not expose this method (April 2026); the smoke
+    # store simulates the future API so the stage produces a delta.
+    def get_user_mood(self) -> float:
+        return 0.7
 
     def get_memory(self, mid: int) -> dict | None:
         return self._mems.get(mid)
@@ -124,8 +137,12 @@ def _run(env_name: str | None) -> tuple[list[int], list[float], float]:
     embs = _Embeddings()
     t0 = time.perf_counter()
     with _ablate(env_name):
+        # Query carries a clear positive VADER compound ("fixed deployed
+        # excellent") so EMOTIONAL_RETRIEVAL is non-neutral and ablation
+        # produces a measurable delta. Domain tokens (alpha/beta/gamma)
+        # keep HDC and SA paths active.
         out = recall(
-            query="alpha beta gamma extra",
+            query="alpha beta gamma extra fixed deployed excellent",
             store=store,
             embeddings=embs,
             top_k=10,
@@ -147,6 +164,8 @@ def main() -> None:
         "CORTEX_ABLATE_HDC",
         "CORTEX_ABLATE_SPREADING_ACTIVATION",
         "CORTEX_ABLATE_DENDRITIC_CLUSTERS",
+        "CORTEX_ABLATE_EMOTIONAL_RETRIEVAL",
+        "CORTEX_ABLATE_MOOD_CONGRUENT_RERANK",
     ]
     deltas = {}
     for env in mechs:
@@ -164,7 +183,7 @@ def main() -> None:
         print(f"  ids: {ids}")
         print(f"  latency: {dt * 1000:.2f} ms")
 
-    # All four must produce a non-trivial delta.
+    # All six must produce a non-trivial delta.
     failures = [
         k for k, v in deltas.items() if not (v["ids_changed"] or v["scores_changed"])
     ]
@@ -177,7 +196,7 @@ def main() -> None:
     if failures:
         print(f"\nFAIL: zero-delta mechanisms (wiring bug): {failures}")
         raise SystemExit(1)
-    print("\nPASS: all 4 mechanisms produce observable deltas.")
+    print("\nPASS: all 6 mechanisms produce observable deltas.")
 
 
 if __name__ == "__main__":

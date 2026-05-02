@@ -52,6 +52,23 @@ _SA_BETA: float = 0.25
 # matches get a +DELTA bump and conflicting branches get -DELTA.
 _DENDRITIC_DELTA: float = 0.10
 
+# Emotional / mood-congruent rerank blend weights.
+# source: engineering default; calibration in tasks/blend-weight-calibration.md
+# (task #50, 6-knob grid HOPFIELD × HDC × SA × DENDRITIC × EMOTIONAL_RETRIEVAL ×
+# MOOD_CONGRUENT). Bower (1981) "Mood and Memory," Am. Psychologist 36(2)
+# does not prescribe a numeric blend weight; the paper's claim is qualitative
+# (mood-congruent recall is faster/more accurate than incongruent), so the
+# magnitude is set conservatively below the perception-side stages.
+_EMOTIONAL_RETRIEVAL_BETA: float = 0.20
+_MOOD_CONGRUENT_BETA: float = 0.15
+
+# Below this absolute compound-valence value the query is treated as
+# emotionally neutral and the EMOTIONAL_RETRIEVAL stage no-ops. VADER
+# (Hutto & Gilbert, ICWSM 2014) §4 reports |compound| ≥ 0.05 as a useful
+# positive/negative cutoff for short text; we use 0.10 so that single
+# weakly-loaded tokens do not flip the rerank.
+_EMOTIONAL_QUERY_VALENCE_FLOOR: float = 0.10
+
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -453,3 +470,113 @@ def dendritic_modulate(
 
     modulated.sort(key=lambda c: c.get("score", 0.0), reverse=True)
     return modulated
+
+
+# ── EMOTIONAL_RETRIEVAL stage ───────────────────────────────────────────
+# Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2):129-148.
+# Mood-congruent recall: candidates whose stored emotional valence matches
+# the query's inferred valence are retrieved faster and more accurately.
+# Engineering blend via RRF (Cormack et al. SIGIR 2009).
+
+
+def emotional_retrieval_rerank(
+    candidates: list[dict[str, Any]],
+    query: str,
+    *,
+    blend_beta: float = _EMOTIONAL_RETRIEVAL_BETA,
+    valence_floor: float = _EMOTIONAL_QUERY_VALENCE_FLOOR,
+) -> list[dict[str, Any]]:
+    """Rerank by query-valence ↔ candidate-valence congruence.
+
+    Bower (1981): emotionally-congruent material is retrieved faster and
+    more accurately than incongruent material. We infer the query's
+    affective load via VADER (Hutto & Gilbert, ICWSM 2014), measure each
+    candidate's stored ``emotional_valence`` distance from the query
+    valence, then RRF-blend that rank with the WRRF rank.
+
+    A neutral query (|valence| < ``valence_floor``) carries no congruence
+    signal and the stage no-ops — RRF on a uniform rank would only
+    add noise.
+
+    Disabled when ``CORTEX_ABLATE_EMOTIONAL_RETRIEVAL=1`` — returns input
+    unchanged. Distinct from MOOD_CONGRUENT_RERANK: this stage uses the
+    *query's* valence (per-recall), not a session-level user mood state.
+
+    Sources:
+      - Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+      - Hutto, C.J. & Gilbert, E. (2014). "VADER: A Parsimonious Rule-based
+        Model for Sentiment Analysis of Social Media Text." ICWSM 2014.
+      - Cormack, Clarke & Buettcher (2009). RRF blend.
+    """
+    if is_mechanism_disabled(Mechanism.EMOTIONAL_RETRIEVAL):
+        return candidates
+    if not candidates:
+        return candidates
+
+    from mcp_server.shared.vader import vader_compound
+
+    q_valence = vader_compound(query)
+    if abs(q_valence) < valence_floor:
+        # Neutral query — no useful congruence signal to inject.
+        return candidates
+
+    def _distance(c: dict[str, Any]) -> float:
+        c_v = c.get("emotional_valence", 0.0) or 0.0
+        return abs(float(c_v) - q_valence)
+
+    by_match = sorted(enumerate(candidates), key=lambda x: _distance(x[1]))
+    mech_ranks = {
+        candidates[i]["memory_id"]: rank for rank, (i, _) in enumerate(by_match)
+    }
+    return _rrf_blend(candidates, mech_ranks, blend_beta)
+
+
+# ── MOOD_CONGRUENT_RERANK stage ────────────────────────────────────────
+# Bower (1981) mood-state-dependent recall: a person in a given mood
+# preferentially recalls memories acquired (or stored) in that same mood.
+# Distinct from EMOTIONAL_RETRIEVAL — this stage uses a USER session-level
+# mood signal, not the per-query valence.
+
+
+def mood_congruent_rerank(
+    candidates: list[dict[str, Any]],
+    user_mood: float | None,
+    *,
+    blend_beta: float = _MOOD_CONGRUENT_BETA,
+) -> list[dict[str, Any]]:
+    """Rerank by user-mood ↔ candidate-valence congruence.
+
+    ``user_mood`` is a float in [-1, +1] representing the user's current
+    affective state (e.g., set by an upstream emotion classifier or a
+    manual ``checkpoint`` annotation). When ``None``, the stage no-ops:
+    we do NOT fabricate a mood signal in the absence of one.
+
+    Default policy from Bower (1981): mood-congruent — candidates whose
+    stored valence is closer to the user's current mood get a rank boost.
+    The boost is small (RRF beta=0.15) so the underlying retrieval order
+    still dominates; this is a tie-breaker, not a filter.
+
+    Disabled when ``CORTEX_ABLATE_MOOD_CONGRUENT_RERANK=1`` — returns
+    input unchanged. Distinct from EMOTIONAL_RETRIEVAL (which uses the
+    query text's inferred valence).
+
+    Sources:
+      - Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+      - Cormack, Clarke & Buettcher (2009). RRF blend.
+    """
+    if is_mechanism_disabled(Mechanism.MOOD_CONGRUENT_RERANK):
+        return candidates
+    if user_mood is None or not candidates:
+        return candidates
+
+    user_mood_f = float(user_mood)
+
+    def _distance(c: dict[str, Any]) -> float:
+        c_v = c.get("emotional_valence", 0.0) or 0.0
+        return abs(float(c_v) - user_mood_f)
+
+    by_match = sorted(enumerate(candidates), key=lambda x: _distance(x[1]))
+    mech_ranks = {
+        candidates[i]["memory_id"]: rank for rank, (i, _) in enumerate(by_match)
+    }
+    return _rrf_blend(candidates, mech_ranks, blend_beta)

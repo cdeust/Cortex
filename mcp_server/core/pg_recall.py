@@ -33,6 +33,33 @@ def _get_titans() -> TitansMemory:
     return _titans
 
 
+def _get_user_mood(store: Any) -> float | None:
+    """Return the user's session-level mood in [-1, +1], or None if absent.
+
+    Looks for an explicit ``get_user_mood()`` method on the store. There is
+    no such method in the current ``PgMemoryStore`` (April 2026), so this
+    helper returns ``None`` and the MOOD_CONGRUENT_RERANK stage no-ops —
+    per the zetetic source-discipline rule we do NOT fabricate a mood signal.
+    When an upstream emotion classifier or manual checkpoint annotation
+    populates a mood store, expose ``get_user_mood()`` and this helper
+    will start returning real values without further wiring changes.
+    """
+    if store is None:
+        return None
+    if not hasattr(store, "get_user_mood"):
+        return None
+    try:
+        v = store.get_user_mood()
+    except Exception:  # noqa: BLE001 — non-load-bearing; absence is fine
+        return None
+    if v is None:
+        return None
+    try:
+        return max(-1.0, min(1.0, float(v)))
+    except (TypeError, ValueError):
+        return None
+
+
 # ── Chronological reranking ─────────────────────────────────────────────
 # ChronoRAG (Chen et al., arxiv 2508.18748, 2025): for event ordering
 # queries, blend relevance rank with chronological rank via Reciprocal
@@ -257,8 +284,10 @@ def recall(
     # constants and citations.
     from mcp_server.core.recall_pipeline import (
         dendritic_modulate,
+        emotional_retrieval_rerank,
         hdc_rerank,
         hopfield_complete,
+        mood_congruent_rerank,
         spreading_activation_expand,
     )
 
@@ -271,6 +300,16 @@ def recall(
     candidates = hdc_rerank(candidates, query)
     candidates = spreading_activation_expand(candidates, query, store)
     candidates = dendritic_modulate(candidates, query, store)
+
+    # 4e. EMOTIONAL_RETRIEVAL — Bower 1981 mood-congruent recall using
+    # the QUERY's inferred valence (VADER) against each candidate's stored
+    # emotional_valence. No-ops on neutral queries.
+    candidates = emotional_retrieval_rerank(candidates, query)
+
+    # 4f. MOOD_CONGRUENT_RERANK — Bower 1981 mood-state-dependent recall
+    # using the USER's session-level mood. Returns identity when no mood
+    # signal exists; we do not fabricate one.
+    candidates = mood_congruent_rerank(candidates, _get_user_mood(store))
 
     # 5. Client-side FlashRank reranking
     if rerank and len(candidates) > 1:

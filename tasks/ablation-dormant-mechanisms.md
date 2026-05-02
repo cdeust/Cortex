@@ -48,6 +48,8 @@ no longer routes through it.
 | **HDC** | `core/recall_pipeline.hdc_rerank()` | Skips Kanerva 2009 bipolar HDC similarity rerank — content tokens stop contributing the bipolar bind/bundle signal |
 | **SPREADING_ACTIVATION** | `core/recall_pipeline.spreading_activation_expand()` | No graph-side BFS over the entity graph → memories reachable only via 2-3 hops drop out of the result set; observable as new IDs disappearing on ablation |
 | **DENDRITIC_CLUSTERS** | `core/recall_pipeline.dendritic_modulate()` | No multiplicative perturbation in [0.9, 1.1] from query-content Jaccard → near-ties shuffle slightly differently |
+| **EMOTIONAL_RETRIEVAL** | `core/recall_pipeline.emotional_retrieval_rerank()` | Skips Bower 1981 mood-congruent rerank — candidates whose stored `emotional_valence` is closest to the query's VADER compound no longer get an RRF rank boost; non-neutral queries lose the affect signal |
+| **MOOD_CONGRUENT_RERANK** | `core/recall_pipeline.mood_congruent_rerank()` | Skips Bower 1981 mood-state-dependent rerank — when an upstream mood signal is present (`store.get_user_mood()`), candidates congruent with the user's mood lose their rank boost. No-op when no mood signal exists |
 | **CO_ACTIVATION** | `handlers/recall.py:_apply_co_activation` (line 188) | Skips Hebbian post-recall edge strengthening — affects subsequent recalls' SR signal |
 
 ## State-Only Read-Path Mechanisms
@@ -95,8 +97,12 @@ the wiring.
 The §6.3 ablation table now distinguishes:
 
 1. **Active read-path** — ADAPTIVE_DECAY, HOPFIELD, HDC,
-   SPREADING_ACTIVATION, DENDRITIC_CLUSTERS, CO_ACTIVATION.
-   All produce non-zero deltas on a single read.
+   SPREADING_ACTIVATION, DENDRITIC_CLUSTERS, EMOTIONAL_RETRIEVAL,
+   MOOD_CONGRUENT_RERANK, CO_ACTIVATION.
+   All produce non-zero deltas on a single read (MOOD_CONGRUENT_RERANK
+   only when the store exposes a non-None ``get_user_mood()``; the
+   production store does not yet, but the wiring is live for the future
+   classifier — and the smoke harness exercises it via a stub).
 2. **State-only read-path** — SURPRISE_MOMENTUM. No ranking effect
    on a single benchmark pass; effect emerges across consecutive recalls.
 
@@ -110,4 +116,5 @@ path.
 - Commit `099ba1e` (module-level guards added)
 - Commit (this) — wired four dormant mechs through `pg_recall.recall`
 - Smoke test: `tasks/smoke_recall_pipeline.py`
-- Tests: `tests_py/core/test_pg_recall_pipeline.py` (12 tests, all green)
+- Tests: `tests_py/core/test_pg_recall_pipeline.py` (21 tests, all green)
+- Commit (this) — wired EMOTIONAL_RETRIEVAL + MOOD_CONGRUENT_RERANK; +6 tests; smoke confirms 6 mechanisms produce deltas

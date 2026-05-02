@@ -23,8 +23,10 @@ import pytest
 
 from mcp_server.core.recall_pipeline import (
     dendritic_modulate,
+    emotional_retrieval_rerank,
     hdc_rerank,
     hopfield_complete,
+    mood_congruent_rerank,
     spreading_activation_expand,
 )
 
@@ -363,6 +365,88 @@ def test_dendritic_falls_back_to_token_jaccard_when_query_unresolvable():
         new = c_out["score"]
         if old > 0:
             assert 0.9 - 1e-6 <= new / old <= 1.1 + 1e-6
+
+
+# ── EMOTIONAL_RETRIEVAL ─────────────────────────────────────────────────
+
+
+def _emo_candidates() -> list[dict]:
+    """Candidates spanning the valence range [-0.8, +0.8]."""
+    valences = [+0.8, -0.6, +0.1, -0.8, +0.5]
+    return [
+        {
+            "memory_id": i,
+            "content": f"mem {i}",
+            "score": 1.0 / (i + 1),
+            "heat": 0.5,
+            "tags": [],
+            "domain": "test",
+            "created_at": "2026-04-30T00:00:00Z",
+            "emotional_valence": v,
+        }
+        for i, v in enumerate(valences)
+    ]
+
+
+def test_emotional_retrieval_active_positive_query_promotes_positive():
+    """A positive-valence query must rank positive candidates above negative."""
+    cands = _emo_candidates()
+    # "fixed deployed shipped excellent" → strongly positive VADER compound
+    out = emotional_retrieval_rerank(
+        cands, "fixed deployed shipped excellent breakthrough"
+    )
+    out_ids = [c["memory_id"] for c in out]
+    # Candidate 0 (valence +0.8) and 4 (+0.5) must outrank 3 (-0.8) and 1 (-0.6).
+    assert out_ids.index(0) < out_ids.index(3)
+    assert out_ids.index(0) < out_ids.index(1)
+    # Score type unchanged (float), and all keys preserved.
+    by_id = {c["memory_id"]: c for c in cands}
+    for c_out in out:
+        assert isinstance(c_out["score"], float)
+        assert set(by_id[c_out["memory_id"]]) <= set(c_out)
+
+
+def test_emotional_retrieval_neutral_query_returns_identity():
+    """A neutral query (|VADER compound| < floor) is a no-op."""
+    cands = _emo_candidates()
+    # "the file path module import" — zero lexicon hits → compound = 0.0
+    out = emotional_retrieval_rerank(cands, "the file path module import")
+    assert out == cands
+
+
+def test_emotional_retrieval_disabled_returns_identity():
+    """CORTEX_ABLATE_EMOTIONAL_RETRIEVAL=1 must short-circuit the rerank."""
+    cands = _emo_candidates()
+    with _ablate("CORTEX_ABLATE_EMOTIONAL_RETRIEVAL"):
+        out = emotional_retrieval_rerank(cands, "fixed deployed shipped excellent")
+    assert out == cands
+
+
+# ── MOOD_CONGRUENT_RERANK ───────────────────────────────────────────────
+
+
+def test_mood_congruent_no_mood_returns_identity():
+    """user_mood=None → stage is identity. We do NOT fabricate a mood."""
+    cands = _emo_candidates()
+    out = mood_congruent_rerank(cands, None)
+    assert out == cands
+
+
+def test_mood_congruent_disabled_returns_identity():
+    """CORTEX_ABLATE_MOOD_CONGRUENT_RERANK=1 must short-circuit."""
+    cands = _emo_candidates()
+    with _ablate("CORTEX_ABLATE_MOOD_CONGRUENT_RERANK"):
+        out = mood_congruent_rerank(cands, +0.7)
+    assert out == cands
+
+
+def test_mood_congruent_active_promotes_congruent_valence():
+    """Positive user mood → positive-valence candidates get a rank boost."""
+    cands = _emo_candidates()
+    out = mood_congruent_rerank(cands, user_mood=+0.7)
+    out_ids = [c["memory_id"] for c in out]
+    # Candidate 0 (+0.8) is closest to mood +0.7 → must rank above 3 (-0.8).
+    assert out_ids.index(0) < out_ids.index(3)
 
 
 if __name__ == "__main__":
