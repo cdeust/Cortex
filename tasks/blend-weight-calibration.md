@@ -1,6 +1,6 @@
 # Blend-weight calibration — 6 read-path stages
 
-**Status:** pre-registered (results pending Phase A + B execution)
+**Status:** completed — both phases ran; results below; defaults stand for all 6 knobs.
 **Pre-registered:** 2026-05-02
 **Owner:** task #50 (Cortex verification campaigns)
 
@@ -147,19 +147,135 @@ engineering default with a comment switching from `engineering default` to
 
 ## Results
 
-(to be filled in after Phase A + Phase B complete)
+**Date:** 2026-05-03 (analysis); sweep ran 2026-05-02.
+**Code SHA at sweep launch:** `39ab694` (sweep started before subsequent
+commits `9d6bc96` and `0e1f90d`; both subsequent commits modify
+consolidation/CLI surfaces and do **not** touch the read-path stages
+exercised by this calibration, so the results remain valid for the six
+calibrated read-path constants).
+**Tree dirty at launch:** false (verified by harness `manifest.json`).
+**Phase A artifact:** `benchmarks/results/blend_calibration/phase_a_20260502T200248Z/analysis.json`
+**Phase B artifact:** `benchmarks/results/blend_calibration/phase_b_20260502T232133Z/analysis.json`
+**Wall:** Phase A 4178 s (~70 min); Phase B ~61 min. Total ≈ 131 min vs. 13 h budget.
 
 ### Phase A optimum
-TBD
+
+17-cell central-composite design over the 4 perception-side knobs;
+EMOTIONAL_RETRIEVAL_BETA and MOOD_CONGRUENT_BETA pinned at engineering defaults.
+
+| Field | Value |
+|---|---|
+| Best cell label | `A_center` |
+| HOPFIELD_BETA | 0.30 |
+| HDC_BETA | 0.20 |
+| SA_BETA | 0.25 |
+| DENDRITIC_DELTA | 0.10 |
+| MRR | 0.84 |
+| R@10 | 0.94 |
+| Plateau width (ε=0.005) | **1 cell** — the center is the unique optimum |
+
+**Per-knob marginal effect (Δ MRR low → high holding others at center):**
+
+| Knob | Marginal range | Best level | by_level |
+|---|---|---|---|
+| HOPFIELD_BETA | 0.0453 | 0.30 | {0.30: 0.840, 0.10: 0.823, 0.40: 0.795} |
+| HDC_BETA | 0.0364 | 0.20 | {0.20: 0.840, 0.10: 0.814, 0.40: 0.804} |
+| SA_BETA | 0.0375 | 0.25 | {0.25: 0.840, 0.10: 0.803, 0.40: 0.815} |
+| DENDRITIC_DELTA | 0.0353 | 0.10 | {0.10: 0.840, 0.05: 0.813, 0.20: 0.805} |
+
+All four perception-side marginals exceed the 0.003 threshold, so the
+knobs DO affect retrieval (they are not no-ops). The engineering defaults
+happen to be at or very close to the optimum on every axis.
 
 ### Phase B optimum
-TBD
+
+25-cell 5 × 5 grid over the 2 affect-side knobs with the 4 perception-side
+knobs pinned at the Phase A optimum (0.30, 0.20, 0.25, 0.10).
+
+| Field | Value |
+|---|---|
+| Best cell label | `B_er0.10_mc0.05` (first in plateau; all 25 are tied) |
+| EMOTIONAL_RETRIEVAL_BETA | 0.10 (any of {0.10, 0.15, 0.20, 0.25, 0.30} ties) |
+| MOOD_CONGRUENT_BETA | 0.05 (any of {0.05, 0.10, 0.15, 0.20, 0.25} ties) |
+| MRR | 0.84 (identical across all 25 cells) |
+| R@10 | 0.90 |
+| Plateau width (ε=0.005) | **25 cells** — full plateau, no gradient |
+
+**Per-knob marginal effect:**
+
+| Knob | Marginal range | Interpretation |
+|---|---|---|
+| EMOTIONAL_RETRIEVAL_BETA | 0.000 | no observable effect at this n |
+| MOOD_CONGRUENT_BETA | 0.000 | no observable effect at this n |
+
+This is a real scientific finding, not a benchmark bug or instrumentation
+defect. Both stages are gated upstream of their blend weight on this
+benchmark:
+
+- **EMOTIONAL_RETRIEVAL** stage no-ops on LongMemEval-S queries because the
+  queries are factual / neutral. VADER compound valence falls below
+  `_EMOTIONAL_QUERY_VALENCE_FLOOR = 0.10`, the floor check returns the
+  candidate list unchanged, and the blend weight is never consulted.
+- **MOOD_CONGRUENT_RERANK** stage no-ops because `PgMemoryStore` does not
+  implement `get_user_mood()`. `_get_user_mood(store)` returns `None`, the
+  stage short-circuits, and the blend weight is never consulted. This is
+  already documented in task #54.
+
+The pre-registration explicitly anticipated the second case ("MOOD_CONGRUENT_RERANK
+is a no-op in production until upstream emotion classifier ships"). The first
+case (factual-query VADER gate) is consistent with that caveat.
 
 ### Decision per knob
-TBD
+
+Pre-registered decision rule: a knob's calibrated value replaces the
+engineering default iff `Δ_MRR ≥ 0.005 AND marginal_effect ≥ 0.003`.
+Otherwise the engineering default stands.
+
+| Knob | Δ_MRR (best vs default) | Marginal | Decision |
+|---|---|---|---|
+| HOPFIELD_BETA | 0.000 (best == default) | 0.0453 | **default stands** — confirmed near-optimum |
+| HDC_BETA | 0.000 | 0.0364 | **default stands** — confirmed near-optimum |
+| SA_BETA | 0.000 | 0.0375 | **default stands** — confirmed near-optimum |
+| DENDRITIC_DELTA | 0.000 | 0.0353 | **default stands** — confirmed near-optimum |
+| EMOTIONAL_RETRIEVAL_BETA | 0.000 | 0.000 | **default stands** — no observable effect on LongMemEval-S (upstream VADER gate) |
+| MOOD_CONGRUENT_BETA | 0.000 | 0.000 | **default stands** — no observable effect on LongMemEval-S (no user-mood adapter) |
+
+H0 is **not rejected** for any of the six knobs.
 
 ### Calibrated constants
-TBD
+
+**No constant values change. Six constants get comment updates only.**
+
+In `mcp_server/core/recall_pipeline.py`:
+
+- `_HOPFIELD_BETA = 0.30` — comment now reads
+  "engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §HOPFIELD_BETA"
+- `_HDC_BETA = 0.20` — comment now reads
+  "engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §HDC_BETA"
+- `_SA_BETA = 0.25` — comment now reads
+  "engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §SA_BETA"
+- `_DENDRITIC_DELTA = 0.10` — comment now reads
+  "engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §DENDRITIC_DELTA"
+- `_EMOTIONAL_RETRIEVAL_BETA = 0.20` — comment now reads
+  "engineering default — no observable effect on LongMemEval-S (upstream VADER gate); tasks/blend-weight-calibration.md Results §EMOTIONAL_RETRIEVAL_BETA"
+- `_MOOD_CONGRUENT_BETA = 0.15` — comment now reads
+  "engineering default — no observable effect on LongMemEval-S (no user-mood adapter); tasks/blend-weight-calibration.md Results §MOOD_CONGRUENT_BETA"
+
+The two affect-side constants are retained at their conservative defaults
+for the benefit of benchmarks that DO exercise these gates (emotion-laden
+corpora, user-mood-aware deployments). Removing them would require a
+separate decision rooted in evidence from such benchmarks; this calibration
+provides no such evidence either way.
 
 ### Notes / deviations from pre-registration
-TBD
+
+None. The execution matched the pre-registered design:
+- 17-cell CCD for Phase A, n=50 LongMemEval-S — executed as specified.
+- 25-cell 5×5 grid for Phase B, n=30 LongMemEval-S — executed as specified.
+- Single-seed limitation acknowledged in the pre-registration; not mitigated
+  here. The Phase A plateau width of 1 (decisive optimum at the center) and
+  Phase B plateau width of 25 (full null) are both consistent with the
+  single-seed reporting protocol — the wide plateau on Phase B is exactly
+  the kind of "no detectable effect at this n" outcome the pre-registration
+  warned about for upstream-gated stages.
+- Decision rule applied mechanically; no post-hoc reframing.

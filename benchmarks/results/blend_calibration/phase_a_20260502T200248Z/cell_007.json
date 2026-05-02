@@ -1,0 +1,17 @@
+{
+  "idx": 7,
+  "label": "A_LHHL",
+  "weights": {
+    "HOPFIELD_BETA": 0.1,
+    "HDC_BETA": 0.4,
+    "SA_BETA": 0.4,
+    "DENDRITIC_DELTA": 0.05,
+    "EMOTIONAL_RETRIEVAL_BETA": 0.2,
+    "MOOD_CONGRUENT_BETA": 0.15
+  },
+  "n_queries": 50,
+  "wall_seconds": 231.76775654195808,
+  "returncode": 0,
+  "mrr": 0.817,
+  "r10": 0.94
+}

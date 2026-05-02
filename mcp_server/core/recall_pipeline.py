@@ -71,25 +71,44 @@ def _env_float(name: str, default: float) -> float:
 # LongMemEval-S to pick the optima documented in
 # ``tasks/blend-weight-calibration.md``. If unset, the engineering defaults
 # below stand.
-_HOPFIELD_BETA: float = _env_float("CORTEX_HOPFIELD_BETA", 0.30)
-_HDC_BETA: float = _env_float("CORTEX_HDC_BETA", 0.20)
-_SA_BETA: float = _env_float("CORTEX_SA_BETA", 0.25)
+#
+# Calibration outcome (task #50, Phase A — 17-cell CCD, n=50 LongMemEval-S,
+# 2026-05-02): all four perception-side knobs are confirmed near-optimum at
+# their engineering defaults. Center cell (0.30, 0.20, 0.25, 0.10) is the
+# unique plateau winner at MRR=0.84, R@10=0.94. Marginal effects 0.035–0.045
+# confirm the knobs DO affect retrieval (not no-ops); the defaults happen to
+# be the optimal levels. See tasks/blend-weight-calibration.md Results §A.
+_HOPFIELD_BETA: float = _env_float("CORTEX_HOPFIELD_BETA", 0.30)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §HOPFIELD_BETA
+_HDC_BETA: float = _env_float("CORTEX_HDC_BETA", 0.20)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §HDC_BETA
+_SA_BETA: float = _env_float("CORTEX_SA_BETA", 0.25)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §SA_BETA
 
 # Dendritic multiplicative range — bounded perturbation from Poirazi (2003)
 # soma scale of 0.96. We use [1 - DELTA, 1 + DELTA] so a 1.0 baseline
 # (no cluster match) leaves the score unchanged, while high-affinity
 # matches get a +DELTA bump and conflicting branches get -DELTA.
-_DENDRITIC_DELTA: float = _env_float("CORTEX_DENDRITIC_DELTA", 0.10)
+_DENDRITIC_DELTA: float = _env_float("CORTEX_DENDRITIC_DELTA", 0.10)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §DENDRITIC_DELTA
 
 # Emotional / mood-congruent rerank blend weights.
-# source: engineering default; calibration in tasks/blend-weight-calibration.md
-# (task #50, 6-knob grid HOPFIELD × HDC × SA × DENDRITIC × EMOTIONAL_RETRIEVAL ×
-# MOOD_CONGRUENT). Bower (1981) "Mood and Memory," Am. Psychologist 36(2)
-# does not prescribe a numeric blend weight; the paper's claim is qualitative
-# (mood-congruent recall is faster/more accurate than incongruent), so the
-# magnitude is set conservatively below the perception-side stages.
-_EMOTIONAL_RETRIEVAL_BETA: float = _env_float("CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.20)
-_MOOD_CONGRUENT_BETA: float = _env_float("CORTEX_MOOD_CONGRUENT_BETA", 0.15)
+# Bower (1981) "Mood and Memory," Am. Psychologist 36(2) does not prescribe
+# a numeric blend weight; the paper's claim is qualitative (mood-congruent
+# recall is faster/more accurate than incongruent), so the magnitude is set
+# conservatively below the perception-side stages.
+#
+# Calibration outcome (task #50, Phase B — 25-cell 5×5 grid, n=30
+# LongMemEval-S, 2026-05-02): both affect-side knobs showed zero observable
+# effect on LongMemEval-S (all 25 cells tied at MRR=0.84, marginal=0.0).
+# This is a genuine null on this benchmark, driven by upstream gates:
+#   • EMOTIONAL_RETRIEVAL stage no-ops because LME-S queries are factual/
+#     neutral (VADER compound < _EMOTIONAL_QUERY_VALENCE_FLOOR=0.10, see
+#     floor check inside emotional_retrieval_rerank below).
+#   • MOOD_CONGRUENT_RERANK stage no-ops because PgMemoryStore has no
+#     get_user_mood() adapter (task #54). _get_user_mood(store) at
+#     pg_recall.py returns None and the stage short-circuits.
+# Constants are kept at the conservative engineering defaults for the
+# benefit of benchmarks that DO exercise these gates (emotion-laden corpora,
+# user-mood-aware deployments).
+_EMOTIONAL_RETRIEVAL_BETA: float = _env_float("CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.20)  # engineering default — no observable effect on LongMemEval-S (upstream VADER gate); tasks/blend-weight-calibration.md Results §EMOTIONAL_RETRIEVAL_BETA
+_MOOD_CONGRUENT_BETA: float = _env_float("CORTEX_MOOD_CONGRUENT_BETA", 0.15)  # engineering default — no observable effect on LongMemEval-S (no user-mood adapter); tasks/blend-weight-calibration.md Results §MOOD_CONGRUENT_BETA
 
 # Below this absolute compound-valence value the query is treated as
 # emotionally neutral and the EMOTIONAL_RETRIEVAL stage no-ops. VADER

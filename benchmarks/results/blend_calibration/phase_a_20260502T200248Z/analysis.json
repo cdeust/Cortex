@@ -1,0 +1,59 @@
+{
+  "best": {
+    "idx": 0,
+    "label": "A_center",
+    "weights": {
+      "HOPFIELD_BETA": 0.3,
+      "HDC_BETA": 0.2,
+      "SA_BETA": 0.25,
+      "DENDRITIC_DELTA": 0.1,
+      "EMOTIONAL_RETRIEVAL_BETA": 0.2,
+      "MOOD_CONGRUENT_BETA": 0.15
+    },
+    "mrr": 0.84,
+    "r10": 0.94
+  },
+  "plateau_size": 1,
+  "plateau_eps": 0.005,
+  "plateau_labels": [
+    "A_center"
+  ],
+  "marginal_effects": {
+    "HOPFIELD_BETA": {
+      "range": 0.04525000000000001,
+      "best_level": 0.3,
+      "by_level": {
+        "0.3": 0.84,
+        "0.1": 0.823,
+        "0.4": 0.79475
+      }
+    },
+    "HDC_BETA": {
+      "range": 0.036375000000000046,
+      "best_level": 0.2,
+      "by_level": {
+        "0.2": 0.84,
+        "0.1": 0.814125,
+        "0.4": 0.8036249999999999
+      }
+    },
+    "SA_BETA": {
+      "range": 0.03749999999999998,
+      "best_level": 0.25,
+      "by_level": {
+        "0.25": 0.84,
+        "0.1": 0.8025,
+        "0.4": 0.81525
+      }
+    },
+    "DENDRITIC_DELTA": {
+      "range": 0.035250000000000004,
+      "best_level": 0.1,
+      "by_level": {
+        "0.1": 0.84,
+        "0.05": 0.813,
+        "0.2": 0.80475
+      }
+    }
+  }
+}

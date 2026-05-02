@@ -1,0 +1,20 @@
+{
+  "code_hash": "0e1f90d94e077dab22e4003e2ea5337d25912443",
+  "dirty": false,
+  "phase": "a",
+  "n_queries": 50,
+  "n_cells": 17,
+  "total_wall_seconds": 4178.1342589160195,
+  "started_at": "2026-05-02T21:12:27.762251+00:00",
+  "command": [
+    "/Users/cdeust/Developments/Cortex/benchmarks/lib/blend_weight_sweep.py",
+    "--phase",
+    "a",
+    "--n-queries",
+    "50",
+    "--output",
+    "benchmarks/results/blend_calibration/phase_a_20260502T200248Z"
+  ],
+  "data_path": "/Users/cdeust/Developments/Cortex/benchmarks/longmemeval/longmemeval_s.json",
+  "seed_note": "LongMemEval-S has fixed question order; benchmarks/lib/bench_db applies CORTEX_BENCH_DETERMINISTIC_RUN_ID GUCs when set"
+}
