@@ -141,10 +141,18 @@ def compute_pg_weights(
       cannot discriminate when constant), kept as a separate var so the
       n_scan harness can force a specific constant heat at write time and
       confirm the ranker reproduces flat baseline at read time.
+    - ``CORTEX_ABLATE_ADAPTIVE_DECAY=1`` (Mechanism.ADAPTIVE_DECAY):
+      handler-level read-path guard. Forces heat weight to 0.0 in the
+      WRRF fusion so the thermodynamic adaptive-decay signal cannot
+      influence ranking. This is the cleaner approach than trying to
+      inject ablation into PL/pgSQL — same observable effect at the
+      composition root. Source: tasks/verification-protocol.md E1.
     Source: tasks/verification-protocol.md E2 (N-scan); env vars defined
     by benchmarks/lib/n_scan_runner.py:_apply_condition.
     """
     import os as _os
+
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     cw = core_weights or {}
     # Vector is always 1.0 in the PG path — it's the primary discovery signal.
@@ -160,8 +168,10 @@ def compute_pg_weights(
     overrides = _PG_INTENT_OVERRIDES.get(intent)
     if overrides:
         base.update(overrides)
-    if _os.environ.get("CORTEX_DECAY_DISABLED") == "1" or _os.environ.get(
-        "CORTEX_HEAT_CONSTANT"
+    if (
+        _os.environ.get("CORTEX_DECAY_DISABLED") == "1"
+        or _os.environ.get("CORTEX_HEAT_CONSTANT")
+        or is_mechanism_disabled(Mechanism.ADAPTIVE_DECAY)
     ):
         base["heat"] = 0.0
     return base
