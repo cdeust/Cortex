@@ -1,0 +1,31 @@
+{
+  "overall_mrr": 0.9134277777777778,
+  "overall_recall10": 0.984,
+  "category_mrr": {
+    "Single-session (user)": 0.814047619047619,
+    "Multi-session reasoning": 0.9622389306599832,
+    "Single-session (preference)": 0.6677777777777778,
+    "Temporal reasoning": 0.929344193817878,
+    "Knowledge updates": 0.9245726495726495,
+    "Single-session (assistant)": 1.0
+  },
+  "category_recall10": {
+    "Single-session (user)": 0.9428571428571428,
+    "Multi-session reasoning": 1.0,
+    "Single-session (preference)": 0.9333333333333333,
+    "Temporal reasoning": 0.9849624060150376,
+    "Knowledge updates": 1.0,
+    "Single-session (assistant)": 1.0
+  },
+  "elapsed_s": 2358.1529042089824,
+  "consolidation_total_wall_s": 0.0,
+  "consolidation_call_count": 0,
+  "manifest": {
+    "with_consolidation": false,
+    "ablate_mechanism": "EMOTIONAL_RETRIEVAL",
+    "ablate_env_var": "CORTEX_ABLATE_EMOTIONAL_RETRIEVAL=1",
+    "n_questions": 500,
+    "consolidation_call_count": 0,
+    "consolidation_total_wall_s": 0.0
+  }
+}

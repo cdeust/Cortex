@@ -1,0 +1,31 @@
+{
+  "overall_mrr": 0.9125174603174603,
+  "overall_recall10": 0.982,
+  "category_mrr": {
+    "Single-session (user)": 0.8005102040816326,
+    "Multi-session reasoning": 0.9704976727533119,
+    "Single-session (preference)": 0.6762433862433863,
+    "Temporal reasoning": 0.9223773720014321,
+    "Knowledge updates": 0.9254273504273505,
+    "Single-session (assistant)": 1.0
+  },
+  "category_recall10": {
+    "Single-session (user)": 0.9428571428571428,
+    "Multi-session reasoning": 1.0,
+    "Single-session (preference)": 0.9333333333333333,
+    "Temporal reasoning": 0.9774436090225563,
+    "Knowledge updates": 1.0,
+    "Single-session (assistant)": 1.0
+  },
+  "elapsed_s": 1999.339390374953,
+  "consolidation_total_wall_s": 0.0,
+  "consolidation_call_count": 0,
+  "manifest": {
+    "with_consolidation": false,
+    "ablate_mechanism": "HDC",
+    "ablate_env_var": "CORTEX_ABLATE_HDC=1",
+    "n_questions": 500,
+    "consolidation_call_count": 0,
+    "consolidation_total_wall_s": 0.0
+  }
+}

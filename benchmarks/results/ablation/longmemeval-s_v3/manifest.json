@@ -1,0 +1,150 @@
+{
+  "code_hash": "0e858e8db0f8a5dae0879fa0134113d101be19f8",
+  "dirty": false,
+  "started_at": "2026-05-02T22:39:22.127847+00:00",
+  "n": 500,
+  "n_rows": 17,
+  "variant": "s",
+  "with_consolidation": false,
+  "mechanisms": [
+    "HOPFIELD",
+    "HDC",
+    "SPREADING_ACTIVATION",
+    "DENDRITIC_CLUSTERS",
+    "EMOTIONAL_RETRIEVAL",
+    "ADAPTIVE_DECAY",
+    "CO_ACTIVATION",
+    "SURPRISE_MOMENTUM",
+    "OSCILLATORY_CLOCK",
+    "PREDICTIVE_CODING",
+    "NEUROMODULATION",
+    "PATTERN_SEPARATION",
+    "EMOTIONAL_TAGGING",
+    "SYNAPTIC_TAGGING",
+    "ENGRAM_ALLOCATION",
+    "RECONSOLIDATION"
+  ],
+  "rows": [
+    {
+      "row": "BASELINE",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2352.7046070098877,
+      "returncode": 0
+    },
+    {
+      "row": "HOPFIELD",
+      "mrr": 0.9117412698412699,
+      "r10": 0.98,
+      "wall_seconds": 2349.5053050518036,
+      "returncode": 0
+    },
+    {
+      "row": "HDC",
+      "mrr": 0.9125174603174603,
+      "r10": 0.982,
+      "wall_seconds": 2000.7482550144196,
+      "returncode": 0
+    },
+    {
+      "row": "SPREADING_ACTIVATION",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2356.7548151016235,
+      "returncode": 0
+    },
+    {
+      "row": "DENDRITIC_CLUSTERS",
+      "mrr": 0.9125944444444445,
+      "r10": 0.984,
+      "wall_seconds": 2368.347133874893,
+      "returncode": 0
+    },
+    {
+      "row": "EMOTIONAL_RETRIEVAL",
+      "mrr": 0.9134277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2359.5716710090637,
+      "returncode": 0
+    },
+    {
+      "row": "ADAPTIVE_DECAY",
+      "mrr": 0.9138357142857143,
+      "r10": 0.984,
+      "wall_seconds": 2374.3850541114807,
+      "returncode": 0
+    },
+    {
+      "row": "CO_ACTIVATION",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2369.5183742046356,
+      "returncode": 0
+    },
+    {
+      "row": "SURPRISE_MOMENTUM",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2381.4527127742767,
+      "returncode": 0
+    },
+    {
+      "row": "OSCILLATORY_CLOCK",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2377.2621648311615,
+      "returncode": 0
+    },
+    {
+      "row": "PREDICTIVE_CODING",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2432.310583114624,
+      "returncode": 0
+    },
+    {
+      "row": "NEUROMODULATION",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2404.08025598526,
+      "returncode": 0
+    },
+    {
+      "row": "PATTERN_SEPARATION",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2356.3776149749756,
+      "returncode": 0
+    },
+    {
+      "row": "EMOTIONAL_TAGGING",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2414.110841989517,
+      "returncode": 0
+    },
+    {
+      "row": "SYNAPTIC_TAGGING",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2375.18350481987,
+      "returncode": 0
+    },
+    {
+      "row": "ENGRAM_ALLOCATION",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2343.2147059440613,
+      "returncode": 0
+    },
+    {
+      "row": "RECONSOLIDATION",
+      "mrr": 0.9124277777777778,
+      "r10": 0.984,
+      "wall_seconds": 2292.5596871376038,
+      "returncode": 0
+    }
+  ],
+  "last_completed_at": "2026-05-03T09:44:30.249786+00:00",
+  "finished_at": "2026-05-03T09:44:30.252494+00:00"
+}
