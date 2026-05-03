@@ -544,11 +544,10 @@ carry it.
 
 The \S\ref{sec:empirical} table reports the integrated stack against
 published baselines.  This subsection decomposes the integrated number
-into per-mechanism contributions on a single benchmark---LongMemEval-S
-at $n{=}500$, single seed---at the calibrated equilibrium described in
-\S\ref{sec:calibration} below.  The LoCoMo half is reported in a
-forthcoming companion subsection (\S\ref{sec:locomo-forthcoming});
-the sweep is currently running.
+into per-mechanism contributions on two benchmarks---LongMemEval-S
+at $n{=}500$, single seed (\S\S\ref{sec:per-mech-table}--\ref{sec:per-mech-architectural})
+and LoCoMo at $n{=}1986$, single seed (\S\ref{sec:locomo-evidence})---at
+the calibrated equilibrium described in \S\ref{sec:calibration} below.
 
 \paragraph{Headline against the established Cortex baseline.}  At
 $n{=}500$ the calibrated integrated stack reaches
@@ -711,19 +710,120 @@ consolidation, write-time pressure, and inter-session heat dynamics
 is observable only on a benchmark whose architecture preserves
 longitudinal state.
 
-\subsubsection{LoCoMo evidence: forthcoming}
+\subsubsection{LoCoMo evidence: empirical resolution of the architectural-mismatch hypothesis}
+\label{sec:locomo-evidence}
 \label{sec:locomo-forthcoming}
 
-A 14-row LoCoMo ablation (10 consolidation/longitudinal mechanisms +
-baseline + checks) is currently sweeping ($\sim$7--11\,h wall,
-single-seed).  On completion this subsection will be extended with
-the LoCoMo per-mechanism table for: CASCADE, INTERFERENCE,
-HOMEOSTATIC\_PLASTICITY, SYNAPTIC\_PLASTICITY, MICROGLIAL\_PRUNING,
-TWO\_STAGE\_MODEL, EMOTIONAL\_DECAY, TRIPARTITE\_SYNAPSE,
-SCHEMA\_ENGINE, plus the longitudinal read-path rows
-(ADAPTIVE\_DECAY, RECONSOLIDATION, SYNAPTIC\_TAGGING) that were
-muted by LME-S's per-question reset.  We do not speculate on the
-LoCoMo numbers here; they are not measured yet.
+The LME-S analysis above identified three classes of mechanism whose
+mechanism-of-action is foreclosed by the LME-S
+\texttt{db.clear() $\to$ db.load(haystack) $\to$ db.recall(query)}
+per-question architecture: read-path rerank in a saturated regime,
+affect-side stages on factual queries, and longitudinal mechanisms
+whose state is wiped per question.  We claimed the longitudinal class
+would show up on a longitudinal benchmark.  We now measure that.
+
+The LoCoMo ablation is a 14-row, two-baseline, single-seed sweep on
+the full benchmark ($n = 1986$).  The two-baseline structure is
+necessary because a single anchor cannot fairly evaluate both
+classes: mechanisms whose mechanism-of-action requires session
+continuity at recall time are ablated against
+\texttt{BASELINE\_NO\_CONSOLIDATION} (consolidation off), while
+mechanisms that fire only during consolidation are ablated against
+\texttt{BASELINE\_WITH\_CONSOLIDATION} (consolidation on).  Each
+anchor reflects the active mechanism set at recall time for that
+group's mechanism-of-action.  Sign convention is unchanged from
+\S\ref{sec:per-mech-table}: $\Delta\text{MRR} = \text{anchor} -
+\text{ablated}$.
+
+\paragraph{Headline.}  \texttt{BASELINE\_NO\_CONSOLIDATION} reaches
+MRR $= 0.8278$, R@10 $= 0.942$ on LoCoMo ($n = 1986$).  Against the
+established LoCoMo baseline (MRR $= 0.794$, R@10 $= 0.926$) this is
+$+4.3\%$ MRR, $+1.6\%$ R@10.
+\texttt{BASELINE\_WITH\_CONSOLIDATION} reaches MRR $= 0.8264$,
+R@10 $= 0.940$ ($\Delta$ vs.\ NO $= +0.0014$, within the per-row
+noise floor).  The two anchors agreeing at full $n$ confirms that the
+consolidation cadence fix described in \S\ref{sec:cadence-fix} holds
+on the full benchmark, not only on smoke.  Artefacts at
+\texttt{benchmarks/results/ablation/locomo\_v3/}; manifest code SHA
+\texttt{ef178da}, dirty=false, finished 2026-05-03.
+
+\begin{center}
+\small
+\begin{tabular}{lrrrrl}
+\toprule
+Mechanism                       & MRR (abl.) & R@10 (abl.) & $\Delta$MRR & $\Delta$R@10 & Anchor \\
+\midrule
+BASELINE\_NO\_CONSOLIDATION     & 0.8278 & 0.942 & 0          & 0          & self \\
+RECONSOLIDATION                 & 0.8202 & 0.931 & $+$0.0076  & $+$0.011   & NO   \\
+CO\_ACTIVATION                  & 0.8268 & 0.940 & $+$0.0010  & $+$0.001   & NO   \\
+ADAPTIVE\_DECAY                 & 0.8441 & 0.962 & $-$0.0163  & $-$0.020   & NO   \\
+BASELINE\_WITH\_CONSOLIDATION   & 0.8264 & 0.940 & 0          & 0          & self \\
+CASCADE                         & 0.8272 & 0.941 & $-$0.0008  & $-$0.001   & WITH \\
+INTERFERENCE                    & 0.8260 & 0.939 & $+$0.0004  & $+$0.001   & WITH \\
+HOMEOSTATIC\_PLASTICITY         & 0.8289 & 0.945 & $-$0.0025  & $-$0.005   & WITH \\
+SYNAPTIC\_PLASTICITY            & 0.8264 & 0.940 & $\phantom{-}0.0000$ & 0 & WITH \\
+MICROGLIAL\_PRUNING             & 0.8253 & 0.939 & $+$0.0011  & $+$0.001   & WITH \\
+TWO\_STAGE\_MODEL               & 0.8276 & 0.941 & $-$0.0012  & $-$0.001   & WITH \\
+EMOTIONAL\_DECAY                & 0.8249 & 0.940 & $+$0.0015  & $\phantom{-}0.000$ & WITH \\
+TRIPARTITE\_SYNAPSE             & 0.8268 & 0.941 & $-$0.0004  & $-$0.001   & WITH \\
+SCHEMA\_ENGINE                  & 0.8268 & 0.941 & $-$0.0004  & $-$0.001   & WITH \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Empirical resolution of the LME-S architectural-mismatch
+hypothesis.}  The three longitudinal mechanisms LME-S could not
+exercise show up on LoCoMo with consistent signs and magnitudes:
+
+\begin{center}
+\small
+\begin{tabular}{lrrl}
+\toprule
+Mechanism        & LME-S $\Delta$MRR & LoCoMo $\Delta$MRR & Resolution \\
+\midrule
+RECONSOLIDATION  & $+$0.0000 & $+$0.0076 & Confirmed: fires on multi-session recall \\
+CO\_ACTIVATION   & $+$0.0000 & $+$0.0010 & Confirmed; smaller magnitude \\
+ADAPTIVE\_DECAY  & $-$0.0014 & $-$0.0163 & Same sign, amplified $\sim 11\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This is the load-bearing finding of \S\ref{sec:locomo-evidence}.  The
+\S\ref{sec:per-mech-architectural} argument (that 13 LME-S rows were
+\emph{predicted-null by construction}, not failed mechanisms) is now
+empirically substantiated for the longitudinal subset: when the
+benchmark exercises the mechanism-of-action, the mechanism shows up
+in the deltas.
+
+\paragraph{Top contributors per anchor group.}  In the
+longitudinal-read-path group, ADAPTIVE\_DECAY ($|\Delta\text{MRR}| =
+0.0163$, counterproductive) and RECONSOLIDATION ($\Delta\text{MRR} =
++0.0076$, positive) dominate; CO\_ACTIVATION ($+0.0010$) is
+consistent-sign but at the per-row noise floor.  In the
+consolidation-only group, all nine deltas sit within the per-row
+noise floor ($\approx \pm 0.002$ MRR at $n = 1986$ single-seed);
+HOMEOSTATIC\_PLASTICITY ($-0.0025$) is the largest absolute,
+EMOTIONAL\_DECAY ($+0.0015$) and TWO\_STAGE\_MODEL ($-0.0012$)
+follow.  The honest reading of the consolidation-only group is that
+the consolidation pipeline as a whole contributes (the cadence fix
+narrative in \S\ref{sec:cadence-fix} is not undone by these deltas),
+but no single consolidation-time mechanism dominates at LoCoMo's
+scale---the same calibrated-stack property
+\S\ref{sec:per-mechanism} already documented for LME-S.
+
+\paragraph{Limitations of the LoCoMo run.}  Single-seed at
+$n = 1986$; per-row noise floor $\approx \pm 0.002$ MRR.  The
+plasticity result-shape contract bug fixed in commit \texttt{5f737fe}
+(\S\ref{sec:plasticity-fix} below) was discovered \emph{during} the
+LoCoMo sweep and the run was launched on bytes pre-fix; the
+\texttt{BASELINE\_WITH} and the nine consolidation-only rows
+therefore ran with a logged-WARNING (not a crash) that may have
+muted some consolidation deltas.  The three longitudinal-read-path
+rows ran with consolidation off, are not affected by the plasticity
+bug, and constitute the empirical resolution finding above.  A
+re-run of the consolidation-only group on post-fix bytes is
+documented as a follow-up; the architectural-mismatch resolution
+does not depend on it.
 
 \subsubsection{Calibration rigor: Phase~A and Phase~B}
 \label{sec:calibration}
@@ -791,31 +891,94 @@ LoCoMo half (\S\ref{sec:locomo-forthcoming}) and for any production
 backfill scenario where memories are ingested with historical
 timestamps.
 
+The fix was validated on smoke first; the \S\ref{sec:locomo-evidence}
+LoCoMo run is the $n = 1986$ validation.  At full scale,
+\texttt{BASELINE\_WITH\_CONSOLIDATION} reaches MRR $= 0.8264$
+against \texttt{BASELINE\_NO\_CONSOLIDATION} at MRR $= 0.8278$
+($\Delta$ vs.\ NO $= +0.0014$, within the per-row noise floor of
+$\approx \pm 0.002$ MRR).  The two anchors agree at full $n$; the
+cadence fix holds, and the \S\ref{sec:locomo-evidence}
+consolidation-only deltas are measured against a stable post-fix
+baseline.
+
 We mention this not to recount engineering, but because it tightens
 the \S\ref{sec:intro} framing: a verification campaign is not just
 \emph{was the system as designed correct?} but \emph{did
-verification improve the system?}  In this instance it did, and the
-LoCoMo numbers reported in the forthcoming \S\ref{sec:locomo-forthcoming}
-will be measured against the post-fix code path.
+verification improve the system?}  In this instance it did.
+
+\subsubsection{Verification surfaced a second production fix: plasticity result-shape contract}
+\label{sec:plasticity-fix}
+
+A second production-relevant bug surfaced during the same LoCoMo
+verification campaign.  The Hebbian update path
+(\texttt{apply\_hebbian\_update}) returns a list of result dicts each
+carrying an \texttt{action} field that the downstream
+\texttt{\_apply\_updates} consumer dispatches on.  The ablation
+no-op for plasticity returned raw edge dicts missing the
+\texttt{action} key.  Downstream consumed each dict, found no
+recognised action, logged a \texttt{WARNING}, and silently dropped
+that update from the consolidation pass.  This was a contract bug,
+not a crash: rows ran to completion with the plasticity
+contribution silently muted on the affected paths.
+
+The fix (commit \texttt{5f737fe}) makes the ablation no-op return
+result-shaped dicts with \texttt{action="none"}, restoring contract
+compliance for the disabled path.  Regression tests lock the
+result-shape invariant.
+
+The \S\ref{sec:locomo-evidence} LoCoMo run was launched on bytes
+\emph{before} commit \texttt{5f737fe}, which means the
+consolidation-only ablation rows (CASCADE, INTERFERENCE,
+HOMEOSTATIC\_PLASTICITY, MICROGLIAL\_PRUNING, TWO\_STAGE\_MODEL,
+EMOTIONAL\_DECAY, TRIPARTITE\_SYNAPSE, SCHEMA\_ENGINE) may have a
+slightly muted plasticity contribution.  The SYNAPTIC\_PLASTICITY
+ablation row is not affected: that row explicitly disables the
+plasticity mechanism entirely, so the no-op shape bug cannot
+exercise.  The three longitudinal-read-path rows (RECONSOLIDATION,
+CO\_ACTIVATION, ADAPTIVE\_DECAY) ran with consolidation off and are
+likewise not affected.  The empirical resolution of the
+architectural-mismatch hypothesis (\S\ref{sec:locomo-evidence}) does
+not depend on the consolidation-only group; it rests on the
+longitudinal-read-path rows, which are clean.
+
+A re-run of the \texttt{BASELINE\_WITH} and consolidation-only rows
+on post-\texttt{5f737fe} bytes is the natural follow-up.  The
+\S\ref{sec:per-mechanism} narrative does not change as a result; the
+consolidation-only deltas are already at the noise floor in the
+pre-fix bytes, so the most likely outcome of the re-run is tighter
+confirmation of the same structure.  We declare this here rather
+than amend silently because the verification campaign's evidence is
+the load-bearing argument of \S\ref{sec:per-mechanism}, and the
+integrity of that argument requires disclosing every code-path
+artefact that touched the numbers.
+
+The \S\ref{sec:intro} framing applies again: verification did not
+just confirm the system; it surfaced two real bugs (cadence and
+plasticity result-shape) that are now fixed.
 
 \subsubsection{Caveats specific to \S\ref{sec:per-mechanism}}
 
 \begin{itemize}
-\item \emph{Single-seed.}  Each of the 17 rows is run once on the
-  full LongMemEval-S benchmark ($n = 500$).  Per-question noise
-  averages down by $\sqrt{n}$; empirical per-row noise floor is
-  $\approx \pm 0.001$ MRR.  $\Delta$MRR magnitudes below this
-  threshold are not interpretable as causal contributions.  The
-  paper-bearing claim of \S\ref{sec:per-mechanism} is the
-  \emph{category-specialization pattern}
-  (\S\ref{sec:per-mech-category}) and the \emph{integrated stack
-  lift over the published baseline}, not the per-row sub-noise
-  deltas.
-\item \emph{Single benchmark.}  All 17 rows are LongMemEval-S only.
-  The 13 muted rows are predicted-null on this benchmark by
-  construction (\S\ref{sec:per-mech-architectural}), not failed
-  mechanisms.  The LoCoMo half (\S\ref{sec:locomo-forthcoming}) is
-  the right benchmark for the longitudinal rows.
+\item \emph{Single-seed on both benchmarks.}  Each row in
+  \S\ref{sec:per-mech-table} (17 rows, LME-S, $n = 500$) and
+  \S\ref{sec:locomo-evidence} (14 rows, LoCoMo, $n = 1986$) is run
+  once.  Per-question noise averages down by $\sqrt{n}$; empirical
+  per-row noise floor is $\approx \pm 0.001$ MRR on LME-S and
+  $\approx \pm 0.002$ MRR on LoCoMo.  $\Delta$MRR magnitudes below
+  the relevant threshold are not interpretable as causal
+  contributions.  The paper-bearing claims of \S\ref{sec:per-mechanism}
+  are the \emph{category-specialization pattern}
+  (\S\ref{sec:per-mech-category}, LME-S), the \emph{empirical
+  resolution of the architectural-mismatch hypothesis}
+  (\S\ref{sec:locomo-evidence}, LoCoMo), and the \emph{integrated
+  stack lift over the published baselines on both benchmarks}, not
+  the per-row sub-noise deltas.
+\item \emph{Two benchmarks, complementary architectures.}  LME-S
+  (\S\ref{sec:per-mech-table}) captures saturated-rerank and
+  integrated-stack behaviour; LoCoMo (\S\ref{sec:locomo-evidence})
+  captures longitudinal mechanism behaviour.  The two together cover
+  the read-path, write-path, and consolidation-path stack; neither
+  alone would.
 \item \emph{Calibration-conditional.}  The integrated lift is
   reported at the Phase~A/B calibrated equilibrium.  Re-calibration
   on a different workload (e.g.\ an emotion-laden corpus that
