@@ -17,6 +17,7 @@ from mcp_server.handlers.remember_helpers import (
     evaluate_gate,
     insert_and_post_process,
     try_curation,
+    update_user_mood_ema,
 )
 from mcp_server.handlers.remember_response import build_merge_response
 from mcp_server.infrastructure import wiki_store
@@ -330,6 +331,9 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         content, embedding, force, store, emb_engine, tags, mod["heat"]
     )
     if action == "merge":
+        # Mood signal still updates on merge — the user authored the content,
+        # whether we keep it as a new row or fold it into an existing one.
+        update_user_mood_ema(content, source, store)
         return build_merge_response(mid, domain, mod, gate)
 
     result = insert_and_post_process(
@@ -356,6 +360,14 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if is_global and result.get("stored"):
         result["is_global"] = True
         result["global_reason"] = global_reason
+
+    # MOOD_CONGRUENT_RERANK signal-feed (Bower 1981 mood-congruent recall):
+    # EMA-update user_mood.valence from VADER compound on user-authored
+    # content. Non-user sources are ignored to keep the signal faithful
+    # to the user's affective state. See remember_helpers.update_user_mood_ema
+    # for the contract and source-discipline notes.
+    if result.get("stored"):
+        update_user_mood_ema(content, source, store)
 
     # Promote decision-shaped memories to the authored wiki layer.
     #

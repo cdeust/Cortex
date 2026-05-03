@@ -1,8 +1,16 @@
 """Tests for mcp_server.handlers.remember — store memory handler."""
 
 import asyncio
+import os
+
+import pytest
 
 from mcp_server.handlers.remember import handler
+from mcp_server.handlers.remember_helpers import (
+    MOOD_EMA_ALPHA,
+    update_user_mood_ema,
+)
+from mcp_server.shared.vader import vader_compound
 
 
 class TestRememberHandler:
@@ -133,3 +141,137 @@ class TestRememberHandler:
             assert isinstance(result["valence"], float)
             assert isinstance(result["reason"], str)
             assert isinstance(result["triggers_created"], list)
+
+
+class _MoodStoreStub:
+    """Minimal duck-typed user_mood store for EMA hook tests.
+
+    Mirrors PgMemoryStore.get_user_mood / set_user_mood semantics without
+    requiring a live PG connection. Returns None when absent (matches the
+    'no row' branch of the real store).
+    """
+
+    def __init__(self, initial: float | None = None) -> None:
+        self.valence: float | None = initial
+        self.write_calls: int = 0
+
+    def get_user_mood(self) -> float | None:
+        return self.valence
+
+    def set_user_mood(self, valence: float, arousal: float = 0.0) -> None:
+        self.write_calls += 1
+        self.valence = max(-1.0, min(1.0, float(valence)))
+
+
+class TestUserMoodEmaHook:
+    """update_user_mood_ema unit tests — stub store, no DB required."""
+
+    def test_positive_message_increases_mood(self):
+        store = _MoodStoreStub(initial=0.0)
+        new = update_user_mood_ema(
+            "This is wonderful, I am so happy and delighted!",
+            source="user",
+            store=store,
+        )
+        assert new is not None
+        assert new > 0.0
+        # First update from 0.0 baseline: new = α * compound
+        compound = vader_compound("This is wonderful, I am so happy and delighted!")
+        assert new == pytest.approx(MOOD_EMA_ALPHA * compound, rel=1e-6)
+        assert store.valence == pytest.approx(new, rel=1e-6)
+        assert store.write_calls == 1
+
+    def test_negative_message_decreases_mood(self):
+        store = _MoodStoreStub(initial=0.0)
+        new = update_user_mood_ema(
+            "This is terrible, I hate this awful broken mess.",
+            source="user",
+            store=store,
+        )
+        assert new is not None
+        assert new < 0.0
+        assert store.write_calls == 1
+
+    def test_neutral_message_keeps_mood_near_baseline(self):
+        store = _MoodStoreStub(initial=0.0)
+        new = update_user_mood_ema(
+            "The file is at /tmp/foo.txt with 42 bytes.",
+            source="user",
+            store=store,
+        )
+        assert new is not None
+        assert abs(new) < 0.1
+        assert store.write_calls == 1
+
+    def test_ema_decay_pulls_toward_new_signal(self):
+        """A negative message after a positive baseline must decay toward 0."""
+        store = _MoodStoreStub(initial=0.6)
+        new = update_user_mood_ema(
+            "This is terrible, awful, broken garbage.",
+            source="user",
+            store=store,
+        )
+        assert new is not None
+        # EMA: new = (1-α)*0.6 + α*compound; compound is negative, so new < 0.6
+        assert new < 0.6
+        # And the write happened
+        assert store.write_calls == 1
+
+    def test_non_user_source_skipped(self):
+        for source in ("tool", "consolidation", "import", "session"):
+            store = _MoodStoreStub(initial=0.0)
+            new = update_user_mood_ema(
+                "This is wonderful and amazing!",
+                source=source,
+                store=store,
+            )
+            assert new is None, f"source={source} should not update mood"
+            assert store.write_calls == 0
+            assert store.valence == 0.0
+
+    def test_ablation_skips_write(self):
+        store = _MoodStoreStub(initial=0.0)
+        prev = os.environ.get("CORTEX_ABLATE_MOOD_CONGRUENT_RERANK")
+        os.environ["CORTEX_ABLATE_MOOD_CONGRUENT_RERANK"] = "1"
+        try:
+            new = update_user_mood_ema(
+                "Wonderful happy joyful day!",
+                source="user",
+                store=store,
+            )
+        finally:
+            if prev is None:
+                os.environ.pop("CORTEX_ABLATE_MOOD_CONGRUENT_RERANK", None)
+            else:
+                os.environ["CORTEX_ABLATE_MOOD_CONGRUENT_RERANK"] = prev
+        assert new is None
+        assert store.write_calls == 0
+
+    def test_store_without_api_returns_none(self):
+        class _NoApi:
+            pass
+
+        new = update_user_mood_ema("Anything here.", source="user", store=_NoApi())
+        assert new is None
+
+    def test_store_failure_swallowed(self):
+        class _Boom:
+            def get_user_mood(self) -> float | None:
+                return 0.0
+
+            def set_user_mood(self, *a, **k) -> None:
+                raise RuntimeError("db down")
+
+        # Must not raise
+        new = update_user_mood_ema("Happy day!", source="user", store=_Boom())
+        assert new is None
+
+    def test_no_baseline_treats_old_as_zero(self):
+        store = _MoodStoreStub(initial=None)  # no row yet
+        new = update_user_mood_ema(
+            "Wonderful!", source="user", store=store
+        )
+        assert new is not None
+        # Old None → treated as 0.0; new = α * compound
+        compound = vader_compound("Wonderful!")
+        assert new == pytest.approx(MOOD_EMA_ALPHA * compound, rel=1e-6)

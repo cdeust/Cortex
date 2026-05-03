@@ -14,6 +14,8 @@ from mcp_server.core import (
     write_gate_calibration,
     write_post_store,
 )
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.shared.vader import vader_compound
 from mcp_server.core.dual_store_cls import classify_memory
 from mcp_server.core.predictive_coding_flat import (
     compute_embedding_novelty,
@@ -411,3 +413,69 @@ def insert_and_post_process(
         sep,
         interf,
     )
+
+
+# ── User-mood EMA hook (Bower 1981 mood-congruent recall, signal side) ──
+# Engineering default; calibration pending future work — Bower (1981)
+# "Mood and Memory" Am. Psychologist 36(2) prescribes mood-congruent
+# recall qualitatively, not the time-constant of mood drift. No published
+# psychophysics constant for the EMA decay of self-report mood at the
+# session timescale was located (April 2026). Conservative default
+# matches the structural form of other Cortex EMAs (write_gate_calibration).
+# When a published value is found, replace this constant and cite.
+MOOD_EMA_ALPHA: float = 0.3
+
+
+def update_user_mood_ema(
+    content: str,
+    source: str,
+    store: MemoryStore,
+) -> float | None:
+    """EMA-update the user's session-level mood from VADER on user content.
+
+    Contract:
+      pre:  content is a hardened, non-empty string; source is one of the
+            remember.py source enum values; store exposes get_user_mood /
+            set_user_mood (real PgMemoryStore or duck-compatible stub).
+      post: when source == "user" AND MOOD_CONGRUENT_RERANK is NOT ablated,
+            user_mood.valence is upserted to
+                (1 - α) * old + α * vader_compound(content)
+            with α = MOOD_EMA_ALPHA, old defaulting to 0.0 when the row
+            is absent. Returns the new valence on update, or None when
+            skipped (non-user source, ablated, or store missing API).
+            Never raises — failures are swallowed and reported as None.
+
+    Source-discipline notes:
+      - VADER compound: Hutto & Gilbert, ICWSM 2014.
+      - Mood-congruent recall: Bower 1981 Am. Psychologist 36(2).
+      - α = 0.3: engineering default (see module-level comment above).
+
+    User-side definition (self-flagged risk addressed):
+      Only source == "user" updates mood. System-generated memories
+      (source ∈ {"tool", "consolidation", "import"}) and conversational
+      transcripts (source == "session", which is mixed agent/user)
+      do NOT mutate user_mood, because their content does not reflect
+      the user's affective state at recall time.
+
+      Ablation symmetry: when CORTEX_ABLATE_MOOD_CONGRUENT_RERANK=1,
+      we also skip the write so the table doesn't accumulate signal
+      that's then ignored downstream (clean ablation deltas).
+    """
+    if source != "user":
+        return None
+    if is_mechanism_disabled(Mechanism.MOOD_CONGRUENT_RERANK):
+        return None
+    if not hasattr(store, "set_user_mood") or not hasattr(store, "get_user_mood"):
+        return None
+    try:
+        compound = vader_compound(content)
+        old = store.get_user_mood()
+        old_valence = 0.0 if old is None else float(old)
+        new_valence = (1.0 - MOOD_EMA_ALPHA) * old_valence + MOOD_EMA_ALPHA * compound
+        # Clamp defensively; set_user_mood clamps too, but we want the
+        # returned value to match what was persisted.
+        new_valence = max(-1.0, min(1.0, new_valence))
+        store.set_user_mood(new_valence)
+        return new_valence
+    except Exception:  # noqa: BLE001 — non-load-bearing; mood is a soft signal
+        return None
