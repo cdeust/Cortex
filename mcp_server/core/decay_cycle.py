@@ -75,8 +75,19 @@ def _parse_datetime(value) -> datetime | None:
 
 
 def _hours_since_access(mem: dict, now: datetime) -> float | None:
-    """Return hours elapsed since last access, or None if unparseable."""
-    last_accessed = mem.get("last_accessed", mem.get("created_at", ""))
+    """Return hours elapsed since last access, or None if unparseable.
+
+    Fallback chain: last_accessed → ingested_at → created_at. The
+    ingested_at fallback (added for the consolidation-cadence fix —
+    tasks/e1-v3-locomo-smoke-finding.md) ensures backfilled memories
+    with a backdated created_at do not falsely register as
+    "last-accessed years ago" when last_accessed is missing.
+    """
+    last_accessed = (
+        mem.get("last_accessed")
+        or mem.get("ingested_at")
+        or mem.get("created_at", "")
+    )
     last_dt = _parse_datetime(last_accessed)
     if last_dt is None:
         return None
@@ -85,12 +96,25 @@ def _hours_since_access(mem: dict, now: datetime) -> float | None:
 
 
 def _hours_since_creation(mem: dict, now: datetime) -> float | None:
-    """Return hours elapsed since creation."""
-    created = mem.get("created_at", "")
-    created_dt = _parse_datetime(created)
-    if created_dt is None:
+    """Return hours elapsed since the memory entered THIS system.
+
+    ACT-R "lifetime L" in B_i = ln(n) − d·ln(L) is lifetime in the
+    learner's system since acquisition (Anderson & Lebiere 1998), not
+    elapsed time since the original-source event. For Cortex this is
+    ``ingested_at``: backfilled / imported memories with backdated
+    ``created_at`` would otherwise return a wrongly-large L on first
+    decay pass and collapse heat to near-zero before any access.
+    Source: tasks/e1-v3-locomo-smoke-finding.md.
+
+    Falls back to ``created_at`` only for in-memory dicts that never
+    round-tripped through PG (schema backfills ingested_at=created_at
+    for legacy rows, so PG-sourced dicts always have the field).
+    """
+    raw = mem.get("ingested_at") or mem.get("created_at", "")
+    ingested_dt = _parse_datetime(raw)
+    if ingested_dt is None:
         return None
-    hours = (now - created_dt).total_seconds() / 3600.0
+    hours = (now - ingested_dt).total_seconds() / 3600.0
     return max(_MIN_LIFETIME_HOURS, hours)
 
 
@@ -263,8 +287,18 @@ def compute_decay_updates(
 
 
 def _parse_hours_since_access(record: dict, now: datetime) -> float | None:
-    """Parse hours since last access from a memory or entity record."""
-    last_accessed = record.get("last_accessed", record.get("created_at", ""))
+    """Parse hours since last access from a memory or entity record.
+
+    Fallback chain mirrors _hours_since_access: last_accessed →
+    ingested_at → created_at. Entities do not currently carry
+    ingested_at, so this is a no-op for entity records but defensive
+    for memory dicts that take this path.
+    """
+    last_accessed = (
+        record.get("last_accessed")
+        or record.get("ingested_at")
+        or record.get("created_at", "")
+    )
     last_dt = _parse_datetime(last_accessed)
     if last_dt is None:
         return None

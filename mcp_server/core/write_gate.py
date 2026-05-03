@@ -78,8 +78,14 @@ def compute_temporal_novelty(
         best_idx = similarities.index(max(similarities))
         if best_idx < len(vec_hits):
             best_mem = get_memory(vec_hits[best_idx][0])
-            if best_mem and best_mem.get("created_at"):
-                hours = _parse_hours_since(best_mem["created_at"])
+            # Temporal novelty asks "have we seen this in MY system
+            # recently?" — that is elapsed-since-ingest, not
+            # elapsed-since-the-original-event. Use ingested_at and fall
+            # back to created_at for legacy rows.
+            # Source: tasks/e1-v3-locomo-smoke-finding.md.
+            if best_mem and (best_mem.get("ingested_at") or best_mem.get("created_at")):
+                ts = best_mem.get("ingested_at") or best_mem["created_at"]
+                hours = _parse_hours_since(ts)
     return _compute_temporal_novelty(hours)
 
 

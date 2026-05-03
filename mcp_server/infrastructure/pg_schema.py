@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS memories (
     domain          TEXT DEFAULT '',
     directory_context TEXT DEFAULT '',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ingested_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_accessed   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     heat_base       REAL NOT NULL DEFAULT 1.0
                     CHECK (heat_base >= 0.0 AND heat_base <= 1.0),
@@ -1280,6 +1281,33 @@ BEGIN
         ALTER TABLE memories ADD COLUMN stage_entered_at TIMESTAMPTZ;
         -- Backfill: set to created_at for existing memories
         UPDATE memories SET stage_entered_at = created_at WHERE stage_entered_at IS NULL;
+    END IF;
+END $$;
+
+-- Migration: add ingested_at for consolidation cadence reasoning.
+-- Source: tasks/e1-v3-locomo-smoke-finding.md.
+-- created_at = original event/utterance time (may be backdated on import).
+-- ingested_at = when the row entered THIS Cortex DB (always NOW at insert).
+-- Compression and decay cadence MUST use ingested_at: the mechanism asks
+-- "has this memory had time to be revisited in MY system" not "when did
+-- the original event happen". Backfill existing rows from created_at to
+-- preserve idempotency and pre-existing semantics.
+-- NOTE keep this comment free of semicolons (DDL is split on the literal
+-- character per _split_statements — df14e16 and 9f94bd3 are prior
+-- incidents of that class).
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'ingested_at'
+    ) THEN
+        ALTER TABLE memories ADD COLUMN ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+        -- Backfill rows that pre-existed this column. They were created
+        -- before ingested_at was tracked, so the safest assumption is
+        -- ingested_at = created_at (i.e., they entered the system at the
+        -- time their content was authored). This block runs only inside
+        -- the IF NOT EXISTS guard, so it is naturally idempotent.
+        UPDATE memories SET ingested_at = created_at;
     END IF;
 END $$;
 

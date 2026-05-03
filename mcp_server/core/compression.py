@@ -31,18 +31,34 @@ _NUMBER_VERSION_RE = re.compile(r"\b\d+(?:\.\d+)+\b")
 _CAMELCASE_RE = re.compile(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b")
 
 
-def _parse_created_at(memory: dict) -> datetime | None:
-    """Parse created_at from memory, returning None on failure."""
-    created_at_str = memory.get("created_at", "")
-    if not created_at_str:
+def _parse_ingested_at(memory: dict) -> datetime | None:
+    """Parse ingest timestamp for cadence reasoning.
+
+    Compression cadence asks "has this memory had time to be revisited
+    in MY system" — that is elapsed time since ingest, NOT elapsed time
+    since the original event. Backfilled / imported memories carry a
+    backdated created_at (e.g. a 2023 conversation imported in 2026);
+    using created_at would compress them on the first consolidation
+    pass, before retrieval ever runs (see tasks/e1-v3-locomo-smoke-finding.md).
+
+    Falls back to created_at for legacy rows that predate the
+    ingested_at column (the schema migration in pg_schema.py backfills
+    ingested_at = created_at in that case anyway, so the fallback only
+    matters for in-memory dicts that never round-tripped through PG).
+    """
+    raw = memory.get("ingested_at") or memory.get("created_at", "")
+    if not raw:
         return None
-    try:
-        created_at = datetime.fromisoformat(created_at_str)
-    except (ValueError, TypeError):
-        return None
-    if created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=timezone.utc)
-    return created_at
+    if isinstance(raw, datetime):
+        dt = raw
+    else:
+        try:
+            dt = datetime.fromisoformat(raw)
+        except (ValueError, TypeError):
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def _compute_resistance(memory: dict) -> float:
@@ -74,11 +90,13 @@ def get_compression_schedule(
     if memory.get("store_type", "episodic") == "semantic":
         return 0
 
-    created_at = _parse_created_at(memory)
-    if created_at is None:
+    ingested_at = _parse_ingested_at(memory)
+    if ingested_at is None:
         return 0
 
-    hours_elapsed = (datetime.now(timezone.utc) - created_at).total_seconds() / 3600.0
+    # Cadence is measured from ingest, not from the original event.
+    # Source: tasks/e1-v3-locomo-smoke-finding.md.
+    hours_elapsed = (datetime.now(timezone.utc) - ingested_at).total_seconds() / 3600.0
     resistance = _compute_resistance(memory)
 
     if hours_elapsed < gist_age_hours * resistance:

@@ -60,6 +60,56 @@ class TestGetCompressionSchedule:
     def test_invalid_timestamp(self):
         assert get_compression_schedule({"created_at": "invalid"}) == 0
 
+    # ── Cadence relative to ingest, not original event ──────────────────
+    # Source: tasks/e1-v3-locomo-smoke-finding.md.
+
+    def test_backdated_created_at_with_fresh_ingest_stays_level_zero(self):
+        """Regression: backfilled memories must NOT compress immediately.
+
+        A user imports a 2023 conversation in 2026. created_at is the
+        original event time (years ago). ingested_at is now. The cadence
+        gate must read ingested_at — otherwise the memory gist-compresses
+        on the first consolidation pass before retrieval ever runs
+        (LoCoMo MRR collapse from 0.866 to 0.222 surfaced this bug).
+        """
+        years_ago = (datetime.now(timezone.utc) - timedelta(days=365 * 3)).isoformat()
+        now = datetime.now(timezone.utc).isoformat()
+        mem = {
+            "created_at": years_ago,
+            "ingested_at": now,
+            "importance": 0.3,
+            "store_type": "episodic",
+        }
+        # Fresh ingest → level 0 even though created_at says 3 years old.
+        assert get_compression_schedule(mem) == 0
+
+    def test_fresh_created_at_old_ingest_compresses(self):
+        """Inverse: an old ingest with a recent created_at still compresses.
+
+        Demonstrates that ingested_at — not created_at — is the cadence
+        signal. (Pathological dict; real INSERTs always set ingested_at
+        to NOW(), but the contract must hold.)
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        sixty_days_ago = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        mem = {
+            "created_at": now,
+            "ingested_at": sixty_days_ago,
+            "importance": 0.3,
+            "store_type": "episodic",
+        }
+        assert get_compression_schedule(mem) == 2
+
+    def test_missing_ingested_at_falls_back_to_created_at(self):
+        """Legacy rows (pre-migration) lack ingested_at → fall back."""
+        sixty_days_ago = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        mem = {
+            "created_at": sixty_days_ago,
+            "importance": 0.3,
+            "store_type": "episodic",
+        }
+        assert get_compression_schedule(mem) == 2
+
 
 class TestExtractGist:
     def test_short_content_preserved(self):

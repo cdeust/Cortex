@@ -131,7 +131,14 @@ def _build_tagging_candidates(
         if mem["id"] == exclude_id:
             continue
         mem_ents = _find_shared_entities(mem["id"], entity_names, store)
-        hours_ago = _hours_since_creation(mem.get("created_at", ""))
+        # Synaptic-tagging window is cadence-relative to ingest time, not
+        # original-event time. For backfilled memories with a backdated
+        # created_at this prevents the tagging window from collapsing
+        # immediately on first consolidation pass.
+        # Source: tasks/e1-v3-locomo-smoke-finding.md.
+        hours_ago = _hours_since_creation(
+            mem.get("ingested_at") or mem.get("created_at", "")
+        )
         candidates.append(
             {
                 "id": mem["id"],
