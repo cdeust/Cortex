@@ -168,9 +168,7 @@ def run_benchmark(
 
     print(f"Running benchmark on {len(dataset)} questions (PostgreSQL backend)...")
     if with_consolidation:
-        print(
-            "  consolidation: ON (per-question warmup pass between load and recall)"
-        )
+        print("  consolidation: ON (per-question warmup pass between load and recall)")
     if ablate_mechanism:
         print(f"  ablation: CORTEX_ABLATE_{ablate_mechanism}=1")
     print()

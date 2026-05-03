@@ -178,9 +178,7 @@ def run_benchmark(
         f"{sum(len(c['qa']) for c in data)} QA pairs (PostgreSQL backend)..."
     )
     if with_consolidation:
-        print(
-            "  consolidation: ON (between session-load and QA, per conversation)"
-        )
+        print("  consolidation: ON (between session-load and QA, per conversation)")
     if ablate_mechanism:
         print(f"  ablation: CORTEX_ABLATE_{ablate_mechanism}=1")
     print()

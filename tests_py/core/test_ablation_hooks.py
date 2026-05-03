@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import os
 
-import pytest
 
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 

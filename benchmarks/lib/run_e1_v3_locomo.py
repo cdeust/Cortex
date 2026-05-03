@@ -62,40 +62,93 @@ class Row:
 # Two-baseline 14-row design.
 ROWS: list[Row] = [
     # === Baseline 1: NO consolidation, anchor for longitudinal read-path mechs ===
-    Row("BASELINE_NO_CONSOLIDATION", ablate=None,
-        with_consolidation=False, anchor="BASELINE_NO_CONSOLIDATION"),
-
+    Row(
+        "BASELINE_NO_CONSOLIDATION",
+        ablate=None,
+        with_consolidation=False,
+        anchor="BASELINE_NO_CONSOLIDATION",
+    ),
     # Longitudinal read-path — ablated vs NO_CONSOLIDATION
-    Row("RECONSOLIDATION", ablate="RECONSOLIDATION",
-        with_consolidation=False, anchor="BASELINE_NO_CONSOLIDATION"),
-    Row("CO_ACTIVATION", ablate="CO_ACTIVATION",
-        with_consolidation=False, anchor="BASELINE_NO_CONSOLIDATION"),
-    Row("ADAPTIVE_DECAY", ablate="ADAPTIVE_DECAY",
-        with_consolidation=False, anchor="BASELINE_NO_CONSOLIDATION"),
-
+    Row(
+        "RECONSOLIDATION",
+        ablate="RECONSOLIDATION",
+        with_consolidation=False,
+        anchor="BASELINE_NO_CONSOLIDATION",
+    ),
+    Row(
+        "CO_ACTIVATION",
+        ablate="CO_ACTIVATION",
+        with_consolidation=False,
+        anchor="BASELINE_NO_CONSOLIDATION",
+    ),
+    Row(
+        "ADAPTIVE_DECAY",
+        ablate="ADAPTIVE_DECAY",
+        with_consolidation=False,
+        anchor="BASELINE_NO_CONSOLIDATION",
+    ),
     # === Baseline 2: WITH consolidation, anchor for consolidation-only mechs ===
-    Row("BASELINE_WITH_CONSOLIDATION", ablate=None,
-        with_consolidation=True, anchor="BASELINE_WITH_CONSOLIDATION"),
-
+    Row(
+        "BASELINE_WITH_CONSOLIDATION",
+        ablate=None,
+        with_consolidation=True,
+        anchor="BASELINE_WITH_CONSOLIDATION",
+    ),
     # Consolidation-only — ablated vs WITH_CONSOLIDATION
-    Row("CASCADE", ablate="CASCADE",
-        with_consolidation=True, anchor="BASELINE_WITH_CONSOLIDATION"),
-    Row("INTERFERENCE", ablate="INTERFERENCE",
-        with_consolidation=True, anchor="BASELINE_WITH_CONSOLIDATION"),
-    Row("HOMEOSTATIC_PLASTICITY", ablate="HOMEOSTATIC_PLASTICITY",
-        with_consolidation=True, anchor="BASELINE_WITH_CONSOLIDATION"),
-    Row("SYNAPTIC_PLASTICITY", ablate="SYNAPTIC_PLASTICITY",
-        with_consolidation=True, anchor="BASELINE_WITH_CONSOLIDATION"),
-    Row("MICROGLIAL_PRUNING", ablate="MICROGLIAL_PRUNING",
-        with_consolidation=True, anchor="BASELINE_WITH_CONSOLIDATION"),
-    Row("TWO_STAGE_MODEL", ablate="TWO_STAGE_MODEL",
-        with_consolidation=True, anchor="BASELINE_WITH_CONSOLIDATION"),
-    Row("EMOTIONAL_DECAY", ablate="EMOTIONAL_DECAY",
-        with_consolidation=True, anchor="BASELINE_WITH_CONSOLIDATION"),
-    Row("TRIPARTITE_SYNAPSE", ablate="TRIPARTITE_SYNAPSE",
-        with_consolidation=True, anchor="BASELINE_WITH_CONSOLIDATION"),
-    Row("SCHEMA_ENGINE", ablate="SCHEMA_ENGINE",
-        with_consolidation=True, anchor="BASELINE_WITH_CONSOLIDATION"),
+    Row(
+        "CASCADE",
+        ablate="CASCADE",
+        with_consolidation=True,
+        anchor="BASELINE_WITH_CONSOLIDATION",
+    ),
+    Row(
+        "INTERFERENCE",
+        ablate="INTERFERENCE",
+        with_consolidation=True,
+        anchor="BASELINE_WITH_CONSOLIDATION",
+    ),
+    Row(
+        "HOMEOSTATIC_PLASTICITY",
+        ablate="HOMEOSTATIC_PLASTICITY",
+        with_consolidation=True,
+        anchor="BASELINE_WITH_CONSOLIDATION",
+    ),
+    Row(
+        "SYNAPTIC_PLASTICITY",
+        ablate="SYNAPTIC_PLASTICITY",
+        with_consolidation=True,
+        anchor="BASELINE_WITH_CONSOLIDATION",
+    ),
+    Row(
+        "MICROGLIAL_PRUNING",
+        ablate="MICROGLIAL_PRUNING",
+        with_consolidation=True,
+        anchor="BASELINE_WITH_CONSOLIDATION",
+    ),
+    Row(
+        "TWO_STAGE_MODEL",
+        ablate="TWO_STAGE_MODEL",
+        with_consolidation=True,
+        anchor="BASELINE_WITH_CONSOLIDATION",
+    ),
+    Row(
+        "EMOTIONAL_DECAY",
+        ablate="EMOTIONAL_DECAY",
+        with_consolidation=True,
+        anchor="BASELINE_WITH_CONSOLIDATION",
+    ),
+    Row(
+        "TRIPARTITE_SYNAPSE",
+        ablate="TRIPARTITE_SYNAPSE",
+        with_consolidation=True,
+        anchor="BASELINE_WITH_CONSOLIDATION",
+    ),
+    Row(
+        "SCHEMA_ENGINE",
+        ablate="SCHEMA_ENGINE",
+        with_consolidation=True,
+        anchor="BASELINE_WITH_CONSOLIDATION",
+    ),
 ]
 
 
@@ -119,8 +172,12 @@ def _git_dirty() -> bool:
 def _run_row(row: Row) -> dict:
     out_path = _OUT_DIR / f"{row.label}.json"
     cmd = [
-        "uv", "run", "python", str(_HARNESS),
-        "--results-out", str(out_path),
+        "uv",
+        "run",
+        "python",
+        str(_HARNESS),
+        "--results-out",
+        str(out_path),
     ]
     if row.with_consolidation:
         cmd.append("--with-consolidation")
@@ -128,8 +185,10 @@ def _run_row(row: Row) -> dict:
         cmd += ["--ablate", row.ablate]
 
     print(f"\n{'=' * 70}", flush=True)
-    print(f"[E1v3-LoCoMo] {row.label} — start {datetime.now(timezone.utc).isoformat()}",
-          flush=True)
+    print(
+        f"[E1v3-LoCoMo] {row.label} — start {datetime.now(timezone.utc).isoformat()}",
+        flush=True,
+    )
     print(f"[E1v3-LoCoMo] cmd: {' '.join(cmd)}", flush=True)
     print(f"{'=' * 70}", flush=True)
 
@@ -139,8 +198,11 @@ def _run_row(row: Row) -> dict:
 
     rc = proc.returncode
     if rc != 0:
-        print(f"[E1v3-LoCoMo][ERROR] {row.label} returncode={rc}",
-              file=sys.stderr, flush=True)
+        print(
+            f"[E1v3-LoCoMo][ERROR] {row.label} returncode={rc}",
+            file=sys.stderr,
+            flush=True,
+        )
 
     mrr: float | None = None
     r10: float | None = None
@@ -154,11 +216,17 @@ def _run_row(row: Row) -> dict:
             cat_mrr = data.get("category_mrr", {}) or {}
             cat_r10 = data.get("category_recall10", {}) or {}
         except Exception as e:
-            print(f"[E1v3-LoCoMo][WARN] {row.label} parse {out_path}: {e}",
-                  file=sys.stderr, flush=True)
+            print(
+                f"[E1v3-LoCoMo][WARN] {row.label} parse {out_path}: {e}",
+                file=sys.stderr,
+                flush=True,
+            )
 
-    print(f"[E1v3-LoCoMo] {row.label} done — rc={rc} wall={wall:.1f}s "
-          f"mrr={mrr} r10={r10}", flush=True)
+    print(
+        f"[E1v3-LoCoMo] {row.label} done — rc={rc} wall={wall:.1f}s "
+        f"mrr={mrr} r10={r10}",
+        flush=True,
+    )
     return {
         "row": row.label,
         "anchor": row.anchor,
@@ -183,11 +251,20 @@ def _write_summary(rows: list[dict]) -> None:
     summary_path = _OUT_DIR / "summary.csv"
     with summary_path.open("w", newline="") as f:
         w = csv.writer(f)
-        w.writerow([
-            "row", "anchor", "with_consolidation", "ablate",
-            "mrr", "r10", "wall_seconds", "returncode",
-            "delta_mrr_vs_anchor", "delta_r10_vs_anchor",
-        ])
+        w.writerow(
+            [
+                "row",
+                "anchor",
+                "with_consolidation",
+                "ablate",
+                "mrr",
+                "r10",
+                "wall_seconds",
+                "returncode",
+                "delta_mrr_vs_anchor",
+                "delta_r10_vs_anchor",
+            ]
+        )
         for r in rows:
             d_mrr = ""
             d_r10 = ""
@@ -198,14 +275,20 @@ def _write_summary(rows: list[dict]) -> None:
                     d_mrr = f"{a_mrr - r['mrr']:.4f}"
                 if a_r10 is not None and r["r10"] is not None:
                     d_r10 = f"{a_r10 - r['r10']:.4f}"
-            w.writerow([
-                r["row"], r["anchor"], r["with_consolidation"],
-                r["ablate"] or "",
-                "" if r["mrr"] is None else f"{r['mrr']:.4f}",
-                "" if r["r10"] is None else f"{r['r10']:.4f}",
-                f"{r['wall_seconds']:.1f}",
-                r["returncode"], d_mrr, d_r10,
-            ])
+            w.writerow(
+                [
+                    r["row"],
+                    r["anchor"],
+                    r["with_consolidation"],
+                    r["ablate"] or "",
+                    "" if r["mrr"] is None else f"{r['mrr']:.4f}",
+                    "" if r["r10"] is None else f"{r['r10']:.4f}",
+                    f"{r['wall_seconds']:.1f}",
+                    r["returncode"],
+                    d_mrr,
+                    d_r10,
+                ]
+            )
     print(f"[E1v3-LoCoMo] summary → {summary_path}", flush=True)
 
 
@@ -237,8 +320,11 @@ def main() -> int:
     manifest_path.write_text(json.dumps(manifest, indent=2))
 
     if dirty:
-        print("[E1v3-LoCoMo][FATAL] tree is dirty; refusing to launch.",
-              file=sys.stderr, flush=True)
+        print(
+            "[E1v3-LoCoMo][FATAL] tree is dirty; refusing to launch.",
+            file=sys.stderr,
+            flush=True,
+        )
         return 2
 
     rows: list[dict] = []
@@ -246,8 +332,11 @@ def main() -> int:
     # 1. BASELINE_NO_CONSOLIDATION first — sanity gate vs CLAUDE.md (~0.794 MRR).
     rows.append(_run_row(ROWS[0]))
     if rows[0]["returncode"] != 0 or rows[0]["mrr"] is None:
-        print("[E1v3-LoCoMo][FATAL] BASELINE_NO_CONSOLIDATION failed; aborting.",
-              file=sys.stderr, flush=True)
+        print(
+            "[E1v3-LoCoMo][FATAL] BASELINE_NO_CONSOLIDATION failed; aborting.",
+            file=sys.stderr,
+            flush=True,
+        )
         manifest["rows"] = rows
         manifest["aborted"] = "baseline_no_consolidation_failed"
         manifest_path.write_text(json.dumps(manifest, indent=2, default=str))
@@ -261,7 +350,8 @@ def main() -> int:
             f"[E1v3-LoCoMo][WARN] BASELINE_NO_CONSOLIDATION MRR={bn_mrr:.3f} "
             f"deviates >0.05 from CLAUDE.md headline 0.794. Continuing — "
             f"document in writeup.",
-            file=sys.stderr, flush=True,
+            file=sys.stderr,
+            flush=True,
         )
 
     # 2. Remaining 13 rows.

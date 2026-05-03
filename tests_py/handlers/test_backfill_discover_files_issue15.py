@@ -92,7 +92,11 @@ def test_returns_correct_count(fake_projects_dir: Path) -> None:
 
 def test_respects_project_filter(fake_projects_dir: Path) -> None:
     """project_filter still narrows results to matching slugs."""
-    results = backfill_helpers.discover_files(project_filter="test-project", max_files=100)
+    results = backfill_helpers.discover_files(
+        project_filter="test-project", max_files=100
+    )
     assert len(results) == 4
-    results_no_match = backfill_helpers.discover_files(project_filter="nope", max_files=100)
+    results_no_match = backfill_helpers.discover_files(
+        project_filter="nope", max_files=100
+    )
     assert len(results_no_match) == 0

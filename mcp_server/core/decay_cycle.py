@@ -84,9 +84,7 @@ def _hours_since_access(mem: dict, now: datetime) -> float | None:
     "last-accessed years ago" when last_accessed is missing.
     """
     last_accessed = (
-        mem.get("last_accessed")
-        or mem.get("ingested_at")
-        or mem.get("created_at", "")
+        mem.get("last_accessed") or mem.get("ingested_at") or mem.get("created_at", "")
     )
     last_dt = _parse_datetime(last_accessed)
     if last_dt is None:

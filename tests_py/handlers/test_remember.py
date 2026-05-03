@@ -268,9 +268,7 @@ class TestUserMoodEmaHook:
 
     def test_no_baseline_treats_old_as_zero(self):
         store = _MoodStoreStub(initial=None)  # no row yet
-        new = update_user_mood_ema(
-            "Wonderful!", source="user", store=store
-        )
+        new = update_user_mood_ema("Wonderful!", source="user", store=store)
         assert new is not None
         # Old None → treated as 0.0; new = α * compound
         compound = vader_compound("Wonderful!")

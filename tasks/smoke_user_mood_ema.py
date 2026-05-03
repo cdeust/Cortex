@@ -57,7 +57,9 @@ def main() -> None:
     store = _MoodStore()
 
     pos_msg = "Wonderful breakthrough! I am thrilled and delighted with this success."
-    neg_msg = "This is terrible. I hate this awful broken garbage. Frustrated and angry."
+    neg_msg = (
+        "This is terrible. I hate this awful broken garbage. Frustrated and angry."
+    )
 
     print(f"\n[1] vader_compound(positive) = {vader_compound(pos_msg):+.4f}")
     print(f"    vader_compound(negative) = {vader_compound(neg_msg):+.4f}")
@@ -75,7 +77,9 @@ def main() -> None:
     pre = store.valence
     for src in ("tool", "consolidation", "import", "session"):
         result = update_user_mood_ema(pos_msg, source=src, store=store)
-        print(f"    source={src:14s} → returned {result}, mood still {store.valence:+.4f}")
+        print(
+            f"    source={src:14s} → returned {result}, mood still {store.valence:+.4f}"
+        )
     assert store.valence == pre, "non-user source must not mutate mood"
 
     print("\n[4] Drive mood strongly positive for rerank delta test:")
@@ -94,9 +98,9 @@ def main() -> None:
     for cid in sorted(base_scores):
         v = next(c["emotional_valence"] for c in cands if c["memory_id"] == cid)
         bs, as_ = base_scores[cid], active_scores[cid]
-        print(f"    {cid:>3}  {v:+8.2f}  {bs:>10.6f}  {as_:>10.6f}  {as_-bs:>+10.6f}")
+        print(f"    {cid:>3}  {v:+8.2f}  {bs:>10.6f}  {as_:>10.6f}  {as_ - bs:>+10.6f}")
 
-    delta_congruent = active_scores[4] - base_scores[4]   # high +valence
+    delta_congruent = active_scores[4] - base_scores[4]  # high +valence
     delta_incongruent = active_scores[0] - base_scores[0]  # high -valence
     print(
         f"\n    Δ congruent  (id=4, valence +0.9): {delta_congruent:+.6f}"

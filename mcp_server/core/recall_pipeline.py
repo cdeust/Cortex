@@ -78,15 +78,23 @@ def _env_float(name: str, default: float) -> float:
 # unique plateau winner at MRR=0.84, R@10=0.94. Marginal effects 0.035–0.045
 # confirm the knobs DO affect retrieval (not no-ops); the defaults happen to
 # be the optimal levels. See tasks/blend-weight-calibration.md Results §A.
-_HOPFIELD_BETA: float = _env_float("CORTEX_HOPFIELD_BETA", 0.30)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §HOPFIELD_BETA
-_HDC_BETA: float = _env_float("CORTEX_HDC_BETA", 0.20)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §HDC_BETA
-_SA_BETA: float = _env_float("CORTEX_SA_BETA", 0.25)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §SA_BETA
+_HOPFIELD_BETA: float = _env_float(
+    "CORTEX_HOPFIELD_BETA", 0.30
+)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §HOPFIELD_BETA
+_HDC_BETA: float = _env_float(
+    "CORTEX_HDC_BETA", 0.20
+)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §HDC_BETA
+_SA_BETA: float = _env_float(
+    "CORTEX_SA_BETA", 0.25
+)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §SA_BETA
 
 # Dendritic multiplicative range — bounded perturbation from Poirazi (2003)
 # soma scale of 0.96. We use [1 - DELTA, 1 + DELTA] so a 1.0 baseline
 # (no cluster match) leaves the score unchanged, while high-affinity
 # matches get a +DELTA bump and conflicting branches get -DELTA.
-_DENDRITIC_DELTA: float = _env_float("CORTEX_DENDRITIC_DELTA", 0.10)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §DENDRITIC_DELTA
+_DENDRITIC_DELTA: float = _env_float(
+    "CORTEX_DENDRITIC_DELTA", 0.10
+)  # engineering default — confirmed near-optimum, tasks/blend-weight-calibration.md Results §DENDRITIC_DELTA
 
 # Emotional / mood-congruent rerank blend weights.
 # Bower (1981) "Mood and Memory," Am. Psychologist 36(2) does not prescribe
@@ -107,8 +115,12 @@ _DENDRITIC_DELTA: float = _env_float("CORTEX_DENDRITIC_DELTA", 0.10)  # engineer
 # Constants are kept at the conservative engineering defaults for the
 # benefit of benchmarks that DO exercise these gates (emotion-laden corpora,
 # user-mood-aware deployments).
-_EMOTIONAL_RETRIEVAL_BETA: float = _env_float("CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.20)  # engineering default — no observable effect on LongMemEval-S (upstream VADER gate); tasks/blend-weight-calibration.md Results §EMOTIONAL_RETRIEVAL_BETA
-_MOOD_CONGRUENT_BETA: float = _env_float("CORTEX_MOOD_CONGRUENT_BETA", 0.15)  # engineering default — no observable effect on LongMemEval-S (no user-mood adapter); tasks/blend-weight-calibration.md Results §MOOD_CONGRUENT_BETA
+_EMOTIONAL_RETRIEVAL_BETA: float = _env_float(
+    "CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.20
+)  # engineering default — no observable effect on LongMemEval-S (upstream VADER gate); tasks/blend-weight-calibration.md Results §EMOTIONAL_RETRIEVAL_BETA
+_MOOD_CONGRUENT_BETA: float = _env_float(
+    "CORTEX_MOOD_CONGRUENT_BETA", 0.15
+)  # engineering default — no observable effect on LongMemEval-S (no user-mood adapter); tasks/blend-weight-calibration.md Results §MOOD_CONGRUENT_BETA
 
 # Below this absolute compound-valence value the query is treated as
 # emotionally neutral and the EMOTIONAL_RETRIEVAL stage no-ops. VADER

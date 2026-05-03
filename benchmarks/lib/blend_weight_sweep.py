@@ -66,7 +66,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import io
 import itertools
 import json
 import os
@@ -74,8 +73,7 @@ import re
 import subprocess
 import sys
 import time
-from contextlib import redirect_stdout
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -98,9 +96,24 @@ DEFAULTS = {
 # Center + 16 face-centered corners on [low, high] for each of 4 knobs.
 # DENDRITIC uses a tighter range [0.05, 0.20] per the spec.
 # source: tasks/blend-weight-calibration.md §Phase A grid.
-PHASE_A_LOW = {"HOPFIELD_BETA": 0.10, "HDC_BETA": 0.10, "SA_BETA": 0.10, "DENDRITIC_DELTA": 0.05}
-PHASE_A_HIGH = {"HOPFIELD_BETA": 0.40, "HDC_BETA": 0.40, "SA_BETA": 0.40, "DENDRITIC_DELTA": 0.20}
-PHASE_A_CENTER = {"HOPFIELD_BETA": 0.30, "HDC_BETA": 0.20, "SA_BETA": 0.25, "DENDRITIC_DELTA": 0.10}
+PHASE_A_LOW = {
+    "HOPFIELD_BETA": 0.10,
+    "HDC_BETA": 0.10,
+    "SA_BETA": 0.10,
+    "DENDRITIC_DELTA": 0.05,
+}
+PHASE_A_HIGH = {
+    "HOPFIELD_BETA": 0.40,
+    "HDC_BETA": 0.40,
+    "SA_BETA": 0.40,
+    "DENDRITIC_DELTA": 0.20,
+}
+PHASE_A_CENTER = {
+    "HOPFIELD_BETA": 0.30,
+    "HDC_BETA": 0.20,
+    "SA_BETA": 0.25,
+    "DENDRITIC_DELTA": 0.10,
+}
 
 PHASE_B_GRID = {
     "EMOTIONAL_RETRIEVAL_BETA": [0.10, 0.15, 0.20, 0.25, 0.30],
@@ -140,8 +153,12 @@ def build_phase_b_cells(perception_optimum: dict[str, float]) -> list[Cell]:
     idx = 0
     for er in PHASE_B_GRID["EMOTIONAL_RETRIEVAL_BETA"]:
         for mc in PHASE_B_GRID["MOOD_CONGRUENT_BETA"]:
-            weights = {**DEFAULTS, **perception_optimum,
-                       "EMOTIONAL_RETRIEVAL_BETA": er, "MOOD_CONGRUENT_BETA": mc}
+            weights = {
+                **DEFAULTS,
+                **perception_optimum,
+                "EMOTIONAL_RETRIEVAL_BETA": er,
+                "MOOD_CONGRUENT_BETA": mc,
+            }
             label = f"B_er{er:.2f}_mc{mc:.2f}"
             cells.append(Cell(idx=idx, label=label, weights=weights))
             idx += 1
@@ -151,9 +168,9 @@ def build_phase_b_cells(perception_optimum: dict[str, float]) -> list[Cell]:
 def build_smoke_cells() -> list[Cell]:
     """3 cells: low/center/high on HOPFIELD only — proves the env-var override fires."""
     return [
-        Cell(idx=0, label="smoke_low",    weights={**DEFAULTS, "HOPFIELD_BETA": 0.10}),
+        Cell(idx=0, label="smoke_low", weights={**DEFAULTS, "HOPFIELD_BETA": 0.10}),
         Cell(idx=1, label="smoke_center", weights={**DEFAULTS, "HOPFIELD_BETA": 0.30}),
-        Cell(idx=2, label="smoke_high",   weights={**DEFAULTS, "HOPFIELD_BETA": 0.40}),
+        Cell(idx=2, label="smoke_high", weights={**DEFAULTS, "HOPFIELD_BETA": 0.40}),
     ]
 
 
@@ -181,16 +198,22 @@ def run_cell(cell: Cell, n_queries: int, out_dir: Path) -> dict[str, Any]:
     cmd = [
         sys.executable,
         str(REPO_ROOT / "benchmarks" / "longmemeval" / "run_benchmark.py"),
-        "--variant", "s",
-        "--limit", str(n_queries),
+        "--variant",
+        "s",
+        "--limit",
+        str(n_queries),
     ]
     env = _cell_env(cell)
     env["PYTHONHASHSEED"] = "0"
     env["CUDA_VISIBLE_DEVICES"] = ""
     t0 = time.monotonic()
     proc = subprocess.run(
-        cmd, env=env, cwd=str(REPO_ROOT),
-        capture_output=True, text=True, timeout=3600,
+        cmd,
+        env=env,
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=3600,
     )
     wall = time.monotonic() - t0
     metrics = _parse_lme_output(proc.stdout)
@@ -237,14 +260,32 @@ def write_summary_csv(records: list[dict[str, Any]], out_dir: Path) -> None:
     """Write a flat CSV: one row per cell."""
     if not records:
         return
-    fieldnames = ["idx", "label", "mrr", "r10", "n_queries", "wall_seconds", "returncode",
-                  *(f"w_{k}" for k in DEFAULTS)]
+    fieldnames = [
+        "idx",
+        "label",
+        "mrr",
+        "r10",
+        "n_queries",
+        "wall_seconds",
+        "returncode",
+        *(f"w_{k}" for k in DEFAULTS),
+    ]
     with (out_dir / "summary.csv").open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
         for r in records:
-            row = {k: r.get(k) for k in ("idx", "label", "mrr", "r10",
-                                         "n_queries", "wall_seconds", "returncode")}
+            row = {
+                k: r.get(k)
+                for k in (
+                    "idx",
+                    "label",
+                    "mrr",
+                    "r10",
+                    "n_queries",
+                    "wall_seconds",
+                    "returncode",
+                )
+            }
             for k in DEFAULTS:
                 row[f"w_{k}"] = r["weights"].get(k)
             w.writerow(row)
@@ -272,8 +313,13 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "by_level": means,
         }
     return {
-        "best": {"idx": best["idx"], "label": best["label"],
-                 "weights": best["weights"], "mrr": best["mrr"], "r10": best["r10"]},
+        "best": {
+            "idx": best["idx"],
+            "label": best["label"],
+            "weights": best["weights"],
+            "mrr": best["mrr"],
+            "r10": best["r10"],
+        },
         "plateau_size": len(plateau),
         "plateau_eps": eps,
         "plateau_labels": [r["label"] for r in plateau],
@@ -284,8 +330,9 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
 # ── Manifest ────────────────────────────────────────────────────────────
 
 
-def write_manifest(out_dir: Path, args: argparse.Namespace, n_cells: int,
-                   total_wall: float) -> None:
+def write_manifest(
+    out_dir: Path, args: argparse.Namespace, n_cells: int, total_wall: float
+) -> None:
     """Emit the reproducibility manifest sidecar (Move 3)."""
     code_hash = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=str(REPO_ROOT), text=True
@@ -296,10 +343,13 @@ def write_manifest(out_dir: Path, args: argparse.Namespace, n_cells: int,
     # - Untracked files (benchmark result archives, agent caches, node_modules)
     # - Submodule internal state (.claude/worktrees/agent-* — agent
     #   infrastructure, not benchmark source) via --ignore-submodules=all.
-    dirty = bool(subprocess.check_output(
-        ["git", "diff", "--stat", "--ignore-submodules=all", "HEAD"],
-        cwd=str(REPO_ROOT), text=True
-    ).strip())
+    dirty = bool(
+        subprocess.check_output(
+            ["git", "diff", "--stat", "--ignore-submodules=all", "HEAD"],
+            cwd=str(REPO_ROOT),
+            text=True,
+        ).strip()
+    )
     manifest = {
         "code_hash": code_hash,
         "dirty": dirty,
@@ -311,7 +361,7 @@ def write_manifest(out_dir: Path, args: argparse.Namespace, n_cells: int,
         "command": sys.argv,
         "data_path": str(LME_DATA),
         "seed_note": "LongMemEval-S has fixed question order; benchmarks/lib/bench_db "
-                     "applies CORTEX_BENCH_DETERMINISTIC_RUN_ID GUCs when set",
+        "applies CORTEX_BENCH_DETERMINISTIC_RUN_ID GUCs when set",
     }
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
@@ -327,8 +377,12 @@ def main() -> int:
     parser.add_argument("--hdc", type=float, default=DEFAULTS["HDC_BETA"])
     parser.add_argument("--sa", type=float, default=DEFAULTS["SA_BETA"])
     parser.add_argument("--dendritic", type=float, default=DEFAULTS["DENDRITIC_DELTA"])
-    parser.add_argument("--output", type=Path, default=None,
-                        help="output dir; default benchmarks/results/blend_calibration/<ts>")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="output dir; default benchmarks/results/blend_calibration/<ts>",
+    )
     args = parser.parse_args()
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -339,15 +393,19 @@ def main() -> int:
         cells = build_phase_a_cells()
     elif args.phase == "b":
         perception = {
-            "HOPFIELD_BETA": args.hopfield, "HDC_BETA": args.hdc,
-            "SA_BETA": args.sa, "DENDRITIC_DELTA": args.dendritic,
+            "HOPFIELD_BETA": args.hopfield,
+            "HDC_BETA": args.hdc,
+            "SA_BETA": args.sa,
+            "DENDRITIC_DELTA": args.dendritic,
         }
         cells = build_phase_b_cells(perception)
     else:
         cells = build_smoke_cells()
 
-    print(f"[blend-sweep] phase={args.phase} cells={len(cells)} "
-          f"n_queries={args.n_queries} out={out_dir}")
+    print(
+        f"[blend-sweep] phase={args.phase} cells={len(cells)} "
+        f"n_queries={args.n_queries} out={out_dir}"
+    )
     t0 = time.monotonic()
     records: list[dict[str, Any]] = []
     for i, cell in enumerate(cells, start=1):
@@ -355,9 +413,11 @@ def main() -> int:
         rec = run_cell(cell, args.n_queries, out_dir)
         cell_dt = time.monotonic() - cell_t0
         ok = "OK" if rec["returncode"] == 0 and rec["mrr"] is not None else "FAIL"
-        print(f"[blend-sweep] [{i}/{len(cells)}] {cell.label:24s} "
-              f"mrr={rec.get('mrr')!s:>6} r10={rec.get('r10')!s:>6} "
-              f"wall={cell_dt:6.1f}s {ok}")
+        print(
+            f"[blend-sweep] [{i}/{len(cells)}] {cell.label:24s} "
+            f"mrr={rec.get('mrr')!s:>6} r10={rec.get('r10')!s:>6} "
+            f"wall={cell_dt:6.1f}s {ok}"
+        )
         records.append(rec)
     total_wall = time.monotonic() - t0
 
@@ -370,8 +430,10 @@ def main() -> int:
     if analysis.get("best"):
         b = analysis["best"]
         print(f"[blend-sweep] best cell: {b['label']} mrr={b['mrr']} r10={b['r10']}")
-        print(f"[blend-sweep] plateau size: {analysis['plateau_size']} "
-              f"(eps={analysis['plateau_eps']})")
+        print(
+            f"[blend-sweep] plateau size: {analysis['plateau_size']} "
+            f"(eps={analysis['plateau_eps']})"
+        )
     return 0
 
 

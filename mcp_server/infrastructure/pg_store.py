@@ -571,9 +571,7 @@ class PgMemoryStore(
         except (KeyError, TypeError, ValueError):
             return None
 
-    def get_user_mood_state(
-        self, user_id: str = "default"
-    ) -> dict[str, float] | None:
+    def get_user_mood_state(self, user_id: str = "default") -> dict[str, float] | None:
         """Return the full mood state ``{valence, arousal}`` or None.
 
         Reserved for future stages that consume arousal (Russell 1980
@@ -768,7 +766,12 @@ class PgMemoryStore(
             except (json.JSONDecodeError, TypeError):
                 d["tags"] = []
         # Convert datetime to ISO string for compatibility
-        for field in ("created_at", "ingested_at", "last_accessed", "last_reconsolidated"):
+        for field in (
+            "created_at",
+            "ingested_at",
+            "last_accessed",
+            "last_reconsolidated",
+        ):
             if isinstance(d.get(field), datetime):
                 d[field] = d[field].isoformat()
         return d

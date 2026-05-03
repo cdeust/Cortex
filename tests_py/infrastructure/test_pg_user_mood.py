@@ -61,9 +61,7 @@ class TestUserMoodWrite:
         assert v is not None
         assert v == pytest.approx(0.7, abs=1e-5)
         state = store.get_user_mood_state()
-        assert state == pytest.approx(
-            {"valence": 0.7, "arousal": 0.3}, abs=1e-5
-        )
+        assert state == pytest.approx({"valence": 0.7, "arousal": 0.3}, abs=1e-5)
 
     def test_set_clamps_above_one(self, store):
         store.set_user_mood(2.0, 5.0)
@@ -80,9 +78,7 @@ class TestUserMoodWrite:
         store.set_user_mood(-0.4, 0.1)
         store.set_user_mood(-0.4, 0.1)
         state = store.get_user_mood_state()
-        assert state == pytest.approx(
-            {"valence": -0.4, "arousal": 0.1}, abs=1e-5
-        )
+        assert state == pytest.approx({"valence": -0.4, "arousal": 0.1}, abs=1e-5)
 
 
 class TestUserMoodBridge:
