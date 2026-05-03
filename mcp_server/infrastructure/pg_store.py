@@ -539,6 +539,87 @@ class PgMemoryStore(
         )
         self._conn.commit()
 
+    # ── User mood (Bower 1981 mood-congruent recall) ──────────────────
+    # The pg_recall._get_user_mood(store) bridge duck-types against
+    # ``get_user_mood()`` and consumes a scalar valence in [-1, +1].
+    # We expose:
+    #   - get_user_mood()       → scalar float (the bridge contract)
+    #   - get_user_mood_state() → {valence, arousal} dict (richer reads)
+    #   - set_user_mood(v, a)   → upsert (writers / emotion classifier)
+    # Returns ``None`` from get_user_mood() iff the row is genuinely
+    # absent — defensive; the schema seeds a 'default' neutral row, but
+    # an in-flight migration or a manually deleted row should still
+    # no-op the rerank rather than crash.
+    # Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+
+    def get_user_mood(self, user_id: str = "default") -> float | None:
+        """Return the user's current mood valence in [-1, +1], or None.
+
+        Scalar contract matches ``mcp_server/core/pg_recall.py:_get_user_mood``
+        which clamps and floats the returned value. None means "no signal" —
+        the MOOD_CONGRUENT_RERANK stage no-ops in that case (Bower 1981
+        requires a real mood; we never fabricate one).
+        """
+        row = self._execute(
+            "SELECT valence FROM user_mood WHERE user_id = %s",
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            return float(row["valence"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def get_user_mood_state(
+        self, user_id: str = "default"
+    ) -> dict[str, float] | None:
+        """Return the full mood state ``{valence, arousal}`` or None.
+
+        Reserved for future stages that consume arousal (Russell 1980
+        circumplex). The MOOD_CONGRUENT_RERANK stage uses only valence
+        and reads it via ``get_user_mood()``.
+        """
+        row = self._execute(
+            "SELECT valence, arousal FROM user_mood WHERE user_id = %s",
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            return {
+                "valence": float(row["valence"]),
+                "arousal": float(row["arousal"]),
+            }
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def set_user_mood(
+        self,
+        valence: float,
+        arousal: float = 0.0,
+        user_id: str = "default",
+    ) -> None:
+        """Upsert the user's mood state. Clamps both dims to [-1, +1].
+
+        Refreshes ``updated_at`` automatically. Idempotent — repeated
+        writes with the same value still bump the timestamp, which is
+        the correct semantics for a "freshness of last observed mood"
+        signal that downstream EMA aggregators may consult.
+        """
+        v = max(-1.0, min(1.0, float(valence)))
+        a = max(-1.0, min(1.0, float(arousal)))
+        self._execute(
+            "INSERT INTO user_mood (user_id, valence, arousal, updated_at) "
+            "VALUES (%s, %s, %s, NOW()) "
+            "ON CONFLICT (user_id) DO UPDATE "
+            "SET valence = EXCLUDED.valence, "
+            "    arousal = EXCLUDED.arousal, "
+            "    updated_at = NOW()",
+            (user_id, v, a),
+        )
+        self._conn.commit()
+
     def delete_memory(self, memory_id: int) -> bool:
         cur = self._execute("DELETE FROM memories WHERE id = %s", (memory_id,))
         self._conn.commit()

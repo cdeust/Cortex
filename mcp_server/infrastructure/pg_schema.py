@@ -487,6 +487,26 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
     state_json  TEXT NOT NULL DEFAULT '{}'
 );
 
+-- User session-level mood state for MOOD_CONGRUENT_RERANK (Bower 1981).
+-- Single-row table keyed by user_id (default 'default') so the recall
+-- pipeline's _get_user_mood(store) bridge can read a real signal instead
+-- of always returning None. The seed row defaults to neutral (valence=0,
+-- arousal=0) — consumers may update via set_user_mood() once an upstream
+-- emotion classifier wires in. The duck-typed pg_recall._get_user_mood()
+-- bridge consumes the scalar `valence`; `arousal` is reserved for the
+-- two-dimensional Russell (1980) circumplex if a future stage needs it.
+-- Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+CREATE TABLE IF NOT EXISTS user_mood (
+    user_id     TEXT PRIMARY KEY DEFAULT 'default',
+    valence     REAL NOT NULL DEFAULT 0.0
+        CHECK (valence >= -1.0 AND valence <= 1.0),
+    arousal     REAL NOT NULL DEFAULT 0.0
+        CHECK (arousal >= -1.0 AND arousal <= 1.0),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO user_mood (user_id, valence, arousal) VALUES ('default', 0.0, 0.0)
+ON CONFLICT (user_id) DO NOTHING;
+
 -- Precomputed (x, y) coordinates for every workflow-graph node. The
 -- layout pass runs out-of-band (handlers/recompute_layout.py via
 -- igraph DrL on CPU) and persists the result here so the viz can ship
