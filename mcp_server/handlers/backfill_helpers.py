@@ -207,7 +207,22 @@ def discover_files(project_filter: str, max_files: int) -> list[tuple[Path, str]
         slug = project_dir.name
         if project_filter and project_filter not in slug:
             continue
-        for jsonl_file in sorted(project_dir.glob("*.jsonl"), reverse=True):
+        # Walk recursively to capture four legitimate session layouts:
+        #   1. Flat parent           <slug>/<uuid>.jsonl
+        #   2. UUID-dir parent       <slug>/<uuid>/<uuid>.jsonl
+        #   3. Subagent (data dir)   <slug>/<parent>/data/subagents/agent-<id>.jsonl
+        #   4. Subagent (direct)     <slug>/<parent>/agent-<id>.jsonl
+        # Pre-fix glob("*.jsonl") only saw layout 1, missing ~89% of sessions
+        # when subagent / teammate use is active. Issue #15.
+        for jsonl_file in sorted(project_dir.rglob("*.jsonl"), reverse=True):
+            parent = jsonl_file.parent
+            accept = (
+                parent == project_dir
+                or parent.name == jsonl_file.stem
+                or jsonl_file.name.startswith("agent-")
+            )
+            if not accept:
+                continue
             results.append((jsonl_file, slug))
             if len(results) >= limit:
                 break
