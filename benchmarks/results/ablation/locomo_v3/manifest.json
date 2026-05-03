@@ -1,0 +1,433 @@
+{
+  "code_hash": "ef178da7418a05bcf7aeb3e66f5b3179fdad2c4d",
+  "dirty": false,
+  "started_at": "2026-05-03T11:11:11.476008+00:00",
+  "n_rows": 14,
+  "design": "two-baseline",
+  "rows_spec": [
+    {
+      "label": "BASELINE_NO_CONSOLIDATION",
+      "ablate": null,
+      "with_consolidation": false,
+      "anchor": "BASELINE_NO_CONSOLIDATION"
+    },
+    {
+      "label": "RECONSOLIDATION",
+      "ablate": "RECONSOLIDATION",
+      "with_consolidation": false,
+      "anchor": "BASELINE_NO_CONSOLIDATION"
+    },
+    {
+      "label": "CO_ACTIVATION",
+      "ablate": "CO_ACTIVATION",
+      "with_consolidation": false,
+      "anchor": "BASELINE_NO_CONSOLIDATION"
+    },
+    {
+      "label": "ADAPTIVE_DECAY",
+      "ablate": "ADAPTIVE_DECAY",
+      "with_consolidation": false,
+      "anchor": "BASELINE_NO_CONSOLIDATION"
+    },
+    {
+      "label": "BASELINE_WITH_CONSOLIDATION",
+      "ablate": null,
+      "with_consolidation": true,
+      "anchor": "BASELINE_WITH_CONSOLIDATION"
+    },
+    {
+      "label": "CASCADE",
+      "ablate": "CASCADE",
+      "with_consolidation": true,
+      "anchor": "BASELINE_WITH_CONSOLIDATION"
+    },
+    {
+      "label": "INTERFERENCE",
+      "ablate": "INTERFERENCE",
+      "with_consolidation": true,
+      "anchor": "BASELINE_WITH_CONSOLIDATION"
+    },
+    {
+      "label": "HOMEOSTATIC_PLASTICITY",
+      "ablate": "HOMEOSTATIC_PLASTICITY",
+      "with_consolidation": true,
+      "anchor": "BASELINE_WITH_CONSOLIDATION"
+    },
+    {
+      "label": "SYNAPTIC_PLASTICITY",
+      "ablate": "SYNAPTIC_PLASTICITY",
+      "with_consolidation": true,
+      "anchor": "BASELINE_WITH_CONSOLIDATION"
+    },
+    {
+      "label": "MICROGLIAL_PRUNING",
+      "ablate": "MICROGLIAL_PRUNING",
+      "with_consolidation": true,
+      "anchor": "BASELINE_WITH_CONSOLIDATION"
+    },
+    {
+      "label": "TWO_STAGE_MODEL",
+      "ablate": "TWO_STAGE_MODEL",
+      "with_consolidation": true,
+      "anchor": "BASELINE_WITH_CONSOLIDATION"
+    },
+    {
+      "label": "EMOTIONAL_DECAY",
+      "ablate": "EMOTIONAL_DECAY",
+      "with_consolidation": true,
+      "anchor": "BASELINE_WITH_CONSOLIDATION"
+    },
+    {
+      "label": "TRIPARTITE_SYNAPSE",
+      "ablate": "TRIPARTITE_SYNAPSE",
+      "with_consolidation": true,
+      "anchor": "BASELINE_WITH_CONSOLIDATION"
+    },
+    {
+      "label": "SCHEMA_ENGINE",
+      "ablate": "SCHEMA_ENGINE",
+      "with_consolidation": true,
+      "anchor": "BASELINE_WITH_CONSOLIDATION"
+    }
+  ],
+  "rows": [
+    {
+      "row": "BASELINE_NO_CONSOLIDATION",
+      "anchor": "BASELINE_NO_CONSOLIDATION",
+      "with_consolidation": false,
+      "ablate": null,
+      "mrr": 0.8278244277865873,
+      "r10": 0.9419778002018163,
+      "category_mrr": {
+        "multi_hop": 0.7812799782425951,
+        "temporal": 0.5834195997239476,
+        "single_hop": 0.7434284588539908,
+        "open_domain": 0.8737212879602891,
+        "adversarial": 0.878556302939711
+      },
+      "category_recall10": {
+        "multi_hop": 0.8940809968847352,
+        "temporal": 0.782608695652174,
+        "single_hop": 0.9432624113475178,
+        "open_domain": 0.9690844233055886,
+        "adversarial": 0.9573991031390134
+      },
+      "wall_seconds": 2211.5143361091614,
+      "returncode": 0
+    },
+    {
+      "row": "RECONSOLIDATION",
+      "anchor": "BASELINE_NO_CONSOLIDATION",
+      "with_consolidation": false,
+      "ablate": "RECONSOLIDATION",
+      "mrr": 0.8202435010331075,
+      "r10": 0.9308779011099899,
+      "category_mrr": {
+        "multi_hop": 0.7689363595905652,
+        "temporal": 0.5613181504485852,
+        "single_hop": 0.734886862546437,
+        "open_domain": 0.8720533001151313,
+        "adversarial": 0.8668561819346573
+      },
+      "category_recall10": {
+        "multi_hop": 0.8722741433021807,
+        "temporal": 0.75,
+        "single_hop": 0.9361702127659575,
+        "open_domain": 0.9631391200951248,
+        "adversarial": 0.9461883408071748
+      },
+      "wall_seconds": 2123.1776580810547,
+      "returncode": 0
+    },
+    {
+      "row": "CO_ACTIVATION",
+      "anchor": "BASELINE_NO_CONSOLIDATION",
+      "with_consolidation": false,
+      "ablate": "CO_ACTIVATION",
+      "mrr": 0.8268363685871253,
+      "r10": 0.9404641775983855,
+      "category_mrr": {
+        "multi_hop": 0.7767059783414924,
+        "temporal": 0.576595928226363,
+        "single_hop": 0.7474684791174152,
+        "open_domain": 0.8723717985014061,
+        "adversarial": 0.8788552566018933
+      },
+      "category_recall10": {
+        "multi_hop": 0.897196261682243,
+        "temporal": 0.7717391304347826,
+        "single_hop": 0.9397163120567376,
+        "open_domain": 0.9667063020214031,
+        "adversarial": 0.9573991031390134
+      },
+      "wall_seconds": 2220.7900359630585,
+      "returncode": 0
+    },
+    {
+      "row": "ADAPTIVE_DECAY",
+      "anchor": "BASELINE_NO_CONSOLIDATION",
+      "with_consolidation": false,
+      "ablate": "ADAPTIVE_DECAY",
+      "mrr": 0.8440802540323227,
+      "r10": 0.9616548940464178,
+      "category_mrr": {
+        "multi_hop": 0.8364893932650941,
+        "temporal": 0.6010697032436163,
+        "single_hop": 0.7448454913880446,
+        "open_domain": 0.8835673706660626,
+        "adversarial": 0.8879573279236956
+      },
+      "category_recall10": {
+        "multi_hop": 0.9626168224299065,
+        "temporal": 0.8043478260869565,
+        "single_hop": 0.9574468085106383,
+        "open_domain": 0.9774078478002378,
+        "adversarial": 0.9663677130044843
+      },
+      "wall_seconds": 2242.4090900421143,
+      "returncode": 0
+    },
+    {
+      "row": "BASELINE_WITH_CONSOLIDATION",
+      "anchor": "BASELINE_WITH_CONSOLIDATION",
+      "with_consolidation": true,
+      "ablate": null,
+      "mrr": 0.8263582560504862,
+      "r10": 0.9399596367305751,
+      "category_mrr": {
+        "multi_hop": 0.7719638530386194,
+        "temporal": 0.576595928226363,
+        "single_hop": 0.7425419340312958,
+        "open_domain": 0.8734782854877979,
+        "adversarial": 0.8811721474838067
+      },
+      "category_recall10": {
+        "multi_hop": 0.8909657320872274,
+        "temporal": 0.7717391304347826,
+        "single_hop": 0.9397163120567376,
+        "open_domain": 0.9667063020214031,
+        "adversarial": 0.9596412556053812
+      },
+      "wall_seconds": 3607.3437838554382,
+      "returncode": 0
+    },
+    {
+      "row": "CASCADE",
+      "anchor": "BASELINE_WITH_CONSOLIDATION",
+      "with_consolidation": true,
+      "ablate": "CASCADE",
+      "mrr": 0.8272041628625888,
+      "r10": 0.9409687184661958,
+      "category_mrr": {
+        "multi_hop": 0.7754944864757949,
+        "temporal": 0.576595928226363,
+        "single_hop": 0.7452774963413261,
+        "open_domain": 0.87340514882132,
+        "adversarial": 0.8807984554060787
+      },
+      "category_recall10": {
+        "multi_hop": 0.8909657320872274,
+        "temporal": 0.7717391304347826,
+        "single_hop": 0.9397163120567376,
+        "open_domain": 0.9690844233055886,
+        "adversarial": 0.9596412556053812
+      },
+      "wall_seconds": 3653.2695727348328,
+      "returncode": 0
+    },
+    {
+      "row": "INTERFERENCE",
+      "anchor": "BASELINE_WITH_CONSOLIDATION",
+      "with_consolidation": true,
+      "ablate": "INTERFERENCE",
+      "mrr": 0.8260250989060273,
+      "r10": 0.9389505549949546,
+      "category_mrr": {
+        "multi_hop": 0.7745302378479949,
+        "temporal": 0.5755089717046239,
+        "single_hop": 0.7441587864460205,
+        "open_domain": 0.8721821150180247,
+        "adversarial": 0.8794905331340309
+      },
+      "category_recall10": {
+        "multi_hop": 0.8909657320872274,
+        "temporal": 0.7608695652173914,
+        "single_hop": 0.9397163120567376,
+        "open_domain": 0.9667063020214031,
+        "adversarial": 0.9573991031390134
+      },
+      "wall_seconds": 3314.6269528865814,
+      "returncode": 0
+    },
+    {
+      "row": "HOMEOSTATIC_PLASTICITY",
+      "anchor": "BASELINE_WITH_CONSOLIDATION",
+      "with_consolidation": true,
+      "ablate": "HOMEOSTATIC_PLASTICITY",
+      "mrr": 0.828872351160444,
+      "r10": 0.9445005045408678,
+      "category_mrr": {
+        "multi_hop": 0.782259061464669,
+        "temporal": 0.5767468944099379,
+        "single_hop": 0.7453408195429472,
+        "open_domain": 0.874320536775947,
+        "adversarial": 0.8815458395615345
+      },
+      "category_recall10": {
+        "multi_hop": 0.9003115264797508,
+        "temporal": 0.7717391304347826,
+        "single_hop": 0.9468085106382979,
+        "open_domain": 0.9714625445897741,
+        "adversarial": 0.9596412556053812
+      },
+      "wall_seconds": 4089.9900391101837,
+      "returncode": 0
+    },
+    {
+      "row": "SYNAPTIC_PLASTICITY",
+      "anchor": "BASELINE_WITH_CONSOLIDATION",
+      "with_consolidation": true,
+      "ablate": "SYNAPTIC_PLASTICITY",
+      "mrr": 0.8264431470536415,
+      "r10": 0.9399596367305751,
+      "category_mrr": {
+        "multi_hop": 0.7753214162092668,
+        "temporal": 0.5770186335403727,
+        "single_hop": 0.7457334233929979,
+        "open_domain": 0.8716767642451352,
+        "adversarial": 0.8804247633283507
+      },
+      "category_recall10": {
+        "multi_hop": 0.8940809968847352,
+        "temporal": 0.7717391304347826,
+        "single_hop": 0.9397163120567376,
+        "open_domain": 0.9667063020214031,
+        "adversarial": 0.9573991031390134
+      },
+      "wall_seconds": 4144.661541938782,
+      "returncode": 0
+    },
+    {
+      "row": "MICROGLIAL_PRUNING",
+      "anchor": "BASELINE_WITH_CONSOLIDATION",
+      "with_consolidation": true,
+      "ablate": "MICROGLIAL_PRUNING",
+      "mrr": 0.8252941152915926,
+      "r10": 0.9394550958627649,
+      "category_mrr": {
+        "multi_hop": 0.7765551599663749,
+        "temporal": 0.576595928226363,
+        "single_hop": 0.7425630417651694,
+        "open_domain": 0.870399939603269,
+        "adversarial": 0.878929995017439
+      },
+      "category_recall10": {
+        "multi_hop": 0.897196261682243,
+        "temporal": 0.7717391304347826,
+        "single_hop": 0.9397163120567376,
+        "open_domain": 0.9643281807372176,
+        "adversarial": 0.9573991031390134
+      },
+      "wall_seconds": 3566.1608259677887,
+      "returncode": 0
+    },
+    {
+      "row": "TWO_STAGE_MODEL",
+      "anchor": "BASELINE_WITH_CONSOLIDATION",
+      "with_consolidation": true,
+      "ablate": "TWO_STAGE_MODEL",
+      "mrr": 0.8276452356926627,
+      "r10": 0.9409687184661958,
+      "category_mrr": {
+        "multi_hop": 0.7764340107798051,
+        "temporal": 0.5711611456176674,
+        "single_hop": 0.7481776989755713,
+        "open_domain": 0.873708076175377,
+        "adversarial": 0.8807984554060787
+      },
+      "category_recall10": {
+        "multi_hop": 0.897196261682243,
+        "temporal": 0.7717391304347826,
+        "single_hop": 0.9432624113475178,
+        "open_domain": 0.9667063020214031,
+        "adversarial": 0.9573991031390134
+      },
+      "wall_seconds": 3331.540370941162,
+      "returncode": 0
+    },
+    {
+      "row": "EMOTIONAL_DECAY",
+      "anchor": "BASELINE_WITH_CONSOLIDATION",
+      "with_consolidation": true,
+      "ablate": "EMOTIONAL_DECAY",
+      "mrr": 0.8249431390450562,
+      "r10": 0.9399596367305751,
+      "category_mrr": {
+        "multi_hop": 0.7724657568115512,
+        "temporal": 0.576401828847481,
+        "single_hop": 0.7417398401440954,
+        "open_domain": 0.8718272842232414,
+        "adversarial": 0.878182610861983
+      },
+      "category_recall10": {
+        "multi_hop": 0.8909657320872274,
+        "temporal": 0.7717391304347826,
+        "single_hop": 0.9397163120567376,
+        "open_domain": 0.9678953626634959,
+        "adversarial": 0.9573991031390134
+      },
+      "wall_seconds": 3293.639673233032,
+      "returncode": 0
+    },
+    {
+      "row": "TRIPARTITE_SYNAPSE",
+      "anchor": "BASELINE_WITH_CONSOLIDATION",
+      "with_consolidation": true,
+      "ablate": "TRIPARTITE_SYNAPSE",
+      "mrr": 0.8267811093492224,
+      "r10": 0.9409687184661958,
+      "category_mrr": {
+        "multi_hop": 0.7728292043712605,
+        "temporal": 0.5768676673567977,
+        "single_hop": 0.7435635483507824,
+        "open_domain": 0.8745649547968216,
+        "adversarial": 0.8796773791728949
+      },
+      "category_recall10": {
+        "multi_hop": 0.8940809968847352,
+        "temporal": 0.7717391304347826,
+        "single_hop": 0.9397163120567376,
+        "open_domain": 0.9690844233055886,
+        "adversarial": 0.9573991031390134
+      },
+      "wall_seconds": 3273.8390879631042,
+      "returncode": 0
+    },
+    {
+      "row": "SCHEMA_ENGINE",
+      "anchor": "BASELINE_WITH_CONSOLIDATION",
+      "with_consolidation": true,
+      "ablate": "SCHEMA_ENGINE",
+      "mrr": 0.8267917207246169,
+      "r10": 0.9409687184661958,
+      "category_mrr": {
+        "multi_hop": 0.7802539188053207,
+        "temporal": 0.5709799861973776,
+        "single_hop": 0.7431793875942811,
+        "open_domain": 0.872865824887228,
+        "adversarial": 0.8790421026407574
+      },
+      "category_recall10": {
+        "multi_hop": 0.9034267912772586,
+        "temporal": 0.7608695652173914,
+        "single_hop": 0.9397163120567376,
+        "open_domain": 0.9667063020214031,
+        "adversarial": 0.9573991031390134
+      },
+      "wall_seconds": 3257.810354948044,
+      "returncode": 0
+    }
+  ],
+  "last_completed_at": "2026-05-03T23:30:02.287424+00:00",
+  "finished_at": "2026-05-03T23:30:02.293643+00:00"
+}

@@ -1,0 +1,30 @@
+{
+  "overall_mrr": 0.8267811093492224,
+  "overall_recall10": 0.9409687184661958,
+  "category_mrr": {
+    "multi_hop": 0.7728292043712605,
+    "temporal": 0.5768676673567977,
+    "single_hop": 0.7435635483507824,
+    "open_domain": 0.8745649547968216,
+    "adversarial": 0.8796773791728949
+  },
+  "category_recall10": {
+    "multi_hop": 0.8940809968847352,
+    "temporal": 0.7717391304347826,
+    "single_hop": 0.9397163120567376,
+    "open_domain": 0.9690844233055886,
+    "adversarial": 0.9573991031390134
+  },
+  "elapsed_s": 3232.3802168369293,
+  "consolidation_total_wall_s": 1017.3956404599594,
+  "consolidation_call_count": 10,
+  "manifest": {
+    "with_consolidation": true,
+    "ablate_mechanism": "TRIPARTITE_SYNAPSE",
+    "ablate_env_var": "CORTEX_ABLATE_TRIPARTITE_SYNAPSE=1",
+    "n_conversations": 10,
+    "n_questions": 1982,
+    "consolidation_call_count": 10,
+    "consolidation_total_wall_s": 1017.3956404599594
+  }
+}
