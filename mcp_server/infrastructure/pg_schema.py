@@ -493,7 +493,7 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
 -- of always returning None. The seed row defaults to neutral (valence=0,
 -- arousal=0) — consumers may update via set_user_mood() once an upstream
 -- emotion classifier wires in. The duck-typed pg_recall._get_user_mood()
--- bridge consumes the scalar `valence`; `arousal` is reserved for the
+-- bridge consumes the scalar `valence` only. `arousal` is reserved for the
 -- two-dimensional Russell (1980) circumplex if a future stage needs it.
 -- Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
 CREATE TABLE IF NOT EXISTS user_mood (

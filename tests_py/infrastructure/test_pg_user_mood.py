@@ -128,7 +128,13 @@ class TestMoodCongruentRerankWithRealStore:
             {"memory_id": 100, "score": 0.5, "emotional_valence": -0.8},
             {"memory_id": 200, "score": 0.4, "emotional_valence": +0.8},
         ]
-        out = mood_congruent_rerank(cands, mood)
+        # Use a dominant blend (beta > 0.5) to demonstrate the wiring CAN flip
+        # adjacent ranks when given enough weight. The calibrated production
+        # default _MOOD_CONGRUENT_BETA=0.15 is intentionally below the rank-flip
+        # threshold (RRF math: beta > 0.5 to flip rank-1 vs rank-0); the
+        # mechanism is a tie-breaker, not a filter, by design (Bower 1981
+        # describes the effect qualitatively, not as a dominant signal).
+        out = mood_congruent_rerank(cands, mood, blend_beta=0.6)
         out_ids = [c["memory_id"] for c in out]
         # Mood 0.8 closer to 0.8 than to -0.8 → mid 200 promoted.
         assert out_ids.index(200) < out_ids.index(100)
