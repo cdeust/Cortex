@@ -202,7 +202,14 @@ def test_synaptic_plasticity_guard():
     _, restore = _ablate(Mechanism.SYNAPTIC_PLASTICITY)
     try:
         out = apply_hebbian_update(edges, co, acts, thr)
-        assert out == edges
+        # Ablated path: weights unchanged but the result-shape contract
+        # (every dict carries `action`, `weight`, `delta`) MUST hold so
+        # downstream `_apply_updates` can iterate uniformly. Pre-fix returned
+        # raw edges, which broke the cycle silently with a logged WARNING.
+        assert len(out) == len(edges)
+        assert out[0]["weight"] == 0.5
+        assert out[0]["action"] == "none"
+        assert out[0]["delta"] == 0.0
     finally:
         restore()
     out2 = apply_hebbian_update(edges, co, acts, thr)

@@ -168,8 +168,21 @@ def apply_hebbian_update(
     from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.SYNAPTIC_PLASTICITY):
-        # No-op: identity, no LTP/LTD weight changes.
-        return list(edges)
+        # No-op identity: zero weight change but the result-shape contract
+        # (every dict carries `action`, `weight`, `delta`) must hold so
+        # downstream `_apply_updates` in handlers/consolidation/plasticity.py
+        # doesn't KeyError. Pre-fix returned raw edges, which broke the
+        # cycle silently with a logged WARNING and dropped the row's
+        # plasticity contribution.
+        return [
+            {
+                **edge,
+                "weight": edge.get("weight", 1.0),
+                "delta": 0.0,
+                "action": "none",
+            }
+            for edge in edges
+        ]
     return [
         _hebbian_single(
             edge,
