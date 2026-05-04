@@ -5,6 +5,7 @@
 *.out
 *.toc
 *.pdf
+!main.pdf
 *.fdb_latexmk
 *.fls
 *.synctex.gz
