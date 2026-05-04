@@ -147,7 +147,6 @@ def parse_judge_output(
       unparseable lines yield ``verdict='incorrect'`` as a conservative
       default (a missing verdict cannot count as correct).
     """
-    id_to_cond = {sid: cond for sid, cond, _ in shuffled}
     parsed: dict[int, VerdictLabel] = {}
     for line in text.splitlines():
         line = line.strip()
