@@ -85,11 +85,13 @@ def test_audit_flags_google_prefix():
 
 
 def test_audit_clean_for_normal_strings():
-    findings = M.audit_no_secrets({
-        "ok": "claude-haiku-4-5-20251001",
-        "model": "gpt-4o-2024-11-20",
-        "nested": {"inner": "no secrets here"},
-    })
+    findings = M.audit_no_secrets(
+        {
+            "ok": "claude-haiku-4-5-20251001",
+            "model": "gpt-4o-2024-11-20",
+            "nested": {"inner": "no secrets here"},
+        }
+    )
     assert findings == []
 
 
@@ -134,8 +136,12 @@ def test_cost_tracking_increment(tmp_path, fake_prompts, fake_lockfile):
     out_dir = tmp_path / "results" / "testrun-cost"
     path = M.write_manifest(m, out_dir)
 
-    M.update_cost_tracking(path, add_input_tokens=100, add_output_tokens=20, add_usd=0.01)
-    M.update_cost_tracking(path, add_input_tokens=50, add_output_tokens=10, add_usd=0.005)
+    M.update_cost_tracking(
+        path, add_input_tokens=100, add_output_tokens=20, add_usd=0.01
+    )
+    M.update_cost_tracking(
+        path, add_input_tokens=50, add_output_tokens=10, add_usd=0.005
+    )
 
     blob = json.loads(path.read_text())
     assert blob["cost_tracking"]["input_tokens_total"] == 150

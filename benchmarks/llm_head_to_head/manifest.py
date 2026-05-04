@@ -103,11 +103,13 @@ class Manifest:
     cells_total: int
     stats: ManifestStats
     hardware: ManifestHardware
-    cost_tracking: dict[str, Any] = field(default_factory=lambda: {
-        "input_tokens_total": 0,
-        "output_tokens_total": 0,
-        "estimated_usd": 0.0,
-    })
+    cost_tracking: dict[str, Any] = field(
+        default_factory=lambda: {
+            "input_tokens_total": 0,
+            "output_tokens_total": 0,
+            "estimated_usd": 0.0,
+        }
+    )
     schema_compliance: dict[str, Any] = field(default_factory=dict)
 
 
@@ -368,7 +370,9 @@ def update_cost_tracking(
         blob = json.load(fp)
     ct = blob.setdefault("cost_tracking", {})
     ct["input_tokens_total"] = int(ct.get("input_tokens_total", 0)) + add_input_tokens
-    ct["output_tokens_total"] = int(ct.get("output_tokens_total", 0)) + add_output_tokens
+    ct["output_tokens_total"] = (
+        int(ct.get("output_tokens_total", 0)) + add_output_tokens
+    )
     ct["estimated_usd"] = float(ct.get("estimated_usd", 0.0)) + add_usd
     tmp = manifest_path.with_suffix(".tmp")
     with tmp.open("w") as fp:

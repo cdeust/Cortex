@@ -123,7 +123,9 @@ def build_naive_long_context(
     full_text = separator.join(turn_strings)
     full_tokens = token_counter(full_text)
     if full_tokens <= input_token_budget:
-        return TruncationResult(text=full_text, input_tokens=full_tokens, truncated=False)
+        return TruncationResult(
+            text=full_text, input_tokens=full_tokens, truncated=False
+        )
 
     # Recency-truncate: walk from the END, accumulating turns until we
     # would exceed the budget. Then drop the earliest accepted turn(s)
@@ -140,7 +142,9 @@ def build_naive_long_context(
         candidate = turn_strings[idx]
         cand_tokens = token_counter(candidate)
         # +sep_tokens because joining adds a separator unless first.
-        addition = cand_tokens + (sep_tokens if accepted_suffix_start < len(turn_strings) else 0)
+        addition = cand_tokens + (
+            sep_tokens if accepted_suffix_start < len(turn_strings) else 0
+        )
         if accepted_token_count + addition > input_token_budget:
             break
         accepted_suffix_start = idx

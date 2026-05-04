@@ -401,11 +401,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--n", type=int, default=3, help="Items in dry-run / smoke.")
     p.add_argument(
-        "--generator", default="haiku", help="Generator alias (haiku|opus|gpt-4o-mini|gemini-2.0-flash)."
+        "--generator",
+        default="haiku",
+        help="Generator alias (haiku|opus|gpt-4o-mini|gemini-2.0-flash).",
     )
-    p.add_argument(
-        "--judge", default="gpt4o", help="Judge alias (gpt4o|opus)."
-    )
+    p.add_argument("--judge", default="gpt4o", help="Judge alias (gpt4o|opus).")
     p.add_argument("--output", default=None, help="Output directory for live run.")
     p.add_argument(
         "--cost-ceiling",
@@ -413,7 +413,9 @@ def main(argv: list[str] | None = None) -> int:
         default=SMOKE_COST_CEILING_USD,
         help="Hard USD cap; aborts mid-loop if exceeded.",
     )
-    p.add_argument("--split", default="10M", help="BEAM split (10M is the protocol universe).")
+    p.add_argument(
+        "--split", default="10M", help="BEAM split (10M is the protocol universe)."
+    )
     args = p.parse_args(argv)
 
     if args.dry_run and args.run:

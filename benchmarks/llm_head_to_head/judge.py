@@ -123,8 +123,7 @@ def render_judge_prompt(
     """
     by_id = {sid: text for sid, _, text in shuffled}
     filled = (
-        template
-        .replace("{QUESTION}", question)
+        template.replace("{QUESTION}", question)
         .replace("{ABILITY}", ability)
         .replace("{GOLD}", gold or "[NO ANSWER]")
         .replace("{SUPPORT}", support or "(none)")
@@ -202,7 +201,9 @@ def judge_item(
       - on dry_run: judge call is stubbed; verdicts default to 'incorrect'.
     """
     shuffled, _ = shuffle_candidates(question_id, candidates_by_condition)
-    prompt = render_judge_prompt(question, ability, gold, support, shuffled, judge_template)
+    prompt = render_judge_prompt(
+        question, ability, gold, support, shuffled, judge_template
+    )
 
     if judge_mode == "single_judge_opus":
         judge_model = SINGLE_JUDGE_MODEL
@@ -222,4 +223,6 @@ def judge_item(
         dry_run=dry_run,
     )
     verdicts = parse_judge_output(response.text, shuffled)
-    return JudgePanel(verdicts=verdicts, judge_model=judge_model, judge_response=response)
+    return JudgePanel(
+        verdicts=verdicts, judge_model=judge_model, judge_response=response
+    )

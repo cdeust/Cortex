@@ -99,9 +99,7 @@ def test_no_monkey_patching_primitives():
 def test_handler_kwargs_subset_of_production_schema():
     """The kwargs in handler({...}) must be a subset of the production schema."""
     tree = _ast()
-    declared_props = set(
-        production_recall.schema["inputSchema"]["properties"].keys()
-    )
+    declared_props = set(production_recall.schema["inputSchema"]["properties"].keys())
 
     used_keys: set[str] = set()
     for node in ast.walk(tree):

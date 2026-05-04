@@ -87,9 +87,7 @@ def test_truncation_returns_contiguous_suffix():
         return  # not interesting
 
     # Find which TURN_xxxx tags are in the result.
-    present = sorted(
-        i for i in range(50) if f"TURN_{i:04d}" in result.text
-    )
+    present = sorted(i for i in range(50) if f"TURN_{i:04d}" in result.text)
     if not present:
         return
     # The set of present turns must form an unbroken suffix [k, k+1, ..., 49].

@@ -86,6 +86,4 @@ def passages_to_context(memories: list[dict[str, Any]], separator: str = "\n\n")
     post: returns a string; empty when memories is empty. The format
       preserves the production ranking — caller does NOT shuffle.
     """
-    return separator.join(
-        m.get("content", "") for m in memories if m.get("content")
-    )
+    return separator.join(m.get("content", "") for m in memories if m.get("content"))

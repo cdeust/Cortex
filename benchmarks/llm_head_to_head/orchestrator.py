@@ -125,7 +125,10 @@ def build_context(
             condition="B",
             text=text,
             estimated_input_tokens=long_context_truncator._heuristic_token_count(text),
-            diagnostics={"k": retriever_baselines.STANDARD_RAG_TOP_K, "n_passages": len(passages)},
+            diagnostics={
+                "k": retriever_baselines.STANDARD_RAG_TOP_K,
+                "n_passages": len(passages),
+            },
         )
     if condition == "C":
         memories = cortex_caller.cortex_recall(item.question, domain="beam")
@@ -160,9 +163,7 @@ def render_answer_prompt(template: str, context_text: str, question: str) -> str
     pre: ``template`` is the contents of ``prompts/answer.md``.
     post: returns the fully rendered prompt string.
     """
-    return template.replace("{CONTEXT}", context_text).replace(
-        "{QUESTION}", question
-    )
+    return template.replace("{CONTEXT}", context_text).replace("{QUESTION}", question)
 
 
 def estimate_run_cost(
@@ -182,9 +183,7 @@ def estimate_run_cost(
     total = 0.0
     cells: list[dict] = []
     for gen in generator_models:
-        budget = (
-            long_context_truncator.MODEL_INPUT_BUDGETS.get(gen, 100_000)
-        )
+        budget = long_context_truncator.MODEL_INPUT_BUDGETS.get(gen, 100_000)
         for cond in conditions:
             if cond == "A":
                 # naive long-context: full window-sized input
@@ -195,9 +194,8 @@ def estimate_run_cost(
                 input_tokens_per_call = 1_500  # protocol §7 estimate
             else:
                 input_tokens_per_call = 0
-            cell_cost = (
-                len(items)
-                * estimate_cost_usd(gen, input_tokens_per_call, avg_output_tokens)
+            cell_cost = len(items) * estimate_cost_usd(
+                gen, input_tokens_per_call, avg_output_tokens
             )
             total += cell_cost
             cells.append(
@@ -236,7 +234,9 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="BEAM-10M LLM Head-to-Head Orchestrator (Stage 0 scaffold)"
     )
-    p.add_argument("--dry-run", action="store_true", help="No API calls; print diagnostics only.")
+    p.add_argument(
+        "--dry-run", action="store_true", help="No API calls; print diagnostics only."
+    )
     p.add_argument("--n", type=int, default=3, help="Item count (dry-run only).")
     p.add_argument(
         "--generators",
@@ -530,9 +530,7 @@ def run_live(
     return summary
 
 
-def _emit_item_line(
-    results_dir: Path, cell: LiveCellResult, judge_label: str
-) -> None:
+def _emit_item_line(results_dir: Path, cell: LiveCellResult, judge_label: str) -> None:
     """Write one items.jsonl row for a completed (or judge-failed) cell.
 
     pre: ``judge_label`` is one of the protocol verdicts OR the literal

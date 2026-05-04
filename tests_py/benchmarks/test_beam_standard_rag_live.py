@@ -67,9 +67,7 @@ class _FakeEmbeddingEngine:
 @pytest.fixture
 def patch_embedding(monkeypatch: pytest.MonkeyPatch) -> _FakeEmbeddingEngine:
     eng = _FakeEmbeddingEngine()
-    monkeypatch.setattr(
-        retriever_baselines, "get_embedding_engine", lambda: eng
-    )
+    monkeypatch.setattr(retriever_baselines, "get_embedding_engine", lambda: eng)
     return eng
 
 
