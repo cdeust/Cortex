@@ -42,8 +42,8 @@ Stateless reducer that turns a feature description into a 9-file PRD. 17 MCP too
 ### [Automatised Pipeline](https://github.com/cdeust/automatised-pipeline) — codebase intelligence
 Codebase intelligence as an MCP server. Tree-sitter AST → LadybugDB graph → Louvain communities → hybrid BM25 + TF-IDF + RRF search. 23 tools, 10 stages, 220 tests, Rust, Clean Architecture. The read-only intelligence layer between finding and PRD.
 
-### [AI Architect](https://github.com/cdeust/ai-architect-mcp) — autonomous engineering pipeline
-11-stage orchestration over Cortex + PRD Spec Generator + Automatised Pipeline: finding → spec → verified PR with no LLM judges. 64 verification rules, 17 codebase intelligence tools, 5 science-backed git analytics. The product surface at [ai-architect.tools](https://ai-architect.tools).
+### [AI Architect](https://ai-architect.tools) — autonomous engineering pipeline
+11-stage orchestration over Cortex + PRD Spec Generator + Automatised Pipeline: finding → spec → verified PR with no LLM judges. 64 verification rules, 17 codebase intelligence tools, 5 science-backed git analytics.
 
 ## What I believe
 
