@@ -1,8 +1,8 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.4.9)  10 APR 2026 07:40
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.4.9)  4 MAY 2026 15:44
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
-**main
+**main.tex
 (./main.tex
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
@@ -457,220 +457,76 @@ Overfull \hbox (4.11842pt too wide) in paragraph at lines 499--507
 5 c\OT1/cmr/m/n/10.95 ) \OMS/cmsy/m/n/10.95 ^^@
  []
 
-[7]
-
-LaTeX Warning: Reference `fig:dataflow' on page 8 undefined on input line 573.
-
-! Argument of \@xverbatim has an extra }.
-<inserted text> 
-                \par 
-l.609 }}
-        
-I've run across a `}' that doesn't seem to match anything.
-For example, `\def\a#1{...}' and `\a}' would produce
-this error. If you simply proceed now, the `\par' that
-I've just inserted will cause me to report a runaway
-argument that might be the root of the problem. But if
-your `}' was spurious, just type `2' and it will go away.
-
-Runaway argument?
- Query | v [Stage Detection] --> current_stage | v [Phase 1: Own-Stag\ETC.
-! Paragraph ended before \@xverbatim was complete.
-<to be read again> 
-                   \par 
-l.609 }}
-        
-I suspect you've forgotten a `}', causing me to apply this
-control sequence to too much text. How can we recover?
-My plan is to forget the whole thing and hope for the best.
-
-! Extra }, or forgotten \endgroup.
-<recently read> }
-                 
-l.609 }}
-        
-I've deleted a group-closing symbol because it seems to be
-spurious, as in `$x}$'. But perhaps the } is legitimate and
-you forgot something else, as in `\hbox{$x}'. In such cases
-the way to recover is to insert both the forgotten and the
-deleted material, e.g., by typing `I$}'.
-
-! Extra }, or forgotten \endgroup.
-\fbox  ...x {\color@begingroup \kern \fboxsep {#1}
-                                                  \kern \fboxsep \color@endg...
-l.609 }}
-        
-I've deleted a group-closing symbol because it seems to be
-spurious, as in `$x}$'. But perhaps the } is legitimate and
-you forgot something else, as in `\hbox{$x}'. In such cases
-the way to recover is to insert both the forgotten and the
-deleted material, e.g., by typing `I$}'.
-
-! Missing \endgroup inserted.
-<inserted text> 
-                \endgroup 
-l.613 context window with priority budgeting.}
-                                              
-I've inserted something that you may have forgotten.
-(See the <inserted text> above.)
-With luck, this will get me unwedged. But if you
-really didn't forget anything, try typing `2' now; then
-my insertion and my current dilemma will both disappear.
-
-! Missing \endgroup inserted.
-<inserted text> 
-                \endgroup 
-l.613 context window with priority budgeting.}
-                                              
-I've inserted something that you may have forgotten.
-(See the <inserted text> above.)
-With luck, this will get me unwedged. But if you
-really didn't forget anything, try typing `2' now; then
-my insertion and my current dilemma will both disappear.
-
-! Missing } inserted.
-<inserted text> 
-                }
-l.613 context window with priority budgeting.}
-                                              
-I've inserted something that you may have forgotten.
-(See the <inserted text> above.)
-With luck, this will get me unwedged. But if you
-really didn't forget anything, try typing `2' now; then
-my insertion and my current dilemma will both disappear.
-
-! Missing \endgroup inserted.
-<inserted text> 
-                \endgroup 
-l.613 context window with priority budgeting.}
-                                              
-I've inserted something that you may have forgotten.
-(See the <inserted text> above.)
-With luck, this will get me unwedged. But if you
-really didn't forget anything, try typing `2' now; then
-my insertion and my current dilemma will both disappear.
-
-! Missing } inserted.
-<inserted text> 
-                }
-l.613 context window with priority budgeting.}
-                                              
-I've inserted something that you may have forgotten.
-(See the <inserted text> above.)
-With luck, this will get me unwedged. But if you
-really didn't forget anything, try typing `2' now; then
-my insertion and my current dilemma will both disappear.
-
-! Missing } inserted.
-<inserted text> 
-                }
-l.613 context window with priority budgeting.}
-                                              
-I've inserted something that you may have forgotten.
-(See the <inserted text> above.)
-With luck, this will get me unwedged. But if you
-really didn't forget anything, try typing `2' now; then
-my insertion and my current dilemma will both disappear.
-
-! Too many }'s.
-\color@endbox ->\color@endgroup \egroup 
-                                        
-l.615 \end{figure}
-                  
-You've closed more groups than you opened.
-Such booboos are generally harmless, so keep going.
-
-
-! LaTeX Error: \begin{document} ended by \end{figure}.
-
-See the LaTeX manual or LaTeX Companion for explanation.
-Type  H <return>  for immediate help.
- ...                                              
-                                                  
-l.615 \end{figure}
-                  
-Your command was ignored.
-Type  I <command> <return>  to replace it with another command,
-or  <return>  to continue without it.
-
-! Extra \endgroup.
-\end  ...end#1\endcsname \@checkend {#1}\endgroup 
-                                                  \UseHook {env/#1/after}\if...
-l.615 \end{figure}
-                  
-Things are pretty mixed up, but I think the worst is over.
-
-[8]
+[7] [8]
 LaTeX Font Info:    Trying to load font information for OMS+cmtt on input line 
-626.
-LaTeX Font Info:    No file OMScmtt.fd. on input line 626.
+624.
+LaTeX Font Info:    No file OMScmtt.fd. on input line 624.
 
 
 LaTeX Font Warning: Font shape `OMS/cmtt/m/n' undefined
 (Font)              using `OMS/cmsy/m/n' instead
-(Font)              for symbol `textbraceleft' on input line 626.
+(Font)              for symbol `textbraceleft' on input line 624.
 
-[9]
-
-LaTeX Warning: `h' float specifier changed to `ht'.
-
-[10] [11]
-! Undefined control sequence.
-l.848     S^* = \argmax
-                       _{|S| \leq k} \sum_{c \in S} \left[\text{score}(c) - ...
-The control sequence at the end of the top line
-of your error message was never \def'ed. If you have
-misspelled it (e.g., `\hobx'), type `I' and the correct
-spelling (e.g., `I\hbox'). Otherwise just continue,
-and I'll forget about whatever was undefined.
-
+[9] [10] [11] [12]
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
-put line 864.
+put line 862.
 LaTeX Font Info:    Trying to load font information for OMS+cmr on input line 8
-68.
+66.
+
 (/usr/local/texlive/2026basic/texmf-dist/tex/latex/base/omscmr.fd
 File: omscmr.fd 2024/11/19 v2.5n Standard LaTeX font definitions
 )
 LaTeX Font Info:    Font shape `OMS/cmr/m/n' in size <10.95> not available
-(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 868.
- [12]
-[13] [14] [15]
-Overfull \hbox (31.11699pt too wide) in paragraph at lines 1146--1151
+(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 866.
+ [13]
+[14]
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+[15] [16]
+Overfull \hbox (31.11699pt too wide) in paragraph at lines 1144--1149
 []\OT1/cmr/bx/n/10.95 Phase 1: Own-stage WRRF + sub-mod-u-lar se-lect. \OT1/cmr
 /m/n/10.95 The WRRF pipeline's \OT1/cmtt/m/n/10.95 recall[]memories()
  []
 
-[16] [17] [18] [19] [20]
-Overfull \hbox (1.17966pt too wide) in paragraph at lines 1482--1488
+[17]
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+[18] [19] [20]
+Overfull \hbox (1.17966pt too wide) in paragraph at lines 1480--1486
  []\OT1/cmr/bx/n/10.95 Contradiction res-o-lu-tion: $\OT1/cmr/m/n/10.95 +0\OML/
 cmm/m/it/10.95 :\OT1/cmr/m/n/10.95 092$\OT1/cmr/bx/n/10.95 .[] \OT1/cmr/m/n/10.
 95 Stage-scoped re-trieval nat-u-rally iso-lates con-tra-dict-ing state-
  []
 
-[21] [22] [23] [24]
-Overfull \hbox (0.50699pt too wide) in paragraph at lines 1834--1836
+[21] [22] [23] [24] [25]
+Overfull \hbox (0.50699pt too wide) in paragraph at lines 1832--1834
 []\OT1/cmr/bx/n/10.95 ai-prd-builder \OT1/cmr/m/n/10.95 (Septem-ber 2025): Con-
 textMan-ager with fixed-section bud-get split-ting. Pub-
  []
 
 
-Overfull \hbox (27.85207pt too wide) in paragraph at lines 1837--1842
+Overfull \hbox (27.85207pt too wide) in paragraph at lines 1835--1840
 \OT1/cmr/m/n/10.95 pro-gres-sive con-den-sa-tion, domain-aware con-densers, and
  trun-ca-tion warn-ing in-jec-tion. StageAware-
  []
 
-[25] [26] [27] [28]
-Overfull \hbox (34.99574pt too wide) in paragraph at lines 2107--2110
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+[26] [27] [28] [29]
+Overfull \hbox (34.99574pt too wide) in paragraph at lines 2105--2108
 []\OT1/cmr/m/n/10.95 This en-sures zero cross-conversation con-tam-i-na-tion. T
 he TRUN-CATE ap-proach (vs. DROP/CREATE)
  []
 
-[29]
+[30]
 
 LaTeX Warning: `h' float specifier changed to `ht'.
 
-[30]
-Overfull \hbox (0.84961pt too wide) in paragraph at lines 2230--2233
+[31]
+Overfull \hbox (0.84961pt too wide) in paragraph at lines 2228--2231
 []\OT1/cmtt/m/n/10.95 memories[]by[]entity[]fn(entity[]ids)\OT1/cmr/m/n/10.95 :
  re-turns mem-o-ries con-tain-ing the given en-ti-ties. Wired
  []
@@ -679,11 +535,14 @@ Overfull \hbox (0.84961pt too wide) in paragraph at lines 2230--2233
 LaTeX Warning: `h' float specifier changed to `ht'.
 
 
-Underfull \hbox (badness 3428) in paragraph at lines 2294--2295
+Underfull \hbox (badness 3428) in paragraph at lines 2292--2293
 []\OT1/cmr/m/n/10.95 Stage de-tec-tion used lo-cal
  []
 
-[31] [32] [33] (./main.bbl [34] [35]) [36] (./main.aux)
+
+LaTeX Warning: `h' float specifier changed to `ht'.
+
+[32] [33] [34] (./main.bbl [35] [36]) [37] (./main.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
@@ -692,23 +551,17 @@ L3 programming layer <2026-01-19>
 
 LaTeX Font Warning: Some font shapes were not available, defaults substituted.
 
-
-LaTeX Warning: There were undefined references.
-
-
-LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
-
 Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: F8C9AF5D51EFF08F0BD6B4820290A7ED;16665.
  ) 
 Here is how much of TeX's memory you used:
- 11642 strings out of 469006
- 175017 string characters out of 5454814
- 602654 words of memory out of 5000000
+ 11644 strings out of 469006
+ 175032 string characters out of 5454814
+ 601906 words of memory out of 5000000
  39797 multiletter control sequences out of 15000+600000
  641892 words of font info for 95 fonts, out of 8000000 for 9000
  319 hyphenation exceptions out of 8191
- 75i,11n,79p,411b,723s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,11n,79p,415b,723s stack positions out of 10000i,1000n,20000p,200000b,200000s
  </Users/cdeust/Library/texlive/2026basic/texmf-var/fonts/pk/ljfour/jknappen/
 ec/tcrm1095.600pk></usr/local/texlive/2026basic/texmf-dist/fonts/type1/public/a
 msfonts/cm/cmbx10.pfb></usr/local/texlive/2026basic/texmf-dist/fonts/type1/publ
@@ -734,10 +587,10 @@ al/texlive/2026basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb></usr
 fb></usr/local/texlive/2026basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt
 9.pfb></usr/local/texlive/2026basic/texmf-dist/fonts/type1/public/amsfonts/symb
 ols/msbm10.pfb>
-Output written on main.pdf (36 pages, 413554 bytes).
+Output written on main.pdf (37 pages, 415236 bytes).
 PDF statistics:
- 1098 PDF objects out of 1200 (max. 8388607)
- 1004 compressed objects within 11 object streams
- 391 named destinations out of 1000 (max. 500000)
+ 1107 PDF objects out of 1200 (max. 8388607)
+ 1012 compressed objects within 11 object streams
+ 393 named destinations out of 1000 (max. 500000)
  673 words of extra memory for PDF output out of 10000 (max. 10000000)
 

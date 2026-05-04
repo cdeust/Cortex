@@ -6,6 +6,153 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.15.0] — E1 v3 verification campaign + arXiv-ready papers + BEAM-10M harness
+
+A single coherent release covering 64 commits since v3.14.12. The headline is
+verification: every benchmark number on the README is now backed by a
+per-mechanism ablation row with code SHAs, dirty flags, manifests, and
+per-row JSON outputs preserved alongside the writeups. Two production fixes
+were surfaced by the campaign and ship inside the same release. Both
+companion papers (thermodynamic memory + structured context assembly) are
+arXiv-ready.
+
+### Verification campaign (paper-claim-bearing)
+
+- **E1 v3 LongMemEval-S — 17-row per-mechanism ablation, n=500.** Headline
+  `MRR = 0.9124`, `R@10 = 98.4%` (vs. published baselines `MRR = 0.882`,
+  `R@10 = 97.8%`: **+3.0% MRR, +0.6% R@10**). Driver:
+  `benchmarks/lib/run_e1_v3_lme.py`. Per-row JSONs:
+  `benchmarks/results/ablation/longmemeval-s_v3/`. Writeup:
+  `tasks/e1-v3-results.md`.
+- **E1 v3 LoCoMo — 14-row two-baseline ablation, n=1986.** Headline
+  `MRR = 0.8279`, `R@10 = 94.3%` (`BASELINE_NO_CONSOLIDATION`,
+  longitudinal-read-path anchor) — vs. CLAUDE.md baseline
+  (`MRR = 0.794`, `R@10 = 0.926`): **+4.3% MRR, +1.7% R@10**. Re-run on
+  plasticity-fixed bytes (commit `2f45bcb`, descendant of `5f737fe`).
+  Cadence-fix anchor agreement re-validated identically
+  (`ΔvsNO = +0.0014`); two consolidation-only rows
+  (`HOMEOSTATIC_PLASTICITY`, `SCHEMA_ENGINE`) recover positive
+  contributions previously masked by the contract bug.
+  `benchmarks/results/ablation/locomo_v3_post_plasticity_fix/`.
+  Writeup: `tasks/e1-v3-locomo-results-post-fix.md`. The pre-fix sweep is
+  preserved at `tasks/e1-v3-locomo-results.md`.
+- **Phase A + B blend-weight calibration.** Central composite design + 5×5
+  grid search; all six post-WRRF rerank constants confirmed near-optimum at
+  the engineering defaults shipped today. `tasks/e1-v3-blend-calibration.md`.
+- **Per-category delta analysis (LME-S).** Mechanism specialization
+  surfaced: HDC specializes for multi-session reasoning, HOPFIELD for
+  knowledge updates, ADAPTIVE_DECAY against stable preferences.
+  `tasks/e1-v3-per-category.md`.
+
+Total: **45 per-mechanism evidence rows** across 26 enum mechanisms
+(17 read-path on LongMemEval-S + 9 consolidation-only routed to LoCoMo).
+
+### Fixed (production fixes surfaced during verification)
+
+- **`6c51bce` — consolidation cadence is now ingest-relative.**
+  `consolidation_engine` migrated from wall-clock `created_at` to
+  ingest-relative `ingested_at`. Recovers `MRR 0.222 → 0.8264` on
+  backdated corpora; affects every production backfill scenario where
+  memories carry old timestamps but were written today.
+- **`5f737fe` — plasticity result-shape contract preserved on ablation.**
+  `apply_hebbian_update` no-op (when `CORTEX_ABLATE_SYNAPTIC_PLASTICITY=1`)
+  now returns dicts with `action="none"` instead of raw edge tuples,
+  fixing a silent `KeyError` downstream in consolidation/plasticity. This
+  is what was masking the two consolidation-only contributions in the
+  pre-fix LoCoMo sweep.
+
+### Added (read-path mechanisms now wired end-to-end)
+
+- **`ddb5b58` / `024ea1a` / `bc0ae4f`** — `HOPFIELD`, `HDC`,
+  `SPREADING_ACTIVATION`, `DENDRITIC_CLUSTERS` wired into the `pg_recall`
+  pipeline. Batch Hopfield embeddings and real entity-set Jaccard for the
+  dendritic stage. Query-entity resolution extended to natural-language
+  tokens.
+- **`81e8d90`** — `EMOTIONAL_RETRIEVAL` + `MOOD_CONGRUENT_RERANK` are now
+  live read-path stages (not test-only).
+- **`9d6bc96`** — `RECONSOLIDATION` post-retrieval stage wired
+  (Nader 2000); retrieved memories become labile and may be updated
+  against the retrieval context.
+- **`c5ade6b`** — VADER → `user_mood` EMA hook in `remember()`; closes
+  the `MOOD_CONGRUENT` signal gap end-to-end.
+- **`b4b23e7`** — `PgMemoryStore.get_user_mood` / `set_user_mood` +
+  `user_mood` DDL; the column the read-path stage was reading didn't
+  exist before this.
+- **`099ba1e` / `54f8501`** — 23 mechanisms now have
+  `CORTEX_ABLATE_<MECH>=1` env-var hooks reading at the production
+  hot-path (not just at test wiring), so ablation studies exercise the
+  same code path as production.
+
+### Added (benchmark + verification infrastructure)
+
+- **`3201cc3` / `0a53996`** — BEAM-10M LLM head-to-head harness scaffold
+  + live mode wiring at `benchmarks/llm_head_to_head/`; smoke pending
+  API keys.
+- **`0e1f90d`** — LongMemEval-S `--with-consolidation` flag.
+- **`b68c5ac` / `ef178da`** — LoCoMo `--ablate` + `--with-consolidation`
+  + `--results-out` flags + 14-row driver `run_e1_v3_locomo.py`.
+- **`f09485d`** — Blend-weight calibration infrastructure with
+  pre-registration; harness dirty-check matched to pre-reg
+  (`39ab694` ignores submodule internal state).
+- **`5a5d8d3` / `3eab1ed`** — E2 N-scan rebuilt as real-benchmark
+  subsample + Zipf synthetic; ablation env vars wired into the
+  production code path.
+- **DB snapshot + restore + HNSW determinism infrastructure** (E2 / E3 /
+  E4 / E5 internal harnesses).
+
+### Added (papers + endorsement materials)
+
+- **`6b80760` / `3ace1fb` / `3eaeaf6`** — `docs/arxiv-thermodynamic/main.pdf`
+  compiled, 30 pages. Ported to LaTeX matching `arxiv/main.tex` style.
+- **`9e6ddf6`** — Recompile with bibtex pass; **all 45 citations now
+  resolve** (vs. the previous 4 unresolved `??` markers).
+- **`bce4840` / `db4fe0a` / `6f75221`** — §6.3 three-pass integration:
+  LME-S evidence + LoCoMo subsection + post-fix re-run + cadence-fix
+  narrative + plasticity-fix narrative.
+- **`fa9c101` / `fb6f67f`** — §6.4 Operating Regime added; full E2b Zipf
+  curve integrated; falsifications reframed as predicted boundaries with
+  the `N=100k` datapoint landed.
+- **`a787fe6`** — Refresh `linkedin-endorser-post.md`; new
+  `arxiv-endorsement-email.md` template with pre-submission checklist.
+- **`974c364` / `2152946`** — Prose polish; `BEAM Overall 0.543 → 0.591`
+  number fix in CLAUDE.md and the markdown source.
+- **`ffcad91`** — Repo reorg: `arxiv/` → `arxiv-context-assembly/` +
+  paper-md moved into `docs/papers/`.
+- **`docs/arxiv-context-assembly/main.pdf`** — 37 pages, pre-existing
+  verbatim + argmax bugs fixed, arXiv-ready.
+
+### Fixed (issue fixes from contributors)
+
+- **`5398745`** — issue #15 (Nitjsefnie). `discover_files` walks all four
+  session layouts (subagent + teammate transcripts), recovers ~89% of
+  session content during backfill that was previously dropped.
+
+### Fixed (CI + plumbing)
+
+- **`df14e16`** — DDL comment semicolon broke `ddl.split(';')` extractor.
+- **`9f94bd3`** — `user_mood` DDL comment semicolon + test uses dominant
+  beta.
+- **`34aa452`** — Repair docstring boundary in `cls.run_cls_cycle`
+  (broken in `3eab1ed`).
+- **`51ce608` / `c4253cc` / `5271828` / `fd51f6f` / `4918638` / `79f0b20`** —
+  ruff format + drop unused imports in verification harnesses;
+  bump tool count to 47.
+- **`18b4be4`** — ruff format on `memories_page` + `memories_facets`.
+
+### Changed (visualization, repo housekeeping)
+
+- **`63bacca` / `2953bae` / `b7a8f97`** — Paged Knowledge + Board with
+  filter chips, lazy-load; default landing reverted to Knowledge; Graph
+  view restored to pre-d3-removal state with a warning banner.
+- **22 stale public repos archived; `ai-prd-mcp` deleted** — security
+  hardening (legacy build artefacts had embedded keys at one point) +
+  portfolio cleanup.
+- **`551a411` / `30d80fe`** — Profile README draft for `cdeust/cdeust`
+  (controls AI Overview narrative); profile draft points
+  `AI Architect` to website not archived repo.
+- **Cortex repo description + topics refreshed** for AI-search
+  discovery.
+
 ## [3.14.12] — fix MCP client deadlock on long upstream responses
 
 ### Fixed

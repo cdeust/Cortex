@@ -7,8 +7,8 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/tests-2500_passing-brightgreen.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/citations-41_papers-orange.svg" alt="Citations">
-  <img src="https://img.shields.io/badge/version-3.14.2-brightgreen.svg" alt="Version 3.14.2">
+  <img src="https://img.shields.io/badge/citations-45_papers-orange.svg" alt="Citations">
+  <img src="https://img.shields.io/badge/version-3.15.0-brightgreen.svg" alt="Version 3.15.0">
   <a href="https://glama.ai/mcp/servers/cdeust/Cortex"><img src="https://glama.ai/mcp/servers/cdeust/Cortex/badges/score.svg" alt="Glama score: security A, license A"></a>
 </p>
 
@@ -30,7 +30,9 @@ Claude Code forgets you every time you close the tab. Every architecture decisio
 
 Cortex is a persistent memory engine for Claude Code built on computational neuroscience. It remembers what you worked on, how you think, what you decided and why. Not as a dumb text dump shoved into context, but as a living memory system that consolidates, forgets intelligently, and reconstructs the right context at the right time.
 
-**20 biological mechanisms. 47 MCP tools. 9 automatic hooks. Runs entirely on your machine. PostgreSQL + pgvector.**
+**26 biological mechanisms. 47 MCP tools. 9 automatic hooks. Runs entirely on your machine. PostgreSQL + pgvector.**
+
+**v3.15.0 — verification campaign + arXiv-ready papers**: 45 per-mechanism ablation rows across LongMemEval-S (17 rows, n=500) and LoCoMo (14 rows × 2 sweeps, n=1986). Headline numbers stay verified — LongMemEval R@10 = 98.4% / MRR = 0.9124, LoCoMo R@10 = 94.3% / MRR = 0.8279 — and every figure now traces to a JSON in `benchmarks/results/ablation/` with code SHAs, dirty flags, and per-row category breakdowns. The thermodynamic memory paper (`docs/arxiv-thermodynamic/main.pdf`, 30 pages, all 45 citations resolved) and the structured context assembly paper (`docs/arxiv-context-assembly/main.pdf`, 37 pages) are arXiv-ready. Two production fixes surfaced during verification: consolidation cadence is now ingest-relative instead of wall-clock (recovers MRR 0.222 → 0.8264 on backdated corpora), and the plasticity ablation no-op preserves the result-shape contract (no more silent KeyError). HOPFIELD, HDC, SPREADING_ACTIVATION, DENDRITIC_CLUSTERS, EMOTIONAL_RETRIEVAL, MOOD_CONGRUENT_RERANK, and RECONSOLIDATION are now wired end-to-end on the production read path; 23 mechanisms have CORTEX_ABLATE_<MECH> hooks reading at the hot path. BEAM-10M LLM head-to-head harness scaffolded at `benchmarks/llm_head_to_head/`. [Release notes →](https://github.com/cdeust/Cortex/releases/tag/v3.15.0)
 
 **v3.14.2 — call graph lit + queryable**: the workflow graph now renders the actual call and import edges between symbols — not just the AST shells. Every edge carries a *confidence* (0.0–1.0) and a *reason* tag (`direct-ast`, `import-scope-lookup`, `memory-entities-link`, …) so you can tell a resolved call from a same-name guess at a glance. Knowledge-graph entities ship as a first-class layer: ~10k entities extracted from memory text land between the memory ring and the file shell, heat-weighted centroid-placed near the memories that mention them. And a new `query_workflow_graph` MCP tool returns typed subgraphs on demand — filter by `node_kind`, `edge_kind`, `neighbour_of <id> + depth`, or `domain`, so downstream agents can reason over graph slices without rebuilding from scratch.
 
@@ -152,8 +154,8 @@ LoCoMo (Maharana et al., ACL 2024): 1,986 questions across 10 conversations, inc
 
 | | Cortex | What it means |
 |---|---|---|
-| Recall@10 | **94.2%** | Right memory in top 10 over 9 times out of 10 (n=1986, BASELINE_NO_CONSOLIDATION) |
-| MRR | **0.8278** | Correct answer is typically the first result |
+| Recall@10 | **94.3%** | Right memory in top 10 over 9 times out of 10 (n=1986, BASELINE_NO_CONSOLIDATION, post-plasticity-fix) |
+| MRR | **0.8279** | Correct answer is typically the first result |
 
 | Category | MRR | R@10 | Why this score |
 |---|---|---|---|
@@ -234,7 +236,7 @@ Cortex doesn't store memories the way a database stores rows. It treats them mor
 
 **Similar memories stay distinct.** Pattern separation — modeled on the dentate gyrus, which keeps "Tuesday's standup" separate from "Wednesday's standup" even though they're almost identical. Without this, retrieval returns the same generic match for every similar query. *(Leutgeb et al. 2007; Yassa & Stark 2011)*
 
-**41 papers total.** Every algorithm, constant, and threshold traces to a published source. Full citations, equations, ablation data, and per-module implementation audit: **[docs/papers/science.md](docs/papers/science.md)** | **[Research post on structured context assembly](docs/research-post-context-assembly.md)**
+**45 papers total.** Every algorithm, constant, and threshold traces to a published source. Full citations, equations, ablation data, and per-module implementation audit: **[docs/papers/science.md](docs/papers/science.md)** | **[Thermodynamic memory paper (PDF, 30 pages)](docs/arxiv-thermodynamic/main.pdf)** | **[Structured context assembly paper (PDF, 37 pages)](docs/arxiv-context-assembly/main.pdf)** | **[Research post on structured context assembly](docs/research-post-context-assembly.md)**
 
 ---
 
@@ -391,7 +393,7 @@ Every benchmark headline number above is backed by a per-mechanism ablation camp
 - **LoCoMo, 14 rows, n=1986 (pre-plasticity-fix bytes)** — `tasks/e1-v3-locomo-results.md`. Two-baseline (NO_CONSOLIDATION / WITH_CONSOLIDATION) design; empirical resolution of the architectural-mismatch hypothesis (RECONSOLIDATION ΔMRR = +0.0076, ADAPTIVE_DECAY ΔMRR = -0.0163).
 - **LoCoMo, 14 rows, n=1986 (post-plasticity-fix bytes)** — `tasks/e1-v3-locomo-results-post-fix.md`. Re-run on commit `2f45bcb` (descendant of plasticity result-shape fix `5f737fe`); cadence-fix anchor agreement re-validated identically (ΔvsNO = +0.0014); two consolidation-only rows (HOMEOSTATIC_PLASTICITY, SCHEMA_ENGINE) recover positive contributions previously masked by the contract bug.
 
-Total: 45 per-mechanism evidence rows. The full paper, including the §6.3 per-mechanism evidence section and §6.3.4.1 plasticity-fix re-run subsection, is at `docs/arxiv-thermodynamic/main.pdf`.
+Total: 45 per-mechanism evidence rows across 26 enum mechanisms (17 read-path + 9 consolidation-only routed to LoCoMo). The full thermodynamic memory paper, including §6.3 per-mechanism evidence and §6.3.4.1 plasticity-fix re-run subsection, is at `docs/arxiv-thermodynamic/main.pdf` (30 pages, all 45 citations resolved). The companion structured context assembly paper is at `docs/arxiv-context-assembly/main.pdf` (37 pages).
 
 ## License
 
@@ -399,11 +401,30 @@ MIT
 
 ## Citation
 
+If you reference the system, the paper PDFs on `main` are the canonical artefacts (arXiv IDs forthcoming, endorsement in progress):
+
 ```bibtex
 @software{cortex2026,
   title={Cortex: Persistent Memory for Claude Code},
   author={Deust, Clement},
   year={2026},
   url={https://github.com/cdeust/Cortex}
+}
+
+@unpublished{deust2026thermodynamic,
+  title={Thermodynamic Memory for Conversational Agents:
+         A Per-Mechanism Ablation Study on LongMemEval and LoCoMo},
+  author={Deust, Clement},
+  year={2026},
+  note={arXiv ID forthcoming, endorsement in progress},
+  url={https://github.com/cdeust/Cortex/blob/main/docs/arxiv-thermodynamic/main.pdf}
+}
+
+@unpublished{deust2026context,
+  title={Structured Context Assembly for Long-Horizon Conversational Memory},
+  author={Deust, Clement},
+  year={2026},
+  note={arXiv ID forthcoming, endorsement in progress},
+  url={https://github.com/cdeust/Cortex/blob/main/docs/arxiv-context-assembly/main.pdf}
 }
 ```
