@@ -23,6 +23,8 @@ benchmarks/longmemeval/longmemeval_s.json
 benchmarks/longmemeval/longmemeval_oracle.json
 benchmarks/spell_alteration/*.pdf
 *.pdf
+# Whitelist the thermodynamic memory paper PDF (compiled artefact for publication)
+!docs/arxiv-thermodynamic/main.pdf
 
 # Runtime telemetry
 traces/
