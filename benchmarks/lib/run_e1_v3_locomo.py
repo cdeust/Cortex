@@ -47,7 +47,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[2]
-_OUT_DIR = _ROOT / "benchmarks" / "results" / "ablation" / "locomo_v3"
+_OUT_DIR = _ROOT / "benchmarks" / "results" / "ablation" / "locomo_v3_post_plasticity_fix"
 _HARNESS = _ROOT / "benchmarks" / "locomo" / "run_benchmark.py"
 
 
