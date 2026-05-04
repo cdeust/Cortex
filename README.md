@@ -132,17 +132,17 @@ LongMemEval (Wu et al., ICLR 2025): 500 human-curated questions embedded in ~40 
 
 | | Cortex | What it means |
 |---|---|---|
-| Recall@10 | **97.8%** | The right memory shows up in the top 10 results for nearly every question |
-| MRR | **0.882** | The correct answer is usually the first or second result |
+| Recall@10 | **98.4%** | The right memory shows up in the top 10 results for nearly every question |
+| MRR | **0.9124** | The correct answer is usually the first or second result |
 
 | Category | MRR | R@10 | Why this score |
 |---|---|---|---|
-| Single-session (assistant) | 0.982 | 100.0% | Verbatim assistant responses are easy to match |
-| Multi-session reasoning | 0.936 | 99.2% | Entity graph connects evidence across sessions |
-| Knowledge updates | 0.921 | 100.0% | Heat decay naturally surfaces the newest version of a fact |
-| Temporal reasoning | 0.857 | 97.7% | Time anchors embedded directly in memory content |
-| Single-session (user) | 0.806 | 94.3% | User phrasing varies more than assistant responses |
-| Single-session (preference) | 0.641 | 90.0% | Preferences are implicit — harder to retrieve by keyword |
+| Single-session (assistant) | 1.000 | 100.0% | Verbatim assistant responses are easy to match |
+| Multi-session reasoning | 0.962 | 100.0% | Entity graph connects evidence across sessions |
+| Knowledge updates | 0.925 | 100.0% | Heat decay naturally surfaces the newest version of a fact |
+| Temporal reasoning | 0.926 | 98.5% | Time anchors embedded directly in memory content |
+| Single-session (user) | 0.814 | 94.3% | User phrasing varies more than assistant responses |
+| Single-session (preference) | 0.668 | 93.3% | Preferences are implicit — harder to retrieve by keyword |
 
 Knowledge updates scored highest because heat-based decay naturally pushes newer information above older versions of the same fact. This wasn't designed for the benchmark. It's just how the thermodynamic model works.
 
@@ -152,16 +152,16 @@ LoCoMo (Maharana et al., ACL 2024): 1,986 questions across 10 conversations, inc
 
 | | Cortex | What it means |
 |---|---|---|
-| Recall@10 | **92.6%** | Right memory in top 10 over 9 times out of 10 |
-| MRR | **0.794** | Correct answer is typically the first result |
+| Recall@10 | **94.2%** | Right memory in top 10 over 9 times out of 10 (n=1986, BASELINE_NO_CONSOLIDATION) |
+| MRR | **0.8278** | Correct answer is typically the first result |
 
 | Category | MRR | R@10 | Why this score |
 |---|---|---|---|
-| Adversarial | 0.855 | 93.9% | Trick questions can't fool five fused signals |
-| Open-domain | 0.835 | 95.0% | Broad questions benefit from multi-signal coverage |
-| Multi-hop | 0.760 | 88.8% | Entity graph connects evidence across turns |
-| Single-hop | 0.700 | 92.9% | Direct factual questions — strong but room to improve |
-| Temporal | 0.539 | 77.2% | "When did X happen?" is the hardest category — needs better time-series matching |
+| Adversarial | 0.881 | 96.0% | Trick questions can't fool five fused signals |
+| Open-domain | 0.875 | 96.9% | Broad questions benefit from multi-signal coverage |
+| Multi-hop | 0.779 | 90.3% | Entity graph connects evidence across turns |
+| Single-hop | 0.741 | 94.0% | Direct factual questions — strong but room to improve |
+| Temporal | 0.577 | 78.3% | "When did X happen?" is the hardest category — needs better time-series matching |
 
 No LLM at query time. No API calls. Just a 22MB embedding model, PostgreSQL with pgvector, and neuroscience algorithms doing the heavy lifting. Five retrieval signals fused server-side (vector similarity, full-text search, trigram matching, thermodynamic heat, recency), then reranked by a cross-encoder.
 
@@ -382,6 +382,16 @@ ruff format --check .     # Format
 ```
 
 ---
+
+## Verification
+
+Every benchmark headline number above is backed by a per-mechanism ablation campaign on the appropriate benchmark for each mechanism's mechanism-of-action. The campaign comprises three artefact sets at full n on a single-seed protocol with code SHAs, dirty flags, manifests, and per-row JSON outputs preserved alongside the writeups:
+
+- **LongMemEval-S, 17 rows, n=500** — `tasks/e1-v3-results.md`. Per-mechanism deltas across the integrated stack at the calibrated equilibrium; category-specialization analysis.
+- **LoCoMo, 14 rows, n=1986 (pre-plasticity-fix bytes)** — `tasks/e1-v3-locomo-results.md`. Two-baseline (NO_CONSOLIDATION / WITH_CONSOLIDATION) design; empirical resolution of the architectural-mismatch hypothesis (RECONSOLIDATION ΔMRR = +0.0076, ADAPTIVE_DECAY ΔMRR = -0.0163).
+- **LoCoMo, 14 rows, n=1986 (post-plasticity-fix bytes)** — `tasks/e1-v3-locomo-results-post-fix.md`. Re-run on commit `2f45bcb` (descendant of plasticity result-shape fix `5f737fe`); cadence-fix anchor agreement re-validated identically (ΔvsNO = +0.0014); two consolidation-only rows (HOMEOSTATIC_PLASTICITY, SCHEMA_ENGINE) recover positive contributions previously masked by the contract bug.
+
+Total: 45 per-mechanism evidence rows. The full paper, including the §6.3 per-mechanism evidence section and §6.3.4.1 plasticity-fix re-run subsection, is at `docs/arxiv-thermodynamic/main.pdf`.
 
 ## License
 
