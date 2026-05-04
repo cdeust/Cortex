@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -36,10 +37,17 @@ from benchmarks.llm_head_to_head import (
 )
 from benchmarks.llm_head_to_head.data_loader import BeamItem
 from benchmarks.llm_head_to_head.generator import estimate_cost_usd
+from benchmarks.llm_head_to_head.manifest import (
+    ManifestModelEntry,
+    build_manifest,
+    write_manifest,
+)
 from benchmarks.llm_head_to_head.orchestrator import (
     PROMPTS_DIR,
+    RESULTS_DIR,
     estimate_run_cost,
     render_answer_prompt,
+    run_live,
 )
 
 
@@ -47,6 +55,23 @@ from benchmarks.llm_head_to_head.orchestrator import (
 PILOT_GENERATOR = "claude-haiku-4-5-20251001"
 PILOT_JUDGE = "gpt-4o-2024-11-20"
 PILOT_CONDITIONS = ("B", "C")
+
+# Map CLI shorthand → fully pinned model id (protocol §3 vendor pins).
+GENERATOR_ALIASES: dict[str, str] = {
+    "haiku": "claude-haiku-4-5-20251001",
+    "opus": "claude-opus-4-7-20260301",
+    "gpt-4o-mini": "gpt-4o-mini-2024-07-18",
+    "gemini-2.0-flash": "gemini-2.0-flash",
+}
+
+JUDGE_ALIASES: dict[str, str] = {
+    "gpt4o": "gpt-4o-2024-11-20",
+    "gpt-4o": "gpt-4o-2024-11-20",
+    "opus": "claude-opus-4-7-20260301",
+}
+
+# Stage 0 hard ceiling (task constraint: total smoke spend ≤ $0.15).
+SMOKE_COST_CEILING_USD = 0.15
 
 # Stage 2.1 cell selection for cost estimate output.
 STAGE2_1_CONDITIONS = ("A", "B", "C", "D")
@@ -215,21 +240,209 @@ def dry_run(n: int, split: str = "10M") -> int:
     return 0
 
 
+def run_pilot_live(
+    n: int,
+    generator_alias: str,
+    judge_alias: str,
+    output_dir: Path,
+    split: str = "10M",
+    cost_ceiling_usd: float = SMOKE_COST_CEILING_USD,
+) -> int:
+    """Stage-0 / Stage-1 LIVE pilot — real API calls, real judge, real manifest.
+
+    pre:
+      - ``ANTHROPIC_API_KEY`` and ``OPENAI_API_KEY`` are set in the env
+        (the cross-vendor judge needs both for the Haiku × GPT-4o pairing).
+      - ``DATABASE_URL`` points at the local Cortex Postgres; pgvector +
+        pg_trgm extensions installed; production schema migrated.
+      - Network reachable for Anthropic + OpenAI APIs.
+    post:
+      - Writes ``output_dir/manifest.json`` and ``output_dir/items.jsonl``.
+      - Each item × condition cell appears as one items.jsonl line with
+        a real generator_response and judge_label.
+      - Returns 0 on success (all cells produced); 4 on cost-ceiling abort;
+        5 on dataset load failure; 6 on DB connection failure.
+    invariant:
+      - The smoke is bounded by ``cost_ceiling_usd`` (defence-in-depth on
+        the Stage 0 $0.15 cap); the run aborts mid-loop if exceeded.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    generator_model = GENERATOR_ALIASES.get(generator_alias, generator_alias)
+    judge_model = JUDGE_ALIASES.get(judge_alias, judge_alias)
+
+    # Pre-flight: load BEAM items.
+    try:
+        all_items_iter = data_loader.iter_items(split)
+        items: list[BeamItem] = []
+        for it in all_items_iter:
+            if len(items) >= n:
+                break
+            items.append(it)
+    except Exception as e:
+        print(
+            f"[pilot] failed to load BEAM-{split}: {type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
+        return 5
+    if not items:
+        print("[pilot] no items loaded; aborting.", file=sys.stderr)
+        return 5
+
+    # Pre-flight: open BenchmarkDB and seed memories under domain="beam".
+    # This single DB instance serves BOTH:
+    #   - Condition B (direct cosine query against the same memories table)
+    #   - Condition C (production handler reads same memories table)
+    # That's by design — protocol §2.B/C compares retrieval STACKS over
+    # the same ground-truth memory population.
+    try:
+        from benchmarks.lib.bench_db import BenchmarkDB
+    except Exception as e:
+        print(
+            f"[pilot] could not import BenchmarkDB: {type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
+        return 6
+
+    print(
+        f"[pilot] LIVE pilot: n={len(items)}, generator={generator_model}, "
+        f"judge={judge_model}, ceiling=${cost_ceiling_usd}",
+        file=sys.stderr,
+    )
+    print(f"[pilot] output_dir={output_dir}", file=sys.stderr)
+
+    # Build the manifest scaffold up-front (write_manifest emits
+    # manifest.json so cost_tracking can be patched later).
+    repo_root = Path(__file__).resolve().parents[2]
+    answer_prompt_path = PROMPTS_DIR / "answer.md"
+    judge_prompt_path = PROMPTS_DIR / "judge.md"
+    package_lockfile_path = repo_root / "uv.lock"
+    pricing_snapshot_sha = "stage0-smoke-2026-05-02"
+
+    manifest = build_manifest(
+        run_id=output_dir.name,
+        repo_root=repo_root,
+        generator_models={
+            "primary": ManifestModelEntry(
+                api="anthropic" if generator_alias == "haiku" else "vendor",
+                model_id=generator_model,
+            )
+        },
+        judge_models={
+            "primary": ManifestModelEntry(
+                api="openai" if judge_alias.startswith("gpt") else "vendor",
+                model_id=judge_model,
+            )
+        },
+        judge_mode="cross_vendor",
+        item_count=len(items),
+        conditions=list(PILOT_CONDITIONS),
+        pricing_snapshot_sha=pricing_snapshot_sha,
+        answer_prompt_path=answer_prompt_path,
+        judge_prompt_path=judge_prompt_path,
+        package_lockfile_path=package_lockfile_path,
+    )
+    write_manifest(manifest, output_dir)
+
+    answer_template = answer_prompt_path.read_text()
+    judge_template = judge_prompt_path.read_text()
+
+    # Open BenchmarkDB and seed BEAM memories. The seeded conversation
+    # is whichever conv the items belong to; for n≤3 they share the same
+    # conversation_idx in BEAM-10M (one mega-convo per record). We seed
+    # ALL turns from the items' conversations, deduplicated by content.
+    seen_convs: set[int] = set()
+    rc = 0
+    with BenchmarkDB() as db:
+        all_memories: list[dict[str, Any]] = []
+        seen_content: set[str] = set()
+        for it in items:
+            if it.conversation_idx in seen_convs:
+                continue
+            seen_convs.add(it.conversation_idx)
+            for mem in it.memories:
+                content = mem.get("content", "")
+                if content and content not in seen_content:
+                    seen_content.add(content)
+                    all_memories.append(mem)
+        print(
+            f"[pilot] seeding {len(all_memories)} memories under domain='beam' "
+            f"from {len(seen_convs)} conversations…",
+            file=sys.stderr,
+        )
+        if all_memories:
+            db.load_memories(all_memories, domain="beam")
+
+        summary = run_live(
+            items=items,
+            conditions=PILOT_CONDITIONS,
+            generator_model=generator_model,
+            judge_mode="cross_vendor",
+            results_dir=output_dir,
+            answer_template=answer_template,
+            judge_template=judge_template,
+            db_for_rag=db,
+            cost_ceiling_usd=cost_ceiling_usd,
+        )
+
+    print(f"[pilot] DONE. Summary: {summary}", file=sys.stderr)
+    if summary.get("aborted"):
+        rc = 4
+    if summary.get("cells_failed", 0) > 0 and summary.get("cells_run", 0) == 0:
+        rc = 7
+    return rc
+
+
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="BEAM-10M H2H pilot (Stage 1)")
+    p = argparse.ArgumentParser(description="BEAM-10M H2H pilot (Stage 0/1)")
     p.add_argument("--dry-run", action="store_true", help="No API calls.")
-    p.add_argument("--n", type=int, default=3, help="Items in dry-run.")
+    p.add_argument(
+        "--run", action="store_true", help="LIVE pilot — fires real API calls."
+    )
+    p.add_argument("--n", type=int, default=3, help="Items in dry-run / smoke.")
+    p.add_argument(
+        "--generator", default="haiku", help="Generator alias (haiku|opus|gpt-4o-mini|gemini-2.0-flash)."
+    )
+    p.add_argument(
+        "--judge", default="gpt4o", help="Judge alias (gpt4o|opus)."
+    )
+    p.add_argument("--output", default=None, help="Output directory for live run.")
+    p.add_argument(
+        "--cost-ceiling",
+        type=float,
+        default=SMOKE_COST_CEILING_USD,
+        help="Hard USD cap; aborts mid-loop if exceeded.",
+    )
     p.add_argument("--split", default="10M", help="BEAM split (10M is the protocol universe).")
     args = p.parse_args(argv)
 
-    if not args.dry_run:
-        print(
-            "[pilot] Live pilot is not wired in Stage 0. Use --dry-run.",
-            file=sys.stderr,
-        )
+    if args.dry_run and args.run:
+        print("[pilot] --dry-run and --run are mutually exclusive.", file=sys.stderr)
         return 2
 
-    return dry_run(args.n, args.split)
+    if args.run:
+        out = (
+            Path(args.output)
+            if args.output
+            else RESULTS_DIR / f"smoke_{time.strftime('%Y%m%dT%H%M%SZ')}"
+        )
+        return run_pilot_live(
+            n=args.n,
+            generator_alias=args.generator,
+            judge_alias=args.judge,
+            output_dir=out,
+            split=args.split,
+            cost_ceiling_usd=args.cost_ceiling,
+        )
+
+    if args.dry_run:
+        return dry_run(args.n, args.split)
+
+    print(
+        "[pilot] specify --dry-run or --run; see --help.",
+        file=sys.stderr,
+    )
+    return 2
 
 
 if __name__ == "__main__":

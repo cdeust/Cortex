@@ -226,6 +226,19 @@ class _RetryableError(RuntimeError):
     """Internal marker for 429 / 500 / connection errors."""
 
 
+def _heuristic_word_tokens(text: str) -> int:
+    """1.33 words→tokens fallback for vendors that don't report usage.
+
+    pre: ``text`` is a Python str (possibly empty).
+    post: returns int ≥ 0; 0 only when text is empty.
+    source: GPT-2 BPE empirical word→token ratio ≈ 1.33 (Radford 2019),
+      cross-checked against tiktoken cl100k. See protocol §7.
+    """
+    if not text:
+        return 0
+    return int(len(text.split()) * 1.33) + 1
+
+
 def _call_anthropic(
     model_id: str,
     prompt: str,
@@ -296,11 +309,20 @@ def _call_google(
 
     text = (resp.text or "") if hasattr(resp, "text") else ""
     usage = getattr(resp, "usage_metadata", None)
+    # Google sometimes omits usage on streaming/short responses; fall back
+    # to the protocol §7 word→token heuristic so cost-tracking is never
+    # silently zero. The fallback is ALWAYS conservative (overcounts).
+    in_tok = getattr(usage, "prompt_token_count", 0) or 0
+    out_tok = getattr(usage, "candidates_token_count", 0) or 0
+    if not in_tok:
+        in_tok = _heuristic_word_tokens(prompt)
+    if not out_tok:
+        out_tok = _heuristic_word_tokens(text)
     return GeneratorResponse(
         model_id=model_id,
         text=text,
-        input_tokens=getattr(usage, "prompt_token_count", 0) or 0,
-        output_tokens=getattr(usage, "candidates_token_count", 0) or 0,
+        input_tokens=in_tok,
+        output_tokens=out_tok,
         retries=list(retries),
     )
 

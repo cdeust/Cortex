@@ -36,6 +36,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from benchmarks.llm_head_to_head import (
     cortex_caller,
@@ -46,12 +47,25 @@ from benchmarks.llm_head_to_head import (
 )
 from benchmarks.llm_head_to_head.data_loader import BeamItem
 from benchmarks.llm_head_to_head.generator import (
+    GeneratorError,
+    GeneratorResponse,
     PRICING_USD_PER_M_TOKEN,
+    call_generator,
     estimate_cost_usd,
 )
+from benchmarks.llm_head_to_head.judge import (
+    JUDGE_FOR_GENERATOR,
+    SINGLE_JUDGE_MODEL,
+    JudgePanel,
+    judge_item,
+)
 from benchmarks.llm_head_to_head.manifest import (
+    ItemResultLine,
+    Manifest,
     ManifestModelEntry,
+    append_item_result,
     build_manifest,
+    update_cost_tracking,
     write_manifest,
 )
 
@@ -262,17 +276,286 @@ def main(argv: list[str] | None = None) -> int:
         print("[orchestrator] DRY RUN — no API calls made.")
         return 0
 
-    # Live-mode wiring deliberately not implemented in Stage 0 (per
-    # protocol §12 timeline). The pilot.py script runs Stage 1 (B+C
-    # only on Haiku), and the eventual full-panel Stage 2 builds on
-    # this orchestrator. Stage 0 stops here.
+    # Live-mode CLI is intentionally minimal — pilot.py is the canonical
+    # entry point for Stage 1 (B+C on Haiku) and forwards into ``run_live``
+    # below. The orchestrator's CLI here exists only for ad-hoc smoke runs.
     print(
-        "[orchestrator] Live mode not yet wired — Stage 0 commits scaffold "
-        "only. See tasks/beam-10m-llm-head-to-head-protocol.md §12 for "
-        "the timeline. Use --dry-run for now.",
+        "[orchestrator] Live mode CLI not implemented; use "
+        "`python -m benchmarks.llm_head_to_head.pilot --run` to fire a "
+        "live pilot. The orchestrator library functions (run_live, "
+        "build_context) are imported by pilot.py.",
         file=sys.stderr,
     )
     return 2
+
+
+# ── Live runner ──────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class LiveCellResult:
+    """One (item × condition × generator) cell after live execution."""
+
+    question_id: str
+    ability: str
+    condition: str
+    generator_model: str
+    generator_response: str
+    input_tokens: int
+    output_tokens: int
+    retry_count: int
+    estimated_usd: float
+    wall_time_s: float
+
+
+def _generate_one_cell(
+    item: BeamItem,
+    condition: str,
+    generator_model: str,
+    answer_template: str,
+    db_for_rag: Any,
+) -> LiveCellResult:
+    """Build the condition's context, render the prompt, fire one generator call.
+
+    pre:
+      - ``condition`` ∈ ALL_CONDITIONS.
+      - ``answer_template`` is the contents of ``prompts/answer.md``.
+      - For B: ``db_for_rag`` is a BenchmarkDB-like with the BEAM memories
+        already loaded under ``domain='beam'``.
+      - For C: the production memory store has been seeded with the same
+        memories under ``domain='beam'``.
+    post:
+      - returns one ``LiveCellResult``; raises ``GeneratorError`` if the
+        vendor call exhausted retries (so the caller can decide whether
+        to skip the cell or abort the run).
+    """
+    ctx = build_context(condition, item, generator_model, db_for_rag)
+    prompt = render_answer_prompt(answer_template, ctx.text, item.question)
+
+    t0 = time.time()
+    response: GeneratorResponse = call_generator(
+        model_id=generator_model,
+        prompt=prompt,
+        max_output_tokens=4_000,
+        temperature=0.0,
+        dry_run=False,
+    )
+    wall = time.time() - t0
+
+    cost = estimate_cost_usd(
+        generator_model, response.input_tokens, response.output_tokens
+    )
+    return LiveCellResult(
+        question_id=item.question_id,
+        ability=item.ability,
+        condition=condition,
+        generator_model=generator_model,
+        generator_response=response.text,
+        input_tokens=response.input_tokens,
+        output_tokens=response.output_tokens,
+        retry_count=len(response.retries),
+        estimated_usd=cost,
+        wall_time_s=wall,
+    )
+
+
+def _format_support_for_judge(item: BeamItem) -> str:
+    """Render the gold supporting turns for the judge prompt's SUPPORT field.
+
+    pre: ``item`` carries source_chat_ids that index into ``item.turns``.
+    post: returns a concatenation of supporting turn texts; empty string
+      when ``source_chat_ids`` is empty (abstention items).
+    """
+    passages = oracle_loader.build_oracle_context(item)
+    return oracle_loader.passages_to_context(passages)
+
+
+def run_live(
+    items: list[BeamItem],
+    conditions: tuple[str, ...],
+    generator_model: str,
+    judge_mode: str,
+    results_dir: Path,
+    answer_template: str,
+    judge_template: str,
+    db_for_rag: Any,
+    cost_ceiling_usd: float,
+) -> dict[str, Any]:
+    """End-to-end live run. Builds contexts, generates answers, judges, writes manifest.
+
+    pre:
+      - ``items`` is non-empty.
+      - ``conditions`` ⊆ ALL_CONDITIONS.
+      - ``generator_model`` is in ``VENDOR_BY_MODEL`` and has a configured judge.
+      - ``results_dir`` already contains a manifest.json (caller wrote it
+        before calling this function); we only append items.jsonl + patch
+        cost_tracking.
+      - ``cost_ceiling_usd`` is a hard limit; we abort and return early
+        with ``{'aborted': True, ...}`` if the running total exceeds it
+        (defence-in-depth on Stage 0 budget cap).
+    post:
+      - returns a summary dict with totals, per-cell results, and judge
+        verdicts.
+      - one items.jsonl line per (item × condition) is appended.
+      - manifest.json's cost_tracking is incremented.
+    """
+    manifest_path = results_dir / "manifest.json"
+    summary: dict[str, Any] = {
+        "items": len(items),
+        "conditions": list(conditions),
+        "generator": generator_model,
+        "judge_mode": judge_mode,
+        "total_input_tokens": 0,
+        "total_output_tokens": 0,
+        "total_usd": 0.0,
+        "cells_run": 0,
+        "cells_failed": 0,
+        "judge_calls": 0,
+        "aborted": False,
+    }
+
+    # Track running total to enforce ``cost_ceiling_usd``. The estimate
+    # is conservative (sum of generator + judge cells already completed).
+    total_usd = 0.0
+    total_input = 0
+    total_output = 0
+
+    for item_idx, item in enumerate(items, start=1):
+        if total_usd > cost_ceiling_usd:
+            summary["aborted"] = True
+            summary["abort_reason"] = (
+                f"cost_ceiling exceeded after {item_idx - 1} items "
+                f"(total ${total_usd:.4f} > ceiling ${cost_ceiling_usd:.4f})"
+            )
+            print(f"[orchestrator] {summary['abort_reason']}", file=sys.stderr)
+            break
+
+        print(
+            f"[orchestrator] item {item_idx}/{len(items)} "
+            f"({item.question_id}, ability={item.ability})",
+            file=sys.stderr,
+        )
+
+        candidates_by_condition: dict[str, str] = {}
+        cell_results: list[LiveCellResult] = []
+        for cond in conditions:
+            try:
+                cell = _generate_one_cell(
+                    item=item,
+                    condition=cond,
+                    generator_model=generator_model,
+                    answer_template=answer_template,
+                    db_for_rag=db_for_rag,
+                )
+            except GeneratorError as e:
+                print(
+                    f"[orchestrator] cell {item.question_id}/{cond} failed: {e}",
+                    file=sys.stderr,
+                )
+                summary["cells_failed"] += 1
+                continue
+
+            cell_results.append(cell)
+            candidates_by_condition[cond] = cell.generator_response
+            total_usd += cell.estimated_usd
+            total_input += cell.input_tokens
+            total_output += cell.output_tokens
+            summary["cells_run"] += 1
+
+        if not candidates_by_condition:
+            print(
+                f"[orchestrator] all cells for {item.question_id} failed; "
+                "skipping judge",
+                file=sys.stderr,
+            )
+            continue
+
+        # Judge: one call, judges all conditions for this item via the
+        # cross-vendor pairing in JUDGE_FOR_GENERATOR (or single-judge Opus).
+        try:
+            panel: JudgePanel = judge_item(
+                question_id=item.question_id,
+                question=item.question,
+                ability=item.ability,
+                gold=item.gold_answer or "",
+                support=_format_support_for_judge(item),
+                candidates_by_condition=candidates_by_condition,
+                judge_template=judge_template,
+                generator_model_id=generator_model,
+                judge_mode=judge_mode,
+                dry_run=False,
+            )
+        except GeneratorError as e:
+            print(
+                f"[orchestrator] judge failed for {item.question_id}: {e}",
+                file=sys.stderr,
+            )
+            # Cells still produced answers — record with judge_label="error"
+            # rather than dropping them silently.
+            for cell in cell_results:
+                _emit_item_line(
+                    results_dir,
+                    cell,
+                    judge_label="error",
+                )
+            continue
+
+        verdict_by_cond = {v.condition: v.verdict for v in panel.verdicts}
+        judge_cost = estimate_cost_usd(
+            panel.judge_model,
+            panel.judge_response.input_tokens,
+            panel.judge_response.output_tokens,
+        )
+        total_usd += judge_cost
+        total_input += panel.judge_response.input_tokens
+        total_output += panel.judge_response.output_tokens
+        summary["judge_calls"] += 1
+
+        for cell in cell_results:
+            label = verdict_by_cond.get(cell.condition, "incorrect")
+            _emit_item_line(results_dir, cell, judge_label=label)
+
+    summary["total_input_tokens"] = total_input
+    summary["total_output_tokens"] = total_output
+    summary["total_usd"] = round(total_usd, 6)
+
+    # Patch manifest cost_tracking.
+    if manifest_path.exists():
+        update_cost_tracking(
+            manifest_path,
+            add_input_tokens=total_input,
+            add_output_tokens=total_output,
+            add_usd=total_usd,
+        )
+    return summary
+
+
+def _emit_item_line(
+    results_dir: Path, cell: LiveCellResult, judge_label: str
+) -> None:
+    """Write one items.jsonl row for a completed (or judge-failed) cell.
+
+    pre: ``judge_label`` is one of the protocol verdicts OR the literal
+      ``'error'`` (judge call failed; the cell answer is preserved for audit).
+    post: appends one JSONL line; never raises (failures here would mask
+      cost-tracking already incremented).
+    """
+    append_item_result(
+        results_dir,
+        ItemResultLine(
+            question_id=cell.question_id,
+            ability=cell.ability,
+            condition=cell.condition,
+            generator_model=cell.generator_model,
+            generator_response=cell.generator_response,
+            judge_label=judge_label,
+            input_tokens=cell.input_tokens,
+            output_tokens=cell.output_tokens,
+            retry_count=cell.retry_count,
+            estimated_usd=cell.estimated_usd,
+            wall_time_s=cell.wall_time_s,
+        ),
+    )
 
 
 if __name__ == "__main__":
