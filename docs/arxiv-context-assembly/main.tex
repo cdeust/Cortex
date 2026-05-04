@@ -22,7 +22,7 @@
   \texttt{github.com/cdeust/Cortex}
 }
 
-\date{April 2026}
+\date{May 2026}
 
 \begin{document}
 \maketitle
@@ -332,8 +332,8 @@ procedure (\texttt{recall\_memories()}), returning pre-fused results.
 Client-side, FlashRank (ONNX cross-encoder) reranks the top-$3k$
 candidates to produce the final ranking.
 
-This pipeline is strong at moderate scale: 97.8\% R@10 on
-LongMemEval, 92.6\% R@10 on LoCoMo.  The five-signal fusion
+This pipeline is strong at moderate scale: 98.4\% R@10 on
+LongMemEval, 94.2\% R@10 on LoCoMo (E1 v3, May 2026).  The five-signal fusion
 mitigates any single signal's weakness (\eg, vector similarity
 misses lexical matches that trigram catches; FTS misses paraphrases
 that vectors catch).  But at BEAM-10M scale, all five signals suffer
@@ -574,7 +574,6 @@ Figure~\ref{fig:dataflow} illustrates the conceptual data flow.
 
 \begin{figure}[t]
 \centering
-\fbox{\parbox{0.9\columnwidth}{%
 \small
 \begin{verbatim}
 Query
@@ -606,7 +605,6 @@ Query
   v
 Final Prompt --> Reader Model
 \end{verbatim}
-}}
 \caption{Conceptual data flow of the two-primitive architecture.  The
 StageAwareContextAssembler produces structured context from three
 retrieval phases; the ContextDecomposer fits it into the model's
@@ -845,7 +843,7 @@ Phase~1 retrieves from the current stage's memories.  The procedure is:
   \item \textbf{Submodular selection.}  From the oversample, select
     the final set via the MMR-submodular objective:
     \begin{equation}
-    S^* = \argmax_{|S| \leq k} \sum_{c \in S} \left[\text{score}(c) - \lambda \cdot \max_{c' \in S \setminus \{c\}} \text{sim}(c, c')\right]
+    S^* = \operatorname*{arg\,max}_{|S| \leq k} \sum_{c \in S} \left[\text{score}(c) - \lambda \cdot \max_{c' \in S \setminus \{c\}} \text{sim}(c, c')\right]
     \label{eq:mmr}
     \end{equation}
     where $\text{score}(c)$ is the WRRF score,
@@ -1254,8 +1252,8 @@ management---the regime where our architecture is designed to help.
 \paragraph{WRRF baseline.}
 Cortex's production pipeline without the assembler: 5-signal
 server-side fusion + FlashRank client-side reranking.  This is a
-strong baseline: 97.8\% R@10 on LongMemEval, 92.6\% R@10 on LoCoMo,
-and 0.591 MRR on BEAM-100K.
+strong baseline: 98.4\% R@10 on LongMemEval, 94.2\% R@10 on LoCoMo
+(E1 v3, May 2026), and 0.591 MRR on BEAM-100K.
 
 \paragraph{LIGHT} \citep{Tavakoli2026}.
 The strongest published system on BEAM, achieving 0.266 overall on

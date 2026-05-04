@@ -25,6 +25,7 @@ benchmarks/spell_alteration/*.pdf
 *.pdf
 # Whitelist the thermodynamic memory paper PDF (compiled artefact for publication)
 !docs/arxiv-thermodynamic/main.pdf
+!docs/arxiv-context-assembly/main.pdf
 
 # Runtime telemetry
 traces/

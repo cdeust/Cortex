@@ -14,11 +14,13 @@ The architecture was designed in September 2025 for generating 9-page PRDs on Ap
 **LaTeX source ready:** github.com/cdeust/Cortex/docs/arxiv-context-assembly/
 **Repo (MIT, open source):** github.com/cdeust/Cortex
 
-Other benchmark results:
-• 97.8% Recall@10 on LongMemEval (vs 78.4% paper best)
-• 92.6% Recall@10 on LoCoMo
-• 41 paper citations, 20 neuroscience mechanisms with faithful implementations
-• 2500+ tests passing
+Other benchmark results (E1 v3 verification campaign, May 2026):
+• 98.4% Recall@10 / 0.9124 MRR on LongMemEval (vs 78.4% paper best, n=500)
+• 94.2% Recall@10 / 0.8278 MRR on LoCoMo (vs 92.6% / 0.794, n=1986)
+• 45 row entries of per-mechanism ablation evidence (17 LME-S + 14 LoCoMo + 14 LoCoMo post-fix)
+• 41 paper citations, 26 biological mechanisms with faithful implementations
+• 2700+ tests passing
+• Two production fixes shipped during verification (consolidation cadence, plasticity result-shape)
 
 The paper was reviewed by three independent reasoning agents (Einstein operational-definition audit, Feynman cargo-cult detector, Shannon information-theoretic analysis) and revised based on their findings — including running the temporal-detection experiment they demanded. Every limitation is disclosed. Every constant traces to a paper or measured ablation.
 
@@ -39,7 +41,7 @@ Built a memory system that scores +33.4% on BEAM-10M (ICLR 2026) — without ora
 Paper: "Stage-Aware Context Assembly for Long-Context Memory Retrieval"
 Repo: github.com/cdeust/Cortex (MIT, LaTeX source in docs/arxiv-context-assembly/)
 
-97.8% R@10 LongMemEval | 92.6% R@10 LoCoMo | 0.471 MRR BEAM-10M
+98.4% R@10 LongMemEval | 94.2% R@10 LoCoMo | +33.4% BEAM-10M
 
 If you can endorse on cs.IR, cs.CL, or cs.AI — DM me. Paper is ready.
 
