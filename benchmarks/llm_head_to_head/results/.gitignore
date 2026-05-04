@@ -1,0 +1,5 @@
+# Per-run outputs are generated artefacts; only the manifest schema and
+# this gitignore are tracked.
+*
+!.gitignore
+!README.md
