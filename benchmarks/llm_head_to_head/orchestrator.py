@@ -40,7 +40,6 @@ from typing import Any
 
 from benchmarks.llm_head_to_head import (
     cortex_caller,
-    data_loader,
     long_context_truncator,
     oracle_loader,
     retriever_baselines,
@@ -49,24 +48,17 @@ from benchmarks.llm_head_to_head.data_loader import BeamItem
 from benchmarks.llm_head_to_head.generator import (
     GeneratorError,
     GeneratorResponse,
-    PRICING_USD_PER_M_TOKEN,
     call_generator,
     estimate_cost_usd,
 )
 from benchmarks.llm_head_to_head.judge import (
-    JUDGE_FOR_GENERATOR,
-    SINGLE_JUDGE_MODEL,
     JudgePanel,
     judge_item,
 )
 from benchmarks.llm_head_to_head.manifest import (
     ItemResultLine,
-    Manifest,
-    ManifestModelEntry,
     append_item_result,
-    build_manifest,
     update_cost_tracking,
-    write_manifest,
 )
 
 

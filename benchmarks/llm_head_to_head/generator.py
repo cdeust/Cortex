@@ -32,7 +32,6 @@ import os
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Any
 
 
 # Verified pricing snapshotted at protocol freeze (protocol §7).

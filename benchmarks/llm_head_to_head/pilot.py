@@ -36,7 +36,6 @@ from benchmarks.llm_head_to_head import (
     oracle_loader,
 )
 from benchmarks.llm_head_to_head.data_loader import BeamItem
-from benchmarks.llm_head_to_head.generator import estimate_cost_usd
 from benchmarks.llm_head_to_head.manifest import (
     ManifestModelEntry,
     build_manifest,
