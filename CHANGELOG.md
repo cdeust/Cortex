@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.15.3] - 2026-05-09
+
+### Security
+- **python-multipart 0.0.26 → 0.0.27** — fixes a denial-of-service vulnerability in `MultipartParser` header parsing where an attacker could send unbounded multipart part headers (oversized individual values or many repeated headers without terminating the header block) causing CPU exhaustion. Affects FastMCP and any ASGI / Starlette / FastAPI app in the dependency chain. Patched version 0.0.27 enforces default header-count and header-size limits. ([Dependabot alert](https://github.com/cdeust/Cortex/security/dependabot))
+
+### Fixed
+- v3.15.2 GitHub release was tagged at the wrong commit (308ed41 instead of the PR-#22 merge commit 6b19ec4) due to a local fast-forward conflict during release scripting. The v3.15.2 tag now exists as a graveyard entry; v3.15.3 is the canonical version that includes both the MCP startup robustness work from PR #22 (originally intended for v3.15.2) AND this security bump.
+
+### Notes for users
+- If you're on v3.15.0, v3.15.1, or v3.15.2, upgrade directly to v3.15.3 to get the python-multipart security fix plus the MCP startup robustness improvements (`${CLAUDE_PLUGIN_ROOT}` substitution + `cortex-doctor mcp` diagnostic).
+
 ## [3.15.2] - 2026-05-09
 
 ### Fixed
