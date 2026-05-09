@@ -27,6 +27,7 @@ precondition than the contract — it required a specific marketplace
 key in installed_plugins.json, rejecting --plugin-dir / --plugin-url /
 manual-install scenarios that the documented contract supports).
 """
+
 from __future__ import annotations
 
 import json
@@ -106,6 +107,4 @@ def test_command_is_python3(mcp_config: dict) -> None:
     spawned process to be able to execute the launcher.py script.
     """
     cmd = mcp_config["mcpServers"]["cortex"]["command"]
-    assert cmd in ("python3", "python"), (
-        f"Expected python3 (or python), got: {cmd!r}"
-    )
+    assert cmd in ("python3", "python"), f"Expected python3 (or python), got: {cmd!r}"
