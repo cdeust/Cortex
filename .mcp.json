@@ -3,8 +3,8 @@
     "cortex": {
       "command": "python3",
       "args": [
-        "-c",
-        "import json,os; p=json.load(open(os.path.expanduser('~/.claude/plugins/installed_plugins.json')))['plugins']['cortex@cortex-plugins'][0]['installPath']; os.execvp('python3',['python3',os.path.join(p,'scripts','launcher.py'),'mcp_server'])"
+        "${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py",
+        "mcp_server"
       ],
       "env": {
         "DATABASE_URL": "postgresql://localhost:5432/cortex",
