@@ -6,6 +6,37 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.15.2] - 2026-05-09
+
+### Fixed
+- **MCP startup robustness** — Discord user reported the Cortex MCP server
+  failing to start with no actionable error. Root cause: `.mcp.json` used a
+  fragile `python -c` one-liner that read `~/.claude/plugins/installed_plugins.json`
+  to dynamically resolve the install path. The wrapper swallowed all
+  launcher startup errors invisibly and broke under: (a) plugin upgrade
+  leaving stale `installPath`, (b) custom marketplace install names, (c)
+  `python3` not on PATH, (d) any `installed_plugins.json` shape change by
+  Claude Code. `.mcp.json` now uses `${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py`
+  — Anthropic's documented plugin substitution variable, already used by
+  every hook in this repo. The launcher self-orients via `__file__` so
+  manual installs continue to work.
+
+### Added
+- **`cortex-doctor mcp`** — new diagnostic subcommand for end-to-end MCP
+  startup checks. Tells the user *exactly* which check failed, what
+  command/path was tried, and the actual error string — no more silent
+  "✘ failed". Checks: python interpreter on PATH, `installed_plugins.json`
+  shape, `CLAUDE_PLUGIN_ROOT` env, launcher smoke probe (catches errors
+  the old `-c` wrapper hid), `DATABASE_URL`, critical Python deps. Use
+  `--json` for Discord-paste-friendly output.
+
+### Verification
+- 36 new tests added (`tests_py/test_doctor_mcp.py`,
+  `tests_py/scripts/test_launcher_resolution.py`); all pass.
+- Backward-compatible: `cortex-doctor` (no subcommand) preserves legacy
+  full-setup verification behaviour.
+- Platform-agnostic: no Windows/Mac-specific code paths.
+
 ## [3.15.1] - 2026-05-05
 
 ### Fixed

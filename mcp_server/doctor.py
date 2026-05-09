@@ -271,12 +271,29 @@ CHECKS: list[Callable[[], Check]] = [
 
 
 def run() -> int:
-    """Run all checks. Print a report. Return 0 on required-green, 1 otherwise.
+    """Entry point. Dispatches to subcommand if given, else full check.
 
-    Optional checks (``Check.optional=True``) warn on failure but do not
-    cause a non-zero exit. Only core-required checks (PG connection,
-    Python version, etc.) gate the exit code.
+    Subcommands:
+      (none)   Full setup verification (Python, PG, extensions, etc.)
+      mcp      MCP startup diagnostics (Discord-debug-friendly)
+               Flags:
+                 --json   Emit machine-readable JSON report
+                 --copy   Prepend a "paste me in Discord" header to the
+                          human output (useful for issue templates)
     """
+    argv = sys.argv[1:]
+    if argv and argv[0] == "mcp":
+        from mcp_server.doctor_mcp import run_mcp
+
+        flags = argv[1:]
+        json_output = "--json" in flags
+        copy_header = "--copy" in flags
+        return run_mcp(json_output=json_output, copy_header=copy_header)
+    return _run_full_check()
+
+
+def _run_full_check() -> int:
+    """Full setup verification (legacy `cortex-doctor` behaviour)."""
     checks = [c() for c in CHECKS]
     width = max(len(c.name) for c in checks) + 2
 
