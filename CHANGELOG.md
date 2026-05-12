@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.15.4] - 2026-05-12
+
+### Added
+- **Richer wiki classification — multi-axis schema (ADR-2244 Phase 1).** Replaces the single `kind` axis with a 4-tuple `(kind, lifecycle, audience, provenance) + tags`. The previous taxonomy left 92% of pages in the `notes` catch-all; the audit on 2026-05-12 surfaced 58 `.md.md` pages, 10 timestamp-slug ADRs, 11 path-leak slugs, and 537 classifier-rejectable pages. The new schema gives the classifier 8 kinds (tutorial, how-to, reference, explanation, adr, runbook, rfc, journal), 5 universal + 4 ADR-specific lifecycle states, 5 audience values, and 4 provenance values — with `requires_generator` enforcement for ai/auto-generated content. Backward-compatible: legacy directories (`notes/`, `specs/`, `conventions/`, `lessons/`, `guides/`, `files/`) still readable; `normalize_legacy_kind` maps frontmatter on read. ([#27](https://github.com/cdeust/Cortex/pull/27))
+- **Data-driven axis registry — open-world classification.** Every classification axis now loads its valid values from `wiki/_schema/<axis>/<name>.md` markdown files. The Python defaults remain as the bootstrap seed; users add new kinds, lifecycles, audiences, or provenances by writing a markdown file with frontmatter (`patterns`, `tag_aliases`, `default`, `requires_generator`, `applies_to_kinds`). Validation policy is **reject + suggest**: unknown values raise with a `difflib.get_close_matches` suggestion and the exact file path to write to register the value. The classifier dispatches via `match_axis(content, tags, axis, registry)` — pure regex + tag-alias dispatch with zero hardcoded enum names. ([#28](https://github.com/cdeust/Cortex/pull/28))
+
+### Fixed
+- **`codebase_analyze` no longer silently truncates at `max_files=500`.** Default is now `0` (no limit). Positive values still cap the walk; ADR-0045 §R2 bounded-memory walk preserved for capped mode. Unbounded mode walks the whole tree but materialises only post-filter survivors (`O(filtered_files)`, not `O(tree_size)`). Discovered when a full-scale bootstrap ran two repos that hit the cap at exactly 5000 files. ([#25](https://github.com/cdeust/Cortex/pull/25))
+- **Wiki slug/title leaks (`.md.md`, timestamp-as-title, path-embedded titles).** `wiki_layout.slugify` strips trailing `.md` chains so the six filename builders (`adr_filename`, `domain_page_path`, `wiki_sync`, `draft_compiler`, `ingest_prd`, `ingest_codebase_pages`) no longer produce `.md.md`. `derive_title` rejects YAML metadata key:value lines (e.g. `created: 2026-04-15T09:29:10Z`) and content with embedded `/Users/`, `/home/`, Windows drive paths mid-line. When every candidate line is rejected, returns empty to trigger the deterministic `memory-<hash>` fallback instead of leaking raw content prefixes. ([#26](https://github.com/cdeust/Cortex/pull/26))
+- **File-documentation pages no longer routed to `notes/`.** The old `wiki_sync._KIND_TO_DIR` had no mapping for `file` kind, so 7820 file-documentation pages produced by `codebase_analyze` silently fell back to `notes/`. The new sync routes auto-generated codebase content to `reference/<domain>/` with `provenance=auto-generated`. (Task #8, folded into [#27](https://github.com/cdeust/Cortex/pull/27).)
+
+### Security
+- **`urllib3` 2.6.3 → 2.7.0** — fixes two high-severity issues that affected the Cortex dependency chain: decompression-bomb safeguards bypassed in `HTTPResponse.drain_conn()` and Brotli partial reads (GHSA-mf9v-mfxr-j63j), and sensitive headers leaked across origins by `ProxyManager.connection_from_url` on cross-host redirects (GHSA-qccp-gfcp-xxvc). ([#24](https://github.com/cdeust/Cortex/pull/24))
+
+### Notes for users
+- This release introduces a new schema for wiki page frontmatter. Existing pages remain readable; new writes use the modern 4-tuple. The migration phases (pilot → stable IDs → bulk re-bucketing → cleanup → producer audit) are tracked in ADR-2244 inside the methodology wiki and will land in subsequent releases.
+- To register your own classification value, write a markdown file under `wiki/_schema/<axis>/<name>.md`. See `mcp_server/core/wiki_axis_registry.py` docstring for the frontmatter contract.
+- The wiki-classification literature survey backing the new schema is at `docs/research/wiki-classification-survey.md`. Citations are inline; the GRADE certainty for the schema design is **moderate** — strong convergence across 14 surveyed taxonomies, no empirical comparison study.
+
 ## [3.15.3] - 2026-05-09
 
 ### Security
