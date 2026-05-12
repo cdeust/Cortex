@@ -93,11 +93,10 @@ schema = {
             },
             "max_files": {
                 "type": "integer",
-                "description": "Maximum number of files to process per call. Cap to avoid runaway analysis on monorepos.",
-                "default": 500,
-                "minimum": 1,
-                "maximum": 50000,
-                "examples": [100, 500, 5000],
+                "description": "Maximum number of files to process per call. Set to 0 (default) for no limit — process every matching file. Use a positive cap only to bound runaway analysis on extremely large monorepos.",
+                "default": 0,
+                "minimum": 0,
+                "examples": [0, 500, 5000],
             },
             "max_file_size_kb": {
                 "type": "integer",
@@ -129,7 +128,8 @@ schema = {
 CODEBASE_SOURCE = "codebase_analyze"
 CODEBASE_TAG = "codebase"
 LANG_TAG_PREFIX = "lang:"
-DEFAULT_MAX_FILES = 500
+# 0 = no limit. Positive values cap the walk; see helpers.collect_source_files.
+DEFAULT_MAX_FILES = 0
 DEFAULT_MAX_FILE_SIZE_KB = 100
 
 _store: MemoryStore | None = None

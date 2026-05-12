@@ -141,3 +141,40 @@ def test_deterministic_ordering(tmp_path):
         tmp_path, languages=None, max_files=30, max_bytes=1_000_000
     )
     assert a == b
+
+
+def test_unbounded_returns_every_match(tmp_path):
+    """``max_files=0`` means no cap — return every matching file in the tree.
+
+    Regression: previously the handler defaulted to max_files=500 and the
+    skill called it with max_files=5000, both of which truncated real
+    codebases. With ``max_files <= 0`` the walk must be exhaustive.
+    """
+    _make_tree(tmp_path, 7500)
+    files = helpers.collect_source_files(
+        tmp_path, languages=None, max_files=0, max_bytes=1_000_000
+    )
+    assert len(files) == 7500
+
+
+def test_negative_max_files_is_unbounded(tmp_path):
+    """Any non-positive ``max_files`` is treated as unbounded."""
+    _make_tree(tmp_path, 200)
+    files = helpers.collect_source_files(
+        tmp_path, languages=None, max_files=-1, max_bytes=1_000_000
+    )
+    assert len(files) == 200
+
+
+def test_unbounded_still_filters(tmp_path):
+    """Unbounded walk still applies language, size, and IGNORE_DIRS filters."""
+    (tmp_path / "a.py").write_text("x=1")
+    (tmp_path / "b.js").write_text("var x = 1;")
+    (tmp_path / "junk.md").write_text("# readme")
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "ignored.py").write_text("x=1")
+
+    files = helpers.collect_source_files(
+        tmp_path, languages=["python"], max_files=0, max_bytes=1_000_000
+    )
+    assert [p.name for p in files] == ["a.py"]

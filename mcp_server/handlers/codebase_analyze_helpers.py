@@ -38,48 +38,82 @@ def collect_source_files(
 
     Preconditions:
         - ``root`` is an existing directory.
-        - ``max_files > 0`` and ``max_bytes > 0``.
+        - ``max_bytes > 0``.
+        - ``max_files`` may be any integer; ``<= 0`` means "no limit" and
+          processes every matching file in the tree.
 
     Postconditions:
-        - Returns at most ``max_files`` paths, each referring to a regular file
-          whose extension maps to a known language (and satisfies ``languages``
-          if supplied), and whose size is ``<= max_bytes``.
-        - Peak memory footprint is O(max_files * CANDIDATE_MULTIPLIER) paths,
-          not O(tree_size) — see ADR-0045 §R2. On a 10M-file monorepo with
-          ``max_files=5000`` we hold at most 50K Path objects during the sort,
-          not 10M.
-
-    Invariant (per iteration): ``len(files) <= max_files``.
+        - When ``max_files > 0``: returns at most ``max_files`` paths,
+          and peak memory is O(max_files * CANDIDATE_MULTIPLIER) paths
+          (ADR-0045 §R2). On a 10M-file monorepo with ``max_files=5000``
+          we hold at most 50K Path objects during the sort.
+        - When ``max_files <= 0``: returns every matching path. Peak
+          memory is O(filtered_files) — we never materialise the whole
+          tree, only the post-filter survivors.
+        - Each returned path is a regular file whose extension maps to a
+          known language (and satisfies ``languages`` if supplied), and
+          whose size is ``<= max_bytes``.
     """
-    files: list[Path] = []
     lang_filter = set(languages) if languages else None
+    unbounded = max_files <= 0
 
-    # Bounded candidate set: take ``max_files * CANDIDATE_MULTIPLIER`` paths
-    # from the generator, then sort for deterministic ordering. The previous
-    # ``sorted(root.rglob("*"))`` materialised the entire tree before the
-    # ``max_files`` cap applied — OOM on large monorepos (ADR-0045 §R2).
+    if unbounded:
+        return _collect_unbounded(root, lang_filter, max_bytes)
+    return _collect_bounded(root, lang_filter, max_files, max_bytes)
+
+
+def _file_matches(
+    path: Path,
+    lang_filter: set[str] | None,
+    max_bytes: int,
+) -> bool:
+    """Return True iff ``path`` is a source file we should keep."""
+    if not path.is_file():
+        return False
+    if any(d in path.parts for d in IGNORE_DIRS):
+        return False
+    lang = EXT_TO_LANG.get(path.suffix.lower())
+    if not lang:
+        return False
+    if lang_filter and lang not in lang_filter:
+        return False
+    try:
+        if path.stat().st_size > max_bytes:
+            return False
+    except OSError:
+        return False
+    return True
+
+
+def _collect_unbounded(
+    root: Path,
+    lang_filter: set[str] | None,
+    max_bytes: int,
+) -> list[Path]:
+    """Walk the entire tree, filter, then sort. Memory O(filtered_count)."""
+    survivors = [p for p in root.rglob("*") if _file_matches(p, lang_filter, max_bytes)]
+    survivors.sort()
+    return survivors
+
+
+def _collect_bounded(
+    root: Path,
+    lang_filter: set[str] | None,
+    max_files: int,
+    max_bytes: int,
+) -> list[Path]:
+    """Bounded-candidate walk: take ``max_files * CANDIDATE_MULTIPLIER`` paths
+    then sort for deterministic ordering. See ADR-0045 §R2.
+    """
     candidate_cap = max(max_files * CANDIDATE_MULTIPLIER, max_files)
     candidates = sorted(itertools.islice(root.rglob("*"), candidate_cap))
 
+    files: list[Path] = []
     for path in candidates:
         if len(files) >= max_files:
             break
-        if not path.is_file():
-            continue
-        if any(d in path.parts for d in IGNORE_DIRS):
-            continue
-        lang = EXT_TO_LANG.get(path.suffix.lower())
-        if not lang:
-            continue
-        if lang_filter and lang not in lang_filter:
-            continue
-        try:
-            if path.stat().st_size > max_bytes:
-                continue
-        except OSError:
-            continue
-        files.append(path)
-
+        if _file_matches(path, lang_filter, max_bytes):
+            files.append(path)
     return files
 
 

@@ -179,7 +179,7 @@ def _register_codebase_analyze(mcp: FastMCP) -> None:
     async def tool_codebase_analyze(
         directory: str | None = None,
         languages: list[str] | None = None,
-        max_files: int = 500,
+        max_files: int = 0,
         max_file_size_kb: int = 100,
         incremental: bool = True,
         dry_run: bool = False,
