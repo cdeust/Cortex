@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mcp_server.core.wiki_classifier import classify_memory
+from mcp_server.core.wiki_classifier import classify_memory, derive_title
 
 
 # ── Audit-tag gate ────────────────────────────────────────────────────
@@ -97,3 +97,80 @@ def test_valid_lesson_admitted() -> None:
         "on path again."
     )
     assert classify_memory(content, tags=["lesson", "bug-fix"]) == "lesson"
+
+
+# ── derive_title regression tests (bugs found 2026-05-12) ─────────────
+
+
+def test_derive_title_rejects_yaml_timestamp_line() -> None:
+    """Regression — 10 ADRs were slugged ``decision-created-2026-04-15t...``
+    because the first non-{}/[] line in the body was a YAML ``created:``
+    timestamp. derive_title must reject metadata key:value lines.
+    """
+    content = (
+        "created: 2026-04-15T09:29:10Z\n"
+        "We adopted pgvector with HNSW because benchmarks showed 3x speedup.\n"
+    )
+    title = derive_title(content, "adr")
+    assert "2026-04-15" not in title
+    assert "created" not in title.lower()
+    assert "pgvector" in title.lower() or "HNSW" in title
+
+
+def test_derive_title_rejects_embedded_posix_path() -> None:
+    """Regression — pages like ``2026-04-17-also-on-users-cdeust-documents-
+    developments-...`` were created because the first body line contained
+    an absolute /Users/ path mid-sentence and the path-as-title regex only
+    matched start-of-line. derive_title must reject path-embedded lines.
+    """
+    content = (
+        "also on /Users/cdeust/Documents/Developments/ai-architect-prd-builder "
+        "the same issue shows up\n"
+        "The real spec: caching keys must include model SHA.\n"
+    )
+    title = derive_title(content, "spec")
+    assert "users-cdeust" not in title.lower()
+    assert "/users/" not in title.lower()
+
+
+def test_derive_title_rejects_windows_path() -> None:
+    content = (
+        "see C:\\Users\\dev\\project\\config.toml for details\n"
+        "Caching policy: include the model SHA in every key.\n"
+    )
+    title = derive_title(content, "spec")
+    # The C:\ line must not appear; the clean second line is used instead.
+    assert "config.toml" not in title.lower()
+    assert "\\users\\dev" not in title.lower()
+    assert "caching" in title.lower()
+
+
+def test_derive_title_returns_empty_when_no_clean_candidate() -> None:
+    """When every candidate line is rejected, return empty so the caller
+    (wiki_sync) routes to the deterministic ``memory-<hash>`` fallback
+    instead of inheriting the v3.10.1 ``content[:80]`` raw-fragment leak.
+    """
+    content = (
+        "created: 2026-04-15T09:29:10Z\n"
+        "updated: 2026-04-15T09:29:11Z\n"
+        "id: 1828\n"
+    )
+    title = derive_title(content, "adr")
+    assert title == ""
+
+
+def test_derive_title_bare_iso_timestamp_rejected() -> None:
+    content = (
+        "2026-04-15T09:29:10Z is when this happened\n"
+        "Decision: adopt pgvector for ANN.\n"
+    )
+    title = derive_title(content, "adr")
+    assert "2026-04-15" not in title
+
+
+def test_derive_title_still_works_for_clean_input() -> None:
+    """Positive control — happy path must continue to work."""
+    content = "Use pgvector for retrieval — IVFFlat is too slow at our scale."
+    title = derive_title(content, "adr")
+    assert "pgvector" in title.lower()
+    assert title.startswith("Decision:")

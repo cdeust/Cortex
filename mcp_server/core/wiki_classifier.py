@@ -169,6 +169,30 @@ _PATH_OR_URL_TITLE_PATTERNS = [
         r"^\s*#*\s*[\w.-]+\.(pdf|png|jpg|jpeg|svg|gif|zip|tar\.gz|docx?|xlsx?|csv|log|yaml|yml)\b",
         re.IGNORECASE,
     ),
+    # Path embedded mid-line ("also on /Users/...", "fix the file at C:\\..."):
+    # any absolute POSIX path or Windows drive path anywhere in the title.
+    # Bug found 2026-05-12: pages like
+    # specs/2026-04-17-also-on-users-cdeust-documents-developments-...md
+    # passed the start-of-line check, then slugify stripped the leading "/"
+    # and folded the entire path into the slug.
+    re.compile(r"(?:^|\s)/(Users|home|root|opt|var|etc|tmp)/", re.IGNORECASE),
+    re.compile(r"(?:^|\s)[A-Za-z]:[\\/]"),
+]
+
+# YAML-frontmatter / key:value lines that leaked through as titles when the
+# real title was missing. Reject lines that are purely "key: value" where
+# the value is a timestamp, identifier, or boolean — they're metadata,
+# not titles.  Bug found 2026-05-12: 10 ADRs slugged as
+# "decision-created-2026-04-15t09-29-10z" because the YAML "created:"
+# line was the first non-{}/[] line in the body.
+_YAML_KV_TITLE_PATTERNS = [
+    # `created: 2026-04-15T09:29:10Z`, `updated: 2026-04-15`, `date: ...`
+    re.compile(
+        r"^\s*(created|updated|date|timestamp|time|id|uuid|version)\s*:\s*\S",
+        re.IGNORECASE,
+    ),
+    # Bare ISO-8601 timestamp anywhere (would slug to t09-29-10z form)
+    re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}[:-]\d{2}[:-]\d{2}", re.IGNORECASE),
 ]
 
 # Session / audit artefact tags — these are recall-fodder, not wiki-worthy.
@@ -538,6 +562,27 @@ def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
     return "note"
 
 
+def _line_is_title_candidate(cleaned: str) -> bool:
+    """Return True iff ``cleaned`` is acceptable as a wiki page title.
+
+    Rejects: empty/short, JSON braces, embedded paths/URLs, YAML metadata
+    key:value lines, bare timestamps. Callers that get False from every
+    candidate line should yield an empty title and let the deterministic
+    hash fallback kick in (see ``wiki_sync._sync_to_wiki``).
+    """
+    if len(cleaned) <= 10:
+        return False
+    if cleaned.startswith("{") or cleaned.startswith("["):
+        return False
+    for pat in _PATH_OR_URL_TITLE_PATTERNS:
+        if pat.search(cleaned):
+            return False
+    for pat in _YAML_KV_TITLE_PATTERNS:
+        if pat.search(cleaned):
+            return False
+    return True
+
+
 def derive_title(
     content: str,
     kind: str,
@@ -548,31 +593,25 @@ def derive_title(
 
     Strategy (Alexander P4 + Eco):
     1. Strip known prefixes
-    2. Use kind-specific extraction
-    3. Fall back to entity-based or tag-based title
-    4. Last resort: first meaningful sentence
+    2. Walk lines; accept the first that passes ``_line_is_title_candidate``
+    3. Fall back to entity-based title if 2+ entities are supplied
+    4. Otherwise return "" — caller is responsible for a deterministic
+       fallback (e.g. ``memory-<hash>``). Returning a raw 80-char content
+       prefix here used to leak filesystem paths, timestamps, and sentence
+       fragments into slugs.
     """
-    # Get clean first line
     lines = content.strip().split("\n")
     first_meaningful = ""
     for line in lines:
         cleaned = line.strip()
         for pat in _TITLE_STRIP_PREFIXES:
             cleaned = pat.sub("", cleaned).strip()
-        if (
-            len(cleaned) > 10
-            and not cleaned.startswith("{")
-            and not cleaned.startswith("[")
-        ):
+        if _line_is_title_candidate(cleaned):
             first_meaningful = cleaned
             break
 
-    if not first_meaningful:
-        first_meaningful = content.strip()[:80]
-
     # Truncate to reasonable title length
     if len(first_meaningful) > 80:
-        # Cut at word boundary
         first_meaningful = first_meaningful[:77].rsplit(" ", 1)[0] + "..."
 
     # Kind-specific prefixing for clarity
@@ -590,6 +629,9 @@ def derive_title(
         if prefix:
             return f"{prefix}: {entity_title}"
         return entity_title
+
+    if not first_meaningful:
+        return ""
 
     if prefix and not first_meaningful.lower().startswith(prefix.lower()):
         return f"{prefix}: {first_meaningful}"

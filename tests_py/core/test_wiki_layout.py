@@ -30,6 +30,34 @@ def test_slugify_empty() -> None:
     assert slugify("!!!") == "unknown"
 
 
+def test_slugify_strips_trailing_md_extension() -> None:
+    """Regression — bug found 2026-05-12.
+
+    Inputs that already look like .md filenames produced .md.md pages
+    because every wiki callsite appends ``.md`` to the slug. 58 pages
+    in the wiki had this shape (e.g. ``2234-decision-001-zero-
+    dependencies.md.md``). Slug must never end in ``.md``.
+    """
+    assert slugify("001-zero-dependencies.md") == "001-zero-dependencies"
+    assert slugify("foo.md") == "foo"
+    # Iterated md chain — should collapse to base.
+    assert slugify("foo.md.md") == "foo"
+    assert slugify("foo.md.md.md") == "foo"
+
+
+def test_slugify_preserves_non_md_extensions() -> None:
+    """``file_path_slug`` callers depend on .py/.ts/etc. surviving."""
+    assert slugify("login.py") == "login.py"
+    assert slugify("config.yaml") == "config.yaml"
+
+
+def test_adr_filename_no_double_md() -> None:
+    """End-to-end: title that contains '.md' must not yield .md.md."""
+    slug = slugify("001-zero-dependencies.md")
+    assert adr_filename(2234, slug) == "2234-001-zero-dependencies.md"
+    assert not adr_filename(2234, slug).endswith(".md.md")
+
+
 def test_file_path_slug() -> None:
     assert (
         file_path_slug("mcp_server/handlers/wiki_write.py")

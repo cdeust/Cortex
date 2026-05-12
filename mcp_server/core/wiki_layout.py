@@ -32,16 +32,29 @@ PAGE_KINDS = (
 
 _SAFE = re.compile(r"[^a-zA-Z0-9_.-]+")
 _MAX_SLUG_LEN = 80
+# Trailing extension tokens to strip before slug consumers append ".md".
+# Without this strip, an input title that already looks like a filename
+# (e.g. "001-zero-dependencies.md") produced filenames like
+# "2234-001-zero-dependencies.md.md" because every caller in the wiki
+# layer appends ".md" unconditionally. Strip iteratively so e.g.
+# "foo.md.md" → "foo".
+_TRAILING_MD_EXT = re.compile(r"(?:\.md)+$", re.IGNORECASE)
 
 
 def slugify(value: str, *, max_len: int = _MAX_SLUG_LEN) -> str:
-    """Stable filesystem-safe slug. Deterministic, lowercased, length-capped."""
+    """Stable filesystem-safe slug. Deterministic, lowercased, length-capped.
+
+    Postcondition: the returned slug never ends with ``.md`` (or any chain
+    of ``.md`` suffixes). Callers may safely append ``.md`` without
+    risking ``.md.md``.
+    """
     if not value:
         return "unknown"
     cleaned = _SAFE.sub("-", value.strip().lower()).strip("-")
     if not cleaned:
         return "unknown"
-    return cleaned[:max_len].rstrip("-") or "unknown"
+    cleaned = _TRAILING_MD_EXT.sub("", cleaned).rstrip(".-") or "unknown"
+    return cleaned[:max_len].rstrip("-.") or "unknown"
 
 
 def file_path_slug(file_path: str) -> str:
