@@ -150,11 +150,7 @@ def test_derive_title_returns_empty_when_no_clean_candidate() -> None:
     (wiki_sync) routes to the deterministic ``memory-<hash>`` fallback
     instead of inheriting the v3.10.1 ``content[:80]`` raw-fragment leak.
     """
-    content = (
-        "created: 2026-04-15T09:29:10Z\n"
-        "updated: 2026-04-15T09:29:11Z\n"
-        "id: 1828\n"
-    )
+    content = "created: 2026-04-15T09:29:10Z\nupdated: 2026-04-15T09:29:11Z\nid: 1828\n"
     title = derive_title(content, "adr")
     assert title == ""
 
