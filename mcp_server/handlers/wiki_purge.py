@@ -101,7 +101,12 @@ def _parse_tags(raw: Any) -> list[str]:
 
 
 def _evaluate_page(md_path: Path) -> tuple[str | None, list[str]]:
-    """Classify a single page. Returns (kind_or_None, tags)."""
+    """Classify a single page. Returns (kind_or_None, tags).
+
+    The ADR-2244 classifier returns a ``Classification`` object (or None
+    for rejection). Purge only cares about admit-vs-reject; we surface
+    the modern ``kind`` string for reporting, ``None`` to signal purge.
+    """
     text = md_path.read_text(encoding="utf-8", errors="ignore")
     r = parse_yaml_frontmatter(text)
     tags = _parse_tags(r.meta.get("tags"))
@@ -110,7 +115,8 @@ def _evaluate_page(md_path: Path) -> tuple[str | None, list[str]]:
     if lines and lines[0].startswith("# "):
         lines = lines[1:]
     content = "\n".join(lines).strip() or str(r.meta.get("title", ""))
-    return classify_memory(content, tags), tags
+    result = classify_memory(content, tags)
+    return (result.kind if result is not None else None), tags
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:

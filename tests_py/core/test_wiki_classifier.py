@@ -86,17 +86,29 @@ def test_valid_adr_admitted() -> None:
         "HNSW (m=16, ef_construction=64) because benchmarks show 3x improvement. "
         "Consequences: Postgres becomes mandatory."
     )
-    assert classify_memory(content, tags=["decision", "architecture"]) == "adr"
+    result = classify_memory(content, tags=["decision", "architecture"])
+    assert result is not None
+    assert result.kind == "adr"
+    assert result.lifecycle == "proposed"  # default for new ADRs
+    assert result.provenance == "human"
 
 
-def test_valid_lesson_admitted() -> None:
+def test_valid_lesson_admitted_as_explanation() -> None:
+    """ADR-2244 §4.1: the legacy 'lesson' kind maps to modern 'explanation'.
+
+    Root-cause analysis is explanatory content — the 'lesson' bucket
+    collapses into 'explanation' with audience=[developer].
+    """
     content = (
         "The bug was that FlashRank ONNX cache persisted stale weights across "
         "container restarts. Root cause: cache key did not include model hash. "
         "Fix: include model SHA in the cache key. Never ship a cache keyed only "
         "on path again."
     )
-    assert classify_memory(content, tags=["lesson", "bug-fix"]) == "lesson"
+    result = classify_memory(content, tags=["lesson", "bug-fix"])
+    assert result is not None
+    assert result.kind == "explanation"
+    assert result.lifecycle == "seedling"
 
 
 # ── derive_title regression tests (bugs found 2026-05-12) ─────────────
@@ -170,3 +182,97 @@ def test_derive_title_still_works_for_clean_input() -> None:
     title = derive_title(content, "adr")
     assert "pgvector" in title.lower()
     assert title.startswith("Decision:")
+
+
+# ── ADR-2244: modern-kind routing (tutorial / how-to / runbook / rfc / journal) ──
+
+
+def test_classifier_detects_runbook_from_pattern() -> None:
+    """Content describing on-call response routes to kind=runbook."""
+    content = (
+        "When the alert fires for high p99 latency on the recall path, "
+        "first check pgvector replica health via the runbook dashboard. "
+        "If healthy, rotate the connection pool. Recovery procedure: "
+        "1) check connections, 2) restart proxy, 3) page on-call DBA."
+    )
+    result = classify_memory(content, tags=["runbook", "ops"])
+    assert result is not None
+    assert result.kind == "runbook"
+    assert "ops" in result.audience
+
+
+def test_classifier_detects_tutorial_from_pattern() -> None:
+    content = (
+        "Tutorial: in this tutorial we'll learn how to wire pgvector "
+        "into a fresh Cortex install. By the end of this tutorial you'll "
+        "have a working recall pipeline. Step 1: install Postgres 16. "
+        "Step 2: enable the pgvector extension."
+    )
+    result = classify_memory(content, tags=["tutorial", "getting-started"])
+    assert result is not None
+    assert result.kind == "tutorial"
+
+
+def test_classifier_detects_howto_from_pattern() -> None:
+    content = (
+        "How to migrate a wiki page between kinds when the classifier "
+        "verdict changes after an ADR. Here's how to do it without "
+        "breaking inbound links: use the redirect-stub pattern from MediaWiki."
+    )
+    result = classify_memory(content, tags=["how-to", "migration"])
+    assert result is not None
+    assert result.kind == "how-to"
+
+
+def test_classifier_detects_rfc_from_pattern() -> None:
+    content = (
+        "RFC: we propose to replace the single-kind taxonomy with a "
+        "4-tuple (kind, lifecycle, audience, provenance). This RFC "
+        "supersedes the previous wiki classification design and proposes "
+        "an explicit migration plan with stable IDs and redirects."
+    )
+    result = classify_memory(content, tags=["rfc", "design"])
+    assert result is not None
+    assert result.kind == "rfc"
+
+
+def test_classifier_detects_journal_from_dated_heading() -> None:
+    content = (
+        "## 2026-05-12\n\n"
+        "Worked on the wiki classifier today. Decided to collapse v1/v2 "
+        "into a single function per user direction. The 4-tuple is now "
+        "the only return shape; legacy callers got migrated in the same PR."
+    )
+    result = classify_memory(content, tags=["journal", "design"])
+    assert result is not None
+    assert result.kind == "journal"
+
+
+# ── ADR-2244: provenance and audience inference ────────────────────────
+
+
+def test_codebase_tag_marks_auto_generated_provenance() -> None:
+    content = (
+        "## Process — packages/codebase-rust/src/parser/mod.rs::parse_file\n"
+        "Decision: this function parses a single source file via tree-sitter "
+        "and falls back to a regex tokeniser. The trade-off is documented "
+        "in ADR-0033."
+    )
+    result = classify_memory(
+        content,
+        tags=["code-reference", "codebase"],
+    )
+    assert result is not None
+    assert result.provenance == "auto-generated"
+    assert result.generator is not None  # required when provenance is auto-gen
+
+
+def test_security_tag_routes_to_security_audience() -> None:
+    content = (
+        "Decision: store session tokens in a separate, HSM-backed column "
+        "with auth-grade rotation. Context: legal compliance requires "
+        "token-level access auditing distinct from app-level logging."
+    )
+    result = classify_memory(content, tags=["security", "decision"])
+    assert result is not None
+    assert "security" in result.audience

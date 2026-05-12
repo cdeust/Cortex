@@ -443,23 +443,16 @@ def _apply_user_rules(content: str, tags: list[str] | None):
     return match
 
 
-def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
-    """Classify memory content for wiki sync.
+def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str | None:
+    """Run the admission gates and return a legacy kind name or None.
 
-    Inversion (Eco + Ahrens research): default to REJECT. A memory is
-    promoted to the wiki only if it passes three gates:
+    This is the internal kind-detection used by ``classify_memory``.
+    Returns one of {adr, lesson, convention, spec, note} when admitted,
+    or None on rejection. The string return is mapped to the ADR-2244
+    modern kind by ``classify_memory`` before reaching any caller.
 
-      1. Noise rejection (tool output, JSON, slash-command framing)
-      2. Hard-negative gate (imperatives, first-person narration, status,
-         temporal deixis — any hit disqualifies)
-      3. Positive scoring (≥ 4 of 8 quality signals)
-
-    Explicit knowledge-shaped tags (decision/adr/spec/design/lesson/
-    convention/rule) bypass the positive scorer — those are opt-in by
-    the caller and presumed wiki-worthy.
-
-    Returns page kind ('adr', 'lesson', 'convention', 'spec', 'note')
-    or None if the content should be rejected.
+    Internal-only — direct callers should use ``classify_memory`` so they
+    receive a full ``Classification`` tuple, not just the kind.
     """
     if not content or len(content.strip()) < 50:
         return None
@@ -508,8 +501,14 @@ def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
 
     # Tag-based fast-path: explicit knowledge tags bypass positive scoring.
     # The caller has declared intent; trust the declaration.
+    # ADR-2244: extended to include the new modern-kind shape tags
+    # (runbook/tutorial/how-to/rfc/journal) plus the auto-gen producer
+    # markers (code-reference/codebase) so codebase_analyze output is
+    # admitted by the gate and the provenance facet downstream marks it
+    # as auto-generated.
     tag_set = tag_set_pre
     _EXPLICIT_KNOWLEDGE_TAGS = {
+        # Legacy knowledge tags.
         "decision",
         "adr",
         "architecture",
@@ -521,6 +520,21 @@ def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
         "standard",
         "paper",
         "research",
+        # ADR-2244 modern-kind shape tags.
+        "runbook",
+        "playbook",
+        "tutorial",
+        "getting-started",
+        "how-to",
+        "howto",
+        "rfc",
+        "proposal",
+        "journal",
+        # Auto-gen producer markers (provenance flips to auto-generated
+        # downstream; bypassing positive score is correct here because
+        # the producer has already filtered to high-signal content).
+        "code-reference",
+        "codebase",
     }
     has_explicit_tag = bool(tag_set & _EXPLICIT_KNOWLEDGE_TAGS)
 
@@ -560,6 +574,214 @@ def classify_memory(content: str, tags: list[str] | None = None) -> str | None:
 
     # Catch-all: meaningful content that passed the gate
     return "note"
+
+
+# ── ADR-2244 4-tuple classification (Phase 1) ─────────────────────────
+
+
+# Patterns introduced for the new kinds in ADR-2244 §4.1. They sit alongside
+# the legacy _ADR_PATTERNS / _LESSON_PATTERNS / _CONVENTION_PATTERNS so the
+# v1 classifier stays unchanged.
+
+_TUTORIAL_PATTERNS = [
+    re.compile(
+        r"\b(tutorial:|in this tutorial|we['']?ll (learn|build|create|walk through)|"
+        r"by the end of this tutorial|getting started:|step 1[:.])\b",
+        re.IGNORECASE,
+    ),
+]
+
+_HOWTO_PATTERNS = [
+    re.compile(
+        r"\b(how to |how do (you|i) |here['']?s how to |to do (this|that),)\b",
+        re.IGNORECASE,
+    ),
+]
+
+_RUNBOOK_PATTERNS = [
+    re.compile(
+        r"\b(runbook|incident response|on[- ]call|when (the )?alert fires|"
+        r"if (this|that) happens|recovery procedure|rollback steps?)\b",
+        re.IGNORECASE,
+    ),
+]
+
+_RFC_PATTERNS = [
+    re.compile(
+        r"\b(rfc:|proposal:|we propose to|proposed (design|change|approach)|"
+        r"this rfc|request for comments)\b",
+        re.IGNORECASE,
+    ),
+]
+
+_JOURNAL_PATTERNS = [
+    # Dated entry header — ## 2026-05-12 or ## 2026-05-12 — title
+    re.compile(r"^##?\s*\d{4}-\d{2}-\d{2}\b", re.MULTILINE),
+]
+
+
+def _detect_modern_kind(
+    content: str,
+    tag_set: set[str],
+    legacy_kind: str,
+) -> str:
+    """Map the v1 (legacy) kind to a modern v2 kind, plus pattern overrides.
+
+    The v1 classifier picks one of {adr, lesson, convention, spec, note}.
+    The v2 classifier needs one of the 8 modern kinds. This function:
+
+    1. Checks the new pattern catalogs (tutorial, how-to, runbook, rfc,
+       journal) — those override the legacy mapping when they hit.
+    2. Falls back to the legacy → modern map for everything else.
+
+    The mapping rationale (ADR-2244 §4.1):
+        adr        → adr            (kept)
+        lesson     → explanation    (root-cause analysis is explanatory)
+        convention → explanation    (the "why" of a rule is explanation)
+        spec       → rfc            (default; post-implementation specs
+                                     should be retagged to ``reference``)
+        note       → explanation    (catch-all becomes explanation, not notes)
+    """
+    # 1. Modern-pattern overrides — strongest signals first.
+    for pat in _RUNBOOK_PATTERNS:
+        if pat.search(content):
+            return "runbook"
+    if tag_set & {"runbook", "playbook", "incident"}:
+        return "runbook"
+
+    for pat in _TUTORIAL_PATTERNS:
+        if pat.search(content):
+            return "tutorial"
+    if tag_set & {"tutorial", "getting-started"}:
+        return "tutorial"
+
+    for pat in _HOWTO_PATTERNS:
+        if pat.search(content):
+            return "how-to"
+    if tag_set & {"how-to", "howto", "guide"}:
+        return "how-to"
+
+    for pat in _RFC_PATTERNS:
+        if pat.search(content):
+            return "rfc"
+    if tag_set & {"rfc", "proposal"}:
+        return "rfc"
+
+    for pat in _JOURNAL_PATTERNS:
+        if pat.search(content):
+            return "journal"
+    if tag_set & {"journal", "diary", "log"}:
+        return "journal"
+
+    # 2. Legacy → modern fallback.
+    _LEGACY_KIND_MAP = {
+        "adr": "adr",
+        "lesson": "explanation",
+        "convention": "explanation",
+        "spec": "rfc",
+        "note": "explanation",
+        # Reference can come from explicit tags or downstream callers; the
+        # v1 classifier never returns it, so this row is documentation only.
+        "reference": "reference",
+    }
+    return _LEGACY_KIND_MAP.get(legacy_kind, "explanation")
+
+
+def _detect_provenance(tag_set: set[str]) -> str:
+    """Infer ``provenance`` from tags.
+
+    ``human`` is the default. Explicit provenance tags or the codebase
+    auto-gen signature (``code-reference``, ``codebase``) flip to
+    ``auto-generated``. Memory imports flip to ``imported``.
+    """
+    if tag_set & {"auto-generated", "code-reference", "codebase"}:
+        return "auto-generated"
+    if tag_set & {"imported", "import"}:
+        return "imported"
+    if tag_set & {"ai-generated", "synthesized", "synth"}:
+        return "ai-generated"
+    return "human"
+
+
+def _default_lifecycle(kind: str) -> str:
+    """Default lifecycle for a newly classified page.
+
+    ADRs default to ``proposed`` (Nygard convention). Everything else
+    defaults to ``seedling`` (digital-garden convention).
+    """
+    return "proposed" if kind == "adr" else "seedling"
+
+
+def classify_memory(
+    content: str,
+    tags: list[str] | None = None,
+):
+    """Classify memory content for the wiki (ADR-2244 single classifier).
+
+    Returns a ``Classification`` (kind, lifecycle, audience, provenance,
+    generator, tags) from ``mcp_server.shared.wiki_classification`` when
+    the memory should be admitted, or ``None`` to reject.
+
+    Admission gates (same as the legacy single-kind classifier):
+      1. Audit-tag gate — backfill / session-summary / stage-N / tool-output
+         are rejected before user rules.
+      2. User-editable rules from ``wiki/_rules/*.md``.
+      3. Noise rejection — tool/system/slash artefacts.
+      4. Hard-negative gate — imperatives, first-person, status framing,
+         temporal deixis, path/URL titles, audit-shaped titles.
+      5. Positive scoring — ≥ 4 of 8 signals, unless an explicit knowledge
+         tag (decision/adr/spec/design/lesson/convention/rule) bypasses.
+
+    Routing (ADR-2244 §4.1): the 5 legacy kinds (adr/lesson/convention/
+    spec/note) map to the 8 modern kinds via ``_detect_modern_kind``;
+    pattern overrides for tutorial/how-to/runbook/rfc/journal take
+    precedence over the legacy-derived kind.
+
+    Local import keeps the module's import graph flat.
+    """
+    from mcp_server.shared.wiki_classification import Classification, Generator
+
+    legacy_kind = _classify_to_legacy_kind(content, tags)
+    if legacy_kind is None:
+        return None
+
+    tag_set = {t.lower() for t in (tags or [])}
+    modern_kind = _detect_modern_kind(content, tag_set, legacy_kind)
+    provenance = _detect_provenance(tag_set)
+    lifecycle = _default_lifecycle(modern_kind)
+
+    # Audience inference — closed enum per ADR-2244 §4.3.
+    # Security-tagged content gets security audience; ops/runbook gets ops;
+    # everything else defaults to developer.
+    audiences: list[str] = []
+    if tag_set & {"security", "auth", "crypto", "vulnerability"}:
+        audiences.append("security")
+    if modern_kind == "runbook" or tag_set & {"ops", "sre", "infra", "deploy"}:
+        audiences.append("ops")
+    if not audiences:
+        audiences.append("developer")
+
+    # Provenance with full generator block when ai/auto-generated.
+    generator: Generator | None = None
+    if provenance in {"ai-generated", "auto-generated"}:
+        generator = Generator(
+            model="unknown",
+            version="",
+            prompt_template="",
+            generated_at="",
+        )
+
+    # Tags pass through (capped to keep frontmatter tractable).
+    out_tags = tuple(sorted(tag_set))[:50]
+
+    return Classification(
+        kind=modern_kind,
+        lifecycle=lifecycle,
+        audience=tuple(audiences),
+        provenance=provenance,
+        generator=generator,
+        tags=out_tags,
+    )
 
 
 def _line_is_title_candidate(cleaned: str) -> bool:

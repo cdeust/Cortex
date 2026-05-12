@@ -25,6 +25,7 @@ from typing import Final
 # ── Required front-matter fields per page kind ──────────────────────────
 
 REQUIRED_FRONTMATTER: Final[dict[str, tuple[str, ...]]] = {
+    # Legacy kinds — kept readable; values match pre-ADR-2244 contracts.
     "adr": ("id", "title", "status", "date", "context", "decision", "consequences"),
     "specs": ("title", "status", "owner", "created", "updated"),
     "guides": ("title", "audience", "prerequisites", "updated"),
@@ -34,9 +35,57 @@ REQUIRED_FRONTMATTER: Final[dict[str, tuple[str, ...]]] = {
     "notes": ("title", "updated"),
     "journal": ("title", "date"),
     "files": ("file_path", "language", "updated"),
+    # Modern kinds (ADR-2244 §4). Every modern kind requires the 4-tuple
+    # axes (kind, lifecycle, audience, provenance) plus kind-specific
+    # fields.  Note: ``kind`` itself is a required frontmatter field for
+    # *every* modern page, validated by ``wiki_schema_loader``.
+    "tutorial": (
+        "title",
+        "kind",
+        "lifecycle",
+        "audience",
+        "provenance",
+        "updated",
+    ),
+    "how-to": (
+        "title",
+        "kind",
+        "lifecycle",
+        "audience",
+        "provenance",
+        "updated",
+    ),
+    "runbook": (
+        "title",
+        "kind",
+        "lifecycle",
+        "audience",
+        "provenance",
+        "trigger",
+        "updated",
+    ),
+    "rfc": (
+        "title",
+        "kind",
+        "lifecycle",
+        "audience",
+        "provenance",
+        "created",
+        "updated",
+    ),
+    "explanation": (
+        "title",
+        "kind",
+        "lifecycle",
+        "audience",
+        "provenance",
+        "updated",
+    ),
 }
 
 # Valid values for `status` field (ADR + specs).
+# Note: lifecycle (ADR-2244 §4.2) is a separate axis; the legacy ``status``
+# field is preserved for backward compat on ADR/spec pages.
 STATUS_VALUES: Final[dict[str, tuple[str, ...]]] = {
     "adr": ("proposed", "accepted", "rejected", "deprecated", "superseded"),
     "specs": ("draft", "review", "accepted", "implemented", "deprecated"),
@@ -301,7 +350,162 @@ updated: {{updated}}
 """
 
 
+# ── ADR-2244 modern-kind templates ───────────────────────────────────────
+
+
+TUTORIAL_TEMPLATE = """---
+title: {{title}}
+kind: tutorial
+lifecycle: {{lifecycle}}
+audience: {{audience}}
+provenance: {{provenance}}
+updated: {{updated}}
+---
+
+# {{title}}
+
+## What you'll learn
+
+{{learning_outcomes}}
+
+## Prerequisites
+
+{{prerequisites}}
+
+## Steps
+
+{{steps}}
+
+## Next steps
+
+{{next_steps}}
+"""
+
+
+HOWTO_TEMPLATE = """---
+title: {{title}}
+kind: how-to
+lifecycle: {{lifecycle}}
+audience: {{audience}}
+provenance: {{provenance}}
+updated: {{updated}}
+---
+
+# {{title}}
+
+## When to use this
+
+{{when_to_use}}
+
+## Steps
+
+{{steps}}
+
+## Verification
+
+{{verification}}
+"""
+
+
+RUNBOOK_TEMPLATE = """---
+title: {{title}}
+kind: runbook
+lifecycle: {{lifecycle}}
+audience: {{audience}}
+provenance: {{provenance}}
+trigger: {{trigger}}
+updated: {{updated}}
+---
+
+# {{title}}
+
+## Trigger
+
+{{trigger_description}}
+
+## Diagnosis
+
+{{diagnosis}}
+
+## Recovery procedure
+
+{{recovery_steps}}
+
+## Rollback
+
+{{rollback}}
+
+## Post-incident
+
+{{post_incident}}
+"""
+
+
+RFC_TEMPLATE = """---
+title: {{title}}
+kind: rfc
+lifecycle: {{lifecycle}}
+audience: {{audience}}
+provenance: {{provenance}}
+created: {{created}}
+updated: {{updated}}
+---
+
+# {{title}}
+
+## Summary
+
+{{summary}}
+
+## Motivation
+
+{{motivation}}
+
+## Proposed design
+
+{{design}}
+
+## Alternatives considered
+
+{{alternatives}}
+
+## Open questions
+
+{{open_questions}}
+"""
+
+
+EXPLANATION_TEMPLATE = """---
+title: {{title}}
+kind: explanation
+lifecycle: {{lifecycle}}
+audience: {{audience}}
+provenance: {{provenance}}
+updated: {{updated}}
+---
+
+# {{title}}
+
+## Context
+
+{{context}}
+
+## Explanation
+
+{{explanation}}
+
+## Implications
+
+{{implications}}
+
+## See also
+
+{{see_also}}
+"""
+
+
 TEMPLATES: Final[dict[str, str]] = {
+    # Legacy kinds.
     "adr": ADR_TEMPLATE,
     "specs": SPEC_TEMPLATE,
     "guides": GUIDE_TEMPLATE,
@@ -311,6 +515,12 @@ TEMPLATES: Final[dict[str, str]] = {
     "notes": NOTE_TEMPLATE,
     "journal": JOURNAL_TEMPLATE,
     "files": FILE_TEMPLATE,
+    # ADR-2244 modern kinds.
+    "tutorial": TUTORIAL_TEMPLATE,
+    "how-to": HOWTO_TEMPLATE,
+    "runbook": RUNBOOK_TEMPLATE,
+    "rfc": RFC_TEMPLATE,
+    "explanation": EXPLANATION_TEMPLATE,
 }
 
 

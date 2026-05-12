@@ -64,6 +64,21 @@ def _derive_title(content: str) -> str:
     return first_line
 
 
+# ADR-2244 §4.1: modern kind → directory. All 8 modern kinds map to their
+# own directory under wiki/. The classifier never returns a legacy kind
+# from v2; legacy directories stay populated only by pre-migration content.
+_MODERN_KIND_TO_DIR = {
+    "tutorial": "tutorial",
+    "how-to": "how-to",
+    "reference": "reference",
+    "explanation": "explanation",
+    "adr": "adr",
+    "runbook": "runbook",
+    "rfc": "rfc",
+    "journal": "journal",
+}
+
+
 def build_from_memory(
     *,
     memory_id: int | str,
@@ -73,15 +88,20 @@ def build_from_memory(
 ) -> tuple[str, str] | None:
     """Build (relative_path, markdown) for a memory, or None if rejected.
 
-    Uses the wiki classifier to determine page kind and smart title.
-    Routes to kind-specific templates. Domain-scoped paths.
+    Uses the v2 classifier (ADR-2244) to determine the 4-tuple
+    classification, routes to the modern kind directory, and writes
+    frontmatter conforming to the new schema.
+
+    Routing fix (Task #8): file-documentation content from
+    ``codebase_analyze`` now lands in ``reference/<domain>/`` with
+    ``provenance=auto-generated`` instead of being silently dumped in
+    ``notes/`` (which had no ``file`` mapping in the old _KIND_TO_DIR).
     """
-    # Use classifier instead of tag-only gate
-    kind = classify_memory(content, tags)
-    if kind is None:
+    classification = classify_memory(content, tags)
+    if classification is None:
         return None
 
-    title = derive_title(content, kind, tags)
+    title = derive_title(content, classification.kind, tags)
     if not title:
         import hashlib
 
@@ -90,23 +110,75 @@ def build_from_memory(
     slug = slugify(title)
     filename = f"{memory_id}-{slug}.md"
 
-    # Map classifier kind (singular) to PAGE_KINDS directory (plural)
-    _KIND_TO_DIR = {
-        "adr": "adr",
-        "spec": "specs",
-        "lesson": "lessons",
-        "convention": "conventions",
-        "note": "notes",
-        "guide": "guides",
-        "reference": "reference",
-        "journal": "journal",
-    }
-    dir_name = _KIND_TO_DIR.get(kind, "notes")
+    dir_name = _MODERN_KIND_TO_DIR.get(classification.kind, "explanation")
     safe_domain = slugify(domain, max_len=40) if domain else "_general"
     rel = f"{dir_name}/{safe_domain}/{filename}"
 
-    # Build page with kind-appropriate template
-    markdown = build_note(
-        title=title, body=content, tags=tags or [kind], updated=_now_iso()
-    )
+    # Frontmatter from the 4-tuple; body from the existing note template.
+    fm = classification.to_frontmatter()
+    fm["title"] = title
+    fm["updated"] = _now_iso()
+    if "memory_id" not in fm:
+        fm["memory_id"] = memory_id
+
+    markdown = _render_with_frontmatter(fm, title, content)
     return rel, markdown
+
+
+def _render_with_frontmatter(
+    frontmatter: dict[str, object],
+    title: str,
+    body: str,
+) -> str:
+    """Render a wiki page with explicit ADR-2244 frontmatter.
+
+    Falls back to ``build_note`` for the body shape so legacy callers
+    continue to see a familiar note structure. The frontmatter is the
+    only thing that changes — the body remains the existing template
+    output until per-kind templates land in Phase 1.D.
+    """
+    # Use the existing note builder for the body shape, then replace its
+    # frontmatter with the 4-tuple-aware version.
+    note_md = build_note(
+        title=title,
+        body=body,
+        tags=list(frontmatter.get("tags") or []),
+        updated=str(frontmatter.get("updated", "")),
+    )
+    body_only = _strip_frontmatter(note_md)
+    return _format_frontmatter(frontmatter) + body_only
+
+
+def _strip_frontmatter(md: str) -> str:
+    """Remove a leading ``---``-delimited frontmatter block from markdown."""
+    if not md.startswith("---"):
+        return md
+    end = md.find("\n---", 3)
+    if end == -1:
+        return md
+    body_start = md.find("\n", end + 4)
+    return md[body_start + 1 :] if body_start != -1 else ""
+
+
+def _format_frontmatter(fm: dict[str, object]) -> str:
+    """Serialise a frontmatter dict to a ``---``-delimited YAML block.
+
+    Mirrors wiki_pages._format_frontmatter but lives here so wiki_sync
+    can produce ADR-2244 frontmatter without importing from wiki_pages
+    (whose builder API does not accept arbitrary dicts).
+    """
+    lines = ["---"]
+    for key, value in fm.items():
+        if isinstance(value, list):
+            lines.append(f"{key}:")
+            for item in value:
+                lines.append(f"  - {item}")
+        elif isinstance(value, dict):
+            lines.append(f"{key}:")
+            for sub_key, sub_value in value.items():
+                lines.append(f"  {sub_key}: {sub_value}")
+        else:
+            lines.append(f"{key}: {value}")
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)

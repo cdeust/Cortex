@@ -18,17 +18,37 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
-PAGE_KINDS = (
+# Modern kinds (ADR-2244 §4.1). Each drives a directory under wiki/ for
+# pages classified to that kind. New writes use these names exclusively.
+MODERN_PAGE_KINDS = (
+    "tutorial",
+    "how-to",
+    "reference",
+    "explanation",
     "adr",
+    "runbook",
+    "rfc",
+    "journal",
+)
+
+# Legacy kinds — kept in PAGE_KINDS so existing pages remain readable and
+# wiki_list/wiki_read continue to function during the migration window.
+# New code SHOULD NOT route to these. See
+# ``mcp_server.shared.wiki_classification.LEGACY_KIND_TO_MODERN`` for the
+# read-time normalization map.
+LEGACY_PAGE_KINDS = (
     "specs",
     "guides",
-    "reference",
     "conventions",
     "lessons",
     "notes",
-    "journal",
     "files",
 )
+
+# Full set accepted by ``page_path`` / ``domain_page_path`` — modern + legacy
+# for backward-compat. Validation in higher layers (wiki_classification.py)
+# enforces modern-only on write.
+PAGE_KINDS = MODERN_PAGE_KINDS + LEGACY_PAGE_KINDS
 
 _SAFE = re.compile(r"[^a-zA-Z0-9_.-]+")
 _MAX_SLUG_LEN = 80

@@ -92,15 +92,34 @@ def test_index_path() -> None:
     assert str(index_path()) == ".generated/INDEX.md"
 
 
-def test_page_kinds_stable() -> None:
-    assert PAGE_KINDS == (
+def test_page_kinds_modern_plus_legacy() -> None:
+    """ADR-2244: PAGE_KINDS contains all 8 modern + 6 legacy kinds.
+
+    Modern kinds drive new writes; legacy kinds remain accepted by
+    ``page_path`` / ``domain_page_path`` so existing pages under
+    notes/specs/conventions/lessons/guides/files stay readable.
+    """
+    from mcp_server.core.wiki_layout import LEGACY_PAGE_KINDS, MODERN_PAGE_KINDS
+
+    assert MODERN_PAGE_KINDS == (
+        "tutorial",
+        "how-to",
+        "reference",
+        "explanation",
         "adr",
+        "runbook",
+        "rfc",
+        "journal",
+    )
+    assert LEGACY_PAGE_KINDS == (
         "specs",
         "guides",
-        "reference",
         "conventions",
         "lessons",
         "notes",
-        "journal",
         "files",
     )
+    # The combined tuple must contain every modern + every legacy kind.
+    assert set(PAGE_KINDS) == set(MODERN_PAGE_KINDS) | set(LEGACY_PAGE_KINDS)
+    # No duplicates (e.g. journal is modern; must not appear twice).
+    assert len(PAGE_KINDS) == len(set(PAGE_KINDS))
