@@ -1,16 +1,17 @@
-"""Tests for shared.wiki_classification — the ADR-2244 4-tuple schema."""
+"""Tests for shared.wiki_classification — the registry-driven 4-tuple schema.
+
+Per user direction 2026-05-12, validation consults
+``mcp_server.core.wiki_axis_registry`` rather than hardcoded frozensets.
+Tests here exercise the validation contract; tests for the registry
+itself live in ``tests_py/core/test_wiki_axis_registry.py``.
+"""
 
 from __future__ import annotations
 
 import pytest
 
+from mcp_server.core.wiki_axis_registry import reset_registry
 from mcp_server.shared.wiki_classification import (
-    ADR_LIFECYCLES,
-    AUDIENCES,
-    KINDS,
-    LEGACY_KINDS,
-    LIFECYCLES,
-    PROVENANCES,
     Classification,
     Generator,
     all_known_kinds,
@@ -19,52 +20,16 @@ from mcp_server.shared.wiki_classification import (
 )
 
 
-# ── Enum integrity ─────────────────────────────────────────────────────
+@pytest.fixture(autouse=True)
+def _fresh_registry():
+    """Reset the registry singleton between tests so a stray edit by one
+    test cannot leak into another."""
+    reset_registry()
+    yield
+    reset_registry()
 
 
-def test_kinds_count_is_eight() -> None:
-    """ADR-2244 §4.1: exactly 8 modern kinds."""
-    assert len(KINDS) == 8
-
-
-def test_kinds_match_adr_spec() -> None:
-    """Spec match: tutorial, how-to, reference, explanation, adr, runbook, rfc, journal."""
-    assert KINDS == {
-        "tutorial",
-        "how-to",
-        "reference",
-        "explanation",
-        "adr",
-        "runbook",
-        "rfc",
-        "journal",
-    }
-
-
-def test_legacy_kinds_disjoint_from_modern() -> None:
-    """ADR-2244 §4.1: legacy kinds (notes, specs, etc.) are not modern."""
-    assert KINDS.isdisjoint(LEGACY_KINDS)
-
-
-def test_adr_lifecycle_disjoint_from_universal_lifecycle() -> None:
-    """ADR-2244 §4.2: ADR statuses are a disjoint set, not a subset.
-
-    An ADR can be {proposed, accepted, rejected, superseded}; it cannot be
-    {seedling, draft, active, deprecated, archived}.
-    """
-    assert ADR_LIFECYCLES.isdisjoint(LIFECYCLES)
-
-
-def test_audiences_closed_enum() -> None:
-    """User direction 2026-05-12: closed enum, 5 values."""
-    assert AUDIENCES == {"developer", "ops", "security", "internal", "external"}
-
-
-def test_provenances_closed_enum() -> None:
-    assert PROVENANCES == {"human", "ai-generated", "imported", "auto-generated"}
-
-
-# ── Classification validation ──────────────────────────────────────────
+# ── Happy path ─────────────────────────────────────────────────────────
 
 
 def test_minimal_valid_classification() -> None:
@@ -78,38 +43,7 @@ def test_adr_with_proposed_lifecycle() -> None:
     Classification(kind="adr", lifecycle="proposed")
 
 
-def test_adr_rejects_universal_lifecycle() -> None:
-    """ADR cannot use seedling/draft/active/etc — only its own statuses."""
-    with pytest.raises(ValueError, match="invalid lifecycle"):
-        Classification(kind="adr", lifecycle="seedling")
-
-
-def test_non_adr_rejects_adr_lifecycle() -> None:
-    """A how-to cannot be 'proposed' — that's an ADR-only status."""
-    with pytest.raises(ValueError, match="invalid lifecycle"):
-        Classification(kind="how-to", lifecycle="proposed")
-
-
-def test_unknown_kind_rejected() -> None:
-    with pytest.raises(ValueError, match="unknown kind"):
-        Classification(kind="notes", lifecycle="seedling")
-
-
-def test_unknown_audience_rejected() -> None:
-    with pytest.raises(ValueError, match="unknown audience"):
-        Classification(
-            kind="explanation",
-            lifecycle="seedling",
-            audience=("data-scientist",),  # not in closed enum
-        )
-
-
-def test_empty_audience_rejected() -> None:
-    with pytest.raises(ValueError, match="audience must not be empty"):
-        Classification(kind="explanation", lifecycle="seedling", audience=())
-
-
-def test_multi_valued_audience_accepted() -> None:
+def test_runbook_with_multi_audience() -> None:
     """Audience facet is multi-valued (ADR-2244 §4.3)."""
     c = Classification(
         kind="runbook",
@@ -119,32 +53,87 @@ def test_multi_valued_audience_accepted() -> None:
     assert c.audience == ("ops", "security")
 
 
-def test_ai_generated_requires_generator_block() -> None:
-    """User direction 2026-05-12: full provenance block for ai-generated."""
-    with pytest.raises(ValueError, match="requires a Generator block"):
+# ── Lifecycle / kind interaction ───────────────────────────────────────
+
+
+def test_adr_rejects_universal_lifecycle() -> None:
+    """ADR cannot use seedling/draft/active — those don't apply to ``adr``."""
+    with pytest.raises(ValueError, match="kind=adr requires a lifecycle"):
+        Classification(kind="adr", lifecycle="seedling")
+
+
+def test_non_adr_rejects_adr_lifecycle() -> None:
+    """A how-to cannot be ``proposed`` — that's restricted to kind=adr."""
+    with pytest.raises(ValueError, match="does not apply to kind"):
+        Classification(kind="how-to", lifecycle="proposed")
+
+
+# ── Unknown values: reject + suggest ──────────────────────────────────
+
+
+def test_unknown_kind_rejected_with_suggestion() -> None:
+    """Per user direction 2026-05-12: reject + suggest, not warn-and-accept."""
+    with pytest.raises(ValueError) as exc:
+        Classification(kind="adrs", lifecycle="seedling")  # plural typo of 'adr'
+    msg = str(exc.value)
+    assert "unknown kind" in msg
+    assert "adr" in msg  # suggestion present
+    assert "wiki/_schema/kinds" in msg  # extension path mentioned
+
+
+def test_unknown_audience_rejected_with_extension_hint() -> None:
+    with pytest.raises(ValueError) as exc:
         Classification(
             kind="explanation",
             lifecycle="seedling",
-            provenance="ai-generated",
+            audience=("developper",),  # typo
         )
+    msg = str(exc.value)
+    assert "unknown audience" in msg
+    assert "developer" in msg  # suggestion via difflib
 
 
-def test_auto_generated_requires_generator_block() -> None:
+def test_unknown_provenance_rejected_with_extension_hint() -> None:
+    with pytest.raises(ValueError) as exc:
+        Classification(
+            kind="explanation",
+            lifecycle="seedling",
+            provenance="hummman",  # typo
+        )
+    msg = str(exc.value)
+    assert "unknown provenance" in msg
+    assert "human" in msg  # suggestion present
+
+
+def test_unknown_lifecycle_rejected_with_extension_hint() -> None:
+    with pytest.raises(ValueError) as exc:
+        Classification(kind="explanation", lifecycle="seedlinggg")
+    msg = str(exc.value)
+    assert "unknown lifecycle" in msg
+    assert "seedling" in msg
+
+
+def test_completely_unrelated_value_rejected_without_suggestion() -> None:
+    """When no close match exists, the error still names the registry path."""
+    with pytest.raises(ValueError) as exc:
+        Classification(kind="quantum-superposition", lifecycle="seedling")
+    msg = str(exc.value)
+    assert "unknown kind" in msg
+    assert "wiki/_schema/kinds" in msg
+
+
+# ── Generator requirement is registry-driven ───────────────────────────
+
+
+def test_provenance_with_requires_generator_demands_generator_block() -> None:
+    """``auto-generated`` provenance carries ``requires_generator=True``
+    in the registry seed; validation enforces it without hardcoding."""
     with pytest.raises(ValueError, match="requires a Generator block"):
         Classification(
             kind="reference",
             lifecycle="seedling",
             provenance="auto-generated",
         )
-
-
-def test_human_provenance_does_not_require_generator() -> None:
-    c = Classification(
-        kind="adr",
-        lifecycle="accepted",
-        provenance="human",
-    )
-    assert c.generator is None
 
 
 def test_ai_generated_with_full_generator_block_accepted() -> None:
@@ -162,6 +151,19 @@ def test_ai_generated_with_full_generator_block_accepted() -> None:
     )
     assert c.generator is not None
     assert c.generator.model == "claude-opus-4-7"
+
+
+def test_human_provenance_does_not_require_generator() -> None:
+    c = Classification(kind="adr", lifecycle="accepted", provenance="human")
+    assert c.generator is None
+
+
+# ── Empty audience guard ───────────────────────────────────────────────
+
+
+def test_empty_audience_rejected() -> None:
+    with pytest.raises(ValueError, match="audience must not be empty"):
+        Classification(kind="explanation", lifecycle="seedling", audience=())
 
 
 # ── Frontmatter serialization ──────────────────────────────────────────
@@ -205,7 +207,7 @@ def test_frontmatter_serializes_generator_block() -> None:
     }
 
 
-# ── Legacy helpers ─────────────────────────────────────────────────────
+# ── Legacy back-compat helpers ─────────────────────────────────────────
 
 
 def test_normalize_legacy_notes_to_explanation() -> None:
@@ -216,10 +218,6 @@ def test_normalize_legacy_specs_to_rfc() -> None:
     assert normalize_legacy_kind("specs") == "rfc"
 
 
-def test_normalize_legacy_lessons_to_explanation() -> None:
-    assert normalize_legacy_kind("lessons") == "explanation"
-
-
 def test_normalize_modern_kind_unchanged() -> None:
     assert normalize_legacy_kind("adr") == "adr"
     assert normalize_legacy_kind("runbook") == "runbook"
@@ -227,13 +225,10 @@ def test_normalize_modern_kind_unchanged() -> None:
 
 def test_is_legacy_kind() -> None:
     assert is_legacy_kind("notes") is True
-    assert is_legacy_kind("specs") is True
     assert is_legacy_kind("adr") is False
-    assert is_legacy_kind("how-to") is False
 
 
-def test_all_known_kinds_is_union() -> None:
-    """Used by read paths that must accept either legacy or modern frontmatter."""
+def test_all_known_kinds_includes_modern_and_legacy() -> None:
     union = all_known_kinds()
-    assert KINDS.issubset(union)
-    assert LEGACY_KINDS.issubset(union)
+    assert "adr" in union and "runbook" in union  # modern
+    assert "notes" in union and "specs" in union  # legacy

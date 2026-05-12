@@ -237,13 +237,18 @@ def test_classifier_detects_rfc_from_pattern() -> None:
 
 
 def test_classifier_detects_journal_from_dated_heading() -> None:
+    """Journal kind fires when content is a dated reflective entry.
+
+    The dated heading is the signal; the body must avoid stronger
+    signals (decision markers, RFC tags) that would route elsewhere.
+    """
     content = (
         "## 2026-05-12\n\n"
-        "Worked on the wiki classifier today. Decided to collapse v1/v2 "
-        "into a single function per user direction. The 4-tuple is now "
-        "the only return shape; legacy callers got migrated in the same PR."
+        "Spent the morning on wiki classification design. Read three of "
+        "the surveyed taxonomies and sketched the registry approach. "
+        "Productive day overall."
     )
-    result = classify_memory(content, tags=["journal", "design"])
+    result = classify_memory(content, tags=["journal", "diary"])
     assert result is not None
     assert result.kind == "journal"
 

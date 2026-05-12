@@ -579,136 +579,118 @@ def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str
 # ── ADR-2244 4-tuple classification (Phase 1) ─────────────────────────
 
 
-# Patterns introduced for the new kinds in ADR-2244 §4.1. They sit alongside
-# the legacy _ADR_PATTERNS / _LESSON_PATTERNS / _CONVENTION_PATTERNS so the
-# v1 classifier stays unchanged.
-
-_TUTORIAL_PATTERNS = [
-    re.compile(
-        r"\b(tutorial:|in this tutorial|we['']?ll (learn|build|create|walk through)|"
-        r"by the end of this tutorial|getting started:|step 1[:.])\b",
-        re.IGNORECASE,
-    ),
-]
-
-_HOWTO_PATTERNS = [
-    re.compile(
-        r"\b(how to |how do (you|i) |here['']?s how to |to do (this|that),)\b",
-        re.IGNORECASE,
-    ),
-]
-
-_RUNBOOK_PATTERNS = [
-    re.compile(
-        r"\b(runbook|incident response|on[- ]call|when (the )?alert fires|"
-        r"if (this|that) happens|recovery procedure|rollback steps?)\b",
-        re.IGNORECASE,
-    ),
-]
-
-_RFC_PATTERNS = [
-    re.compile(
-        r"\b(rfc:|proposal:|we propose to|proposed (design|change|approach)|"
-        r"this rfc|request for comments)\b",
-        re.IGNORECASE,
-    ),
-]
-
-_JOURNAL_PATTERNS = [
-    # Dated entry header — ## 2026-05-12 or ## 2026-05-12 — title
-    re.compile(r"^##?\s*\d{4}-\d{2}-\d{2}\b", re.MULTILINE),
-]
+# Legacy → modern kind mapping. This is a one-time backward-compat shim
+# (the legacy classifier returns 5 kinds; the modern axis defines 8) and
+# stays in code rather than the registry: it is *transformational*, not
+# *configurable*. Per ADR-2244 §4.1.
+_LEGACY_KIND_MAP: dict[str, str] = {
+    "adr": "adr",
+    "lesson": "explanation",
+    "convention": "explanation",
+    "spec": "rfc",
+    "note": "explanation",
+    "reference": "reference",
+}
 
 
 def _detect_modern_kind(
     content: str,
-    tag_set: set[str],
+    tags: list[str] | None,
     legacy_kind: str,
 ) -> str:
-    """Map the v1 (legacy) kind to a modern v2 kind, plus pattern overrides.
+    """Pick a modern kind for a content+tags pair.
 
-    The v1 classifier picks one of {adr, lesson, convention, spec, note}.
-    The v2 classifier needs one of the 8 modern kinds. This function:
+    Strategy (registry-driven per user direction 2026-05-12):
+      1. Ask the registry which kinds match content/tags via
+         ``match_axis``. The first hit wins; users add new kinds (with
+         their own detection patterns) by writing
+         ``wiki/_schema/kinds/<name>.md``.
+      2. If no registered kind matches, fall back to the legacy → modern
+         map (lesson/convention/note → explanation; spec → rfc; adr/
+         reference unchanged).
 
-    1. Checks the new pattern catalogs (tutorial, how-to, runbook, rfc,
-       journal) — those override the legacy mapping when they hit.
-    2. Falls back to the legacy → modern map for everything else.
-
-    The mapping rationale (ADR-2244 §4.1):
-        adr        → adr            (kept)
-        lesson     → explanation    (root-cause analysis is explanatory)
-        convention → explanation    (the "why" of a rule is explanation)
-        spec       → rfc            (default; post-implementation specs
-                                     should be retagged to ``reference``)
-        note       → explanation    (catch-all becomes explanation, not notes)
+    The legacy fallback is intentional: the upstream
+    ``_classify_to_legacy_kind`` returns one of the 5 legacy kinds when
+    no registered pattern fires, so we always have a kind to assign.
     """
-    # 1. Modern-pattern overrides — strongest signals first.
-    for pat in _RUNBOOK_PATTERNS:
-        if pat.search(content):
-            return "runbook"
-    if tag_set & {"runbook", "playbook", "incident"}:
-        return "runbook"
+    from mcp_server.core.wiki_axis_registry import AXIS_KIND, get_registry, match_axis
 
-    for pat in _TUTORIAL_PATTERNS:
-        if pat.search(content):
-            return "tutorial"
-    if tag_set & {"tutorial", "getting-started"}:
-        return "tutorial"
-
-    for pat in _HOWTO_PATTERNS:
-        if pat.search(content):
-            return "how-to"
-    if tag_set & {"how-to", "howto", "guide"}:
-        return "how-to"
-
-    for pat in _RFC_PATTERNS:
-        if pat.search(content):
-            return "rfc"
-    if tag_set & {"rfc", "proposal"}:
-        return "rfc"
-
-    for pat in _JOURNAL_PATTERNS:
-        if pat.search(content):
-            return "journal"
-    if tag_set & {"journal", "diary", "log"}:
-        return "journal"
-
-    # 2. Legacy → modern fallback.
-    _LEGACY_KIND_MAP = {
-        "adr": "adr",
-        "lesson": "explanation",
-        "convention": "explanation",
-        "spec": "rfc",
-        "note": "explanation",
-        # Reference can come from explicit tags or downstream callers; the
-        # v1 classifier never returns it, so this row is documentation only.
-        "reference": "reference",
-    }
+    matches = match_axis(content, tags, AXIS_KIND, get_registry())
+    if matches:
+        return matches[0]
     return _LEGACY_KIND_MAP.get(legacy_kind, "explanation")
 
 
-def _detect_provenance(tag_set: set[str]) -> str:
-    """Infer ``provenance`` from tags.
+def _detect_provenance(tags: list[str] | None) -> str:
+    """Pick a provenance value via the registry.
 
-    ``human`` is the default. Explicit provenance tags or the codebase
-    auto-gen signature (``code-reference``, ``codebase``) flip to
-    ``auto-generated``. Memory imports flip to ``imported``.
+    Falls back to the default-flagged provenance value (``human`` in the
+    bootstrap seed) when no pattern or tag matches. Users register new
+    provenances by writing ``wiki/_schema/provenances/<name>.md``.
     """
-    if tag_set & {"auto-generated", "code-reference", "codebase"}:
-        return "auto-generated"
-    if tag_set & {"imported", "import"}:
-        return "imported"
-    if tag_set & {"ai-generated", "synthesized", "synth"}:
-        return "ai-generated"
-    return "human"
+    from mcp_server.core.wiki_axis_registry import (
+        AXIS_PROVENANCE,
+        get_registry,
+        match_axis,
+    )
+
+    reg = get_registry()
+    matches = match_axis("", tags, AXIS_PROVENANCE, reg)
+    if matches:
+        return matches[0]
+    default = reg.default_for(AXIS_PROVENANCE)
+    return default.name if default is not None else "human"
 
 
-def _default_lifecycle(kind: str) -> str:
-    """Default lifecycle for a newly classified page.
+def _detect_audiences(
+    content: str, tags: list[str] | None, kind: str
+) -> tuple[str, ...]:
+    """Pick one or more audience values via the registry.
 
-    ADRs default to ``proposed`` (Nygard convention). Everything else
-    defaults to ``seedling`` (digital-garden convention).
+    Audience is multi-valued: a runbook may target ops + security. Any
+    matching registered audience contributes. Falls back to the
+    default audience when nothing matches.
     """
+    from mcp_server.core.wiki_axis_registry import (
+        AXIS_AUDIENCE,
+        get_registry,
+        match_axis,
+    )
+
+    reg = get_registry()
+    matches = list(match_axis(content, tags, AXIS_AUDIENCE, reg))
+    if not matches:
+        default = reg.default_for(AXIS_AUDIENCE)
+        if default is not None:
+            matches.append(default.name)
+        else:
+            matches.append("developer")
+    # Deduplicate preserving order.
+    seen: set[str] = set()
+    return tuple(x for x in matches if not (x in seen or seen.add(x)))
+
+
+def _pick_lifecycle(kind: str) -> str:
+    """Pick the default lifecycle for a new page of the given kind.
+
+    Asks the registry for the lifecycle value flagged ``default=true``
+    among entries that apply to this kind. ADR-applicable lifecycle
+    values are filtered separately so a non-ADR cannot inherit ``proposed``.
+    """
+    from mcp_server.core.wiki_axis_registry import (
+        AXIS_LIFECYCLE,
+        get_registry,
+    )
+
+    reg = get_registry()
+    for v in reg.values(AXIS_LIFECYCLE):
+        if v.default and (
+            (kind == "adr" and "adr" in v.applies_to_kinds)
+            or (kind != "adr" and not v.applies_to_kinds)
+        ):
+            return v.name
+    # Last-resort hardcoded fallback (registry seed must always populate
+    # at least one default per axis, so this is unreachable in practice).
     return "proposed" if kind == "adr" else "seedling"
 
 
@@ -722,22 +704,20 @@ def classify_memory(
     generator, tags) from ``mcp_server.shared.wiki_classification`` when
     the memory should be admitted, or ``None`` to reject.
 
-    Admission gates (same as the legacy single-kind classifier):
-      1. Audit-tag gate — backfill / session-summary / stage-N / tool-output
-         are rejected before user rules.
+    **Open-world dispatch.** Every axis consults
+    ``mcp_server.core.wiki_axis_registry`` — adding a new kind /
+    lifecycle / audience / provenance is a wiki schema edit, not a
+    Python edit (user direction 2026-05-12). Detection is regex- and
+    tag-driven via ``match_axis``.
+
+    Admission gates (unchanged from the legacy single-kind classifier):
+      1. Audit-tag gate — backfill / session-summary / stage-N / tool-output.
       2. User-editable rules from ``wiki/_rules/*.md``.
       3. Noise rejection — tool/system/slash artefacts.
       4. Hard-negative gate — imperatives, first-person, status framing,
          temporal deixis, path/URL titles, audit-shaped titles.
       5. Positive scoring — ≥ 4 of 8 signals, unless an explicit knowledge
-         tag (decision/adr/spec/design/lesson/convention/rule) bypasses.
-
-    Routing (ADR-2244 §4.1): the 5 legacy kinds (adr/lesson/convention/
-    spec/note) map to the 8 modern kinds via ``_detect_modern_kind``;
-    pattern overrides for tutorial/how-to/runbook/rfc/journal take
-    precedence over the legacy-derived kind.
-
-    Local import keeps the module's import graph flat.
+         tag bypasses.
     """
     from mcp_server.shared.wiki_classification import Classification, Generator
 
@@ -745,25 +725,19 @@ def classify_memory(
     if legacy_kind is None:
         return None
 
-    tag_set = {t.lower() for t in (tags or [])}
-    modern_kind = _detect_modern_kind(content, tag_set, legacy_kind)
-    provenance = _detect_provenance(tag_set)
-    lifecycle = _default_lifecycle(modern_kind)
+    modern_kind = _detect_modern_kind(content, tags, legacy_kind)
+    provenance = _detect_provenance(tags)
+    lifecycle = _pick_lifecycle(modern_kind)
+    audiences = _detect_audiences(content, tags, modern_kind)
 
-    # Audience inference — closed enum per ADR-2244 §4.3.
-    # Security-tagged content gets security audience; ops/runbook gets ops;
-    # everything else defaults to developer.
-    audiences: list[str] = []
-    if tag_set & {"security", "auth", "crypto", "vulnerability"}:
-        audiences.append("security")
-    if modern_kind == "runbook" or tag_set & {"ops", "sre", "infra", "deploy"}:
-        audiences.append("ops")
-    if not audiences:
-        audiences.append("developer")
-
-    # Provenance with full generator block when ai/auto-generated.
+    # Provenance with full generator block when the registered provenance
+    # requires it. The registry entry's ``requires_generator`` flag is the
+    # source of truth — no hardcoded set of provenance names here.
     generator: Generator | None = None
-    if provenance in {"ai-generated", "auto-generated"}:
+    from mcp_server.core.wiki_axis_registry import AXIS_PROVENANCE, get_registry
+
+    prov_value = get_registry().get(AXIS_PROVENANCE, provenance)
+    if prov_value is not None and prov_value.requires_generator:
         generator = Generator(
             model="unknown",
             version="",
@@ -772,12 +746,13 @@ def classify_memory(
         )
 
     # Tags pass through (capped to keep frontmatter tractable).
+    tag_set = {t.lower() for t in (tags or [])}
     out_tags = tuple(sorted(tag_set))[:50]
 
     return Classification(
         kind=modern_kind,
         lifecycle=lifecycle,
-        audience=tuple(audiences),
+        audience=audiences,
         provenance=provenance,
         generator=generator,
         tags=out_tags,
