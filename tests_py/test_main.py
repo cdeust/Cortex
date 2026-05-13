@@ -67,7 +67,9 @@ class TestMain:
         assert "query_workflow_graph" in tool_names
         # Verification campaign — read/write ratio telemetry (Popper C6).
         assert "get_telemetry" in tool_names
-        assert len(tool_names) == 47
+        # ADR-2244 Phase 3.2 — page rename with redirect stub.
+        assert "wiki_rename" in tool_names
+        assert len(tool_names) == 48
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"
