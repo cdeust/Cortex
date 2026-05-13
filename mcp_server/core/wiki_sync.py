@@ -24,6 +24,7 @@ import re
 from datetime import datetime, timezone
 
 from mcp_server.core.wiki_classifier import classify_memory, derive_title
+from mcp_server.core.wiki_identity import generate_page_id
 from mcp_server.core.wiki_layout import slugify
 from mcp_server.core.wiki_pages import build_note
 
@@ -115,7 +116,11 @@ def build_from_memory(
     rel = f"{dir_name}/{safe_domain}/{filename}"
 
     # Frontmatter from the 4-tuple; body from the existing note template.
+    # Phase 3 of ADR-2244: every page carries a stable ``id`` (UUID4) in
+    # its frontmatter so renames can leave redirect stubs that survive
+    # bulk migration. See ``mcp_server.core.wiki_identity``.
     fm = classification.to_frontmatter()
+    fm["id"] = generate_page_id()
     fm["title"] = title
     fm["updated"] = _now_iso()
     if "memory_id" not in fm:

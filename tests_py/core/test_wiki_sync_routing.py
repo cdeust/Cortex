@@ -113,6 +113,58 @@ def test_rejection_returns_none() -> None:
     assert result is None
 
 
+def test_new_page_carries_stable_id() -> None:
+    """Phase 3 of ADR-2244: every page written by wiki_sync gets a UUID4
+    id in its frontmatter so the path can later be moved without losing
+    the page's identity. The id is required for redirect stubs that
+    preserve inbound links during bulk migration.
+    """
+    from mcp_server.core.wiki_identity import is_valid_page_id
+
+    content = (
+        "Decision: use pgvector over IVFFlat for ANN search. Context: 100k "
+        "memories. Decided to adopt HNSW. Consequences: Postgres mandatory."
+    )
+    result = build_from_memory(
+        memory_id=300,
+        content=content,
+        tags=["decision", "architecture"],
+        domain="cortex",
+    )
+    assert result is not None
+    _rel, md = result
+    fm = _parse_frontmatter(md)
+    assert "id" in fm
+    assert is_valid_page_id(fm["id"])
+
+
+def test_each_new_page_gets_a_distinct_id() -> None:
+    """Two writes produce two different ids so we never accidentally
+    write a redirect stub that points at its own source."""
+    from mcp_server.core.wiki_identity import is_valid_page_id
+
+    content_a = (
+        "Decision: use pgvector. Context: 100k memories need sub-100ms. "
+        "Decided to adopt HNSW. Consequences: Postgres mandatory."
+    )
+    content_b = (
+        "Decision: use Lucene. Context: full text search on 10M docs. "
+        "Decided to adopt Lucene. Consequences: JVM in the stack."
+    )
+    r_a = build_from_memory(
+        memory_id=301, content=content_a, tags=["decision"], domain="cortex"
+    )
+    r_b = build_from_memory(
+        memory_id=302, content=content_b, tags=["decision"], domain="cortex"
+    )
+    assert r_a is not None and r_b is not None
+    id_a = _parse_frontmatter(r_a[1])["id"]
+    id_b = _parse_frontmatter(r_b[1])["id"]
+    assert is_valid_page_id(id_a)
+    assert is_valid_page_id(id_b)
+    assert id_a != id_b
+
+
 def test_file_documentation_does_not_route_to_notes() -> None:
     """Task #8 fix: pages tagged as code references must not land in notes/.
 
