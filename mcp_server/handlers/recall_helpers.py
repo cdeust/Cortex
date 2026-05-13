@@ -136,6 +136,82 @@ def parse_tags(tags: Any) -> list:
     return tags if tags else []
 
 
+# Low-signal tags: memories so tagged are auto-captures from tool
+# operations, backfill imports, or stage reports — useful for audit
+# replay but noise in semantic recall.
+#
+# Spike 2026-05-13: three diverse queries about ADR-2244 design
+# decisions returned exclusively ``# Tool: Edit`` captures from
+# unrelated repos. The curated wiki (31 ADRs + 21 lessons + 54
+# conventions) was drowned out because every captured tool call
+# scores high on WRRF + heat + recency.
+#
+# The wiki classifier (``mcp_server.core.wiki_classifier._AUDIT_TAGS``)
+# already maintains this concept and rejects such content from the
+# wiki. Recall reuses the same idea at the retrieval layer.
+LOW_SIGNAL_TAGS: frozenset[str] = frozenset(
+    {
+        "auto-captured",
+        "_backfill",
+        "imported",
+        "session-summary",
+        "tool-output",
+        "code-review",
+        "tool:edit",
+        "tool:bash",
+        "tool:read",
+        "tool:write",
+        "tool:grep",
+        "tool:glob",
+        "tool:search",
+        "tool:webfetch",
+        "tool:websearch",
+        "tool:notebookedit",
+        "stage-1",
+        "stage-2",
+        "stage-3",
+        "stage-4",
+        "stage-5",
+        "stage-6",
+        "stage-7",
+        "stage-8",
+        "stage-9",
+        "stage-10",
+        "stage-11",
+        "audit",
+        "automated",
+        "wip",
+        "progress",
+    }
+)
+
+
+def filter_low_signal(results: list[dict]) -> tuple[list[dict], int]:
+    """Drop memories whose tags mark them as low-signal noise.
+
+    Returns ``(kept_results, dropped_count)``. The dropped count is
+    surfaced in the response so callers see how much was filtered —
+    important for debugging the "why didn't I get the result I expected"
+    case.
+
+    Callers that explicitly want low-signal memories (debugging,
+    replay tooling) skip this filter via the ``include_low_signal``
+    input parameter on the recall handler.
+    """
+    kept: list[dict] = []
+    dropped = 0
+    for r in results:
+        tags = r.get("tags", [])
+        if isinstance(tags, str):
+            tags = parse_tags(tags)
+        tag_set = {str(t).lower() for t in tags}
+        if tag_set & LOW_SIGNAL_TAGS:
+            dropped += 1
+            continue
+        kept.append(r)
+    return kept, dropped
+
+
 def build_result(mem: dict, score: float, intent: str, settings: Any) -> dict:
     """Build a single result dict with recency boost."""
     created_at = mem.get("created_at", "")

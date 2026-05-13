@@ -19,6 +19,7 @@ from mcp_server.core.query_intent import QueryIntent, classify_query_intent
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.handlers.recall_helpers import (
     build_enhancements,
+    filter_low_signal,
     inject_triggered_memories,
 )
 from mcp_server.infrastructure.embedding_engine import get_embedding_engine
@@ -147,6 +148,20 @@ schema = {
                 ),
                 "examples": ["engineer", "researcher", "reviewer"],
             },
+            "include_low_signal": {
+                "type": "boolean",
+                "description": (
+                    "When false (default), drops memories tagged as auto-"
+                    "captures (``auto-captured``, ``tool:edit``, ``_backfill``, "
+                    "``stage-N``, ``session-summary``, …) so curated content "
+                    "(ADRs, lessons, conventions) surfaces in the first few "
+                    "results. Spike 2026-05-13 showed unfiltered recall is "
+                    "drowned by tool-output captures even for queries about "
+                    "design decisions. Set true for debugging / replay "
+                    "tooling that needs the raw memory feed."
+                ),
+                "default": False,
+            },
         },
     },
 }
@@ -254,15 +269,22 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     agent_topic = args.get("agent_topic")
     max_results = args.get("max_results", 10)
     min_heat = args.get("min_heat", 0.05)
+    include_low_signal = bool(args.get("include_low_signal", False))
     settings = get_memory_settings()
     store, emb = _get_store(), get_embedding_engine()
 
-    # Base retrieval: pg_recall (intent → PG weights → recall_memories → rerank)
+    # Base retrieval: pg_recall (intent → PG weights → recall_memories → rerank).
+    # Over-fetch when filtering is on so that after low-signal drops we
+    # still surface ``max_results`` curated items. Tool-output captures
+    # are common enough that a 3× headroom is a reasonable starting
+    # point — the alternative is iterative refill, which complicates
+    # the rerank ordering.
+    fetch_k = max_results * 3 if not include_low_signal else max_results
     results = pg_recall(
         query=query,
         store=store,
         embeddings=emb,
-        top_k=max_results,
+        top_k=fetch_k,
         domain=domain,
         directory=directory,
         agent_topic=agent_topic,
@@ -270,6 +292,16 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         wrrf_k=settings.WRRF_K,
         momentum_state=_momentum_state,
     )
+
+    # Low-signal filter (spike 2026-05-13). Tool-output captures,
+    # backfilled imports, and stage reports dominate unfiltered recall
+    # even for queries about design decisions, drowning out curated
+    # ADRs / lessons / conventions. Filter unless the caller opts in.
+    low_signal_dropped = 0
+    if not include_low_signal:
+        results, low_signal_dropped = filter_low_signal(results)
+    # Cap to the caller-requested max_results after filtering.
+    results = results[:max_results]
 
     # Production enrichments on top of base retrieval
     results = inject_triggered_memories(results, query, store)
@@ -286,6 +318,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "results": results,
         "total": len(results),
+        "low_signal_dropped": low_signal_dropped,
         "query_intent": intent,
         "dispatch_tier": "pg",
         "signals": {},
