@@ -7,8 +7,8 @@ Wiki root: `/Users/cdeust/.claude/methodology/wiki`
 - **Sample size:** 100
 - **Admitted by new classifier:** 88 (88.0%)
 - **Rejected (admission gate):** 12 (12.0%)
-- **Kind kept (legacy → modern direct map):** 58 (65.9% of admitted)
-- **Kind changed:** 30 (34.1% of admitted)
+- **Kind kept (legacy → modern direct map):** 77 (87.5% of admitted)
+- **Kind changed:** 11 (12.5% of admitted)
 
 ## Distribution — legacy kinds in the sample
 
@@ -31,11 +31,11 @@ Wiki root: `/Users/cdeust/.claude/methodology/wiki`
 
 | Proposed kind | Pages |
 |---|---:|
-| `explanation` | 64 |
-| `adr` | 13 |
+| `explanation` | 54 |
+| `adr` | 16 |
 | `<rejected>` | 12 |
 | `reference` | 10 |
-| `runbook` | 1 |
+| `rfc` | 8 |
 
 ## Transition matrix (legacy → proposed)
 
@@ -43,20 +43,18 @@ Wiki root: `/Users/cdeust/.claude/methodology/wiki`
 |---|---|---:|
 | `notes` | `explanation` | 23 |
 | `reference` | `reference` | 10 |
+| `adr` | `adr` | 8 |
 | `explanation` | `explanation` | 8 |
 | `specs` | `<rejected>` | 8 |
-| `rfc` | `adr` | 8 |
+| `rfc` | `rfc` | 8 |
 | `guides` | `explanation` | 8 |
 | `conventions` | `explanation` | 8 |
-| `adrs` | `explanation` | 7 |
-| `adr` | `adr` | 5 |
+| `adrs` | `adr` | 8 |
 | `lessons` | `explanation` | 4 |
 | `lessons` | `<rejected>` | 4 |
-| `adr` | `explanation` | 3 |
 | `README.md` | `explanation` | 1 |
 | `specs` | `explanation` | 1 |
 | `architecture` | `explanation` | 1 |
-| `adrs` | `runbook` | 1 |
 
 ## Proposed facet distributions (admitted pages only)
 
@@ -64,16 +62,16 @@ Wiki root: `/Users/cdeust/.claude/methodology/wiki`
 
 | Value | Pages |
 |---|---:|
-| `seedling` | 75 |
-| `proposed` | 13 |
+| `seedling` | 72 |
+| `proposed` | 16 |
 
 ### Audience (multi-valued — counted per occurrence)
 
 | Value | Pages |
 |---|---:|
-| `developer` | 83 |
-| `security` | 21 |
+| `developer` | 86 |
 | `ops` | 15 |
+| `security` | 10 |
 
 ### Provenance
 
@@ -93,19 +91,19 @@ Wiki root: `/Users/cdeust/.claude/methodology/wiki`
 | Path | Legacy → Proposed | Lifecycle | Audience | Provenance | Status |
 |---|---|---|---|---|---|
 | `README.md` | `README.md` → `explanation` | `seedling` | `developer` | `human` | 🔁 changed |
-| `adr/_general/2236-decision-003-felder-silverman-model.md.md` | `adr` → `explanation` | `seedling` | `security` | `human` | 🔁 changed |
+| `adr/_general/2236-decision-003-felder-silverman-model.md.md` | `adr` → `adr` | `proposed` | `developer` | `human` | ✅ kept |
 | `adr/agentic-ai/86789-decision-0004-validation-tool-optional-triple.md.md` | `adr` → `adr` | `proposed` | `developer` | `human` | ✅ kept |
 | `adr/agentic-ai/96925-decision-0005-prd-spec-subtree-approach.md.md` | `adr` → `adr` | `proposed` | `developer` | `human` | ✅ kept |
-| `adr/_general/2238-decision-005-agglomerative-over-kmeans-clustering.md.md` | `adr` → `explanation` | `seedling` | `ops` | `human` | 🔁 changed |
-| `adr/_general/2234-decision-001-zero-dependencies.md.md` | `adr` → `explanation` | `seedling` | `developer`, `ops`, `security` | `human` | 🔁 changed |
-| `adr/agentic-ai/96928-decision-0008-claude-plugin-path-placement.md.md` | `adr` → `adr` | `proposed` | `security` | `human` | ✅ kept |
+| `adr/_general/2238-decision-005-agglomerative-over-kmeans-clustering.md.md` | `adr` → `adr` | `proposed` | `ops` | `human` | ✅ kept |
+| `adr/_general/2234-decision-001-zero-dependencies.md.md` | `adr` → `adr` | `proposed` | `developer`, `ops` | `human` | ✅ kept |
+| `adr/agentic-ai/96928-decision-0008-claude-plugin-path-placement.md.md` | `adr` → `adr` | `proposed` | `developer` | `human` | ✅ kept |
 | `adr/agentic-ai/86792-decision-0007-better-sqlite3-native-build.md.md` | `adr` → `adr` | `proposed` | `developer`, `ops` | `human` | ✅ kept |
 | `adr/agentic-ai/86787-decision-0002-analyze-codebase-serial-vs-parallel.md.md` | `adr` → `adr` | `proposed` | `developer` | `human` | ✅ kept |
 | `explanation/codebase-alteration-bench/23744-file-storage-repository.py.md` | `explanation` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `explanation/codebase-alteration-bench/23738-file-auth-crypto.py.md` | `explanation` → `explanation` | `seedling` | `developer`, `security` | `auto-generated` | ✅ kept |
 | `explanation/codebase-alteration-bench/23739-file-auth-middleware.py.md` | `explanation` → `explanation` | `seedling` | `developer`, `security` | `auto-generated` | ✅ kept |
 | `explanation/codebase-alteration-bench/23768-file-api-health.py.md` | `explanation` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
-| `explanation/codebase-alteration-bench/23779-file-api-routes.py.md` | `explanation` → `explanation` | `seedling` | `developer`, `security` | `auto-generated` | ✅ kept |
+| `explanation/codebase-alteration-bench/23779-file-api-routes.py.md` | `explanation` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `explanation/codebase-alteration-bench/23753-file-models-user.py.md` | `explanation` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `explanation/codebase-alteration-bench/23771-file-auth-middleware.py.md` | `explanation` → `explanation` | `seedling` | `developer`, `security` | `auto-generated` | ✅ kept |
 | `explanation/codebase-alteration-bench/23778-file-api-health.py.md` | `explanation` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
@@ -116,23 +114,23 @@ Wiki root: `/Users/cdeust/.claude/methodology/wiki`
 | `specs/_general/2087-tool-bash.md` | `specs` → — | — | — | — | ❌ admission gate rejected (audit-tag, noise, or low score) |
 | `specs/_general/2207-tool-bash.md` | `specs` → — | — | — | — | ❌ admission gate rejected (audit-tag, noise, or low score) |
 | `specs/2026/2026-04-17-jdk-21-temurin.md` | `specs` → — | — | — | — | ❌ admission gate rejected (audit-tag, noise, or low score) |
-| `specs/_general/1820-spec-module-catalog-dcp-wealth-android.md` | `specs` → `explanation` | `seedling` | `developer`, `security` | `human` | 🔁 changed |
-| `architecture/2026/2026-04-21-overview.md` | `architecture` → `explanation` | `seedling` | `developer`, `ops`, `security` | `human` | 🔁 changed |
-| `rfc/repo-a/24695-project-structure-repo-a.md` | `rfc` → `adr` | `proposed` | `developer` | `human` | 🔁 changed |
-| `rfc/repo-b/24071-project-structure-repo-b.md` | `rfc` → `adr` | `proposed` | `developer` | `human` | 🔁 changed |
-| `rfc/repo-b/24655-project-structure-repo-b.md` | `rfc` → `adr` | `proposed` | `developer` | `human` | 🔁 changed |
-| `rfc/repo-a/24068-project-structure-repo-a.md` | `rfc` → `adr` | `proposed` | `developer` | `human` | 🔁 changed |
-| `rfc/repo-b/24698-project-structure-repo-b.md` | `rfc` → `adr` | `proposed` | `developer` | `human` | 🔁 changed |
-| `rfc/repo-a/24664-project-structure-repo-a.md` | `rfc` → `adr` | `proposed` | `developer` | `human` | 🔁 changed |
-| `rfc/repo-b/24077-project-structure-repo-b.md` | `rfc` → `adr` | `proposed` | `developer` | `human` | 🔁 changed |
-| `rfc/repo-a/24658-project-structure-repo-a.md` | `rfc` → `adr` | `proposed` | `developer` | `human` | 🔁 changed |
+| `specs/_general/1820-spec-module-catalog-dcp-wealth-android.md` | `specs` → `explanation` | `seedling` | `developer` | `human` | 🔁 changed |
+| `architecture/2026/2026-04-21-overview.md` | `architecture` → `explanation` | `seedling` | `developer`, `ops` | `human` | 🔁 changed |
+| `rfc/repo-a/24695-project-structure-repo-a.md` | `rfc` → `rfc` | `seedling` | `developer` | `human` | ✅ kept |
+| `rfc/repo-b/24071-project-structure-repo-b.md` | `rfc` → `rfc` | `seedling` | `developer` | `human` | ✅ kept |
+| `rfc/repo-b/24655-project-structure-repo-b.md` | `rfc` → `rfc` | `seedling` | `developer` | `human` | ✅ kept |
+| `rfc/repo-a/24068-project-structure-repo-a.md` | `rfc` → `rfc` | `seedling` | `developer` | `human` | ✅ kept |
+| `rfc/repo-b/24698-project-structure-repo-b.md` | `rfc` → `rfc` | `seedling` | `developer` | `human` | ✅ kept |
+| `rfc/repo-a/24664-project-structure-repo-a.md` | `rfc` → `rfc` | `seedling` | `developer` | `human` | ✅ kept |
+| `rfc/repo-b/24077-project-structure-repo-b.md` | `rfc` → `rfc` | `seedling` | `developer` | `human` | ✅ kept |
+| `rfc/repo-a/24658-project-structure-repo-a.md` | `rfc` → `rfc` | `seedling` | `developer` | `human` | ✅ kept |
 | `notes/codebase-alteration-bench/12160-file-storage-user_repo.py.md` | `notes` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `notes/codebase-alteration-bench/9312-file-storage-user_repo.py.md` | `notes` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `notes/ai-architect-prd-builder/101422-file-....md` | `notes` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `notes/ai-prd-generator/113856-file-....md` | `notes` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `notes/ai-prd-generator/109874-file-....md` | `notes` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `notes/agentic-ai/97741-file-packages-mcp-servers-reasoning-src-backend.ts.md` | `notes` → `explanation` | `seedling` | `developer`, `ops` | `auto-generated` | ✅ kept |
-| `notes/agentic-ai/98169-file-packages-memory-src-shared-hash.ts.md` | `notes` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
+| `notes/agentic-ai/98169-file-packages-memory-src-shared-hash.ts.md` | `notes` → `explanation` | `seedling` | `developer`, `security` | `auto-generated` | ✅ kept |
 | `notes/ai-prd-generator/113272-file-....md` | `notes` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `guides/2026/2026-04-21-patterns.md` | `guides` → `explanation` | `seedling` | `developer` | `human` | 🔁 changed |
 | `guides/2026/2026-04-21-user-flow.md` | `guides` → `explanation` | `seedling` | `security` | `human` | 🔁 changed |
@@ -140,32 +138,32 @@ Wiki root: `/Users/cdeust/.claude/methodology/wiki`
 | `guides/2026/2026-04-21-glossary.md` | `guides` → `explanation` | `seedling` | `developer`, `ops` | `human` | 🔁 changed |
 | `guides/2026/2026-04-21-security.md` | `guides` → `explanation` | `seedling` | `developer`, `ops`, `security` | `human` | 🔁 changed |
 | `guides/2026/2026-04-21-testing.md` | `guides` → `explanation` | `seedling` | `developer`, `security` | `human` | 🔁 changed |
-| `guides/2026/2026-04-21-00-day-one.md` | `guides` → `explanation` | `seedling` | `developer`, `ops`, `security` | `human` | 🔁 changed |
+| `guides/2026/2026-04-21-00-day-one.md` | `guides` → `explanation` | `seedling` | `developer`, `ops` | `human` | 🔁 changed |
 | `guides/2026/2026-04-21-design-system.md` | `guides` → `explanation` | `seedling` | `developer` | `human` | 🔁 changed |
-| `conventions/agentic-ai/86774-convention-p-align-center.md` | `conventions` → `explanation` | `seedling` | `developer`, `ops`, `security` | `human` | ✅ kept |
+| `conventions/agentic-ai/86774-convention-p-align-center.md` | `conventions` → `explanation` | `seedling` | `developer`, `ops` | `human` | ✅ kept |
 | `conventions/ai-architect-mcp/99075-convention-file-mcp-ai_architect_mcp-_adapters-git_adapter.py.md` | `conventions` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `conventions/agentic-ai/98438-convention-file-....md` | `conventions` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `conventions/ai-architect-mcp/99125-convention-file-mcp-ai_architect_mcp-_interview-scorers-outline_flow.py.md` | `conventions` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `conventions/agentic-ai/96936-convention-ci-cd-.github-workflows-ci.yml.md` | `conventions` → `explanation` | `seedling` | `developer`, `ops` | `human` | ✅ kept |
-| `conventions/agentic-ai/96915-convention-phase_3_plan.md.md` | `conventions` → `explanation` | `seedling` | `developer`, `ops`, `security` | `human` | ✅ kept |
+| `conventions/agentic-ai/96915-convention-phase_3_plan.md.md` | `conventions` → `explanation` | `seedling` | `developer`, `ops` | `human` | ✅ kept |
 | `conventions/agentic-ai/96914-convention-patterns.md.md` | `conventions` → `explanation` | `seedling` | `developer` | `human` | ✅ kept |
 | `conventions/ai-architect-mcp/99082-convention-file-mcp-ai_architect_mcp-_adapters-github_adapter.py.md` | `conventions` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `lessons/cortex/97502-lesson-file-tests_py-hooks-test_auto_recall.py.md` | `lessons` → `explanation` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `lessons/2026/2026-04-17-1-49-0.md` | `lessons` → `explanation` | `seedling` | `developer` | `human` | ✅ kept |
 | `lessons/2026/2026-04-17-tool-bash.md` | `lessons` → — | — | — | — | ❌ admission gate rejected (audit-tag, noise, or low score) |
-| `lessons/2026/2026-04-21-route-simulation-findings.md` | `lessons` → `explanation` | `seedling` | `developer`, `security` | `human` | ✅ kept |
-| `lessons/agentic-ai/96917-lesson-phase_plan.md.md` | `lessons` → `explanation` | `seedling` | `developer`, `ops`, `security` | `human` | ✅ kept |
+| `lessons/2026/2026-04-21-route-simulation-findings.md` | `lessons` → `explanation` | `seedling` | `developer` | `human` | ✅ kept |
+| `lessons/agentic-ai/96917-lesson-phase_plan.md.md` | `lessons` → `explanation` | `seedling` | `developer`, `ops` | `human` | ✅ kept |
 | `lessons/2026/2026-04-17-found-a-crash-when-coming-from-publication-push-notification.md` | `lessons` → — | — | — | — | ❌ admission gate rejected (audit-tag, noise, or low score) |
 | `lessons/_general/1855-known-issues-and-technical-debt-dcp-wealth-android.md` | `lessons` → — | — | — | — | ❌ admission gate rejected (audit-tag, noise, or low score) |
 | `lessons/2026/2026-04-17-c1-plaintext-backbase-artifactory-credentials-in-git.md` | `lessons` → — | — | — | — | ❌ admission gate rejected (audit-tag, noise, or low score) |
-| `adrs/2026/2026-04-08-author-the-wiki-as-a-first-class-layer.md` | `adrs` → `explanation` | `seedling` | `developer` | `human` | 🔁 changed |
-| `adrs/2026/2026-04-15-rotate-backbase-artifactory-credentials-committed-in-setting.md` | `adrs` → `explanation` | `seedling` | `developer`, `ops` | `human` | 🔁 changed |
-| `adrs/2026/2026-04-15-network-security-config-allows-cleartext-and-lacks-certifica.md` | `adrs` → `runbook` | `seedling` | `security` | `human` | 🔁 changed |
-| `adrs/2026/2026-04-15-sgn-credentials-shipped-in-apk-via-ci-sed-injection.md` | `adrs` → `explanation` | `seedling` | `developer`, `security` | `human` | 🔁 changed |
-| `adrs/2026/2026-04-15-maskingaction-only-masks-checkable-views-textview-pii-leaks.md` | `adrs` → `explanation` | `seedling` | `developer` | `human` | 🔁 changed |
-| `adrs/2026/2026-04-08-manual-jacoco-agent-configuration-instead-of-the-jacoco-grad.md` | `adrs` → `explanation` | `seedling` | `developer` | `human` | 🔁 changed |
-| `adrs/2026/2026-04-21-portfolio-details-declares-hilt-plugin-kapt-but-uses-ko.md` | `adrs` → `explanation` | `seedling` | `developer` | `human` | 🔁 changed |
-| `adrs/2026/2026-04-15-myapplicationdependencies-is-a-1180-line-god-composition-roo.md` | `adrs` → `explanation` | `seedling` | `developer`, `security` | `human` | 🔁 changed |
+| `adrs/2026/2026-04-08-author-the-wiki-as-a-first-class-layer.md` | `adrs` → `adr` | `proposed` | `developer` | `human` | ✅ kept |
+| `adrs/2026/2026-04-15-rotate-backbase-artifactory-credentials-committed-in-setting.md` | `adrs` → `adr` | `proposed` | `developer`, `ops` | `human` | ✅ kept |
+| `adrs/2026/2026-04-15-network-security-config-allows-cleartext-and-lacks-certifica.md` | `adrs` → `adr` | `proposed` | `developer` | `human` | ✅ kept |
+| `adrs/2026/2026-04-15-sgn-credentials-shipped-in-apk-via-ci-sed-injection.md` | `adrs` → `adr` | `proposed` | `developer`, `security` | `human` | ✅ kept |
+| `adrs/2026/2026-04-15-maskingaction-only-masks-checkable-views-textview-pii-leaks.md` | `adrs` → `adr` | `proposed` | `developer` | `human` | ✅ kept |
+| `adrs/2026/2026-04-08-manual-jacoco-agent-configuration-instead-of-the-jacoco-grad.md` | `adrs` → `adr` | `proposed` | `developer` | `human` | ✅ kept |
+| `adrs/2026/2026-04-21-portfolio-details-declares-hilt-plugin-kapt-but-uses-ko.md` | `adrs` → `adr` | `proposed` | `developer` | `human` | ✅ kept |
+| `adrs/2026/2026-04-15-myapplicationdependencies-is-a-1180-line-god-composition-roo.md` | `adrs` → `adr` | `proposed` | `developer`, `security` | `human` | ✅ kept |
 | `reference/codebase/plugins-codebase-src-rust-src-clustering-rs-cluster-graph.md` | `reference` → `reference` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `reference/codebase/plugins-codebase-src-rust-src-graph-store-rs-tests-test-create-and-query.md` | `reference` → `reference` | `seedling` | `developer` | `auto-generated` | ✅ kept |
 | `reference/codebase/packages-codebase-rust-tests-stage9-integration-rs-test-semantic-diff-missing-pa.md` | `reference` → `reference` | `seedling` | `developer` | `auto-generated` | ✅ kept |

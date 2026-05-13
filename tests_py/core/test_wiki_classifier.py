@@ -281,3 +281,60 @@ def test_security_tag_routes_to_security_audience() -> None:
     result = classify_memory(content, tags=["security", "decision"])
     assert result is not None
     assert "security" in result.audience
+
+
+# ── Calibration regressions from the Phase 2 pilot (2026-05-13) ───────
+
+
+def test_adr_detected_from_nygard_heading_skeleton() -> None:
+    """Pilot 2026-05-13 found 3 of 8 ADRs misclassified because their body
+    used the canonical ``## Decision`` heading without a ``Decision:`` colon.
+    The ADR pattern now matches the heading skeleton.
+    """
+    content = (
+        "## Status\n\nAccepted\n\n"
+        "## Context\n\n"
+        "MCP plugins run inside Claude Code's process. Any external "
+        "dependency introduces supply chain risk.\n\n"
+        "## Decision\n\n"
+        "Use zero external npm dependencies. Rely on Node.js built-ins.\n\n"
+        "## Consequences\n\n"
+        "Gain: no supply chain attack surface. Lose: more hand-written code."
+    )
+    result = classify_memory(content, tags=["adr"])
+    assert result is not None
+    assert result.kind == "adr"
+
+
+def test_architecture_tag_alone_does_not_route_to_adr() -> None:
+    """Pilot 2026-05-13 found 8 of 8 RFC pages misrouted to ADR because
+    they carried the ``architecture`` tag, which used to be in adr.tag_aliases.
+    ``architecture`` was removed from adr aliases — those pages now stay RFC
+    (or fall through to explanation if no other signal hits).
+    """
+    content = (
+        "## Top-level layout\n\n- README.md\n- pyproject.toml\n\n"
+        "Project structure: repo-a. Primary languages: unknown."
+    )
+    result = classify_memory(content, tags=["architecture", "project-structure"])
+    # Must NOT be adr (the regression we just fixed).
+    if result is not None:
+        assert result.kind != "adr"
+
+
+def test_crypto_module_name_does_not_flag_security_audience() -> None:
+    """Pilot 2026-05-13 found ADR-001 (zero dependencies) tagged ``security``
+    audience because its body listed ``crypto`` among Node built-in modules.
+    The security pattern now requires ``cryptograph(y|ic)`` — the full word —
+    so a bare module name no longer fires the audience.
+    """
+    content = (
+        "Decision: use zero external dependencies. Rely on Node.js built-in "
+        "modules: fs, path, os, http, crypto, and node:test. No external "
+        "supply chain. Hand-write any utility a library would provide."
+    )
+    result = classify_memory(content, tags=["decision", "adr"])
+    assert result is not None
+    assert result.kind == "adr"
+    # The bare word ``crypto`` (module name) should NOT trigger security.
+    assert "security" not in result.audience

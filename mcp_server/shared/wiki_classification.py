@@ -30,7 +30,7 @@ from typing import Final
 # writes. The registry does not list these; ``normalize_legacy_kind``
 # remaps them on read.
 LEGACY_KINDS: Final[frozenset[str]] = frozenset(
-    {"notes", "specs", "conventions", "lessons", "guides", "files"}
+    {"notes", "specs", "conventions", "lessons", "guides", "files", "adrs"}
 )
 
 LEGACY_KIND_TO_MODERN: Final[dict[str, str]] = {
@@ -40,6 +40,9 @@ LEGACY_KIND_TO_MODERN: Final[dict[str, str]] = {
     "lessons": "explanation",
     "guides": "how-to",
     "files": "reference",
+    # The wiki has a few pages under ``adrs/`` (plural) — observed during the
+    # 2026-05-13 Phase 2 pilot. Treated as the same legacy kind as ``adr``.
+    "adrs": "adr",
 }
 
 

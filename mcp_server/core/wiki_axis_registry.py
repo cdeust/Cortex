@@ -142,6 +142,11 @@ def _re(pattern: str) -> re.Pattern[str]:
     return re.compile(pattern, re.IGNORECASE)
 
 
+def _re_ml(pattern: str) -> re.Pattern[str]:
+    """Compile a regex with IGNORECASE + MULTILINE for ``^``-anchored line patterns."""
+    return re.compile(pattern, re.IGNORECASE | re.MULTILINE)
+
+
 # Each tuple = (name, display_name, patterns, tag_aliases, kwargs).
 _DEFAULT_KINDS: tuple[AxisValue, ...] = (
     AxisValue(
@@ -149,10 +154,20 @@ _DEFAULT_KINDS: tuple[AxisValue, ...] = (
         axis=AXIS_KIND,
         display_name="ADR (Architecture Decision Record)",
         patterns=(
+            # Inline decision markers (Nygard prose).
             _re(r"\b(decided to|decision:|the decision is|chose .+ because)\b"),
             _re(r"\b(rejected .+ (due to|because)|we will use|selected .+ over)\b"),
+            # Nygard heading skeleton — the canonical ADR section structure.
+            # Pilot 2026-05-13 found that 3 of 8 sampled ADRs had ``## Decision``
+            # heading without a colon, so the prose-only patterns missed them.
+            _re_ml(r"^##+\s*Decision\s*$"),
+            _re_ml(r"^##+\s*Consequences\s*$"),
         ),
-        tag_aliases=("decision", "adr", "architecture"),
+        # ``architecture`` removed (pilot 2026-05-13): it is too broad to be an
+        # ADR-only tag — 8 of 8 sampled rfc/ pages were misrouted to adr/
+        # because they carried the ``architecture`` tag. Architecture-tagged
+        # content is more often spec/rfc/explanation than a single decision.
+        tag_aliases=("decision", "adr"),
         description="Nygard/MADR-style record of a single architectural decision.",
     ),
     AxisValue(
@@ -354,12 +369,22 @@ _DEFAULT_AUDIENCES: tuple[AxisValue, ...] = (
         name="security",
         axis=AXIS_AUDIENCE,
         display_name="Security",
+        # Pilot 2026-05-13 found bare ``crypto`` (Node built-in module) false-
+        # positiving as a security signal. The patterns now require the full
+        # suffix (``cryptograph(y|ic)``) or the longer security-domain words.
+        # Same for ``auth`` — must be ``authentication``/``authorization`` to
+        # count, not the abbreviation.
         patterns=(
             _re(
-                r"\b(auth(entication|orization)?|crypto(graphy)?|vulnerab(le|ility)|cve|threat model)\b"
+                r"\b(authentication|authorization|cryptograph(y|ic)|vulnerab(le|ility)|cve|threat model)\b"
             ),
-            _re(r"\b(secret|token|credential|session|sso|oauth|tls|encryption)\b"),
+            _re(
+                r"\b(credential|oauth|sso|encryption|decrypt(ed|ion)?|"
+                r"key rotation|HSM|secret manager)\b"
+            ),
         ),
+        # Tags remain the strongest signal — a page explicitly tagged ``security``
+        # is unambiguous.
         tag_aliases=("security", "auth", "crypto", "vulnerability", "secops"),
         description="Security engineers and reviewers.",
     ),
