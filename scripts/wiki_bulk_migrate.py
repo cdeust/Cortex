@@ -102,6 +102,15 @@ def _clean_title_candidate(title: str) -> bool:
 
     Rejects: empty / very short / path-shaped / timestamp-shaped /
     obviously synthetic ("memory-…").
+
+    Bug found 2026-05-13 during live apply: some titles carry the
+    timestamp pattern with spaces instead of hyphens (e.g.
+    ``Decision created 2026 04 15t09 29 10z`` — a de-slugified
+    artefact of the original slug bug). The literal-hyphen regex
+    missed those, the title passed as "clean", slugify converted the
+    spaces back to hyphens, and the proposed slug ended up identical
+    to the source. Reject the *slugified* form against the timestamp
+    pattern so both spacings are caught.
     """
     if not title or len(title.strip()) < 4:
         return False
@@ -111,6 +120,11 @@ def _clean_title_candidate(title: str) -> bool:
     if re.search(r"/(Users|home|root|opt|var|etc|tmp)/", t, re.IGNORECASE):
         return False
     if re.search(r"\d{4}-\d{2}-\d{2}T\d{2}", t, re.IGNORECASE):
+        return False
+    # Pre-slugify and re-check: catches space-separated timestamps that
+    # slugify into the same canonical hyphenated form.
+    slugged = slugify(t)
+    if re.search(r"\d{4}-\d{2}-\d{2}t\d{2}", slugged, re.IGNORECASE):
         return False
     return True
 
@@ -217,6 +231,13 @@ def plan(wiki_root: Path) -> list[Pollution]:
     ``skipped_reason`` so the caller can surface them without erroring.
     """
     plans: list[Pollution] = []
+    # Disambiguate slug collisions (multiple sources deriving the same
+    # H1-based target slug; e.g. dcp-wealth-android pages whose H1 is
+    # ``# Context`` all map to ``context.md``). When two proposals
+    # collide, append ``-<memory-id>`` to the second. Live apply on
+    # 2026-05-13 surfaced 7 such cases.
+    seen_targets: set[str] = set()
+
     for md in wiki_root.rglob("*.md"):
         rel = md.relative_to(wiki_root)
         if rel.parts and rel.parts[0].startswith("."):
@@ -268,36 +289,52 @@ def plan(wiki_root: Path) -> list[Pollution]:
             continue
 
         if is_double:
-            plans.append(
-                Pollution(
-                    rel_path=rel_str,
-                    pattern="double-md",
-                    proposed_path=double_target,
-                    reason="strip .md.md duplicate extension",
-                    page_id=page_id,
-                )
-            )
+            target = double_target
+            pattern = "double-md"
+            reason = "strip .md.md duplicate extension"
         elif is_timestamp:
-            plans.append(
-                Pollution(
-                    rel_path=rel_str,
-                    pattern="timestamp-slug",
-                    proposed_path=_propose_timestamp_rename(rel_str, text, fm),
-                    reason="replace timestamp-as-slug with content-derived slug",
-                    page_id=page_id,
-                )
-            )
+            target = _propose_timestamp_rename(rel_str, text, fm)
+            pattern = "timestamp-slug"
+            reason = "replace timestamp-as-slug with content-derived slug"
         else:  # is_path_leak
-            plans.append(
-                Pollution(
-                    rel_path=rel_str,
-                    pattern="path-leak",
-                    proposed_path=_propose_path_leak_rename(rel_str, text, fm),
-                    reason="remove filesystem path leaked into slug",
-                    page_id=page_id,
-                )
+            target = _propose_path_leak_rename(rel_str, text, fm)
+            pattern = "path-leak"
+            reason = "remove filesystem path leaked into slug"
+
+        # Disambiguate if the target is already taken — either by an
+        # earlier item in this same plan, or by a page on disk left
+        # over from a previous apply run. The suffix uses the source
+        # page's stable id (UUID prefix), which is guaranteed unique
+        # and unaffected by directory-name coincidences (e.g. a
+        # ``/2026/`` year directory was being captured as a "memory id"
+        # by the prior regex-based approach).
+        if target in seen_targets or (wiki_root / target).exists():
+            target = _disambiguate_target(target, page_id)
+        seen_targets.add(target)
+
+        plans.append(
+            Pollution(
+                rel_path=rel_str,
+                pattern=pattern,
+                proposed_path=target,
+                reason=reason,
+                page_id=page_id,
             )
+        )
     return plans
+
+
+def _disambiguate_target(target: str, page_id: str) -> str:
+    """Append a stable suffix from ``page_id`` so two sources don't
+    collide on the same target slug.
+
+    ``page_id`` is a UUID4 (Phase 3); the first 8 hex chars are enough
+    entropy to disambiguate within any realistic wiki.
+    """
+    suffix = page_id.replace("-", "")[:8] if page_id else "x"
+    if target.endswith(".md"):
+        return f"{target[:-3]}-{suffix}.md"
+    return f"{target}-{suffix}"
 
 
 # ── Apply (delegates to wiki_rename handler) ────────────────────────────
