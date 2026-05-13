@@ -30,15 +30,20 @@ schema = {
         "Regenerate the wiki table of contents at "
         "<wiki_root>/.generated/INDEX.md by enumerating every authored page "
         "and grouping it by kind (adr, specs, guides, reference, "
-        "conventions, lessons, notes, journal, files). Output is "
-        "deterministic — sorted by kind then path so unchanged wikis yield "
-        "byte-identical INDEX files. Authored pages are never touched; the "
-        "only file written is INDEX.md, atomically via tmp+rename. Use this "
-        "after bulk wiki edits, imports, or `wiki_compile` runs. Distinct "
-        "from `wiki_list` (returns the listing in the response, no file "
-        "write) and from `wiki_consolidate` (heat decay / staleness, not ToC "
-        "rebuild). Takes no arguments. Latency <100ms even for thousands of "
-        "pages. Returns {path, total_pages, by_kind: {kind: count}, root}."
+        "conventions, lessons, notes, journal, files). Redirect stubs are "
+        "excluded; auto-generated pages (``provenance: auto-generated``) "
+        "are surfaced in a separate ``Auto-generated reference`` section "
+        "after the human-authored content so they don't dominate the main "
+        "listing (Phase 5 of ADR-2244). Output is deterministic — sorted "
+        "by kind then path so unchanged wikis yield byte-identical INDEX "
+        "files. Authored pages are never touched; the only file written "
+        "is INDEX.md, atomically via tmp+rename. Use this after bulk "
+        "wiki edits, imports, or `wiki_compile` runs. Distinct from "
+        "`wiki_list` (returns the listing in the response, no file "
+        "write) and from `wiki_consolidate` (heat decay / staleness, not "
+        "ToC rebuild). Takes no arguments. Latency <500ms on a 9000-page "
+        "wiki. Returns {path, total_pages, by_kind, "
+        "auto_generated_by_kind, redirect_count, root}."
     ),
     "inputSchema": {
         "type": "object",
@@ -49,14 +54,30 @@ schema = {
 }
 
 
-def _render_index(grouped: dict[str, list[str]]) -> str:
+def _render_index(
+    grouped: dict[str, list[str]],
+    auto_grouped: dict[str, list[str]],
+) -> str:
+    """Render INDEX.md with human-authored content first, auto-gen second.
+
+    Phase 5 of ADR-2244: auto-generated pages get their own clearly-marked
+    section so readers see curated content first and aren't drowning in
+    the 8,700+ file-reference pages.
+    """
     lines: list[str] = [_BANNER, "", "# Wiki Index", ""]
-    total = sum(len(v) for v in grouped.values())
-    lines.append(f"**{total} authored pages across {len(PAGE_KINDS)} kinds.**")
+    total_human = sum(len(v) for v in grouped.values())
+    total_auto = sum(len(v) for v in auto_grouped.values())
+    lines.append(
+        f"**{total_human} human-authored pages, "
+        f"{total_auto} auto-generated reference pages.**"
+    )
+    lines.append("")
+
+    lines.append("## Human-authored")
     lines.append("")
     for kind in PAGE_KINDS:
         pages = grouped.get(kind, [])
-        lines.append(f"## {kind} ({len(pages)})")
+        lines.append(f"### {kind} ({len(pages)})")
         lines.append("")
         if not pages:
             lines.append("_No pages yet._")
@@ -66,48 +87,85 @@ def _render_index(grouped: dict[str, list[str]]) -> str:
             name = rel.rsplit("/", 1)[-1]
             lines.append(f"- [{name}](../{rel})")
         lines.append("")
+
+    if total_auto > 0:
+        lines.append("## Auto-generated reference")
+        lines.append("")
+        lines.append(
+            "_Produced by ``codebase_analyze`` and similar tooling. "
+            "Lookup-shaped, not curated narrative._"
+        )
+        lines.append("")
+        for kind in PAGE_KINDS:
+            pages = auto_grouped.get(kind, [])
+            if not pages:
+                continue
+            lines.append(f"### {kind} ({len(pages)})")
+            lines.append("")
+            for rel in pages:
+                name = rel.rsplit("/", 1)[-1]
+                lines.append(f"- [{name}](../{rel})")
+            lines.append("")
     return "\n".join(lines)
 
 
-def _is_redirect_page(rel_path: str) -> bool:
-    """True iff the page declares a redirect (read frontmatter from disk)."""
+def _classify_page(rel_path: str) -> tuple[bool, bool]:
+    """Read frontmatter once; return (is_redirect_stub, is_auto_generated)."""
     try:
         content = read_page(WIKI_ROOT, rel_path)
     except (ValueError, OSError):
-        return False
+        return False, False
     if content is None:
-        return False
-    return is_redirect(parse_frontmatter(content))
+        return False, False
+    fm = parse_frontmatter(content)
+    redirect_flag = is_redirect(fm)
+    raw_prov = fm.get("provenance", "")
+    auto_gen_flag = (
+        isinstance(raw_prov, str) and raw_prov.strip().lower() == "auto-generated"
+    )
+    return redirect_flag, auto_gen_flag
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Phase 3.2 of ADR-2244: redirect stubs are excluded from the index.
+    """Phases 3.2 + 5 of ADR-2244: split human / auto-gen / redirects.
 
-    The reader-facing INDEX.md should only list live pages — a stub at
-    an old path is a navigation aid for inbound links, not content to
-    advertise. The summary still reports the count of stubs so callers
-    have visibility.
+    Redirects: excluded entirely from INDEX.md (they're navigational aids
+    for inbound links, not content to advertise). Counted in the summary.
+
+    Auto-generated pages: surfaced in their own section after the
+    human-authored content so they don't drown the main listing.
     """
     grouped: dict[str, list[str]] = {}
+    auto_grouped: dict[str, list[str]] = {}
     redirects_by_kind: dict[str, int] = {}
+    auto_by_kind: dict[str, int] = {}
+
     for kind in PAGE_KINDS:
         try:
             all_pages = list_pages(WIKI_ROOT, kind=kind)
         except (ValueError, OSError):
             grouped[kind] = []
+            auto_grouped[kind] = []
             redirects_by_kind[kind] = 0
+            auto_by_kind[kind] = 0
             continue
         live: list[str] = []
+        auto: list[str] = []
         n_redirect = 0
         for rel in all_pages:
-            if _is_redirect_page(rel):
+            redirect_flag, auto_gen_flag = _classify_page(rel)
+            if redirect_flag:
                 n_redirect += 1
+            elif auto_gen_flag:
+                auto.append(rel)
             else:
                 live.append(rel)
         grouped[kind] = live
+        auto_grouped[kind] = auto
         redirects_by_kind[kind] = n_redirect
+        auto_by_kind[kind] = len(auto)
 
-    content = _render_index(grouped)
+    content = _render_index(grouped, auto_grouped)
     target = Path(WIKI_ROOT) / str(index_path())
     ensure_dir(target.parent)
     tmp = target.with_suffix(target.suffix + ".tmp")
@@ -116,9 +174,12 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     return {
         "path": str(index_path()),
-        "total_pages": sum(len(v) for v in grouped.values()),
+        "total_pages": sum(len(v) for v in grouped.values())
+        + sum(len(v) for v in auto_grouped.values()),
         "by_kind": {k: len(v) for k, v in grouped.items()},
+        "auto_generated_by_kind": auto_by_kind,
         "redirects_by_kind": redirects_by_kind,
         "redirect_count": sum(redirects_by_kind.values()),
+        "auto_generated_count": sum(auto_by_kind.values()),
         "root": str(WIKI_ROOT),
     }

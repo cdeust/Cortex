@@ -79,15 +79,22 @@ def _register_wiki_list(mcp: FastMCP) -> None:
     async def tool_wiki_list(
         kind: str | None = None,
         include_redirects: bool = False,
+        include_auto_generated: bool = False,
     ) -> dict:
         """List authored wiki pages, optionally filtered by kind.
 
-        Phase 3.2 of ADR-2244: redirect stubs are excluded by default.
-        Pass ``include_redirects=True`` to see them.
+        Phase 3.2: redirect stubs excluded by default.
+        Phase 5: auto-generated pages (``provenance: auto-generated``)
+        excluded by default — they'd otherwise dominate listings at
+        ~8,700 pages. Opt in with ``include_auto_generated=True``.
         """
         return await safe_handler(
             wiki_list.handler,
-            {"kind": kind, "include_redirects": include_redirects},
+            {
+                "kind": kind,
+                "include_redirects": include_redirects,
+                "include_auto_generated": include_auto_generated,
+            },
             tool_name="wiki_list",
         )
 

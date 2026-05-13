@@ -178,6 +178,143 @@ def test_list_no_redirects_means_redirect_count_zero(tmp_wiki: Path) -> None:
     assert result["redirect_count"] == 0
 
 
+# ── Phase 5: auto-generated filter ────────────────────────────────────
+
+
+def _auto_gen_page(page_id: str, title: str) -> str:
+    """A page whose frontmatter declares ``provenance: auto-generated``."""
+    return (
+        f"---\nid: {page_id}\ntitle: {title}\nkind: reference\n"
+        f"lifecycle: seedling\naudience:\n  - developer\n"
+        f"provenance: auto-generated\ngenerator:\n"
+        f"  model: cortex-codebase-analyze\n  version: v1\n"
+        f"---\n\n# {title}\n\nAuto-gen body.\n"
+    )
+
+
+def test_list_excludes_auto_generated_by_default(tmp_wiki: Path) -> None:
+    """Phase 5 of ADR-2244: ``provenance: auto-generated`` pages are
+    hidden from the default listing — at ~8,700 pages they would
+    dominate any view."""
+    pid_human = generate_page_id()
+    pid_auto = generate_page_id()
+    _write(tmp_wiki / "reference/cortex/curated.md", _page(pid_human, "Curated"))
+    _write(
+        tmp_wiki / "reference/cortex/file-x.py.md",
+        _auto_gen_page(pid_auto, "File: x.py"),
+    )
+
+    result = _run(wiki_list.handler({"kind": "reference"}))
+    assert "reference/cortex/curated.md" in result["pages"]
+    assert "reference/cortex/file-x.py.md" not in result["pages"]
+    assert result["count"] == 1
+    assert result["auto_generated_count"] == 1
+
+
+def test_list_include_auto_generated_returns_both(tmp_wiki: Path) -> None:
+    pid_human = generate_page_id()
+    pid_auto = generate_page_id()
+    _write(tmp_wiki / "reference/cortex/curated.md", _page(pid_human, "Curated"))
+    _write(
+        tmp_wiki / "reference/cortex/file-x.py.md",
+        _auto_gen_page(pid_auto, "File: x.py"),
+    )
+
+    result = _run(
+        wiki_list.handler({"kind": "reference", "include_auto_generated": True})
+    )
+    assert "reference/cortex/curated.md" in result["pages"]
+    assert "reference/cortex/file-x.py.md" in result["pages"]
+    assert result["count"] == 2
+
+
+def test_list_both_filters_compose_correctly(tmp_wiki: Path) -> None:
+    """Redirect stub of an auto-gen page: counted as redirect, hidden
+    by default. Verifies the two filters don't double-count or fight
+    each other."""
+    pid = generate_page_id()
+    _write(
+        tmp_wiki / "reference/cortex/curated.md",
+        _page(generate_page_id(), "Curated"),
+    )
+    _write(
+        tmp_wiki / "reference/cortex/file-x.py.md",
+        _auto_gen_page(pid, "File: x.py"),
+    )
+    _write(
+        tmp_wiki / "reference/cortex/old-file-path.md",
+        _stub("reference/cortex/file-x.py.md", target_id=pid),
+    )
+
+    result = _run(wiki_list.handler({"kind": "reference"}))
+    # Only the curated human-authored page is visible.
+    assert result["count"] == 1
+    assert "reference/cortex/curated.md" in result["pages"]
+    assert result["redirect_count"] == 1
+    assert result["auto_generated_count"] == 1
+
+
+def test_list_fast_path_when_both_filters_disabled(tmp_wiki: Path) -> None:
+    """When both filters are off, the handler avoids the per-page
+    frontmatter read and returns the raw list."""
+    _write(tmp_wiki / "adr/a.md", _page(generate_page_id(), "A"))
+    _write(
+        tmp_wiki / "adr/b.md",
+        _auto_gen_page(generate_page_id(), "B"),
+    )
+    result = _run(
+        wiki_list.handler(
+            {
+                "kind": "adr",
+                "include_redirects": True,
+                "include_auto_generated": True,
+            }
+        )
+    )
+    assert result["count"] == 2
+    assert result["redirect_count"] == 0  # not partitioned in fast path
+    assert result["auto_generated_count"] == 0
+
+
+# ── Phase 5: reindex separates auto-gen into its own section ─────────
+
+
+def test_reindex_separates_auto_generated_from_human_authored(
+    tmp_wiki: Path,
+) -> None:
+    """INDEX.md must surface human-authored content first; auto-gen
+    reference pages get their own clearly-marked tail section."""
+    _write(
+        tmp_wiki / "reference/cortex/curated.md",
+        _page(generate_page_id(), "Curated"),
+    )
+    _write(
+        tmp_wiki / "reference/cortex/file-x.py.md",
+        _auto_gen_page(generate_page_id(), "File: x.py"),
+    )
+    _write(
+        tmp_wiki / "reference/cortex/file-y.py.md",
+        _auto_gen_page(generate_page_id(), "File: y.py"),
+    )
+
+    result = _run(wiki_reindex.handler({}))
+    assert result["by_kind"]["reference"] == 1
+    assert result["auto_generated_count"] == 2
+    assert result["auto_generated_by_kind"]["reference"] == 2
+
+    index = (tmp_wiki / ".generated" / "INDEX.md").read_text("utf-8")
+    # Both sections exist, in the right order.
+    h_pos = index.find("## Human-authored")
+    a_pos = index.find("## Auto-generated reference")
+    assert h_pos >= 0
+    assert a_pos >= 0
+    assert h_pos < a_pos
+    # Curated page in human-authored section, auto-gen pages below.
+    assert "curated.md" in index
+    assert "file-x.py.md" in index
+    assert "file-y.py.md" in index
+
+
 # ── wiki_reindex: stubs not in INDEX.md ──────────────────────────────
 
 
