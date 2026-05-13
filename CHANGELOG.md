@@ -6,6 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.16.0] - 2026-05-13
+
+ADR-2244 reaches its full Phase 2-6 cycle: pilot verification, stable-ID
+foundation, redirect mechanics, bulk-migration tooling, default-view
+filtering, and both producer audits. The wiki classification redesign
+that started in v3.15.4 is now complete code-side; one-shot apply
+scripts wait for operator authorisation.
+
+### Added
+- **Pilot migration analyzer + 1000-page accuracy verification (Phases 2).** `scripts/wiki_pilot_migration.py` walks the live wiki, runs each page through the post-#27/#28 classifier, and reports the proposed 4-tuple alongside the legacy kind. Live 1000-page sample landed at **96.7% kind-kept** — well above the ≥ 90% ADR-2244 acceptance target. The pilot also drove a calibration pass (Nygard heading skeleton detection for ADRs, `architecture` removed from adr.tag_aliases, security audience tightened to require `cryptograph(y|ic)` not bare `crypto`, `adrs` typo dir mapped to `adr`). ([#31](https://github.com/cdeust/Cortex/pull/31), [#32](https://github.com/cdeust/Cortex/pull/32))
+- **Stable page IDs + redirect stubs (Phase 3 foundation).** Every wiki page now carries an immutable `id: <UUID4>` in its frontmatter so renames can leave redirect stubs that preserve inbound links during bulk migration. New modules: `mcp_server.core.wiki_identity` (UUID generation, parsing, validation) and `mcp_server.core.wiki_redirect` (redirect data model, path-based chain resolution with cycle + depth protection, stub authoring). New CLI: `scripts/wiki_backfill_ids.py` (idempotent one-shot that mints IDs on every page lacking one; dry-run by default). Live dry-run shows 9607 pages would receive a fresh id, 1 skipped (no frontmatter). ([#33](https://github.com/cdeust/Cortex/pull/33))
+- **Handler-layer redirect mechanics + `wiki_rename` (Phase 3.2).** `wiki_read` now follows redirect chains transparently (≤ 5 hops; cycles and depth-exhaustion surface as errors). `wiki_list` excludes redirect stubs by default; `wiki_reindex` drops them from `.generated/INDEX.md`. New tool `wiki_rename` performs an atomic move + redirect-stub creation; refuses to operate on pages without a stable id or to chain stubs. ([#34](https://github.com/cdeust/Cortex/pull/34), folded onto main via [#36](https://github.com/cdeust/Cortex/pull/36))
+- **Bulk migration — deterministic renames (Phase 4.1).** `scripts/wiki_bulk_migrate.py` walks three audit-confirmed pollution patterns and renames them via `wiki_rename`: `.md.md` duplicates (58 paths), `decision-created-YYYY-MM-DDt…z` timestamp slugs (10 paths), and `users-cdeust-…`-shaped path-leak slugs (10+ paths). Live dry-run detects 70 pollution paths in the current wiki, all correctly refused pre-backfill. ([#35](https://github.com/cdeust/Cortex/pull/35), folded onto main via [#36](https://github.com/cdeust/Cortex/pull/36))
+- **Bulk migration — file-doc re-bucket (Phase 4.2).** `scripts/wiki_rebucket_file_docs.py` moves the 8,734 `notes/<domain>/<id>-file-*.md` pages produced by `codebase_analyze` to `reference/<domain>/<file-slug>.md` and rewrites the frontmatter to the modern schema (`kind: reference`, `lifecycle: seedling`, `audience: [developer]`, `provenance: auto-generated`, full generator block). Slug is derived from the `file:<path>` tag — canonical even when the on-disk filename was truncated to `98817-file-....md`. Idempotent; collisions resolved via `-<memory_id>` suffix. ([#37](https://github.com/cdeust/Cortex/pull/37))
+- **Auto-generated pages filtered from default views (Phase 5).** `wiki_list` excludes pages with `provenance: auto-generated` by default — at the 8,700+ scale these would dominate any listing. Opt-in via `include_auto_generated=true`. `wiki_reindex` groups INDEX.md into two top-level sections ("Human-authored" and "Auto-generated reference"); deterministic output preserved. Both filters share a single per-page frontmatter read to keep listing latency under 500ms on the 9000-page wiki. ([#39](https://github.com/cdeust/Cortex/pull/39))
+
+### Fixed
+- **Producer audit — `codebase_analyze` routes to `kind=reference` (Phase 6).** The bare `codebase` tag emitted by `codebase_analyze._build_tags` was not in `reference.tag_aliases` (only `code-reference` with a hyphen was), so every file-doc page routed to `kind=explanation` via the legacy-fallback path — the producer-side root cause of the 8,734-page misroute that Phase 4.2 has to clean up. Adding `codebase` to the alias list closes the leak. ([#38](https://github.com/cdeust/Cortex/pull/38))
+- **Producer audit — `wiki_seed_codebase` emits modern kind tags (Phase 6.2).** `_kind_for(rel_path)` used to return legacy kind names (`spec`, `convention`, `lesson`, `note`); the call-site wrote them as `kind:<value>` tags that the classifier never read. Now returns modern kind names that are themselves tag aliases (`adr`, `rfc`, `explanation`), and the tag list emits the bare name plus `imported` (provenance hint) — both forms the classifier picks up. ([#40](https://github.com/cdeust/Cortex/pull/40))
+
+### Security
+- **`authlib` 0.7.0 → 1.7.2** — Dependabot alert #4 (CVE-2026-44681 / GHSA-r95x-qfjj-fjj2). Unauthenticated open redirect in `OpenIDImplicitGrant` / `OpenIDHybridGrant` when the `openid` scope is omitted. Cortex is not an OIDC authorization server so the vulnerable code paths are never invoked, but the bump closes the alert and protects downstream applications that vendor Cortex's `uv.lock`. ([#30](https://github.com/cdeust/Cortex/pull/30))
+
+### Notes for users
+- **The wiki on disk has not been migrated yet.** All apply scripts are dry-run by default. To realise the cleanup:
+    ```bash
+    python scripts/wiki_backfill_ids.py --apply            # mint 9607 stable IDs
+    python scripts/wiki_bulk_migrate.py --apply            # rename the 70 polluted paths
+    python scripts/wiki_rebucket_file_docs.py --apply      # move the 8734 file-docs
+    ```
+    Each step is idempotent. Every move leaves a redirect stub so inbound links continue to resolve via `wiki_read`.
+- **Phase 5 + 6 + 6.2 take effect on next MCP restart.** Phase 5 changes how listings render; Phase 6 + 6.2 fix the producers so new writes go to the right place without further intervention.
+- The full migration plan (Phases 1–6, including the parts that landed in v3.15.4) is captured in ADR-2244 inside the methodology wiki. The literature survey backing the schema design is at `docs/research/wiki-classification-survey.md` — GRADE certainty: moderate (strong convergence across 14 surveyed taxonomies, no empirical comparison study).
+
 ## [3.15.4] - 2026-05-12
 
 ### Added
