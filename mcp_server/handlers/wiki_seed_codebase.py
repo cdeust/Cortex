@@ -136,18 +136,29 @@ _SKIP_PATH_FRAGMENTS = (
 
 
 def _kind_for(rel_path: str) -> str:
+    """Map a seed-eligible markdown path to a *modern* (ADR-2244) kind.
+
+    Returned values are themselves tag aliases registered in
+    ``mcp_server.core.wiki_axis_registry._DEFAULT_KINDS``, so emitting
+    the value as a memory tag lets the classifier route the page to
+    the correct kind directory.
+
+    Before ADR-2244 Phase 6.2 this function returned legacy kinds
+    (``spec``, ``convention``, ``lesson``, ``note``) and the call-site
+    wrote them as ``kind:<value>`` tags — a shape the classifier never
+    read. The kind hint flowed nowhere.
+    """
     low = rel_path.lower()
     if "adr" in low or "decision" in low:
         return "adr"
     if "architecture" in low:
-        return "spec"
+        return "rfc"  # was: spec — modern: pre-decision design → rfc
     if "convention" in low or "style" in low:
-        return "convention"
+        return "explanation"  # was: convention
     if "lesson" in low or "postmortem" in low:
-        return "lesson"
-    if low.startswith("readme") or low.endswith("/readme.md"):
-        return "note"
-    return "note"
+        return "explanation"  # was: lesson
+    # README and bare notes route to explanation in the modern taxonomy.
+    return "explanation"
 
 
 def _collect_files(
@@ -222,10 +233,20 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
                 content = content[:max_bytes] + "\n\n[...truncated]"
             domain = repo_root.name or "seed"
             kind = _kind_for(rel)
+            # ADR-2244 Phase 6.2: emit ``kind`` as a registered tag alias
+            # (``adr`` / ``rfc`` / ``explanation``) so the classifier
+            # actually routes the page; emit ``imported`` so provenance
+            # resolves to ``imported`` (these are bulk-imported markdown
+            # files, not human-authored fresh in the wiki).
             result = await h_remember(
                 {
                     "content": content,
-                    "tags": ["seed:codebase", f"kind:{kind}", f"file:{rel}"],
+                    "tags": [
+                        "seed:codebase",
+                        "imported",
+                        kind,
+                        f"file:{rel}",
+                    ],
                     "domain": domain,
                     "source": f"seed:{rel}",
                     "force": True,
