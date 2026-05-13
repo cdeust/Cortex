@@ -196,7 +196,11 @@ _DEFAULT_KINDS: tuple[AxisValue, ...] = (
         axis=AXIS_KIND,
         display_name="Reference",
         patterns=(),  # reference is usually identified by tags / producer, not content
-        tag_aliases=("reference", "api", "spec", "code-reference"),
+        # Producer audit (ADR-2244 Phase 6): ``codebase`` is the bare tag
+        # written by ``codebase_analyze``; without it here, file-doc pages
+        # got routed to ``explanation`` instead of ``reference``, producing
+        # the 8734-page misroute Phase 4.2 had to clean up.
+        tag_aliases=("reference", "api", "spec", "code-reference", "codebase"),
         description="Authoritative lookup table — API docs, file docs, schema refs.",
     ),
     AxisValue(

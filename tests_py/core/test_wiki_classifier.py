@@ -322,6 +322,37 @@ def test_architecture_tag_alone_does_not_route_to_adr() -> None:
         assert result.kind != "adr"
 
 
+def test_codebase_analyze_output_routes_to_reference_kind() -> None:
+    """Producer audit (ADR-2244 Phase 6): a page tagged ``codebase``
+    (the bare tag written by ``codebase_analyze``) must route to
+    ``kind=reference``, not ``kind=explanation``. Without this contract
+    the 8734-page file-doc misroute Phase 4.2 cleaned up would simply
+    keep happening on every new ``codebase_analyze`` run.
+    """
+    content = (
+        "# Process — packages/codebase-rust/src/parser/mod.rs::parse_file\n\n"
+        "- Entry kind: lib_entry\n"
+        "- BFS depth: 6\n"
+        "- Symbols in flow: 0\n"
+    )
+    # The exact tag set produced by codebase_analyze._build_tags:
+    #   [codebase, file:<path>, hash:<sha>, lang:<lang>, symbol:<name>...]
+    result = classify_memory(
+        content,
+        tags=[
+            "codebase",
+            "file:packages/codebase-rust/src/parser/mod.rs",
+            "hash:abcdef0123",
+            "lang:rust",
+            "symbol:parse_file",
+        ],
+    )
+    assert result is not None
+    assert result.kind == "reference"
+    assert result.provenance == "auto-generated"
+    assert result.generator is not None  # auto-generated requires it
+
+
 def test_crypto_module_name_does_not_flag_security_audience() -> None:
     """Pilot 2026-05-13 found ADR-001 (zero dependencies) tagged ``security``
     audience because its body listed ``crypto`` among Node built-in modules.
