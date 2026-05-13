@@ -17,11 +17,12 @@ from mcp_server.handlers import (
     wiki_purge,
     wiki_read,
     wiki_reindex,
+    wiki_rename,
     wiki_verify,
     wiki_write,
 )
-from mcp_server.tool_error_handler import safe_handler
 from mcp_server.handlers._tool_meta import tool_kwargs
+from mcp_server.tool_error_handler import safe_handler
 
 
 def register(mcp: FastMCP) -> None:
@@ -34,6 +35,7 @@ def register(mcp: FastMCP) -> None:
     _register_wiki_reindex(mcp)
     _register_wiki_purge(mcp)
     _register_wiki_verify(mcp)
+    _register_wiki_rename(mcp)
 
 
 def _register_wiki_write(mcp: FastMCP) -> None:
@@ -59,19 +61,34 @@ def _register_wiki_write(mcp: FastMCP) -> None:
 
 def _register_wiki_read(mcp: FastMCP) -> None:
     @mcp.tool(name="wiki_read", **tool_kwargs(wiki_read.schema))
-    async def tool_wiki_read(path: str) -> dict:
-        """Read the raw markdown of a wiki page by relative path."""
+    async def tool_wiki_read(path: str, follow_redirects: bool = True) -> dict:
+        """Read the raw markdown of a wiki page by relative path.
+
+        Phase 3.2 of ADR-2244: redirect stubs are followed transparently
+        by default. Pass ``follow_redirects=False`` to read the stub itself.
+        """
         return await safe_handler(
-            wiki_read.handler, {"path": path}, tool_name="wiki_read"
+            wiki_read.handler,
+            {"path": path, "follow_redirects": follow_redirects},
+            tool_name="wiki_read",
         )
 
 
 def _register_wiki_list(mcp: FastMCP) -> None:
     @mcp.tool(name="wiki_list", **tool_kwargs(wiki_list.schema))
-    async def tool_wiki_list(kind: str | None = None) -> dict:
-        """List authored wiki pages, optionally filtered by kind."""
+    async def tool_wiki_list(
+        kind: str | None = None,
+        include_redirects: bool = False,
+    ) -> dict:
+        """List authored wiki pages, optionally filtered by kind.
+
+        Phase 3.2 of ADR-2244: redirect stubs are excluded by default.
+        Pass ``include_redirects=True`` to see them.
+        """
         return await safe_handler(
-            wiki_list.handler, {"kind": kind}, tool_name="wiki_list"
+            wiki_list.handler,
+            {"kind": kind, "include_redirects": include_redirects},
+            tool_name="wiki_list",
         )
 
 
@@ -140,4 +157,30 @@ def _register_wiki_verify(mcp: FastMCP) -> None:
             wiki_verify.handler,
             {"path": path} if path else {},
             tool_name="wiki_verify",
+        )
+
+
+def _register_wiki_rename(mcp: FastMCP) -> None:
+    @mcp.tool(name="wiki_rename", **tool_kwargs(wiki_rename.schema))
+    async def tool_wiki_rename(
+        from_path: str,
+        to_path: str,
+        reason: str = "",
+        overwrite_dest: bool = False,
+    ) -> dict:
+        """Move a page and leave a redirect stub at the old path.
+
+        Phase 3.2 of ADR-2244 — the building block for Phase 4 bulk renames.
+        Requires the source page to have a stable frontmatter ``id`` (run
+        ``scripts/wiki_backfill_ids.py --apply`` first).
+        """
+        return await safe_handler(
+            wiki_rename.handler,
+            {
+                "from_path": from_path,
+                "to_path": to_path,
+                "reason": reason,
+                "overwrite_dest": overwrite_dest,
+            },
+            tool_name="wiki_rename",
         )
