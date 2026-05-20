@@ -141,6 +141,7 @@ def build_rejection_response(
     """Build response when write gate rejects the memory."""
     return {
         "stored": False,
+        "action": "rejected",
         "reason": gate_reason,
         "novelty": _describe_signals(
             embedding_novelty,

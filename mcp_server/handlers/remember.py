@@ -39,8 +39,8 @@ schema = {
                 "description": "True if content landed in the memory store (as new row or a merge into an existing one).",
             },
             "memory_id": {
-                "type": "string",
-                "description": "UUID of the resulting memory row. Present when stored=true.",
+                "type": "integer",
+                "description": "ID of the resulting memory row (PG bigint). Present when stored=true.",
             },
             "action": {
                 "type": "string",
@@ -52,8 +52,8 @@ schema = {
                 "description": "Human-readable explanation of the gate decision (e.g. 'low surprise', 'high entity overlap').",
             },
             "merged_with": {
-                "type": "string",
-                "description": "UUID of the existing memory when action=merged.",
+                "type": "integer",
+                "description": "ID of the existing memory (PG bigint) when action=merged.",
             },
             "heat": {
                 "type": "number",
@@ -260,7 +260,7 @@ def _parse_args(
 async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Store a memory with thermodynamic properties and predictive coding gate."""
     if not args or not args.get("content"):
-        return {"stored": False, "reason": "no_content"}
+        return {"stored": False, "action": "rejected", "reason": "no_content"}
 
     # Phase 7: harden user-controlled content at the ingestion boundary
     # (NFC normalization, control/bidi strip, byte cap).
@@ -268,7 +268,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     args["content"] = harden_content(args["content"])
     if not args["content"]:
-        return {"stored": False, "reason": "no_content"}
+        return {"stored": False, "action": "rejected", "reason": "no_content"}
 
     (
         content,
