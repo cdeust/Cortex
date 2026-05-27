@@ -43,8 +43,19 @@ def _is_cortex_root(p: Path) -> bool:
 
 
 def _find_dev_source() -> Path | None:
-    for env in ("CORTEX_DEV_ROOT", "CLAUDE_PROJECT_DIR"):
-        v = os.environ.get(env)
+    """Locate the dev source. See GHSA-gvpp-v77h-5w8g gating in
+    ``mcp_server/handlers/open_visualization._find_dev_source`` — the
+    bootstrap script inherits the parent process environment, so any
+    untrusted env var consulted here would re-open the same hole the
+    handler closes.
+
+    ``CLAUDE_PROJECT_DIR`` is therefore NOT consulted. ``CORTEX_DEV_ROOT``
+    requires the explicit ``CORTEX_DEV_SOURCE_SYNC=1`` opt-in flag
+    (exact value ``"1"``). The ``~/Documents/Developments/Cortex``
+    fallback is preserved (user-controlled filesystem).
+    """
+    if os.environ.get("CORTEX_DEV_SOURCE_SYNC") == "1":
+        v = os.environ.get("CORTEX_DEV_ROOT")
         if v and _is_cortex_root(Path(v)):
             return Path(v)
     default = Path.home() / "Documents" / "Developments" / "Cortex"

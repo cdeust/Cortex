@@ -60,6 +60,34 @@ def _find_dev_source() -> Path | None:
     duplicated here so this handler stays usable even when it's loaded
     from an older plugin-cache snapshot whose launcher lacks the
     auto-detect extension.
+
+    Security gating (GHSA-gvpp-v77h-5w8g, EQSTLab 2026-05-27): the
+    return value of this function is consumed by ``handler()`` to
+    locate a ``visualize_bootstrap.py`` that is then ``subprocess.run``
+    against the local Python interpreter. Any directory we return is
+    therefore a code-execution surface, so candidate sources must NOT
+    be attacker-controllable.
+
+    Previous implementation accepted ``CLAUDE_PROJECT_DIR`` (set
+    automatically by Claude Code to whatever project the user opens)
+    as a candidate, validated by a two-marker-file check
+    (``mcp_server/`` directory + ``ui/unified-viz.html``) that any
+    attacker can trivially replicate. That allowed local arbitrary
+    code execution by enticing the user to open an attacker-crafted
+    project and run ``/cortex-visualize``.
+
+    Hardening:
+      * ``CLAUDE_PROJECT_DIR`` is no longer consulted.
+      * ``CORTEX_DEV_ROOT`` is consulted only when the user has also
+        set ``CORTEX_DEV_SOURCE_SYNC=1`` — an explicit opt-in flag
+        that signals "I deliberately want my CORTEX_DEV_ROOT to be
+        used as a code-execution dev source." Without the flag,
+        ``CORTEX_DEV_ROOT`` (which an attacker could in principle
+        plant in a shell rc file) is ignored.
+      * The conventional ``~/Documents/Developments/Cortex`` fallback
+        remains — that path is controlled by the user's own filesystem
+        and an attacker who can already write under ``$HOME`` has
+        higher-privilege code execution by other means.
     """
 
     def _is_cortex_root(p: Path) -> bool:
@@ -70,10 +98,12 @@ def _find_dev_source() -> Path | None:
         )
 
     candidates: list[Path] = []
-    for env in ("CORTEX_DEV_ROOT", "CLAUDE_PROJECT_DIR"):
-        v = os.environ.get(env)
+    # Explicit dev-source opt-in (see security gating in docstring).
+    if os.environ.get("CORTEX_DEV_SOURCE_SYNC") == "1":
+        v = os.environ.get("CORTEX_DEV_ROOT")
         if v:
             candidates.append(Path(v))
+    # Conventional home-directory checkout — user-controlled, safe.
     candidates.append(Path.home() / "Documents" / "Developments" / "Cortex")
     for c in candidates:
         if _is_cortex_root(c):

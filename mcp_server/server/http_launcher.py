@@ -51,16 +51,31 @@ def _kill_port(port: int) -> None:
 def _detect_dev_source() -> Path | None:
     """Return a dev-checkout source root if one is visible.
 
-    Detection order:
-      1. ``CORTEX_DEV_ROOT`` env var — explicit override.
-      2. ``CLAUDE_PROJECT_DIR`` env var — Claude Code sets this when
-         the user is working inside a project directory.
-      3. The file the launcher module was loaded from, if it's inside
-         a Cortex source tree (auto-detect for dev mode).
-      4. The conventional checkout location
-         ``$HOME/Documents/Developments/Cortex`` — falls back here so
-         the MCP itself syncs on every ``cortex-visualize`` call with
-         no env-var configuration.
+    Detection order (after the GHSA-gvpp-v77h-5w8g hardening):
+      1. ``CORTEX_DEV_ROOT`` env var, **only when** the user has also
+         set ``CORTEX_DEV_SOURCE_SYNC=1`` as an explicit opt-in. The
+         flag signals "I deliberately want my CORTEX_DEV_ROOT to be
+         used as a code-execution dev source"; without it the env
+         var is ignored.
+      2. The file the launcher module was loaded from, if it's inside
+         a Cortex source tree (auto-detect for ``pip install -e .``
+         / ``uv run`` dev mode). This is filesystem-position-based:
+         the attacker would have to place the launcher module itself
+         inside their malicious project to influence it, which
+         requires write access to the user's site-packages and is
+         therefore higher-privileged than the exploit it would yield.
+      3. The conventional checkout location
+         ``$HOME/Documents/Developments/Cortex`` — controlled by the
+         user's own filesystem.
+
+    ``CLAUDE_PROJECT_DIR`` (set automatically by Claude Code to
+    whatever project the user has open) is **NOT** consulted: per
+    EQSTLab's 2026-05-27 advisory, that path is attacker-controllable
+    via social-engineering ("open this repo to reproduce the bug")
+    and combined with the two-marker ``_is_cortex_root`` check it
+    constituted a local arbitrary-code-execution surface (the
+    returned dev source is passed to ``rsync`` and then the
+    visualization server respawns from the synced copy).
 
     A directory qualifies only if it contains both ``mcp_server/`` and
     ``ui/unified-viz.html``. When a dev source is returned
@@ -77,17 +92,19 @@ def _detect_dev_source() -> Path | None:
         )
 
     candidates: list[Path] = []
-    for env in ("CORTEX_DEV_ROOT", "CLAUDE_PROJECT_DIR"):
-        v = os.environ.get(env)
+    # Explicit dev-source opt-in (see security gating in docstring).
+    if os.environ.get("CORTEX_DEV_SOURCE_SYNC") == "1":
+        v = os.environ.get("CORTEX_DEV_ROOT")
         if v:
             candidates.append(Path(v))
     # Walk up from this module to see if we're loaded out of a source
-    # checkout (for ``uv run`` / ``pip install -e`` dev mode).
+    # checkout (for ``uv run`` / ``pip install -e`` dev mode). Position
+    # of the module on disk; not attacker-controllable through env.
     here = Path(__file__).resolve()
     for ancestor in list(here.parents)[:6]:
         candidates.append(ancestor)
     # Conventional location — the MCP plugin auto-syncs from here even
-    # when no env var is set.
+    # when no env var is set. User-controlled filesystem path.
     candidates.append(Path.home() / "Documents" / "Developments" / "Cortex")
 
     for c in candidates:
