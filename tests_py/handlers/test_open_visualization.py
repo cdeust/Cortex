@@ -1,12 +1,9 @@
 """Tests for mcp_server.handlers.open_visualization — unified 3D graph launcher."""
 
 import asyncio
-import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-
-import pytest
 
 from mcp_server.handlers import open_visualization
 from mcp_server.handlers.open_visualization import _find_dev_source, handler
