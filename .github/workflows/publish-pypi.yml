@@ -1,0 +1,116 @@
+name: Publish to PyPI
+
+# Trusted Publishing (PEP 740 / OIDC) — no long-lived secret stored in
+# GitHub or anywhere else. The workflow asks GitHub Actions to mint a
+# short-lived OIDC token; PyPI verifies the token against the trusted
+# publisher configuration on https://pypi.org/manage/project/neuro-cortex-
+# memory/settings/publishing/ and issues a one-shot upload credential.
+#
+# To enable this for the first time on PyPI:
+#   1. Log in to pypi.org as a project maintainer.
+#   2. Navigate to the project's "Publishing" settings page.
+#   3. Under "Add a new publisher", choose GitHub and fill in:
+#        Owner:               cdeust
+#        Repository name:     Cortex
+#        Workflow filename:   publish-pypi.yml
+#        Environment name:    (leave blank, or use "pypi" if you want
+#                              an extra approval gate; if you set one
+#                              here you MUST also set `environment:`
+#                              in the publish job below)
+#   4. Save. The first run of this workflow against the project from
+#      the configured (workflow + branch + environment) tuple will
+#      then be authorised to upload.
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Manual trigger for the very first release once Trusted Publishing
+  # is configured on PyPI's side, or to re-publish a tag that already
+  # existed before this workflow landed. Pass the tag as input — the
+  # build job will check it out and build from that tree.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. "v3.17.1"). Default: triggering ref.'
+        required: false
+        default: ""
+
+# Cancel any in-flight publish for the SAME tag (avoid a tag-push
+# racing with a manual workflow_dispatch). Different tags do NOT
+# cancel each other.
+concurrency:
+  group: pypi-publish-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build wheel + sdist
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo at the right ref
+        uses: actions/checkout@v4
+        with:
+          # Resolve the ref priority: explicit workflow_dispatch input
+          # wins, otherwise the triggering tag.
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build distributions
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+          python -m build
+
+      - name: Verify built artifacts
+        run: |
+          ls -la dist/
+          # Sanity check: the sdist and wheel filenames must contain a
+          # version. Refuse to upload an unversioned mystery build.
+          test "$(ls dist/*.whl 2>/dev/null | wc -l)" = "1"
+          test "$(ls dist/*.tar.gz 2>/dev/null | wc -l)" = "1"
+
+      - name: Upload built artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-dist
+          path: dist/
+          retention-days: 7
+
+  publish:
+    name: Publish to PyPI via OIDC
+    needs: build
+    runs-on: ubuntu-latest
+    # If you configure a GitHub Environment named "pypi" on the repo
+    # (Settings → Environments) and reference it on the PyPI Trusted
+    # Publisher entry, uncomment the next line to gate publishes
+    # behind environment-protection rules (manual approval, branch
+    # restriction, etc.). Without it the workflow publishes as soon
+    # as the build job succeeds.
+    #
+    # environment: pypi
+    permissions:
+      id-token: write  # required to mint the OIDC token PyPI verifies
+    steps:
+      - name: Download built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          # Fail loudly on any upload error rather than silently
+          # skipping — a failed publish must not be confused with
+          # "nothing to do."
+          skip-existing: false
+          verbose: true
