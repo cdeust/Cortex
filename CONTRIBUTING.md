@@ -107,7 +107,7 @@ project-specific rules:
 - **No mutable default arguments.** No globals except for read-once
   configuration objects.
 - **No bare `except:`.** Catch the specific exception you mean.
-- **Type-checked at `--strict`.** `mypy --strict src/cortex/` must pass.
+- **Type-checked at `--strict`.** `mypy --strict mcp_server/` must pass.
 - **§4.1 File ≤500 lines, §4.2 function ≤50 lines.**
 
 The full standard lives in
@@ -118,11 +118,11 @@ The full standard lives in
 ## Testing
 
 ```bash
-pytest                           # full suite (~2500 tests)
-pytest tests/unit                # unit only
-pytest tests/integration         # PostgreSQL-backed integration
-pytest tests/benchmark -k locomo # subset
-pytest -x --ff                   # stop on first fail, run failures first
+pytest                               # full suite (~2500 tests)
+pytest tests_py/core                 # one subsystem (unit-level)
+pytest tests_py/integration          # PostgreSQL-backed integration
+pytest tests_py/benchmarks -k locomo # subset
+pytest -x --ff                       # stop on first fail, run failures first
 ```
 
 Tests run against a local PostgreSQL instance. CI provisions a fresh DB
