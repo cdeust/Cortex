@@ -64,9 +64,9 @@ const KIND_COLOURS = {
 const DEFAULT_COLOUR = "#94A3B8";
 
 // ── Depth → default node size ──────────────────────────────────────────────
-// Matches old graph: domain hubs 28–48 px radius, children scale down by depth.
-// Sigma sizes are in graph units; at typical zoom they map ~1:1 to pixels.
-const DEPTH_SIZE = [28, 12, 9, 6, 5, 4, 3];
+// Domain hubs big, children progressively smaller — creates the galaxy hierarchy.
+// L0 domains: 22  L1 setup: 7  L2 tools: 5  L3 files: 3  L4+: 2  L6 symbols: 1.5
+const DEPTH_SIZE = [22, 7, 5, 3, 2, 2, 1.5];
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -229,9 +229,10 @@ export function mount(container, callbacks = {}) {
   _sigma = new SigmaClass(_graph, container, {
     renderEdgeLabels:              false,
     defaultEdgeType:               "line",
-    // Show persistent labels for L0 (28) and L1 (12); smaller nodes hover-only.
-    labelRenderedSizeThreshold:    10,
-    labelSize:                     12,
+    // Hover-only labels — no persistent text on the canvas, keeps it readable.
+    // Sigma still shows labels for hovered/selected nodes regardless of this.
+    labelRenderedSizeThreshold:    999,
+    labelSize:                     13,
     labelColor:                    { color: "#c4d4dc" },
     labelFont:                     "JetBrains Mono, monospace",
     labelWeight:                   "500",

@@ -124,6 +124,54 @@ function _ensureDom() {
   _mermaidDiv      = document.getElementById("panel-mermaid-div");
   _truncatedBadge  = document.getElementById("panel-truncated-badge");
   _chainError      = document.getElementById("panel-chain-error");
+  _metricsEl       = document.getElementById("panel-metrics");
+}
+
+// ── Intelligence metrics display ──────────────────────────────────────────
+
+let _metricsEl = null;
+
+const _STAGE_LABELS = {
+  labile: "New", early_ltp: "Growing", late_ltp: "Strong",
+  consolidated: "Stable", reconsolidating: "Updating",
+};
+
+/**
+ * Render node intelligence attributes (heat, stage, domain, connections)
+ * into the #panel-metrics strip above the tabs.
+ * @param {Object} attrs — graphology node attributes
+ */
+function _renderMetrics(attrs) {
+  if (!_metricsEl) return;
+  const items = [];
+
+  // Kind badge
+  if (attrs.kind) items.push({ label: "kind",   val: attrs.kind,                    color: attrs.color });
+  // Domain
+  if (attrs.domain) items.push({ label: "domain", val: attrs.domain });
+  // Heat (0–1 thermodynamic importance)
+  if (attrs.heat != null) {
+    const h = Math.round(attrs.heat * 100);
+    const heatColor = h >= 70 ? "#10B981" : h >= 40 ? "#F59E0B" : "#EF4444";
+    items.push({ label: "heat", val: h + "%", color: heatColor });
+  }
+  // Consolidation stage
+  if (attrs.consolidation_stage) {
+    items.push({ label: "stage", val: _STAGE_LABELS[attrs.consolidation_stage] || attrs.consolidation_stage });
+  }
+  // Depth
+  if (attrs.depth != null) items.push({ label: "L", val: attrs.depth });
+  // Size / weight
+  if (attrs.size != null && attrs.kind !== "symbol") {
+    items.push({ label: "weight", val: typeof attrs.size === "number" ? attrs.size.toFixed(1) : attrs.size });
+  }
+
+  if (!items.length) { _metricsEl.innerHTML = ""; return; }
+
+  _metricsEl.innerHTML = items.map(it => {
+    const dot = it.color ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${it.color};margin-right:4px;vertical-align:middle;"></span>` : "";
+    return `<span class="metric-chip">${dot}<span class="metric-label">${it.label}</span><span class="metric-val">${it.val}</span></span>`;
+  }).join("");
 }
 
 // ── Tab handling ──────────────────────────────────────────────────────────
@@ -288,11 +336,23 @@ async function _renderMermaid(mermaidSource, truncated) {
 
   try {
     await window.mermaid.run({ nodes: [_mermaidDiv] });
+    // Force the rendered SVG to fill the container width.
+    const svg = _mermaidDiv.querySelector("svg");
+    if (svg) {
+      svg.style.width  = "100%";
+      svg.style.height = "auto";
+      svg.style.minHeight = "200px";
+      svg.removeAttribute("width");
+      svg.removeAttribute("height");
+      // Ensure viewBox is set so the SVG scales correctly.
+      if (!svg.getAttribute("viewBox") && svg.getAttribute("width") && svg.getAttribute("height")) {
+        svg.setAttribute("viewBox", `0 0 ${svg.getAttribute("width")} ${svg.getAttribute("height")}`);
+      }
+    }
   } catch (err) {
     console.warn("[chain-panel] mermaid render error:", err);
-    // Fallback: raw source in <pre>.
     const pre = document.createElement("pre");
-    pre.style.cssText = "font-size:10px;white-space:pre-wrap;color:var(--fg-2);margin:0;";
+    pre.style.cssText = "font-size:10px;white-space:pre-wrap;color:var(--fg-2);margin:0;overflow:auto;";
     pre.textContent = mermaidSource;
     _mermaidDiv.innerHTML = "";
     _mermaidDiv.appendChild(pre);
@@ -392,6 +452,9 @@ function _render(nodeId, tab, pushHistory = true) {
 
   if (_labelEl) _labelEl.textContent = label;
   if (_kindEl)  _kindEl.textContent  = kind;
+
+  // Render intelligence metrics from node attributes.
+  _renderMetrics(attrs);
 
   // Show panel if not already open.
   _panel.classList.add("open");

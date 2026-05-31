@@ -304,3 +304,41 @@ button.depth-dot:focus-visible {
   outline-offset: 2px;
   border-radius: var(--r-sm, 4px);
 }
+
+/* ── Node intelligence metrics strip ─────────────────────────────────── */
+#panel-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 12px 4px;
+  border-bottom: 1px solid var(--ink-3);
+  min-height: 28px;
+}
+.metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--ink-2);
+  border: 1px solid var(--ink-3);
+  border-radius: 10px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-family: var(--mono);
+}
+.metric-label { color: var(--fg-3); margin-right: 2px; }
+.metric-val   { color: var(--fg-1); font-weight: 600; }
+
+/* ── Chain diagram: full-width scrollable SVG ─────────────────────────── */
+#panel-mermaid-container {
+  background: var(--ink-2);
+  border-radius: var(--r-md);
+  padding: 8px;
+  overflow: auto;
+  max-height: none;
+  min-height: 220px;
+}
+#panel-mermaid-container svg {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 180px;
+}
