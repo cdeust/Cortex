@@ -59,11 +59,16 @@
   // L6 phases with >50K nodes are symbol clouds too dense to navigate in
   // the graph view — skip them too (they still exist in the backend cache
   // for chain analysis).
+  // Skip phases that lod.js loads on-demand; skip L5 (838MB) always.
   var SKIP_PHASES = { 'L5': true };
   var L6_NODE_CAP = 50000;
 
   function applyPhase(key){
     if(applied[key] || inflight[key]) return Promise.resolve();
+    // Let lod.js own L0+L1 loading — don't double-load.
+    if((key === 'L0' || key === 'L1') && window.JUG && JUG._lod){
+      applied[key] = true; return Promise.resolve();
+    }
     if(SKIP_PHASES[key]){ applied[key] = true; return Promise.resolve(); }
     inflight[key] = true;
     return fetch('/api/graph/phase?name='+encodeURIComponent(key))
@@ -98,7 +103,15 @@
   function refreshBar(p){
     var box = document.getElementById('build-progress');
     if(!box) return;
-    if(p.phase === 'idle' || p.full_ready){
+    // Never show the progress banner for L5/L6 background loading — the user
+    // hasn't requested memories or symbols. Also hide when L0+L1 are done.
+    var phase = p.phase || '';
+    var suppressPhases = ['loading memories','loading symbols','loading memory',
+                          'loading_memories','l5','l6'];
+    var doSuppress = suppressPhases.some(function(s){
+      return phase.toLowerCase().indexOf(s) !== -1;
+    });
+    if(p.phase === 'idle' || p.full_ready || doSuppress || (p.phases && p.phases['L1'])){
       box.style.opacity = '0';
       setTimeout(function(){ box.style.display='none'; }, 400);
       return;

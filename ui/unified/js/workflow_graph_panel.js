@@ -237,7 +237,13 @@
     }
 
     function hide() {
+      // Move focus out before hiding so aria-hidden doesn't trap a focused element.
+      if (root.contains(document.activeElement)) {
+        document.activeElement.blur();
+      }
       root.classList.remove('wfg-panel--open');
+      // Use inert (hides from AT + prevents focus) instead of aria-hidden alone.
+      root.setAttribute('inert', '');
       root.setAttribute('aria-hidden', 'true');
     }
 
