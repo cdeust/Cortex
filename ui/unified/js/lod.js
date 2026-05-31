@@ -1,185 +1,185 @@
-// Cortex — LOD: on-demand, per-node progressive loading.
+// Cortex — LOD via SSE with depth gate.
 //
-// POLICY:
-//   Startup: load L0 (domains, ~20 nodes). That's it.
-//   On click: inject ONLY the children of the clicked node.
-//             Never load the whole next phase at once.
+// Subscribes to /api/graph/events (the live SSE stream).
+// Each batch has a `label` that maps to a depth level.
+// Default gate: accept depth 0 (domains) + depth 1 (setup).
+// On node click: open the gate one level deeper for that node's domain.
 //
-// How it works:
-//   Each phase is fetched ONCE and cached in _phaseCache.
-//   Clicking a node injects only the slice of cached nodes whose
-//   domain_id or parent id matches the clicked node — so clicking
-//   "cortex" shows cortex's L1 children, not every domain's L1.
-//
-// Nodes injected near the clicked node's position for natural placement.
+// No polling loops. No phase endpoint. The SSE stream IS the data.
 (function () {
   'use strict';
 
-  // ── Phase cache ────────────────────────────────────────────────────────────
-  var _phaseCache   = {};   // phaseKey → {nodes, edges}
-  var _fetchPromise = {};   // phaseKey → Promise (dedup concurrent fetches)
-  var _injectedFor  = {};   // nodeId → true (already expanded this node)
-
-  // Kind → which phase to fetch when this node is clicked.
-  var KIND_PHASE = {
-    domain:     'L1',
-    tool_hub:   'L2',
-    mcp:        'L2',
-    agent:      'L2',
-    skill:      'L3',
-    hook:       'L3',
-    command:    'L3',
-    file:       'L4',
-    discussion: 'L5',
-    memory:     'L5',
-  };
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-
-  function _base() {
-    return (JUG.API_URL || 'http://127.0.0.1:3458/api/graph')
-             .replace('/api/graph', '');
+  // ── Depth mapping: SSE batch label → depth level ───────────────────────────
+  // Labels come from the graph builder (graph_event_stream.py push calls).
+  function _depthOf(label, kind) {
+    if (!label) return _kindDepth(kind);
+    var l = label.toLowerCase();
+    if (l === 'skeleton' || l.startsWith('l0') || l === 'domains') return 0;
+    if (l === 'skills' || l === 'hooks' || l === 'agents' || l === 'commands'
+        || l.startsWith('l1') || l === 'setup') return 1;
+    if (l === 'tools' || l.startsWith('l2') || l === 'tool_hubs') return 2;
+    if (l === 'files' || l.startsWith('l3')) return 3;
+    if (l === 'discussions' || l.startsWith('l4')) return 4;
+    if (l === 'memories' || l.startsWith('l5')) return 5;
+    if (l.startsWith('l6') || l.includes('symbol')) return 6;
+    return _kindDepth(kind);
   }
 
+  function _kindDepth(kind) {
+    var map = { domain:0, skill:1, hook:1, command:1, agent:1, mcp:1,
+                tool_hub:2, file:3, discussion:4, memory:5, symbol:6 };
+    return map[kind] != null ? map[kind] : 1;
+  }
+
+  // ── Gate: which depths are currently allowed ───────────────────────────────
+  // Default: domains (0) + setup (1). Never memories/symbols unless asked.
+  var _maxDepth = 1;          // global ceiling
+  var _domainDepth = {};      // domainSlug → ceiling (overrides global)
+  var _seenBatches = {};      // label → true (prevent re-injecting on reconnect)
+
+  function _allowed(depth, domainSlug) {
+    var ceiling = (_domainDepth[domainSlug] != null)
+                    ? _domainDepth[domainSlug]
+                    : _maxDepth;
+    return depth <= ceiling;
+  }
+
+  // ── SSE subscriber ─────────────────────────────────────────────────────────
+  var _source = null;
+  var _retries = 0;
+  var _MAX_RETRIES = 5;
+
+  function _connect() {
+    if (_source) { _source.close(); _source = null; }
+    var url = (JUG.API_URL || 'http://127.0.0.1:3458/api/graph')
+                .replace('/api/graph', '/api/graph/events');
+    _source = new EventSource(url);
+
+    _source.addEventListener('batch', function (ev) {
+      try {
+        var d = JSON.parse(ev.data);
+        var nodes = d.nodes || [];
+        var edges = d.edges || [];
+        if (!nodes.length && !edges.length) return;
+
+        // Classify batch by first node's kind if label is ambiguous.
+        var firstKind = nodes[0] ? (nodes[0].kind || nodes[0].type || '') : '';
+        var depth = _depthOf(d.label, firstKind);
+
+        // Filter nodes to allowed depth.
+        var allowed = nodes.filter(function (n) {
+          var nDepth = _depthOf(d.label, n.kind || n.type || '');
+          var slug = n.domain || (n.domain_id || '').split(':')[1] || '';
+          return _allowed(nDepth, slug);
+        });
+        if (!allowed.length) return;
+
+        // Seed positions from parent if available.
+        var graph = JUG.state && JUG.state.lastData;
+        allowed.forEach(function (n) {
+          if (n.x != null && n.y != null) return;
+          var domId = n.domain_id || ('domain:' + (n.domain || ''));
+          if (graph) {
+            var parent = (graph.nodes || []).find(function(gn){ return gn.id === domId; });
+            if (parent) {
+              n.x = (parent.x || 0) + (Math.random() - 0.5) * 80;
+              n.y = (parent.y || 0) + (Math.random() - 0.5) * 80;
+            }
+          }
+        });
+
+        var allowedIds = Object.create(null);
+        allowed.forEach(function(n){ allowedIds[n.id] = true; });
+        var filtEdges = edges.filter(function(e){
+          return allowedIds[e.source] || allowedIds[e.target];
+        });
+
+        if (typeof JUG.appendGraphDelta === 'function') {
+          JUG.appendGraphDelta(allowed, filtEdges);
+        }
+        _retries = 0;
+      } catch (e) {
+        console.warn('[lod] batch parse error', e);
+      }
+    });
+
+    _source.addEventListener('done', function () {
+      _source.close(); _source = null;
+      _status('Online — click a node to expand');
+    });
+
+    _source.onerror = function () {
+      _source.close(); _source = null;
+      if (_retries < _MAX_RETRIES) {
+        _retries++;
+        setTimeout(_connect, 2000 * _retries);
+      }
+    };
+  }
+
+  // ── Click-to-expand: unlock one more depth for the clicked node's domain ───
+  var _expandedNodes = {};
+
+  if (window.JUG && JUG.on) {
+    JUG.on('graph:selectNode', function (node) {
+      if (!node || _expandedNodes[node.id]) return;
+      _expandedNodes[node.id] = true;
+
+      var kind  = node.kind || node.type || '';
+      var slug  = node.domain || (node.id.split(':')[1] || '');
+      var depth = _kindDepth(kind);
+      var want  = depth + 1;
+
+      if (want > 4) return; // stop before memories (5) unless explicit
+
+      // Raise the ceiling for this domain and reconnect SSE so missed
+      // batches replay (EventSource Last-Event-ID handles resume).
+      var current = _domainDepth[slug] != null ? _domainDepth[slug] : _maxDepth;
+      if (want <= current) return; // already unlocked
+
+      _domainDepth[slug] = want;
+      console.log('[lod] unlocked', slug, '→ depth', want);
+      _status('Loading depth ' + want + ' for ' + (node.label || slug) + '…');
+
+      // Reconnect to replay missed batches at new depth.
+      setTimeout(function () { _connect(); }, 50);
+    });
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
   function _status(msg) {
     var el = document.getElementById('status-text');
     if (el) el.textContent = msg;
   }
 
-  // ── Fetch + cache a phase ──────────────────────────────────────────────────
+  // ── Boot ───────────────────────────────────────────────────────────────────
+  // Kick the build via progress poll, then open the SSE stream.
+  fetch((JUG.API_URL||'http://127.0.0.1:3458/api/graph').replace('/api/graph','/api/graph/progress'))
+    .catch(function(){});
+  setTimeout(_connect, 1000);
 
-  function _fetchPhase(key) {
-    if (_phaseCache[key]) return Promise.resolve(_phaseCache[key]);
-    if (_fetchPromise[key]) return _fetchPromise[key];
-
-    _fetchPromise[key] = fetch(_base() + '/api/graph/phase?name=' + encodeURIComponent(key))
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) {
-        if (data && data.ready) {
-          _phaseCache[key] = { nodes: data.nodes || [], edges: data.edges || [] };
-          return _phaseCache[key];
-        }
-        // Not ready — retry in 3 s, do not cache.
-        delete _fetchPromise[key];
-        return new Promise(function (resolve) {
-          setTimeout(function () { resolve(_fetchPhase(key)); }, 3000);
-        });
-      })
-      .catch(function () {
-        delete _fetchPromise[key];
-        return { nodes: [], edges: [] };
-      });
-
-    return _fetchPromise[key];
-  }
-
-  // ── Inject children of a clicked node ─────────────────────────────────────
-
-  function _injectChildren(node, phaseKey) {
-    if (_injectedFor[node.id]) return;
-    _injectedFor[node.id] = true;
-    _status('Loading children of ' + (node.label || node.id) + '…');
-
-    _fetchPhase(phaseKey).then(function (phase) {
-      var allNodes = phase.nodes;
-      var allEdges = phase.edges;
-
-      // Filter to nodes whose domain_id matches the clicked node, OR whose
-      // parent edge connects to the clicked node id.
-      var domainId = node.id;             // e.g. "domain:cortex"
-      var domainSlug = node.domain || (node.id.split(':')[1] || '');
-
-      var childNodes = allNodes.filter(function (n) {
-        return n.domain_id === domainId
-            || n.domain    === domainSlug
-            || n.parent_id === domainId;
-      });
-
-      if (!childNodes.length) {
-        // No domain match — fall back to injecting the full phase once.
-        // This covers tool_hub, file, etc. whose parent isn't a domain.
-        childNodes = allNodes;
-      }
-
-      // Collect edges that connect child nodes.
-      var childIds = Object.create(null);
-      childNodes.forEach(function (n) { childIds[n.id] = true; });
-      var childEdges = allEdges.filter(function (e) {
-        return childIds[e.source] || childIds[e.target];
-      });
-
-      // Seed positions near the clicked node so D3 places them locally.
-      var graph = JUG.state && JUG.state.lastData;
-      var px = 0, py = 0;
-      if (graph) {
-        var parent = (graph.nodes || []).find(function (n) { return n.id === node.id; });
-        if (parent) { px = parent.x || 0; py = parent.y || 0; }
-      }
-      childNodes.forEach(function (n) {
-        if (n.x == null) n.x = px + (Math.random() - 0.5) * 60;
-        if (n.y == null) n.y = py + (Math.random() - 0.5) * 60;
-      });
-
-      if (childNodes.length) {
-        if (typeof JUG.appendGraphDelta === 'function') {
-          JUG.appendGraphDelta(childNodes, childEdges);
-        }
-        console.log('[lod] injected', childNodes.length, 'children of', node.id,
-                    '(phase', phaseKey + ')');
-      }
-      _status('Online — click nodes to expand');
-    });
-  }
-
-  // ── Click handler ──────────────────────────────────────────────────────────
-
+  // Suppress the "loading memories" progress banner — user only cares about
+  // structural graph. Hide it after L1 is done.
   if (window.JUG && JUG.on) {
-    JUG.on('graph:selectNode', function (node) {
-      if (!node) return;
-      var kind = node.kind || node.type || '';
-      var phase = KIND_PHASE[kind];
-      if (!phase) return;
-      _injectChildren(node, phase);
+    JUG.on('state:activeView', function(ev) {
+      if (ev && ev.value === 'graph') {
+        var b = document.getElementById('build-progress');
+        if (b) b.style.display = 'none';
+      }
     });
   }
-
-  // ── Boot: load L0 once the server has it ready ─────────────────────────────
-
-  var _bootTries = 0;
-  function _bootPoll() {
-    _bootTries++;
-    if (_bootTries > 30) return; // give up after ~60 s
-    fetch(_base() + '/api/graph/progress')
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (p) {
-        if (!p || !p.phases) return;
-        if (p.phases['L0']) {
-          _fetchPhase('L0').then(function (phase) {
-            if (phase.nodes.length && typeof JUG.appendGraphDelta === 'function') {
-              JUG.appendGraphDelta(phase.nodes, phase.edges);
-              console.log('[lod] boot: L0 loaded,', phase.nodes.length, 'domain nodes');
-              _status('Online — click a domain to expand it');
-            }
-          });
-          return; // stop polling
-        }
-        _status('Building graph…');
-        setTimeout(_bootPoll, 2000);
-      })
-      .catch(function () { setTimeout(_bootPoll, 3000); });
-  }
-
-  // Kick build then poll.
-  fetch(_base() + '/api/graph/progress').catch(function () {});
-  setTimeout(_bootPoll, 1200);
+  // Also hide it on boot after a short grace period.
+  setTimeout(function() {
+    var b = document.getElementById('build-progress');
+    if (b) b.style.display = 'none';
+  }, 8000);
 
   // ── Debug ──────────────────────────────────────────────────────────────────
   window.JUG = window.JUG || {};
   JUG._lod = {
-    cache: _phaseCache,
-    injected: _injectedFor,
-    loadPhase: _fetchPhase,
-    inject: _injectChildren,
+    maxDepth: function(d){ _maxDepth = d; _connect(); },
+    unlockDomain: function(slug, d){ _domainDepth[slug] = d; _connect(); },
+    domainDepth: _domainDepth,
   };
 
 }());
