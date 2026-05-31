@@ -2,71 +2,199 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cortex — Neural Graph</title>
 <style>
+:root {
+  --bg: #080810; --fg: #c4d4dc; --accent: #00d4ff;
+  --ink-1: rgba(255,255,255,0.05); --ink-2: rgba(255,255,255,0.08);
+  --mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:#080810; color:#c4d4dc; font-family: monospace; overflow:hidden; }
-#graph-container { width:100vw; height:100vh; }
-#status { position:fixed; bottom:10px; left:14px; font-size:11px; color:#80d2e0; letter-spacing:1px; pointer-events:none; }
-#stats { position:fixed; top:10px; left:10px; font-size:11px; line-height:2; background:rgba(8,8,16,0.75); padding:8px 12px; border-radius:4px; border:1px solid rgba(120,200,220,0.15); }
-#stats b { color:#00d4ff; }
+body { background:var(--bg); color:var(--fg); font-family:var(--mono); font-size:12px; overflow:hidden; }
+#graph { width:100vw; height:100vh; }
+
+/* Sidebar */
+#sidebar {
+  position:fixed; top:0; left:0; width:220px; height:100vh;
+  background:rgba(6,8,18,0.85); border-right:1px solid rgba(120,200,220,0.1);
+  padding:16px 12px; pointer-events:none; z-index:10;
+  display:flex; flex-direction:column; gap:4px;
+}
+.sidebar-title { font-size:16px; font-weight:700; color:var(--accent); letter-spacing:2px; margin-bottom:4px; }
+.sidebar-sub { font-size:10px; color:rgba(196,212,220,0.4); letter-spacing:1.5px; margin-bottom:12px; }
+.stat-row { display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.03); }
+.stat-row span:first-child { color:rgba(196,212,220,0.6); }
+.stat-row span:last-child { color:var(--accent); font-weight:600; }
+
+/* Status bar */
+#status {
+  position:fixed; bottom:10px; left:50%; transform:translateX(-50%);
+  background:rgba(10,16,28,0.9); border:1px solid rgba(120,200,220,0.2);
+  border-radius:4px; padding:6px 14px; font-size:11px; color:#80d2e0;
+  letter-spacing:1px; white-space:nowrap; z-index:20;
+  transition: opacity 0.4s;
+}
+
+/* Loading overlay */
+#loading {
+  position:fixed; inset:0; background:var(--bg); z-index:100;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+  transition:opacity 0.6s;
+}
+#loading.done { opacity:0; pointer-events:none; }
+.loader-ring {
+  width:40px; height:40px; border:2px solid rgba(0,212,255,0.15);
+  border-top-color:var(--accent); border-radius:50%;
+  animation:spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+.loader-title { font-size:22px; font-weight:800; letter-spacing:6px; color:var(--accent); }
+.loader-sub { font-size:11px; color:rgba(196,212,220,0.5); letter-spacing:2px; }
 </style>
 </head>
 <body>
-<div id="stats">
-  Nodes: <b id="s-nodes">—</b><br>
-  Edges: <b id="s-edges">—</b><br>
-  Source: <b id="s-src">—</b>
+
+<div id="loading">
+  <div class="loader-ring"></div>
+  <div class="loader-title">CORTEX</div>
+  <div class="loader-sub" id="loader-msg">Reading snapshot…</div>
 </div>
-<div id="graph-container"></div>
-<div id="status">Initializing…</div>
+
+<div id="sidebar">
+  <div class="sidebar-title">CORTEX</div>
+  <div class="sidebar-sub">Neural Graph</div>
+  <div class="stat-row"><span>Nodes</span><span id="s-nodes">—</span></div>
+  <div class="stat-row"><span>Edges</span><span id="s-edges">—</span></div>
+  <div class="stat-row"><span>Domains</span><span id="s-domains">—</span></div>
+</div>
+
+<div id="graph"></div>
+<div id="status">Loading…</div>
 
 <script src="vendor/force-graph.min.js"></script>
-<script src="js/state.js"></script>
-<script src="js/config.js"></script>
-<script src="js/draw.js"></script>
-<script src="js/tooltip.js"></script>
-<script src="js/renderer.js"></script>
-<script src="js/graph.js"></script>
-
 <script>
-const { invoke } = window.__TAURI__.core;
-
+// ── Helpers ────────────────────────────────────────────────────────────────
 function setText(id, v) { const e = document.getElementById(id); if(e) e.textContent = v; }
 function setStatus(msg) { setText('status', msg); }
+function setLoaderMsg(msg) { setText('loader-msg', msg); }
 
+function hideLoading() {
+  const el = document.getElementById('loading');
+  if(!el) return;
+  el.classList.add('done');
+  setTimeout(() => { if(el.parentNode) el.parentNode.removeChild(el); }, 700);
+}
+
+// ── Colors (same palette as the browser graph) ────────────────────────────
+const KIND_COLOR = {
+  domain:'#FCD34D', skill:'#FB923C', hook:'#A855F7', agent:'#EC4899',
+  command:'#FACC15', mcp:'#6366F1', tool_hub:'#F97316', file:'#06B6D4',
+  discussion:'#EF4444', memory:'#10B981', symbol:'#64748B', entity:'#50B0C8',
+};
+function nodeColor(n) { return n.color || KIND_COLOR[n.kind] || KIND_COLOR[n.type] || '#94A3B8'; }
+function nodeRadius(n) {
+  const r = { domain:20, tool_hub:12, mcp:10, skill:8, hook:8, agent:8,
+               command:6, file:5, discussion:6, memory:5, symbol:3, entity:4 };
+  return (r[n.kind] || r[n.type] || 4) * (n.size || 1);
+}
+
+// ── Graph renderer ─────────────────────────────────────────────────────────
+let graph = null;
+let hoveredNode = null;
+
+function initGraph(nodes, edges) {
+  const container = document.getElementById('graph');
+  graph = ForceGraph()(container)
+    .backgroundColor('#080810')
+    .nodeId('id')
+    .nodeLabel('label')
+    .nodeCanvasObject((node, ctx, scale) => {
+      const r = nodeRadius(node) / scale;
+      const color = nodeColor(node);
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, 2*Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+      if(scale > 4 && node.label) {
+        ctx.font = `${Math.min(6/scale, 2)}px monospace`;
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.textAlign = 'center';
+        ctx.fillText(node.label, node.x, node.y + r + 2/scale);
+      }
+    })
+    .nodeCanvasObjectMode(() => 'replace')
+    .linkColor(() => 'rgba(80,180,200,0.10)')
+    .linkWidth(0.4)
+    .d3AlphaDecay(0.02)
+    .d3VelocityDecay(0.3)
+    .warmupTicks(50)
+    .cooldownTicks(300)
+    .graphData({ nodes, links: edges });
+
+  // Stats
+  const domainCount = nodes.filter(n => n.kind === 'domain' || n.type === 'domain').length;
+  setText('s-nodes', nodes.length.toLocaleString());
+  setText('s-edges', edges.length.toLocaleString());
+  setText('s-domains', domainCount);
+}
+
+// ── Boot via Tauri IPC ─────────────────────────────────────────────────────
 async function boot() {
-  setStatus('Reading snapshot from disk…');
+  // Wait for Tauri IPC to be available
+  let retries = 0;
+  while (!window.__TAURI__ && retries < 20) {
+    await new Promise(r => setTimeout(r, 100));
+    retries++;
+  }
+  if (!window.__TAURI__) {
+    setStatus('Error: Tauri IPC not available');
+    return;
+  }
+
+  const { invoke } = window.__TAURI__.core;
+
   try {
+    setLoaderMsg('Checking snapshot…');
     const info = await invoke('get_snapshot_info');
+
     if (info.exists !== 'true') {
-      setStatus('No snapshot — run: open http://127.0.0.1:3458 once to build it');
+      setLoaderMsg('No snapshot found');
+      setStatus('Run: uv run python3 scripts/dump_snapshot.py first');
+      hideLoading();
       return;
     }
+
     const sizeMB = (parseInt(info.size_bytes) / 1048576).toFixed(1);
-    setStatus('Decoding ' + sizeMB + ' MB snapshot (Rust, direct disk)…');
+    setLoaderMsg(`Decoding ${sizeMB} MB…`);
+    setStatus(`Reading ${sizeMB} MB snapshot from disk…`);
 
     const t0 = performance.now();
     const data = await invoke('load_graph');
     const ms = Math.round(performance.now() - t0);
 
-    setStatus('Rendering ' + data.node_count.toLocaleString() + ' nodes…');
-    setText('s-nodes', data.node_count.toLocaleString());
-    setText('s-edges', data.edge_count.toLocaleString());
-    setText('s-src', data.source);
+    setLoaderMsg(`Rendering ${data.node_count.toLocaleString()} nodes…`);
+    setStatus(`Decoded in ${ms} ms — starting force simulation…`);
 
-    // Feed into existing force-graph renderer via JUG.appendGraphDelta
-    JUG.state.lastData = { nodes: [], edges: [], links: [], meta: { schema: 'workflow_graph.v1' } };
-    JUG.appendGraphDelta(data.nodes, data.edges);
+    initGraph(data.nodes, data.edges);
+    hideLoading();
+    setStatus(`Ready — ${data.node_count.toLocaleString()} nodes · ${data.edge_count.toLocaleString()} edges · loaded in ${ms} ms`);
 
-    setStatus('Ready — ' + data.node_count.toLocaleString() + ' nodes loaded in ' + ms + ' ms');
+    // Fade out status after 5s
+    setTimeout(() => {
+      const el = document.getElementById('status');
+      if(el) el.style.opacity = '0.3';
+    }, 5000);
+
   } catch(err) {
     setStatus('Error: ' + err);
-    console.error(err);
+    setLoaderMsg('Failed: ' + err);
+    hideLoading();
+    console.error('[cortex]', err);
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => setTimeout(boot, 200));
+window.addEventListener('DOMContentLoaded', () => setTimeout(boot, 100));
 </script>
 </body>
 </html>

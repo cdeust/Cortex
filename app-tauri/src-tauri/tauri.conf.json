@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "identifier": "tools.ai-architect.cortex-graph",
   "build": {
-    "frontendDist": "../frontend",
-    "devUrl": "http://localhost:1420"
+    "frontendDist": "../frontend"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Cortex — Neural Graph",
