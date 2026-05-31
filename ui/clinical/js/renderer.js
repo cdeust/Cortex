@@ -64,9 +64,9 @@ const KIND_COLOURS = {
 const DEFAULT_COLOUR = "#94A3B8";
 
 // ── Depth → default node size ──────────────────────────────────────────────
-// Kept intentionally small — nodes at 600k+ need to be dots, not blobs.
-// Domain hubs (L0) are 8 so they read as "bigger" without dominating.
-const DEPTH_SIZE = [8, 5, 4, 3, 2, 2, 1.5];
+// Matches old graph: domain hubs 28–48 px radius, children scale down by depth.
+// Sigma sizes are in graph units; at typical zoom they map ~1:1 to pixels.
+const DEPTH_SIZE = [28, 12, 9, 6, 5, 4, 3];
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -164,19 +164,13 @@ function _nodeReducer(_key, data) {
  * @param {Object} data
  * @returns {Object}
  */
-function _edgeReducer(key, data) {
-  // Sigma v3 reducers receive (key, attributes) — no graph arg.
-  // Use the module-level _graph to check endpoint visibility.
-  if (_graph) {
-    try {
-      const src = _graph.source(key);
-      const tgt = _graph.target(key);
-      const srcHidden = _graph.getNodeAttribute(src, "hidden");
-      const tgtHidden = _graph.getNodeAttribute(tgt, "hidden");
-      if (srcHidden || tgtHidden) return { ...data, hidden: true };
-    } catch (_) { /* edge or node not yet in graph — treat as visible */ }
-  }
-  return { ...data, hidden: false, color: "#333333", size: 0.5 };
+function _edgeReducer(_key, data) {
+  return {
+    ...data,
+    hidden: false,
+    color:  "rgba(80,180,200,0.12)",
+    size:   0.6,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -235,13 +229,14 @@ export function mount(container, callbacks = {}) {
   _sigma = new SigmaClass(_graph, container, {
     renderEdgeLabels:              false,
     defaultEdgeType:               "line",
-    // Only render persistent labels for large nodes (L0 domains at size 8).
-    // Smaller nodes show their label on hover only — keeps the canvas clean.
-    labelRenderedSizeThreshold:    7,
-    labelSize:                     11,
+    // Show persistent labels for L0 (28) and L1 (12); smaller nodes hover-only.
+    labelRenderedSizeThreshold:    10,
+    labelSize:                     12,
     labelColor:                    { color: "#c4d4dc" },
     labelFont:                     "JetBrains Mono, monospace",
-    labelWeight:                   "400",
+    labelWeight:                   "500",
+    // Edge visibility — subtle cyan like the old graph.
+    defaultEdgeColor:              "rgba(80,180,200,0.15)",
     nodeReducer:                   _nodeReducer,
     edgeReducer:                   _edgeReducer,
   });
@@ -277,19 +272,20 @@ export function addNodes(nodes, currentVisibleDepth = Infinity) {
     // if it's not a registered program. We keep it as `kind` only.
     const { id, type: _serverType, ...attrs } = n;
     const nodeDepth = attrs.depth || 0;
-    const isVisible = nodeDepth <= currentVisibleDepth;
-    const fadePct = isVisible ? 0 : 1;
+    // Show all loaded nodes — the "galaxy cluster" visual requires simultaneous
+    // rendering of all depths. Depth controls WHAT IS FETCHED, not what is shown.
+    const fadePct = 0;   // start transparent, fade in regardless of depth
     _graph.addNode(id, {
       ...attrs,
       label:   _shortLabel(attrs.label || id),
       kind:    attrs.kind || _serverType || "default",
       type:    "circle",   // Sigma v3 WebGL program — always "circle"
       depth:   nodeDepth,
-      x:       typeof attrs.x === "number" ? attrs.x : (Math.random() - 0.5) * 100,
-      y:       typeof attrs.y === "number" ? attrs.y : (Math.random() - 0.5) * 100,
+      x:       typeof attrs.x === "number" ? attrs.x : (Math.random() - 0.5) * 2,
+      y:       typeof attrs.y === "number" ? attrs.y : (Math.random() - 0.5) * 2,
       color:   kindColour(attrs.kind || _serverType || ""),
       size:    depthSize(nodeDepth),
-      hidden:  !isVisible,
+      hidden:  false,
       fadePct,
     });
     if (isVisible) {
@@ -464,12 +460,14 @@ export function getSigma() {
  * Call once after the initial batch of nodes is rendered.
  */
 export function fitCamera() {
-  if (!_sigma) return;
+  if (!_sigma || !_graph) return;
   try {
-    // Sigma v3: getCamera().animatedReset() or setState with explicit ratio
-    const cam = _sigma.getCamera();
-    // Reset to default first, then fit proportionally.
-    // ratio > 1 = zoomed out; we want enough zoom-out to see the full ring.
-    cam.setState({ x: 0.5, y: 0.5, ratio: 1.8, angle: 0 });
-  } catch (_) { /* ignore if camera API varies */ }
+    // Let Sigma compute the bounding box and fit everything into view.
+    // animatedReset() is the Sigma v3 equivalent of "fit all nodes".
+    _sigma.getCamera().animatedReset();
+  } catch (_) {
+    // Fallback: manual zoom-out for coordinate space of ~16 units diameter
+    try { _sigma.getCamera().setState({ x: 0.5, y: 0.5, ratio: 2.5, angle: 0 }); }
+    catch (__) { /* ignore */ }
+  }
 }

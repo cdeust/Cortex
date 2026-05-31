@@ -62,11 +62,11 @@ const _domainCentroids = new Map();
 // Used when /api/quadtree returns 503 (no DrL positions yet).
 // L0 domain nodes: golden-angle ring at DOMAIN_R.
 // L1+ nodes: golden-angle orbit around their domain hub at depth-scaled radius.
-// Coordinate space matches DrL's normalised [-1, 1] output so that
-// positions snap correctly when quadtree becomes available.
-const DOMAIN_R      = 0.85;   // domain ring — fits in the [-1,1] world
-const CHILD_R_BASE  = 0.18;   // L1 orbit radius around domain hub
-const CHILD_R_STEP  = 0.12;   // extra radius per additional depth level
+// Coordinate space: large enough for readable clusters but compatible with
+// DrL's normalised output. Nodes spread across a visible galaxy pattern.
+const DOMAIN_R      = 8;      // domain ring radius (~screen-space friendly)
+const CHILD_R_BASE  = 2.5;    // L1 orbit radius around domain hub
+const CHILD_R_STEP  = 1.8;    // extra radius per additional depth level
 const GOLDEN_ANGLE  = 2.39996322972865332; // radians (2π / φ²)
 
 /** @type {Map<string,{x:number,y:number}>} domain node id → position */
