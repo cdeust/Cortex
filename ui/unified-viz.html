@@ -151,29 +151,13 @@
     fetch('/api/graph/progress').then(function(r){ return r.ok ? r.json() : null; }).then(function(p){
       if(p){
         refreshBar(p);
-        var seq = Promise.resolve();
-        var keys = Object.keys(p.phases || {});
-        keys.forEach(function(k){
-          if(!applied[k] && p.phases[k]){
-            seq = seq.then(function(){ return applyPhase(k); });
-          }
-        });
-        // Two-stage fallback: render skeleton (~1 s) on baseline_ready,
-        // then re-render with the full graph on full_ready. The cumulative
-        // /api/graph cache holds both stages in turn; appendGraphDelta
-        // dedups so the second fetch only adds the heavy nodes.
+        // Phase loading is handled exclusively by phase_loader.js.
+        // This inline script only drives the progress bar + CXGB snapshot.
         if(p.baseline_ready && !skeletonFetched){
           skeletonFetched = true;
           _renderFromCache('skeleton');
         }
-        if(p.full_ready && !fullFetched){
-          fullFetched = true;
-          _renderFromCache('full');
-        }
-        if(p.full_ready){
-          var allDone = keys.every(function(k){ return applied[k] || !p.phases[k]; });
-          if(allDone){ return; }
-        }
+        if(p.full_ready){ return; }
       }
       setTimeout(poll, 400);
     }).catch(function(){ setTimeout(poll, 1200); });
