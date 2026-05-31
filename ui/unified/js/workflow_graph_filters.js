@@ -149,7 +149,11 @@
       var domains = [];
       for (var i = 0; i < data.nodes.length; i++) {
         var n = data.nodes[i];
-        if (n.kind === 'domain' || n.type === 'domain') {
+        // Only real project domains — exclude the global sentinel and
+        // filesystem-path garbage. isGlobal is the authoritative flag.
+        if ((n.kind === 'domain' || n.type === 'domain')
+            && !n.isGlobal
+            && n.id !== 'domain:__global__') {
           domains.push(n.label || n.id.replace('domain:', ''));
         }
       }
