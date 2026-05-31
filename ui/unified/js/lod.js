@@ -460,19 +460,20 @@
           // Filter out global; count real project domains.
           var realDomains = nodes.filter(function(n) { return n.selectableDomain; });
           if (realDomains.length > 0) {
-            // Fresh data from server — clear cache entry so we re-inject.
             if (showedCache) delete _loaded['L0:*'];
             _applyL0(nodes, phase.edges || [], false);
           } else {
-            // Not ready yet — retry.
-            if (!showedCache) _status('Building domain graph…');
-            setTimeout(tryL0, 2500);
+            // Server still building — show progress and retry quickly.
+            if (!showedCache) {
+              _status('Building graph (' + tries + '/' + 25 + ')… ' +
+                      'Nodes: ' + (phase ? (phase.node_total || 0) : 0));
+            }
+            setTimeout(tryL0, 1000);  // retry every 1s, not 2.5s
           }
         })
-        .catch(function() { setTimeout(tryL0, 3000); });
+        .catch(function() { setTimeout(tryL0, 2000); });
     }
-    // Delay slightly so cache render settles first; then fetch fresh.
-    setTimeout(tryL0, showedCache ? 1500 : 300);
+    setTimeout(tryL0, showedCache ? 1500 : 200);  // try at 200ms on cold start
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────
