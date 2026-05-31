@@ -318,76 +318,94 @@
     });
   }
 
-  // ── Boot: L0 domains must appear INSTANTLY ────────────────────────────────
-  //
-  // Strategy:
-  //   1. If localStorage has cached L0 nodes from a previous session, inject
-  //      them immediately (< 10 ms) so the graph appears without any wait.
-  //   2. In parallel, kick the server build and poll for a fresher L0.
-  //      When fresher data arrives, re-inject (dedup is a no-op for nodes
-  //      already present; new nodes from updated sessions get added).
-  //   3. Cache TTL: 24 h — domains don't change often.
+  // ── Domain dropdown: populate directly from L0 nodes ─────────────────────
+  // Populate immediately when we have L0 data — don't wait for state:lastData.
+  // workflow_graph_filters.js and controls.js also populate on state:lastData,
+  // but this ensures the dropdown is ready before any user interaction.
 
-  var L0_CACHE_TTL = 24 * 60 * 60 * 1000;  // 24 hours
+  function _populateDomainDropdown(nodes) {
+    var sel = document.getElementById('domain-select');
+    if (!sel) return;
+    var domains = [];
+    nodes.forEach(function(n) {
+      if (n.selectableDomain && n.label) domains.push(n.label);
+    });
+    domains.sort();
+    var current = sel.value;
+    sel.innerHTML = '<option value="">All Domains</option>';
+    domains.forEach(function(d) {
+      var opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = d;
+      sel.appendChild(opt);
+    });
+    if (domains.indexOf(current) !== -1) sel.value = current;
+  }
 
-  function _bootFromCache() {
-    try {
-      var raw = localStorage.getItem(L0_CACHE_KEY);
-      if (!raw) return false;
-      var cached = JSON.parse(raw);
-      if (!cached || !cached.nodes || !cached.nodes.length) return false;
-      if (Date.now() - (cached.ts || 0) > L0_CACHE_TTL) return false;
-      // Inject cached L0 immediately — no network round-trip.
-      _inject(cached.nodes, cached.edges || [], 'L0[cache]', '');
-      _loaded['L0:*'] = true;   // mark loaded so boot poll refreshes, not re-loads
-      _status('Online — use the filter to load deeper layers');
-      return true;
-    } catch(_e) { return false; }
+  // ── Boot: L0 domains INSTANTLY ────────────────────────────────────────────
+  // 1. Try localStorage cache first → sub-10ms display.
+  // 2. Immediately fetch /api/graph/phase?name=L0 — if server has data, use it.
+  // 3. If server returns empty (cold start), kick build and retry.
+  // No complex progress-polling — just try L0 directly and retry on miss.
+
+  var L0_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+  function _applyL0(nodes, edges, fromCache) {
+    var f = _filterNodes(nodes, edges, '', 'L0');
+    if (!f.nodes.length) return false;
+    _inject(f.nodes, f.edges, fromCache ? 'L0[cache]' : 'L0', '');
+    _populateDomainDropdown(f.nodes);
+    _loaded['L0:*'] = true;
+    _status('Online — select a depth or domain to explore');
+    // Update localStorage with fresh data.
+    if (!fromCache) {
+      try { localStorage.setItem(L0_CACHE_KEY, JSON.stringify({ nodes: f.nodes, edges: f.edges, ts: Date.now() })); } catch(_e) {}
+    }
+    return true;
   }
 
   function _boot() {
-    // Step 1: show domains instantly from cache if available.
-    var fromCache = _bootFromCache();
+    // 1. Try cache for instant display.
+    var showedCache = false;
+    try {
+      var raw = localStorage.getItem(L0_CACHE_KEY);
+      if (raw) {
+        var cached = JSON.parse(raw);
+        if (cached && cached.nodes && cached.nodes.length &&
+            (Date.now() - (cached.ts || 0)) < L0_CACHE_TTL) {
+          showedCache = _applyL0(cached.nodes, cached.edges || [], true);
+        }
+      }
+    } catch(_e) {}
 
-    // Step 2: kick the full build and refresh L0 from server.
+    // 2. Kick the build so the server starts building fresh data.
     fetch(_base() + '/api/graph?batch_size=1').catch(function(){});
 
+    // 3. Immediately try fetching L0 from server (works if server is warm).
     var tries = 0;
-    var refreshed = false;
-    function poll() {
+    function tryL0() {
       tries++;
-      if (tries > 30 || refreshed) return;
-      fetch(_base() + '/api/graph/progress')
-        .then(function(r){ return r.ok ? r.json() : null; })
-        .then(function(p){
-          var l0Ready = p && p.phases && p.phases['L0'] === true;
-          if (l0Ready) {
-            fetch(_base() + '/api/graph/phase?name=L0')
-              .then(function(r){ return r.ok ? r.json() : null; })
-              .then(function(phase){
-                var nodeCount = phase ? (phase.node_total || (phase.nodes||[]).length) : 0;
-                if (nodeCount > 1) {
-                  refreshed = true;
-                  // Clear stale cache entry so _loadPhase re-injects fresh data.
-                  if (fromCache) delete _loaded['L0:*'];
-                  _loadPhase('L0', '', function(){
-                    if (!fromCache) _status('Online — use the filter to load deeper layers');
-                  });
-                } else {
-                  if (!fromCache) _status('Building domain graph…');
-                  setTimeout(poll, 3000);
-                }
-              })
-              .catch(function(){ setTimeout(poll, 3000); });
+      if (tries > 25) return;
+      fetch(_base() + '/api/graph/phase?name=L0')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(phase) {
+          var nodes = phase ? (phase.nodes || []) : [];
+          // Filter out global; count real project domains.
+          var realDomains = nodes.filter(function(n) { return n.selectableDomain; });
+          if (realDomains.length > 0) {
+            // Fresh data from server — clear cache entry so we re-inject.
+            if (showedCache) delete _loaded['L0:*'];
+            _applyL0(nodes, phase.edges || [], false);
           } else {
-            if (!fromCache) _status('Building graph…');
-            setTimeout(poll, 2500);
+            // Not ready yet — retry.
+            if (!showedCache) _status('Building domain graph…');
+            setTimeout(tryL0, 2500);
           }
         })
-        .catch(function(){ setTimeout(poll, 3000); });
+        .catch(function() { setTimeout(tryL0, 3000); });
     }
-    // If we had cache, delay the refresh poll so the cached view can settle.
-    setTimeout(poll, fromCache ? 2000 : 1200);
+    // Delay slightly so cache render settles first; then fetch fresh.
+    setTimeout(tryL0, showedCache ? 1500 : 300);
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────
