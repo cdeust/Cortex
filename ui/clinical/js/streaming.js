@@ -58,6 +58,56 @@ let _progressTimer = null;
 /** @type {Map<string,{x:number,y:number,count:number}>} */
 const _domainCentroids = new Map();
 
+// ── Hierarchical fallback layout ──────────────────────────────────────────
+// Used when /api/quadtree returns 503 (no DrL positions yet).
+// L0 domain nodes: golden-angle ring at DOMAIN_R.
+// L1+ nodes: golden-angle orbit around their domain hub at depth-scaled radius.
+const DOMAIN_R      = 1400;   // radius of the domain ring
+const CHILD_R_BASE  = 280;    // orbit radius at depth 1
+const CHILD_R_STEP  = 180;    // extra radius per additional depth level
+const GOLDEN_ANGLE  = 2.39996322972865332; // radians (2π / φ²)
+
+/** @type {Map<string,{x:number,y:number}>} domain node id → position */
+const _domainNodePos  = new Map();
+let   _domainNodeIdx  = 0;
+/** @type {Map<string,number>} domain id → child counter */
+const _domainChildIdx = new Map();
+
+/**
+ * Deterministic position for a node when the quadtree is unavailable.
+ * Domain nodes are placed on a golden-angle ring; others orbit their hub.
+ * @param {Object} n — node with kind, domain_id, depth fields
+ * @returns {{x:number, y:number}}
+ */
+function _fallbackLayout(n) {
+  const domainId = n.domain_id || ("domain:" + (n.domain || ""));
+
+  // L0 domain nodes — evenly distribute on a large ring.
+  if (n.kind === "domain" || n.kind === "tool_hub" && !n.domain_id) {
+    if (!_domainNodePos.has(n.id)) {
+      const angle = _domainNodeIdx * GOLDEN_ANGLE;
+      _domainNodePos.set(n.id, {
+        x: DOMAIN_R * Math.cos(angle),
+        y: DOMAIN_R * Math.sin(angle),
+      });
+      _domainNodeIdx++;
+    }
+    return _domainNodePos.get(n.id);
+  }
+
+  // All other nodes — orbit around their domain hub.
+  const hub = _domainNodePos.get(domainId) || { x: 0, y: 0 };
+  const childIdx = _domainChildIdx.get(domainId) || 0;
+  _domainChildIdx.set(domainId, childIdx + 1);
+  const depth = n.depth || 1;
+  const r = CHILD_R_BASE + (depth - 1) * CHILD_R_STEP;
+  const angle = childIdx * GOLDEN_ANGLE;
+  return {
+    x: hub.x + r * Math.cos(angle),
+    y: hub.y + r * Math.sin(angle),
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 //  Public API
 // ─────────────────────────────────────────────────────────────────────────
@@ -306,16 +356,17 @@ function _resolvePosition(n) {
     }
   }
 
-  // 3. Domain anchor
+  // 3. Domain anchor (centroid of already-positioned siblings)
   if (n.domain && _domainCentroids.has(n.domain)) {
     const c = _domainCentroids.get(n.domain);
-    const jx = (Math.random() - 0.5) * 40;
-    const jy = (Math.random() - 0.5) * 40;
+    const jx = (Math.random() - 0.5) * 20;
+    const jy = (Math.random() - 0.5) * 20;
     return { x: c.x / c.count + jx, y: c.y / c.count + jy };
   }
 
-  // 4. Origin jitter
-  return { x: (Math.random() - 0.5) * 100, y: (Math.random() - 0.5) * 100 };
+  // 4. Hierarchical fallback — deterministic golden-angle ring / orbit.
+  //    Avoids the all-nodes-at-origin pile-up when quadtree is 503.
+  return _fallbackLayout(n);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
