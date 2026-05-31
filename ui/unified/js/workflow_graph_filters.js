@@ -155,6 +155,9 @@
           domains.push(n.label || n.id.replace('domain:', ''));
         }
       }
+      // Never wipe the dropdown when the graph is empty (e.g. during a
+      // resetGraph() call). Only repopulate when we have real domain nodes.
+      if (!domains.length) return;
       domains.sort();
       var current = sel.value;
       sel.innerHTML = '<option value="">All Domains</option>';
@@ -164,7 +167,8 @@
         opt.textContent = domains[j];
         sel.appendChild(opt);
       }
-      if (domains.indexOf(current) !== -1) sel.value = current;
+      // Restore the selection — works for both "All Domains" and a named domain.
+      if (current === '' || domains.indexOf(current) !== -1) sel.value = current;
     }
     sel.addEventListener('change', function () {
       state.domain = sel.value || '';

@@ -148,6 +148,8 @@
         domains[n.domain] = true;
       }
     });
+    // Never wipe on empty state (resetGraph emits state:lastData with 0 nodes).
+    if (!Object.keys(domains).length) return;
     var current = select.value;
     select.innerHTML = '<option value="">All Domains</option>';
     Object.keys(domains).sort().forEach(function(d) {
@@ -156,7 +158,8 @@
       opt.textContent = d.length > 30 ? d.slice(0, 30) + '...' : d;
       select.appendChild(opt);
     });
-    select.value = current;
+    // Restore selection after repopulation.
+    if (current === '' || Object.keys(domains).indexOf(current) !== -1) select.value = current;
   }
 
   function rebuildWithFilters() {

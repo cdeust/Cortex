@@ -330,6 +330,7 @@
     nodes.forEach(function(n) {
       if (n.selectableDomain && n.label) domains.push(n.label);
     });
+    if (!domains.length) return;  // never wipe on empty
     domains.sort();
     var current = sel.value;
     sel.innerHTML = '<option value="">All Domains</option>';
@@ -339,7 +340,8 @@
       opt.textContent = d;
       sel.appendChild(opt);
     });
-    if (domains.indexOf(current) !== -1) sel.value = current;
+    // Restore previous selection (including named domain after resetGraph).
+    if (current === '' || domains.indexOf(current) !== -1) sel.value = current;
   }
 
   // ── Boot: L0 domains INSTANTLY ────────────────────────────────────────────
