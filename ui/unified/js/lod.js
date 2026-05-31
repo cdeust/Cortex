@@ -238,7 +238,9 @@
   // ── Boot: load L0 (domains only) ──────────────────────────────────────────
 
   function _boot() {
-    // Kick the build, wait for it to have L0, then load.
+    // Kick the full background build by fetching /api/graph (not just progress).
+    // The graph endpoint is the only one that reliably triggers _kick_background_build.
+    fetch(_base() + '/api/graph?batch_size=1').catch(function(){});
     fetch(_base() + '/api/graph/progress').catch(function(){});
     var tries = 0;
     var booted = false;  // guard: load L0 exactly once, regardless of polls
@@ -251,24 +253,27 @@
           // Wait for the server to explicitly mark L0 ready (not just
           // node_count > 0 — the skeleton fires too early with only 1 domain).
           // p.phases['L0'] === true means all domain nodes are in the cache.
-          if (p && p.phases && p.phases['L0'] === true) {
-            booted = true;
-            _loadPhase('L0', '', function(){
-              // If only 1 node loaded (just global), server cache was still
-              // warming — reload once after a short delay.
-              var n = JUG.state && JUG.state.lastData && JUG.state.lastData.nodes;
-              var domainCount = n ? n.filter(function(d){ return d.kind === 'domain' && d.selectableDomain; }).length : 0;
-              if (domainCount < 2) {
-                setTimeout(function(){
-                  delete _loaded['L0:*'];
+          // Load L0 once the server marks it ready AND it has real project
+          // domains (>1 node means more than just global sentinel).
+          var l0Ready = p && p.phases && p.phases['L0'] === true;
+          if (l0Ready) {
+            // Check actual node count via phase endpoint before committing.
+            fetch(_base() + '/api/graph/phase?name=L0')
+              .then(function(r){ return r.ok ? r.json() : null; })
+              .then(function(phase){
+                var nodeCount = phase ? (phase.node_total || (phase.nodes||[]).length) : 0;
+                if (nodeCount > 1) {
+                  booted = true;
                   _loadPhase('L0', '', function(){
                     _status('Online — use the filter to load deeper layers');
                   });
-                }, 3000);
-              } else {
-                _status('Online — use the filter to load deeper layers');
-              }
-            });
+                } else {
+                  // Still only skeleton (global only) — keep waiting.
+                  _status('Building domain graph…');
+                  setTimeout(poll, 3000);
+                }
+              })
+              .catch(function(){ setTimeout(poll, 3000); });
           } else {
             _status('Building graph — waiting for domain layer…');
             setTimeout(poll, 2500);
