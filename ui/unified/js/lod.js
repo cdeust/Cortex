@@ -17,7 +17,15 @@
   var _loaded   = {};   // "phaseKey:domainSlug" → true
   var _pending  = {};   // same key → true (in-flight)
 
+  // L0 domain nodes are cached in localStorage so they appear INSTANTLY
+  // on every page load after the first. The build takes 20–30 s on cold
+  // start; without the cache the user stares at an empty canvas every time.
+  var L0_CACHE_KEY = 'cortex.lod.l0.v1';
+
   var PHASES = ['L0','L1','L2','L3','L4','L5','L6'];
+  // L5 phase is ~838 MB of JSON — exceeds V8's string limit.
+  // Load in chunks via offset/limit to avoid the parse crash.
+  var L5_CHUNK_SIZE = 4000;
 
   var DEPTH_LABEL = {
     L0: 'domains', L1: 'setup', L2: 'tools',
@@ -60,87 +68,158 @@
     return false;
   }
 
-  // ── Load one phase, filtered by domain slug if provided ────────────────────
+  // ── Filter helpers ─────────────────────────────────────────────────────────
+
+  function _filterNodes(nodes, edges, domainSlug, phaseKey) {
+    // Always remove global sentinel — it is an internal anchor, not a project.
+    nodes = nodes.filter(function(n) { return !n.isGlobal && n.id !== 'domain:__global__'; });
+
+    // For L1+, scope strictly to the selected domain.
+    if (domainSlug && domainSlug !== 'all' && domainSlug !== '' && phaseKey !== 'L0') {
+      nodes = nodes.filter(function(n) { return _belongsToDomain(n, domainSlug); });
+    }
+
+    var nodeIds = Object.create(null);
+    nodes.forEach(function(n) { nodeIds[n.id] = true; });
+    edges = edges.filter(function(e) { return nodeIds[e.source] && nodeIds[e.target]; });
+    return { nodes: nodes, edges: edges };
+  }
+
+  function _inject(nodes, edges, phaseKey, domainSlug) {
+    if (nodes.length && typeof JUG.appendGraphDelta === 'function') {
+      JUG.appendGraphDelta(nodes, edges);
+      console.log('[lod]', phaseKey, (domainSlug || '*'),
+                  '+' + nodes.length + 'N +' + edges.length + 'E');
+      _updateLegend();
+    }
+  }
+
+  // ── Legend: show actual rendered node counts ───────────────────────────────
+
+  function _updateLegend() {
+    var d = JUG.state && JUG.state.lastData;
+    if (!d || !d.nodes) return;
+    var counts = { domain:0, memory:0, entity:0, discussion:0 };
+    d.nodes.forEach(function(n) {
+      var k = n.kind || n.type || '';
+      if (counts[k] !== undefined) counts[k]++;
+    });
+    var setText = function(id, v) { var el=document.getElementById(id); if(el) el.textContent=v; };
+    setText('s-dom',  counts.domain);
+    setText('s-mem',  counts.memory);
+    setText('s-ent',  counts.entity);
+    setText('s-disc', counts.discussion);
+    setText('s-nodes', d.nodes.length);
+  }
+
+  // ── Load one phase ─────────────────────────────────────────────────────────
 
   function _loadPhase(phaseKey, domainSlug, onDone) {
     var cacheKey = phaseKey + ':' + (domainSlug || '*');
     if (_loaded[cacheKey] || _pending[cacheKey]) {
-      if (typeof onDone === 'function') onDone();
-      return;
+      if (typeof onDone === 'function') onDone(); return;
     }
     _pending[cacheKey] = true;
     _status('Loading ' + (DEPTH_LABEL[phaseKey] || phaseKey) +
             (domainSlug ? ' for ' + domainSlug : '') + '…');
 
+    // L5 (memories, ~838 MB) must be paginated — V8 can't parse it in one shot.
+    if (phaseKey === 'L5') {
+      _loadPhasePaged('L5', domainSlug, 0, cacheKey, onDone);
+      return;
+    }
+
     fetch(_base() + '/api/graph/phase?name=' + encodeURIComponent(phaseKey))
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) {
-        if (!data) {
-          delete _pending[cacheKey];
-          if (typeof onDone === 'function') onDone();
-          return;
-        }
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data) { delete _pending[cacheKey]; if(typeof onDone==='function') onDone(); return; }
         if (!data.ready && !data.node_total) {
-          // Not ready yet — retry once in 2 s
-          setTimeout(function () {
-            delete _pending[cacheKey];
-            _loadPhase(phaseKey, domainSlug, onDone);
-          }, 2000);
+          setTimeout(function() { delete _pending[cacheKey]; _loadPhase(phaseKey, domainSlug, onDone); }, 2000);
           return;
         }
-        var nodes = data.nodes || [];
-        var edges = data.edges || [];
+        var f = _filterNodes(data.nodes || [], data.edges || [], domainSlug, phaseKey);
+        _inject(f.nodes, f.edges, phaseKey, domainSlug);
 
-        // Domain filter: keep only nodes matching the selected domain.
-        //
-        // L0 is the structural domain layer — keep ALL domain hubs so the
-        // overall map layout stays intact even when a single domain is
-        // selected. For L1+ (setup, tools, files, …) scope STRICTLY to the
-        // selected domain: the user picked "cortex" + "L1" to see cortex's
-        // hub and cortex's children, NOT all 20 domains' children.
-        if (domainSlug && domainSlug !== 'all' && domainSlug !== '' &&
-            phaseKey !== 'L0') {
-          nodes = nodes.filter(function (n) {
-            return _belongsToDomain(n, domainSlug);
-          });
-          var nodeIds = Object.create(null);
-          nodes.forEach(function (n) { nodeIds[n.id] = true; });
-          // Keep only edges internal to the kept node set — matches the
-          // server-side AND scoping so no dangling edge endpoints leak in.
-          edges = edges.filter(function (e) {
-            return nodeIds[e.source] && nodeIds[e.target];
-          });
+        // Cache L0 for instant display on next page load.
+        if (phaseKey === 'L0' && f.nodes.length > 1) {
+          try { localStorage.setItem(L0_CACHE_KEY, JSON.stringify({ nodes: f.nodes, edges: f.edges, ts: Date.now() })); } catch(_e) {}
         }
 
-        if (nodes.length && typeof JUG.appendGraphDelta === 'function') {
-          JUG.appendGraphDelta(nodes, edges);
-          console.log('[lod]', phaseKey, (domainSlug || '*'),
-                      '+' + nodes.length + 'N +' + edges.length + 'E');
-        }
-        _loaded[cacheKey] = true;
-        delete _pending[cacheKey];
+        _loaded[cacheKey] = true; delete _pending[cacheKey];
         _status('Online');
         if (typeof onDone === 'function') onDone();
       })
-      .catch(function (err) {
+      .catch(function(err) {
         console.warn('[lod]', phaseKey, 'failed:', err.message);
-        _loaded[cacheKey] = true;
-        delete _pending[cacheKey];
+        _loaded[cacheKey] = true; delete _pending[cacheKey];
+        if (typeof onDone === 'function') onDone();
+      });
+  }
+
+  // ── L5 paginated loader ────────────────────────────────────────────────────
+
+  function _loadPhasePaged(key, domainSlug, offset, cacheKey, onDone) {
+    var url = _base() + '/api/graph/phase?name=' + encodeURIComponent(key) +
+              '&offset=' + offset + '&limit=' + L5_CHUNK_SIZE;
+    fetch(url)
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || (!data.nodes && !data.edges)) {
+          _loaded[cacheKey] = true; delete _pending[cacheKey];
+          if (typeof onDone === 'function') onDone(); return;
+        }
+        var f = _filterNodes(data.nodes || [], data.edges || [], domainSlug, key);
+        _inject(f.nodes, f.edges, key + '[' + offset + ']', domainSlug);
+        if (!data.done) {
+          setTimeout(function() { _loadPhasePaged(key, domainSlug, offset + L5_CHUNK_SIZE, cacheKey, onDone); }, 50);
+        } else {
+          _loaded[cacheKey] = true; delete _pending[cacheKey];
+          _status('Online'); if (typeof onDone === 'function') onDone();
+        }
+      })
+      .catch(function(err) {
+        console.warn('[lod] L5 chunk failed:', err.message);
+        _loaded[cacheKey] = true; delete _pending[cacheKey];
         if (typeof onDone === 'function') onDone();
       });
   }
 
   // ── Load up to a given depth level (cumulative) ────────────────────────────
+  // L6 is special: server uses L6:cortex, L6:agentic-ai etc — discover from progress.
+
+  var _l6Keys = null;  // discovered L6 phase keys
+
+  function _discoverL6Keys(onReady) {
+    if (_l6Keys !== null) { onReady(_l6Keys); return; }
+    fetch(_base() + '/api/graph/progress')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(p) {
+        _l6Keys = p && p.phases ? Object.keys(p.phases).filter(function(k) { return /^L6[_:]/.test(k) && p.phases[k]; }) : [];
+        onReady(_l6Keys);
+      })
+      .catch(function() { _l6Keys = []; onReady([]); });
+  }
 
   function loadUpTo(maxDepth, domainSlug) {
-    var idx  = PHASES.indexOf(maxDepth);
+    var idx = PHASES.indexOf(maxDepth);
     if (idx < 0) idx = 0;
-    var chain = PHASES.slice(0, idx + 1);  // e.g. ['L0','L1','L2'] for L2
+    // Build a flat chain of phase keys to load in order.
+    var chain = PHASES.slice(0, idx + 1);
 
-    // Load sequentially so L0 domain hubs appear first.
     function loadNext(i) {
       if (i >= chain.length) return;
-      _loadPhase(chain[i], domainSlug, function () { loadNext(i + 1); });
+      var key = chain[i];
+      if (key === 'L6') {
+        // Discover and load all L6:proj sub-phases in order.
+        _discoverL6Keys(function(keys) {
+          if (!keys.length) { _status('No symbol phases available'); return; }
+          var ki = 0;
+          function nextL6() { if (ki < keys.length) _loadPhase(keys[ki++], domainSlug, nextL6); }
+          nextL6();
+        });
+      } else {
+        _loadPhase(key, domainSlug, function() { loadNext(i + 1); });
+      }
     }
     loadNext(0);
   }
@@ -235,53 +314,76 @@
     });
   }
 
-  // ── Boot: load L0 (domains only) ──────────────────────────────────────────
+  // ── Boot: L0 domains must appear INSTANTLY ────────────────────────────────
+  //
+  // Strategy:
+  //   1. If localStorage has cached L0 nodes from a previous session, inject
+  //      them immediately (< 10 ms) so the graph appears without any wait.
+  //   2. In parallel, kick the server build and poll for a fresher L0.
+  //      When fresher data arrives, re-inject (dedup is a no-op for nodes
+  //      already present; new nodes from updated sessions get added).
+  //   3. Cache TTL: 24 h — domains don't change often.
+
+  var L0_CACHE_TTL = 24 * 60 * 60 * 1000;  // 24 hours
+
+  function _bootFromCache() {
+    try {
+      var raw = localStorage.getItem(L0_CACHE_KEY);
+      if (!raw) return false;
+      var cached = JSON.parse(raw);
+      if (!cached || !cached.nodes || !cached.nodes.length) return false;
+      if (Date.now() - (cached.ts || 0) > L0_CACHE_TTL) return false;
+      // Inject cached L0 immediately — no network round-trip.
+      _inject(cached.nodes, cached.edges || [], 'L0[cache]', '');
+      _loaded['L0:*'] = true;   // mark loaded so boot poll refreshes, not re-loads
+      _status('Online — use the filter to load deeper layers');
+      return true;
+    } catch(_e) { return false; }
+  }
 
   function _boot() {
-    // Kick the full background build by fetching /api/graph (not just progress).
-    // The graph endpoint is the only one that reliably triggers _kick_background_build.
+    // Step 1: show domains instantly from cache if available.
+    var fromCache = _bootFromCache();
+
+    // Step 2: kick the full build and refresh L0 from server.
     fetch(_base() + '/api/graph?batch_size=1').catch(function(){});
-    fetch(_base() + '/api/graph/progress').catch(function(){});
+
     var tries = 0;
-    var booted = false;  // guard: load L0 exactly once, regardless of polls
+    var refreshed = false;
     function poll() {
       tries++;
-      if (tries > 20 || booted) return;
+      if (tries > 30 || refreshed) return;
       fetch(_base() + '/api/graph/progress')
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(p){
-          // Wait for the server to explicitly mark L0 ready (not just
-          // node_count > 0 — the skeleton fires too early with only 1 domain).
-          // p.phases['L0'] === true means all domain nodes are in the cache.
-          // Load L0 once the server marks it ready AND it has real project
-          // domains (>1 node means more than just global sentinel).
           var l0Ready = p && p.phases && p.phases['L0'] === true;
           if (l0Ready) {
-            // Check actual node count via phase endpoint before committing.
             fetch(_base() + '/api/graph/phase?name=L0')
               .then(function(r){ return r.ok ? r.json() : null; })
               .then(function(phase){
                 var nodeCount = phase ? (phase.node_total || (phase.nodes||[]).length) : 0;
                 if (nodeCount > 1) {
-                  booted = true;
+                  refreshed = true;
+                  // Clear stale cache entry so _loadPhase re-injects fresh data.
+                  if (fromCache) delete _loaded['L0:*'];
                   _loadPhase('L0', '', function(){
-                    _status('Online — use the filter to load deeper layers');
+                    if (!fromCache) _status('Online — use the filter to load deeper layers');
                   });
                 } else {
-                  // Still only skeleton (global only) — keep waiting.
-                  _status('Building domain graph…');
+                  if (!fromCache) _status('Building domain graph…');
                   setTimeout(poll, 3000);
                 }
               })
               .catch(function(){ setTimeout(poll, 3000); });
           } else {
-            _status('Building graph — waiting for domain layer…');
+            if (!fromCache) _status('Building graph…');
             setTimeout(poll, 2500);
           }
         })
         .catch(function(){ setTimeout(poll, 3000); });
     }
-    setTimeout(poll, 1200);
+    // If we had cache, delay the refresh poll so the cached view can settle.
+    setTimeout(poll, fromCache ? 2000 : 1200);
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────
