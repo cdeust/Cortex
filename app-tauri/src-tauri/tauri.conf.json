@@ -13,11 +13,16 @@
         "width": 1600,
         "height": 1000,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "devtools": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["/tmp/**", "/private/tmp/**"]
+      }
     }
   },
   "bundle": {

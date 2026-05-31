@@ -614,33 +614,59 @@
 <!-- Tauri IPC data loader: reads CXGB snapshot directly from disk via Rust.
      No HTTP server. Triggers on Graph tab activation. -->
 <script>
+// Cortex Tauri data loader.
+// Rust writes /tmp/cortex-graph.json on startup.
+// We fetch it with Tauri's asset protocol.
 (function() {
-  var loaded = false;
-  function _load() {
-    if (loaded || !window.__TAURI__) return;
-    loaded = true;
-    var invoke = window.__TAURI__.core.invoke;
-    var t0 = performance.now();
-    invoke('load_graph')
-      .then(function(data) {
-        if (!data || !data.nodes) return;
-        if (!JUG.state.lastData) {
-          JUG.state.lastData = { nodes: [], edges: [], links: [], meta: { schema: 'workflow_graph.v1' } };
-        }
-        JUG.appendGraphDelta(data.nodes, data.edges || []);
-        var ms = Math.round(performance.now() - t0);
-        console.log('[tauri] loaded ' + data.node_count + ' nodes / ' + data.edge_count + ' edges in ' + ms + ' ms');
-        var el = document.getElementById('status-text');
-        if (el) el.textContent = 'Online (' + data.node_count + ' nodes, ' + ms + ' ms)';
-        var loading = document.getElementById('loading');
-        if (loading) { loading.classList.add('done'); setTimeout(function(){ if(loading.parentNode) loading.parentNode.removeChild(loading); }, 1100); }
-      })
-      .catch(function(err) { console.error('[tauri] load_graph failed:', err); });
+  function applyGraph(data) {
+    if (!data || !data.nodes || !data.nodes.length) return;
+    if (!window.JUG) return;
+    if (!JUG.state.lastData) {
+      JUG.state.lastData = { nodes: [], edges: [], links: [], meta: { schema: 'workflow_graph.v1' } };
+    }
+    JUG.appendGraphDelta(data.nodes, data.edges || []);
+    var el = document.getElementById('status-text');
+    if (el) el.textContent = 'Online (' + data.nodes.length.toLocaleString() + ' nodes)';
+    var loading = document.getElementById('loading');
+    if (loading) {
+      loading.classList.add('done');
+      setTimeout(function() { if (loading.parentNode) loading.parentNode.removeChild(loading); }, 1100);
+    }
   }
+
+  function tryLoad() {
+    // Rust wrote graph-data.js to ~/.cache/cortex/ before the window opened.
+    // Load it as a script — sets window.__CORTEX_GRAPH__.
+    if (window.__CORTEX_GRAPH__) {
+      applyGraph(window.__CORTEX_GRAPH__);
+      return;
+    }
+    var s = document.createElement('script');
+    var home = 'asset://localhost/Users/cdeust';
+    s.src = home + '/.cache/cortex/graph-data.js';
+    s.onload = function() {
+      if (window.__CORTEX_GRAPH__) applyGraph(window.__CORTEX_GRAPH__);
+      else console.error('[cortex] graph-data.js loaded but __CORTEX_GRAPH__ not set');
+    };
+    s.onerror = function(e) {
+      console.error('[cortex] could not load', s.src, e);
+    };
+    document.head.appendChild(s);
+  }
+
+  // Wait for JUG to be ready (graph.js sets up appendGraphDelta)
+  function waitForJUG(tries) {
+    if (window.JUG && typeof JUG.appendGraphDelta === 'function') {
+      tryLoad();
+    } else if (tries > 0) {
+      setTimeout(function() { waitForJUG(tries - 1); }, 100);
+    }
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(_load, 500); });
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(function() { waitForJUG(30); }, 300); });
   } else {
-    setTimeout(_load, 500);
+    setTimeout(function() { waitForJUG(30); }, 300);
   }
 })();
 </script>

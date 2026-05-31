@@ -285,6 +285,27 @@ fn get_snapshot_info() -> HashMap<String, String> {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 fn main() {
+    // Pre-load graph and write as JSON to a temp file the WebView can fetch.
+    // This bypasses IPC entirely — the frontend does a plain fetch('/graph.json').
+    let snapshot_file = snapshot_paths().into_iter().find(|p| p.exists());
+    if let Some(path) = snapshot_file {
+        match fs::read(&path) {
+            Ok(data) => match decode_cxgb(&data) {
+                Ok(graph) => {
+                    let out = dirs::home_dir().unwrap_or_default()
+                        .join(".cache/cortex/graph-data.js");
+                    if let Ok(json) = serde_json::to_string(&graph) {
+                        let js = format!("window.__CORTEX_GRAPH__={};", json);
+                        let _ = fs::write(&out, js);
+                        eprintln!("[cortex] graph JS written to {} ({} nodes)", out.display(), graph.node_count);
+                    }
+                }
+                Err(e) => eprintln!("[cortex] decode error: {}", e),
+            },
+            Err(e) => eprintln!("[cortex] read error: {}", e),
+        }
+    }
+
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![load_graph, get_snapshot_info])
         .run(tauri::generate_context!())
