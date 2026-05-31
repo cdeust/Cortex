@@ -635,23 +635,30 @@
   }
 
   function tryLoad() {
-    // Rust wrote graph-data.js to ~/.cache/cortex/ before the window opened.
-    // Load it as a script — sets window.__CORTEX_GRAPH__.
-    if (window.__CORTEX_GRAPH__) {
-      applyGraph(window.__CORTEX_GRAPH__);
+    // Native IPC: Rust command returns decoded graph data directly.
+    // Try multiple Tauri v2 invoke paths for compatibility.
+    var t0 = performance.now();
+    var invokePromise;
+    if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+      invokePromise = window.__TAURI__.core.invoke('load_graph');
+    } else if (window.__TAURI_INVOKE__) {
+      // Raw internal Tauri invoke available in all v2 versions
+      invokePromise = new Promise(function(res, rej) {
+        window.__TAURI_INVOKE__('load_graph', {}, res, rej);
+      });
+    } else {
+      console.error('[cortex] No Tauri IPC available');
       return;
     }
-    var s = document.createElement('script');
-    var home = 'asset://localhost/Users/cdeust';
-    s.src = home + '/.cache/cortex/graph-data.js';
-    s.onload = function() {
-      if (window.__CORTEX_GRAPH__) applyGraph(window.__CORTEX_GRAPH__);
-      else console.error('[cortex] graph-data.js loaded but __CORTEX_GRAPH__ not set');
-    };
-    s.onerror = function(e) {
-      console.error('[cortex] could not load', s.src, e);
-    };
-    document.head.appendChild(s);
+    invokePromise
+      .then(function(data) {
+        var ms = Math.round(performance.now() - t0);
+        console.log('[cortex] invoke returned', data.node_count, 'nodes in', ms, 'ms');
+        applyGraph(data);
+      })
+      .catch(function(err) {
+        console.error('[cortex] invoke failed:', err);
+      });
   }
 
   // Wait for JUG to be ready (graph.js sets up appendGraphDelta)
