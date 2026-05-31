@@ -248,13 +248,29 @@
       fetch(_base() + '/api/graph/progress')
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(p){
-          if (p && (p.node_count > 0 || (p.phases && p.phases['L0']))) {
+          // Wait for the server to explicitly mark L0 ready (not just
+          // node_count > 0 — the skeleton fires too early with only 1 domain).
+          // p.phases['L0'] === true means all domain nodes are in the cache.
+          if (p && p.phases && p.phases['L0'] === true) {
             booted = true;
             _loadPhase('L0', '', function(){
-              _status('Online — use the filter to load deeper layers');
+              // If only 1 node loaded (just global), server cache was still
+              // warming — reload once after a short delay.
+              var n = JUG.state && JUG.state.lastData && JUG.state.lastData.nodes;
+              var domainCount = n ? n.filter(function(d){ return d.kind === 'domain' && d.selectableDomain; }).length : 0;
+              if (domainCount < 2) {
+                setTimeout(function(){
+                  delete _loaded['L0:*'];
+                  _loadPhase('L0', '', function(){
+                    _status('Online — use the filter to load deeper layers');
+                  });
+                }, 3000);
+              } else {
+                _status('Online — use the filter to load deeper layers');
+              }
             });
           } else {
-            _status('Building graph…');
+            _status('Building graph — waiting for domain layer…');
             setTimeout(poll, 2500);
           }
         })
