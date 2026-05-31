@@ -338,9 +338,29 @@ def get_phase_payload(key: str) -> dict:
             nodes = [n for n in all_nodes if (n.get("kind") or n.get("type")) in allowed_kinds]
             if nodes:
                 node_ids = {n["id"] for n in nodes}
+                # Edge scoping — AND, not OR.
+                #
+                # Symptom: "[lod] L0 cortex +20N +484347E" — L0 returns 20
+                # domain nodes but 484,347 edges (all edges in the graph).
+                #
+                # Root cause: with an OR predicate every edge that merely
+                # *touches* a phase node is included. L0 nodes are the ~20
+                # domain hubs, and nearly every node in the graph carries an
+                # ``in_domain`` edge pointing TO its domain hub. OR therefore
+                # matched all those edges → the entire edge set.
+                #
+                # Fix: a phase payload must carry only edges INTERNAL to the
+                # phase — both endpoints inside this phase's node set. Under
+                # the client's append model (lod.js → appendGraphDelta), a
+                # cross-phase parent edge (e.g. tool_hub -> domain) is owned
+                # by the CHILD phase, which the client appends on top of the
+                # already-loaded parent phase; the dedup sets in graph.js
+                # keep repeats a no-op. So no edge is lost by requiring both
+                # endpoints here, and L0 collapses back to its ~20 structural
+                # domain-to-domain edges.
                 edges = [
                     e for e in all_edges
-                    if e.get("source") in node_ids or e.get("target") in node_ids
+                    if e.get("source") in node_ids and e.get("target") in node_ids
                 ]
 
     return {

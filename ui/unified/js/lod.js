@@ -36,6 +36,30 @@
     if (el) el.textContent = msg;
   }
 
+  // ── Domain scoping ─────────────────────────────────────────────────────────
+  //
+  // A node belongs to the selected domain when its own `domain`/`domain_id`
+  // names that domain. The domain hub node for `slug` is the node with
+  // `kind === 'domain'` and `label === slug` (or `id` ending in `:slug`); it
+  // also satisfies `domain === slug` for hubs that self-tag, so it is included
+  // by the same predicate.
+  //
+  // Symptom: "I ask for L1 of Cortex I get all domains." Root cause: the old
+  // filter had `|| n.kind === 'domain'`, which kept ALL 20 domain hubs for any
+  // selected domain, regardless of slug — so selecting "cortex" still rendered
+  // every domain. Fix: scope strictly to the selected domain's own nodes; the
+  // one matching domain hub comes along naturally.
+  function _belongsToDomain(n, slug) {
+    if (n.domain === slug) return true;
+    if ((n.domain_id || '').indexOf(slug) !== -1) return true;
+    // The domain hub for this slug (its own kind === 'domain' node).
+    if ((n.kind || n.type) === 'domain') {
+      if (n.label === slug) return true;
+      if ((n.id || '').indexOf(':' + slug) !== -1) return true;
+    }
+    return false;
+  }
+
   // ── Load one phase, filtered by domain slug if provided ────────────────────
 
   function _loadPhase(phaseKey, domainSlug, onDone) {
@@ -51,7 +75,11 @@
     fetch(_base() + '/api/graph/phase?name=' + encodeURIComponent(phaseKey))
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
-        if (!data) return;
+        if (!data) {
+          delete _pending[cacheKey];
+          if (typeof onDone === 'function') onDone();
+          return;
+        }
         if (!data.ready && !data.node_total) {
           // Not ready yet — retry once in 2 s
           setTimeout(function () {
@@ -64,16 +92,23 @@
         var edges = data.edges || [];
 
         // Domain filter: keep only nodes matching the selected domain.
-        if (domainSlug && domainSlug !== 'all' && domainSlug !== '') {
+        //
+        // L0 is the structural domain layer — keep ALL domain hubs so the
+        // overall map layout stays intact even when a single domain is
+        // selected. For L1+ (setup, tools, files, …) scope STRICTLY to the
+        // selected domain: the user picked "cortex" + "L1" to see cortex's
+        // hub and cortex's children, NOT all 20 domains' children.
+        if (domainSlug && domainSlug !== 'all' && domainSlug !== '' &&
+            phaseKey !== 'L0') {
           nodes = nodes.filter(function (n) {
-            return n.domain === domainSlug
-                || (n.domain_id || '').indexOf(domainSlug) !== -1
-                || n.kind === 'domain';  // always keep domain hubs visible
+            return _belongsToDomain(n, domainSlug);
           });
           var nodeIds = Object.create(null);
           nodes.forEach(function (n) { nodeIds[n.id] = true; });
+          // Keep only edges internal to the kept node set — matches the
+          // server-side AND scoping so no dangling edge endpoints leak in.
           edges = edges.filter(function (e) {
-            return nodeIds[e.source] || nodeIds[e.target];
+            return nodeIds[e.source] && nodeIds[e.target];
           });
         }
 
@@ -125,17 +160,30 @@
     return sel ? (sel.value || '') : '';
   }
 
+  // Clear only the cache keys for the phases we are about to (re)load, for the
+  // requested domain scope. Clearing the WHOLE `_loaded` map (the old bug)
+  // also wiped the boot poller's record that L0 had loaded, letting the poller
+  // re-fire and reload from scratch — part of the reset loop.
+  function _clearPhasesFor(depth, domain) {
+    var idx = PHASES.indexOf(depth);
+    if (idx < 0) idx = 0;
+    var scope = ':' + (domain || '*');
+    for (var i = 0; i <= idx; i++) {
+      delete _loaded[PHASES[i] + scope];
+    }
+  }
+
   function _onFilterChange() {
     var depth  = _currentDepth();
     var domain = _currentDomain();
-    // Full reset — clears nodes, edges, AND the dedup sets (graph.js:188-189)
-    // so appendGraphDelta starts clean. Without this, old nodes stay and new
-    // ones pile on top because _existingIdSet is never cleared (root cause 4).
-    _loaded = {};
-    _clickExpanded = {};
-    if (typeof JUG.resetGraph === 'function') {
-      JUG.resetGraph();
-    }
+    // No full reset. resetGraph() rebuilds the scene with an EMPTY dataset,
+    // which emits `state:lastData` with 0 nodes → the console "Graph: 0 nodes,
+    // 0 edges" flash AND wipes the domain dropdown (controls.js /
+    // workflow_graph_filters.js repopulate it from lastData on that event).
+    // Instead we clear only the affected phase cache keys and re-append; the
+    // dedup sets in graph.js make already-present nodes a no-op, so re-loading
+    // the same depth is harmless and there is no visible empty flash.
+    _clearPhasesFor(depth, domain);
     loadUpTo(depth, domain);
   }
 
@@ -154,7 +202,9 @@
       domainSel.addEventListener('change', function () {
         var depth = _currentDepth();
         if (/^L[0-6]$/.test(depth)) {
-          // Reload current depth for the new domain.
+          // Reload current depth for the new domain. Clear only this depth's
+          // phase keys for the new scope so the strict domain filter re-runs.
+          _clearPhasesFor(depth, domainSel.value || '');
           loadUpTo(depth, domainSel.value || '');
         }
       });
@@ -191,13 +241,15 @@
     // Kick the build, wait for it to have L0, then load.
     fetch(_base() + '/api/graph/progress').catch(function(){});
     var tries = 0;
+    var booted = false;  // guard: load L0 exactly once, regardless of polls
     function poll() {
       tries++;
-      if (tries > 20) return;
+      if (tries > 20 || booted) return;
       fetch(_base() + '/api/graph/progress')
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(p){
           if (p && (p.node_count > 0 || (p.phases && p.phases['L0']))) {
+            booted = true;
             _loadPhase('L0', '', function(){
               _status('Online — use the filter to load deeper layers');
             });
