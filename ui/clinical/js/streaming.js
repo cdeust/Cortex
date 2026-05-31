@@ -62,9 +62,11 @@ const _domainCentroids = new Map();
 // Used when /api/quadtree returns 503 (no DrL positions yet).
 // L0 domain nodes: golden-angle ring at DOMAIN_R.
 // L1+ nodes: golden-angle orbit around their domain hub at depth-scaled radius.
-const DOMAIN_R      = 1400;   // radius of the domain ring
-const CHILD_R_BASE  = 280;    // orbit radius at depth 1
-const CHILD_R_STEP  = 180;    // extra radius per additional depth level
+// Coordinate space matches DrL's normalised [-1, 1] output so that
+// positions snap correctly when quadtree becomes available.
+const DOMAIN_R      = 0.85;   // domain ring — fits in the [-1,1] world
+const CHILD_R_BASE  = 0.18;   // L1 orbit radius around domain hub
+const CHILD_R_STEP  = 0.12;   // extra radius per additional depth level
 const GOLDEN_ANGLE  = 2.39996322972865332; // radians (2π / φ²)
 
 /** @type {Map<string,{x:number,y:number}>} domain node id → position */
@@ -140,6 +142,7 @@ export async function coldStart() {
     renderer.applyPositions(_positionMap);
   }
   renderer.refresh();
+  renderer.fitCamera();  // zoom out to show the full domain ring
 
   // 6. Start progress bar polling.
   _startProgressPolling();

@@ -458,3 +458,18 @@ export function getGraph() {
 export function getSigma() {
   return _sigma;
 }
+
+/**
+ * Fit the camera to all visible nodes with padding.
+ * Call once after the initial batch of nodes is rendered.
+ */
+export function fitCamera() {
+  if (!_sigma) return;
+  try {
+    // Sigma v3: getCamera().animatedReset() or setState with explicit ratio
+    const cam = _sigma.getCamera();
+    // Reset to default first, then fit proportionally.
+    // ratio > 1 = zoomed out; we want enough zoom-out to see the full ring.
+    cam.setState({ x: 0.5, y: 0.5, ratio: 1.8, angle: 0 });
+  } catch (_) { /* ignore if camera API varies */ }
+}
