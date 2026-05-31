@@ -1,0 +1,472 @@
+/* Cortex Memory Board — Kanban by consolidation stage */
+
+#timeline-container {
+  /* Geometry (position, top/left/right/bottom, padding, overflow) owned by
+     theme.css so the view clears the fixed filter-bar. Keep only the
+     display behavior + cosmetic properties here. */
+  display: none;
+  flex-direction: column;
+  background: var(--void, #080810);
+  z-index: 0;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* View toggle */
+.view-toggle {
+  display: inline-flex; gap: 0; margin-right: 12px;
+  border: 1px solid var(--cyan, #50D0E8); border-radius: 4px; overflow: hidden;
+}
+.view-toggle .view-btn {
+  padding: 4px 10px; font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--cyan, #50D0E8);
+  background: transparent; border: none; cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.view-toggle .view-btn:not(:last-child) { border-right: 1px solid var(--cyan, #50D0E8); }
+.view-toggle .view-btn.active { background: var(--cyan, #50D0E8); color: var(--void, #080810); }
+.view-toggle .view-btn:hover:not(.active) { background: rgba(80,208,232,0.12); }
+
+/* ═══════════════════════════════════
+   FLOW HEADER STRIP
+   ═══════════════════════════════════ */
+.kb-flow-strip {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 8px 6px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.kb-flow-node {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+}
+.kb-flow-count {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 0 8px currentColor;
+}
+.kb-flow-label {
+  font: 700 11px 'Orbitron', sans-serif;
+  color: var(--sc, #50C8E0);
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 6px currentColor;
+}
+/* Percentage bar row */
+.kb-flow-pct-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 6px;
+}
+.kb-flow-pct-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.kb-flow-pct-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.kb-flow-pct {
+  font-size: 11px;
+  font-weight: 600;
+  color: #FFF;
+  min-width: 32px;
+  text-align: right;
+}
+/* Biological properties */
+.kb-flow-bio-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  width: 100%;
+}
+.kb-flow-bio-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+.kb-flow-bio-row span:first-child { color: #C0D4E0; }
+.kb-flow-bio-row span:last-child { color: #FFF; font-weight: 600; }
+/* Live metrics section */
+.kb-flow-live {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 4px 0 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.kb-flow-live-title {
+  font: 700 11px 'Orbitron', sans-serif;
+  color: var(--sc, #50C8E0);
+  letter-spacing: 0.15em;
+  text-align: center;
+  margin-bottom: 2px;
+}
+/* Advance condition */
+.kb-flow-advance {
+  font-size: 11px;
+  color: #C0D4E0;
+  text-align: center;
+  padding: 4px 6px 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  width: 100%;
+  line-height: 1.4;
+}
+/* Mini metric bars in flow nodes */
+.kb-flow-metric {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 0 6px;
+}
+.kb-flow-metric-label {
+  font-size: 11px;
+  color: #C0D4E0;
+  width: 40px;
+  min-width: 40px;
+}
+.kb-flow-metric-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.kb-flow-metric-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.kb-flow-metric-val {
+  font-size: 11px;
+  font-weight: 600;
+  color: #FFF;
+  width: 30px;
+  text-align: right;
+}
+
+.kb-flow-arrow {
+  width: 28px;
+  min-width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 16px;
+}
+.kb-flow-arrow-line {
+  width: 100%;
+  height: 2px;
+  background: var(--sc, #50C8E0);
+  opacity: 0.3;
+  position: relative;
+}
+.kb-flow-arrow-line::after {
+  content: '\u25B6';
+  position: absolute;
+  right: -6px; top: -6px;
+  font-size: 8px;
+  color: var(--sc, #50C8E0);
+  opacity: 0.5;
+}
+
+/* ═══════════════════════════════════
+   BOARD — 5 columns side by side
+   ═══════════════════════════════════ */
+.kb-board {
+  flex: 1 1 0;
+  min-height: 0;                     /* allow grid children to scroll */
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-flow: column;
+  gap: 8px;
+  padding: 4px 8px 8px;
+  overflow: hidden;
+}
+
+/* ── Column ── */
+.kb-col {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255,255,255,0.02);
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+/* Column header */
+.kb-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--sc, #50C8E0);
+  flex-shrink: 0;
+}
+.kb-col-title {
+  font: 700 11px 'Orbitron', sans-serif;
+  color: var(--sc, #50C8E0);
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 10px var(--sc, #50C8E0);
+}
+.kb-col-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sc, #50C8E0);
+  background: rgba(255,255,255,0.06);
+  padding: 2px 8px;
+  border-radius: 8px;
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Cards container — scrollable */
+.kb-col-cards {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kb-col-cards::-webkit-scrollbar { width: 3px; }
+.kb-col-cards::-webkit-scrollbar-track { background: transparent; }
+.kb-col-cards::-webkit-scrollbar-thumb { background: var(--sc, #50C8E0)25; border-radius: 2px; }
+
+/* Empty state */
+.kb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60px;
+  font-size: 11px;
+  color: rgba(200,220,235,0.3);
+  border: 1px dashed rgba(255,255,255,0.08);
+  border-radius: 4px;
+}
+
+/* ═══════════════════════════════════
+   CARD
+   ═══════════════════════════════════ */
+.kb-card {
+  position: relative;
+  display: flex;
+  background: var(--card, #0e1018);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s, opacity 0.15s, box-shadow 0.15s;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+/* Heat tint pseudo-element */
+.kb-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: var(--card-stage-color, transparent);
+  opacity: calc(var(--card-heat, 0) * 0.12);
+  transition: opacity 0.3s;
+}
+.kb-card:hover {
+  border-color: rgba(80,210,235,0.3);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Integrity border variants */
+.kb-card--healthy { border-left: 4px solid #60D888; }
+.kb-card--consolidating { border-left: 4px solid #E0B840; }
+.kb-card--at-risk { border-left: 4px dashed #E07070; }
+.kb-card--fading { border-left: 4px dotted #555; }
+.kb-card--neutral { border-left: 4px solid #666; }
+
+/* Card body */
+.kb-card-body {
+  flex: 1;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Label */
+.kb-card-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #FFF;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Meta: domain + time */
+.kb-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kb-card-domain {
+  font-size: 11px;
+  font-weight: 500;
+  color: #A0C0D8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kb-card-time {
+  font-size: 11px;
+  color: #8AB0C8;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Tags */
+.kb-card-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.kb-card-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: #50D0E8;
+  background: rgba(80,210,235,0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(80,210,235,0.15);
+}
+
+/* Store type badge */
+.kb-card__store-badge {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.kb-card__store-badge--episodic { background: rgba(88, 216, 136, 0.15); color: #58D888; }
+.kb-card__store-badge--semantic { background: rgba(192, 112, 208, 0.15); color: #C070D0; }
+
+/* Always-visible scan tier — cards are full-size at first paint so
+   no hover/click expansion shifts the layout. The hover-grow used to
+   drag the bottom sentinel into the IntersectionObserver's view,
+   which triggered an unintended next-page fetch. */
+.kb-card__scan {
+  max-height: none;
+  overflow: visible;
+  padding: 6px 0 0;
+  border-top: 1px solid rgba(80, 208, 232, 0.1);
+}
+
+/* Bio bars */
+.kb-card__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0;
+}
+.kb-card__bar-label {
+  font-size: 9px;
+  color: var(--text-dim, #8AB0C8);
+  width: 55px;
+  flex-shrink: 0;
+}
+.kb-card__bar-track {
+  flex: 1;
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.kb-card__bar-fill {
+  height: 3px;
+  background: var(--cyan, #50D0E8);
+  border-radius: 2px;
+  max-width: 100%;
+}
+
+/* Risk badges */
+.kb-card__risk-badge {
+  font-size: 9px;
+  color: #E07070;
+  padding: 1px 4px;
+  border: 1px solid rgba(224, 112, 112, 0.3);
+  border-radius: 3px;
+  margin-top: 3px;
+  display: inline-block;
+}
+.kb-card__meta-badge {
+  font-size: 9px;
+  color: var(--cyan-dim, #508090);
+  margin-left: 4px;
+}
+
+/* Flow header at-risk badge */
+.kb-flow-risk-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #E07070;
+  background: rgba(224, 112, 112, 0.1);
+  border: 1px solid rgba(224, 112, 112, 0.3);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* Badges */
+.kb-badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.kb-badge-protected { color: #E8B840; }
+.kb-badge-semantic {
+  color: #C070D0;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+/* ═══════════════════════════════════
+   SELECTION
+   ═══════════════════════════════════ */
+.kb-card-selected {
+  border-color: var(--cyan, #50D0E8) !important;
+  box-shadow: 0 0 12px rgba(80,210,235,0.2) !important;
+  z-index: 10;
+}
+/* Fading/dropped memories (heat < 0.1) */
+.kb-card-fading {
+  opacity: 0.4;
+  border-style: dashed;
+}
+.kb-card-fading .kb-card-label {
+  text-decoration: line-through;
+  text-decoration-color: rgba(224,80,80,0.3);
+}
+
+.kb-card-dimmed {
+  opacity: 0.15;
+}
