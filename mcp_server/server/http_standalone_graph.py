@@ -305,14 +305,44 @@ def _register_phase(key: str, deps: list[str], label: str) -> None:
         _build_progress.setdefault("phases", {})[key] = False
 
 
+_PHASE_KINDS: dict[str, set[str]] = {
+    "L0": {"domain"},
+    "L1": {"skill", "hook", "command", "agent", "mcp"},
+    "L2": {"tool_hub"},
+    "L3": {"file"},
+    "L4": {"discussion"},
+    "L5": {"memory"},
+}
+
+
 def get_phase_payload(key: str) -> dict:
     spec = PHASES.get(key)
     pl = _phase_payloads.get(key, {"nodes": [], "edges": []})
     nodes = pl.get("nodes", [])
     edges = pl.get("edges", [])
+
+    # Fallback: _phase_payloads is empty when the streaming builder
+    # populates _graph_cache directly instead of the phase cache.
+    # Extract the relevant kind-slice from the full cache so the
+    # phase endpoint always returns useful data.
+    if not nodes and key in _PHASE_KINDS:
+        cache = _graph_cache
+        if cache:
+            cache_data = cache.get("data") if isinstance(cache.get("data"), dict) else cache
+            all_nodes: list = cache_data.get("nodes", []) if isinstance(cache_data, dict) else []
+            all_edges: list = cache_data.get("edges", []) if isinstance(cache_data, dict) else []
+            allowed_kinds = _PHASE_KINDS[key]
+            nodes = [n for n in all_nodes if (n.get("kind") or n.get("type")) in allowed_kinds]
+            if nodes:
+                node_ids = {n["id"] for n in nodes}
+                edges = [
+                    e for e in all_edges
+                    if e.get("source") in node_ids or e.get("target") in node_ids
+                ]
+
     return {
         "phase": key,
-        "ready": bool(spec and spec["ready"]),
+        "ready": bool((spec and spec["ready"]) or nodes),
         "deps": spec["deps"] if spec else [],
         "nodes": nodes,
         "edges": edges,

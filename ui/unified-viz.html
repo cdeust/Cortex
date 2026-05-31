@@ -201,15 +201,15 @@
   <button class="filter-btn" id="wfg-filter-reset"
           title="Clear the graph filter (show everything)">Reset</button>
   <select id="wfg-filter-select" class="filter-select"
-          aria-label="Workflow graph filter">
-    <option value="all" selected>All nodes</option>
-    <optgroup label="By layer">
-      <option value="L1">L1 — Claude setup (skills · hooks · commands · agents)</option>
-      <option value="L2">L2 — tools (Edit · Read · Grep · Glob · Bash · Write · Task)</option>
-      <option value="L3">L3 — files touched by tools</option>
-      <option value="L4">L4 — discussions</option>
-      <option value="L5">L5 — memories</option>
-      <option value="L6">L6 — AST symbols (functions · methods · classes)</option>
+          aria-label="Load depth — controls how many layers to load">
+    <optgroup label="Load depth (on demand)">
+      <option value="L0" selected>L0 — Domains only</option>
+      <option value="L1">L1 — + Setup (skills · hooks · agents)</option>
+      <option value="L2">L2 — + Tools (Edit · Read · Bash…)</option>
+      <option value="L3">L3 — + Files</option>
+      <option value="L4">L4 — + Discussions</option>
+      <option value="L5">L5 — + Memories</option>
+      <option value="L6">L6 — + AST symbols</option>
     </optgroup>
     <optgroup label="By kind">
       <option value="kind:skill">Skills only</option>
