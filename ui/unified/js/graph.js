@@ -273,4 +273,15 @@
   JUG.buildGraph = buildGraph;
   JUG.addBatchToGraph = addBatchToGraph;
   JUG.getActiveEdges = function() { return JUG._activeEdges || []; };
+
+  // Full reset: clears nodes, edges, AND the dedup sets so appendGraphDelta
+  // starts clean. Call before loading a new depth level (not between phases
+  // of the same depth, where append is correct).
+  JUG.resetGraph = function() {
+    JUG.state.lastData = { nodes: [], edges: [], links: [], meta: {} };
+    JUG._existingIdSet  = null;
+    JUG._existingEdgeSet = null;
+    JUG._rebuildQueued  = false;
+    if (JUG.state.lastData) buildGraph(JUG.state.lastData);
+  };
 })();

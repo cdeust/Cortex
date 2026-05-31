@@ -59,46 +59,10 @@
   // L6 phases with >50K nodes are symbol clouds too dense to navigate in
   // the graph view — skip them too (they still exist in the backend cache
   // for chain analysis).
-  // Skip phases that lod.js loads on-demand; skip L5 (838MB) always.
-  var SKIP_PHASES = { 'L5': true };
-  var L6_NODE_CAP = 50000;
-
-  function applyPhase(key){
-    if(applied[key] || inflight[key]) return Promise.resolve();
-    // Let lod.js own L0+L1 loading — don't double-load.
-    if((key === 'L0' || key === 'L1') && window.JUG && JUG._lod){
-      applied[key] = true; return Promise.resolve();
-    }
-    if(SKIP_PHASES[key]){ applied[key] = true; return Promise.resolve(); }
-    inflight[key] = true;
-    return fetch('/api/graph/phase?name='+encodeURIComponent(key))
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(p){
-        if(!p || !p.ready) return;
-        // Guard: skip oversized L6 symbol phases to protect the canvas.
-        if(key.indexOf('L6:') === 0 && (p.node_total || 0) > L6_NODE_CAP){
-          console.log('[phase] skipped (too large)', key, p.node_total+'N');
-          applied[key] = true;
-          return;
-        }
-        if(typeof JUG.appendGraphDelta === 'function'){
-          if(!JUG.state.lastData){
-            JUG.state.lastData = {
-              nodes: [], edges: [], links: [],
-              meta: { schema: 'workflow_graph.v1' }
-            };
-          }
-          JUG.appendGraphDelta(p.nodes || [], p.edges || []);
-        }
-        applied[key] = true;
-        console.log('[phase] applied', key, '+'+((p.nodes||[]).length)+'N', '+'+((p.edges||[]).length)+'E');
-      })
-      .catch(function(err){
-        console.warn('[phase] '+key+' failed:', err);
-        applied[key] = true;  // don't retry a permanently-failing phase
-      })
-      .then(function(){ inflight[key] = false; });
-  }
+  // lod.js is the sole owner of phase loading.
+  // This inline script only updates the progress bar and build stats.
+  // applyPhase is a no-op stub — kept to avoid reference errors in poll().
+  function applyPhase(){ return Promise.resolve(); }
 
   function refreshBar(p){
     var box = document.getElementById('build-progress');

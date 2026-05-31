@@ -143,7 +143,10 @@
     if (!select || !JUG.state.lastData) return;
     var domains = {};
     (JUG.state.lastData.nodes || []).forEach(function(n) {
-      if (n.domain) domains[n.domain] = true;
+      // Only real project domains — exclude global sentinel and filesystem paths.
+      if (n.kind === 'domain' && !n.isGlobal && n.domain && n.domain !== 'global') {
+        domains[n.domain] = true;
+      }
     });
     var current = select.value;
     select.innerHTML = '<option value="">All Domains</option>';

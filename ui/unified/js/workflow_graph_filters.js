@@ -107,7 +107,11 @@
     var sel = document.getElementById('wfg-filter-select');
     if (sel) {
       sel.addEventListener('change', function () {
-        state.wfgFilter = sel.value || 'all';
+        var val = sel.value || 'all';
+        // L0–L6 are depth-load commands owned by lod.js, not visual filters.
+        // Let the event propagate to lod.js; do not apply a visual predicate.
+        if (/^L[0-6]$/.test(val)) return;
+        state.wfgFilter = val;
         apply();
       });
     }

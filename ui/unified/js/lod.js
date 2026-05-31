@@ -128,11 +128,13 @@
   function _onFilterChange() {
     var depth  = _currentDepth();
     var domain = _currentDomain();
-    // Reset graph to domain skeleton before loading new depth.
-    if (typeof JUG.buildGraph === 'function' && JUG.state && JUG.state.lastData) {
-      // Keep only domain nodes in lastData, then reload.
-      JUG.state.lastData = { nodes: [], edges: [], meta: {} };
-      _loaded = {};
+    // Full reset — clears nodes, edges, AND the dedup sets (graph.js:188-189)
+    // so appendGraphDelta starts clean. Without this, old nodes stay and new
+    // ones pile on top because _existingIdSet is never cleared (root cause 4).
+    _loaded = {};
+    _clickExpanded = {};
+    if (typeof JUG.resetGraph === 'function') {
+      JUG.resetGraph();
     }
     loadUpTo(depth, domain);
   }

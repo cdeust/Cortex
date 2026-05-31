@@ -307,8 +307,11 @@ def _register_phase(key: str, deps: list[str], label: str) -> None:
 
 _PHASE_KINDS: dict[str, set[str]] = {
     "L0": {"domain"},
-    "L1": {"skill", "hook", "command", "agent", "mcp"},
-    "L2": {"tool_hub"},
+    # L1 = structural setup layer (~190 nodes: skills, hooks, agents, MCPs).
+    # "command" is Bash-execution telemetry (5878 nodes) — NOT setup.
+    # Commands belong in L2 alongside tool_hubs via command_in_hub edges.
+    "L1": {"skill", "hook", "agent", "mcp"},
+    "L2": {"tool_hub", "command"},
     "L3": {"file"},
     "L4": {"discussion"},
     "L5": {"memory"},
