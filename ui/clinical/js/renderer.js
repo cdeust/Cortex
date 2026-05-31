@@ -290,9 +290,7 @@ export function addNodes(nodes, currentVisibleDepth = Infinity) {
       hidden:  !isVisible,
       fadePct,
     });
-    if (isVisible) {
-      _fadingIn.add(id);
-    }
+    if (isVisible) _fadingIn.add(id);
   }
   _startFade();
 }
