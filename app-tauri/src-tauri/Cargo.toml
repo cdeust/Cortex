@@ -1,0 +1,25 @@
+[package]
+name = "cortex-graph"
+version = "1.0.0"
+edition = "2021"
+
+[[bin]]
+name = "cortex-graph"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+byteorder = "1"
+dirs = "5"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

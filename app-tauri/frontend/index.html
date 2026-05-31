@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cortex — Neural Graph</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#080810; color:#c4d4dc; font-family: monospace; overflow:hidden; }
+#graph-container { width:100vw; height:100vh; }
+#status { position:fixed; bottom:10px; left:14px; font-size:11px; color:#80d2e0; letter-spacing:1px; pointer-events:none; }
+#stats { position:fixed; top:10px; left:10px; font-size:11px; line-height:2; background:rgba(8,8,16,0.75); padding:8px 12px; border-radius:4px; border:1px solid rgba(120,200,220,0.15); }
+#stats b { color:#00d4ff; }
+</style>
+</head>
+<body>
+<div id="stats">
+  Nodes: <b id="s-nodes">—</b><br>
+  Edges: <b id="s-edges">—</b><br>
+  Source: <b id="s-src">—</b>
+</div>
+<div id="graph-container"></div>
+<div id="status">Initializing…</div>
+
+<script src="vendor/force-graph.min.js"></script>
+<script src="js/state.js"></script>
+<script src="js/config.js"></script>
+<script src="js/draw.js"></script>
+<script src="js/tooltip.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/graph.js"></script>
+
+<script>
+const { invoke } = window.__TAURI__.core;
+
+function setText(id, v) { const e = document.getElementById(id); if(e) e.textContent = v; }
+function setStatus(msg) { setText('status', msg); }
+
+async function boot() {
+  setStatus('Reading snapshot from disk…');
+  try {
+    const info = await invoke('get_snapshot_info');
+    if (info.exists !== 'true') {
+      setStatus('No snapshot — run: open http://127.0.0.1:3458 once to build it');
+      return;
+    }
+    const sizeMB = (parseInt(info.size_bytes) / 1048576).toFixed(1);
+    setStatus('Decoding ' + sizeMB + ' MB snapshot (Rust, direct disk)…');
+
+    const t0 = performance.now();
+    const data = await invoke('load_graph');
+    const ms = Math.round(performance.now() - t0);
+
+    setStatus('Rendering ' + data.node_count.toLocaleString() + ' nodes…');
+    setText('s-nodes', data.node_count.toLocaleString());
+    setText('s-edges', data.edge_count.toLocaleString());
+    setText('s-src', data.source);
+
+    // Feed into existing force-graph renderer via JUG.appendGraphDelta
+    JUG.state.lastData = { nodes: [], edges: [], links: [], meta: { schema: 'workflow_graph.v1' } };
+    JUG.appendGraphDelta(data.nodes, data.edges);
+
+    setStatus('Ready — ' + data.node_count.toLocaleString() + ' nodes loaded in ' + ms + ' ms');
+  } catch(err) {
+    setStatus('Error: ' + err);
+    console.error(err);
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => setTimeout(boot, 200));
+</script>
+</body>
+</html>

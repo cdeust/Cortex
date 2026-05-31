@@ -1,0 +1,28 @@
+{
+  "productName": "Cortex Graph",
+  "version": "1.0.0",
+  "identifier": "tools.ai-architect.cortex-graph",
+  "build": {
+    "frontendDist": "../frontend",
+    "devUrl": "http://localhost:1420"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Cortex — Neural Graph",
+        "width": 1600,
+        "height": 1000,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": []
+  }
+}

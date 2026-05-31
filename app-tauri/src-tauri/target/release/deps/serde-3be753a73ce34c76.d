@@ -1,0 +1,14 @@
+/Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/deps/serde-3be753a73ce34c76.d: /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/build/serde-ee4f988f157785bb/out/private.rs
+
+/Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/deps/libserde-3be753a73ce34c76.rlib: /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/build/serde-ee4f988f157785bb/out/private.rs
+
+/Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/deps/libserde-3be753a73ce34c76.rmeta: /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/build/serde-ee4f988f157785bb/out/private.rs
+
+/Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/build/serde-ee4f988f157785bb/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/build/serde-ee4f988f157785bb/out

@@ -1,0 +1,14 @@
+/Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/deps/thiserror-caba3f6fdca5dd39.d: /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/build/thiserror-75cf82f60c513d5b/out/private.rs
+
+/Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/deps/libthiserror-caba3f6fdca5dd39.rlib: /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/build/thiserror-75cf82f60c513d5b/out/private.rs
+
+/Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/deps/libthiserror-caba3f6fdca5dd39.rmeta: /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/build/thiserror-75cf82f60c513d5b/out/private.rs
+
+/Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs:
+/Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs:
+/Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs:
+/Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs:
+/Users/cdeust/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs:
+/Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/build/thiserror-75cf82f60c513d5b/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/cdeust/Developments/Cortex/app-tauri/src-tauri/target/release/build/thiserror-75cf82f60c513d5b/out
