@@ -46,21 +46,22 @@ const _fadingIn = new Set();
 const FADE_FRAMES = 18;   // ~300 ms at 60 fps
 let _fadeRafId = null;
 
-// ── Node-kind → colour ─────────────────────────────────────────────────────
+// ── Node-kind → colour (matches the unified graph palette) ─────────────────
 const KIND_COLOURS = {
-  domain:     "#d9a63c",
-  skill:      "#42c5b5",
-  hook:       "#b06fcf",
-  agent:      "#5882e8",
-  command:    "#5abf7c",
-  tool:       "#e07040",
-  file:       "#c8943c",
-  discussion: "#6870cf",
-  memory:     "#66b87a",
-  symbol:     "#c4963c",
-  entity:     "#c75840",
+  domain:     "#FCD34D",   // gold  — domain hubs
+  skill:      "#FB923C",   // orange — skills
+  hook:       "#A855F7",   // purple — hooks
+  agent:      "#EC4899",   // pink  — agents
+  command:    "#FACC15",   // yellow — commands
+  mcp:        "#6366F1",   // indigo — MCP
+  tool_hub:   "#F97316",   // deep orange — tool hubs
+  file:       "#06B6D4",   // cyan  — files
+  discussion: "#EF4444",   // red   — discussions
+  memory:     "#10B981",   // emerald — memories
+  symbol:     "#64748B",   // slate — symbols
+  entity:     "#50B0C8",   // teal  — entities
 };
-const DEFAULT_COLOUR = "#7a7a7a";
+const DEFAULT_COLOUR = "#94A3B8";
 
 // ── Depth → default node size ──────────────────────────────────────────────
 // Kept intentionally small — nodes at 600k+ need to be dots, not blobs.

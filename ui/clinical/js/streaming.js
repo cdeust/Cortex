@@ -190,19 +190,20 @@ async function _maybeLoadPhase(key) {
     _enqueuePhaseData(data, key);
     loadedPhases.add(key);
   } catch (err) {
-    // retry once after 2 s
+    // One retry after 2 s — then give up so we don't loop forever.
     setTimeout(async () => {
       try {
         const data = await api.fetchPhase(key);
         _enqueuePhaseData(data, key);
-        loadedPhases.add(key);
       } catch (_) {
-        _showStatus(`Phase ${key} failed — graph may be incomplete`, true);
+        console.warn(`[streaming] Phase ${key} permanently failed — SSE will fill in`);
       } finally {
+        loadedPhases.add(key);   // mark done (success or permanent failure)
         navigation.markLoaded(depth);
+        pendingPhases.delete(key);
       }
     }, 2000);
-    return;  // markLoaded called in the retry's finally
+    return;
   } finally {
     pendingPhases.delete(key);
   }
@@ -214,7 +215,9 @@ function _enqueuePhaseData(data, key) {
   if (!data) return;
   const depthForPhase = _depthForKey(key);
   for (const n of (data.nodes || [])) {
-    _pendingDeltaNodes.push({ ...n, depth: n.depth ?? depthForPhase });
+    // Use phase depth, then kind-based depth, then node's own depth field.
+    const depth = n.depth ?? (depthForPhase || _depthForKind(n.kind || ""));
+    _pendingDeltaNodes.push({ ...n, depth });
   }
   for (const e of (data.edges || [])) {
     _pendingDeltaEdges.push(e);
@@ -222,16 +225,28 @@ function _enqueuePhaseData(data, key) {
   if (!_rafRunning) _scheduleDrain();
 }
 
-/** Map phase key → depth number. */
+/** Map phase key OR SSE batch label → depth number.
+ *  SSE labels come from PHASES[key]["label"] e.g. "L0 domains",
+ *  "L1 Claude setup", "L5 memories", "L6 cortex symbols".
+ *  Falls through to kind-based mapping when label is unknown.
+ */
 function _depthForKey(key) {
-  if (key === "L0") return 0;
-  if (key === "L1") return 1;
-  if (key === "L2") return 2;
-  if (key === "L3") return 3;
-  if (key === "L4") return 4;
-  if (key === "L5") return 5;
-  if (key.startsWith("L6:")) return 6;
+  if (!key) return 0;
+  if (key === "L0" || key.startsWith("L0 ") || key === "skeleton" || key === "domains") return 0;
+  if (key === "L1" || key.startsWith("L1 ") || key === "setup") return 1;
+  if (key === "L2" || key.startsWith("L2 ") || key === "tools") return 2;
+  if (key === "L3" || key.startsWith("L3 ") || key === "files") return 3;
+  if (key === "L4" || key.startsWith("L4 ") || key === "discussions") return 4;
+  if (key === "L5" || key.startsWith("L5 ") || key === "memories") return 5;
+  if (key.startsWith("L6") || key.includes("symbol") || key.includes("cross")) return 6;
   return 0;
+}
+
+/** Depth derived from node kind when the phase key is unknown. */
+function _depthForKind(kind) {
+  const D = { domain: 0, skill: 1, hook: 1, command: 1, agent: 1, mcp: 1,
+               tool_hub: 2, file: 3, discussion: 4, memory: 5, symbol: 6, entity: 1 };
+  return D[kind] ?? 1;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
