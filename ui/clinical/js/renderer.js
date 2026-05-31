@@ -245,23 +245,25 @@ export function addNodes(nodes, currentVisibleDepth = Infinity) {
   if (!_graph) return;
   for (const n of nodes) {
     if (_graph.hasNode(n.id)) continue;
-    const { id, ...attrs } = n;
+    // Destructure `type` out — the server uses it for node kind (e.g. "domain",
+    // "skill") but Sigma v3 interprets `type` as a WebGL program name and throws
+    // if it's not a registered program. We keep it as `kind` only.
+    const { id, type: _serverType, ...attrs } = n;
     const nodeDepth = attrs.depth || 0;
     const isVisible = nodeDepth <= currentVisibleDepth;
-    // Start fade-in for visible nodes; hidden nodes have fadePct=1 (irrelevant).
     const fadePct = isVisible ? 0 : 1;
     _graph.addNode(id, {
+      ...attrs,
       label:   attrs.label || id,
-      kind:    attrs.kind  || "default",
+      kind:    attrs.kind || _serverType || "default",
+      type:    "circle",   // Sigma v3 WebGL program — always "circle"
       depth:   nodeDepth,
       x:       typeof attrs.x === "number" ? attrs.x : (Math.random() - 0.5) * 100,
       y:       typeof attrs.y === "number" ? attrs.y : (Math.random() - 0.5) * 100,
-      color:   kindColour(attrs.kind || ""),
+      color:   kindColour(attrs.kind || _serverType || ""),
       size:    depthSize(nodeDepth),
       hidden:  !isVisible,
       fadePct,
-      ...attrs,
-      // Ensure computed attrs are not overwritten by spread.
     });
     if (isVisible) {
       _fadingIn.add(id);
