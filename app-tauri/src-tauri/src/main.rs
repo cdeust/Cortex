@@ -18,26 +18,30 @@ use serde::{Deserialize, Serialize};
 
 const MAGIC: [u8; 4] = [0x43, 0x58, 0x47, 0x42]; // "CXGB"
 const VERSION: u16 = 1;
-const HEADER_SIZE: usize = 64;
+// Header: "<4sHHIIQII" = magic(4)+ver(2)+flags(2)+node_count(4)+edge_count(4)+pool_off(8)+pool_len(4)+pad(4) = 32
+const HEADER_SIZE: usize = 32;
+// Node: "<IBxxxIfff" = id_off(4)+kind(1)+pad(3)+dom_off(4)+x(4)+y(4)+size(4) = 24
 const NODE_SIZE: usize = 24;
+// Edge: "<IIBxxx" = src_off(4)+tgt_off(4)+kind(1)+pad(3) = 12
 const EDGE_SIZE: usize = 12;
 
 // Kind byte → string (must match graph_snapshot.js _nodeKind / _edgeKind)
+// Matches _NODE_KIND_MAP in mcp_server/server/graph_snapshot.py exactly
 fn node_kind(b: u8) -> &'static str {
     match b {
-        1 => "domain",
-        2 => "skill",
-        3 => "command",
-        4 => "hook",
-        5 => "agent",
-        6 => "mcp",
-        7 => "tool_hub",
-        8 => "file",
-        9 => "discussion",
+        0  => "domain",
+        1  => "tool_hub",
+        2  => "file",
+        3  => "symbol",
+        4  => "skill",
+        5  => "hook",
+        6  => "command",
+        7  => "agent",
+        8  => "mcp",
+        9  => "discussion",
         10 => "memory",
-        11 => "symbol",
-        12 => "entity",
-        _ => "node",
+        11 => "entity",
+        _  => "node",
     }
 }
 
@@ -88,10 +92,15 @@ pub struct GraphNode {
     pub color: String,
     #[serde(rename = "domain_id")]
     pub domain_id: String,
+    // x/y omitted when 0 — force-graph computes layout from scratch
+    #[serde(skip_serializing_if = "is_zero")]
     pub x: f32,
+    #[serde(skip_serializing_if = "is_zero")]
     pub y: f32,
     pub size: f32,
 }
+
+fn is_zero(v: &f32) -> bool { v.abs() < 0.001 }
 
 #[derive(Serialize, Clone)]
 pub struct GraphEdge {
