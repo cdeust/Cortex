@@ -63,7 +63,9 @@ const KIND_COLOURS = {
 const DEFAULT_COLOUR = "#7a7a7a";
 
 // ── Depth → default node size ──────────────────────────────────────────────
-const DEPTH_SIZE = [22, 16, 12, 8, 5, 4, 3];
+// Kept intentionally small — nodes at 600k+ need to be dots, not blobs.
+// Domain hubs (L0) are 8 so they read as "bigger" without dominating.
+const DEPTH_SIZE = [8, 5, 4, 3, 2, 2, 1.5];
 
 // ─────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -75,6 +77,26 @@ const DEPTH_SIZE = [22, 16, 12, 8, 5, 4, 3];
  */
 function kindColour(kind) {
   return KIND_COLOURS[kind] || DEFAULT_COLOUR;
+}
+
+/**
+ * Strip file paths and extensions so labels stay readable.
+ * "/Users/x/Cortex/mcp_server/core/foo.py" → "foo"
+ * "domain:cortex" → "cortex"
+ * "skill:my-skill" → "my-skill"
+ * @param {string} raw
+ * @returns {string}
+ */
+function _shortLabel(raw) {
+  if (!raw) return "";
+  // Strip structured-id prefixes (e.g. "domain:", "skill:", "entity:")
+  let s = raw.replace(/^[a-z_]+:/, "");
+  // Take the last path segment for absolute paths
+  s = s.replace(/\\/g, "/").split("/").filter(Boolean).pop() || s;
+  // Remove common file extensions
+  s = s.replace(/\.(py|js|ts|mts|mjs|md|json|yaml|yml|toml|txt|sh|rs|go)$/i, "");
+  // Truncate at 28 chars to avoid label overflow
+  return s.length > 28 ? s.slice(0, 26) + "…" : s;
 }
 
 /**
@@ -211,10 +233,14 @@ export function mount(container, callbacks = {}) {
   const SigmaClass = window.Sigma;
   _sigma = new SigmaClass(_graph, container, {
     renderEdgeLabels:              false,
-    defaultEdgeType:               "arrow",
-    labelDensity:                  0.07,
-    labelGridCellSize:             60,
-    labelRenderedSizeThreshold:    6,
+    defaultEdgeType:               "line",
+    // Only render persistent labels for large nodes (L0 domains at size 8).
+    // Smaller nodes show their label on hover only — keeps the canvas clean.
+    labelRenderedSizeThreshold:    7,
+    labelSize:                     11,
+    labelColor:                    { color: "#c4d4dc" },
+    labelFont:                     "JetBrains Mono, monospace",
+    labelWeight:                   "400",
     nodeReducer:                   _nodeReducer,
     edgeReducer:                   _edgeReducer,
   });
@@ -254,7 +280,7 @@ export function addNodes(nodes, currentVisibleDepth = Infinity) {
     const fadePct = isVisible ? 0 : 1;
     _graph.addNode(id, {
       ...attrs,
-      label:   attrs.label || id,
+      label:   _shortLabel(attrs.label || id),
       kind:    attrs.kind || _serverType || "default",
       type:    "circle",   // Sigma v3 WebGL program — always "circle"
       depth:   nodeDepth,
