@@ -117,6 +117,56 @@ _WIKI_DB_OPS = {
 }
 
 
+def serve_clinical(handler, path_no_qs: str) -> None:
+    """Serve the clinical-hospital graph UI from ui/clinical/.
+
+    /clinical/ and /clinical → index.html
+    /clinical/<path> → ui/clinical/<path> (JS, CSS, vendor assets)
+    Returns 404 for missing files rather than crashing.
+    """
+    from mcp_server.server.http_common import send_plain_error
+
+    # Resolve the clinical root from the handler's server attribute
+    # (_build_unified_handler stores clinical_root on the class).
+    clinical_root: Path | None = getattr(handler.__class__, "_clinical_root", None)
+    clinical_html: Path | None = getattr(handler.__class__, "_clinical_html_path", None)
+
+    if clinical_root is None or clinical_html is None:
+        send_plain_error(handler, 503)
+        return
+
+    # Map /clinical/ → index.html; /clinical/<path> → clinical_root/<path>
+    suffix = path_no_qs[len("/clinical") :].lstrip("/")
+    target = clinical_html if not suffix else clinical_root / suffix
+
+    if not target.is_file():
+        # clinical not built yet — redirect to unified view
+        handler.send_response(302)
+        handler.send_header("Location", "/")
+        handler.send_header("Content-Length", "0")
+        handler.end_headers()
+        return
+
+    ext = target.suffix.lower()
+    ctype = {
+        ".html": "text/html; charset=utf-8",
+        ".js": "application/javascript",
+        ".css": "text/css",
+        ".json": "application/json",
+        ".woff2": "font/woff2",
+        ".png": "image/png",
+        ".svg": "image/svg+xml",
+    }.get(ext, "application/octet-stream")
+
+    body = target.read_bytes()
+    handler.send_response(200)
+    handler.send_header("Content-Type", ctype)
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store, must-revalidate")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 def _route_unified_get(
     handler,
     store,
@@ -128,10 +178,19 @@ def _route_unified_get(
     """Resolve a GET request for the unified server."""
     path = handler.path
     path_no_qs = path.split("?")[0]
+    # ── Clinical graph UI (/clinical/) ──────────────────────────────────
+    if path_no_qs in ("/clinical", "/clinical/") or path_no_qs.startswith("/clinical/"):
+        serve_clinical(handler, path_no_qs)
+        return
     if path_no_qs == "/api/graph/progress":
         from mcp_server.server.http_standalone_endpoints import serve_graph_progress
 
         serve_graph_progress(handler, store)
+        return
+    if path_no_qs == "/api/graph/chain":
+        from mcp_server.server.http_standalone_chain import serve_graph_chain
+
+        serve_graph_chain(handler, store)
         return
     if path_no_qs == "/api/graph/phase":
         from mcp_server.server.http_standalone_endpoints import serve_graph_phase
@@ -153,37 +212,13 @@ def _route_unified_get(
 
         serve_memories_facets(handler, store)
         return
-    if path_no_qs == "/api/graph/stream":
-        from mcp_server.handlers.graph_stream import serve as serve_stream
+    if path == "/api/graph.zera" or path.startswith("/api/graph.zera?"):
+        # ZERA-bundle variant of /api/graph — same data, content-addressed
+        # binary transport. Reads the same _graph_cache; no effect on
+        # retrieval paths.
+        from mcp_server.server.http_standalone_endpoints import serve_graph_zera
 
-        serve_stream(handler, store)
-        return
-    if path_no_qs == "/api/graph/stream/stats":
-        from mcp_server.handlers.graph_stream import serve_stats
-
-        serve_stats(handler, store)
-        return
-    if path_no_qs.startswith("/api/node/"):
-        from mcp_server.handlers.node_metadata import serve as serve_node_metadata
-
-        serve_node_metadata(handler, store)
-        return
-    if path_no_qs == "/api/graph/events":
-        # Live SSE stream of per-source batches — the browser watches
-        # the graph grow on first visit (cold cache). Falls back to
-        # /api/graph.bin when a precomputed snapshot exists. See
-        # mcp_server/server/graph_event_stream.py.
-        from mcp_server.server.http_standalone_endpoints import serve_graph_events
-
-        serve_graph_events(handler, store)
-        return
-    if path_no_qs == "/api/graph.bin":
-        # CXGB binary snapshot — full graph in ~110 ms vs the JSON
-        # path's ~1–3 s parse on a 135 k-node graph. See
-        # mcp_server/server/graph_snapshot.py for format spec.
-        from mcp_server.server.http_standalone_endpoints import serve_graph_binary
-
-        serve_graph_binary(handler, store)
+        serve_graph_zera(handler, store)
         return
     if path == "/api/graph" or path.startswith("/api/graph?"):
         serve_graph(handler, store)
@@ -273,6 +308,8 @@ def _route_unified_get(
 def _build_unified_handler(ui_root: Path, store) -> type:
     """HTTPHandler factory for the unified viz server."""
     html_path = ui_root / "unified-viz.html"
+    clinical_html_path = ui_root / "clinical" / "index.html"
+    clinical_root = ui_root / "clinical"
     js_dir = ui_root / "unified" / "js"
     css_dir = ui_root / "unified"
     vendor_dir = ui_root / "unified" / "vendor"
@@ -283,6 +320,8 @@ def _build_unified_handler(ui_root: Path, store) -> type:
         # response, killing any streaming endpoint. Chunked transfer +
         # keep-alive land automatically once protocol_version is 1.1.
         protocol_version = "HTTP/1.1"
+        _clinical_root = clinical_root
+        _clinical_html_path = clinical_html_path
 
         def _guard_host(self) -> bool:
             if validate_host_header(self):

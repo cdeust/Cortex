@@ -51,19 +51,32 @@
   // /api/graph/progress's `phases` dict. The server inserts keys in
   // DAG order so iteration order matches publish order; the client's
   // appendGraphDelta dedup handles any slack.
-  var applied = {};   // phaseKey → true once appended
+  var applied = {};   // phaseKey → true once appended (or permanently skipped)
   var inflight = {};  // phaseKey → true while fetching
+
+  // L5 = memories (~838 MB serialised) — exceeds V8's JSON.parse string
+  // limit. Memories are accessible via the Knowledge tab; skip here.
+  // L6 phases with >50K nodes are symbol clouds too dense to navigate in
+  // the graph view — skip them too (they still exist in the backend cache
+  // for chain analysis).
+  var SKIP_PHASES = { 'L5': true };
+  var L6_NODE_CAP = 50000;
 
   function applyPhase(key){
     if(applied[key] || inflight[key]) return Promise.resolve();
+    if(SKIP_PHASES[key]){ applied[key] = true; return Promise.resolve(); }
     inflight[key] = true;
     return fetch('/api/graph/phase?name='+encodeURIComponent(key))
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(p){
         if(!p || !p.ready) return;
+        // Guard: skip oversized L6 symbol phases to protect the canvas.
+        if(key.indexOf('L6:') === 0 && (p.node_total || 0) > L6_NODE_CAP){
+          console.log('[phase] skipped (too large)', key, p.node_total+'N');
+          applied[key] = true;
+          return;
+        }
         if(typeof JUG.appendGraphDelta === 'function'){
-          // Seed lastData if this is the very first append — the
-          // bridge/graph modules expect it to exist.
           if(!JUG.state.lastData){
             JUG.state.lastData = {
               nodes: [], edges: [], links: [],
@@ -75,7 +88,10 @@
         applied[key] = true;
         console.log('[phase] applied', key, '+'+((p.nodes||[]).length)+'N', '+'+((p.edges||[]).length)+'E');
       })
-      .catch(function(err){ console.warn('[phase] '+key+' failed:', err); })
+      .catch(function(err){
+        console.warn('[phase] '+key+' failed:', err);
+        applied[key] = true;  // don't retry a permanently-failing phase
+      })
       .then(function(){ inflight[key] = false; });
   }
 
@@ -536,26 +552,9 @@
   </div>
 </div>
 
-<!-- Force-graph CDN stays disabled — the legacy canvas it mounts was
-     the source of the persistent alpha rectangle. We stub the global
-     BEFORE renderer.js runs so ``ForceGraph()(container)`` chains on
-     an inert Proxy and mounts nothing, while renderer.js / graph.js
-     continue to expose the JUG API the other scripts expect. -->
-<!-- <script src="https://unpkg.com/force-graph"></script> -->
-<script>
-  window.ForceGraph = function () {
-    var noop = function () { return stub; };
-    var stub = new Proxy({}, { get: function () { return noop; } });
-    return function () { return stub; };
-  };
-</script>
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
-<script src="/js/workflow_graph_shims.js"></script>
-<script src="/js/draw.js"></script>
 <script src="/js/tooltip.js"></script>
-<script src="/js/renderer.js"></script>
-<script src="/js/graph.js"></script>
 <script src="/js/detail_tools.js"></script>
 <script src="/js/detail_format.js"></script>
 <script src="/js/detail_diff.js"></script>
@@ -580,6 +579,8 @@
 <script src="/js/workflow_graph_bridge.js"></script>
 <script src="/js/workflow_graph_filters.js"></script>
 <script src="/js/polling.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="/js/chain_panel.js"></script>
 
 </body>
 </html>

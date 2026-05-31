@@ -22,19 +22,6 @@
     index:      'Indexes',
     misc:       'Miscellaneous',
   };
-  var KIND_ICONS = {
-    adr:        '',
-    spec:       '',
-    lesson:     '',
-    convention: '',
-    note:       '',
-    guide:      '',
-    domain:     '',
-    entity:     '',
-    index:      '',
-    misc:       '',
-  };
-
   var MATURITY = {
     stub:     { label: 'Stub',     cls: 'wiki-mat-stub' },
     draft:    { label: 'Draft',    cls: 'wiki-mat-draft' },

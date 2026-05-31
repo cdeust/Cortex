@@ -22,6 +22,7 @@
   var pageDone = false;
   var lastFetchToken = 0;
   var scrolledSinceFetch = false;
+  var _pageObserver = null;  // track the active IntersectionObserver so we can disconnect before recreating
 
   // Server-known filter facets. Loaded once on first show() so chips
   // can show ALL options up-front (not only what's been paged).
@@ -217,10 +218,6 @@
         }
       });
   }
-
-  // Compatibility shim: old call sites expected an in-memory list.
-  // After lazy-load, "all memories" is what we've fetched so far.
-  function getMemories() { return memoriesAccum; }
 
   function getDomains() { return Object.keys(domainsSeen).sort(); }
 
@@ -448,10 +445,12 @@
     // root to container made the sentinel always count as "inside the
     // root" so isIntersecting was permanently true (or permanently
     // false depending on overflow), and pagination stalled.
+    if (_pageObserver) { _pageObserver.disconnect(); _pageObserver = null; }
     var io = new IntersectionObserver(function(entries) {
       entries.forEach(function(e) { if (e.isIntersecting) _fetchPage(); });
     }, { root: null, rootMargin: '400px' });
     io.observe(sentinel);
+    _pageObserver = io;
   }
 
   function _renderPagedGrid() {
@@ -517,67 +516,6 @@
 
     _refreshDomainBar();
     _refreshStatsBar();
-  }
-
-  // Legacy alias kept for anything still calling it.
-  function rebuildGrid() { _renderPagedGrid(); }
-
-  function populateGrid(grid, filtered, allMems) {
-    grid.innerHTML = '';
-
-    if (filtered.length === 0) {
-      var empty = el('div', 'kv-empty');
-      var emptyTitle = el('div', 'kv-empty-title');
-      emptyTitle.textContent = 'No memories found';
-      empty.appendChild(emptyTitle);
-      var emptyText = document.createElement('div');
-      emptyText.className = 'kv-empty-sub';
-      emptyText.textContent = searchQuery
-        ? 'No memories match "' + searchQuery + '"'
-        : 'No memories in this domain yet';
-      empty.appendChild(emptyText);
-      grid.appendChild(empty);
-      return;
-    }
-
-    // Global memories pinned at top
-    var globals = filtered.filter(function(m) { return m.isGlobal; });
-    var nonGlobals = filtered.filter(function(m) { return !m.isGlobal; });
-
-    if (globals.length > 0 && currentDomain === 'all') {
-      var banner = el('div', 'kv-global-banner');
-      var bannerTitle = el('div', 'kv-global-title');
-      bannerTitle.textContent = 'Rules That Apply Everywhere';
-      banner.appendChild(bannerTitle);
-      grid.appendChild(banner);
-
-      globals.forEach(function(m) {
-        grid.appendChild(buildCard(m, allMems));
-      });
-    }
-
-    // Group by domain if showing all
-    if (currentDomain === 'all' || currentDomain === 'global') {
-      var byDomain = {};
-      nonGlobals.forEach(function(m) {
-        var d = m.domain || 'unknown';
-        if (!byDomain[d]) byDomain[d] = [];
-        byDomain[d].push(m);
-      });
-      var domainKeys = Object.keys(byDomain).sort();
-      domainKeys.forEach(function(d) {
-        var header = el('div', 'kv-domain-header');
-        header.textContent = shortDomain(d);
-        grid.appendChild(header);
-        byDomain[d].forEach(function(m) {
-          grid.appendChild(buildCard(m, allMems));
-        });
-      });
-    } else {
-      nonGlobals.forEach(function(m) {
-        grid.appendChild(buildCard(m, allMems));
-      });
-    }
   }
 
   // ── Symbol ↔ memory impact resolution ──
@@ -1221,29 +1159,6 @@
     }
 
     return html.join('');
-  }
-
-  function addMeta(parent, label, value) {
-    var item = el('div', 'kv-expanded-meta-item');
-    var l = el('span', 'kv-expanded-meta-label');
-    l.textContent = label;
-    var v = el('span', 'kv-expanded-meta-val');
-    v.textContent = value;
-    item.appendChild(l);
-    item.appendChild(v);
-    parent.appendChild(item);
-  }
-
-  function addMetaColored(parent, label, value, color) {
-    var item = el('div', 'kv-expanded-meta-item');
-    var l = el('span', 'kv-expanded-meta-label');
-    l.textContent = label;
-    var v = el('span', 'kv-expanded-meta-val');
-    v.textContent = value;
-    v.style.color = color;
-    item.appendChild(l);
-    item.appendChild(v);
-    parent.appendChild(item);
   }
 
   function domainPill(label, value, isGlobal) {

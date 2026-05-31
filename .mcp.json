@@ -3,7 +3,7 @@
     "cortex": {
       "command": "python3",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/scripts/launcher.py",
+        "/Users/cdeust/.claude/plugins/marketplaces/cortex-plugins/scripts/launcher.py",
         "mcp_server"
       ],
       "env": {

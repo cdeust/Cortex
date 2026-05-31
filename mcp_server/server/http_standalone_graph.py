@@ -308,12 +308,16 @@ def _register_phase(key: str, deps: list[str], label: str) -> None:
 def get_phase_payload(key: str) -> dict:
     spec = PHASES.get(key)
     pl = _phase_payloads.get(key, {"nodes": [], "edges": []})
+    nodes = pl.get("nodes", [])
+    edges = pl.get("edges", [])
     return {
         "phase": key,
         "ready": bool(spec and spec["ready"]),
         "deps": spec["deps"] if spec else [],
-        "nodes": pl.get("nodes", []),
-        "edges": pl.get("edges", []),
+        "nodes": nodes,
+        "edges": edges,
+        "node_total": len(nodes),
+        "edge_total": len(edges),
     }
 
 

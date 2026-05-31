@@ -22,6 +22,7 @@
   var boardPagesFetched = 0;
   var boardFetchToken = 0;
   var boardScrolledSinceFetch = false;
+  var _boardObserver = null;  // track the active IntersectionObserver so we can disconnect before recreating
 
   // Server-known facets + active filters (mirror Knowledge tab).
   var boardFacets = null;
@@ -502,10 +503,12 @@
 
   function _boardAttachIntersectionObserver(sentinel) {
     if (!('IntersectionObserver' in window)) return;
+    if (_boardObserver) { _boardObserver.disconnect(); _boardObserver = null; }
     var io = new IntersectionObserver(function(entries) {
       entries.forEach(function(e) { if (e.isIntersecting) _boardFetchPage(); });
     }, { root: null, rootMargin: '400px' });
     io.observe(sentinel);
+    _boardObserver = io;
   }
 
   function _boardAttachScrollBackstop(sentinel) {
