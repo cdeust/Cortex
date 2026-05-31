@@ -84,9 +84,17 @@ def _node_to_dict(n) -> dict[str, Any]:
         d["domain"] = plain
         if "isGlobal" not in d:
             d["isGlobal"] = False
+        # A domain-kind node is selectable as a project domain iff it is not
+        # the global sentinel. Emitted here — the single serialization funnel
+        # for every endpoint (/api/graph, /phase, .bin, SSE) — so no client
+        # consumer needs to re-derive "is this a real project domain."
+        if d.get("kind") == "domain":
+            d["selectableDomain"] = True
     else:
         d["domain"] = "global"
         d["isGlobal"] = True
+        if d.get("kind") == "domain":
+            d["selectableDomain"] = False
     # camelCase aliases — card renderers use these
     for snake, camel in _CAMEL_ALIASES.items():
         if snake in d and camel not in d:

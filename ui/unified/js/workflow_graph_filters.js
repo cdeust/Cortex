@@ -151,9 +151,7 @@
         var n = data.nodes[i];
         // Only real project domains — exclude the global sentinel and
         // filesystem-path garbage. isGlobal is the authoritative flag.
-        if ((n.kind === 'domain' || n.type === 'domain')
-            && !n.isGlobal
-            && n.id !== 'domain:__global__') {
+        if (n.selectableDomain) {
           domains.push(n.label || n.id.replace('domain:', ''));
         }
       }

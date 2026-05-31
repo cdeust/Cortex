@@ -144,7 +144,7 @@
     var domains = {};
     (JUG.state.lastData.nodes || []).forEach(function(n) {
       // Only real project domains — exclude global sentinel and filesystem paths.
-      if (n.kind === 'domain' && !n.isGlobal && n.domain && n.domain !== 'global') {
+      if (n.selectableDomain) {
         domains[n.domain] = true;
       }
     });
