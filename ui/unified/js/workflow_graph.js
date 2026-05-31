@@ -8,7 +8,14 @@
 // Renderers are provided by workflow_graph_render_svg.js / _canvas.js on JUG._wfg.
 (function () {
   var D3_URL = 'https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js';
-  var CANVAS_THRESHOLD = 2000;
+  // Always render via canvas. SVG path (mountSVG) cannot grow
+  // incrementally — its d3-enter/exit selections are bound once at
+  // mount time, so calling handle.append() later would never paint
+  // new circles. Canvas reads ctx.nodes/ctx.edges every frame, so
+  // pushing into those arrays is enough for the new nodes to show.
+  // The visual difference at small N is negligible; ergonomics of
+  // a unified renderer path are worth the trade.
+  var CANVAS_THRESHOLD = 0;
 
   // Tokens — kind-driven radii, colors, edge distances, strengths.
   var KIND_RADIUS = {
@@ -132,7 +139,8 @@
   function renderWorkflowGraph(container, data) {
     if (!container) throw new Error('renderWorkflowGraph: container required');
     container.innerHTML = '';
-    var handle = { destroy: function () {}, select: function () {}, data: data };
+    var handle = { destroy: function () {}, select: function () {},
+                   data: data, append: function () { return { addedNodes: 0, addedEdges: 0 }; } };
     // Tilemap gate — query string ``?viz=tilemap`` swaps the entire
     // d3-force pipeline for the deck.gl + Datashader server-tile path.
     // The legacy renderer stays as the default until the new path is
@@ -151,6 +159,7 @@
       var impl = mount(container, data || { nodes: [], edges: [] });
       handle.destroy = impl.destroy;
       handle.select = impl.select;
+      handle.append = impl.append;
     });
     return handle;
   }
@@ -285,6 +294,174 @@
     }
     window.addEventListener('resize', onResize);
 
+    // Incremental append: mutate the live ``nodes`` and ``edges``
+    // arrays (== ctx.nodes / ctx.edges) and gently restart the
+    // simulation. Existing nodes stay where they are; new nodes are
+    // seeded near their domain anchor and drift into place under
+    // the force constraints. The canvas renderer reads ctx.nodes /
+    // ctx.edges every frame, so new nodes appear on the next paint
+    // without any DOM rebind. Edges to nodes that aren't yet in the
+    // graph are skipped (caller must re-feed them on a later batch
+    // when both endpoints exist).
+    function append(newNodes, newEdges) {
+      newNodes = newNodes || [];
+      newEdges = newEdges || [];
+      var addedN = 0, addedE = 0;
+      // Canvas centre — guaranteed-numeric fallback chain. The video
+      // recording showed memories piling on a Fibonacci spiral around
+      // world (0, 0), which is the EXACT default that d3-force's
+      // initializeNodes() places nodes with NaN x/y on. So somewhere
+      // anc.x was NaN/undefined and d3 silently overrode our position.
+      // Belt-and-braces: ctx.cx → ctx.width/2 → window.innerWidth/2 →
+      // a hard-coded value, whichever first yields a finite positive
+      // number.
+      function _finite(v, fallback) {
+        return (typeof v === 'number' && isFinite(v)) ? v : fallback;
+      }
+      var cx = _finite(ctx.cx, _finite(ctx.width / 2,
+                _finite(window.innerWidth / 2, 600)));
+      var cy = _finite(ctx.cy, _finite(ctx.height / 2,
+                _finite(window.innerHeight / 2, 400)));
+      // Build a list of ALL valid anchor coords once, so unknown-
+      // domain memories pick a random EXISTING anchor instead of
+      // falling back to (cx,cy) where they'd pile up on the same
+      // pixel and trigger d3's NaN→spiral re-initialisation through
+      // collision overflow.
+      var anchorList = [];
+      for (var dk in ctx.anchors) {
+        var av = ctx.anchors[dk];
+        if (av && isFinite(av.x) && isFinite(av.y)) anchorList.push(av);
+      }
+      if (anchorList.length === 0) anchorList.push({ x: cx, y: cy });
+
+      for (var i = 0; i < newNodes.length; i++) {
+        var n = newNodes[i];
+        if (!n || n.id == null || ctx.byId[n.id]) continue;
+        var n2 = Object.assign({}, n);
+        var didCandidates = [
+          n2.domain_id,
+          n2.domain && ctx.byId[n2.domain] && ctx.byId[n2.domain].kind === 'domain' ? n2.domain : null,
+          n2.domain ? 'domain:' + n2.domain : null,
+          n2.domain ? 'domain:' + String(n2.domain).toLowerCase() : null,
+        ];
+        var did = null;
+        var anc = null;
+        for (var c = 0; c < didCandidates.length; c++) {
+          var cand = didCandidates[c];
+          if (cand && ctx.anchors[cand]
+              && isFinite(ctx.anchors[cand].x)
+              && isFinite(ctx.anchors[cand].y)) {
+            did = cand;
+            anc = ctx.anchors[cand];
+            break;
+          }
+        }
+        if (!anc) {
+          // No specific domain match. Pick a random valid anchor so
+          // memories with mismatched domain labels still cluster
+          // somewhere meaningful (and definitely NOT at world origin).
+          anc = anchorList[(Math.random() * anchorList.length) | 0];
+          did = 'domain:__global__';
+        }
+        ctx.domainOf[n2.id] = did;
+
+        var angle = Math.random() * Math.PI * 2;
+        var rr = 30 + Math.random() * 100;
+        var nx = anc.x + Math.cos(angle) * rr;
+        var ny = anc.y + Math.sin(angle) * rr;
+        // Final guard: if anything's NaN here it'd trigger d3's
+        // spiral default. Replace with cx/cy + small jitter.
+        if (!isFinite(nx) || !isFinite(ny)) {
+          nx = cx + (Math.random() - 0.5) * 60;
+          ny = cy + (Math.random() - 0.5) * 60;
+        }
+        n2.x = nx;
+        n2.y = ny;
+        nodes.push(n2);
+        ctx.byId[n2.id] = n2;
+        addedN++;
+      }
+      for (var j = 0; j < newEdges.length; j++) {
+        var e = newEdges[j];
+        if (!e) continue;
+        var s = (e.source && e.source.id) || e.source;
+        var t = (e.target && e.target.id) || e.target;
+        if (!ctx.byId[s] || !ctx.byId[t]) continue;
+        var e2 = Object.assign({}, e, { source: s, target: t });
+        // Crosslink classification used by the link force.
+        var sd = ctx.domainOf[s], td = ctx.domainOf[t];
+        e2._crossDomain = !!(sd && td && sd !== td);
+        edges.push(e2);
+        addedE++;
+      }
+      if (addedN || addedE) {
+        sim.nodes(nodes);
+        sim.force('link').links(edges);
+        // ── Reheat throttling ──
+        // The bridge drains at 60 rAF/sec during streaming. Calling
+        // sim.alpha(0.15).restart() per drain pegged alpha at 0.15
+        // forever — alphaDecay (~0.022 / tick) can never pull alpha
+        // down between drains, so forces fire continuously and the
+        // whole graph drifts every frame. User saw this as
+        // 'refreshing the whole graph every sec'.
+        //
+        // Two-tier bump based on elapsed time since the previous
+        // reheat:
+        //   < 250 ms  → α = 0.03  (gentle nudge; new nodes drift to
+        //              their links, existing nodes barely shift)
+        //   ≥ 250 ms  → α = 0.15  (settle a fresh wave)
+        // Only bump if the current alpha is BELOW the target — so a
+        // long ongoing settle from a previous wave isn't stomped on.
+        var now = (window.performance && performance.now()) || Date.now();
+        var sinceLast = now - (sim._lastReheatAt || 0);
+        var bump = sinceLast < 250 ? 0.03 : 0.15;
+        if (sim.alpha() < bump) sim.alpha(bump);
+        sim.restart();
+        sim._lastReheatAt = now;
+        if (sim._idleTimer) clearTimeout(sim._idleTimer);
+        sim._idleTimer = setTimeout(function () {
+          sim._idleTimer = null;
+          sim.stop();
+        }, 3000);
+      }
+      return { addedNodes: addedN, addedEdges: addedE,
+               totalNodes: nodes.length, totalEdges: edges.length };
+    }
+
+    // Pin every node at its current position once the seed's force
+    // simulation has settled. New nodes added later via handle.append
+    // stay unpinned so they can drift to a sensible position under
+    // force; the already-settled nodes are locked so the incoming
+    // mass (memories at 100 k+, symbols at 600 k+) can't push them
+    // off-screen via manyBody repulsion. That was the user-visible
+    // 'nodes already there should not be removed' bug.
+    //
+    // Pinning fires when alpha first drops below 0.08 (visually
+    // settled — see Maxwell-damped ADR-0047) OR after 3.5 s wall-
+    // clock, whichever comes first. The alpha condition cannot use
+    // sim.alphaMin() because the throttled appends keep nudging
+    // alpha above the floor; we need a higher threshold that's
+    // reached during the seed's natural decay.
+    var _pinStartedAt = (window.performance && performance.now()) || Date.now();
+    function _pinSettledNodes() {
+      if (sim._pinDone) return;
+      var now = (window.performance && performance.now()) || Date.now();
+      var elapsed = now - _pinStartedAt;
+      if (sim.alpha() > 0.08 && elapsed < 3500) {
+        setTimeout(_pinSettledNodes, 200);
+        return;
+      }
+      sim._pinDone = true;
+      var pinned = 0;
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (n.fx == null) { n.fx = n.x; n.fy = n.y; pinned++; }
+      }
+      console.log('[wfg] seed layout settled at α=' + sim.alpha().toFixed(3)
+                  + ' — pinned ' + pinned + ' nodes');
+    }
+    setTimeout(_pinSettledNodes, 600);
+
     var handle = {
       destroy: function () {
         window.removeEventListener('resize', onResize);
@@ -297,6 +474,7 @@
       applyFilter: function (pred) {
         if (typeof renderer.applyFilter === 'function') renderer.applyFilter(pred, ctx);
       },
+      append: append,
     };
     // Expose a stable hook so the filter-bar driver can reach us.
     window.JUG.wfgApplyFilter = function (pred) { handle.applyFilter(pred); };

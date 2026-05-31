@@ -177,8 +177,6 @@
     JUG.state.selectedId = node.id;
     _emitting = true;
     JUG.emit('graph:selectNode', node);
-    // Open the chain panel for the clicked node.
-    JUG.emit('chain:open', { id: node.id, label: node.label || node.name || node.id });
     _emitting = false;
     if (graph) graph.linkColor(graph.linkColor());
   }

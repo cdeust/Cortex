@@ -215,19 +215,47 @@
     else setTimeout(run, 16);
   }
 
+  // Running totals kept on the JUG namespace so appendGraphDelta
+  // stays O(batch_size) instead of O(N_accumulated) per call. Reset
+  // by _seedSets when lastData is replaced wholesale.
+  JUG._statCounts = JUG._statCounts || { domain: 0, memory: 0, discussion: 0,
+                                          totalNodes: 0, totalEdges: 0 };
+
   JUG.appendGraphDelta = function(nodes, edges) {
     nodes = nodes || []; edges = edges || [];
     if (!JUG.state.lastData) {
       JUG.state.lastData = { nodes: [], edges: [], links: [], meta: { schema: 'workflow_graph.v1' } };
+      JUG._statCounts = { domain: 0, memory: 0, discussion: 0,
+                          totalNodes: 0, totalEdges: 0 };
     }
     _seedSets();
-    var added = 0, addedE = 0;
+    // Track which items were ACTUALLY added so subscribers can
+    // process the delta in O(batch_size) instead of re-scanning the
+    // accumulated state.lastData. With 114 SSE chunks growing to
+    // 135 k nodes, re-scanning the full set per batch is ~9 billion
+    // iterations — that OOMs the tab. The delta payload keeps the
+    // hot path O(1000).
+    //
+    // Memory cap REMOVED — user requirement: every node must be
+    // clickable / inspectable, including the cold-tail memories
+    // and symbols. The per-batch loop is O(batch_size) thanks to
+    // the dedup map, and the running counters never recompute
+    // O(N) again, so even on a 600 k+ accumulated graph the per-
+    // batch work stays bounded by the SSE batch chunk (≤ 1000).
+    var addedNodes = [];
+    var addedEdges = [];
+    var c = JUG._statCounts;
     for (var i = 0; i < nodes.length; i++) {
       var n = nodes[i];
       if (!n || !n.id || JUG._existingIdSet[n.id]) continue;
       JUG._existingIdSet[n.id] = true;
       JUG.state.lastData.nodes.push(n);
-      added++;
+      addedNodes.push(n);
+      var kind = n.kind || n.type || '';
+      if (kind === 'domain') c.domain++;
+      else if (kind === 'memory') c.memory++;
+      else if (kind === 'discussion') c.discussion++;
+      c.totalNodes++;
     }
     for (var j = 0; j < edges.length; j++) {
       var e = edges[j];
@@ -237,51 +265,44 @@
       JUG._existingEdgeSet[k] = true;
       JUG.state.lastData.edges.push(e);
       JUG.state.lastData.links.push(e);
-      addedE++;
+      addedEdges.push(e);
+      c.totalEdges++;
     }
-    if (added || addedE) _scheduleRebuild();
-    // Recompute sidebar stats live from the cumulative nodes array.
-    // Without this the legend reads `meta.*_count` from the ONE
-    // /api/graph snapshot fetched at page load — which can race and
-    // report zero for categories that arrive later (memories land in
-    // L5, symbols in L6:*). Reading from lastData.nodes is always
-    // current regardless of which phases have landed.
+    // Sidebar update — O(1) DOM writes, no node scan.
     try {
-      var nl = JUG.state.lastData.nodes;
-      var counts = { domain: 0, memory: 0, discussion: 0 };
-      for (var ci = 0; ci < nl.length; ci++) {
-        var k = nl[ci].kind || nl[ci].type || '';
-        counts[k] = (counts[k] || 0) + 1;
-      }
-      var entityCount = nl.length - (counts.domain || 0) - (counts.memory || 0);
       var setTxt = function(id, v){ var el = document.getElementById(id); if(el) el.textContent = v; };
-      setTxt('s-dom',   counts.domain || 0);
-      setTxt('s-mem',   counts.memory || 0);
+      var entityCount = c.totalNodes - c.domain - c.memory;
+      setTxt('s-dom',   c.domain);
+      setTxt('s-mem',   c.memory);
       setTxt('s-ent',   entityCount);
-      setTxt('s-nodes', nl.length);
-      setTxt('s-edge',  JUG.state.lastData.edges.length);
-      setTxt('s-disc',  counts.discussion || 0);
+      setTxt('s-nodes', c.totalNodes);
+      setTxt('s-edge',  c.totalEdges);
+      setTxt('s-disc',  c.discussion);
     } catch(_e){}
-    // Fire the legacy event bus so any listener (bridge, sidebar)
-    // sees the updated data without re-fetching. The reactive setter
-    // in state.js emits `{value, old}` — match that shape.
+    // Legacy force-graph rebuild — only run when the workflow-graph
+    // renderer (the one the bridge installs and the page actually
+    // shows) is NOT active. With ~135 k nodes accumulated, calling
+    // buildGraph on every batch rebuilds a hidden canvas at a cost
+    // that alone OOMs the tab. The bridge sets
+    // window.JUG.__wfgActive=true on first seed so this guard kicks
+    // in for every subsequent append.
+    if ((addedNodes.length || addedEdges.length) && !(JUG.__wfgActive)) {
+      _scheduleRebuild();
+    }
+    // Fire the legacy event bus with a delta payload so the bridge
+    // can append O(batch_size) instead of re-diffing N accumulated.
     if (typeof JUG.emit === 'function') {
-      try { JUG.emit('state:lastData', { value: JUG.state.lastData, old: null }); } catch(_e){}
+      try {
+        JUG.emit('state:lastData', {
+          value: JUG.state.lastData,
+          delta: { nodes: addedNodes, edges: addedEdges },
+          old: null,
+        });
+      } catch(_e){}
     }
   };
 
   JUG.buildGraph = buildGraph;
   JUG.addBatchToGraph = addBatchToGraph;
   JUG.getActiveEdges = function() { return JUG._activeEdges || []; };
-
-  // Full reset: clears nodes, edges, AND the dedup sets so appendGraphDelta
-  // starts clean. Call before loading a new depth level (not between phases
-  // of the same depth, where append is correct).
-  JUG.resetGraph = function() {
-    JUG.state.lastData = { nodes: [], edges: [], links: [], meta: {} };
-    JUG._existingIdSet  = null;
-    JUG._existingEdgeSet = null;
-    JUG._rebuildQueued  = false;
-    if (JUG.state.lastData) buildGraph(JUG.state.lastData);
-  };
 })();

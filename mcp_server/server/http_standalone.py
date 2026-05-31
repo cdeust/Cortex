@@ -297,13 +297,14 @@ def _route_unified_get(
 
         cb = str(int(_time.time()))
         text = raw.decode("utf-8", errors="replace")
+        # Only add ?v= to paths that don't already have a query string.
         text = _re.sub(
-            r'(<script\s+[^>]*src="/js/[^"]+?)(")',
+            r'(<script\s+[^>]*src="/js/[^"?]+?)(")',
             r"\1?v=" + cb + r"\2",
             text,
         )
         text = _re.sub(
-            r'(<link\s+[^>]*href="/css/[^"]+?)(")',
+            r'(<link\s+[^>]*href="/css/[^"?]+?)(")',
             r"\1?v=" + cb + r"\2",
             text,
         )

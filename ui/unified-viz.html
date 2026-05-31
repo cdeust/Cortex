@@ -51,31 +51,83 @@
   // /api/graph/progress's `phases` dict. The server inserts keys in
   // DAG order so iteration order matches publish order; the client's
   // appendGraphDelta dedup handles any slack.
-  var applied = {};   // phaseKey → true once appended (or permanently skipped)
+  var applied = {};   // phaseKey → true once appended
   var inflight = {};  // phaseKey → true while fetching
+  // Two-stage fallback: the server publishes a fast skeleton (~1 s,
+  // domains + setup) and flips baseline_ready, then later publishes
+  // the full graph and flips full_ready. appendGraphDelta dedups, so
+  // fetching twice only adds the new nodes the second time.
+  var skeletonFetched = false;
+  var fullFetched = false;
 
-  // L5 = memories (~838 MB serialised) — exceeds V8's JSON.parse string
-  // limit. Memories are accessible via the Knowledge tab; skip here.
-  // L6 phases with >50K nodes are symbol clouds too dense to navigate in
-  // the graph view — skip them too (they still exist in the backend cache
-  // for chain analysis).
-  // lod.js is the sole owner of phase loading.
-  // This inline script only updates the progress bar and build stats.
-  // applyPhase is a no-op stub — kept to avoid reference errors in poll().
-  function applyPhase(){ return Promise.resolve(); }
+  // Live SSE stream startup is REGISTERED at the bottom of the page,
+  // AFTER state.js and graph_event_stream.js have loaded — this inline
+  // script runs in <head> before those externals are defined, so a
+  // listener registered here would never see JUG.on. See the bottom
+  // <script> block "live-stream startup".
+  function _renderFromCache(label){
+    // Try the CXGB binary snapshot first — full graph load in ~110 ms
+    // on a 135 k-node graph vs ~1–3 s for the JSON path. Falls back
+    // automatically when no snapshot exists yet (first build pending).
+    var t0 = performance.now();
+    function _apply(g, via){
+      if(g && g.nodes && g.nodes.length && typeof JUG.appendGraphDelta === 'function'){
+        if(!JUG.state.lastData){
+          JUG.state.lastData = { nodes: [], edges: [], links: [], meta: { schema: 'workflow_graph.v1' } };
+        }
+        JUG.appendGraphDelta(g.nodes, g.edges || g.links || []);
+        console.log(
+          '[viz] ' + label + ' rendered via ' + via + ': ' +
+          g.nodes.length + ' nodes / ' + ((g.edges||g.links||[]).length) +
+          ' edges in ' + Math.round(performance.now() - t0) + ' ms'
+        );
+      }
+    }
+    var snapPromise = (window.GraphSnapshot && typeof GraphSnapshot.fetch === 'function')
+      ? GraphSnapshot.fetch('/api/graph.bin')
+      : Promise.reject(new Error('snapshot module not loaded'));
+    return snapPromise
+      .then(function(g){ _apply(g, 'CXGB binary snapshot'); })
+      .catch(function(snapErr){
+        // 404 / no snapshot / decode error → JSON path (still works,
+        // just slower until the first build completes).
+        console.log('[viz] '+label+' snapshot unavailable ('+(snapErr && snapErr.message)+'), falling back to /api/graph JSON');
+        return fetch('/api/graph').then(function(r){ return r.ok ? r.json() : null; }).then(function(g){
+          _apply(g, 'JSON /api/graph');
+        });
+      })
+      .catch(function(err){ console.warn('[viz] '+label+' all paths failed:', err); });
+  }
+
+  function applyPhase(key){
+    if(applied[key] || inflight[key]) return Promise.resolve();
+    inflight[key] = true;
+    return fetch('/api/graph/phase?name='+encodeURIComponent(key))
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(p){
+        if(!p || !p.ready) return;
+        if(typeof JUG.appendGraphDelta === 'function'){
+          // Seed lastData if this is the very first append — the
+          // bridge/graph modules expect it to exist.
+          if(!JUG.state.lastData){
+            JUG.state.lastData = {
+              nodes: [], edges: [], links: [],
+              meta: { schema: 'workflow_graph.v1' }
+            };
+          }
+          JUG.appendGraphDelta(p.nodes || [], p.edges || []);
+        }
+        applied[key] = true;
+        console.log('[phase] applied', key, '+'+((p.nodes||[]).length)+'N', '+'+((p.edges||[]).length)+'E');
+      })
+      .catch(function(err){ console.warn('[phase] '+key+' failed:', err); })
+      .then(function(){ inflight[key] = false; });
+  }
 
   function refreshBar(p){
     var box = document.getElementById('build-progress');
     if(!box) return;
-    // Never show the progress banner for L5/L6 background loading — the user
-    // hasn't requested memories or symbols. Also hide when L0+L1 are done.
-    var phase = p.phase || '';
-    var suppressPhases = ['loading memories','loading symbols','loading memory',
-                          'loading_memories','l5','l6'];
-    var doSuppress = suppressPhases.some(function(s){
-      return phase.toLowerCase().indexOf(s) !== -1;
-    });
-    if(p.phase === 'idle' || p.full_ready || doSuppress || (p.phases && p.phases['L1'])){
+    if(p.phase === 'idle' || p.full_ready){
       box.style.opacity = '0';
       setTimeout(function(){ box.style.display='none'; }, 400);
       return;
@@ -110,6 +162,18 @@
             seq = seq.then(function(){ return applyPhase(k); });
           }
         });
+        // Two-stage fallback: render skeleton (~1 s) on baseline_ready,
+        // then re-render with the full graph on full_ready. The cumulative
+        // /api/graph cache holds both stages in turn; appendGraphDelta
+        // dedups so the second fetch only adds the heavy nodes.
+        if(p.baseline_ready && !skeletonFetched){
+          skeletonFetched = true;
+          _renderFromCache('skeleton');
+        }
+        if(p.full_ready && !fullFetched){
+          fullFetched = true;
+          _renderFromCache('full');
+        }
         if(p.full_ready){
           var allDone = keys.every(function(k){ return applied[k] || !p.phases[k]; });
           if(allDone){ return; }
@@ -178,15 +242,15 @@
   <button class="filter-btn" id="wfg-filter-reset"
           title="Clear the graph filter (show everything)">Reset</button>
   <select id="wfg-filter-select" class="filter-select"
-          aria-label="Load depth — controls how many layers to load">
-    <optgroup label="Load depth (on demand)">
-      <option value="L0" selected>L0 — Domains only</option>
-      <option value="L1">L1 — + Setup (skills · hooks · agents)</option>
-      <option value="L2">L2 — + Tools (Edit · Read · Bash…)</option>
-      <option value="L3">L3 — + Files</option>
-      <option value="L4">L4 — + Discussions</option>
-      <option value="L5">L5 — + Memories</option>
-      <option value="L6">L6 — + AST symbols</option>
+          aria-label="Workflow graph filter">
+    <option value="all" selected>All nodes</option>
+    <optgroup label="By layer">
+      <option value="L1">L1 — Claude setup (skills · hooks · commands · agents)</option>
+      <option value="L2">L2 — tools (Edit · Read · Grep · Glob · Bash · Write · Task)</option>
+      <option value="L3">L3 — files touched by tools</option>
+      <option value="L4">L4 — discussions</option>
+      <option value="L5">L5 — memories</option>
+      <option value="L6">L6 — AST symbols (functions · methods · classes)</option>
     </optgroup>
     <optgroup label="By kind">
       <option value="kind:skill">Skills only</option>
@@ -223,24 +287,13 @@
      can be unresponsive at scale — explain the situation in-line so
      users aren't confused if their browser hangs. Hidden by default;
      controls.js toggles display on view change. -->
-<div id="cortex-graph-warn" role="status"
-     style="display:none;position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:200;
-            max-width:760px;padding:8px 36px 8px 14px;
-            background:linear-gradient(90deg,rgba(48,28,12,0.92),rgba(64,40,16,0.92));
-            border:1px solid rgba(224,140,64,0.5);border-radius:5px;
-            color:#FFE3B5;font:11.5px/1.45 -apple-system,Inter,system-ui,sans-serif;
-            letter-spacing:0.2px;box-shadow:0 4px 14px rgba(0,0,0,0.4)">
-  <span style="color:#FFB060;margin-right:6px">⚠</span>
-  <strong>Graph may be unusable at this scale.</strong>
-  Due to performance issues we are currently investigating, opening the Graph
-  view can freeze the browser when memory counts are high. We are actively
-  working on it. Use <strong>Knowledge</strong> or <strong>Board</strong> for
-  reliable browsing while we land the rewrite.
-  <button id="cortex-graph-warn-close" aria-label="Dismiss"
-          style="position:absolute;top:4px;right:6px;width:22px;height:22px;
-                 background:transparent;border:none;color:#FFB060;font-size:14px;
-                 cursor:pointer;line-height:1;padding:0">×</button>
-</div>
+<!-- Obsolete warning banner removed when the force renderer gained
+     a 6 000-node cap + adaptive throttle (commit df1db15). The graph
+     view now stays responsive on the full 135 k-node dev DB by
+     sampling memories/files/entities by heat/count and re-rendering
+     at most every 4 s during ingest. Re-add a warning only if a
+     larger-scale failure mode emerges. -->
+<div id="cortex-graph-warn" role="status" style="display:none"></div>
 <script>
 (function(){
   var b = document.getElementById('cortex-graph-warn-close');
@@ -529,48 +582,113 @@
   </div>
 </div>
 
-<script src="/js/config.js"></script>
-<script src="/js/state.js"></script>
-<!-- ForceGraph CDN disabled — stub so renderer.js / graph.js init without crashing. -->
+<!-- Force-graph library — re-enabled so renderer.js can actually
+     mount a canvas and paint. The previous stub was added to suppress
+     a stray alpha rectangle issue, but it left the page unable to
+     render anything. The phase loader feeds JUG.appendGraphDelta →
+     buildGraph → JUG.setGraphData → ForceGraph; without the real
+     library the chain ends in a no-op Proxy and nothing draws. -->
+<script src="/vendor/force-graph.min.js"></script>
+<script src="/js/config.js?v=117ece5"></script>
+<script src="/js/state.js?v=117ece5"></script>
+<script src="/js/workflow_graph_shims.js?v=117ece5"></script>
+<script src="/js/draw.js?v=117ece5"></script>
+<script src="/js/tooltip.js?v=117ece5"></script>
+<script src="/js/renderer.js?v=117ece5"></script>
+<script src="/js/graph_snapshot.js?v=117ece5"></script>
+<script src="/js/graph_event_stream.js?v=117ece5"></script>
+<script src="/js/graph.js?v=117ece5"></script>
+<script src="/js/detail_tools.js?v=117ece5"></script>
+<script src="/js/detail_format.js?v=117ece5"></script>
+<script src="/js/detail_diff.js?v=117ece5"></script>
+<script src="/js/detail_panel.js?v=117ece5"></script>
+<script src="/js/discussion_detail.js?v=117ece5"></script>
+<script src="/js/memory_science.js?v=117ece5"></script>
+<script src="/js/timeline.js?v=117ece5"></script>
+<script src="/js/sankey.js?v=117ece5"></script>
+<script src="/js/knowledge.js?v=117ece5"></script>
+<script src="/js/wiki.js?v=117ece5"></script>
+<script src="/js/controls.js?v=117ece5"></script>
+<script src="/js/monitor.js?v=117ece5"></script>
+<script src="/js/workflow_graph_labels.js?v=117ece5"></script>
+<script src="/js/workflow_graph_humanize.js?v=117ece5"></script>
+<script src="/js/workflow_graph_panel.js?v=117ece5"></script>
+<script src="/js/workflow_graph_panel_helpers.js?v=117ece5"></script>
+<script src="/js/workflow_graph_panel_renderers.js?v=117ece5"></script>
+<script src="/js/workflow_graph_render_svg.js?v=117ece5"></script>
+<script src="/js/workflow_graph_render_canvas.js?v=117ece5"></script>
+<script src="/js/workflow_graph_tilemap.js?v=117ece5"></script>
+<script src="/js/workflow_graph.js?v=117ece5"></script>
+<!-- Bridge enabled (2026-05-28): re-enabled now that it has a 500 ms
+     debounce + 5 s safety-net. The old disable comment was from a
+     pre-debounce version of the bridge that destroy-and-remounted on
+     every SSE event. The current bridge collapses bursts of state:
+     lastData updates into at most ~2 renders/sec, which is what the
+     README's brain-region-cloud renderer needs (workflow_graph.js
+     D3 force layout, kind-driven radii + concentric shells). Without
+     the bridge the Graph tab falls back to the legacy force-graph
+     library renderer (graph.js, basic circles) — not what the README
+     screenshot shows. -->
+<script src="/js/workflow_graph_bridge.js?v=117ece5"></script>
+<!-- polling.js re-enabled: its boot fetches /api/graph?meta_only=1
+     which returns just the meta dict (Domains/Memories/Entities/Nodes
+     /Synapses/Discussions counters + system_vitals + benchmarks). The
+     streaming canvas paints the graph via SSE; polling.js owns the
+     sidebar counters and the discussion batches. -->
+<script src="/js/polling.js?v=117ece5"></script>
+<script src="/js/workflow_graph_filters.js?v=117ece5"></script>
+<!-- Live SSE stream startup. Runs AFTER state.js + graph_event_stream.js
+     are defined (the inline script in <head> can't see JUG.on since it
+     parses before those scripts load). Opens the EventSource the moment
+     the user activates the Graph tab so the user watches the graph grow
+     as each per-source batch arrives. -->
 <script>
-window.ForceGraph = function () {
-  var noop = function () { return stub; };
-  var stub = new Proxy({}, { get: function () { return noop; } });
-  return function () { return stub; };
-};
+(function() {
+  if (!window.JUG || !window.GraphEventStream) {
+    console.warn('[stream] JUG or GraphEventStream missing — live stream disabled');
+    return;
+  }
+  var opened = false;
+  function _start() {
+    if (opened) return;
+    opened = true;
+    GraphEventStream.start({
+      onProgress: function(p) {
+        console.log('[stream] batch ' + p.batches + ': +' + p.label + ' → ' + p.nodes + ' nodes total');
+      },
+      onDone: function(s) {
+        console.log('[stream] build complete: ' + s.nodes + ' nodes / ' + s.edges + ' edges in ' + s.elapsed_ms + ' ms');
+      },
+    });
+  }
+  // Open immediately if the user is already on the Graph tab; otherwise
+  // wait for them to switch to it.
+  if (JUG.state && JUG.state.activeView === 'graph') _start();
+  JUG.on('state:activeView', function(ev) {
+    if (ev && ev.value === 'graph') _start();
+  });
+  console.log('[stream] live-stream startup registered (JUG.on listener installed)');
+})();
 </script>
-<!-- Legacy stack: graph.js registers JUG.buildGraph/setGraphData/addBatchToGraph/appendGraphDelta -->
-<script src="/js/draw.js"></script>
-<script src="/js/renderer.js"></script>
-<script src="/js/graph.js"></script>
-<script src="/js/tooltip.js"></script>
-<script src="/js/detail_tools.js"></script>
-<script src="/js/detail_format.js"></script>
-<script src="/js/detail_diff.js"></script>
-<script src="/js/detail_panel.js"></script>
-<script src="/js/discussion_detail.js"></script>
-<script src="/js/memory_science.js"></script>
-<script src="/js/timeline.js"></script>
-<script src="/js/sankey.js"></script>
-<script src="/js/knowledge.js"></script>
-<script src="/js/wiki.js"></script>
-<script src="/js/controls.js"></script>
-<script src="/js/monitor.js"></script>
-<script src="/js/workflow_graph_labels.js"></script>
-<script src="/js/workflow_graph_humanize.js"></script>
-<script src="/js/workflow_graph_panel.js"></script>
-<script src="/js/workflow_graph_panel_helpers.js"></script>
-<script src="/js/workflow_graph_panel_renderers.js"></script>
-<script src="/js/workflow_graph_render_svg.js"></script>
-<script src="/js/workflow_graph_render_canvas.js"></script>
-<script src="/js/workflow_graph_tilemap.js"></script>
-<script src="/js/workflow_graph.js"></script>
-<script src="/js/workflow_graph_bridge.js"></script>
-<script src="/js/workflow_graph_filters.js"></script>
-<script src="/js/lod.js"></script>
-<script src="/js/polling.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-<script src="/js/chain_panel.js"></script>
+<!-- Default loader: progressive phase-by-phase population of the legacy
+     force graph. The streaming SSE canvas was sparse (hub-only layout)
+     and the Datashader tilemap required a long blocking layout pass;
+     the user's original UX was the legacy graph filling in branch by
+     branch as each phase landed, which this restores. -->
+<script src="/js/phase_loader.js?v=117ece5"></script>
+<!-- Streaming canvas is now opt-in via ?viz=stream — keeps the
+     experimental SSE renderer reachable without making it the
+     default. -->
+<script>
+  if (typeof window !== 'undefined' && window.location &&
+      window.location.search.indexOf('viz=stream') !== -1) {
+    var s = document.createElement('script');
+    s.src = '/js/streaming_canvas.js';
+    document.body.appendChild(s);
+  }
+</script>
 
+<script defer src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="/js/chain_panel.js"></script>
 </body>
 </html>
