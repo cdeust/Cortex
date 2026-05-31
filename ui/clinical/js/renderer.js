@@ -288,8 +288,11 @@ export function addEdges(edges) {
     if (_graph.hasEdge(src, tgt)) continue;
     try {
       _graph.addEdgeWithKey(edgeId, src, tgt, {
-        type:   e.type  || "depends",
-        label:  e.label || e.type || "",
+        // Sigma v3 edge `type` must be a registered program ("line" or "arrow").
+        // The server's kind/type ("in_domain", "calls", etc.) is kept as `kind`.
+        type:   "line",
+        kind:   e.kind  || e.type || "link",
+        label:  e.label || e.kind || e.type || "",
         hidden: false,
       });
     } catch (_) {
