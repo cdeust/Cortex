@@ -52,7 +52,7 @@ _SORT_DIRECTION = {
     "oldest": ">",
 }
 _DEFAULT_LIMIT = 50
-_MAX_LIMIT = 200
+_MAX_LIMIT = 5000  # raised for LOD graph bulk-loading
 
 
 def _decode_cursor(s: str | None) -> dict | None:
