@@ -20,6 +20,10 @@
   // ── Authoritative state — NEVER read from DOM, always from these vars ──────
   var _selectedDepth  = 'L0';
   var _selectedDomain = '';
+  // Guard: set true while lod.js is programmatically rebuilding dropdowns.
+  // Prevents innerHTML-rebuild from firing spurious change events into the
+  // domain/depth listeners — those only react to genuine user interactions.
+  var _suppressChange = false;
 
   // L0 domain nodes are cached in localStorage so they appear INSTANTLY
   // on every page load after the first. The build takes 20–30 s on cold
@@ -335,23 +339,30 @@
 
   // Attach to the depth filter.
   function _attachControls() {
-    var depthSel = document.getElementById('wfg-filter-select');
+    var depthSel  = document.getElementById('wfg-filter-select');
+    var domainSel = document.getElementById('domain-select');
+
+    // Sync JS state FROM current DOM values (browser may have restored
+    // previous selections via autocomplete/bfcache).
+    if (depthSel  && /^L[0-6]$/.test(depthSel.value))  _selectedDepth  = depthSel.value;
+    if (domainSel && domainSel.value)                   _selectedDomain = domainSel.value;
+
     if (depthSel) {
       depthSel.addEventListener('change', function () {
+        if (_suppressChange) return;
         var val = depthSel.value;
-        if (!/^L[0-6]$/.test(val)) return; // non-LOD handled by filters.js
-        _selectedDepth = val;   // authoritative state — not DOM
+        if (!/^L[0-6]$/.test(val)) return;
+        _selectedDepth = val;
         _onFilterChange();
       });
     }
-    var domainSel = document.getElementById('domain-select');
     if (domainSel) {
       domainSel.addEventListener('change', function () {
-        _selectedDomain = domainSel.value || '';  // authoritative state
+        if (_suppressChange) return;
+        _selectedDomain = domainSel.value || '';
         if (!/^L[0-6]$/.test(_selectedDepth)) return;
         _clearPhasesFor(_selectedDepth, _selectedDomain);
         if (typeof JUG.resetGraph === 'function') JUG.resetGraph();
-        // Immediately re-sync DOM so the selection is visible after resetGraph.
         _syncDomToState();
         loadUpTo(_selectedDepth, _selectedDomain);
       });
@@ -394,9 +405,11 @@
     nodes.forEach(function(n) {
       if (n.selectableDomain && n.label) domains.push(n.label);
     });
-    if (!domains.length) return;  // never wipe on empty
+    if (!domains.length) return;
     domains.sort();
-    var current = sel.value;
+    // Suppress change events while rebuilding — innerHTML resets value to ''
+    // which fires a spurious change event that calls resetGraph().
+    _suppressChange = true;
     sel.innerHTML = '<option value="">All Domains</option>';
     domains.forEach(function(d) {
       var opt = document.createElement('option');
@@ -404,9 +417,8 @@
       opt.textContent = d;
       sel.appendChild(opt);
     });
-    // Restore previous selection (including named domain after resetGraph).
-    // Always restore from authoritative JS state, not DOM.
     sel.value = _selectedDomain;
+    setTimeout(function() { _suppressChange = false; }, 0);
   }
 
   // ── Boot: L0 domains INSTANTLY ────────────────────────────────────────────
