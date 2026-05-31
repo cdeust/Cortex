@@ -60,6 +60,64 @@ class PgQueryMixin:
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
+    def iter_hot_memories_chunked(
+        self,
+        min_heat: float = 0.0,
+        include_benchmarks: bool = True,
+        chunk_size: int = 1000,
+    ) -> "Iterator[list[dict[str, Any]]]":
+        """Stream hot memories in chunks via a server-side cursor.
+
+        Same query as ``get_hot_memories(limit=0)`` but rows arrive in
+        ``chunk_size`` batches over the wire — the caller can ingest +
+        emit + repaint per chunk instead of waiting for a 100 k-row
+        ``.fetchall()`` to materialise. Used by the workflow-graph build
+        so the SSE event stream surfaces memories as they arrive from PG
+        rather than after the whole query finishes. Mirrors the existing
+        ``iter_memories_for_decay`` server-side-cursor pattern.
+
+        source: docs/program/phase-5-pool-admission-design.md (Phase 4
+        chunked iteration via ``itersize`` on named cursors).
+        """
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        if get_memory_settings().POOL_DISABLED:
+            yield self.get_hot_memories(
+                min_heat=min_heat,
+                limit=0,
+                include_benchmarks=include_benchmarks,
+            )
+            return
+
+        bench_filter = (
+            "" if include_benchmarks else "AND NOT coalesce(is_benchmark, FALSE) "
+        )
+        sql = (
+            f"SELECT * FROM memories WHERE heat_base >= %s {bench_filter}"
+            "ORDER BY heat_base DESC"
+        )
+        # Named (server-side) cursors require an active transaction;
+        # the batch pool's connections default to autocommit, so wrap
+        # in an explicit conn.transaction() to satisfy the
+        # "DECLARE CURSOR can only be used in transaction blocks"
+        # constraint.
+        with self.batch_pool.connection() as conn:
+            with conn.transaction():
+                with conn.cursor(name="graph_hot_stream") as cur:
+                    cur.itersize = chunk_size
+                    cur.execute(sql, (min_heat,))
+                    chunk: list[dict[str, Any]] = []
+                    for row in cur:
+                        # dict(row) — match the iter_memories_for_decay
+                        # idiom; the named cursor doesn't apply
+                        # dict_row by default so rows arrive as tuples.
+                        chunk.append(self._normalize_memory_row(dict(row)))
+                        if len(chunk) >= chunk_size:
+                            yield chunk
+                            chunk = []
+                    if chunk:
+                        yield chunk
+
     def get_all_memories_with_embeddings(self) -> list[dict[str, Any]]:
         rows = self._execute(
             "SELECT id, heat_base, embedding FROM memories WHERE embedding IS NOT NULL"

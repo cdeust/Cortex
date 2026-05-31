@@ -33,8 +33,13 @@ schema = {
         "Distinct from `get_methodology_graph` (returns JSON for a "
         "CUSTOM client, no browser launched, no auxiliary views) and "
         "`list_domains` (text overview, no graph). Side effects: spawns "
-        "an HTTP server process and opens a browser tab. Latency ~200ms "
-        "(server warmup + browser launch). Returns {url, message}."
+        "an HTTP server process and opens a browser tab. The CALL itself "
+        "returns in ~200 ms (server warmup + browser launch); the GRAPH "
+        "build is lazy — kicked when the page polls /api/graph/progress "
+        "(i.e. when the user opens the Graph view). First paint of the "
+        "skeleton lands in ~1 s; the full graph fills in behind it and "
+        "depends on the DB size (seconds for typical, ~1-3 min on a 100k+ "
+        "memory store). Returns {url, message, dev_source, bootstrap, layout}."
     ),
     "inputSchema": {
         "type": "object",
@@ -243,13 +248,22 @@ async def handler(args: dict | None = None) -> dict:
     # opens the browser at the UI and returns. The frontend's Graph
     # button is the only place that fires /api/graph and
     # /api/recompute_layout, with its own progress polling.
-    target_url = url.rstrip("/") + "/?viz=tilemap"
+    # Default to the force-directed workflow graph (the README hero
+    # screenshot). The tilemap renderer (`?viz=tilemap`) is a different
+    # CPU-layout + Datashader pipeline that requires a precomputed igraph
+    # layout and does NOT share the skeleton-first / progress-kicks-build
+    # / two-stage fallback path the force-directed renderer uses. Landing
+    # on ?viz=force gives the user first paint in ~1 s on any DB size;
+    # the heavy data fills in behind it.
+    target_url = url.rstrip("/") + "/?viz=force"
     open_in_browser(target_url)
 
     message = (
-        f"Tilemap viz opened at {target_url}. Click the Graph button "
-        "in the UI to build/refresh the graph; indexing happens on "
-        "demand, not on launch."
+        f"Workflow graph opened at {target_url}. Click the Graph tab in "
+        "the UI if not already selected; the build kicks lazily on first "
+        "progress poll. First paint (skeleton: domains + setup) appears "
+        "in ~1 s; the full graph fills in behind it as memories / files / "
+        "AST symbols stream from the cache."
     )
     return {
         "url": target_url,

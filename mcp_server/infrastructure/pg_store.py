@@ -296,20 +296,49 @@ class PgMemoryStore(
             cur = conn.execute(query, params, **kwargs)
         return _MaterializedCursor(cur)
 
+    # Advisory lock id for schema bootstrap. Two processes hitting a
+    # fresh DB simultaneously (e.g. http_standalone + a worker subproc)
+    # used to deadlock on the A3 migration's ALTER TABLE / CREATE INDEX
+    # pair. With this lock, the second process waits for the first to
+    # finish before re-running idempotent DDL.
+    # source: hashlib.sha256(b'cortex_schema_a3').hexdigest() mod 2**31
+    _SCHEMA_LOCK_ID = 1357020271
+
     def _init_schema(self) -> None:
         """Create all tables, indexes, and stored procedures.
 
         Each statement runs independently — one failure doesn't
         prevent the rest from being created.
+
+        Wrapped in a Postgres advisory lock so concurrent processes
+        bootstrapping the same database serialize through the migration
+        DDL instead of deadlocking on overlapping ALTER TABLE locks.
+
+        Pre: self._conn is a live psycopg connection.
+        Post: schema is at the latest version; advisory lock released
+        even on failure (try/finally).
         """
-        for ddl in get_all_ddl():
+        # Acquire — blocks until peer releases. pg_advisory_lock is
+        # session-scoped; safe across the autocommit/transaction modes
+        # we use because release is paired in the finally block.
+        self._conn.execute("SELECT pg_advisory_lock(%s);", (self._SCHEMA_LOCK_ID,))
+        try:
+            for ddl in get_all_ddl():
+                try:
+                    self._conn.execute(ddl)
+                except Exception as exc:
+                    logger.warning(
+                        "Schema statement failed: %s — %s", ddl.split("\n")[0][:50], exc
+                    )
+            self._conn.commit()
+        finally:
             try:
-                self._conn.execute(ddl)
-            except Exception as exc:
-                logger.warning(
-                    "Schema statement failed: %s — %s", ddl.split("\n")[0][:50], exc
+                self._conn.execute(
+                    "SELECT pg_advisory_unlock(%s);", (self._SCHEMA_LOCK_ID,)
                 )
-        self._conn.commit()
+                self._conn.commit()
+            except Exception as exc:
+                logger.warning("Failed to release schema advisory lock: %s", exc)
 
     @property
     def has_vec(self) -> bool:

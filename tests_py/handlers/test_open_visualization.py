@@ -26,7 +26,7 @@ class TestOpenVisualizationHandler:
     """The handler now drives the full prepare-then-render pipeline:
     after launching the standalone server it polls /api/graph/progress,
     invokes /api/recompute_layout, and only then opens the browser at
-    the ``?viz=tilemap`` path. Tests stub ``_prepare_layout`` so they
+    the ``?viz=force`` path. Tests stub ``_prepare_layout`` so they
     don't issue real HTTP traffic."""
 
     def test_returns_url(self):
@@ -43,7 +43,7 @@ class TestOpenVisualizationHandler:
         ):
             result = asyncio.run(handler({}))
 
-        assert result["url"] == "http://localhost:3458/?viz=tilemap"
+        assert result["url"] == "http://localhost:3458/?viz=force"
         assert "localhost" in result["message"]
 
     def test_default_args_none(self):
@@ -59,7 +59,7 @@ class TestOpenVisualizationHandler:
             ),
         ):
             result = asyncio.run(handler(None))
-        assert result["url"] == "http://localhost:3458/?viz=tilemap"
+        assert result["url"] == "http://localhost:3458/?viz=force"
 
     def test_launches_unified_server_type(self):
         mock_launch = MagicMock(return_value="http://localhost:3458")
@@ -94,17 +94,17 @@ class TestOpenVisualizationHandler:
             ),
         ):
             asyncio.run(handler({}))
-        mock_open.assert_called_once_with("http://localhost:5555/?viz=tilemap")
+        mock_open.assert_called_once_with("http://localhost:5555/?viz=force")
 
-    def test_opens_browser_at_tilemap_url_unconditionally(self):
-        """Handler always opens the tilemap URL — graph build happens on
+    def test_opens_browser_at_force_url_unconditionally(self):
+        """Handler always opens the force-directed URL — graph build happens on
         demand via the UI's Graph button, not on launch.
 
         Previously a fallback path opened the legacy URL when
         ``_prepare_layout`` reported ``igraph_missing``; that branch
         was removed when the on-launch layout precomputation was
         dropped (2026-05). The handler now returns immediately after
-        opening ``?viz=tilemap`` regardless of any layout state."""
+        opening ``?viz=force`` regardless of any layout state."""
         with (
             patch(
                 "mcp_server.handlers.open_visualization.launch_server",
@@ -115,8 +115,9 @@ class TestOpenVisualizationHandler:
             ) as mock_open,
         ):
             result = asyncio.run(handler({}))
-        mock_open.assert_called_once_with("http://localhost:5555/?viz=tilemap")
-        assert "tilemap" in result["message"]
+        mock_open.assert_called_once_with("http://localhost:5555/?viz=force")
+        assert "force" in result["url"]
+        assert "Workflow graph" in result["message"]
 
 
 class TestDevSourceSecurityHardening:

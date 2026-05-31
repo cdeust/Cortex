@@ -80,10 +80,17 @@ def _cache_roots() -> list[Path]:
     # hashes env + wheel-set so different plugin versions end up in
     # different archive roots. If we only rsync one, whichever archive
     # happens to be the resolved plugin env at launch runs stale code.
-    for arch in (home / ".cache" / "uv" / "archive-v0").glob(
-        "*/lib/python*/site-packages"
-    ):
+    #
+    # Two archive layouts exist in the wild: nested
+    # (``<hash>/lib/python*/site-packages/mcp_server``) for full venv
+    # installs, and flat (``<hash>/mcp_server``) for editable / wheel
+    # installs. We must hit BOTH or the plugin loads stale handlers.
+    arch_root = home / ".cache" / "uv" / "archive-v0"
+    for arch in arch_root.glob("*/lib/python*/site-packages"):
         if (arch / "mcp_server").is_dir():
+            roots.append(arch)
+    for arch in arch_root.glob("*"):
+        if arch.is_dir() and (arch / "mcp_server").is_dir():
             roots.append(arch)
     return roots
 
@@ -201,6 +208,78 @@ def _spawn_server(src: Path) -> None:
     )
 
 
+def _extras_available(src: Path) -> bool:
+    """Probe the standalone-server's Python for the viz-tile extras.
+
+    The MCP handler's URL/message logic is cached in ``sys.modules`` of
+    the long-lived plugin process and may be stale; this helper makes
+    the bootstrap (always re-parsed from disk) authoritative about
+    whether the dense tilemap path is reachable. ``standalone`` runs
+    under whatever Python we use here, so importing igraph/datashader
+    in *this* process is the right test.
+    """
+    try:
+        import importlib
+
+        for mod in ("igraph", "datashader", "pyarrow", "PIL"):
+            importlib.import_module(mod)
+        return True
+    except Exception:
+        return False
+
+
+def _drive_prepare_then_render(timeout_s: int = 600) -> str | None:
+    """Wait for graph baseline, fire /api/recompute_layout, return the
+    force-directed graph URL on success.
+
+    Previously this opened the tilemap (Datashader CPU-layout renderer)
+    which doesn't share the skeleton-first / live-SSE-stream / binary-
+    snapshot path. The force-directed renderer (``?viz=force``) does:
+    skeleton_ready in ~1 s, live batches via /api/graph/events, fast
+    binary load via /api/graph.bin. See commits 0204da8, d9d8a98,
+    972bb9a, f21e255.
+
+    Idempotent — recompute_layout skips when fingerprint matches PG.
+    Runs in a daemon thread so the bootstrap script returns immediately;
+    the browser tab self-heals via the phase poller + SSE subscriber
+    that the force renderer already wires up.
+    """
+    import json as _json
+    import threading as _thr
+    import time as _time
+    import urllib.request as _ur
+    import webbrowser as _wb
+
+    base = f"http://127.0.0.1:{PORT}"
+
+    def _run() -> None:
+        try:
+            _ur.urlopen(f"{base}/api/graph", timeout=5).read(1024)
+        except Exception:
+            pass
+        deadline = _time.monotonic() + timeout_s
+        while _time.monotonic() < deadline:
+            try:
+                with _ur.urlopen(f"{base}/api/graph/progress", timeout=5) as r:
+                    p = _json.loads(r.read().decode("utf-8"))
+                if p.get("baseline_ready") or p.get("full_ready"):
+                    break
+            except Exception:
+                pass
+            _time.sleep(2)
+        try:
+            _ur.urlopen(f"{base}/api/recompute_layout", timeout=timeout_s).read()
+        except Exception:
+            pass
+        try:
+            _wb.open(f"{base}/?viz=force")
+        except Exception:
+            pass
+
+    _thr.Thread(target=_run, name="cortex-prepare", daemon=True).start()
+    return f"{base}/?viz=force"
+
+
 def main() -> None:
     src = _find_dev_source()
     if src is None:
@@ -209,7 +288,19 @@ def main() -> None:
     synced = _sync(src)
     _kill_port(PORT)
     _spawn_server(src)
-    print(f"ok synced={synced} url=http://127.0.0.1:{PORT}", flush=True)
+    if _extras_available(src):
+        target = _drive_prepare_then_render()
+        print(
+            f"ok synced={synced} url={target} extras=ok",
+            flush=True,
+        )
+    else:
+        # Explicit ?viz=force so the HTML's inline auto-redirect probe
+        # doesn't bounce a bare URL to the tilemap default.
+        print(
+            f"ok synced={synced} url=http://127.0.0.1:{PORT}/?viz=force extras=missing",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":

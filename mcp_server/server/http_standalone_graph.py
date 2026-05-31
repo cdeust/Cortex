@@ -39,6 +39,32 @@ from mcp_server.server.http_standalone_state import (
 
 _cached_domain_hub_ids: dict[str, str] = {}
 
+# ── Layout authority singleton ────────────────────────────────────────────
+#
+# The layout authority is the single owner of (node_id → (x, y)) slot
+# emission for the live SSE stream. The build worker pushes node/edge
+# deltas into it; the SSE handler at /api/graph/stream subscribes and
+# drains. Lazy construction keeps the import graph clean (the authority
+# imports from server/, this module imports nothing of it at module
+# load) and lets a fresh build_authority() reset the event log once
+# per process. Subsequent _kick_background_build calls reset the log
+# inside build_authority() too — they don't drop the singleton.
+_layout_authority = None
+
+
+def get_layout_authority():
+    """Return the process-wide LayoutAuthority, building it on first use.
+
+    Pre: none.
+    Post: returns the same instance for the life of the process.
+    """
+    global _layout_authority
+    if _layout_authority is None:
+        from mcp_server.server.layout_authority import build_authority
+        _layout_authority = build_authority()
+    return _layout_authority
+
+
 _graph_cache: dict | None = None
 _graph_cache_ts: float = 0.0
 _graph_build_lock = threading.Lock()
@@ -214,6 +240,39 @@ def get_build_progress() -> dict:
     return snap
 
 
+def ensure_build_started(store) -> None:
+    """Kick the background build iff it hasn't started and no completed
+    graph is cached.
+
+    Why this exists: per the 2026-05-17 direction the build must not
+    auto-fire at server startup — it kicks lazily when the user opens
+    the Graph view. The original trigger was a ``/api/graph`` fetch from
+    polling.js's boot. The streaming refactor moved the graph-tab poller
+    onto ``/api/graph/progress`` (meta-only) + ``/api/graph/phase``, and
+    neither kicks the build — so opening the Graph view stopped starting
+    it and the graph never appeared. This helper restores the trigger on
+    the progress endpoint: the phase-poller only polls ``/progress`` when
+    ``activeView === 'graph'``, so kicking here keeps the lazy semantics
+    (no build until the user is actually on the Graph tab) without
+    depending on a separate ``/api/graph`` fetch.
+
+    Idempotent: ``_kick_background_build`` collapses concurrent calls via
+    a non-blocking lock, and the cache check below prevents re-kicking a
+    finished build. Safe to call on every poll.
+    """
+    if store is None:
+        return
+    build_in_progress = _graph_build_lock.locked()
+    cache_has_data = bool(
+        _graph_cache
+        and _graph_cache.get("data")
+        and _graph_cache["data"].get("nodes")
+    )
+    if build_in_progress or cache_has_data:
+        return
+    _kick_background_build(store, None)
+
+
 def _set_progress(**kw) -> None:
     with _build_progress_lock:
         _build_progress.update(kw)
@@ -281,6 +340,115 @@ def _mark_phase_ready(phase_key: str) -> None:
         _build_progress["phases"] = {k: v["ready"] for k, v in PHASES.items()}
 
 
+# Edge kinds we accept as "<node> is parented by <other endpoint>" hints
+# when scanning a freshly-merged batch for I3/I4 parent linkage.
+_PARENT_HINT_EDGE_KINDS = frozenset(
+    {"defined_in", "tool_used_file", "in_domain", "command_in_hub"}
+)
+
+
+def _edge_endpoint(value):
+    """Return the id from an edge endpoint that may be a dict or str."""
+    if isinstance(value, dict):
+        return value.get("id")
+    return value
+
+
+def _parent_id_for(node: dict, edges: list[dict]) -> str | None:
+    """Find the parent id for ``node`` from a freshly-merged batch.
+
+    For symbol nodes, the parent is the file pointed to by a
+    ``defined_in`` edge whose source is this symbol. For file nodes,
+    the parent (when known) is the tool_hub from a ``tool_used_file``
+    edge whose target is this file. None when no batch-local hint
+    exists — the authority then falls back to its domain-anchor
+    placement (I4/I7).
+
+    Pre: edges is the same list that was just merged with ``node``.
+    Post: returns a node id (str) or None; never raises.
+    """
+    nid = node.get("id")
+    if not nid:
+        return None
+    kind = node.get("kind") or node.get("type") or ""
+    for e in edges:
+        ek = e.get("kind") or e.get("type") or ""
+        if ek not in _PARENT_HINT_EDGE_KINDS:
+            continue
+        s = _edge_endpoint(e.get("source"))
+        t = _edge_endpoint(e.get("target"))
+        # symbol -> file via defined_in: source is symbol, target is file
+        if kind == "symbol" and ek == "defined_in" and s == nid:
+            return t
+        # file -> tool_hub via tool_used_file: source is tool_hub,
+        # target is file; we want the tool_hub for this file.
+        if kind == "file" and ek == "tool_used_file" and t == nid:
+            return s
+        # command in tool hub: command -> tool_hub
+        if kind == "command" and ek == "command_in_hub" and s == nid:
+            return t
+    return None
+
+
+def _emit_to_authority(new_nodes: list[dict], new_edges: list[dict]) -> None:
+    """Forward a freshly-merged delta into the LayoutAuthority.
+
+    Producer drift (missing fields, unknown kinds, non-string ids) is
+    skipped per-item; nothing here can stop the legacy build worker.
+    Pre: new_nodes / new_edges are the same lists ``_merge`` was about
+    to commit to the cumulative cache.
+    Post: every well-formed node + edge has been pushed through
+    ``add_node`` / ``add_edge``; malformed items are silently dropped.
+    """
+    from mcp_server.server.layout_authority_protocol import (
+        EdgeDelta,
+        NodeDelta,
+    )
+
+    auth = get_layout_authority()
+    for n in new_nodes:
+        nid = n.get("id")
+        if not isinstance(nid, str) or not nid:
+            continue
+        kind = n.get("kind") or n.get("type") or "unknown"
+        # The protocol layer maps file/symbol/etc onto its NODE_KINDS;
+        # invalid kinds raise ValueError below and are skipped.
+        domain_id = n.get("domain_id")
+        if not domain_id:
+            # Fall back to a global anchor so unscoped nodes still
+            # land somewhere instead of being dropped. Mirrors the
+            # graph-builder's "domain:__global__" sentinel.
+            domain_id = "domain:__global__"
+        # 'domain' kind requires domain_id == node_id. The graph
+        # builder enforces this, but we re-assert defensively.
+        if kind == "domain":
+            domain_id = nid
+        try:
+            delta = NodeDelta(
+                node_id=nid,
+                kind=kind,
+                domain_id=domain_id,
+                parent_id=_parent_id_for(n, new_edges),
+                tool_name=n.get("tool") or n.get("tool_name"),
+            )
+            auth.add_node(delta)
+        except (ValueError, TypeError):
+            # Producer drift — skip and continue.
+            continue
+
+    for e in new_edges:
+        s = _edge_endpoint(e.get("source"))
+        t = _edge_endpoint(e.get("target"))
+        if not s or not t:
+            continue
+        kind = e.get("kind") or e.get("type") or "default"
+        try:
+            auth.add_edge(EdgeDelta(source_id=s, target_id=t, kind=kind))
+        except (ValueError, TypeError):
+            # Unknown edge kind, etc. — skip.
+            continue
+
+
 def _kick_background_build(store, domain_filter: str | None) -> None:
     """Spawn the two-stage background builder at most once. Stage 1
     (baseline, no AST) finishes in ~5 s and becomes the cached graph
@@ -291,7 +459,24 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
         return
 
     def _run():
-        global _graph_roster_fingerprint
+        global _graph_roster_fingerprint, _layout_authority
+
+        # Producer-feedback Act-channel (Cochrane Finding A) — module
+        # imported once here so the inter-phase wait_for_clear calls
+        # below resolve without re-importing per batch.
+        from mcp_server.server import layout_authority_pressure as _pressure
+
+        # Fresh authority (and event log reset) for every build so the
+        # SSE stream restarts at seq=1 with no leaked slots from the
+        # previous run. build_authority() calls _log.reset() internally.
+        try:
+            from mcp_server.server.layout_authority import build_authority
+            _layout_authority = build_authority()
+        except Exception as _exc:  # pragma: no cover - defensive
+            print(
+                f"[cortex] layout-authority init failed: {_exc}",
+                file=sys.stderr,
+            )
 
         def _merge(new_nodes, new_edges, stage, pct, message, phase_key=None, **flags):
             """Append ``new_nodes`` + ``new_edges`` into the cumulative
@@ -348,6 +533,20 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                 - kind_counts.get("memory", 0)
             )
             cur["meta"]["counts"] = kind_counts
+            # ── Layout-authority emission ──
+            # In addition to the legacy per-phase cache (kept for
+            # /api/graph/phase + /api/graph clients), every new node /
+            # edge is pushed through the LayoutAuthority so the live
+            # SSE stream at /api/graph/stream sees them in real time.
+            # Errors here are non-fatal — the legacy path above already
+            # persisted the data; authority emission is purely additive.
+            try:
+                _emit_to_authority(new_nodes, new_edges)
+            except Exception as _exc:  # pragma: no cover - defensive
+                print(
+                    f"[cortex] layout-authority emission error: {_exc}",
+                    file=sys.stderr,
+                )
             # Also append into the per-phase delta buffer so the
             # client can ``GET /api/graph/phase?name=<key>`` and
             # append exactly this phase's new content to its live
@@ -371,6 +570,29 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
             _graph_cache = {"data": cur, "domain_filter": domain_filter}
             _graph_cache_ts = time.monotonic()
             _cached_domain_hub_ids = extract_domain_hub_ids(cur["nodes"])
+            # ── SSE emission for L6 (symbols) and any other _merge caller ──
+            # The baseline build emits each per-source batch via _on_batch
+            # → _events.emit, but the L6 symbol loop calls _merge directly
+            # with no SSE feeder, so 670 k+ AP symbols stayed in the
+            # cumulative cache and never reached the live browser. Push
+            # the same delta onto _events so SSE subscribers (the bridge
+            # in workflow_graph_bridge.js, future renderers) see L6 grow
+            # in real time — same wire shape as baseline batches, label
+            # taken from ``stage`` so the user can tell ``L6 1/28 Cortex``
+            # apart from ``memories`` in the network panel.
+            try:
+                if new_nodes or new_edges:
+                    _events.emit(
+                        stage,
+                        list(new_nodes),
+                        list(new_edges),
+                        chunk=1000,
+                    )
+            except Exception as _exc:  # pragma: no cover - defensive
+                print(
+                    f"[cortex] sse stream emission error: {_exc}",
+                    file=sys.stderr,
+                )
             _set_progress(
                 phase=stage,
                 pct=pct,
@@ -450,11 +672,139 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
             saved_flag = os.environ.get("CORTEX_MEMORY_AP_ENABLED")
             os.environ["CORTEX_MEMORY_AP_ENABLED"] = "0"
             memory_config.get_memory_settings.cache_clear()
+
+            # ── Baseline producer (2026-05-27, revised) ──
+            #
+            # build_workflow_graph runs the source loads (PG queries) and
+            # builds the structural graph. We surface per-source progress
+            # via on_source_loaded so /api/graph/progress shows the work
+            # in flight ("loaded 107043 memories") instead of a silent
+            # spinner, and we defer the native tree-sitter AST parse
+            # (defer_native_ast=True) — that parse was 58.6 s of a 99 s
+            # build; AST symbols arrive via the L6 AP loop below instead.
+            #
+            # We do NOT use the per-source on_batch push here: routing
+            # every node/edge of the huge memories batch (107k nodes +
+            # 107k edges) through the LayoutAuthority synchronously in the
+            # build thread pinned a core for minutes with no SSE consumer
+            # attached. Instead we take the returned dict and publish it
+            # in ONE _merge into the cumulative cache, then flip the
+            # baseline phases ready. The client renders from the cache
+            # (the unified-viz phase poller's baseline-ready fallback
+            # fetches /api/graph). The on_batch / LayoutAuthority SSE
+            # path remains available for the streaming_canvas renderer
+            # once its large-batch performance is addressed.
+            _stream_pct = {"v": 0.02}  # progress monotone within 0.02–0.28
+
+            # Live event stream — every per-source batch lands here as
+            # chunked SSE events the moment the builder emits it. The
+            # first visit's browser subscribes to /api/graph/events and
+            # appendGraphDelta's each event, so the user watches the
+            # graph grow instead of waiting for the full ingest to
+            # finish. RESET on every kicked build so a previous build's
+            # tail events don't leak into this run's subscribers.
+            from mcp_server.server import graph_event_stream as _events
+            _events.reset()
+
+            from mcp_server.handlers.workflow_graph import (
+                _edge_to_dict, _node_to_dict,
+            )
+
+            def _on_source_loaded(label: str, count: int) -> None:
+                _stream_pct["v"] = min(0.28, _stream_pct["v"] + 0.02)
+                _set_progress(
+                    phase=f"loading {label}",
+                    pct=_stream_pct["v"],
+                    message=f"loaded {count} {label}",
+                )
+
+            def _on_batch(label: str, nodes_objs, edges_objs) -> None:
+                """Push per-source batch onto the SSE event queue.
+
+                Intentionally JUST a push — no _merge, no LayoutAuthority
+                emit per item. The cumulative cache is populated by ONE
+                _merge after build completion (where the O(cache) work
+                is paid once), and the snapshot is written at the same
+                point. This keeps the build thread fast even on the
+                107 k-memory batch that previously ground for minutes.
+                """
+                if not nodes_objs and not edges_objs:
+                    return
+                n_dicts = [_node_to_dict(n) for n in nodes_objs]
+                e_dicts = [_edge_to_dict(e) for e in edges_objs]
+                _events.emit(label, n_dicts, e_dicts, chunk=1000)
+
+            # ── Stage 1: skeleton (≪1 s) → first paint ──
+            # stage="skeleton" loads only skills + hooks, no memories, no
+            # tool_events, no AST. The builder still produces the domain
+            # hubs (via _ensure_domain on every node's domain_id), so the
+            # client immediately sees the structural backbone instead of
+            # waiting ~1–3 min for the full ingest on a large DB.
+            try:
+                skeleton = build_workflow_graph(
+                    store,
+                    domain_filter=domain_filter,
+                    stage="skeleton",
+                    defer_native_ast=True,
+                )
+            except Exception as _exc:  # pragma: no cover - defensive
+                print(
+                    f"[cortex] skeleton build failed: {_exc}",
+                    file=sys.stderr,
+                )
+                skeleton = {"nodes": [], "edges": [], "meta": {}}
+
+            _merge(
+                skeleton.get("nodes", []),
+                skeleton.get("edges", []),
+                stage="skeleton",
+                pct=0.05,
+                message=(
+                    f"skeleton: {len(skeleton.get('nodes', []))} nodes / "
+                    f"{len(skeleton.get('edges', []))} edges"
+                ),
+                phase_key=None,
+                baseline_ready=True,
+            )
+            for _phase_key in ("L0", "L1"):
+                _mark_phase_ready(_phase_key)
+
+            # Write a skeleton CXGB snapshot NOW so /api/graph.bin starts
+            # serving in <200 ms (the full snapshot below replaces it
+            # when ingestion finishes — could be minutes on a large DB).
+            # Without this the first /api/graph.bin returns 404 until the
+            # full build completes, which defeats the whole point of the
+            # precomputed-snapshot protocol.
+            try:
+                from mcp_server.server.graph_snapshot import (
+                    write_from_graph_cache,
+                )
+                _snap_path, _snap_bytes = write_from_graph_cache(
+                    skeleton.get("nodes", []),
+                    skeleton.get("edges", []),
+                )
+                print(
+                    f"[cortex] skeleton snapshot: {_snap_bytes:,} bytes → "
+                    f"{_snap_path}",
+                    file=sys.stderr,
+                )
+            except Exception as _exc:  # pragma: no cover - defensive
+                print(
+                    f"[cortex] skeleton snapshot write failed: {_exc}",
+                    file=sys.stderr,
+                )
+
+            # ── Stage 2: full baseline (load + ingest the heavy sources) ──
+            # Replaces the cumulative cache with the full graph. The client
+            # already painted the skeleton; this fills it in.
             try:
                 baseline = build_workflow_graph(
                     store,
                     domain_filter=domain_filter,
                     stage="full",
+                    on_source_loaded=_on_source_loaded,
+                    on_batch=_on_batch,
+                    defer_native_ast=True,
                 )
             finally:
                 if saved_flag is None:
@@ -463,93 +813,61 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                     os.environ["CORTEX_MEMORY_AP_ENABLED"] = saved_flag
                 memory_config.get_memory_settings.cache_clear()
 
-            # Partition baseline nodes by kind so we can publish one
-            # layer at a time with a small delay — the client sees the
-            # graph grow: domains → L1 → L2 → L3 → L4 → L5.
-            by_kind: dict[str, list] = {}
-            for n in baseline.get("nodes", []):
-                by_kind.setdefault(n.get("kind") or "", []).append(n)
-            edges_all = baseline.get("edges", [])
-            node_ids_in_cache: set[str] = set()
+            _merge(
+                baseline.get("nodes", []),
+                baseline.get("edges", []),
+                stage="baseline",
+                pct=0.30,
+                message=(
+                    f"baseline: {len(baseline.get('nodes', []))} nodes / "
+                    f"{len(baseline.get('edges', []))} edges"
+                ),
+                phase_key=None,
+            )
+            for _phase_key in ("L0", "L1", "L2", "L3", "L4", "L5"):
+                _mark_phase_ready(_phase_key)
+            _set_progress(
+                phase="baseline_ready",
+                pct=0.30,
+                message=(
+                    f"baseline ready: {len(baseline.get('nodes', []))} nodes / "
+                    f"{len(baseline.get('edges', []))} edges"
+                ),
+                baseline_ready=True,
+            )
 
-            def _edges_for(node_ids: set[str]):
-                """Return all edges both of whose endpoints are already
-                in the cache — avoids publishing an edge before its
-                target node is visible."""
-                out = []
-                for e in edges_all:
-                    sid = (
-                        e.get("source").get("id")
-                        if isinstance(e.get("source"), dict)
-                        else e.get("source")
-                    )
-                    tid = (
-                        e.get("target").get("id")
-                        if isinstance(e.get("target"), dict)
-                        else e.get("target")
-                    )
-                    if sid in node_ids and tid in node_ids:
-                        out.append(e)
-                return out
+            # ── CXGB binary snapshot ──
+            # Write the precomputed snapshot so subsequent /api/graph.bin
+            # loads finish in ~110 ms instead of re-serialising JSON on
+            # every request. Atomic rename means a concurrent reader
+            # either gets the previous complete snapshot or the new
+            # complete snapshot — never a torn write.
+            try:
+                from mcp_server.server.graph_snapshot import (
+                    write_from_graph_cache,
+                )
+                _snap_path, _snap_bytes = write_from_graph_cache(
+                    baseline.get("nodes", []),
+                    baseline.get("edges", []),
+                )
+                print(
+                    f"[cortex] graph snapshot: {_snap_bytes:,} bytes → "
+                    f"{_snap_path}",
+                    file=sys.stderr,
+                )
+            except Exception as _exc:  # pragma: no cover - defensive
+                print(
+                    f"[cortex] graph snapshot write failed: {_exc}",
+                    file=sys.stderr,
+                )
 
-            LAYER_ORDER = [
-                ("L0", "L0 domains", ["domain"], 0.05),
-                ("L1", "L1 setup", ["skill", "hook", "command", "agent", "mcp"], 0.10),
-                ("L2", "L2 tools", ["tool_hub"], 0.14),
-                ("L3", "L3 files", ["file"], 0.18),
-                ("L4", "L4 discussions", ["discussion"], 0.22),
-                # Entities publish alongside memories: the only edge they
-                # carry is ``about_entity`` (MEMORY → ENTITY), so both
-                # endpoints must land in the same phase or ``_edges_for``
-                # drops the edge for lack of a visible target.
-                ("L5", "L5 memories", ["memory", "entity"], 0.28),
-            ]
-            for phase_key, label, kinds, pct in LAYER_ORDER:
-                # State-machine gate: block until every prerequisite
-                # phase is ``ready``. Guarantees the cache never
-                # publishes this phase's nodes/edges before its
-                # parents exist.
-                if not _phase_deps_satisfied(phase_key):
-                    continue
-                layer_nodes = []
-                for k in kinds:
-                    layer_nodes.extend(by_kind.get(k, []))
-                for n in layer_nodes:
-                    node_ids_in_cache.add(n.get("id"))
-                layer_edges = _edges_for(node_ids_in_cache)
-                # Only add the NEW edges this layer introduces.
-                already_published = (
-                    _graph_cache["data"].get("edges", []) if _graph_cache else []
-                )
-                already_keys = {
-                    (e.get("source"), e.get("target"), e.get("kind"))
-                    for e in already_published
-                }
-                new_edges = [
-                    e
-                    for e in layer_edges
-                    if (e.get("source"), e.get("target"), e.get("kind"))
-                    not in already_keys
-                ]
-                flags = (
-                    {"baseline_ready": phase_key == "L5"} if phase_key == "L5" else {}
-                )
-                _merge(
-                    layer_nodes,
-                    new_edges,
-                    stage=label,
-                    pct=pct,
-                    message=(
-                        f"{label}: +{len(layer_nodes)} nodes (+{len(new_edges)} edges)"
-                    ),
-                    phase_key=phase_key,
-                    **flags,
-                )
-                # Mark this phase as ``ready`` in the state machine
-                # — the next phase (and the client's next fetch) can
-                # now safely depend on these nodes existing.
-                _mark_phase_ready(phase_key)
-                time.sleep(0.1)
+            # Signal end-of-stream so live SSE subscribers stop polling
+            # and the browser can flip from "incremental" mode to its
+            # final rendered state.
+            try:
+                _events.close()
+            except Exception:
+                pass
 
             # L6 — AST per project, per 200-symbol batch.
             from mcp_server.core.workflow_graph_palette import (
@@ -576,6 +894,12 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                     "(AP disabled)",
                     full_ready=True,
                 )
+                # Tell the SSE stream the build is finished so connected
+                # clients can flush + close cleanly.
+                try:
+                    get_layout_authority().done()
+                except Exception:
+                    pass
                 return
 
             # File-path → file-id map for DEFINED_IN edge resolution.
@@ -892,6 +1216,11 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                         phase_key=phase_key,
                     )
                     time.sleep(0.02)
+                    # Act-channel consult between L6 symbol batches —
+                    # L6 is the highest-volume phase (~64k symbols per
+                    # large project) and the most likely to overflow
+                    # P4. See _pressure module docstring.
+                    _pressure.wait_for_clear(timeout=1.0)
                 # Intra-project edges land in the same project phase,
                 # but only AFTER all its nodes — the client's dangling-
                 # edge filter handles any slack.
@@ -923,6 +1252,11 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                     phase_key="L6_CROSS",
                 )
                 time.sleep(0.05)
+                # Act-channel consult between L6 cross-edge batches.
+                # Edges live in P5 (lowest pre-subtree priority) and
+                # are dropped before any nodes — back off if the
+                # authority is signalling that.
+                _pressure.wait_for_clear(timeout=1.0)
             _mark_phase_ready("L6_CROSS")
 
             # Done.
@@ -959,6 +1293,11 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                 node_count=len(cur["nodes"]),
                 edge_count=len(cur["edges"]),
             )
+            # Final terminator on the SSE stream so subscribers close.
+            try:
+                get_layout_authority().done()
+            except Exception:
+                pass
         except Exception as exc:  # pragma: no cover
             print(f"[cortex] background build error: {exc}", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)

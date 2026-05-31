@@ -131,7 +131,7 @@ def _route_unified_get(
     if path_no_qs == "/api/graph/progress":
         from mcp_server.server.http_standalone_endpoints import serve_graph_progress
 
-        serve_graph_progress(handler)
+        serve_graph_progress(handler, store)
         return
     if path_no_qs == "/api/graph/phase":
         from mcp_server.server.http_standalone_endpoints import serve_graph_phase
@@ -152,6 +152,38 @@ def _route_unified_get(
         from mcp_server.handlers.memories_facets import serve as serve_memories_facets
 
         serve_memories_facets(handler, store)
+        return
+    if path_no_qs == "/api/graph/stream":
+        from mcp_server.handlers.graph_stream import serve as serve_stream
+
+        serve_stream(handler, store)
+        return
+    if path_no_qs == "/api/graph/stream/stats":
+        from mcp_server.handlers.graph_stream import serve_stats
+
+        serve_stats(handler, store)
+        return
+    if path_no_qs.startswith("/api/node/"):
+        from mcp_server.handlers.node_metadata import serve as serve_node_metadata
+
+        serve_node_metadata(handler, store)
+        return
+    if path_no_qs == "/api/graph/events":
+        # Live SSE stream of per-source batches — the browser watches
+        # the graph grow on first visit (cold cache). Falls back to
+        # /api/graph.bin when a precomputed snapshot exists. See
+        # mcp_server/server/graph_event_stream.py.
+        from mcp_server.server.http_standalone_endpoints import serve_graph_events
+
+        serve_graph_events(handler, store)
+        return
+    if path_no_qs == "/api/graph.bin":
+        # CXGB binary snapshot — full graph in ~110 ms vs the JSON
+        # path's ~1–3 s parse on a 135 k-node graph. See
+        # mcp_server/server/graph_snapshot.py for format spec.
+        from mcp_server.server.http_standalone_endpoints import serve_graph_binary
+
+        serve_graph_binary(handler, store)
         return
     if path == "/api/graph" or path.startswith("/api/graph?"):
         serve_graph(handler, store)

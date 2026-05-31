@@ -82,7 +82,8 @@ def write_layout(
 def read_layout_version(store) -> dict | None:
     """Return ``{'version', 'fingerprint', 'count'}`` or None if empty."""
     sql = (
-        "SELECT layout_version, topology_fingerprint, COUNT(*) "
+        "SELECT layout_version AS v, topology_fingerprint AS fp, "
+        "COUNT(*) AS n "
         "FROM workflow_graph_layout "
         "GROUP BY layout_version, topology_fingerprint "
         "ORDER BY layout_version DESC LIMIT 1"
@@ -92,7 +93,10 @@ def read_layout_version(store) -> dict | None:
         row = cur.fetchone()
     if not row:
         return None
-    return {"version": int(row[0]), "fingerprint": row[1], "count": int(row[2])}
+    # The pool is configured with ``dict_row`` (see pg_store.py), so
+    # ``row`` is a dict keyed on the SELECT aliases. Tuple-indexing
+    # would raise KeyError(0). The aliases above pin stable keys.
+    return {"version": int(row["v"]), "fingerprint": row["fp"], "count": int(row["n"])}
 
 
 def read_all_positions(store) -> list[tuple[str, float, float, str]]:
@@ -106,7 +110,12 @@ def read_all_positions(store) -> list[tuple[str, float, float, str]]:
     sql = "SELECT node_id, x, y, kind FROM workflow_graph_layout"
     with _conn(store) as conn, conn.cursor() as cur:
         cur.execute(sql)
-        return [(r[0], float(r[1]), float(r[2]), r[3]) for r in cur.fetchall()]
+        # Pool returns dict rows; index by column name so the read
+        # stays correct regardless of how the pool was configured.
+        return [
+            (r["node_id"], float(r["x"]), float(r["y"]), r["kind"])
+            for r in cur.fetchall()
+        ]
 
 
 def read_positions_in_bbox(
@@ -130,4 +139,7 @@ def read_positions_in_bbox(
     )
     with _conn(store) as conn, conn.cursor() as cur:
         cur.execute(sql, (min_x, max_x, min_y, max_y))
-        return [(r[0], float(r[1]), float(r[2]), r[3]) for r in cur.fetchall()]
+        return [
+            (r["node_id"], float(r["x"]), float(r["y"]), r["kind"])
+            for r in cur.fetchall()
+        ]

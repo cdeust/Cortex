@@ -186,6 +186,25 @@ def load_command_files(
     ]
 
 
+def _project_memory_row(r: dict[str, Any]) -> dict[str, Any]:
+    """Pick the graph-relevant fields from a normalized memory row.
+
+    Extracted from ``load_memories`` so ``iter_memories_chunked`` can
+    project per-chunk rows using the same shape contract.
+    """
+    row_dict: dict[str, Any] = {
+        "id": r.get("id"),
+        "domain": r.get("domain") or "",
+        "consolidation_stage": r.get("consolidation_stage") or "episodic",
+        "heat": float(r.get("heat") or r.get("heat_base") or 0.0),
+        "content": r.get("content") or "",
+    }
+    for k in _MEMORY_PASSTHROUGH_KEYS:
+        if k in r and r[k] is not None:
+            row_dict[k] = r[k]
+    return row_dict
+
+
 def load_memories(
     pg_store, min_heat: float = 0.0, limit: int = 10000
 ) -> list[dict[str, Any]]:
@@ -195,20 +214,27 @@ def load_memories(
         limit=limit,
         include_benchmarks=True,
     )
-    out: list[dict[str, Any]] = []
-    for r in rows:
-        row_dict: dict[str, Any] = {
-            "id": r.get("id"),
-            "domain": r.get("domain") or "",
-            "consolidation_stage": r.get("consolidation_stage") or "episodic",
-            "heat": float(r.get("heat") or r.get("heat_base") or 0.0),
-            "content": r.get("content") or "",
-        }
-        for k in _MEMORY_PASSTHROUGH_KEYS:
-            if k in r and r[k] is not None:
-                row_dict[k] = r[k]
-        out.append(row_dict)
-    return out
+    return [_project_memory_row(r) for r in rows]
+
+
+def iter_memories_chunked(
+    pg_store, min_heat: float = 0.0, chunk_size: int = 1000
+):
+    """Stream-yield memory chunks via a server-side PG cursor.
+
+    Streaming counterpart to ``load_memories``: instead of fetching the
+    entire result set into Python memory and returning it, yields
+    ``chunk_size``-sized lists of projected memory dicts as PG sends
+    them over the wire. The workflow-graph build uses this so the SSE
+    event stream surfaces memories DURING the query, not after a ~10 s
+    blocking ``.fetchall()`` materialisation.
+    """
+    for chunk in pg_store.iter_hot_memories_chunked(
+        min_heat=min_heat,
+        include_benchmarks=True,
+        chunk_size=chunk_size,
+    ):
+        yield [_project_memory_row(r) for r in chunk]
 
 
 def load_entities(pg_store, min_heat: float = 0.05) -> list[dict[str, Any]]:

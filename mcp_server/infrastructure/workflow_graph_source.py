@@ -189,6 +189,20 @@ class WorkflowGraphSource:
     ) -> list[dict[str, Any]]:
         return _pg.load_memories(pg_store, min_heat=min_heat, limit=limit)
 
+    def iter_memories_chunked(
+        self, pg_store, min_heat: float = 0.0, chunk_size: int = 1000
+    ):
+        """Stream memory chunks via a server-side PG cursor.
+
+        Mirrors ``load_memories`` but yields chunks of projected dicts
+        as PG sends them — the workflow-graph build uses this so SSE
+        subscribers see memory nodes WHILE the query runs (rather than
+        a ~10 s blocking wait followed by a single burst).
+        """
+        return _pg.iter_memories_chunked(
+            pg_store, min_heat=min_heat, chunk_size=chunk_size
+        )
+
     # ── 7. Discussions (JSONL metadata) ───────────────────────────────
     def load_discussions(self, session_store=None) -> list[dict[str, Any]]:
         _ = session_store

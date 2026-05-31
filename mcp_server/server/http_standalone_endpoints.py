@@ -118,11 +118,196 @@ def serve_graph(handler, store) -> None:
         send_json_error(handler, e)
 
 
-def serve_graph_progress(handler) -> None:
-    """GET /api/graph/progress — background-build progress snapshot."""
-    from mcp_server.server.http_standalone_graph import get_build_progress
+def serve_graph_events(handler, store=None) -> None:
+    """GET /api/graph/events — Server-Sent Events stream of build batches.
+
+    The build worker pushes per-source batches onto an in-memory event
+    queue (see ``graph_event_stream``). This handler streams them to a
+    single browser connection in real time so the user watches the
+    graph grow as the builder produces nodes — first source within a
+    second, full graph fills in behind it. No precomputed snapshot is
+    required for this to work; it's the live-build channel.
+
+    Wire format (text/event-stream):
+        event: batch
+        id: <buffer index>
+        data: {"label":..,"nodes":[...],"edges":[...],"off":..,"n_total":..}
+
+        event: done
+        data: {"total_nodes":N,"total_edges":E}
+
+    The client (``ui/unified/js/graph_event_stream.js``) parses each
+    ``batch`` event and calls ``JUG.appendGraphDelta(nodes, edges)``.
+    appendGraphDelta dedups by id, so reconnect-and-replay is safe.
+
+    Lazy-kicks the build (ensure_build_started) so opening the SSE
+    stream on a cold cache starts the pipeline producing events.
+    """
+    from urllib.parse import parse_qs, urlparse
+
+    from mcp_server.server.graph_event_stream import (
+        format_done,
+        format_event,
+        format_heartbeat,
+        get_stream,
+    )
+    from mcp_server.server.http_standalone_graph import (
+        ensure_build_started,
+        get_build_progress,
+    )
+
+    # Honour Last-Event-ID for resume after a flaky connection. Spec
+    # says the value is the ``id:`` of the last event the client saw;
+    # we advance past it on resume.
+    last_id_header = (
+        handler.headers.get("Last-Event-ID")
+        or handler.headers.get("Last-Event-Id")
+        or ""
+    )
+    since = 0
+    try:
+        since = int(last_id_header) + 1 if last_id_header else 0
+    except ValueError:
+        since = 0
+    # Also allow ?since=N as a fallback (curl-friendly).
+    qs = parse_qs(urlparse(handler.path).query)
+    if "since" in qs:
+        try:
+            since = max(since, int(qs["since"][0]))
+        except (ValueError, IndexError):
+            pass
 
     try:
+        ensure_build_started(store)
+
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        handler.send_header("Cache-Control", "no-cache")
+        handler.send_header("Connection", "keep-alive")
+        handler.send_header("X-Accel-Buffering", "no")  # disable proxy buffering
+        handler.end_headers()
+
+        stream = get_stream()
+
+        # Replay-then-tail loop. subscribe() returns on close-and-drained
+        # OR on a 15 s idle timeout. On idle timeout we emit an SSE
+        # comment (heartbeat) and re-subscribe from where we left off,
+        # so the connection stays open across long pauses (the source-
+        # loading phase is ~15–20 s of silence before the first batch).
+        # Loop exits cleanly when (a) the stream is closed and drained,
+        # or (b) the client disconnects (BrokenPipe).
+        cursor = since
+        while True:
+            saw_any = False
+            for idx, event in stream.subscribe(since=cursor, timeout=15.0):
+                try:
+                    handler.wfile.write(format_event(idx, event))
+                    handler.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    return
+                cursor = idx + 1
+                saw_any = True
+
+            s = stream.stats()
+            if s.get("closed") and cursor >= s.get("count", 0):
+                # Build finished AND we've drained every event.
+                prog = get_build_progress()
+                try:
+                    handler.wfile.write(
+                        format_done(
+                            total_nodes=prog.get("node_count", 0),
+                            total_edges=prog.get("edge_count", 0),
+                        )
+                    )
+                    handler.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
+
+            # Idle timeout — keep the connection alive with a comment.
+            # If the client is gone, the write fails and we exit.
+            try:
+                handler.wfile.write(format_heartbeat())
+                handler.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                return
+            # If we saw nothing AND the stream is still open, loop
+            # back into subscribe() to wait for more. This is the
+            # source-loading gap (no batches for ~15–20 s while PG
+            # queries run).
+            if not saw_any:
+                continue
+    except Exception as e:
+        # Best-effort error reporting on an already-started chunked
+        # response is fraught; log and close.
+        try:
+            handler.wfile.write(
+                f"event: error\ndata: {type(e).__name__}: {e}\n\n".encode()
+            )
+            handler.wfile.flush()
+        except Exception:
+            pass
+
+
+def serve_graph_binary(handler, store=None) -> None:
+    """GET /api/graph.bin — precomputed binary snapshot (CXGB v1).
+
+    Streams ``~/.cache/cortex/graph-snapshot.bin`` as
+    ``application/octet-stream`` with zero Python-side serialisation.
+    The browser decodes it via ``DataView`` (see
+    ``ui/unified/js/graph_snapshot.js``) — full graph load in ~110 ms
+    on the 135 k / 166 k benchmark DB, vs ~45 min when the
+    rebuild-from-PG path runs each time. See
+    ``mcp_server/server/graph_snapshot.py`` for the format spec.
+
+    Also lazily kicks the background build so the first visit to this
+    endpoint starts producing a snapshot — subsequent visits get the
+    fast load. Returns HTTP 404 if no snapshot exists yet (the client
+    falls back to the JSON path while the build runs).
+    """
+    from mcp_server.server.graph_snapshot import default_path
+    from mcp_server.server.http_standalone_graph import ensure_build_started
+
+    try:
+        ensure_build_started(store)
+        path = default_path()
+        if not path.is_file():
+            handler.send_response(404)
+            handler.send_header("Content-Type", "text/plain; charset=utf-8")
+            handler.end_headers()
+            handler.wfile.write(b"snapshot not yet built")
+            return
+        st = path.stat()
+        with open(path, "rb") as fh:
+            payload = fh.read()
+        handler.send_response(200)
+        handler.send_header("Content-Type", "application/octet-stream")
+        handler.send_header("Content-Length", str(len(payload)))
+        # Snapshot is regenerated on every successful build; long-cache
+        # would serve a stale graph after a rebuild. Use a weak ETag
+        # off the mtime so a client can revalidate cheaply.
+        handler.send_header("Cache-Control", "no-cache")
+        handler.send_header("ETag", f'W/"{int(st.st_mtime)}-{st.st_size}"')
+        handler.end_headers()
+        handler.wfile.write(payload)
+    except Exception as e:
+        send_json_error(handler, e)
+
+
+def serve_graph_progress(handler, store=None) -> None:
+    """GET /api/graph/progress — background-build progress snapshot.
+
+    Also lazily kicks the background build if it hasn't started (see
+    ``ensure_build_started``): the graph-tab poller hits this endpoint,
+    so this is what starts the build when the user opens the Graph view.
+    """
+    from mcp_server.server.http_standalone_graph import (
+        ensure_build_started,
+        get_build_progress,
+    )
+
+    try:
+        ensure_build_started(store)
         send_json_ok(handler, get_build_progress())
     except Exception as e:
         send_json_error(handler, e)

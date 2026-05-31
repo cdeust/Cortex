@@ -20,7 +20,7 @@ agent / command, skill / mcp usage) lives in
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from typing import Iterable
+from typing import Callable, Iterable, List, Optional, Tuple
 
 from mcp_server.core.workflow_graph_builder_relational import (
     ingest_ast_edge,
@@ -106,53 +106,132 @@ class WorkflowGraphBuilder:
     def build(self, inputs: WorkflowBuildInputs):
         """Ingest every stream in ``inputs`` and return (nodes, edges).
 
-        Signature satisfies the §4.4 parameter-count rule (≤4): single
-        DTO parameter holds all the data streams. See
-        ``workflow_graph_inputs.WorkflowBuildInputs`` for the shape.
+        Backwards-compatible wrapper around ``streaming_build`` that
+        drains all batches and returns the final accumulated graph.
+        Callers wanting per-batch emission should use ``streaming_build``
+        directly.
         """
+        for _ in self.streaming_build(inputs, on_batch=None):
+            pass
+        return self._dedupe_and_link(self._nodes.values(), self._edges)
+
+    def streaming_build(
+        self,
+        inputs: WorkflowBuildInputs,
+        on_batch: Optional[
+            Callable[[str, List[WorkflowNode], List[WorkflowEdge]], None]
+        ] = None,
+    ):
+        """Generator variant: yield ``(label, new_nodes, new_edges)`` per
+        source-ingest step.
+
+        Why this exists: a synchronous ``build()`` call against the
+        ``stage="full"`` inputs runs ~13 PG queries and ~3 ingest phases
+        before returning anything to the caller. Measured baseline on
+        the dev DB: ~150 s before the first node reaches the SSE
+        producer, even though the layout authority and SSE transport
+        are designed to stream. Cochrane Finding A's Act-channel never
+        fires in that window because the producer never reaches the
+        inter-batch seams. See ``tasks/layout-authority/audits/cochrane.md``
+        §12 and the run-time measurement on 2026-05-27.
+
+        Streaming order respects the builder's three-phase contract:
+            phase 1 — node-bearing sources (one batch per source)
+            files   — file finalisation (synthetic batch)
+            phase 2 — relational sources (one batch per source)
+            phase 3 — AST symbols + AST edges (two batches)
+
+        The yielded ``new_nodes`` / ``new_edges`` are the deltas added
+        by THAT source — already deduped within the batch via
+        ``_dedupe_and_link`` on just the new edges, so cross-source
+        weight summing is preserved for the final ``build()`` return
+        (different sources emit different ``EdgeKind`` values, so
+        cross-source key collisions are impossible by construction).
+
+        ``on_batch`` is invoked with the same triple just before each
+        yield, for callers that prefer push semantics (e.g. wiring
+        into ``LayoutAuthority.add_node``). When ``None`` the generator
+        still yields — drain it with ``for _ in ...: pass`` to run the
+        ingest without emission.
+        """
+        # Capture the offsets BEFORE _ensure_domain so the synthetic
+        # ``domain:__global__`` node is included in the first batch's
+        # delta. Otherwise it stays at index 0, every batch slices
+        # ``[prev_n:]`` with prev_n>=1, the global node is never
+        # emitted, and validate_graph rejects the in_domain edges that
+        # target it ("edge target missing: domain:__global__").
+        prev_n = len(self._nodes)
+        prev_e = len(self._edges)
         self._ensure_domain(GLOBAL_DOMAIN_ID, "global")
+
+        def _emit(label: str):
+            nonlocal prev_n, prev_e
+            new_nodes = list(self._nodes.values())[prev_n:]
+            new_edges_raw = self._edges[prev_e:]
+            # Intra-batch dedup-and-link: collapses repeat (src,tgt,kind)
+            # edges within this source and sums their weights. Cheap
+            # because the batch is the size of one source's output, not
+            # the whole graph.
+            _, new_edges = self._dedupe_and_link(new_nodes, new_edges_raw)
+            prev_n = len(self._nodes)
+            prev_e = len(self._edges)
+            if on_batch is not None:
+                on_batch(label, new_nodes, new_edges)
+            return label, new_nodes, new_edges
+
         # Phase 1: node ingestion. Mix of self-bound builder methods
         # (for kinds the builder owns) and free functions that take
         # the builder as first arg (for externalised kinds like
         # ENTITY). The dispatch shape is the same for both.
-        phase1: tuple[tuple[list, object], ...] = (
-            (inputs.tool_events, self._ingest_tool_event),
-            (inputs.skill_paths, self._ingest_skill),
-            (inputs.hook_defs, self._ingest_hook),
-            (inputs.agent_events, self._ingest_agent),
-            (inputs.command_events, self._ingest_command),
-            (inputs.memories, self._ingest_memory),
-            (inputs.discussions, self._ingest_discussion),
+        phase1: Tuple[Tuple[str, list, object], ...] = (
+            ("tool_events", inputs.tool_events, self._ingest_tool_event),
+            ("skills", inputs.skill_paths, self._ingest_skill),
+            ("hooks", inputs.hook_defs, self._ingest_hook),
+            ("agents", inputs.agent_events, self._ingest_agent),
+            ("commands", inputs.command_events, self._ingest_command),
+            ("memories", inputs.memories, self._ingest_memory),
+            ("discussions", inputs.discussions, self._ingest_discussion),
         )
-        for events, fn in phase1:
+        for label, events, fn in phase1:
             for ev in events or []:
                 fn(ev)
+            yield _emit(label)
         for ev in inputs.entities or []:
             ingest_entity(self, ev)
+        yield _emit("entities")
+        # File finalisation depends on the cumulative tool/discussion
+        # ingestion above — synthesised as its own batch so the SSE
+        # producer sees file nodes before any phase-2 edge references
+        # them. The LayoutAuthority's I3 invariant tolerates late
+        # arrivals via the pending-symbols buffer, but emitting in
+        # dependency order minimises buffering pressure.
         self._finalize_files()
+        yield _emit("files")
         # Phase 2: relational edges. Every helper takes the builder
         # as first arg, assumes file nodes exist.
-        phase2: tuple[tuple[list, object], ...] = (
-            (inputs.discussion_file_events, ingest_discussion_file),
-            (inputs.command_file_events, ingest_command_file),
-            (inputs.skill_usage_events, ingest_skill_usage),
-            (inputs.mcp_usage_events, ingest_mcp_usage),
-            (inputs.discussion_tool_events, ingest_discussion_tool),
-            (inputs.discussion_agent_events, ingest_discussion_agent),
-            (inputs.discussion_command_events, ingest_discussion_command),
-            (inputs.memory_entity_edges, ingest_about_entity),
+        phase2: Tuple[Tuple[str, list, object], ...] = (
+            ("discussion_files", inputs.discussion_file_events, ingest_discussion_file),
+            ("command_files", inputs.command_file_events, ingest_command_file),
+            ("skill_usage", inputs.skill_usage_events, ingest_skill_usage),
+            ("mcp_usage", inputs.mcp_usage_events, ingest_mcp_usage),
+            ("discussion_tools", inputs.discussion_tool_events, ingest_discussion_tool),
+            ("discussion_agents", inputs.discussion_agent_events, ingest_discussion_agent),
+            ("discussion_commands", inputs.discussion_command_events, ingest_discussion_command),
+            ("memory_entity_edges", inputs.memory_entity_edges, ingest_about_entity),
         )
-        for events, fn in phase2:
+        for label, events, fn in phase2:
             for ev in events or []:
                 fn(self, ev)
+            yield _emit(label)
         # Phase 3 (ADR-0046): AST enrichment. Symbols attach to files,
         # AST edges attach to symbols — silently skip when their parent
         # is missing. Empty lists when AP isn't configured.
         for sym in inputs.ast_symbols or []:
             ingest_symbol(self, sym)
+        yield _emit("ast_symbols")
         for edge in inputs.ast_edges or []:
             ingest_ast_edge(self, edge)
-        return self._dedupe_and_link(self._nodes.values(), self._edges)
+        yield _emit("ast_edges")
 
     # ── al-jabr: fill missing domain / classify file tool mix ─────────
 

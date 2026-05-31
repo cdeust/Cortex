@@ -511,7 +511,7 @@ ON CONFLICT (user_id) DO NOTHING;
 -- Precomputed (x, y) coordinates for every workflow-graph node. The
 -- layout pass runs out-of-band (handlers/recompute_layout.py via
 -- igraph DrL on CPU) and persists the result here so the viz can ship
--- coordinates with each node — eliminating the d3-force tick cost in
+-- coordinates with each node, eliminating the d3-force tick cost in
 -- the browser. ``topology_fingerprint`` tracks which graph build the
 -- coordinates were computed against. The tile and quadtree endpoints
 -- read them by ``layout_version`` so a stale layout never serves
@@ -1366,7 +1366,15 @@ def _split_statements(ddl: str) -> list[str]:
         return [ddl.strip()] if ddl.strip() else []
     statements = []
     for part in ddl.split(";"):
-        stmt = part.strip()
+        # Strip leading SQL line comments and blank lines so a chunk that
+        # begins with "-- foo\nCREATE TABLE ..." is not mistaken for the
+        # comment text being the first SQL token. Also drop chunks that
+        # are *entirely* comments / whitespace.
+        lines = [ln for ln in part.splitlines()]
+        # remove leading blank/comment lines
+        while lines and (not lines[0].strip() or lines[0].lstrip().startswith("--")):
+            lines.pop(0)
+        stmt = "\n".join(lines).strip()
         if stmt:
             statements.append(stmt + ";")
     return statements
