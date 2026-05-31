@@ -84,12 +84,18 @@ def _node_to_dict(n) -> dict[str, Any]:
         d["domain"] = plain
         if "isGlobal" not in d:
             d["isGlobal"] = False
-        # A domain-kind node is selectable as a project domain iff it is not
-        # the global sentinel. Emitted here — the single serialization funnel
-        # for every endpoint (/api/graph, /phase, .bin, SSE) — so no client
-        # consumer needs to re-derive "is this a real project domain."
+        # selectableDomain = this is a real project slug, not a filesystem path.
+        # Rules (single definition, no client re-derives):
+        #   - Filesystem paths contain '/' → not a project slug
+        #   - Build-artifact subdirectories contain '(' → not a project slug
+        # Everything else (cortex, agentic-ai, ...) is a selectable project.
         if d.get("kind") == "domain":
-            d["selectableDomain"] = True
+            _lbl = plain or ""
+            d["selectableDomain"] = (
+                "/" not in _lbl
+                and "\\" not in _lbl
+                and "(" not in _lbl
+            )
     else:
         d["domain"] = "global"
         d["isGlobal"] = True
