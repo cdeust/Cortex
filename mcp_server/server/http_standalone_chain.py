@@ -117,20 +117,62 @@ def serve_graph_chain(handler, store) -> None:
             send_json_ok(handler, _not_found_payload(seed))
             return
 
-        entity = _resolve_start_entity_by_name(seed, store)
-        if not entity:
+        # ── Resolve seed to one or more entity start IDs ──────────────────
+        # Three node-id schemas from the workflow graph:
+        #   entity:<pgid>  → PG entity by primary key (direct)
+        #   domain:<slug>  → top entities in that domain (aggregate)
+        #   <other>        → strip prefix, try name lookup
+        start_entities: list[dict] = []
+        resolved_seed = seed
+
+        if seed.startswith("entity:"):
+            raw_id = seed[len("entity:"):]
+            try:
+                ent = store.get_entity_by_id(int(raw_id))
+                if ent:
+                    start_entities = [ent]
+                    resolved_seed = ent.get("name", seed)
+            except (ValueError, TypeError):
+                pass
+
+        elif seed.startswith("domain:"):
+            slug = seed[len("domain:"):]
+            start_entities = store.get_top_entities_for_domain(slug, limit=15)
+            resolved_seed = slug
+
+        else:
+            # Strip structured-id prefix (skill:, hook:, file:, …) and try
+            # the bare label as an entity name.
+            bare = seed.split(":")[-1] if ":" in seed else seed
+            ent = _resolve_start_entity_by_name(bare, store)
+            if not ent and bare != seed:
+                ent = _resolve_start_entity_by_name(seed, store)
+            if ent:
+                start_entities = [ent]
+                resolved_seed = ent.get("name", seed)
+
+        if not start_entities:
             send_json_ok(handler, _not_found_payload(seed))
             return
 
-        edges = _bfs_entity_graph(
-            start_entity_id=entity["id"],
-            store=store,
-            max_depth=depth,
-            max_edges=_NODE_CAP,
-            direction=direction,
-            rel_filter=None,
-        )
-        mermaid, n_nodes, n_edges, depth_reached, truncated = _build_mermaid(edges)
+        # ── BFS from each start entity, merge ─────────────────────────────
+        all_edges: list[dict] = []
+        cap_per = max(1, _NODE_CAP // len(start_entities))
+        for ent in start_entities:
+            all_edges.extend(
+                _bfs_entity_graph(
+                    start_entity_id=ent["id"],
+                    store=store,
+                    max_depth=depth,
+                    max_edges=cap_per,
+                    direction=direction,
+                    rel_filter=None,
+                )
+            )
+            if len(all_edges) >= _NODE_CAP:
+                break
+
+        mermaid, n_nodes, n_edges, depth_reached, truncated = _build_mermaid(all_edges)
         send_json_ok(
             handler,
             {
@@ -139,11 +181,8 @@ def serve_graph_chain(handler, store) -> None:
                 "edge_count": n_edges,
                 "depth_reached": depth_reached,
                 "truncated": truncated,
-                "seed": entity.get("name", seed),
+                "seed": resolved_seed,
             },
         )
     except Exception:
-        # Contract: this function never raises. send_json_ok sets the CORS
-        # header via _apply_cors_headers, so the not-found body carries the
-        # same headers as the success path.
         send_json_ok(handler, _not_found_payload(seed))

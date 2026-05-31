@@ -96,6 +96,21 @@ class PgEntityMixin:
         ).fetchone()
         return dict(row) if row else None
 
+    def get_top_entities_for_domain(
+        self, domain_slug: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Return the highest-heat entities tagged with ``domain_slug``.
+
+        Used by the chain endpoint to seed a domain-level BFS — the domain
+        node itself is not an entity, but its code symbols are.
+        """
+        rows = self._execute(
+            "SELECT * FROM entities WHERE domain = %s "
+            "ORDER BY heat DESC, mention_count DESC LIMIT %s",
+            (domain_slug, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_all_entities(
         self, min_heat: float = 0.05, include_archived: bool = False
     ) -> list[dict[str, Any]]:

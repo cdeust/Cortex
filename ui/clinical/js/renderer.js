@@ -272,9 +272,11 @@ export function addNodes(nodes, currentVisibleDepth = Infinity) {
     // if it's not a registered program. We keep it as `kind` only.
     const { id, type: _serverType, ...attrs } = n;
     const nodeDepth = attrs.depth || 0;
-    // Show all loaded nodes — the "galaxy cluster" visual requires simultaneous
-    // rendering of all depths. Depth controls WHAT IS FETCHED, not what is shown.
-    const fadePct = 0;   // start transparent, fade in regardless of depth
+    // Nodes deeper than currentVisibleDepth are hidden until the user scrolls in.
+    // This is LOD — each depth level should look as rich as the old graph for the
+    // nodes that ARE visible at that depth.
+    const isVisible = nodeDepth <= currentVisibleDepth;
+    const fadePct = isVisible ? 0 : 1;
     _graph.addNode(id, {
       ...attrs,
       label:   _shortLabel(attrs.label || id),
@@ -285,7 +287,7 @@ export function addNodes(nodes, currentVisibleDepth = Infinity) {
       y:       typeof attrs.y === "number" ? attrs.y : (Math.random() - 0.5) * 2,
       color:   kindColour(attrs.kind || _serverType || ""),
       size:    depthSize(nodeDepth),
-      hidden:  false,
+      hidden:  !isVisible,
       fadePct,
     });
     if (isVisible) {
