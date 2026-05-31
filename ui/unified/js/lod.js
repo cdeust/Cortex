@@ -17,6 +17,10 @@
   var _loaded   = {};   // "phaseKey:domainSlug" → true
   var _pending  = {};   // same key → true (in-flight)
 
+  // ── Authoritative state — NEVER read from DOM, always from these vars ──────
+  var _selectedDepth  = 'L0';
+  var _selectedDomain = '';
+
   // L0 domain nodes are cached in localStorage so they appear INSTANTLY
   // on every page load after the first. The build takes 20–30 s on cold
   // start; without the cache the user stares at an empty canvas every time.
@@ -227,17 +231,16 @@
 
   // ── Wire the depth filter select ───────────────────────────────────────────
 
-  function _currentDepth() {
-    var sel = document.getElementById('wfg-filter-select');
-    if (!sel) return 'L0';
-    var val = sel.value;
-    // Only respond to our LOD options (L0-L6).
-    return /^L[0-6]$/.test(val) ? val : 'L0';
-  }
+  // Read from JS state — never from DOM (DOM can be reset; state cannot).
+  function _currentDepth()  { return _selectedDepth; }
+  function _currentDomain() { return _selectedDomain; }
 
-  function _currentDomain() {
-    var sel = document.getElementById('domain-select');
-    return sel ? (sel.value || '') : '';
+  // Sync DOM to state (called after any dropdown rebuild).
+  function _syncDomToState() {
+    var depthSel  = document.getElementById('wfg-filter-select');
+    var domainSel = document.getElementById('domain-select');
+    if (depthSel  && depthSel.value  !== _selectedDepth)  depthSel.value  = _selectedDepth;
+    if (domainSel && domainSel.value !== _selectedDomain) domainSel.value = _selectedDomain;
   }
 
   // Clear only the cache keys for the phases we are about to (re)load, for the
@@ -273,23 +276,21 @@
     if (depthSel) {
       depthSel.addEventListener('change', function () {
         var val = depthSel.value;
-        if (/^L[0-6]$/.test(val)) _onFilterChange();
-        // Non-LOD values fall through to the existing graph filter logic.
+        if (!/^L[0-6]$/.test(val)) return; // non-LOD handled by filters.js
+        _selectedDepth = val;   // authoritative state — not DOM
+        _onFilterChange();
       });
     }
     var domainSel = document.getElementById('domain-select');
     if (domainSel) {
       domainSel.addEventListener('change', function () {
-        var depth  = _currentDepth();
-        var domain = domainSel.value || '';
-        if (!/^L[0-6]$/.test(depth)) return;
-        // Domain switch: FULL reset — old domain's nodes must leave the graph.
-        // This is safe here because the domain select doesn't listen to
-        // state:lastData, so resetGraph → buildGraph(empty) → state:lastData
-        // cannot re-trigger this listener.
-        _clearPhasesFor(depth, domain);
+        _selectedDomain = domainSel.value || '';  // authoritative state
+        if (!/^L[0-6]$/.test(_selectedDepth)) return;
+        _clearPhasesFor(_selectedDepth, _selectedDomain);
         if (typeof JUG.resetGraph === 'function') JUG.resetGraph();
-        loadUpTo(depth, domain);
+        // Immediately re-sync DOM so the selection is visible after resetGraph.
+        _syncDomToState();
+        loadUpTo(_selectedDepth, _selectedDomain);
       });
     }
   }
@@ -341,7 +342,8 @@
       sel.appendChild(opt);
     });
     // Restore previous selection (including named domain after resetGraph).
-    if (current === '' || domains.indexOf(current) !== -1) sel.value = current;
+    // Always restore from authoritative JS state, not DOM.
+    sel.value = _selectedDomain;
   }
 
   // ── Boot: L0 domains INSTANTLY ────────────────────────────────────────────
