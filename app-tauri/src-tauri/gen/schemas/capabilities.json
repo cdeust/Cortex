@@ -1,1 +1,1 @@
-{}
+{"main-capability":{"identifier":"main-capability","description":"Cortex Graph native app capabilities","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-start-dragging","core:window:allow-close","core:window:allow-minimize","core:window:allow-maximize"]}}

@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "identifier": "tools.ai-architect.cortex-graph",
   "build": {
-    "frontendDist": "../frontend"
+    "frontendDist": "../frontend",
+    "devUrl": "http://127.0.0.1:3458"
   },
   "app": {
     "withGlobalTauri": true,

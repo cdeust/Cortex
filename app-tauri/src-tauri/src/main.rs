@@ -1,292 +1,118 @@
-// Cortex Native Graph — Tauri + Rust
-// Reads CXGB binary snapshot directly from disk. No HTTP server.
-// File path: ~/.cache/cortex/graph-snapshot.bin
-// Data → IPC → WebView (force-graph D3 renderer, same as browser version)
+// Cortex Native App — Tauri shell around the Cortex HTTP server.
+// Spawns the existing Python server as a child process, waits for it
+// to be ready, then loads it in the WebView. No IPC complexity.
+// All tabs, all visualization, all functionality — wrapped as .app.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-
-use std::collections::HashMap;
-use std::fs;
+use std::process::{Child, Command};
+use std::time::{Duration, Instant};
+use std::thread;
 use std::path::PathBuf;
 
+const PORT: u16 = 3458;
+const SERVER_URL: &str = "http://127.0.0.1:3458";
 
-use serde::{Deserialize, Serialize};
-
-
-// ── CXGB format constants (must match graph_snapshot.js) ──────────────────
-
-const MAGIC: [u8; 4] = [0x43, 0x58, 0x47, 0x42]; // "CXGB"
-const VERSION: u16 = 1;
-// Header: "<4sHHIIQII" = magic(4)+ver(2)+flags(2)+node_count(4)+edge_count(4)+pool_off(8)+pool_len(4)+pad(4) = 32
-const HEADER_SIZE: usize = 32;
-// Node: "<IBxxxIfff" = id_off(4)+kind(1)+pad(3)+dom_off(4)+x(4)+y(4)+size(4) = 24
-const NODE_SIZE: usize = 24;
-// Edge: "<IIBxxx" = src_off(4)+tgt_off(4)+kind(1)+pad(3) = 12
-const EDGE_SIZE: usize = 12;
-
-// Kind byte → string (must match graph_snapshot.js _nodeKind / _edgeKind)
-// Matches _NODE_KIND_MAP in mcp_server/server/graph_snapshot.py exactly
-fn node_kind(b: u8) -> &'static str {
-    match b {
-        0  => "domain",
-        1  => "tool_hub",
-        2  => "file",
-        3  => "symbol",
-        4  => "skill",
-        5  => "hook",
-        6  => "command",
-        7  => "agent",
-        8  => "mcp",
-        9  => "discussion",
-        10 => "memory",
-        11 => "entity",
-        _  => "node",
-    }
-}
-
-fn edge_kind(b: u8) -> &'static str {
-    match b {
-        1 => "in_domain",
-        2 => "tool_used_file",
-        3 => "invoked_skill",
-        4 => "triggered_hook",
-        5 => "spawned_agent",
-        6 => "about_entity",
-        7 => "calls",
-        8 => "defined_in",
-        9 => "imports",
-        10 => "member_of",
-        11 => "cross_domain",
-        _ => "link",
-    }
-}
-
-fn kind_color(kind: &str) -> &'static str {
-    match kind {
-        "domain" => "#FCD34D",
-        "skill" => "#FB923C",
-        "hook" => "#A855F7",
-        "agent" => "#EC4899",
-        "command" => "#FACC15",
-        "mcp" => "#6366F1",
-        "tool_hub" => "#F97316",
-        "file" => "#06B6D4",
-        "discussion" => "#EF4444",
-        "memory" => "#10B981",
-        "symbol" => "#64748B",
-        "entity" => "#50B0C8",
-        _ => "#94A3B8",
-    }
-}
-
-// ── Data types ─────────────────────────────────────────────────────────────
-
-#[derive(Serialize, Clone)]
-pub struct GraphNode {
-    pub id: String,
-    pub kind: String,
-    #[serde(rename = "type")]
-    pub node_type: String,
-    pub label: String,
-    pub color: String,
-    #[serde(rename = "domain_id")]
-    pub domain_id: String,
-    // x/y omitted when 0 — force-graph computes layout from scratch
-    #[serde(skip_serializing_if = "is_zero")]
-    pub x: f32,
-    #[serde(skip_serializing_if = "is_zero")]
-    pub y: f32,
-    pub size: f32,
-}
-
-fn is_zero(v: &f32) -> bool { v.abs() < 0.001 }
-
-#[derive(Serialize, Clone)]
-pub struct GraphEdge {
-    pub source: String,
-    pub target: String,
-    pub kind: String,
-    #[serde(rename = "type")]
-    pub edge_type: String,
-}
-
-#[derive(Serialize)]
-pub struct GraphData {
-    pub nodes: Vec<GraphNode>,
-    pub edges: Vec<GraphEdge>,
-    pub node_count: usize,
-    pub edge_count: usize,
-    pub source: String,
-}
-
-// ── CXGB decoder ──────────────────────────────────────────────────────────
-
-fn read_u16_le(data: &[u8], off: usize) -> u16 {
-    u16::from_le_bytes([data[off], data[off + 1]])
-}
-
-fn read_u32_le(data: &[u8], off: usize) -> u32 {
-    u32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]])
-}
-
-fn read_f32_le(data: &[u8], off: usize) -> f32 {
-    f32::from_le_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]])
-}
-
-fn read_string(data: &[u8], pool_off: usize, str_off: usize) -> String {
-    let abs = pool_off + str_off;
-    if abs + 2 > data.len() {
-        return String::new();
-    }
-    let len = read_u16_le(data, abs) as usize;
-    if abs + 2 + len > data.len() {
-        return String::new();
-    }
-    String::from_utf8_lossy(&data[abs + 2..abs + 2 + len]).into_owned()
-}
-
-fn decode_cxgb(data: &[u8]) -> Result<GraphData, String> {
-    if data.len() < HEADER_SIZE {
-        return Err(format!("snapshot too small: {} bytes", data.len()));
-    }
-    if &data[0..4] != &MAGIC {
-        return Err("bad magic — not a CXGB snapshot".to_string());
-    }
-    let ver = read_u16_le(data, 4);
-    if ver != VERSION {
-        return Err(format!("unsupported version: {}", ver));
-    }
-
-    let node_count = read_u32_le(data, 8) as usize;
-    let edge_count = read_u32_le(data, 12) as usize;
-    let pool_off = read_u32_le(data, 16) as usize;
-
-    let mut nodes = Vec::with_capacity(node_count);
-    for ni in 0..node_count {
-        let base = HEADER_SIZE + ni * NODE_SIZE;
-        let id_off = read_u32_le(data, base) as usize;
-        let kind_b = data[base + 4];
-        let dom_off = read_u32_le(data, base + 8) as usize;
-        let x = read_f32_le(data, base + 12);
-        let y = read_f32_le(data, base + 16);
-        let size = read_f32_le(data, base + 20);
-
-        let id = read_string(data, pool_off, id_off);
-        let kind = node_kind(kind_b).to_string();
-        let domain_id = read_string(data, pool_off, dom_off);
-
-        // Derive label from id (strip prefix)
-        let label = id.split(':').last().unwrap_or(&id).to_string();
-        let color = kind_color(&kind).to_string();
-
-        // Skip global sentinel
-        if id == "domain:__global__" {
-            continue;
-        }
-
-        nodes.push(GraphNode {
-            id,
-            node_type: kind.clone(),
-            kind,
-            label,
-            color,
-            domain_id,
-            x,
-            y,
-            size: if size <= 0.0 { 5.0 } else { size },
-        });
-    }
-
-    let edge_base = HEADER_SIZE + node_count * NODE_SIZE;
-    let mut edges = Vec::with_capacity(edge_count);
-    for ei in 0..edge_count {
-        let base = edge_base + ei * EDGE_SIZE;
-        let src_off = read_u32_le(data, base) as usize;
-        let tgt_off = read_u32_le(data, base + 4) as usize;
-        let ek = data[base + 8];
-
-        let source = read_string(data, pool_off, src_off);
-        let target = read_string(data, pool_off, tgt_off);
-        let kind = edge_kind(ek).to_string();
-
-        edges.push(GraphEdge {
-            source,
-            target,
-            edge_type: kind.clone(),
-            kind,
-        });
-    }
-
-    let n = nodes.len();
-    let e = edges.len();
-    Ok(GraphData {
-        nodes,
-        edges,
-        node_count: n,
-        edge_count: e,
-        source: "CXGB snapshot (direct disk read)".to_string(),
-    })
-}
-
-// ── Snapshot path discovery ────────────────────────────────────────────────
-
-fn snapshot_paths() -> Vec<PathBuf> {
+fn find_cortex_root() -> Option<PathBuf> {
+    // Check common locations for the Cortex repo
     let home = dirs::home_dir().unwrap_or_default();
-    vec![
-        home.join(".cache/cortex/graph-snapshot.bin"),
-        home.join("Library/Caches/cortex/graph-snapshot.bin"),
-        PathBuf::from("/tmp/cortex-graph-snapshot.bin"),
-    ]
+    let candidates = vec![
+        home.join("Developments/Cortex"),
+        home.join("Documents/Developments/Cortex"),
+        home.join("Developer/Cortex"),
+        home.join("Projects/Cortex"),
+        std::env::current_dir().ok().unwrap_or_default(),
+    ];
+    candidates.into_iter().find(|p| p.join("mcp_server").is_dir())
 }
 
-// ── Tauri commands ─────────────────────────────────────────────────────────
+fn find_uv() -> Option<PathBuf> {
+    let home = dirs::home_dir().unwrap_or_default();
+    let candidates = vec![
+        PathBuf::from("/usr/local/bin/uv"),
+        PathBuf::from("/opt/homebrew/bin/uv"),
+        home.join(".cargo/bin/uv"),
+        home.join(".local/bin/uv"),
+    ];
+    candidates.into_iter().find(|p| p.exists())
+}
 
-#[tauri::command]
-fn load_graph() -> Result<GraphData, String> {
-    for path in snapshot_paths() {
-        if path.exists() {
-            let data = fs::read(&path)
-                .map_err(|e| format!("read {}: {}", path.display(), e))?;
-            let result = decode_cxgb(&data)
-                .map_err(|e| format!("decode {}: {}", path.display(), e))?;
-            eprintln!(
-                "[cortex] Loaded {} nodes, {} edges from {}",
-                result.node_count,
-                result.edge_count,
-                path.display()
-            );
-            return Ok(result);
-        }
+fn kill_existing_server() {
+    // Kill any process holding port 3458
+    let _ = Command::new("lsof")
+        .args(["-ti", &format!(":{}", PORT)])
+        .output()
+        .map(|out| {
+            let pids = String::from_utf8_lossy(&out.stdout);
+            for pid in pids.split_whitespace() {
+                if let Ok(p) = pid.trim().parse::<u32>() {
+                    let _ = Command::new("kill").args(["-9", &p.to_string()]).status();
+                }
+            }
+        });
+    thread::sleep(Duration::from_millis(300));
+}
+
+fn spawn_server(cortex_root: &PathBuf) -> Option<Child> {
+    let uv = find_uv()?;
+    let server_script = cortex_root.join("mcp_server/server/http_standalone.py");
+    if !server_script.exists() {
+        eprintln!("[cortex] server script not found: {}", server_script.display());
+        return None;
     }
-    Err(format!(
-        "No snapshot found. Run the Cortex MCP server once to build it.\nLooked in: {:?}",
-        snapshot_paths()
-    ))
+
+    eprintln!("[cortex] spawning server: {} run python3 {} --type unified --port {}",
+        uv.display(), server_script.display(), PORT);
+
+    Command::new(&uv)
+        .args(["run", "python3",
+               server_script.to_str().unwrap(),
+               "--type", "unified",
+               "--port", &PORT.to_string()])
+        .current_dir(cortex_root)
+        .env("CORTEX_IDLE_TIMEOUT", "86400")  // 24h — never times out
+        .spawn()
+        .map_err(|e| eprintln!("[cortex] spawn error: {}", e))
+        .ok()
 }
 
-#[tauri::command]
-fn get_snapshot_info() -> HashMap<String, String> {
-    let mut info = HashMap::new();
-    for path in snapshot_paths() {
-        if path.exists() {
-            if let Ok(meta) = fs::metadata(&path) {
-                info.insert("path".to_string(), path.display().to_string());
-                info.insert("size_bytes".to_string(), meta.len().to_string());
-                info.insert("exists".to_string(), "true".to_string());
-                return info;
+fn wait_for_server(timeout_secs: u64) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(timeout_secs);
+    while Instant::now() < deadline {
+        if let Ok(resp) = ureq::get(SERVER_URL).call() {
+            if resp.status() == 200 {
+                eprintln!("[cortex] server ready at {}", SERVER_URL);
+                return true;
             }
         }
+        thread::sleep(Duration::from_millis(300));
     }
-    info.insert("exists".to_string(), "false".to_string());
-    info
+    false
 }
 
-// ── Main ───────────────────────────────────────────────────────────────────
-
 fn main() {
+    let cortex_root = match find_cortex_root() {
+        Some(p) => { eprintln!("[cortex] root: {}", p.display()); p }
+        None => {
+            eprintln!("[cortex] ERROR: Cortex repo not found");
+            // Still launch the app — it will show an error page
+            tauri::Builder::default()
+                .run(tauri::generate_context!())
+                .expect("error running Cortex");
+            return;
+        }
+    };
+
+    kill_existing_server();
+    let _child = spawn_server(&cortex_root);
+
+    // Wait up to 30s for the server to be ready
+    let ready = wait_for_server(30);
+    if !ready {
+        eprintln!("[cortex] WARNING: server did not start within 30s");
+    }
+
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![load_graph, get_snapshot_info])
         .run(tauri::generate_context!())
-        .expect("error while running Cortex");
+        .expect("error running Cortex");
 }
