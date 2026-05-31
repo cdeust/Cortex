@@ -217,9 +217,7 @@ def load_memories(
     return [_project_memory_row(r) for r in rows]
 
 
-def iter_memories_chunked(
-    pg_store, min_heat: float = 0.0, chunk_size: int = 1000
-):
+def iter_memories_chunked(pg_store, min_heat: float = 0.0, chunk_size: int = 1000):
     """Stream-yield memory chunks via a server-side PG cursor.
 
     Streaming counterpart to ``load_memories``: instead of fetching the

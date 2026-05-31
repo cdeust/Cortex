@@ -100,14 +100,16 @@ class GraphEventStream:
                 e_chunk = edges[off : off + step]
                 if not n_chunk and not e_chunk:
                     continue
-                self._buf.append({
-                    "label": label,
-                    "off": off,
-                    "n_total": n_total,
-                    "e_total": e_total,
-                    "nodes": n_chunk,
-                    "edges": e_chunk,
-                })
+                self._buf.append(
+                    {
+                        "label": label,
+                        "off": off,
+                        "n_total": n_total,
+                        "e_total": e_total,
+                        "nodes": n_chunk,
+                        "edges": e_chunk,
+                    }
+                )
                 emitted += 1
             if emitted:
                 self._cond.notify_all()
@@ -141,7 +143,9 @@ class GraphEventStream:
         with self._lock:
             return {"count": len(self._buf), "closed": self._closed}
 
-    def subscribe(self, since: int = 0, *, timeout: float = 30.0) -> Iterator[tuple[int, dict]]:
+    def subscribe(
+        self, since: int = 0, *, timeout: float = 30.0
+    ) -> Iterator[tuple[int, dict]]:
         """Generator yielding ``(index, event_dict)`` from ``since``.
 
         Returns when (a) the stream is closed AND the subscriber has
@@ -225,11 +229,7 @@ def format_event(index: int, event: dict) -> bytes:
     standard ``Last-Event-ID`` header on reconnect.
     """
     payload = json.dumps(event, separators=(",", ":"), default=_json_default)
-    return (
-        f"id: {index}\n"
-        f"event: batch\n"
-        f"data: {payload}\n\n"
-    ).encode("utf-8")
+    return (f"id: {index}\nevent: batch\ndata: {payload}\n\n").encode("utf-8")
 
 
 def format_done(total_nodes: int, total_edges: int) -> bytes:
@@ -237,10 +237,7 @@ def format_done(total_nodes: int, total_edges: int) -> bytes:
         {"total_nodes": total_nodes, "total_edges": total_edges},
         separators=(",", ":"),
     )
-    return (
-        f"event: done\n"
-        f"data: {payload}\n\n"
-    ).encode("utf-8")
+    return (f"event: done\ndata: {payload}\n\n").encode("utf-8")
 
 
 def format_heartbeat() -> bytes:

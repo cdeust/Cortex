@@ -36,19 +36,19 @@ SYM_R_SPREAD: float = 32.0
 SYM_CLUMP_R: float = 18.0
 
 # ── Sector half-widths (workflow_graph.js lines 63-65) ──────────────────
-SECTOR_SETUP_HALF: float = math.pi / 2.6   # ~69°
-SECTOR_SIDE_HALF: float = math.pi / 6.5    # ~28°
+SECTOR_SETUP_HALF: float = math.pi / 2.6  # ~69°
+SECTOR_SIDE_HALF: float = math.pi / 6.5  # ~28°
 SECTOR_SIDE_ANGLE: float = math.pi * 0.72  # ~130° from outward axis
 
 # ── Per-tool angles, local to each domain's outward axis (lines 76-84) ──
 TOOL_LOCAL_ANGLE: dict[str, float] = {
-    "Edit":  0.0,
+    "Edit": 0.0,
     "Write": -math.pi / 12,
-    "Read":   math.pi / 12,
-    "Grep":  -math.pi /  6,
-    "Glob":   math.pi /  6,
-    "Bash":  -math.pi / 3.6,
-    "Task":   math.pi / 3.6,
+    "Read": math.pi / 12,
+    "Grep": -math.pi / 6,
+    "Glob": math.pi / 6,
+    "Bash": -math.pi / 3.6,
+    "Task": math.pi / 3.6,
 }
 
 # Golden angle for Fibonacci-spiral domain placement (line 323).
@@ -69,7 +69,11 @@ def base_radius(width: float, height: float, n_domains: int) -> float:
 
 
 def domain_anchor(
-    index: int, total_domains: int, cx: float, cy: float, base_r: float,
+    index: int,
+    total_domains: int,
+    cx: float,
+    cy: float,
+    base_r: float,
 ) -> Tuple[float, float]:
     """Fibonacci spiral — same formula as workflow_graph.js line 326."""
     n = max(total_domains, 1)
@@ -92,7 +96,10 @@ def outward_angle(anchor: Tuple[float, float], cx: float, cy: float) -> float:
 
 # ── L1 setup ring (workflow_graph.js lines 500-507) ─────────────────────
 def slot_for_setup(
-    anchor: Tuple[float, float], outward: float, idx: int, total: int,
+    anchor: Tuple[float, float],
+    outward: float,
+    idx: int,
+    total: int,
 ) -> Tuple[float, float]:
     """Skill / hook / command / agent fan inside the setup sector."""
     arc = SECTOR_SETUP_HALF * 2.0
@@ -104,7 +111,9 @@ def slot_for_setup(
 
 # ── L2 tool hubs (workflow_graph.js lines 469-476) ──────────────────────
 def slot_for_tool_hub(
-    anchor: Tuple[float, float], outward: float, tool_name: str,
+    anchor: Tuple[float, float],
+    outward: float,
+    tool_name: str,
 ) -> Tuple[float, float]:
     """Tool hub at fixed per-tool angle along the outward axis."""
     local = TOOL_LOCAL_ANGLE.get(tool_name, 0.0)
@@ -119,7 +128,10 @@ def tool_hub_angle(outward: float, tool_name: str) -> float:
 
 # ── L3 files (workflow_graph.js lines 485-495) ──────────────────────────
 def slot_for_file(
-    anchor: Tuple[float, float], hub_angle: float, idx_in_hub: int, total_in_hub: int,
+    anchor: Tuple[float, float],
+    hub_angle: float,
+    idx_in_hub: int,
+    total_in_hub: int,
 ) -> Tuple[float, float]:
     """File orbits its primary tool hub; arc widens with file count."""
     n = max(total_in_hub, 1)
@@ -131,7 +143,10 @@ def slot_for_file(
 
 # ── L4 discussions (workflow_graph.js lines 511-519) ────────────────────
 def slot_for_discussion(
-    anchor: Tuple[float, float], outward: float, idx: int, total: int,
+    anchor: Tuple[float, float],
+    outward: float,
+    idx: int,
+    total: int,
 ) -> Tuple[float, float]:
     """Discussion lane on one side of the domain, opposite memories."""
     center = outward + SECTOR_SIDE_ANGLE
@@ -144,7 +159,10 @@ def slot_for_discussion(
 
 # ── L5 memories (workflow_graph.js lines 522-531) ───────────────────────
 def slot_for_memory(
-    anchor: Tuple[float, float], outward: float, idx: int, total: int,
+    anchor: Tuple[float, float],
+    outward: float,
+    idx: int,
+    total: int,
 ) -> Tuple[float, float]:
     """Memory lane on the opposite side from discussions."""
     center = outward - SECTOR_SIDE_ANGLE
@@ -157,26 +175,32 @@ def slot_for_memory(
 
 # ── MCPs (workflow_graph.js lines 536-541) ──────────────────────────────
 def slot_for_mcp(
-    anchor: Tuple[float, float], outward: float, idx: int, total: int,
+    anchor: Tuple[float, float],
+    outward: float,
+    idx: int,
+    total: int,
 ) -> Tuple[float, float]:
     """MCPs sit INWARD of the domain so cross-domain edges fan visibly."""
     t = outward + math.pi
     jitter = (idx - (max(total, 1) - 1) / 2.0) * 0.25
-    return (anchor[0] + MCP_R * math.cos(t + jitter),
-            anchor[1] + MCP_R * math.sin(t + jitter))
+    return (
+        anchor[0] + MCP_R * math.cos(t + jitter),
+        anchor[1] + MCP_R * math.sin(t + jitter),
+    )
 
 
 # ── L6 symbols (workflow_graph.js — petal cloud around parent file) ─────
 def slot_for_symbol(
-    file_slot: Tuple[float, float], idx_in_file: int, total_in_file: int,
+    file_slot: Tuple[float, float],
+    idx_in_file: int,
+    total_in_file: int,
 ) -> Tuple[float, float]:
     """Petal around parent file. Idx-deterministic angle around the file."""
     if total_in_file <= 0:
         return file_slot
     angle = 2.0 * math.pi * (idx_in_file + 0.5) / total_in_file
     r = SYM_CLUMP_R + (idx_in_file % 4) * 3.0
-    return (file_slot[0] + r * math.cos(angle),
-            file_slot[1] + r * math.sin(angle))
+    return (file_slot[0] + r * math.cos(angle), file_slot[1] + r * math.sin(angle))
 
 
 # ── Dispatcher ──────────────────────────────────────────────────────────
@@ -194,25 +218,23 @@ def compute_slot(node_kind: str, ctx: dict) -> Tuple[float, float]:
     domain anchor as a safe fallback so the renderer never sees NaN.
     """
     if node_kind == "domain":
-        return domain_anchor(ctx["index"], ctx["total_domains"],
-                             ctx["cx"], ctx["cy"], ctx["base_r"])
+        return domain_anchor(
+            ctx["index"], ctx["total_domains"], ctx["cx"], ctx["cy"], ctx["base_r"]
+        )
     if node_kind == "tool_hub":
         return slot_for_tool_hub(ctx["anchor"], ctx["outward"], ctx["tool_name"])
     if node_kind == "file":
-        return slot_for_file(ctx["anchor"], ctx["hub_angle"],
-                             ctx["idx"], ctx["total"])
+        return slot_for_file(ctx["anchor"], ctx["hub_angle"], ctx["idx"], ctx["total"])
     if node_kind == "symbol":
         return slot_for_symbol(ctx["file_slot"], ctx["idx"], ctx["total"])
     if node_kind in ("skill", "hook", "command", "agent"):
-        return slot_for_setup(ctx["anchor"], ctx["outward"],
-                              ctx["idx"], ctx["total"])
+        return slot_for_setup(ctx["anchor"], ctx["outward"], ctx["idx"], ctx["total"])
     if node_kind == "discussion":
-        return slot_for_discussion(ctx["anchor"], ctx["outward"],
-                                   ctx["idx"], ctx["total"])
+        return slot_for_discussion(
+            ctx["anchor"], ctx["outward"], ctx["idx"], ctx["total"]
+        )
     if node_kind == "memory":
-        return slot_for_memory(ctx["anchor"], ctx["outward"],
-                               ctx["idx"], ctx["total"])
+        return slot_for_memory(ctx["anchor"], ctx["outward"], ctx["idx"], ctx["total"])
     if node_kind == "mcp":
-        return slot_for_mcp(ctx["anchor"], ctx["outward"],
-                            ctx["idx"], ctx["total"])
+        return slot_for_mcp(ctx["anchor"], ctx["outward"], ctx["idx"], ctx["total"])
     return ctx.get("anchor", (ctx.get("cx", 0.0), ctx.get("cy", 0.0)))

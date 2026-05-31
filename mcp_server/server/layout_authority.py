@@ -445,9 +445,7 @@ class LayoutAuthority:
 # ── Factory ──────────────────────────────────────────────────────────────
 
 
-def build_authority(
-    width: float = 1000.0, height: float = 1000.0
-) -> LayoutAuthority:
+def build_authority(width: float = 1000.0, height: float = 1000.0) -> LayoutAuthority:
     """Construct a fresh LayoutAuthority. Resets the global event log
     so the new build starts from a clean replay window. The seq counter
     persists across resets (see layout_authority_log.reset docstring).
@@ -469,9 +467,7 @@ if __name__ == "__main__":
     auth.add_node(NodeDelta("domain:cortex", "domain", "domain:cortex"))
     auth.add_node(NodeDelta("file:abc", "file", "domain:cortex"))
     auth.add_node(
-        NodeDelta(
-            "symbol:foo", "symbol", "domain:cortex", parent_id="file:abc"
-        )
+        NodeDelta("symbol:foo", "symbol", "domain:cortex", parent_id="file:abc")
     )
     auth.add_edge(EdgeDelta("symbol:foo", "file:abc", "defined_in"))
 

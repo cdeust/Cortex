@@ -61,13 +61,11 @@ def serve(handler, store) -> None:
             pass
         return
 
-    node_id = unquote(path_no_qs[len(_PREFIX):])
+    node_id = unquote(path_no_qs[len(_PREFIX) :])
     node = _lookup_node(node_id)
 
     if node is None:
-        body = json.dumps(
-            {"error": "not_found", "node_id": node_id}
-        ).encode("utf-8")
+        body = json.dumps({"error": "not_found", "node_id": node_id}).encode("utf-8")
         handler.send_response(404)
         handler.send_header("Content-Type", "application/json; charset=utf-8")
         handler.send_header("Content-Length", str(len(body)))

@@ -84,24 +84,44 @@ MAGIC = b"CXGB"
 VERSION = 1
 
 _NODE_KIND_MAP = {
-    "domain": 0, "tool_hub": 1, "file": 2, "symbol": 3, "skill": 4,
-    "hook": 5, "command": 6, "agent": 7, "mcp": 8, "discussion": 9,
-    "memory": 10, "entity": 11,
+    "domain": 0,
+    "tool_hub": 1,
+    "file": 2,
+    "symbol": 3,
+    "skill": 4,
+    "hook": 5,
+    "command": 6,
+    "agent": 7,
+    "mcp": 8,
+    "discussion": 9,
+    "memory": 10,
+    "entity": 11,
 }
 _EDGE_KIND_MAP = {
-    "in_domain": 0, "tool_used_file": 1, "defined_in": 2, "calls": 3,
-    "imports": 4, "member_of": 5, "about_entity": 6, "command_opened": 7,
-    "discussion_opened": 8, "skill_usage": 9, "mcp_usage": 10,
-    "discussion_tool": 11, "discussion_agent": 12,
-    "discussion_command": 13, "extends": 14, "other": 15,
+    "in_domain": 0,
+    "tool_used_file": 1,
+    "defined_in": 2,
+    "calls": 3,
+    "imports": 4,
+    "member_of": 5,
+    "about_entity": 6,
+    "command_opened": 7,
+    "discussion_opened": 8,
+    "skill_usage": 9,
+    "mcp_usage": 10,
+    "discussion_tool": 11,
+    "discussion_agent": 12,
+    "discussion_command": 13,
+    "extends": 14,
+    "other": 15,
 }
 
 _HEADER_FMT = "<4sHHIIQII"
-_HEADER_SIZE = struct.calcsize(_HEADER_FMT)   # 32
+_HEADER_SIZE = struct.calcsize(_HEADER_FMT)  # 32
 _NODE_FMT = "<IBxxxIfff"
-_NODE_SIZE = struct.calcsize(_NODE_FMT)       # 24
+_NODE_SIZE = struct.calcsize(_NODE_FMT)  # 24
 _EDGE_FMT = "<IIBxxx"
-_EDGE_SIZE = struct.calcsize(_EDGE_FMT)       # 12
+_EDGE_SIZE = struct.calcsize(_EDGE_FMT)  # 12
 
 assert _HEADER_SIZE == 32, _HEADER_SIZE
 assert _NODE_SIZE == 24, _NODE_SIZE
@@ -161,8 +181,15 @@ def serialize(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> bytes
         id_off = pool.intern(node_id)
         dom_off = pool.intern(domain)
         struct.pack_into(
-            _NODE_FMT, node_rows, i * _NODE_SIZE,
-            id_off, kind, dom_off, x, y, size,
+            _NODE_FMT,
+            node_rows,
+            i * _NODE_SIZE,
+            id_off,
+            kind,
+            dom_off,
+            x,
+            y,
+            size,
         )
 
     edge_rows = bytearray(_EDGE_SIZE * len(edges))
@@ -176,17 +203,25 @@ def serialize(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> bytes
         kind_str = e.get("kind") or e.get("type") or ""
         kind = _EDGE_KIND_MAP.get(kind_str, 255)
         struct.pack_into(
-            _EDGE_FMT, edge_rows, i * _EDGE_SIZE,
-            pool.intern(src or ""), pool.intern(tgt or ""), kind,
+            _EDGE_FMT,
+            edge_rows,
+            i * _EDGE_SIZE,
+            pool.intern(src or ""),
+            pool.intern(tgt or ""),
+            kind,
         )
 
     pool_bytes = pool.bytes()
     pool_off = _HEADER_SIZE + len(node_rows) + len(edge_rows)
     header = struct.pack(
         _HEADER_FMT,
-        MAGIC, VERSION, 0,
-        len(nodes), len(edges),
-        pool_off, len(pool_bytes),
+        MAGIC,
+        VERSION,
+        0,
+        len(nodes),
+        len(edges),
+        pool_off,
+        len(pool_bytes),
         0,
     )
     return bytes(header) + bytes(node_rows) + bytes(edge_rows) + pool_bytes
@@ -225,12 +260,16 @@ def deserialize(buf: bytes) -> dict[str, Any]:
         id_off, kind, dom_off, x, y, size = struct.unpack_from(
             _NODE_FMT, buf, base + i * _NODE_SIZE
         )
-        nodes.append({
-            "id": read_str(id_off),
-            "kind": inv_node_kind.get(kind, "unknown"),
-            "domain_id": read_str(dom_off),
-            "x": x, "y": y, "size": size,
-        })
+        nodes.append(
+            {
+                "id": read_str(id_off),
+                "kind": inv_node_kind.get(kind, "unknown"),
+                "domain_id": read_str(dom_off),
+                "x": x,
+                "y": y,
+                "size": size,
+            }
+        )
 
     edges: list[dict[str, Any]] = []
     base = _HEADER_SIZE + n_count * _NODE_SIZE
@@ -238,11 +277,13 @@ def deserialize(buf: bytes) -> dict[str, Any]:
         src_off, tgt_off, kind = struct.unpack_from(
             _EDGE_FMT, buf, base + i * _EDGE_SIZE
         )
-        edges.append({
-            "source": read_str(src_off),
-            "target": read_str(tgt_off),
-            "kind": inv_edge_kind.get(kind, "unknown"),
-        })
+        edges.append(
+            {
+                "source": read_str(src_off),
+                "target": read_str(tgt_off),
+                "kind": inv_edge_kind.get(kind, "unknown"),
+            }
+        )
 
     return {"nodes": nodes, "edges": edges, "meta": {"format": "CXGBv1"}}
 
@@ -260,9 +301,7 @@ def write_atomic(path: Path, payload: bytes) -> None:
     new complete snapshot — never a torn partial write.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(
-        prefix=path.name + ".tmp.", dir=str(path.parent)
-    )
+    fd, tmp = tempfile.mkstemp(prefix=path.name + ".tmp.", dir=str(path.parent))
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(payload)

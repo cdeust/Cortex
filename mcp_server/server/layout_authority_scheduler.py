@@ -76,13 +76,13 @@ from typing import Optional
 # source: design brief option 1 ("Cap P4 at 64k"); see module docstring
 # for the worst-case memory derivation.
 QUEUE_SIZES: dict[int, int] = {
-    0: 1_000,        # P0 domains          — ~11 in practice
-    1: 1_000,        # P1 tool hubs        — ~70 in practice
-    2: 16_000,       # P2 files            — ~30k in practice (drops above)
-    3: 32_000,       # P3 setup/discussion/memories/entities
-    4: 64_000,       # P4 symbols          — high volume, drop first among nodes
-    5: 128_000,      # P5 edges            — typically 4× nodes; drop before nodes
-    6: 100,          # P6 subtree requests — coalesced
+    0: 1_000,  # P0 domains          — ~11 in practice
+    1: 1_000,  # P1 tool hubs        — ~70 in practice
+    2: 16_000,  # P2 files            — ~30k in practice (drops above)
+    3: 32_000,  # P3 setup/discussion/memories/entities
+    4: 64_000,  # P4 symbols          — high volume, drop first among nodes
+    5: 128_000,  # P5 edges            — typically 4× nodes; drop before nodes
+    6: 100,  # P6 subtree requests — coalesced
 }
 
 PRIORITY_DOMAIN = 0
@@ -120,12 +120,8 @@ class Stats:
     dropped — cumulative drops due to a full queue (monotonic).
     """
 
-    queued: dict[int, int] = field(
-        default_factory=lambda: {p: 0 for p in QUEUE_SIZES}
-    )
-    dropped: dict[int, int] = field(
-        default_factory=lambda: {p: 0 for p in QUEUE_SIZES}
-    )
+    queued: dict[int, int] = field(default_factory=lambda: {p: 0 for p in QUEUE_SIZES})
+    dropped: dict[int, int] = field(default_factory=lambda: {p: 0 for p in QUEUE_SIZES})
 
 
 class PriorityScheduler:
@@ -156,9 +152,7 @@ class PriorityScheduler:
     """
 
     def __init__(self) -> None:
-        self._queues: dict[int, deque] = {
-            p: deque(maxlen=None) for p in QUEUE_SIZES
-        }
+        self._queues: dict[int, deque] = {p: deque(maxlen=None) for p in QUEUE_SIZES}
         # maxlen=None because we want explicit drop accounting on submit
         # rather than silent left-pop eviction that maxlen would do.
         self._lock = threading.Lock()
@@ -210,9 +204,7 @@ class PriorityScheduler:
         priorities — that is the displaced-scheduling guarantee.
         """
         with self._not_empty:
-            deadline = (
-                None if timeout is None else time.monotonic() + timeout
-            )
+            deadline = None if timeout is None else time.monotonic() + timeout
             while True:
                 picked = self._pop_highest_locked()
                 if picked is not None:

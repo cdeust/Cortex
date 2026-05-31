@@ -430,13 +430,19 @@ def _build_interleaved(
     """
     from mcp_server.core.workflow_graph_builder import WorkflowGraphBuilder
     from mcp_server.core.workflow_graph_builder_relational import (
-        ingest_ast_edge, ingest_command_file, ingest_discussion_agent,
-        ingest_discussion_command, ingest_discussion_file,
-        ingest_discussion_tool, ingest_mcp_usage, ingest_skill_usage,
+        ingest_ast_edge,
+        ingest_command_file,
+        ingest_discussion_agent,
+        ingest_discussion_command,
+        ingest_discussion_file,
+        ingest_discussion_tool,
+        ingest_mcp_usage,
+        ingest_skill_usage,
         ingest_symbol,
     )
     from mcp_server.core.workflow_graph_entity import (
-        ingest_about_entity, ingest_entity,
+        ingest_about_entity,
+        ingest_entity,
     )
     from mcp_server.core.workflow_graph_schema import GLOBAL_DOMAIN_ID
 
@@ -446,16 +452,13 @@ def _build_interleaved(
     def _filter(items, key="domain"):
         if not domain_filter:
             return items or []
-        return [
-            ev for ev in (items or [])
-            if (ev.get(key) or "") == domain_filter
-        ]
+        return [ev for ev in (items or []) if (ev.get(key) or "") == domain_filter]
 
     def _emit_delta(label: str, prev_n: int, prev_e: int) -> None:
         if on_batch is None:
             return
         new_nodes = list(builder._nodes.values())[prev_n:]  # noqa: SLF001
-        new_edges_raw = builder._edges[prev_e:]             # noqa: SLF001
+        new_edges_raw = builder._edges[prev_e:]  # noqa: SLF001
         # Intra-batch dedupe so the per-source emission still collapses
         # repeated (src, tgt, kind) edges; cross-source weight summing
         # is preserved by the final _dedupe_and_link below.
@@ -519,15 +522,13 @@ def _build_interleaved(
     notify_loaded("tool_events", tool_events)
     _ingest_loop("tool_events", tool_events, builder._ingest_tool_event)
 
-    known_paths = {
-        e.get("file_path") for e in tool_events if e.get("file_path")
-    }
+    known_paths = {e.get("file_path") for e in tool_events if e.get("file_path")}
     # file nodes synthesised here — emit as their own batch so the
     # browser can apply them in dependency order before phase 2 edges
     # reference them.
-    prev_n = len(builder._nodes)   # noqa: SLF001
-    prev_e = len(builder._edges)   # noqa: SLF001
-    builder._finalize_files()       # noqa: SLF001
+    prev_n = len(builder._nodes)  # noqa: SLF001
+    prev_e = len(builder._edges)  # noqa: SLF001
+    builder._finalize_files()  # noqa: SLF001
     _emit_delta("files", prev_n, prev_e)
 
     # ── Phase 1c: entities (medium ~22 k) ──
@@ -562,7 +563,9 @@ def _build_interleaved(
 
     discussion_commands = _filter(source.load_discussion_commands())
     notify_loaded("discussion_commands", discussion_commands)
-    _ingest_loop("discussion_commands", discussion_commands, ingest_discussion_command, True)
+    _ingest_loop(
+        "discussion_commands", discussion_commands, ingest_discussion_command, True
+    )
 
     # ── Phase 3: HEAVY sources last (memories + memory_entity_edges) ──
     # Memories are the biggest PG query AND the biggest ingest pass on
@@ -589,8 +592,7 @@ def _build_interleaved(
 
     memory_entity_edges = source.load_memory_entity_edges(store)
     notify_loaded("memory_entity_edges", memory_entity_edges)
-    _ingest_loop("memory_entity_edges", memory_entity_edges,
-                 ingest_about_entity, True)
+    _ingest_loop("memory_entity_edges", memory_entity_edges, ingest_about_entity, True)
 
     # ── Phase 4: AST symbols (deferred by default in streaming mode) ──
     if stage == "full" and not defer_native_ast:
@@ -600,6 +602,7 @@ def _build_interleaved(
         from mcp_server.infrastructure.workflow_graph_source_native_ast import (
             WorkflowGraphNativeASTSource,
         )
+
         ast_source = WorkflowGraphASTSource()
         ast_symbols = ast_source.load_symbols([]) if ast_source.enabled() else []
         ast_edges = ast_source.load_ast_edges([]) if ast_source.enabled() else []
@@ -614,8 +617,8 @@ def _build_interleaved(
 
     # Final pass: cross-source dedup (same contract as builder.build()).
     nodes, edges = builder._dedupe_and_link(  # noqa: SLF001
-        builder._nodes.values(),                # noqa: SLF001
-        builder._edges,                          # noqa: SLF001
+        builder._nodes.values(),  # noqa: SLF001
+        builder._edges,  # noqa: SLF001
     )
     validate_graph(nodes, edges)
 
@@ -639,12 +642,17 @@ def _build_interleaved(
             "entity_count": file_count,
             "discussion_count": discussion_count,
             "counts": {
-                "nodes": len(nodes), "edges": len(edges),
-                "tool_events": len(tool_events), "skills": len(skills),
-                "hooks": len(hooks), "agents": len(agents),
-                "commands": len(commands), "memories": memories_total,
+                "nodes": len(nodes),
+                "edges": len(edges),
+                "tool_events": len(tool_events),
+                "skills": len(skills),
+                "hooks": len(hooks),
+                "agents": len(agents),
+                "commands": len(commands),
+                "memories": memories_total,
                 "discussions": len(discussions),
-                "files": file_count, "symbols": symbol_count,
+                "files": file_count,
+                "symbols": symbol_count,
                 "entities": entity_node_count,
             },
             "ast_enabled": (stage == "full" and not defer_native_ast),

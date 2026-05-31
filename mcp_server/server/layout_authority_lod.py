@@ -37,10 +37,19 @@ from mcp_server.server.layout_authority_protocol import NodeDelta
 # These form the structural scaffolding; their cardinality is bounded
 # (typically O(domains) + O(tools) + O(files)) so emitting all of them
 # at every zoom is cheap.
-_ALWAYS_VISIBLE: frozenset[str] = frozenset({
-    "domain", "tool_hub", "file", "discussion",
-    "skill", "hook", "command", "agent", "mcp",
-})
+_ALWAYS_VISIBLE: frozenset[str] = frozenset(
+    {
+        "domain",
+        "tool_hub",
+        "file",
+        "discussion",
+        "skill",
+        "hook",
+        "command",
+        "agent",
+        "mcp",
+    }
+)
 
 # Kinds that are decimated by the power-law stride.
 _DECIMATED: frozenset[str] = frozenset({"symbol"})
@@ -69,7 +78,7 @@ def stride(zoom: float) -> int:
     """
     z = 0.0 if zoom < 0.0 else (1.0 if zoom > 1.0 else zoom)
     exponent = 3.0 - z * 4.0
-    s = int(2 ** exponent)
+    s = int(2**exponent)
     return s if s >= 1 else 1
 
 
@@ -146,7 +155,10 @@ def visible_subset(
 # many pass the filter at each canonical zoom level and comparing
 # against N / stride(zoom).
 
-def _selfcheck_powerlaw(n_symbols: int = 1_000_000) -> list[tuple[float, int, int, float]]:
+
+def _selfcheck_powerlaw(
+    n_symbols: int = 1_000_000,
+) -> list[tuple[float, int, int, float]]:
     """Return rows of (zoom, stride, visible_count, ratio_to_ideal).
 
     `ratio_to_ideal` should be close to 1.0 if the hash is uniform.

@@ -112,11 +112,7 @@ def format_slot(seq: int, slot: "SlotAssignment") -> bytes:
     data_bytes = payload.encode("utf-8")
 
     # Concatenation here is faster than b"".join for small fixed N on CPython.
-    return (
-        _ID_PREFIX + seq_bytes + _NL
-        + _EVT_SLOT
-        + _DATA_PREFIX + data_bytes + _NLNL
-    )
+    return _ID_PREFIX + seq_bytes + _NL + _EVT_SLOT + _DATA_PREFIX + data_bytes + _NLNL
 
 
 def format_edge(seq: int, edge: "EdgeDelta") -> bytes:
@@ -129,11 +125,7 @@ def format_edge(seq: int, edge: "EdgeDelta") -> bytes:
     seq_bytes = str(seq).encode("ascii")
     data_bytes = payload.encode("utf-8")
 
-    return (
-        _ID_PREFIX + seq_bytes + _NL
-        + _EVT_EDGE
-        + _DATA_PREFIX + data_bytes + _NLNL
-    )
+    return _ID_PREFIX + seq_bytes + _NL + _EVT_EDGE + _DATA_PREFIX + data_bytes + _NLNL
 
 
 def format_done(seq: int, total_slots: int, total_edges: int) -> bytes:
@@ -142,11 +134,7 @@ def format_done(seq: int, total_slots: int, total_edges: int) -> bytes:
         raise ValueError("totals must be non-negative")
     payload = f"{total_slots}|{total_edges}".encode("ascii")
     seq_bytes = str(seq).encode("ascii")
-    return (
-        _ID_PREFIX + seq_bytes + _NL
-        + _EVT_DONE
-        + _DATA_PREFIX + payload + _NLNL
-    )
+    return _ID_PREFIX + seq_bytes + _NL + _EVT_DONE + _DATA_PREFIX + payload + _NLNL
 
 
 def format_keepalive() -> bytes:

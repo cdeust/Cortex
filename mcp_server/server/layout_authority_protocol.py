@@ -27,20 +27,45 @@ from typing import Any, Optional, Protocol, runtime_checkable
 
 # ── Allowed-value sets (NORMATIVE) ────────────────────────────────
 
-NODE_KINDS: frozenset[str] = frozenset({
-    "domain", "skill", "hook", "command", "agent", "mcp",
-    "tool_hub", "file", "discussion", "memory", "entity", "symbol",
-})
+NODE_KINDS: frozenset[str] = frozenset(
+    {
+        "domain",
+        "skill",
+        "hook",
+        "command",
+        "agent",
+        "mcp",
+        "tool_hub",
+        "file",
+        "discussion",
+        "memory",
+        "entity",
+        "symbol",
+    }
+)
 
-EDGE_KINDS: frozenset[str] = frozenset({
-    "in_domain", "tool_used_file", "defined_in", "calls",
-    "imports", "member_of", "about_entity", "invoked_skill",
-    "triggered_hook", "spawned_agent", "command_in_hub",
-    "invoked_mcp", "discussion_touched_file", "command_touched_file",
-})
+EDGE_KINDS: frozenset[str] = frozenset(
+    {
+        "in_domain",
+        "tool_used_file",
+        "defined_in",
+        "calls",
+        "imports",
+        "member_of",
+        "about_entity",
+        "invoked_skill",
+        "triggered_hook",
+        "spawned_agent",
+        "command_in_hub",
+        "invoked_mcp",
+        "discussion_touched_file",
+        "command_touched_file",
+    }
+)
 
 
 # ── Value types ──────────────────────────────────────────────────
+
 
 @dataclass(frozen=True, slots=True)
 class NodeDelta:
@@ -67,6 +92,7 @@ class NodeDelta:
         - one SlotAssignment for node_id will be emitted in bounded
           time AFTER all required parent state is present (see I3, I4).
     """
+
     node_id: str
     kind: str
     domain_id: str
@@ -95,6 +121,7 @@ class EdgeDelta:
           (Edges are streamed via a SEPARATE event kind handled by the
           wire layer — see layout_authority_wire.py.)
     """
+
     source_id: str
     target_id: str
     kind: str
@@ -121,6 +148,7 @@ class SlotAssignment:
         domain_id: copied from the NodeDelta — used by the client to
                    color/group on arrival.
     """
+
     seq: int
     node_id: str
     x: float
@@ -219,6 +247,7 @@ I7. domain_id on every NodeDelta and SlotAssignment is non-empty and
 
 # ── Convenience factory ───────────────────────────────────────────
 
+
 def authority_from_geometry(
     width: float = 1000.0,
     height: float = 1000.0,
@@ -227,4 +256,5 @@ def authority_from_geometry(
     ``layout_authority.py`` — this stub forward-declares only and
     defers the import to call time to keep this module pure."""
     from mcp_server.server.layout_authority import build_authority
+
     return build_authority(width=width, height=height)

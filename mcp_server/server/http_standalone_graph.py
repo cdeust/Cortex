@@ -61,6 +61,7 @@ def get_layout_authority():
     global _layout_authority
     if _layout_authority is None:
         from mcp_server.server.layout_authority import build_authority
+
         _layout_authority = build_authority()
     return _layout_authority
 
@@ -264,9 +265,7 @@ def ensure_build_started(store) -> None:
         return
     build_in_progress = _graph_build_lock.locked()
     cache_has_data = bool(
-        _graph_cache
-        and _graph_cache.get("data")
-        and _graph_cache["data"].get("nodes")
+        _graph_cache and _graph_cache.get("data") and _graph_cache["data"].get("nodes")
     )
     if build_in_progress or cache_has_data:
         return
@@ -471,6 +470,7 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
         # previous run. build_authority() calls _log.reset() internally.
         try:
             from mcp_server.server.layout_authority import build_authority
+
             _layout_authority = build_authority()
         except Exception as _exc:  # pragma: no cover - defensive
             print(
@@ -704,10 +704,12 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
             # finish. RESET on every kicked build so a previous build's
             # tail events don't leak into this run's subscribers.
             from mcp_server.server import graph_event_stream as _events
+
             _events.reset()
 
             from mcp_server.handlers.workflow_graph import (
-                _edge_to_dict, _node_to_dict,
+                _edge_to_dict,
+                _node_to_dict,
             )
 
             def _on_source_loaded(label: str, count: int) -> None:
@@ -779,13 +781,13 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                 from mcp_server.server.graph_snapshot import (
                     write_from_graph_cache,
                 )
+
                 _snap_path, _snap_bytes = write_from_graph_cache(
                     skeleton.get("nodes", []),
                     skeleton.get("edges", []),
                 )
                 print(
-                    f"[cortex] skeleton snapshot: {_snap_bytes:,} bytes → "
-                    f"{_snap_path}",
+                    f"[cortex] skeleton snapshot: {_snap_bytes:,} bytes → {_snap_path}",
                     file=sys.stderr,
                 )
             except Exception as _exc:  # pragma: no cover - defensive
@@ -846,13 +848,13 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                 from mcp_server.server.graph_snapshot import (
                     write_from_graph_cache,
                 )
+
                 _snap_path, _snap_bytes = write_from_graph_cache(
                     baseline.get("nodes", []),
                     baseline.get("edges", []),
                 )
                 print(
-                    f"[cortex] graph snapshot: {_snap_bytes:,} bytes → "
-                    f"{_snap_path}",
+                    f"[cortex] graph snapshot: {_snap_bytes:,} bytes → {_snap_path}",
                     file=sys.stderr,
                 )
             except Exception as _exc:  # pragma: no cover - defensive

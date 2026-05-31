@@ -215,8 +215,16 @@ class WorkflowGraphBuilder:
             ("skill_usage", inputs.skill_usage_events, ingest_skill_usage),
             ("mcp_usage", inputs.mcp_usage_events, ingest_mcp_usage),
             ("discussion_tools", inputs.discussion_tool_events, ingest_discussion_tool),
-            ("discussion_agents", inputs.discussion_agent_events, ingest_discussion_agent),
-            ("discussion_commands", inputs.discussion_command_events, ingest_discussion_command),
+            (
+                "discussion_agents",
+                inputs.discussion_agent_events,
+                ingest_discussion_agent,
+            ),
+            (
+                "discussion_commands",
+                inputs.discussion_command_events,
+                ingest_discussion_command,
+            ),
             ("memory_entity_edges", inputs.memory_entity_edges, ingest_about_entity),
         )
         for label, events, fn in phase2:

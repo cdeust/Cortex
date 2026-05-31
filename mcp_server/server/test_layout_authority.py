@@ -28,6 +28,7 @@ from mcp_server.server import layout_authority_wire as wire  # noqa: E402
 
 try:
     import resource  # POSIX only
+
     _HAVE_RESOURCE = True
 except ImportError:  # pragma: no cover - non-POSIX
     _HAVE_RESOURCE = False
@@ -76,7 +77,10 @@ class TestSlotStability(unittest.TestCase):
         # Falsifies any shared accumulator across kinds.
         ctx_hub = {"anchor": (300.0, 300.0), "outward": 0.0, "tool_name": "Bash"}
         ctx_file = {
-            "anchor": (300.0, 300.0), "hub_angle": 0.0, "idx": 5, "total": 10,
+            "anchor": (300.0, 300.0),
+            "hub_angle": 0.0,
+            "idx": 5,
+            "total": 10,
         }
         a = geom.compute_slot("tool_hub", ctx_hub)
         for _ in range(100):
@@ -102,8 +106,17 @@ class TestSlotStability(unittest.TestCase):
             "base_r": 200.0,
         }
         for kind in (
-            "domain", "tool_hub", "file", "symbol", "skill", "hook",
-            "command", "agent", "discussion", "memory", "mcp",
+            "domain",
+            "tool_hub",
+            "file",
+            "symbol",
+            "skill",
+            "hook",
+            "command",
+            "agent",
+            "discussion",
+            "memory",
+            "mcp",
         ):
             x, y = geom.compute_slot(kind, full_ctx)
             self.assertTrue(math.isfinite(x), f"x not finite for {kind}")
@@ -137,7 +150,8 @@ class TestBoundedState(unittest.TestCase):
         self.assertTrue(math.isfinite(sink_y))
         delta = after - before
         self.assertLess(
-            delta, ceiling_bytes,
+            delta,
+            ceiling_bytes,
             f"RSS grew by {delta} bytes over 10^6 calls — possible leak",
         )
 
@@ -193,7 +207,8 @@ class TestDropAccounting(unittest.TestCase):
             accepted = s.submit(sched.PRIORITY_DOMAIN, ("over", i))
             self.assertFalse(accepted)
         self.assertEqual(
-            s.stats()["dropped"][sched.PRIORITY_DOMAIN], overflow,
+            s.stats()["dropped"][sched.PRIORITY_DOMAIN],
+            overflow,
         )
         # And other priorities are untouched (no cross-talk).
         for p, drops in s.stats()["dropped"].items():
@@ -265,6 +280,7 @@ class TestReplayLost(unittest.TestCase):
         original_drops = evlog._event_log_drops
         try:
             import collections as _c
+
             evlog._event_log = _c.deque(maxlen=small_cap)
             evlog._event_log_drops = 0
             first_seq = evlog.emit("slot", b"first")
@@ -274,7 +290,8 @@ class TestReplayLost(unittest.TestCase):
             # The buffer dropped the early events, so oldest must exceed
             # first_seq+1; the SSE handler interprets this as 'replay_lost'.
             self.assertGreater(
-                oldest, first_seq + 1,
+                oldest,
+                first_seq + 1,
                 "log did not signal a replay gap after overflow",
             )
             # And the events list must NOT include first_seq.
@@ -396,30 +413,39 @@ class TestPressureActChannel(unittest.TestCase):
         # Falsifies: flag drops as soon as pending_edges dips below trip
         # (would flap on single-event jitter around the threshold).
         pressure.observe(
-            event_log_drops=0, edges_dropped=0,
-            pending_edges=80_000, pending_symbols_total=0,
+            event_log_drops=0,
+            edges_dropped=0,
+            pending_edges=80_000,
+            pending_symbols_total=0,
         )
         self.assertTrue(pressure.is_overloaded())
         # Still above clear (50k) — flag must remain set.
         pressure.observe(
-            event_log_drops=0, edges_dropped=0,
-            pending_edges=60_000, pending_symbols_total=0,
+            event_log_drops=0,
+            edges_dropped=0,
+            pending_edges=60_000,
+            pending_symbols_total=0,
         )
         self.assertTrue(pressure.is_overloaded())
         # Below clear AND no new drops — flag releases.
         pressure.observe(
-            event_log_drops=0, edges_dropped=0,
-            pending_edges=49_999, pending_symbols_total=0,
+            event_log_drops=0,
+            edges_dropped=0,
+            pending_edges=49_999,
+            pending_symbols_total=0,
         )
         self.assertFalse(pressure.is_overloaded())
 
     def test_wait_for_clear_times_out_under_persistent_pressure(self) -> None:
         # Falsifies: a stuck consumer can stall the producer forever.
         pressure.observe(
-            event_log_drops=0, edges_dropped=0,
-            pending_edges=90_000, pending_symbols_total=0,
+            event_log_drops=0,
+            edges_dropped=0,
+            pending_edges=90_000,
+            pending_symbols_total=0,
         )
         import time as _t
+
         start = _t.monotonic()
         ok = pressure.wait_for_clear(timeout=0.05)
         elapsed = _t.monotonic() - start
@@ -430,6 +456,7 @@ class TestPressureActChannel(unittest.TestCase):
     def test_wait_for_clear_returns_immediately_when_clear(self) -> None:
         # Falsifies: producer pays a polling penalty even when idle.
         import time as _t
+
         start = _t.monotonic()
         ok = pressure.wait_for_clear(timeout=5.0)
         elapsed = _t.monotonic() - start
@@ -439,8 +466,10 @@ class TestPressureActChannel(unittest.TestCase):
     def test_snapshot_exposes_every_counter(self) -> None:
         # Falsifies: Cochrane 1c (read every emitted counter) is unmet.
         pressure.observe(
-            event_log_drops=7, edges_dropped=3,
-            pending_edges=42, pending_symbols_total=11,
+            event_log_drops=7,
+            edges_dropped=3,
+            pending_edges=42,
+            pending_symbols_total=11,
         )
         snap = pressure.snapshot()
         self.assertEqual(snap["event_log_drops"], 7)
