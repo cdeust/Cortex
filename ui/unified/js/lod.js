@@ -1,179 +1,185 @@
-// Cortex — LOD (Level of Detail) progressive graph loader.
+// Cortex — LOD: on-demand, per-node progressive loading.
 //
-// Prevents rendering 600K+ nodes at once by loading phases on demand:
-//   - Zoom out → show only domain skeleton (L0, ~20 nodes)
-//   - Zoom in  → auto-load the next phase for the visible area
-//   - Click node → expand that node's immediate children
+// POLICY:
+//   Startup: load L0 (domains, ~20 nodes). That's it.
+//   On click: inject ONLY the children of the clicked node.
+//             Never load the whole next phase at once.
 //
-// Works on top of the existing D3 force graph via JUG.appendGraphDelta.
-// The force simulation absorbs new nodes at their parent's position,
-// letting D3 handle placement naturally.
+// How it works:
+//   Each phase is fetched ONCE and cached in _phaseCache.
+//   Clicking a node injects only the slice of cached nodes whose
+//   domain_id or parent id matches the clicked node — so clicking
+//   "cortex" shows cortex's L1 children, not every domain's L1.
 //
-// Phase map (matches server PHASES):
-//   L0  domains        ← always loaded
-//   L1  setup (skills/hooks/agents/commands)
-//   L2  tools (tool_hub)
-//   L3  files
-//   L4  discussions
-//   L5  memories
-//   L6:<proj>  AST symbols (per project, skipped if >50K nodes)
-//
-// Usage: loaded by unified-viz.html after workflow_graph_bridge.js.
-//        No explicit init needed — attaches to JUG events automatically.
+// Nodes injected near the clicked node's position for natural placement.
 (function () {
   'use strict';
 
-  // ── State ─────────────────────────────────────────────────────────────────
-  var loadedPhases    = {};   // phaseKey → true
-  var pendingPhases   = {};   // phaseKey → true (in-flight)
-  var L6_NODE_CAP     = 50000; // skip L6 phases larger than this
+  // ── Phase cache ────────────────────────────────────────────────────────────
+  var _phaseCache   = {};   // phaseKey → {nodes, edges}
+  var _fetchPromise = {};   // phaseKey → Promise (dedup concurrent fetches)
+  var _injectedFor  = {};   // nodeId → true (already expanded this node)
 
-  // Zoom thresholds: D3's k (scale) value at which to auto-load deeper phases.
-  // k = 1 is the initial zoom; k > 1 = zoomed in.
-  var ZOOM_THRESHOLDS = [
-    { phase: 'L1', minK: 0.6  },   // zoom in slightly → load setup ring
-    { phase: 'L2', minK: 1.1  },   // more zoom → tools
-    { phase: 'L3', minK: 1.8  },   // file ring
-    { phase: 'L4', minK: 2.8  },   // discussions
-    { phase: 'L5', minK: 4.0  },   // memories
-  ];
-
-  // ── Phase loading ─────────────────────────────────────────────────────────
-
-  function _apiURL(path) {
-    var base = (window.JUG && JUG.API_URL) || 'http://127.0.0.1:3458/api/graph';
-    return base.replace('/api/graph', '') + path;
-  }
-
-  function _loadPhase(key) {
-    if (loadedPhases[key] || pendingPhases[key]) return;
-    pendingPhases[key] = true;
-    fetch(_apiURL('/api/graph/phase?name=' + encodeURIComponent(key)))
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) {
-        if (!data || !data.ready) return;
-        var nodes = data.nodes || [];
-        var edges = data.edges || [];
-        if (!nodes.length && !edges.length) return;
-        // Skip oversized L6 phases — symbols cloud would overwhelm the sim.
-        if (key.indexOf('L6:') === 0 && (data.node_total || 0) > L6_NODE_CAP) {
-          console.log('[lod] skipped (too large)', key, data.node_total, 'nodes');
-          loadedPhases[key] = true;
-          return;
-        }
-        if (typeof JUG.appendGraphDelta === 'function') {
-          JUG.appendGraphDelta(nodes, edges);
-        }
-        loadedPhases[key] = true;
-        console.log('[lod] loaded', key, '+' + nodes.length + 'N', '+' + edges.length + 'E');
-      })
-      .catch(function (err) {
-        console.warn('[lod] phase', key, 'failed:', err.message);
-        loadedPhases[key] = true; // don't retry
-      })
-      .then(function () { delete pendingPhases[key]; });
-  }
-
-  function _loadL6FromProgress() {
-    fetch(_apiURL('/api/graph/progress'))
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (p) {
-        if (!p || !p.phases) return;
-        Object.keys(p.phases).forEach(function (k) {
-          if (k.indexOf('L6:') === 0 && p.phases[k]) _loadPhase(k);
-        });
-      })
-      .catch(function () {});
-  }
-
-  // ── Zoom-driven auto-expand ───────────────────────────────────────────────
-
-  var _lastK = 1;
-  var _zoomCheckRaf = null;
-
-  function _onZoom(k) {
-    if (Math.abs(k - _lastK) < 0.05) return;   // ignore micro-changes
-    _lastK = k;
-
-    ZOOM_THRESHOLDS.forEach(function (t) {
-      if (k >= t.minK && !loadedPhases[t.phase]) {
-        _loadPhase(t.phase);
-        if (t.phase === 'L3') {
-          // L3 ready → also trigger L6 discovery
-          setTimeout(_loadL6FromProgress, 2000);
-        }
-      }
-    });
-  }
-
-  // Hook into D3's zoom event via JUG events emitted by workflow_graph_bridge.
-  // The bridge emits 'graph:zoom' with {k} on every D3 zoom transform.
-  if (window.JUG && JUG.on) {
-    JUG.on('graph:zoom', function (ev) {
-      if (ev && ev.k != null) _onZoom(ev.k);
-    });
-  }
-
-  // ── Click-to-expand: reveal children of clicked node ─────────────────────
-
-  // When a node is clicked, load the phase that contains its children.
-  // Domain → load L1; tool_hub → load L2; file → load L3; etc.
-  var KIND_NEXT_PHASE = {
+  // Kind → which phase to fetch when this node is clicked.
+  var KIND_PHASE = {
     domain:     'L1',
     tool_hub:   'L2',
-    file:       'L3',
-    discussion: 'L4',
+    mcp:        'L2',
+    agent:      'L2',
+    skill:      'L3',
+    hook:       'L3',
+    command:    'L3',
+    file:       'L4',
+    discussion: 'L5',
     memory:     'L5',
   };
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function _base() {
+    return (JUG.API_URL || 'http://127.0.0.1:3458/api/graph')
+             .replace('/api/graph', '');
+  }
+
+  function _status(msg) {
+    var el = document.getElementById('status-text');
+    if (el) el.textContent = msg;
+  }
+
+  // ── Fetch + cache a phase ──────────────────────────────────────────────────
+
+  function _fetchPhase(key) {
+    if (_phaseCache[key]) return Promise.resolve(_phaseCache[key]);
+    if (_fetchPromise[key]) return _fetchPromise[key];
+
+    _fetchPromise[key] = fetch(_base() + '/api/graph/phase?name=' + encodeURIComponent(key))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && data.ready) {
+          _phaseCache[key] = { nodes: data.nodes || [], edges: data.edges || [] };
+          return _phaseCache[key];
+        }
+        // Not ready — retry in 3 s, do not cache.
+        delete _fetchPromise[key];
+        return new Promise(function (resolve) {
+          setTimeout(function () { resolve(_fetchPhase(key)); }, 3000);
+        });
+      })
+      .catch(function () {
+        delete _fetchPromise[key];
+        return { nodes: [], edges: [] };
+      });
+
+    return _fetchPromise[key];
+  }
+
+  // ── Inject children of a clicked node ─────────────────────────────────────
+
+  function _injectChildren(node, phaseKey) {
+    if (_injectedFor[node.id]) return;
+    _injectedFor[node.id] = true;
+    _status('Loading children of ' + (node.label || node.id) + '…');
+
+    _fetchPhase(phaseKey).then(function (phase) {
+      var allNodes = phase.nodes;
+      var allEdges = phase.edges;
+
+      // Filter to nodes whose domain_id matches the clicked node, OR whose
+      // parent edge connects to the clicked node id.
+      var domainId = node.id;             // e.g. "domain:cortex"
+      var domainSlug = node.domain || (node.id.split(':')[1] || '');
+
+      var childNodes = allNodes.filter(function (n) {
+        return n.domain_id === domainId
+            || n.domain    === domainSlug
+            || n.parent_id === domainId;
+      });
+
+      if (!childNodes.length) {
+        // No domain match — fall back to injecting the full phase once.
+        // This covers tool_hub, file, etc. whose parent isn't a domain.
+        childNodes = allNodes;
+      }
+
+      // Collect edges that connect child nodes.
+      var childIds = Object.create(null);
+      childNodes.forEach(function (n) { childIds[n.id] = true; });
+      var childEdges = allEdges.filter(function (e) {
+        return childIds[e.source] || childIds[e.target];
+      });
+
+      // Seed positions near the clicked node so D3 places them locally.
+      var graph = JUG.state && JUG.state.lastData;
+      var px = 0, py = 0;
+      if (graph) {
+        var parent = (graph.nodes || []).find(function (n) { return n.id === node.id; });
+        if (parent) { px = parent.x || 0; py = parent.y || 0; }
+      }
+      childNodes.forEach(function (n) {
+        if (n.x == null) n.x = px + (Math.random() - 0.5) * 60;
+        if (n.y == null) n.y = py + (Math.random() - 0.5) * 60;
+      });
+
+      if (childNodes.length) {
+        if (typeof JUG.appendGraphDelta === 'function') {
+          JUG.appendGraphDelta(childNodes, childEdges);
+        }
+        console.log('[lod] injected', childNodes.length, 'children of', node.id,
+                    '(phase', phaseKey + ')');
+      }
+      _status('Online — click nodes to expand');
+    });
+  }
+
+  // ── Click handler ──────────────────────────────────────────────────────────
 
   if (window.JUG && JUG.on) {
     JUG.on('graph:selectNode', function (node) {
       if (!node) return;
-      var next = KIND_NEXT_PHASE[node.kind || node.type || ''];
-      if (next && !loadedPhases[next]) {
-        console.log('[lod] click-expand', node.id, '→ loading', next);
-        _loadPhase(next);
-      }
+      var kind = node.kind || node.type || '';
+      var phase = KIND_PHASE[kind];
+      if (!phase) return;
+      _injectChildren(node, phase);
     });
   }
 
-  // ── Polling: watch progress and load ready phases ─────────────────────────
-  // On initial page load, poll until L0 is ready, then hand off to zoom/click.
+  // ── Boot: load L0 once the server has it ready ─────────────────────────────
 
-  var _progressPoller = null;
-  var _pollCount = 0;
-
-  function _pollProgress() {
-    fetch(_apiURL('/api/graph/progress'))
+  var _bootTries = 0;
+  function _bootPoll() {
+    _bootTries++;
+    if (_bootTries > 30) return; // give up after ~60 s
+    fetch(_base() + '/api/graph/progress')
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (p) {
-        if (!p) return;
-        // L0 is the skeleton — load it once ready.
-        if (p.phases && p.phases['L0'] && !loadedPhases['L0']) {
-          _loadPhase('L0');
+        if (!p || !p.phases) return;
+        if (p.phases['L0']) {
+          _fetchPhase('L0').then(function (phase) {
+            if (phase.nodes.length && typeof JUG.appendGraphDelta === 'function') {
+              JUG.appendGraphDelta(phase.nodes, phase.edges);
+              console.log('[lod] boot: L0 loaded,', phase.nodes.length, 'domain nodes');
+              _status('Online — click a domain to expand it');
+            }
+          });
+          return; // stop polling
         }
-        // Kick progress polling off after we have L0.
-        if (loadedPhases['L0'] || _pollCount > 30) {
-          clearInterval(_progressPoller);
-          return;
-        }
+        _status('Building graph…');
+        setTimeout(_bootPoll, 2000);
       })
-      .catch(function () {});
-    _pollCount++;
+      .catch(function () { setTimeout(_bootPoll, 3000); });
   }
 
-  // Start polling after a short delay to let the build kick off.
-  setTimeout(function () {
-    _progressPoller = setInterval(_pollProgress, 1500);
-    _pollProgress();
-  }, 800);
+  // Kick build then poll.
+  fetch(_base() + '/api/graph/progress').catch(function () {});
+  setTimeout(_bootPoll, 1200);
 
-  // ── Expose for debugging ──────────────────────────────────────────────────
+  // ── Debug ──────────────────────────────────────────────────────────────────
   window.JUG = window.JUG || {};
   JUG._lod = {
-    loaded: loadedPhases,
-    pending: pendingPhases,
-    loadPhase: _loadPhase,
+    cache: _phaseCache,
+    injected: _injectedFor,
+    loadPhase: _fetchPhase,
+    inject: _injectChildren,
   };
 
-})();
+}());
