@@ -20,11 +20,11 @@ _REPO = os.path.abspath(os.path.join(_HERE, "..", ".."))
 if _REPO not in sys.path:
     sys.path.insert(0, _REPO)
 
-from mcp_server.server import layout_authority_geometry as geom
-from mcp_server.server import layout_authority_log as evlog
-from mcp_server.server import layout_authority_pressure as pressure
-from mcp_server.server import layout_authority_scheduler as sched
-from mcp_server.server import layout_authority_wire as wire
+from mcp_server.server import layout_authority_geometry as geom  # noqa: E402
+from mcp_server.server import layout_authority_log as evlog  # noqa: E402
+from mcp_server.server import layout_authority_pressure as pressure  # noqa: E402
+from mcp_server.server import layout_authority_scheduler as sched  # noqa: E402
+from mcp_server.server import layout_authority_wire as wire  # noqa: E402
 
 try:
     import resource  # POSIX only
