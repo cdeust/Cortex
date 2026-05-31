@@ -124,15 +124,18 @@ def serve_clinical(handler, path_no_qs: str) -> None:
     /clinical/<path> → ui/clinical/<path> (JS, CSS, vendor assets)
     Returns 404 for missing files rather than crashing.
     """
-    from mcp_server.server.http_common import send_plain_error
-
     # Resolve the clinical root from the handler's server attribute
     # (_build_unified_handler stores clinical_root on the class).
     clinical_root: Path | None = getattr(handler.__class__, "_clinical_root", None)
     clinical_html: Path | None = getattr(handler.__class__, "_clinical_html_path", None)
 
     if clinical_root is None or clinical_html is None:
-        send_plain_error(handler, 503)
+        body = b"clinical UI not configured"
+        handler.send_response(503)
+        handler.send_header("Content-Type", "text/plain")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
         return
 
     # Map /clinical/ → index.html; /clinical/<path> → clinical_root/<path>
@@ -211,6 +214,16 @@ def _route_unified_get(
         from mcp_server.handlers.memories_facets import serve as serve_memories_facets
 
         serve_memories_facets(handler, store)
+        return
+    if path_no_qs == "/api/graph/events":
+        from mcp_server.server.http_standalone_endpoints import serve_graph_events
+
+        serve_graph_events(handler, store)
+        return
+    if path == "/api/graph.bin" or path.startswith("/api/graph.bin?"):
+        from mcp_server.server.http_standalone_endpoints import serve_graph_binary
+
+        serve_graph_binary(handler, store)
         return
     if path == "/api/graph.zera" or path.startswith("/api/graph.zera?"):
         # ZERA-bundle variant of /api/graph — same data, content-addressed
