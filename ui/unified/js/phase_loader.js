@@ -45,10 +45,15 @@
     return isFinite(n) ? n : -1;
   }
 
+  // Phases that add no structural value to the graph view — skip them.
+  // memory_entity_edges: 110K+ KG entity edges that flood the canvas
+  // with a green cloud obscuring the structural galaxy layout.
+  var SKIP = { memory_entity_edges: true, L5: true };
+
   function _readyKeys(phases) {
     var keys = [];
     for (var k in phases) {
-      if (phases[k] && !loaded[k]) keys.push(k);
+      if (phases[k] && !loaded[k] && !SKIP[k]) keys.push(k);
     }
     keys.sort(function (a, b) { return _rank(b) - _rank(a); });
     return keys;

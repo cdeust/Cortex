@@ -123,7 +123,10 @@
   function refreshBar(p){
     var box = document.getElementById('build-progress');
     if(!box) return;
-    if(p.phase === 'idle' || p.full_ready){
+    var phase = (p.phase || '').toLowerCase();
+    var hidePhases = ['memory_entity', 'loading memory', 'idle'];
+    var shouldHide = p.full_ready || hidePhases.some(function(s){ return phase.indexOf(s) !== -1; });
+    if(shouldHide){
       box.style.opacity = '0';
       setTimeout(function(){ box.style.display='none'; }, 400);
       return;
