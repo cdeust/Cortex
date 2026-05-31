@@ -89,14 +89,10 @@
     return snapPromise
       .then(function(g){ _apply(g, 'CXGB binary snapshot'); })
       .catch(function(snapErr){
-        // 404 / no snapshot / decode error → JSON path (still works,
-        // just slower until the first build completes).
-        console.log('[viz] '+label+' snapshot unavailable ('+(snapErr && snapErr.message)+'), falling back to /api/graph JSON');
-        return fetch('/api/graph').then(function(r){ return r.ok ? r.json() : null; }).then(function(g){
-          _apply(g, 'JSON /api/graph');
-        });
-      })
-      .catch(function(err){ console.warn('[viz] '+label+' all paths failed:', err); });
+        // No fallback to /api/graph — that dumps 484K nodes at once and
+        // crashes the browser. phase_loader.js handles progressive loading.
+        console.log('[viz] '+label+' snapshot unavailable — phase_loader will populate');
+      });
   }
 
   function applyPhase(key){
