@@ -18,7 +18,8 @@ from __future__ import annotations
 import threading
 import time
 
-IDLE_TIMEOUT = 600.0  # 10 minutes — matches the plugin default.
+import os as _os
+IDLE_TIMEOUT = float(_os.environ.get("CORTEX_IDLE_TIMEOUT", "600"))  # default 10 min
 GRAPH_CACHE_TTL = 120.0  # seconds — avoids rebuilding 8000+ nodes.
 CONVERSATIONS_CACHE_TTL = 60.0  # seconds — JSONL scan is ~O(files).
 
