@@ -128,9 +128,11 @@
     _status('Loading ' + (DEPTH_LABEL[phaseKey] || phaseKey) +
             (domainSlug ? ' for ' + domainSlug : '') + '…');
 
-    // L5 (memories, ~838 MB) must be paginated — V8 can't parse it in one shot.
+    // L5 memories: read directly from Postgres via /api/memories (fast, local).
+    // The graph-build-cache path is slow (build must finish L5 first).
+    // /api/memories is keyset-paginated from Postgres — 5000 records in ~60ms.
     if (phaseKey === 'L5') {
-      _loadPhasePaged('L5', domainSlug, 0, cacheKey, onDone);
+      _loadMemoriesFast(domainSlug, null, cacheKey, onDone);
       return;
     }
 
@@ -184,6 +186,67 @@
       })
       .catch(function(err) {
         console.warn('[lod] L5 chunk failed:', err.message);
+        _loaded[cacheKey] = true; delete _pending[cacheKey];
+        if (typeof onDone === 'function') onDone();
+      });
+  }
+
+  // ── Fast memory loader via /api/memories (Postgres keyset pagination) ────────
+  // ~5000 memories per request at ~60ms each → 130K memories in ~1.5s locally.
+
+  var MEM_PAGE = 5000;
+  var MEM_COLORS = {
+    labile: '#EF4444', early_ltp: '#F59E0B', late_ltp: '#10B981',
+    consolidated: '#06B6D4', reconsolidating: '#A855F7',
+  };
+
+  function _memToNode(m) {
+    var stage = m.consolidation_stage || m.stage || 'labile';
+    return {
+      id:      'mem:' + m.id,
+      kind:    'memory',
+      type:    'memory',
+      label:   (m.label || m.content || '').slice(0, 50) || ('mem ' + m.id),
+      domain:  m.domain || '',
+      domain_id: m.domain_id || ('domain:' + (m.domain || '')),
+      color:   MEM_COLORS[stage] || '#10B981',
+      consolidation_stage: stage,
+      heat:    m.heat || 0,
+      isGlobal: !!m.isGlobal,
+      selectableDomain: false,
+    };
+  }
+
+  function _loadMemoriesFast(domainSlug, cursor, cacheKey, onDone) {
+    var url = _base() + '/api/memories?limit=' + MEM_PAGE;
+    if (domainSlug && domainSlug !== 'all' && domainSlug !== '') {
+      url += '&domain=' + encodeURIComponent(domainSlug);
+    }
+    if (cursor) url += '&cursor=' + encodeURIComponent(cursor);
+
+    fetch(url)
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !data.items || !data.items.length) {
+          _loaded[cacheKey] = true; delete _pending[cacheKey];
+          _status('Online'); if (typeof onDone === 'function') onDone(); return;
+        }
+        var nodes = data.items.map(_memToNode);
+        if (typeof JUG.appendGraphDelta === 'function') {
+          JUG.appendGraphDelta(nodes, []);
+          console.log('[lod] L5[memories]', (domainSlug || '*'), '+' + nodes.length + 'N');
+          _updateLegend();
+        }
+        if (data.next_cursor) {
+          // More pages — continue immediately (local Postgres is fast).
+          _loadMemoriesFast(domainSlug, data.next_cursor, cacheKey, onDone);
+        } else {
+          _loaded[cacheKey] = true; delete _pending[cacheKey];
+          _status('Online'); if (typeof onDone === 'function') onDone();
+        }
+      })
+      .catch(function(err) {
+        console.warn('[lod] L5 memories failed:', err.message);
         _loaded[cacheKey] = true; delete _pending[cacheKey];
         if (typeof onDone === 'function') onDone();
       });
