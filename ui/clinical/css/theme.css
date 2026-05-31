@@ -1,0 +1,205 @@
+/* =======================================================================
+   Cortex Clinical — dark cyber theme.
+   Derived from ui/unified/theme.css; trimmed to what clinical UI needs.
+   ======================================================================= */
+
+:root {
+  /* ── Warm-neutral greys ───────────────────────────────────────────── */
+  --ink-0:  oklch(12% 0.006 60);   /* canvas */
+  --ink-1:  oklch(15% 0.008 60);   /* surface */
+  --ink-2:  oklch(18% 0.010 60);   /* elevated */
+  --ink-3:  oklch(22% 0.010 60);   /* chip */
+  --ink-4:  oklch(28% 0.010 60);   /* input */
+  --line:   oklch(30% 0.010 60 / 0.45);
+  --line-2: oklch(35% 0.010 60 / 0.22);
+  --hair:   oklch(45% 0.010 60 / 0.14);
+
+  --fg-0:   oklch(96% 0.005 80);   /* primary text */
+  --fg-1:   oklch(80% 0.006 70);   /* secondary */
+  --fg-2:   oklch(62% 0.006 70);   /* tertiary */
+  --fg-3:   oklch(48% 0.008 70);   /* quaternary */
+
+  /* ── Accent — warm amber ─────────────────────────────────────────── */
+  --amber:      oklch(78% 0.13 75);
+  --amber-soft: oklch(78% 0.13 75 / 0.14);
+  --amber-glow: oklch(78% 0.13 75 / 0.35);
+
+  /* ── Node-kind palette (data colours only) ───────────────────────── */
+  --kind-domain:     oklch(78% 0.13 95);   /* warm gold */
+  --kind-skill:      oklch(74% 0.14 190);  /* cyan */
+  --kind-hook:       oklch(72% 0.14 320);  /* violet */
+  --kind-agent:      oklch(78% 0.15 230);  /* blue */
+  --kind-command:    oklch(80% 0.13 155);  /* green */
+  --kind-tool:       oklch(78% 0.13 40);   /* red-orange */
+  --kind-file:       oklch(74% 0.10 60);   /* amber */
+  --kind-discussion: oklch(74% 0.13 250);  /* indigo */
+  --kind-memory:     oklch(76% 0.13 155);  /* sage */
+  --kind-symbol:     oklch(72% 0.15 55);   /* ochre */
+  --kind-entity:     oklch(68% 0.17 28);   /* rust */
+  --kind-default:    oklch(62% 0.006 70);  /* neutral */
+
+  /* ── Depth-level tints ───────────────────────────────────────────── */
+  --depth-0: oklch(78% 0.13 95);
+  --depth-1: oklch(74% 0.14 190);
+  --depth-2: oklch(78% 0.15 230);
+  --depth-3: oklch(80% 0.13 155);
+  --depth-4: oklch(74% 0.10 60);
+  --depth-5: oklch(76% 0.13 155);
+  --depth-6: oklch(62% 0.006 70);
+
+  /* ── Typography ──────────────────────────────────────────────────── */
+  --sans: 'Inter Tight', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace;
+
+  /* ── Geometry ────────────────────────────────────────────────────── */
+  --header-h:  48px;
+  --panel-w:   360px;
+  --r-sm:  4px;
+  --r-md:  6px;
+  --r-lg:  10px;
+  --ease:  cubic-bezier(.2,.7,.1,1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+
+body {
+  background: var(--ink-0);
+  color: var(--fg-0);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--ink-1); }
+::-webkit-scrollbar-thumb { background: var(--ink-4); border-radius: 3px; }
+
+/* ── Utility typography ───────────────────────────────────────────────── */
+.mono { font-family: var(--mono); }
+.fg-1 { color: var(--fg-1); }
+.fg-2 { color: var(--fg-2); }
+.fg-3 { color: var(--fg-3); }
+
+/* ── Phase badges ─────────────────────────────────────────────────────── */
+.phase-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-family: var(--mono);
+  background: var(--ink-3);
+  color: var(--fg-2);
+  border: 1px solid var(--line);
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.phase-badge.done {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border-color: var(--amber-glow);
+}
+
+/* ── Status bar ───────────────────────────────────────────────────────── */
+#status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ink-1);
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--fg-2);
+  z-index: 200;
+  transition: opacity 0.3s;
+}
+#status-bar.error { color: oklch(68% 0.17 28); }
+#status-bar.hidden { opacity: 0; pointer-events: none; }
+
+/* ── Progress bar ─────────────────────────────────────────────────────── */
+#progress-bar {
+  height: 2px;
+  background: var(--ink-2);
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  right: 0;
+  z-index: 150;
+}
+#progress-fill {
+  height: 100%;
+  background: var(--amber);
+  width: 0%;
+  transition: width 0.4s var(--ease);
+}
+#phase-label {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--fg-3);
+  padding: 0 8px;
+  position: fixed;
+  top: calc(var(--header-h) + 4px);
+  right: 0;
+  z-index: 151;
+}
+
+/* ── Depth indicator ──────────────────────────────────────────────────── */
+#depth-indicator {
+  position: fixed;
+  bottom: 36px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  z-index: 100;
+}
+.depth-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-4);
+  border: 1px solid var(--line);
+  transition: background 0.2s, transform 0.2s;
+  cursor: default;
+}
+.depth-dot.active {
+  background: var(--amber);
+  transform: scale(1.3);
+}
+.depth-dot.loaded {
+  background: var(--ink-3);
+  border-color: var(--fg-3);
+}
+
+/* ── Tooltip ──────────────────────────────────────────────────────────── */
+#node-tooltip {
+  position: fixed;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 6px 10px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 300;
+  max-width: 280px;
+  display: none;
+}
+#node-tooltip .tooltip-label {
+  color: var(--fg-0);
+  font-weight: 500;
+}
+#node-tooltip .tooltip-kind {
+  color: var(--fg-2);
+  font-size: 11px;
+  font-family: var(--mono);
+}
