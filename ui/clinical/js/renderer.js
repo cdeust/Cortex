@@ -111,7 +111,7 @@ function _hexAlpha(hex, alpha) {
  * @param {Object} data
  * @returns {Object}
  */
-function _nodeReducer(_g, _node, data) {
+function _nodeReducer(_key, data) {
   const depth  = data.depth || 0;
   const hidden = data.hidden === true;
   const base   = data.color || kindColour(data.kind || "");
@@ -141,10 +141,18 @@ function _nodeReducer(_g, _node, data) {
  * @param {Object} data
  * @returns {Object}
  */
-function _edgeReducer(graph, edge, data) {
-  const srcHidden = graph.getNodeAttribute(graph.source(edge), "hidden");
-  const tgtHidden = graph.getNodeAttribute(graph.target(edge), "hidden");
-  if (srcHidden || tgtHidden) return { ...data, hidden: true };
+function _edgeReducer(key, data) {
+  // Sigma v3 reducers receive (key, attributes) — no graph arg.
+  // Use the module-level _graph to check endpoint visibility.
+  if (_graph) {
+    try {
+      const src = _graph.source(key);
+      const tgt = _graph.target(key);
+      const srcHidden = _graph.getNodeAttribute(src, "hidden");
+      const tgtHidden = _graph.getNodeAttribute(tgt, "hidden");
+      if (srcHidden || tgtHidden) return { ...data, hidden: true };
+    } catch (_) { /* edge or node not yet in graph — treat as visible */ }
+  }
   return { ...data, hidden: false, color: "#333333", size: 0.5 };
 }
 
