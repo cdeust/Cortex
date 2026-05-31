@@ -332,11 +332,23 @@ def serve_graph_phase(handler) -> None:
 
     try:
         name = ""
+        offset = 0
+        limit: int | None = None
         if "?" in handler.path:
             for p in handler.path.split("?", 1)[1].split("&"):
                 if p.startswith("name="):
                     name = unquote(p[5:])
-        send_json_ok(handler, get_phase_payload(name))
+                elif p.startswith("offset="):
+                    try:
+                        offset = int(p[7:])
+                    except ValueError:
+                        pass
+                elif p.startswith("limit="):
+                    try:
+                        limit = int(p[6:])
+                    except ValueError:
+                        pass
+        send_json_ok(handler, get_phase_payload(name, offset=offset, limit=limit))
     except Exception as e:
         send_json_error(handler, e)
 

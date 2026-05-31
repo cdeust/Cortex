@@ -318,7 +318,7 @@ _PHASE_KINDS: dict[str, set[str]] = {
 }
 
 
-def get_phase_payload(key: str) -> dict:
+def get_phase_payload(key: str, offset: int = 0, limit: int | None = None) -> dict:
     spec = PHASES.get(key)
     pl = _phase_payloads.get(key, {"nodes": [], "edges": []})
     nodes = pl.get("nodes", [])
@@ -363,14 +363,23 @@ def get_phase_payload(key: str) -> dict:
                     if e.get("source") in node_ids and e.get("target") in node_ids
                 ]
 
+    node_total = len(nodes)
+    edge_total = len(edges)
+    if limit is not None:
+        nodes = nodes[offset : offset + limit]
+        edges = edges[offset : offset + limit]
+    done = limit is None or (offset + limit) >= max(node_total, edge_total)
     return {
         "phase": key,
-        "ready": bool((spec and spec["ready"]) or nodes),
+        "ready": bool((spec and spec["ready"]) or node_total),
         "deps": spec["deps"] if spec else [],
         "nodes": nodes,
         "edges": edges,
-        "node_total": len(nodes),
-        "edge_total": len(edges),
+        "node_total": node_total,
+        "edge_total": edge_total,
+        "offset": offset,
+        "limit": limit,
+        "done": done,
     }
 
 
