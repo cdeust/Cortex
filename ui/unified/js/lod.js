@@ -74,8 +74,9 @@
     // Always remove global sentinel — it is an internal anchor, not a project.
     nodes = nodes.filter(function(n) { return !n.isGlobal && n.id !== 'domain:__global__'; });
 
-    // For L1+, scope strictly to the selected domain.
-    if (domainSlug && domainSlug !== 'all' && domainSlug !== '' && phaseKey !== 'L0') {
+    // Scope strictly to the selected domain — ALL phases including L0.
+    // When the user picks "agentic-ai" they want ONLY agentic-ai nodes.
+    if (domainSlug && domainSlug !== 'all' && domainSlug !== '') {
       nodes = nodes.filter(function(n) { return _belongsToDomain(n, domainSlug); });
     }
 
@@ -279,13 +280,16 @@
     var domainSel = document.getElementById('domain-select');
     if (domainSel) {
       domainSel.addEventListener('change', function () {
-        var depth = _currentDepth();
-        if (/^L[0-6]$/.test(depth)) {
-          // Reload current depth for the new domain. Clear only this depth's
-          // phase keys for the new scope so the strict domain filter re-runs.
-          _clearPhasesFor(depth, domainSel.value || '');
-          loadUpTo(depth, domainSel.value || '');
-        }
+        var depth  = _currentDepth();
+        var domain = domainSel.value || '';
+        if (!/^L[0-6]$/.test(depth)) return;
+        // Domain switch: FULL reset — old domain's nodes must leave the graph.
+        // This is safe here because the domain select doesn't listen to
+        // state:lastData, so resetGraph → buildGraph(empty) → state:lastData
+        // cannot re-trigger this listener.
+        _clearPhasesFor(depth, domain);
+        if (typeof JUG.resetGraph === 'function') JUG.resetGraph();
+        loadUpTo(depth, domain);
       });
     }
   }
