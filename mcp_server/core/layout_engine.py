@@ -85,7 +85,7 @@ def layout(
     if algorithm == "drl" and len(node_ids) >= 200:
         coords = g.layout("drl")
     elif algorithm == "fr" or len(node_ids) < 200:
-        coords = g.layout_fruchterman_reingold(niter=200, seed=seed)
+        coords = g.layout_fruchterman_reingold(niter=200)
     else:
         # Defensive default: DrL is the expected path; fall back to FR
         # for any unknown algorithm name rather than raising.
