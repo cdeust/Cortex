@@ -9,6 +9,7 @@
     var root = svg.append('g').attr('class', 'wfg-root');
     var zoom = d3.zoom().scaleExtent([0.05, 6]).on('zoom', function (ev) {
       root.attr('transform', ev.transform);
+      if (window.JUG && JUG.emit) JUG.emit('graph:zoom', { k: ev.transform.k });
     });
     svg.call(zoom).on('dblclick.zoom', null);
 

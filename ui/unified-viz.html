@@ -554,6 +554,18 @@
 
 <script src="/js/config.js"></script>
 <script src="/js/state.js"></script>
+<!-- ForceGraph CDN disabled — stub so renderer.js / graph.js init without crashing. -->
+<script>
+window.ForceGraph = function () {
+  var noop = function () { return stub; };
+  var stub = new Proxy({}, { get: function () { return noop; } });
+  return function () { return stub; };
+};
+</script>
+<!-- Legacy stack: graph.js registers JUG.buildGraph/setGraphData/addBatchToGraph/appendGraphDelta -->
+<script src="/js/draw.js"></script>
+<script src="/js/renderer.js"></script>
+<script src="/js/graph.js"></script>
 <script src="/js/tooltip.js"></script>
 <script src="/js/detail_tools.js"></script>
 <script src="/js/detail_format.js"></script>
@@ -578,6 +590,7 @@
 <script src="/js/workflow_graph.js"></script>
 <script src="/js/workflow_graph_bridge.js"></script>
 <script src="/js/workflow_graph_filters.js"></script>
+<script src="/js/lod.js"></script>
 <script src="/js/polling.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <script src="/js/chain_panel.js"></script>
