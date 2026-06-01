@@ -37,7 +37,6 @@ from mcp_server.server.http_standalone_endpoints import (
     serve_discussion_detail,
     serve_discussions,
     serve_file_diff,
-    serve_graph,
     serve_sankey,
     serve_static,
 )
@@ -117,59 +116,6 @@ _WIKI_DB_OPS = {
 }
 
 
-def serve_clinical(handler, path_no_qs: str) -> None:
-    """Serve the clinical-hospital graph UI from ui/clinical/.
-
-    /clinical/ and /clinical → index.html
-    /clinical/<path> → ui/clinical/<path> (JS, CSS, vendor assets)
-    Returns 404 for missing files rather than crashing.
-    """
-    # Resolve the clinical root from the handler's server attribute
-    # (_build_unified_handler stores clinical_root on the class).
-    clinical_root: Path | None = getattr(handler.__class__, "_clinical_root", None)
-    clinical_html: Path | None = getattr(handler.__class__, "_clinical_html_path", None)
-
-    if clinical_root is None or clinical_html is None:
-        body = b"clinical UI not configured"
-        handler.send_response(503)
-        handler.send_header("Content-Type", "text/plain")
-        handler.send_header("Content-Length", str(len(body)))
-        handler.end_headers()
-        handler.wfile.write(body)
-        return
-
-    # Map /clinical/ → index.html; /clinical/<path> → clinical_root/<path>
-    suffix = path_no_qs[len("/clinical") :].lstrip("/")
-    target = clinical_html if not suffix else clinical_root / suffix
-
-    if not target.is_file():
-        # clinical not built yet — redirect to unified view
-        handler.send_response(302)
-        handler.send_header("Location", "/")
-        handler.send_header("Content-Length", "0")
-        handler.end_headers()
-        return
-
-    ext = target.suffix.lower()
-    ctype = {
-        ".html": "text/html; charset=utf-8",
-        ".js": "application/javascript",
-        ".css": "text/css",
-        ".json": "application/json",
-        ".woff2": "font/woff2",
-        ".png": "image/png",
-        ".svg": "image/svg+xml",
-    }.get(ext, "application/octet-stream")
-
-    body = target.read_bytes()
-    handler.send_response(200)
-    handler.send_header("Content-Type", ctype)
-    handler.send_header("Content-Length", str(len(body)))
-    handler.send_header("Cache-Control", "no-store, must-revalidate")
-    handler.end_headers()
-    handler.wfile.write(body)
-
-
 def _route_unified_get(
     handler,
     store,
@@ -181,24 +127,30 @@ def _route_unified_get(
     """Resolve a GET request for the unified server."""
     path = handler.path
     path_no_qs = path.split("?")[0]
-    # ── Clinical graph UI (/clinical/) ──────────────────────────────────
-    if path_no_qs in ("/clinical", "/clinical/") or path_no_qs.startswith("/clinical/"):
-        serve_clinical(handler, path_no_qs)
-        return
-    if path_no_qs == "/api/graph/progress":
-        from mcp_server.server.http_standalone_endpoints import serve_graph_progress
+    if path_no_qs == "/api/trace/domains":
+        from mcp_server.server.http_standalone_trace import serve_trace_domains
 
-        serve_graph_progress(handler, store)
+        serve_trace_domains(handler)
         return
-    if path_no_qs == "/api/graph/chain":
-        from mcp_server.server.http_standalone_chain import serve_graph_chain
+    if path_no_qs == "/api/trace/sessions":
+        from mcp_server.server.http_standalone_trace import serve_trace_sessions
 
-        serve_graph_chain(handler, store)
+        serve_trace_sessions(handler)
         return
-    if path_no_qs == "/api/graph/phase":
-        from mcp_server.server.http_standalone_endpoints import serve_graph_phase
+    if path_no_qs == "/api/trace/chain":
+        from mcp_server.server.http_standalone_trace import serve_trace_chain
 
-        serve_graph_phase(handler)
+        serve_trace_chain(handler)
+        return
+    if path_no_qs == "/api/trace/file":
+        from mcp_server.server.http_standalone_trace import serve_trace_file
+
+        serve_trace_file(handler)
+        return
+    if path_no_qs == "/api/graph/node":
+        from mcp_server.server.http_standalone_endpoints import serve_graph_node
+
+        serve_graph_node(handler, store)
         return
     if path_no_qs == "/api/memories":
         # Keyset-paged memory listing for the Knowledge + Board tabs.
@@ -215,27 +167,7 @@ def _route_unified_get(
 
         serve_memories_facets(handler, store)
         return
-    if path_no_qs == "/api/graph/events":
-        from mcp_server.server.http_standalone_endpoints import serve_graph_events
-
-        serve_graph_events(handler, store)
-        return
-    if path == "/api/graph.bin" or path.startswith("/api/graph.bin?"):
-        from mcp_server.server.http_standalone_endpoints import serve_graph_binary
-
-        serve_graph_binary(handler, store)
-        return
-    if path == "/api/graph.zera" or path.startswith("/api/graph.zera?"):
-        # ZERA-bundle variant of /api/graph — same data, content-addressed
-        # binary transport. Reads the same _graph_cache; no effect on
-        # retrieval paths.
-        from mcp_server.server.http_standalone_endpoints import serve_graph_zera
-
-        serve_graph_zera(handler, store)
-        return
-    if path == "/api/graph" or path.startswith("/api/graph?"):
-        serve_graph(handler, store)
-    elif path == "/api/discussions" or path.startswith("/api/discussions?"):
+    if path == "/api/discussions" or path.startswith("/api/discussions?"):
         serve_discussions(handler)
     elif path_no_qs.startswith("/api/discussion/"):
         serve_discussion_detail(handler, path_no_qs)
@@ -322,8 +254,6 @@ def _route_unified_get(
 def _build_unified_handler(ui_root: Path, store) -> type:
     """HTTPHandler factory for the unified viz server."""
     html_path = ui_root / "unified-viz.html"
-    clinical_html_path = ui_root / "clinical" / "index.html"
-    clinical_root = ui_root / "clinical"
     js_dir = ui_root / "unified" / "js"
     css_dir = ui_root / "unified"
     vendor_dir = ui_root / "unified" / "vendor"
@@ -334,8 +264,6 @@ def _build_unified_handler(ui_root: Path, store) -> type:
         # response, killing any streaming endpoint. Chunked transfer +
         # keep-alive land automatically once protocol_version is 1.1.
         protocol_version = "HTTP/1.1"
-        _clinical_root = clinical_root
-        _clinical_html_path = clinical_html_path
 
         def _guard_host(self) -> bool:
             if validate_host_header(self):

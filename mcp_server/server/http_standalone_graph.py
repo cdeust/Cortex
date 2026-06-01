@@ -238,40 +238,34 @@ def get_build_progress() -> dict:
         snap = dict(_build_progress)
         if snap.get("started_at"):
             snap["elapsed"] = time.monotonic() - snap["started_at"]
+    # If no build has run this process but a complete snapshot (>1 MB) is
+    # already on disk, report ready so the frontend's phase_loader fetches
+    # /api/graph.bin immediately instead of polling "idle" forever. This
+    # is what makes a cold process render the cached galaxy with no build.
+    # source: measured 2026-05-31 — gate skipped the build but the UI sat
+    # blank because progress stayed baseline_ready=False.
+    if not snap.get("baseline_ready") and not snap.get("full_ready"):
+        try:
+            from mcp_server.server.graph_snapshot import default_path
+
+            p = default_path()
+            if p.is_file() and p.stat().st_size > 1_000_000:
+                snap["baseline_ready"] = True
+                snap["full_ready"] = True
+                snap["phase"] = "cached snapshot"
+                snap["pct"] = 1.0
+        except OSError:
+            pass
     return snap
 
 
 def ensure_build_started(store) -> None:
-    """Kick the background build iff it hasn't started and no completed
-    graph is cached.
-
-    Why this exists: per the 2026-05-17 direction the build must not
-    auto-fire at server startup — it kicks lazily when the user opens
-    the Graph view. The original trigger was a ``/api/graph`` fetch from
-    polling.js's boot. The streaming refactor moved the graph-tab poller
-    onto ``/api/graph/progress`` (meta-only) + ``/api/graph/phase``, and
-    neither kicks the build — so opening the Graph view stopped starting
-    it and the graph never appeared. This helper restores the trigger on
-    the progress endpoint: the phase-poller only polls ``/progress`` when
-    ``activeView === 'graph'``, so kicking here keeps the lazy semantics
-    (no build until the user is actually on the Graph tab) without
-    depending on a separate ``/api/graph`` fetch.
-
-    Idempotent: ``_kick_background_build`` collapses concurrent calls via
-    a non-blocking lock, and the cache check below prevents re-kicking a
-    finished build. Safe to call on every poll.
+    """No-op. The capped-galaxy snapshot build was replaced by the
+    live domain-split execution-trace graph (/api/trace/*). Kept as a
+    stable import surface for any legacy /api/graph/* route; it must
+    never kick the old build. source: 2026-05-31 trace refactor.
     """
-    if store is None:
-        return
-    build_in_progress = _graph_build_lock.locked()
-    cache_has_data = bool(
-        _graph_cache and _graph_cache.get("data") and _graph_cache["data"].get("nodes")
-    )
-    if build_in_progress or cache_has_data:
-        return
-    _kick_background_build(store, None)
-
-
+    return None
 def _set_progress(**kw) -> None:
     with _build_progress_lock:
         _build_progress.update(kw)
@@ -866,6 +860,15 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
             # Replaces the cumulative cache with the full graph. The client
             # already painted the skeleton; this fills it in.
             try:
+                # Cap memory nodes at the top-N hottest so the galaxy
+                # renders fast. The DB holds 400k+ memories; rendering all
+                # of them made a 484k-node graph that never hit <=200 ms.
+                # Override with CORTEX_VIZ_MEMORY_LIMIT (0 = no cap).
+                # source: measured 2026-05-31; user decision = ~25k.
+                try:
+                    _mem_limit = int(os.environ.get("CORTEX_VIZ_MEMORY_LIMIT", "25000"))
+                except ValueError:
+                    _mem_limit = 25000
                 baseline = build_workflow_graph(
                     store,
                     domain_filter=domain_filter,
@@ -873,6 +876,7 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                     on_source_loaded=_on_source_loaded,
                     on_batch=_on_batch,
                     defer_native_ast=True,
+                    memory_limit=_mem_limit,
                 )
             finally:
                 if saved_flag is None:
@@ -903,6 +907,49 @@ def _kick_background_build(store, domain_filter: str | None) -> None:
                 ),
                 baseline_ready=True,
             )
+
+            # ── Bake layout coordinates into the nodes ──
+            # The CXGB snapshot stores x/y per node. Without a layout pass
+            # every node ships at (0,0) and the browser recomputes the
+            # entire force layout live on each load — nodes start stacked
+            # at the origin and visibly fly apart for several seconds
+            # ("off by default"). Run one DrL pass here (OpenOrd; ~0.8 s
+            # for 34k nodes, measured 2026-05-31) and write the resulting
+            # coords so the galaxy opens already arranged.
+            try:
+                from mcp_server.core import layout_engine
+
+                _bl_nodes = baseline.get("nodes", [])
+                _bl_edges = baseline.get("edges", [])
+                _ids = [n["id"] for n in _bl_nodes if n.get("id")]
+                _edge_pairs = []
+                for _e in _bl_edges:
+                    _s = _e.get("source")
+                    _t = _e.get("target")
+                    if isinstance(_s, dict):
+                        _s = _s.get("id")
+                    if isinstance(_t, dict):
+                        _t = _t.get("id")
+                    if _s and _t and _s != _t:
+                        _edge_pairs.append((_s, _t))
+                _coords = layout_engine.layout(_ids, _edge_pairs)
+                _pos = {nid: (x, y) for nid, x, y in _coords}
+                for _n in _bl_nodes:
+                    _xy = _pos.get(_n.get("id"))
+                    if _xy is not None:
+                        _n["x"], _n["y"] = _xy[0], _xy[1]
+                print(
+                    f"[cortex] layout baked: {len(_coords)} coords "
+                    f"for {len(_bl_nodes)} nodes",
+                    file=sys.stderr,
+                )
+            except Exception as _exc:  # pragma: no cover - defensive
+                # igraph missing or layout error — fall back to (0,0);
+                # the client still settles a live layout, just slower.
+                print(
+                    f"[cortex] layout bake skipped: {_exc}",
+                    file=sys.stderr,
+                )
 
             # ── CXGB binary snapshot ──
             # Write the precomputed snapshot so subsequent /api/graph.bin

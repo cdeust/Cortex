@@ -249,51 +249,6 @@ def serve_graph_events(handler, store=None) -> None:
             pass
 
 
-def serve_graph_binary(handler, store=None) -> None:
-    """GET /api/graph.bin — precomputed binary snapshot (CXGB v1).
-
-    Streams ``~/.cache/cortex/graph-snapshot.bin`` as
-    ``application/octet-stream`` with zero Python-side serialisation.
-    The browser decodes it via ``DataView`` (see
-    ``ui/unified/js/graph_snapshot.js``) — full graph load in ~110 ms
-    on the 135 k / 166 k benchmark DB, vs ~45 min when the
-    rebuild-from-PG path runs each time. See
-    ``mcp_server/server/graph_snapshot.py`` for the format spec.
-
-    Also lazily kicks the background build so the first visit to this
-    endpoint starts producing a snapshot — subsequent visits get the
-    fast load. Returns HTTP 404 if no snapshot exists yet (the client
-    falls back to the JSON path while the build runs).
-    """
-    from mcp_server.server.graph_snapshot import default_path
-    from mcp_server.server.http_standalone_graph import ensure_build_started
-
-    try:
-        ensure_build_started(store)
-        path = default_path()
-        if not path.is_file():
-            handler.send_response(404)
-            handler.send_header("Content-Type", "text/plain; charset=utf-8")
-            handler.end_headers()
-            handler.wfile.write(b"snapshot not yet built")
-            return
-        st = path.stat()
-        with open(path, "rb") as fh:
-            payload = fh.read()
-        handler.send_response(200)
-        handler.send_header("Content-Type", "application/octet-stream")
-        handler.send_header("Content-Length", str(len(payload)))
-        # Snapshot is regenerated on every successful build; long-cache
-        # would serve a stale graph after a rebuild. Use a weak ETag
-        # off the mtime so a client can revalidate cheaply.
-        handler.send_header("Cache-Control", "no-cache")
-        handler.send_header("ETag", f'W/"{int(st.st_mtime)}-{st.st_size}"')
-        handler.end_headers()
-        handler.wfile.write(payload)
-    except Exception as e:
-        send_json_error(handler, e)
-
-
 def serve_graph_progress(handler, store=None) -> None:
     """GET /api/graph/progress — background-build progress snapshot.
 
@@ -349,6 +304,49 @@ def serve_graph_phase(handler) -> None:
                     except ValueError:
                         pass
         send_json_ok(handler, get_phase_payload(name, offset=offset, limit=limit))
+    except Exception as e:
+        send_json_error(handler, e)
+
+
+def serve_graph_node(handler, store) -> None:
+    """GET /api/graph/node?id=<node_id> — full record for one node.
+
+    The CXGB snapshot carries only 6 fields per node (id/kind/domain_id/
+    x/y/size) so the galaxy loads in ~30 ms. The rich detail panel fetches
+    the full record on click via this endpoint (on-demand drill) instead
+    of bloating the base graph. Resolves ``memory:<pg_id>`` and
+    ``entity:<pg_id>`` ids to their PG rows; other kinds return the id
+    parsed into {kind, label}. source: design 2026-05-31 — top-25k galaxy
+    + on-demand cold-tail drill.
+    """
+    from urllib.parse import unquote
+
+    try:
+        node_id = ""
+        if "?" in handler.path:
+            for p in handler.path.split("?", 1)[1].split("&"):
+                if p.startswith("id="):
+                    node_id = unquote(p[3:])
+        if not node_id:
+            send_json_ok(handler, {"error": "missing id"})
+            return
+
+        kind, _, raw = node_id.partition(":")
+        record: dict | None = None
+        if kind == "memory" and raw.isdigit() and hasattr(store, "get_memory"):
+            record = store.get_memory(int(raw))
+        elif kind == "entity" and raw.isdigit() and hasattr(store, "get_entity_by_id"):
+            record = store.get_entity_by_id(int(raw))
+
+        send_json_ok(
+            handler,
+            {
+                "id": node_id,
+                "kind": kind or "unknown",
+                "found": record is not None,
+                "record": record or {},
+            },
+        )
     except Exception as e:
         send_json_error(handler, e)
 

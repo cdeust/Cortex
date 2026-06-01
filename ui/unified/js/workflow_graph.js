@@ -22,6 +22,7 @@
     domain: 26, tool_hub: 14, agent: 10, skill: 10, command: 8,
     hook: 9, memory: 7, discussion: 8, entity: 6, file: 5, mcp: 12,
     symbol: 2,
+    session: 16, prompt: 9, action: 6,
   };
   var KIND_COLOR = {
     domain: '#FCD34D',     // gold hub
@@ -36,6 +37,9 @@
     entity: '#50B0C8',     // teal
     file: '#06B6D4',       // cyan fallback — primary-tool color overrides
     symbol: '#64748B',     // slate — inherits parent-file color via node.color
+    session: '#FCD34D',    // session hub (gold)
+    prompt: '#22D3EE',     // user prompt (cyan)
+    action: '#94A3B8',     // tool action (slate; per-tool color via node.color)
   };
   // Radial hierarchy inside each domain cloud — FIVE concentric/sector levels:
   //   L1 setup  (skills/hooks/commands/agents)   @ r = SETUP_R   front sector

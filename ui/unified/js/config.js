@@ -97,6 +97,10 @@ JUG.ZOOM_LEVELS = {
 JUG.STRUCTURAL_TYPES = { 'root': true, 'category': true, 'domain': true, 'agent': true, 'type-group': true, 'topic': true, 'bridge-entity': true };
 
 JUG.getNodeColor = function(node) {
+  if (!node) return '#00d2ff';
+  // Trace nodes (session/prompt/action) carry their own color and have
+  // no isGlobal/storeType fields — short-circuit to it.
+  if (node.color) return node.color;
   if (node.isGlobal) return '#8B6914';
   if (node.type === 'memory') {
     // Memory color is set by heat gradient in the backend

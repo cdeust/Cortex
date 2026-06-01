@@ -23,19 +23,19 @@
       });
     });
 
-    // Knowledge is the default landing view — at high N the graph
-    // payload + force simulation can freeze the browser, so we land
-    // on the lazy-loaded Knowledge tab. Users can still click Graph;
-    // the in-page warning banner above explains the trade-off.
+    // Trace is the default landing view — the live, domain-split
+    // execution-trace graph loads only ~7 domain hubs up-front (each
+    // level fetched live on expand), so the old high-N freeze that
+    // forced a Knowledge landing no longer applies. Honour the view
+    // declared in state.js (default 'trace') rather than hard-forcing.
     setTimeout(function() {
+      var landing = (JUG.state && JUG.state.activeView) || 'trace';
       JUG.state.activeView = '_init';
-      JUG.state.activeView = 'knowledge';
-      toggleFilterBarVisibility('knowledge');
-      _toggleGraphWarn('knowledge');
-      // Sync the active class on the buttons (HTML hard-codes
-      // active=graph; flip it to match the runtime default).
+      JUG.state.activeView = landing;
+      toggleFilterBarVisibility(landing);
+      _toggleGraphWarn(landing);
       viewBtns.forEach(function(b) {
-        b.classList.toggle('active', b.dataset.view === 'knowledge');
+        b.classList.toggle('active', b.dataset.view === landing);
       });
     }, 0);
 

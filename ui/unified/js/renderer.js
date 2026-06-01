@@ -258,7 +258,10 @@
     var infoPanel = document.getElementById('info-panel');
     var legend = document.getElementById('legend');
     var statusBar = document.getElementById('status-bar');
-    var isGraph = e.value === 'graph';
+    // Trace shares the graph canvas + force renderer (it emits
+    // workflow_graph.v1-shaped nodes), so treat it like the Graph view
+    // for container/panel visibility.
+    var isGraph = e.value === 'graph' || e.value === 'trace';
 
     if (graphContainer) graphContainer.style.display = isGraph ? 'block' : 'none';
     if (infoPanel) infoPanel.style.display = isGraph ? '' : 'none';
