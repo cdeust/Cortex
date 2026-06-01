@@ -16,6 +16,7 @@
 
   function isWorkflowGraph(data) {
     if (!data || !Array.isArray(data.nodes) || data.nodes.length === 0) return false;
+    if (data.meta && data.meta.schema === 'trace.v1') return true;
     if (data.meta && data.meta.schema === 'workflow_graph.v1') return true;
     for (var i = 0; i < Math.min(data.nodes.length, 50); i++) {
       var k = data.nodes[i].kind;
@@ -76,6 +77,12 @@
     try {
       var wrapper = ensureWrapper();
       if (!wrapper) { console.warn(LOG, 'no #graph-container'); return false; }
+      // Mark the D3 workflow-graph as THE active renderer so graph.js's
+      // appendGraphDelta stops also rebuilding the legacy force-graph on
+      // every update. Without this both renderers ran on every delta
+      // (double work) — the bug the audit surfaced. This is the single
+      // point where D3 takes over the canvas.
+      if (window.JUG) JUG.__wfgActive = true;
       hideLegacyRenderer();
       if (_handle && typeof _handle.destroy === 'function') {
         try { _handle.destroy(); } catch (_) {}
@@ -138,7 +145,11 @@
     if (JUG.state && isWorkflowGraph(JUG.state.lastData)) render(JUG.state.lastData);
 
     JUG.on('state:activeView', function (ev) {
-      if (ev && ev.value === 'graph') {
+      // The Trace view (default) renders through the SAME workflow-graph
+      // wrapper as the legacy Graph view did, so it must show the wrapper
+      // + reflow exactly the same way. Without this the bridge renders
+      // into a hidden div and the user sees only the base node.
+      if (ev && (ev.value === 'graph' || ev.value === 'trace')) {
         var w = document.getElementById(_wrapperId);
         if (w) w.style.display = 'block';
         hideLegacyRenderer();

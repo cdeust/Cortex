@@ -47,6 +47,14 @@
     JUG._existingIdSet = new Set();
     JUG._existingEdgeSet = new Set();
     _expanded = Object.create(null);
+    // Seed lastData with the TRACE schema so the workflow-graph bridge
+    // hands trace data back to the force-graph renderer (tree-branching)
+    // instead of overlaying its radial-galaxy canvas. appendGraphDelta
+    // only seeds meta when lastData is null, so set it here first.
+    JUG.state.lastData = {
+      nodes: [], edges: [], links: [],
+      meta: { schema: 'trace.v1', source: 'trace' },
+    };
     if (typeof JUG.setGraphData === 'function') {
       // renderer.setGraphData(nodes, links) — two ARRAY args, not an object.
       JUG.setGraphData([], []);

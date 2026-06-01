@@ -108,6 +108,13 @@
     calls: 24,                           // caller ↔ callee tight
     imports: 60,                         // short effective length — gain-bounded
     member_of: 10,                       // method ↔ class tight
+    // Trace neural cloud: session sits out from the hub; a session's
+    // events cluster tight around it; files sit a short hop from their
+    // action so shared files visibly bridge multiple actions.
+    has_session: 90,
+    step: 34,
+    next: 28,
+    read: 30, edit: 30, write: 30, run: 30,
   };
   var EDGE_STRENGTH = {
     in_domain: 0.0,                      // layout is slot-anchored; links = slack
@@ -124,6 +131,14 @@
     calls: 0.12,                         // halved
     imports: 0.04,                       // 4.5× gain cut — no runaway resonance
     member_of: 0.60,
+    // Trace neural cloud: link forces gently bind connected nodes so the
+    // structure reads (session→its work, action→its files) while charge
+    // repulsion keeps the cloud spread. Moderate strengths — strong
+    // enough to cluster a session's work, soft enough not to collapse.
+    has_session: 0.20,
+    step: 0.15,
+    next: 0.25,
+    read: 0.30, edit: 0.30, write: 0.30, run: 0.30,
   };
   var CROSS_DOMAIN_DISTANCE = 260;
   var CROSS_DOMAIN_STRENGTH = 0.02;
@@ -491,6 +506,18 @@
     var byId = {};
     nodes.forEach(function (n) { byId[n.id] = n; });
     var domains = nodes.filter(function (n) { return n.kind === 'domain'; });
+    // Trace graphs (domain → session → chain → file) are a tree, not the
+    // galaxy's L1–L6 radial shells. Detect via the active view OR the
+    // data schema OR trace-only kinds — on a fresh load only domains are
+    // present (no session/action yet), so kind-sniffing alone would
+    // wrongly draw the galaxy rings on the default trace screen.
+    var _view = (window.JUG && JUG.state && JUG.state.activeView) || '';
+    var _schema = (window.JUG && JUG.state && JUG.state.lastData &&
+                   JUG.state.lastData.meta && JUG.state.lastData.meta.schema) || '';
+    var isTrace = _view === 'trace' || _schema === 'trace.v1' || nodes.some(function (n) {
+      var k = n.kind || n.type;
+      return k === 'session' || k === 'action' || k === 'prompt';
+    });
 
     var cx = width / 2, cy = height / 2;
     // Each domain's outer shell is roughly FILE_R + cushion; Fibonacci
@@ -516,7 +543,9 @@
     nodes.forEach(function (n) {
       if (n.kind === 'domain') { domainOf[n.id] = n.id; return; }
       if (n.domain && byId[n.domain] && byId[n.domain].kind === 'domain') domainOf[n.id] = n.domain;
-      else if (n.domain_id && byId[n.domain_id]) domainOf[n.id] = n.domain_id;
+      else if (n.domain_id && byId[n.domain_id] && byId[n.domain_id].kind === 'domain') {
+        domainOf[n.id] = n.domain_id;
+      }
     });
     edges.forEach(function (e) {
       if (e.kind !== 'in_domain') return;
@@ -525,6 +554,24 @@
       if (s.kind === 'domain' && !domainOf[t.id]) domainOf[t.id] = s.id;
       if (t.kind === 'domain' && !domainOf[s.id]) domainOf[s.id] = t.id;
     });
+    // Trace edges carry the domain DOWN the chain: domain→session
+    // (has_session), session→event + event→event (step / next), and
+    // action→file (read/edit/write/run). Iterate to a fixed point so a
+    // file reached only via action→file still resolves to its domain.
+    var _traceEdgeKinds = { has_session: 1, step: 1, next: 1,
+      read: 1, edit: 1, write: 1, run: 1 };
+    for (var _pass = 0; _pass < 6; _pass++) {
+      var _changed = false;
+      for (var _ei = 0; _ei < edges.length; _ei++) {
+        var te = edges[_ei];
+        if (!_traceEdgeKinds[te.kind]) continue;
+        var ss = typeof te.source === 'object' ? te.source.id : te.source;
+        var tt = typeof te.target === 'object' ? te.target.id : te.target;
+        if (domainOf[ss] && !domainOf[tt]) { domainOf[tt] = domainOf[ss]; _changed = true; }
+        else if (domainOf[tt] && !domainOf[ss]) { domainOf[ss] = domainOf[tt]; _changed = true; }
+      }
+      if (!_changed) break;
+    }
 
     // Parent file per symbol — drives the symbol-petal clustering.
     // Prefer `defined_in` edges; fall back to `path` string match.
@@ -590,7 +637,11 @@
       anchors: anchors, domainOf: domainOf, primaryHub: primaryHub,
       parentFile: parentFile,
       degree: degree, adj: adj, slotOf: slotOf,
-      shells: SHELL_LEVELS, sideShells: [
+      isTrace: isTrace,
+      // Trace has no L1–L6 shells or discussion/memory side lanes —
+      // suppress them so the canvas draws a clean tree.
+      shells: isTrace ? [] : SHELL_LEVELS,
+      sideShells: isTrace ? [] : [
         { key: 'L4', r: DISC_R, label: 'L4 discussions', angle: SECTOR_SIDE_ANGLE },
         { key: 'L5', r: MEM_R,  label: 'L5 memories',    angle: -SECTOR_SIDE_ANGLE },
       ], cx: cx, cy: cy, baseR: baseR,
@@ -645,6 +696,56 @@
       // For domains near the center the outward axis is unstable — bias upward.
       if (Math.hypot(a.x - cx, a.y - cy) < 5) outward = -Math.PI / 2;
       var g = groups[domId];
+
+      // ── Trace layout: domain → neural hub-and-spoke ──
+      // Children radiate ORGANICALLY outward from their parent — sessions
+      // ring the domain hub, then each session's prompt/action nodes form
+      // a sub-cloud around it, with files branching off the actions that
+      // touched them. No pinning, no timeline: the force simulation
+      // (has_session / step / next / verb link forces) does the layout,
+      // seeded here so it settles into a clean radial cloud instead of a
+      // single overlapping ball. Mirrors how the galaxy seeds symbols
+      // along the outward ray then lets forces spread them.
+      var sessions = g.session || [];
+      var sessAngle = {};
+      if (sessions.length) {
+        var sArc = Math.PI * 2;   // full ring around the hub
+        sessions.forEach(function (s, i) {
+          var t = outward + (i / sessions.length) * sArc;
+          sessAngle[s.id] = t;
+          var r = SETUP_R + 50;
+          slotOf[s.id] = { x: a.x + r * Math.cos(t), y: a.y + r * Math.sin(t) };
+        });
+      }
+      // prompt / action: seed in a sub-cloud around their OWN session
+      // hub (outward from the hub, along that session's angle) so each
+      // session's work clusters together rather than mixing.
+      ['prompt', 'action'].forEach(function (kind) {
+        (g[kind] || []).forEach(function (n) {
+          if (slotOf[n.id]) return;
+          var sid = 'session:' + (n.session_id || '');
+          var sslot = slotOf[sid];
+          var base = sslot || { x: a.x, y: a.y };
+          var theta = (sessAngle[sid] != null ? sessAngle[sid] : outward);
+          var h = 0, ids = String(n.id);
+          for (var ci = 0; ci < ids.length; ci++) h = ((h << 5) - h + ids.charCodeAt(ci)) | 0;
+          var spread = 40 + (Math.abs(h) % 90);
+          var jitter = theta + ((Math.abs(h >> 3) % 100) / 100 - 0.5) * 1.4;
+          slotOf[n.id] = { x: base.x + spread * Math.cos(jitter),
+                           y: base.y + spread * Math.sin(jitter) };
+        });
+      });
+      // Files: seed near the domain's outer edge; verb link force pulls
+      // each toward the action(s) that touched it, so shared files sit
+      // between their actions (the "all directions" connectivity).
+      (g.file || []).forEach(function (n) {
+        if (slotOf[n.id]) return;
+        var h = 0, ids = String(n.id);
+        for (var ci = 0; ci < ids.length; ci++) h = ((h << 5) - h + ids.charCodeAt(ci)) | 0;
+        var t = outward + ((Math.abs(h) % 1000) / 1000) * Math.PI * 2;
+        var r = SETUP_R + 130 + (Math.abs(h >> 3) % 80);
+        slotOf[n.id] = { x: a.x + r * Math.cos(t), y: a.y + r * Math.sin(t) };
+      });
 
       // L2: tool_hubs at fixed per-tool angles within the setup sector.
       var hubAngle = {};

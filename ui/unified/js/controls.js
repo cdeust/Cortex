@@ -180,7 +180,9 @@
     var legend = document.getElementById('legend');
     if (infoPanel) infoPanel.style.display = isFullscreen ? 'none' : '';
     if (statusBar) statusBar.style.display = isFullscreen ? 'none' : '';
-    if (legend) legend.style.display = isFullscreen ? 'none' : '';
+    // The galaxy legend is meaningless in the trace tree — hide it for
+    // both fullscreen views and the trace view.
+    if (legend) legend.style.display = (isFullscreen || view === 'trace') ? 'none' : '';
 
     // Hide filter controls (not the view toggle) for non-graph views
     var filterBtnsRow = document.querySelectorAll('#filter-bar .filter-btn[data-filter]');

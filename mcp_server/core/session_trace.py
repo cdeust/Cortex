@@ -110,7 +110,13 @@ def _file_node(path: str) -> dict:
         "type": "file",
         "label": base,
         "path": path,
-        "collapsed": True,  # expandable into AST/impact/git (L3)
+        # NOTE: no ``collapsed`` flag. The force-graph renderer hides any
+        # node with ``collapsed`` unless its ``_parentId`` is in the
+        # expanded set; trace controls visibility by what it FETCHES
+        # (file nodes only arrive when a session is expanded), so a
+        # collapsed flag here would make every file invisible. The L3
+        # AST/impact/git drill is triggered on click, not via this flag.
+        "drillable": True,
     }
 
 
@@ -168,6 +174,8 @@ def build_chain(
                     "label": _short(text, 60),
                     "full": text[:4000],
                     "ts": ts,
+                    "seq": step,  # execution order — drives the timeline spine
+                    "session_id": session_id,
                     "domain_id": session_node,
                 }
             )
@@ -187,6 +195,8 @@ def build_chain(
                     "tool": tool,
                     "label": _action_label(tool, inp),
                     "ts": ts,
+                    "seq": step,  # execution order — drives the timeline spine
+                    "session_id": session_id,
                     "domain_id": session_node,
                 }
             )

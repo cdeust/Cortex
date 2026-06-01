@@ -117,7 +117,12 @@ def list_domains() -> list[dict[str, Any]]:
                 "label": project_dir_to_label(pdir.name),
                 "domain_id": did,
                 "session_count": len(files),
-                "collapsed": True,
+                # ``expandable`` (not ``collapsed``): the force-graph
+                # renderer hides nodes flagged ``collapsed`` unless their
+                # parent is in its expanded-set, which trace doesn't use
+                # (it fetches children on click). ``collapsed`` here would
+                # hide every domain hub.
+                "expandable": True,
             }
         )
     return out
@@ -224,7 +229,7 @@ def list_sessions(domain_id: str) -> dict[str, Any]:
                     "last_activity": meta["last_ts"],
                     "git_branch": meta["git_branch"],
                     "action_count": meta["action_count"],
-                    "collapsed": True,
+                    "expandable": True,
                 }
             )
             edges.append(
