@@ -131,14 +131,14 @@
     calls: 0.12,                         // halved
     imports: 0.04,                       // 4.5× gain cut — no runaway resonance
     member_of: 0.60,
-    // Trace neural cloud: link forces gently bind connected nodes so the
-    // structure reads (session→its work, action→its files) while charge
-    // repulsion keeps the cloud spread. Moderate strengths — strong
-    // enough to cluster a session's work, soft enough not to collapse.
-    has_session: 0.20,
-    step: 0.15,
-    next: 0.25,
-    read: 0.30, edit: 0.30, write: 0.30, run: 0.30,
+    // Trace: layout is SLOT-DRIVEN (per-session sectors in computeSlots).
+    // Link strengths are ~0 so the slot force is uncontested — exactly how
+    // the galaxy keeps structural edges (in_domain/tool_used_file) at 0 so
+    // dots don't collapse into a ball. The edges still DRAW as lines.
+    has_session: 0.0,
+    step: 0.0,
+    next: 0.0,
+    read: 0.0, edit: 0.0, write: 0.0, run: 0.0,
   };
   var CROSS_DOMAIN_DISTANCE = 260;
   var CROSS_DOMAIN_STRENGTH = 0.02;
@@ -697,53 +697,60 @@
       if (Math.hypot(a.x - cx, a.y - cy) < 5) outward = -Math.PI / 2;
       var g = groups[domId];
 
-      // ── Trace layout: domain → neural hub-and-spoke ──
-      // Children radiate ORGANICALLY outward from their parent — sessions
-      // ring the domain hub, then each session's prompt/action nodes form
-      // a sub-cloud around it, with files branching off the actions that
-      // touched them. No pinning, no timeline: the force simulation
-      // (has_session / step / next / verb link forces) does the layout,
-      // seeded here so it settles into a clean radial cloud instead of a
-      // single overlapping ball. Mirrors how the galaxy seeds symbols
-      // along the outward ray then lets forces spread them.
+      // ── Trace layout: domain → per-session COMPACT SUB-CLUSTERS ──
+      // Each session becomes a tight disk of its own work, placed on a
+      // ring around the domain hub. ALL of a session's events (prompt /
+      // action / file) pack around that session's sub-center in a
+      // phyllotaxis (sunflower) spiral — a dense, even, NON-overlapping
+      // disk, exactly the compactness the galaxy got from orbiting a hub.
+      // No marching-outward rows: cluster radius grows with sqrt(count),
+      // so even a 600-event session stays a bounded blob you can read as
+      // "this session's work", clearly separated from other sessions.
       var sessions = g.session || [];
-      var sessAngle = {};
-      if (sessions.length) {
-        var sArc = Math.PI * 2;   // full ring around the hub
-        sessions.forEach(function (s, i) {
-          var t = outward + (i / sessions.length) * sArc;
-          sessAngle[s.id] = t;
-          var r = SETUP_R + 50;
-          slotOf[s.id] = { x: a.x + r * Math.cos(t), y: a.y + r * Math.sin(t) };
-        });
-      }
-      // prompt / action: seed in a sub-cloud around their OWN session
-      // hub (outward from the hub, along that session's angle) so each
-      // session's work clusters together rather than mixing.
-      ['prompt', 'action'].forEach(function (kind) {
+      // Group every event under its session.
+      var bySession = {};   // sid -> [nodes]
+      ['prompt', 'action', 'file'].forEach(function (kind) {
         (g[kind] || []).forEach(function (n) {
-          if (slotOf[n.id]) return;
           var sid = 'session:' + (n.session_id || '');
-          var sslot = slotOf[sid];
-          var base = sslot || { x: a.x, y: a.y };
-          var theta = (sessAngle[sid] != null ? sessAngle[sid] : outward);
-          var h = 0, ids = String(n.id);
-          for (var ci = 0; ci < ids.length; ci++) h = ((h << 5) - h + ids.charCodeAt(ci)) | 0;
-          var spread = 40 + (Math.abs(h) % 90);
-          var jitter = theta + ((Math.abs(h >> 3) % 100) / 100 - 0.5) * 1.4;
-          slotOf[n.id] = { x: base.x + spread * Math.cos(jitter),
-                           y: base.y + spread * Math.sin(jitter) };
+          (bySession[sid] = bySession[sid] || []).push(n);
         });
       });
-      // Files: seed near the domain's outer edge; verb link force pulls
-      // each toward the action(s) that touched it, so shared files sit
-      // between their actions (the "all directions" connectivity).
+      // Ring radius for session sub-centers: scale so the biggest cluster
+      // disk fits between neighbours without colliding.
+      var DOT = 13;                       // ~node spacing in the spiral
+      var GOLDEN = Math.PI * (3 - Math.sqrt(5));
+      function clusterRadius(count) { return DOT * Math.sqrt(Math.max(count, 1)) + 14; }
+      var maxCount = 0;
+      sessions.forEach(function (s) {
+        maxCount = Math.max(maxCount, (bySession['session:' + (s.session_id || '')] || []).length);
+      });
+      var ringR = SETUP_R + 60 + clusterRadius(maxCount) * 1.15;
+      sessions.forEach(function (s, i) {
+        var sid = 'session:' + (s.session_id || '');
+        var theta = outward + (i + 0.5) * (Math.PI * 2 / Math.max(sessions.length, 1));
+        var scx = a.x + ringR * Math.cos(theta);
+        var scy = a.y + ringR * Math.sin(theta);
+        slotOf[s.id] = { x: scx, y: scy };   // session hub at the cluster center
+        var items = (bySession[sid] || []).slice();
+        // stable order: prompts, then actions, then files (by seq if any)
+        items.sort(function (p, q) {
+          var ps = (p.seq != null ? p.seq : 1e9), qs = (q.seq != null ? q.seq : 1e9);
+          return ps - qs;
+        });
+        items.forEach(function (n, k) {
+          // phyllotaxis: r = c·√k, angle = k·goldenAngle → even packing
+          var rr = DOT * Math.sqrt(k + 0.5);
+          var aa = (k + 1) * GOLDEN;
+          slotOf[n.id] = { x: scx + rr * Math.cos(aa), y: scy + rr * Math.sin(aa) };
+        });
+      });
+      // Files with no resolvable session: small ring just past the
+      // session band; verb links draw the connection to their action.
+      var orphanI = 0;
       (g.file || []).forEach(function (n) {
         if (slotOf[n.id]) return;
-        var h = 0, ids = String(n.id);
-        for (var ci = 0; ci < ids.length; ci++) h = ((h << 5) - h + ids.charCodeAt(ci)) | 0;
-        var t = outward + ((Math.abs(h) % 1000) / 1000) * Math.PI * 2;
-        var r = SETUP_R + 130 + (Math.abs(h >> 3) % 80);
+        var t = outward + (orphanI++) * GOLDEN;
+        var r = ringR + clusterRadius(maxCount) + 30 + (orphanI % 5) * 12;
         slotOf[n.id] = { x: a.x + r * Math.cos(t), y: a.y + r * Math.sin(t) };
       });
 

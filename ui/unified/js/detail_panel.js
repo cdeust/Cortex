@@ -138,6 +138,18 @@
     var content = document.getElementById('detail-content');
     if (!panel || !content || !data) return;
 
+    // Trace nodes get their own renderer (header + expandable sections),
+    // in THIS one panel. Galaxy-memory rendering below is bypassed.
+    var _k = data.kind || data.type;
+    if (_k === 'domain' || _k === 'session' || _k === 'action' ||
+        _k === 'prompt' || _k === 'file') {
+      content.innerHTML = JUG._traceDetail.build(data);
+      panel.classList.add('open');
+      panel.classList.remove('minimized');
+      JUG._traceDetail.wire(content, data);
+      return;
+    }
+
     var col = JUG.getNodeColor(data);
     var typeLabel = JUG.NODE_LABELS[data.type] || data.type || data.kind || '';
     var edges = getConnections(data);
@@ -238,6 +250,16 @@
   var _enrichCache = {};
   var _lastSelectedId = null;     // closure-tracked; avoids depending on JUG state field name
   JUG.on('graph:selectNode', function(node) {
+    // Trace nodes (domain/session/action/prompt/file) render in this SAME
+    // panel via the trace-aware openDetailPanel branch — no second panel,
+    // no galaxy-memory PG enrichment.
+    var _k = node && (node.kind || node.type);
+    if (_k === 'domain' || _k === 'session' || _k === 'action' ||
+        _k === 'prompt' || _k === 'file') {
+      openDetailPanel(node);
+      _lastSelectedId = node && node.id;
+      return;
+    }
     openDetailPanel(node);
     if (!node || !node.id) return;
     _lastSelectedId = node.id;

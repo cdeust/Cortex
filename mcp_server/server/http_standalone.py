@@ -147,6 +147,11 @@ def _route_unified_get(
 
         serve_trace_file(handler)
         return
+    if path_no_qs == "/api/trace/impact":
+        from mcp_server.server.http_standalone_trace import serve_trace_impact
+
+        serve_trace_impact(handler)
+        return
     if path_no_qs == "/api/graph/node":
         from mcp_server.server.http_standalone_endpoints import serve_graph_node
 

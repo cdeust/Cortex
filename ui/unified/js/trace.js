@@ -124,23 +124,111 @@
         })
         .catch(function (e) { _expanded[node.id] = false; _setStatus('Sessions failed: ' + e.message); });
     } else if (kind === 'session') {
+      // Chain renders ON the canvas as the session's grouped sub-cluster
+      // (computeSlots gives each session an exclusive sector). Detail goes
+      // in the single detail panel (detail_panel.js). No node-list panel.
       _expanded[node.id] = true;
       var sid = node.session_id || String(node.id).replace(/^session:/, '');
       _setStatus('Loading chain...');
       _fetchJSON('/api/trace/chain?session=' + encodeURIComponent(sid))
         .then(function (d) {
-          _apply(d);
           var m = d.meta || {};
-          // Register this session for live tailing.
-          _liveSince[node.id] = (typeof d.next_since === 'number')
-            ? d.next_since : (m.event_count || 0);
-          _ensureLiveTimer();
-          _setStatus('chain - ' + (m.event_count || 0) + ' steps (live)');
+          _apply(d);            // chain nodes/edges → canvas, grouped
+          _setStatus('chain - ' + (m.event_count || 0) + ' steps');
         })
         .catch(function (e) { _expanded[node.id] = false; _setStatus('Chain failed: ' + e.message); });
-    } else if (kind === 'file') {
-      _drillFile(node);
     }
+    // file click: the impact diagram + detail are handled by the
+    // detail-panel "Impact" section (detail_panel.js), not here.
+  }
+
+  // Tool→color used by both the canvas (via workflow_graph KIND_COLOR) and
+  // the impact diagram / flow panel.
+  var TOOL_DOT = {
+    Read: '#38BDF8', NotebookRead: '#38BDF8', Grep: '#7DD3FC', Glob: '#7DD3FC',
+    Edit: '#FBBF24', MultiEdit: '#FBBF24', NotebookEdit: '#FBBF24',
+    Write: '#34D399', Bash: '#F87171', Task: '#EC4899', Agent: '#EC4899',
+    WebFetch: '#A78BFA', WebSearch: '#A78BFA',
+  };
+
+  // ── Impact / dependency DIAGRAM (flow panel) ─────────────────────────
+  // A developer's blast-radius view for a file: what it imports/calls
+  // (downstream) and what calls/imports it (upstream), grouped, with the
+  // file in the center. Built from /api/trace/impact (Cortex code-graph).
+  // Exposed as window.TraceView.showImpact(path) so the detail-panel
+  // "Impact" section can open it.
+  var EDGE_KIND_LABEL = {
+    imports: 'imports', calls: 'calls', member_of: 'member', uses: 'uses',
+  };
+
+  function _renderImpact(path) {
+    var panel = document.getElementById('flow-panel');
+    var content = document.getElementById('flow-content');
+    var title = document.getElementById('flow-title');
+    if (!panel || !content) return;
+    if (title) title.textContent = 'Impact · ' + _short(path.split('/').pop(), 32);
+    content.innerHTML = '<div class="impact-loading">analyzing dependencies…</div>';
+    panel.classList.add('open');
+    var detail = document.getElementById('detail-panel');
+    panel.classList.toggle('with-detail', !!(detail && detail.classList.contains('open')));
+
+    _fetchJSON('/api/trace/impact?path=' + encodeURIComponent(path))
+      .then(function (d) {
+        if (!d || !d.available) {
+          content.innerHTML = '<div class="impact-loading">No dependency data · '
+            + _esc((d && (d.reason || d.error)) || 'not indexed') + '</div>';
+          return;
+        }
+        content.innerHTML = _impactHtml(d);
+        // click a box → select that file/symbol on the canvas if present
+        content.querySelectorAll('.impact-box[data-file]').forEach(function (el) {
+          el.addEventListener('click', function () {
+            var fp = el.getAttribute('data-file');
+            var nid = 'file:' + fp;
+            var nd = (JUG.state.lastData.nodes || []).filter(function (x) { return x.id === nid; })[0];
+            if (nd && JUG.emit) JUG.emit('graph:selectNode', nd);
+          });
+        });
+      })
+      .catch(function (e) {
+        content.innerHTML = '<div class="impact-loading">Impact failed: ' + _esc(e.message) + '</div>';
+      });
+  }
+
+  function _impactGroup(title, items, dir) {
+    if (!items || !items.length) return '';
+    var h = '<div class="impact-group"><div class="impact-group-title">'
+      + (dir === 'up' ? '▲ ' : dir === 'down' ? '▼ ' : '') + _esc(title)
+      + ' <span class="impact-count">' + items.length + '</span></div>';
+    items.slice(0, 60).forEach(function (it) {
+      var kindLabel = EDGE_KIND_LABEL[it.kind] || it.kind || '';
+      var conf = (it.confidence != null && it.confidence < 1)
+        ? ' <span class="impact-conf">' + Math.round(it.confidence * 100) + '%</span>' : '';
+      h += '<div class="impact-box" data-file="' + _esc(it.file || '') + '">'
+        + '<span class="impact-arrow">' + (dir === 'up' ? '←' : dir === 'down' ? '→' : '·') + '</span>'
+        + '<span class="impact-name">' + _esc(it.label || it.name || it.file || '?') + '</span>'
+        + '<span class="impact-edge">' + _esc(kindLabel) + conf + '</span>'
+        + '</div>';
+    });
+    if (items.length > 60) h += '<div class="impact-loading">… ' + (items.length - 60) + ' more</div>';
+    return h + '</div>';
+  }
+
+  function _impactHtml(d) {
+    var center = d.center || {};
+    var h = '<div class="impact-center">' + _esc(center.label || center.file || 'this file') + '</div>';
+    h += _impactGroup('Calls / imports (downstream)', d.downstream, 'down');
+    h += _impactGroup('Called / imported by (upstream)', d.upstream, 'up');
+    h += _impactGroup('Defines', d.members, 'flat');
+    if (!(d.downstream || []).length && !(d.upstream || []).length && !(d.members || []).length) {
+      h += '<div class="impact-loading">No dependencies found in the code-graph.</div>';
+    }
+    return h;
+  }
+
+  function _closeFlow() {
+    var panel = document.getElementById('flow-panel');
+    if (panel) panel.classList.remove('open');
   }
 
   // ── Live tail: poll expanded sessions + domains for new work ──────────
@@ -196,59 +284,15 @@
     else { _stopLiveTimer(); _setStatus('○ live paused'); }
   }
 
-  // ── L3 file drill: AST symbols + git history + impact ─────────────────
-  function _drillFile(node) {
-    var path = node.path || String(node.id).replace(/^file:/, '');
-    _fetchJSON('/api/trace/file?path=' + encodeURIComponent(path))
-      .then(function (d) { _renderFileDrill(node, d); })
-      .catch(function (e) { _setStatus('File drill failed: ' + e.message); });
-  }
-
   function _esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  function _renderFileDrill(node, d) {
-    var content = document.getElementById('detail-content');
-    if (!content) return;
-    var git = (d && d.git) || {};
-    var ast = (d && d.ast) || {};
-    var h = '<div class="section-title">File - ' + _esc(node.label || '') + '</div>';
-
-    h += '<div class="section-title">Git</div>';
-    if (git.available) {
-      h += '<div class="conn-item">' + _esc(git.diff_type || 'unknown')
-        + ' - ' + ((git.lines || []).length) + ' lines'
-        + (git.truncated ? ' (truncated)' : '') + '</div>';
-    } else {
-      h += '<div class="conn-item" style="color:var(--fg-3)">no git data</div>';
-    }
-
-    h += '<div class="section-title">AST symbols</div>';
-    var syms = ast && ast.available ? ast.symbols : null;
-    var rows = Array.isArray(syms) ? syms
-      : (syms && Array.isArray(syms.rows) ? syms.rows
-      : (syms && Array.isArray(syms.nodes) ? syms.nodes : []));
-    if (ast && ast.available && rows.length) {
-      rows.slice(0, 40).forEach(function (s) {
-        var nm = s.qualified_name || s.name || s.id || (s.properties && s.properties.name) || '?';
-        h += '<div class="conn-item"><span class="conn-label">' + _esc(nm) + '</span></div>';
-      });
-      if (rows.length > 40) h += '<div class="conn-item">... ' + (rows.length - 40) + ' more</div>';
-    } else {
-      var reason = (ast && (ast.reason || ast.error)) || 'not indexed';
-      h += '<div class="conn-item" style="color:var(--fg-3)">no AST - ' + _esc(reason) + '</div>';
-    }
-
-    var prev = content.querySelector('.trace-file-drill');
-    if (prev) prev.remove();
-    var section = document.createElement('div');
-    section.className = 'trace-file-drill';
-    section.innerHTML = h;
-    content.appendChild(section);
-  }
-
+  // ── Trace detail panel: kind-dispatched rich info ────────────────────
+  // Owns #detail-content for trace nodes. domain → counts; session →
+  // linked conversation + chain summary; action → causal context + files;
+  // prompt → full text; file → git diff + AST/impact.
   function _show() {
     var c = _container();
     if (c) c.style.display = '';
@@ -263,14 +307,24 @@
     _stopLiveTimer();   // don't poll while another view is active
   }
 
+  function _short(text, n) {
+    n = n || 60;
+    var s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+    return s.length > n ? s.slice(0, n - 1) + '…' : s;
+  }
+
   function _attach() {
     if (!window.JUG || !JUG.on) { setTimeout(_attach, 60); return; }
     JUG.on('state:activeView', function (ev) {
       if (ev && ev.value === 'trace') _show(); else _hide();
     });
+    // Detail is rendered by detail_panel.js (the single panel). Trace only
+    // drives canvas EXPANSION on select.
     JUG.on('graph:selectNode', function (node) {
       if (_mounted) _expand(node);
     });
+    var flowClose = document.getElementById('flow-close');
+    if (flowClose) flowClose.addEventListener('click', _closeFlow);
     if (JUG.state && JUG.state.activeView === 'trace') _show();
   }
 
@@ -285,5 +339,6 @@
     reload: function () { _booted = false; _boot(); },
     setLive: _setLive,
     isLive: function () { return _liveOn; },
+    showImpact: _renderImpact,   // detail-panel "Impact" section opens this
   };
 })();

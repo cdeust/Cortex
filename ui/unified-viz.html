@@ -203,6 +203,17 @@
   <div id="detail-content"></div>
 </div>
 
+<!-- Process-flow panel: a session's chain-of-call rendered top→bottom,
+     ordered by execution. Lives beside the detail panel; the chain is
+     NOT dumped onto the canvas (which stays the clean hub-and-spoke). -->
+<div id="flow-panel">
+  <div class="flow-header">
+    <span id="flow-title">Chain of work</span>
+    <button class="window-btn" id="flow-close" title="Close">&#x2715;</button>
+  </div>
+  <div id="flow-content"></div>
+</div>
+
 <div id="tooltip"></div>
 
 <div id="diff-modal">
@@ -445,6 +456,7 @@
 <script src="/js/detail_format.js?v=117ece5"></script>
 <script src="/js/detail_diff.js?v=117ece5"></script>
 <script src="/js/detail_panel.js?v=117ece5"></script>
+<script src="/js/trace_detail.js"></script>
 <script src="/js/discussion_detail.js?v=117ece5"></script>
 <script src="/js/memory_science.js?v=117ece5"></script>
 <script src="/js/timeline.js?v=117ece5"></script>

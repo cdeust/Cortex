@@ -206,9 +206,175 @@ def serve_trace_file(handler) -> None:
         send_json_error(handler, e)
 
 
+def _basename(p: str) -> str:
+    return (p or "").replace("\\", "/").rstrip("/").split("/")[-1]
+
+
+def _impact_for_graph(graph_path: str, rel_path: str) -> dict | None:
+    """Run the exact-path impact queries against ONE code-graph.
+
+    Returns ``{downstream, upstream, members}`` or None if the file has no
+    symbols in this graph (so the caller can try the next graph). Uses
+    targeted Cypher with a ``STARTS WITH '<rel>::'`` filter on
+    qualified_name — fast + exact (no cross-file collisions, no full-graph
+    label-pair enumeration). Edge kinds: calls (Function/Method), imports
+    (File→symbol), member (container→method).
+    """
+    from mcp_server.infrastructure.workflow_graph_source_ast import _as_list
+
+    # Reuse the warm AST source's pinned loop + persistent AP connection.
+    # A fresh APBridge + asyncio.run() per HTTP request collides with the
+    # warm bridge on the same AP subprocess (relationship MATCH queries
+    # silently returned 0 over HTTP while single-node MATCH worked). The
+    # source serializes every call onto one loop, which is reliable.
+    src = _get_ast_source()
+    loop_run = src._loop_owner.run  # noqa: SLF001
+    bridge = src._bridge            # noqa: SLF001
+
+    async def _run() -> dict | None:
+        if True:
+            async def q(cypher):
+                rows = await bridge.query_graph(graph_path, cypher)
+                return _as_list(rows)
+
+            # Does this graph even contain the file? (cheap gate)
+            present = await q(
+                "MATCH (f:File) WHERE f.id = '%s' RETURN f.id AS id LIMIT 1"
+                % rel_path.replace("'", "")
+            )
+            if not present:
+                return None
+
+            esc = rel_path.replace("'", "")
+            # downstream calls: a function defined in this file → callee
+            calls = await q(
+                "MATCH (s:Function)-[r:Calls_Function_Function]->(d:Function) "
+                "WHERE s.qualified_name STARTS WITH '%s::' "
+                "RETURN DISTINCT d.qualified_name AS name, r.confidence AS conf "
+                "LIMIT 200" % esc
+            )
+            # downstream imports: this File imports symbol
+            imports = await q(
+                "MATCH (f:File)-[r:Imports_File_Function]->(d:Function) "
+                "WHERE f.id = '%s' "
+                "RETURN DISTINCT d.qualified_name AS name, r.confidence AS conf "
+                "LIMIT 200" % esc
+            )
+            # upstream: who calls a function in this file
+            callers = await q(
+                "MATCH (s:Function)-[r:Calls_Function_Function]->(d:Function) "
+                "WHERE d.qualified_name STARTS WITH '%s::' "
+                "RETURN DISTINCT s.qualified_name AS name, r.confidence AS conf "
+                "LIMIT 200" % esc
+            )
+            # members: methods/functions defined in this file
+            members_rows = await q(
+                "MATCH (s:Function) WHERE s.qualified_name STARTS WITH '%s::' "
+                "RETURN DISTINCT s.qualified_name AS name LIMIT 200" % esc
+            )
+
+            def _file_of(qn):
+                return str(qn or "").partition("::")[0]
+
+            def _short_name(qn):
+                return str(qn or "").split("::")[-1]
+
+            def _conf(r):
+                try:
+                    return float(r.get("conf")) if r.get("conf") is not None else None
+                except (TypeError, ValueError):
+                    return None
+
+            downstream = []
+            for r in calls + imports:
+                nm = r.get("name")
+                if not nm:
+                    continue
+                downstream.append({
+                    "file": _file_of(nm), "name": nm, "label": _short_name(nm),
+                    "kind": "calls" if r in calls else "imports", "confidence": _conf(r),
+                })
+            upstream = [
+                {"file": _file_of(r.get("name")), "name": r.get("name"),
+                 "label": _short_name(r.get("name")), "kind": "calls",
+                 "confidence": _conf(r)}
+                for r in callers if r.get("name")
+            ]
+            members = [
+                {"file": rel_path, "name": r.get("name"),
+                 "label": _short_name(r.get("name")), "kind": "member",
+                 "confidence": None}
+                for r in members_rows if r.get("name")
+            ]
+            return {"downstream": downstream, "upstream": upstream, "members": members}
+
+    return loop_run(_run())
+
+
+def serve_trace_impact(handler) -> None:
+    """GET /api/trace/impact?path=<file> — dependency/impact subgraph.
+
+    Blast-radius for a file from the AP code-graph:
+      * downstream — what this file calls / imports (it depends on these)
+      * upstream   — what calls this file (these break if it changes)
+      * members    — symbols this file defines
+    Queries the FIRST code-graph that contains the file (exact File.id
+    match), so it hits the Cortex graph for a Cortex path rather than
+    scanning all 6 graphs. ``{available: False, reason}`` when off / not
+    indexed.
+    """
+    try:
+        from mcp_server.infrastructure import ap_bridge
+
+        path = _param(handler, "path")
+        if not path:
+            send_json_ok(handler, {"available": False, "reason": "missing path"})
+            return
+        if not ap_bridge.is_enabled():
+            send_json_ok(handler, {"available": False, "reason": "ap_disabled"})
+            return
+
+        rel = path.replace("\\", "/").lstrip("./")
+        # Several graphs may contain the same relative path (a stale legacy
+        # index AND the fresh Cortex code-graph). The first hit can be the
+        # stale one with members-only and no edges, so pick the RICHEST
+        # result (most call/import edges) across all graphs that have it.
+        result = None
+        best_edges = -1
+        for gp in ap_bridge.resolve_graph_paths():
+            try:
+                r = _impact_for_graph(gp, rel)
+            except Exception:
+                r = None
+            if r is None:
+                continue
+            n = len(r.get("downstream", [])) + len(r.get("upstream", [])) \
+                + len(r.get("members", []))
+            if n > best_edges:
+                best_edges = n
+                result = r
+
+        if result is None:
+            send_json_ok(handler, {
+                "available": False, "reason": "not_indexed", "path": path,
+                "center": {"file": path, "label": _basename(path)},
+            })
+            return
+
+        result.update({
+            "available": True, "path": path,
+            "center": {"file": path, "label": _basename(path)},
+            "meta": {"schema": "trace.v1", "level": 4},
+        })
+        send_json_ok(handler, result)
+    except Exception as e:
+        send_json_error(handler, e)
+
+
 __all__ = [
     "serve_trace_domains",
     "serve_trace_sessions",
     "serve_trace_chain",
     "serve_trace_file",
+    "serve_trace_impact",
 ]
