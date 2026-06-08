@@ -91,28 +91,36 @@ def _allowed_probe_roots() -> "list[str]":
     return roots
 
 
-def _under_allowed_root(p: "Path") -> bool:  # noqa: F821
-    """True iff ``p`` resolves inside any allowed probe root.
+def _contained_resolved(p: "str | Path") -> "Path | None":  # noqa: F821
+    """Resolve ``p`` and return it ONLY if it lands inside an allowed probe
+    root; otherwise ``None``.
 
-    Uses ``Path.resolve().is_relative_to()`` — the canonical, CodeQL-
-    recognised path-traversal sanitiser (CWE-22) — so the ``?name=`` /
-    ``?path=`` query data can never reach a filesystem op that escapes
-    ``$HOME`` / cwd / temp.
+    Sanitise-and-return: the returned Path is the *validated* value, and
+    callers must use it (never the raw input) for any subsequent filesystem
+    op. This places the ``is_relative_to`` barrier (the canonical CWE-22
+    path-traversal sanitiser) directly on the tainted→sink dataflow, which
+    CodeQL recognises — so ``?name=`` / ``?path=`` query data can never
+    reach a filesystem op that escapes ``$HOME`` / cwd / temp.
     """
     from pathlib import Path
 
     try:
         target = Path(p).resolve(strict=False)
     except (OSError, ValueError):
-        return False
+        return None
     for root in _allowed_probe_roots():
         try:
             base = Path(root).resolve(strict=False)
         except (OSError, ValueError):
             continue
         if target == base or target.is_relative_to(base):
-            return True
-    return False
+            return target
+    return None
+
+
+def _under_allowed_root(p: "Path") -> bool:  # noqa: F821
+    """Back-compat boolean wrapper around :func:`_contained_resolved`."""
+    return _contained_resolved(p) is not None
 
 
 def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
@@ -158,11 +166,11 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
     # ``_under_allowed_root`` (HOME / cwd / temp) so a crafted ``?name=``
     # still can't probe ``/etc`` / ``/root`` (CWE-22).
     if clean.startswith(("/", "\\")):
-        try:
-            target = Path(clean).resolve(strict=False)
-        except (OSError, ValueError):
-            return find_git_root()
-        if not _under_allowed_root(target):
+        # Sanitise-and-return: ``target`` is the validated resolved path
+        # (gated by is_relative_to), so the value reaching ``is_dir()`` /
+        # ``git rev-parse`` below carries the CWE-22 barrier inline.
+        target = _contained_resolved(clean)
+        if target is None:
             return find_git_root()
         # Walk up to the first directory that exists (handles a file, or
         # an intermediate dir, deleted after capture). Capped at 64.

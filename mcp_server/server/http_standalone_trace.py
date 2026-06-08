@@ -659,27 +659,16 @@ def _to_repo_relative(path: str) -> str:
     from pathlib import Path
 
     from mcp_server.infrastructure.git_diff import find_git_root
-    from mcp_server.server.http_file_diff import _allowed_probe_roots
+    from mcp_server.server.http_file_diff import _contained_resolved
 
-    try:
-        ap = Path(p).resolve(strict=False)
-    except (OSError, ValueError):
-        return p.lstrip("/")
-    # CWE-22 containment: only derive a repo for paths that resolve inside
-    # an allowed root (HOME / cwd / temp). ``is_relative_to`` is the
-    # canonical path-traversal sanitiser — a crafted ``?path=`` cannot
-    # reach ``/etc`` / ``/root``. ``?path=`` is loopback-only and normally
-    # carries the user's own file node path; this just bounds the surface.
-    contained = False
-    for r in _allowed_probe_roots():
-        try:
-            base = Path(r).resolve(strict=False)
-        except (OSError, ValueError):
-            continue
-        if ap == base or ap.is_relative_to(base):
-            contained = True
-            break
-    if not contained:
+    # Sanitise-and-return (CWE-22): ``ap`` is None unless ``p`` resolves
+    # inside an allowed root (HOME / cwd / temp). ``is_relative_to`` is the
+    # canonical path-traversal barrier, applied inline before ``ap`` reaches
+    # any filesystem op — a crafted ``?path=`` cannot reach ``/etc`` /
+    # ``/root``. ``?path=`` is loopback-only and normally carries the user's
+    # own file node path; this just bounds the surface.
+    ap = _contained_resolved(p)
+    if ap is None:
         return p.lstrip("/")
     try:
         root = find_git_root(ap.parent)
