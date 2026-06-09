@@ -44,7 +44,10 @@ _TOOL_NAMES = frozenset({"edit", "write", "bash", "read", "grep", "glob", "task"
 
 
 def _cmd_hash(cmd: str) -> str:
-    return hashlib.sha1(cmd.encode("utf-8")).hexdigest()[:12]
+    # SHA-256 (non-broken) for deterministic command node IDs — feeds the
+    # self-healing workflow_graph_layout cache, not a security boundary.
+    # Matches workflow_graph_schema._short_hash (CWE-327/328 clean).
+    return hashlib.sha256(cmd.encode("utf-8")).hexdigest()[:12]
 
 
 def _first_line(text: str) -> str:

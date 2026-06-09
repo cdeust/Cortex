@@ -116,16 +116,18 @@ class WorkflowEdge(BaseModel):
 
 
 def _short_hash(value: str, width: int = 10) -> str:
-    """Stable, non-cryptographic short hash for ID stability across runs.
+    """Stable, non-cryptographic short hash for deterministic node IDs.
 
-    ``usedforsecurity=False`` (Python 3.9+) documents intent — this hash mints
-    deterministic node IDs, it never protects sensitive data — and lets CodeQL's
-    weak-hashing query correctly skip it. SHA-1 is retained (not upgraded to
-    SHA-256) so existing node IDs stay stable across graphs and snapshots.
+    Uses SHA-256 (a non-broken algorithm) rather than SHA-1 purely for
+    determinism: ``same input -> same id`` within a graph build. The only
+    consumer of these IDs is ``workflow_graph_layout``, a position cache
+    keyed by ``(node_id, topology_fingerprint, layout_version)`` — when the
+    ID scheme changes, the fingerprint changes and the layout recomputes, so
+    there is no cross-build stability requirement to preserve. SHA-256 keeps
+    CodeQL's weak-hashing query (CWE-327/328) clean without relying on the
+    ``usedforsecurity`` flag.
     """
-    return hashlib.sha1(value.encode("utf-8"), usedforsecurity=False).hexdigest()[
-        :width
-    ]
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:width]
 
 
 class NodeIdFactory:
