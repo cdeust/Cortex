@@ -134,43 +134,70 @@ def _contained_resolved(p: "str | Path") -> "Path | None":  # noqa: F821
     return None
 
 
-def _first_existing_dir_within(target: "Path") -> "Path | None":  # noqa: F821
-    """Walk UP from ``target`` to the first directory that exists on disk,
-    never leaving an allowed probe root. Capped at 64 levels.
+def _descend_trusted(root: str, names: "list[str]") -> "Path | None":  # noqa: F821
+    """Descend from a TRUSTED ``root`` into child directories whose names
+    match the successive user-supplied ``names``, returning the deepest
+    existing directory reached.
 
-    The ``_within`` guard is re-asserted on every iteration *before* the
-    ``is_dir()`` sink, so the CWE-22 containment barrier dominates the
-    filesystem access locally even as the walk ascends toward the root —
-    a crafted ``?name=`` cannot make the probe climb out to ``/`` or ``/etc``.
+    CWE-22 taint break: this is the ``git_diff._match_in_whitelist`` pattern
+    applied to directory traversal. At every level the candidate paths come
+    from ``os.scandir(cur)`` — a trusted enumeration of what is actually on
+    disk — and a user component selects among them ONLY via ``entry.name ==
+    name`` equality. The path that reaches the ``is_dir`` / ``scandir`` sink
+    (``cur`` / ``entry.path``) is composed entirely from the constant
+    ``root`` plus scandir output; the user ``names`` never construct a probed
+    path. Static analysers (CodeQL ``py/path-injection``) therefore see the
+    sink operand as not derived from user input. Capped at 64 levels.
     """
     import os
     from pathlib import Path
 
-    roots = _allowed_probe_roots()
-    cur = target
-    for _ in range(64):
-        real = os.path.realpath(str(cur))
-        contained = False
-        for root in roots:
-            try:
-                # Inline CWE-22 barrier: the ``is_dir()`` sink lives directly
-                # inside the ``commonpath`` guard so it dominates the filesystem
-                # access on ``real`` — this is the exact shape CodeQL's
-                # path-injection dataflow recognises as a sanitiser (a guard
-                # behind a helper / ``any(...)`` generator is NOT recognised).
-                if os.path.commonpath([root, real]) == root:
-                    contained = True
-                    if Path(real).is_dir():
-                        return Path(real)
-                    break
-            except (ValueError, OSError):
-                continue
-        if not contained:
-            return None
-        parent = os.path.dirname(real)
-        if parent == real:
-            return None
-        cur = Path(parent)
+    cur = os.path.realpath(root)  # ``root`` is a constant probe root → trusted
+    if not os.path.isdir(cur):
+        return None
+    deepest = cur
+    for name in names[:64]:
+        nxt = None
+        try:
+            with os.scandir(cur) as entries:
+                for entry in entries:
+                    # Equality match only — ``name`` selects a trusted entry,
+                    # it never builds the path that gets probed.
+                    if entry.name == name and entry.is_dir():
+                        nxt = entry.path
+                        break
+        except (OSError, ValueError):
+            break
+        if nxt is None:
+            break
+        cur = nxt
+        deepest = cur
+    return Path(deepest)
+
+
+def _first_existing_dir_within(target: "Path") -> "Path | None":  # noqa: F821
+    """Deepest existing directory on ``target``'s path chain, found by
+    DESCENDING from the allowed probe root that contains it — never by
+    probing a ``realpath(user_input)``-derived path.
+
+    CWE-22 taint break (redesign): the up-walk variant fed ``is_dir()`` a
+    value derived from the user-controlled ``target`` on every iteration,
+    which CodeQL's loop-carried dataflow re-taints and refuses to treat as
+    sanitised. Instead we locate the constant allowed root that prefixes
+    ``target`` (a pure segment comparison — no filesystem op on user data),
+    then hand the remaining components to :func:`_descend_trusted`, where the
+    filesystem sinks only ever touch trusted enumerated paths. ``target`` is
+    used solely to *choose* a root and *compare* component names.
+    """
+    import os
+
+    real = os.path.realpath(str(target))
+    target_parts = [p for p in real.split(os.sep) if p]
+    for root in _allowed_probe_roots():
+        root_parts = [p for p in root.split(os.sep) if p]
+        if target_parts[: len(root_parts)] != root_parts:
+            continue
+        return _descend_trusted(root, target_parts[len(root_parts) :])
     return None
 
 
@@ -188,11 +215,16 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
 
       * Strip surrounding quotes, reject empty/null-byte inputs.
       * ``..`` segments are rejected outright — input falls back to CWD.
-      * Every probed path is real-pathed and gated by ``_within``
-        (``os.path.commonpath``) against ``$HOME`` / cwd / temp, so
-        attackers cannot probe ``/etc``, ``/root``, etc.
-      * Ancestor walk capped at 64 levels (``_first_existing_dir_within``).
-      * Only ``is_dir()`` / ``git rev-parse`` run against the ancestry —
+      * ``_contained_resolved`` bounds the input to ``$HOME`` / cwd / temp
+        (``os.path.commonpath``), so anything outside falls back to CWD.
+      * The directory actually probed is reached by DESCENDING from a
+        constant allowed root via ``_first_existing_dir_within`` /
+        ``_descend_trusted`` (``os.scandir``): the value that reaches
+        ``is_dir`` / ``git rev-parse --cwd`` is composed from trusted
+        enumeration, not from ``name`` — the CWE-22 taint flow is broken
+        the same way ``git_diff._match_in_whitelist`` breaks it.
+      * Descent capped at 64 levels.
+      * Only directory probes / ``git rev-parse`` run against the path —
         no file content is read in this function.
     """
     from pathlib import Path
@@ -211,8 +243,9 @@ def _git_root_for_name(name: str, find_git_root) -> "Path | None":  # noqa: F821
     # Absolute inputs are the COMMON case, not an attack: graph file nodes
     # carry the absolute ``file_path`` captured from the original tool call,
     # on this same machine. ``_contained_resolved`` bounds the path to
-    # HOME / cwd / temp, then ``_first_existing_dir_within`` walks up to the
-    # first existing dir — both gated by the ``commonpath`` barrier (CWE-22).
+    # HOME / cwd / temp, then ``_first_existing_dir_within`` DESCENDS from the
+    # containing trusted root via ``os.scandir`` to the deepest existing dir —
+    # so the path reaching the git sink is trusted enumeration (CWE-22).
     if clean.startswith(("/", "\\")):
         target = _contained_resolved(clean)
         if target is None:
