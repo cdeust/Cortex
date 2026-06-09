@@ -26,6 +26,23 @@
       "category": "productivity",
       "runtime": ["cli", "cowork"],
       "runtime_notes": "CLI mode requires PostgreSQL 15+ with pgvector. Cowork/sandboxed mode falls back to SQLite automatically (set CORTEX_RUNTIME=cowork or leave DATABASE_URL unset)."
+    },
+    {
+      "name": "zetetic-team-subagents",
+      "source": {
+        "source": "github",
+        "repo": "cdeust/zetetic-team-subagents"
+      },
+      "description": "Zetetic agent team for Cortex — 97 genius reasoning patterns from history's greatest minds + 19 team specialists (architect, engineer, code-reviewer, refactorer, …), 63 skills, 24 commands, 18 tools, 17 hooks, under one epistemic standard none of them can bypass. Composes with Cortex memory: every agent recalls/remembers through the Cortex MCP and routes via /genius, /agent, /zetetic, /quality, /research commands.",
+      "author": {
+        "name": "Clement Deust",
+        "email": "admin@ai-architect.tools"
+      },
+      "homepage": "https://ai-architect.tools",
+      "repository": "https://github.com/cdeust/zetetic-team-subagents",
+      "license": "MIT",
+      "keywords": ["agents", "reasoning", "research", "zetetic", "epistemic", "claude-code", "refactoring", "clean-architecture"],
+      "category": "research"
     }
   ]
 }
