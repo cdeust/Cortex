@@ -86,10 +86,10 @@ def _try_get_memory_store():
         return _memory_store
     try:
         from mcp_server.infrastructure.memory_config import get_memory_settings
-        from mcp_server.infrastructure.memory_store import MemoryStore
+        from mcp_server.infrastructure.memory_store import get_shared_store
 
         settings = get_memory_settings()
-        _memory_store = MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+        _memory_store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
         _memory_available = True
         return _memory_store
     except Exception as e:

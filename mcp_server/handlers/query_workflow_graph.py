@@ -28,7 +28,7 @@ from typing import Any
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.handlers.workflow_graph import build_workflow_graph
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 
 _store: MemoryStore | None = None
 
@@ -38,7 +38,7 @@ def _get_store() -> MemoryStore:
     global _store
     if _store is None:
         s = get_memory_settings()
-        _store = MemoryStore(s.DB_PATH, s.EMBEDDING_DIM)
+        _store = get_shared_store(s.DB_PATH, s.EMBEDDING_DIM)
     return _store
 
 

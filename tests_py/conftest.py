@@ -155,45 +155,45 @@ def _clean_sqlite_store() -> None:
         pass
 
 
+# Handler module-level caches that hold (a reference to) the shared store or
+# its derivatives. Nulling them forces re-fetch from get_shared_store() after
+# the shared store is closed; otherwise a handler would hand back a store whose
+# psycopg pools are already closed.
+_HANDLER_CACHE_ATTRS = ("_store", "_memory_store", "_embeddings", "_memory_available")
+
+
 def _reset_all_singletons() -> None:
-    """Reset handler module-level singletons so they reconnect fresh.
+    """Reset the shared store and handler-level caches so the next test
+    reconnects fresh.
 
-    Closes any SQLite store connections before nulling to prevent leaked
-    file handles and 'database is locked' errors in subsequent tests.
+    The 37 handlers no longer each own a store — they fetch one process-wide
+    instance via get_shared_store(), whose two psycopg pools are the only
+    connections held. reset_shared_store() closes those pools (fixing the CI
+    connection leak that drove live connections past 60 and triggered the
+    30-minute batch-pool acquire hangs). We then null every handler cache by
+    iterating the handlers package, so the list cannot drift out of date.
     """
-    modules_and_attrs = [
-        ("mcp_server.handlers.recall", ["_store", "_embeddings"]),
-        ("mcp_server.handlers.remember", ["_store", "_embeddings"]),
-        ("mcp_server.handlers.consolidate", ["_store", "_embeddings"]),
-        ("mcp_server.handlers.checkpoint", ["_store"]),
-        ("mcp_server.handlers.memory_stats", ["_store"]),
-    ]
+    try:
+        from mcp_server.infrastructure.memory_store import reset_shared_store
 
-    # Close any open SQLite store connections before nulling
-    closed_ids: set[int] = set()
-    for mod_name, attrs in modules_and_attrs:
-        try:
-            mod = importlib.import_module(mod_name)
-            store = getattr(mod, "_store", None)
-            if store is not None and id(store) not in closed_ids:
-                if hasattr(store, "close"):
-                    try:
-                        store.close()
-                    except Exception:
-                        pass
-                closed_ids.add(id(store))
-        except ImportError:
-            pass
+        reset_shared_store()
+    except ImportError:
+        pass
 
-    # Now null all singletons
-    for mod_name, attrs in modules_and_attrs:
+    import pkgutil
+
+    import mcp_server.handlers as handlers_pkg
+
+    for _finder, mod_name, _ispkg in pkgutil.iter_modules(handlers_pkg.__path__):
         try:
-            mod = importlib.import_module(mod_name)
-            for attr in attrs:
-                if hasattr(mod, attr):
-                    setattr(mod, attr, None)
-        except ImportError:
-            pass
+            mod = importlib.import_module(f"mcp_server.handlers.{mod_name}")
+        except Exception:
+            continue
+        for attr in _HANDLER_CACHE_ATTRS:
+            if hasattr(mod, attr):
+                # All these caches use None as their "recompute me" sentinel
+                # (_memory_available starts None = "not yet checked").
+                setattr(mod, attr, None)
 
     try:
         from mcp_server.infrastructure.memory_config import get_memory_settings

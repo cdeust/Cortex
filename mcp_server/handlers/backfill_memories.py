@@ -24,7 +24,7 @@ from mcp_server.handlers.backfill_helpers import (
     slug_to_domain,
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.scanner import read_head_tail
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 
@@ -324,7 +324,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Backfill prior conversations into the memory store."""
     parsed = _parse_args(args)
     settings = get_memory_settings()
-    store = MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+    store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
     ensure_backfill_log(store)
 
     candidates = discover_files(parsed["project_filter"], parsed["max_files"])

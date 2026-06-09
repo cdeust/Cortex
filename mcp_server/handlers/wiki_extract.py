@@ -20,7 +20,7 @@ from typing import Any
 
 from mcp_server.core.claim_extractor import extract_claims
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
     delete_claims_for_memory,
     insert_claim_events,
@@ -82,7 +82,7 @@ schema = {
 
 def _get_store() -> MemoryStore:
     settings = get_memory_settings()
-    return MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+    return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
 def _memory_rows(conn, memory_id: int | None, limit: int, force: bool) -> list[dict]:
