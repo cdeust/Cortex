@@ -325,6 +325,7 @@ class TestSetupScript:
             "needs_setup",
             "create_failed",
             "schema_failed",
+            "auth_failed",
             "error",
         )
         if parsed["status"] == "ready":
