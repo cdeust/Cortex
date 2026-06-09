@@ -42,9 +42,14 @@ logger = logging.getLogger(__name__)
 
 
 def _get_database_url() -> str:
-    """Get DATABASE_URL from environment or MemorySettings default."""
-    url = os.environ.get("DATABASE_URL", "")
-    if not url:
+    """Get DATABASE_URL from environment or MemorySettings default.
+
+    An unexpanded ``${user_config.database_url}`` token (Claude Code passes the
+    literal through if the user_config option is unset and carries no default)
+    is treated as unset, so the settings default still applies.
+    """
+    url = os.environ.get("DATABASE_URL", "").strip()
+    if not url or "${" in url:
         from mcp_server.infrastructure.memory_config import get_memory_settings
 
         url = get_memory_settings().DATABASE_URL

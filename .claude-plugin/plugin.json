@@ -17,6 +17,14 @@
     "neuroscience",
     "agents"
   ],
+  "userConfig": {
+    "database_url": {
+      "type": "string",
+      "title": "Cortex database URL",
+      "description": "PostgreSQL connection string (postgresql://[user[:pass]@]host[:port]/dbname). Leave as the default for a local install; set this to point Cortex at a remote or credentialed database. Your value persists across plugin updates.",
+      "default": "postgresql://127.0.0.1:5432/cortex"
+    }
+  },
   "mcpServers": "./.mcp.json",
   "postInstall": {
     "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/install-plugin.sh",

@@ -26,7 +26,7 @@ from pathlib import Path
 
 # ── Config ────────────────────────────────────────────────────────────────
 
-_DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
+_DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://127.0.0.1:5432/cortex")
 _HOT_LIMIT = int(os.environ.get("CORTEX_SESSION_START_LIMIT", "8"))
 _MIN_HEAT = float(os.environ.get("CORTEX_SESSION_START_MIN_HEAT", "0.4"))
 _ANCHOR_LIMIT = int(os.environ.get("CORTEX_SESSION_START_ANCHOR_LIMIT", "5"))
@@ -522,6 +522,10 @@ def _build_cold_start_message(setup_result: dict | None) -> str:
         lines.append("```\n")
         lines.append("Cortex will auto-create the database and schema on next start.")
         return "\n".join(lines)
+
+    if setup_result and setup_result.get("status") == "auth_failed":
+        msg = setup_result.get("message", "Authentication failed")
+        return "## Cortex — Database Authentication\n\n" + msg
 
     if setup_result and setup_result.get("status") != "ready":
         msg = setup_result.get("message", "Unknown setup error")

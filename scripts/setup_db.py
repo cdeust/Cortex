@@ -6,9 +6,10 @@ Outputs status to stderr (diagnostic) and a single JSON result to stdout.
 
 Exit codes:
   0 — database ready (created or already existed)
-  1 — PostgreSQL not running or not installed
+  1 — PostgreSQL not running or not installed (server unreachable)
   2 — could not create database or extensions
   3 — schema initialization failed
+  4 — authentication/authorization failure (server up, bad credentials/role)
 """
 
 from __future__ import annotations
@@ -34,15 +35,27 @@ def _log(msg: str) -> None:
 
 def _result(status: str, message: str, **extra: object) -> None:
     """Print JSON result to stdout and exit."""
-    code = {"ready": 0, "needs_install": 1, "create_failed": 2, "schema_failed": 3}
+    code = {
+        "ready": 0,
+        "needs_install": 1,
+        "create_failed": 2,
+        "schema_failed": 3,
+        "auth_failed": 4,
+    }
     out = {"status": status, "message": message, **extra}
     print(json.dumps(out))
     sys.exit(code.get(status, 1))
 
 
 def _get_database_url() -> str:
-    """Resolve DATABASE_URL from environment or default."""
-    return os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
+    """Resolve DATABASE_URL from environment or default.
+
+    Treats an empty value or an unexpanded ``${...}`` token as unset.
+    """
+    url = os.environ.get("DATABASE_URL", "").strip()
+    if not url or "${" in url:
+        return "postgresql://127.0.0.1:5432/cortex"
+    return url
 
 
 def _parse_db_url(url: str) -> dict:
@@ -76,38 +89,58 @@ def _pg_is_running(host: str, port: str) -> bool:
         return False
 
 
-def _db_exists(host: str, port: str, dbname: str) -> bool:
-    """Check if the target database exists."""
+# Substrings that mark a PostgreSQL connection failure as authentication/
+# authorization (not a missing database or a down server). Source: libpq
+# error messages — postgresql.org/docs/current/protocol-error-fields.html
+_AUTH_SIGNATURES = (
+    "password authentication failed",
+    "no password supplied",
+    "authentication failed",
+    "does not exist",  # role "x" does not exist
+    "permission denied",
+    "must be superuser",
+    "must be member of",
+)
+
+
+def _is_auth_error(stderr: str) -> bool:
+    """True if stderr indicates an auth/authorization failure (not db-absent)."""
+    s = stderr.lower()
+    return any(sig in s for sig in _AUTH_SIGNATURES)
+
+
+def _probe_database(host: str, port: str, dbname: str) -> tuple[str, str]:
+    """Probe for the target database.
+
+    Returns (state, detail) where state is one of:
+      exists | absent | auth_failed | error
+    """
     psql = shutil.which("psql")
     if not psql:
-        return False
+        return "error", "psql not found on PATH"
     try:
         r = subprocess.run(
             [
-                psql,
-                "-h",
-                host,
-                "-p",
-                port,
-                "-d",
-                "postgres",
-                "-tAc",
+                psql, "-h", host, "-p", port, "-d", "postgres", "-tAc",
                 f"SELECT 1 FROM pg_database WHERE datname = '{_safe_ident(dbname)}'",
             ],
             capture_output=True,
             timeout=5,
             text=True,
         )
-        return "1" in r.stdout
-    except Exception:
-        return False
+    except Exception as e:
+        return "error", str(e)
+    if r.returncode != 0:
+        detail = r.stderr.strip()
+        return ("auth_failed" if _is_auth_error(detail) else "error"), detail
+    return ("exists" if "1" in r.stdout else "absent"), ""
 
 
-def _create_db(host: str, port: str, dbname: str) -> bool:
-    """Create the database."""
+def _create_db(host: str, port: str, dbname: str) -> tuple[bool, str]:
+    """Create the database. Returns (ok, stderr)."""
     createdb = shutil.which("createdb")
     if not createdb:
-        return False
+        return False, "createdb not found on PATH"
     try:
         r = subprocess.run(
             [createdb, "-h", host, "-p", port, dbname],
@@ -115,9 +148,9 @@ def _create_db(host: str, port: str, dbname: str) -> bool:
             timeout=10,
             text=True,
         )
-        return r.returncode == 0
-    except Exception:
-        return False
+        return r.returncode == 0, r.stderr.strip()
+    except Exception as e:
+        return False, str(e)
 
 
 def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
@@ -208,6 +241,44 @@ def _count_session_files() -> int:
     return count
 
 
+def _server_down_message(host: str, port: str) -> str:
+    """Message for an unreachable server — includes the stale-lock case."""
+    return (
+        f"PostgreSQL is not accepting connections at {host}:{port}.\n"
+        "\n"
+        "If it was working before, an unclean shutdown can leave a stale lock\n"
+        "that blocks restart (the PID in postmaster.pid gets reused by another\n"
+        "process, so PostgreSQL refuses to start):\n"
+        "  brew services list                 # look for postgresql@NN in 'error'\n"
+        "  rm -f $(brew --prefix)/var/postgresql@17/postmaster.pid\n"
+        "  brew services restart postgresql@17\n"
+        "\n"
+        "If it is not installed yet:\n"
+        "  # macOS\n"
+        "  brew install postgresql@17 pgvector && brew services start postgresql@17\n"
+        "  # Ubuntu/Debian\n"
+        "  sudo apt install postgresql postgresql-server-dev-all\n"
+        "  sudo systemctl start postgresql\n"
+        "  # pgvector: https://github.com/pgvector/pgvector#installation\n"
+        "\n"
+        "Then restart Claude Code."
+    )
+
+
+def _auth_message(host: str, port: str, dbname: str, detail: str) -> str:
+    """Message for an auth/authorization failure — server up, creds wrong."""
+    return (
+        f"PostgreSQL at {host}:{port} is running, but the connection was "
+        f"refused for authentication/authorization reasons:\n"
+        f"  {detail}\n"
+        "\n"
+        "The database may well exist — this is a credentials/role problem, not a\n"
+        "missing database. Check the user, password, and role in your DATABASE_URL\n"
+        "(set it via the plugin's database_url config), and that the role may "
+        f"connect to '{dbname}'."
+    )
+
+
 def main() -> None:
     """Auto-detect and set up PostgreSQL for Cortex."""
     url = _get_database_url()
@@ -216,34 +287,26 @@ def main() -> None:
 
     _log(f"Checking PostgreSQL at {host}:{port}/{dbname}")
 
-    # Step 1: Is PostgreSQL running?
+    # Step 1: Is the server reachable at all?
     if not _pg_is_running(host, port):
-        _result(
-            "needs_install",
-            (
-                "PostgreSQL is not running. To set up Cortex:\n"
-                "\n"
-                "  # macOS\n"
-                "  brew install postgresql@17 pgvector\n"
-                "  brew services start postgresql@17\n"
-                "\n"
-                "  # Ubuntu/Debian\n"
-                "  sudo apt install postgresql postgresql-server-dev-all\n"
-                "  sudo systemctl start postgresql\n"
-                "  # Install pgvector: https://github.com/pgvector/pgvector#installation\n"
-                "\n"
-                "Then restart Claude Code."
-            ),
-        )
+        _result("needs_install", _server_down_message(host, port))
 
-    # Step 2: Does the database exist?
-    if not _db_exists(host, port, dbname):
+    # Step 2: Probe the database — distinguishes absent from auth failure.
+    state, detail = _probe_database(host, port, dbname)
+    if state == "auth_failed":
+        _result("auth_failed", _auth_message(host, port, dbname, detail))
+    if state == "error":
+        _result("create_failed", f"Could not query PostgreSQL: {detail}")
+    if state == "absent":
         _log(f"Database '{dbname}' not found, creating...")
-        if not _create_db(host, port, dbname):
+        ok, err = _create_db(host, port, dbname)
+        if not ok:
+            if _is_auth_error(err):
+                _result("auth_failed", _auth_message(host, port, dbname, err))
             _result(
                 "create_failed",
-                f"Could not create database '{dbname}'. "
-                f"Try manually: createdb {dbname}",
+                f"Could not create database '{dbname}': {err or 'unknown error'}\n"
+                f"Try manually: createdb -h {host} -p {port} {dbname}",
             )
         _log(f"Database '{dbname}' created")
 

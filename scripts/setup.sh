@@ -210,7 +210,7 @@ ok "Python packages installed"
 step "Database & schema"
 
 export PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}"
-export DATABASE_URL="${DATABASE_URL:-postgresql://localhost:5432/cortex}"
+export DATABASE_URL="${DATABASE_URL:-postgresql://127.0.0.1:5432/cortex}"
 
 # Run the existing setup_db.py which handles DB creation, extensions, and schema
 SETUP_OUTPUT=$(python3 "$SCRIPT_DIR/setup_db.py" 2>/dev/null || true)
@@ -403,5 +403,5 @@ echo "  1. Restart Claude Code to activate"
 echo "  2. Start a conversation — Cortex works automatically"
 echo "  3. Use /cortex-recall to search memories"
 echo ""
-echo "Database: ${DATABASE_URL:-postgresql://localhost:5432/cortex}"
+echo "Database: ${DATABASE_URL:-postgresql://127.0.0.1:5432/cortex}"
 echo "Deps:     ${DEPS_DIR}"

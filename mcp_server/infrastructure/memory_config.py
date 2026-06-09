@@ -44,7 +44,7 @@ class MemorySettings(BaseSettings):
     RUNTIME: str = ""  # "cli" | "cowork" — set by validator from CORTEX_RUNTIME or CLAUDE_ENVIRONMENT
 
     # ── Storage ──────────────────────────────────────────────────────────
-    DATABASE_URL: str = "postgresql://localhost:5432/cortex"
+    DATABASE_URL: str = "postgresql://127.0.0.1:5432/cortex"  # 127.0.0.1 not localhost: avoids IPv6 ::1 / peer-auth ambiguity
     DB_PATH: str = str(METHODOLOGY_DIR / "memory.db")  # deprecated, kept for migration
     SQLITE_FALLBACK_PATH: str = str(METHODOLOGY_DIR / "memory.db")
     STORE_BACKEND: str = "auto"  # "auto" | "postgresql" | "sqlite"

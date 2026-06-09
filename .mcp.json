@@ -7,7 +7,7 @@
         "mcp_server"
       ],
       "env": {
-        "DATABASE_URL": "postgresql://localhost:5432/cortex",
+        "DATABASE_URL": "${user_config.database_url}",
         "CORTEX_RUNTIME": "",
         "CORTEX_MEMORY_AP_ENABLED": "1"
       }
