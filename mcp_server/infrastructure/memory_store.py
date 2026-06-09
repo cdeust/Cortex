@@ -78,9 +78,7 @@ def get_shared_store(
     with _shared_lock:
         store = _shared_stores.get(key)
         if store is None:
-            store = _construct_store(
-                db_path, embedding_dim, database_url=database_url
-            )
+            store = _construct_store(db_path, embedding_dim, database_url=database_url)
             _shared_stores[key] = store
         return store
 

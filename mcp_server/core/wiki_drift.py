@@ -195,9 +195,7 @@ def _file_exists_under(source_root: str, cited: str) -> bool:
 
     for dirpath, dirnames, filenames in os.walk(source_root):
         dirnames[:] = [
-            d
-            for d in dirnames
-            if d not in _SKIP_DIRECTORIES and not d.startswith(".")
+            d for d in dirnames if d not in _SKIP_DIRECTORIES and not d.startswith(".")
         ]
         if bn in filenames:
             return True
