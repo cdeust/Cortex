@@ -121,7 +121,14 @@ def _probe_database(host: str, port: str, dbname: str) -> tuple[str, str]:
     try:
         r = subprocess.run(
             [
-                psql, "-h", host, "-p", port, "-d", "postgres", "-tAc",
+                psql,
+                "-h",
+                host,
+                "-p",
+                port,
+                "-d",
+                "postgres",
+                "-tAc",
                 f"SELECT 1 FROM pg_database WHERE datname = '{_safe_ident(dbname)}'",
             ],
             capture_output=True,
