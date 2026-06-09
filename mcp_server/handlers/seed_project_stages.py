@@ -8,7 +8,6 @@ Constants live in seed_project_constants.py.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from mcp_server.handlers.seed_project_constants import (
@@ -21,6 +20,7 @@ from mcp_server.handlers.seed_project_constants import (
     HEAT_BY_TYPE,
     IGNORE_DIRS,
 )
+from mcp_server.handlers.source_walk import walk_pruned
 
 
 def heat_for_tags(tags: list[str]) -> float:
@@ -47,26 +47,10 @@ def _safe_read(path: Path, max_bytes: int = 65536) -> str:
         return ""
 
 
-def _walk_pruned(root: Path):
-    """Walk ``root`` skipping IGNORE_DIRS and not following symlinks/junctions.
-
-    Uses ``os.walk(followlinks=False)`` with in-place pruning of ``dirnames``
-    so that ignored directories (node_modules, .venv, __pycache__, etc.) are
-    never descended into. This is the canonical cross-platform idiom and is
-    required on Windows to avoid traversing NTFS junctions and reparse points.
-    Yields ``Path`` objects for every file under the pruned tree.
-    """
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS]
-        dp = Path(dirpath)
-        for name in filenames:
-            yield dp / name
-
-
 def _detect_languages(root: Path) -> list[str]:
     """Detect primary programming languages from file extensions."""
     ext_counts: dict[str, int] = {}
-    for p in _walk_pruned(root):
+    for p in walk_pruned(root):
         lang = EXT_MAP.get(p.suffix.lower())
         if lang:
             ext_counts[lang] = ext_counts.get(lang, 0) + 1
@@ -174,7 +158,7 @@ def stage_docs(root: Path, max_bytes: int) -> list[dict]:
 def stage_entry_points(root: Path, max_bytes: int) -> list[dict]:
     """Find and read entry point files."""
     discoveries = []
-    for p in _walk_pruned(root):
+    for p in walk_pruned(root):
         # Skip anything inside dist-info/egg-info build metadata
         if any(part.endswith((".dist-info", ".egg-info")) for part in p.parts):
             continue

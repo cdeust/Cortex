@@ -8,6 +8,7 @@ from pathlib import Path
 
 from mcp_server.core.codebase_parser import EXT_TO_LANG, FileAnalysis
 from mcp_server.handlers.seed_project_constants import IGNORE_DIRS
+from mcp_server.handlers.source_walk import walk_pruned
 from mcp_server.infrastructure.memory_store import MemoryStore
 
 CODEBASE_AGENT_CONTEXT = "codebase"
@@ -15,8 +16,8 @@ FILE_TAG_PREFIX = "file:"
 HASH_TAG_PREFIX = "hash:"
 
 # Bounded-candidate multiplier: we take at most ``max_files * CANDIDATE_MULTIPLIER``
-# paths from ``rglob`` before sorting. Source: ADR-0045 §R2 — bounded streaming for
-# ingestion paths. The multiplier gives the sort a meaningful candidate set while
+# paths from the pruned walk before sorting. Source: ADR-0045 §R2 — bounded streaming
+# for ingestion paths. The multiplier gives the sort a meaningful candidate set while
 # keeping peak memory O(max_files) instead of O(tree_size).
 CANDIDATE_MULTIPLIER = 10
 
@@ -90,8 +91,15 @@ def _collect_unbounded(
     lang_filter: set[str] | None,
     max_bytes: int,
 ) -> list[Path]:
-    """Walk the entire tree, filter, then sort. Memory O(filtered_count)."""
-    survivors = [p for p in root.rglob("*") if _file_matches(p, lang_filter, max_bytes)]
+    """Walk the pruned tree, filter, then sort. Memory O(filtered_count).
+
+    Uses ``walk_pruned`` (not ``rglob``) so vendored subtrees in IGNORE_DIRS
+    are never descended into — a repo carrying a 154M ``deps/`` no longer
+    stalls the walk for minutes before the extension filter rejects it.
+    """
+    survivors = [
+        p for p in walk_pruned(root) if _file_matches(p, lang_filter, max_bytes)
+    ]
     survivors.sort()
     return survivors
 
@@ -106,7 +114,7 @@ def _collect_bounded(
     then sort for deterministic ordering. See ADR-0045 §R2.
     """
     candidate_cap = max(max_files * CANDIDATE_MULTIPLIER, max_files)
-    candidates = sorted(itertools.islice(root.rglob("*"), candidate_cap))
+    candidates = sorted(itertools.islice(walk_pruned(root), candidate_cap))
 
     files: list[Path] = []
     for path in candidates:
