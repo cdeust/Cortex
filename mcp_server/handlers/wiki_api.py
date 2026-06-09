@@ -77,7 +77,7 @@ def _get_store():
     """Lazy store accessor — never raises; returns None if DB missing."""
     try:
         from mcp_server.infrastructure.memory_config import get_memory_settings
-        from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+        from mcp_server.infrastructure.memory_store import get_shared_store
 
         settings = get_memory_settings()
         return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
