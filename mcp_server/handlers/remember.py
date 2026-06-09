@@ -24,7 +24,7 @@ from mcp_server.infrastructure import wiki_store
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.embedding_engine import get_embedding_engine
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.profile_store import load_profiles
 
 schema = {
@@ -188,7 +188,7 @@ def _get_store() -> MemoryStore:
     global _store
     if _store is None:
         s = get_memory_settings()
-        _store = MemoryStore(s.DB_PATH, s.EMBEDDING_DIM)
+        _store = get_shared_store(s.DB_PATH, s.EMBEDDING_DIM)
     return _store
 
 

@@ -1205,6 +1205,8 @@ _SKIP_DIRECTORIES: Final[frozenset[str]] = frozenset(
         ".venv",
         "venv",
         "env",
+        "deps",
+        "site-packages",
         "__pycache__",
         ".mypy_cache",
         ".pytest_cache",

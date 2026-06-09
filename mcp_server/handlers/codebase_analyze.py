@@ -31,7 +31,7 @@ from mcp_server.handlers.codebase_analyze_helpers import (
 )
 from mcp_server.handlers.remember import handler as remember_handler
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import READ_ONLY
 
 # ── Schema ────────────────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ def _get_store() -> MemoryStore:
     global _store
     if _store is None:
         s = get_memory_settings()
-        _store = MemoryStore(s.DB_PATH, s.EMBEDDING_DIM)
+        _store = get_shared_store(s.DB_PATH, s.EMBEDDING_DIM)
     return _store
 
 

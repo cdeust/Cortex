@@ -23,7 +23,7 @@ from mcp_server.core.concept_emerger import (
     emerge,
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
     get_concepts_by_entity_overlap,
     insert_concept,
@@ -79,7 +79,7 @@ schema = {
 
 def _get_store() -> MemoryStore:
     settings = get_memory_settings()
-    return MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+    return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
 def _fetch_resolved_claims(conn, limit: int) -> list[dict]:

@@ -28,9 +28,28 @@ documentation and fixed the same way."
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _headless_authoring_enabled() -> bool:
+    """Opt-in gate for the ``claude -p`` headless authoring drain.
+
+    Default OFF. The drain can spawn up to ~38 ``claude -p`` subprocesses
+    per cycle (30 anchor + 8 file-doc), each up to 180s, **synchronously
+    on the consolidate event loop**. Unthrottled, that storm wedges the
+    machine — and in tests/CI (where ``claude`` may be on PATH on dev
+    boxes) it also blocks the suite. It stays off until per-cycle load
+    balancing lands; set ``CORTEX_HEADLESS_AUTHORING=1`` to opt in.
+    """
+    return os.getenv("CORTEX_HEADLESS_AUTHORING", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 # Autonomous mode applies the stub + classifier purge axes — these
@@ -56,28 +75,25 @@ MAX_PURGES_PER_CYCLE = 500
 
 
 async def _invoke_wiki_purge(args: dict[str, Any]) -> dict[str, Any]:
-    """Call the wiki_purge handler in whichever event-loop context we land in."""
-    import asyncio
-
+    """Await the wiki_purge handler on the caller's event loop."""
     from mcp_server.handlers.wiki_purge import handler as wiki_purge_handler
 
-    try:
-        running_loop = asyncio.get_running_loop()
-    except RuntimeError:
-        running_loop = None
-    if running_loop is None:
-        return await wiki_purge_handler(args)
-    # We're already inside an event loop — just await directly. The
-    # ``async`` def at the top makes that legal.
     return await wiki_purge_handler(args)
 
 
-def _run_purge_axis(
+async def _run_purge_axis(
     *, axis: str, apply: bool, max_purges: int | None = None
 ) -> dict[str, Any]:
-    """Run wiki_purge with exactly one axis enabled, returning a flat dict."""
-    import asyncio
+    """Run wiki_purge with exactly one axis enabled, returning a flat dict.
 
+    Awaited directly on the consolidate handler's event loop. An earlier
+    revision bridged via ``asyncio.run_coroutine_threadsafe(...).result()``,
+    which self-deadlocked: it scheduled the coroutine on the *same* loop
+    whose thread the synchronous caller had already blocked, so the
+    coroutine could never run and every axis stalled to the 120s timeout
+    (CI Test job hung ~1h). Awaiting keeps the psycopg async pool on its
+    owning loop and removes the deadlock entirely.
+    """
     purge_args: dict[str, Any] = {
         "apply": apply,
         "purge_stubs": axis == "stub",
@@ -86,19 +102,10 @@ def _run_purge_axis(
     }
     if max_purges is not None:
         purge_args["max_purges"] = max_purges
-    try:
-        running_loop = asyncio.get_running_loop()
-    except RuntimeError:
-        running_loop = None
-    if running_loop is None:
-        return asyncio.run(_invoke_wiki_purge(purge_args))
-    future = asyncio.run_coroutine_threadsafe(
-        _invoke_wiki_purge(purge_args), running_loop
-    )
-    return future.result(timeout=120)
+    return await _invoke_wiki_purge(purge_args)
 
 
-def run_wiki_maintenance(
+async def run_wiki_maintenance(
     store: Any,
     *,
     apply_stubs: bool = _AUTONOMOUS_STUB_APPLY_DEFAULT,
@@ -143,7 +150,7 @@ def run_wiki_maintenance(
 
     # Stub axis.
     try:
-        r = _run_purge_axis(
+        r = await _run_purge_axis(
             axis="stub", apply=apply_stubs, max_purges=max_purges_per_axis
         )
         out["stub"]["purged"] = r.get("purged", 0)
@@ -155,7 +162,7 @@ def run_wiki_maintenance(
 
     # Classifier axis.
     try:
-        r = _run_purge_axis(
+        r = await _run_purge_axis(
             axis="classifier",
             apply=apply_classifier_rejects,
             max_purges=max_purges_per_axis,
@@ -172,27 +179,36 @@ def run_wiki_maintenance(
     # session. The worker here calls `claude -p` directly so the
     # loop closes without human intervention. See
     # ``consolidation/headless_authoring.py``.
-    try:
-        from mcp_server.handlers.consolidation.headless_authoring import (
-            run_headless_authoring_cycle,
-        )
+    #
+    # Opt-in only (default OFF): the drain spawns up to ~38 ``claude -p``
+    # subprocesses synchronously on the event loop. Until per-cycle load
+    # balancing lands it stays gated behind ``CORTEX_HEADLESS_AUTHORING``
+    # so consolidate (and the test suite) never blocks on a subprocess
+    # storm.
+    if not _headless_authoring_enabled():
+        out["headless_authoring"] = {"status": "disabled"}
+    else:
+        try:
+            from mcp_server.handlers.consolidation.headless_authoring import (
+                run_headless_authoring_cycle,
+            )
 
-        cycle = run_headless_authoring_cycle()
-        out["headless_authoring"] = {
-            "pages_with_gaps": cycle.pages_with_gaps,
-            "drains_attempted": cycle.drains_attempted,
-            "drains_filled": cycle.drains_filled,
-            "drains_failed": cycle.drains_failed,
-            "duration_ms": cycle.duration_ms,
-        }
-    except Exception as exc:
-        logger.debug(
-            "wiki_maintenance: headless authoring drain failed (non-fatal): %s",
-            exc,
-        )
-        out["headless_authoring"] = {
-            "status": f"error: {type(exc).__name__}: {exc}",
-        }
+            cycle = run_headless_authoring_cycle()
+            out["headless_authoring"] = {
+                "pages_with_gaps": cycle.pages_with_gaps,
+                "drains_attempted": cycle.drains_attempted,
+                "drains_filled": cycle.drains_filled,
+                "drains_failed": cycle.drains_failed,
+                "duration_ms": cycle.duration_ms,
+            }
+        except Exception as exc:
+            logger.debug(
+                "wiki_maintenance: headless authoring drain failed (non-fatal): %s",
+                exc,
+            )
+            out["headless_authoring"] = {
+                "status": f"error: {type(exc).__name__}: {exc}",
+            }
 
     # Per-project coverage dashboards (Meadows L6 information surface).
     try:

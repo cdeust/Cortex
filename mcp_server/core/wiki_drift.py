@@ -186,8 +186,17 @@ def _file_exists_under(source_root: str, cited: str) -> bool:
     if os.path.isfile(full):
         return True
     bn = os.path.basename(cited)
+    # Prune the same vendored / build dirs as list_source_files. Without this,
+    # a repo carrying a venv/, node_modules/, deps/, or site-packages/ at its
+    # root makes this per-cited-path fallback walk tens of thousands of files,
+    # turning one consolidate cycle into a multi-minute stall. The skip set is
+    # the single source of truth for "not a source tree".
+    from mcp_server.core.wiki_coverage import _SKIP_DIRECTORIES
+
     for dirpath, dirnames, filenames in os.walk(source_root):
-        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        dirnames[:] = [
+            d for d in dirnames if d not in _SKIP_DIRECTORIES and not d.startswith(".")
+        ]
         if bn in filenames:
             return True
     return False
