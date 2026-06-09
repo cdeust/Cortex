@@ -30,21 +30,6 @@ jobs:
     name: Test before release
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_USER: cortex
-          POSTGRES_PASSWORD: cortex
-          POSTGRES_DB: cortex
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U cortex"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     env:
       DATABASE_URL: postgresql://cortex:cortex@localhost:5432/cortex
 
@@ -56,8 +41,30 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Enable pg_trgm extension
-        run: PGPASSWORD=cortex psql -h localhost -U cortex -d cortex -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+      # Runner-local PostgreSQL + pgvector (no Docker Hub pull). See ci.yml for
+      # the rationale: anonymous registry-1.docker.io pulls are rate-limited and
+      # outage-prone; PGDG apt is the canonical, unmetered pgvector source.
+      - name: Set up PostgreSQL + pgvector (runner-local, no registry pull)
+        run: |
+          set -euxo pipefail
+          sudo systemctl start postgresql
+          PG_VER="$(pg_lsclusters -h | awk 'NR==1 {print $1}')"
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          for i in 1 2 3; do sudo apt-get update && break || sleep 5; done
+          for i in 1 2 3; do sudo apt-get install -y "postgresql-${PG_VER}-pgvector" && break || sleep 5; done
+          sudo -u postgres psql -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE cortex LOGIN SUPERUSER PASSWORD 'cortex';"
+          sudo -u postgres createdb -O cortex cortex
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -d cortex \
+            -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+          for i in $(seq 1 30); do
+            PGPASSWORD=cortex pg_isready -h localhost -U cortex -d cortex && break || sleep 1
+          done
+          PGPASSWORD=cortex psql -h localhost -U cortex -d cortex -c "SELECT version();"
 
       - name: Cache HuggingFace models
         uses: actions/cache@v4
