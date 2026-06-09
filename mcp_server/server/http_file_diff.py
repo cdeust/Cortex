@@ -150,15 +150,27 @@ def _first_existing_dir_within(target: "Path") -> "Path | None":  # noqa: F821
     cur = target
     for _ in range(64):
         real = os.path.realpath(str(cur))
-        if not any(_within(real, root) for root in roots):
+        contained = False
+        for root in roots:
+            try:
+                # Inline CWE-22 barrier: the ``is_dir()`` sink lives directly
+                # inside the ``commonpath`` guard so it dominates the filesystem
+                # access on ``real`` — this is the exact shape CodeQL's
+                # path-injection dataflow recognises as a sanitiser (a guard
+                # behind a helper / ``any(...)`` generator is NOT recognised).
+                if os.path.commonpath([root, real]) == root:
+                    contained = True
+                    if Path(real).is_dir():
+                        return Path(real)
+                    break
+            except (ValueError, OSError):
+                continue
+        if not contained:
             return None
-        contained = Path(real)
-        if contained.is_dir():
-            return contained
-        parent = contained.parent
-        if parent == contained:
+        parent = os.path.dirname(real)
+        if parent == real:
             return None
-        cur = parent
+        cur = Path(parent)
     return None
 
 
