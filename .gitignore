@@ -37,3 +37,6 @@ benchmarks/snapshots/
 .memsearch/
 
 app-tauri/src-tauri/target/
+
+# Vendored site-packages tree (pip --target install; not part of the repo)
+/deps/

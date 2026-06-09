@@ -50,11 +50,23 @@ class PgRelationshipMixin:
         return len(rel_ids)
 
     def insert_relationship(self, data: dict[str, Any]) -> int:
+        # Idempotent on the directed tuple (source, target, type). Re-ingest
+        # (e.g. incremental codebase re-analysis) replays the same structural
+        # edges; without ON CONFLICT this raises UniqueViolation on
+        # uq_relationships_directed. On conflict we refresh the edge instead
+        # of duplicating: keep the strongest weight, mark it re-reinforced.
+        # Source: uq_relationships_directed (pg_schema.py §A3); issue #13.
         row = self._execute(
             "INSERT INTO relationships "
             "(source_entity_id, target_entity_id, relationship_type, weight, "
             "is_causal, confidence, created_at, last_reinforced) "
-            "VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW()) RETURNING id",
+            "VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW()) "
+            "ON CONFLICT (source_entity_id, target_entity_id, relationship_type) "
+            "DO UPDATE SET "
+            "  weight = GREATEST(relationships.weight, EXCLUDED.weight), "
+            "  confidence = GREATEST(relationships.confidence, EXCLUDED.confidence), "
+            "  last_reinforced = NOW() "
+            "RETURNING id",
             (
                 data["source_entity_id"],
                 data["target_entity_id"],

@@ -27,7 +27,7 @@ from mcp_server.infrastructure.embedding_engine import (
     get_embedding_engine,
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 
 logger = logging.getLogger(__name__)
@@ -161,7 +161,7 @@ def _get_store() -> MemoryStore:
     global _store
     if _store is None:
         settings = get_memory_settings()
-        _store = MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+        _store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
     return _store
 
 
@@ -174,6 +174,20 @@ def _timed(fn, *args, **kwargs) -> dict[str, Any]:
     t0 = time.monotonic()
     try:
         result = fn(*args, **kwargs) or {}
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        return {"error": f"{type(exc).__name__}: {exc}", "duration_ms": ms}
+    ms = int((time.monotonic() - t0) * 1000)
+    if isinstance(result, dict):
+        result["duration_ms"] = ms
+    return result
+
+
+async def _atimed(fn, *args, **kwargs) -> dict[str, Any]:
+    """Async counterpart of :func:`_timed` for awaitable cycle functions."""
+    t0 = time.monotonic()
+    try:
+        result = await fn(*args, **kwargs) or {}
     except Exception as exc:
         ms = int((time.monotonic() - t0) * 1000)
         return {"error": f"{type(exc).__name__}: {exc}", "duration_ms": ms}
@@ -212,7 +226,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if args.get("wiki", True):
         cap_raw = args.get("wiki_max_purges_per_axis", 500)
         cap = int(cap_raw) if cap_raw is not None and int(cap_raw) > 0 else None
-        wiki_stats = _timed(
+        wiki_stats = await _atimed(
             run_wiki_maintenance,
             store,
             apply_stubs=bool(args.get("wiki_apply_stubs", True)),

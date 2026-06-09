@@ -25,7 +25,7 @@ from mcp_server.core.wiki_schema_loader import load_registry
 from mcp_server.core.wiki_view_executor import compile_view
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 
 
 schema = {
@@ -86,7 +86,7 @@ schema = {
 
 def _get_store() -> MemoryStore:
     settings = get_memory_settings()
-    return MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+    return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:

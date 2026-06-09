@@ -258,8 +258,7 @@ class TestMCPClientConnect:
                 new_callable=AsyncMock,
                 return_value=proc,
             ):
-                with patch("asyncio.sleep", new_callable=AsyncMock):
-                    await client.connect()
+                await client.connect()
 
             assert client.connected is True
             assert client.protocol_version == "2025-11-25"
@@ -322,8 +321,7 @@ class TestMCPClientConnect:
                 new_callable=AsyncMock,
                 return_value=proc,
             ):
-                with patch("asyncio.sleep", new_callable=AsyncMock):
-                    await client.connect()
+                await client.connect()
 
             assert client.connected is True
             assert client.protocol_version == PROTOCOL_VERSION
@@ -375,9 +373,8 @@ class TestMCPClientConnect:
                 new_callable=AsyncMock,
                 return_value=proc,
             ):
-                with patch("asyncio.sleep", new_callable=AsyncMock):
-                    with pytest.raises(McpConnectionError, match="Handshake failed"):
-                        await client.connect()
+                with pytest.raises(McpConnectionError, match="Handshake failed"):
+                    await client.connect()
 
             assert client.connected is False
 
@@ -423,8 +420,7 @@ class TestMCPClientConnect:
                 new_callable=AsyncMock,
                 return_value=proc,
             ) as mock_exec:
-                with patch("asyncio.sleep", new_callable=AsyncMock):
-                    await client.connect()
+                await client.connect()
 
             call_kwargs = mock_exec.call_args
             assert call_kwargs[1]["cwd"] == "/tmp"

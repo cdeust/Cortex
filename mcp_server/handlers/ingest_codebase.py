@@ -37,7 +37,7 @@ from mcp_server.handlers import ingest_codebase_writers as writers
 from mcp_server.handlers.ingest_codebase_schema import schema  # re-exported
 from mcp_server.handlers.ingest_helpers import call_upstream, normalise_mcp_payload
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.core.streaming.adaptive_writer import (
     AdaptiveBatchWriter,
     adaptive_drain,
@@ -94,7 +94,7 @@ def _get_store() -> MemoryStore:
         with _store_lock:
             if _store is None:
                 settings = get_memory_settings()
-                _store = MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+                _store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
     return _store
 
 

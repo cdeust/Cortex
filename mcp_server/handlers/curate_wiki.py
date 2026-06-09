@@ -53,7 +53,7 @@ from mcp_server.core.wiki_coverage import _project_source_root, audit_all_domain
 from mcp_server.core.wiki_drift import audit_wiki_drift
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.infrastructure.config import WIKI_ROOT
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import get_shared_store
 
 
 schema = {
@@ -247,7 +247,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     include_reauthor = bool(args.get("include_reauthor", True))
     reauthor_jobs_max = int(args.get("reauthor_jobs_max") or 3)
 
-    store = MemoryStore()
+    store = get_shared_store()
     # Draw a memory pool. Recently-accessed memories are higher-signal
     # candidates because they reflect what the user actively works on.
     if recent_only:

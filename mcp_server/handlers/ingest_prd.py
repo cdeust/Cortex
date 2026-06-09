@@ -29,7 +29,7 @@ from mcp_server.errors import McpConnectionError
 from mcp_server.handlers.ingest_helpers import call_upstream, normalise_mcp_payload
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.wiki_store import write_page
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ def _get_store() -> MemoryStore:
     global _store
     if _store is None:
         settings = get_memory_settings()
-        _store = MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+        _store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
     return _store
 
 

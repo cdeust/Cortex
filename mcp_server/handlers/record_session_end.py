@@ -392,7 +392,7 @@ async def handler(args: dict) -> dict:
         from mcp_server.handlers.auto_task_record_writer import (
             maybe_write_task_record,
         )
-        from mcp_server.infrastructure.memory_store import MemoryStore
+        from mcp_server.infrastructure.memory_store import get_shared_store
 
         task_record_status = maybe_write_task_record(
             session_id=session_id,
@@ -401,7 +401,7 @@ async def handler(args: dict) -> dict:
             duration_seconds=duration,
             turn_count=turn_count,
             tools_used=tools_used or [],
-            store=MemoryStore(),
+            store=get_shared_store(),
         )
     except Exception as exc:
         task_record_status = {
