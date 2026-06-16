@@ -1431,6 +1431,31 @@ wheels = [
 ]
 
 [[package]]
+name = "leidenalg"
+version = "0.12.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "igraph" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/82/b7/45bae25ab59321a14902bec2f47e32b92e76f8b4b3887a13ee69a0b32c60/leidenalg-0.12.0.tar.gz", hash = "sha256:c81a45a2fb874fe71e903d43a869d0efeb7f907af70476c03f6945ef0e8f44c5", size = 453641, upload-time = "2026-05-24T10:17:53.556Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/53/7f/0900c05ccbb27744f9dd11321dc2978e9f5ffe678db54f23eb94cf4e5951/leidenalg-0.12.0-cp38-abi3-macosx_10_9_x86_64.whl", hash = "sha256:96eec407f540d9ddb0c103dadc632d5519cfcdb39689fb21ae0ceeaa97bb2ec3", size = 2257399, upload-time = "2026-05-24T10:17:32.257Z" },
+    { url = "https://files.pythonhosted.org/packages/72/f6/d15c889c7c65dbc41c84fe83243c203b083f70cef62ed0acc630098b2012/leidenalg-0.12.0-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:2e0e1c2321c2e06a7f4f8a73ca15fcd54e0139a62afb448933c42badcfab8adc", size = 1926700, upload-time = "2026-05-24T10:17:33.946Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/36/7480eef0473bd87f69826e0dfb6bb1c1ee0915fa6d31be445d0bfcbd3a1a/leidenalg-0.12.0-cp38-abi3-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:5f6a97f698f13a588e1ae7344908cddee9f87d33acc226fc5c5b99752ebd71f8", size = 2546580, upload-time = "2026-05-24T10:17:35.133Z" },
+    { url = "https://files.pythonhosted.org/packages/5f/45/cf5eb36b4517bb85397760a6033628695e8b0723b45f10f487b07cec84df/leidenalg-0.12.0-cp38-abi3-manylinux_2_26_i686.manylinux_2_28_i686.whl", hash = "sha256:78df2e463f3ffffffda590e9b0d790107e59f722f095731b78a58803d1ca92e5", size = 2845846, upload-time = "2026-05-24T10:17:37.115Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/be/dba31e662c2ee028e20dd0308c1bc6e398dd7a1786fdd0821722537b4124/leidenalg-0.12.0-cp38-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:fcbd89655243cc739d28ba23fe894587d8d7235124a9248ba375819585e70090", size = 2739255, upload-time = "2026-05-24T10:17:38.376Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/02/22597cf6d7ee093523ad5885a31499d698812db5744d98086383c3da08b5/leidenalg-0.12.0-cp38-abi3-musllinux_1_2_i686.whl", hash = "sha256:c6a6231d3db490ee3cc4004f214b0bb947dc3fabde75bd61d878bc3fb9685d06", size = 4072277, upload-time = "2026-05-24T10:17:39.881Z" },
+    { url = "https://files.pythonhosted.org/packages/05/e5/2f3322376fddd6b85790eaddcd314c9402bf81e984b35870acb4cfcbd0e1/leidenalg-0.12.0-cp38-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:63b49f5716c7cb155f3a3e25505bcc33f3c8c62105734fc152bc07518e63e9ab", size = 3799963, upload-time = "2026-05-24T10:17:41.035Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/35/f4f07ddac6718a11c70d858fd4afcc849ca84f485b5d7092bcf09492ec06/leidenalg-0.12.0-cp38-abi3-win32.whl", hash = "sha256:283cd987623e2c5e7b11ed3f15b7805d597a934bf387a7e820d2f673001b635f", size = 1675833, upload-time = "2026-05-24T10:17:42.663Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/77/0c8fb67729e83bddd43971cd4851f497a96810fca63f8029e3f008e82b1b/leidenalg-0.12.0-cp38-abi3-win_amd64.whl", hash = "sha256:f5d9529b44d5f6add0847d68fa6ced99f581357f6ca02b54c049eb3a2f45ff04", size = 1990568, upload-time = "2026-05-24T10:17:44.071Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/c7/a6433027c603b97cba5748a5f00ff10aaaefcfdea46a9fc0e3f0f733591a/leidenalg-0.12.0-pp311-pypy311_pp73-macosx_10_15_x86_64.whl", hash = "sha256:b48e26f746b3f3cee49d609f42b0eb4c3e80a174e16d13c6e371d9a555c93419", size = 2255462, upload-time = "2026-05-24T10:17:45.878Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/d3/82f79c7615a5787737c4d11443afbdbbfcd6f9d6e304f767966954dd83d4/leidenalg-0.12.0-pp311-pypy311_pp73-macosx_11_0_arm64.whl", hash = "sha256:65466be8f6b14117cc285d4d785bedec8fc6792c48cf89a3df3551dba36fb782", size = 1924927, upload-time = "2026-05-24T10:17:47.403Z" },
+    { url = "https://files.pythonhosted.org/packages/22/f0/6839fb4a5de5892fbd47abaf6c9afe09d525eeabe6973e0bc1e731dd651c/leidenalg-0.12.0-pp311-pypy311_pp73-manylinux_2_26_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:ecf067611776bf3acf33afcd1ecd8a381f67ab664c14e9530dd63eef0da646f8", size = 2379702, upload-time = "2026-05-24T10:17:48.942Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/14/f18249ee7f94f3c15066c4b2fb207236c0908ebea61252b5f10d131cffda/leidenalg-0.12.0-pp311-pypy311_pp73-manylinux_2_26_i686.manylinux_2_28_i686.whl", hash = "sha256:b213229d8aa2708117642b478d5b51cae2cfeddf9d80aa98667fe7260119c3ee", size = 2683536, upload-time = "2026-05-24T10:17:50.362Z" },
+    { url = "https://files.pythonhosted.org/packages/45/c0/5b5afcd49d49b2b249e6326d991ab3e74d5603ef917bdd9f283a6cf9cfa9/leidenalg-0.12.0-pp311-pypy311_pp73-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:43176c9470648098f6b642a6e070a12e65ef347700059da9132fefdf98e70df9", size = 2570625, upload-time = "2026-05-24T10:17:51.96Z" },
+]
+
+[[package]]
 name = "llvmlite"
 version = "0.47.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1812,7 +1837,7 @@ wheels = [
 
 [[package]]
 name = "neuro-cortex-memory"
-version = "3.18.3"
+version = "3.21.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
@@ -1832,6 +1857,8 @@ benchmarks = [
     { name = "sentence-transformers" },
 ]
 codebase = [
+    { name = "igraph" },
+    { name = "leidenalg" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "tree-sitter" },
@@ -1871,7 +1898,9 @@ requires-dist = [
     { name = "datashader", marker = "extra == 'viz-tile'", specifier = ">=0.16.3" },
     { name = "fastmcp", specifier = ">=2.0.0" },
     { name = "flashrank", marker = "extra == 'benchmarks'", specifier = ">=0.2.0" },
+    { name = "igraph", marker = "extra == 'codebase'", specifier = ">=0.11" },
     { name = "igraph", marker = "extra == 'viz-tile'", specifier = ">=0.11" },
+    { name = "leidenalg", marker = "extra == 'codebase'", specifier = ">=0.10" },
     { name = "networkx", marker = "extra == 'codebase'", specifier = ">=3.0" },
     { name = "networkx", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "numpy", specifier = ">=1.24.0" },
@@ -3121,14 +3150,14 @@ wheels = [
 
 [[package]]
 name = "pyjwt"
-version = "2.12.1"
+version = "2.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c2/27/a3b6e5bf6ff856d2509292e95c8f57f0df7017cf5394921fc4e4ef40308a/pyjwt-2.12.1.tar.gz", hash = "sha256:c74a7a2adf861c04d002db713dd85f84beb242228e671280bf709d765b03672b", size = 102564, upload-time = "2026-03-13T19:27:37.25Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3b/81/58d0ac84e1ef3a3843791d6954d94c0b33d526c75eeb1efbce9d0a4c4077/pyjwt-2.13.0.tar.gz", hash = "sha256:41571c89ca91598c79e8ef18a2d07367d4810fbbd6f637794879baf1b7703423", size = 107515, upload-time = "2026-05-21T19:54:36.618Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e5/7a/8dd906bd22e79e47397a61742927f6747fe93242ef86645ee9092e610244/pyjwt-2.12.1-py3-none-any.whl", hash = "sha256:28ca37c070cad8ba8cd9790cd940535d40274d22f80ab87f3ac6a713e6e8454c", size = 29726, upload-time = "2026-03-13T19:27:35.677Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/5e/ecf12fdb62546d64385c158514e9b2b671f7832108ef2ecd2020ce0af2d1/pyjwt-2.13.0-py3-none-any.whl", hash = "sha256:66adcc2aff09b3f1bbd95fc1e1577df8ac8723c978552fd43304c8a290ac5728", size = 31274, upload-time = "2026-05-21T19:54:35.362Z" },
 ]
 
 [package.optional-dependencies]
