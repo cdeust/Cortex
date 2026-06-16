@@ -24,6 +24,7 @@ This file is the composition root. Implementation is split:
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import threading
 from pathlib import Path
@@ -51,6 +52,7 @@ from mcp_server.infrastructure.staging_resolve_sink import (
     build_edge_sink,
     build_entity_sink,
 )
+from mcp_server.shared.progress import NullProgress, ProgressReporter
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +76,17 @@ _DEFAULT_TOP_PROCESSES: int | None = None
 # constant memory on both sides. source: benchmark — the proven 1000-row chunk
 # (74MB peak RSS / ~49.5k rows/s streaming 500k rows, measured 2026-06-03).
 _EDGE_PAGE_SIZE: int = 1_000
+
+# Human-readable names for the 6 sequential ingest stages.
+# Order must match the execution order inside handler().
+_STAGES: tuple[str, ...] = (
+    "analyze graph",
+    "fetch files",
+    "ingest entities",
+    "ingest edges",
+    "pull processes",
+    "enrich process symbols",
+)
 
 __all__ = ["schema", "handler"]
 
@@ -156,6 +169,98 @@ def _entity_rows_from_files(
     return rows
 
 
+@dataclasses.dataclass
+class _SymbolPageCtx:
+    """Grouped context for the symbol pagination loop (avoids >4-param violation)."""
+
+    graph_path: str
+    domain: str
+    page_size: int
+    top_symbols: int | None
+    symbol_total: int | None
+    writer: Any
+    run_id: str
+    store: Any
+    progress: Any
+
+
+async def _stream_symbol_pages(
+    ctx: _SymbolPageCtx,
+    diagnostics: list[str],
+    start_offset: int,
+    start_count: int,
+) -> int:
+    """Paginate Kuzu symbols into ctx.writer; return total rows consumed.
+
+    Precondition:  start_offset/start_count from checkpoint (or 0, 0 fresh).
+    Postcondition: all symbol pages written, checkpoint updated each page.
+    Invariant:     total_symbols non-decreasing; terminates on empty page or
+                   top_symbols cap.
+    """
+    offset = start_offset
+    total_symbols = start_count
+    while True:
+        page, page_diag = await cypher.fetch_symbols_page(
+            ctx.graph_path, offset=offset, page_size=ctx.page_size
+        )
+        diagnostics.extend(page_diag)
+        if not page:
+            break
+        rows = [
+            r
+            for s in page
+            if (r := writers.symbol_entity_row(s, ctx.domain)) is not None
+        ]
+        if rows:
+            ctx.writer.add_many(rows)
+        total_symbols += len(page)
+        # stride != page_size — see symbol_page_stride (2026-06-11 RCA).
+        offset += cypher.symbol_page_stride(ctx.page_size)
+        _checkpoint_write(ctx.store, ctx.run_id, offset, total_symbols)
+        ctx.progress.advance(total_symbols, total=ctx.symbol_total)
+        if ctx.top_symbols is not None and total_symbols >= ctx.top_symbols:
+            break
+    return total_symbols
+
+
+async def _build_symbol_ctx(
+    store: Any,
+    graph_path: str,
+    domain: str,
+    page_size: int,
+    top_symbols: int | None,
+    progress: Any,
+) -> tuple[_SymbolPageCtx, AdaptiveBatchWriter, Any, int, int]:
+    """Build the pagination context + sink; return (ctx, writer, sink, off, n).
+
+    top_symbols is the tightest honest bound when set; otherwise Kuzu is
+    queried for the real count via three cheap COUNT(*) queries. None means
+    indeterminate — the bar stays frozen but McpProgress.advance() still
+    emits a running-count text line on every dispatch.
+    """
+    run_id = f"ingest-symbols:{domain}"
+    sink = build_entity_sink(lambda: store.batch_pool.connection())
+    writer = AdaptiveBatchWriter(sink, make_entity_controller())
+    offset, count = _checkpoint_read(store, run_id)
+    symbol_total: int | None = (
+        top_symbols
+        if top_symbols is not None
+        else await cypher.fetch_symbols_total(graph_path)
+    )
+    ctx = _SymbolPageCtx(
+        graph_path=graph_path,
+        domain=domain,
+        page_size=page_size,
+        top_symbols=top_symbols,
+        symbol_total=symbol_total,
+        writer=writer,
+        run_id=run_id,
+        store=store,
+        progress=progress,
+    )
+    return ctx, writer, sink, offset, count
+
+
 async def _ingest_entities(
     store: Any,
     graph_path: str,
@@ -164,61 +269,33 @@ async def _ingest_entities(
     diagnostics: list[str],
     page_size: int,
     top_symbols: int | None,
+    *,
+    progress: ProgressReporter | None = None,
 ) -> tuple[int, int]:
     """Stream files + paged symbols into KG entities via the staging sink.
 
-    Entities resolve their ids server-side (NOT EXISTS dedup on
-    (LOWER(name), domain)); NO qualified_name -> id map is held in Python --
-    that map was the O(total_symbols) buffer that broke constant memory. The
-    sink is SINGLE-WRITER on this (the event loop's) thread: its borrowed
-    connection is created and used on one thread only, and Kuzu fetch / PG
-    write are sequential per page, so peak RAM is O(page_size). Kuzu is
-    read-only during ingest (graph built by ensure_graph first), so
-    SKIP/LIMIT paging is drift-safe. Returns
+    SINGLE-WRITER; peak RAM is O(page_size). Returns
     (symbol_rows_seen, entity_rows_inserted).
     """
-    run_id = f"ingest-symbols:{domain}"
-    sink = build_entity_sink(lambda: store.batch_pool.connection())
-    # Single-writer (NOT EXISTS dedup needs no race) but ADAPTIVELY sized: the
-    # writer buffers Kuzu pages and flushes AIMD-sized batches (measured bounds
-    # in calibrated.py), growing while PG keeps up and shrinking when it slows.
-    writer = AdaptiveBatchWriter(sink, make_entity_controller())
-    offset, total_symbols = _checkpoint_read(store, run_id)  # 0,0 on a fresh run
+    _progress = progress or NullProgress()
+    ctx, writer, sink, offset, total = await _build_symbol_ctx(
+        store,
+        graph_path,
+        domain,
+        page_size,
+        top_symbols,
+        _progress,
+    )
     try:
-        # File entities are idempotent (NOT EXISTS), so re-running them on a
-        # resume is harmless; write them once at the start regardless.
         file_rows = _entity_rows_from_files(files, domain)
         if file_rows:
             writer.add_many(file_rows)
-        while True:
-            page, page_diag = await cypher.fetch_symbols_page(
-                graph_path, offset=offset, page_size=page_size
-            )
-            diagnostics.extend(page_diag)
-            if not page:
-                break
-            rows = [
-                r
-                for s in page
-                if (r := writers.symbol_entity_row(s, domain)) is not None
-            ]
-            if rows:
-                writer.add_many(rows)
-            total_symbols += len(page)
-            # Advance by the PER-LABEL stride fetch_symbols_page actually
-            # consumed — advancing by page_size skipped the per-label rows
-            # between stride and page_size in every window (2026-06-11 RCA).
-            offset += cypher.symbol_page_stride(page_size)
-            # Advisory checkpoint after the page committed. A crash before this
-            # write re-does at most one page on resume (idempotent → safe).
-            _checkpoint_write(store, run_id, offset, total_symbols)
-            if top_symbols is not None and total_symbols >= top_symbols:
-                break
-        writer.flush_remaining()  # flush the buffered tail
+        total = await _stream_symbol_pages(ctx, diagnostics, offset, total)
+        writer.flush_remaining()
     finally:
         sink.close()
-    _checkpoint_clear(store, run_id)  # clean completion — drop the checkpoint
-    return total_symbols, writer.rows_written
+    _checkpoint_clear(store, ctx.run_id)
+    return total, writer.rows_written
 
 
 def _checkpoint_read(store: Any, run_id: str) -> tuple[int, int]:
@@ -263,6 +340,8 @@ async def _ingest_edges(
     files: list[dict[str, Any]],
     diagnostics: list[str],
     page_size: int,
+    *,
+    progress: ProgressReporter | None = None,
 ) -> tuple[int, int]:
     """Stream call + containment edges into LOAD-BALANCED adaptive writers.
 
@@ -308,6 +387,8 @@ async def _ingest_edges(
 async def _pull_processes(
     graph_path: str,
     top_processes: int | None,
+    *,
+    progress: ProgressReporter | None = None,
 ) -> list[dict[str, Any]]:
     """Pull ALL processes via upstream get_processes; respect optional cap.
 
@@ -352,6 +433,8 @@ async def _enrich_process_symbols(
     graph_path: str,
     processes: list[dict[str, Any]],
     diagnostics: list[str],
+    *,
+    progress: ProgressReporter | None = None,
 ) -> None:
     """Attach participating symbol qns to each process (in place).
 
@@ -379,8 +462,21 @@ def _process_node_count(proc: dict[str, Any]) -> int:
         return 0
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Ingest a codebase analysis into Cortex's store."""
+async def handler(
+    args: dict[str, Any] | None = None,
+    *,
+    progress: ProgressReporter | None = None,
+) -> dict[str, Any]:
+    """Ingest a codebase analysis into Cortex's store.
+
+    Precondition:  args["project_path"] is a non-empty string path to an
+                   existing codebase directory.
+    Postcondition: returns dict with "ingested": True and summary counts on
+                   success, or "ingested": False with "reason" on failure.
+                   progress receives stage() once per _STAGES entry in order,
+                   advance() after each entity page, and close() in the finally.
+    """
+    _progress = progress or NullProgress()
     args = args or {}
     project_path = (args.get("project_path") or "").strip()
     if not project_path:
@@ -413,10 +509,12 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     domain = f"code:{Path(project_path).name}"
 
     try:
+        _progress.stage(_STAGES[0], 0, len(_STAGES))
         graph_path, analyze_stats = await graphmod.ensure_graph(
             store, project_path, output_dir, language, force_reindex
         )
     except McpConnectionError as exc:
+        _progress.close()
         return {
             "ingested": False,
             "reason": "upstream_mcp_unreachable",
@@ -424,6 +522,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         }
     except Exception as exc:
         logger.warning("ingest_codebase analyze step failed: %s", exc, exc_info=True)
+        _progress.close()
         return {
             "ingested": False,
             "reason": "analyze_failed",
@@ -438,53 +537,65 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     diagnostics: list[Any] = []
     do_symbols = top_symbols is None or top_symbols > 0
 
-    # ── Phase 1: files (small; become file entities + containment sources) ─
-    files: list[dict[str, Any]] = []
-    if do_symbols:
-        files, file_diag = await cypher.fetch_files(graph_path, limit=None)
-        diagnostics.extend(file_diag)
+    try:
+        # ── Phase 1: files (small; become file entities + containment sources) ─
+        files: list[dict[str, Any]] = []
+        if do_symbols:
+            _progress.stage(_STAGES[1], 1, len(_STAGES))
+            files, file_diag = await cypher.fetch_files(graph_path, limit=None)
+            diagnostics.extend(file_diag)
 
-    # ── Phase 2: entities — files + paged symbols streamed to the staging
-    # sink. No qualified_name->id map is held; ids resolve server-side. ─────
-    total_symbols_seen = 0
-    entities_written = 0
-    if do_symbols:
-        total_symbols_seen, entities_written = await _ingest_entities(
-            store=store,
-            graph_path=graph_path,
-            domain=domain,
-            files=files,
-            diagnostics=diagnostics,
-            page_size=_SYMBOL_PAGE_SIZE,
-            top_symbols=top_symbols,
+        # ── Phase 2: entities — files + paged symbols streamed to the staging
+        # sink. No qualified_name->id map is held; ids resolve server-side. ─────
+        total_symbols_seen = 0
+        entities_written = 0
+        if do_symbols:
+            _progress.stage(_STAGES[2], 2, len(_STAGES))
+            total_symbols_seen, entities_written = await _ingest_entities(
+                store=store,
+                graph_path=graph_path,
+                domain=domain,
+                files=files,
+                diagnostics=diagnostics,
+                page_size=_SYMBOL_PAGE_SIZE,
+                top_symbols=top_symbols,
+                progress=_progress,
+            )
+
+        # ── Phase 3: edges — call + containment, streamed page-by-page and
+        # resolved by SQL JOIN against the entities committed in Phase 2 (the
+        # staged barrier: Phase 2 has fully returned before any edge resolves).
+        # Constant memory on both fetch and write sides — no edge list, no
+        # name-set. ───────────────────────────────────────────────────────────
+        edges_written = 0
+        edges_seen = 0
+        if total_symbols_seen:
+            _progress.stage(_STAGES[3], 3, len(_STAGES))
+            edges_written, edges_seen = await _ingest_edges(
+                store=store,
+                graph_path=graph_path,
+                domain=domain,
+                files=files,
+                diagnostics=diagnostics,
+                page_size=_EDGE_PAGE_SIZE,
+                progress=_progress,
+            )
+
+        # ── Phase 4: processes ───────────────────────────────────────────────
+        _progress.stage(_STAGES[4], 4, len(_STAGES))
+        processes = (
+            await _pull_processes(graph_path, top_processes, progress=_progress)
+            if (top_processes is None or top_processes > 0)
+            else []
         )
-
-    # ── Phase 3: edges — call + containment, streamed page-by-page and
-    # resolved by SQL JOIN against the entities committed in Phase 2 (the
-    # staged barrier: Phase 2 has fully returned before any edge resolves).
-    # Constant memory on both fetch and write sides — no edge list, no
-    # name-set. ───────────────────────────────────────────────────────────
-    edges_written = 0
-    edges_seen = 0
-    if total_symbols_seen:
-        edges_written, edges_seen = await _ingest_edges(
-            store=store,
-            graph_path=graph_path,
-            domain=domain,
-            files=files,
-            diagnostics=diagnostics,
-            page_size=_EDGE_PAGE_SIZE,
-        )
-
-    # ── Phase 4: processes ───────────────────────────────────────────────
-    processes = (
-        await _pull_processes(graph_path, top_processes)
-        if (top_processes is None or top_processes > 0)
-        else []
-    )
-    if processes:
-        await _enrich_process_symbols(graph_path, processes, diagnostics)
-    wiki_paths = pages.write_process_pages(processes)
+        if processes:
+            _progress.stage(_STAGES[5], 5, len(_STAGES))
+            await _enrich_process_symbols(
+                graph_path, processes, diagnostics, progress=_progress
+            )
+        wiki_paths = pages.write_process_pages(processes)
+    finally:
+        _progress.close()
 
     response: dict[str, Any] = {
         "ingested": True,

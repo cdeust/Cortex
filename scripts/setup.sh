@@ -23,10 +23,36 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+STEP_TOTAL=7
+STEP_NUM=0
+
 ok()   { echo -e "${GREEN}[ok]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!!]${NC} $1"; }
 fail() { echo -e "${RED}[FAIL]${NC} $1"; exit 1; }
-step() { echo -e "\n${YELLOW}===${NC} $1 ${YELLOW}===${NC}"; }
+step() {
+    STEP_NUM=$((STEP_NUM + 1))
+    echo -e "\n${YELLOW}=== [${STEP_NUM}/${STEP_TOTAL}] $1 ===${NC}"
+}
+
+# spinner <pid> — animate while background PID runs; report ok/fail on exit.
+# Usage: some_long_command &  spinner $!
+# Respects set -e: the spinner itself does not trap ERR; the caller checks
+# the exit code of the background command via $spin_exit.
+spinner() {
+    local pid=$1
+    local chars='-\|/'
+    local i=0
+    # Poll until the background process exits.
+    while kill -0 "$pid" 2>/dev/null; do
+        i=$(( (i + 1) % 4 ))
+        printf "\r  [%s] running..." "${chars:$i:1}"
+        sleep 0.2
+    done
+    wait "$pid"
+    spin_exit=$?
+    printf "\r"  # clear the spinner line
+    return $spin_exit
+}
 
 # ── OS Detection ────────────────────────────────────────────────────────
 
@@ -55,10 +81,16 @@ install_postgresql_macos() {
     fi
 
     if ! brew list postgresql@17 &>/dev/null 2>&1; then
-        echo "Installing PostgreSQL 17..."
-        brew install postgresql@17
+        echo "  Installing PostgreSQL 17 (this may take a few minutes)..."
+        brew install postgresql@17 &>/dev/null &
+        if spinner $!; then
+            ok "PostgreSQL 17 installed"
+        else
+            fail "brew install postgresql@17 failed"
+        fi
+    else
+        ok "PostgreSQL 17 installed"
     fi
-    ok "PostgreSQL 17 installed"
 
     # Ensure it's in PATH
     if ! command -v pg_isready &>/dev/null; then
@@ -124,10 +156,16 @@ step "pgvector extension"
 
 install_pgvector_macos() {
     if ! brew list pgvector &>/dev/null 2>&1; then
-        echo "Installing pgvector..."
-        brew install pgvector
+        echo "  Installing pgvector..."
+        brew install pgvector &>/dev/null &
+        if spinner $!; then
+            ok "pgvector installed"
+        else
+            fail "brew install pgvector failed"
+        fi
+    else
+        ok "pgvector installed"
     fi
-    ok "pgvector installed"
 }
 
 install_pgvector_linux() {
@@ -231,19 +269,21 @@ fi
 
 step "Embedding model"
 
-echo "Pre-caching sentence-transformers model (one-time ~100MB download)..."
+echo "  Pre-caching sentence-transformers model (one-time ~100MB download)..."
 PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}" python3 -c "
 try:
     from sentence_transformers import SentenceTransformer
     model = SentenceTransformer('all-MiniLM-L6-v2')
-    # Verify it works
     emb = model.encode(['test'])
     print(f'Model loaded: {emb.shape[1]}D embeddings')
 except Exception as e:
     print(f'Warning: model cache failed ({e}). Will download on first use.')
-" 2>/dev/null
-
-ok "Embedding model cached"
+" 2>/dev/null &
+if spinner $!; then
+    ok "Embedding model cached"
+else
+    warn "Embedding model cache step failed — will download on first use"
+fi
 
 # ── Step 6: Verify ──────────────────────────────────────────────────────
 

@@ -176,6 +176,37 @@ def symbol_page_stride(page_size: int) -> int:
     return max(1, page_size // len(_SYMBOL_LABELS))
 
 
+async def fetch_symbols_total(
+    graph_path: str,
+) -> int | None:
+    """Return the total symbol count across all three label types.
+
+    Runs three cheap ``COUNT(*)`` Cypher queries (one per label) and sums
+    the results. This is used as the ``total`` denominator for within-stage
+    progress so the entity stage shows a determinate fraction.
+
+    Returns None when any query fails — callers must treat None as
+    indeterminate and fall back to textual movement.
+    """
+    total = 0
+    for label, _ in _SYMBOL_LABELS:
+        cypher = f"MATCH (n:{label}) RETURN COUNT(n) AS c"
+        try:
+            result, err = await _run_query(graph_path, cypher)
+        except _TRANSPORT_ERRORS:
+            return None
+        if err is not None or result is None:
+            return None
+        rows = result.get("rows") or []
+        if not rows or not rows[0]:
+            return None
+        try:
+            total += int(rows[0][0])
+        except (TypeError, ValueError, IndexError):
+            return None
+    return total
+
+
 async def fetch_symbols_page(
     graph_path: str,
     offset: int,

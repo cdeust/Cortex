@@ -8,9 +8,14 @@ Cortex consumes upstream artefacts; it does not drive those pipelines.
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+import asyncio
+import functools
+
+from fastmcp import Context, FastMCP
 
 from mcp_server.handlers import change_impact, ingest_codebase, ingest_prd
+from mcp_server.mcp_progress import McpProgress
+from mcp_server.shared.progress import NullProgress
 from mcp_server.tool_error_handler import safe_handler
 from mcp_server.handlers._tool_meta import tool_kwargs
 
@@ -31,14 +36,28 @@ def _register_ingest_codebase(mcp: FastMCP) -> None:
         output_dir: str | None = None,
         language: str = "auto",
         force_reindex: bool = False,
+        ctx: Context | None = None,
     ) -> dict:
         """Ingest upstream codebase analysis into Cortex.
 
         No caps. Pulls every Function/Method/Struct/process the upstream
         graph holds, projects them all into Cortex memories + KG.
+
+        ctx is injected by FastMCP when the client supports progress reporting.
+        Progress dispatches to the main loop via run_coroutine_threadsafe because
+        the handler body runs on a worker thread (asyncio.to_thread in safe_handler).
         """
+        # Build the progress reporter bound to THIS event loop before handing
+        # off to the worker thread (asyncio.to_thread). The worker thread must
+        # NOT call get_running_loop() — it has its own fresh loop.
+        progress: McpProgress | NullProgress
+        if ctx is not None:
+            progress = McpProgress(ctx, asyncio.get_running_loop())
+        else:
+            progress = NullProgress()
+        fn = functools.partial(ingest_codebase.handler, progress=progress)
         return await safe_handler(
-            ingest_codebase.handler,
+            fn,
             {
                 "project_path": project_path,
                 "output_dir": output_dir,

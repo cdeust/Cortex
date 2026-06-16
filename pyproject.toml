@@ -45,7 +45,7 @@ cortex-doctor = "mcp_server.doctor:run"
 [project.optional-dependencies]
 postgresql = [
     "psycopg[binary]>=3.1",
-    "psycopg_pool>=3.2",
+    "psycopg-pool>=3.2",
     "pgvector>=0.3",
 ]
 sqlite = [
