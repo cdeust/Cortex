@@ -122,11 +122,33 @@ def check_python() -> None:
 # ── Step 2: PostgreSQL check ──────────────────────────────────────────
 
 
+def _parse_db_host_port(url: str) -> tuple[str, str]:
+    """Extract host and port from a PostgreSQL DSN using stdlib urllib.parse.
+
+    Pre:  url is a non-empty str with a postgresql:// or postgres:// scheme.
+    Post: returns (host, port) as strings; falls back to ("localhost", "5432")
+          for any component that is absent or unparseable.
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.hostname or "localhost"
+        port = str(parsed.port) if parsed.port else "5432"
+    except Exception:
+        host, port = "localhost", "5432"
+    return host, port
+
+
 def check_postgresql() -> None:
     step("PostgreSQL")
 
+    # Derive the target host/port from DATABASE_URL so that a remote DSN is
+    # probed correctly.  When DATABASE_URL is unset the module-level constant
+    # already defaults to postgresql://localhost:5432/cortex, so the parsed
+    # values are ("localhost", "5432") and behaviour is unchanged.
+    host, port = _parse_db_host_port(DATABASE_URL)
+
     # Check pg_isready
-    result = run(["pg_isready"])
+    result = run(["pg_isready", "-h", host, "-p", port])
     if result.returncode != 0:
         if sys.platform == "win32":
             warn(

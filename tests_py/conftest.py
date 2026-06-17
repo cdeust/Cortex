@@ -149,17 +149,22 @@ def _clean_sqlite_via_singleton() -> bool:
     Returns True if cleanup succeeded (so we don't need a separate connection).
     This avoids 'database is locked' errors from opening a competing connection
     to a WAL-mode SQLite database.
+
+    Uses dynamic discovery over ALL handler modules (pkgutil.iter_modules) so
+    that forget, navigate_memory, and any future handler are covered
+    automatically.  The prior hardcoded list of 5 modules omitted those two
+    handlers, causing the cleanup to fall back to a competing sqlite3.connect()
+    whose WAL-mode writes are immediately visible to the handler's still-open
+    connection — producing spurious get_memory()==None failures (diagnosed
+    2026-06-17, incident test_forget ~30% cold-start flake rate).
     """
-    store_modules = [
-        "mcp_server.handlers.recall",
-        "mcp_server.handlers.remember",
-        "mcp_server.handlers.consolidate",
-        "mcp_server.handlers.checkpoint",
-        "mcp_server.handlers.memory_stats",
-    ]
-    for mod_name in store_modules:
+    import pkgutil
+
+    import mcp_server.handlers as handlers_pkg
+
+    for _finder, mod_name, _ispkg in pkgutil.iter_modules(handlers_pkg.__path__):
         try:
-            mod = importlib.import_module(mod_name)
+            mod = importlib.import_module(f"mcp_server.handlers.{mod_name}")
             store = getattr(mod, "_store", None)
             if store is not None and hasattr(store, "_conn"):
                 conn = store._conn
@@ -170,6 +175,13 @@ def _clean_sqlite_via_singleton() -> bool:
                         pass
                 try:
                     conn.execute("DELETE FROM memories_fts")
+                except Exception:
+                    pass
+                # WAL checkpoint: flush pending writes to main DB file so the
+                # next sqlite3.connect() fallback (if it fires) sees a clean
+                # slate rather than stale WAL pages.
+                try:
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                 except Exception:
                     pass
                 conn.commit()
@@ -198,6 +210,11 @@ def _clean_sqlite_store() -> None:
                 pass
         try:
             conn.execute("DELETE FROM memories_fts")
+        except Exception:
+            pass
+        # Checkpoint WAL before close so subsequent opens see a clean DB.
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except Exception:
             pass
         conn.commit()

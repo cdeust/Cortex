@@ -84,6 +84,8 @@ docker run -it \
 
 **Manual:** See [detailed manual setup instructions](docs/manual-setup.md).
 
+**WSL / TLS client-cert / remote PostgreSQL:** See [deployment scenarios](docs/deployment-scenarios.md).
+
 </details>
 
 ---
