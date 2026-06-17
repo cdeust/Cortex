@@ -29,6 +29,7 @@ from mcp_server.infrastructure.sqlite_store_entities import SqliteEntityMixin
 from mcp_server.infrastructure.sqlite_store_entity_merge import (
     SqliteEntityMergeMixin,
 )
+from mcp_server.infrastructure.sqlite_store_mood import SqliteMoodMixin
 from mcp_server.infrastructure.sqlite_store_queries import SqliteQueryMixin
 from mcp_server.infrastructure.sqlite_store_relationships import (
     SqliteRelationshipMixin,
@@ -52,6 +53,7 @@ class SqliteMemoryStore(
     SqliteRuleMixin,
     SqliteStatsMixin,
     SqliteAuxiliaryMixin,
+    SqliteMoodMixin,
     SqliteSearchMixin,
 ):
     """SQLite + FTS5 + sqlite-vec storage engine for Cortex memory system."""
@@ -212,10 +214,10 @@ class SqliteMemoryStore(
                 separation_index, interference_score,
                 schema_match_score, schema_id,
                 hippocampal_dependency, is_benchmark, agent_context,
-                is_global
+                is_global, supersedes_id
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )""",
             (
                 content,
@@ -243,6 +245,7 @@ class SqliteMemoryStore(
                 int(data.get("is_benchmark", False)),
                 data.get("agent_context", ""),
                 int(data.get("is_global", False)),
+                data.get("supersedes_id"),
             ),
         )
         memory_id = cur.lastrowid

@@ -52,6 +52,8 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from mcp_server.shared.redaction import redact_url, scrub_secrets
+
 
 @dataclass
 class McpCheck:
@@ -416,7 +418,7 @@ def _check_database_url() -> McpCheck:
             detail=f"unexpected scheme: {url[:20]}...",
             fix="Use postgresql:// scheme.",
         )
-    return McpCheck(name="DATABASE_URL", ok=True, detail=url, severity="ok")
+    return McpCheck(name="DATABASE_URL", ok=True, detail=redact_url(url), severity="ok")
 
 
 def _check_pg_reachable() -> McpCheck:
@@ -446,7 +448,7 @@ def _check_pg_reachable() -> McpCheck:
             error=f"{type(exc).__name__}: {exc}",
             fix="Install: `pip install psycopg[binary]>=3.1`",
         )
-    attempted = f"psycopg.connect({url!r}); cur.execute('SELECT 1')"
+    attempted = f"psycopg.connect({redact_url(url)!r}); cur.execute('SELECT 1')"
     try:
         with psycopg.connect(url, connect_timeout=5) as conn:
             row = conn.execute("SELECT 1").fetchone()
@@ -454,12 +456,14 @@ def _check_pg_reachable() -> McpCheck:
         # Catch-all here is intentional: psycopg raises a wide variety of
         # subclasses (OperationalError, DatabaseError, etc.) and we want
         # the precise exception type + message in the report.
+        # scrub_secrets guards against psycopg OperationalError embedding the
+        # full DSN (including password) in its message on connection failure.
         return McpCheck(
             name="postgresql reachable",
             ok=False,
             detail="connection failed",
             attempted=attempted,
-            error=f"{type(exc).__name__}: {exc}",
+            error=scrub_secrets(f"{type(exc).__name__}: {exc}"),
             fix="Check that PostgreSQL is running and the DSN is correct. "
             "macOS Homebrew: `brew services start postgresql@17`. "
             "Verify with: `psql \"$DATABASE_URL\" -c 'SELECT 1'`.",
@@ -507,12 +511,14 @@ def _check_pg_extensions() -> McpCheck:
         with psycopg.connect(url, connect_timeout=5) as conn:
             rows = conn.execute(attempted).fetchall()
     except Exception as exc:
+        # scrub_secrets guards against psycopg OperationalError embedding the
+        # full DSN (including password) in its message on connection failure.
         return McpCheck(
             name="postgresql extensions",
             ok=False,
             detail="query failed",
             attempted=attempted,
-            error=f"{type(exc).__name__}: {exc}",
+            error=scrub_secrets(f"{type(exc).__name__}: {exc}"),
         )
     names = sorted({r[0] for r in rows})
     missing = sorted({"vector", "pg_trgm"} - set(names))

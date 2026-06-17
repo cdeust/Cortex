@@ -24,6 +24,7 @@ from mcp_server.core.gist_extraction import (
     extract_gist,
     needs_gist,
 )
+from mcp_server.shared.redaction import scrub_secrets
 
 _LOG_PREFIX = "[cortex-post-tool-capture]"
 
@@ -373,6 +374,12 @@ def process_event(event: dict[str, Any]) -> None:
         _log(f"skip {tool_name}: {reason}")
         return
 
+    # Scrub secrets from the tool output BEFORE tagging, gisting, or
+    # persisting.  This is the single choke point on the write path.
+    # scrub_secrets covers: URL passwords, AWS keys, bearer tokens,
+    # key=value secret assignments, and PEM private-key blocks.
+    output = scrub_secrets(output)
+
     # Tags are derived from the FULL output so signal tags (error/test/
     # success) survive even when the body is gisted.
     tags = _build_tags(tool_name, output)
@@ -380,6 +387,9 @@ def process_event(event: dict[str, Any]) -> None:
     content = _build_memory_content(tool_name, tool_input, body_output, cwd)
     if pointer:
         content = f"{content}\n\n{pointer}"
+    # Scrub the assembled content (catches secrets in the Bash command
+    # reference line and any other structural fragments).
+    content = scrub_secrets(content)
 
     try:
         _store_memory(tool_name, content, tags, cwd)

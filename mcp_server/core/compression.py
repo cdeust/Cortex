@@ -62,16 +62,38 @@ def _parse_ingested_at(memory: dict) -> datetime | None:
 
 
 def _compute_resistance(memory: dict) -> float:
-    """Compute compression resistance multiplier from memory attributes."""
+    """Compute compression resistance multiplier from memory attributes.
+
+    Each multiplier is an engineering choice — no paper provides exact
+    values for these thresholds in a conversational memory system.
+    The qualitative direction (important / surprising / frequently accessed
+    memories resist compression longer) is grounded in the rate-distortion
+    and memory-importance literature (Tishby 1999; Toth et al. 2020) but
+    the specific numbers are hand-tuned and need ablation calibration.
+
+    Sources for individual multipliers:
+      2.0 (importance > 0.7): engineering choice — high-importance memories
+          warrant 2x longer retention before compression; calibration pending
+          — see ablation.
+      1.5 (surprise_score > 0.6): engineering choice — high-surprise memories
+          resist forgetting (von Restorff 1933 qualitative finding); exact
+          factor is hand-tuned; calibration pending — see ablation.
+      1.3 (confidence > 0.8): engineering choice — high-confidence memories
+          are less likely to be stale; factor is hand-tuned; calibration
+          pending — see ablation.
+      1.5 (access_count > 10): engineering choice — frequently accessed
+          memories should remain at full fidelity longer; calibration
+          pending — see ablation.
+    """
     resistance = 1.0
     if memory.get("importance", 0.5) > 0.7:
-        resistance *= 2.0
+        resistance *= 2.0  # source: engineering choice — see docstring
     if memory.get("surprise_score", 0.0) > 0.6:
-        resistance *= 1.5
+        resistance *= 1.5  # source: engineering choice — see docstring
     if memory.get("confidence", 1.0) > 0.8:
-        resistance *= 1.3
+        resistance *= 1.3  # source: engineering choice — see docstring
     if memory.get("access_count", 0) > 10:
-        resistance *= 1.5
+        resistance *= 1.5  # source: engineering choice — see docstring
     return resistance
 
 
@@ -82,9 +104,30 @@ def get_compression_schedule(
 ) -> int:
     """Calculate target compression level based on age and importance.
 
+    Ablation: when CORTEX_ABLATE_COMPRESSION=1 the compression pass is
+    skipped for all memories — returns 0 (full fidelity) unconditionally.
+    This mirrors the spreading_activation ablation pattern (inline import
+    to avoid a circular-import risk at module-load time).
+
+    Age thresholds:
+        gist_age_hours=168.0  (7 days)  — engineering choice; calibration
+            pending ablation study. Source: engineering choice —
+            balances retrieval fidelity vs storage cost at typical session
+            cadence; calibration pending — see ablation.
+        tag_age_hours=720.0   (30 days) — engineering choice; calibration
+            pending ablation study. Source: engineering choice —
+            chosen as ~1 month, beyond which gist-level detail is unlikely
+            to be recalled verbatim; calibration pending — see ablation.
+
     Returns:
         0 = full fidelity, 1 = gist, 2 = tag
     """
+    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+
+    if is_mechanism_disabled(Mechanism.COMPRESSION):
+        # No-op: skip compression entirely; all memories remain at full fidelity.
+        return 0
+
     if memory.get("is_protected", False):
         return 0
     if memory.get("store_type", "episodic") == "semantic":

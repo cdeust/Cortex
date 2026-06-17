@@ -142,6 +142,33 @@ def _process_patterns(
 # ── Duplicate Detection ──────────────────────────────────────────────────
 
 
+def _parse_created_at(memory: dict[str, Any]) -> float:
+    """Return created_at as a UTC timestamp float, or 0.0 if unparseable.
+
+    Precondition: memory is a dict optionally containing 'created_at' as
+    an ISO string or datetime.
+    Postcondition: returns a non-negative float (unix timestamp); 0.0 means
+    the timestamp was absent or unparseable.
+    """
+    from datetime import datetime, timezone
+
+    raw = memory.get("created_at")
+    if raw is None:
+        return 0.0
+    if isinstance(raw, datetime):
+        dt = raw if raw.tzinfo is not None else raw.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    if isinstance(raw, str):
+        try:
+            dt = datetime.fromisoformat(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.timestamp()
+        except (ValueError, TypeError):
+            return 0.0
+    return 0.0
+
+
 def find_near_duplicates(
     memories: list[dict[str, Any]],
     similarity_fn,
@@ -150,7 +177,17 @@ def find_near_duplicates(
     """Find pairs of near-duplicate memories.
 
     Returns list of (keep_id, remove_id) pairs.
-    The memory with higher heat is kept.
+
+    Tie-break policy — prefer the MORE RECENT memory (higher created_at),
+    falling back to higher heat only when timestamps are equal or both absent.
+
+    Rationale: a fresh correction of a stale fact has low heat (just stored)
+    but a newer created_at.  The old stale duplicate has high heat from
+    prior accesses.  Keeping by heat would discard the correction.
+    Keeping by recency ensures the supersession is respected.
+
+    Precondition: each element of `memories` has an 'id' key.
+    Postcondition: (keep_id, remove_id) — keep_id is the more-recent memory.
     """
     duplicates: list[tuple[int, int]] = []
     seen: set[int] = set()
@@ -166,14 +203,27 @@ def find_near_duplicates(
             if emb_a is None or emb_b is None:
                 continue
             if similarity_fn(emb_a, emb_b) >= threshold:
-                # Keep the one with higher heat
-                heat_i = memories[i].get("heat", 0)
-                heat_j = memories[j].get("heat", 0)
-                if heat_i >= heat_j:
-                    duplicates.append((memories[i]["id"], memories[j]["id"]))
+                # Prefer the newer memory (higher created_at timestamp).
+                # Fall back to heat only when timestamps are identical / absent.
+                ts_i = _parse_created_at(memories[i])
+                ts_j = _parse_created_at(memories[j])
+                if ts_i != ts_j:
+                    keep_newer = i if ts_i > ts_j else j
+                    drop_older = j if ts_i > ts_j else i
                 else:
-                    duplicates.append((memories[j]["id"], memories[i]["id"]))
-                seen.add(j)
+                    # Timestamps equal or both absent: fall back to heat.
+                    heat_i = memories[i].get("heat", 0)
+                    heat_j = memories[j].get("heat", 0)
+                    keep_newer = i if heat_i >= heat_j else j
+                    drop_older = j if heat_i >= heat_j else i
+                duplicates.append(
+                    (memories[keep_newer]["id"], memories[drop_older]["id"])
+                )
+                seen.add(drop_older)
+                # If the anchor (i) was dropped, it cannot win any further
+                # comparisons — stop the inner loop.
+                if drop_older == i:
+                    break
 
     return duplicates
 

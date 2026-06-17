@@ -36,6 +36,7 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from benchmarks._repro import build_repro_manifest, multi_run_stats
 from benchmarks.beam.data import (
     extract_10m_chat,
     extract_conversation_turns,
@@ -276,8 +277,23 @@ def evaluate_retrieval(
 # ── Main Benchmark ───────────────────────────────────────────────────────
 
 
-def run_benchmark(split: str = "100K", limit: int | None = None, verbose: bool = False):
-    """Run BEAM retrieval benchmark using production PG retrieval."""
+def run_benchmark(
+    split: str = "100K",
+    limit: int | None = None,
+    verbose: bool = False,
+    n_runs: int = 1,
+) -> dict:
+    """Run BEAM retrieval benchmark using production PG retrieval.
+
+    Precondition: PG schema initialised; split in {"100K","500K","1M","10M"};
+    n_runs >= 1 (default 1 preserves single-run behaviour).
+    Postcondition: returns metric dict with keys: overall_mrr, overall_r10,
+    ability_mrr, ability_r5, ability_r10, total_questions, elapsed_s, manifest.
+    When n_runs > 1 the dict also contains ``runs_mrr``, ``runs_r10``,
+    ``stats_mrr``, and ``stats_r10``.
+    Manifest includes the reproducibility sidecar (git commit, library
+    versions, platform, timestamp).
+    """
     print(f"Loading BEAM dataset (split={split})...")
     ds = load_beam_dataset(split)
 
@@ -285,66 +301,12 @@ def run_benchmark(split: str = "100K", limit: int | None = None, verbose: bool =
         ds = ds.select(range(min(limit, len(ds))))
 
     print(f"Running benchmark on {len(ds)} conversations (PostgreSQL backend)...")
-
-    all_metrics: dict[str, list[dict]] = defaultdict(list)
-    total_start = time.time()
-
-    with BenchmarkDB() as db:
-        for conv_idx, conversation in enumerate(ds):
-            conv_start = time.time()
-
-            # BEAM-10M aggregates 10 sub-plans into one ~10M-token convo
-            if split == "10M":
-                chat = extract_10m_chat(conversation)
-            else:
-                chat = conversation.get("chat", "")
-            turns = extract_conversation_turns(chat)
-            memories = turns_to_memories(turns)
-
-            if not memories:
-                continue
-
-            raw_pq = conversation.get("probing_questions", "{}")
-            questions = parse_probing_questions(raw_pq)
-
-            if not questions:
-                continue
-
-            # Clean up previous, load new
-            db.clear()
-            mem_ids, _source_map = db.load_memories(memories, domain="beam")
-
-            metrics = evaluate_retrieval(db, questions, turns, mem_ids)
-
-            for ability, m in metrics.items():
-                all_metrics[ability].append(m)
-
-            elapsed = time.time() - conv_start
-            if (conv_idx + 1) % 5 == 0 or conv_idx == 0:
-                total_q = sum(
-                    m["total_questions"] for ms in all_metrics.values() for m in ms
-                )
-                avg_mrr = 0.0
-                if all_metrics:
-                    ability_mrrs = []
-                    for ms in all_metrics.values():
-                        if ms:
-                            ability_mrrs.append(sum(m["mrr"] for m in ms) / len(ms))
-                    if ability_mrrs:
-                        avg_mrr = sum(ability_mrrs) / len(ability_mrrs)
-                print(
-                    f"  [{conv_idx + 1}/{len(ds)}] avg_MRR={avg_mrr:.3f} "
-                    f"questions={total_q} ({elapsed:.1f}s/conv)"
-                )
-
-    total_time = time.time() - total_start
-
-    # Report
+    if n_runs > 1:
+        print(f"  n_runs: {n_runs} (will report mean ± std and 95 % CI)")
     print()
-    print("=" * 72)
-    print("BEAM Benchmark Results — Cortex (PostgreSQL)")
-    print("=" * 72)
-    print()
+
+    # Capture reproducibility sidecar once at benchmark start.
+    repro = build_repro_manifest()
 
     # LIGHT (LLM-as-judge QA) scores from Tavakoli et al., ICLR 2026
     # Table 2, "LIGHT" column, 100K split. These are full QA scores
@@ -362,57 +324,205 @@ def run_benchmark(split: str = "100K", limit: int | None = None, verbose: bool =
         "temporal_reasoning": 0.075,
     }
 
-    print(f"{'Ability':<28} {'MRR':>6} {'R@5':>6} {'R@10':>6} {'Qs':>4}  {'LIGHT':>6}")
-    print("-" * 70)
+    runs_mrr: list[float] = []
+    runs_r10: list[float] = []
 
-    overall_mrr = []
-    overall_r5 = []
-    overall_r10 = []
-    total_qs = 0
+    final_ability_mrr: dict[str, float] = {}
+    final_ability_r5: dict[str, float] = {}
+    final_ability_r10: dict[str, float] = {}
+    final_total_qs = 0
+    final_total_time = 0.0
 
-    for ability in sorted(all_metrics.keys()):
-        ms = all_metrics[ability]
-        if not ms:
-            continue
-        mrr = sum(m["mrr"] for m in ms) / len(ms)
-        r5 = sum(m["recall_at_5"] for m in ms) / len(ms)
-        r10 = sum(m["recall_at_10"] for m in ms) / len(ms)
-        qs = sum(m["total_questions"] for m in ms)
+    for run_idx in range(n_runs):
+        if n_runs > 1:
+            print(f"--- Run {run_idx + 1}/{n_runs} ---")
 
-        light = light_scores.get(ability, 0.0)
+        all_metrics: dict[str, list[dict]] = defaultdict(list)
+        total_start = time.time()
+
+        with BenchmarkDB() as db:
+            for conv_idx, conversation in enumerate(ds):
+                conv_start = time.time()
+
+                # BEAM-10M aggregates 10 sub-plans into one ~10M-token convo
+                if split == "10M":
+                    chat = extract_10m_chat(conversation)
+                else:
+                    chat = conversation.get("chat", "")
+                turns = extract_conversation_turns(chat)
+                memories = turns_to_memories(turns)
+
+                if not memories:
+                    continue
+
+                raw_pq = conversation.get("probing_questions", "{}")
+                questions = parse_probing_questions(raw_pq)
+
+                if not questions:
+                    continue
+
+                # Clean up previous, load new
+                db.clear()
+                mem_ids, _source_map = db.load_memories(memories, domain="beam")
+
+                metrics = evaluate_retrieval(db, questions, turns, mem_ids)
+
+                for ability, m in metrics.items():
+                    all_metrics[ability].append(m)
+
+                elapsed = time.time() - conv_start
+                if (conv_idx + 1) % 5 == 0 or conv_idx == 0:
+                    total_q = sum(
+                        m["total_questions"] for ms in all_metrics.values() for m in ms
+                    )
+                    avg_mrr = 0.0
+                    if all_metrics:
+                        ability_mrrs = []
+                        for ms in all_metrics.values():
+                            if ms:
+                                ability_mrrs.append(
+                                    sum(m["mrr"] for m in ms) / len(ms)
+                                )
+                        if ability_mrrs:
+                            avg_mrr = sum(ability_mrrs) / len(ability_mrrs)
+                    print(
+                        f"  [{conv_idx + 1}/{len(ds)}] avg_MRR={avg_mrr:.3f} "
+                        f"questions={total_q} ({elapsed:.1f}s/conv)"
+                    )
+
+        total_time = time.time() - total_start
+
+        # Aggregate per-run metrics
+        ability_mrr_run: dict[str, float] = {}
+        ability_r5_run: dict[str, float] = {}
+        ability_r10_run: dict[str, float] = {}
+        run_overall_mrr: list[float] = []
+        run_overall_r5: list[float] = []
+        run_overall_r10: list[float] = []
+        total_qs = 0
+
+        for ability in sorted(all_metrics.keys()):
+            ms = all_metrics[ability]
+            if not ms:
+                continue
+            mrr = sum(m["mrr"] for m in ms) / len(ms)
+            r5 = sum(m["recall_at_5"] for m in ms) / len(ms)
+            r10 = sum(m["recall_at_10"] for m in ms) / len(ms)
+            qs = sum(m["total_questions"] for m in ms)
+            ability_mrr_run[ability] = mrr
+            ability_r5_run[ability] = r5
+            ability_r10_run[ability] = r10
+            total_qs += qs
+            run_overall_mrr.append(mrr)
+            run_overall_r5.append(r5)
+            run_overall_r10.append(r10)
+
+        avg_mrr_run = sum(run_overall_mrr) / len(run_overall_mrr) if run_overall_mrr else 0.0
+        avg_r10_run = sum(run_overall_r10) / len(run_overall_r10) if run_overall_r10 else 0.0
+
+        runs_mrr.append(avg_mrr_run)
+        runs_r10.append(avg_r10_run)
+
+        final_ability_mrr = ability_mrr_run
+        final_ability_r5 = ability_r5_run
+        final_ability_r10 = ability_r10_run
+        final_total_qs = total_qs
+        final_total_time = total_time
+
+        # Report this run
+        print()
+        print("=" * 72)
+        print("BEAM Benchmark Results — Cortex (PostgreSQL)")
+        print("=" * 72)
+        print()
 
         print(
-            f"{ability:<28} {mrr:>6.3f} {r5:>5.1%} {r10:>5.1%} {qs:>4}  {light:>6.3f}"
+            f"{'Ability':<28} {'MRR':>6} {'R@5':>6} {'R@10':>6} {'Qs':>4}  {'LIGHT':>6}"
         )
+        print("-" * 70)
 
-        overall_mrr.append(mrr)
-        overall_r5.append(r5)
-        overall_r10.append(r10)
-        total_qs += qs
+        for ability in sorted(all_metrics.keys()):
+            ms = all_metrics[ability]
+            if not ms:
+                continue
+            mrr = ability_mrr_run.get(ability, 0.0)
+            r5 = ability_r5_run.get(ability, 0.0)
+            r10 = ability_r10_run.get(ability, 0.0)
+            qs = sum(m["total_questions"] for m in ms)
+            light = light_scores.get(ability, 0.0)
+            print(
+                f"{ability:<28} {mrr:>6.3f} {r5:>5.1%} {r10:>5.1%} {qs:>4}  "
+                f"{light:>6.3f}"
+            )
 
-    print("-" * 70)
-    if overall_mrr:
-        avg_mrr = sum(overall_mrr) / len(overall_mrr)
-        avg_r5 = sum(overall_r5) / len(overall_r5)
-        avg_r10 = sum(overall_r10) / len(overall_r10)
-        light_overall = sum(light_scores.values()) / len(light_scores)
+        print("-" * 70)
+        if run_overall_mrr:
+            light_overall = sum(light_scores.values()) / len(light_scores)
+            print(
+                f"{'OVERALL':<28} {avg_mrr_run:>6.3f} "
+                f"{sum(run_overall_r5) / len(run_overall_r5) if run_overall_r5 else 0.0:>5.1%} "
+                f"{avg_r10_run:>5.1%} {total_qs:>4}  "
+                f"{light_overall:>6.3f}"
+            )
+
+        print()
         print(
-            f"{'OVERALL':<28} {avg_mrr:>6.3f} {avg_r5:>5.1%} {avg_r10:>5.1%} {total_qs:>4}  "
-            f"{light_overall:>6.3f}"
+            f"Total time: {total_time:.1f}s "
+            f"({total_time / max(len(ds), 1):.1f}s/conversation)"
+        )
+        print(f"Conversations: {len(ds)}, Split: {split}")
+        print()
+        print("Note: LIGHT scores are full QA (LLM-as-judge), not retrieval-only.")
+        print("      Cortex scores here are retrieval MRR/Recall — not directly comparable")
+        print("      but show retrieval quality that feeds downstream QA.")
+
+    stats_mrr = multi_run_stats(runs_mrr)
+    stats_r10 = multi_run_stats(runs_r10)
+
+    if n_runs > 1:
+        print()
+        print(f"Multi-run summary ({n_runs} runs):")
+        print(
+            f"  MRR:  mean={stats_mrr['mean']:.3f}  "
+            f"std={stats_mrr['std']:.3f}  "
+            f"95% CI [{stats_mrr['ci95_lower']:.3f}, {stats_mrr['ci95_upper']:.3f}]"
+        )
+        print(
+            f"  R@10: mean={stats_r10['mean']:.3f}  "
+            f"std={stats_r10['std']:.3f}  "
+            f"95% CI [{stats_r10['ci95_lower']:.3f}, {stats_r10['ci95_upper']:.3f}]"
         )
 
-    print()
-    print(
-        f"Total time: {total_time:.1f}s ({total_time / max(len(ds), 1):.1f}s/conversation)"
-    )
-    print(f"Conversations: {len(ds)}, Split: {split}")
-    print()
-    print("Note: LIGHT scores are full QA (LLM-as-judge), not retrieval-only.")
-    print("      Cortex scores here are retrieval MRR/Recall — not directly comparable")
-    print("      but show retrieval quality that feeds downstream QA.")
+    manifest = {
+        "split": split,
+        "n_conversations": len(ds),
+        "n_questions": final_total_qs,
+        "n_runs": n_runs,
+        # ── Reproducibility sidecar ──────────────────────────────────────────
+        "repro": repro,
+    }
+
+    result: dict = {
+        "overall_mrr": runs_mrr[-1] if runs_mrr else 0.0,
+        "overall_r10": runs_r10[-1] if runs_r10 else 0.0,
+        "ability_mrr": final_ability_mrr,
+        "ability_r5": final_ability_r5,
+        "ability_r10": final_ability_r10,
+        "total_questions": final_total_qs,
+        "elapsed_s": final_total_time,
+        "manifest": manifest,
+    }
+    if n_runs > 1:
+        result["runs_mrr"] = runs_mrr
+        result["runs_r10"] = runs_r10
+        result["stats_mrr"] = stats_mrr
+        result["stats_r10"] = stats_r10
+    return result
 
 
 if __name__ == "__main__":
+    import json
+
     parser = argparse.ArgumentParser(description="BEAM benchmark for Cortex")
     parser.add_argument(
         "--split",
@@ -422,6 +532,37 @@ if __name__ == "__main__":
     )
     parser.add_argument("--limit", type=int, help="Limit number of conversations")
     parser.add_argument("--verbose", action="store_true", help="Show detailed results")
+    parser.add_argument(
+        "--n-runs",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "Repeat the full evaluation N times and report mean ± std and "
+            "95 %% CI on MRR and Recall@10 (default: 1, preserves existing "
+            "single-run behaviour)."
+        ),
+    )
+    parser.add_argument(
+        "--results-out",
+        type=str,
+        default=None,
+        help="Optional path to write the result+manifest JSON.",
+    )
     args = parser.parse_args()
 
-    run_benchmark(split=args.split, limit=args.limit, verbose=args.verbose)
+    if args.n_runs < 1:
+        parser.error("--n-runs must be >= 1")
+
+    results = run_benchmark(
+        split=args.split, limit=args.limit, verbose=args.verbose, n_runs=args.n_runs
+    )
+
+    if args.results_out:
+        from pathlib import Path
+
+        out_path = Path(args.results_out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w") as f:
+            json.dump(results, f, indent=2, default=str)
+        print(f"Results written to {out_path}")

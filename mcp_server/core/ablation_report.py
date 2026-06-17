@@ -39,6 +39,7 @@ def plan_full_ablation_study(
         Mechanism.SYNAPTIC_TAGGING,
         Mechanism.EMOTIONAL_TAGGING,
         Mechanism.MICROGLIAL_PRUNING,
+        Mechanism.COMPRESSION,
         Mechanism.RECONSOLIDATION,
         Mechanism.PATTERN_SEPARATION,
         Mechanism.INTERFERENCE,

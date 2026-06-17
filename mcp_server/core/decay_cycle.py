@@ -44,7 +44,13 @@ from mcp_server.core.thermodynamics import compute_decay
 _ACT_R_DECAY_D: float = 0.5
 
 # s: noise parameter for activation → probability mapping.
-# Standard ACT-R uses s ≈ 0.4. We use 1.0 for our hours timescale.
+# Standard ACT-R value is s ≈ 0.4 (Anderson & Lebiere 1998, Eq. 4.5).
+# We use s = 1.0 rather than 0.4.
+# Source: engineering choice — ACT-R's 0.4 is calibrated to millisecond
+# RT experiments on word recognition; Cortex operates at an hours-to-days
+# timescale where the logistic needs a wider spread to avoid saturating at
+# heat=1.0 for young memories.  The value 1.0 is hand-tuned and deviates
+# from the paper; calibration pending — see benchmarks/beam/ablation.py.
 _ACT_R_NOISE_S: float = 1.0
 
 # Minimum hours to avoid log(0)

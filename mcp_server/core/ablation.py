@@ -75,6 +75,7 @@ class Mechanism(Enum):
     EMOTIONAL_DECAY = "emotional_decay"
     MOOD_CONGRUENT_RERANK = "mood_congruent_rerank"
     ENTITY_DEDUP = "entity_dedup"
+    COMPRESSION = "compression"
 
 
 @dataclass

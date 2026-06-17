@@ -236,32 +236,51 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
 );
 """
 
-# ── Indexes ───────────────────────────────────────────────────────────────
-
-INDEXES_DDL = """
-CREATE INDEX IF NOT EXISTS idx_memories_heat
-    ON memories (heat);
-CREATE INDEX IF NOT EXISTS idx_memories_domain
-    ON memories (domain);
-CREATE INDEX IF NOT EXISTS idx_memories_store_type
-    ON memories (store_type);
-CREATE INDEX IF NOT EXISTS idx_memories_created_at
-    ON memories (created_at);
-CREATE INDEX IF NOT EXISTS idx_memories_stage
-    ON memories (consolidation_stage);
-CREATE INDEX IF NOT EXISTS idx_entities_name
-    ON entities (name);
-CREATE INDEX IF NOT EXISTS idx_entities_heat
-    ON entities (heat);
-CREATE INDEX IF NOT EXISTS idx_prospective_active
-    ON prospective_memories (is_active);
-CREATE INDEX IF NOT EXISTS idx_schemas_domain
-    ON schemas (domain);
-CREATE INDEX IF NOT EXISTS idx_rel_pair_type
-    ON relationships (source_entity_id, target_entity_id, relationship_type);
-CREATE INDEX IF NOT EXISTS idx_memories_agent_context
-    ON memories (agent_context);
+# User session-level mood state for MOOD_CONGRUENT_RERANK (Bower 1981).
+# Mirrors pg_schema.py user_mood table. The seed row defaults to neutral
+# so the pg_recall._get_user_mood() bridge gets a real signal instead of
+# always returning None.
+# Split into two separate DDL statements because sqlite3.Connection.execute()
+# accepts only one statement at a time (unlike executescript).
+# Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+USER_MOOD_DDL = """
+CREATE TABLE IF NOT EXISTS user_mood (
+    user_id     TEXT PRIMARY KEY DEFAULT 'default',
+    valence     REAL NOT NULL DEFAULT 0.0
+                CHECK (valence >= -1.0 AND valence <= 1.0),
+    arousal     REAL NOT NULL DEFAULT 0.0
+                CHECK (arousal >= -1.0 AND arousal <= 1.0),
+    updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
 """
+
+# Seed the default neutral mood row. Engineering choice: this INSERT is a
+# separate DDL so _init_schema's per-statement try/except loop handles it
+# individually — a conflict on an existing row is silently skipped.
+USER_MOOD_SEED_DDL = """
+INSERT OR IGNORE INTO user_mood (user_id, valence, arousal)
+VALUES ('default', 0.0, 0.0)
+"""
+
+# ── Indexes ───────────────────────────────────────────────────────────────
+# Each index is a separate string so _init_schema's per-statement loop
+# executes all of them. sqlite3.Connection.execute() runs only the first
+# statement of a multi-statement string; a single large INDEXES_DDL would
+# silently create only the first index and discard the rest.
+
+INDEXES_DDL: list[str] = [
+    "CREATE INDEX IF NOT EXISTS idx_memories_heat_base ON memories (heat_base)",
+    "CREATE INDEX IF NOT EXISTS idx_memories_domain ON memories (domain)",
+    "CREATE INDEX IF NOT EXISTS idx_memories_store_type ON memories (store_type)",
+    "CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories (created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_memories_stage ON memories (consolidation_stage)",
+    "CREATE INDEX IF NOT EXISTS idx_entities_name ON entities (name)",
+    "CREATE INDEX IF NOT EXISTS idx_entities_heat ON entities (heat)",
+    "CREATE INDEX IF NOT EXISTS idx_prospective_active ON prospective_memories (is_active)",
+    "CREATE INDEX IF NOT EXISTS idx_schemas_domain ON schemas (domain)",
+    "CREATE INDEX IF NOT EXISTS idx_rel_pair_type ON relationships (source_entity_id, target_entity_id, relationship_type)",
+    "CREATE INDEX IF NOT EXISTS idx_memories_agent_context ON memories (agent_context)",
+]
 
 
 def get_all_ddl() -> list[str]:
@@ -269,6 +288,11 @@ def get_all_ddl() -> list[str]:
 
     Note: FTS5 and vec0 virtual tables are returned separately
     so callers can skip vec0 if sqlite-vec is not available.
+
+    INDEXES_DDL is a list of individual CREATE INDEX statements so that
+    _init_schema's per-statement loop creates every index. A single
+    multi-statement string passed to sqlite3.execute() would silently
+    run only the first statement.
     """
     return [
         MEMORIES_DDL,
@@ -287,7 +311,9 @@ def get_all_ddl() -> list[str]:
         MEMORY_RULES_DDL,
         SCHEMAS_DDL,
         OSCILLATORY_STATE_DDL,
-        INDEXES_DDL,
+        USER_MOOD_DDL,
+        USER_MOOD_SEED_DDL,
+        *INDEXES_DDL,
     ]
 
 
@@ -303,4 +329,10 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     # Trigger provenance (bounded-io Phase 2 F1) — PG parity with the
     # prospective_memories.created_by migration in pg_schema.py.
     ("prospective_memories", "created_by", "TEXT NOT NULL DEFAULT ''"),
+    # Memory supersession chain (P0-1a parity) — mirrors pg_schema.py
+    # supersedes_id / superseded_by_id columns added in MIGRATIONS_DDL.
+    # SQLite does not enforce FK on ADD COLUMN; the FK is declared for
+    # documentation but will not be enforced at this site.
+    ("memories", "supersedes_id", "INTEGER"),
+    ("memories", "superseded_by_id", "INTEGER"),
 ]

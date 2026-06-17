@@ -359,8 +359,63 @@ class SqliteSearchMixin:
         domain: str | None = None,
         limit: int = 500,
     ) -> list[tuple[int, Any, float]]:
-        """Stub — sqlite-vec does not support efficient batch embedding fetch."""
-        return []
+        """Return (memory_id, embedding_bytes, heat) for hot memories.
+
+        Precondition: min_heat >= 0.0; limit >= 1.
+        Postcondition: ordered by heat_base DESC; len <= limit; rows without
+          embeddings are excluded; empty list when sqlite-vec is absent.
+
+        Mirrors PgMemoryStore.get_hot_embeddings. SQLite stores embeddings in
+        memories_vec (sqlite-vec); we join client-side: fetch hot IDs, then
+        fetch each embedding by rowid. Engineering choice: O(N) join is
+        acceptable at fallback scale (<10k memories).
+        """
+        # precondition: heat column is heat_base in SQLite schema (A3 migration)
+        conds = ["heat_base >= ?", "NOT is_stale"]
+        params: list[Any] = [min_heat]
+        if domain:
+            conds.append("(domain = ? OR is_global = 1)")
+            params.append(domain)
+        params.append(limit)
+        rows = self._conn.execute(
+            f"SELECT id, heat_base FROM memories WHERE {' AND '.join(conds)} "
+            f"ORDER BY heat_base DESC LIMIT ?",
+            params,
+        ).fetchall()
+        if not rows:
+            return []
+        results: list[tuple[int, Any, float]] = []
+        for row in rows:
+            mid = row["id"] if hasattr(row, "__getitem__") else row[0]
+            heat_val = row["heat_base"] if hasattr(row, "__getitem__") else row[1]
+            emb = self._fetch_embedding_bytes(mid)
+            if emb is not None:
+                results.append((mid, emb, float(heat_val)))
+        return results
+
+    def _fetch_embedding_bytes(self, memory_id: int) -> bytes | None:
+        """Fetch raw embedding bytes from memories_vec for a single memory.
+
+        Precondition: memory_id is a valid integer.
+        Postcondition: returns bytes (numpy float32 packed) or None if the
+          vec table is absent, the row is missing, or the embedding is NULL.
+        """
+        if not self._has_vec:
+            return None
+        try:
+            vec_row = self._conn.execute(
+                "SELECT embedding FROM memories_vec WHERE rowid = ?",
+                (memory_id,),
+            ).fetchone()
+            if vec_row is None:
+                return None
+            raw = vec_row["embedding"] if hasattr(vec_row, "__getitem__") else vec_row[0]
+            if raw is None:
+                return None
+            # sqlite-vec returns a buffer/memoryview; convert to bytes.
+            return bytes(raw)
+        except Exception:
+            return None
 
     def get_temporal_co_access(
         self,
@@ -368,5 +423,67 @@ class SqliteSearchMixin:
         min_access: int = 1,
         limit: int = 100,
     ) -> list[tuple[int, int, float]]:
-        """Stub — temporal co-access requires PG window functions."""
-        return []
+        """Return (mem_a, mem_b, proximity_weight) pairs co-accessed recently.
+
+        Precondition: window_hours > 0; limit >= 1.
+        Postcondition: a < b (canonical pair order); w in (0,1]; ordered DESC;
+          len <= limit.
+
+        Mirrors PgMemoryStore.get_temporal_co_access for SR-graph construction.
+        SQLite divergence: only one last_accessed timestamp per memory (no
+        access log). Approximation: pair memories whose last_accessed differs
+        by less than window_hours; proximity = 1 - delta/window (linear decay).
+        min_access is honored via access_count >= min_access, mirroring the PG
+        stored procedure WHERE clause (pg_schema.py get_temporal_co_access).
+        Source: Dayan, P. (1993). "Improving Generalisation for Temporal
+        Difference Learning: The Successor Representation." Neural Computation
+        5(4), 613-624. Proximity formula adapted from PG stored procedure shape.
+        """
+        window_seconds = window_hours * 3600.0
+        try:
+            rows = self._conn.execute(
+                """
+                SELECT
+                    CASE WHEN a.id < b.id THEN a.id ELSE b.id END AS mem_a,
+                    CASE WHEN a.id < b.id THEN b.id ELSE a.id END AS mem_b,
+                    1.0 - (
+                        ABS(
+                            (julianday(a.last_accessed) - julianday(b.last_accessed))
+                            * 86400.0
+                        ) / ?
+                    ) AS proximity
+                FROM memories a
+                JOIN memories b
+                    ON a.id != b.id
+                    AND ABS(
+                        (julianday(a.last_accessed) - julianday(b.last_accessed))
+                        * 86400.0
+                    ) < ?
+                WHERE a.access_count >= ?
+                  AND NOT a.is_stale
+                  AND b.access_count >= ?
+                  AND NOT b.is_stale
+                GROUP BY mem_a, mem_b
+                ORDER BY proximity DESC
+                LIMIT ?
+                """,
+                (
+                    window_seconds,
+                    window_seconds,
+                    min_access,
+                    min_access,
+                    limit,
+                ),
+            ).fetchall()
+        except sqlite3.Error:
+            return []
+        results: list[tuple[int, int, float]] = []
+        for row in rows:
+            if hasattr(row, "__getitem__"):
+                mem_a, mem_b, proximity = row["mem_a"], row["mem_b"], row["proximity"]
+            else:
+                mem_a, mem_b, proximity = row[0], row[1], row[2]
+            if proximity is None or proximity <= 0:
+                continue
+            results.append((int(mem_a), int(mem_b), float(min(1.0, proximity))))
+        return results

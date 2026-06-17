@@ -28,6 +28,7 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from benchmarks._repro import build_repro_manifest, multi_run_stats
 from benchmarks.lib.bench_db import BenchmarkDB
 from benchmarks.locomo.data import (
     CATEGORY_NAMES,
@@ -168,7 +169,20 @@ def run_benchmark(
     *,
     with_consolidation: bool = False,
     ablate_mechanism: str | None = None,
+    n_runs: int = 1,
 ) -> dict:
+    """Run the LoCoMo benchmark using production PG retrieval.
+
+    Precondition: PG schema initialised; n_runs >= 1 (default 1 preserves
+    single-run behaviour).
+    Postcondition: returns metric dict with keys: overall_mrr,
+    overall_recall10, category_mrr, category_recall10, elapsed_s,
+    consolidation_total_wall_s, consolidation_call_count, manifest.
+    When n_runs > 1 the dict also contains ``runs_mrr``, ``runs_recall10``,
+    ``stats_mrr``, and ``stats_recall10``.
+    Manifest includes the reproducibility sidecar (git commit, library
+    versions, platform, timestamp).
+    """
     data = load_locomo(data_path)
     if limit:
         data = data[:limit]
@@ -181,94 +195,142 @@ def run_benchmark(
         print("  consolidation: ON (between session-load and QA, per conversation)")
     if ablate_mechanism:
         print(f"  ablation: CORTEX_ABLATE_{ablate_mechanism}=1")
+    if n_runs > 1:
+        print(f"  n_runs: {n_runs} (will report mean ± std and 95 % CI)")
     print()
 
-    all_results: dict[str, list[dict]] = defaultdict(list)
-    total_start = time.time()
-    consolidation_total_wall_s = 0.0
-    consolidation_call_count = 0
+    # Capture reproducibility sidecar once at benchmark start.
+    repro = build_repro_manifest()
 
-    with BenchmarkDB() as db:
-        for conv_idx, conv in enumerate(data):
-            sessions = extract_sessions(conv["conversation"])
+    runs_mrr: list[float] = []
+    runs_recall10: list[float] = []
 
-            # Clean up previous conversation, load new sessions
-            db.clear()
-            memories = [
-                {
-                    "content": s["content"],
-                    "user_content": s.get("user_content", ""),
-                    "created_at": s.get("date", ""),
-                    "source": f"session_{s['session_idx']}",
-                    "tags": ["locomo"],
-                }
-                for s in sessions
-            ]
-            mem_ids, source_map = db.load_memories(memories, domain="locomo")
+    final_category_mrr: dict[str, float] = {}
+    final_category_recall10: dict[str, float] = {}
+    final_elapsed = 0.0
+    final_consolidation_total_wall_s = 0.0
+    final_consolidation_call_count = 0
+    final_overall_total = 0
 
-            # Consolidation pass between session-load and QA. Off by default to
-            # preserve historical reproducibility. ON exercises the
-            # consolidation-only mechanisms (CASCADE, INTERFERENCE,
-            # HOMEOSTATIC_PLASTICITY, SYNAPTIC_PLASTICITY, MICROGLIAL_PRUNING,
-            # TWO_STAGE_MODEL, EMOTIONAL_DECAY, TRIPARTITE_SYNAPSE,
-            # SCHEMA_ENGINE) so per-mechanism ablation deltas become
-            # attributable on the longitudinal benchmark.
-            if with_consolidation:
-                consolidation_total_wall_s += _run_consolidation_pass()
-                consolidation_call_count += 1
+    for run_idx in range(n_runs):
+        if n_runs > 1:
+            print(f"--- Run {run_idx + 1}/{n_runs} ---")
 
-            conv_results = evaluate_conversation(
-                db, sessions, mem_ids, source_map, conv["qa"]
-            )
-            for cat, rs in conv_results.items():
-                all_results[cat].extend(rs)
+        all_results: dict[str, list[dict]] = defaultdict(list)
+        total_start = time.time()
+        consolidation_total_wall_s = 0.0
+        consolidation_call_count = 0
 
-            total_q = sum(len(rs) for rs in all_results.values())
-            print(
-                f"  [{conv_idx + 1}/{len(data)}] questions={total_q} "
-                f"({time.time() - total_start:.1f}s)"
-            )
+        with BenchmarkDB() as db:
+            for conv_idx, conv in enumerate(data):
+                sessions = extract_sessions(conv["conversation"])
 
-    elapsed = time.time() - total_start
-    print_results(all_results, elapsed, len(data))
+                # Clean up previous conversation, load new sessions
+                db.clear()
+                memories = [
+                    {
+                        "content": s["content"],
+                        "user_content": s.get("user_content", ""),
+                        "created_at": s.get("date", ""),
+                        "source": f"session_{s['session_idx']}",
+                        "tags": ["locomo"],
+                    }
+                    for s in sessions
+                ]
+                mem_ids, source_map = db.load_memories(memories, domain="locomo")
 
-    if verbose:
-        print("\nMissed questions (no hit in top 10):")
+                # Consolidation pass between session-load and QA. Off by default
+                # to preserve historical reproducibility. ON exercises the
+                # consolidation-only mechanisms (CASCADE, INTERFERENCE,
+                # HOMEOSTATIC_PLASTICITY, SYNAPTIC_PLASTICITY,
+                # MICROGLIAL_PRUNING, TWO_STAGE_MODEL, EMOTIONAL_DECAY,
+                # TRIPARTITE_SYNAPSE, SCHEMA_ENGINE) so per-mechanism ablation
+                # deltas become attributable on the longitudinal benchmark.
+                if with_consolidation:
+                    consolidation_total_wall_s += _run_consolidation_pass()
+                    consolidation_call_count += 1
+
+                conv_results = evaluate_conversation(
+                    db, sessions, mem_ids, source_map, conv["qa"]
+                )
+                for cat, rs in conv_results.items():
+                    all_results[cat].extend(rs)
+
+                total_q = sum(len(rs) for rs in all_results.values())
+                print(
+                    f"  [{conv_idx + 1}/{len(data)}] questions={total_q} "
+                    f"({time.time() - total_start:.1f}s)"
+                )
+
+        elapsed = time.time() - total_start
+        print_results(all_results, elapsed, len(data))
+
+        if verbose:
+            print("\nMissed questions (no hit in top 10):")
+            for cat, rs in all_results.items():
+                for m in [r for r in rs if not r["hit_rank"] or r["hit_rank"] > 10][:3]:
+                    print(f"  [{cat}] {m['question'][:80]}")
+
+        # Aggregate metrics for this run.
+        overall_mrr_sum = 0.0
+        overall_r10 = 0
+        overall_total = 0
+        category_mrr_run: dict[str, float] = {}
+        category_recall10_run: dict[str, float] = {}
         for cat, rs in all_results.items():
-            for m in [r for r in rs if not r["hit_rank"] or r["hit_rank"] > 10][:3]:
-                print(f"  [{cat}] {m['question'][:80]}")
+            if not rs:
+                continue
+            mrr_sum = sum(1.0 / r["hit_rank"] for r in rs if r["hit_rank"])
+            r10 = sum(1 for r in rs if r["hit_rank"] and r["hit_rank"] <= 10)
+            n = len(rs)
+            category_mrr_run[cat] = mrr_sum / n
+            category_recall10_run[cat] = r10 / n
+            overall_mrr_sum += mrr_sum
+            overall_r10 += r10
+            overall_total += n
 
-    # Aggregate metrics for results-out / driver consumption.
-    overall_mrr_sum = 0.0
-    overall_r10 = 0
-    overall_total = 0
-    category_mrr: dict[str, float] = {}
-    category_recall10: dict[str, float] = {}
-    for cat, rs in all_results.items():
-        if not rs:
-            continue
-        mrr_sum = sum(1.0 / r["hit_rank"] for r in rs if r["hit_rank"])
-        r10 = sum(1 for r in rs if r["hit_rank"] and r["hit_rank"] <= 10)
-        n = len(rs)
-        category_mrr[cat] = mrr_sum / n
-        category_recall10[cat] = r10 / n
-        overall_mrr_sum += mrr_sum
-        overall_r10 += r10
-        overall_total += n
+        overall_mrr_run = overall_mrr_sum / overall_total if overall_total else 0.0
+        overall_recall10_run = overall_r10 / overall_total if overall_total else 0.0
 
-    overall_mrr = overall_mrr_sum / overall_total if overall_total else 0.0
-    overall_recall10 = overall_r10 / overall_total if overall_total else 0.0
+        runs_mrr.append(overall_mrr_run)
+        runs_recall10.append(overall_recall10_run)
 
-    if with_consolidation:
-        avg_ms = (
-            consolidation_total_wall_s / consolidation_call_count * 1000
-            if consolidation_call_count
-            else 0.0
+        final_category_mrr = category_mrr_run
+        final_category_recall10 = category_recall10_run
+        final_elapsed = elapsed
+        final_consolidation_total_wall_s = consolidation_total_wall_s
+        final_consolidation_call_count = consolidation_call_count
+        final_overall_total = overall_total
+
+        if with_consolidation:
+            avg_ms = (
+                consolidation_total_wall_s / consolidation_call_count * 1000
+                if consolidation_call_count
+                else 0.0
+            )
+            print(
+                f"Consolidation: {consolidation_call_count} calls, "
+                f"total {consolidation_total_wall_s:.1f}s "
+                f"(avg {avg_ms:.1f}ms/call) — excluded from per-question stats"
+            )
+
+    overall_mrr = runs_mrr[-1] if runs_mrr else 0.0
+    overall_recall10 = runs_recall10[-1] if runs_recall10 else 0.0
+    stats_mrr = multi_run_stats(runs_mrr)
+    stats_recall10 = multi_run_stats(runs_recall10)
+
+    if n_runs > 1:
+        print()
+        print(f"Multi-run summary ({n_runs} runs):")
+        print(
+            f"  MRR:     mean={stats_mrr['mean']:.3f}  "
+            f"std={stats_mrr['std']:.3f}  "
+            f"95% CI [{stats_mrr['ci95_lower']:.3f}, {stats_mrr['ci95_upper']:.3f}]"
         )
         print(
-            f"Consolidation: {consolidation_call_count} calls, "
-            f"total {consolidation_total_wall_s:.1f}s "
-            f"(avg {avg_ms:.1f}ms/call) — excluded from per-question stats"
+            f"  R@10:    mean={stats_recall10['mean']:.3f}  "
+            f"std={stats_recall10['std']:.3f}  "
+            f"95% CI [{stats_recall10['ci95_lower']:.3f}, {stats_recall10['ci95_upper']:.3f}]"
         )
 
     manifest = {
@@ -278,21 +340,30 @@ def run_benchmark(
             f"CORTEX_ABLATE_{ablate_mechanism}=1" if ablate_mechanism else None
         ),
         "n_conversations": len(data),
-        "n_questions": overall_total,
-        "consolidation_call_count": consolidation_call_count,
-        "consolidation_total_wall_s": consolidation_total_wall_s,
+        "n_questions": final_overall_total,
+        "n_runs": n_runs,
+        "consolidation_call_count": final_consolidation_call_count,
+        "consolidation_total_wall_s": final_consolidation_total_wall_s,
+        # ── Reproducibility sidecar ──────────────────────────────────────────
+        "repro": repro,
     }
 
-    return {
+    result: dict = {
         "overall_mrr": overall_mrr,
         "overall_recall10": overall_recall10,
-        "category_mrr": category_mrr,
-        "category_recall10": category_recall10,
-        "elapsed_s": elapsed,
-        "consolidation_total_wall_s": consolidation_total_wall_s,
-        "consolidation_call_count": consolidation_call_count,
+        "category_mrr": final_category_mrr,
+        "category_recall10": final_category_recall10,
+        "elapsed_s": final_elapsed,
+        "consolidation_total_wall_s": final_consolidation_total_wall_s,
+        "consolidation_call_count": final_consolidation_call_count,
         "manifest": manifest,
     }
+    if n_runs > 1:
+        result["runs_mrr"] = runs_mrr
+        result["runs_recall10"] = runs_recall10
+        result["stats_mrr"] = stats_mrr
+        result["stats_recall10"] = stats_recall10
+    return result
 
 
 if __name__ == "__main__":
@@ -328,7 +399,21 @@ if __name__ == "__main__":
         default=None,
         help="Optional path to write the result+manifest JSON.",
     )
+    parser.add_argument(
+        "--n-runs",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "Repeat the full evaluation N times and report mean ± std and "
+            "95 %% CI on MRR and Recall@10 (default: 1, preserves existing "
+            "single-run behaviour)."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.n_runs < 1:
+        parser.error("--n-runs must be >= 1")
 
     # Export ablation env var BEFORE any handler/store import touches it. The
     # ablation.is_disabled reads os.environ on every call, so setting it here
@@ -354,6 +439,7 @@ if __name__ == "__main__":
         verbose=args.verbose,
         with_consolidation=args.with_consolidation,
         ablate_mechanism=ablate_mech,
+        n_runs=args.n_runs,
     )
 
     if args.results_out:

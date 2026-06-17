@@ -139,12 +139,18 @@ def _effective_min_dwell(
         synaptic tagging stages are not schema-dependent.
     """
     if stage in (ConsolidationStage.LATE_LTP, ConsolidationStage.CONSOLIDATED):
-        # Tse et al. (2007): ~15x acceleration for schema-consistent memories.
-        # Engineering approximation: exponential gives diminishing returns.
-        schema_factor = 15.0 ** (-schema_match)  # 1.0 at 0, ~0.067 at 1.0
+        # Tse et al. (2007) shows ~10-15x acceleration experimentally, but
+        # provides NO equation.  The base 15.0 and the exponential form are
+        # engineering choices: 15.0**(-schema_match) equals 1.0 at match=0
+        # and ~0.067 at match=1.0, matching the experimental magnitude.
+        # Source: engineering choice — calibration pending — see ablation.
+        schema_factor = 15.0 ** (-schema_match)  # source: engineering choice
     else:
-        # Earlier stages: modest acceleration (hand-tuned, no paper basis)
-        schema_factor = 1.0 - (schema_match * 0.2)
+        # Earlier stages: modest linear factor — schema acceleration is a
+        # systems-consolidation phenomenon; synaptic tagging is not
+        # schema-dependent.  The 0.2 coefficient is hand-tuned.
+        # Source: engineering choice — calibration pending — see ablation.
+        schema_factor = 1.0 - (schema_match * 0.2)  # source: engineering choice
     return props.min_dwell_hours * schema_factor  # type: ignore[attr-defined]
 
 

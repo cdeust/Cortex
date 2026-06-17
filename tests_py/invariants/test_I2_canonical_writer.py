@@ -39,9 +39,11 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # A3 batched writer (homeostatic cohort branch + any other batch consumer).
     # update_memories_heat_batch — SET line at 624 (shifted 608→624 likewise).
     ("infrastructure/pg_store.py", 624),
-    # SQLite parity (shifted 284→288, 328→332).
-    ("infrastructure/sqlite_store.py", 288),
-    ("infrastructure/sqlite_store.py", 332),
+    # SQLite parity (shifted 288→291, 332→335 by the P0-1a insert_memory
+    # supersedes_id fix, which added rows above bump_heat_raw; both sites
+    # remain the canonical bump_heat_raw / update_memories_heat_batch writers).
+    ("infrastructure/sqlite_store.py", 291),
+    ("infrastructure/sqlite_store.py", 335),
     # Homeostatic fold (amortized ~once/month per domain). Shifted 292→317
     # when the bounded-I/O slim-projection helpers were added above it.
     ("handlers/consolidation/homeostatic.py", 317),

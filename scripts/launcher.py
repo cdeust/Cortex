@@ -52,18 +52,47 @@ def _ensure_deps(deps_dir: str) -> None:
     hook can read its payload. Install whatever's missing in a single
     pip call so partial states (e.g., pydantic present but fastmcp
     absent after a python upgrade) self-heal.
+
+    Supply-chain safety: all direct packages are pinned to the exact
+    releases resolved in uv.lock (see the ``# source: uv.lock``
+    comments below).  Pip is given ``--index-url https://pypi.org/simple/``
+    so a compromised or custom index cannot shadow the named packages.
+    Transitive dependencies are resolved by pip at install time and are
+    NOT separately pinned — they are bounded by the exact version of the
+    direct package, which limits the attack surface to packages that the
+    pinned release would have accepted.
+
+    Full ``--require-hashes`` mode is intentionally NOT used here: pip's
+    ``--require-hashes`` requires every package in the dependency
+    closure (including pip's own install-time dependencies) to be listed
+    with a hash.  At bootstrap time we install only the small set below;
+    shipping or generating a complete transitive-closure hash file at
+    runtime would add fragile complexity with little security gain over
+    exact-version pinning + index locking on the direct installs.
     """
     os.makedirs(deps_dir, exist_ok=True)
+
+    # numpy resolves to two versions in uv.lock depending on Python:
+    #   2.2.6 for Python < 3.11  (resolution-marker "python_full_version < '3.11'")
+    #   2.4.4 for Python >= 3.11 (all remaining markers)
+    # source: uv.lock (numpy blocks at lines ~1968 and ~2033).
+    # uv.lock also forks by sys_platform for some packages, but numpy's
+    # version split is purely by python_full_version — no platform branch
+    # is needed here. This covers the non-win32 install path used by this
+    # bootstrap; win32 users are not excluded, and the same versions apply.
+    _numpy_version = "2.2.6" if sys.version_info < (3, 11) else "2.4.4"
+
     # Base runtime (every entry point) + postgres trio (pg_store
     # hard-imports at module load): (import_name, pip_spec).
+    # All versions sourced from uv.lock resolved set.
     required = [
-        ("fastmcp", "fastmcp>=2.0.0"),
-        ("pydantic", "pydantic>=2.0.0"),
-        ("pydantic_settings", "pydantic-settings>=2.0.0"),
-        ("numpy", "numpy>=1.24.0"),
-        ("psycopg", "psycopg[binary]>=3.1"),
-        ("psycopg_pool", "psycopg_pool>=3.2"),
-        ("pgvector", "pgvector>=0.3"),
+        ("fastmcp", "fastmcp==3.2.4"),                        # source: uv.lock
+        ("pydantic", "pydantic==2.13.3"),                      # source: uv.lock
+        ("pydantic_settings", "pydantic-settings==2.14.0"),    # source: uv.lock
+        ("numpy", f"numpy=={_numpy_version}"),                 # source: uv.lock
+        ("psycopg", "psycopg[binary]==3.3.3"),                 # source: uv.lock
+        ("psycopg_pool", "psycopg_pool==3.3.0"),               # source: uv.lock
+        ("pgvector", "pgvector==0.4.2"),                       # source: uv.lock
     ]
     missing = [spec for name, spec in required if not _importable(name, deps_dir)]
     if not missing:
@@ -138,24 +167,68 @@ def _pip_install(deps_dir: str, packages: list[str]) -> None:
     import shutil
 
     tmp_dir = f"{deps_dir}.tmp-{os.getpid()}"
+    # --index-url: constrain installs to the official PyPI index so a
+    # custom or compromised index cannot shadow packages via
+    # dependency-confusion attacks.
+    # Exact == version pinning (sourced from uv.lock) is a VERSION
+    # safeguard only: it prevents a newer release from silently running.
+    # It does NOT verify content integrity against a compromised index —
+    # pip performs no hash check by default. For integrity verification,
+    # --require-hashes with a complete transitive hash manifest would be
+    # needed; that is intentionally omitted here (see _ensure_deps docstring).
+    #
+    # The environment passed to pip is sanitized (see clean_env below) to
+    # prevent the caller's PIP_INDEX_URL / PIP_EXTRA_INDEX_URL /
+    # PIP_CONFIG_FILE from overriding --index-url and re-opening the
+    # dependency-confusion vector.
+    clean_env = dict(os.environ)
+    for _var in (
+        "PIP_INDEX_URL",
+        "PIP_EXTRA_INDEX_URL",
+        "PIP_CONFIG_FILE",
+        "PIP_FIND_LINKS",
+        "PIP_TRUSTED_HOST",
+    ):
+        clean_env.pop(_var, None)
     base = [
         sys.executable,
         "-m",
         "pip",
         "install",
         "-q",
+        "--index-url",
+        "https://pypi.org/simple/",
         "--target",
         tmp_dir,
         *packages,
     ]
     try:
-        proc = subprocess.run(base, capture_output=True, text=True)
+        proc = subprocess.run(base, capture_output=True, text=True, env=clean_env)
         err = (proc.stderr or "") + (proc.stdout or "")
         if proc.returncode != 0 and "externally-managed-environment" in err:
+            # PEP 668 (https://peps.python.org/pep-0668/) interpreters
+            # refuse bare ``pip install`` with an
+            # ``externally-managed-environment`` error.  Installing with
+            # ``--target`` writes into the plugin's own deps dir (never
+            # system site-packages), so the override is safe.  We warn
+            # prominently so the operator is aware — this is NOT a silent
+            # fallback.
+            print(
+                "[cortex-launcher] WARNING: pip reports an "
+                "externally-managed Python environment (PEP 668). "
+                "The Cortex plugin installs dependencies into its own "
+                "private directory (not system site-packages), so "
+                "--break-system-packages is safe here. "
+                "Retrying with that flag now. "
+                "If you want to suppress this retry, pre-install the "
+                f"packages yourself: {', '.join(packages)}",
+                file=sys.stderr,
+            )
             proc = subprocess.run(
                 base + ["--break-system-packages"],
                 capture_output=True,
                 text=True,
+                env=clean_env,
             )
             err = (proc.stderr or "") + (proc.stdout or "")
         if proc.returncode != 0:
@@ -185,9 +258,10 @@ def _ensure_all_deps(deps_dir: str) -> None:
     """Install all dependencies including ML packages."""
     _ensure_deps(deps_dir)
     if not _importable("sentence_transformers", deps_dir):
+        # source: uv.lock (sentence-transformers and flashrank blocks)
         _pip_install(
             deps_dir,
-            ["sentence-transformers>=2.2.0", "flashrank>=0.2.0"],
+            ["sentence-transformers==5.4.1", "flashrank==0.2.10"],
         )
 
 
