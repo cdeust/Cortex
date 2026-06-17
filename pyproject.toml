@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neuro-cortex-memory"
-version = "3.22.0"
+version = "3.23.0"
 description = "Scientifically-grounded memory system based on computational neuroscience research"
 readme = "README.md"
 license = "MIT"
@@ -36,11 +36,16 @@ Repository = "https://github.com/cdeust/Cortex"
 # (`/plugin install cortex@cortex-plugins`). The marketplace clones this
 # repo into ~/.claude/plugins/cache/cortex-plugins/cortex/<version>/ and
 # Claude Code spawns the MCP server + hooks via scripts/launcher.py
-# (see .mcp.json + .claude-plugin/plugin.json). Cortex is NOT published
-# to PyPI and uvx-based invocation is NOT supported.
-# The single console script below is for local CLI use of the doctor
-# from a checkout (not from a PyPI install).
+# (see .mcp.json + .claude-plugin/plugin.json). PyPI is a deprecated,
+# best-effort secondary channel (see .github/workflows/release.yml).
+# The two console scripts below are for local CLI use from a checkout:
+#   - cortex-doctor: runs the environment doctor.
+#   - neuro-cortex-memory: starts the stdio MCP server (equivalent to
+#     `python -m mcp_server`). Registry indexers such as Glama build the
+#     repo with `uv sync` and launch it via `uv run neuro-cortex-memory`,
+#     so this entry point must exist and match the package name.
 cortex-doctor = "mcp_server.doctor:run"
+neuro-cortex-memory = "mcp_server.__main__:main"
 
 [project.optional-dependencies]
 postgresql = [

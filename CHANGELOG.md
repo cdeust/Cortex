@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.23.0] - 2026-06-17
+
+Registry-indexer build fix. No runtime behaviour change.
+
+### Fixed
+- **Glama (and any `uv run`-based registry indexer) build.** Added the
+  `neuro-cortex-memory` console script (`[project.scripts]`, entry point
+  `mcp_server.__main__:main`). Glama does not use the repo `Dockerfile`; it builds
+  with `uv sync` and launches the server via `uv run neuro-cortex-memory`. Only
+  `cortex-doctor` was declared, so `uv run neuro-cortex-memory` failed with
+  `Failed to spawn: neuro-cortex-memory — No such file or directory`; the container
+  exited before the MCP handshake, no tool registered, and the tools score
+  collapsed. The new entry point starts the stdio server (equivalent to
+  `python -m mcp_server`) and registers all 46 MCP tools at import time **without a
+  PostgreSQL connection**, so `tools/list` answers inside Glama's DB-less container.
+  The marketplace install path (`scripts/launcher.py`) is unaffected.
+
 ## [3.22.0] - 2026-06-17
 
 Security + reliability release (P0/P1 audit hardening). PostgreSQL remains the
