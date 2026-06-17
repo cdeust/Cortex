@@ -101,6 +101,51 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
+  test-sqlite:
+    name: Test (SQLite backend)
+    runs-on: ubuntu-latest
+
+    # Force the SQLite fallback path — no PostgreSQL installed or started.
+    # The conftest detects PG-unreachable and sets CORTEX_MEMORY_STORE_BACKEND=sqlite
+    # automatically; this env var makes the selection explicit and observable in logs.
+    # source: mcp_server/infrastructure/memory_store.py _construct_store() — the
+    # 'sqlite' backend branch is always reachable without PG; conftest.py line 99
+    # mirrors this override when _USE_PG is False.
+    env:
+      CORTEX_MEMORY_STORE_BACKEND: sqlite
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-3.12-sqlite-${{ hashFiles('pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-3.12-sqlite-
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
+
+      - name: Install dependencies (no postgresql extra)
+        run: pip install -e ".[dev,sqlite]"
+
+      - name: Pre-download embedding model
+        run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"
+        continue-on-error: true
+
+      - name: Run tests against SQLite backend
+        run: pytest --tb=short -q
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

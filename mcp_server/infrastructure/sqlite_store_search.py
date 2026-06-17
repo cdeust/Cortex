@@ -121,7 +121,7 @@ class SqliteSearchMixin:
         params.append(pool)
         rows = self._conn.execute(
             f"SELECT id FROM memories WHERE {' AND '.join(conds)} "
-            f"ORDER BY heat DESC LIMIT ?",
+            f"ORDER BY heat_base DESC LIMIT ?",
             params,
         ).fetchall()
         for rank, r in enumerate(rows, 1):
@@ -155,7 +155,7 @@ class SqliteSearchMixin:
         domain: str | None,
         directory: str | None,
     ) -> tuple[list[str], list[Any]]:
-        conds = ["heat >= ?", "NOT is_stale"]
+        conds = ["heat_base >= ?", "NOT is_stale"]
         params: list[Any] = [min_heat]
         if domain:
             conds.append("(domain = ? OR is_global = 1)")
@@ -206,7 +206,7 @@ class SqliteSearchMixin:
             row = row_map.get(mid)
             if row is None:
                 continue
-            if row["heat"] < min_heat or row["is_stale"]:
+            if row["heat_base"] < min_heat or row["is_stale"]:
                 continue
             is_global = bool(row.get("is_global", 0))
             if domain and row["domain"] != domain and not is_global:
@@ -218,7 +218,7 @@ class SqliteSearchMixin:
                     "memory_id": mid,
                     "content": row["content"],
                     "score": scores[mid],
-                    "heat": row["heat"],
+                    "heat": row["heat_base"],
                     "domain": row["domain"],
                     "created_at": row["created_at"],
                     "store_type": row["store_type"],
@@ -343,7 +343,7 @@ class SqliteSearchMixin:
             name = entity["name"]
             mem_rows = self._conn.execute(
                 "SELECT id FROM memories WHERE content LIKE ? "
-                "AND heat >= ? AND NOT is_stale LIMIT 20",
+                "AND heat_base >= ? AND NOT is_stale LIMIT 20",
                 (f"%{name}%", min_heat),
             ).fetchall()
             for mr in mem_rows:

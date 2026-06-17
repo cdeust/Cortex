@@ -23,8 +23,8 @@ class SqliteStatsMixin:
                 COUNT(*) AS total,
                 SUM(CASE WHEN store_type = 'episodic' THEN 1 ELSE 0 END) AS episodic,
                 SUM(CASE WHEN store_type = 'semantic' THEN 1 ELSE 0 END) AS semantic,
-                SUM(CASE WHEN heat >= 0.05 THEN 1 ELSE 0 END) AS active,
-                SUM(CASE WHEN heat < 0.05 THEN 1 ELSE 0 END) AS archived,
+                SUM(CASE WHEN heat_base >= 0.05 THEN 1 ELSE 0 END) AS active,
+                SUM(CASE WHEN heat_base < 0.05 THEN 1 ELSE 0 END) AS archived,
                 SUM(CASE WHEN is_stale THEN 1 ELSE 0 END) AS stale,
                 SUM(CASE WHEN is_protected THEN 1 ELSE 0 END) AS protected
             FROM memories
@@ -35,7 +35,7 @@ class SqliteStatsMixin:
 
     def get_avg_heat(self) -> float:
         row = self._conn.execute(
-            "SELECT AVG(heat) AS avg_heat FROM memories"
+            "SELECT AVG(heat_base) AS avg_heat FROM memories"
         ).fetchone()
         return float(row["avg_heat"] or 0.0) if row else 0.0
 
@@ -150,10 +150,10 @@ class SqliteStatsMixin:
         self, domain: str, limit: int = 50
     ) -> list[dict[str, Any]]:
         rows = self._conn.execute(
-            "SELECT id, heat, importance, "
+            "SELECT id, heat_base, importance, "
             "consolidation_stage, directory_context, interference_score "
             "FROM memories WHERE domain = ? "
-            "AND NOT is_stale ORDER BY heat DESC LIMIT ?",
+            "AND NOT is_stale ORDER BY heat_base DESC LIMIT ?",
             (domain, limit),
         ).fetchall()
         return [dict(r) for r in rows]
