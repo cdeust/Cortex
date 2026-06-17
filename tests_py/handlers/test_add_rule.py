@@ -46,8 +46,15 @@ class TestAddRuleSuccess:
         result = await handler(_minimal_args())
 
         assert result["created"] is True
-        for key in ("rule_id", "rule_type", "scope", "scope_value", "condition",
-                    "action", "priority"):
+        for key in (
+            "rule_id",
+            "rule_type",
+            "scope",
+            "scope_value",
+            "condition",
+            "action",
+            "priority",
+        ):
             assert key in result, f"missing key in success response: {key}"
 
     @pytest.mark.asyncio
@@ -116,11 +123,13 @@ class TestAddRuleHardType:
         """POST-9: rule_type=hard, action=exclude stored and echoed correctly."""
         from mcp_server.handlers.add_rule import handler
 
-        result = await handler({
-            "condition": "tag:deprecated",
-            "action": "exclude",
-            "rule_type": "hard",
-        })
+        result = await handler(
+            {
+                "condition": "tag:deprecated",
+                "action": "exclude",
+                "rule_type": "hard",
+            }
+        )
 
         assert result["created"] is True
         assert result["rule_type"] == "hard"
@@ -136,11 +145,13 @@ class TestAddRuleTagType:
         """POST-10: rule_type=tag, action=tag:<name> stored and echoed correctly."""
         from mcp_server.handlers.add_rule import handler
 
-        result = await handler({
-            "condition": "keyword:TODO",
-            "action": "tag:review",
-            "rule_type": "tag",
-        })
+        result = await handler(
+            {
+                "condition": "keyword:TODO",
+                "action": "tag:review",
+                "rule_type": "tag",
+            }
+        )
 
         assert result["created"] is True
         assert result["rule_type"] == "tag"
@@ -181,13 +192,15 @@ class TestAddRuleDomainScope:
         """Scope=domain with scope_value stored and echoed."""
         from mcp_server.handlers.add_rule import handler
 
-        result = await handler({
-            "condition": "tag:old",
-            "action": "penalize:0.5",
-            "rule_type": "soft",
-            "scope": "domain",
-            "scope_value": "auth-service",
-        })
+        result = await handler(
+            {
+                "condition": "tag:old",
+                "action": "penalize:0.5",
+                "rule_type": "soft",
+                "scope": "domain",
+                "scope_value": "auth-service",
+            }
+        )
 
         assert result["created"] is True
         assert result["scope"] == "domain"
@@ -198,13 +211,15 @@ class TestAddRuleDomainScope:
         """Scope=directory with scope_value stored and echoed."""
         from mcp_server.handlers.add_rule import handler
 
-        result = await handler({
-            "condition": "source:import",
-            "action": "exclude",
-            "rule_type": "hard",
-            "scope": "directory",
-            "scope_value": "/Users/alice/code/cortex",
-        })
+        result = await handler(
+            {
+                "condition": "source:import",
+                "action": "exclude",
+                "rule_type": "hard",
+                "scope": "directory",
+                "scope_value": "/Users/alice/code/cortex",
+            }
+        )
 
         assert result["created"] is True
         assert result["scope"] == "directory"
@@ -252,11 +267,13 @@ class TestAddRuleValidationErrors:
         """POST-7: rule_type not in {hard,soft,tag} → created=False."""
         from mcp_server.handlers.add_rule import handler
 
-        result = await handler({
-            "condition": "tag:old",
-            "action": "exclude",
-            "rule_type": "unknown_type",
-        })
+        result = await handler(
+            {
+                "condition": "tag:old",
+                "action": "exclude",
+                "rule_type": "unknown_type",
+            }
+        )
 
         assert result["created"] is False
         assert "reason" in result
@@ -266,11 +283,13 @@ class TestAddRuleValidationErrors:
         """POST-8: scope not in {global,domain,directory} → created=False."""
         from mcp_server.handlers.add_rule import handler
 
-        result = await handler({
-            "condition": "tag:old",
-            "action": "exclude",
-            "scope": "cluster",
-        })
+        result = await handler(
+            {
+                "condition": "tag:old",
+                "action": "exclude",
+                "scope": "cluster",
+            }
+        )
 
         assert result["created"] is False
         assert "reason" in result
@@ -280,26 +299,33 @@ class TestAddRuleValidationErrors:
         """POST-4: scope=domain but no scope_value → created=False."""
         from mcp_server.handlers.add_rule import handler
 
-        result = await handler({
-            "condition": "tag:old",
-            "action": "exclude",
-            "scope": "domain",
-        })
+        result = await handler(
+            {
+                "condition": "tag:old",
+                "action": "exclude",
+                "scope": "domain",
+            }
+        )
 
         assert result["created"] is False
         assert "reason" in result
-        assert "scope_value" in result["reason"].lower() or "scope" in result["reason"].lower()
+        assert (
+            "scope_value" in result["reason"].lower()
+            or "scope" in result["reason"].lower()
+        )
 
     @pytest.mark.asyncio
     async def test_directory_scope_without_scope_value_returns_error(self):
         """POST-4: scope=directory but no scope_value → created=False."""
         from mcp_server.handlers.add_rule import handler
 
-        result = await handler({
-            "condition": "tag:old",
-            "action": "exclude",
-            "scope": "directory",
-        })
+        result = await handler(
+            {
+                "condition": "tag:old",
+                "action": "exclude",
+                "scope": "directory",
+            }
+        )
 
         assert result["created"] is False
         assert "reason" in result
@@ -346,45 +372,53 @@ class TestValidateRuleArgs:
     def test_invalid_rule_type(self):
         from mcp_server.handlers.add_rule import _validate_rule_args
 
-        err = _validate_rule_args({
-            "condition": "tag:old",
-            "action": "exclude",
-            "rule_type": "mega",
-        })
+        err = _validate_rule_args(
+            {
+                "condition": "tag:old",
+                "action": "exclude",
+                "rule_type": "mega",
+            }
+        )
         assert err is not None
         assert err["created"] is False
 
     def test_invalid_scope(self):
         from mcp_server.handlers.add_rule import _validate_rule_args
 
-        err = _validate_rule_args({
-            "condition": "tag:old",
-            "action": "exclude",
-            "scope": "cluster",
-        })
+        err = _validate_rule_args(
+            {
+                "condition": "tag:old",
+                "action": "exclude",
+                "scope": "cluster",
+            }
+        )
         assert err is not None
         assert err["created"] is False
 
     def test_domain_scope_missing_scope_value(self):
         from mcp_server.handlers.add_rule import _validate_rule_args
 
-        err = _validate_rule_args({
-            "condition": "tag:old",
-            "action": "exclude",
-            "scope": "domain",
-        })
+        err = _validate_rule_args(
+            {
+                "condition": "tag:old",
+                "action": "exclude",
+                "scope": "domain",
+            }
+        )
         assert err is not None
         assert err["created"] is False
 
     def test_domain_scope_with_scope_value_ok(self):
         from mcp_server.handlers.add_rule import _validate_rule_args
 
-        err = _validate_rule_args({
-            "condition": "tag:old",
-            "action": "exclude",
-            "scope": "domain",
-            "scope_value": "auth",
-        })
+        err = _validate_rule_args(
+            {
+                "condition": "tag:old",
+                "action": "exclude",
+                "scope": "domain",
+                "scope_value": "auth",
+            }
+        )
         assert err is None
 
 

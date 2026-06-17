@@ -121,6 +121,7 @@ def redact_url(url: str) -> str:
 # ── Self-check assertions (run once at import; caught by python3 -m py_compile
 #    equivalents and by the test suite) ────────────────────────────────────────
 
+
 def _selfcheck() -> None:
     """Regression assertions for the two confirmed leak vectors."""
     # Repro: query-parameter password must be masked.

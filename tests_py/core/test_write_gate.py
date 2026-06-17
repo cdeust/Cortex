@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timezone, timedelta
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -130,9 +129,7 @@ class TestDetermineBypass:
         assert reason is None
 
     def test_empty_content_empty_tags_no_bypass(self):
-        bypassed, reason = wg.determine_bypass(
-            force=False, content="", tags=[]
-        )
+        bypassed, reason = wg.determine_bypass(force=False, content="", tags=[])
         assert bypassed is False
         assert reason is None
 
@@ -176,9 +173,7 @@ class TestComputeEmbeddingNovelty:
         assert result == pytest.approx(0.1, abs=1e-9)
 
     def test_clamped_to_unit_interval_on_oversize_similarity(self):
-        result = wg.compute_embedding_novelty(
-            embedding=None, similarities=[1.5]
-        )
+        result = wg.compute_embedding_novelty(embedding=None, similarities=[1.5])
         assert 0.0 <= result <= 1.0
 
 
@@ -236,9 +231,7 @@ class TestComputeEntityNovelty:
         # CamelCase identifiers so extractor picks them up
         content = "PaymentGateway StripeAdapter KafkaProducer"
         # First pass: discover what names are extracted
-        _, names, _, _ = wg.compute_entity_novelty(
-            content=content, known_lookup=set()
-        )
+        _, names, _, _ = wg.compute_entity_novelty(content=content, known_lookup=set())
         # Mark one as known if any were found, otherwise use empty set
         all_known = {names[0]} if names else set()
         _, names2, known, _ = wg.compute_entity_novelty(
@@ -418,9 +411,7 @@ class TestComputeStructuralNovelty:
     """
 
     def test_empty_recent_returns_default(self):
-        result = wg.compute_structural_novelty(
-            content="some text", recent_contents=[]
-        )
+        result = wg.compute_structural_novelty(content="some text", recent_contents=[])
         assert result == 0.7
 
     def test_identical_structure_low_novelty(self):
@@ -545,9 +536,7 @@ class TestApplyOscillatoryContext:
         store.load_oscillatory_state.return_value = None
         store.save_oscillatory_state.return_value = None
 
-        heat, theta, enc, state = wg.apply_oscillatory_context(
-            store=store, heat=0.6
-        )
+        heat, theta, enc, state = wg.apply_oscillatory_context(store=store, heat=0.6)
         # heat is modulated by encoding_mod but must stay in [0, 1]
         assert 0.0 <= heat <= 1.0
 
@@ -578,6 +567,7 @@ class TestApplyNeuromodulation:
 
     def _call(self, content="Some content", new_names=None, known=None, **kwargs):
         from mcp_server.core.oscillatory_clock import OscillatoryState
+
         osc_state = OscillatoryState()
         defaults = dict(
             content=content,
@@ -618,7 +608,7 @@ class TestApplyNeuromodulation:
         assert 0.0 <= heat <= 1.0
 
     def test_exception_path_returns_inputs_unchanged(self):
-        from mcp_server.core.oscillatory_clock import OscillatoryState
+
         # Pass an osc_state with a property that raises on attribute access
         bad_osc = MagicMock()
         bad_osc.ach_level = property(lambda self: (_ for _ in ()).throw(RuntimeError()))

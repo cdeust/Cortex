@@ -59,9 +59,7 @@ class SqliteMoodMixin:
         except (KeyError, TypeError, ValueError, IndexError):
             return None
 
-    def get_user_mood_state(
-        self, user_id: str = "default"
-    ) -> dict[str, float] | None:
+    def get_user_mood_state(self, user_id: str = "default") -> dict[str, float] | None:
         """Return the full mood state ``{valence, arousal}`` or None.
 
         Precondition: user_id is a non-empty string.
@@ -153,9 +151,7 @@ class SqliteMoodMixin:
 
     # ── Bulk embedding fetch ──────────────────────────────────────────
 
-    def get_embeddings_for_memories(
-        self, memory_ids: list[int]
-    ) -> dict[int, bytes]:
+    def get_embeddings_for_memories(self, memory_ids: list[int]) -> dict[int, bytes]:
         """Bulk fetch embeddings for a known set of memory IDs.
 
         Precondition: memory_ids is a list of valid integer IDs (may be empty).

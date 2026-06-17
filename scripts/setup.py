@@ -74,7 +74,9 @@ def _redact_db_url(url: str) -> str:
         if ":" in host:  # IPv6 literal — re-wrap in brackets
             host = f"[{host}]"
         port = parsed.port
-        netloc = f"{user}:***@{host}:{port}" if port is not None else f"{user}:***@{host}"
+        netloc = (
+            f"{user}:***@{host}:{port}" if port is not None else f"{user}:***@{host}"
+        )
     return urllib.parse.urlunparse(
         (parsed.scheme, netloc, parsed.path, parsed.params, query, parsed.fragment)
     )

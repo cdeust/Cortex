@@ -32,8 +32,6 @@ Contract assertions (each test must be able to fail on regression):
 
 from __future__ import annotations
 
-import os
-import tempfile
 
 import pytest
 
@@ -294,7 +292,9 @@ class TestProspectiveMemory:
         )
         assert isinstance(pm_id, int) and pm_id > 0
         active = store.get_active_prospective_memories()
-        assert any(p["content"] == "Remember to clean up test artifacts" for p in active)
+        assert any(
+            p["content"] == "Remember to clean up test artifacts" for p in active
+        )
 
     def test_deactivate_prospective_memory(self, store):
         pm_id = store.insert_prospective_memory(

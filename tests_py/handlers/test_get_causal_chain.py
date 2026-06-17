@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -236,9 +235,7 @@ class TestDepthCap:
         tgt_id = _insert_entity(store, "CapTgt", "concept")
         _insert_relationship(store, src_id, tgt_id, "caused_by")
 
-        result = _run(
-            _handler_impl({"entity_name": "CapSrc", "max_depth": 10})
-        )
+        result = _run(_handler_impl({"entity_name": "CapSrc", "max_depth": 10}))
         # The handler applies min(max_depth, 5); result["max_depth"] must be ≤ 5
         assert result["max_depth"] <= 5
 
@@ -326,9 +323,7 @@ class TestDirection:
         # A causes B (outgoing from A)
         _insert_relationship(store, a_id, b_id, "caused_by")
 
-        result = _run(
-            _handler_impl({"entity_name": "DirA", "direction": "outgoing"})
-        )
+        result = _run(_handler_impl({"entity_name": "DirA", "direction": "outgoing"}))
         # At minimum, the direct edge A→B must appear
         assert result["total_edges"] >= 1
 

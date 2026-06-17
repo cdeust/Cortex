@@ -12,10 +12,6 @@ Contract (from handler docstring and schema):
   - Empty scope → validated=0, stale_found=0, stale_updated=0, reports=[].
 """
 
-import asyncio
-import os
-import tempfile
-
 import pytest
 
 from mcp_server.handlers.validate_memory import (
@@ -300,9 +296,7 @@ class TestValidateMemoryStaleDetection:
             }
         )
         # dry_run=True: stale_found counts detected stale memories
-        assert result["stale_found"] >= 1, (
-            "dry_run should still report stale_found"
-        )
+        assert result["stale_found"] >= 1, "dry_run should still report stale_found"
         # But stale_updated must be 0 — no DB writes occurred
         assert result["stale_updated"] == 0, (
             "dry_run=True must not write is_stale to the database"

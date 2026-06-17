@@ -147,7 +147,13 @@ def multi_run_stats(values: list[float]) -> dict[str, float | int | None]:
     """
     n = len(values)
     if n == 0:
-        return {"mean": None, "std": None, "n": 0, "ci95_lower": None, "ci95_upper": None}
+        return {
+            "mean": None,
+            "std": None,
+            "n": 0,
+            "ci95_lower": None,
+            "ci95_upper": None,
+        }
 
     mean = sum(values) / n
     if n == 1:

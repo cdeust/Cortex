@@ -184,9 +184,7 @@ class TestComputeCoverageScore:
         assert 0 <= score <= 100
 
     def test_extreme_compression_penalty_bounded(self):
-        score = self._call(
-            **self._base(compression_ratio=1.0)
-        )
+        score = self._call(**self._base(compression_ratio=1.0))
         assert 0 <= score <= 100
 
     def test_returns_integer(self):
@@ -284,7 +282,11 @@ class TestAssessCoverageHandlerEmptyStore:
 
         result = await handler()
         # The early-return dict has only: coverage_score, total_memories, recommendations
-        assert set(result.keys()) == {"coverage_score", "total_memories", "recommendations"}
+        assert set(result.keys()) == {
+            "coverage_score",
+            "total_memories",
+            "recommendations",
+        }
 
     @pytest.mark.asyncio
     async def test_none_args_treated_as_empty(self):

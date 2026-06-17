@@ -11,8 +11,6 @@ Contract under test (from anchor.py docstring and schema):
   POST-8: idempotent — anchoring an already-anchored memory does not duplicate _anchor tag.
 """
 
-import asyncio
-
 import pytest
 
 from mcp_server.handlers.anchor import (
@@ -46,7 +44,7 @@ class TestBuildAnchorTags:
         tags = _build_anchor_tags({"tags": []}, reason=long_reason)
         scoped = [t for t in tags if t.startswith("_anchor:")]
         assert len(scoped) == 1
-        suffix = scoped[0][len("_anchor:"):]
+        suffix = scoped[0][len("_anchor:") :]
         assert len(suffix) <= 40
 
     def test_no_reason_no_scoped_tag(self):
@@ -132,7 +130,6 @@ def _seed_memory(content: str, tags=None, **kwargs) -> int:
     from mcp_server.handlers.anchor import _get_store
 
     store = _get_store()
-    import json as _json
 
     data: dict = {
         "content": content,
@@ -174,10 +171,12 @@ class TestAnchorHandlerSuccess:
             {"memory_id": mid, "reason": "critical architecture decision"}
         )
         assert result["anchored"] is True
-        assert result["content_preview"].startswith("[ANCHOR: critical architecture decision]")
-        assert any(
-            t.startswith("_anchor:critical") for t in result["tags"]
-        ), f"scoped anchor tag missing from {result['tags']}"
+        assert result["content_preview"].startswith(
+            "[ANCHOR: critical architecture decision]"
+        )
+        assert any(t.startswith("_anchor:critical") for t in result["tags"]), (
+            f"scoped anchor tag missing from {result['tags']}"
+        )
 
     @pytest.mark.asyncio
     async def test_store_flags_written(self):

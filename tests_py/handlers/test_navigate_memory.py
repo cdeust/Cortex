@@ -17,9 +17,7 @@ Contract under test (from handler docstring and schema):
 from __future__ import annotations
 
 import asyncio
-import datetime
 
-import pytest
 
 from mcp_server.handlers.navigate_memory import handler as navigate_handler
 
@@ -222,9 +220,13 @@ class TestNavigateWithNeighbors:
             "sort test neighbor memory beta",
         )
         result = asyncio.run(navigate_handler({"memory_id": mid_a}))
-        _assert_neighbors_found(result, "test_neighbors_sorted_ascending_by_sr_distance")
+        _assert_neighbors_found(
+            result, "test_neighbors_sorted_ascending_by_sr_distance"
+        )
         distances = [n["sr_distance"] for n in result["neighbors"]]
-        assert distances == sorted(distances), "neighbors not sorted by sr_distance ascending"
+        assert distances == sorted(distances), (
+            "neighbors not sorted by sr_distance ascending"
+        )
 
     def test_each_neighbor_has_required_fields(self):
         """Each neighbor dict must carry the fields the schema promises."""
@@ -301,7 +303,9 @@ class TestNavigateMaxDepthCap:
             "not satisfied (access_count < 1 for one or both memories?)"
         )
         # Success path: max_depth key must be present and capped.
-        assert "max_depth" in result, f"max_depth key absent in success result: {result}"
+        assert "max_depth" in result, (
+            f"max_depth key absent in success result: {result}"
+        )
         assert result["max_depth"] <= 4, (
             f"max_depth not capped: got {result['max_depth']}, expected <= 4"
         )
@@ -323,7 +327,9 @@ class TestNavigateMaxDepthCap:
             "No co-access neighbors found — _store_coaccessed_pair precondition "
             "not satisfied (access_count < 1 for one or both memories?)"
         )
-        assert "max_depth" in result, f"max_depth key absent in success result: {result}"
+        assert "max_depth" in result, (
+            f"max_depth key absent in success result: {result}"
+        )
         assert result["max_depth"] == 1, (
             f"max_depth=1 not preserved: got {result['max_depth']}"
         )
@@ -343,7 +349,9 @@ class TestNavigate2DMap:
     def test_2d_map_absent_without_neighbors(self):
         """include_2d_map=True but no neighbors — coordinates_2d is still absent."""
         mid = _store_memory("2d map empty test memory zqq882")
-        result = asyncio.run(navigate_handler({"memory_id": mid, "include_2d_map": True}))
+        result = asyncio.run(
+            navigate_handler({"memory_id": mid, "include_2d_map": True})
+        )
         # Handler only attaches coordinates_2d when there ARE neighbors
         # (conditional in _handler_impl: `if include_2d and neighbors`)
         assert "coordinates_2d" not in result

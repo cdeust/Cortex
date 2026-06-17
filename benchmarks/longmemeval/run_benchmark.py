@@ -319,9 +319,7 @@ def run_benchmark(
         runs_recall10.append(overall_recall10_run)
 
         # Keep the last run's breakdown for the final report.
-        final_category_mrr = {
-            k: sum(v) / len(v) for k, v in category_mrr_run.items()
-        }
+        final_category_mrr = {k: sum(v) / len(v) for k, v in category_mrr_run.items()}
         final_category_recall10 = {
             k: sum(v) / len(v) for k, v in category_recall10_run.items()
         }

@@ -95,7 +95,13 @@ def _recall(
     max_results: int = 10,
 ) -> list[dict]:
     """Call the PL/pgSQL stored procedure directly — no client-side reranking."""
-    w = weights or {"vector": 1.0, "fts": 0.5, "ngram": 0.3, "heat": 0.3, "recency": 0.0}
+    w = weights or {
+        "vector": 1.0,
+        "fts": 0.5,
+        "ngram": 0.3,
+        "heat": 0.3,
+        "recency": 0.0,
+    }
     return store.recall_memories(
         query_text=query,
         query_embedding=_query_aligned_emb(1.0),  # canonical query direction
@@ -140,7 +146,9 @@ class TestReturnShape:
         rows = _recall(store, "shape contract alpha", min_heat=0.0)
         assert rows, "expected at least one row after insert"
         for col in self._REQUIRED_COLUMNS:
-            assert col in rows[0], f"missing required column in stored-procedure output: {col}"
+            assert col in rows[0], (
+                f"missing required column in stored-procedure output: {col}"
+            )
 
     def test_score_is_positive_float(self, store):
         """Postcondition: score is a non-negative numeric value."""
@@ -159,7 +167,9 @@ class TestReturnShape:
             assert isinstance(row["score"], (int, float)), (
                 f"score must be numeric, got {type(row['score'])}"
             )
-            assert row["score"] >= 0.0, f"score must be non-negative, got {row['score']}"
+            assert row["score"] >= 0.0, (
+                f"score must be non-negative, got {row['score']}"
+            )
 
     def test_insert_memory_returns_positive_integer_id(self, store):
         """Postcondition: insert_memory returns an int > 0."""
@@ -211,12 +221,20 @@ class TestRankingInvariants:
         rows = _recall(
             store,
             "distributed tracing OpenTelemetry spans",
-            weights={"vector": 0.5, "fts": 1.0, "ngram": 1.0, "heat": 0.0, "recency": 0.0},
+            weights={
+                "vector": 0.5,
+                "fts": 1.0,
+                "ngram": 1.0,
+                "heat": 0.0,
+                "recency": 0.0,
+            },
             min_heat=0.0,
         )
         ids = [r["memory_id"] for r in rows]
         assert high_id in ids, "relevant memory must appear in results"
-        assert low_id in ids, "irrelevant memory must also be retrievable (not excluded)"
+        assert low_id in ids, (
+            "irrelevant memory must also be retrievable (not excluded)"
+        )
         assert ids.index(high_id) < ids.index(low_id), (
             f"relevant memory {high_id} must outrank irrelevant {low_id}, got order {ids}"
         )
@@ -239,7 +257,13 @@ class TestRankingInvariants:
         rows = _recall(
             store,
             "identical content heat tiebreaker delta",
-            weights={"vector": 1.0, "fts": 0.5, "ngram": 0.3, "heat": 2.0, "recency": 0.0},
+            weights={
+                "vector": 1.0,
+                "fts": 0.5,
+                "ngram": 0.3,
+                "heat": 2.0,
+                "recency": 0.0,
+            },
             min_heat=0.0,
         )
         ids = [r["memory_id"] for r in rows]
@@ -366,7 +390,13 @@ class TestMultipleMemoriesRanking:
         rows = _recall(
             store,
             "PostgreSQL pgvector HNSW index cosine recall retrieval",
-            weights={"vector": 1.0, "fts": 0.8, "ngram": 0.5, "heat": 0.5, "recency": 0.0},
+            weights={
+                "vector": 1.0,
+                "fts": 0.8,
+                "ngram": 0.5,
+                "heat": 0.5,
+                "recency": 0.0,
+            },
             min_heat=0.0,
             max_results=10,
         )

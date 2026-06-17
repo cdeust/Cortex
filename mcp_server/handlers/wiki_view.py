@@ -181,7 +181,10 @@ def _resolve_query(args: dict) -> tuple[str, dict] | dict:
         registry = load_registry(Path(WIKI_ROOT))
         view = registry.views.get(name)
         if view is None:
-            return {"error": f"view {name!r} not found", "available": list(registry.views.keys())}
+            return {
+                "error": f"view {name!r} not found",
+                "available": list(registry.views.keys()),
+            }
         return view.query, {"name": view.name, "rel_path": view.rel_path}
 
     if inline_query:

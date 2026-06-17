@@ -48,13 +48,14 @@ _CONFTEST_PATH = os.path.abspath(
 with open(_CONFTEST_PATH, encoding="utf-8") as _fh:
     _CONFTEST_LINES = _fh.readlines()
 
+
 # Extract just the two guard-related function definitions.  We locate them by
 # scanning for the ``def`` lines rather than hard-coding line numbers, so a
 # shift from future edits above the functions does not break this test file.
 def _find_function_block(lines: list[str], func_name: str) -> tuple[int, int]:
     """Return (start, end) 0-indexed line indices for a top-level function."""
     start = next(
-        i for i, l in enumerate(lines) if l.startswith(f"def {func_name}(")
+        i for i, line in enumerate(lines) if line.startswith(f"def {func_name}(")
     )
     # Find the next top-level def/class/assignment (col 0) after start.
     end = len(lines)
@@ -70,8 +71,7 @@ _guard_start, _guard_end = _find_function_block(
     _CONFTEST_LINES, "_guard_against_populated_db"
 )
 _FUNC_SOURCE = "".join(
-    _CONFTEST_LINES[_looks_start:_looks_end]
-    + _CONFTEST_LINES[_guard_start:_guard_end]
+    _CONFTEST_LINES[_looks_start:_looks_end] + _CONFTEST_LINES[_guard_start:_guard_end]
 )
 
 
@@ -129,9 +129,10 @@ class TestAllowPopulatedOverride:
         guard = _make_guard("postgresql://host/production")
         fake_pg = _fake_psycopg(row_count=537396)
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             fake_pg.connect.assert_not_called()
             mock_exit.assert_not_called()
@@ -147,9 +148,10 @@ class TestAllowPopulatedOverride:
         guard = _make_guard("postgresql://host/cortex_test")
         fake_pg = _fake_psycopg(row_count=0)
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             mock_exit.assert_not_called()
 
@@ -182,9 +184,10 @@ class TestUrlNameCheck:
         guard = _make_guard(url)
         fake_pg = _fake_psycopg(row_count=999999)
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             fake_pg.connect.assert_not_called()
             mock_exit.assert_not_called()
@@ -213,9 +216,10 @@ class TestUrlNameCheck:
         guard = _make_guard(url)
         fake_pg = _fake_psycopg(raise_exc=Exception("no PG available"))
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()  # must not raise (exception is caught inside the guard)
             fake_pg.connect.assert_called_once()
             mock_exit.assert_not_called()
@@ -243,9 +247,10 @@ class TestPgUnreachable:
         guard = _make_guard("postgresql://localhost/mydb")
         fake_pg = _fake_psycopg(raise_exc=Exception("Connection refused"))
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             mock_exit.assert_not_called()
 
@@ -259,9 +264,10 @@ class TestPgUnreachable:
         guard = _make_guard("postgresql://localhost/mydb")
         fake_pg = _fake_psycopg(raise_exc=RuntimeError("timeout"))
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             mock_exit.assert_not_called()
 
@@ -281,9 +287,10 @@ class TestEmptyDb:
         guard = _make_guard("postgresql://localhost/mydb")
         fake_pg = _fake_psycopg(row_count=0)
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             mock_exit.assert_not_called()
 
@@ -300,9 +307,10 @@ class TestEmptyDb:
         # row_count=None instructs _fake_psycopg to return fetchone_result=None
         fake_pg = _fake_psycopg(row_count=None)
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             mock_exit.assert_not_called()
 
@@ -327,9 +335,10 @@ class TestPopulatedDbBlocked:
         guard = _make_guard("postgresql://localhost/mydb")
         fake_pg = _fake_psycopg(row_count=537396)
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             mock_exit.assert_called_once()
             call_kwargs = mock_exit.call_args[1]
@@ -349,9 +358,10 @@ class TestPopulatedDbBlocked:
         row_count = 42
         fake_pg = _fake_psycopg(row_count=row_count)
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             assert mock_exit.called, "pytest.exit was not called for count=42"
             exit_message = mock_exit.call_args[0][0]
@@ -371,9 +381,10 @@ class TestPopulatedDbBlocked:
         guard = _make_guard("postgresql://localhost/mydb")
         fake_pg = _fake_psycopg(row_count=1)
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             assert mock_exit.called, (
                 "Guard did not call pytest.exit for count=1 — "
@@ -396,9 +407,10 @@ class TestPopulatedDbBlocked:
         guard = _make_guard("postgresql://localhost/mydb")
         fake_pg = _fake_psycopg(row_count=0)
 
-        with mock.patch.dict(sys.modules, {"psycopg": fake_pg}), mock.patch.object(
-            pytest, "exit"
-        ) as mock_exit:
+        with (
+            mock.patch.dict(sys.modules, {"psycopg": fake_pg}),
+            mock.patch.object(pytest, "exit") as mock_exit,
+        ):
             guard()
             mock_exit.assert_not_called()
 

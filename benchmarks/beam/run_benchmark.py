@@ -380,9 +380,7 @@ def run_benchmark(
                         ability_mrrs = []
                         for ms in all_metrics.values():
                             if ms:
-                                ability_mrrs.append(
-                                    sum(m["mrr"] for m in ms) / len(ms)
-                                )
+                                ability_mrrs.append(sum(m["mrr"] for m in ms) / len(ms))
                         if ability_mrrs:
                             avg_mrr = sum(ability_mrrs) / len(ability_mrrs)
                     print(
@@ -417,8 +415,12 @@ def run_benchmark(
             run_overall_r5.append(r5)
             run_overall_r10.append(r10)
 
-        avg_mrr_run = sum(run_overall_mrr) / len(run_overall_mrr) if run_overall_mrr else 0.0
-        avg_r10_run = sum(run_overall_r10) / len(run_overall_r10) if run_overall_r10 else 0.0
+        avg_mrr_run = (
+            sum(run_overall_mrr) / len(run_overall_mrr) if run_overall_mrr else 0.0
+        )
+        avg_r10_run = (
+            sum(run_overall_r10) / len(run_overall_r10) if run_overall_r10 else 0.0
+        )
 
         runs_mrr.append(avg_mrr_run)
         runs_r10.append(avg_r10_run)
@@ -473,7 +475,9 @@ def run_benchmark(
         print(f"Conversations: {len(ds)}, Split: {split}")
         print()
         print("Note: LIGHT scores are full QA (LLM-as-judge), not retrieval-only.")
-        print("      Cortex scores here are retrieval MRR/Recall — not directly comparable")
+        print(
+            "      Cortex scores here are retrieval MRR/Recall — not directly comparable"
+        )
         print("      but show retrieval quality that feeds downstream QA.")
 
     stats_mrr = multi_run_stats(runs_mrr)

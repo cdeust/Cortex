@@ -22,7 +22,6 @@ fix (incident 2026-06-17).
 
 from __future__ import annotations
 
-import asyncio
 
 import pytest
 
@@ -35,6 +34,7 @@ from mcp_server.handlers.forget import handler as forget_handler
 def _get_forget_store():
     """Return the store instance that forget_handler uses (same singleton)."""
     from mcp_server.handlers.forget import _get_store
+
     return _get_store()
 
 
@@ -45,7 +45,9 @@ def _seed_memory(content: str = "forget test memory") -> int:
     """
     store = _get_forget_store()
     mid = store.insert_memory({"content": content, "force": True})
-    assert isinstance(mid, int) and mid > 0, f"insert_memory returned unexpected value: {mid!r}"
+    assert isinstance(mid, int) and mid > 0, (
+        f"insert_memory returned unexpected value: {mid!r}"
+    )
     return mid
 
 
@@ -57,7 +59,9 @@ def _seed_protected_memory(content: str = "protected forget test memory") -> int
     """
     store = _get_forget_store()
     mid = store.insert_memory({"content": content, "is_protected": True})
-    assert isinstance(mid, int) and mid > 0, f"insert_memory returned unexpected value: {mid!r}"
+    assert isinstance(mid, int) and mid > 0, (
+        f"insert_memory returned unexpected value: {mid!r}"
+    )
     # Belt-and-suspenders: ensure the flag is visible via the same store.
     mem = store.get_memory(mid)
     assert mem is not None, "precondition: memory must exist after insert"
@@ -147,7 +151,9 @@ class TestForgetHardDelete:
         result = await forget_handler({"memory_id": mid})
         assert result["deleted"] is True
 
-        assert store.get_memory(mid) is None, "postcondition: hard delete must remove the row"
+        assert store.get_memory(mid) is None, (
+            "postcondition: hard delete must remove the row"
+        )
 
     @pytest.mark.asyncio
     async def test_hard_delete_second_call_returns_not_found(self):

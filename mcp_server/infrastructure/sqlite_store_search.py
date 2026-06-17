@@ -409,7 +409,9 @@ class SqliteSearchMixin:
             ).fetchone()
             if vec_row is None:
                 return None
-            raw = vec_row["embedding"] if hasattr(vec_row, "__getitem__") else vec_row[0]
+            raw = (
+                vec_row["embedding"] if hasattr(vec_row, "__getitem__") else vec_row[0]
+            )
             if raw is None:
                 return None
             # sqlite-vec returns a buffer/memoryview; convert to bytes.

@@ -86,13 +86,13 @@ def _ensure_deps(deps_dir: str) -> None:
     # hard-imports at module load): (import_name, pip_spec).
     # All versions sourced from uv.lock resolved set.
     required = [
-        ("fastmcp", "fastmcp==3.2.4"),                        # source: uv.lock
-        ("pydantic", "pydantic==2.13.3"),                      # source: uv.lock
-        ("pydantic_settings", "pydantic-settings==2.14.0"),    # source: uv.lock
-        ("numpy", f"numpy=={_numpy_version}"),                 # source: uv.lock
-        ("psycopg", "psycopg[binary]==3.3.3"),                 # source: uv.lock
-        ("psycopg_pool", "psycopg_pool==3.3.0"),               # source: uv.lock
-        ("pgvector", "pgvector==0.4.2"),                       # source: uv.lock
+        ("fastmcp", "fastmcp==3.2.4"),  # source: uv.lock
+        ("pydantic", "pydantic==2.13.3"),  # source: uv.lock
+        ("pydantic_settings", "pydantic-settings==2.14.0"),  # source: uv.lock
+        ("numpy", f"numpy=={_numpy_version}"),  # source: uv.lock
+        ("psycopg", "psycopg[binary]==3.3.3"),  # source: uv.lock
+        ("psycopg_pool", "psycopg_pool==3.3.0"),  # source: uv.lock
+        ("pgvector", "pgvector==0.4.2"),  # source: uv.lock
     ]
     missing = [spec for name, spec in required if not _importable(name, deps_dir)]
     if not missing:
