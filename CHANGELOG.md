@@ -6,6 +6,53 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.22.0] - 2026-06-17
+
+Security + reliability release (P0/P1 audit hardening). PostgreSQL remains the
+mandatory backend; the SQLite fallback path was substantially repaired.
+
+### Security
+- **Headless authoring sandbox (RCE fix).** The `claude -p` documentation worker
+  used `--allowedTools` (an auto-approve list, **not** a restriction), so `Bash`
+  stayed in the model's context, and it loaded the target repo's
+  `.claude/settings.json`/hooks — letting a malicious repo achieve code execution.
+  Now uses `--tools "Read,Glob,Grep"` (removes Bash/Edit/Write from context) **and**
+  `--bare` (ignores the untrusted repo's settings/hooks/MCP), and fails closed when
+  `ANTHROPIC_API_KEY` is absent. The feature remains default-OFF.
+- **Secret redaction.** `redact_url` now masks libpq `?password=`/`pgpassword`
+  query-parameter passwords and preserves IPv6 host brackets; `doctor` scrubs
+  PostgreSQL DSNs leaked through psycopg exception/`error` fields.
+- **Dependency bootstrap.** Removed a false "pip rejects hash mismatch" claim and
+  sanitized the pip subprocess environment (`PIP_INDEX_URL`/`PIP_EXTRA_INDEX_URL`/
+  `PIP_CONFIG_FILE`/…) so the `--index-url` lock can't be bypassed via inherited env.
+
+### Fixed
+- **SQLite backend A3 rename completion.** The `heat` → `heat_base` migration was
+  incomplete on the SQLite fallback: `INDEXES_DDL` was a single multi-statement
+  string referencing a non-existent `heat` column, so **none of the 11 indexes were
+  created** (full table scans); `sqlite_store_search.py` and `sqlite_store_stats.py`
+  also queried `heat`. All corrected — recall/ingest on the SQLite fallback is no
+  longer crippled. (`entities.heat` is a real column and is untouched.)
+- **SQLite parity:** `insert_memory` now persists `supersedes_id`;
+  `get_temporal_co_access` honors `min_access` via `access_count`.
+- **Ablation:** `Mechanism.COMPRESSION` added to `plan_full_ablation_study()`.
+- **Benchmarks:** reproducibility `_git_dirty` uses `git status --porcelain`
+  (detects staged + untracked changes).
+- **Remote PostgreSQL:** `scripts/setup.py` preflight derives host/port from
+  `DATABASE_URL` (`pg_isready -h HOST -p PORT`) instead of always probing localhost.
+- Flaky `forget`/`navigate_memory` handler tests fixed at the root (the SQLite test
+  cleanup iterated a hardcoded handler list and skipped a WAL checkpoint).
+
+### Added
+- **Test coverage (P1-8):** `write_gate`, the anti-data-loss conftest guard, an
+  end-to-end PG recall test, MCP handler contract tests
+  (`validate_memory`, `get_causal_chain`, `assess_coverage`, `add_rule`, `anchor`),
+  and a dedicated SQLite backend suite.
+- **CI:** a `test-sqlite` job exercising the SQLite fallback.
+- **Docs:** `docs/deployment-scenarios.md` — WSL, TLS client-certificate
+  `DATABASE_URL` (no password; passed straight to libpq), and remote PostgreSQL.
+- `tasks/pyright-remediation-plan.md` — phased plan to clear the 566 pyright errors.
+
 ## [3.21.0] - 2026-06-15
 
 ### Changed
