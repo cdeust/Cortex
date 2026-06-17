@@ -37,6 +37,13 @@ docs/arxiv-*/*.fls
 docs/arxiv-*/*.fdb_latexmk
 docs/arxiv-*/*.synctex.gz
 
+# Local virtualenv (uv-managed; never committed)
+.venv/
+
+# Pyright ratchet — ephemeral per-run output; typecheck-baseline.json IS tracked
+pyright-current.json
+pyright-*.json
+
 # Runtime telemetry
 traces/
 

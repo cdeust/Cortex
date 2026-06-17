@@ -1,0 +1,9 @@
+{
+  "include": ["mcp_server"],
+  "exclude": [".claude", "tests_py", "benchmarks", "scripts", ".venv"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "basic",
+  "reportMissingModuleSource": "none"
+}

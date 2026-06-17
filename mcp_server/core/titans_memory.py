@@ -194,7 +194,12 @@ class TitansMemory:
             prediction = M @ k
             loss = torch.sum((prediction - v) ** 2)
             loss.backward()
-            grad = M.grad.detach()
+            # backward() populates .grad on a leaf requiring grad; a None here
+            # means the autograd graph was broken — surface it, don't deref None.
+            grad_tensor = M.grad
+            if grad_tensor is None:
+                raise RuntimeError("titans surprise: gradient missing after backward()")
+            grad = grad_tensor.detach()
 
             # Surprise momentum update: S_t = eta * S_{t-1} - theta * grad
             self._S = self.eta * self._S - self.theta * grad

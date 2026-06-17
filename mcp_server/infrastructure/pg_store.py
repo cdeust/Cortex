@@ -510,6 +510,8 @@ class PgMemoryStore(
             },
         ).fetchone()
         self._conn.commit()
+        if row is None:
+            raise RuntimeError("INSERT ... RETURNING id produced no row")
         return row["id"]
 
     def set_superseded_by(self, old_id: int, new_id: int) -> None:

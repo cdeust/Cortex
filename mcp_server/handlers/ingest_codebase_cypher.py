@@ -111,9 +111,7 @@ def file_path_from_qn(qn: str) -> list[str]:
     return candidates
 
 
-async def _run_query(
-    graph_path: str, cypher: str
-) -> tuple[dict[str, Any] | None, str | None]:
+async def _run_query(graph_path: str, cypher: str) -> tuple[dict[str, Any], str | None]:
     """Run a single cypher query, draining upstream byte-budget pages.
 
     Upstream ``query_graph`` (automatised-pipeline ≥0.4.0,
@@ -130,9 +128,9 @@ async def _run_query(
     bounded by the caller's explicit LIMIT.
 
     Returns (result_dict, error_message). On upstream-reported errors
-    (status=error), result is None and the error_message is populated.
-    Transport errors raise; callers catch narrow transport classes and
-    surface them as diagnostics.
+    (status=error), result is an empty dict and the error_message is
+    populated. Transport errors raise; callers catch narrow transport
+    classes and surface them as diagnostics.
     """
     merged_rows: list[Any] = []
     offset = 0
@@ -145,9 +143,9 @@ async def _run_query(
         )
         page = normalise_mcp_payload(payload)
         if isinstance(page, dict) and page.get("status") == "error":
-            return None, str(page.get("message") or "<unknown upstream error>")
+            return {}, str(page.get("message") or "<unknown upstream error>")
         if not isinstance(page, dict):
-            return None, f"unexpected payload type: {type(page).__name__}"
+            return {}, f"unexpected payload type: {type(page).__name__}"
         result = page
         merged_rows.extend(page.get("rows") or [])
         next_offset = page.get("next_offset")
@@ -156,7 +154,7 @@ async def _run_query(
         if int(next_offset) <= offset:
             # Non-advancing cursor would loop forever — upstream contract
             # violation; surface it instead of spinning.
-            return None, f"non-advancing pagination cursor at offset {offset}"
+            return {}, f"non-advancing pagination cursor at offset {offset}"
         offset = int(next_offset)
     result = dict(result)
     result["rows"] = merged_rows
@@ -195,7 +193,7 @@ async def fetch_symbols_total(
             result, err = await _run_query(graph_path, cypher)
         except _TRANSPORT_ERRORS:
             return None
-        if err is not None or result is None:
+        if err is not None:
             return None
         rows = result.get("rows") or []
         if not rows or not rows[0]:

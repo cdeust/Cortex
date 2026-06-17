@@ -524,7 +524,9 @@ class TestUpstreamPagination:
 
         monkeypatch.setattr(cyp, "call_upstream", _call)
         result, err = await cyp._run_query("/g", "MATCH (n) RETURN n LIMIT 10")
-        assert result is None
+        # On any upstream error _run_query returns an empty dict (never None)
+        # plus a populated message — callers bail on err, not on result.
+        assert result == {}
         assert "non-advancing" in err
 
     @pytest.mark.asyncio

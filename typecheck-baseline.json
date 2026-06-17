@@ -1,0 +1,10 @@
+{
+  "reportArgumentType": 98,
+  "reportAssignmentType": 26,
+  "reportAttributeAccessIssue": 351,
+  "reportCallIssue": 37,
+  "reportGeneralTypeIssues": 2,
+  "reportMissingImports": 1,
+  "reportOperatorIssue": 1,
+  "reportReturnType": 52
+}

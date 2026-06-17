@@ -94,11 +94,12 @@ class _SyncLoop:
     def _ensure_loop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None or self._loop.is_closed():
             self._loop = asyncio.new_event_loop()
+            loop = self._loop  # non-Optional local captured by the loop thread
             import threading
 
             def _run_forever():
-                asyncio.set_event_loop(self._loop)
-                self._loop.run_forever()
+                asyncio.set_event_loop(loop)
+                loop.run_forever()
 
             self._thread = threading.Thread(
                 target=_run_forever,

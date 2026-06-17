@@ -291,6 +291,8 @@ class APBridge:
             raise ValueError(f"AP tool not in allowlist: {tool!r}")
         if not await self.connect():
             return None
+        if self._client is None:  # connect() success guarantees a client; defensive
+            return None
         try:
             return await self._client.call(tool, args or {})
         except Exception as exc:

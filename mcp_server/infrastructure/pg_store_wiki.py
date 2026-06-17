@@ -29,6 +29,19 @@ def body_hash(body: str) -> str:
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
+def _returning_id(row: dict[str, Any] | tuple[Any, ...] | None) -> int:
+    """Extract the id from an ``INSERT ... RETURNING id`` fetchone() result.
+
+    A default psycopg cursor yields tuple rows; a ``dict_row`` cursor yields
+    dict rows — hence the isinstance split. An INSERT ... RETURNING always
+    produces exactly one row, so a None here is a broken query (or a silently
+    rolled-back transaction), not a normal path — surface it loudly.
+    """
+    if row is None:
+        raise RuntimeError("INSERT ... RETURNING id produced no row")
+    return row["id"] if isinstance(row, dict) else row[0]
+
+
 # ── wiki.pages ─────────────────────────────────────────────────────────
 
 
@@ -249,8 +262,7 @@ def insert_claim_events(conn: Connection, claims: list[dict]) -> list[int]:
                 "supersedes": c.get("supersedes"),
             }
             cur.execute(sql, params)
-            row = cur.fetchone()
-            out.append(row["id"] if isinstance(row, dict) else row[0])
+            out.append(_returning_id(cur.fetchone()))
     return out
 
 
@@ -578,8 +590,7 @@ def insert_concept(conn: Connection, concept: dict[str, Any]) -> int:
     }
     with conn.cursor() as cur:
         cur.execute(sql, params)
-        row = cur.fetchone()
-        return row["id"] if isinstance(row, dict) else row[0]
+        return _returning_id(cur.fetchone())
 
 
 def update_concept(conn: Connection, concept_id: int, fields: dict[str, Any]) -> bool:
@@ -648,8 +659,7 @@ def insert_draft(conn: Connection, draft: dict[str, Any]) -> int:
     }
     with conn.cursor() as cur:
         cur.execute(sql, params)
-        row = cur.fetchone()
-        return row["id"] if isinstance(row, dict) else row[0]
+        return _returning_id(cur.fetchone())
 
 
 def get_draft(conn: Connection, draft_id: int) -> dict | None:
@@ -799,8 +809,7 @@ def insert_citation(
     """
     with conn.cursor() as cur:
         cur.execute(sql, (page_id, session_id, domain, memory_id))
-        row = cur.fetchone()
-        return row["id"] if isinstance(row, dict) else row[0]
+        return _returning_id(cur.fetchone())
 
 
 # ── wiki.memos (grounded-theory audit trail) ──────────────────────────
@@ -839,8 +848,7 @@ def insert_memo(
                 author,
             ),
         )
-        row = cur.fetchone()
-        return row["id"] if isinstance(row, dict) else row[0]
+        return _returning_id(cur.fetchone())
 
 
 # ── Diagnostics ────────────────────────────────────────────────────────

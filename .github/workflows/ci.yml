@@ -181,16 +181,35 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
-      - name: Install dependencies
+      # Pyright resolves third-party imports from ./.venv (pinned in
+      # pyrightconfig.json: venvPath="."/venv=".venv"). The full stub set MUST
+      # be installed or every import collapses to Unknown — and Unknown
+      # SUPPRESSES downstream type errors, making the baseline meaningless.
+      # source: measured 2026-06-18 — an unresolved env reports 566 errors, a
+      # fully-resolved env reports 593 (Unknown was masking 27+ real errors).
+      # flashrank (core reranker) + sqlite-vec live outside dev/postgresql/codebase.
+      - name: Create .venv with the full type-check environment
         run: |
-          pip install -e ".[dev]"
-          pip install pyright
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install -e ".[dev,postgresql,sqlite,codebase]" flashrank
+          # Pin pyright — diagnostic output drifts between releases, so the
+          # committed baseline is only comparable against the pinned version.
+          .venv/bin/pip install pyright==1.1.410
 
-      - name: Run type checker
-        run: pyright mcp_server/
-        continue-on-error: true
+      # The ratchet IS the gate. pyright always exits non-zero while the
+      # 568-error backlog stands, so its own exit is ignored (|| true); the
+      # build fails only when a --blocking rule regresses past its committed
+      # baseline (0). Add rules to --blocking as each batch drives them to
+      # their floor — see tasks/pyright-remediation-plan.md.
+      - name: Run pyright + per-rule ratchet gate
+        run: |
+          .venv/bin/python -m pyright --outputjson mcp_server/ > pyright-current.json || true
+          .venv/bin/python scripts/check_pyright_ratchet.py \
+            pyright-current.json typecheck-baseline.json \
+            --blocking reportOptionalMemberAccess reportOptionalSubscript
 
   build:
     name: Build Package
