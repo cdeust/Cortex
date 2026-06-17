@@ -143,8 +143,14 @@ jobs:
         run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"
         continue-on-error: true
 
-      - name: Run tests against SQLite backend
-        run: pytest --tb=short -q
+      - name: Run SQLite backend tests
+        # Scope: the SQLite fallback is intentionally NOT at full feature parity
+        # with the mandatory PostgreSQL backend (some SqliteMemoryStore methods
+        # and PG-specific tests do not apply). Run the dedicated SQLite backend
+        # suite, which exercises CRUD, heat_base columns/indexes, FTS, and
+        # backend selection on the fallback path. Broadening to the full suite
+        # on SQLite is tracked separately (full-parity effort).
+        run: pytest tests_py/infrastructure/test_sqlite_backend.py --tb=short -q
 
   lint:
     name: Lint
