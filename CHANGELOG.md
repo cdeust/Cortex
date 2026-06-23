@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.24.1] - 2026-06-23
+
+Cross-backend `recall` fix — PostgreSQL users could not use `recall`.
+
+### Fixed
+- **`recall` (and every read tool) on PostgreSQL.** The PostgreSQL store returns
+  `numpy.float32` scores and `datetime` timestamps where the SQLite store returns
+  `float`/`str`. FastMCP can only build `structuredContent` from JSON-native
+  values, so a non-native field silently dropped `structuredContent` and the
+  Claude Code host rejected the call with *"outputSchema defined but no structured
+  output returned"* — on PostgreSQL only, while SQLite-backed tests stayed green.
+  Added `mcp_server/shared/json_native.py::to_json_native`, applied at the
+  `tool_error_handler.safe_handler` boundary every tool crosses, normalizing
+  results to one JSON-native shape regardless of backend.
+
+### Added
+- Mutation testing (mutmut): `[tool.mutmut]` config + `scripts/mutation_check.sh`
+  scoped per-change runner. Mandated on changed code by coding-standards §12.
+
 ## [3.23.0] - 2026-06-17
 
 Registry-indexer build fix. No runtime behaviour change.

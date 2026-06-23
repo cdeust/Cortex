@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hypermnesia-mcp"
-version = "3.24.0"
+version = "3.24.1"
 description = "Scientifically-grounded memory system based on computational neuroscience research"
 readme = "README.md"
 license = "MIT"
@@ -141,3 +141,29 @@ source = ["mcp_server"]
 
 [tool.coverage.report]
 show_missing = true
+
+[dependency-groups]
+dev = [
+    "mutmut>=3.6.0",
+]
+
+[tool.mutmut]
+# Mutation testing (mutmut 3.x). Mutation score — not line coverage — is
+# the real signal that a test SUITE can detect a regression: a mutant that
+# survives is a behavior no test pins. This guards against the class of bug
+# where green tests on one backend (SQLite) hide a failure on another (PG),
+# e.g. the 2026-06-23 recall structuredContent regression.
+#
+# This committed scope is narrowed to the demonstrated module; per-change
+# runs widen `source_paths`/`only_mutate` to the touched files (see
+# scripts/mutation_check.sh). Mac defaults use_setproctitle to False.
+# source_paths = the importable package (so the mutants/ working copy can
+# import it); only_mutate narrows the actual mutation to the touched file;
+# also_copy brings the test tree (mutmut's default copies tests/ and test/
+# but NOT tests_py/). For a per-change run, repoint only_mutate + the test
+# selection at the changed file and its test.
+source_paths = ["mcp_server"]
+only_mutate = ["mcp_server/shared/json_native.py"]
+also_copy = ["tests_py", "deps"]
+pytest_add_cli_args_test_selection = ["tests_py/shared/test_json_native.py"]
+use_setproctitle = false

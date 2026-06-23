@@ -7,6 +7,9 @@ htmlcov/
 dist/
 build/
 .pytest_cache/
+# mutmut working copy + cache (mutation testing artefacts, regenerated per run)
+mutants/
+.mutmut-cache
 # Built MCPB bundle — release artifact attached to GitHub Releases, never committed
 *.mcpb
 .python-version
