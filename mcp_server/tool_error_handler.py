@@ -30,6 +30,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Callable, Coroutine
 
+from mcp_server.shared.json_native import to_json_native
+
 _DB_SETUP_GUIDE = (
     "Cortex could not connect to PostgreSQL. "
     "This usually means the database is not set up yet.\n\n"
@@ -166,7 +168,16 @@ async def safe_handler(
         # not reject the response.
         if result is None:
             return {}
-        return result
+        # Single wire format across backends. The PG store returns
+        # ``datetime``/``numpy`` scalars where the SQLite store returns
+        # ``str``/``float``; FastMCP can only build ``structuredContent``
+        # from JSON-native values, so a non-native field silently drops
+        # structuredContent and the client rejects the call ("outputSchema
+        # defined but no structured output returned"). Normalizing here —
+        # the one boundary every handler crosses — guarantees an identical,
+        # schema-friendly return shape regardless of which backend produced
+        # it. Native dicts (e.g. remember) pass through unchanged.
+        return to_json_native(result)
     except Exception as exc:
         error_type, message = _classify_error(exc)
         if tool_name:

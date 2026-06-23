@@ -15,6 +15,7 @@ silently regresses to ``-> str`` will fail this test before it ships.
 from __future__ import annotations
 
 import asyncio
+import json
 import typing
 
 import pytest
@@ -107,3 +108,53 @@ def test_tools_with_output_schema_have_dict_return_type(all_registered_tools):
         "FastMCP will reject these at runtime (issue #17):\n"
         + "\n".join(f"  - {name}: {rt!r}" for name, rt in offenders)
     )
+
+
+class TestWireValuesAreJsonNative:
+    """Issue #17 part 2 (2026-06-23): the dict-return contract is necessary
+    but not sufficient. A handler can return a dict whose VALUES are not
+    JSON-native — the PostgreSQL store yields ``numpy.float32`` scores and
+    ``datetime`` timestamps where the SQLite store yields ``float``/``str``.
+    FastMCP can only build ``structuredContent`` from JSON-serializable
+    values, so a non-native field silently drops structuredContent and the
+    Claude Code client rejects the call ("outputSchema defined but no
+    structured output returned"). This passed CI because the suite ran on
+    SQLite (native types) and asserted key presence, never serializability.
+
+    ``safe_handler`` normalizes at the one boundary every handler crosses,
+    so every backend's output is JSON-native and identical in type. Pinned
+    here with a fake PG-shaped handler — no DB, backend-agnostic, fails
+    regardless of which store the suite runs against.
+    """
+
+    def test_safe_handler_renders_pg_like_output_json_serializable(self):
+        import datetime as dt
+
+        import numpy as np
+
+        from mcp_server.tool_error_handler import safe_handler
+
+        async def pg_like_handler(_args):
+            # Mirrors a PostgreSQL recall row exactly: numpy score + tz-aware
+            # datetime. Raised "Object of type float32 is not JSON
+            # serializable" before the boundary normalizer existed.
+            return {
+                "memories": [
+                    {
+                        "memory_id": np.int64(4202320),
+                        "score": np.float32(0.0026),
+                        "created_at": dt.datetime(
+                            2026, 6, 10, 13, 19, 31, tzinfo=dt.timezone.utc
+                        ),
+                    }
+                ],
+                "count": 1,
+            }
+
+        result = asyncio.run(safe_handler(pg_like_handler, {"query": "x"}))
+        # The exact wire requirement FastMCP imposes on structuredContent.
+        json.dumps(result)  # must not raise
+        mem = result["memories"][0]
+        assert isinstance(mem["score"], float)
+        assert isinstance(mem["created_at"], str)
+        assert isinstance(mem["memory_id"], int)
