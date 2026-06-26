@@ -152,6 +152,62 @@ jobs:
         # on SQLite is tracked separately (full-parity effort).
         run: pytest tests_py/infrastructure/test_sqlite_backend.py --tb=short -q
 
+  test-windows:
+    name: Test (Windows, SQLite backend)
+    runs-on: windows-latest
+
+    # Real NT proof for the cross-platform fixes (fcntl→msvcrt, sys.executable,
+    # NTFS exec bits, $HOME override, path separators). We use the SQLite
+    # fallback so no PostgreSQL has to be provisioned on the Windows runner —
+    # the conftest selects it when PG is unreachable; the env var makes it
+    # explicit. source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §10 (CI Windows)
+    env:
+      CORTEX_MEMORY_STORE_BACKEND: sqlite
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
+
+      - name: Install dependencies (no postgresql extra)
+        run: pip install -e ".[dev,sqlite]"
+
+      # Import smoke: the modules that previously crashed at load on Windows
+      # (fcntl import) or silently misbehaved. If any fails to import, the
+      # platform branches are wrong — fail fast before the suite.
+      - name: Import smoke (formerly Windows-broken modules)
+        run: >-
+          python -c "import mcp_server.shared.platform,
+          mcp_server.infrastructure.pipeline_install_lock,
+          mcp_server.infrastructure.pipeline_discovery,
+          mcp_server.core.staleness, mcp_server.doctor, mcp_server.doctor_mcp;
+          print('windows import smoke OK')"
+
+      - name: Pre-download embedding model
+        run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"
+        continue-on-error: true
+
+      # Scope (explicit, not silent): the portability tests plus the modules
+      # carrying Windows-specific branches and the SQLite backend suite. The
+      # full PG suite is not run here — it is covered by the ubuntu `test` job.
+      - name: Run portability + backend tests
+        run: >-
+          pytest --tb=short -q
+          tests_py/shared/test_platform.py
+          tests_py/infrastructure/test_pipeline_discovery.py
+          tests_py/infrastructure/test_pipeline_install_lock.py
+          tests_py/core/test_staleness.py
+          tests_py/infrastructure/test_sqlite_backend.py
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

@@ -30,11 +30,13 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import sys
 from pathlib import Path
 from typing import Optional
 
 from mcp_server.infrastructure.config import MCP_CONNECTIONS_PATH
 from mcp_server.infrastructure.file_io import read_json, write_json
+from mcp_server.shared.platform import home_dir
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +56,13 @@ _SOURCE_DIRS = (
     "../ai-automatised-pipeline",
 )
 
-_BUILT_RELATIVE = ("target/release/automatised-pipeline",)
+# Windows builds emit an .exe; list it first so it wins on NT. The
+# extension-less name is the Linux/macOS artifact.
+# source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.5
+_BUILT_RELATIVE = (
+    "target/release/automatised-pipeline.exe",
+    "target/release/automatised-pipeline",
+)
 
 # ── Marketplace install (canonical) ─────────────────────────────────────
 
@@ -62,7 +70,7 @@ _BUILT_RELATIVE = ("target/release/automatised-pipeline",)
 # own .mcp.json resolves from: installed_plugins.json -> installPath ->
 # target/release/automatised-pipeline. Preferring it means Cortex spawns the
 # exact plugin the user installed — no self-built symlink, no version drift.
-_INSTALLED_PLUGINS_PATH = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+_INSTALLED_PLUGINS_PATH = home_dir() / ".claude" / "plugins" / "installed_plugins.json"
 _AP_PLUGIN_KEY = "automatised-pipeline@automatised-pipeline-marketplace"
 _AP_BINARY_RELATIVE = Path("target") / "release" / "automatised-pipeline"
 
@@ -95,9 +103,9 @@ def _marketplace_pipeline_binary() -> Optional[str]:
 # Where the silent installer clones and builds the upstream source.
 # Living next to other methodology artefacts means cleanup is one rm -rf.
 _INSTALL_SRC_DIR = (
-    Path.home() / ".claude" / "methodology" / "src" / "automatised-pipeline"
+    home_dir() / ".claude" / "methodology" / "src" / "automatised-pipeline"
 )
-_INSTALL_BIN_DIR = Path.home() / ".claude" / "methodology" / "bin"
+_INSTALL_BIN_DIR = home_dir() / ".claude" / "methodology" / "bin"
 _INSTALL_SYMLINK = _INSTALL_BIN_DIR / "mcp-server"
 
 
@@ -134,7 +142,12 @@ def discover_pipeline_command() -> Optional[list[str]]:
             continue
         for rel in _BUILT_RELATIVE:
             built = root / rel
-            if built.is_file() and built.stat().st_mode & 0o111:
+            # NTFS doesn't store Unix exec bits — st_mode & 0o111 is always 0
+            # on Windows, so the bit check would reject every valid binary.
+            # source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.5
+            if built.is_file() and (
+                sys.platform == "win32" or built.stat().st_mode & 0o111
+            ):
                 return [str(built)]
 
     return None

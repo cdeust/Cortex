@@ -33,6 +33,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Final
 
+from mcp_server.shared.platform import to_posix
+
 
 @dataclass
 class PageDrift:
@@ -340,7 +342,9 @@ def audit_wiki_drift(
             if not f.endswith(".md"):
                 continue
             full = os.path.join(dirpath, f)
-            rel = os.path.relpath(full, wiki_root)
+            # Normalize to '/' so _kind_and_domain_from_path's path parsing
+            # works on Windows. source: REPORT_..._CORTEX_WINDOWS §5.3
+            rel = to_posix(os.path.relpath(full, wiki_root))
             kind, domain = _kind_and_domain_from_path(rel)
             if not domain or not kind:
                 continue

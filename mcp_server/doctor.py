@@ -28,6 +28,8 @@ import sys
 from pathlib import Path
 from typing import Callable
 
+from mcp_server.shared.platform import home_dir
+
 
 class Check:
     __slots__ = ("name", "ok", "detail", "fix", "optional")
@@ -165,7 +167,9 @@ def _pg_extensions() -> Check:
 
 
 def _methodology_dir() -> Check:
-    path = Path("~/.claude/methodology").expanduser()
+    # home_dir() honors $HOME on every OS; Path.expanduser() ignores it on
+    # Windows. source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.1
+    path = home_dir() / ".claude" / "methodology"
     try:
         path.mkdir(parents=True, exist_ok=True)
         probe = path / ".write_probe"

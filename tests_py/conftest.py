@@ -5,11 +5,20 @@ available (CI without PG, sandboxed environments), falls back to SQLite
 with per-test isolation via temporary DB files.
 """
 
+import asyncio
 import importlib
 import os
+import sys
 import tempfile
 
 import pytest
+
+# On Windows asyncio defaults to ProactorEventLoop, whose GC-time teardown
+# emits a noisy "Event loop is closed" PytestUnraisableExceptionWarning that
+# can mask real errors. SelectorEventLoop tears down cleanly and matches the
+# POSIX default. source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §6.5
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # ── Resolve test database URL ─────────────────────────────────────────────
 

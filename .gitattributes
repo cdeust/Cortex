@@ -1,0 +1,23 @@
+# Normalize line endings. Shell scripts and Python with CRLF break on
+# checkout under Git Bash (bad interpreter) and trip py_compile diffs.
+# source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §7.2
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.py   text eol=lf
+*.toml text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+
+# Binary assets — never normalize.
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.pdf  binary
+*.onnx binary
+*.so   binary
+*.dylib binary
+*.dll  binary
+*.exe  binary

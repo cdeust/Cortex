@@ -56,6 +56,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Final
 
+from mcp_server.shared.platform import to_posix
+
 
 # Minimum useful page size in bytes. Below this, a page is a stub —
 # the scope is not really covered.
@@ -1266,7 +1268,9 @@ def list_source_files(root: str) -> list[str]:
             if ext not in _SOURCE_EXTENSIONS:
                 continue
             full = os.path.join(dirpath, f)
-            rel = os.path.relpath(full, root)
+            # relpath emits backslashes on Windows; downstream indexing and
+            # comparisons assume '/'. source: REPORT_..._CORTEX_WINDOWS §5.3
+            rel = to_posix(os.path.relpath(full, root))
             out.append(rel)
     return out
 

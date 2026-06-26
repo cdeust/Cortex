@@ -52,6 +52,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from mcp_server.shared.platform import home_dir, python_executable
 from mcp_server.shared.redaction import redact_url, scrub_secrets
 
 
@@ -148,7 +149,7 @@ def _check_python_interpreter() -> McpCheck:
 
 
 def _installed_plugins_path() -> Path:
-    return Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    return home_dir() / ".claude" / "plugins" / "installed_plugins.json"
 
 
 def _check_installed_plugins_json() -> tuple[McpCheck, dict | None]:
@@ -362,7 +363,11 @@ def _check_launcher_smoke(install_path: str | None) -> McpCheck:
             detail="launcher.py missing",
             attempted=str(launcher),
         )
-    py = shutil.which("python3") or shutil.which("python") or sys.executable
+    # Never resolve "python3"/"python" by name: on Windows PATH those hit the
+    # Microsoft Store stub (exit 9009, no interpreter), making this smoke test
+    # spuriously fail. The launcher must run under THIS interpreter anyway.
+    # source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.2
+    py = python_executable()
     cmd = [py, str(launcher)]
     attempted = " ".join(cmd)
     try:

@@ -29,6 +29,19 @@ _PATH_RE = re.compile(
     re.MULTILINE,
 )
 
+# Matches backslash-separated paths — Windows relative (``src\core\x.py``)
+# and drive-absolute (``C:\Users\me\x.py``). Without this, refs stored with
+# backslashes are invisible to staleness detection on Windows.
+# source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.6
+_WIN_PATH_RE = re.compile(
+    r"(?:^|[\s\"'`(,])("
+    r"(?:[A-Za-z]:\\?)?"  # optional drive letter, consuming its backslash
+    r"(?:[\w@.-]+\\)+"  # one or more backslash-separated segments
+    r"[\w@.-]+\.\w{1,10}"  # filename.ext
+    r")(?:[\s\"'`:),]|$)",
+    re.MULTILINE,
+)
+
 # Matches imports/requires that imply a local path
 _IMPORT_PATH_RE = re.compile(
     r"""(?:import|from|require)\s+['"]([./][^'"]+)['"]""",
@@ -55,6 +68,14 @@ def extract_file_references(content: str) -> list[str]:
 
     for m in _PATH_RE.finditer(content):
         path = m.group(1).strip()
+        if path and not _EXCLUDE_RE.search(path) and len(path) < 256:
+            refs.add(path)
+
+    # Backslash paths are normalized to '/' so a single ref is stored
+    # regardless of the separator the author used; resolution works with
+    # forward slashes on every OS.
+    for m in _WIN_PATH_RE.finditer(content):
+        path = m.group(1).strip().replace("\\", "/")
         if path and not _EXCLUDE_RE.search(path) and len(path) < 256:
             refs.add(path)
 
