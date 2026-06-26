@@ -34,5 +34,8 @@ def test_backslash_and_forward_slash_dedupe_to_one_ref():
 
 
 def test_excludes_urls():
+    # A URL must yield no filesystem references at all (stronger than checking
+    # for a single host substring, which CodeQL flags as incomplete URL
+    # sanitization — py/incomplete-url-substring-sanitization).
     refs = extract_file_references("docs at https://example.com/page.html")
-    assert not any("example.com" in r for r in refs)
+    assert refs == []
