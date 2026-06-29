@@ -7,10 +7,19 @@ Three outcomes based on mismatch between stored memory and current context:
   - low <= mismatch < high: RECONSOLIDATE — update memory with current context
   - mismatch >= high: EXTINCTION — archive old memory, create new one
 
-Emotional modulation (Yonelinas & Ritchey 2015, Lee 2009):
-  - Prediction error gate: PE = mismatch * (1 - stability * 0.5)
-  - Age-dependent threshold: older memories resist reconsolidation (Milekic & Alberini 2002)
-  - Emotional strength gain: reconsolidation is 1-1.8x stronger for emotional memories
+Modulation — the qualitative mechanisms trace to cited papers, but every
+numeric coefficient below is an engineering default (calibration pending —
+see docs/provenance/blend-weight-calibration.md). The papers establish the
+*direction* of each effect, not the magnitude:
+  - Prediction-error gate PE = mismatch * (1 - stability * 0.5): Lee (2009)
+    gives only the qualitative trace-strength → lability relationship; the
+    0.5 coefficient is ours.
+  - Age-dependent threshold: Milekic & Alberini (2002) show only a
+    qualitative, temporally-graded age-resistance; the 30-day window and
+    0.15 weight are ours.
+  - Emotional strength gain: emotionally-loaded memories receive a larger
+    reconsolidation update. This is an engineering default and is NOT
+    derived from Yonelinas & Ritchey (2015) — see decide_action.
 
 Pure business logic — no I/O. Decisions are returned to the caller.
 """
@@ -101,15 +110,27 @@ def decide_action(
     emotional_arousal: float = 0.0,
     age_days: float = 0.0,
     *,
-    low_threshold: float = 0.15,
-    high_threshold: float = 0.65,
+    low_threshold: float = 0.15,  # engineering default (calibration pending)
+    high_threshold: float = 0.65,  # engineering default (calibration pending)
 ) -> ReconsolidationResult:
     """Determine reconsolidation action based on mismatch and memory state.
 
-    Thresholds: Osan-Tort-Amaral (PLoS ONE, 2011).
-    PE gate: Lee (Trends Neurosci, 2009).
-    Age factor: Milekic & Alberini (2002).
-    Emotional multiplier: Yonelinas & Ritchey (2015) decay ratio.
+    Structural source: Osan, Tort & Amaral (PLoS ONE, 2011) — the three-regime
+    structure (no-change / reconsolidate / extinguish on rising mismatch). That
+    model's parameters are network-specific (pattern overlap, network size,
+    protein-synthesis / degradation levels), NOT normalized cut points on a
+    [0, 1] mismatch. The 0.15 / 0.65 thresholds here do NOT come from the
+    paper; they are engineering defaults (calibration pending — see
+    docs/provenance/blend-weight-calibration.md).
+
+    Qualitative grounding for the modulation terms (directions only — every
+    coefficient is an engineering default):
+      - PE falls with trace strength: Lee (Trends Neurosci, 2009).
+      - Older memories resist destabilization: Milekic & Alberini (Neuron,
+        2002) — temporally-graded, no fixed window prescribed.
+      - Emotional memories get a larger update: engineering. The Yonelinas &
+        Ritchey (2015) "slow forgetting" result is a FORGETTING-RATE effect,
+        not a reconsolidation gain, so it is deliberately NOT cited here.
 
     Returns ReconsolidationResult with action, prediction_error,
     strength_delta, and emotional_multiplier.
@@ -122,11 +143,15 @@ def decide_action(
     if is_protected:
         return ReconsolidationResult(action="none")
 
-    # Prediction error gate (Lee 2009): stable memories dampen PE
+    # Prediction-error gate: stable memories dampen PE. Lee (2009) gives the
+    # qualitative trace-strength → lability relationship only; the 0.5
+    # coefficient is an engineering default (calibration pending).
     prediction_error = mismatch * (1.0 - stability * 0.5)
 
-    # Age-dependent threshold (Milekic & Alberini 2002):
-    # Older memories require larger PE to destabilize
+    # Age-dependent threshold: older memories require larger PE to destabilize.
+    # Milekic & Alberini (2002) show only a qualitative, temporally-graded
+    # age-resistance — no 30-day window, no 0.15 weight. Both are engineering
+    # defaults (calibration pending).
     age_factor = min(age_days / 30.0, 1.0) * 0.15
     effective_low = low_threshold + age_factor + (stability * 0.2)
     effective_high = high_threshold + (stability * 0.1)
@@ -145,8 +170,12 @@ def decide_action(
             strength_delta=-0.2,
         )
 
-    # Reconsolidation regime — emotional multiplier (Yonelinas & Ritchey 2015)
-    # Decay ratio b_neutral/b_emotional = 2.0 → up to 1.8x at arousal=0.8
+    # Reconsolidation regime — emotionally-loaded memories receive a larger
+    # update (≤1.8x at full arousal). Engineering default (calibration
+    # pending). NOT derived from Yonelinas & Ritchey (2015): their result is a
+    # slower FORGETTING RATE for emotional memories (a decay-side effect), not
+    # a reconsolidation GAIN. Equating the two would be a category error, so no
+    # paper is cited for this coefficient.
     emotional_multiplier = 1.0 + min(emotional_arousal, 0.8)
     strength_delta = prediction_error * 0.1 * emotional_multiplier
 
@@ -290,7 +319,9 @@ def compute_reconsolidation_action(
     Source: Nader, Schafe & LeDoux (2000), Nature 406(6797). Retrieval
     triggers a labile window during which the memory is re-stored with
     modifications. Bower (1981) Am. Psychologist 36(2): mood-congruent
-    re-storage. Yonelinas & Ritchey (2015) emotional gain.
+    re-storage. The emotional-arousal gain on the update is an engineering
+    default (see decide_action — NOT Yonelinas & Ritchey 2015, whose result
+    is a forgetting-rate effect, not a reconsolidation gain).
 
     Honors `CORTEX_ABLATE_RECONSOLIDATION=1` via `decide_action`'s
     internal gate (returns action="none"). The stage-level guard in
@@ -339,13 +370,13 @@ def compute_reconsolidation_action(
 
     if decision.action == "update":
         # Re-storage in the labile window. Heat bump scaled by
-        # emotional_multiplier (Yonelinas & Ritchey 2015) so emotionally-
-        # loaded memories receive proportionally larger reconsolidation
-        # gain (≤ 1.8x at full arousal).
+        # emotional_multiplier (engineering default, see decide_action) so
+        # emotionally-loaded memories receive a proportionally larger
+        # reconsolidation gain (≤ 1.8x at full arousal).
         heat_delta = _RECONS_HEAT_BUMP_UPDATE * decision.emotional_multiplier
         # Cap the bump at the same magnitude as the bound documented in
-        # ReconsolidationOutcome's contract — Yonelinas multiplier can push
-        # us above _RECONS_HEAT_BUMP_UPDATE alone.
+        # ReconsolidationOutcome's contract — the emotional multiplier can
+        # push us above _RECONS_HEAT_BUMP_UPDATE alone.
         heat_delta = min(heat_delta, _RECONS_HEAT_BUMP_UPDATE * 2.0)
         valence_delta = 0.0
         if abs(query_valence) >= _RECONS_QUERY_VALENCE_FLOOR:

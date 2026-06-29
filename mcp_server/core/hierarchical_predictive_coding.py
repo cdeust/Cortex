@@ -12,6 +12,10 @@ References:
         Phil Trans R Soc B 360:815-836
     Friston K, Kiebel S (2009) Predictive coding under the free-energy
         principle. Phil Trans R Soc B 364:1211-1221
+    Feldman H, Friston K (2010) Attention, uncertainty, and free-energy.
+        Front Hum Neurosci 4:215
+    Yu AJ, Dayan P (2005) Uncertainty, neuromodulation, and attention.
+        Neuron 46:681-692
 
 Pure business logic -- no I/O.
 """
@@ -56,48 +60,43 @@ __all__ = [
 ]
 
 
-# -- Level weights for hierarchical combination --------------------------------
+# -- Precision-weighted level combination --------------------------------------
+#
+# Friston's free energy is the precision-weighted sum of squared prediction
+# errors across the hierarchy: F = Sum_i pi_i * eps_i^2 (Friston 2005;
+# Friston & Kiebel 2009). Cross-level contributions are weighted by PRECISION
+# (inverse variance, encoded as the synaptic gain on error units --
+# Feldman & Friston 2010), NOT by a fixed prior. Precision is neuromodulated
+# by NE (global gain) and ACh (bottom-up vs top-down ratio -- Yu & Dayan 2005)
+# inside ``neuromodulate_precisions``. There are therefore deliberately no free
+# cross-level weight constants in this module: the combination is derived
+# entirely from the precision values. (Earlier revisions used a fixed prior
+# [0.30, 0.35, 0.35] plus a duplicate ACh-weight transform; both were ungrounded
+# borrowings of the Friston label and have been removed in favour of the
+# precision-derived sum.)
 
-_LEVEL_WEIGHTS = [0.30, 0.35, 0.35]  # Sensory, Entity, Schema
-
-
-# -- ACh-modulated level weights -----------------------------------------------
-
-
-def _compute_ach_weights(ach_level: float) -> tuple[float, float, float]:
-    """Compute ACh-modulated level weights, normalized to sum to 1.
-
-    High ACh (encoding): boost L0/L1 (bottom-up), reduce L2.
-    Low ACh (retrieval): boost L2 (top-down), reduce L0/L1.
-    """
-    ach_norm = (ach_level - 0.3) / 0.7
-    weight_0 = _LEVEL_WEIGHTS[0] * (0.7 + 0.6 * ach_norm)
-    weight_1 = _LEVEL_WEIGHTS[1] * (0.7 + 0.6 * ach_norm)
-    weight_2 = _LEVEL_WEIGHTS[2] * (1.3 - 0.6 * ach_norm)
-    total = weight_0 + weight_1 + weight_2
-
-    if total > 0:
-        weight_0 /= total
-        weight_1 /= total
-        weight_2 /= total
-
-    return weight_0, weight_1, weight_2
+# source: PrecisionState default (predictive_coding_gate.py) -- unit precision
+# (variance 1.0) for a domain with no observed prediction-error history.
+_DEFAULT_LEVEL_PRECISIONS = [1.0, 1.0, 1.0]  # Sensory, Entity, Schema
 
 
-def _apply_precision_modulation(
-    levels: list[PredictionLevel],
-    precision_state: PrecisionState,
+def _level_precisions(
+    precision_state: PrecisionState | None,
     ne_level: float,
     ach_level: float,
-) -> None:
-    """Apply NE/ACh precision gain to each level's free energy in-place."""
-    modulated_prec = neuromodulate_precisions(
-        precision_state.level_precisions,
-        ne_level,
-        ach_level,
+) -> list[float]:
+    """Cross-level precisions pi_i, neuromodulated by NE (gain) and ACh (ratio).
+
+    Friston: each level's contribution to total free energy is scaled by its
+    precision (inverse variance), not a fixed prior. Falls back to unit
+    precision when no domain precision-error history exists.
+    """
+    base = (
+        precision_state.level_precisions
+        if precision_state is not None
+        else list(_DEFAULT_LEVEL_PRECISIONS)
     )
-    for i, level in enumerate(levels):
-        level.free_energy *= modulated_prec[i]
+    return neuromodulate_precisions(base, ne_level, ach_level)
 
 
 # -- Main orchestrator ---------------------------------------------------------
@@ -133,15 +132,28 @@ def _compute_prediction_levels(
 
 def _aggregate_novelty(
     levels: list[PredictionLevel],
-    ach_level: float,
+    level_precisions: list[float],
 ) -> tuple[float, float]:
-    """Aggregate level free energies into total free energy and novelty score."""
-    w0, w1, w2 = _compute_ach_weights(ach_level)
-    total_fe = (
-        w0 * levels[0].free_energy
-        + w1 * levels[1].free_energy
-        + w2 * levels[2].free_energy
+    """Combine per-level free energies into total free energy + novelty score.
+
+    Total free energy is the precision-weighted sum F = Sum_i pi_i * F_i
+    (Friston 2005 eq. 7; Friston & Kiebel 2009) -- additive across levels, each
+    weighted by its cross-level precision pi_i. No fixed cross-level prior is
+    used; NE amplifies all precisions and ACh shifts the bottom-up/top-down
+    ratio via ``neuromodulate_precisions``.
+    """
+    # strict=True: exactly one precision per level -- a length mismatch would
+    # silently drop a level's free energy from the total, corrupting the gate.
+    total_fe = sum(
+        prec * level.free_energy
+        for prec, level in zip(level_precisions, levels, strict=True)
     )
+    # source: engineering (logistic squash of unbounded free energy -> [0,1] so
+    # the gate sees a comparable novelty score); NOT from Friston. Steepness 3.0
+    # and midpoint 0.5 are uncalibrated defaults -- calibration pending
+    # (benchmarks/gate_precision/run_benchmark.py). The additive precision-
+    # weighted free-energy aggregation above is the Fristonian part; this
+    # mapping is a presentation transform only.
     novelty = 1.0 / (1.0 + math.exp(-3.0 * (total_fe - 0.5)))
     return total_fe, max(0.0, min(1.0, novelty))
 
@@ -174,10 +186,8 @@ def compute_hierarchical_novelty(
         domain_familiarity,
     )
 
-    if precision_state is not None:
-        _apply_precision_modulation(levels, precision_state, ne_level, ach_level)
-
-    total_fe, novelty = _aggregate_novelty(levels, ach_level)
+    level_precisions = _level_precisions(precision_state, ne_level, ach_level)
+    total_fe, novelty = _aggregate_novelty(levels, level_precisions)
 
     return HierarchicalPrediction(
         levels=levels,

@@ -636,6 +636,42 @@ For each module I examined: (1) the paper(s) cited in the docstring, (2) what th
 
 ### Changelog
 
+**2026-06-30 (Wave 3 — provenance audit of 5 previously-unaudited modules):**
+Audited 5 modules outside the original 33. One real functional bug, four sets
+of false paper attributions. Full suite GREEN (3620 passed).
+- `platt_calibration.py` — **FUNCTIONAL BUG FIXED**. `_smoothed_target` swapped
+  the class counts: positive examples used `n_neg` and negatives used `n_pos`,
+  inverting Platt 1999 Eq.7 / Lin-Lin-Weng 2007 Eq.2 (positive
+  t=(N⁺+1)/(N⁺+2), negative t=1/(N⁻+2)). Extracted to a named helper with a
+  regression test (`test_target_smoothing_uses_correct_class_counts`).
+  `CONVERGENCE_TOL` 1e-6→1e-5 to match Lin-Lin-Weng Algorithm 1 stopping
+  criterion; `MAX_ITERATIONS=100` sourced to the same Algorithm 1.
+  `MIN_SAMPLES=50` relabeled engineering default (Platt prescribes no minimum).
+- `reconsolidation.py` — 4 false attributions removed, no values changed. The
+  0.15/0.65 thresholds do NOT come from Osan-Tort-Amaral 2011 (its parameters
+  are network-specific, not normalized cut points); the PE 0.5 coeff and the
+  30-day/0.15 age window are engineering defaults (Lee 2009 and Milekic &
+  Alberini 2002 give direction only). The emotional multiplier is NO LONGER
+  attributed to Yonelinas & Ritchey 2015 — their result is a forgetting-rate
+  effect, not a reconsolidation gain (category error documented in-code).
+- `hierarchical_predictive_coding.py` — **DEEP FIX**. Removed the ungrounded
+  fixed cross-level prior `[0.30, 0.35, 0.35]` and the duplicate ACh-weight
+  transform (triple-counted ACh against `neuromodulate_precisions`). Total free
+  energy is now the precision-weighted sum F = Σ πᵢ·Fᵢ (Friston 2005 eq. 7;
+  Friston & Kiebel 2009) derived entirely from the neuromodulated precision
+  values — no free cross-level constants remain. Logistic novelty squash
+  (steepness 3.0, midpoint 0.5) relabeled engineering presentation transform.
+  Operating-point scale shift; NO production impact (`WRITE_GATE_HIERARCHICAL`
+  defaults False) — re-enabling requires re-running `benchmarks/gate_precision`.
+- `neurogenesis.py` — docstring rescoped: this is a temporal-context dimension
+  weighting heuristic, NOT dentate-gyrus pattern separation. Aimone 2011 (a
+  review with no formula) demoted to motivation-only. 5 constants
+  (`_NEUROGENESIS_BOOST`, `_SEPARATION_THRESHOLD`, bucket hours/stride/fraction)
+  named and relabeled engineering defaults; no behavior change.
+- `memory_ingest.py` — `importance_boost=1.5` relabeled engineering default.
+  Adcock et al. 2006 motivates a reward→memory boost (direction) but reports no
+  multiplier; demoted to motivation-only.
+
 **2026-04-03 (Wave 2):**
 - `neuromodulation_channels.py` DA channel: R-W equation verified faithful. Schultz firing
   rate claim fixed (was "40Hz baseline, 80Hz burst" → now "5Hz baseline, 20-30Hz burst").

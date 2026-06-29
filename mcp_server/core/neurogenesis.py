@@ -1,15 +1,23 @@
-"""Neurogenesis analog and separation metrics.
+"""Temporal-context dimension weighting and separation metrics.
 
-Simulates adult neurogenesis: new "neurons" (embedding dimensions) are
-hyperexcitable initially and gradually mature, creating temporal context
-signals for natural temporal clustering. Also provides separation metrics
-for monitoring pattern separation effectiveness.
+This module implements a temporal-context encoding heuristic: a rotating
+hash-selected subset of fixed embedding dimensions is boosted by a magnitude
+that decays with memory age, so recent memories cluster on shared dimensions.
+It does NOT implement dentate-gyrus pattern separation. The "neurogenesis"
+framing is a loose biological MOTIVATION, not a faithful model — the cited
+papers below inspire the concept (young, broadly-tuned units carry temporal/
+contextual signal that fades as they mature) but prescribe no weight, decay,
+or threshold formula. All numeric constants here are engineering defaults
+(see per-constant comments), not paper-derived values.
 
-References:
-    Aimone JB et al. (2011) Resolving new memories: DG, neurogenesis, and
-        pattern separation. Neuron 70:589-596
-    Cognitive Neurodynamics (2025) Dynamic impact of adult neurogenesis
-        on pattern separation in the DG neural network.
+Motivating references (concept only, NOT a source for any constant):
+    Aimone JB, Deng W, Gage FH (2011) Resolving new memories: a critical look
+        at the dentate gyrus, adult neurogenesis, and pattern separation.
+        Neuron 70:589-596. A review proposing the "memory resolution"
+        hypothesis; it gives no computational weight/threshold formula.
+    Cognitive Neurodynamics (2025) Dynamic impact of adult neurogenesis on
+        pattern separation in the DG neural network. (network simulation;
+        not a prescription for embedding-dimension weights)
 
 Pure business logic — no I/O.
 """
@@ -26,7 +34,18 @@ from mcp_server.shared.linear_algebra import (
 
 # ── Configuration ─────────────────────────────────────────────────────────
 
+# Extra weight applied to the "young" (recently-boosted) dimension subset at
+# zero age. No paper prescribes this magnitude — Aimone 2011 is a review with
+# no formula.
+# source: engineering default; calibration pending
 _NEUROGENESIS_BOOST = 0.3
+
+# Cosine-similarity threshold above which a neighbor counts as interference
+# pressure. Mirrors the same 0.75 in separation_core.py, which is likewise an
+# empirically-tuned engineering choice for 384-dim dense embeddings (the DG
+# sourced value there is _SPARSITY_TARGET=0.04 sparsity from Leutgeb 2007 —
+# a sparsity fraction, NOT a cosine threshold, so there is nothing to defer to).
+# source: engineering default; calibration pending
 _SEPARATION_THRESHOLD = 0.75
 
 
@@ -51,9 +70,19 @@ def _apply_dimension_boosts(
 ) -> None:
     """Apply time-varying dimension boosts to weight vector (in-place)."""
     embedding_dim = len(weights)
-    time_bucket = int(hours_since_creation / 6.0)
-    boosted_start = (time_bucket * 7) % embedding_dim
-    boosted_count = max(1, int(embedding_dim * 0.1))
+    # 6.0 = hours per temporal bucket (memories within the same 6h window share
+    #   the same boosted dimension subset); 7 = stride that rotates the boosted
+    #   window across buckets (coprime-ish with typical dims to spread coverage);
+    #   0.1 = fraction of dimensions boosted per bucket (~10%). None of these are
+    #   paper-derived; they are hand-picked knobs controlling temporal-cluster
+    #   granularity, and have not been calibrated against retrieval benchmarks.
+    # source: engineering default; calibration pending
+    _hours_per_bucket = 6.0
+    _bucket_stride = 7
+    _boosted_fraction = 0.1
+    time_bucket = int(hours_since_creation / _hours_per_bucket)
+    boosted_start = (time_bucket * _bucket_stride) % embedding_dim
+    boosted_count = max(1, int(embedding_dim * _boosted_fraction))
 
     for i in range(boosted_count):
         dim_idx = (boosted_start + i) % embedding_dim
@@ -65,19 +94,26 @@ def compute_temporal_separation_weights(
     embedding_dim: int,
     *,
     boost: float = _NEUROGENESIS_BOOST,
+    # Exponential time-constant (hours) over which the boost decays via
+    # 1 - exp(-t/maturation_hours). 48h is a hand-chosen "recent memory" window
+    # at this system's hours/days timescale; Aimone 2011 discusses a weeks-long
+    # biological maturation window but gives no time-constant to port here.
+    # source: engineering default; calibration pending
     maturation_hours: float = 48.0,
 ) -> list[float]:
-    """Compute dimension-specific weights for temporal pattern separation.
+    """Compute dimension-specific weights for temporal-context encoding.
 
-    Simulates adult neurogenesis: new "neurons" are hyperexcitable initially
-    and gradually mature. Recent memories get boosted on a rotating subset
-    of dimensions (temporal hash), creating natural temporal clustering.
+    A rotating hash-selected subset of dimensions is boosted by a magnitude
+    that decays with memory age, so recent memories cluster on shared
+    dimensions. This is a temporal-context heuristic inspired by — not an
+    implementation of — Aimone's pattern-separation hypothesis (see module
+    docstring); all constants are engineering defaults.
 
     Args:
         hours_since_creation: Age of the memory in hours.
         embedding_dim: Dimensionality of embeddings.
-        boost: How much extra weight new dimensions get.
-        maturation_hours: How long until neurogenesis boost fades.
+        boost: Extra weight applied to the boosted dimension subset at age 0.
+        maturation_hours: Time-constant over which the boost decays.
 
     Returns:
         Per-dimension weight vector (length = embedding_dim).

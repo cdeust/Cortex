@@ -31,11 +31,15 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-# ── Defaults (source: Platt 1999 §2.1, stable numerical limits) ─────────
+# ── Defaults ───────────────────────────────────────────────────────────
 
-MIN_SAMPLES: int = 50  # Below this, refuse to fit — too few pairs.
-MAX_ITERATIONS: int = 100  # Newton-Raphson cap.
-CONVERGENCE_TOL: float = 1e-6  # Gradient norm below this -> fit done.
+# source: engineering default (Platt 1999 prescribes no minimum); calibration
+# pending. Below this, refuse to fit — too few pairs to estimate 2 params.
+MIN_SAMPLES: int = 50
+# source: Lin, Lin & Weng (2007) Algorithm 1, "maxiter = 100".
+MAX_ITERATIONS: int = 100
+# source: Lin, Lin & Weng (2007) Algorithm 1 stopping criterion |g| < 1e-5.
+CONVERGENCE_TOL: float = 1e-5  # Gradient norm below this -> fit done.
 
 
 @dataclass(frozen=True)
@@ -85,6 +89,18 @@ def _predict_platt(A: float, B: float, s: float) -> float:
     return _sigmoid(-(A * s + B))
 
 
+def _smoothed_target(y: int, n_pos: int, n_neg: int) -> float:
+    """Platt-smoothed regression target for one example.
+
+    source: Platt 1999 Eq.7 / Lin-Lin-Weng (2007) Eq.2 —
+      positive example (y == 1): t = (N+ + 1) / (N+ + 2)  -> uses n_pos
+      negative example (y == 0): t = 1 / (N- + 2)         -> uses n_neg
+    """
+    if y == 1:
+        return (n_pos + 1.0) / (n_pos + 2.0)
+    return 1.0 / (n_neg + 2.0)
+
+
 def fit_platt(
     samples: list[TrainingSample],
     *,
@@ -107,7 +123,8 @@ def fit_platt(
       Hess = sum_i p_i * (1 - p_i) * [[s_i^2, s_i], [s_i, 1]]
       [A, B] -= Hess^-1 @ grad
 
-    Standard derivation (Platt 1999 §2.1; also in any GLM text).
+    source: Lin, Lin & Weng (2007) Algorithm 1 gradient/Hessian; standard
+    logistic-regression Newton step (also in any GLM text).
     """
     n = len(samples)
     if n < min_samples:
@@ -131,8 +148,7 @@ def fit_platt(
             s = sample.raw_score
             y = sample.label
             p = _sigmoid(-(A * s + B))
-            # target t uses Platt smoothing (1999 Eq. 7).
-            t = (1.0 - 1.0 / (n_neg + 2.0)) if y == 1 else 1.0 / (n_pos + 2.0)
+            t = _smoothed_target(y, n_pos, n_neg)
             d = p - t
             g_a += d * (-s)  # partial derivative w.r.t. A
             g_b += d * (-1.0)

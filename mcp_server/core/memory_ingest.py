@@ -88,7 +88,8 @@ def ingest_memory(
         #
         # Paper backing (WHY decisions deserve protection):
         #   McGaugh 2004: emotionally significant → ~2x retention
-        #   Adcock et al. 2006: reward-motivated → ~1.5x recall boost
+        #   Adcock et al. 2006: reward-motivated → better recall (direction only;
+        #     paper reports a significant 24h advantage but prescribes no ratio)
         #   Schultz 1997: decision = resolved prediction error = DA burst
         #
         # Detection: regex in memory_decomposer.py (engineering heuristic,
@@ -98,7 +99,12 @@ def ingest_memory(
         # synaptic tagging — strong events promote weak traces).
         is_decision = entities.get("has_decision", False)
         auto_protect = is_decision and not is_benchmark
-        importance_boost = 1.5 if is_decision else 1.0  # Adcock et al. 2006
+        # source: engineering default; calibration pending. Adcock et al. 2006
+        # (Neuron 50:507) motivates reward->memory boost (high-value scenes
+        # significantly better recalled at 24h) but reports NO multiplier — the
+        # 1.5 is not the paper's value. Transposing a recognition-memory effect
+        # to a heat/decay importance weight is an analogy. Needs ablation.
+        importance_boost = 1.5 if is_decision else 1.0
 
         # ── Team memory propagation (TMS) ──────────────────────────
         # Wegner 1987 Transactive Memory Systems: team knowledge requires

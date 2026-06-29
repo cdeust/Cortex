@@ -74,6 +74,20 @@ class TestFitPlatt:
         assert math.isfinite(params.B)
         assert params.n_samples == len(samples)
 
+    def test_target_smoothing_uses_correct_class_counts(self):
+        """The Platt-smoothed target must use the MATCHING class count
+        (Platt 1999 Eq.7 / Lin-Lin-Weng Eq.2): a positive example's target
+        is (N+ +1)/(N+ +2) and uses n_pos; a negative example's target is
+        1/(N- +2) and uses n_neg. Heavy imbalance (N+=4, N-=100) makes the
+        correct values far from the swapped-bug values, so the prior swap
+        (positive->n_neg, negative->n_pos) would fail these assertions.
+        """
+        n_pos, n_neg = 4, 100
+        # Positive branch: correct 5/6 ~= 0.833; swapped bug -> 101/102 ~= 0.990.
+        assert pc._smoothed_target(1, n_pos, n_neg) == pytest.approx((n_pos + 1) / (n_pos + 2))
+        # Negative branch: correct 1/102 ~= 0.0098; swapped bug -> 1/6 ~= 0.167.
+        assert pc._smoothed_target(0, n_pos, n_neg) == pytest.approx(1.0 / (n_neg + 2))
+
 
 class TestCalibrateApply:
     """calibrate_score behaviour under fitted / unfitted params."""
