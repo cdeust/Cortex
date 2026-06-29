@@ -1,0 +1,40 @@
+{
+  "overall_mrr": 0.8573333333333334,
+  "overall_recall10": 0.94,
+  "category_mrr": {
+    "Single-session (user)": 0.8573333333333334
+  },
+  "category_recall10": {
+    "Single-session (user)": 0.94
+  },
+  "elapsed_s": 896.5998824580001,
+  "consolidation_total_wall_s": 698.0919223390028,
+  "consolidation_call_count": 50,
+  "manifest": {
+    "with_consolidation": true,
+    "with_consolidation_note": null,
+    "ablate_mechanism": "ACTIVE_FORGETTING",
+    "ablate_env_var": "CORTEX_ABLATE_ACTIVE_FORGETTING=1",
+    "n_questions": 50,
+    "n_runs": 1,
+    "consolidation_call_count": 50,
+    "consolidation_total_wall_s": 698.0919223390028,
+    "repro": {
+      "git_commit": "c264af951cb5cd3c7320ca5a69f803fdae44144c",
+      "git_dirty": true,
+      "python_version": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.0.13.3)]",
+      "platform_system": "Darwin",
+      "platform_machine": "arm64",
+      "platform_node": "mac-1.home",
+      "timestamp_utc": "2026-06-29T20:32:57.228025+00:00",
+      "lib_versions": {
+        "sentence-transformers": "5.4.1",
+        "torch": "2.11.0",
+        "numpy": "2.4.4",
+        "psycopg": "3.3.3",
+        "pgvector": "0.4.2",
+        "flashrank": "0.2.10"
+      }
+    }
+  }
+}

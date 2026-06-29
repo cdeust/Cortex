@@ -754,6 +754,20 @@ class PgMemoryStore(
         )
         self._conn.commit()
 
+    def update_forgetting_pressure_accum(self, memory_id: int, accum: float) -> None:
+        """Persist the permanent-circuit leaky-integrator state for one memory.
+
+        Written every forgetting cycle (including leak-down when interference
+        abates), so the accumulator carries sustained-pressure history across
+        cycles — the faithful discretization of gradual Rac1 erosion.
+        source: mcp_server/core/active_forgetting.py (update_pressure_accum).
+        """
+        self._execute(
+            "UPDATE memories SET forgetting_pressure_accum = %s WHERE id = %s",
+            (accum, memory_id),
+        )
+        self._conn.commit()
+
     # ── Search (delegates to PL/pgSQL) ────────────────────────────────
 
     def recall_memories(

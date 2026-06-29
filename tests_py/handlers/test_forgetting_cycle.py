@@ -1,84 +1,25 @@
 """Handler tests for the active-forgetting consolidation cycle.
 
-The noisy-OR aggregate is the load-bearing maths of the chronic-interference
-signal (Pearl 1988), so it is tested directly and exhaustively here — no
-database, per the SRP split that keeps aggregation in the handler. A few
-fake-store wiring checks confirm the two circuits route to the right reversible
-effect.
+The chronic-interference aggregator and the leaky integrator are pure core
+(``mcp_server.core.active_forgetting``) and are tested there; this file checks
+the WIRING — that the handler reads raw newer-neighbour similarities, advances
+and persists the per-memory accumulator every cycle, and routes the two circuits
+to the right reversible effect. No database (fake duck-typed store).
 """
 
 from __future__ import annotations
-
-import math
 
 import pytest
 
 from mcp_server.core.active_forgetting import (
     ACUTE_OVERLAP_THRESHOLD,
     ACUTE_RECENCY_WINDOW_HOURS,
+    PERMANENT_ACCUM_THRESHOLD,
 )
 from mcp_server.handlers.consolidation.forgetting import (
     _evaluate_memory,
-    _noisy_or,
     run_forgetting_cycle,
 )
-
-
-# ── Noisy-OR aggregate ────────────────────────────────────────────────────
-
-
-def test_noisy_or_empty_is_zero():
-    """No newer neighbors → no chronic interference."""
-    assert _noisy_or([]) == 0.0
-
-
-def test_noisy_or_single_neighbor_equals_its_similarity():
-    """One neighbor: 1 - (1 - s) == s."""
-    assert _noisy_or([0.6]) == pytest.approx(0.6)
-
-
-def test_noisy_or_matches_closed_form():
-    """1 - ∏(1 - s_i) computed against the explicit product."""
-    sims = [0.3, 0.5, 0.2]
-    expected = 1.0 - (1 - 0.3) * (1 - 0.5) * (1 - 0.2)
-    assert _noisy_or(sims) == pytest.approx(expected)
-
-
-def test_noisy_or_grows_with_count():
-    """Two equal neighbors interfere more than one (accumulation with count)."""
-    one = _noisy_or([0.4])
-    two = _noisy_or([0.4, 0.4])
-    assert two > one
-    assert two == pytest.approx(1.0 - (1 - 0.4) ** 2)
-
-
-def test_noisy_or_monotone_when_adding_a_neighbor():
-    """Adding any neighbor never decreases the aggregate (monotone in count)."""
-    base = _noisy_or([0.5, 0.3])
-    grown = _noisy_or([0.5, 0.3, 0.7])
-    assert grown >= base
-
-
-def test_noisy_or_bounded_unit_interval():
-    """Even many strong neighbors stay within [0, 1]."""
-    val = _noisy_or([0.9] * 50)
-    assert 0.0 <= val <= 1.0
-
-
-def test_noisy_or_clamps_negative_similarity():
-    """A negative cosine (near-orthogonal) contributes nothing, never inflates."""
-    assert _noisy_or([-0.5]) == 0.0
-    assert _noisy_or([0.6, -0.3]) == pytest.approx(0.6)
-
-
-def test_noisy_or_clamps_above_one():
-    """A >1 similarity is clamped to a saturating term, not an out-of-range one."""
-    assert _noisy_or([1.5]) == pytest.approx(1.0)
-
-
-def test_noisy_or_order_independent():
-    """Product is commutative — neighbor ordering must not change the result."""
-    assert _noisy_or([0.2, 0.8, 0.4]) == pytest.approx(_noisy_or([0.8, 0.4, 0.2]))
 
 
 # ── Effect wiring (fake store, no database) ───────────────────────────────
@@ -91,6 +32,7 @@ class _FakeStore:
         self._neighbors = neighbors
         self.staled: list[int] = []
         self.heat_writes: dict[int, float] = {}
+        self.accum_writes: dict[int, float] = {}
 
     def search_newer_neighbors(self, embedding, after, exclude_id, top_k=10):
         return self._neighbors
@@ -101,6 +43,9 @@ class _FakeStore:
     def update_memory_heat(self, memory_id, heat):
         self.heat_writes[memory_id] = heat
 
+    def update_forgetting_pressure_accum(self, memory_id, accum):
+        self.accum_writes[memory_id] = accum
+
 
 def _memory(**over):
     base = {
@@ -110,6 +55,7 @@ def _memory(**over):
         "consolidation_stage": "labile",
         "heat": 0.5,
         "is_protected": False,
+        "forgetting_pressure_accum": 0.0,
     }
     base.update(over)
     return base
@@ -118,9 +64,8 @@ def _memory(**over):
 def test_transient_effect_scales_heat_by_interferer_overlap():
     """DAMB block: heat × (1 - acute_overlap), magnitude from measured salience.
 
-    Uses a ``consolidated`` stage so the permanent circuit's pressure stays
-    below ``Tp`` and the transient circuit is isolated (the two read disjoint
-    signals; permanent — when it fires — subsumes transient).
+    Uses a ``consolidated`` stage so the permanent accumulator stays far below
+    Θ and the transient circuit is isolated (disjoint signals).
     """
     overlap = 0.8  # ≥ ACUTE_OVERLAP_THRESHOLD, recent → transient fires
     assert overlap >= ACUTE_OVERLAP_THRESHOLD
@@ -133,30 +78,60 @@ def test_transient_effect_scales_heat_by_interferer_overlap():
     assert store.staled == []
 
 
-def test_permanent_effect_marks_stale_on_labile_with_strong_chronic():
-    """Rac1: a labile trace under strong accumulated newer interference is staled."""
-    # Many strong newer neighbors → chronic near 1; labile vulnerability is high.
+def test_permanent_requires_sustained_pressure_not_a_single_cycle():
+    """A single strong cycle from zero accumulator does NOT fire permanent —
+    the leaky integrator demands sustained interference (the saturation fix)."""
+    store = _FakeStore([(0.9, 100.0)] * 5)  # strong genuine near-dups, old enough
+    effect = _evaluate_memory(store, _memory(consolidation_stage="labile"), set())
+    assert effect == "retain"
+    assert store.staled == []
+    assert 0.0 < store.accum_writes[1] < PERMANENT_ACCUM_THRESHOLD
+
+
+def test_permanent_fires_once_accumulator_crosses_threshold():
+    """With prior accumulated pressure, one more strong cycle crosses Θ → stale."""
     store = _FakeStore([(0.9, 100.0)] * 5)  # old enough that transient won't fire
-    effect = _evaluate_memory(
-        store, _memory(consolidation_stage="labile"), set()
-    )
+    mem = _memory(consolidation_stage="labile", forgetting_pressure_accum=1.0)
+    effect = _evaluate_memory(store, mem, set())
     assert effect == "permanent"
     assert store.staled == [1]
+    assert store.accum_writes[1] >= PERMANENT_ACCUM_THRESHOLD
+
+
+def test_accumulator_persisted_every_cycle_including_leak():
+    """Even a retain cycle writes back the (possibly leaked) accumulator."""
+    store = _FakeStore([(0.5, 100.0)] * 5)  # background band → chronic 0
+    mem = _memory(consolidation_stage="labile", forgetting_pressure_accum=0.4)
+    effect = _evaluate_memory(store, mem, set())
+    assert effect == "retain"
+    # chronic 0 → accum = λ·0.4 = 0.34 (leaked, not reset)
+    assert store.accum_writes[1] == pytest.approx(0.85 * 0.4)
+
+
+def test_background_neighbours_never_accumulate_pressure():
+    """A full field of background (~0.5) neighbours yields chronic 0 → no growth."""
+    store = _FakeStore([(0.52, 100.0), (0.61, 100.0), (0.48, 100.0), (0.55, 100.0)])
+    effect = _evaluate_memory(store, _memory(consolidation_stage="labile"), set())
+    assert effect == "retain"
+    assert store.accum_writes[1] == 0.0
 
 
 def test_pinned_memory_is_exempt_from_both_circuits():
     """is_protected (or heat≥1.0) exempts the memory entirely."""
     store = _FakeStore([(0.95, 1.0)])  # would otherwise fire transient
-    effect = _evaluate_memory(store, _memory(is_protected=True), set())
+    mem = _memory(is_protected=True, forgetting_pressure_accum=10.0)
+    effect = _evaluate_memory(store, mem, set())
     assert effect == "retain"
     assert store.staled == [] and store.heat_writes == {}
 
 
 def test_recently_active_memory_is_sleep_protected():
-    """A memory replayed this cycle is exempt (sleep inhibits forgetting)."""
+    """A memory replayed this cycle is exempt; its accumulator leaks (pressure 0)."""
     store = _FakeStore([(0.95, 1.0)])
-    effect = _evaluate_memory(store, _memory(id=7), recently_active_ids={7})
+    mem = _memory(id=7, forgetting_pressure_accum=1.0)
+    effect = _evaluate_memory(store, mem, recently_active_ids={7})
     assert effect == "retain"
+    assert store.accum_writes[7] == pytest.approx(0.85 * 1.0)  # leaked, no new pressure
 
 
 def test_old_acute_interferer_does_not_trigger_transient():

@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS memories (
                             CHECK (heat_base >= 0.0 AND heat_base <= 1.0),
     heat_base_set_at        TEXT NOT NULL DEFAULT (datetime('now')),
     no_decay                INTEGER NOT NULL DEFAULT 0,
+    forgetting_pressure_accum REAL NOT NULL DEFAULT 0,
     surprise_score          REAL DEFAULT 0.0,
     importance              REAL DEFAULT 0.5,
     emotional_valence       REAL DEFAULT 0.0,

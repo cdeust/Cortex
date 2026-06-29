@@ -1,0 +1,65 @@
+{
+  "overall_mrr": 0.5013278218694885,
+  "overall_r10": 0.6816666666666666,
+  "ability_mrr": {
+    "abstention": 0.15,
+    "contradiction_resolution": 0.8341666666666667,
+    "event_ordering": 0.376140873015873,
+    "information_extraction": 0.42607142857142855,
+    "instruction_following": 0.2806845238095238,
+    "knowledge_update": 0.8270833333333334,
+    "multi_session_reasoning": 0.6189880952380953,
+    "preference_following": 0.4111111111111111,
+    "summarization": 0.2931988536155203,
+    "temporal_reasoning": 0.7958333333333333
+  },
+  "ability_r5": {
+    "abstention": 0.15,
+    "contradiction_resolution": 0.9,
+    "event_ordering": 0.5,
+    "information_extraction": 0.475,
+    "instruction_following": 0.425,
+    "knowledge_update": 0.95,
+    "multi_session_reasoning": 0.775,
+    "preference_following": 0.6,
+    "summarization": 0.4722222222222222,
+    "temporal_reasoning": 0.925
+  },
+  "ability_r10": {
+    "abstention": 0.15,
+    "contradiction_resolution": 0.9,
+    "event_ordering": 0.65,
+    "information_extraction": 0.525,
+    "instruction_following": 0.525,
+    "knowledge_update": 0.95,
+    "multi_session_reasoning": 0.85,
+    "preference_following": 0.675,
+    "summarization": 0.6666666666666666,
+    "temporal_reasoning": 0.925
+  },
+  "total_questions": 395,
+  "elapsed_s": 776.9530627727509,
+  "manifest": {
+    "split": "100K",
+    "n_conversations": 20,
+    "n_questions": 395,
+    "n_runs": 1,
+    "repro": {
+      "git_commit": "c264af951cb5cd3c7320ca5a69f803fdae44144c",
+      "git_dirty": true,
+      "python_version": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.0.13.3)]",
+      "platform_system": "Darwin",
+      "platform_machine": "arm64",
+      "platform_node": "mac-1.home",
+      "timestamp_utc": "2026-06-29T22:21:10.574848+00:00",
+      "lib_versions": {
+        "sentence-transformers": "5.4.1",
+        "torch": "2.11.0",
+        "numpy": "2.4.4",
+        "psycopg": "3.3.3",
+        "pgvector": "0.4.2",
+        "flashrank": "0.2.10"
+      }
+    }
+  }
+}

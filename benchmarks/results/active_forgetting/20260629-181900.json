@@ -1,0 +1,27 @@
+{
+  "benchmark": "active_forgetting",
+  "date": "2026-06-29T18:19:00.201545+00:00",
+  "derived_thresholds": {
+    "PERMANENT_PRESSURE_THRESHOLD": 0.3275,
+    "ACUTE_OVERLAP_THRESHOLD": 0.575,
+    "ACUTE_RECENCY_WINDOW_HOURS": 13.0
+  },
+  "margins": {
+    "permanent": 0.295,
+    "overlap": 0.55,
+    "age_hours": 22.0
+  },
+  "baseline_wrongly_staled": [
+    "P3",
+    "P4"
+  ],
+  "labels_reproduced": true,
+  "fixture_consolidated_graded_not_immune": true,
+  "fixture_sleep_protects_permanent": true,
+  "fixture_zero_chronic_no_permanent": true,
+  "fixture_transient_stage_independent": true,
+  "fixture_transient_needs_recency_and_overlap": true,
+  "fixture_circuits_independent": true,
+  "fixture_reversibility": true,
+  "passed": true
+}

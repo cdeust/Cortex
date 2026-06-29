@@ -8,13 +8,20 @@ inhibits the Rac1 forgetting circuit (Davis & Zhong 2017, Neuron 95:490-503).
 
 Per active memory that is neither pinned nor replayed this cycle:
 
-  - ``chronic_interference`` = the noisy-OR over the similarities of NEWER
-    overlapping neighbors (``1 - ∏(1 - sim_i)``; Pearl 1988): param-free,
-    bounded to [0, 1], monotone increasing in both neighbor count and strength
-    — the faithful aggregate of Davis & Zhong's "ongoing" retroactive
-    interference signal. Aggregation lives here (the store returns raw
-    per-neighbor similarities) so the SQL stays a plain KNN and the maths is
-    unit-testable without a database (SRP).
+  - ``chronic`` = the core ``chronic_interference`` over the NEWER overlapping
+    neighbours: a REDUNDANCY-GATED excess noisy-OR that counts only genuine
+    near-duplicates (sim ≥ τ_dup = curation.MERGE_THRESHOLD), excluding the ~0.5
+    background band of 384-dim embeddings. This is the saturation fix — a plain
+    noisy-OR over the 10 nearest newer neighbours saturated to ≈1.0 for 99.6% of
+    memories and marked 46% of the corpus stale in one cycle. The gating lives in
+    pure core (the store returns raw per-neighbour similarities), unit-testable
+    without a database (SRP).
+
+  - ``accum`` = the leaky integrator over cycles: ``λ·accum_{t-1} + chronic ×
+    stage_vulnerability``. Permanent forgetting requires *sustained* pressure
+    (accum ≥ Θ_accum), faithful to the gradual Rac1/cofilin erosion; sleep-
+    protected cycles add 0 and let the accumulator leak. The prior accumulator is
+    read from the row and the new value is written back EVERY cycle.
 
   - the acute interferer = the strongest newer neighbor (``acute_overlap``) and
     its age (``acute_age_hours``), feeding the stage-independent transient DAMB
@@ -42,35 +49,21 @@ from typing import Iterable
 
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 from mcp_server.core.active_forgetting import (
+    chronic_interference,
     is_permanent_forgetting,
     is_transient_forgetting,
+    update_pressure_accum,
 )
 from mcp_server.infrastructure.memory_store import MemoryStore
 
 logger = logging.getLogger(__name__)
 
-# Newer-neighbor fan-out for the chronic noisy-OR aggregate. Bounds I/O only:
-# the noisy-OR is monotone in count, so this caps how much of a long similar-
-# neighbor tail can contribute — it is NOT a biological rate constant. Matches
-# the store's default KNN width.
+# Newer-neighbor fan-out for the chronic aggregate. Bounds I/O only: the gated
+# noisy-OR counts only near-duplicates, so this caps how much of a long similar-
+# neighbor tail is scanned — it is NOT a biological rate constant. Matches the
+# store's default KNN width.
 # source: I/O bound; mirrors search_vectors default top_k (pg_store.py)
 NEIGHBOR_K = 10
-
-
-def _noisy_or(similarities: Iterable[float]) -> float:
-    """Noisy-OR aggregate ``1 - ∏(1 - s_i)`` over neighbor similarities (Pearl 1988).
-
-    Param-free, range [0, 1], monotone increasing in both the count and the
-    strength of overlapping neighbors — the faithful accumulation of Davis &
-    Zhong (2017)'s "ongoing" retroactive interference. Each similarity is
-    clamped to [0, 1]: cosine can dip slightly negative for near-orthogonal
-    embeddings, and a negative term must not inflate the product. An empty
-    neighbor set yields 0.0 (no interference).
-    """
-    product = 1.0
-    for s in similarities:
-        product *= 1.0 - max(0.0, min(1.0, float(s)))
-    return 1.0 - product
 
 
 def run_forgetting_cycle(
@@ -120,7 +113,9 @@ def _evaluate_memory(
     (stale) effect subsumes the transient (heat) effect, so once a memory is
     marked stale the redundant heat write is skipped — the independence of the
     two circuits is preserved at the DECISION level (disjoint signals), not by
-    forcing two writes on the same row.
+    forcing two writes on the same row. The leaky-integrator accumulator is
+    advanced and persisted EVERY cycle (including leak-down) so sustained
+    pressure carries across cycles.
     """
     embedding = mem.get("embedding")
     if not embedding:
@@ -130,7 +125,7 @@ def _evaluate_memory(
     neighbors = store.search_newer_neighbors(
         embedding, mem.get("created_at"), memory_id, top_k=NEIGHBOR_K
     )
-    chronic = _noisy_or(sim for sim, _ in neighbors)
+    chronic = chronic_interference(sim for sim, _ in neighbors)
     acute_overlap, acute_age_hours = neighbors[0] if neighbors else (0.0, float("inf"))
 
     stage = mem.get("consolidation_stage") or "labile"
@@ -138,7 +133,11 @@ def _evaluate_memory(
     is_pinned = bool(mem.get("is_protected")) or heat >= 1.0
     recently_active = memory_id in recently_active_ids
 
-    if is_permanent_forgetting(stage, chronic, is_pinned, recently_active):
+    prev_accum = float(mem.get("forgetting_pressure_accum", 0.0) or 0.0)
+    accum = update_pressure_accum(prev_accum, stage, chronic, recently_active)
+    store.update_forgetting_pressure_accum(memory_id, accum)
+
+    if is_permanent_forgetting(accum, is_pinned, recently_active):
         store.mark_memory_stale(memory_id, True)
         return "permanent"
     if is_transient_forgetting(acute_overlap, acute_age_hours, is_pinned, recently_active):

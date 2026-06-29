@@ -1,10 +1,26 @@
 """Active-forgetting benchmark — two independent DA forgetting circuits (A2).
 
-Acceptance instrument for Tier-A item A2: a NEW consolidation settlement pass
-that, faithful to the *Drosophila* dopaminergic active-forgetting literature,
-applies TWO anatomically/molecularly DISTINCT forgetting circuits — not a
-severity ladder. Full design rationale lives in ADR-017; this docstring fixes
-only the testable contract.
+Acceptance instrument for Tier-A item A2: a consolidation settlement pass that,
+faithful to the *Drosophila* dopaminergic active-forgetting literature, applies
+TWO anatomically/molecularly DISTINCT forgetting circuits — not a severity
+ladder. Full design rationale lives in ADR-017; this docstring fixes only the
+testable contract.
+
+This revision replaces a synthetic-abstraction benchmark that abstracted
+``chronic`` into a hand-labelled [0, 1] value and so NEVER exercised the
+raw-similarity → chronic construction. Against the live 6989-memory corpus that
+omission hid a saturation bug: a plain noisy-OR over the 10 nearest newer
+neighbours marked 46% of the corpus PERMANENT-stale in one cycle and never fired
+the transient circuit. Two load-bearing changes close that gap:
+
+  - PERMANENT fixtures now carry RAW newer-neighbour similarity lists and the
+    benchmark computes ``chronic`` through the core ``chronic_interference``
+    (redundancy-gated excess noisy-OR), so the aggregator is exercised
+    end-to-end. A non-saturation fixture makes the old failure fail loudly forever.
+  - PERMANENT firing is SUSTAINED (a leaky integrator over cycles), so it is
+    tested by S1–S5 *time-series* fixtures from which ``derive_thresholds`` reads
+    the leak λ and accumulation threshold Θ_accum as the max-margin pair
+    reproducing every label.
 
 Primary sources (open-access via PMC; quotes verified against raw text):
   - Sabandal, Berry & Davis (2021), Nature 591:426-430 (PMC8522469): transient
@@ -23,28 +39,10 @@ Primary sources (open-access via PMC; quotes verified against raw text):
     memories … more resistant … weaker memories … more vulnerable" — ordinal
     ONLY; no quantitative strength→rate law exists in any of these papers.
 
-Contract (each clause is a fixture below):
-  PERMANENT circuit (Rac1 erosion → reversible is_stale):
-    P1 DRIVER = chronic interference from NEWER memories; zero ⇒ no permanent.
-    P2 STAGE-GRADED via the cascade interference_vulnerability (Kandel 2001 /
-       Bahrick 1984 / Benna & Fusi 2016) — REUSED. Consolidated (0.05) resists
-       strongly but is NOT hard-gated immune.
-    P3 SLEEP PROTECTS: recently replayed/accessed ⇒ excluded (sleep quiets the
-       ongoing forgetting cells).
-    permanent ⟺ (chronic_interference × stage_vulnerability) >= Tp, not pinned/slept.
-  TRANSIENT circuit (DAMB retrieval-block → reversible heat reduction):
-    T1 TRIGGER = an acute recent interferer: acute_overlap >= X AND acute_age <= W.
-    T2 STAGE-INDEPENDENT: fires even on consolidated memory (Sabandal's finding).
-    T3 REVERSIBLE: recovers on re-access.
-  INDEPENDENCE: the two circuits read different signals and never interact —
-    a memory may receive neither, one, or both; transient never causes permanent.
-  No (1-heat) salience term (no paper functional form); resistance rides on stage.
-  No phasic-DA reuse (would invert: salient = high encoding DA = should resist).
-
-Benchmark-FIRST rationale: no biological rate constant exists at hours/days
-(literature is ms *Drosophila* / in-vitro kinetics), so every threshold must
-trace to "source: benchmark <path>". This file IS that source — the labeled POOL
-fixes ground truth and ``derive_thresholds`` reads Tp / X / W off it; the core
+Benchmark-FIRST rationale: no biological rate constant exists at hours/days, so
+every threshold traces to "source: benchmark <path>". This file IS that source —
+the labelled fixtures fix ground truth and ``derive_thresholds`` reads
+τ_dup-provenance, (λ, Θ_accum), X and W off them; the core
 (mcp_server/core/active_forgetting.py) bakes them and is verified here.
 
 Run:
@@ -61,234 +59,297 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
-# The core under test (the same functions production calls). forgetting_pressure
-# is the single source of the permanent-pressure formula; the derivation below
-# reads the thresholds off the labeled POOL using it.
+# The core under test (the same functions production calls).
 from mcp_server.core.active_forgetting import (  # noqa: E402
+    ACUTE_OVERLAP_THRESHOLD,
+    ACUTE_RECENCY_WINDOW_HOURS,
+    PRESSURE_LEAK_LAMBDA,
+    PERMANENT_ACCUM_THRESHOLD,
+    TAU_DUP,
+    chronic_interference,
     forgetting_pressure,
     is_permanent_forgetting,
     is_transient_forgetting,
+    update_pressure_accum,
 )
+from mcp_server.core.curation import MERGE_THRESHOLD  # noqa: E402
 
 RESULTS_DIR = REPO / "benchmarks" / "results" / "active_forgetting"
 
-# ── Labeled pool ───────────────────────────────────────────────────────────────
-# Signals (explicit, DB-free stand-ins for the handler's embedding/entity queries,
-# exactly as A1 uses explicit _gain for the vector query):
-#   consolidation_stage — PERMANENT circuit's graded resistance (transient ignores it).
-#   heat                — anchor detection (>=1.0) + the quantity transient reduces.
-#   chronic_interference— ongoing aggregate overlap from NEWER memories (permanent driver).
-#   acute_overlap       — overlap with the single strongest recent interferer (transient).
-#   acute_age_hours     — age of that interferer (transient recency).
-#   is_protected        — user-pinned hard exclusion (both circuits).
-#   recently_active     — sleep/just-accessed: excludes permanent; transient recovers.
-#   exp_permanent / exp_transient — by-construction ground-truth labels (the spec).
-POOL = [
-    # ── PERMANENT axis: chronic interference × graded stage resistance ─────────
-    # (acute_overlap 0 ⇒ transient NO for all of these).
-    {"id": "P1", "consolidation_stage": "labile", "heat": 0.30,
-     "chronic_interference": 0.70, "acute_overlap": 0.0, "acute_age_hours": 999.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": True, "exp_transient": False,
-     "note": "labile×0.70 eff 0.630 ⇒ permanent"},
-    {"id": "P2", "consolidation_stage": "early_ltp", "heat": 0.25,
-     "chronic_interference": 0.95, "acute_overlap": 0.0, "acute_age_hours": 999.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": True, "exp_transient": False,
-     "note": "early_ltp×0.95 eff 0.475 ⇒ permanent"},
-    {"id": "P3", "consolidation_stage": "consolidated", "heat": 0.20,
-     "chronic_interference": 0.95, "acute_overlap": 0.0, "acute_age_hours": 999.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": False, "exp_transient": False,
-     "note": "consolidated×0.95 eff 0.0475 ⇒ resists (graded, NOT immune-gated)"},
-    {"id": "P4", "consolidation_stage": "late_ltp", "heat": 0.20,
-     "chronic_interference": 0.60, "acute_overlap": 0.0, "acute_age_hours": 999.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": False, "exp_transient": False,
-     "note": "late_ltp×0.60 eff 0.120 ⇒ resists"},
-    {"id": "P5", "consolidation_stage": "labile", "heat": 0.30,
-     "chronic_interference": 0.20, "acute_overlap": 0.0, "acute_age_hours": 999.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": False, "exp_transient": False,
-     "note": "labile×0.20 eff 0.180 ⇒ weak driver, retain"},
-    {"id": "P6", "consolidation_stage": "labile", "heat": 0.30,
-     "chronic_interference": 0.80, "acute_overlap": 0.0, "acute_age_hours": 999.0,
-     "is_protected": False, "recently_active": True,
-     "exp_permanent": False, "exp_transient": False,
-     "note": "eff 0.72 BUT recently_active ⇒ sleep-protected (load-bearing)"},
-    {"id": "P7", "consolidation_stage": "labile", "heat": 0.30,
-     "chronic_interference": 0.80, "acute_overlap": 0.0, "acute_age_hours": 999.0,
-     "is_protected": True, "recently_active": False,
-     "exp_permanent": False, "exp_transient": False,
-     "note": "eff 0.72 BUT is_protected ⇒ retain"},
-    {"id": "P8", "consolidation_stage": "labile", "heat": 0.30,
-     "chronic_interference": 0.0, "acute_overlap": 0.0, "acute_age_hours": 999.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": False, "exp_transient": False,
-     "note": "zero chronic interference ⇒ no permanent (driver falsifier)"},
-    # ── TRANSIENT axis: acute recent interferer, stage-INDEPENDENT ─────────────
-    # (chronic 0 ⇒ permanent NO for all of these).
-    {"id": "T1", "consolidation_stage": "consolidated", "heat": 0.40,
-     "chronic_interference": 0.0, "acute_overlap": 0.90, "acute_age_hours": 1.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": False, "exp_transient": True,
-     "note": "consolidated + acute recent interferer ⇒ transient (STAGE-INDEPENDENT)"},
-    {"id": "T2", "consolidation_stage": "labile", "heat": 0.40,
-     "chronic_interference": 0.0, "acute_overlap": 0.85, "acute_age_hours": 2.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": False, "exp_transient": True,
-     "note": "acute recent interferer ⇒ transient (reversibility tested)"},
-    {"id": "T3", "consolidation_stage": "labile", "heat": 0.40,
-     "chronic_interference": 0.0, "acute_overlap": 0.85, "acute_age_hours": 24.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": False, "exp_transient": False,
-     "note": "strong overlap but interferer too OLD ⇒ no transient (isolates W)"},
-    {"id": "T4", "consolidation_stage": "labile", "heat": 0.40,
-     "chronic_interference": 0.0, "acute_overlap": 0.30, "acute_age_hours": 1.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": False, "exp_transient": False,
-     "note": "recent but overlap too LOW ⇒ no transient (isolates X)"},
-    {"id": "T5", "consolidation_stage": "consolidated", "heat": 0.40,
-     "chronic_interference": 0.0, "acute_overlap": 0.90, "acute_age_hours": 1.0,
-     "is_protected": True, "recently_active": False,
-     "exp_permanent": False, "exp_transient": False,
-     "note": "acute interferer but pinned ⇒ no transient"},
-    # ── BOTH (independence) and NEITHER ────────────────────────────────────────
-    {"id": "B1", "consolidation_stage": "labile", "heat": 0.30,
-     "chronic_interference": 0.75, "acute_overlap": 0.90, "acute_age_hours": 1.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": True, "exp_transient": True,
-     "note": "chronic eff 0.675 AND acute recent interferer ⇒ BOTH (independent)"},
-    {"id": "N1", "consolidation_stage": "late_ltp", "heat": 0.30,
-     "chronic_interference": 0.30, "acute_overlap": 0.20, "acute_age_hours": 5.0,
-     "is_protected": False, "recently_active": False,
-     "exp_permanent": False, "exp_transient": False,
-     "note": "eff 0.06 and weak/old acute ⇒ neither"},
+GRID_LAMBDAS = [round(0.05 * i, 2) for i in range(1, 19)]  # 0.05 … 0.90
+
+# ── Permanent SIGNAL pool ───────────────────────────────────────────────────────
+# Each row carries the RAW newer-neighbour cosine list ``newer_sims`` and the
+# expected redundancy-gated ``chronic`` BAND (zero vs positive). This exercises
+# the aggregator that the old abstracted pool never touched. τ_dup = 0.85, so only
+# genuine near-duplicates (sim ≥ 0.85) contribute; the ~0.5 background band is
+# excluded. ``acute`` (strongest newer sim, its age) feeds the disjoint transient
+# circuit and lets the same neighbour list drive both circuits.
+SIGNAL_POOL = [
+    {"id": "G1", "newer_sims": [0.52, 0.61, 0.48, 0.55, 0.67, 0.50, 0.58, 0.49, 0.63, 0.54],
+     "exp_chronic_zero": True,
+     "note": "10 background neighbours (~0.5) ⇒ chronic 0 (NON-SATURATION, load-bearing)"},
+    {"id": "G2", "newer_sims": [0.52, 0.61, 0.48, 0.99, 0.55, 0.50, 0.58],
+     "exp_chronic_zero": False,
+     "note": "one near-exact duplicate (0.99) in a background field ⇒ chronic high"},
+    {"id": "G3", "newer_sims": [0.95, 0.92],
+     "exp_chronic_zero": False,
+     "note": "two genuine near-dups ⇒ accumulating chronic (monotone in count)"},
+    {"id": "G4", "newer_sims": [0.84, 0.83, 0.82, 0.80],
+     "exp_chronic_zero": True,
+     "note": "all JUST BELOW τ_dup ⇒ chronic 0 (membership gate, not rescale)"},
+    {"id": "G5", "newer_sims": [],
+     "exp_chronic_zero": True,
+     "note": "no newer neighbours ⇒ chronic 0 (driver falsifier)"},
 ]
 
 
-# Benchmark adapter: map a POOL row to the core's is_pinned argument.
-def _pinned(mem: dict) -> bool:
-    """User-pinned exclusion for BOTH circuits: is_protected or anchored (heat>=1.0)."""
-    return bool(mem.get("is_protected")) or mem["heat"] >= 1.0
+# ── Permanent TIME-SERIES pool (S1–S5): derives (λ, Θ_accum) ─────────────────────
+# Each series is a per-cycle list of (chronic, recently_active) at a fixed stage.
+# ``fire_by`` is the cycle index (1-based) at which the memory MUST be stale;
+# ``recovers`` asserts the accumulator leaks back below Θ by the final cycle
+# (reinstatement). chronic 0.667 ≈ one 0.95 near-dup ⇒ labile pressure ≈ 0.60.
+_P = 0.667  # per-cycle chronic when a genuine interferer is present (labile pressure 0.60)
+SERIES_POOL = [
+    {"id": "S1", "stage": "labile", "fire_by": 3, "recovers": False,
+     "cycles": [(_P, False)] * 5,
+     "note": "sustained interference ⇒ permanent erosion accumulates and fires"},
+    {"id": "S2", "stage": "labile", "fire_by": None, "recovers": False,
+     "cycles": [(_P, False), (0.0, False), (0.0, False), (0.0, False), (0.0, False)],
+     "note": "single bout ⇒ NEVER (Sabandal: no conversion from one episode)"},
+    {"id": "S3", "stage": "labile", "fire_by": None, "recovers": False,
+     "cycles": [(_P, False), (_P, True), (_P, True), (_P, False), (_P, True)],
+     "note": "interference present but mostly sleep-protected ⇒ leak dominates, NEVER"},
+    {"id": "S4", "stage": "labile", "fire_by": 5, "recovers": False,
+     "cycles": [(0.22, False), (0.33, False), (0.50, False), (_P, False), (_P, False)],
+     "note": "ramping interference ⇒ fires on crossing, not at the first cycle"},
+    {"id": "S5", "stage": "labile", "fire_by": 3, "recovers": True,
+     "cycles": [(_P, False), (_P, False), (_P, False),
+                (0.0, False), (0.0, False), (0.0, False), (0.0, False)],
+     "note": "decay-recovery ⇒ fires then accumulator leaks back below Θ (reinstatement)"},
+]
 
 
-def _permanent_candidate(mem: dict) -> bool:
-    """Passes the PERMANENT gates (not pinned, not sleep-protected)."""
-    return not _pinned(mem) and not mem.get("recently_active")
+# ── Transient pool: acute recent interferer, stage-INDEPENDENT ───────────────────
+# (chronic axis is irrelevant here; transient reads only the strongest acute
+# interferer and its age.)
+TRANSIENT_POOL = [
+    {"id": "T1", "acute_overlap": 0.90, "acute_age_hours": 1.0,
+     "is_protected": False, "recently_active": False, "exp_transient": True,
+     "note": "consolidated-stage acute recent interferer ⇒ transient (STAGE-INDEPENDENT)"},
+    {"id": "T2", "acute_overlap": 0.85, "acute_age_hours": 2.0,
+     "is_protected": False, "recently_active": False, "exp_transient": True,
+     "note": "acute recent interferer ⇒ transient (reversibility tested)"},
+    {"id": "T3", "acute_overlap": 0.85, "acute_age_hours": 24.0,
+     "is_protected": False, "recently_active": False, "exp_transient": False,
+     "note": "strong overlap but interferer too OLD ⇒ no transient (isolates W)"},
+    {"id": "T4", "acute_overlap": 0.30, "acute_age_hours": 1.0,
+     "is_protected": False, "recently_active": False, "exp_transient": False,
+     "note": "recent but overlap too LOW ⇒ no transient (isolates X)"},
+    {"id": "T5", "acute_overlap": 0.90, "acute_age_hours": 1.0,
+     "is_protected": True, "recently_active": False, "exp_transient": False,
+     "note": "acute interferer but pinned ⇒ no transient"},
+]
 
 
-def _transient_candidate(mem: dict) -> bool:
-    """Passes the TRANSIENT gates (not pinned, not just-accessed/recovered)."""
-    return not _pinned(mem) and not mem.get("recently_active")
+# ── Accumulator trajectory helper ────────────────────────────────────────────────
 
 
-# ── Constant derivation (this benchmark IS the source for the core constants) ───
+def _trajectory(series: dict, lam: float) -> list[float]:
+    """Accumulator value after each cycle for a series under leak ``lam``."""
+    accum = 0.0
+    out = []
+    for chronic, sleep in series["cycles"]:
+        accum = update_pressure_accum(accum, series["stage"], chronic, sleep, lam)
+        out.append(accum)
+    return out
+
+
+# ── Constant derivation (this benchmark IS the source for the core constants) ─────
 
 
 def derive_thresholds() -> dict:
-    """Read the three separating constants off the labeled POOL.
+    """Read every separating constant off the labelled fixtures.
 
-    Tp  permanent-pressure threshold (chronic × stage_vuln space).
-    X   acute-overlap threshold; W acute-recency window (hours) for transient.
-    Each is the midpoint between adjacent label classes — the maximum-margin 1-D
-    separator, the standard read-off for a by-construction labeled set.
+    (λ, Θ_accum) — grid-search the leak λ; for each, the firing fixtures impose a
+    floor (accum at their required-fire cycle) and the never/recovery fixtures a
+    ceiling (their peak / recovered-tail accum). The admissible band is
+    ``ceiling < Θ ≤ floor``; the chosen λ maximises ``floor − ceiling`` and Θ is
+    its midpoint — the 2-D max-margin separator for a by-construction labelled set.
+
+    X, W — acute-overlap / recency max-margin midpoints on the transient pool.
     """
-    perm = [m for m in POOL if _permanent_candidate(m)]
-    perm_yes = [forgetting_pressure(m["consolidation_stage"], m["chronic_interference"])
-                for m in perm if m["exp_permanent"]]
-    perm_no = [forgetting_pressure(m["consolidation_stage"], m["chronic_interference"])
-               for m in perm if not m["exp_permanent"]]
-    tp = (max(perm_no) + min(perm_yes)) / 2.0
+    best = None
+    for lam in GRID_LAMBDAS:
+        floor = float("inf")   # min accum among fire fixtures at their fire cycle
+        ceiling = 0.0          # max accum among never fixtures / recovered tails
+        ok = True
+        for s in SERIES_POOL:
+            traj = _trajectory(s, lam)
+            if s["fire_by"] is not None:
+                floor = min(floor, traj[s["fire_by"] - 1])
+            else:
+                ceiling = max(ceiling, max(traj))
+            if s["recovers"]:
+                ceiling = max(ceiling, traj[-1])  # post-recovery tail must stay below Θ
+        if not (ceiling < floor):
+            ok = False
+        if ok:
+            margin = floor - ceiling
+            if best is None or margin > best["margin"]:
+                best = {"lam": lam, "theta": (ceiling + floor) / 2.0,
+                        "floor": floor, "ceiling": ceiling, "margin": margin}
+    if best is None:
+        raise AssertionError("no (λ, Θ) reproduces the S1–S5 labels — fixtures inconsistent")
 
-    tr = [m for m in POOL if _transient_candidate(m)]
-    tr_yes = [m for m in tr if m["exp_transient"]]
-    # X: separate overlap among interferers recent enough to matter.
-    yes_overlap_min = min(m["acute_overlap"] for m in tr_yes)
-    recent_no_overlap = [m["acute_overlap"] for m in tr
-                         if not m["exp_transient"] and m["acute_age_hours"] <= 12.0]
+    # Transient X / W (max-margin midpoints).
+    yes = [m for m in TRANSIENT_POOL if m["exp_transient"] and not m["is_protected"]]
+    yes_overlap_min = min(m["acute_overlap"] for m in yes)
+    recent_no_overlap = [m["acute_overlap"] for m in TRANSIENT_POOL
+                         if not m["exp_transient"] and not m["is_protected"]
+                         and m["acute_age_hours"] <= 12.0]
     x = (max(recent_no_overlap) + yes_overlap_min) / 2.0
-    # W: separate age among interferers strong enough to matter (overlap >= x).
-    yes_age_max = max(m["acute_age_hours"] for m in tr_yes)
-    strong_no_age = [m["acute_age_hours"] for m in tr
-                     if not m["exp_transient"] and m["acute_overlap"] >= x]
+    yes_age_max = max(m["acute_age_hours"] for m in yes)
+    strong_no_age = [m["acute_age_hours"] for m in TRANSIENT_POOL
+                     if not m["exp_transient"] and not m["is_protected"]
+                     and m["acute_overlap"] >= x]
     w = (yes_age_max + min(strong_no_age)) / 2.0
 
     return {
-        "Tp": tp, "X": x, "W": w,
-        "perm_no_max": max(perm_no), "perm_yes_min": min(perm_yes),
-        "perm_margin": min(perm_yes) - max(perm_no),
+        "lambda": best["lam"], "Theta_accum": best["theta"],
+        "accum_floor": best["floor"], "accum_ceiling": best["ceiling"],
+        "accum_margin": best["margin"],
+        "X": x, "W": w,
         "overlap_margin": yes_overlap_min - max(recent_no_overlap),
         "age_margin": min(strong_no_age) - yes_age_max,
     }
 
 
-# ── Decisions (call the core) ───────────────────────────────────────────────────
+# ── Verification: signal construction ─────────────────────────────────────────────
 
 
-def _decide_permanent(mem: dict) -> bool:
-    return is_permanent_forgetting(
-        mem["consolidation_stage"], mem["chronic_interference"],
-        _pinned(mem), mem.get("recently_active", False),
-    )
-
-
-def _decide_transient(mem: dict) -> bool:
-    return is_transient_forgetting(
-        mem["acute_overlap"], mem["acute_age_hours"],
-        _pinned(mem), mem.get("recently_active", False),
-    )
-
-
-def labels_reproduced() -> dict:
-    """Core reproduces every (permanent, transient) label pair."""
+def signal_reproduced() -> dict:
+    """Core ``chronic_interference`` lands every SIGNAL_POOL row in its band."""
     mismatches = []
-    for m in POOL:
-        gp, gt = _decide_permanent(m), _decide_transient(m)
-        if gp != m["exp_permanent"] or gt != m["exp_transient"]:
-            mismatches.append({"id": m["id"],
-                               "expected": (m["exp_permanent"], m["exp_transient"]),
-                               "got": (gp, gt)})
-    return {"passed": not mismatches, "mismatches": mismatches, "n": len(POOL)}
+    for m in SIGNAL_POOL:
+        c = chronic_interference(m["newer_sims"], TAU_DUP)
+        zero = c == 0.0
+        if zero != m["exp_chronic_zero"]:
+            mismatches.append({"id": m["id"], "chronic": round(c, 4),
+                               "exp_zero": m["exp_chronic_zero"]})
+    return {"passed": not mismatches, "mismatches": mismatches, "n": len(SIGNAL_POOL)}
 
 
-# ── Falsifier fixtures (paper predictions; require the core) ─────────────────────
+def fixture_non_saturation() -> dict:
+    """A full field of background neighbours stays at chronic 0; one exact
+    duplicate alone goes high. The exact guard against the 46%-saturation bug."""
+    background = chronic_interference([0.5] * 10, TAU_DUP)
+    one_dup = chronic_interference([0.5] * 10 + [0.99], TAU_DUP)
+    return {"passed": background == 0.0 and one_dup > 0.5,
+            "background_chronic": round(background, 6), "one_dup_chronic": round(one_dup, 4)}
+
+
+def fixture_tau_dup_provenance() -> dict:
+    """τ_dup is the committed curation cutoff, not a free constant."""
+    return {"passed": TAU_DUP == MERGE_THRESHOLD,
+            "tau_dup": TAU_DUP, "merge_threshold": MERGE_THRESHOLD}
+
+
+# ── Verification: permanent firing (accumulator, baked constants) ─────────────────
+
+
+def _series_fire_cycle(series: dict) -> int | None:
+    """First cycle (1-based) at which the baked core marks the series permanent."""
+    accum = 0.0
+    for i, (chronic, sleep) in enumerate(series["cycles"], start=1):
+        accum = update_pressure_accum(accum, series["stage"], chronic, sleep)
+        if is_permanent_forgetting(accum, False, sleep):
+            return i
+    return None
+
+
+def series_reproduced() -> dict:
+    """Baked (λ, Θ_accum) reproduce every S1–S5 fire/never/recovery label."""
+    mismatches = []
+    for s in SERIES_POOL:
+        fire = _series_fire_cycle(s)
+        if s["fire_by"] is None:
+            if fire is not None:
+                mismatches.append({"id": s["id"], "expected": "never", "got_cycle": fire})
+            continue
+        if fire is None or fire > s["fire_by"]:
+            mismatches.append({"id": s["id"], "fire_by": s["fire_by"], "got_cycle": fire})
+            continue
+        if s["recovers"]:
+            tail = _trajectory(s, PRESSURE_LEAK_LAMBDA)[-1]
+            if tail >= PERMANENT_ACCUM_THRESHOLD:
+                mismatches.append({"id": s["id"], "no_recovery_tail": round(tail, 4)})
+    return {"passed": not mismatches, "mismatches": mismatches, "n": len(SERIES_POOL)}
+
+
+# ── Verification: transient (baked constants) ─────────────────────────────────────
+
+
+def transient_reproduced() -> dict:
+    mismatches = []
+    for m in TRANSIENT_POOL:
+        pinned = bool(m["is_protected"])
+        got = is_transient_forgetting(m["acute_overlap"], m["acute_age_hours"],
+                                      pinned, m["recently_active"])
+        if got != m["exp_transient"]:
+            mismatches.append({"id": m["id"], "expected": m["exp_transient"], "got": got})
+    return {"passed": not mismatches, "mismatches": mismatches, "n": len(TRANSIENT_POOL)}
+
+
+# ── Falsifier fixtures (paper predictions; require the core) ──────────────────────
 
 
 def fixture_consolidated_graded_not_immune() -> dict:
-    """Consolidated RESISTS permanent (graded) yet is NOT globally immune: the
-    transient circuit still fires on it (Davis&Zhong 2017 + Sabandal 2021)."""
-    perm = [is_permanent_forgetting("consolidated", c, False, False)
-            for c in (0.5, 0.95, 1.0)]
-    # transient fires on consolidated with an acute recent interferer:
-    trans = is_transient_forgetting(0.90, 1.0, False, False)
-    return {"passed": not any(perm) and trans,
-            "consolidated_permanent": perm, "consolidated_transient": trans}
+    """Consolidated RESISTS permanent even under sustained strong chronic (graded),
+    yet is NOT globally immune: the transient circuit still fires on it
+    (Davis&Zhong 2017 + Sabandal 2021)."""
+    accum = 0.0
+    for _ in range(20):  # sustained, strong chronic, consolidated stage
+        accum = update_pressure_accum(accum, "consolidated", 0.95, False)
+    permanent = is_permanent_forgetting(accum, False, False)
+    transient = is_transient_forgetting(0.90, 1.0, False, False)
+    return {"passed": (not permanent) and transient,
+            "consolidated_accum_steady": round(accum, 4),
+            "consolidated_permanent": permanent, "consolidated_transient": transient}
 
 
 def fixture_sleep_protects_permanent() -> dict:
-    """recently_active ⇒ no permanent regardless of chronic interference (Davis&Zhong)."""
-    failures = [c for c in (0.7, 0.9, 1.0)
-                if is_permanent_forgetting("labile", c, False, True)]
-    return {"passed": not failures, "failures": failures}
+    """Sustained chronic but sleep-protected EVERY cycle ⇒ never permanent
+    (sleep zeroes pressure and the accumulator leaks; Davis&Zhong)."""
+    accum = 0.0
+    fired = False
+    for _ in range(20):
+        accum = update_pressure_accum(accum, "labile", 0.95, True)  # recently_active
+        fired = fired or is_permanent_forgetting(accum, False, True)
+    return {"passed": not fired, "final_accum": round(accum, 6)}
 
 
 def fixture_zero_chronic_no_permanent() -> dict:
-    """No chronic driver ⇒ no permanent, any stage (interference-driven falsifier)."""
-    failures = [s for s in ("labile", "early_ltp", "late_ltp", "consolidated")
-                if is_permanent_forgetting(s, 0.0, False, False)]
+    """No chronic driver ⇒ accumulator stays 0 ⇒ no permanent, any stage."""
+    failures = []
+    for s in ("labile", "early_ltp", "late_ltp", "consolidated"):
+        accum = 0.0
+        for _ in range(20):
+            accum = update_pressure_accum(accum, s, 0.0, False)
+        if is_permanent_forgetting(accum, False, False):
+            failures.append(s)
     return {"passed": not failures, "failures": failures}
 
 
 def fixture_transient_stage_independent() -> dict:
-    """An acute recent interferer triggers transient at EVERY stage (Sabandal 2021)."""
-    failures = [s for s in ("labile", "early_ltp", "late_ltp", "consolidated")
-                if not is_transient_forgetting(0.90, 1.0, False, False)]
-    return {"passed": not failures, "failures": failures, "note": "stage not an arg"}
+    """An acute recent interferer triggers transient regardless of stage
+    (stage is not even an argument; Sabandal 2021)."""
+    fires = is_transient_forgetting(0.90, 1.0, False, False)
+    return {"passed": fires, "note": "stage not an arg"}
 
 
 def fixture_transient_needs_recency_and_overlap() -> dict:
-    """Transient requires BOTH overlap>=X AND age<=W (the AND, not either)."""
+    """Transient requires BOTH overlap≥X AND age≤W (the AND, not either)."""
     old = is_transient_forgetting(0.90, 48.0, False, False)   # strong but old
     weak = is_transient_forgetting(0.20, 1.0, False, False)   # recent but weak
     fires = is_transient_forgetting(0.90, 1.0, False, False)  # both ⇒ fires
@@ -296,115 +357,101 @@ def fixture_transient_needs_recency_and_overlap() -> dict:
             "old": old, "weak": weak, "both": fires}
 
 
-def fixture_circuits_independent() -> dict:
-    """Four quadrants realised; transient never induces permanent (no conversion)."""
-    both = (_decide_permanent(_m("B1")), _decide_transient(_m("B1")))
-    perm_only = (_decide_permanent(_m("P1")), _decide_transient(_m("P1")))
-    trans_only = (_decide_permanent(_m("T2")), _decide_transient(_m("T2")))
-    # transient-only memory (acute strong, chronic 0) is never permanent:
-    no_conversion = not is_permanent_forgetting("labile", 0.0, False, False)
-    return {"passed": both == (True, True) and perm_only == (True, False)
-            and trans_only == (False, True) and no_conversion,
-            "both": both, "permanent_only": perm_only, "transient_only": trans_only,
-            "no_conversion": no_conversion}
+def fixture_circuits_independent_no_conversion() -> dict:
+    """The circuits read disjoint signals; a purely transient (acute-only,
+    chronic 0) history NEVER becomes permanent (Sabandal: no conversion)."""
+    accum = 0.0
+    for _ in range(20):  # repeated acute interference but chronic 0 ⇒ accum stays 0
+        accum = update_pressure_accum(accum, "labile", 0.0, False)
+    transient = is_transient_forgetting(0.90, 1.0, False, False)
+    permanent = is_permanent_forgetting(accum, False, False)
+    return {"passed": transient and not permanent,
+            "transient": transient, "permanent": permanent, "accum": round(accum, 6)}
 
 
 def fixture_reversibility() -> dict:
-    """Transient recovers on re-access; permanent is reinstated on re-access.
-
-    Both modes are reversible: a re-accessed (recently_active) memory escapes
-    both circuits — transient spontaneously recovers (Sabandal 2021); permanent
-    is_stale is a recoverable soft-delete reinstated when the trace is reactivated.
-    """
-    t2 = _m("T2")
-    transient_recovers = _decide_transient(t2) and not is_transient_forgetting(
-        t2["acute_overlap"], t2["acute_age_hours"], False, True)
-    p1 = _m("P1")
-    permanent_reinstated = _decide_permanent(p1) and not is_permanent_forgetting(
-        p1["consolidation_stage"], p1["chronic_interference"], False, True)
-    return {"passed": transient_recovers and permanent_reinstated,
+    """Both modes reversible. Transient recovers on re-access (recently_active).
+    Permanent is reinstated: once interference abates, the accumulator leaks back
+    below Θ (the S5 decay-recovery trajectory)."""
+    transient_recovers = (is_transient_forgetting(0.85, 2.0, False, False)
+                          and not is_transient_forgetting(0.85, 2.0, False, True))
+    s5 = next(s for s in SERIES_POOL if s["id"] == "S5")
+    traj = _trajectory(s5, PRESSURE_LEAK_LAMBDA)
+    fired = any(a >= PERMANENT_ACCUM_THRESHOLD for a in traj)
+    reinstated = traj[-1] < PERMANENT_ACCUM_THRESHOLD
+    return {"passed": transient_recovers and fired and reinstated,
             "transient_recovers": transient_recovers,
-            "permanent_reinstated": permanent_reinstated}
-
-
-def _m(mem_id: str) -> dict:
-    return next(m for m in POOL if m["id"] == mem_id)
-
-
-# ── Discriminating baseline ─────────────────────────────────────────────────────
-
-
-def baseline_would_miss() -> dict:
-    """Coldness != forgettability. A naive 'is_stale the coldest-N' (LRU/decay)
-    baseline retires cold memories that are protected/consolidated/un-interfered,
-    which the faithful permanent circuit retains. Heat is not even a permanent
-    input here, so the baseline mis-fires by construction."""
-    faithful = {m["id"] for m in POOL if m["exp_permanent"]}
-    coldest = sorted(POOL, key=lambda m: m["heat"])[:len(faithful)]
-    baseline = {m["id"] for m in coldest}
-    return {"baseline_stale": sorted(baseline), "faithful_stale": sorted(faithful),
-            "baseline_wrongly_staled": sorted(baseline - faithful),
-            "baseline_wrong_count": len(baseline - faithful)}
+            "permanent_fired": fired, "permanent_reinstated": reinstated,
+            "final_accum": round(traj[-1], 4)}
 
 
 def main() -> int:
     th = derive_thresholds()
-    baseline = baseline_would_miss()
 
     print("=" * 78)
     print("ACTIVE-FORGETTING BENCHMARK  (two independent DA circuits)")
     print("=" * 78)
     print("\n[derived constants — SOURCE for mcp_server/core/active_forgetting.py]")
-    print(f"  PERMANENT_PRESSURE_THRESHOLD = {th['Tp']:.5f}"
-          f"   (retain≤{th['perm_no_max']:.4f} | stale≥{th['perm_yes_min']:.4f}; "
-          f"margin {th['perm_margin']:.4f})")
-    print(f"  ACUTE_OVERLAP_THRESHOLD      = {th['X']:.5f}   (margin {th['overlap_margin']:.4f})")
-    print(f"  ACUTE_RECENCY_WINDOW_HOURS   = {th['W']:.5f}   (margin {th['age_margin']:.4f}h)")
-    print("\n[baseline 'is_stale the coldest' vs faithful permanent]")
-    print(f"  baseline stales {baseline['baseline_stale']}")
-    print(f"  faithful stales {baseline['faithful_stale']}")
-    print(f"  baseline WRONGLY stales {baseline['baseline_wrongly_staled']} "
-          f"({baseline['baseline_wrong_count']} of {len(POOL)})")
+    print(f"  PRESSURE_LEAK_LAMBDA       = {th['lambda']:.4f}")
+    print(f"  PERMANENT_ACCUM_THRESHOLD  = {th['Theta_accum']:.5f}"
+          f"   (never/recover≤{th['accum_ceiling']:.4f} | fire≥{th['accum_floor']:.4f}; "
+          f"margin {th['accum_margin']:.4f})")
+    print(f"  TAU_DUP                    = {TAU_DUP:.4f}   (== curation.MERGE_THRESHOLD)")
+    print(f"  ACUTE_OVERLAP_THRESHOLD    = {th['X']:.5f}   (margin {th['overlap_margin']:.4f})")
+    print(f"  ACUTE_RECENCY_WINDOW_HOURS = {th['W']:.5f}   (margin {th['age_margin']:.4f}h)")
+    print(f"\n[baked in core] λ={PRESSURE_LEAK_LAMBDA}  Θ_accum={PERMANENT_ACCUM_THRESHOLD}"
+          f"  X={ACUTE_OVERLAP_THRESHOLD}  W={ACUTE_RECENCY_WINDOW_HOURS}")
 
-    report = {
-        "benchmark": "active_forgetting",
-        "date": datetime.now(timezone.utc).isoformat(),
-        "derived_thresholds": {
-            "PERMANENT_PRESSURE_THRESHOLD": round(th["Tp"], 5),
-            "ACUTE_OVERLAP_THRESHOLD": round(th["X"], 5),
-            "ACUTE_RECENCY_WINDOW_HOURS": round(th["W"], 5),
-        },
-        "margins": {"permanent": round(th["perm_margin"], 5),
-                    "overlap": round(th["overlap_margin"], 5),
-                    "age_hours": round(th["age_margin"], 5)},
-        "baseline_wrongly_staled": baseline["baseline_wrongly_staled"],
-    }
-
-    repro = labels_reproduced()
+    sig = signal_reproduced()
+    f_sat = fixture_non_saturation()
+    f_tau = fixture_tau_dup_provenance()
+    ser = series_reproduced()
+    tran = transient_reproduced()
     f_graded = fixture_consolidated_graded_not_immune()
     f_sleep = fixture_sleep_protects_permanent()
     f_zero = fixture_zero_chronic_no_permanent()
     f_stageind = fixture_transient_stage_independent()
     f_recency = fixture_transient_needs_recency_and_overlap()
-    f_indep = fixture_circuits_independent()
+    f_indep = fixture_circuits_independent_no_conversion()
     f_rev = fixture_reversibility()
 
-    print(f"\n[labels reproduced]  passed={repro['passed']}  "
-          f"mismatches={repro['mismatches']}")
+    print(f"\n[signal construction] passed={sig['passed']}  mismatches={sig['mismatches']}")
+    print(f"[series (λ,Θ) reproduced] passed={ser['passed']}  mismatches={ser['mismatches']}")
+    print(f"[transient reproduced] passed={tran['passed']}  mismatches={tran['mismatches']}")
     print("\n[falsifiers]")
-    print(f"  consolidated graded-resistant, not immune   passed={f_graded['passed']}")
-    print(f"  sleep protects permanent                    passed={f_sleep['passed']}")
-    print(f"  zero chronic ⇒ no permanent                 passed={f_zero['passed']}")
-    print(f"  transient stage-independent                 passed={f_stageind['passed']}")
-    print(f"  transient needs recency AND overlap         passed={f_recency['passed']}")
-    print(f"  circuits independent (no conversion)        passed={f_indep['passed']}")
-    print(f"  both modes reversible on re-access          passed={f_rev['passed']}")
+    print(f"  non-saturation (background 0, one dup high)  passed={f_sat['passed']}  {f_sat}")
+    print(f"  τ_dup == curation.MERGE_THRESHOLD            passed={f_tau['passed']}")
+    print(f"  consolidated graded-resistant, not immune    passed={f_graded['passed']}")
+    print(f"  sleep protects permanent                     passed={f_sleep['passed']}")
+    print(f"  zero chronic ⇒ no permanent                  passed={f_zero['passed']}")
+    print(f"  transient stage-independent                  passed={f_stageind['passed']}")
+    print(f"  transient needs recency AND overlap          passed={f_recency['passed']}")
+    print(f"  circuits independent (no conversion)         passed={f_indep['passed']}")
+    print(f"  both modes reversible                        passed={f_rev['passed']}")
 
-    passed = all([repro["passed"], f_graded["passed"], f_sleep["passed"],
+    passed = all([sig["passed"], ser["passed"], tran["passed"], f_sat["passed"],
+                  f_tau["passed"], f_graded["passed"], f_sleep["passed"],
                   f_zero["passed"], f_stageind["passed"], f_recency["passed"],
                   f_indep["passed"], f_rev["passed"]])
-    report.update({
-        "labels_reproduced": repro["passed"],
+
+    report = {
+        "benchmark": "active_forgetting",
+        "date": datetime.now(timezone.utc).isoformat(),
+        "derived_thresholds": {
+            "PRESSURE_LEAK_LAMBDA": round(th["lambda"], 5),
+            "PERMANENT_ACCUM_THRESHOLD": round(th["Theta_accum"], 5),
+            "TAU_DUP": TAU_DUP,
+            "ACUTE_OVERLAP_THRESHOLD": round(th["X"], 5),
+            "ACUTE_RECENCY_WINDOW_HOURS": round(th["W"], 5),
+        },
+        "margins": {"accum": round(th["accum_margin"], 5),
+                    "overlap": round(th["overlap_margin"], 5),
+                    "age_hours": round(th["age_margin"], 5)},
+        "signal_reproduced": sig["passed"],
+        "series_reproduced": ser["passed"],
+        "transient_reproduced": tran["passed"],
+        "fixture_non_saturation": f_sat["passed"],
+        "fixture_tau_dup_provenance": f_tau["passed"],
         "fixture_consolidated_graded_not_immune": f_graded["passed"],
         "fixture_sleep_protects_permanent": f_sleep["passed"],
         "fixture_zero_chronic_no_permanent": f_zero["passed"],
@@ -413,7 +460,7 @@ def main() -> int:
         "fixture_circuits_independent": f_indep["passed"],
         "fixture_reversibility": f_rev["passed"],
         "passed": passed,
-    })
+    }
     _write(report)
     print(f"\nPASSED={passed}")
     return 0 if passed else 1

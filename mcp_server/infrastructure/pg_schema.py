@@ -1212,6 +1212,17 @@ BEGIN
     ) THEN
         ALTER TABLE memories ADD COLUMN no_decay BOOLEAN NOT NULL DEFAULT FALSE;
     END IF;
+    -- A2 active forgetting: leaky-integrator state for the permanent (Rac1)
+    -- circuit. Accumulates chronic-interference pressure across consolidation
+    -- cycles; sustained pressure (accum >= Theta_accum) marks the trace stale.
+    -- source: mcp_server/core/active_forgetting.py (update_pressure_accum).
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'forgetting_pressure_accum'
+    ) THEN
+        ALTER TABLE memories
+            ADD COLUMN forgetting_pressure_accum REAL NOT NULL DEFAULT 0;
+    END IF;
 END $$;
 
 -- Phase 2 B3 migration: canonicalize co_retrieval relationships so
