@@ -1,6 +1,6 @@
 {
   "benchmark": "forgetting_curve_fidelity",
-  "date": "2026-06-30T10:22:51.098025+00:00",
+  "date": "2026-06-30T11:00:48.950894+00:00",
   "artifact_under_test": "effective_heat() + effective_stage() (mcp_server/infrastructure/pg_schema.py)",
   "config": {
     "quick": false,
@@ -479,9 +479,9 @@
     },
     "passed": true
   },
-  "diagnostic_ensemble_mixture": {
-    "name": "ensemble_mixture_benna_fusi",
-    "source": "Benna&Fusi 2016 (continuum-of-timescales \u2192 power law)",
+  "criterion_4_benna_fusi_sqrt_t": {
+    "name": "benna_fusi_sqrt_t_law_family",
+    "source": "Benna&Fusi 2016 (Nat.Neurosci. 19:1697 \u2014 SNR\u221d1/\u221at)",
     "n_points": 17,
     "mean_curve": [
       [
@@ -580,8 +580,15 @@
       "power_law_at_least_as_good": false,
       "r2_hspace_power": 0.0,
       "r2_hspace_exp": 0.61311
-    }
+    },
+    "sqrt_t_band": [
+      0.4,
+      0.6
+    ],
+    "power_b_exponent": 0.390077,
+    "power_b_in_sqrt_t_band": false,
+    "passed": false
   },
   "overall_passed": false,
-  "verdict": "PARTIALLY FALSIFIED: permastore (Bahrick) reproduced, but the \u03b1-ladder does NOT produce power-law decay for a matured trace \u2014 a single exponential fits at least as well. The cascade is piecewise/single-exponential + floor, not heavy-tailed."
+  "verdict": "PARTIALLY FALSIFIED: permastore (Bahrick) reproduced, but the \u03b1-ladder does NOT produce power-law decay for a matured trace \u2014 a single exponential fits at least as well. The cascade is piecewise/single-exponential + floor, not heavy-tailed. Benna&Fusi \u221at law-family NOT reproduced: the 4-level \u03b1-ladder mixture (fit b=0.390, winner=exponential) is not the 1/\u221at continuum \u2014 too few levels over too narrow a rate range."
 }

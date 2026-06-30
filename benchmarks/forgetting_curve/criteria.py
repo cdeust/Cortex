@@ -30,6 +30,13 @@ COLLAPSE_THRESHOLD = 0.01
 # Power-law exponent plausibility band. source: Wixted&Ebbesen 1991 (~0.1-0.5),
 # Anderson&Schooler 1991 (d≈0.5), Benna&Fusi 2016 (b≈0.5).
 PLAUSIBLE_B_LOW, PLAUSIBLE_B_HIGH = 0.1, 0.6
+# Benna&Fusi √t law-family band: the cascade / continuum-of-timescales
+# prediction is specifically h ∝ 1/√t, a power law with exponent ≈ 0.5.
+# source: Benna&Fusi 2016 (Nat.Neurosci. 19:1697 — SNR∝1/√t from a density of
+# timescales p(τ)∝1/τ); Anderson&Schooler 1991 (ACT-R d≈0.5). The ±0.1
+# half-width around 0.5 is an engineering tolerance on the canonical exponent,
+# narrower than the generic plausibility band above (which only asks "small b").
+SQRT_T_B_LOW, SQRT_T_B_HIGH = 0.4, 0.6
 
 
 def transient_points(traj: list[dict], floor: float) -> list[tuple[float, float]]:
@@ -111,11 +118,23 @@ def criterion_exponent(traj_a: list[dict], traj_b: list[dict]) -> dict:
     return out
 
 
-def ensemble_diagnostic(trajs: dict[str, list[dict]], ages: list[float]) -> dict:
-    """Benna&Fusi mixture test (descriptive): the AGGREGATE retention of a
-    population terminating across all 4 stages. A mixture of exponentials with
-    separated rates is the canonical route to a power law — does the 4-stage
-    α-ladder approximate it?"""
+def criterion_benna_fusi_sqrt_t(trajs: dict[str, list[dict]],
+                                ages: list[float]) -> dict:
+    """Criterion 4 (Benna&Fusi law-family): does the model reproduce the
+    cascade √t law, h ∝ 1/√t?
+
+    Tested on the population MIXTURE — the mean retention over a cohort whose
+    members terminate across all 4 stages — NOT on a single trace. A single
+    stage decays as a pure exponential by construction; the only route to a
+    power law in this architecture is the superposition of separated timescales
+    (Benna&Fusi 2016). PASSES iff the mixture is fit better by a power law than
+    by a single exponential (ΔAIC>2, power_law wins) AND its fitted exponent
+    falls in the √t band [0.4, 0.6] around the canonical 0.5.
+
+    CAN FAIL — and is expected to: a 4-level α-ladder spanning a single rate
+    decade (2.0→0.5) is far coarser than Benna&Fusi's many-decade continuum of
+    timescales, so the mixture need not approximate 1/√t. Failure documents the
+    law family honestly; it does not gate overall_passed (which tracks C1+C2)."""
     curve = []
     for i, age in enumerate(ages):
         heats = [trajs[name][i]["heat"] for name in PROFILES]
@@ -124,26 +143,46 @@ def ensemble_diagnostic(trajs: dict[str, list[dict]], ages: list[float]) -> dict
     power = curve_fit.fit_power_law(pts)
     expo = curve_fit.fit_exponential(pts)
     cmp = curve_fit.compare_models(power, expo)
+    b = power["b_exponent"]
+    in_band = SQRT_T_B_LOW <= b <= SQRT_T_B_HIGH
     return {
-        "name": "ensemble_mixture_benna_fusi",
-        "source": "Benna&Fusi 2016 (continuum-of-timescales → power law)",
+        "name": "benna_fusi_sqrt_t_law_family",
+        "source": "Benna&Fusi 2016 (Nat.Neurosci. 19:1697 — SNR∝1/√t)",
         "n_points": len(pts), "mean_curve": [[t, round(h, 6)] for t, h in curve],
         "power_law_fit": power, "exponential_fit": expo, "comparison": cmp,
+        "sqrt_t_band": [SQRT_T_B_LOW, SQRT_T_B_HIGH],
+        "power_b_exponent": b,
+        "power_b_in_sqrt_t_band": bool(in_band),
+        "passed": bool(cmp["winner"] == "power_law" and in_band),
     }
 
 
-def verdict(c1: dict, c2: dict) -> str:
-    """One-line overall verdict from the two gating criteria."""
+def verdict(c1: dict, c2: dict, bf: dict) -> str:
+    """One-line overall verdict. overall_passed tracks the two gating criteria
+    (C1 single-trace power law, C2 permastore); the Benna&Fusi √t law-family
+    finding (bf) is appended as an explicit clause but does not gate."""
     if c1["passed"] and c2["passed"]:
-        return ("DEMONSTRATED: matured decay is power-law-compatible AND "
+        base = ("DEMONSTRATED: matured decay is power-law-compatible AND "
                 "permastore holds while labile forgetting is preserved.")
-    if c2["passed"] and not c1["passed"]:
-        return ("PARTIALLY FALSIFIED: permastore (Bahrick) reproduced, but the "
+    elif c2["passed"] and not c1["passed"]:
+        base = ("PARTIALLY FALSIFIED: permastore (Bahrick) reproduced, but the "
                 "α-ladder does NOT produce power-law decay for a matured trace "
                 "— a single exponential fits at least as well. The cascade is "
                 "piecewise/single-exponential + floor, not heavy-tailed.")
-    if c1["passed"] and not c2["passed"]:
-        return ("PARTIALLY FALSIFIED: power-law form present but permastore "
+    elif c1["passed"] and not c2["passed"]:
+        base = ("PARTIALLY FALSIFIED: power-law form present but permastore "
                 "floor / labile-collapse contract violated.")
-    return ("FALSIFIED: neither the power-law form nor the permastore contract "
-            "is reproduced by effective_heat over published curve forms.")
+    else:
+        base = ("FALSIFIED: neither the power-law form nor the permastore "
+                "contract is reproduced by effective_heat over published "
+                "curve forms.")
+    b = bf["power_b_exponent"]
+    win = bf["comparison"]["winner"]
+    if bf["passed"]:
+        base += (f" Benna&Fusi √t law-family CONFIRMED: the stage mixture "
+                 f"decays as a power law with b={b:.3f}≈0.5 (1/√t).")
+    else:
+        base += (f" Benna&Fusi √t law-family NOT reproduced: the 4-level "
+                 f"α-ladder mixture (fit b={b:.3f}, winner={win}) is not the "
+                 f"1/√t continuum — too few levels over too narrow a rate range.")
+    return base

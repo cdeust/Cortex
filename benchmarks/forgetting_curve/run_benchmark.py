@@ -133,12 +133,12 @@ def run(quick: bool) -> Path:
     c1 = criteria.criterion_power_over_exp(trajs["B_consolidated"])
     c2 = criteria.criterion_permastore(trajs["A_labile"], trajs["B_consolidated"])
     c3 = criteria.criterion_exponent(trajs["A_labile"], trajs["B_consolidated"])
-    ens = criteria.ensemble_diagnostic(trajs, ages)
-    return _finish(quick, ages, trajs, c1, c2, c3, ens)
+    c4 = criteria.criterion_benna_fusi_sqrt_t(trajs, ages)
+    return _finish(quick, ages, trajs, c1, c2, c3, c4)
 
 
-def _finish(quick, ages, trajs, c1, c2, c3, ens) -> Path:
-    verdict = criteria.verdict(c1, c2)
+def _finish(quick, ages, trajs, c1, c2, c3, c4) -> Path:
+    verdict = criteria.verdict(c1, c2, c4)
     payload = {
         "benchmark": "forgetting_curve_fidelity",
         "date": datetime.now(timezone.utc).isoformat(),
@@ -149,7 +149,7 @@ def _finish(quick, ages, trajs, c1, c2, c3, ens) -> Path:
         "criterion_1_power_over_exponential": c1,
         "criterion_2_permastore": c2,
         "criterion_3_exponent_plausibility": c3,
-        "diagnostic_ensemble_mixture": ens,
+        "criterion_4_benna_fusi_sqrt_t": c4,
         "overall_passed": bool(c1["passed"] and c2["passed"]),
         "verdict": verdict,
     }
@@ -158,11 +158,11 @@ def _finish(quick, ages, trajs, c1, c2, c3, ens) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / "results.json"
     out_path.write_text(json.dumps(payload, indent=2))
-    _print_report(c1, c2, c3, ens, verdict, out_path)
+    _print_report(c1, c2, c3, c4, verdict, out_path)
     return out_path
 
 
-def _print_report(c1, c2, c3, ens, verdict, out_path) -> None:
+def _print_report(c1, c2, c3, c4, verdict, out_path) -> None:
     print("=" * 78)
     print("FORGETTING-CURVE FIDELITY BENCHMARK  (effective_heat vs paper forms)")
     print("=" * 78)
@@ -181,12 +181,15 @@ def _print_report(c1, c2, c3, ens, verdict, out_path) -> None:
         print(f"  {label}: power b={p['power_b']:.4f} "
               f"(in band {p['power_b_in_band']})  "
               f"exp half-life={p['exp_half_life_hours']}h")
-    cmpe = ens["comparison"]
-    print(f"\n[diagnostic ensemble mixture]")
-    print(f"  power r²(h)={cmpe['r2_hspace_power']:.4f}  "
+    cmpe = c4["comparison"]
+    print(f"\n[C4 Benna&Fusi √t law-family]    PASS={c4['passed']}")
+    print(f"  mixture power r²(h)={cmpe['r2_hspace_power']:.4f}  "
           f"exp r²(h)={cmpe['r2_hspace_exp']:.4f}  "
           f"ΔAIC(exp-power)={cmpe['delta_aic_exp_minus_power']:.2f}  "
           f"winner={cmpe['winner']}")
+    print(f"  fit b={c4['power_b_exponent']:.4f}  "
+          f"√t band {c4['sqrt_t_band']}  "
+          f"in band={c4['power_b_in_sqrt_t_band']}")
     print(f"\nVERDICT: {verdict}")
     print(f"results → {out_path}")
 
