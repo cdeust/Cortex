@@ -1,6 +1,6 @@
 {
   "benchmark": "forgetting_curve_fidelity",
-  "date": "2026-06-30T11:00:48.950894+00:00",
+  "date": "2026-06-30T11:31:07.321925+00:00",
   "artifact_under_test": "effective_heat() + effective_stage() (mcp_server/infrastructure/pg_schema.py)",
   "config": {
     "quick": false,
@@ -482,7 +482,8 @@
   "criterion_4_benna_fusi_sqrt_t": {
     "name": "benna_fusi_sqrt_t_law_family",
     "source": "Benna&Fusi 2016 (Nat.Neurosci. 19:1697 \u2014 SNR\u221d1/\u221at)",
-    "n_points": 17,
+    "n_transient_points": 13,
+    "mixture_floor": 0.0375,
     "mean_curve": [
       [
         0.5,
@@ -555,40 +556,40 @@
     ],
     "power_law_fit": {
       "model": "power_law",
-      "a": 1.838246,
-      "b_exponent": 0.390077,
-      "r2_fitspace": 0.80386,
-      "r2_hspace": 0.0,
-      "rss_hspace": 3.676394440127431,
-      "aic_hspace": -20.032,
-      "half_life_hours": 5.91
+      "a": 1.364995,
+      "b_exponent": 0.235372,
+      "r2_fitspace": 0.63628,
+      "r2_hspace": 0.23043,
+      "rss_hspace": 0.9327638700402774,
+      "aic_hspace": -28.249,
+      "half_life_hours": 19.01
     },
     "exponential_fit": {
       "model": "exponential",
-      "a": 0.648208,
-      "b_per_hour": 0.00045297,
-      "r2_fitspace": 0.70401,
-      "r2_hspace": 0.61311,
-      "rss_hspace": 1.1265175826137264,
-      "aic_hspace": -40.139,
-      "half_life_hours": 1530.21
+      "a": 0.969901,
+      "b_per_hour": 0.00177921,
+      "r2_fitspace": 0.99397,
+      "r2_hspace": 0.99145,
+      "rss_hspace": 0.010361466374479189,
+      "aic_hspace": -86.75,
+      "half_life_hours": 389.58
     },
     "comparison": {
-      "delta_aic_exp_minus_power": -20.107,
+      "delta_aic_exp_minus_power": -58.501,
       "aic_threshold": 2.0,
       "winner": "exponential",
       "power_law_at_least_as_good": false,
-      "r2_hspace_power": 0.0,
-      "r2_hspace_exp": 0.61311
+      "r2_hspace_power": 0.23043,
+      "r2_hspace_exp": 0.99145
     },
     "sqrt_t_band": [
       0.4,
       0.6
     ],
-    "power_b_exponent": 0.390077,
+    "power_b_exponent": 0.235372,
     "power_b_in_sqrt_t_band": false,
     "passed": false
   },
   "overall_passed": false,
-  "verdict": "PARTIALLY FALSIFIED: permastore (Bahrick) reproduced, but the \u03b1-ladder does NOT produce power-law decay for a matured trace \u2014 a single exponential fits at least as well. The cascade is piecewise/single-exponential + floor, not heavy-tailed. Benna&Fusi \u221at law-family NOT reproduced: the 4-level \u03b1-ladder mixture (fit b=0.390, winner=exponential) is not the 1/\u221at continuum \u2014 too few levels over too narrow a rate range."
+  "verdict": "PARTIALLY FALSIFIED: permastore (Bahrick) reproduced, but the \u03b1-ladder does NOT produce power-law decay for a matured trace \u2014 a single exponential fits at least as well. The cascade is piecewise/single-exponential + floor, not heavy-tailed. Benna&Fusi \u221at law-family NOT reproduced: the 4-level \u03b1-ladder mixture (fit b=0.235, winner=exponential) is not the 1/\u221at continuum \u2014 too few levels over too narrow a rate range."
 }

@@ -134,12 +134,22 @@ def criterion_benna_fusi_sqrt_t(trajs: dict[str, list[dict]],
     CAN FAIL — and is expected to: a 4-level α-ladder spanning a single rate
     decade (2.0→0.5) is far coarser than Benna&Fusi's many-decade continuum of
     timescales, so the mixture need not approximate 1/√t. Failure documents the
-    law family honestly; it does not gate overall_passed (which tracks C1+C2)."""
+    law family honestly; it does not gate overall_passed (which tracks C1+C2).
+
+    The fit is restricted to the strictly-decaying TRANSIENT regime (same
+    transient_points filter as C1/C3), excluding the permastore plateau. The
+    plateau is a SEPARATE phenomenon (Bahrick floor, tested by C2), not part of
+    the decay law; including it would force any monotone law to fail for the
+    wrong reason (a power law a·t^-b can represent neither a ceiling at 1.0 nor a
+    floor). The mixture floor is the equal-weight mean of the per-profile
+    permastore floors."""
     curve = []
     for i, age in enumerate(ages):
         heats = [trajs[name][i]["heat"] for name in PROFILES]
         curve.append((age, sum(heats) / len(heats)))
-    pts = [(t, h) for t, h in curve if 1e-3 < h < 0.9999]
+    mixture_floor = sum(p["expected_floor"] for p in PROFILES.values()) / len(PROFILES)
+    mixture_traj = [{"age_hours": t, "heat": h} for t, h in curve]
+    pts = transient_points(mixture_traj, mixture_floor)
     power = curve_fit.fit_power_law(pts)
     expo = curve_fit.fit_exponential(pts)
     cmp = curve_fit.compare_models(power, expo)
@@ -148,7 +158,8 @@ def criterion_benna_fusi_sqrt_t(trajs: dict[str, list[dict]],
     return {
         "name": "benna_fusi_sqrt_t_law_family",
         "source": "Benna&Fusi 2016 (Nat.Neurosci. 19:1697 — SNR∝1/√t)",
-        "n_points": len(pts), "mean_curve": [[t, round(h, 6)] for t, h in curve],
+        "n_transient_points": len(pts), "mixture_floor": round(mixture_floor, 6),
+        "mean_curve": [[t, round(h, 6)] for t, h in curve],
         "power_law_fit": power, "exponential_fit": expo, "comparison": cmp,
         "sqrt_t_band": [SQRT_T_B_LOW, SQRT_T_B_HIGH],
         "power_b_exponent": b,
