@@ -160,6 +160,20 @@ CORTEX_HEADLESS_MAX_FILE_DRAINS: int = _env_int(
     "CORTEX_HEADLESS_MAX_FILE_DRAINS", MAX_DRAINS_PER_CYCLE
 )
 
+# Agents mode — selects the ``claude -p`` invocation strategy.
+#   1 (default): load the user's zetetic agent ROSTER (--setting-sources user)
+#       and give the top-level authoring agent the ``Task`` tool so it can
+#       delegate read-only codebase analysis to specialists (architect,
+#       engineer, …). A hard ``--disallowedTools`` ceiling (Write/Edit/Bash/
+#       NotebookEdit) propagates to every spawned subagent, so the roster can
+#       analyse but never write or execute. User hooks load too — they are
+#       neutralised by CORTEX_HEADLESS_AUTHORING_CHILD (see _subprocess_env).
+#   0: hardened solo path — ``--safe-mode`` config isolation, no roster, no
+#       Task tool. Use when you want zero user-config surface in the child.
+# Policy knob, not a measured constant. Default 1 reflects the design intent:
+# diverse specialist grounding beats a single generalist pass.
+CORTEX_HEADLESS_AGENTS: int = _env_int("CORTEX_HEADLESS_AGENTS", 1)
+
 
 # ── Core data types ───────────────────────────────────────────────────────
 
@@ -262,23 +276,6 @@ class _AnchorCandidate:
     suggested_kind: str
 
 
-_API_CREDENTIAL_KEYS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
-
-
-def _subprocess_env() -> dict[str, str]:
-    """Child env for ``claude -p``, choosing the auth method.
-
-    Default ``CORTEX_HEADLESS_AUTH=subscription`` strips API-key credentials
-    so the CLI uses the logged-in subscription (no API charge). Setting
-    ``CORTEX_HEADLESS_AUTH=api`` passes the parent env through unchanged, so a
-    present ``ANTHROPIC_API_KEY`` bills the API — an explicit user opt-in.
-    """
-    mode = os.getenv("CORTEX_HEADLESS_AUTH", "subscription").strip().lower()
-    if mode == "api":
-        return dict(os.environ)
-    return {k: v for k, v in os.environ.items() if k not in _API_CREDENTIAL_KEYS}
-
-
 async def _claude_invoke(
     prompt: str,
     *,
@@ -292,93 +289,33 @@ async def _claude_invoke(
     the call is non-blocking on the event loop.  On timeout the
     subprocess is killed and an empty InvokeResult is returned.
 
-    Security controls (audit B-1) — TWO INDEPENDENT ENFORCING CONTROLS:
+    The argv and child environment — including the full audit-B-1 security
+    argument for both agents mode (the default, loading the user's zetetic
+    roster under a hard write/exec ceiling) and solo ``--safe-mode`` mode —
+    are built by ``claude_cli._build_argv`` / ``claude_cli._subprocess_env``.
+    Auth is subscription-by-default, ``CORTEX_HEADLESS_AUTH=api`` opt-in.
 
-    Control 1 — ``--tools "Read,Glob,Grep"``
-        Restricts which built-in tools Claude can use: Bash, Edit, and
-        Write are removed from the model's context entirely. This is
-        NOT the same as ``--allowedTools``, which auto-approves tools
-        but does NOT remove them — ``--allowedTools`` would leave Bash
-        available and is therefore INCORRECT for confinement.
-        Source: https://code.claude.com/docs/en/cli-reference (--tools flag)
-                https://code.claude.com/docs/en/headless (headless mode)
+    Response parsing relies on ``--output-format json``: ``result`` (assistant
+    text) and ``total_cost_usd`` (client-side spend). ``usage`` / ``is_error``
+    are NOT guaranteed in the CLI JSON — errors are detected via subprocess
+    returncode only.
 
-    Control 2 — ``--safe-mode``
-        Disables CLAUDE.md, skills, plugins, hooks, MCP servers, custom
-        commands/agents, and project/user settings. This defeats the same
-        malicious-settings vector (permissions.allow:["Bash"]) and the
-        malicious-hook vector that ``--bare`` did. We use ``--safe-mode``
-        rather than ``--bare`` deliberately: ``--bare`` documents
-        "Anthropic auth is strictly ANTHROPIC_API_KEY or apiKeyHelper via
-        --settings (OAuth and keychain are never read)" — i.e. it forces
-        API-key *billing* and ignores a logged-in subscription. ``--safe-mode``
-        gives the same config isolation while leaving OAuth/keychain intact,
-        so the drain runs on the user's Claude subscription (no API charge).
-        Source: https://code.claude.com/docs/en/cli-reference (--safe-mode, --bare)
-
-    Auth — subscription by default, API key opt-in
-        ``--safe-mode`` imposes no auth method; the CLI picks API-key billing
-        whenever ``ANTHROPIC_API_KEY`` is in its env, otherwise it falls back
-        to the keychain/OAuth subscription. ``create_subprocess_exec`` inherits
-        the parent env by default, so the auth is chosen via the child env:
-          * ``CORTEX_HEADLESS_AUTH=subscription`` (default) — strip
-            ``ANTHROPIC_API_KEY`` / ``ANTHROPIC_AUTH_TOKEN`` from the child env
-            so the call runs on the logged-in subscription (no API charge).
-          * ``CORTEX_HEADLESS_AUTH=api`` — pass the parent env through, so a
-            present ``ANTHROPIC_API_KEY`` bills the API (the user opted in).
-        See ``_subprocess_env``. Verified against claude CLI 2.1.197.
-
-    Control 3 — ``--output-format json``
-        Emits a single JSON object.  Documented top-level fields we
-        rely on: ``result`` (str — assistant text) and
-        ``total_cost_usd`` (float — client-side spend estimate).
-        ``usage`` and ``is_error`` are NOT guaranteed in the CLI JSON
-        — we detect errors via subprocess returncode only.
-        Source: https://code.claude.com/docs/en/headless (output-format)
-
-    Advisory (NOT counted as enforcing): ``_wrap_untrusted`` / ``_UNTRUSTED_GUARD``
-        Prompt-level injection defence — demotes untrusted file content
-        to DATA in the model's context. Defence-in-depth only; it relies
-        on model instruction-following and is not a hard sandbox.
-
-    Note on ``--add-dir``: when provided it EXTENDS the readable scope
-        to include ``source_root`` alongside cwd. It does NOT confine
-        reads — the model can still read files outside that directory.
-        Residual read-exfiltration risk remains; full FS isolation would
-        require ``--sandbox`` (out of scope here).
-        Source: https://code.claude.com/docs/en/cli-reference (--add-dir flag)
+    The prompt is fed via STDIN, not as a positional argv element: the
+    variadic ``--add-dir`` would otherwise swallow a trailing prompt and the
+    CLI would error "Input must be provided". See ``claude_cli._build_argv``.
     """
-    # Control 1: --tools restricts (removes) Bash/Edit/Write from the model
-    # context. Control 2: --safe-mode isolates config (no malicious
-    # settings/hooks) WITHOUT disabling OAuth/keychain, so the call runs on
-    # the user's Claude subscription. Control 3: --output-format json for
-    # structured cost telemetry.
-    # source: https://code.claude.com/docs/en/cli-reference
-    #         https://code.claude.com/docs/en/headless
-    argv = [
-        _CLAUDE_BIN,
-        "--print",
-        "--no-session-persistence",
-        "--safe-mode",
-        "--tools",
-        "Read,Glob,Grep",
-        "--output-format",
-        "json",
-    ]
-    if source_root:
-        # Extends readable scope to include source_root; does NOT confine.
-        argv += ["--add-dir", source_root]
-    argv.append(prompt)
+    argv = _build_argv(source_root)
 
     call_timeout = timeout if timeout is not None else float(CLAUDE_CALL_TIMEOUT_SEC)
 
-    # Default to the subscription; pass the API key through only when the
-    # user opts in via CORTEX_HEADLESS_AUTH=api. See _subprocess_env.
+    # Subscription by default + hook-neutralising child flag; API key passes
+    # through only on CORTEX_HEADLESS_AUTH=api opt-in. See claude_cli.
     child_env = _subprocess_env()
 
     try:
         proc = await asyncio.create_subprocess_exec(
             *argv,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
@@ -393,7 +330,7 @@ async def _claude_invoke(
 
     try:
         stdout_bytes, stderr_bytes = await asyncio.wait_for(
-            proc.communicate(), timeout=call_timeout
+            proc.communicate(input=prompt.encode("utf-8")), timeout=call_timeout
         )
     except asyncio.TimeoutError:
         logger.warning(
@@ -454,6 +391,22 @@ async def _claude_invoke(
     return InvokeResult(text=text, cost_usd=cost_usd)
 
 
+def _delegation_hint_for(kind: str) -> str | None:
+    """Return the Task-delegation prompt paragraph for ``kind``, or None.
+
+    Gated on ``CORTEX_HEADLESS_AGENTS`` (module global — patchable in tests).
+    In solo mode the ``claude -p`` call has no ``Task`` tool and no agent
+    roster, so a delegation hint would point the model at an unavailable
+    tool; return None to omit it. In agents mode, delegate to
+    ``authoring_prompts._delegation_hint`` (the pure string builder).
+    """
+    if not CORTEX_HEADLESS_AGENTS:
+        return None
+    from .authoring_prompts import _delegation_hint
+
+    return _delegation_hint(kind)
+
+
 # ── Re-exports — the public import surface (see module docstring) ─────────
 #
 # These siblings import THIS module as ``_root`` and read the patchable
@@ -461,6 +414,7 @@ async def _claude_invoke(
 # constant / type / ``_claude_invoke`` definition above. This is a
 # deliberate, load-order-sensitive circular import.
 
+from .claude_cli import _build_argv, _subprocess_env  # noqa: E402
 from .candidate_scan import (  # noqa: E402
     _collect_anchor_candidates,
     _scan_pages_with_gaps,
@@ -490,7 +444,11 @@ __all__ = [
     "CORTEX_HEADLESS_USD_BUDGET",
     "CORTEX_HEADLESS_MAX_FILE_DRAINS",
     "CORTEX_HEADLESS_MAX_ANCHOR_DRAINS",
+    "CORTEX_HEADLESS_AGENTS",
     "CLAUDE_CALL_TIMEOUT_SEC",
     "_CLAUDE_BIN",
+    "_build_argv",
+    "_subprocess_env",
+    "_delegation_hint_for",
     "MAX_DRAINS_PER_CYCLE",
 ]

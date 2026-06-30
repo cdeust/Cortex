@@ -46,6 +46,53 @@ def _wrap_untrusted(text: str) -> str:
     return f"{_UNTRUSTED_OPEN}\n{text}\n{_UNTRUSTED_CLOSE}"
 
 
+# Page-kind → specialist agent for optional Task delegation in agents mode.
+# The agents themselves come from the user's roster (loaded by
+# ``--setting-sources user``); this map only suggests a sensible default per
+# page kind. Unknown kinds fall back to ``_DEFAULT_SPECIALIST``.
+_KIND_SPECIALIST: dict[str, str] = {
+    "file-doc": "architect",
+    "reference": "architect",
+    "architecture": "architect",
+    "services": "architect",
+    "api": "engineer",
+    "ci-cd": "devops-engineer",
+    "mcp": "engineer",
+    "adr": "architect",
+    "decision": "architect",
+    "spec": "paper-writer",
+    "note": "architect",
+}
+_DEFAULT_SPECIALIST = "architect"
+
+
+def _delegation_hint(kind: str) -> str:
+    """Build the optional Task-delegation paragraph for an authoring prompt.
+
+    Returns a self-contained Markdown section (trailing blank line included)
+    inviting the model to delegate deep, read-only codebase analysis to a
+    specialist subagent via the ``Task`` tool, then synthesise the findings
+    into the page itself. The caller (``headless_authoring._delegation_hint_for``)
+    decides whether to include it at all — gated on the agents-mode knob —
+    so this builder stays pure and never reads the environment.
+
+    Pre-condition:  ``kind`` is a wiki page kind (may be unknown).
+    Post-condition: returns a non-empty paragraph; the suggested specialist
+                    is ``_KIND_SPECIALIST[kind]`` or ``_DEFAULT_SPECIALIST``.
+    """
+    agent = _KIND_SPECIALIST.get(kind, _DEFAULT_SPECIALIST)
+    return (
+        "## You may delegate analysis (optional)\n\n"
+        "A roster of specialist subagents is available through the **Task** "
+        f"tool. For a `{kind}` page the **{agent}** agent is well-suited to "
+        "map the structure before you write; spawn one (or several, for "
+        "independent facets — callers, invariants, failure modes) to gather "
+        "grounded findings, then SYNTHESISE them into the page YOURSELF. "
+        "Subagents are read-only (Read/Glob/Grep) and return analysis, not "
+        "file writes. Delegation is optional — skip it for simple pages.\n\n"
+    )
+
+
 def _find_gap_marker(
     body: str, gap_name: str, gap_description: str
 ) -> tuple[int, int] | None:
@@ -79,11 +126,14 @@ def _build_section_prompt(
     gap_name: str,
     gap_description: str,
     source_text: str | None,
+    delegate_hint: str | None = None,
 ) -> str:
     """Construct the LLM prompt for one missing section.
 
     Pre-condition:  all string parameters are well-typed; ``source_text``
-                    may be None when the source file is unavailable.
+                    may be None when the source file is unavailable;
+                    ``delegate_hint`` is the optional agents-mode Task
+                    delegation paragraph (None in solo mode).
     Post-condition: returned prompt includes the security guard header
                     and wraps every untrusted block in the delimiter so
                     the model treats source material as data, not
@@ -113,6 +163,7 @@ def _build_section_prompt(
         f"`{page_path}` (title: {title!r}, project: {domain!r}).\n\n"
         f"The section to author is **{gap_name}**. The curation gap "
         f"description states:\n\n{safe_gap_desc}\n\n"
+        f"{delegate_hint or ''}"
         f"## What I want from you\n\n"
         f"Write JUST the body of the `## {gap_name.title()}` section as Markdown. "
         f"Do NOT include the heading line itself (I'll add it). Do NOT add a "
@@ -262,13 +313,15 @@ def _build_page_prompt(
     page_meta: dict[str, Any],
     gaps: list[str],
     source_text: str | None,
+    delegate_hint: str | None = None,
 ) -> str:
     """Construct a single prompt that asks Claude to author every missing
     section on the page, formatted as a strict heading-delimited block
     we can parse.
 
     Pre-condition:  ``gaps`` is a non-empty list of known gap slugs;
-                    ``source_text`` may be None.
+                    ``source_text`` may be None; ``delegate_hint`` is the
+                    optional agents-mode Task delegation paragraph.
     Post-condition: returned prompt includes the security guard header
                     and wraps every untrusted block (source text, gap
                     descriptions derived from frontmatter) in the
@@ -312,6 +365,7 @@ def _build_page_prompt(
         f"{_UNTRUSTED_GUARD}\n\n"
         f"You are authoring missing sections for the wiki file-doc "
         f"of `{source_path}` in project `{domain}`.\n\n"
+        f"{delegate_hint or ''}"
         f"## Ground your writing in codebase intelligence FIRST\n\n"
         f"Before drafting, extract structural facts about the file "
         f"using whatever tools are available. Try in this order; "

@@ -220,6 +220,7 @@ def _scope_anchor_prompt(
     scope_title: str,
     scope_description: str,
     source_root: str,
+    delegate_hint: str | None = None,
 ) -> str:
     """Build the prompt that asks Claude to author a project anchor page.
 
@@ -293,6 +294,7 @@ def _scope_anchor_prompt(
         f"The page you must produce is the **{scope_title}** anchor "
         f"(scope: `{scope_name}`). The scope description is:\n\n"
         f"{safe_scope_description}\n\n"
+        f"{delegate_hint or ''}"
         f"## Ground your writing in codebase intelligence FIRST\n\n"
         f"Before drafting the page, use whatever codebase-intelligence "
         f"tools are available to extract structural facts about the "

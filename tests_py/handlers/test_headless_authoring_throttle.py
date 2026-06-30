@@ -561,7 +561,7 @@ class _HangingProc:
         self.killed = False
         self.waited = False
 
-    async def communicate(self) -> Any:
+    async def communicate(self, input: Any = None) -> Any:
         await asyncio.Event().wait()  # hang until cancelled
 
     def kill(self) -> None:
@@ -606,11 +606,13 @@ class TestCancellationCleanup:
 class TestSubscriptionAuth:
     """The drain runs on the subscription by default, API key only on opt-in.
 
-    Enforcing facts: argv carries ``--safe-mode`` (config isolation that keeps
-    OAuth/keychain) and never ``--bare`` (which forces API-key billing); the
-    default child env strips ``ANTHROPIC_API_KEY`` / ``ANTHROPIC_AUTH_TOKEN``
-    (subscription); and ``CORTEX_HEADLESS_AUTH=api`` passes them through so a
-    user who wants API billing still can.
+    Enforcing facts: argv never carries ``--bare`` (which forces API-key
+    billing); the default child env strips ``ANTHROPIC_API_KEY`` /
+    ``ANTHROPIC_AUTH_TOKEN`` (subscription); ``CORTEX_HEADLESS_AUTH=api`` passes
+    them through so a user who wants API billing still can; and the child env
+    always carries ``CORTEX_HEADLESS_AUTHORING_CHILD=1`` so user hooks no-op.
+    The auth behaviour is orthogonal to agents/solo mode, so these tests pin
+    the mode explicitly.
     """
 
     @staticmethod
@@ -618,7 +620,7 @@ class TestSubscriptionAuth:
         class _OkProc:
             returncode = 0
 
-            async def communicate(self) -> Any:
+            async def communicate(self, input: Any = None) -> Any:
                 return (b'{"result": "OK", "total_cost_usd": 0.0}', b"")
 
         async def _fake_exec(*argv: Any, **kwargs: Any) -> _OkProc:
@@ -629,7 +631,7 @@ class TestSubscriptionAuth:
         monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
 
     @pytest.mark.asyncio
-    async def test_default_uses_safe_mode_and_strips_api_key(
+    async def test_default_strips_api_key_and_marks_child(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         from mcp_server.handlers.consolidation import headless_authoring as ha
@@ -643,12 +645,13 @@ class TestSubscriptionAuth:
         result = await ha._claude_invoke("prompt")
 
         assert result.text == "OK"
-        assert "--safe-mode" in captured["argv"]
         assert "--bare" not in captured["argv"]
         env = captured["env"]
         assert env is not None, "must pass an explicit env to strip credentials"
         assert "ANTHROPIC_API_KEY" not in env
         assert "ANTHROPIC_AUTH_TOKEN" not in env
+        # User hooks (loaded by --setting-sources user) must no-op in the child.
+        assert env.get("CORTEX_HEADLESS_AUTHORING_CHILD") == "1"
 
     @pytest.mark.asyncio
     async def test_api_mode_passes_api_key_through(
@@ -664,7 +667,120 @@ class TestSubscriptionAuth:
         result = await ha._claude_invoke("prompt")
 
         assert result.text == "OK"
-        assert "--safe-mode" in captured["argv"]
         env = captured["env"]
         assert env is not None
         assert env.get("ANTHROPIC_API_KEY") == "sk-user-opted-in"
+        assert env.get("CORTEX_HEADLESS_AUTHORING_CHILD") == "1"
+
+
+class TestAgentsMode:
+    """Agents mode (default) loads the roster under a hard write/exec ceiling;
+    solo mode falls back to ``--safe-mode`` config isolation.
+    """
+
+    @staticmethod
+    def _patch_exec(monkeypatch: pytest.MonkeyPatch, captured: dict[str, Any]) -> None:
+        class _OkProc:
+            returncode = 0
+
+            async def communicate(self, input: Any = None) -> Any:
+                return (b'{"result": "OK", "total_cost_usd": 0.0}', b"")
+
+        async def _fake_exec(*argv: Any, **kwargs: Any) -> _OkProc:
+            captured["argv"] = list(argv)
+            return _OkProc()
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
+
+    @pytest.mark.asyncio
+    async def test_agents_mode_loads_roster_with_hard_ceiling(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from mcp_server.handlers.consolidation import headless_authoring as ha
+
+        monkeypatch.setattr(ha, "CORTEX_HEADLESS_AGENTS", 1)
+        captured: dict[str, Any] = {}
+        self._patch_exec(monkeypatch, captured)
+
+        await ha._claude_invoke("prompt")
+        argv = captured["argv"]
+
+        # Roster loads from the user source only (project/local excluded).
+        assert "--setting-sources" in argv
+        assert argv[argv.index("--setting-sources") + 1] == "user"
+        # Task delegation is available; writes/exec are hard-denied.
+        assert argv[argv.index("--tools") + 1] == "Read,Glob,Grep,Task"
+        assert "--disallowedTools" in argv
+        assert (
+            argv[argv.index("--disallowedTools") + 1] == "Write,Edit,Bash,NotebookEdit"
+        )
+        # Agents mode does NOT use --safe-mode (that would unload the roster).
+        assert "--safe-mode" not in argv
+
+    @pytest.mark.asyncio
+    async def test_solo_mode_uses_safe_mode_without_task(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from mcp_server.handlers.consolidation import headless_authoring as ha
+
+        monkeypatch.setattr(ha, "CORTEX_HEADLESS_AGENTS", 0)
+        captured: dict[str, Any] = {}
+        self._patch_exec(monkeypatch, captured)
+
+        await ha._claude_invoke("prompt")
+        argv = captured["argv"]
+
+        assert "--safe-mode" in argv
+        assert "--setting-sources" not in argv
+        assert "--disallowedTools" not in argv
+        assert argv[argv.index("--tools") + 1] == "Read,Glob,Grep"
+
+    def test_delegation_hint_gated_on_agents_knob(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from mcp_server.handlers.consolidation import headless_authoring as ha
+
+        monkeypatch.setattr(ha, "CORTEX_HEADLESS_AGENTS", 1)
+        hint = ha._delegation_hint_for("adr")
+        assert hint is not None
+        assert "Task" in hint and "architect" in hint
+
+        monkeypatch.setattr(ha, "CORTEX_HEADLESS_AGENTS", 0)
+        assert ha._delegation_hint_for("adr") is None
+
+    @pytest.mark.asyncio
+    async def test_prompt_via_stdin_not_argv(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: the variadic ``--add-dir`` must not swallow the prompt.
+
+        With a source_root present, the prompt MUST travel via stdin and be
+        absent from argv — otherwise the CLI errors "Input must be provided".
+        """
+        from mcp_server.handlers.consolidation import headless_authoring as ha
+
+        captured: dict[str, Any] = {}
+
+        class _OkProc:
+            returncode = 0
+
+            async def communicate(self, input: Any = None) -> Any:
+                captured["input"] = input
+                return (b'{"result": "OK", "total_cost_usd": 0.0}', b"")
+
+        async def _fake_exec(*argv: Any, **kwargs: Any) -> _OkProc:
+            captured["argv"] = list(argv)
+            captured["stdin"] = kwargs.get("stdin")
+            return _OkProc()
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
+
+        await ha._claude_invoke("MY_UNIQUE_PROMPT", source_root="/some/src")
+
+        assert "--add-dir" in captured["argv"]
+        assert captured["argv"][captured["argv"].index("--add-dir") + 1] == "/some/src"
+        # Prompt is NOT a positional argv element …
+        assert "MY_UNIQUE_PROMPT" not in captured["argv"]
+        # … it is fed via stdin instead.
+        assert captured["stdin"] is asyncio.subprocess.PIPE
+        assert captured["input"] == b"MY_UNIQUE_PROMPT"

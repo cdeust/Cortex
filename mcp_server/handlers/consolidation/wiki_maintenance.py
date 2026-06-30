@@ -46,6 +46,11 @@ def _headless_authoring_enabled() -> bool:
       * ``CORTEX_HEADLESS_AUTH`` (default ``subscription``) — ``subscription``
         runs on the logged-in Claude session (no API charge); ``api`` bills
         ``ANTHROPIC_API_KEY`` instead.
+      * ``CORTEX_HEADLESS_AGENTS`` (default 1) — ``1`` loads the user's zetetic
+        agent roster (``--setting-sources user``) and lets the authoring agent
+        delegate read-only analysis via ``Task`` under a hard write/exec
+        ceiling (richer grounding, higher per-page cost); ``0`` runs the
+        hardened solo ``--safe-mode`` path with no roster.
       * ``CORTEX_HEADLESS_CONCURRENCY`` (default 4) — max in-flight calls.
       * ``CORTEX_HEADLESS_BUDGET_SEC`` (default 300) — wall-clock deadline.
       * ``CORTEX_HEADLESS_USD_BUDGET`` (default 5.0) — per-cycle cap on the

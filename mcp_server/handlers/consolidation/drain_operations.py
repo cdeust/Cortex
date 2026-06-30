@@ -83,6 +83,7 @@ async def drain_one(
         gap_name=_gap_heading(gap_name),
         gap_description=gap_desc,
         source_text=source_text,
+        delegate_hint=_root._delegation_hint_for(meta.get("kind") or "file-doc"),
     )
     ir = await invoke(prompt, source_root=src_root)
     response = ir.text
@@ -178,6 +179,7 @@ async def drain_all_gaps_on_page(
         page_meta=meta,
         gaps=gaps,
         source_text=source_text,
+        delegate_hint=_root._delegation_hint_for(meta.get("kind") or "file-doc"),
     )
     ir = await invoke(prompt, source_root=src_root)
     base_ms = int((time.monotonic() - start) * 1000)
@@ -318,6 +320,7 @@ async def drain_missing_anchors(
                 scope_title=sc.scope.title,
                 scope_description=sc.scope.description,
                 source_root=src_root,
+                delegate_hint=_root._delegation_hint_for(sc.scope.suggested_kind),
             )
             ir = await invoke(prompt, cwd=src_root, source_root=src_root)
             response = ir.text

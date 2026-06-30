@@ -418,4 +418,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # No-op inside the headless wiki-authoring subprocess (see
+    # _headless_guard): prevents recursion + memory pollution when
+    # ``claude -p --setting-sources user`` loads the user hooks.
+    from mcp_server.hooks._headless_guard import (
+        exit_if_headless_authoring_child,
+    )
+
+    exit_if_headless_authoring_child()
     main()
