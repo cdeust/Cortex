@@ -90,6 +90,7 @@ _CLAUDE_BIN = "claude"
 # measured constants: tuning them to match your hardware and cost
 # tolerance via env vars is expected and encouraged.
 
+
 def _env_int(name: str, default: int) -> int:
     """Return int from env var ``name``, or ``default`` when absent/invalid.
 
@@ -104,7 +105,9 @@ def _env_int(name: str, default: int) -> int:
     except ValueError:
         logger.warning(
             "headless-authoring: %s=%r is not an int; using default %d",
-            name, raw, default,
+            name,
+            raw,
+            default,
         )
         return default
 
@@ -123,7 +126,9 @@ def _env_float(name: str, default: float) -> float:
     except ValueError:
         logger.warning(
             "headless-authoring: %s=%r is not a float; using default %g",
-            name, raw, default,
+            name,
+            raw,
+            default,
         )
         return default
 
@@ -158,6 +163,7 @@ CORTEX_HEADLESS_MAX_FILE_DRAINS: int = _env_int(
 
 # ── Core data types ───────────────────────────────────────────────────────
 
+
 @dataclass
 class InvokeResult:
     """Outcome of one ``claude -p`` call.
@@ -169,7 +175,7 @@ class InvokeResult:
     """
 
     text: str | None  # None on failure
-    cost_usd: float   # client-side spend estimate; 0.0 when unavailable
+    cost_usd: float  # client-side spend estimate; 0.0 when unavailable
 
 
 @dataclass
@@ -187,8 +193,8 @@ class CycleBudget:
     the cap.  This is acceptable for an operational safety rail.
     """
 
-    deadline: float        # time.monotonic() timestamp
-    usd_cap: float         # <=0 means no USD cap
+    deadline: float  # time.monotonic() timestamp
+    usd_cap: float  # <=0 means no USD cap
     usd_spent: float = field(default=0.0)
 
     def time_left(self) -> float:
@@ -353,9 +359,7 @@ async def _claude_invoke(
         logger.warning("headless-authoring: claude binary not found on PATH")
         return InvokeResult(text=None, cost_usd=0.0)
     except Exception as exc:
-        logger.warning(
-            "headless-authoring: failed to start claude subprocess: %s", exc
-        )
+        logger.warning("headless-authoring: failed to start claude subprocess: %s", exc)
         return InvokeResult(text=None, cost_usd=0.0)
 
     try:

@@ -162,6 +162,7 @@ async def run_headless_authoring_cycle(
                         detail="budget exhausted",
                     )
                 ]
+
             # Wrap invoke to auto-charge the budget after each call and
             # inject the effective timeout derived from remaining budget time.
             async def charging_invoke(prompt: str, **kw: Any) -> Any:
@@ -190,15 +191,14 @@ async def run_headless_authoring_cycle(
     page_results_nested: list[list[Any]] = (
         list(await asyncio.gather(*page_coros)) if page_coros else []
     )
-    file_results: list[Any] = [
-        r for nested in page_results_nested for r in nested
-    ]
+    file_results: list[Any] = [r for nested in page_results_nested for r in nested]
 
     all_results = anchor_results + file_results
     filled = sum(1 for r in all_results if r.status == "filled")
     failed = sum(1 for r in all_results if r.status == "failed")
     skipped_budget = sum(
-        1 for r in all_results
+        1
+        for r in all_results
         if r.status == "skipped" and r.detail == "budget exhausted"
     )
     # "attempted" means an invoke was actually issued — a skipped candidate

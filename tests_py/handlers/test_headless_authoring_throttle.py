@@ -25,6 +25,7 @@ import pytest
 
 # ── Fake invoke infrastructure ──────────────────────────────────────────
 
+
 @dataclass
 class FakeInvokeStats:
     """Shared mutable state for the fake invoke function."""
@@ -67,6 +68,7 @@ def _make_stats(cost_per_call: float = 0.5, sleep: float = 0.01) -> FakeInvokeSt
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _make_wiki_page(tmp_path: Path, name: str = "page.md") -> Path:
     """Write a minimal wiki page with one curation gap."""
@@ -133,7 +135,16 @@ class TestConcurrencyCap:
         # Patch _scan_pages_with_gaps to return our fake pages
         def fake_scan(_: Path) -> list[Any]:
             return [
-                (p, {"curation_gaps": ["purpose"], "domain": "d", "kind": "reference", "source_file_path": "x.py"}, "_(missing — needs: What)_")
+                (
+                    p,
+                    {
+                        "curation_gaps": ["purpose"],
+                        "domain": "d",
+                        "kind": "reference",
+                        "source_file_path": "x.py",
+                    },
+                    "_(missing — needs: What)_",
+                )
                 for p in pages
             ]
 
@@ -144,9 +155,7 @@ class TestConcurrencyCap:
         async def fake_invoke(prompt: str, **kw: Any) -> ha.InvokeResult:
             return await stats(prompt, cost_per_call=0.1, sleep=0.05, **kw)
 
-        summary = await ha.run_headless_authoring_cycle(
-            tmp_path, invoke=fake_invoke
-        )
+        await ha.run_headless_authoring_cycle(tmp_path, invoke=fake_invoke)
 
         assert stats.max_concurrent <= 2, (
             f"Expected max_concurrent <= 2, got {stats.max_concurrent}"
@@ -187,9 +196,7 @@ class TestConcurrencyCap:
         async def fake_invoke(prompt: str, **kw: Any) -> ha.InvokeResult:
             return await stats(prompt, cost_per_call=0.2, sleep=0.05, **kw)
 
-        summary = await ha.run_headless_authoring_cycle(
-            tmp_path, invoke=fake_invoke
-        )
+        await ha.run_headless_authoring_cycle(tmp_path, invoke=fake_invoke)
 
         assert stats.max_concurrent <= 3, (
             f"Expected max_concurrent <= 3, got {stats.max_concurrent}"
@@ -251,16 +258,12 @@ class TestWallClockDeadline:
             call_count += 1
             return ha.InvokeResult(text="content", cost_usd=0.0)
 
-        summary = await ha.run_headless_authoring_cycle(
-            tmp_path, invoke=invoke
-        )
+        summary = await ha.run_headless_authoring_cycle(tmp_path, invoke=invoke)
 
         skipped = [r for r in summary.results if r.status == "skipped"]
         assert len(skipped) > 0, "Expected at least one skipped result after deadline"
         # Budget-skipped items must NOT have called invoke.
-        assert call_count < 4, (
-            f"Expected fewer than 4 invoke calls; got {call_count}"
-        )
+        assert call_count < 4, f"Expected fewer than 4 invoke calls; got {call_count}"
         assert summary.skipped_budget >= len(skipped)
         # MINOR-2 invariant: budget-skipped candidates are NOT counted as
         # attempts. attempted + skipped must reconstruct the full result set.
@@ -304,9 +307,7 @@ class TestUsdCap:
             call_count += 1
             return ha.InvokeResult(text="content", cost_usd=0.5)
 
-        summary = await ha.run_headless_authoring_cycle(
-            tmp_path, invoke=costly_invoke
-        )
+        summary = await ha.run_headless_authoring_cycle(tmp_path, invoke=costly_invoke)
 
         # With concurrency=1 and cap=0.5 / cost=0.5, at most 1 call should
         # run before the budget is exhausted.  Allow 1 overshoot at most
@@ -352,9 +353,7 @@ class TestUsdCap:
             call_count += 1
             return ha.InvokeResult(text="content", cost_usd=99.0)
 
-        summary = await ha.run_headless_authoring_cycle(
-            tmp_path, invoke=invoke
-        )
+        summary = await ha.run_headless_authoring_cycle(tmp_path, invoke=invoke)
 
         assert call_count == 3, f"Expected 3 calls (no USD cap); got {call_count}"
         assert summary.skipped_budget == 0
@@ -372,7 +371,6 @@ class TestGroundableFilter:
     ) -> None:
         """drain_missing_anchors: scopes with groundable=False are never invoked."""
         import mcp_server.handlers.consolidation.headless_authoring as ha
-        import mcp_server.core.wiki_coverage as wc
 
         # Build fake domain registry with one domain.
         fake_repo = MagicMock()
@@ -451,8 +449,12 @@ class TestGroundableFilter:
 
         scope_names = [c.scope_name for c in cands]
         assert "prd" not in scope_names, "'prd' (ungroundable) must be excluded"
-        assert "changelog" not in scope_names, "'changelog' (ungroundable) must be excluded"
-        assert "architecture" in scope_names, "'architecture' (groundable) must be included"
+        assert "changelog" not in scope_names, (
+            "'changelog' (ungroundable) must be excluded"
+        )
+        assert "architecture" in scope_names, (
+            "'architecture' (groundable) must be included"
+        )
 
     @pytest.mark.asyncio
     async def test_cycle_never_invokes_ungroundable_scopes(
@@ -496,9 +498,7 @@ class TestGroundableFilter:
             call_count += 1
             return ha.InvokeResult(text="content", cost_usd=0.1)
 
-        summary = await ha.run_headless_authoring_cycle(
-            tmp_path, invoke=invoke
-        )
+        summary = await ha.run_headless_authoring_cycle(tmp_path, invoke=invoke)
 
         # Only the groundable anchor should have been attempted.
         assert call_count == 1
