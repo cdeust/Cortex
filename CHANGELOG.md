@@ -6,6 +6,50 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.25.0] - 2026-07-01
+
+Headless wiki-authoring hardened end-to-end (subscription billing, full zetetic
+agent roster, anti-recursion guard) plus the active-forgetting memory module and
+Windows portability fixes.
+
+### Added
+- **Active forgetting (Module #6).** `core/active_forgetting.py` +
+  `handlers/consolidation/forgetting.py`: two independent Drosophila dopaminergic
+  forgetting circuits — permanent Rac1 trace erosion (chronic interference ×
+  stage vulnerability) and transient DAMB retrieval block (Davis & Zhong 2017,
+  Sabandal et al. 2021). Shipped with a falsification harness left failing where
+  the model genuinely diverges from biology. (#69)
+- **Safe headless wiki-authoring drain.** Async `claude -p` invocation
+  (`asyncio.create_subprocess_exec` + `wait_for`) that no longer blocks the event
+  loop; per-cycle concurrency / wall-clock / USD budget via `CORTEX_HEADLESS_*`
+  knobs (defaults 4 / 300s / $5); anti-fabrication `Scope.groundable` filter so
+  non-derivable scopes (prd/decisions/changelog/roadmap/accessibility/
+  localization) are never authored from scratch. (#70)
+- **Full zetetic agent roster for wiki authoring.** Two-mode argv
+  (`claude_cli._build_argv`, gated on `CORTEX_HEADLESS_AGENTS`, default on):
+  agents mode loads the user roster only (`--setting-sources user`, project/local
+  excluded so a malicious repo cannot inject settings/hooks) with a hard
+  `--disallowedTools Write,Edit,Bash,NotebookEdit` deny ceiling that propagates to
+  delegated subagents; solo mode falls back to `--safe-mode`. New
+  `hooks/_headless_guard.py` no-ops every Cortex hook under
+  `CORTEX_HEADLESS_AUTHORING_CHILD=1`, stopping consolidation→authoring recursion
+  and memory pollution. (#72)
+
+### Fixed
+- **Windows cross-platform portability.** macOS/Linux compatibility preserved. (#68)
+- **Headless drain billing.** The drain now uses a logged-in Claude subscription
+  by default with API billing as explicit opt-in; previously `--bare` forced
+  `ANTHROPIC_API_KEY` and the fail-closed guard skipped the whole drain on
+  subscription-only machines. (#71)
+- **Silent drain failure since 3.24 (root cause).** The variadic `--add-dir`
+  swallowed the trailing positional prompt, so every drain with a `source_root`
+  failed silently; the prompt is now passed via STDIN. (#72)
+
+### Changed
+- Bump `pydantic-settings` 2.14.0 → 2.14.2 (upstream security patch:
+  `NestedSecretsSettingsSource` no longer follows symlinks outside
+  `secrets_dir`). (#67)
+
 ## [3.24.1] - 2026-06-23
 
 Cross-backend `recall` fix — PostgreSQL users could not use `recall`.

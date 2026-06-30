@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hypermnesia-mcp"
-version = "3.24.1"
+version = "3.25.0"
 description = "Scientifically-grounded memory system based on computational neuroscience research"
 readme = "README.md"
 license = "MIT"

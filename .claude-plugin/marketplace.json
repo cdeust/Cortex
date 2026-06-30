@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Persistent memory and cognitive profiling plugins for Claude Code",
-    "version": "3.24.1"
+    "version": "3.25.0"
   },
   "plugins": [
     {
       "name": "cortex",
       "source": "./",
       "description": "Persistent memory and cognitive profiling for Claude Code — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence, and cognitive profiling. 43 MCP tools (46 with the optional automatised-pipeline + prd-spec-generator integrations) with enriched schemas (visualization extracted to the standalone cortex-viz MCP). PostgreSQL + pgvector in CLI mode; automatic SQLite fallback in Cowork/sandboxed mode. v3.17.0 — autonomous per-project wiki: SessionStart auto-spawns a 6-hour consolidate cycle; a headless `claude -p` worker drains the curation-gap queue, calls codebase-intelligence MCP tools to ground each section in the real call graph, and authors missing anchor pages (architecture / services / api / data-flow / operations / decisions / PRD) per project from the source tree. 15 canonical scopes × 13 file sections; per-project dashboards under `wiki/_dashboards/`. Mermaid diagrams have a 🔍 lens with zoom + pan. Workflow graph with caller-qualified CALLS chains rendering full method-to-method dependencies (native tree-sitter, no AP required). Side panel humanized for non-technical users. Ingests codebase analysis (ai-automatised-pipeline) and PRDs (prd-spec-generator) into wiki + memory + knowledge graph. Docker image available.",
-      "version": "3.24.1",
+      "version": "3.25.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
