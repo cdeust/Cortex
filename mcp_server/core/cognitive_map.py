@@ -7,19 +7,26 @@ Pure business logic — no I/O. Callers pass pre-fetched access history.
 
 References:
   Dayan (1993) "Improving Generalization for Temporal Difference Learning"
-  Stachenfeld et al. (2017) "The Hippocampus as a Predictive Map"
+    — the Successor Representation M = (I - γT)⁻¹.
+  Stachenfeld et al. (2017) "The Hippocampus as a Predictive Map" — the SR
+    matrix's eigenvectors form a low-dimensional embedding of the state
+    graph (grid-cell-like); used by ``project_to_2d``.
+  Belkin & Niyogi (2003) "Laplacian Eigenmaps" — those eigenvectors are
+    computed here via S = D^(-1/2) W D^(-1/2), which is similar to T = D⁻¹W.
 """
 
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 from typing import Any
 
+import numpy as np
+
 # ── SR parameters ─────────────────────────────────────────────────────────
 
-# Temporal decay for SR update: discount for co-access distance
-_SR_DISCOUNT = 0.9
+# The 2D spectral embedding (project_to_2d) uses the eigenvectors of the SR
+# matrix M = (I - γT)⁻¹, which are a function of T alone — they are identical
+# for every discount γ ∈ (0, 1) — so no γ value is needed here.
 
 # Session window: memories accessed within this many hours are co-access candidates
 _CO_ACCESS_WINDOW_HOURS = 2.0
@@ -29,41 +36,6 @@ _MAX_NAVIGATE_DEPTH = 3
 
 
 # ── Co-access graph building ──────────────────────────────────────────────
-
-
-def build_co_access_graph(
-    access_sequences: list[list[int]],
-    discount: float = _SR_DISCOUNT,
-) -> dict[int, dict[int, float]]:
-    """Build a weighted co-access graph from access sequences.
-
-    For each sequence [m1, m2, m3, ...], the SR update gives:
-      SR[m1][m2] += 1
-      SR[m1][m3] += discount
-      SR[m1][m4] += discount^2  ...
-
-    This implements a forward-looking reachability score from any start node.
-
-    Args:
-        access_sequences: List of ordered memory ID sequences from sessions.
-        discount: Temporal discount factor γ (0 < γ < 1).
-
-    Returns:
-        Nested dict: sr_graph[source_id][target_id] = cumulative SR weight.
-    """
-    sr_graph: dict[int, dict[int, float]] = defaultdict(lambda: defaultdict(float))
-
-    for seq in access_sequences:
-        for i, src in enumerate(seq):
-            for j in range(i + 1, len(seq)):
-                tgt = seq[j]
-                dist = j - i
-                weight = discount ** (dist - 1)
-                sr_graph[src][tgt] += weight
-                # Bidirectional (memory access is often symmetric)
-                sr_graph[tgt][src] += weight * discount  # back-link weighted less
-
-    return sr_graph
 
 
 def _parse_iso_timestamp(s: str) -> float:
@@ -137,7 +109,7 @@ def compute_sr_scores(
 
     Args:
         seed_memory_ids: Recently recalled/accessed memory IDs (seeds).
-        sr_graph: Co-access graph from build_co_access_graph or build_temporal_co_access.
+        sr_graph: Co-access graph from build_temporal_co_access.
         top_k: Maximum results.
 
     Returns:
@@ -229,72 +201,99 @@ def navigate_from(
     return visited
 
 
-# ── 2D projection (for visualization) ────────────────────────────────────
+# ── 2D projection: SR spectral embedding ─────────────────────────────────
 
 
-def _spring_relax(
-    positions: list[list[float]],
+def _symmetric_normalized_adjacency(
     sr_graph: dict[int, dict[int, float]],
-    idx_map: dict[int, int],
-    iterations: int = 5,
-) -> None:
-    """Apply force-directed spring relaxation to positions in-place."""
-    n = len(positions)
-    for _ in range(iterations):
-        forces = [[0.0, 0.0] for _ in range(n)]
-        for mid, neighbors in sr_graph.items():
-            if mid not in idx_map:
-                continue
-            i = idx_map[mid]
-            for neighbor_id, weight in neighbors.items():
-                if neighbor_id not in idx_map:
-                    continue
-                j = idx_map[neighbor_id]
-                dx = positions[j][0] - positions[i][0]
-                dy = positions[j][1] - positions[i][1]
-                forces[i][0] += dx * weight * 0.1
-                forces[i][1] += dy * weight * 0.1
+    active_ids: list[int],
+) -> np.ndarray:
+    """Build S = D^(-1/2) W D^(-1/2) over ``active_ids`` (all degree > 0).
 
-        for i in range(n):
-            positions[i][0] += forces[i][0]
-            positions[i][1] += forces[i][1]
+    W is the symmetrised co-access weight matrix. S is similar to the random
+    walk T = D⁻¹W, hence shares the eigenvectors of the SR matrix
+    M = (I - γT)⁻¹ — so its spectrum yields the SR/Laplacian eigenmap
+    (Stachenfeld 2017; Belkin & Niyogi 2003).
+    """
+    n = len(active_ids)
+    idx = {mid: i for i, mid in enumerate(active_ids)}
+    w = np.zeros((n, n), dtype=np.float64)
+    for src, neighbors in sr_graph.items():
+        if src not in idx:
+            continue
+        for tgt, weight in neighbors.items():
+            if tgt in idx:
+                w[idx[src], idx[tgt]] = weight
+    w = 0.5 * (w + w.T)  # symmetrise (co-access affinity is undirected)
+
+    inv_sqrt = 1.0 / np.sqrt(w.sum(axis=1))  # active nodes ⇒ degree > 0
+    return inv_sqrt[:, None] * w * inv_sqrt[None, :]
+
+
+def _active_node_degrees(
+    sr_graph: dict[int, dict[int, float]],
+    memory_ids: list[int],
+) -> set[int]:
+    """IDs in ``memory_ids`` that carry at least one (in- or out-) edge."""
+    present = set(memory_ids)
+    active: set[int] = set()
+    for src, neighbors in sr_graph.items():
+        for tgt, weight in neighbors.items():
+            if weight == 0.0:
+                continue
+            if src in present:
+                active.add(src)
+            if tgt in present:
+                active.add(tgt)
+    return active
 
 
 def project_to_2d(
     sr_graph: dict[int, dict[int, float]],
     memory_ids: list[int],
 ) -> dict[int, tuple[float, float]]:
-    """Project memories to 2D coordinates using spectral embedding of the SR graph.
+    """Project memories to 2D via the SR spectral embedding.
 
-    Uses a simple force-directed approximation:
-    - Strongly connected memories cluster near each other
-    - Isolated memories spread outward
+    Faithful to Stachenfeld et al. (2017): the SR eigenvectors embed the
+    state graph. They are computed from S = D^(-1/2) W D^(-1/2) (similar to
+    T = D⁻¹W, so sharing the SR matrix's eigenvectors — Belkin & Niyogi
+    2003). S's top eigenvalue is the trivial stationary component
+    (eigenvector ∝ √degree); the two subdominant eigenvectors are the
+    grid-cell-like (x, y) axes, placing co-accessed memories near each other.
+    Isolated memories (no edge) have no predictive map → placed at origin.
 
     Args:
-        sr_graph: Co-access graph.
+        sr_graph: Symmetric co-access graph from build_temporal_co_access.
         memory_ids: All memory IDs to project.
 
     Returns:
-        Dict of {memory_id: (x, y)} coordinates in [-1, 1].
+        Dict of {memory_id: (x, y)} coordinates scaled into [-1, 1].
     """
     if not memory_ids:
         return {}
 
-    n = len(memory_ids)
-    idx_map = {mid: i for i, mid in enumerate(memory_ids)}
-    positions = [
-        [math.cos(2 * math.pi * i / n), math.sin(2 * math.pi * i / n)] for i in range(n)
-    ]
-
-    _spring_relax(positions, sr_graph, idx_map)
-
-    all_coords = [v for p in positions for v in p]
-    max_abs = max(max(abs(v) for v in all_coords), 1e-9)
-
-    return {
-        mid: (
-            round(positions[idx_map[mid]][0] / max_abs, 4),
-            round(positions[idx_map[mid]][1] / max_abs, 4),
-        )
-        for mid in memory_ids
+    active = _active_node_degrees(sr_graph, memory_ids)
+    coords: dict[int, tuple[float, float]] = {
+        mid: (0.0, 0.0) for mid in memory_ids if mid not in active
     }
+    active_ids = [mid for mid in memory_ids if mid in active]
+    if len(active_ids) < 2:
+        # 0 or 1 connected node: no non-trivial axis to embed along.
+        coords.update({mid: (0.0, 0.0) for mid in active_ids})
+        return coords
+
+    s = _symmetric_normalized_adjacency(sr_graph, active_ids)
+    # eigh: ascending eigenvalues, orthonormal eigenvectors (S is symmetric).
+    eigvals, eigvecs = np.linalg.eigh(s)
+    order = np.argsort(eigvals)[::-1]  # descending: index 0 is the trivial top
+    # Subdominant eigenvectors as the two embedding axes (skip the stationary).
+    x_axis = eigvecs[:, order[1]]
+    y_axis = eigvecs[:, order[2]] if len(active_ids) >= 3 else np.zeros(len(active_ids))
+
+    xy = np.column_stack((x_axis, y_axis))
+    max_abs = max(float(np.abs(xy).max()), 1e-9)
+    xy = xy / max_abs
+
+    for i, mid in enumerate(active_ids):
+        coords[mid] = (round(float(xy[i, 0]), 4), round(float(xy[i, 1]), 4))
+    return coords
