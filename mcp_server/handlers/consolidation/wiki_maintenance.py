@@ -37,12 +37,18 @@ logger = logging.getLogger(__name__)
 def _headless_authoring_enabled() -> bool:
     """Opt-in gate for the ``claude -p`` headless authoring drain.
 
-    Default OFF. The drain can spawn up to ~38 ``claude -p`` subprocesses
-    per cycle (30 anchor + 8 file-doc), each up to 180s, **synchronously
-    on the consolidate event loop**. Unthrottled, that storm wedges the
-    machine — and in tests/CI (where ``claude`` may be on PATH on dev
-    boxes) it also blocks the suite. It stays off until per-cycle load
-    balancing lands; set ``CORTEX_HEADLESS_AUTHORING=1`` to opt in.
+    Default OFF. Even with concurrency + budget throttling now in place,
+    each cycle spends real money via ANTHROPIC_API_KEY and is therefore
+    opt-in. Set ``CORTEX_HEADLESS_AUTHORING=1`` to enable.
+
+    When enabled, the drain runs under:
+      * ``CORTEX_HEADLESS_CONCURRENCY`` (default 4) — max in-flight calls.
+      * ``CORTEX_HEADLESS_BUDGET_SEC`` (default 300) — wall-clock deadline.
+      * ``CORTEX_HEADLESS_USD_BUDGET`` (default 5.0) — per-cycle USD cap.
+      * ``CORTEX_HEADLESS_MAX_ANCHOR_DRAINS`` / ``_MAX_FILE_DRAINS`` (default 8 each).
+    Ungroundable scopes (prd, decisions, changelog, roadmap, accessibility,
+    localization) are silently skipped — autonomous authoring of those
+    scopes would fabricate content, violating the zetetic standard.
     """
     return os.getenv("CORTEX_HEADLESS_AUTHORING", "0").strip().lower() in {
         "1",
@@ -180,11 +186,10 @@ async def run_wiki_maintenance(
     # loop closes without human intervention. See
     # ``consolidation/headless_authoring.py``.
     #
-    # Opt-in only (default OFF): the drain spawns up to ~38 ``claude -p``
-    # subprocesses synchronously on the event loop. Until per-cycle load
-    # balancing lands it stays gated behind ``CORTEX_HEADLESS_AUTHORING``
-    # so consolidate (and the test suite) never blocks on a subprocess
-    # storm.
+    # Opt-in only (default OFF): each cycle spends real money via
+    # ANTHROPIC_API_KEY.  The worker is now fully async (asyncio.gather
+    # + semaphore + budget), so it no longer blocks the event loop.
+    # Enable via ``CORTEX_HEADLESS_AUTHORING=1``.
     if not _headless_authoring_enabled():
         out["headless_authoring"] = {"status": "disabled"}
     else:
@@ -193,13 +198,16 @@ async def run_wiki_maintenance(
                 run_headless_authoring_cycle,
             )
 
-            cycle = run_headless_authoring_cycle()
+            cycle = await run_headless_authoring_cycle()
             out["headless_authoring"] = {
                 "pages_with_gaps": cycle.pages_with_gaps,
                 "drains_attempted": cycle.drains_attempted,
                 "drains_filled": cycle.drains_filled,
                 "drains_failed": cycle.drains_failed,
                 "duration_ms": cycle.duration_ms,
+                "usd_spent": cycle.usd_spent,
+                "wall_clock_ms": cycle.wall_clock_ms,
+                "skipped_budget": cycle.skipped_budget,
             }
         except Exception as exc:
             logger.debug(

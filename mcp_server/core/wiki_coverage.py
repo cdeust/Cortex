@@ -93,6 +93,14 @@ class Scope:
     anchor_filenames: tuple[str, ...]
     directories: tuple[str, ...]
     suggested_kind: str  # wiki kind to author the missing page as
+    # Whether this scope's content is derivable by READING the source
+    # tree (Read/Glob/Grep only — the headless authoring worker has no
+    # git, no runtime, no human intent). When False, autonomous authoring
+    # of the anchor would be fabrication (zetetic-forbidden): the content
+    # lives in git history, future plans, or human decisions — not in the
+    # code. Such scopes are still surfaced as coverage gaps for a human;
+    # the headless drain skips them. Default True.
+    groundable: bool = True
 
 
 SCOPES: Final[tuple[Scope, ...]] = (
@@ -312,6 +320,10 @@ SCOPES: Final[tuple[Scope, ...]] = (
         anchor_filenames=(),  # any spec or rfc page counts
         directories=("specs", "rfc"),
         suggested_kind="rfc",
+        # PRDs/RFCs encode human intent (problem framing, goals,
+        # non-goals) that is not present in the source tree — authoring
+        # one from code alone would be fabrication.
+        groundable=False,
     ),
     Scope(
         name="decisions",
@@ -324,6 +336,10 @@ SCOPES: Final[tuple[Scope, ...]] = (
         anchor_filenames=(),  # any ADR counts
         directories=("adr", "adrs"),
         suggested_kind="adr",
+        # ADRs record the rationale behind human decisions — the "why we
+        # chose X over Y" lives in people's heads and discussions, not in
+        # the code. Auto-authoring would invent that rationale.
+        groundable=False,
     ),
     Scope(
         name="onboarding",
@@ -836,6 +852,10 @@ SCOPES: Final[tuple[Scope, ...]] = (
         ),
         directories=("reference",),
         suggested_kind="reference",
+        # A changelog is reconstructed from git/release history, which the
+        # Read/Glob/Grep-only worker cannot access. Without a committed
+        # CHANGELOG.md it would invent release entries.
+        groundable=False,
     ),
     Scope(
         name="roadmap",
@@ -855,6 +875,10 @@ SCOPES: Final[tuple[Scope, ...]] = (
         ),
         directories=("explanation", "reference", "guides"),
         suggested_kind="explanation",
+        # A roadmap is forward-looking strategy — what's planned/deferred
+        # and why. None of that exists in the current source tree;
+        # authoring it would be pure fabrication.
+        groundable=False,
     ),
     # ── Inclusive design ───────────────────────────────────────────────
     Scope(
@@ -874,6 +898,11 @@ SCOPES: Final[tuple[Scope, ...]] = (
         ),
         directories=("reference", "explanation"),
         suggested_kind="reference",
+        # Accessibility posture (WCAG level, screen-reader/keyboard
+        # support) is only groundable when UI a11y code exists; for the
+        # backend projects here it would be fabricated. A human authors
+        # the honest "not applicable — no UI" page.
+        groundable=False,
     ),
     Scope(
         name="localization",
@@ -893,6 +922,10 @@ SCOPES: Final[tuple[Scope, ...]] = (
         ),
         directories=("reference", "guides"),
         suggested_kind="reference",
+        # i18n/l10n posture is only groundable when an i18n library and
+        # strings files exist; otherwise it would be fabricated. A human
+        # authors the honest "single-locale" page.
+        groundable=False,
     ),
 )
 
