@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 
 from mcp_server.core.causal_graph import (
-    compute_co_occurrence_matrix,
+    build_presence,
     discover_causal_edges,
 )
 from mcp_server.core.consolidation_engine import plan_cls_consolidation
@@ -358,20 +358,16 @@ def _discover_causal_edges(
             # Insufficient signal — don't run the full O(E^2) pass.
             return 0, qualifying
 
-        # Restrict the vocabulary to entities that meet the minimum, so
-        # the co-occurrence matrix is E_qualifying^2, not E_all^2.
+        # Restrict the vocabulary to entities that meet the minimum, so the
+        # PC independence tests run over E_qualifying variables, not E_all.
         active_names = [
             n for n in entity_names if entity_counts[n] >= _PC_MIN_OBSERVATIONS
         ]
-        co_matrix = compute_co_occurrence_matrix(episodic, active_names)
-        active_counts = {n: entity_counts[n] for n in active_names}
+        presence = build_presence(episodic, active_names)
         edges = discover_causal_edges(
             active_names,
-            co_matrix,
-            active_counts,
-            len(episodic),
+            presence,
             min_observations=_PC_MIN_OBSERVATIONS,
-            independence_threshold=0.5,
         )
         return _store_causal_edges(store, all_entities, edges), qualifying
     except Exception as exc:

@@ -1,6 +1,19 @@
-"""Causal graph -- PC algorithm for causal edge discovery (Spirtes & Glymour 1991).
+"""Causal graph -- PC-algorithm causal edge discovery.
 
-Adjacency matrix representation, no networkx. Pure business logic -- no I/O.
+Structure is learned by the faithful PC algorithm (Spirtes & Glymour 1991;
+Spirtes, Glymour & Scheines 2000) in ``causal_pc``: a G² conditional-
+independence test over binary entity-presence data drives skeleton learning
+with growing conditioning sets, followed by v-structure (collider)
+orientation. Remaining undirected edges are oriented from temporal
+precedence used as PC background knowledge (a standard tiered/temporal-prior
+extension; Spirtes et al. 2000 §6.6) — never overriding a v-structure.
+
+PC determines the *graph structure* (which edges exist and their direction).
+Each surviving edge is additionally annotated with a pointwise-mutual-
+information *effect size* purely for downstream ranking — PMI is not part of
+the structure-learning decision.
+
+Adjacency representation, no networkx. Pure business logic -- no I/O.
 """
 
 from __future__ import annotations
@@ -8,62 +21,41 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from mcp_server.core.causal_pc import orient_v_structures, pc_skeleton
 
-def compute_co_occurrence_matrix(
+
+def build_presence(
     memories: list[dict[str, Any]],
     entity_names: list[str],
-) -> dict[tuple[str, str], int]:
-    """Count co-occurrences of entity pairs across memories.
+) -> list[frozenset[str]]:
+    """Binary presence sample: one frozenset of present entities per memory.
 
-    Returns {(entity_a, entity_b): count}.
+    This is the observation matrix the PC G² test operates on — each memory
+    is an i.i.d. sample, each entity a binary variable.
     """
-    counts: dict[tuple[str, str], int] = {}
+    lowered = [(e, e.lower()) for e in entity_names]
+    samples: list[frozenset[str]] = []
     for mem in memories:
         content = (mem.get("content") or "").lower()
-        present = [e for e in entity_names if e.lower() in content]
-
-        for i in range(len(present)):
-            for j in range(i + 1, len(present)):
-                a, b = sorted([present[i], present[j]])
-                key = (a, b)
-                counts[key] = counts.get(key, 0) + 1
-
-    return counts
+        samples.append(frozenset(name for name, low in lowered if low in content))
+    return samples
 
 
-def compute_conditional_independence(
-    pair_count: int,
-    a_count: int,
-    b_count: int,
-    total: int,
-    conditioned_count: int = 0,
+def _pmi_effect_size(
+    pair_count: int, a_count: int, b_count: int, total: int
 ) -> float:
-    """Test conditional independence using pointwise mutual information.
+    """Pointwise mutual information log₂(p_ab / p_a·p_b) — edge effect size.
 
-    High (>0) = dependent, low (<=0) = independent or negative.
-    conditioned_count adjusts for a third variable explaining co-occurrence.
+    Used only to annotate the *strength* of an edge that PC has already
+    decided to keep; it plays no role in the structure-learning test.
     """
-    if total == 0 or a_count == 0 or b_count == 0:
+    if total == 0 or a_count == 0 or b_count == 0 or pair_count == 0:
         return 0.0
-
     p_ab = pair_count / total
-    p_a = a_count / total
-    p_b = b_count / total
-    expected = p_a * p_b
-
+    expected = (a_count / total) * (b_count / total)
     if expected == 0:
         return 0.0
-
-    # Pointwise mutual information
-    pmi = math.log2(p_ab / expected) if p_ab > 0 else -10.0
-
-    # Adjust for conditioning
-    if conditioned_count > 0:
-        # If conditioning explains the co-occurrence, reduce PMI
-        conditioning_ratio = conditioned_count / pair_count if pair_count > 0 else 0
-        pmi *= max(0, 1.0 - conditioning_ratio)
-
-    return round(pmi, 4)
+    return round(math.log2(p_ab / expected), 4)
 
 
 def compute_temporal_precedence(
@@ -91,153 +83,107 @@ def compute_temporal_precedence(
     return None
 
 
-def _build_skeleton(
-    co_occurrences: dict[tuple[str, str], int],
-    entity_counts: dict[str, int],
-    total_memories: int,
-    independence_threshold: float,
-    min_observations: int,
-) -> dict[tuple[str, str], float]:
-    """Build initial skeleton of dependent pairs via PMI filtering."""
-    skeleton: dict[tuple[str, str], float] = {}
-
-    for (a, b), count in co_occurrences.items():
-        if count < min_observations:
-            continue
-
-        pmi = compute_conditional_independence(
-            count, entity_counts.get(a, 0), entity_counts.get(b, 0), total_memories
-        )
-
-        if pmi > independence_threshold:
-            skeleton[(a, b)] = pmi
-
-    return skeleton
-
-
-def _find_conditionally_independent_edges(
-    skeleton: dict[tuple[str, str], float],
+def _entity_and_pair_counts(
+    presence: list[frozenset[str]],
     entity_names: list[str],
-    co_occurrences: dict[tuple[str, str], int],
-    entity_counts: dict[str, int],
-    total_memories: int,
-    independence_threshold: float,
-) -> set[tuple[str, str]]:
-    """Test each skeleton edge for conditional independence given a third entity."""
-    edges_to_remove: set[tuple[str, str]] = set()
-
-    for a, b in skeleton:
-        for c in entity_names:
-            if c == a or c == b:
-                continue
-
-            ac_count = co_occurrences.get(tuple(sorted([a, c])), 0)
-            bc_count = co_occurrences.get(tuple(sorted([b, c])), 0)
-
-            if ac_count == 0 or bc_count == 0:
-                continue
-
-            min_with_c = min(ac_count, bc_count)
-            ab_count = co_occurrences.get((a, b), 0)
-
-            conditioned_pmi = compute_conditional_independence(
-                ab_count,
-                entity_counts.get(a, 0),
-                entity_counts.get(b, 0),
-                total_memories,
-                conditioned_count=min_with_c,
-            )
-
-            if conditioned_pmi <= independence_threshold:
-                edges_to_remove.add((a, b))
-                break
-
-    return edges_to_remove
+) -> tuple[dict[str, int], dict[frozenset[str], int]]:
+    """Marginal mention counts and pairwise co-occurrence counts from presence."""
+    names = set(entity_names)
+    counts: dict[str, int] = dict.fromkeys(entity_names, 0)
+    pairs: dict[frozenset[str], int] = {}
+    for sample in presence:
+        present = [e for e in sample if e in names]
+        for e in present:
+            counts[e] += 1
+        for i in range(len(present)):
+            for j in range(i + 1, len(present)):
+                key = frozenset((present[i], present[j]))
+                pairs[key] = pairs.get(key, 0) + 1
+    return counts, pairs
 
 
-def _orient_edges(
-    skeleton: dict[tuple[str, str], float],
-    co_occurrences: dict[tuple[str, str], int],
+def _resolve_direction(
+    a: str,
+    b: str,
+    directed: set[tuple[str, str]],
     entity_first_seen: dict[str, str],
+) -> tuple[str, str, bool]:
+    """Pick (source, target, is_directed) for an undirected skeleton edge.
+
+    PC v-structure orientation wins; otherwise temporal precedence is applied
+    as background knowledge. A conflicting bidirected mark stays undirected.
+    """
+    fwd, rev = (a, b) in directed, (b, a) in directed
+    if fwd and not rev:
+        return a, b, True
+    if rev and not fwd:
+        return b, a, True
+    if not fwd and not rev:
+        precedence = compute_temporal_precedence(entity_first_seen, a, b)
+        if precedence == "a_before_b":
+            return a, b, True
+        if precedence == "b_before_a":
+            return b, a, True
+    return a, b, False
+
+
+def discover_causal_edges(
+    entity_names: list[str],
+    presence: list[frozenset[str]],
+    *,
+    entity_first_seen: dict[str, str] | None = None,
+    # PC test significance level (Spirtes et al. 2000 use α as the CI-test
+    # level; 0.05 is the conventional default) and the conditioning-set size
+    # cap (standard PC tractability bound, e.g. causal-learn's default).
+    alpha: float = 0.05,
+    max_cond_size: int = 3,
+    # Sparse-noise floor: drop edges with fewer than this many co-occurrences
+    # (engineering guard; PC's G² test already suppresses low-count pairs).
+    min_observations: int = 3,
 ) -> list[dict[str, Any]]:
-    """Orient skeleton edges using temporal precedence."""
+    """Discover causal edges with the PC algorithm (see module docstring).
+
+    Algorithm (Spirtes & Glymour 1991):
+      1. PC skeleton — G² conditional-independence tests with growing
+         conditioning sets remove edges between independent entities.
+      2. v-structure orientation — unshielded colliders X→Z←Y.
+      3. Temporal precedence orients any edge left undirected (background
+         knowledge), never overriding a v-structure.
+
+    Returns list of edges: {source, target, strength, is_directed, evidence},
+    where ``strength`` is a PMI effect size (annotation only) and ``evidence``
+    is the raw co-occurrence count.
+    """
+    if not entity_names or not presence:
+        return []
+
+    counts, pairs = _entity_and_pair_counts(presence, entity_names)
+    total = len(presence)
+    skeleton, sepsets = pc_skeleton(entity_names, presence, alpha, max_cond_size)
+    directed = orient_v_structures(entity_names, skeleton, sepsets)
+    first_seen = entity_first_seen or {}
+
     causal_edges: list[dict[str, Any]] = []
-
-    for (a, b), strength in skeleton.items():
-        direction = compute_temporal_precedence(entity_first_seen, a, b)
-
-        if direction == "a_before_b":
-            source, target = a, b
-        elif direction == "b_before_a":
-            source, target = b, a
-        else:
-            source, target = a, b
-            strength *= 0.5
-
+    for edge in skeleton:
+        a, b = sorted(edge)
+        evidence = pairs.get(edge, 0)
+        if evidence < min_observations:
+            continue
+        source, target, is_directed = _resolve_direction(a, b, directed, first_seen)
         causal_edges.append(
             {
                 "source": source,
                 "target": target,
-                "strength": round(strength, 4),
-                "is_directed": direction is not None,
-                "evidence": co_occurrences.get((a, b), 0),
+                "strength": _pmi_effect_size(
+                    evidence, counts.get(a, 0), counts.get(b, 0), total
+                ),
+                "is_directed": is_directed,
+                "evidence": evidence,
             }
         )
 
     causal_edges.sort(key=lambda e: e["strength"], reverse=True)
     return causal_edges
-
-
-def _prune_skeleton(
-    skeleton: dict[tuple[str, str], float],
-    edges_to_remove: set[tuple[str, str]],
-) -> None:
-    """Remove conditionally independent edges from the skeleton in place."""
-    for edge in edges_to_remove:
-        skeleton.pop(edge, None)
-
-
-def discover_causal_edges(
-    entity_names: list[str],
-    co_occurrences: dict[tuple[str, str], int],
-    entity_counts: dict[str, int],
-    total_memories: int,
-    entity_first_seen: dict[str, str] | None = None,
-    independence_threshold: float = 0.5,
-    min_observations: int = 3,
-) -> list[dict[str, Any]]:
-    """Simplified PC algorithm for causal edge discovery.
-
-    Algorithm:
-      1. Start with all edges where PMI > threshold (dependent pairs)
-      2. For each edge, test conditional independence given each other entity
-      3. Remove edges that become independent when conditioned
-      4. Orient remaining edges using temporal precedence
-
-    Returns list of causal edges: {source, target, strength, direction, evidence}.
-    """
-    if not entity_names or total_memories == 0:
-        return []
-
-    skeleton = _build_skeleton(
-        co_occurrences,
-        entity_counts,
-        total_memories,
-        independence_threshold,
-        min_observations,
-    )
-    _prune_skeleton(
-        skeleton,
-        _find_conditionally_independent_edges(
-            skeleton,
-            entity_names,
-            co_occurrences,
-            entity_counts,
-            total_memories,
-            independence_threshold,
-        ),
-    )
-    return _orient_edges(skeleton, co_occurrences, entity_first_seen or {})
 
 
 def _build_directed_adjacency(edges: list[dict[str, Any]]) -> dict[str, list[str]]:

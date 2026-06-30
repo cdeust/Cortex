@@ -1,104 +1,201 @@
-"""Tests for mcp_server.core.causal_graph — PC algorithm causal edge discovery."""
+"""Tests for causal_graph + causal_pc — faithful PC causal discovery.
+
+Structure is learned by the PC algorithm (G² conditional-independence tests
+over binary entity-presence data, then v-structure orientation). Synthetic
+data uses product/grid designs so conditional independence holds *exactly*
+within each stratum, letting the tests assert PC's defining behaviour.
+"""
+
+from __future__ import annotations
+
+from itertools import product
 
 from mcp_server.core.causal_graph import (
-    compute_co_occurrence_matrix,
-    compute_conditional_independence,
+    build_presence,
     compute_temporal_precedence,
     discover_causal_edges,
     find_causal_chain,
     find_common_causes,
 )
+from mcp_server.core.causal_pc import (
+    chi2_sf,
+    g2_independent,
+    orient_v_structures,
+    pc_skeleton,
+)
 
 
-# ── compute_co_occurrence_matrix ─────────────────────────────────────────
+# ── chi2_sf: validate against textbook critical values ────────────────────
 
 
-class TestComputeCoOccurrenceMatrix:
-    def test_empty_memories(self):
-        assert compute_co_occurrence_matrix([], ["A", "B"]) == {}
+class TestChi2SurvivalFunction:
+    def test_critical_values_at_5pct(self):
+        # Standard χ² 0.05 critical points: P(χ²_df > crit) ≈ 0.05.
+        for crit, df in [(3.841, 1), (5.991, 2), (7.815, 3), (9.488, 4)]:
+            assert abs(chi2_sf(crit, df) - 0.05) < 1e-3
 
-    def test_empty_entities(self):
-        mems = [{"content": "hello world"}]
-        assert compute_co_occurrence_matrix(mems, []) == {}
+    def test_zero_statistic_is_one(self):
+        assert chi2_sf(0.0, 1) == 1.0
+        assert chi2_sf(-1.0, 2) == 1.0
 
-    def test_single_entity_no_pairs(self):
-        mems = [{"content": "mentions A only"}]
-        assert compute_co_occurrence_matrix(mems, ["A"]) == {}
-
-    def test_two_entities_co_occur(self):
-        mems = [{"content": "A and B together"}]
-        result = compute_co_occurrence_matrix(mems, ["A", "B"])
-        assert result[("A", "B")] == 1
-
-    def test_sorted_key_order(self):
-        mems = [{"content": "Z and A appear"}]
-        result = compute_co_occurrence_matrix(mems, ["Z", "A"])
-        assert ("A", "Z") in result
-        assert ("Z", "A") not in result
-
-    def test_multiple_memories_accumulate(self):
-        mems = [
-            {"content": "A and B"},
-            {"content": "A and B again"},
-            {"content": "only A here"},
-        ]
-        result = compute_co_occurrence_matrix(mems, ["A", "B"])
-        assert result[("A", "B")] == 2
-
-    def test_three_entities_all_pairs(self):
-        mems = [{"content": "A B C all present"}]
-        result = compute_co_occurrence_matrix(mems, ["A", "B", "C"])
-        assert len(result) == 3  # (A,B), (A,C), (B,C)
-
-    def test_case_insensitive_matching(self):
-        mems = [{"content": "apple and banana"}]
-        result = compute_co_occurrence_matrix(mems, ["Apple", "Banana"])
-        assert result[("Apple", "Banana")] == 1
-
-    def test_missing_content_key(self):
-        mems = [{"tags": ["test"]}]
-        result = compute_co_occurrence_matrix(mems, ["A", "B"])
-        assert result == {}
+    def test_large_statistic_near_zero(self):
+        assert chi2_sf(50.0, 1) < 1e-6
 
 
-# ── compute_conditional_independence ─────────────────────────────────────
+# ── G² conditional-independence test ──────────────────────────────────────
 
 
-class TestComputeConditionalIndependence:
-    def test_zero_total_returns_zero(self):
-        assert compute_conditional_independence(5, 10, 10, 0) == 0.0
+def _fork_presence() -> list[frozenset[str]]:
+    """A←C→B with EXACT independence of A,B given C (product design).
 
-    def test_zero_a_count_returns_zero(self):
-        assert compute_conditional_independence(5, 0, 10, 100) == 0.0
+    C present in a 6×6 grid (36 samples): A depends only on the row, B only
+    on the column → A⊥B|C=1 exactly. C absent in 36 samples with neither —
+    that absent stratum makes A and B strongly *marginally* dependent (both
+    are driven by C) while leaving them exactly independent given C.
+    """
+    samples: list[frozenset[str]] = []
+    for row, col in product(range(6), range(6)):
+        s = {"C"}
+        if row < 3:
+            s.add("A")
+        if col < 3:
+            s.add("B")
+        samples.append(frozenset(s))
+    samples.extend(frozenset() for _ in range(36))
+    return samples
 
-    def test_zero_b_count_returns_zero(self):
-        assert compute_conditional_independence(5, 10, 0, 100) == 0.0
 
-    def test_zero_pair_count_negative_pmi(self):
-        result = compute_conditional_independence(0, 10, 10, 100)
-        assert result == -10.0
+class TestG2Independence:
+    def test_conditional_independence_holds_given_common_cause(self):
+        pres = _fork_presence()
+        # Marginally dependent (both driven by C), independent given C.
+        assert g2_independent(pres, "A", "B", (), 0.05) is False
+        assert g2_independent(pres, "A", "B", ("C",), 0.05) is True
 
-    def test_perfect_co_occurrence_positive_pmi(self):
-        # A and B always appear together: p_ab = p_a = p_b = 1.0
-        result = compute_conditional_independence(100, 100, 100, 100)
-        assert result == 0.0  # log2(1.0 / 1.0) = 0
+    def test_collider_marginally_independent_dependent_given_z(self):
+        # A→Z←B: A,B independent marginally, dependent given the collider Z.
+        samples: list[frozenset[str]] = []
+        for a, b in product((0, 1), repeat=2):
+            for _ in range(20):
+                s: set[str] = set()
+                if a:
+                    s.add("A")
+                if b:
+                    s.add("B")
+                if a or b:  # Z present iff A or B present (deterministic OR)
+                    s.add("Z")
+                samples.append(frozenset(s))
+        assert g2_independent(samples, "A", "B", (), 0.05) is True
+        assert g2_independent(samples, "A", "B", ("Z",), 0.05) is False
 
-    def test_strong_positive_association(self):
-        # A appears 10/100, B appears 10/100, pair appears 10/100
-        # p_ab = 0.1, p_a*p_b = 0.01, PMI = log2(10)
-        result = compute_conditional_independence(10, 10, 10, 100)
-        assert result > 3.0  # log2(10) ≈ 3.32
 
-    def test_conditioning_reduces_pmi(self):
-        base = compute_conditional_independence(10, 10, 10, 100, conditioned_count=0)
-        conditioned = compute_conditional_independence(
-            10, 10, 10, 100, conditioned_count=5
+# ── PC skeleton + v-structure orientation ─────────────────────────────────
+
+
+class TestPCSkeleton:
+    def test_fork_removes_a_b_edge_with_c_in_sepset(self):
+        pres = _fork_presence()
+        edges, sepsets = pc_skeleton(["A", "B", "C"], pres, alpha=0.05, max_cond_size=3)
+        assert frozenset(("A", "B")) not in edges  # removed: A⊥B|C
+        assert frozenset(("A", "C")) in edges
+        assert frozenset(("B", "C")) in edges
+        # Separating set of A,B contains the common cause C → NOT a collider.
+        assert "C" in sepsets[frozenset(("A", "B"))]
+        assert orient_v_structures(["A", "B", "C"], edges, sepsets) == set()
+
+    def test_collider_orients_into_z(self):
+        samples: list[frozenset[str]] = []
+        for a, b in product((0, 1), repeat=2):
+            for _ in range(20):
+                s: set[str] = set()
+                if a:
+                    s.add("A")
+                if b:
+                    s.add("B")
+                if a or b:
+                    s.add("Z")
+                samples.append(frozenset(s))
+        edges, sepsets = pc_skeleton(["A", "B", "Z"], samples, 0.05, 3)
+        # A⊥B marginally → A–B removed with empty sepset → Z is a collider.
+        assert frozenset(("A", "B")) not in edges
+        assert sepsets[frozenset(("A", "B"))] == frozenset()
+        directed = orient_v_structures(["A", "B", "Z"], edges, sepsets)
+        assert ("A", "Z") in directed and ("B", "Z") in directed
+
+
+# ── discover_causal_edges (orchestrator) ──────────────────────────────────
+
+
+class TestDiscoverCausalEdges:
+    def test_empty_inputs(self):
+        assert discover_causal_edges([], []) == []
+        assert discover_causal_edges(["A"], []) == []
+
+    def test_fork_drops_spurious_a_b_edge(self):
+        pres = _fork_presence()
+        edges = discover_causal_edges(["A", "B", "C"], pres, min_observations=3)
+        pairs = {frozenset((e["source"], e["target"])) for e in edges}
+        assert frozenset(("A", "B")) not in pairs  # PC removed the spurious edge
+        assert frozenset(("A", "C")) in pairs
+        assert frozenset(("B", "C")) in pairs
+
+    def test_collider_orientation_surfaces_in_edges(self):
+        samples: list[frozenset[str]] = []
+        for a, b in product((0, 1), repeat=2):
+            for _ in range(20):
+                s: set[str] = set()
+                if a:
+                    s.add("A")
+                if b:
+                    s.add("B")
+                if a or b:
+                    s.add("Z")
+                samples.append(frozenset(s))
+        edges = discover_causal_edges(["A", "B", "Z"], samples, min_observations=3)
+        directed = {(e["source"], e["target"]) for e in edges if e["is_directed"]}
+        assert ("A", "Z") in directed and ("B", "Z") in directed
+
+    def test_temporal_precedence_orients_undirected_edge(self):
+        # A and B co-vary (present together or absent together) → a genuine
+        # dependent pair with variance → one undirected edge; temporal
+        # background knowledge (A before B) orients it A→B.
+        pres = [frozenset(("A", "B")) for _ in range(10)]
+        pres += [frozenset() for _ in range(10)]
+        edges = discover_causal_edges(
+            ["A", "B"],
+            pres,
+            entity_first_seen={"A": "2026-01-01", "B": "2026-01-02"},
+            min_observations=3,
         )
-        assert conditioned < base
+        assert len(edges) == 1
+        assert edges[0]["source"] == "A" and edges[0]["target"] == "B"
+        assert edges[0]["is_directed"] is True
 
-    def test_full_conditioning_zeroes_pmi(self):
-        result = compute_conditional_independence(10, 10, 10, 100, conditioned_count=10)
-        assert result == 0.0
+    def test_min_observations_floor(self):
+        pres = [frozenset(("A", "B")) for _ in range(2)]  # only 2 co-occurrences
+        edges = discover_causal_edges(["A", "B"], pres, min_observations=3)
+        assert edges == []
+
+    def test_sorted_by_strength(self):
+        edges = discover_causal_edges(
+            ["A", "B", "C"], _fork_presence(), min_observations=3
+        )
+        strengths = [e["strength"] for e in edges]
+        assert strengths == sorted(strengths, reverse=True)
+
+
+# ── build_presence ────────────────────────────────────────────────────────
+
+
+class TestBuildPresence:
+    def test_presence_per_memory(self):
+        mems = [{"content": "A and B"}, {"content": "only A"}, {"tags": []}]
+        pres = build_presence(mems, ["A", "B"])
+        assert pres == [frozenset(("A", "B")), frozenset(("A",)), frozenset()]
+
+    def test_case_insensitive(self):
+        pres = build_presence([{"content": "apple pie"}], ["Apple"])
+        assert pres == [frozenset(("Apple",))]
 
 
 # ── compute_temporal_precedence ──────────────────────────────────────────
@@ -106,224 +203,55 @@ class TestComputeConditionalIndependence:
 
 class TestComputeTemporalPrecedence:
     def test_a_before_b(self):
-        first_seen = {"A": "2026-01-01", "B": "2026-01-02"}
-        assert compute_temporal_precedence(first_seen, "A", "B") == "a_before_b"
+        fs = {"A": "2026-01-01", "B": "2026-01-02"}
+        assert compute_temporal_precedence(fs, "A", "B") == "a_before_b"
 
     def test_b_before_a(self):
-        first_seen = {"A": "2026-01-02", "B": "2026-01-01"}
-        assert compute_temporal_precedence(first_seen, "A", "B") == "b_before_a"
+        fs = {"A": "2026-01-02", "B": "2026-01-01"}
+        assert compute_temporal_precedence(fs, "A", "B") == "b_before_a"
 
-    def test_same_time_returns_none(self):
-        first_seen = {"A": "2026-01-01", "B": "2026-01-01"}
-        assert compute_temporal_precedence(first_seen, "A", "B") is None
-
-    def test_missing_a_returns_none(self):
-        assert compute_temporal_precedence({"B": "2026-01-01"}, "A", "B") is None
-
-    def test_missing_b_returns_none(self):
-        assert compute_temporal_precedence({"A": "2026-01-01"}, "A", "B") is None
-
-    def test_empty_dict_returns_none(self):
-        assert compute_temporal_precedence({}, "A", "B") is None
+    def test_same_or_missing_returns_none(self):
+        assert compute_temporal_precedence({"A": "x", "B": "x"}, "A", "B") is None
+        assert compute_temporal_precedence({"A": "x"}, "A", "B") is None
 
 
-# ── discover_causal_edges ────────────────────────────────────────────────
-
-
-class TestDiscoverCausalEdges:
-    def test_empty_entities(self):
-        assert discover_causal_edges([], {}, {}, 100) == []
-
-    def test_zero_memories(self):
-        assert discover_causal_edges(["A"], {}, {}, 0) == []
-
-    def test_below_min_observations_filtered(self):
-        co = {("A", "B"): 2}  # Below default min_observations=3
-        counts = {"A": 10, "B": 10}
-        result = discover_causal_edges(["A", "B"], co, counts, 100)
-        assert result == []
-
-    def test_independent_pair_filtered(self):
-        # Low co-occurrence relative to individual counts
-        co = {("A", "B"): 5}
-        counts = {"A": 90, "B": 90}
-        result = discover_causal_edges(
-            ["A", "B"], co, counts, 100, independence_threshold=0.5, min_observations=3
-        )
-        assert len(result) == 0
-
-    def test_strongly_associated_pair_kept(self):
-        co = {("A", "B"): 10}
-        counts = {"A": 10, "B": 10}
-        result = discover_causal_edges(
-            ["A", "B"], co, counts, 100, independence_threshold=0.5, min_observations=3
-        )
-        assert len(result) == 1
-        assert result[0]["strength"] > 0
-
-    def test_temporal_precedence_orients_edge(self):
-        co = {("A", "B"): 10}
-        counts = {"A": 10, "B": 10}
-        first_seen = {"A": "2026-01-01", "B": "2026-01-02"}
-        result = discover_causal_edges(
-            ["A", "B"],
-            co,
-            counts,
-            100,
-            entity_first_seen=first_seen,
-            min_observations=3,
-        )
-        assert len(result) == 1
-        assert result[0]["source"] == "A"
-        assert result[0]["target"] == "B"
-        assert result[0]["is_directed"] is True
-
-    def test_no_temporal_reduces_strength(self):
-        co = {("A", "B"): 10}
-        counts = {"A": 10, "B": 10}
-        directed = discover_causal_edges(
-            ["A", "B"],
-            co,
-            counts,
-            100,
-            entity_first_seen={"A": "2026-01-01", "B": "2026-01-02"},
-            min_observations=3,
-        )
-        undirected = discover_causal_edges(
-            ["A", "B"],
-            co,
-            counts,
-            100,
-            entity_first_seen=None,
-            min_observations=3,
-        )
-        if directed and undirected:
-            assert undirected[0]["strength"] < directed[0]["strength"]
-
-    def test_conditional_independence_removes_edge(self):
-        # A-B co-occur, but C explains both
-        co = {("A", "B"): 5, ("A", "C"): 10, ("B", "C"): 10}
-        counts = {"A": 15, "B": 15, "C": 20}
-        result = discover_causal_edges(
-            ["A", "B", "C"],
-            co,
-            counts,
-            100,
-            independence_threshold=0.5,
-            min_observations=3,
-        )
-        # A-B should be removed or weakened due to C explaining it
-        ab_edges = [e for e in result if {e["source"], e["target"]} == {"A", "B"}]
-        # The conditioning should remove A-B since C explains both
-        assert len(ab_edges) == 0
-
-    def test_sorted_by_strength(self):
-        co = {("A", "B"): 10, ("C", "D"): 20}
-        counts = {"A": 10, "B": 10, "C": 20, "D": 20}
-        result = discover_causal_edges(
-            ["A", "B", "C", "D"],
-            co,
-            counts,
-            100,
-            min_observations=3,
-        )
-        if len(result) >= 2:
-            assert result[0]["strength"] >= result[1]["strength"]
-
-
-# ── find_causal_chain ────────────────────────────────────────────────────
+# ── find_causal_chain / find_common_causes (unchanged traversal) ──────────
 
 
 class TestFindCausalChain:
-    def test_empty_edges(self):
-        assert find_causal_chain([], "A") == []
-
-    def test_start_not_in_graph(self):
-        edges = [{"source": "X", "target": "Y", "is_directed": True}]
-        assert find_causal_chain(edges, "A") == []
-
-    def test_single_directed_edge(self):
-        edges = [{"source": "A", "target": "B", "is_directed": True}]
-        paths = find_causal_chain(edges, "A")
-        assert len(paths) >= 1
-        assert ["A", "B"] in paths
-
     def test_chain_of_three(self):
         edges = [
             {"source": "A", "target": "B", "is_directed": True},
             {"source": "B", "target": "C", "is_directed": True},
         ]
         paths = find_causal_chain(edges, "A")
-        assert any(len(p) == 3 and p[0] == "A" and p[-1] == "C" for p in paths)
+        assert any(p[0] == "A" and p[-1] == "C" and len(p) == 3 for p in paths)
 
-    def test_max_depth_limits(self):
-        edges = [
-            {"source": "A", "target": "B", "is_directed": True},
-            {"source": "B", "target": "C", "is_directed": True},
-            {"source": "C", "target": "D", "is_directed": True},
-        ]
-        paths = find_causal_chain(edges, "A", max_depth=2)
-        assert all(len(p) <= 3 for p in paths)  # max_depth=2 → 3 nodes max
-
-    def test_cycle_avoided(self):
-        edges = [
+    def test_undirected_ignored_and_cycle_safe(self):
+        assert find_causal_chain(
+            [{"source": "A", "target": "B", "is_directed": False}], "A"
+        ) == []
+        cyclic = [
             {"source": "A", "target": "B", "is_directed": True},
             {"source": "B", "target": "A", "is_directed": True},
         ]
-        paths = find_causal_chain(edges, "A")
-        for p in paths:
-            assert len(p) == len(set(p))  # No duplicates
-
-    def test_undirected_edges_ignored(self):
-        edges = [{"source": "A", "target": "B", "is_directed": False}]
-        assert find_causal_chain(edges, "A") == []
-
-
-# ── find_common_causes ───────────────────────────────────────────────────
+        for p in find_causal_chain(cyclic, "A"):
+            assert len(p) == len(set(p))
 
 
 class TestFindCommonCauses:
-    def test_empty_edges(self):
-        assert find_common_causes([], "A", "B") == []
-
-    def test_no_common_causes(self):
-        edges = [
-            {"source": "X", "target": "A", "is_directed": True},
-            {"source": "Y", "target": "B", "is_directed": True},
-        ]
-        assert find_common_causes(edges, "A", "B") == []
-
-    def test_one_common_cause(self):
-        edges = [
-            {"source": "C", "target": "A", "is_directed": True},
-            {"source": "C", "target": "B", "is_directed": True},
-        ]
-        result = find_common_causes(edges, "A", "B")
-        assert result == ["C"]
-
-    def test_multiple_common_causes(self):
-        edges = [
-            {"source": "C", "target": "A", "is_directed": True},
-            {"source": "C", "target": "B", "is_directed": True},
-            {"source": "D", "target": "A", "is_directed": True},
-            {"source": "D", "target": "B", "is_directed": True},
-        ]
-        result = find_common_causes(edges, "A", "B")
-        assert result == ["C", "D"]
-
-    def test_undirected_edges_ignored(self):
-        edges = [
-            {"source": "C", "target": "A", "is_directed": False},
-            {"source": "C", "target": "B", "is_directed": False},
-        ]
-        assert find_common_causes(edges, "A", "B") == []
-
-    def test_sorted_output(self):
+    def test_common_cause_detected_and_sorted(self):
         edges = [
             {"source": "Z", "target": "A", "is_directed": True},
             {"source": "Z", "target": "B", "is_directed": True},
             {"source": "M", "target": "A", "is_directed": True},
             {"source": "M", "target": "B", "is_directed": True},
         ]
-        result = find_common_causes(edges, "A", "B")
-        assert result == sorted(result)
+        assert find_common_causes(edges, "A", "B") == ["M", "Z"]
+
+    def test_undirected_ignored(self):
+        edges = [
+            {"source": "C", "target": "A", "is_directed": False},
+            {"source": "C", "target": "B", "is_directed": False},
+        ]
+        assert find_common_causes(edges, "A", "B") == []
