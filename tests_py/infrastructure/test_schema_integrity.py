@@ -138,10 +138,11 @@ def _digest(s: str) -> str:
 def _live_conn():
     import psycopg
 
-    # Ensure schema is fully initialised, including effective_heat().
+    # Ensure schema is fully initialised, including effective_heat(). Close
+    # the bootstrap store immediately so its psycopg connection is not leaked.
     from mcp_server.infrastructure.pg_store import PgMemoryStore
 
-    PgMemoryStore(database_url=_TEST_DB_URL)
+    PgMemoryStore(database_url=_TEST_DB_URL).close()
 
     conn = psycopg.connect(_TEST_DB_URL, autocommit=True)
     yield conn

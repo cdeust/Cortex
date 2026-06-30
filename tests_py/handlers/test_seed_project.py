@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from mcp_server.handlers.seed_project import handler
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import get_shared_store
 
 
 @pytest.fixture(autouse=True)
@@ -65,7 +65,7 @@ def test_seed_repo_a_then_repo_b_preserves_repo_a(tmp_path: Path) -> None:
     repo_a = _make_repo(tmp_path, "repo-a")
     repo_b = _make_repo(tmp_path, "repo-b")
 
-    store = MemoryStore()
+    store = get_shared_store()
 
     # Seed repo-a
     res_a = asyncio.run(handler({"directory": str(repo_a), "domain": "repo-a"}))
@@ -91,7 +91,7 @@ def test_reseeding_same_repo_purges_only_that_repo(tmp_path: Path) -> None:
     repo_a = _make_repo(tmp_path, "repo-a")
     repo_b = _make_repo(tmp_path, "repo-b")
 
-    store = MemoryStore()
+    store = get_shared_store()
 
     asyncio.run(handler({"directory": str(repo_a), "domain": "repo-a"}))
     asyncio.run(handler({"directory": str(repo_b), "domain": "repo-b"}))

@@ -115,10 +115,10 @@ class TestRememberHandler:
         mem_id = result["memory_id"]
 
         from mcp_server.infrastructure.memory_config import get_memory_settings
-        from mcp_server.infrastructure.memory_store import MemoryStore
+        from mcp_server.infrastructure.memory_store import get_shared_store
 
         s = get_memory_settings()
-        store = MemoryStore(s.DB_PATH, s.EMBEDDING_DIM)
+        store = get_shared_store(s.DB_PATH, s.EMBEDDING_DIM)
         mem = store.get_memory(mem_id)
         assert mem is not None
         assert mem.get("is_global") is True or mem.get("is_global") == 1

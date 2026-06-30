@@ -52,15 +52,18 @@ class TestToolNameGating:
 
 class TestCooldown:
     def test_cooldown_skips_second_call(self):
-        # First call primes the cooldown.
-        with patch("asyncio.run", return_value=["sym_a"]):
-            with patch.object(hook, "_bump_heat_for_symbols", return_value=3):
-                hook.process_event(
-                    {
-                        "tool_name": "Edit",
-                        "tool_input": {"file_path": "/a/b.py"},
-                    }
-                )
+        # First call primes the cooldown. Patch the async probe to a plain
+        # MagicMock so the call site builds no un-awaited coroutine (the
+        # patched asyncio.run supplies the result).
+        with patch.object(hook, "_pipeline_detect_changes", new=MagicMock()):
+            with patch("asyncio.run", return_value=["sym_a"]):
+                with patch.object(hook, "_bump_heat_for_symbols", return_value=3):
+                    hook.process_event(
+                        {
+                            "tool_name": "Edit",
+                            "tool_input": {"file_path": "/a/b.py"},
+                        }
+                    )
 
         # Second call within cooldown should NOT invoke pipeline.
         with patch("asyncio.run") as mock_run:
@@ -99,25 +102,27 @@ class TestHeatBump:
 
 class TestProcessEventIntegration:
     def test_happy_path_calls_bump(self):
-        with patch("asyncio.run", return_value=["my_symbol"]):
-            with patch.object(
-                hook, "_bump_heat_for_symbols", return_value=4
-            ) as mock_bump:
-                hook.process_event(
-                    {
-                        "tool_name": "Write",
-                        "tool_input": {"file_path": "/tmp/x.rs"},
-                    }
-                )
+        with patch.object(hook, "_pipeline_detect_changes", new=MagicMock()):
+            with patch("asyncio.run", return_value=["my_symbol"]):
+                with patch.object(
+                    hook, "_bump_heat_for_symbols", return_value=4
+                ) as mock_bump:
+                    hook.process_event(
+                        {
+                            "tool_name": "Write",
+                            "tool_input": {"file_path": "/tmp/x.rs"},
+                        }
+                    )
         mock_bump.assert_called_once_with(["my_symbol"])
 
     def test_empty_symbols_skips_bump(self):
-        with patch("asyncio.run", return_value=[]):
-            with patch.object(hook, "_bump_heat_for_symbols") as mock_bump:
-                hook.process_event(
-                    {
-                        "tool_name": "Edit",
-                        "tool_input": {"file_path": "/tmp/y.py"},
-                    }
-                )
+        with patch.object(hook, "_pipeline_detect_changes", new=MagicMock()):
+            with patch("asyncio.run", return_value=[]):
+                with patch.object(hook, "_bump_heat_for_symbols") as mock_bump:
+                    hook.process_event(
+                        {
+                            "tool_name": "Edit",
+                            "tool_input": {"file_path": "/tmp/y.py"},
+                        }
+                    )
         mock_bump.assert_not_called()

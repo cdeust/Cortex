@@ -1286,6 +1286,31 @@ def _real_child_client(script: str) -> MCPClient:
     return client
 
 
+async def _close_and_reap(client: MCPClient) -> None:
+    """Close the client and fully reap its real child process.
+
+    ``MCPClient.close`` is synchronous: it sends SIGTERM but cannot await the
+    child's exit, so the asyncio subprocess transport's pipes stay open until
+    GC — emitting ResourceWarnings when the per-test event loop is torn down.
+    Awaiting ``proc.wait()`` and closing the transport here reaps the child
+    deterministically within the test's own loop.
+    """
+    proc = client._proc
+    client.close()
+    if proc is None:
+        return
+    try:
+        await proc.wait()
+    except Exception:
+        pass
+    try:
+        transport = getattr(proc, "_transport", None)
+        if transport is not None:
+            transport.close()
+    except Exception:
+        pass
+
+
 class TestStdioDeadlockRegression:
     """Reproduces the 2026-06-11 ingest stdio deadlock at the mechanism level.
 
@@ -1307,7 +1332,7 @@ class TestStdioDeadlockRegression:
                 assert isinstance(result, str)
                 assert len(result) >= 256 * 1024
             finally:
-                client.close()
+                await _close_and_reap(client)
 
         _run(_test())
 
@@ -1324,7 +1349,7 @@ class TestStdioDeadlockRegression:
                     await client.call("hang", {})
                 assert "timed out" in str(exc.value)
             finally:
-                client.close()
+                await _close_and_reap(client)
 
         _run(_test())
 

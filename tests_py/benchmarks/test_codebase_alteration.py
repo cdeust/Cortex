@@ -21,7 +21,7 @@ import pytest
 
 from mcp_server.handlers.codebase_analyze import handler as analyze_handler
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 
 DOMAIN = "codebase-alteration-bench"
 
@@ -167,8 +167,10 @@ ALTERED_FILES: dict[str, str] = {
 
 
 def _get_store() -> MemoryStore:
+    # Use the process-wide cached store (closed by conftest's
+    # reset_shared_store teardown) so the psycopg connection is not leaked.
     s = get_memory_settings()
-    return MemoryStore(s.DB_PATH, s.EMBEDDING_DIM)
+    return get_shared_store(s.DB_PATH, s.EMBEDDING_DIM)
 
 
 @pytest.fixture(autouse=True)

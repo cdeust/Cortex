@@ -215,7 +215,14 @@ class EmbeddingEngine:
                 else:
                     os.environ["HF_HUB_OFFLINE"] = had_offline
 
-            actual_dim = self._model.get_sentence_embedding_dimension()
+            # sentence-transformers 5.x renamed get_sentence_embedding_dimension
+            # → get_embedding_dimension. Prefer the new name; fall back for <5.
+            get_dim = getattr(
+                self._model,
+                "get_embedding_dimension",
+                self._model.get_sentence_embedding_dimension,
+            )
+            actual_dim = get_dim()
             if actual_dim != self._dim:
                 self._dim = actual_dim
             logger.info(

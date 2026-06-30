@@ -9,7 +9,7 @@ for callers that intentionally want a global purge.
 
 from __future__ import annotations
 
-from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_store import get_shared_store
 
 
 def _insert(store, *, content: str, tag: str, domain: str) -> int:
@@ -26,7 +26,7 @@ def _insert(store, *, content: str, tag: str, domain: str) -> int:
 
 def test_delete_by_tag_with_domain_scopes_to_that_domain() -> None:
     """domain=X removes only memories with tag AND domain=X."""
-    store = MemoryStore()
+    store = get_shared_store()
 
     a1 = _insert(store, content="repo-a memory 1", tag="seeded", domain="repo-a")
     a2 = _insert(store, content="repo-a memory 2", tag="seeded", domain="repo-a")
@@ -52,7 +52,7 @@ def test_delete_by_tag_with_domain_scopes_to_that_domain() -> None:
 
 def test_delete_by_tag_without_domain_purges_globally() -> None:
     """domain=None preserves legacy global-purge behavior."""
-    store = MemoryStore()
+    store = get_shared_store()
 
     _insert(store, content="repo-a memory", tag="seeded", domain="repo-a")
     _insert(store, content="repo-b memory", tag="seeded", domain="repo-b")
@@ -68,7 +68,7 @@ def test_delete_by_tag_without_domain_purges_globally() -> None:
 
 def test_delete_by_tag_with_domain_does_not_touch_other_tags() -> None:
     """Scoped delete must not remove rows that lack the tag, even in-domain."""
-    store = MemoryStore()
+    store = get_shared_store()
 
     _insert(store, content="seeded one", tag="seeded", domain="repo-a")
     _insert(store, content="manual one", tag="manual", domain="repo-a")
@@ -84,7 +84,7 @@ def test_delete_by_tag_with_domain_does_not_touch_other_tags() -> None:
 
 def test_delete_by_tag_with_unknown_domain_is_noop() -> None:
     """Domain that has no rows returns 0 and removes nothing."""
-    store = MemoryStore()
+    store = get_shared_store()
 
     _insert(store, content="real memory", tag="seeded", domain="repo-a")
 
