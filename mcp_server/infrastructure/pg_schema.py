@@ -605,6 +605,96 @@ CREATE INDEX IF NOT EXISTS idx_workflow_graph_layout_xy
 #   - Stage floors (Bahrick 1984 permastore, Benna & Fusi 2016)
 #   - p_factor (global decay rate per hour) = 0.95 default
 
+EFFECTIVE_STAGE_FN = """
+-- effective_stage — LAZY read-time derivation of the consolidation stage.
+--
+-- Root cause (memory 4202985): A3 made HEAT lazy (decayed from stage_hours
+-- on the read path) but left STAGE eager — advanced only by the
+-- consolidation handler (handlers/consolidation/cascade.py), never on
+-- recall/read. Benchmark and import runs trigger no consolidation pass, so
+-- a row stays frozen at its insert stage 'labile' (α=2.0, floor=0.0) while
+-- its heat decays under the labile law → collapses to ~0. This function
+-- re-derives the stage lazily from elapsed dwell + the row's stored signal
+-- columns so α and the floor track the trace's true maturity.
+--
+-- Mirrors cascade_advancement.compute_advancement_readiness applied
+-- cumulatively (advance as far as time + signals permit, one shot),
+-- forward-chain only (labile→early_ltp→late_ltp→consolidated), monotonic
+-- (never demote below the stored stage). The DA gate of the LABILE→EARLY_LTP
+-- transition is encoding-time and unavailable on the read path, so only the
+-- importance gate is used (dopamine treated as absent).
+--
+-- stage_hours is treated as a dwell BUDGET consumed stage-by-stage: leaving
+-- a stage requires budget ≥ that stage's effective min_dwell, and consumes it.
+--
+-- min_dwell hours: labile=0, early_ltp=1, late_ltp=6, consolidated=24.
+--   source: cascade_stages._STAGE_PROPERTIES (Kandel 2001)
+-- schema acceleration on min_dwell (cascade_advancement._effective_min_dwell):
+--   systems-consolidation stages (late_ltp, consolidated): × 15^(-schema)
+--     (Tse 2007 ~10-15× acceleration; 15.0 base is an engineering choice)
+--   synaptic-tag stages (labile, early_ltp): × (1 - schema·0.2)
+-- signal gates (cascade_advancement._check_*_advancement):
+--   labile→early_ltp:     importance > 0.3            (DA path disabled at read)
+--   early_ltp→late_ltp:   access_count ≥ 1 OR importance > 0.4
+--   late_ltp→consolidated: access_count ≥ (3 if schema < 0.5 else 1)
+-- 'reconsolidating' and any unknown stage are returned unchanged — they are
+-- access-triggered (Nader 2000), not time-derivable.
+CREATE OR REPLACE FUNCTION effective_stage(
+    p_stage      TEXT,
+    p_hours      DOUBLE PRECISION,
+    p_importance REAL,
+    p_access     INTEGER,
+    p_schema     REAL
+) RETURNS TEXT AS $$
+DECLARE
+    cur      TEXT             := p_stage;
+    budget   DOUBLE PRECISION := GREATEST(0.0, COALESCE(p_hours, 0.0));
+    imp      DOUBLE PRECISION := COALESCE(p_importance, 0.5);
+    acc      INTEGER          := COALESCE(p_access, 0);
+    sch      DOUBLE PRECISION := COALESCE(p_schema, 0.0);
+    dwell    DOUBLE PRECISION;
+    late_thr INTEGER;
+BEGIN
+    -- Only the forward synaptic-tag chain is derived lazily.
+    IF cur NOT IN ('labile', 'early_ltp', 'late_ltp', 'consolidated') THEN
+        RETURN cur;
+    END IF;
+
+    -- LABILE → EARLY_LTP. min_dwell(labile)=0 → no budget consumed.
+    IF cur = 'labile' THEN
+        IF imp > 0.3 THEN
+            cur := 'early_ltp';
+        ELSE
+            RETURN cur;
+        END IF;
+    END IF;
+
+    -- EARLY_LTP → LATE_LTP. effective min_dwell = 1.0 · (1 - schema·0.2).
+    IF cur = 'early_ltp' THEN
+        dwell := 1.0 * (1.0 - sch * 0.2);
+        IF budget >= dwell AND (acc >= 1 OR imp > 0.4) THEN
+            budget := budget - dwell;
+            cur := 'late_ltp';
+        ELSE
+            RETURN cur;
+        END IF;
+    END IF;
+
+    -- LATE_LTP → CONSOLIDATED. effective min_dwell = 6.0 · 15^(-schema).
+    IF cur = 'late_ltp' THEN
+        dwell := 6.0 * POWER(15.0, -sch);
+        late_thr := CASE WHEN sch < 0.5 THEN 3 ELSE 1 END;
+        IF budget >= dwell AND acc >= late_thr THEN
+            cur := 'consolidated';
+        END IF;
+    END IF;
+
+    -- CONSOLIDATED is terminal on the forward chain.
+    RETURN cur;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
+"""
+
 EFFECTIVE_HEAT_FN = """
 -- p_factor default: 0.95 per DAY (pre-A3 DECAY_MEMORIES_FN ran ~daily,
 -- each run applied factor 0.95 once). Converted to per-hour equivalent:
@@ -625,6 +715,7 @@ DECLARE
     stage_floor    DOUBLE PRECISION;
     base_scaled    DOUBLE PRECISION;
     decayed        DOUBLE PRECISION;
+    eff_stage      TEXT;
 BEGIN
     -- Pinned: protected or explicit no_decay. heat_base is authoritative;
     -- factor still applies (homeostatic contraction affects even anchors
@@ -647,9 +738,26 @@ BEGIN
     stage_hours := GREATEST(0.0, EXTRACT(EPOCH FROM
         (t_now - COALESCE(m.stage_entered_at, m.created_at))) / 3600.0);
 
+    -- Lazily derive the effective consolidation stage. A3 made HEAT lazy but
+    -- left STAGE eager (advanced only by the consolidation handler, never on
+    -- the read path), so between consolidation passes a row's heat decayed
+    -- under the labile α while the trace had already earned a later,
+    -- slower-decaying stage. effective_stage() re-derives the stage from
+    -- elapsed dwell (stage_hours) + the stored signal columns so α and the
+    -- floor below match the trace's true maturity, monotonically (never
+    -- below the stored stage). 'reconsolidating'/unknown stages pass through
+    -- unchanged. source: effective_stage() + cascade_advancement gates.
+    eff_stage := effective_stage(
+        m.consolidation_stage,
+        stage_hours,
+        m.importance,
+        m.access_count,
+        m.schema_match_score
+    );
+
     -- α(stage) — Kandel 2001 stage-dependent decay exponent.
     -- source: pg_schema.py:748-756
-    alpha := CASE m.consolidation_stage
+    alpha := CASE eff_stage
         WHEN 'labile'          THEN 2.0
         WHEN 'early_ltp'       THEN 1.2
         WHEN 'late_ltp'        THEN 0.8
@@ -669,8 +777,10 @@ BEGIN
                 * (1.0 - EXP(-LEAST(stage_hours / 1.0, 80.0)));
 
     -- Stage permastore floor — Bahrick 1984 + Benna & Fusi 2016.
-    -- source: pg_schema.py:742-747
-    stage_floor := CASE m.consolidation_stage
+    -- Uses the lazily-derived eff_stage (see above) so a trace that has
+    -- matured into late_ltp/consolidated gets its retention floor even
+    -- between consolidation passes. source: pg_schema.py:742-747
+    stage_floor := CASE eff_stage
         WHEN 'consolidated'    THEN 0.10
         WHEN 'late_ltp'        THEN 0.05
         WHEN 'reconsolidating' THEN 0.05
@@ -1606,6 +1716,9 @@ def get_all_ddl() -> list[str]:
         # rename lands before indexes on heat_base are created.
         MIGRATIONS_DDL,
         INDEXES_DDL,
+        # effective_stage() must be created before effective_heat(), which
+        # calls it to derive α/floor lazily on the read path.
+        EFFECTIVE_STAGE_FN,
         EFFECTIVE_HEAT_FN,
         EFFECTIVE_HEAT_FROZEN_FN,
         # A3 canonical read path: lazy effective_heat() computes decay at

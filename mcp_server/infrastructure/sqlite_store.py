@@ -203,10 +203,15 @@ class SqliteMemoryStore(
             except ImportError:
                 pass
         content = data["content"]
+        # A3 decay clock parity with PgMemoryStore: anchor heat_base_set_at to
+        # the event date (created_at), not NOW(), so historical-dated inserts
+        # engage the SQL forgetting law. No-op for fresh writes. See
+        # PgMemoryStore.insert_memory for the rationale.
+        heat_base_anchor = data.get("heat_base_set_at") or raw_created or now
         cur = self._conn.execute(
             """INSERT INTO memories (
                 content, tags, source, domain,
-                directory_context, created_at, last_accessed,
+                directory_context, created_at, last_accessed, heat_base_set_at,
                 heat_base, surprise_score, importance,
                 emotional_valence, confidence, store_type,
                 is_protected, consolidation_stage,
@@ -216,7 +221,7 @@ class SqliteMemoryStore(
                 hippocampal_dependency, is_benchmark, agent_context,
                 is_global, supersedes_id
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )""",
             (
@@ -227,6 +232,7 @@ class SqliteMemoryStore(
                 data.get("directory_context", ""),
                 raw_created or now,
                 now,
+                heat_base_anchor,
                 data.get("heat", 1.0),
                 data.get("surprise_score", 0.0),
                 data.get("importance", 0.5),

@@ -450,10 +450,19 @@ class PgMemoryStore(
             from mcp_server.core.temporal import normalize_date_to_iso
 
             raw_created = normalize_date_to_iso(raw_created) or raw_created
+        # A3 decay clock: anchor heat_base_set_at to the event date, not NOW().
+        # effective_heat() decays from COALESCE(heat_base_set_at, last_accessed,
+        # created_at); for a never-touched insert the faithful "last canonical
+        # touch" IS the event (created_at), so a historical-dated memory
+        # (import / benchmark loader) engages the SQL forgetting law instead of
+        # reading hours_elapsed≈0. No-op for fresh writes where created_at≈now.
+        # Source: docs/program/phase-3-a3-migration-design.md §3.1 (clock = last
+        # touch); benchmark root-cause memory 4202968.
+        heat_base_anchor = data.get("heat_base_set_at") or raw_created or now
         row = self._execute(
             """INSERT INTO memories (
                 content, embedding, tags, source, domain,
-                directory_context, created_at, last_accessed,
+                directory_context, created_at, last_accessed, heat_base_set_at,
                 heat_base, surprise_score, importance,
                 emotional_valence, confidence, store_type,
                 is_protected, consolidation_stage,
@@ -465,7 +474,7 @@ class PgMemoryStore(
                 arousal, dominant_emotion, supersedes_id
             ) VALUES (
                 %(content)s, %(embedding)s, %(tags)s::jsonb, %(source)s, %(domain)s,
-                %(directory_context)s, %(created_at)s, %(last_accessed)s,
+                %(directory_context)s, %(created_at)s, %(last_accessed)s, %(heat_base_set_at)s,
                 %(heat)s, %(surprise_score)s, %(importance)s,
                 %(emotional_valence)s, %(confidence)s, %(store_type)s,
                 %(is_protected)s, %(consolidation_stage)s,
@@ -485,6 +494,7 @@ class PgMemoryStore(
                 "directory_context": data.get("directory_context", ""),
                 "created_at": raw_created or now,
                 "last_accessed": now,
+                "heat_base_set_at": heat_base_anchor,
                 "heat": data.get("heat", 1.0),
                 "surprise_score": data.get("surprise_score", 0.0),
                 "importance": data.get("importance", 0.5),

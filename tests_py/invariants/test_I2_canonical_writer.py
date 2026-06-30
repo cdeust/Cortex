@@ -33,17 +33,19 @@ _MCP_ROOT = _REPO_ROOT / "mcp_server"
 # OR be added here with a source-commented ADR justification.
 _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Canonical single-row writer (all callers route through this).
-    # bump_heat_raw — UPDATE at line 566 (shifted 548→566 by code added
-    # above it); still the one canonical single-row site.
-    ("infrastructure/pg_store.py", 566),
+    # bump_heat_raw — UPDATE at line 576 (shifted 566→576 by the
+    # heat_base_set_at decay-clock anchor added to insert_memory above it);
+    # still the one canonical single-row site.
+    ("infrastructure/pg_store.py", 576),
     # A3 batched writer (homeostatic cohort branch + any other batch consumer).
-    # update_memories_heat_batch — SET line at 626 (shifted 608→626 likewise).
-    ("infrastructure/pg_store.py", 626),
-    # SQLite parity (shifted 288→291, 332→335 by the P0-1a insert_memory
-    # supersedes_id fix, which added rows above bump_heat_raw; both sites
-    # remain the canonical bump_heat_raw / update_memories_heat_batch writers).
-    ("infrastructure/sqlite_store.py", 291),
-    ("infrastructure/sqlite_store.py", 335),
+    # update_memories_heat_batch — SET line at 636 (shifted 626→636 likewise).
+    ("infrastructure/pg_store.py", 636),
+    # SQLite parity (shifted 291→297, 335→341 by the same heat_base_set_at
+    # decay-clock anchor added to insert_memory above bump_heat_raw; both
+    # sites remain the canonical bump_heat_raw / update_memories_heat_batch
+    # writers).
+    ("infrastructure/sqlite_store.py", 297),
+    ("infrastructure/sqlite_store.py", 341),
     # Homeostatic fold (amortized ~once/month per domain). Shifted 292→317
     # when the bounded-I/O slim-projection helpers were added above it.
     ("handlers/consolidation/homeostatic.py", 317),
