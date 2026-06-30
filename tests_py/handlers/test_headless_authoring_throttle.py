@@ -586,7 +586,6 @@ class TestCancellationCleanup:
     ) -> None:
         from mcp_server.handlers.consolidation import headless_authoring as ha
 
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         proc = _HangingProc()
 
         async def _fake_exec(*_a: Any, **_k: Any) -> _HangingProc:
@@ -602,3 +601,70 @@ class TestCancellationCleanup:
 
         assert proc.killed, "subprocess.kill() must run in finally on cancellation"
         assert proc.waited, "must reap the killed subprocess via wait()"
+
+
+class TestSubscriptionAuth:
+    """The drain runs on the subscription by default, API key only on opt-in.
+
+    Enforcing facts: argv carries ``--safe-mode`` (config isolation that keeps
+    OAuth/keychain) and never ``--bare`` (which forces API-key billing); the
+    default child env strips ``ANTHROPIC_API_KEY`` / ``ANTHROPIC_AUTH_TOKEN``
+    (subscription); and ``CORTEX_HEADLESS_AUTH=api`` passes them through so a
+    user who wants API billing still can.
+    """
+
+    @staticmethod
+    def _patch_exec(monkeypatch: pytest.MonkeyPatch, captured: dict[str, Any]) -> None:
+        class _OkProc:
+            returncode = 0
+
+            async def communicate(self) -> Any:
+                return (b'{"result": "OK", "total_cost_usd": 0.0}', b"")
+
+        async def _fake_exec(*argv: Any, **kwargs: Any) -> _OkProc:
+            captured["argv"] = list(argv)
+            captured["env"] = kwargs.get("env")
+            return _OkProc()
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
+
+    @pytest.mark.asyncio
+    async def test_default_uses_safe_mode_and_strips_api_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from mcp_server.handlers.consolidation import headless_authoring as ha
+
+        monkeypatch.delenv("CORTEX_HEADLESS_AUTH", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-should-be-stripped")
+        monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "tok-should-be-stripped")
+        captured: dict[str, Any] = {}
+        self._patch_exec(monkeypatch, captured)
+
+        result = await ha._claude_invoke("prompt")
+
+        assert result.text == "OK"
+        assert "--safe-mode" in captured["argv"]
+        assert "--bare" not in captured["argv"]
+        env = captured["env"]
+        assert env is not None, "must pass an explicit env to strip credentials"
+        assert "ANTHROPIC_API_KEY" not in env
+        assert "ANTHROPIC_AUTH_TOKEN" not in env
+
+    @pytest.mark.asyncio
+    async def test_api_mode_passes_api_key_through(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from mcp_server.handlers.consolidation import headless_authoring as ha
+
+        monkeypatch.setenv("CORTEX_HEADLESS_AUTH", "api")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-user-opted-in")
+        captured: dict[str, Any] = {}
+        self._patch_exec(monkeypatch, captured)
+
+        result = await ha._claude_invoke("prompt")
+
+        assert result.text == "OK"
+        assert "--safe-mode" in captured["argv"]
+        env = captured["env"]
+        assert env is not None
+        assert env.get("ANTHROPIC_API_KEY") == "sk-user-opted-in"

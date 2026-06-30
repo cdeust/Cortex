@@ -262,6 +262,23 @@ class _AnchorCandidate:
     suggested_kind: str
 
 
+_API_CREDENTIAL_KEYS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+
+
+def _subprocess_env() -> dict[str, str]:
+    """Child env for ``claude -p``, choosing the auth method.
+
+    Default ``CORTEX_HEADLESS_AUTH=subscription`` strips API-key credentials
+    so the CLI uses the logged-in subscription (no API charge). Setting
+    ``CORTEX_HEADLESS_AUTH=api`` passes the parent env through unchanged, so a
+    present ``ANTHROPIC_API_KEY`` bills the API — an explicit user opt-in.
+    """
+    mode = os.getenv("CORTEX_HEADLESS_AUTH", "subscription").strip().lower()
+    if mode == "api":
+        return dict(os.environ)
+    return {k: v for k, v in os.environ.items() if k not in _API_CREDENTIAL_KEYS}
+
+
 async def _claude_invoke(
     prompt: str,
     *,
@@ -286,15 +303,30 @@ async def _claude_invoke(
         Source: https://code.claude.com/docs/en/cli-reference (--tools flag)
                 https://code.claude.com/docs/en/headless (headless mode)
 
-    Control 2 — ``--bare``
-        Skips hooks, skills, plugins, MCP servers, auto-memory, CLAUDE.md,
-        AND project/user settings (including .claude/settings.json). This
-        defeats the malicious-settings vector (permissions.allow:["Bash"])
-        and the malicious-hook vector. Because ``--bare`` disables
-        OAuth/keychain auth, credentials MUST come from ANTHROPIC_API_KEY
-        in the environment (subprocess inherits env by default). If
-        ANTHROPIC_API_KEY is absent we FAIL CLOSED (see guard below).
-        Source: https://code.claude.com/docs/en/headless (--bare flag)
+    Control 2 — ``--safe-mode``
+        Disables CLAUDE.md, skills, plugins, hooks, MCP servers, custom
+        commands/agents, and project/user settings. This defeats the same
+        malicious-settings vector (permissions.allow:["Bash"]) and the
+        malicious-hook vector that ``--bare`` did. We use ``--safe-mode``
+        rather than ``--bare`` deliberately: ``--bare`` documents
+        "Anthropic auth is strictly ANTHROPIC_API_KEY or apiKeyHelper via
+        --settings (OAuth and keychain are never read)" — i.e. it forces
+        API-key *billing* and ignores a logged-in subscription. ``--safe-mode``
+        gives the same config isolation while leaving OAuth/keychain intact,
+        so the drain runs on the user's Claude subscription (no API charge).
+        Source: https://code.claude.com/docs/en/cli-reference (--safe-mode, --bare)
+
+    Auth — subscription by default, API key opt-in
+        ``--safe-mode`` imposes no auth method; the CLI picks API-key billing
+        whenever ``ANTHROPIC_API_KEY`` is in its env, otherwise it falls back
+        to the keychain/OAuth subscription. ``create_subprocess_exec`` inherits
+        the parent env by default, so the auth is chosen via the child env:
+          * ``CORTEX_HEADLESS_AUTH=subscription`` (default) — strip
+            ``ANTHROPIC_API_KEY`` / ``ANTHROPIC_AUTH_TOKEN`` from the child env
+            so the call runs on the logged-in subscription (no API charge).
+          * ``CORTEX_HEADLESS_AUTH=api`` — pass the parent env through, so a
+            present ``ANTHROPIC_API_KEY`` bills the API (the user opted in).
+        See ``_subprocess_env``. Verified against claude CLI 2.1.197.
 
     Control 3 — ``--output-format json``
         Emits a single JSON object.  Documented top-level fields we
@@ -316,26 +348,18 @@ async def _claude_invoke(
         require ``--sandbox`` (out of scope here).
         Source: https://code.claude.com/docs/en/cli-reference (--add-dir flag)
     """
-    # Fail closed if ANTHROPIC_API_KEY is absent: --bare disables
-    # OAuth/keychain, so the subprocess would have no credentials.
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        logger.warning(
-            "headless-authoring: ANTHROPIC_API_KEY not set — "
-            "headless authoring requires ANTHROPIC_API_KEY in bare/sandboxed mode; "
-            "skipping invocation to avoid unauthenticated subprocess"
-        )
-        return InvokeResult(text=None, cost_usd=0.0)
-
     # Control 1: --tools restricts (removes) Bash/Edit/Write from the model
-    # context. Control 2: --bare isolates config (no malicious settings/hooks).
-    # Control 3: --output-format json for structured cost telemetry.
+    # context. Control 2: --safe-mode isolates config (no malicious
+    # settings/hooks) WITHOUT disabling OAuth/keychain, so the call runs on
+    # the user's Claude subscription. Control 3: --output-format json for
+    # structured cost telemetry.
     # source: https://code.claude.com/docs/en/cli-reference
     #         https://code.claude.com/docs/en/headless
     argv = [
         _CLAUDE_BIN,
         "--print",
         "--no-session-persistence",
-        "--bare",
+        "--safe-mode",
         "--tools",
         "Read,Glob,Grep",
         "--output-format",
@@ -348,12 +372,17 @@ async def _claude_invoke(
 
     call_timeout = timeout if timeout is not None else float(CLAUDE_CALL_TIMEOUT_SEC)
 
+    # Default to the subscription; pass the API key through only when the
+    # user opts in via CORTEX_HEADLESS_AUTH=api. See _subprocess_env.
+    child_env = _subprocess_env()
+
     try:
         proc = await asyncio.create_subprocess_exec(
             *argv,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
+            env=child_env,
         )
     except FileNotFoundError:
         logger.warning("headless-authoring: claude binary not found on PATH")

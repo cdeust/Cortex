@@ -38,13 +38,18 @@ def _headless_authoring_enabled() -> bool:
     """Opt-in gate for the ``claude -p`` headless authoring drain.
 
     Default OFF. Even with concurrency + budget throttling now in place,
-    each cycle spends real money via ANTHROPIC_API_KEY and is therefore
-    opt-in. Set ``CORTEX_HEADLESS_AUTHORING=1`` to enable.
+    each cycle spends a real ``claude -p`` budget (subscription quota by
+    default, or the API if opted in) and is therefore opt-in. Set
+    ``CORTEX_HEADLESS_AUTHORING=1`` to enable.
 
     When enabled, the drain runs under:
+      * ``CORTEX_HEADLESS_AUTH`` (default ``subscription``) — ``subscription``
+        runs on the logged-in Claude session (no API charge); ``api`` bills
+        ``ANTHROPIC_API_KEY`` instead.
       * ``CORTEX_HEADLESS_CONCURRENCY`` (default 4) — max in-flight calls.
       * ``CORTEX_HEADLESS_BUDGET_SEC`` (default 300) — wall-clock deadline.
-      * ``CORTEX_HEADLESS_USD_BUDGET`` (default 5.0) — per-cycle USD cap.
+      * ``CORTEX_HEADLESS_USD_BUDGET`` (default 5.0) — per-cycle cap on the
+        CLI's reported cost estimate (a notional throttle under subscription).
       * ``CORTEX_HEADLESS_MAX_ANCHOR_DRAINS`` / ``_MAX_FILE_DRAINS`` (default 8 each).
     Ungroundable scopes (prd, decisions, changelog, roadmap, accessibility,
     localization) are silently skipped — autonomous authoring of those
@@ -186,10 +191,10 @@ async def run_wiki_maintenance(
     # loop closes without human intervention. See
     # ``consolidation/headless_authoring.py``.
     #
-    # Opt-in only (default OFF): each cycle spends real money via
-    # ANTHROPIC_API_KEY.  The worker is now fully async (asyncio.gather
-    # + semaphore + budget), so it no longer blocks the event loop.
-    # Enable via ``CORTEX_HEADLESS_AUTHORING=1``.
+    # Opt-in only (default OFF): each cycle spends a real claude -p budget
+    # (subscription quota by default; the API only if CORTEX_HEADLESS_AUTH=api).
+    # The worker is now fully async (asyncio.gather + semaphore + budget), so
+    # it no longer blocks the event loop. Enable via ``CORTEX_HEADLESS_AUTHORING=1``.
     if not _headless_authoring_enabled():
         out["headless_authoring"] = {"status": "disabled"}
     else:
