@@ -106,23 +106,16 @@ def test_sql_matches_python_iteration(store: PgMemoryStore) -> None:
     )
     mismatches = []
     for stored, hours, importance, access, schema in grid:
-        expected = _reference_effective_stage(
-            stored, hours, importance, access, schema
-        )
-        actual = _sql_effective_stage(
-            store, stored, hours, importance, access, schema
-        )
+        expected = _reference_effective_stage(stored, hours, importance, access, schema)
+        actual = _sql_effective_stage(store, stored, hours, importance, access, schema)
         if actual != expected:
             mismatches.append(
                 (stored, hours, importance, access, schema, expected, actual)
             )
-    assert not mismatches, (
-        "SQL/Python stage derivation diverged at:\n"
-        + "\n".join(
-            f"  stored={m[0]} h={m[1]} imp={m[2]} acc={m[3]} sch={m[4]}: "
-            f"py={m[5]} sql={m[6]}"
-            for m in mismatches
-        )
+    assert not mismatches, "SQL/Python stage derivation diverged at:\n" + "\n".join(
+        f"  stored={m[0]} h={m[1]} imp={m[2]} acc={m[3]} sch={m[4]}: "
+        f"py={m[5]} sql={m[6]}"
+        for m in mismatches
     )
 
 

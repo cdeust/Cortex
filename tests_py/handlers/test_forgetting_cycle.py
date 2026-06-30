@@ -137,9 +137,7 @@ def test_recently_active_memory_is_sleep_protected():
 def test_old_acute_interferer_does_not_trigger_transient():
     """Beyond the recovery window the transient block has lapsed."""
     store = _FakeStore([(0.95, ACUTE_RECENCY_WINDOW_HOURS + 5.0)])
-    effect = _evaluate_memory(
-        store, _memory(consolidation_stage="consolidated"), set()
-    )
+    effect = _evaluate_memory(store, _memory(consolidation_stage="consolidated"), set())
     # consolidated → near-zero permanent pressure; stale acute → no transient.
     assert effect == "retain"
 

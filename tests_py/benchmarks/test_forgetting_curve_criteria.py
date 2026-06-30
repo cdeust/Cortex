@@ -27,7 +27,7 @@ def _uniform_trajs(curve_fn) -> dict[str, list[dict]]:
 
 def test_sqrt_t_mixture_passes() -> None:
     """A pure 1/√t mixture: power law wins and b lands in the √t band."""
-    trajs = _uniform_trajs(lambda t: 0.95 * t ** -0.5)
+    trajs = _uniform_trajs(lambda t: 0.95 * t**-0.5)
     c4 = criteria.criterion_benna_fusi_sqrt_t(trajs, AGES)
     assert c4["passed"] is True
     assert c4["comparison"]["winner"] == "power_law"
@@ -47,7 +47,7 @@ def test_single_exponential_mixture_fails() -> None:
 def test_out_of_band_power_law_fails() -> None:
     """A power law with the wrong exponent (b≈1.5, steeper than √t) wins over
     exponential but falls outside the √t band — falsified as a √t law."""
-    trajs = _uniform_trajs(lambda t: 0.95 * t ** -1.5)
+    trajs = _uniform_trajs(lambda t: 0.95 * t**-1.5)
     c4 = criteria.criterion_benna_fusi_sqrt_t(trajs, AGES)
     assert c4["comparison"]["winner"] == "power_law"
     assert c4["power_b_in_sqrt_t_band"] is False
@@ -57,9 +57,15 @@ def test_out_of_band_power_law_fails() -> None:
 def test_verdict_appends_sqrt_t_clause() -> None:
     """verdict() must surface the √t finding regardless of C1/C2 outcome."""
     pass_c = {"passed": True}
-    bf_pass = {"passed": True, "power_b_exponent": 0.5,
-               "comparison": {"winner": "power_law"}}
-    bf_fail = {"passed": False, "power_b_exponent": 0.12,
-               "comparison": {"winner": "exponential"}}
+    bf_pass = {
+        "passed": True,
+        "power_b_exponent": 0.5,
+        "comparison": {"winner": "power_law"},
+    }
+    bf_fail = {
+        "passed": False,
+        "power_b_exponent": 0.12,
+        "comparison": {"winner": "exponential"},
+    }
     assert "√t law-family CONFIRMED" in criteria.verdict(pass_c, pass_c, bf_pass)
     assert "√t law-family NOT reproduced" in criteria.verdict(pass_c, pass_c, bf_fail)

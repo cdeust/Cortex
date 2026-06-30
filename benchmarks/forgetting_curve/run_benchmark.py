@@ -64,8 +64,25 @@ DB_NAME = "cortex_curve_test"
 # α-ladder) then logarithmic out to 365d (captures the floor regime).
 # source: task spec grid (1h,6h,1d,3d,7d,14d,30d,60d,90d,180d,270d,365d)
 # enriched with sub-day points to resolve the cascade transitions.
-AGES_HOURS_FULL = [0.5, 1, 2, 4, 6, 8, 12, 24, 72, 168, 336, 720, 1440, 2160,
-                   4320, 6480, 8760]
+AGES_HOURS_FULL = [
+    0.5,
+    1,
+    2,
+    4,
+    6,
+    8,
+    12,
+    24,
+    72,
+    168,
+    336,
+    720,
+    1440,
+    2160,
+    4320,
+    6480,
+    8760,
+]
 AGES_HOURS_QUICK = [1, 6, 24, 72, 168, 720, 2160, 4320, 8760]
 
 
@@ -82,8 +99,12 @@ def _insert_profile(conn, name: str, spec: dict) -> int:
             FALSE, FALSE)
         RETURNING id
         """,
-        (f"forgetting-curve probe {name}", spec["importance"],
-         spec["access"], spec["schema"]),
+        (
+            f"forgetting-curve probe {name}",
+            spec["importance"],
+            spec["access"],
+            spec["schema"],
+        ),
     )
     mid = cur.fetchone()[0]
     conn.commit()
@@ -143,7 +164,7 @@ def _finish(quick, ages, trajs, c1, c2, c3, c4) -> Path:
         "benchmark": "forgetting_curve_fidelity",
         "date": datetime.now(timezone.utc).isoformat(),
         "artifact_under_test": "effective_heat() + effective_stage() "
-                               "(mcp_server/infrastructure/pg_schema.py)",
+        "(mcp_server/infrastructure/pg_schema.py)",
         "config": {"quick": quick, "ages_hours": ages, "profiles": PROFILES},
         "trajectories": trajs,
         "criterion_1_power_over_exponential": c1,
@@ -168,36 +189,45 @@ def _print_report(c1, c2, c3, c4, verdict, out_path) -> None:
     print("=" * 78)
     cmp1 = c1["comparison"]
     print(f"\n[C1 power-law-over-exponential]  PASS={c1['passed']}")
-    print(f"  power r²(h)={cmp1['r2_hspace_power']:.4f}  "
-          f"exp r²(h)={cmp1['r2_hspace_exp']:.4f}  "
-          f"ΔAIC(exp-power)={cmp1['delta_aic_exp_minus_power']:.2f}  "
-          f"winner={cmp1['winner']}")
+    print(
+        f"  power r²(h)={cmp1['r2_hspace_power']:.4f}  "
+        f"exp r²(h)={cmp1['r2_hspace_exp']:.4f}  "
+        f"ΔAIC(exp-power)={cmp1['delta_aic_exp_minus_power']:.2f}  "
+        f"winner={cmp1['winner']}"
+    )
     print(f"\n[C2 permastore Bahrick]          PASS={c2['passed']}")
-    print(f"  B@365d={c2['b_heat_at_365d']:.4f} (floor {c2['permastore_floor']}, "
-          f"holds={c2['b_holds_floor']})  "
-          f"A@365d={c2['a_heat_at_365d']:.2e} (collapses={c2['a_collapses']})")
+    print(
+        f"  B@365d={c2['b_heat_at_365d']:.4f} (floor {c2['permastore_floor']}, "
+        f"holds={c2['b_holds_floor']})  "
+        f"A@365d={c2['a_heat_at_365d']:.2e} (collapses={c2['a_collapses']})"
+    )
     print(f"\n[C3 exponent plausibility]       PASS={c3['passed']}")
     for label, p in c3["profiles"].items():
-        print(f"  {label}: power b={p['power_b']:.4f} "
-              f"(in band {p['power_b_in_band']})  "
-              f"exp half-life={p['exp_half_life_hours']}h")
+        print(
+            f"  {label}: power b={p['power_b']:.4f} "
+            f"(in band {p['power_b_in_band']})  "
+            f"exp half-life={p['exp_half_life_hours']}h"
+        )
     cmpe = c4["comparison"]
     print(f"\n[C4 Benna&Fusi √t law-family]    PASS={c4['passed']}")
-    print(f"  mixture power r²(h)={cmpe['r2_hspace_power']:.4f}  "
-          f"exp r²(h)={cmpe['r2_hspace_exp']:.4f}  "
-          f"ΔAIC(exp-power)={cmpe['delta_aic_exp_minus_power']:.2f}  "
-          f"winner={cmpe['winner']}")
-    print(f"  fit b={c4['power_b_exponent']:.4f}  "
-          f"√t band {c4['sqrt_t_band']}  "
-          f"in band={c4['power_b_in_sqrt_t_band']}")
+    print(
+        f"  mixture power r²(h)={cmpe['r2_hspace_power']:.4f}  "
+        f"exp r²(h)={cmpe['r2_hspace_exp']:.4f}  "
+        f"ΔAIC(exp-power)={cmpe['delta_aic_exp_minus_power']:.2f}  "
+        f"winner={cmpe['winner']}"
+    )
+    print(
+        f"  fit b={c4['power_b_exponent']:.4f}  "
+        f"√t band {c4['sqrt_t_band']}  "
+        f"in band={c4['power_b_in_sqrt_t_band']}"
+    )
     print(f"\nVERDICT: {verdict}")
     print(f"results → {out_path}")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Forgetting-curve fidelity benchmark")
-    parser.add_argument("--quick", action="store_true",
-                        help="coarse 9-point age grid")
+    parser.add_argument("--quick", action="store_true", help="coarse 9-point age grid")
     args = parser.parse_args(argv)
     run(args.quick)
     return 0

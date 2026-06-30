@@ -84,7 +84,9 @@ class TestFitPlatt:
         """
         n_pos, n_neg = 4, 100
         # Positive branch: correct 5/6 ~= 0.833; swapped bug -> 101/102 ~= 0.990.
-        assert pc._smoothed_target(1, n_pos, n_neg) == pytest.approx((n_pos + 1) / (n_pos + 2))
+        assert pc._smoothed_target(1, n_pos, n_neg) == pytest.approx(
+            (n_pos + 1) / (n_pos + 2)
+        )
         # Negative branch: correct 1/102 ~= 0.0098; swapped bug -> 1/6 ~= 0.167.
         assert pc._smoothed_target(0, n_pos, n_neg) == pytest.approx(1.0 / (n_neg + 2))
 

@@ -91,9 +91,7 @@ def fit_exponential(points: list[tuple[float, float]]) -> dict:
         "r2_hspace": round(max(0.0, r2_h), 5),
         "rss_hspace": rss_h,
         "aic_hspace": round(_aic(rss_h, len(points)), 3),
-        "half_life_hours": (
-            round(half_life, 2) if math.isfinite(half_life) else None
-        ),
+        "half_life_hours": (round(half_life, 2) if math.isfinite(half_life) else None),
     }
 
 
@@ -118,9 +116,7 @@ def fit_power_law(points: list[tuple[float, float]]) -> dict:
         "r2_hspace": round(max(0.0, r2_h), 5),
         "rss_hspace": rss_h,
         "aic_hspace": round(_aic(rss_h, len(points)), 3),
-        "half_life_hours": (
-            round(half_life, 2) if math.isfinite(half_life) else None
-        ),
+        "half_life_hours": (round(half_life, 2) if math.isfinite(half_life) else None),
     }
 
 

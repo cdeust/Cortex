@@ -51,8 +51,7 @@ def store():
 
 def _effective_heat(store: PgMemoryStore, memory_id: int) -> float:
     row = store._execute(
-        "SELECT effective_heat(m, NOW(), 1.0) AS eff "
-        "FROM memories m WHERE id = %s",
+        "SELECT effective_heat(m, NOW(), 1.0) AS eff FROM memories m WHERE id = %s",
         (memory_id,),
     ).fetchone()
     assert row is not None

@@ -228,9 +228,12 @@ class TestFindCausalChain:
         assert any(p[0] == "A" and p[-1] == "C" and len(p) == 3 for p in paths)
 
     def test_undirected_ignored_and_cycle_safe(self):
-        assert find_causal_chain(
-            [{"source": "A", "target": "B", "is_directed": False}], "A"
-        ) == []
+        assert (
+            find_causal_chain(
+                [{"source": "A", "target": "B", "is_directed": False}], "A"
+            )
+            == []
+        )
         cyclic = [
             {"source": "A", "target": "B", "is_directed": True},
             {"source": "B", "target": "A", "is_directed": True},

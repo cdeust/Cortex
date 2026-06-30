@@ -12,14 +12,34 @@ from benchmarks.forgetting_curve import curve_fit
 # source: effective_stage() gates in pg_schema.py (imp>0.3; acc≥1 or imp>0.4;
 # acc≥3 for consolidated when schema<0.5).
 PROFILES = {
-    "A_labile": {"importance": 0.2, "access": 0, "schema": 0.0,
-                 "terminal_stage": "labile", "expected_floor": 0.0},
-    "B_consolidated": {"importance": 0.6, "access": 3, "schema": 0.0,
-                       "terminal_stage": "consolidated", "expected_floor": 0.10},
-    "early_ltp": {"importance": 0.35, "access": 0, "schema": 0.0,
-                  "terminal_stage": "early_ltp", "expected_floor": 0.0},
-    "late_ltp": {"importance": 0.5, "access": 0, "schema": 0.0,
-                 "terminal_stage": "late_ltp", "expected_floor": 0.05},
+    "A_labile": {
+        "importance": 0.2,
+        "access": 0,
+        "schema": 0.0,
+        "terminal_stage": "labile",
+        "expected_floor": 0.0,
+    },
+    "B_consolidated": {
+        "importance": 0.6,
+        "access": 3,
+        "schema": 0.0,
+        "terminal_stage": "consolidated",
+        "expected_floor": 0.10,
+    },
+    "early_ltp": {
+        "importance": 0.35,
+        "access": 0,
+        "schema": 0.0,
+        "terminal_stage": "early_ltp",
+        "expected_floor": 0.0,
+    },
+    "late_ltp": {
+        "importance": 0.5,
+        "access": 0,
+        "schema": 0.0,
+        "terminal_stage": "late_ltp",
+        "expected_floor": 0.05,
+    },
 }
 
 # source: Bahrick 1984 permastore + pg_schema consolidated stage_floor.
@@ -43,8 +63,7 @@ def transient_points(traj: list[dict], floor: float) -> list[tuple[float, float]
     """Strictly-decaying regime: heat in (floor·1.05, heat_base). Excludes the
     floored tail and underflow zeros so both models fit the same data."""
     low = max(floor * 1.05, 1e-3)
-    return [(p["age_hours"], p["heat"]) for p in traj
-            if low < p["heat"] < 0.9999]
+    return [(p["age_hours"], p["heat"]) for p in traj if low < p["heat"] < 0.9999]
 
 
 def criterion_power_over_exp(traj_b: list[dict]) -> dict:
@@ -93,13 +112,17 @@ def criterion_permastore(traj_a: list[dict], traj_b: list[dict]) -> dict:
 def criterion_exponent(traj_a: list[dict], traj_b: list[dict]) -> dict:
     """Criterion 3 (descriptive): fitted exponent / half-life vs published
     ranges. Plausibility, not pass/fail unless wildly off (negative HL)."""
-    out = {"name": "exponent_half_life_plausibility",
-           "source": "Wixted&Ebbesen 1991; Anderson&Schooler 1991; Benna&Fusi 2016",
-           "plausible_b_band": [PLAUSIBLE_B_LOW, PLAUSIBLE_B_HIGH],
-           "profiles": {}}
+    out = {
+        "name": "exponent_half_life_plausibility",
+        "source": "Wixted&Ebbesen 1991; Anderson&Schooler 1991; Benna&Fusi 2016",
+        "plausible_b_band": [PLAUSIBLE_B_LOW, PLAUSIBLE_B_HIGH],
+        "profiles": {},
+    }
     sane = True
-    for label, traj, floor in (("A_labile", traj_a, 0.0),
-                               ("B_consolidated", traj_b, PERMASTORE_FLOOR)):
+    for label, traj, floor in (
+        ("A_labile", traj_a, 0.0),
+        ("B_consolidated", traj_b, PERMASTORE_FLOOR),
+    ):
         pts = transient_points(traj, floor)
         power = curve_fit.fit_power_law(pts)
         expo = curve_fit.fit_exponential(pts)
@@ -108,7 +131,8 @@ def criterion_exponent(traj_a: list[dict], traj_b: list[dict]) -> dict:
         hl_sane = expo["half_life_hours"] is not None and expo["half_life_hours"] > 0
         sane = sane and hl_sane
         out["profiles"][label] = {
-            "power_b": b, "power_b_in_band": bool(in_band),
+            "power_b": b,
+            "power_b_in_band": bool(in_band),
             "power_b_fit_r2": power["r2_hspace"],
             "power_half_life_hours": power["half_life_hours"],
             "exp_b_per_hour": expo["b_per_hour"],
@@ -118,8 +142,9 @@ def criterion_exponent(traj_a: list[dict], traj_b: list[dict]) -> dict:
     return out
 
 
-def criterion_benna_fusi_sqrt_t(trajs: dict[str, list[dict]],
-                                ages: list[float]) -> dict:
+def criterion_benna_fusi_sqrt_t(
+    trajs: dict[str, list[dict]], ages: list[float]
+) -> dict:
     """Criterion 4 (Benna&Fusi law-family): does the model reproduce the
     cascade √t law, h ∝ 1/√t?
 
@@ -158,9 +183,12 @@ def criterion_benna_fusi_sqrt_t(trajs: dict[str, list[dict]],
     return {
         "name": "benna_fusi_sqrt_t_law_family",
         "source": "Benna&Fusi 2016 (Nat.Neurosci. 19:1697 — SNR∝1/√t)",
-        "n_transient_points": len(pts), "mixture_floor": round(mixture_floor, 6),
+        "n_transient_points": len(pts),
+        "mixture_floor": round(mixture_floor, 6),
         "mean_curve": [[t, round(h, 6)] for t, h in curve],
-        "power_law_fit": power, "exponential_fit": expo, "comparison": cmp,
+        "power_law_fit": power,
+        "exponential_fit": expo,
+        "comparison": cmp,
         "sqrt_t_band": [SQRT_T_B_LOW, SQRT_T_B_HIGH],
         "power_b_exponent": b,
         "power_b_in_sqrt_t_band": bool(in_band),
@@ -173,27 +201,39 @@ def verdict(c1: dict, c2: dict, bf: dict) -> str:
     (C1 single-trace power law, C2 permastore); the Benna&Fusi √t law-family
     finding (bf) is appended as an explicit clause but does not gate."""
     if c1["passed"] and c2["passed"]:
-        base = ("DEMONSTRATED: matured decay is power-law-compatible AND "
-                "permastore holds while labile forgetting is preserved.")
+        base = (
+            "DEMONSTRATED: matured decay is power-law-compatible AND "
+            "permastore holds while labile forgetting is preserved."
+        )
     elif c2["passed"] and not c1["passed"]:
-        base = ("PARTIALLY FALSIFIED: permastore (Bahrick) reproduced, but the "
-                "α-ladder does NOT produce power-law decay for a matured trace "
-                "— a single exponential fits at least as well. The cascade is "
-                "piecewise/single-exponential + floor, not heavy-tailed.")
+        base = (
+            "PARTIALLY FALSIFIED: permastore (Bahrick) reproduced, but the "
+            "α-ladder does NOT produce power-law decay for a matured trace "
+            "— a single exponential fits at least as well. The cascade is "
+            "piecewise/single-exponential + floor, not heavy-tailed."
+        )
     elif c1["passed"] and not c2["passed"]:
-        base = ("PARTIALLY FALSIFIED: power-law form present but permastore "
-                "floor / labile-collapse contract violated.")
+        base = (
+            "PARTIALLY FALSIFIED: power-law form present but permastore "
+            "floor / labile-collapse contract violated."
+        )
     else:
-        base = ("FALSIFIED: neither the power-law form nor the permastore "
-                "contract is reproduced by effective_heat over published "
-                "curve forms.")
+        base = (
+            "FALSIFIED: neither the power-law form nor the permastore "
+            "contract is reproduced by effective_heat over published "
+            "curve forms."
+        )
     b = bf["power_b_exponent"]
     win = bf["comparison"]["winner"]
     if bf["passed"]:
-        base += (f" Benna&Fusi √t law-family CONFIRMED: the stage mixture "
-                 f"decays as a power law with b={b:.3f}≈0.5 (1/√t).")
+        base += (
+            f" Benna&Fusi √t law-family CONFIRMED: the stage mixture "
+            f"decays as a power law with b={b:.3f}≈0.5 (1/√t)."
+        )
     else:
-        base += (f" Benna&Fusi √t law-family NOT reproduced: the 4-level "
-                 f"α-ladder mixture (fit b={b:.3f}, winner={win}) is not the "
-                 f"1/√t continuum — too few levels over too narrow a rate range.")
+        base += (
+            f" Benna&Fusi √t law-family NOT reproduced: the 4-level "
+            f"α-ladder mixture (fit b={b:.3f}, winner={win}) is not the "
+            f"1/√t continuum — too few levels over too narrow a rate range."
+        )
     return base

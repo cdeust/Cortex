@@ -119,7 +119,9 @@ ACUTE_OVERLAP_THRESHOLD = 0.575
 ACUTE_RECENCY_WINDOW_HOURS = 13.0
 
 
-def chronic_interference(newer_sims: Iterable[float], tau_dup: float = TAU_DUP) -> float:
+def chronic_interference(
+    newer_sims: Iterable[float], tau_dup: float = TAU_DUP
+) -> float:
     """Redundancy-gated excess noisy-OR over newer-neighbour similarities.
 
     Only neighbours at or above the near-duplicate cutoff ``tau_dup`` count as
@@ -211,5 +213,7 @@ def is_transient_forgetting(
     """
     if is_pinned or recently_active:
         return False
-    return (acute_overlap >= ACUTE_OVERLAP_THRESHOLD
-            and acute_age_hours <= ACUTE_RECENCY_WINDOW_HOURS)
+    return (
+        acute_overlap >= ACUTE_OVERLAP_THRESHOLD
+        and acute_age_hours <= ACUTE_RECENCY_WINDOW_HOURS
+    )

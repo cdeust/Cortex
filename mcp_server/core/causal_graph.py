@@ -41,9 +41,7 @@ def build_presence(
     return samples
 
 
-def _pmi_effect_size(
-    pair_count: int, a_count: int, b_count: int, total: int
-) -> float:
+def _pmi_effect_size(pair_count: int, a_count: int, b_count: int, total: int) -> float:
     """Pointwise mutual information log₂(p_ab / p_a·p_b) — edge effect size.
 
     Used only to annotate the *strength* of an edge that PC has already

@@ -310,9 +310,7 @@ def _run_cycles(
         # without the sleep-protection set, the pass would over-forget.
         recently_active = set(deep.pop("replayed_ids", []))
         if "error" not in deep:
-            stats["forgetting"] = _timed(
-                run_forgetting_cycle, store, recently_active
-            )
+            stats["forgetting"] = _timed(run_forgetting_cycle, store, recently_active)
 
     return stats
 

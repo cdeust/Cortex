@@ -146,7 +146,10 @@ def test_alpha_integral_nondecreasing(store: PgMemoryStore) -> None:
 def test_alpha_integral_single_stage_is_alpha_times_tau(store: PgMemoryStore) -> None:
     """A trace stuck in one stage reduces exactly to α·τ (no piecewise change)."""
     # imp≤0.3 stays labile (α=2.0); imp=0.35,acc=0 stays early_ltp (α=1.2).
-    for stored, imp, acc, alpha in (("labile", 0.2, 0, 2.0), ("early_ltp", 0.35, 0, 1.2)):
+    for stored, imp, acc, alpha in (
+        ("labile", 0.2, 0, 2.0),
+        ("early_ltp", 0.35, 0, 1.2),
+    ):
         for tau in (0.5, 10.0, 500.0):
             got = _sql_alpha_integral(store, stored, tau, imp, acc, 0.0)
             assert abs(got - alpha * tau) < 1e-6, (

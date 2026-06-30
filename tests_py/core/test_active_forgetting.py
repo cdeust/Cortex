@@ -138,8 +138,12 @@ def test_single_bout_never_fires_permanent():
 
 def test_transient_needs_overlap_and_recency():
     assert is_transient_forgetting(0.9, 1.0, False, False)
-    assert not is_transient_forgetting(0.9, ACUTE_RECENCY_WINDOW_HOURS + 1, False, False)
-    assert not is_transient_forgetting(ACUTE_OVERLAP_THRESHOLD - 0.01, 1.0, False, False)
+    assert not is_transient_forgetting(
+        0.9, ACUTE_RECENCY_WINDOW_HOURS + 1, False, False
+    )
+    assert not is_transient_forgetting(
+        ACUTE_OVERLAP_THRESHOLD - 0.01, 1.0, False, False
+    )
 
 
 def test_transient_pinned_and_recovered_exempt():

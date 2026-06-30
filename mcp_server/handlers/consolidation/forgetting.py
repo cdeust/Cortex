@@ -81,7 +81,12 @@ def run_forgetting_cycle(
     if not hasattr(store, "search_newer_neighbors"):
         # Cowork/SQLite fallback does not implement the newer-neighbor query;
         # active forgetting is a production (PostgreSQL) deep-cycle mechanism.
-        return {"scanned": 0, "permanent": 0, "transient": 0, "skipped": "unsupported_store"}
+        return {
+            "scanned": 0,
+            "permanent": 0,
+            "transient": 0,
+            "skipped": "unsupported_store",
+        }
 
     counts = {"scanned": 0, "permanent": 0, "transient": 0}
     if hasattr(store, "iter_memories_for_decay"):
@@ -140,7 +145,9 @@ def _evaluate_memory(
     if is_permanent_forgetting(accum, is_pinned, recently_active):
         store.mark_memory_stale(memory_id, True)
         return "permanent"
-    if is_transient_forgetting(acute_overlap, acute_age_hours, is_pinned, recently_active):
+    if is_transient_forgetting(
+        acute_overlap, acute_age_hours, is_pinned, recently_active
+    ):
         store.update_memory_heat(memory_id, heat * (1.0 - acute_overlap))
         return "transient"
     return "retain"

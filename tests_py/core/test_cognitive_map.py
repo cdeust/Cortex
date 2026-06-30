@@ -103,9 +103,7 @@ def test_project_fiedler_separates_clusters() -> None:
     assert max(cluster_a) < min(cluster_b) or max(cluster_b) < min(cluster_a)
 
     # Within-cluster spread is smaller than the across-cluster gap.
-    within = max(
-        max(cluster_a) - min(cluster_a), max(cluster_b) - min(cluster_b)
-    )
+    within = max(max(cluster_a) - min(cluster_a), max(cluster_b) - min(cluster_b))
     across = abs(sum(cluster_a) / 3 - sum(cluster_b) / 3)
     assert across > within
 
