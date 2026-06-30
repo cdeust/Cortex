@@ -671,6 +671,18 @@ of false paper attributions. Full suite GREEN (3620 passed).
 - `memory_ingest.py` — `importance_boost=1.5` relabeled engineering default.
   Adcock et al. 2006 motivates a reward→memory boost (direction) but reports no
   multiplier; demoted to motivation-only.
+- `predictive_coding_flat.py` — completing sibling of the
+  `hierarchical_predictive_coding.py` fix above (added later the same day during
+  the forgetting-law campaign; the flat path had the same Friston-label-without-
+  disclaimer pattern but was missed in the first pass). No values changed. Every
+  constant now carries a provenance disclaimer: the 4-signal blend weights
+  (0.40/0.25/0.20/0.15), the 24h temporal saturation timescale, the length
+  buckets, and the no-data fallback priors (0.5/0.7/0.8) are relabeled
+  engineering defaults; Friston 2005 demoted to concept-only (prediction-error
+  gating). The blend is validated end-to-end — ROC-AUC=0.9998 separating novel
+  from duplicate content (flat mode, `benchmarks/gate_precision`, 2026-06-11;
+  the hierarchical alternative scored only 0.5514 on the same corpus, which is
+  why flat is the default path).
 
 **2026-04-03 (Wave 2):**
 - `neuromodulation_channels.py` DA channel: R-W equation verified faithful. Schultz firing
