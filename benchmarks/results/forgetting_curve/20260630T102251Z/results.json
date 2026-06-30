@@ -1,0 +1,587 @@
+{
+  "benchmark": "forgetting_curve_fidelity",
+  "date": "2026-06-30T10:22:51.098025+00:00",
+  "artifact_under_test": "effective_heat() + effective_stage() (mcp_server/infrastructure/pg_schema.py)",
+  "config": {
+    "quick": false,
+    "ages_hours": [
+      0.5,
+      1,
+      2,
+      4,
+      6,
+      8,
+      12,
+      24,
+      72,
+      168,
+      336,
+      720,
+      1440,
+      2160,
+      4320,
+      6480,
+      8760
+    ],
+    "profiles": {
+      "A_labile": {
+        "importance": 0.2,
+        "access": 0,
+        "schema": 0.0,
+        "terminal_stage": "labile",
+        "expected_floor": 0.0
+      },
+      "B_consolidated": {
+        "importance": 0.6,
+        "access": 3,
+        "schema": 0.0,
+        "terminal_stage": "consolidated",
+        "expected_floor": 0.1
+      },
+      "early_ltp": {
+        "importance": 0.35,
+        "access": 0,
+        "schema": 0.0,
+        "terminal_stage": "early_ltp",
+        "expected_floor": 0.0
+      },
+      "late_ltp": {
+        "importance": 0.5,
+        "access": 0,
+        "schema": 0.0,
+        "terminal_stage": "late_ltp",
+        "expected_floor": 0.05
+      }
+    }
+  },
+  "trajectories": {
+    "A_labile": [
+      {
+        "age_hours": 0.5,
+        "heat": 0.99787,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 1,
+        "heat": 0.9957446,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 2,
+        "heat": 0.9915073,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 4,
+        "heat": 0.9830867,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 6,
+        "heat": 0.97473764,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 8,
+        "heat": 0.9664595,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 12,
+        "heat": 0.9501135,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 24,
+        "heat": 0.9027156,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 72,
+        "heat": 0.7356189,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 168,
+        "heat": 0.48849118,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 336,
+        "heat": 0.23862363,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 720,
+        "heat": 0.04640116,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 1440,
+        "heat": 0.0021530678,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 2160,
+        "heat": 9.990485e-05,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 4320,
+        "heat": 9.980979e-09,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 6480,
+        "heat": 9.971482e-13,
+        "stage": "labile"
+      },
+      {
+        "age_hours": 8760,
+        "heat": 5.9717424e-17,
+        "stage": "labile"
+      }
+    ],
+    "B_consolidated": [
+      {
+        "age_hours": 0.5,
+        "heat": 0.9987215,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 1,
+        "heat": 0.99744457,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 2,
+        "heat": 0.9957446,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 4,
+        "heat": 0.9923533,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 6,
+        "heat": 0.98897356,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 8,
+        "heat": 0.98623604,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 12,
+        "heat": 0.98203915,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 24,
+        "heat": 0.9695555,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 72,
+        "heat": 0.92118776,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 168,
+        "heat": 0.8315706,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 336,
+        "heat": 0.6952057,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 720,
+        "heat": 0.4616546,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 1440,
+        "heat": 0.21426408,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 2160,
+        "heat": 0.1,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 4320,
+        "heat": 0.1,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 6480,
+        "heat": 0.1,
+        "stage": "consolidated"
+      },
+      {
+        "age_hours": 8760,
+        "heat": 0.1,
+        "stage": "consolidated"
+      }
+    ],
+    "early_ltp": [
+      {
+        "age_hours": 0.5,
+        "heat": 0.9987215,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 1,
+        "heat": 0.99744457,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 2,
+        "heat": 0.9948957,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 4,
+        "heat": 0.98981744,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 6,
+        "heat": 0.9847651,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 8,
+        "heat": 0.97973853,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 12,
+        "heat": 0.96976227,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 24,
+        "heat": 0.94043887,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 72,
+        "heat": 0.83174795,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 168,
+        "heat": 0.65059996,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 336,
+        "heat": 0.42328033,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 720,
+        "heat": 0.15845914,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 1440,
+        "heat": 0.0251093,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 2160,
+        "heat": 0.0039787986,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 4320,
+        "heat": 1.5830838e-05,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 6480,
+        "heat": 6.298771e-08,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 8760,
+        "heat": 1.8435743e-10,
+        "stage": "early_ltp"
+      }
+    ],
+    "late_ltp": [
+      {
+        "age_hours": 0.5,
+        "heat": 0.9987215,
+        "stage": "early_ltp"
+      },
+      {
+        "age_hours": 1,
+        "heat": 0.99744457,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 2,
+        "heat": 0.9957446,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 4,
+        "heat": 0.9923533,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 6,
+        "heat": 0.98897356,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 8,
+        "heat": 0.98560536,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 12,
+        "heat": 0.9789033,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 24,
+        "heat": 0.95906925,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 72,
+        "heat": 0.8836713,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 168,
+        "heat": 0.75019175,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 336,
+        "heat": 0.5632679,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 720,
+        "heat": 0.29257765,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 1440,
+        "heat": 0.08567472,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 2160,
+        "heat": 0.05,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 4320,
+        "heat": 0.05,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 6480,
+        "heat": 0.05,
+        "stage": "late_ltp"
+      },
+      {
+        "age_hours": 8760,
+        "heat": 0.05,
+        "stage": "late_ltp"
+      }
+    ]
+  },
+  "criterion_1_power_over_exponential": {
+    "name": "power_law_over_exponential",
+    "source": "Wixted&Ebbesen 1991; Benna&Fusi 2016",
+    "n_points": 13,
+    "power_law_fit": {
+      "model": "power_law",
+      "a": 1.200101,
+      "b_exponent": 0.135149,
+      "r2_fitspace": 0.58625,
+      "r2_hspace": 0.45206,
+      "rss_hspace": 0.4050880381014423,
+      "aic_hspace": -39.092,
+      "half_life_hours": 168.81
+    },
+    "exponential_fit": {
+      "model": "exponential",
+      "a": 0.996072,
+      "b_per_hour": 0.00106754,
+      "r2_fitspace": 0.99999,
+      "r2_hspace": 0.99996,
+      "rss_hspace": 2.835048358677633e-05,
+      "aic_hspace": -163.466,
+      "half_life_hours": 649.3
+    },
+    "comparison": {
+      "delta_aic_exp_minus_power": -124.374,
+      "aic_threshold": 2.0,
+      "winner": "exponential",
+      "power_law_at_least_as_good": false,
+      "r2_hspace_power": 0.45206,
+      "r2_hspace_exp": 0.99996
+    },
+    "passed": false,
+    "margin_delta_aic": -124.374
+  },
+  "criterion_2_permastore": {
+    "name": "permastore_bahrick",
+    "source": "Bahrick 1984; pg_schema consolidated floor=0.10",
+    "b_heat_at_365d": 0.1,
+    "a_heat_at_365d": 5.9717424e-17,
+    "permastore_floor": 0.1,
+    "collapse_threshold": 0.01,
+    "b_holds_floor": true,
+    "a_collapses": true,
+    "passed": true,
+    "margin_b_above_floor": 0.0,
+    "margin_a_below_collapse": 0.01
+  },
+  "criterion_3_exponent_plausibility": {
+    "name": "exponent_half_life_plausibility",
+    "source": "Wixted&Ebbesen 1991; Anderson&Schooler 1991; Benna&Fusi 2016",
+    "plausible_b_band": [
+      0.1,
+      0.6
+    ],
+    "profiles": {
+      "A_labile": {
+        "power_b": 0.538513,
+        "power_b_in_band": true,
+        "power_b_fit_r2": 0.0,
+        "power_half_life_hours": 3.62,
+        "exp_b_per_hour": 0.00426449,
+        "exp_half_life_hours": 162.54
+      },
+      "B_consolidated": {
+        "power_b": 0.135149,
+        "power_b_in_band": true,
+        "power_b_fit_r2": 0.45206,
+        "power_half_life_hours": 168.81,
+        "exp_b_per_hour": 0.00106754,
+        "exp_half_life_hours": 649.3
+      }
+    },
+    "passed": true
+  },
+  "diagnostic_ensemble_mixture": {
+    "name": "ensemble_mixture_benna_fusi",
+    "source": "Benna&Fusi 2016 (continuum-of-timescales \u2192 power law)",
+    "n_points": 17,
+    "mean_curve": [
+      [
+        0.5,
+        0.998509
+      ],
+      [
+        1,
+        0.99702
+      ],
+      [
+        2,
+        0.994473
+      ],
+      [
+        4,
+        0.989403
+      ],
+      [
+        6,
+        0.984362
+      ],
+      [
+        8,
+        0.97951
+      ],
+      [
+        12,
+        0.970205
+      ],
+      [
+        24,
+        0.942945
+      ],
+      [
+        72,
+        0.843056
+      ],
+      [
+        168,
+        0.680213
+      ],
+      [
+        336,
+        0.480094
+      ],
+      [
+        720,
+        0.239773
+      ],
+      [
+        1440,
+        0.0818
+      ],
+      [
+        2160,
+        0.03852
+      ],
+      [
+        4320,
+        0.037504
+      ],
+      [
+        6480,
+        0.0375
+      ],
+      [
+        8760,
+        0.0375
+      ]
+    ],
+    "power_law_fit": {
+      "model": "power_law",
+      "a": 1.838246,
+      "b_exponent": 0.390077,
+      "r2_fitspace": 0.80386,
+      "r2_hspace": 0.0,
+      "rss_hspace": 3.676394440127431,
+      "aic_hspace": -20.032,
+      "half_life_hours": 5.91
+    },
+    "exponential_fit": {
+      "model": "exponential",
+      "a": 0.648208,
+      "b_per_hour": 0.00045297,
+      "r2_fitspace": 0.70401,
+      "r2_hspace": 0.61311,
+      "rss_hspace": 1.1265175826137264,
+      "aic_hspace": -40.139,
+      "half_life_hours": 1530.21
+    },
+    "comparison": {
+      "delta_aic_exp_minus_power": -20.107,
+      "aic_threshold": 2.0,
+      "winner": "exponential",
+      "power_law_at_least_as_good": false,
+      "r2_hspace_power": 0.0,
+      "r2_hspace_exp": 0.61311
+    }
+  },
+  "overall_passed": false,
+  "verdict": "PARTIALLY FALSIFIED: permastore (Bahrick) reproduced, but the \u03b1-ladder does NOT produce power-law decay for a matured trace \u2014 a single exponential fits at least as well. The cascade is piecewise/single-exponential + floor, not heavy-tailed."
+}
