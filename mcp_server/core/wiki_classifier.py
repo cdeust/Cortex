@@ -3,7 +3,9 @@
 Pure business logic — no I/O. The sync path calls this to decide
 whether a memory should become a wiki page, and what kind.
 
-Classification hierarchy (Alexander P2 + Eco):
+Classification hierarchy (inspired by Alexander pattern-language P2 + Eco;
+the labels are conceptual framing, not a computational result borrowed from
+either author):
   1. REJECT: tool invocations, system prompts, JSON, generic instructions
   2. ADR: contains a decision with rationale
   3. LESSON: describes a mistake and its resolution
@@ -383,7 +385,9 @@ def _positive_score(content: str, tags: set[str]) -> int:
     if tags & _KNOWLEDGE_TAGS:
         score += 1
 
-    # 6. Atomic scope (200–3000 chars is the Zettelkasten sweet spot)
+    # 6. Atomic scope. The 200–3000 char band is an unsourced engineering
+    #    default for "a self-contained note" (calibration pending), NOT a
+    #    value from Luhmann's Zettelkasten method, which sets no char range.
     if 200 <= length <= 3000:
         score += 1
 
@@ -428,7 +432,9 @@ _TITLE_MARKDOWN_UNWRAP = [
 ]
 
 
-_POSITIVE_SCORE_THRESHOLD = 4  # must satisfy ≥ 4 of 8 positive signals
+# Unsourced engineering default (calibration pending): must satisfy ≥ 4 of 8
+# positive signals. Not paper-sourced; revisit if classifier precision drifts.
+_POSITIVE_SCORE_THRESHOLD = 4
 
 
 # ── User-rule integration (Phase 5.1) ─────────────────────────────────
@@ -833,7 +839,7 @@ def derive_title(
 ) -> str:
     """Derive a meaningful title for a wiki page.
 
-    Strategy (Alexander P4 + Eco):
+    Strategy (inspired by Alexander pattern-language P4 + Eco; framing only):
     1. Strip known prefixes
     2. Walk lines; accept the first that passes ``_line_is_title_candidate``
     3. Fall back to entity-based title if 2+ entities are supplied

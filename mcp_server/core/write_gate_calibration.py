@@ -6,11 +6,12 @@ gate is too loose — most "novel" attempts aren't actually novel and we
 are storing noise. If too few pass (<10%), the gate is too tight and we
 lose real signal.
 
-Target acceptance rate: 50% (Jaynes-style maximum entropy — half of
-novel attempts pass, which maximises the information content of the
-accept/reject signal, E.T. Jaynes, *Probability Theory: The Logic of
-Science*, 2003, Ch. 11). This is the most informative operating point:
-the gate is maximally discriminative when acceptance is balanced.
+Target acceptance rate: 50%. The accept/reject outcome is a binary
+(Bernoulli) signal; its Shannon entropy H(p) = -p·log₂p - (1-p)·log₂(1-p)
+is maximised at p = 0.5, so a balanced acceptance rate maximises the
+information content of each gate decision. This is the most informative
+operating point: the gate is maximally discriminative when acceptance is
+balanced.
 
 Control mechanism: the calibrator holds an exponential moving average
 (EMA) of the accept signal over the last ~N gate decisions, and nudges
@@ -23,9 +24,10 @@ Pure business logic — no I/O. The state lives in-process; persistence
 is optional and gated on the A3 schema migration landing.
 
 References:
-    Jaynes, E. T. (2003). *Probability Theory: The Logic of Science*.
-        Cambridge University Press. Ch. 11 — the principle of maximum
-        entropy implies 50% acceptance maximises information per decision.
+    Shannon, C. E. (1948). "A Mathematical Theory of Communication."
+        *Bell System Technical Journal* 27. The binary entropy function
+        H(p) is maximised at p = 0.5, so 50% acceptance maximises the
+        information carried by each accept/reject decision.
     Taleb, N. N. (2012). *Antifragile: Things That Gain from Disorder*.
         Random House. — systems that calibrate from their own rejection
         signal are antifragile to distribution shift.
@@ -37,7 +39,7 @@ from dataclasses import dataclass
 
 # ── Control constants (source: operational defaults, see module docstring) ──
 
-TARGET_ACCEPTANCE_RATE: float = 0.5  # Jaynes max-entropy operating point.
+TARGET_ACCEPTANCE_RATE: float = 0.5  # Shannon binary-entropy max (H(p) peaks at p=0.5).
 EMA_DECAY: float = 0.95  # ~20-sample effective memory window.
 ADJUSTMENT_STEP: float = 0.02  # Bounded per-update threshold delta.
 TOLERANCE_BAND: float = 0.15  # |observed - target| below this -> no adjustment.

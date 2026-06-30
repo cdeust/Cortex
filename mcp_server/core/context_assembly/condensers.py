@@ -124,8 +124,9 @@ def condense_entity_triples(text: str, token_budget: int) -> str:
 
 
 # ── Timeline-event condenser ────────────────────────────────────────────
-# Strategy: extract (when, what, who) slots. Fixed schema compresses
-# better than free-text summaries. Tse 2007 schema-congruent consolidation.
+# Strategy: extract (when, what, who) slots. A fixed schema compresses an
+# event more reliably than a free-text summary because the salient fields
+# are pinned. (Engineering heuristic — no biological source.)
 
 
 def condense_timeline_event(text: str, token_budget: int) -> str:

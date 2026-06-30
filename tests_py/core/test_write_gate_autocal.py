@@ -16,8 +16,9 @@ Invariants under test:
   - The EMA converges to the target (0.5) under balanced synthetic
     traffic — the control loop is not biased.
 
-Source: Jaynes (2003), Taleb (2012). Target acceptance 0.5 is the
-maximum-entropy operating point for a binary gate.
+Source: Shannon (1948), Taleb (2012). Target acceptance 0.5 is the
+maximum-entropy operating point for a binary gate (binary entropy H(p)
+peaks at p=0.5).
 """
 
 from __future__ import annotations
