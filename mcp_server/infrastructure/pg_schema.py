@@ -695,6 +695,98 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
 """
 
+ALPHA_INTEGRAL_FN = """
+-- alpha_integral — cumulative α-weighted dwell time ∫₀^τ α(stage(s)) ds.
+--
+-- Root cause (forgetting-curve fidelity benchmark, 2026-06-30): effective_heat
+-- applied α(final stage) to ALL elapsed hours. When a trace matures, α drops
+-- (late_ltp 0.8 → consolidated 0.5); applying the lower α retroactively to the
+-- whole past made the decay exponent α·t DECREASE across a stage boundary, so
+-- heat ROSE with age — non-physical, non-monotonic forgetting (e.g.
+-- B_consolidated 6h heat 0.98982 → 8h 0.99151).
+--
+-- Fix: the instantaneous decay rate is α(stage at dwell-time s). The decay
+-- accumulated over a window is the INTEGRAL of α over that window, not
+-- α(endpoint)·window. This returns ∫₀^p_tau α(stage(s)) ds on the dwell clock,
+-- walking the SAME forward chain as effective_stage() (identical gates and
+-- effective min_dwell). α>0 everywhere ⇒ the integral is strictly increasing
+-- in p_tau ⇒ POWER(p_factor, integral) is monotone decreasing ⇒ forgetting is
+-- monotone by construction.
+--
+-- α(stage): labile=2.0, early_ltp=1.2, late_ltp=0.8, consolidated=0.5,
+--   reconsolidating=1.5, other=1.0. source: pg_schema effective_heat α ladder
+--   (Kandel 2001 stage-dependent decay exponent).
+-- Stage durations mirror effective_stage: labile min_dwell 0 (imp>0.3 gate,
+--   instant); early_ltp 1.0·(1-0.2·schema) gated on acc≥1 OR imp>0.4; late_ltp
+--   6.0·15^(-schema) gated on acc≥(3 if schema<0.5 else 1). A failed gate
+--   freezes the trace in that stage for the remaining τ (its α covers the tail).
+CREATE OR REPLACE FUNCTION alpha_integral(
+    p_stage      TEXT,
+    p_tau        DOUBLE PRECISION,
+    p_importance REAL,
+    p_access     INTEGER,
+    p_schema     REAL
+) RETURNS DOUBLE PRECISION AS $$
+DECLARE
+    cur       TEXT             := p_stage;
+    remaining DOUBLE PRECISION := GREATEST(0.0, COALESCE(p_tau, 0.0));
+    imp       DOUBLE PRECISION := COALESCE(p_importance, 0.5);
+    acc       INTEGER          := COALESCE(p_access, 0);
+    sch       DOUBLE PRECISION := COALESCE(p_schema, 0.0);
+    total     DOUBLE PRECISION := 0.0;
+    dwell     DOUBLE PRECISION;
+    late_thr  INTEGER;
+    seg       DOUBLE PRECISION;
+BEGIN
+    -- Off-chain stages decay at their fixed α for the whole window.
+    IF cur NOT IN ('labile', 'early_ltp', 'late_ltp', 'consolidated') THEN
+        RETURN (CASE cur WHEN 'reconsolidating' THEN 1.5 ELSE 1.0 END)
+               * remaining;
+    END IF;
+
+    -- LABILE: min_dwell 0. imp>0.3 ⇒ leave instantly (0 duration, no α
+    -- contribution). Else frozen labile ⇒ α=2.0 for the whole window.
+    IF cur = 'labile' THEN
+        IF imp > 0.3 THEN
+            cur := 'early_ltp';
+        ELSE
+            RETURN total + 2.0 * remaining;
+        END IF;
+    END IF;
+
+    -- EARLY_LTP: α=1.2. Leaves after dwell = 1.0·(1-0.2·schema) iff gated.
+    IF cur = 'early_ltp' THEN
+        dwell := 1.0 * (1.0 - sch * 0.2);
+        IF NOT (acc >= 1 OR imp > 0.4) THEN
+            RETURN total + 1.2 * remaining;
+        END IF;
+        seg := LEAST(remaining, dwell);
+        total := total + 1.2 * seg;
+        remaining := remaining - seg;
+        IF remaining <= 0.0 THEN RETURN total; END IF;
+        cur := 'late_ltp';
+    END IF;
+
+    -- LATE_LTP: α=0.8. Leaves after dwell = 6.0·15^(-schema) iff gated.
+    IF cur = 'late_ltp' THEN
+        dwell := 6.0 * POWER(15.0, -sch);
+        late_thr := CASE WHEN sch < 0.5 THEN 3 ELSE 1 END;
+        IF NOT (acc >= late_thr) THEN
+            RETURN total + 0.8 * remaining;
+        END IF;
+        seg := LEAST(remaining, dwell);
+        total := total + 0.8 * seg;
+        remaining := remaining - seg;
+        IF remaining <= 0.0 THEN RETURN total; END IF;
+        cur := 'consolidated';
+    END IF;
+
+    -- CONSOLIDATED: terminal, α=0.5 for all remaining τ.
+    RETURN total + 0.5 * remaining;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
+"""
+
 EFFECTIVE_HEAT_FN = """
 -- p_factor default: 0.95 per DAY (pre-A3 DECAY_MEMORIES_FN ran ~daily,
 -- each run applied factor 0.95 once). Converted to per-hour equivalent:
@@ -710,11 +802,11 @@ CREATE OR REPLACE FUNCTION effective_heat(
 DECLARE
     hours_elapsed  DOUBLE PRECISION;
     stage_hours    DOUBLE PRECISION;
-    alpha          DOUBLE PRECISION;
     beta           DOUBLE PRECISION;
     stage_floor    DOUBLE PRECISION;
     base_scaled    DOUBLE PRECISION;
     decayed        DOUBLE PRECISION;
+    eff_decay_hours DOUBLE PRECISION;
     eff_stage      TEXT;
 BEGIN
     -- Pinned: protected or explicit no_decay. heat_base is authoritative;
@@ -755,17 +847,6 @@ BEGIN
         m.schema_match_score
     );
 
-    -- α(stage) — Kandel 2001 stage-dependent decay exponent.
-    -- source: pg_schema.py:748-756
-    alpha := CASE eff_stage
-        WHEN 'labile'          THEN 2.0
-        WHEN 'early_ltp'       THEN 1.2
-        WHEN 'late_ltp'        THEN 0.8
-        WHEN 'consolidated'    THEN 0.5
-        WHEN 'reconsolidating' THEN 1.5
-        ELSE 1.0
-    END;
-
     -- β(valence, Δt_stage) — Yonelinas & Ritchey 2015 emotional damping.
     -- source: pg_schema.py:757-759
     --
@@ -787,10 +868,29 @@ BEGIN
         ELSE 0.0
     END;
 
+    -- Decay exponent = ∫ α(stage(s)) ds over the elapsed window, NOT
+    -- α(final stage)·hours_elapsed. The latter applied a matured trace's
+    -- lower α retroactively to its whole past, so the exponent could shrink
+    -- across a stage boundary and heat ROSE with age (non-monotonic — see
+    -- alpha_integral). The decay window on the dwell clock is
+    -- [stage_hours - hours_elapsed, stage_hours]; its α-integral is the
+    -- difference of cumulative integrals (GREATEST clamps the lower bound for
+    -- rows whose heat was last touched before the current stored stage). For a
+    -- single-stage trace α is constant ⇒ the difference is exactly
+    -- α·hours_elapsed, so single-stage trajectories are byte-identical to the
+    -- prior formula; only multi-stage traces change, and only to remove the
+    -- non-physical bump. source: alpha_integral() (Kandel 2001).
+    eff_decay_hours :=
+        alpha_integral(m.consolidation_stage, stage_hours,
+                       m.importance, m.access_count, m.schema_match_score)
+        - alpha_integral(m.consolidation_stage,
+                         GREATEST(0.0, stage_hours - hours_elapsed),
+                         m.importance, m.access_count, m.schema_match_score);
+
     -- Scale base by homeostatic factor (Feynman first-principles: factor
-    -- is a scalar-per-domain gain, not a per-row mutation). Then apply
-    -- decay continuously across elapsed hours:
-    --   POWER(p_factor, α·β)^hours = POWER(p_factor, α·β·hours)
+    -- is a scalar-per-domain gain, not a per-row mutation). Then apply the
+    -- integrated decay: POWER(p_factor, β · ∫α). β (emotional damping) scales
+    -- the whole exponent as a slowly-varying global factor.
     --
     -- All intermediates are DOUBLE PRECISION (float8) to avoid REAL
     -- underflow at ~1e-38. The clamp below pins output ≥ stage_floor,
@@ -799,7 +899,7 @@ BEGIN
     -- and GREATEST(stage_floor, 0) lifts the value back to stage_floor.
     base_scaled := m.heat_base::DOUBLE PRECISION * factor::DOUBLE PRECISION;
     decayed := base_scaled * POWER(p_factor::DOUBLE PRECISION,
-                                   alpha * beta * hours_elapsed);
+                                   beta * eff_decay_hours);
 
     -- I1 + I8: clamp to REAL-safe range BEFORE cast. REAL (float4)
     -- cannot represent values below ~1.2e-38 even as sub-normals —
@@ -1717,8 +1817,11 @@ def get_all_ddl() -> list[str]:
         MIGRATIONS_DDL,
         INDEXES_DDL,
         # effective_stage() must be created before effective_heat(), which
-        # calls it to derive α/floor lazily on the read path.
+        # calls it to derive the floor lazily on the read path. alpha_integral()
+        # likewise must precede effective_heat(), which calls it for the decay
+        # exponent (piecewise α-integral, monotonic forgetting).
         EFFECTIVE_STAGE_FN,
+        ALPHA_INTEGRAL_FN,
         EFFECTIVE_HEAT_FN,
         EFFECTIVE_HEAT_FROZEN_FN,
         # A3 canonical read path: lazy effective_heat() computes decay at

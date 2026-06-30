@@ -135,9 +135,14 @@ def compute_forgetting_curve(
 ) -> dict[str, float]:
     """Fit a forgetting curve to memory age vs heat data.
 
-    Biology shows power-law forgetting: R(t) = a * t^(-b).
-    If Cortex's mechanisms produce a similar curve, the system is
-    behaving realistically.
+    Fits a single EXPONENTIAL R(t) = a · exp(-b · t) by OLS of ln(heat) on
+    linear age (see ``_fit_log_linear``); the returned ``curve_type`` is
+    ``"exponential"``. NOTE: this is the exponential null, not a power law —
+    the biological power-law form R(t) = a · t^(-b) (Wixted & Ebbesen 1991;
+    Anderson & Schooler 1991) requires regressing ln(heat) on ln(age), which
+    this does NOT do. For the genuine power-law fit and the falsifiable
+    power-vs-exponential model comparison, see
+    ``benchmarks/forgetting_curve/curve_fit.py``.
 
     Args:
         memories_by_age: List of (age_hours, heat) tuples.
