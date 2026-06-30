@@ -313,10 +313,11 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
             gate["importance"],
         )
 
-    # Baseline heat: live writes default to 1.0; backfill / import paths
-    # override via initial_heat to reflect content age (Ebbinghaus curve —
-    # see backfill_helpers.age_decayed_heat). Surprise boost applies on top.
-    # Source: issue #14 P1.
+    # Baseline heat defaults to 1.0. Callers may pass an explicit initial_heat
+    # to set a different baseline; age-based decay is NOT applied here — it is
+    # the read-time job of effective_heat() via the heat_base_set_at anchor
+    # (A3 decay clock), keeping a single canonical age-decay path. Surprise
+    # boost applies on top.
     baseline_heat = initial_heat if initial_heat is not None else 1.0
     heat = thermodynamics.apply_surprise_boost(
         baseline_heat, gate["score"], get_memory_settings().SURPRISE_BOOST

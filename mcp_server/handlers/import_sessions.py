@@ -169,8 +169,6 @@ async def _store_memory(
 ) -> bool:
     """Store a single extracted item via the remember handler."""
     from mcp_server.handlers.backfill_helpers import (
-        age_decayed_heat,
-        compute_age_days,
         gist_oversized_content,
     )
     from mcp_server.handlers.remember import handler as remember_handler
@@ -182,14 +180,15 @@ async def _store_memory(
         "source": "import",
         "force": False,
     }
-    # Preserve original session timestamp AND compute age-decayed initial
-    # heat from it, so historical conversations don't form a bimodal cohort
-    # at heat=1.0 after import. Source: issue #14 P1.
+    # Preserve the original session timestamp. insert_memory anchors
+    # heat_base_set_at to it (A3 decay clock), so effective_heat() decays the
+    # baseline by the memory's real age at READ time — the single canonical
+    # age-decay path. We deliberately do NOT pre-decay initial_heat here: that
+    # would double-count the same age. A3's read-time decay also spreads the
+    # import cohort by age, subsuming the original issue #14 bimodality fix.
     timestamp = item.get("timestamp")
     if timestamp:
         remember_args["created_at"] = str(timestamp)
-        age_days = compute_age_days(str(timestamp))
-        remember_args["initial_heat"] = age_decayed_heat(age_days)
     result = await remember_handler(remember_args)
 
     return bool(result and result.get("stored"))

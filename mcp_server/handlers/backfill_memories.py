@@ -132,8 +132,6 @@ async def _import_single_item(
 ) -> int | None:
     """Store one extracted item. Returns memory_id if stored, else None."""
     from mcp_server.handlers.backfill_helpers import (
-        age_decayed_heat,
-        compute_age_days,
         gist_oversized_content,
     )
     from mcp_server.handlers.remember import handler as remember_handler
@@ -152,15 +150,17 @@ async def _import_single_item(
         "source": f"backfill:{project_slug[:40]}",
         "force": True,
     }
-    # Preserve original session timestamp AND compute age-decayed initial
-    # heat from it, so a 6-month-old conversation imports at heat ~0.3
-    # rather than the baseline 1.0 that would form a bimodal cohort after
-    # a bulk backfill. Source: issue #14 P1 root cause.
+    # Preserve the original session timestamp. insert_memory anchors
+    # heat_base_set_at to it (A3 decay clock), so effective_heat() decays the
+    # baseline by the memory's real age at READ time — the single canonical
+    # age-decay path (pg_schema EFFECTIVE_HEAT_FN). We deliberately do NOT
+    # pre-decay initial_heat here: that would double-count the same age (once
+    # analytically at insert, once dynamically at read). A3's read-time decay
+    # also spreads the import cohort by age, subsuming the original issue #14
+    # bimodality fix.
     timestamp = item.get("timestamp")
     if timestamp:
         remember_args["created_at"] = str(timestamp)
-        age_days = compute_age_days(str(timestamp))
-        remember_args["initial_heat"] = age_decayed_heat(age_days)
     result = await remember_handler(remember_args)
 
     if not result.get("stored"):
