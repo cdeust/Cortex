@@ -83,15 +83,35 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev,postgresql,codebase]"
 
+      # Populate the HuggingFace cache before the (offline) test run. A transient
+      # huggingface.co blip must not leave the cache empty — that surfaced as 58
+      # spurious "couldn't connect to huggingface.co" test failures on a single
+      # matrix leg (CI run 28495801728, Python 3.10, 2026-07-01) while every other
+      # leg was fine. Retry with backoff so a blip self-heals; fail loudly here (no
+      # continue-on-error) instead of cascading into a misleading test failure.
       - name: Pre-download embedding model
-        run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"
-        continue-on-error: true
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+            echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "HF pre-download failed after 5 attempts" >&2
+          exit 1
 
+      # Offline: the model is already cached by the step above, so tests must never
+      # reach out to huggingface.co mid-suite — deterministic and flake-free.
       - name: Run tests
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
         run: pytest --tb=short -q
 
       - name: Run tests with coverage
         if: matrix.python-version == '3.12'
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
         run: pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage
@@ -139,11 +159,22 @@ jobs:
       - name: Install dependencies (no postgresql extra)
         run: pip install -e ".[dev,sqlite]"
 
+      # Retry-with-backoff, fail-loudly: see the `test` job's pre-download step
+      # for the root-cause rationale (CI run 28495801728, 2026-07-01).
       - name: Pre-download embedding model
-        run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"
-        continue-on-error: true
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+            echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "HF pre-download failed after 5 attempts" >&2
+          exit 1
 
       - name: Run SQLite backend tests
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
         # Scope: the SQLite fallback is intentionally NOT at full feature parity
         # with the mandatory PostgreSQL backend (some SqliteMemoryStore methods
         # and PG-specific tests do not apply). Run the dedicated SQLite backend
@@ -192,14 +223,27 @@ jobs:
           mcp_server.core.staleness, mcp_server.doctor, mcp_server.doctor_mcp;
           print('windows import smoke OK')"
 
+      # Retry-with-backoff, fail-loudly: see the `test` job's pre-download step
+      # for the root-cause rationale (CI run 28495801728, 2026-07-01). shell: bash
+      # so the retry loop runs under Git Bash rather than the Windows default pwsh.
       - name: Pre-download embedding model
-        run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"
-        continue-on-error: true
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+            echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "HF pre-download failed after 5 attempts" >&2
+          exit 1
 
       # Scope (explicit, not silent): the portability tests plus the modules
       # carrying Windows-specific branches and the SQLite backend suite. The
       # full PG suite is not run here — it is covered by the ubuntu `test` job.
       - name: Run portability + backend tests
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
         run: >-
           pytest --tb=short -q
           tests_py/shared/test_platform.py
