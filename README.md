@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/tests-3000+_passing-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/references-72_papers-orange.svg" alt="References">
-  <img src="https://img.shields.io/badge/version-3.24.0-brightgreen.svg" alt="Version 3.24.0">
+  <img src="https://img.shields.io/badge/version-3.25.0-brightgreen.svg" alt="Version 3.25.0">
 </p>
 
 <p align="center">
@@ -25,7 +25,7 @@
   <strong>Companion projects:</strong><br>
   <a href="https://github.com/cdeust/cortex-know-when-to-stop-training-model">cortex-beam-abstain</a> (repo <code>cortex-know-when-to-stop-training-model</code>) — community-trained retrieval abstention model for RAG systems<br>
   <a href="https://github.com/cdeust/zetetic-team-subagents">zetetic-team-subagents</a> — specialist Claude Code agents Cortex orchestrates with<br>
-  <a href="https://github.com/cdeust/automatised-pipeline">automatised-pipeline</a> — automated 11-stage pipeline (findings → PRs) that Cortex drives via <code>run_pipeline</code><br>
+  <a href="https://github.com/cdeust/automatised-pipeline">automatised-pipeline</a> — automated 11-stage pipeline (findings → PRs); Cortex ingests its codebase analysis via the optional <code>ingest_codebase</code> / <code>change_impact</code> tools<br>
   <a href="https://github.com/cdeust/cortex-viz">cortex-viz</a> — read-only visualization MCP (galaxy graph, execution trace, wiki browser) over the same store
 </p>
 
@@ -164,15 +164,15 @@ You rarely call these by hand: the lifecycle hooks (plugin install) inject the r
 
 ## What's new
 
+**v3.25.0 — headless wiki-authoring hardened + active forgetting.** The headless wiki worker now delegates read-only codebase analysis to your **full zetetic specialist roster** (architect, engineer, code-reviewer, test-engineer, security-auditor, …) under a hard `Write/Edit/Bash` deny ceiling that propagates to delegated subagents; it bills a logged-in **Claude subscription by default** (API key opt-in), and no-ops every Cortex hook in the child process to stop consolidation→authoring recursion and memory pollution. Root-cause fix: a variadic `--add-dir` had been swallowing the authoring prompt, silently failing every drain with a source root since 3.24. New memory mechanism — **active forgetting**: two *Drosophila* dopaminergic circuits (permanent Rac1 trace erosion under chronic interference + transient DAMB retrieval block), shipped with a falsification harness left failing where the model genuinely diverges from biology. Also: Windows cross-platform portability. *(Davis & Zhong 2017; Sabandal et al. 2021)*
+
+**v3.24.0–3.24.1 — MCPB manifest fix + cross-backend recall fix.** 3.24.1 fixes `recall` (and every read tool) on **PostgreSQL**: the PG store returned `numpy.float32` scores and `datetime` timestamps where FastMCP needs JSON-native values, so a non-native field silently dropped `structuredContent` and the host rejected the call — on PostgreSQL only, while SQLite-backed tests stayed green. Normalized at the `safe_handler` boundary every tool crosses. 3.24.0: MCPB manifest schema fix + PyPI install docs. Also adds mutation testing (mutmut) scoped per-change.
+
 **v3.23.0 — single-click bundle + registry-indexer build fix.** Cortex now ships as an MCP bundle (`.mcpb`) with a `uv` runtime and a selectable storage backend — **SQLite by default, PostgreSQL optional** — so it installs in one click with zero setup. Also: a `neuro-cortex-memory` console script so `uv run neuro-cortex-memory` resolves from a checkout; registry indexers that build with `uv sync` and launch via that script now start the server and register all 43 standalone tools **without** a PostgreSQL connection (46 when the automatised-pipeline + prd-spec-generator integrations are configured; so `tools/list` answers inside a DB-less container).
 
 **v3.22.0 — security + reliability hardening (P0/P1 audit).** Security: a headless-authoring RCE fix (the subprocess toolset is restricted and the untrusted repo's settings/hooks are ignored), DSN/secret redaction (libpq `?password=` query params and psycopg exception leaks), and pip supply-chain hardening. Fixed: the SQLite backend's incomplete `heat→heat_base` rename — all 11 indexes were never created (full table scans) and search/stats queried a dropped column; both are corrected, with a dedicated SQLite-backend CI job and deployment docs (WSL, TLS client-cert `DATABASE_URL`, remote PostgreSQL). 46 MCP tools.
 
 **v3.21.0 — visualization extracted to cortex-viz.** The entire visualization stack — the galaxy graph, execution trace, the Knowledge / Board / Wiki / Pipeline views, and their HTTP server — moves to a standalone companion MCP, **[cortex-viz](https://github.com/cdeust/cortex-viz)**, which reads this same store read-only. Cortex is a focused memory engine again (−50k lines). **Breaking:** the `open_visualization`, `get_methodology_graph`, and `query_workflow_graph` MCP tools are removed from Cortex — install cortex-viz to get them back (its `/cortex-visualize` skill replaces the old one). 46 MCP tools remain; no memory, retrieval, or wiki behaviour changed; full suite green (3214 tests).
-
-**v3.20.0 — graph intelligence + memory knowledge-updates.** The codebase graph gains Leiden community detection, centrality and god-node analysis, and native tree-sitter symbol extraction across 7 languages — no `automatised-pipeline` dependency required. Memory learns to handle *knowledge updates*: a memory that supersedes prior knowledge records an explicit supersession edge so recall ranks the newest version above what it replaces; a MinHash entity-dedup engine (with AST-symbol origin flagging) collapses near-duplicate entities during a consolidate-time merge cycle; and a new `include_related` recall mode returns a memory's graph neighbours in one call.
-
-**v3.19.0 — memory hygiene + scoring integrity.** A fix to an auto-capture scoring inversion at all three roots: prospective-trigger injection no longer harvests garbage keyword triggers from raw tool dumps; WRRF fusion excludes mechanical freshness (`post_tool_capture`) from the hot/recency pools so churn isn't mistaken for importance; and `rate_memory` feedback now wires into rank as a metamemory confidence prior (Kraaij 2002). Oversized auto-captures store a deterministic gist plus a content-addressed artifact pointer — full output one `Read` away, no truncation. Benchmarks regression-free (LongMemEval R@10 98.4% / MRR 0.9124; LoCoMo MRR 0.8278).
 
 → **[Full changelog and release notes](https://github.com/cdeust/Cortex/releases)**
 
@@ -193,6 +193,8 @@ Cortex doesn't store memories the way a database stores rows. It treats them the
 **Background consolidation runs like sleep.** When you're away, a consolidation cycle decays old memories, compresses verbose ones, promotes recurring patterns into general knowledge (episodic → semantic transfer), discovers entity relationships, and runs "dream replay" where related memories are compared and new connections emerge. *(McClelland et al. 1995; Foster & Wilson 2006; Buzsáki 2015)*
 
 **Similar memories stay distinct.** Pattern separation, modeled on the dentate gyrus, keeps "Tuesday's standup" separate from "Wednesday's standup" even though they're nearly identical — without it, retrieval returns the same generic match for every similar query. *(Leutgeb et al. 2007; Yassa & Stark 2011)*
+
+**Forgetting is active, not just passive decay.** Beyond the slow cooling of the heat model, Cortex runs two independent dopaminergic forgetting circuits from *Drosophila*: a permanent one that erodes a memory's trace under chronic interference (Rac1), and a transient one that blocks retrieval of a memory without erasing it (DAMB). Interference-heavy, low-value memories are actively removed rather than left to linger — the same way your brain prunes what competes without paying off. *(Davis & Zhong 2017; Sabandal et al. 2021)*
 
 The two arXiv-ready papers go deeper: **[Thermodynamic Memory vs. Flat-Importance Stores (PDF, 34 pages)](docs/arxiv-thermodynamic/main.pdf)** · **[Stage-Aware Context Assembly (PDF, 39 pages)](docs/arxiv-context-assembly/main.pdf)**.
 
