@@ -95,5 +95,59 @@ def test_render_roundtrip() -> None:
     assert "## Decision" in re_rendered
 
 
+def test_parse_page_strips_quoted_scalar_value() -> None:
+    """Reproduction (wiki.pages.title corruption, 36 rows, 2026-07-14):
+
+    a scalar value quoted per YAML convention because it contains a
+    colon (``title: "Public API surface: automatised-pipeline"``) must
+    have its surrounding quotes stripped, matching the block-list item
+    branch (line ~103) and the inline-list branch (``_strip_inline_list``)
+    which already do this. Before the fix, the scalar branch assigned
+    ``raw_stripped`` verbatim, leaving the literal quote characters in
+    ``fm["title"]`` and, downstream, in ``wiki.pages.title``.
+    """
+    text = (
+        "---\n"
+        'title: "Public API surface: automatised-pipeline"\n'
+        "kind: reference\n"
+        "---\n\nbody\n"
+    )
+    doc = parse_page(text)
+    assert doc.frontmatter["title"] == "Public API surface: automatised-pipeline"
+
+
+def test_parse_page_strips_duplicated_key_label() -> None:
+    """Reproduction (wiki.pages.title corruption, 26 rows, 2026-07-14):
+
+    real files under ~/.claude/methodology/wiki/ (authored by an LLM
+    completion routed verbatim through write_governed_page, see
+    wiki_write.py) contain a duplicated ``title: title: "..."`` label —
+    the frontmatter's own key echoed into its own value. ``line.partition(":")``
+    only ever strips the FIRST ``title:`` label, so the second one used to
+    ride along into ``fm["title"]`` verbatim and then into
+    ``wiki.pages.title`` via ``wiki_migrate.page_row_from_md``. Confirmed
+    against the actual on-disk file (id 913,
+    ``reference/_general/4196397-title-public-api-surface-automatised-pipeline.md``).
+    """
+    text = '---\ntitle: title: "Public API surface: automatised-pipeline"\nkind: reference\n---\n\nbody\n'
+    doc = parse_page(text)
+    assert doc.frontmatter["title"] == "Public API surface: automatised-pipeline"
+
+    # Unquoted duplicated-label variant (id 2916 on disk: title: title: agentic-ai — tutorials)
+    text2 = (
+        "---\ntitle: title: agentic-ai — tutorials\nkind: explanation\n---\n\nbody\n"
+    )
+    doc2 = parse_page(text2)
+    assert doc2.frontmatter["title"] == "agentic-ai — tutorials"
+
+
+def test_parse_page_does_not_strip_legitimate_colon_value() -> None:
+    """A value that legitimately starts with the key name followed by other
+    text (not the ``key: `` duplicate-label pattern) must be preserved."""
+    text = "---\ntitle: titleist golf clubs review\n---\n\nbody\n"
+    doc = parse_page(text)
+    assert doc.frontmatter["title"] == "titleist golf clubs review"
+
+
 def test_empty_page_document() -> None:
     assert render_page(PageDocument()) == ""
