@@ -103,6 +103,16 @@ benchmarks = [
     "pgvector>=0.4,<0.6",        # vector similarity in PostgreSQL (bounds: see [postgresql])
     "pymupdf>=1.24.0",           # PDF parsing for some benchmark sources
 ]
+# Optional OTLP telemetry export (issue #122) -- OFF by default. Absent this
+# extra (and OTEL_EXPORTER_OTLP_ENDPOINT), Cortex telemetry stays local-only
+# (~/.claude/methodology/telemetry.jsonl, no network egress). Installing this
+# extra alone changes nothing either -- see
+# infrastructure/otel_exporter.py::build_otel_exporter, which additionally
+# requires the endpoint env var before wiring any exporter.
+otel = [
+    "opentelemetry-sdk>=1.24.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.24.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",

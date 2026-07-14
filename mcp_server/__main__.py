@@ -49,12 +49,22 @@ from mcp_server import (
     tool_registry_nav,
     tool_registry_wiki,
 )
+from mcp_server.core import telemetry
 from mcp_server.handlers._tool_meta import apply_param_docs
 from mcp_server.infrastructure.mcp_client_pool import close_all
+from mcp_server.infrastructure.otel_exporter import build_otel_exporter
 from mcp_server.infrastructure.upstream_availability import (
     codebase_upstream_available,
     prd_upstream_available,
 )
+
+# Optional OTLP telemetry export (issue #122) -- OFF by default. Wiring the
+# concrete exporter into the core port happens only here, in the
+# composition root; core/telemetry.py never imports infrastructure.
+# build_otel_exporter() returns None (no-op) unless the operator set
+# OTEL_EXPORTER_OTLP_ENDPOINT, so this line is a zero-behavior-change no-op
+# for every existing deployment.
+telemetry.set_exporter(build_otel_exporter())
 
 # ── Server Instance ────────────────────────────────────────────────────────
 

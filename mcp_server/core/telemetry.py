@@ -19,6 +19,18 @@ Opt-out:
   Set ``CORTEX_TELEMETRY_DISABLED=1`` in the environment to disable both
   the in-memory counters and the JSONL append.
 
+Optional export (issue #122):
+  ``TelemetryExporter`` is a port (Protocol) that outer layers may
+  implement to mirror each recorded sample onto an external sink (e.g.
+  OTLP). Core declares the port only -- it never imports an exporter
+  implementation. The composition root (mcp_server/__main__.py) wires a
+  concrete exporter via ``set_exporter()`` at startup, OFF by default
+  (``set_exporter`` is never called unless the operator opted in via
+  env var -- see infrastructure/otel_exporter.py::build_otel_exporter).
+  Export is best-effort: any exception raised by the exporter is caught
+  here and never propagates to the caller, same guarantee as the JSONL
+  append below.
+
 Layer:
   Pure logic. No MCP, no DB, no embeddings. Filesystem write is local
   and best-effort (try/except OSError) so a full disk or permission
@@ -28,18 +40,58 @@ Contract (record):
   precondition: ``op`` is a non-empty string; ``latency_ms`` >= 0;
                 byte / count fields are non-negative ints.
   postcondition: counters[op] is updated atomically; one JSONL line is
-                appended on success or silently dropped on OSError; no
+                appended on success or silently dropped on OSError; the
+                registered exporter (if any) is invoked with the same
+                sample and any exception it raises is swallowed; no
                 exception escapes to the handler.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class TelemetryExporter(Protocol):
+    """Port for mirroring recorded samples onto an external sink.
+
+    Contract:
+      - ``export`` receives the same dict shape written to the JSONL log
+        (``ts``, ``op``, ``latency_ms``, ``bytes_in``, ``bytes_out``,
+        ``result_count``, ``ok``).
+      - ``export`` MUST NOT raise for control flow that reaches the
+        caller -- ``record()`` catches any exception defensively, but a
+        well-behaved implementation handles its own I/O errors.
+    """
+
+    def export(self, sample: dict[str, Any]) -> None:
+        """Mirror one recorded sample onto the external sink."""
+        ...
+
+
+_exporter: TelemetryExporter | None = None
+
+
+def set_exporter(exporter: TelemetryExporter | None) -> None:
+    """Register (or clear, with ``None``) the optional telemetry exporter.
+
+    precondition: none (``exporter`` may be ``None`` to disable export).
+    postcondition: subsequent ``record()`` calls invoke
+                   ``exporter.export(sample)`` best-effort; the local
+                   in-memory counters and JSONL sink are unaffected
+                   either way.
+    """
+    global _exporter
+    _exporter = exporter
+
 
 _LOG_PATH = Path.home() / ".claude" / "methodology" / "telemetry.jsonl"
 try:
@@ -114,6 +166,15 @@ def record(
             f.write(json.dumps(record_line) + "\n")
     except OSError:
         pass
+    # Optional external export (issue #122): best-effort, never breaks the
+    # caller. Reads the module-level reference once so a concurrent
+    # set_exporter(None) mid-call degrades to a no-op rather than racing.
+    exporter = _exporter
+    if exporter is not None:
+        try:
+            exporter.export(record_line)
+        except Exception:
+            logger.debug("telemetry exporter raised; sample dropped", exc_info=True)
 
 
 def snapshot() -> dict[str, dict[str, float | int]]:

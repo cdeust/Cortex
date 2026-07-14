@@ -43,8 +43,10 @@ removes it. The `forget` tool deletes individual memories.
 
 Cortex itself does **not** transmit your memories, conversations, profiles, or
 any personal content to the author, to Anthropic, or to third-party analytics.
-There is no telemetry phone-home; the `get_telemetry` tool reports **local**
-performance statistics only.
+There is no telemetry phone-home **by default**; the `get_telemetry` tool
+reports **local** performance statistics only, and every recorded sample is
+appended to a local, no-egress JSONL file
+(`~/.claude/methodology/telemetry.jsonl`).
 
 The only outbound network activity is:
 
@@ -56,6 +58,13 @@ The only outbound network activity is:
 2. **Integrations you explicitly enable.** If you configure optional upstream MCP
    servers or a remote PostgreSQL database, Cortex communicates only with the
    endpoints you provided.
+3. **Optional OTLP telemetry export (opt-in, OFF by default).** If you set the
+   `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable, Cortex additionally
+   mirrors the same aggregate, content-free metrics already visible via
+   `get_telemetry` (per-tool call counts, latencies, and result counts —
+   never memory content) to the OTLP collector endpoint you configured.
+   Requires the optional `[otel]` install extra. Absent this env var, nothing
+   changes: the local JSONL sink remains the only telemetry sink.
 
 ## Data sharing
 
