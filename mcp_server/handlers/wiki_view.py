@@ -10,8 +10,8 @@ Modes:
   inline (testing): wiki_view({"query": "table: pages\nlimit: 5"})
   list views:       wiki_view({"list": true})
 
-Composition root only — wiki_schema_loader supplies the views dict;
-wiki_view_executor compiles; pg_store executes.
+Composition root only — infrastructure.wiki_schema_reader supplies the
+views dict; wiki_view_executor compiles; pg_store executes.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from typing import Any
 # // PG-only dependencies in composition-root handlers (see memory_store.py
 # // which also defers `import psycopg` to _try_pg_verbose).
 
-from mcp_server.core.wiki_schema_loader import load_registry
+from mcp_server.infrastructure.wiki_schema_reader import load_registry
 from mcp_server.core.wiki_view_executor import compile_view
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings

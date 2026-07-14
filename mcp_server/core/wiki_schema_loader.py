@@ -1,4 +1,4 @@
-"""Self-hosting wiki schema loader (Phase 1.3 of redesign).
+"""Self-hosting wiki schema — data model + pure parsers (Phase 1.3 of redesign).
 
 The wiki describes its own schema. Kinds, classifier rules, views, and
 triggers all live as markdown pages under reserved folders:
@@ -8,13 +8,17 @@ triggers all live as markdown pages under reserved folders:
     wiki/_views/    — saved queries (fenced ``cortex-query`` blocks)
     wiki/_triggers/ — trigger declarations
 
-This module is the READER — parses these files at MCP boot and returns
-typed in-memory registries. Behaviour wires in Phase 2 / 5; for now the
-loader is called once and its output is consumed by the gradually-migrating
-classifier / synthesiser.
+This module declares the typed registries and the pure ``str -> dataclass``
+parsers for each file shape. It performs zero I/O — every parser here takes
+already-read file content as a plain string.
 
-Pure core logic — reads via infrastructure/wiki_store.read_page, never
-writes. Never raises; missing folders produce empty registries.
+Port-and-adapter split (issue #126): the previous single-file version of
+this module also walked the filesystem (via ``infrastructure.wiki_store``)
+to actually build a registry from a wiki root. That I/O orchestration now
+lives in ``mcp_server.infrastructure.wiki_schema_reader.load_registry`` —
+the adapter that reads files on disk and calls the parsers declared here.
+Composition roots (handlers, ``mcp_server/__main__.py``) import
+``load_registry`` from that infrastructure module, not from here.
 """
 
 from __future__ import annotations
@@ -24,7 +28,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from mcp_server.core.wiki_pages import parse_page
-from mcp_server.infrastructure.wiki_store import list_pages, read_page
 
 
 # ── Registry dataclasses ──────────────────────────────────────────────
@@ -105,7 +108,7 @@ class WikiRegistry:
 # ── Parsers ───────────────────────────────────────────────────────────
 
 
-def _parse_kind(rel_path: str, content: str) -> KindDefinition | None:
+def parse_kind(rel_path: str, content: str) -> KindDefinition | None:
     doc = parse_page(content)
     fm = doc.frontmatter or {}
     name = fm.get("name") or Path(rel_path).stem
@@ -125,7 +128,7 @@ def _parse_kind(rel_path: str, content: str) -> KindDefinition | None:
 _TABLE_ROW_RE = re.compile(r"^\|(.+)\|$", re.MULTILINE)
 
 
-def _parse_rules_table(body: str) -> list[ClassifierRule]:
+def parse_rules_table(body: str) -> list[ClassifierRule]:
     """Extract rules from a markdown table.
 
     Expected columns (case-insensitive, order-flexible):
@@ -166,7 +169,7 @@ def _parse_rules_table(body: str) -> list[ClassifierRule]:
 _QUERY_BLOCK_RE = re.compile(r"```cortex-query\n(.*?)\n```", re.DOTALL)
 
 
-def _parse_view(rel_path: str, content: str) -> ViewDefinition | None:
+def parse_view(rel_path: str, content: str) -> ViewDefinition | None:
     doc = parse_page(content)
     fm = doc.frontmatter or {}
     m = _QUERY_BLOCK_RE.search(doc.body or "")
@@ -180,7 +183,7 @@ def _parse_view(rel_path: str, content: str) -> ViewDefinition | None:
     )
 
 
-def _parse_trigger(rel_path: str, content: str) -> TriggerDefinition | None:
+def parse_trigger(rel_path: str, content: str) -> TriggerDefinition | None:
     doc = parse_page(content)
     fm = doc.frontmatter or {}
     event = fm.get("event")
@@ -194,87 +197,7 @@ def _parse_trigger(rel_path: str, content: str) -> TriggerDefinition | None:
     )
 
 
-# ── Loader entry point ───────────────────────────────────────────────
-
-
-def _load_folder(root: Path, folder: str, parser) -> dict:  # type: ignore[type-arg]
-    """Read every .md under ``root/<folder>`` and apply parser.
-
-    Returns dict keyed by parser output's ``name`` (or rel_path for views).
-    """
-    results: dict = {}
-    full = root / folder
-    if not full.exists():
-        return results
-    try:
-        paths = list_pages(root, kind=None)
-    except Exception:
-        return results
-    for rel in paths:
-        # list_pages walks all PAGE_KINDS; filter to our reserved folder
-        if not rel.startswith(folder + "/") and not rel.startswith(folder):
-            continue
-        content = read_page(root, rel)
-        if content is None:
-            continue
-        try:
-            parsed = parser(rel, content)
-        except Exception:
-            continue
-        if parsed is None:
-            continue
-        key = getattr(parsed, "name", None) or rel
-        results[key] = parsed
-    return results
-
-
-def _load_folder_direct(root: Path, folder: str, parser):
-    """Alternative loader that globs directly — used for reserved folders
-    like ``_kinds``, ``_rules`` which are not in PAGE_KINDS.
-    """
-    results: dict = {}
-    full = root / folder
-    if not full.exists():
-        return results
-    for p in sorted(full.rglob("*.md")):
-        rel = str(p.relative_to(root)).replace("\\", "/")
-        try:
-            content = p.read_text(encoding="utf-8")
-        except Exception:
-            continue
-        try:
-            parsed = parser(rel, content)
-        except Exception:
-            continue
-        if parsed is None:
-            continue
-        key = getattr(parsed, "name", None) or rel
-        results[key] = parsed
-    return results
-
-
-def load_registry(wiki_root: Path | str) -> WikiRegistry:
-    """Read the self-hosting schema files and return the registry.
-
-    Safe to call at MCP boot, after wiki_migrate, or on-demand. Missing
-    folders yield empty sub-registries — no raises.
-    """
-    root = Path(wiki_root)
-    kinds = _load_folder_direct(root, "_kinds", _parse_kind)
-
-    # Rules live as a single markdown table per file; parse each and
-    # concatenate preserving file order.
-    rules: list[ClassifierRule] = []
-    rules_dir = root / "_rules"
-    if rules_dir.exists():
-        for p in sorted(rules_dir.rglob("*.md")):
-            try:
-                content = p.read_text(encoding="utf-8")
-                body = parse_page(content).body or ""
-                rules.extend(_parse_rules_table(body))
-            except Exception:
-                continue
-
-    views = _load_folder_direct(root, "_views", _parse_view)
-    triggers = _load_folder_direct(root, "_triggers", _parse_trigger)
-    return WikiRegistry(kinds=kinds, rules=rules, views=views, triggers=triggers)
+# The filesystem walk that builds a ``WikiRegistry`` from a wiki root is
+# I/O and lives in ``mcp_server.infrastructure.wiki_schema_reader.load_registry``
+# (issue #126) — it imports the dataclasses and parsers above and drives
+# them from files read via ``Path`` / ``infrastructure.wiki_store``.

@@ -206,6 +206,7 @@ Run the measurement command in the header to get a current file listing.
 - `embedding_engine.py` — Vector embeddings (384-dim, sentence-transformers)
 - `artifact_store.py` — Content-addressed raw-output artifacts (`~/.claude/methodology/artifacts/<yyyy-mm>/<sha256[:16]>.md`) backing gist+pointer memories
 - `agent_config.py` — Agent configuration and topic scoping
+- `wiki_schema_reader.py` — Filesystem adapter for `core/wiki_schema_loader.py`'s data model/parsers; walks `wiki/_kinds|_rules|_views|_triggers/` and builds a `WikiRegistry` (issue #126 port-and-adapter split)
 
 Note: `pg_store.py` persists to PostgreSQL when configured (plugin/CLI mode);
 see `PRIVACY.md` for the SQLite-default fallback used by `.mcpb`/Cowork

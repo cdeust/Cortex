@@ -50,13 +50,27 @@ from mcp_server import (
     tool_registry_wiki,
 )
 from mcp_server.core import telemetry
+from mcp_server.core.wiki_axis_registry import configure_default_wiki_root
+from mcp_server.core.wiki_classifier import configure_user_rules_provider
 from mcp_server.handlers._tool_meta import apply_param_docs
+from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.mcp_client_pool import close_all
 from mcp_server.infrastructure.otel_exporter import build_otel_exporter
 from mcp_server.infrastructure.upstream_availability import (
     codebase_upstream_available,
     prd_upstream_available,
 )
+from mcp_server.infrastructure.wiki_schema_reader import load_registry
+
+# ── Reverse-DI wiring (issue #126) ──────────────────────────────────────────
+#
+# core/wiki_axis_registry.py and core/wiki_classifier.py declare what they
+# need (a wiki-root provider / a user-rules provider) rather than importing
+# infrastructure directly. This is the one place — the composition root —
+# that supplies the real, infrastructure-backed values.
+
+configure_default_wiki_root(lambda: WIKI_ROOT)
+configure_user_rules_provider(lambda: load_registry(WIKI_ROOT).rules)
 
 # Optional OTLP telemetry export (issue #122) -- OFF by default. Wiring the
 # concrete exporter into the core port happens only here, in the

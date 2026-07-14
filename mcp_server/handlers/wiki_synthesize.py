@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.core.draft_synthesizer import synthesize_draft
-from mcp_server.core.wiki_schema_loader import load_registry
+from mcp_server.infrastructure.wiki_schema_reader import load_registry
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
