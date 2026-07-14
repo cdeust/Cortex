@@ -91,8 +91,22 @@ lives in the automatised-pipeline MCP.
 
 ## Slash Commands
 
-- `/methodology` — View cognitive methodology profile
-- `/why` — Deterministic blame-path entry point: resolve the ⟦rcpt:id⟧ markers in context via the `why` tool (decision 4255039 correction 6)
+Discovered from `commands/*.md` at the repo root (not `.claude/commands/` —
+this is a plugin repo, so the plugin loader picks these up directly). Each
+command is a single Markdown file with a `name`/`description` frontmatter
+pair; `/preflight` additionally scopes `allowed-tools` to keep itself
+read-only.
+
+| Command | What it does | Roles |
+|---|---|---|
+| `/methodology` | Retrieves the cognitive methodology profile (via `query_methodology`) for the current working directory and offers `rebuild_profiles` / `list_domains` / `get_methodology_graph` follow-ups | Any user, any session — the general entry point into a domain's profile |
+| `/why` | Deterministic blame-path: resolves `⟦rcpt:id⟧` presence-in-context markers via the `why` tool, reports which memories were in context (never that they *caused* an answer — Pearl-rung-1 evidence only) | Anyone auditing why an answer looked the way it did |
+| `/preflight [symptôme]` | Runs `python -m mcp_server.doctor` (7 checks) and turns the output into a dependency-ordered, copy-paste repair plan; takes an optional symptom argument to prioritize the relevant check first. Read-only — modifies no files | New users whose install doesn't work yet; support; first-deploy DevOps (issue #119) |
+
+**Convention for adding a new command:** one new `.md` file under
+`commands/` (frontmatter: `name`, `description`, and `allowed-tools` if the
+command should run with restricted permissions) **plus** one new row in the
+table above — the catalogue and the command ship in the same commit.
 
 ## Data Flow
 
