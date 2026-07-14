@@ -4,16 +4,17 @@ description: "MCP tool catalogue (tiers, purpose, target latency) + slash comman
 
 # MCP Tools
 
-50 standalone tools register unconditionally; 3 more register only when an
-upstream MCP server is configured (53 total with both present).
+51 standalone tools register unconditionally; 3 more register only when an
+upstream MCP server is configured (54 total with both present).
 
 ```
-# source: tests_py/test_main.py::test_standalone_baseline_is_50_tools
+# source: tests_py/test_main.py::test_standalone_baseline_is_51_tools
 #   verified 2026-07-12 by a live DB-less `tools/list` stdio round-trip
-#   against `bare-container-contract` + `wiki_migrate`, commit 4be298a3.
+#   against `bare-container-contract` + `wiki_migrate`, commit 4be298a3;
+#   bumped to 51 by `check_setup` (issue #115).
 ```
 
-## Tier 1 — Core Memory & Profiling (21 tools)
+## Tier 1 — Core Memory & Profiling (22 tools)
 
 | Tool | Purpose | Target Latency |
 |---|---|---|
@@ -38,6 +39,7 @@ upstream MCP server is configured (53 total with both present).
 | `backfill_memories` | Auto-import prior Claude Code conversations | varies |
 | `unified_search` | Unified retrieval across memories, wiki, and code graph | <200ms |
 | `get_telemetry` | Retrieval and memory-system telemetry metrics | <50ms |
+| `check_setup` | Verify local install (Python, PG driver, DATABASE_URL, connection, extensions, FS) — facade over `mcp_server.doctor` | <500ms |
 
 ## Tier 2 — Navigation & Exploration (7 tools)
 
@@ -83,9 +85,9 @@ upstream MCP server is configured (53 total with both present).
 ## Upstream-integration tools (3, conditionally registered)
 
 These register only when their upstream MCP server is configured, bringing
-the total to 53: `ingest_codebase` + `change_impact` (automatised-pipeline)
+the total to 54: `ingest_codebase` + `change_impact` (automatised-pipeline)
 and `ingest_prd` (prd-spec-generator). With no upstream present, exactly the
-**50 standalone tools** above register. Driving the ai-architect pipeline
+**51 standalone tools** above register. Driving the ai-architect pipeline
 end-to-end (formerly `run_pipeline`) is **not** part of this server — it
 lives in the automatised-pipeline MCP.
 

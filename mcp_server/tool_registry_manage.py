@@ -1,6 +1,7 @@
-"""Tool registration: Tier 1 memory management tools (6 tools).
+"""Tool registration: Tier 1 memory management tools (8 tools).
 
-Registers forget, validate, rate, seed, anchor, and backfill tools.
+Registers forget, validate, rate, seed, anchor, backfill, codebase
+analyze, and check_setup tools.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from fastmcp import FastMCP
 from mcp_server.handlers import (
     anchor,
     backfill_memories,
+    check_setup,
     codebase_analyze,
     forget,
     rate_memory,
@@ -25,6 +27,7 @@ from mcp_server.handlers._tool_meta import tool_kwargs
 SCHEMAS: dict[str, dict] = {
     "anchor": anchor.schema,
     "backfill_memories": backfill_memories.schema,
+    "check_setup": check_setup.schema,
     "codebase_analyze": codebase_analyze.schema,
     "forget": forget.schema,
     "rate_memory": rate_memory.schema,
@@ -42,6 +45,7 @@ def register(mcp: FastMCP) -> None:
     _register_anchor(mcp)
     _register_backfill_memories(mcp)
     _register_codebase_analyze(mcp)
+    _register_check_setup(mcp)
 
 
 def _register_forget(mcp: FastMCP) -> None:
@@ -211,4 +215,18 @@ def _register_codebase_analyze(mcp: FastMCP) -> None:
                 "domain": domain or "",
             },
             tool_name="codebase_analyze",
+        )
+
+
+def _register_check_setup(mcp: FastMCP) -> None:
+    @mcp.tool(
+        name="check_setup",
+        **tool_kwargs(check_setup.schema),
+    )
+    async def tool_check_setup() -> dict:
+        """Verify the local install: Python, PG driver, DB, extensions, FS."""
+        return await safe_handler(
+            check_setup.handler,
+            {},
+            tool_name="check_setup",
         )

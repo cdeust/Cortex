@@ -42,7 +42,7 @@ separate **cortex-viz** MCP (reads this same store read-only).
 - @docs/adr/ — Architecture Decision Records (013 = thermodynamic memory
   model, 014 = biological mechanisms, 012 = Python migration from Node.js)
 - @docs/module-inventory.md — per-layer module catalogue + dependency rules
-- @docs/mcp-tools.md — the 50 standalone + 3 conditionally-registered MCP
+- @docs/mcp-tools.md — the 51 standalone + 3 conditionally-registered MCP
   tools, by tier, with purpose and target latency
 - @PRIVACY.md — storage truth by launch surface (lines 26–36): SQLite is
   the default for `.mcpb`/Cowork; PostgreSQL is used in plugin/CLI mode
