@@ -32,6 +32,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from mcp_server.core.wiki_frontmatter_validation import normalize_frontmatter
 from mcp_server.core.wiki_layout import page_path
 from mcp_server.core.wiki_pages import (
     build_adr,
@@ -244,7 +245,16 @@ async def write_governed_page(
     caller operating on an alternate tree such as a test fixture, that
     tree's own root); ``rel_path`` is root-relative; ``content`` is the full
     markdown (frontmatter + body) to persist.
-    postcondition: on success, the page is written atomically (tmp+rename,
+    postcondition: for ``mode != "append"`` (a full page, not a fragment),
+    ``content`` is first run through ``normalize_frontmatter`` (issue #107)
+    so the bytes actually written are ALWAYS the canonical
+    ``render_page(parse_page(...))`` form — this closes the corruption
+    class PR #104/commit 53712df8 repaired reactively at read-time (a
+    duplicated ``title: title: "..."`` label, stray YAML quotes) instead of
+    persisting the two known signatures and relying on the reader to
+    tolerate them. ``append`` mode's ``content`` is a fragment appended
+    below existing content, not a full page, so it is never normalized.
+    On success, the page is written atomically (tmp+rename,
     ``write_page``'s existing guarantee) AND a protected
     ``write_class='mechanical'`` pointer memory is stored via ``remember``
     (best-effort — never blocks or fails the write; mechanical is correct
@@ -266,7 +276,18 @@ async def write_governed_page(
     (``consolidation/page_io.py``) both route through here so no caller can
     write wiki-tree bytes while skipping write_class/citation/pointer-memory
     bookkeeping (Move 1: one governed path, no shadow I/O).
+
+    raises: ``UnclosedFrontmatterError`` (propagated, uncaught, from
+    ``normalize_frontmatter``) when ``content`` opens a frontmatter fence
+    it never closes — the one shape that is structurally inexploitable.
+    The interactive tool call (``handler``, below, registered via
+    ``safe_handler``) turns this into a ``fastmcp.exceptions.ToolError``
+    automatically (the repo's standing idiom — see commits
+    c7dfc243/49f29e98); ``consolidation/page_io.py``'s non-tool callers
+    catch it explicitly and degrade to their existing failure contract.
     """
+    if mode != "append":
+        content = normalize_frontmatter(content)
     try:
         result = write_page(root, rel_path, content, mode=mode)
     except WikiExists:

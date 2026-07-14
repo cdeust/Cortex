@@ -16,6 +16,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from mcp_server.core.wiki_frontmatter_validation import UnclosedFrontmatterError
 from mcp_server.handlers.wiki_write import write_governed_page
 from mcp_server.observability import silent_failure
 
@@ -208,13 +209,22 @@ async def _rewrite_page(
         return False
 
     rel_path = str(page_path.relative_to(wiki_root))
-    result = await write_governed_page(
-        wiki_root,
-        rel_path,
-        new_text,
-        mode="replace",
-        tags=[_HEADLESS_TAG],
-    )
+    try:
+        result = await write_governed_page(
+            wiki_root,
+            rel_path,
+            new_text,
+            mode="replace",
+            tags=[_HEADLESS_TAG],
+        )
+    except UnclosedFrontmatterError as exc:
+        # This worker only ever rebuilds a page via
+        # _compute_rewritten_page, which always emits a closed fence —
+        # this branch is unreachable in practice but the write-time
+        # gate (issue #107) makes the failure mode explicit rather than
+        # letting an unhandled exception crash the batch drain cycle.
+        silent_failure.note("headless_authoring.rewrite_page.frontmatter", exc)
+        return False
     if "error" in result:
         silent_failure.note(
             "headless_authoring.rewrite_page.governed_write",
@@ -458,13 +468,23 @@ async def _write_anchor_page(
         "---\n\n"
     )
     content = frontmatter + body_markdown.strip() + "\n"
-    result = await write_governed_page(
-        wiki_root,
-        suggested_path,
-        content,
-        mode="create",
-        tags=[_HEADLESS_TAG, "anchor"],
-    )
+    try:
+        result = await write_governed_page(
+            wiki_root,
+            suggested_path,
+            content,
+            mode="create",
+            tags=[_HEADLESS_TAG, "anchor"],
+        )
+    except UnclosedFrontmatterError as exc:
+        # The frontmatter block above is always closed by this function's
+        # own literal "---\n\n" — unreachable in practice, but this call
+        # runs under asyncio.gather(return_exceptions=False) (see below),
+        # so an unhandled exception here would crash sibling anchor-page
+        # writes too. Catching keeps the write-time gate (issue #107)
+        # from becoming a new way for one page to take the batch down.
+        silent_failure.note("headless_authoring.write_anchor_page.frontmatter", exc)
+        return None
     if "error" in result:
         # Covers both the mkdir/write OSError the raw path used to swallow
         # AND a create-mode race (page authored concurrently) — both are
