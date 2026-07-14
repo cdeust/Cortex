@@ -482,6 +482,21 @@ PY
 # FLOOR_TOLERANCE below its floor fails the whole run with exit 1. A deviation
 # from the published numbers means the code is wrong — this makes that loud
 # instead of silent.
+#
+# CAVEAT — this gates a SINGLE run, but LoCoMo's own same-commit noise is
+# large relative to FLOOR_TOLERANCE. Measured 2026-07-14 at HEAD 5542aa71
+# (v4.14.1), 3 isolated reps via `--only locomo`: MRR 0.7978 / 0.8019 / 0.8010
+# (mean 0.8002, stdev 0.0022) against FLOOR_LOCOMO_MRR=0.805 tol=0.005 (needs
+# >=0.800) — rep1 alone reads FAIL, reps 2 and 3 individually PASS, and the
+# release's own actual stopping rule (the 3-run mean) passes by +0.0002. A
+# signal-to-tolerance ratio of ~2.3 means a single unlucky rep has a real,
+# observed chance of a false FAIL. Data + provenance:
+# benchmarks/results/repro/20260714-floors-rebaseline/. Do NOT treat a single
+# LoCoMo FAIL from this function as proof of a code regression — before
+# bisecting, rerun `--only locomo` two more times and judge the floor against
+# the 3-run mean (matching how 4.14.0/4.14.1 were actually released). This
+# script does not automate that averaging; it is a manual step for whoever is
+# gating a release.
 check_floors() {
     uv run --extra benchmarks python - "$RESULTS_DIR" \
         "$FLOOR_LME_R10" "$FLOOR_LME_MRR" "$FLOOR_LOCOMO_R10" "$FLOOR_LOCOMO_MRR" \

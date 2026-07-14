@@ -440,7 +440,7 @@ See `docs/adr/` for Architecture Decision Records:
 
 **Retrieval engine:** PL/pgSQL stored procedures. WRRF fusion, vector search, FTS, trigram similarity, heat filtering — all server-side. Client-side: intent classification (regex), FlashRank reranking (ONNX), embedding generation (sentence-transformers).
 
-**Benchmarks use the production database.** No custom retrievers. Load data → call `recall_memories()` → measure. Same code path as production.
+**Benchmarks run through `benchmarks/reproduce.sh`'s isolated, ephemeral pgvector container** — the single source of truth for reproducible numbers (see the script's own header). No custom retrievers: load data → call `recall_memories()` → measure, same code path as production, but against a throwaway per-run database, never the live production store. Ad-hoc same-day development checks against the production database are fine for quick sanity checks, but are NOT comparable across days (measured intra-day drift ±0.003 on LoCoMo MRR, 2026-07-14) and must never be used to gate a release: any pre-tag / floor decision goes through `reproduce.sh` on the exact release tree, not the production DB (source: `benchmarks/results/repro/20260714-floors-rebaseline/`, finding logged 2026-07-14 — a pre-tag guard run against production nearly false-failed a floor that passes cleanly in the isolated instrument).
 
 Pre-computed profiles stored at `~/.claude/methodology/profiles.json`.
 
