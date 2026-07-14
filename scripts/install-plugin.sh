@@ -4,8 +4,9 @@ set -euo pipefail
 # Cortex plugin postInstall driver.
 #
 # Two responsibilities:
-#   1. Install Cortex (delegates to scripts/setup.sh: PostgreSQL + pgvector,
-#      Python deps, DB schema, embedding model).
+#   1. Install Cortex — dispatches by OS to scripts/setup.sh (macOS/Linux:
+#      PostgreSQL + pgvector, Python deps, DB schema, embedding model) or
+#      scripts/setup.py (Windows via Git Bash: same steps, cross-platform).
 #   2. Remove stale OTHER versions of Cortex installed elsewhere on the
 #      machine, so the freshly-installed plugin is the single source of
 #      truth.
@@ -52,9 +53,30 @@ CURRENT_VERSION=$("$PY" -c "import json; print(json.load(open('$PLUGIN_JSON'))['
 
 say "Installing Cortex v${CURRENT_VERSION}"
 
-# ── Phase 1: install (delegates to setup.sh) ───────────────────────────
-
-bash "$PLUGIN_ROOT/scripts/setup.sh"
+# ── Phase 1: install (delegates to setup.sh or setup.py by OS) ─────────
+#
+# This is the single, most-upstream OS-dispatch point for the install
+# path — do not duplicate this branch in setup.sh or plugin.json.
+# manifest.json declares win32 as a compatible platform, but
+# scripts/setup.sh only knows how to provision PostgreSQL via brew/apt
+# (macOS/Linux) and previously failed with a bare "Unsupported OS" on
+# every other uname -s, including the MINGW64_NT-*/MSYS_NT-*/CYGWIN_NT-*
+# values Git Bash reports on native Windows (fixes #113). Git Bash is the
+# shell postInstall actually runs under on Windows (plugin.json invokes
+# `bash ...`), so on those uname patterns we delegate to the already
+# cross-platform scripts/setup.py instead of scripts/setup.sh.
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+        say "Detected Windows ($(uname -s)) — delegating to cross-platform scripts/setup.py"
+        "$PY" "$PLUGIN_ROOT/scripts/setup.py" || fail "scripts/setup.py failed. PostgreSQL must be installed and running first (https://www.postgresql.org/download/windows/, then also install pgvector: https://github.com/pgvector/pgvector#windows). Once that is done, re-run manually: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""
+        ;;
+    Darwin|Linux)
+        bash "$PLUGIN_ROOT/scripts/setup.sh"
+        ;;
+    *)
+        fail "Unsupported OS: $(uname -s). Cortex supports macOS, Linux, and Windows (via Git Bash). To retry manually once you've confirmed your shell environment, run: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\" (cross-platform) — see also https://github.com/cdeust/Cortex#readme"
+        ;;
+esac
 
 # ── Phase 2: prune stale OTHER versions ────────────────────────────────
 

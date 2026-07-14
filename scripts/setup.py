@@ -10,6 +10,21 @@ PostgreSQL must be installed separately on Windows:
 
 Usage:
     python3 scripts/setup.py
+
+CI/testing mode:
+    Set CORTEX_MEMORY_STORE_BACKEND=sqlite to skip the PostgreSQL
+    provisioning/verification steps entirely. This exists so CI can
+    exercise the real cross-platform install path (OS dispatch, Python
+    dependency install, embedding model caching) on a runner with no
+    PostgreSQL server, without needing to provision one (source: issue
+    #113 — the Windows postInstall path had zero CI coverage before this
+    flag existed, which is how the "Unsupported OS" regression on native
+    Windows shipped undetected).
+
+    This is a testing convenience only: it does NOT represent a supported
+    zero-PostgreSQL install for the Claude Code plugin channel. The
+    zero-setup SQLite-by-default experience is the separate manifest.json
+    / `uv run` MCP-bundle channel, which never goes through this script.
 """
 
 from __future__ import annotations
@@ -28,6 +43,12 @@ PROJECT_DIR = SCRIPT_DIR.parent
 PLUGIN_DATA = os.environ.get("CLAUDE_PLUGIN_DATA", str(PROJECT_DIR))
 DEPS_DIR = os.path.join(PLUGIN_DATA, "deps")
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
+
+# CI/testing mode: see module docstring. Any other CORTEX_MEMORY_STORE_BACKEND
+# value (unset, "postgresql", "auto") keeps the normal PostgreSQL-required path.
+SKIP_POSTGRES = (
+    os.environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip().lower() == "sqlite"
+)
 
 
 def _redact_db_url(url: str) -> str:
@@ -277,13 +298,33 @@ def cache_embedding_model() -> None:
 # ── Step 6: Verify ───────────────────────────────────────────────────
 
 
-def verify() -> None:
-    step("Verification")
+def _sqlite_checks() -> list[tuple[str, bool]]:
+    """CI/testing-mode checks when PostgreSQL provisioning was skipped.
 
-    sys.path.insert(0, DEPS_DIR)
-    checks = []
+    Pre:  SKIP_POSTGRES is True.
+    Post: returns one (name, passed) pair confirming the sqlite3 stdlib
+          module — the only storage dependency this mode exercises — is
+          importable.
+    """
+    try:
+        import sqlite3  # noqa: F401
 
-    # PostgreSQL
+        return [("sqlite3 stdlib", True)]
+    except ImportError:
+        return [("sqlite3 stdlib", False)]
+
+
+def _postgres_checks() -> list[tuple[str, bool]]:
+    """PostgreSQL connection, extension, and stored-procedure checks.
+
+    Pre:  SKIP_POSTGRES is False; DATABASE_URL points at a server that
+          setup_database() has already provisioned.
+    Post: returns (name, passed) pairs for the connection, the pgvector/
+          pg_trgm extensions, and the recall_memories() stored procedure.
+          Never raises — connection/query failures are reported as a
+          failed check, not an exception.
+    """
+    checks: list[tuple[str, bool]] = []
     try:
         import psycopg
 
@@ -292,29 +333,35 @@ def verify() -> None:
         checks.append(("PostgreSQL connection", True))
     except Exception:
         checks.append(("PostgreSQL connection", False))
-        conn = None
+        return checks
 
-    # Extensions
-    if conn:
-        try:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM pg_extension WHERE extname IN ('vector', 'pg_trgm')"
-            ).fetchone()
-            checks.append(("Extensions (pgvector, pg_trgm)", row[0] == 2))
-        except Exception:
-            checks.append(("Extensions", False))
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM pg_extension WHERE extname IN ('vector', 'pg_trgm')"
+        ).fetchone()
+        checks.append(("Extensions (pgvector, pg_trgm)", row[0] == 2))
+    except Exception:
+        checks.append(("Extensions", False))
 
-        try:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM pg_proc WHERE proname = 'recall_memories'"
-            ).fetchone()
-            checks.append(("PL/pgSQL recall_memories()", row[0] > 0))
-        except Exception:
-            checks.append(("PL/pgSQL procedures", False))
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM pg_proc WHERE proname = 'recall_memories'"
+        ).fetchone()
+        checks.append(("PL/pgSQL recall_memories()", row[0] > 0))
+    except Exception:
+        checks.append(("PL/pgSQL procedures", False))
 
-        conn.close()
+    conn.close()
+    return checks
 
-    # sentence-transformers
+
+def _model_checks() -> list[tuple[str, bool]]:
+    """Embedding/reranking dependency import checks (both backends).
+
+    Post: returns (name, passed) pairs for sentence-transformers and
+          FlashRank, independent of SKIP_POSTGRES.
+    """
+    checks: list[tuple[str, bool]] = []
     try:
         import sentence_transformers  # noqa: F401
 
@@ -322,13 +369,26 @@ def verify() -> None:
     except ImportError:
         checks.append(("sentence-transformers", False))
 
-    # FlashRank
     try:
         from flashrank import Ranker  # noqa: F401
 
         checks.append(("FlashRank reranker", True))
     except ImportError:
         checks.append(("FlashRank reranker", False))
+
+    return checks
+
+
+def verify() -> None:
+    step("Verification")
+
+    sys.path.insert(0, DEPS_DIR)
+
+    # CI/testing mode (see module docstring): no PostgreSQL server is
+    # provisioned, so skip the PG-specific checks rather than reporting a
+    # false failure for a step that was intentionally not run.
+    checks = _sqlite_checks() if SKIP_POSTGRES else _postgres_checks()
+    checks += _model_checks()
 
     all_ok = True
     for name, passed in checks:
@@ -351,9 +411,18 @@ def main() -> None:
     print(f"  Database:    {_redact_db_url(DATABASE_URL)}")
 
     check_python()
-    check_postgresql()
+    if SKIP_POSTGRES:
+        warn(
+            "CORTEX_MEMORY_STORE_BACKEND=sqlite — skipping PostgreSQL "
+            "provisioning and schema steps (CI/testing mode; see module "
+            "docstring). Production installs via the Claude Code plugin "
+            "still require PostgreSQL + pgvector."
+        )
+    else:
+        check_postgresql()
     install_deps()
-    setup_database()
+    if not SKIP_POSTGRES:
+        setup_database()
     cache_embedding_model()
     verify()
 

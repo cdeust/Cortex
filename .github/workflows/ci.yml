@@ -237,6 +237,26 @@ jobs:
           echo "HF pre-download failed after 5 attempts" >&2
           exit 1
 
+      # Real postInstall proof (issue #113). Before this step, no CI job ever
+      # ran plugin.json's actual postInstall command
+      # (`bash scripts/install-plugin.sh`) on any OS — the ubuntu `test` job
+      # above installs deps directly via `pip install -e`, bypassing it
+      # entirely. That gap is why scripts/setup.sh's "Unsupported OS" failure
+      # on native Windows (Git Bash reports uname -s as MINGW64_NT-*/
+      # MSYS_NT-*/CYGWIN_NT-*, matched by neither its Darwin nor Linux branch)
+      # went undetected. The job-level CORTEX_MEMORY_STORE_BACKEND: sqlite
+      # (above) makes scripts/setup.py skip PostgreSQL provisioning (see its
+      # module docstring) so this runs without provisioning a PostgreSQL
+      # server on the runner, while still exercising the real OS dispatch in
+      # install-plugin.sh, the real scripts/setup.py subprocess calls, and
+      # the real embedding-model caching path.
+      - name: Exercise real postInstall path (install-plugin.sh -> setup.py)
+        shell: bash
+        env:
+          CLAUDE_PLUGIN_ROOT: ${{ github.workspace }}
+          CLAUDE_PLUGIN_DATA: ${{ runner.temp }}/cortex-plugin-data
+        run: bash scripts/install-plugin.sh
+
       # Scope (explicit, not silent): the portability tests plus the modules
       # carrying Windows-specific branches and the SQLite backend suite. The
       # full PG suite is not run here — it is covered by the ubuntu `test` job.
@@ -251,6 +271,7 @@ jobs:
           tests_py/infrastructure/test_pipeline_install_lock.py
           tests_py/core/test_staleness.py
           tests_py/infrastructure/test_sqlite_backend.py
+          tests_py/scripts/test_setup_py_backend_skip.py
 
   lint:
     name: Lint
