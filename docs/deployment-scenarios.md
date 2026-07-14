@@ -230,3 +230,60 @@ this section apply only to the outbound HTTPS calls
 `sentence-transformers`/`huggingface_hub`/`flashrank` make; they have no
 effect on `DATABASE_URL`'s `sslcert`/`sslkey`/`sslrootcert` parameters, and
 vice versa.
+
+---
+
+## Two headless CI regimes — pick one per job, never both
+
+Running `claude -p` (headless, no interactive session) in your own CI is a
+different decision from running Cortex's *own* test suite (`.github/workflows/ci.yml`,
+which never invokes the Claude CLI at all). This section is for teams that
+drive Claude Code itself inside a pipeline — linting with an agent, an
+authoring/review bot, a scheduled task — and need to decide whether Cortex's
+memory is available to it. The two regimes are mutually exclusive by
+construction; do not expect both properties from a single job.
+
+### Regime A — `claude -p --bare`: reproducible, no Cortex
+
+`--bare` loads no project/user settings, no hooks, and no MCP servers — it
+forces `ANTHROPIC_API_KEY` billing and starts from a blank configuration
+slate every invocation (see `mcp_server/handlers/consolidation/claude_cli.py`,
+module docstring, "Solo mode" discussion, for the verified behavior Cortex's
+own headless wiki-authoring drain relies on when contrasting `--bare` against
+`--safe-mode`). Because MCP servers never load in this mode, **Cortex is not
+present**: no `SessionStart` context injection, no `remember`/`recall`, no
+consolidation. The job's output depends only on the prompt, the pinned CLI
+version, and whatever files are in the checkout — nothing else.
+
+Use this regime when the job's correctness argument is "this must produce
+the same result on every run" — e.g. a CI check that a diff violates no
+lint rule, or a report-generation step being asserted against a golden file.
+Reproducibility is the whole point; adding Cortex's memory would make the
+job's output depend on accumulated state from prior runs, which defeats that
+argument.
+
+### Regime B — containerized, pinned versions, with memory
+
+Run the Claude CLI (pinned version) and Cortex (pinned plugin/package
+version, PostgreSQL reachable) normally inside a container — project/user
+settings, hooks, and MCP servers all load as they would locally. `SessionStart`
+injects hot/anchored memories, `remember`/`recall` work, and the autonomous
+wiki cycle can consolidate across scheduled runs. This gives the pipeline
+continuity: a nightly review-agent job can accumulate "we already flagged
+this pattern" across weeks of runs instead of starting blank every time.
+
+The trade-off is exactly the one this repo already documents for release
+benchmarks (see `CLAUDE.md`, Build & Test): a job with persistent state
+behind it is not byte-for-byte reproducible run-to-run, because the DB state
+differs. Do not use this regime to gate anything that must be a clean,
+repeatable pass/fail (that is what Regime A, or `benchmarks/reproduce.sh`'s
+isolated ephemeral container, is for) — use it for jobs whose value *is*
+the accumulated memory.
+
+### The rule
+
+One job, one regime. A job that needs both a clean reproducible verdict and
+persistent Cortex memory is asking for a contradiction — `--bare` strips the
+MCP/hooks layer that memory depends on, and enabling that layer reintroduces
+the run-to-run state dependency `--bare` exists to remove. If a pipeline
+needs both properties, split it into two jobs instead of one.
