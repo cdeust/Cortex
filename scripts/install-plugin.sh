@@ -32,6 +32,20 @@ set -euo pipefail
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 
+# On native Windows, CLAUDE_PLUGIN_ROOT (or $PWD) arrives in backslash form
+# (e.g. D:\a\Cortex\Cortex from GitHub Actions' github.workspace). Every
+# later use of PLUGIN_ROOT in this script concatenates it with a
+# forward-slash suffix ("$PLUGIN_ROOT/scripts/setup.py" etc.), which would
+# otherwise produce a mixed-separator path. Normalize once, here, via
+# cygpath (shipped with Git Bash/MSYS2) to the Windows mixed form
+# (drive letter + forward slashes, e.g. D:/a/Cortex/Cortex) so every
+# concatenation downstream is forward-slash-only and Windows programs
+# (native python.exe) still resolve it correctly. A no-op on macOS/Linux,
+# where cygpath doesn't exist. source: issue #113 CI run 29360566538.
+if command -v cygpath >/dev/null 2>&1; then
+    PLUGIN_ROOT="$(cygpath -m "$PLUGIN_ROOT")"
+fi
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
@@ -49,7 +63,19 @@ fi
 PY=$(command -v python3 || command -v python || true)
 [ -n "$PY" ] || fail "python3 not found in PATH"
 
-CURRENT_VERSION=$("$PY" -c "import json; print(json.load(open('$PLUGIN_JSON'))['version'])")
+# CURRENT_VERSION is read via an env var, NOT by interpolating $PLUGIN_JSON
+# into the -c source string. Splicing an arbitrary path into a Python
+# single-quoted string literal re-parses any backslash-letter sequence it
+# contains as a Python string escape — e.g. the "\a" in a GitHub Actions
+# Windows workspace path (D:\a\Cortex\Cortex) becomes ASCII BEL (0x07),
+# corrupting the path to D:\x07\Cortex\Cortex and failing to open it
+# (CI run 29360566538). Environment variables are passed as raw bytes with
+# no escape reinterpretation, so this is safe for any path content
+# (backslashes, spaces, quotes) on every OS, not just Windows.
+CURRENT_VERSION=$(CORTEX_PLUGIN_JSON_PATH="$PLUGIN_JSON" "$PY" -c "
+import json, os
+print(json.load(open(os.environ['CORTEX_PLUGIN_JSON_PATH']))['version'])
+")
 
 say "Installing Cortex v${CURRENT_VERSION}"
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -62,26 +63,75 @@ def test_skip_postgres_flag_derivation(monkeypatch, store_backend, expected):
     assert mod.SKIP_POSTGRES is expected
 
 
-def test_verify_skips_pg_checks_and_checks_sqlite3_when_skip_postgres(
-    monkeypatch, capsys
-):
+def test_verify_selects_sqlite_checks_when_skip_postgres(monkeypatch):
+    """verify() branch selection, hermetic (issue #113 CI run 29360566538).
+
+    The prior version of this test asserted a real SystemExit from
+    verify(), which depends on whether sentence-transformers/flashrank/
+    psycopg happen to be importable and whether a PostgreSQL server is
+    reachable in whatever environment runs the suite — non-deterministic
+    across CI jobs/matrix entries, exactly the flakiness this policy
+    forbids. _sqlite_checks/_postgres_checks/_model_checks are documented
+    as "never raises" (see their docstrings), so the only thing verify()
+    itself is responsible for is: which of _sqlite_checks/_postgres_checks
+    it calls, and whether it exits when a returned check is False. Both
+    are testable by mocking the helpers directly — no import availability,
+    no network, no real database needed.
+    """
     mod = _load_setup_module(monkeypatch, "sqlite")
-    # sentence-transformers / flashrank are not installed in the test env,
-    # so verify() would sys.exit(1) via fail(); that's expected here — we
-    # only assert on what got printed, i.e. which checks it decided to run.
-    with pytest.raises(SystemExit):
-        mod.verify()
-    out = capsys.readouterr().out
-    assert "sqlite3 stdlib" in out
-    assert "PostgreSQL connection" not in out
-    assert "Extensions" not in out
-    assert "PL/pgSQL" not in out
+
+    sqlite_checks = mock.Mock(return_value=[("sqlite3 stdlib", True)])
+    postgres_checks = mock.Mock(return_value=[("PostgreSQL connection", True)])
+    model_checks = mock.Mock(
+        return_value=[("sentence-transformers", True), ("FlashRank reranker", True)]
+    )
+    monkeypatch.setattr(mod, "_sqlite_checks", sqlite_checks)
+    monkeypatch.setattr(mod, "_postgres_checks", postgres_checks)
+    monkeypatch.setattr(mod, "_model_checks", model_checks)
+
+    mod.verify()  # all mocked checks pass -> must not exit
+
+    sqlite_checks.assert_called_once()
+    postgres_checks.assert_not_called()
+    model_checks.assert_called_once()
 
 
-def test_verify_runs_pg_checks_when_not_skip_postgres(monkeypatch, capsys):
+def test_verify_selects_postgres_checks_when_not_skip_postgres(monkeypatch):
     mod = _load_setup_module(monkeypatch, None)
+
+    sqlite_checks = mock.Mock(return_value=[("sqlite3 stdlib", True)])
+    postgres_checks = mock.Mock(return_value=[("PostgreSQL connection", True)])
+    model_checks = mock.Mock(
+        return_value=[("sentence-transformers", True), ("FlashRank reranker", True)]
+    )
+    monkeypatch.setattr(mod, "_sqlite_checks", sqlite_checks)
+    monkeypatch.setattr(mod, "_postgres_checks", postgres_checks)
+    monkeypatch.setattr(mod, "_model_checks", model_checks)
+
+    mod.verify()  # all mocked checks pass -> must not exit
+
+    postgres_checks.assert_called_once()
+    sqlite_checks.assert_not_called()
+    model_checks.assert_called_once()
+
+
+@pytest.mark.parametrize("skip_postgres", [True, False])
+def test_verify_exits_when_any_mocked_check_fails(monkeypatch, skip_postgres):
+    mod = _load_setup_module(monkeypatch, "sqlite" if skip_postgres else None)
+
+    monkeypatch.setattr(
+        mod, "_sqlite_checks", mock.Mock(return_value=[("sqlite3 stdlib", True)])
+    )
+    monkeypatch.setattr(
+        mod,
+        "_postgres_checks",
+        mock.Mock(return_value=[("PostgreSQL connection", False)]),
+    )
+    monkeypatch.setattr(
+        mod,
+        "_model_checks",
+        mock.Mock(return_value=[("sentence-transformers", False)]),
+    )
+
     with pytest.raises(SystemExit):
         mod.verify()
-    out = capsys.readouterr().out
-    assert "PostgreSQL connection" in out
-    assert "sqlite3 stdlib" not in out
