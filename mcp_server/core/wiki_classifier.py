@@ -12,11 +12,18 @@ either author):
   4. CONVENTION: establishes a rule or standard
   5. SPEC: describes a feature or system design
   6. NOTE: catch-all for meaningful content
+
+Size-limit note (coding-standards.md §4, High-stakes per engineer.md Move 7):
+this file is well over the 500-line hard limit, pre-existing before issue #126
+(901 lines before, 916 after adding the reverse-DI rules-provider port below).
+Tracked for a dedicated split — see issue #134 — rather than folded silently
+into #126's layer-violation scope.
 """
 
 from __future__ import annotations
 
 import re
+from typing import Callable
 
 # ── Rejection patterns ────────────────────────────────────────────────
 
@@ -443,8 +450,26 @@ _POSITIVE_SCORE_THRESHOLD = 4
 # on demand. Cached in-process; refresh by calling reset_user_rules().
 # When no rules are loaded (or the wiki isn't initialised), falls back
 # to the hardcoded defaults below.
+#
+# Reverse DI (issue #126): loading these rules requires reading files
+# under the wiki root — that is I/O, and core must not call the
+# infrastructure-backed loader (``infrastructure.wiki_schema_reader.
+# load_registry``) directly. The composition root
+# (``mcp_server/__main__.py``) supplies a zero-arg provider via
+# ``configure_user_rules_provider`` once at boot; no provider configured
+# falls back to the hardcoded defaults below, same as a load failure.
 
 _USER_RULES_CACHE = None  # None = not loaded; [] = loaded but empty
+_USER_RULES_PROVIDER: Callable[[], list] | None = None
+
+
+def configure_user_rules_provider(provider: Callable[[], list]) -> None:
+    """Composition-root injection point: register how to obtain the
+    user-editable classifier rules (``wiki/_rules/*.md``, parsed into
+    ``ClassifierRule`` objects). Call once at MCP server boot.
+    """
+    global _USER_RULES_PROVIDER
+    _USER_RULES_PROVIDER = provider
 
 
 def _load_user_rules():
@@ -453,13 +478,9 @@ def _load_user_rules():
     if _USER_RULES_CACHE is not None:
         return _USER_RULES_CACHE
     try:
-        from pathlib import Path
-
-        from mcp_server.core.wiki_schema_loader import load_registry
-        from mcp_server.infrastructure.config import WIKI_ROOT
-
-        registry = load_registry(Path(WIKI_ROOT))
-        _USER_RULES_CACHE = list(registry.rules)
+        _USER_RULES_CACHE = (
+            list(_USER_RULES_PROVIDER()) if _USER_RULES_PROVIDER is not None else []
+        )
     except Exception:
         _USER_RULES_CACHE = []
     return _USER_RULES_CACHE

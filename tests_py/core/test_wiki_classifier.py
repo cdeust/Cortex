@@ -2,7 +2,41 @@
 
 from __future__ import annotations
 
+import mcp_server.core.wiki_classifier as wiki_classifier
 from mcp_server.core.wiki_classifier import classify_memory, derive_title
+
+
+# ── Reverse-DI port (issue #126) ───────────────────────────────────────
+
+
+def test_user_rules_provider_defaults_to_empty(monkeypatch) -> None:
+    """No provider configured → hardcoded defaults apply (empty rule list),
+    never an import of infrastructure from core."""
+    monkeypatch.setattr(wiki_classifier, "_USER_RULES_PROVIDER", None)
+    monkeypatch.setattr(wiki_classifier, "_USER_RULES_CACHE", None)
+    assert wiki_classifier._load_user_rules() == []
+
+
+def test_user_rules_provider_is_used_when_configured(monkeypatch) -> None:
+    """The composition root injects a provider; ``_load_user_rules`` calls
+    it exactly once, then caches the result.
+
+    Uses ``monkeypatch.setattr`` (not the public ``configure_user_rules_
+    provider``) so teardown restores the pre-test provider automatically —
+    calling the public setter directly would leak ``fake_provider`` into
+    every test that runs afterward in this module.
+    """
+    monkeypatch.setattr(wiki_classifier, "_USER_RULES_CACHE", None)
+    calls = {"n": 0}
+
+    def fake_provider():
+        calls["n"] += 1
+        return ["fake-rule"]
+
+    monkeypatch.setattr(wiki_classifier, "_USER_RULES_PROVIDER", fake_provider)
+    assert wiki_classifier._load_user_rules() == ["fake-rule"]
+    assert wiki_classifier._load_user_rules() == ["fake-rule"]
+    assert calls["n"] == 1  # cached after first load
 
 
 # ── Audit-tag gate ────────────────────────────────────────────────────
