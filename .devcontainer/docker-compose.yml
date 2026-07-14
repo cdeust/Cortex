@@ -1,0 +1,53 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - ..:/workspace:cached
+    environment:
+      # Same "auto" backend the production image (../Dockerfile) opts into
+      # via CORTEX_RUNTIME=cowork — DATABASE_URL present here always wins,
+      # so the devcontainer talks to the `db` service, never SQLite.
+      DATABASE_URL: postgresql://cortex:cortex@db:5432/cortex
+      # scripts/setup_db.py shells out to psql/createdb/pg_isready without
+      # passing -U/-W; these PG* env vars are the standard libpq
+      # credential/connection source those binaries read implicitly.
+      # Dev-only credentials, not reachable outside the compose network.
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: cortex
+      PGPASSWORD: cortex
+      PGDATABASE: cortex
+    depends_on:
+      db:
+        condition: service_healthy
+    # Devcontainer CLI / VS Code attach to a long-lived container; the
+    # actual entrypoint (Claude Code CLI, installed by the devcontainer
+    # feature) is launched interactively by the editor, not by compose.
+    command: sleep infinity
+
+  db:
+    # source: benchmarks/reproduce.sh:116 — the exact image Cortex's own
+    # benchmark harness already uses for its ephemeral PostgreSQL+pgvector
+    # instances (LongMemEval/LoCoMo/BEAM reproduction).
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: cortex
+      POSTGRES_PASSWORD: cortex
+      POSTGRES_DB: cortex
+    volumes:
+      - cortex-devcontainer-pgdata:/var/lib/postgresql/data
+      # Directory-to-directory bind, not a single-file mount: mounting one
+      # file directly at a path absent from the base image proved
+      # unreliable here (verified 2026-07-14 — see initdb/01-extensions.sql
+      # header for the exact failure).
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cortex -d cortex"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  cortex-devcontainer-pgdata:

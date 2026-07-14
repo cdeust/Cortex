@@ -1,0 +1,26 @@
+{
+  "name": "Cortex dev environment",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "remoteUser": "cortex",
+  "features": {
+    "ghcr.io/devcontainers/features/node:2.1.0": {
+      "version": "22"
+    },
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5": {}
+  },
+  "containerEnv": {
+    "DISABLE_AUTOUPDATER": "1"
+  },
+  "postCreateCommand": "python scripts/setup_db.py && python -m mcp_server.doctor",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "anthropic.claude-code"
+      ]
+    }
+  }
+}
