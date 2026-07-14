@@ -373,3 +373,41 @@ def test_migrate_wiki_dry_run_default_leaves_ghost_in_place(
     assert summary["purge"]["purged"] == []
     # Ghost row is still present — dry_run never deletes.
     assert "notes/deleted-page.md" in fake_store.rows
+
+
+# ── issue #105 — dry_run must be transactionally neutral end-to-end ────
+#
+# Regression: `migrate_wiki` used to call `conn.commit()` unconditionally
+# after all four passes, so passes 1-3 (upsert_page, delete_links_from /
+# upsert_link, resolve_unresolved_links) were persisted even when
+# dry_run=True — only pass 4 (purge_ghost_pages) had its own dry_run gate.
+# `--dry-run` must never leave a durable write behind on ANY pass.
+
+
+def test_migrate_wiki_dry_run_rolls_back_never_commits(tmp_path, fake_store) -> None:
+    """dry_run=True must roll back the connection, never commit it.
+
+    This is the mechanism-level proof: on the code prior to the fix,
+    `conn.commit()` was called unconditionally (this assertion fails
+    against that code — `commit.assert_not_called()` raises). After the
+    fix, dry_run rolls back so passes 1-3's writes are discarded along
+    with pass 4's.
+    """
+    _write_page(tmp_path, "notes/alive-page.md", "Alive Page")
+    conn = MagicMock()
+
+    migrate_wiki(tmp_path, conn=conn, dry_run=True)
+
+    conn.rollback.assert_called_once()
+    conn.commit.assert_not_called()
+
+
+def test_migrate_wiki_real_run_commits_never_rolls_back(tmp_path, fake_store) -> None:
+    """dry_run=False must commit — the mirror-image proof to the above."""
+    _write_page(tmp_path, "notes/alive-page.md", "Alive Page")
+    conn = MagicMock()
+
+    migrate_wiki(tmp_path, conn=conn, dry_run=False)
+
+    conn.commit.assert_called_once()
+    conn.rollback.assert_not_called()

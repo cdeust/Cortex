@@ -411,7 +411,18 @@ def migrate_wiki(wiki_root: Path | str, conn, *, dry_run: bool = True) -> dict:
     # this run's view of the filesystem, not a stale one.
     purge_summary = purge_ghost_pages(conn, rel_paths, dry_run=dry_run)
 
-    conn.commit()
+    # dry_run must be transactionally neutral end-to-end: passes 1-3
+    # (upsert_page, delete_links_from/upsert_link, resolve_unresolved_links)
+    # write through the same `conn` as pass 4 and have no dry_run gate of
+    # their own — only pass 4 checks dry_run internally (see
+    # purge_ghost_pages). Committing unconditionally here previously made
+    # `--dry-run` persist passes 1-3 despite the name (issue #105). Roll
+    # back everything this call wrote when dry_run is requested; commit
+    # only on a real (dry_run=False) run.
+    if dry_run:
+        conn.rollback()
+    else:
+        conn.commit()
 
     errors = errors1 + errors2
     return {
