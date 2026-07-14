@@ -55,7 +55,7 @@ are the consensus.
 | Embeddings | sentence-transformers 384-dim + FlashRank ONNX cross-encoder rerank | TF-IDF only (per search/mod.rs) |
 | Search | PL/pgSQL WRRF over vector + FTS + trigram + heat + recency, client-side rerank | Tantivy BM25 + TF-IDF + RRF |
 | Clustering | Per-domain cognitive profile + cross-domain bridges | Louvain + Traag C2 repair (Blondel 2008, Traag 2019 — cited) |
-| Scale | 108 core modules, 47 MCP tools, 2500+ tests | 12 046 LOC, 23 MCP tools, 220 tests |
+| Scale | see docs/module-inventory.md for module counts (single source, per #127) · 47 MCP tools · 2500+ tests | 12 046 LOC, 23 MCP tools, 220 tests |
 | Scientific grounding | Every mechanism cites papers: cascade (Kandel 2001), homeostatic (Turrigiano 2008), neuromodulation (Doya 2002), synaptic tagging (Frey & Morris 1997), microglial pruning (Wang 2020), predictive coding (Friston 2010), … | Every stage cites papers: Louvain (Blondel 2008), Traag (2019), RRF K=60 (Cormack et al 2009), Tarjan SCC, tree-sitter … |
 | Benchmarks | **LongMemEval R@10 97.8%** (paper SOTA 78.4%); **LoCoMo 92.6%**; **BEAM 0.543** (paper SOTA 0.329) — all on clean DB, reproducible | 220 unit tests; no external benchmark yet |
 | Unique features | persistent cross-session memory, thermodynamic decay, cascade consolidation, neuromodulation, synaptic tagging, cognitive profile per domain, predictive-coding write gate, hippocampal replay | PRD validator (symbol hallucination check), security gates (auth-critical/unsafe/public API), Tarjan-SCC semantic diff, 5-layer resolver with LSP, macro expansion, stdlib indexing |

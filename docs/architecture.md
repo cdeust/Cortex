@@ -17,11 +17,11 @@ graph TD
     E[errors/] -.->|types| H
     E -.->|types| SV
 
-    C -.-|40 modules · pure logic, zero I/O| C
-    I -.-|11 modules · SQLite, embeddings, filesystem| I
-    S -.-|10 modules · utilities, Pydantic types| S
-    H -.-|34 handlers · composition roots| H
-    HK -.-|4 hooks · lifecycle automation| HK
+    C -.-|pure logic, zero I/O| C
+    I -.-|SQLite, embeddings, filesystem| I
+    S -.-|utilities, Pydantic types| S
+    H -.-|composition roots| H
+    HK -.-|lifecycle automation| HK
 
     style C fill:#22c55e,color:#000
     style I fill:#06b6d4,color:#000
@@ -35,6 +35,10 @@ graph TD
 ```
 
 Handlers sit at the center as **composition roots**: they wire infrastructure (I/O) to core (logic) and are the only layer allowed to import both.
+
+Per-layer module counts drift too fast for a diagram to carry as a hard-coded
+label (see #114, #127) — **docs/module-inventory.md is the single source**
+for current file counts per layer.
 
 ## Dependency Rules
 
@@ -179,7 +183,9 @@ Handlers sit at the center as **composition roots**: they wire infrastructure (I
 |---|---|
 | `__init__.py` | MethodologyError, ValidationError, StorageError, AnalysisError, McpConnectionError |
 
-### `handlers/` — Tool composition roots (34 handlers)
+### `handlers/` — Tool composition roots
+
+*(file/tool counts: see docs/module-inventory.md — single source, per #127)*
 
 #### Cognitive Profiling
 
@@ -260,7 +266,7 @@ Handlers sit at the center as **composition roots**: they wire infrastructure (I
 
 | Module | Purpose |
 |---|---|
-| `__main__.py` | `python -m mcp_server` — FastMCP bootstrap, registers all 34 tools |
+| `__main__.py` | `python -m mcp_server` — FastMCP bootstrap, registers all standalone tools (see docs/mcp-tools.md for the exact, test-verified count) |
 
 ## Testing Strategy
 
