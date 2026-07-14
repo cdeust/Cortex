@@ -53,8 +53,11 @@ pyright-*.json
 traces/
 
 # Internal dev tooling, agent config & task notes — excluded from the public
-# submission repo (untracked via `git rm --cached`; kept locally on disk)
-.claude/
+# submission repo (untracked via `git rm --cached`; kept locally on disk).
+# Exception: .claude/settings.json is project-scope policy (#119) and must
+# be committed — its deny list is only irremovable-from-local if it ships.
+.claude/*
+!.claude/settings.json
 tasks/
 benchmarks/snapshots/
 .memsearch/
