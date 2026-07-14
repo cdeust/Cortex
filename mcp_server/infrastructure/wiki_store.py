@@ -10,6 +10,24 @@ Operations:
 Never deletes pages. Never regenerates content. The only file that may
 be overwritten by regeneration is ``.generated/INDEX.md`` (owned by the
 wiki_reindex handler, not this module).
+
+Issue #110: ``write_page`` is the true choke point for every wiki-tree
+byte, not ``wiki_write.write_governed_page`` (that function's docstring
+claimed otherwise pre-fix; corrected there). At least 7 handlers plus
+this module's own ``sync_memory_strict`` call ``write_page`` directly,
+bypassing ``write_governed_page``'s governance side effects (pointer
+memory, citations) — deliberately, in most cases (e.g. redirect stubs,
+generated reference pages) where that bookkeeping does not apply. What
+those callers must NOT be able to bypass is write-time frontmatter
+normalization (issue #107/PR #109): ``write_page`` itself now runs
+``normalize_frontmatter`` on any full-page write (``create``/``replace``;
+``append``'s content is a fragment, never normalized — same exclusion
+``write_governed_page`` already documented), so no caller, present or
+future, can persist a non-canonical frontmatter shape. This module
+already imports ``core.wiki_layout``/``core.wiki_sync`` for the same
+wiki-specific pure-function reasons (an established exception to the
+general infrastructure→core dependency rule, scoped to this subsystem);
+``wiki_frontmatter_validation`` is the same kind of dependency.
 """
 
 from __future__ import annotations
@@ -17,6 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from mcp_server.core.wiki_frontmatter_validation import normalize_frontmatter
 from mcp_server.core.wiki_layout import PAGE_KINDS
 from mcp_server.core.wiki_sync import build_from_memory
 from mcp_server.infrastructure.file_io import ensure_dir
@@ -131,6 +150,22 @@ def write_page(
     * ``replace`` — overwrites regardless.
     * ``append`` — appends the content to the existing file (with a
       separating blank line), raises WikiMissing if the file does not exist.
+
+    precondition: for ``create``/``replace``, ``content`` is a FULL page
+    (frontmatter + body, or plain body with no frontmatter) the caller
+    intends to persist verbatim; for ``append``, ``content`` is a
+    fragment appended below whatever is already on disk.
+    postcondition: for ``create``/``replace``, the bytes actually written
+    are always ``normalize_frontmatter(content)`` (issue #110) — this is
+    the one choke point every wiki-tree write passes through, so no
+    caller (governed via ``write_governed_page`` or direct) can persist a
+    non-canonical frontmatter shape. ``append``'s fragment is never
+    normalized (there is no frontmatter fence to canonicalize in a
+    fragment, and treating one as a full page would corrupt it — see
+    ``normalize_frontmatter``'s own precondition).
+    raises: ``UnclosedFrontmatterError`` (from ``normalize_frontmatter``,
+    propagated uncaught) for ``create``/``replace`` when ``content`` opens
+    a frontmatter fence it never closes.
     """
     import os
 
@@ -147,6 +182,9 @@ def write_page(
     # Defence-in-depth against prefix-aliasing.
     if fullpath != base_path and not fullpath[len(base_path) :].startswith(os.sep):
         raise ValueError(f"path escapes wiki root: {rel_path!r}")
+
+    if mode != "append":
+        content = normalize_frontmatter(content)
 
     # fullpath is sanitized — use it directly at every sink.
     existed = os.path.exists(fullpath)

@@ -10,12 +10,18 @@ read-time parser doesn't yet know about would still land on disk
 uncorrected.
 
 This module round-trips content through ``parse_page`` + ``render_page``
-so what ``write_governed_page`` persists is ALWAYS the canonical form —
-whatever ``parse_page`` already knows how to repair is repaired before
-the first byte reaches disk, not after. The read-time tolerance stays in
-place unchanged as defense in depth (content written before this gate
-existed, or by a write path that bypasses ``write_governed_page`` — see
-that module's docstring for the audited list).
+so what reaches disk is ALWAYS the canonical form — whatever
+``parse_page`` already knows how to repair is repaired before the first
+byte is written, not after. Issue #110 moved the call site of this
+function from ``wiki_write.write_governed_page`` down to
+``infrastructure.wiki_store.write_page`` itself, so normalization covers
+every caller (governed or direct) rather than only the interactive
+``wiki_write`` tool path — see that module's docstring for the contract
+and ``tests_py/architecture/test_write_page_call_sites.py`` for the
+audited list of direct callers. The read-time tolerance
+(``wiki_pages.parse_page``'s scalar-branch repair) stays in place
+unchanged as defense in depth for content written before this gate
+existed.
 
 Deliberately does NOT duplicate ``parse_page``'s parsing state machine —
 only the one shape it cannot repair (an unclosed frontmatter fence, which

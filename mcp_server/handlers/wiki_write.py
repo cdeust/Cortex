@@ -32,7 +32,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from mcp_server.core.wiki_frontmatter_validation import normalize_frontmatter
+from mcp_server.core.wiki_frontmatter_validation import UnclosedFrontmatterError
 from mcp_server.core.wiki_layout import page_path
 from mcp_server.core.wiki_pages import (
     build_adr,
@@ -239,30 +239,27 @@ async def write_governed_page(
     tags: list[str] | None = None,
     memory_ids: list[int] | None = None,
 ) -> dict[str, Any]:
-    """The single governed wiki-write path — every wiki-tree byte goes through here.
+    """The governed wiki-write path — adds pointer-memory + citation
+    bookkeeping on top of a plain ``write_page`` call.
 
     precondition: ``root`` is a wiki root (production ``WIKI_ROOT`` or, for a
     caller operating on an alternate tree such as a test fixture, that
     tree's own root); ``rel_path`` is root-relative; ``content`` is the full
     markdown (frontmatter + body) to persist.
-    postcondition: for ``mode != "append"`` (a full page, not a fragment),
-    ``content`` is first run through ``normalize_frontmatter`` (issue #107)
-    so the bytes actually written are ALWAYS the canonical
-    ``render_page(parse_page(...))`` form — this closes the corruption
-    class PR #104/commit 53712df8 repaired reactively at read-time (a
-    duplicated ``title: title: "..."`` label, stray YAML quotes) instead of
-    persisting the two known signatures and relying on the reader to
-    tolerate them. ``append`` mode's ``content`` is a fragment appended
-    below existing content, not a full page, so it is never normalized.
-    On success, the page is written atomically (tmp+rename,
-    ``write_page``'s existing guarantee) AND a protected
-    ``write_class='mechanical'`` pointer memory is stored via ``remember``
-    (best-effort — never blocks or fails the write; mechanical is correct
-    per remember_schema.py's own vocabulary: "structural indexing — ...
-    wiki pointer sync — bypasses the gate entirely, force=true semantics";
-    this call stores a 500-char pointer, not the full authored content, so
-    the class describes the pointer-write, not who authored the page body)
-    AND ``wiki.pages``/``wiki.citations`` are synced best-effort (same
+    postcondition: write-time frontmatter normalization (issue #107) is
+    enforced by ``write_page`` itself (issue #110 — the choke point moved
+    down to ``infrastructure.wiki_store`` so it covers every caller, not
+    just this one), so this function no longer needs to (and does not)
+    call ``normalize_frontmatter`` a second time. On success, the page is
+    written atomically (tmp+rename, ``write_page``'s existing guarantee)
+    AND a protected ``write_class='mechanical'`` pointer memory is stored
+    via ``remember`` (best-effort — never blocks or fails the write;
+    mechanical is correct per remember_schema.py's own vocabulary:
+    "structural indexing — ... wiki pointer sync — bypasses the gate
+    entirely, force=true semantics"; this call stores a 500-char pointer,
+    not the full authored content, so the class describes the
+    pointer-write, not who authored the page body) AND
+    ``wiki.pages``/``wiki.citations`` are synced best-effort (same
     degrade-to-no-op discipline as ``_sync_page_and_cite``'s own contract).
     Write-time provenance grading (``INC7.5`` — ``grade_from_content``,
     triggered inside ``remember()``'s insert path) fires automatically as a
@@ -270,30 +267,42 @@ async def write_governed_page(
     Returns ``{path, mode, created, bytes_written, root, citations_written}``
     or ``{error}``.
 
-    This is deliberately the ONLY function in the codebase that may call
-    ``write_page`` — the interactive ``wiki_write`` MCP tool (``handler``,
-    below) and the headless authoring worker
-    (``consolidation/page_io.py``) both route through here so no caller can
-    write wiki-tree bytes while skipping write_class/citation/pointer-memory
-    bookkeeping (Move 1: one governed path, no shadow I/O).
+    This is the ONLY function in the codebase that may register the
+    pointer-memory + citations governance side effects — the interactive
+    ``wiki_write`` MCP tool (``handler``, below) and the headless
+    authoring worker (``consolidation/page_io.py``) both route through
+    here so no caller performing an authored, citable write skips that
+    bookkeeping. It is emphatically NOT the only caller of ``write_page``:
+    several handlers (redirect stubs, generated reference/PRD/finding
+    pages, ADRs, links) call ``write_page`` directly because pointer
+    memories and citations do not apply to their output — see
+    ``tests_py/architecture/test_write_page_call_sites.py`` for the
+    audited whitelist that guards against a new, unreviewed direct
+    caller appearing silently. Frontmatter normalization is unconditional
+    for all of them regardless (see ``write_page``'s own contract).
 
     raises: ``UnclosedFrontmatterError`` (propagated, uncaught, from
-    ``normalize_frontmatter``) when ``content`` opens a frontmatter fence
-    it never closes — the one shape that is structurally inexploitable.
-    The interactive tool call (``handler``, below, registered via
-    ``safe_handler``) turns this into a ``fastmcp.exceptions.ToolError``
-    automatically (the repo's standing idiom — see commits
-    c7dfc243/49f29e98); ``consolidation/page_io.py``'s non-tool callers
-    catch it explicitly and degrade to their existing failure contract.
+    ``write_page``'s call to ``normalize_frontmatter``) when ``content``
+    opens a frontmatter fence it never closes — the one shape that is
+    structurally inexploitable. The interactive tool call (``handler``,
+    below, registered via ``safe_handler``) turns this into a
+    ``fastmcp.exceptions.ToolError`` automatically (the repo's standing
+    idiom — see commits c7dfc243/49f29e98); ``consolidation/page_io.py``'s
+    non-tool callers catch it explicitly and degrade to their existing
+    failure contract.
     """
-    if mode != "append":
-        content = normalize_frontmatter(content)
     try:
         result = write_page(root, rel_path, content, mode=mode)
     except WikiExists:
         return {"error": f"page already exists: {rel_path}"}
     except WikiMissing:
         return {"error": f"page does not exist: {rel_path}"}
+    except UnclosedFrontmatterError:
+        # Propagate uncaught (see docstring) — narrower than the ValueError
+        # catch below, which must not swallow this one. write_page now
+        # raises it from its own normalize_frontmatter call (issue #110
+        # moved that call down from this function).
+        raise
     except (ValueError, OSError) as exc:
         return {"error": f"write failed: {exc}"}
 
