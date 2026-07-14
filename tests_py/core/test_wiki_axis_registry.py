@@ -222,9 +222,13 @@ def test_reset_registry_picks_up_new_user_file(tmp_path: Path, monkeypatch) -> N
     schema_dir = tmp_path / "_schema" / "audiences"
     schema_dir.mkdir(parents=True)
 
-    # Point WIKI_ROOT at our tmp wiki so the default get_registry picks
-    # up the user file.
-    monkeypatch.setattr("mcp_server.infrastructure.config.WIKI_ROOT", str(tmp_path))
+    # Point the injected wiki-root provider at our tmp wiki (issue #126:
+    # core no longer imports infrastructure.config directly) so the
+    # default get_registry() picks up the user file.
+    monkeypatch.setattr(
+        "mcp_server.core.wiki_axis_registry._WIKI_ROOT_PROVIDER",
+        lambda: str(tmp_path),
+    )
     reset_registry()
 
     from mcp_server.core.wiki_axis_registry import get_registry

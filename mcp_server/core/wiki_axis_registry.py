@@ -37,6 +37,12 @@ Schema file format::
 Unknown values fail validation; the error message proposes the closest
 match via ``difflib.get_close_matches`` (user direction 2026-05-12:
 "reject + suggest").
+
+Size-limit note (coding-standards.md §4, High-stakes per engineer.md Move 7):
+this file is well over the 500-line hard limit, pre-existing before issue #126
+(687 lines before, 705 after adding the reverse-DI wiki-root-provider port
+below). Tracked for a dedicated split — see issue #134 — rather than folded
+silently into #126's layer-violation scope.
 """
 
 from __future__ import annotations
@@ -45,7 +51,7 @@ import difflib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final, Iterable
+from typing import Callable, Final, Iterable
 
 # ── Axis names ──────────────────────────────────────────────────────────
 
@@ -661,9 +667,28 @@ def match_axis(
 
 
 # ── Lazy singleton — cached for in-process classifier calls ─────────────
-
+#
+# Reverse DI (issue #126): core declares the *shape* of what it needs (a
+# zero-arg callable returning the default wiki root) rather than importing
+# ``infrastructure.config.WIKI_ROOT`` directly. The composition root
+# (``mcp_server/__main__.py``) calls ``configure_default_wiki_root`` once
+# at process boot with the real path; tests inject a fixture path the same
+# way. No provider configured → ``get_registry()`` yields the seed-only
+# defaults (still correct, just without user ``_schema/`` overrides).
 
 _REGISTRY_CACHE: AxisRegistry | None = None
+_WIKI_ROOT_PROVIDER: Callable[[], Path | str | None] | None = None
+
+
+def configure_default_wiki_root(provider: Callable[[], Path | str | None]) -> None:
+    """Composition-root injection point: register how to obtain the
+    default wiki root used by the lazy ``get_registry()`` singleton.
+
+    Call once at MCP server boot. Core never imports
+    ``infrastructure.config`` directly — see issue #126.
+    """
+    global _WIKI_ROOT_PROVIDER
+    _WIKI_ROOT_PROVIDER = provider
 
 
 def get_registry() -> AxisRegistry:
@@ -675,9 +700,8 @@ def get_registry() -> AxisRegistry:
     """
     global _REGISTRY_CACHE
     if _REGISTRY_CACHE is None:
-        from mcp_server.infrastructure.config import WIKI_ROOT
-
-        _REGISTRY_CACHE = load_axis_registry(WIKI_ROOT)
+        wiki_root = _WIKI_ROOT_PROVIDER() if _WIKI_ROOT_PROVIDER is not None else None
+        _REGISTRY_CACHE = load_axis_registry(wiki_root)
     return _REGISTRY_CACHE
 
 
