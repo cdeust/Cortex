@@ -11,9 +11,69 @@ import pytest
 from mcp_server.infrastructure.embedding_engine import (
     DEFAULT_MODEL_REVISION,
     EmbeddingEngine,
+    embedding_cache_dir,
     get_embedding_engine,
     reset_embedding_engine,
 )
+
+
+# ── Cache folder (issue #124 — align with reranker's bb1c581f hardening) ──
+
+
+class TestEmbeddingCacheDir:
+    """Mirrors TestRerankerCacheDir in tests_py/core/test_reranker.py."""
+
+    def test_default_is_not_tmp(self, monkeypatch):
+        monkeypatch.delenv("HF_HOME", raising=False)
+        monkeypatch.delenv("SENTENCE_TRANSFORMERS_HOME", raising=False)
+        result = embedding_cache_dir()
+        assert result is not None
+        assert result != "/tmp"
+        assert "huggingface" in result
+
+    def test_honors_xdg_cache_home(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("HF_HOME", raising=False)
+        monkeypatch.delenv("SENTENCE_TRANSFORMERS_HOME", raising=False)
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        assert embedding_cache_dir() == str(tmp_path / "huggingface" / "hub")
+
+    def test_hf_home_already_set_takes_precedence(self, monkeypatch, tmp_path):
+        """An explicit cache_folder outranks HF_HOME inside sentence-
+        transformers, so we must NOT pass one when the user already set
+        HF_HOME — otherwise we'd silently override their choice."""
+        monkeypatch.setenv("HF_HOME", str(tmp_path))
+        monkeypatch.delenv("SENTENCE_TRANSFORMERS_HOME", raising=False)
+        assert embedding_cache_dir() is None
+
+    def test_sentence_transformers_home_already_set_takes_precedence(
+        self, monkeypatch, tmp_path
+    ):
+        monkeypatch.delenv("HF_HOME", raising=False)
+        monkeypatch.setenv("SENTENCE_TRANSFORMERS_HOME", str(tmp_path))
+        assert embedding_cache_dir() is None
+
+    def test_load_passes_cache_folder_to_sentence_transformer(self, monkeypatch):
+        monkeypatch.delenv("HF_HOME", raising=False)
+        monkeypatch.delenv("SENTENCE_TRANSFORMERS_HOME", raising=False)
+        engine = EmbeddingEngine()
+        with patch("sentence_transformers.SentenceTransformer") as mock_st:
+            mock_st.return_value = MagicMock(get_embedding_dimension=lambda: 384)
+            engine._ensure_model()
+        _, kwargs = mock_st.call_args
+        assert kwargs.get("cache_folder") == embedding_cache_dir()
+        assert kwargs["cache_folder"] is not None
+
+    def test_load_passes_none_cache_folder_when_hf_home_set(
+        self, monkeypatch, tmp_path
+    ):
+        monkeypatch.setenv("HF_HOME", str(tmp_path))
+        monkeypatch.delenv("SENTENCE_TRANSFORMERS_HOME", raising=False)
+        engine = EmbeddingEngine()
+        with patch("sentence_transformers.SentenceTransformer") as mock_st:
+            mock_st.return_value = MagicMock(get_embedding_dimension=lambda: 384)
+            engine._ensure_model()
+        _, kwargs = mock_st.call_args
+        assert kwargs.get("cache_folder") is None
 
 
 # ── Init ──────────────────────────────────────────────────────────────

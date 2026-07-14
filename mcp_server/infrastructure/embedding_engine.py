@@ -45,10 +45,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from collections import OrderedDict
 from typing import Any
 
 import numpy as np
+
+from mcp_server.shared.platform import cache_dir as _base_cache_dir
 
 # source: measured 2026-07-11 (incident i7d3) — see module docstring
 # "Model revision pin" section for the full derivation and the blob-hash
@@ -57,6 +60,35 @@ import numpy as np
 DEFAULT_MODEL_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
 
 logger = logging.getLogger(__name__)
+
+
+def embedding_cache_dir() -> str | None:
+    """Resolve the ``cache_folder`` to pass to ``SentenceTransformer``.
+
+    Mirrors ``mcp_server.core.reranker.reranker_cache_dir`` (hardened
+    after the FlashRank /tmp incident, commit bb1c581f): same shared,
+    XDG-aware ``mcp_server.shared.platform.cache_dir()`` base, laid out
+    under ``huggingface/hub`` to match the directory
+    ``sentence-transformers``/``huggingface_hub`` already write
+    ``models--org--name`` snapshots into by default (``$HF_HOME/hub``).
+
+    Precedence, decided for consistency with how ``huggingface_hub``
+    itself resolves its cache (``cache_folder`` passed to
+    ``SentenceTransformer`` takes priority over both env vars inside the
+    library, so passing one unconditionally would silently override a
+    choice the user already made): if ``HF_HOME`` or
+    ``SENTENCE_TRANSFORMERS_HOME`` is set in the environment, return
+    ``None`` and let the library resolve its own default from that env
+    var. Otherwise return our durable, shared cache path so a caller who
+    set neither var still gets a deterministic, XDG-aware location
+    instead of depending entirely on ``huggingface_hub``'s built-in
+    resolution (issue #124 — the reranker was hardened this way in
+    bb1c581f; embeddings had no equivalent).
+    """
+    if os.environ.get("HF_HOME") or os.environ.get("SENTENCE_TRANSFORMERS_HOME"):
+        return None
+    return str(_base_cache_dir() / "huggingface" / "hub")
+
 
 # ── Process-wide singleton ────────────────────────────────────────────
 # One EmbeddingEngine per process. Handlers call get_embedding_engine()
@@ -228,6 +260,14 @@ class EmbeddingEngine:
             device = self._resolve_device()
             from sentence_transformers import SentenceTransformer
 
+            # cache_folder: explicit, XDG-aware default (mirrors the
+            # reranker's /tmp-incident hardening, bb1c581f) unless the
+            # user already set HF_HOME / SENTENCE_TRANSFORMERS_HOME, in
+            # which case we pass None and defer to their choice. See
+            # embedding_cache_dir() docstring for the full precedence
+            # rationale (issue #124).
+            cache_folder = embedding_cache_dir()
+
             # local_files_only=True keeps the load hermetic (no HF Hub
             # requests) whenever the model is already cached. It must be
             # an explicit argument, not the HF_HUB_OFFLINE env var: hub
@@ -244,6 +284,7 @@ class EmbeddingEngine:
                     device=device,
                     local_files_only=True,
                     revision=self._revision,
+                    cache_folder=cache_folder,
                 )
             except _cache_miss:
                 # Model not in local cache (at all, or not at the pinned
@@ -254,7 +295,10 @@ class EmbeddingEngine:
                     self._revision or "refs/main",
                 )
                 self._model = SentenceTransformer(
-                    self._model_name, device=device, revision=self._revision
+                    self._model_name,
+                    device=device,
+                    revision=self._revision,
+                    cache_folder=cache_folder,
                 )
 
             # sentence-transformers 5.x renamed get_sentence_embedding_dimension
