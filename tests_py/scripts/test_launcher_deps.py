@@ -215,6 +215,79 @@ def test_pip_install_rollback_on_mid_commit_failure(deps_mod, tmp_path, monkeypa
     assert (captured_tmp_dir["path"] / "numpy" / "__init__.py").exists()
 
 
+def test_pip_install_rollback_preserves_dist_info_regardless_of_commit_order(
+    deps_mod, tmp_path, monkeypatch
+):
+    """Issue #149 regression: ``os.listdir`` order is unspecified by the
+    stdlib and was observed to differ across CI's Python 3.10 runners,
+    making ``test_pip_install_rollback_on_mid_commit_failure`` flaky.
+    Root cause: the OLD ``numpy-2.2.6.dist-info`` was pruned as soon as
+    the NEW ``numpy-2.4.4.dist-info`` entry committed, before the
+    package-directory entry's commit failed and rolled back -- when
+    ``os.listdir`` happened to yield the dist-info entry first, the
+    prune ran and destroyed the still-valid old metadata ahead of the
+    overall failure. This test forces that exact ordering deterministically
+    (independent of host filesystem enumeration order) so the race can
+    never silently reappear."""
+    deps_dir = tmp_path / "deps"
+    deps_dir.mkdir()
+    _make_pkg_dir(deps_dir, "numpy", marker="ORIGINAL")
+    _make_dist_info(deps_dir, "numpy", "2.2.6")
+
+    captured_tmp_dir = {}
+
+    def fake_run(cmd, **kwargs):
+        tmp_dir = Path(cmd[cmd.index("--target") + 1])
+        captured_tmp_dir["path"] = tmp_dir
+        _make_pkg_dir(tmp_dir, "numpy", marker="FRESH")
+        _make_dist_info(tmp_dir, "numpy", "2.4.4")
+
+        class _Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
+
+    real_replace = os.replace
+
+    def flaky_replace(src, dst):
+        if str(src).endswith(os.path.join("numpy")) and ".tmp-" in str(src):
+            raise PermissionError(
+                "[WinError 5] Access is denied (simulated locked .pyd)"
+            )
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(deps_mod._install.os, "replace", flaky_replace)
+
+    real_listdir = os.listdir
+
+    def forced_listdir(path):
+        # Force the dist-info entry to be enumerated BEFORE the package
+        # directory entry, for tmp_dir only -- the ordering the flake
+        # needed to trigger.
+        names = real_listdir(path)
+        if captured_tmp_dir.get("path") is not None and str(path) == str(
+            captured_tmp_dir["path"]
+        ):
+            return sorted(names, key=lambda n: (not n.endswith(".dist-info"), n))
+        return names
+
+    monkeypatch.setattr(deps_mod._install.os, "listdir", forced_listdir)
+
+    ok = deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"])
+
+    assert ok is False
+    assert "ORIGINAL" in (deps_dir / "numpy" / "__init__.py").read_text(
+        encoding="utf-8"
+    )
+    # The invariant issue #149 broke: the old dist-info must survive an
+    # overall-failed commit even when its OWN entry committed first.
+    assert (deps_dir / "numpy-2.2.6.dist-info").is_dir()
+
+
 def test_pip_install_no_backup_leaked_on_success(deps_mod, tmp_path, monkeypatch):
     """A successful commit leaves no ``*.bak-<pid>`` residue behind."""
     deps_dir = tmp_path / "deps"

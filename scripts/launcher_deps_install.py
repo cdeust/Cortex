@@ -29,6 +29,27 @@ if _SCRIPTS_DIR not in sys.path:
 import launcher_deps_fs as _fs  # noqa: E402
 
 
+def _remove_path(path: str, *, best_effort: bool = False) -> None:
+    """Remove a file or directory at ``path``, whichever it is.
+
+    Precondition: ``path`` exists. Postcondition: ``path`` no longer
+    exists (or, with ``best_effort=True``, removal was attempted and any
+    ``OSError`` was swallowed — used for cleanup that must never mask
+    the caller's own in-flight exception).
+    """
+    if best_effort:
+        if os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            with contextlib.suppress(OSError):
+                os.remove(path)
+        return
+    if os.path.isdir(path):
+        shutil.rmtree(path, ignore_errors=True)
+    else:
+        os.remove(path)
+
+
 def commit_entry(tmp_dir: str, deps_dir: str, entry: str) -> str | None:
     """Move one top-level ``tmp_dir`` entry into ``deps_dir``.
 
@@ -52,10 +73,8 @@ def commit_entry(tmp_dir: str, deps_dir: str, entry: str) -> str | None:
     backup = f"{dest}.bak-{os.getpid()}"
     had_dest = os.path.exists(dest)
     if had_dest:
-        if os.path.isdir(backup):
-            shutil.rmtree(backup, ignore_errors=True)
-        elif os.path.exists(backup):
-            os.remove(backup)
+        if os.path.exists(backup):
+            _remove_path(backup, best_effort=True)
         os.replace(dest, backup)
     try:
         os.replace(src, dest)
@@ -64,19 +83,67 @@ def commit_entry(tmp_dir: str, deps_dir: str, entry: str) -> str | None:
             # Restore the pre-call state; leave `backup` for the caller's
             # rollback bookkeeping (removed once restore is confirmed).
             if os.path.exists(dest):
-                if os.path.isdir(dest):
-                    shutil.rmtree(dest, ignore_errors=True)
-                else:
-                    os.remove(dest)
+                _remove_path(dest, best_effort=True)
             os.replace(backup, dest)
         raise
     if had_dest:
-        if os.path.isdir(backup):
-            shutil.rmtree(backup, ignore_errors=True)
-        else:
-            with contextlib.suppress(OSError):
-                os.remove(backup)
+        _remove_path(backup, best_effort=True)
     return None
+
+
+def _entry_already_satisfied(
+    entry: str, tmp_versions: dict[str, str], dest_versions: dict[str, str]
+) -> bool:
+    """Idempotence guard (issue #97 suggestion 1): true iff ``dest``
+    already has the exact version ``tmp_dir`` resolved for ``entry`` --
+    protects a locked, already-correct transitive dep (e.g. numpy under
+    a running MCP server) from ever entering the rmtree/replace path."""
+    key = _fs.entry_dist_key(entry)
+    tmp_v = tmp_versions.get(key)
+    return tmp_v is not None and dest_versions.get(key) == tmp_v
+
+
+def _commit_resolved_entries(tmp_dir: str, deps_dir: str) -> tuple[bool, str | None]:
+    """Commit every top-level ``tmp_dir`` entry into ``deps_dir``.
+
+    Precondition: ``tmp_dir`` holds a completed, successful pip
+    ``--target`` install. Postcondition: ``(True, None)`` iff every
+    entry committed (or was already satisfied) and every stale
+    ``*.dist-info`` sibling has been pruned; ``(False, failed_entry)`` on
+    the first commit failure, with NO dist-info pruned and ``deps_dir``
+    restored for every entry processed so far.
+
+    Issue #149: ``os.listdir`` order is unspecified by the stdlib and
+    differs by OS/filesystem; a single distribution spans two entries
+    here (its ``.dist-info`` and its package directory), and the batch
+    is only atomic at the whole-``tmp_dir`` level (stops at the first
+    failure). Pruning the OLD dist-info per-entry, immediately after ITS
+    OWN commit, let an ordering where the dist-info committed before the
+    package directory delete the still-valid old metadata and then hit
+    the package-directory failure/rollback -- so the prune below now
+    waits for the whole batch to confirm success.
+    """
+    tmp_versions = _fs.dist_info_versions(tmp_dir)
+    dest_versions = _fs.dist_info_versions(deps_dir)
+    committed_dist_infos: list[str] = []
+    for entry in os.listdir(tmp_dir):
+        if _entry_already_satisfied(entry, tmp_versions, dest_versions):
+            continue
+        try:
+            commit_entry(tmp_dir, deps_dir, entry)
+        except OSError as exc:
+            print(
+                f"[cortex-launcher] commit failed for {entry}: {exc}. "
+                f"Rolled back; retry preserved at {tmp_dir}.",
+                file=sys.stderr,
+            )
+            return False, entry
+        if entry.endswith(".dist-info"):
+            committed_dist_infos.append(entry)
+    # Residue 2: only reached once the WHOLE tmp_dir has committed.
+    for entry in committed_dist_infos:
+        _fs.prune_superseded_dist_info(deps_dir, entry)
+    return True, None
 
 
 def pip_install(
@@ -112,6 +179,15 @@ def pip_install(
     the base pins as constraints on the ML install forces pip to solve
     within them, so a shared transitive agrees with the base pin instead
     of "whatever pip's resolver happens to pick this time."
+
+    # source: rules/coding-standards.md §4.2, §10 — this function is
+    # ~100 lines, over the 50-line / Medium-stakes-flexed 60-line budget.
+    # Pre-existing (137 lines before issue #149's fix; the fix already
+    # extracted the commit loop into `_commit_resolved_entries` and cut
+    # this by ~30 lines). The remainder is the PEP-668-retry + pip
+    # subprocess-invocation concern, unrelated to #149's bug and out of
+    # this change's blast radius; further splitting it is deferred to a
+    # dedicated structural pass rather than risked inside a flake fix.
     """
     tmp_dir = f"{deps_dir}.tmp-{os.getpid()}"
     clean_env = dict(os.environ)
@@ -178,35 +254,7 @@ def pip_install(
         shutil.rmtree(tmp_dir, ignore_errors=True)
         return False
 
-    tmp_versions = _fs.dist_info_versions(tmp_dir)
-    dest_versions = _fs.dist_info_versions(deps_dir)
-    ok = True
-    failed_entry: str | None = None
-    for entry in os.listdir(tmp_dir):
-        key = _fs.entry_dist_key(entry)
-        tmp_v = tmp_versions.get(key)
-        # Idempotence guard: dest already has this exact version — never
-        # touch it. This is what protects a locked, already-correct
-        # transitive dep (numpy under a running MCP server) from ever
-        # entering the rmtree/replace path.
-        if tmp_v is not None and dest_versions.get(key) == tmp_v:
-            continue
-        try:
-            commit_entry(tmp_dir, deps_dir, entry)
-        except OSError as exc:
-            failed_entry = entry
-            ok = False
-            print(
-                f"[cortex-launcher] commit failed for {entry}: {exc}. "
-                f"Rolled back; retry preserved at {tmp_dir}.",
-                file=sys.stderr,
-            )
-            break
-        else:
-            # Residue 2: only reached on a SUCCESSFUL commit — a
-            # cross-version bump just replaced dest's dist-info, so any
-            # older sibling for the same distribution is now stale.
-            _fs.prune_superseded_dist_info(deps_dir, entry)
+    ok, failed_entry = _commit_resolved_entries(tmp_dir, deps_dir)
     if ok:
         shutil.rmtree(tmp_dir, ignore_errors=True)
     else:
