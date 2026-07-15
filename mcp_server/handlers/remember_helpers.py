@@ -175,6 +175,7 @@ def _compute_gate_decision(
     content: str,
     tags: list[str],
     domain: str = "",
+    write_class: str = "",
 ) -> tuple[bool, str, float]:
     """Determine whether to store based on novelty score and bypass rules.
 
@@ -183,8 +184,14 @@ def _compute_gate_decision(
     loop); callers that observe the decision should feed it back via
     ``write_gate_calibration.record`` so the EMA converges to the target
     acceptance rate.
+
+    ``write_class`` (issue #147 fix): threaded into ``determine_bypass`` so
+    a resolved ``deliberate`` write is never rejected for low novelty, per
+    the tool's documented contract.
     """
-    bypass, bypass_reason = write_gate.determine_bypass(force, content, tags)
+    bypass, bypass_reason = write_gate.determine_bypass(
+        force, content, tags, write_class=write_class
+    )
     settings = get_memory_settings()
     base_threshold = settings.WRITE_GATE_THRESHOLD
     # Calibrated threshold overrides the static setting once the per-domain
@@ -206,18 +213,27 @@ def evaluate_gate(
     store: MemoryStore,
     emb_engine: EmbeddingEngine,
     domain: str = "",
+    write_class: str = "",
 ) -> dict[str, Any]:
     """Compute all novelty signals and gate decision.
 
     Contract:
       pre:  content is a non-empty string; embedding is either None or a
             valid vector; ``domain`` is the resolved (normalised) domain
-            for this write path.
+            for this write path; ``write_class`` is the ALREADY-RESOLVED
+            class from ``core.write_class.classify_write_class`` (issue
+            #147) — ``""`` only for callers/tests that don't care about
+            the write-class contract; production callers always pass the
+            resolved value (never ``""``).
       post: the returned dict contains ``should_store``, the observed
             ``gate_reason``, and the ``gate_threshold`` actually used for
             the decision. Side effect: the per-domain calibration EMA is
             updated via ``write_gate_calibration.record`` when the decision
             was NOT a bypass (bypasses are not informative for calibration).
+            A resolved ``write_class == "deliberate"`` NEVER yields
+            ``should_store is False`` (contract: deliberate writes are
+            never novelty-rejected; near-duplicates are still merged/
+            linked/superseded by ``try_curation`` afterward).
     """
     importance = thermodynamics.compute_importance(content, tags)
     sims, vec_hits = compute_similarities(embedding, store, emb_engine)
@@ -264,11 +280,12 @@ def evaluate_gate(
         score, content, ent_names, store
     )
     should_store, gate_reason, threshold = _compute_gate_decision(
-        score, force, content, tags, domain=domain
+        score, force, content, tags, domain=domain, write_class=write_class
     )
     # AF-5 feedback: record non-bypass decisions to drive the EMA. Bypasses
-    # (force, error, decision, important_tag) carry no calibration signal
-    # because the gate didn't actually decide on novelty.
+    # (force, error, decision, important_tag, deliberate write_class) carry
+    # no calibration signal because the gate didn't actually decide on
+    # novelty.
     settings = get_memory_settings()
     is_bypass = gate_reason in {
         "bypass",
@@ -276,6 +293,7 @@ def evaluate_gate(
         "bypass_error",
         "bypass_decision",
         "bypass_important_tag",
+        "bypass_write_class_deliberate",
     }
     if not is_bypass:
         write_gate_calibration.record(
@@ -656,6 +674,54 @@ def _run_post_store(
     return tids, tagged, slot
 
 
+def _grade_content_best_effort(
+    content: str, *, directory: str
+) -> tuple[provenance.ProvenanceReport, str | None]:
+    """Best-effort wrapper around ``validate_memory.grade_from_content``.
+
+    Root cause (issue #147): ``grade_from_content``'s ``base_dir`` fallback
+    calls ``os.getcwd()``, which raises ``FileNotFoundError`` when the
+    process's current working directory no longer exists (e.g. a worktree
+    the session was running in got cleaned up). Every OTHER enrichment step
+    in this insert path (``source_attribution`` classification, the
+    habituation signature) is already wrapped defensively; this call was
+    the sole exception -- an unguarded I/O-adjacent call inside what the
+    surrounding function's own contract calls a best-effort pass. Fixed at
+    the source by matching the established local pattern instead of
+    special-casing ``os.getcwd()``.
+
+    Postcondition: NEVER raises. On success returns
+    ``(grade_report, None)``. On any failure returns a fallback
+    ``ProvenanceReport`` graded ``UNVERIFIABLE`` (the same "we don't know"
+    default ``grade_provenance`` uses for zero extractable references) plus
+    the failing exception's type name, so the caller can surface it as an
+    observable tag instead of a silently absorbed enrichment.
+    """
+    try:
+        base_dir = directory or os.getcwd()
+    except OSError as exc:
+        return (
+            provenance.ProvenanceReport(
+                memory_id=0, grade=provenance.UNVERIFIABLE, ref_counts={}
+            ),
+            type(exc).__name__,
+        )
+    try:
+        return (
+            validate_memory.grade_from_content(
+                content, directory_context=directory, base_dir=base_dir
+            ),
+            None,
+        )
+    except Exception as exc:  # noqa: BLE001 — grading must never block a write
+        return (
+            provenance.ProvenanceReport(
+                memory_id=0, grade=provenance.UNVERIFIABLE, ref_counts={}
+            ),
+            type(exc).__name__,
+        )
+
+
 def insert_and_post_process(
     content: str,
     embedding: Any,
@@ -714,10 +780,20 @@ def insert_and_post_process(
     # evaluate_gate() (called by remember.py before this function), so the
     # tag can never influence the novelty/gate decision -- bench-neutral by
     # construction, no G-bench required for this increment.
-    grade_report = validate_memory.grade_from_content(
-        content, directory_context=directory, base_dir=directory or os.getcwd()
+    grade_report, grading_error = _grade_content_best_effort(
+        content, directory=directory
     )
     tags = [*tags, f"prov:{grade_report.grade}"]
+    if grading_error is not None:
+        # issue #147: grade_from_content's os.getcwd() fallback can raise
+        # FileNotFoundError when the process cwd has been removed mid-session
+        # (e.g. a worktree cleanup) -- unrelated to the DB and unrelated to
+        # write_class. This step is documented as best-effort (like every
+        # other enrichment in this function -- source_attribution above,
+        # habituation signature below); it must never block the insert.
+        # Surfaced as an observable tag rather than silently absorbed
+        # (coding-standards.md: no silent fallbacks).
+        tags = [*tags, f"prov-grading-failed:{grading_error}"]
     record = _build_insert_record(
         content,
         embedding,

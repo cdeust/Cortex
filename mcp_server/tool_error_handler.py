@@ -238,16 +238,13 @@ async def safe_handler(
                 )
             except Exception:
                 pass
-        hint = (
-            "If this persists, check that PostgreSQL is running "
-            "and DATABASE_URL is set correctly."
-            if error_type
-            not in (
-                "missing_extension",
-                "database_not_connected",
-                "explicit_database_url_unreachable",
-            )
-            else None
-        )
-        full_message = f"{error_type}: {message}" + (f"\n\n{hint}" if hint else "")
+        # issue #147: this used to append the DATABASE_URL hint to EVERY
+        # unclassified exception type (FileNotFoundError, ValueError, ...),
+        # not just DB-related ones -- misleading a user chasing a genuine
+        # filesystem/logic bug into "checking PostgreSQL" when it was
+        # demonstrably healthy. The two DB-specific categories already
+        # carry their own actionable guide as `message` itself
+        # (`_EXTENSION_GUIDE` / `_DB_SETUP_GUIDE`); a generic, unclassified
+        # exception gets no DB hint at all.
+        full_message = f"{error_type}: {message}"
         raise ToolError(full_message) from exc

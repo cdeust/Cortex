@@ -191,7 +191,14 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     valence = thermodynamics.compute_valence(content)
 
     gate = evaluate_gate(
-        content, tags, embedding, force, store, emb_engine, domain=domain
+        content,
+        tags,
+        embedding,
+        force,
+        store,
+        emb_engine,
+        domain=domain,
+        write_class=resolved_write_class,
     )
     if not gate["should_store"]:
         return write_gate.build_rejection_response(

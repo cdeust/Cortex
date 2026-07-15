@@ -116,8 +116,33 @@ def determine_bypass(
     force: bool,
     content: str,
     tags: list[str],
+    write_class: str = "",
 ) -> tuple[bool, str | None]:
-    """Determine if write gate should be bypassed and why."""
+    """Determine if write gate should be bypassed and why.
+
+    ``write_class`` (M-D2, issue #147): a resolved ``deliberate`` write is
+    NEVER rejected by the novelty gate — this is the tool's documented
+    contract (near-duplicates are still merged/linked/superseded by
+    ``try_curation`` afterward; bypassing the gate here only skips the
+    REJECT verdict, it does not skip curation, which reads ``force``
+    independently). ``write_class`` defaults to ``""`` (no bypass) so the
+    unit tests exercising the content/tag/force bypass paths in isolation
+    are unaffected; the real call site (``remember_helpers._compute_gate_decision``)
+    always passes the already-resolved class (never ``""`` — see
+    ``core/write_class.classify_write_class``'s postcondition: the return
+    value is always one of ``ALL_WRITE_CLASSES``).
+
+    Checked LAST (after the more specific content/tag bypasses): most
+    ``remember`` calls resolve to ``deliberate`` by default (any source not
+    in the auto/derived/mechanical sets — see ``write_class`` module
+    docstring), so checking it first would mask every content-based
+    ``bypass_error``/``bypass_decision``/``bypass_important_tag`` reason
+    behind the generic ``bypass_write_class_deliberate`` one. Ordering it
+    last preserves the more informative diagnostic reason where one
+    applies, while still guaranteeing every deliberate write bypasses
+    (falling through to the deliberate check when none of the more
+    specific conditions matched).
+    """
     is_error = thermodynamics.is_error_content(content)
     is_decision = thermodynamics.is_decision_content(content)
     has_important = bool({"important", "critical"} & {t.lower() for t in tags})
@@ -130,6 +155,8 @@ def determine_bypass(
         return True, "bypass_decision"
     if has_important:
         return True, "bypass_important_tag"
+    if write_class == "deliberate":
+        return True, "bypass_write_class_deliberate"
     return False, None
 
 
