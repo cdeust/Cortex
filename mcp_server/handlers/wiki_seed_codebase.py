@@ -139,7 +139,7 @@ def _kind_for(rel_path: str) -> str:
     """Map a seed-eligible markdown path to a *modern* (ADR-2244) kind.
 
     Returned values are themselves tag aliases registered in
-    ``mcp_server.core.wiki_axis_registry._DEFAULT_KINDS``, so emitting
+    ``mcp_server.core.wiki_axis_defaults.DEFAULT_KINDS``, so emitting
     the value as a memory tag lets the classifier route the page to
     the correct kind directory.
 
