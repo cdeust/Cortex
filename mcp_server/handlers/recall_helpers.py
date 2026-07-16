@@ -146,7 +146,7 @@ def parse_tags(tags: Any) -> list:
 # conventions) was drowned out because every captured tool call
 # scores high on WRRF + heat + recency.
 #
-# The wiki classifier (``mcp_server.core.wiki_classifier._AUDIT_TAGS``)
+# The wiki classifier (``mcp_server.core.wiki_classifier_patterns.AUDIT_TAGS``)
 # already maintains this concept and rejects such content from the
 # wiki. Recall reuses the same idea at the retrieval layer.
 LOW_SIGNAL_TAGS: frozenset[str] = frozenset(

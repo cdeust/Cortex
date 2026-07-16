@@ -13,436 +13,51 @@ either author):
   5. SPEC: describes a feature or system design
   6. NOTE: catch-all for meaningful content
 
-Size-limit note (coding-standards.md §4, High-stakes per engineer.md Move 7):
-this file is well over the 500-line hard limit, pre-existing before issue #126
-(901 lines before, 916 after adding the reverse-DI rules-provider port below).
-Tracked for a dedicated split — see issue #134 — rather than folded silently
-into #126's layer-violation scope.
+Module split (issue #134, coding-standards.md §4 — this file was 916
+lines, over the 500-line hard limit): pattern tables now live in
+``wiki_classifier_patterns.py``, the hard-negative/audit/positive-score
+gate functions in ``wiki_classifier_gates.py``, title derivation in
+``wiki_title.py``, and ADR-2244 modern-kind/lifecycle/audience/provenance
+detection in ``wiki_kind_detection.py``. This module keeps the admission
+orchestration (``_classify_to_legacy_kind``), the user-rules provider
+(reverse-DI port, kept here because tests monkeypatch its module-level
+globals directly), and the public ``classify_memory`` entry point.
+``derive_title`` is re-exported for backward-compatible imports.
 """
 
 from __future__ import annotations
 
-import re
 from typing import Callable
 
-# ── Rejection patterns ────────────────────────────────────────────────
-
-_REJECT_PREFIXES = (
-    "# Tool:",
-    "Tool:",
-    "tool:",
-    "# tool:",
-    "System:",
-    "system:",
-    "<tool_result>",
-    "<result>",
-    "<command-message>",
-    "<command-name>",
-    "# <command-message>",
-    "# <command-name>",
+from mcp_server.core.wiki_classifier_gates import (
+    fails_audit_tag_gate,
+    fails_hard_negatives,
+    positive_score,
 )
-
-_REJECT_TITLES = {
-    "tool-edit",
-    "tool-bash",
-    "tool-read",
-    "tool-write",
-    "tool-grep",
-    "tool-glob",
-    "tool-search",
-}
-
-_REJECT_PATTERNS = [
-    # Leading `#+\s*` tolerates markdown heading prefix before the keyword
-    re.compile(r"^#*\s*Implement the following plan", re.IGNORECASE),
-    re.compile(r"^#*\s*Execute the following", re.IGNORECASE),
-    re.compile(r"^#*\s*You must respond with only", re.IGNORECASE),
-    re.compile(r"^#*\s*Perform all verification", re.IGNORECASE),
-    re.compile(r"^#*\s*Take the code and split", re.IGNORECASE),
-    re.compile(r"^\s*\{[\s\S]*\}\s*$"),  # Pure JSON object
-    re.compile(r"^\s*\[[\s\S]*\]\s*$"),  # Pure JSON array
-    # Slash-command invocations — only Claude Code UI framing, no knowledge content
-    re.compile(r"<command-(message|name|args)>", re.IGNORECASE),
-    # Benchmark spell content (Hogwarts benchmark artifacts)
-    re.compile(r"^#*\s*Spell:\s*\w+", re.IGNORECASE),
-    # Test content shape markers
-    re.compile(r"^#*\s*Shape test content", re.IGNORECASE),
-]
-
-# ── Classification patterns ───────────────────────────────────────────
-
-_ADR_PATTERNS = [
-    re.compile(
-        r"\b(decided to|decision:|the decision is|chose .+ because|rejected .+ (due to|because)|we will use|selected .+ over)\b",
-        re.IGNORECASE,
-    ),
-]
-
-_LESSON_PATTERNS = [
-    re.compile(
-        r"\b(the bug was|root cause|lesson learned|mistake was|never again|fix:|fixed by|the issue was|the problem was|turned out)\b",
-        re.IGNORECASE,
-    ),
-]
-
-_CONVENTION_PATTERNS = [
-    re.compile(
-        r"\b(always use|never |the canonical|convention:|rule:|standard:|must follow|naming convention|coding standard)\b",
-        re.IGNORECASE,
-    ),
-]
-
-_SPEC_TAGS = {"spec", "design", "specification", "feature"}
-
-# ── Hard-negative gate (Eco + Ahrens): disqualifying patterns ─────────
-#
-# Each of these, if present, is a hard DISQUALIFICATION — single hit blocks
-# admission regardless of positive signals. Catches session chat, imperatives,
-# narration, status updates, and temporal deixis that should live in session
-# logs, not a wiki.
-
-# Imperative verbs in title/first line (task-shaped, not knowledge-shaped)
-_IMPERATIVE_TITLE_PATTERNS = [
-    re.compile(
-        r"^\s*#*\s*(let'?s|lets)\b",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"^\s*#*\s*("
-        r"use|fetch|take|give|look at|verify|audit|check|make|do|run|"
-        r"push|remove|rename|adapt|implement|execute|perform|replace|"
-        r"add|delete|update|modify|fix|install|setup|configure|"
-        r"create|build|write|test|sync|import|export|move|copy|ensure|"
-        r"try|go|start|stop|open|close|clean|restart|refactor|migrate|"
-        r"enable|disable|apply|reset|rebuild|regenerate|analyze"
-        r")\b",
-        re.IGNORECASE,
-    ),
-    # Second-person imperative directed at the AI
-    re.compile(r"^\s*#*\s*you (must|should|need|will|can)\b", re.IGNORECASE),
-    # Questions-as-titles (without resolution body)
-    re.compile(r"^\s*#*\s*(how|what|why|when|where|can|should|is|does)\b[^.]*\?\s*$"),
-]
-
-# First-person narration ("we pushed", "I tried", "we did")
-_FIRST_PERSON_PATTERNS = [
-    re.compile(
-        r"^\s*#*\s*(we|i)\s+"
-        r"(pushed|pulled|did|have|did|tried|ran|found|saw|noticed|got|made|"
-        r"created|added|removed|fixed|broke|updated|changed|deleted|merged|"
-        r"re?-?started|tested|benchmarked|think|need|want|should|re)",
-        re.IGNORECASE,
-    ),
-]
-
-# Status / progress register — NOT knowledge, but work-log entries
-_STATUS_PATTERNS = [
-    re.compile(
-        r"^\s*#*\s*("
-        r"successfully|done|failing|failed|broken|working|not working|"
-        r"finished|completed|in progress|wip|todo|pending"
-        r")\b",
-        re.IGNORECASE,
-    ),
-    # Command/tool output framing
-    re.compile(r"local[-_]command[-_](stdout|stderr|stdin|output)", re.IGNORECASE),
-    # Test harness metadata
-    re.compile(r"session[-_]test[-_]session", re.IGNORECASE),
-    re.compile(r"in domain unknown", re.IGNORECASE),
-]
-
-# Temporal deixis — "now", "just", "previous", "earlier" make the note
-# uninterpretable outside the session in which it was written
-_DEIXIS_PATTERNS = [
-    re.compile(
-        r"^\s*#*\s*("
-        r"just now|just did|previous|earlier|last session|new wip|"
-        r"the one we|like (we|i) (said|did)|yesterday|today|tomorrow|"
-        r"a while ago|recent(ly)?"
-        r")\b",
-        re.IGNORECASE,
-    ),
-]
-
-# Path- or URL-shaped titles — these are file/URL access audit records,
-# not curated knowledge. Keep them as memories (for recall), refuse
-# promotion to the wiki.
-_PATH_OR_URL_TITLE_PATTERNS = [
-    # Absolute POSIX / Windows path as title
-    re.compile(r"^\s*#*\s*[/~]"),
-    re.compile(r"^\s*#*\s*[A-Za-z]:[\\/]"),  # Windows drive letter
-    # URL as title
-    re.compile(r"^\s*#*\s*(https?|ftp|file|ssh|git)://", re.IGNORECASE),
-    # Lone filename as the bulk of the title
-    re.compile(
-        r"^\s*#*\s*[\w.-]+\.(pdf|png|jpg|jpeg|svg|gif|zip|tar\.gz|docx?|xlsx?|csv|log|yaml|yml)\b",
-        re.IGNORECASE,
-    ),
-    # Path embedded mid-line ("also on /Users/...", "fix the file at C:\\..."):
-    # any absolute POSIX path or Windows drive path anywhere in the title.
-    # Bug found 2026-05-12: pages like
-    # specs/2026-04-17-also-on-users-cdeust-documents-developments-...md
-    # passed the start-of-line check, then slugify stripped the leading "/"
-    # and folded the entire path into the slug.
-    re.compile(r"(?:^|\s)/(Users|home|root|opt|var|etc|tmp)/", re.IGNORECASE),
-    re.compile(r"(?:^|\s)[A-Za-z]:[\\/]"),
-]
-
-# YAML-frontmatter / key:value lines that leaked through as titles when the
-# real title was missing. Reject lines that are purely "key: value" where
-# the value is a timestamp, identifier, or boolean — they're metadata,
-# not titles.  Bug found 2026-05-12: 10 ADRs slugged as
-# "decision-created-2026-04-15t09-29-10z" because the YAML "created:"
-# line was the first non-{}/[] line in the body.
-_YAML_KV_TITLE_PATTERNS = [
-    # `created: 2026-04-15T09:29:10Z`, `updated: 2026-04-15`, `date: ...`
-    re.compile(
-        r"^\s*(created|updated|date|timestamp|time|id|uuid|version)\s*:\s*\S",
-        re.IGNORECASE,
-    ),
-    # Bare ISO-8601 timestamp anywhere (would slug to t09-29-10z form)
-    re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}[:-]\d{2}[:-]\d{2}", re.IGNORECASE),
-]
-
-# Session / audit artefact tags — these are recall-fodder, not wiki-worthy.
-# Any hit in tags auto-rejects from the wiki (memory is preserved separately).
-#
-# 2026-05-17 (user feedback "that's the same for all kind of category"):
-# PostToolUse auto-captures are journal entries — tool dumps, command
-# outputs, edit diffs — useful as memories for halo retrieval but
-# pollute the wiki with hundreds of ``Lesson: Command: `git log...```
-# pages that aren't curated knowledge. Adding ``auto-captured`` and
-# ``tool:bash``/``tool:edit`` etc. as audit tags so they stay in PG
-# memory but never become wiki pages. Real wiki pages come from
-# explicit ``remember`` calls with curated content.
-_AUDIT_TAGS = frozenset(
-    {
-        "_backfill",
-        "imported",
-        "session-summary",
-        "tool-output",
-        "auto-captured",
-        "tool:bash",
-        "tool:edit",
-        "tool:write",
-        "tool:multiedit",
-        "tool:notebookedit",
-        "tool:read",
-        "tool:notebookread",
-        "tool:glob",
-        "tool:grep",
-        "tool:webfetch",
-        "tool:websearch",
-        # 2026-05-17 (user feedback "wiki is still far from being curated
-        # documentation"): codebase_analyze dumped one wiki page per scanned
-        # file PER scan invocation — 2176 of 2248 notes were the same
-        # auth/middleware/crypto files repeated 290-349 times each.
-        # ``seeded`` is the tag set by seed_project; ``codebase`` is the
-        # tag set by codebase_analyze's file-level extractor. Both belong
-        # in PG memory (recall substrate, halo retrieval) but never on a
-        # wiki page meant for curated knowledge.
-        "seeded",
-        "codebase",
-        "code-review",
-        "stage-1",
-        "stage-2",
-        "stage-3",
-        "stage-4",
-        "stage-5",
-        "stage-6",
-        "stage-7",
-        "stage-8",
-        "stage-9",
-        "stage-10",
-        "stage-11",
-        "audit",
-        "automated",
-        "wip",
-        "progress",
-    }
+from mcp_server.core.wiki_classifier_patterns import (
+    ADR_PATTERNS,
+    CONVENTION_PATTERNS,
+    LESSON_PATTERNS,
+    POSITIVE_SCORE_THRESHOLD,
+    REJECT_PATTERNS,
+    REJECT_PREFIXES,
+    REJECT_TITLES,
+    SPEC_TAGS,
 )
-
-# Audit/review-shaped title patterns — "stage N:", "code review", "audit:",
-# "session N" — these are work-product reports, not durable knowledge.
-_AUDIT_TITLE_PATTERNS = [
-    re.compile(r"\bstage[ -]?\d+\b", re.IGNORECASE),
-    re.compile(
-        r"\b(code[ -]?review|audit[ -]?report|review[ -]?notes?)\b", re.IGNORECASE
-    ),
-    re.compile(r"\bsession[ -]?(summary|log|report|\d+)\b", re.IGNORECASE),
-]
-
-
-def _fails_hard_negatives(content: str, first_line: str) -> bool:
-    """Return True if content hits any hard-negative pattern.
-
-    Hard negatives are single-strike disqualifiers. Any one match blocks
-    wiki admission. Patterns check first_line primarily (title shape),
-    a few check full content.
-    """
-    for pat in _IMPERATIVE_TITLE_PATTERNS:
-        if pat.search(first_line):
-            return True
-    for pat in _FIRST_PERSON_PATTERNS:
-        if pat.search(first_line):
-            return True
-    for pat in _STATUS_PATTERNS:
-        if pat.search(first_line):
-            return True
-        if pat.search(content[:500]):  # status framing often appears in first 500 chars
-            return True
-    for pat in _DEIXIS_PATTERNS:
-        if pat.search(first_line):
-            return True
-    for pat in _PATH_OR_URL_TITLE_PATTERNS:
-        if pat.search(first_line):
-            return True
-    for pat in _AUDIT_TITLE_PATTERNS:
-        if pat.search(first_line):
-            return True
-    return False
-
-
-def _fails_audit_tag_gate(tags: set[str]) -> bool:
-    """Return True if any audit/session tag is present.
-
-    Audit-tagged memories are valuable for recall but should never be
-    promoted to the wiki — the wiki is for curated specs, ADRs,
-    architecture, security, and lessons.
-    """
-    return bool(tags & _AUDIT_TAGS)
-
-
-# ── Positive quality signals (admit only if ≥ threshold) ──────────────
-
-_STRUCTURE_HEADING = re.compile(r"^#{1,4}\s+\S", re.MULTILINE)
-_STRUCTURE_LIST = re.compile(r"^\s*[-*+]\s+\S", re.MULTILINE)
-_STRUCTURE_CODE = re.compile(r"```\w*\n", re.MULTILINE)
-_CITATION = re.compile(
-    r"\b("
-    r"ADR-?\d+|paper|arxiv|doi:|https?://|"
-    r"\b[A-Z][a-z]+ (et al\.|&) \d{4}|"
-    r"\b[A-Z][a-z]+ \d{4}\b"
-    r")",
+from mcp_server.core.wiki_kind_detection import (
+    detect_audiences,
+    detect_modern_kind,
+    detect_provenance,
+    pick_lifecycle,
 )
-_DECLARATIVE = re.compile(
-    r"\b(is|are|means|causes?|because|implies|requires?|enables?|prevents?|"
-    r"produces?|results? in|leads? to|defined? as|consists of)\b",
-    re.IGNORECASE,
-)
-_FILE_OR_ENTITY_REF = re.compile(
-    r"\b[a-zA-Z_]\w*\.(py|js|ts|md|json|yaml|sql|go|rs|rb|java)\b|"
-    r"\b[a-z_]+\(\)|"
-    r"\bclass\s+[A-Z]\w+|"
-    r"\bdef\s+[a-z_]\w+"
-)
+from mcp_server.core.wiki_title import derive_title, slugify as _slugify
 
-
-def _positive_score(content: str, tags: set[str]) -> int:
-    """Count how many positive quality signals the content exhibits.
-
-    Signals (8 total):
-      1. Multiple structural elements (heading/list/code)
-      2. Contains declarative claim-shaped sentences
-      3. Cites paper, ADR, URL, or function/file reference
-      4. Minimum substantive length (≥ 200 chars)
-      5. Has curated/knowledge tag
-      6. Is atomic (not too long, not too short) — 200-3000 chars
-      7. Domain vocabulary density — at least 3 distinct technical tokens
-      8. References files or code entities
-    """
-    score = 0
-    length = len(content)
-
-    # 1. Structure
-    struct = 0
-    struct += 1 if _STRUCTURE_HEADING.search(content) else 0
-    struct += 1 if _STRUCTURE_LIST.search(content) else 0
-    struct += 1 if _STRUCTURE_CODE.search(content) else 0
-    if struct >= 1:
-        score += 1
-
-    # 2. Declarative claims
-    if len(_DECLARATIVE.findall(content)) >= 2:
-        score += 1
-
-    # 3. Citations / references
-    if _CITATION.search(content):
-        score += 1
-
-    # 4. Substantive length
-    if length >= 200:
-        score += 1
-
-    # 5. Knowledge tag
-    _KNOWLEDGE_TAGS = {
-        "decision",
-        "adr",
-        "architecture",
-        "spec",
-        "design",
-        "lesson",
-        "convention",
-        "rule",
-        "standard",
-        "paper",
-        "research",
-        "reference",
-    }
-    if tags & _KNOWLEDGE_TAGS:
-        score += 1
-
-    # 6. Atomic scope. The 200–3000 char band is an unsourced engineering
-    #    default for "a self-contained note" (calibration pending), NOT a
-    #    value from Luhmann's Zettelkasten method, which sets no char range.
-    if 200 <= length <= 3000:
-        score += 1
-
-    # 7. Domain vocabulary density — at least 3 distinct CamelCase/snake_case
-    #    technical tokens
-    tech_tokens = set(
-        re.findall(r"\b(?:[A-Z][a-z]+[A-Z]\w*|[a-z]+_[a-z_]+)\b", content)
-    )
-    if len(tech_tokens) >= 3:
-        score += 1
-
-    # 8. File/entity references
-    if _FILE_OR_ENTITY_REF.search(content):
-        score += 1
-
-    return score
-
-
-# ── Title prefix stripping ────────────────────────────────────────────
-
-_TITLE_STRIP_PREFIXES = [
-    re.compile(r"^#+\s*"),  # Markdown headings
-    re.compile(
-        r"^(Tool|System|Rule|Decision|Convention|Lesson|Note):\s*", re.IGNORECASE
-    ),
-    re.compile(r"^Implement the following plan:?\s*", re.IGNORECASE),
-    re.compile(r"^Execute the following:?\s*", re.IGNORECASE),
-    re.compile(r"^(Here is|Here's|The following)\s+", re.IGNORECASE),
+__all__ = [
+    "classify_memory",
+    "configure_user_rules_provider",
+    "derive_title",
+    "reset_user_rules",
 ]
-
-# 2026-05-17: markdown unwrappers. Applied with ``sub(r"\1", ...)`` (keep
-# inner text) before the path-detection patterns so a line like
-# ``**File:** `/Users/.../remember.py` `` is tested against the path
-# detector as ``File: /Users/.../remember.py`` — previously the backtick
-# before ``/Users/`` wasn't whitespace so the path filter missed and the
-# raw markdown-wrapped path leaked into the wiki page title.
-_TITLE_MARKDOWN_UNWRAP = [
-    re.compile(r"\*\*([^*]+)\*\*"),  # **bold** → bold
-    re.compile(r"`([^`]+)`"),  # `code` → code
-    re.compile(r"\*([^*]+)\*"),  # *italic* → italic
-    re.compile(r"_([^_]+)_"),  # _italic_ → italic
-]
-
-
-# Unsourced engineering default (calibration pending): must satisfy ≥ 4 of 8
-# positive signals. Not paper-sourced; revisit if classifier precision drifts.
-_POSITIVE_SCORE_THRESHOLD = 4
-
 
 # ── User-rule integration (Phase 5.1) ─────────────────────────────────
 #
@@ -538,7 +153,7 @@ def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str
     # matches "Decision:" should not override the audit-tag disqualifier:
     # backfilled decisions are still backfill, not curated knowledge.
     tag_set_pre = {t.lower() for t in (tags or [])}
-    if _fails_audit_tag_gate(tag_set_pre):
+    if fails_audit_tag_gate(tag_set_pre):
         return None
 
     # Gate 0 — User-editable rules (Phase 5.1).
@@ -553,21 +168,21 @@ def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str
             return user_rule_match.target_kind  # rule admits with kind
 
     # Gate 1 — Noise rejection (obvious tool/system/slash artefacts)
-    for prefix in _REJECT_PREFIXES:
+    for prefix in REJECT_PREFIXES:
         if stripped.startswith(prefix):
             return None
 
-    for pattern in _REJECT_PATTERNS:
+    for pattern in REJECT_PATTERNS:
         if pattern.match(stripped):
             return None
 
     slug = _slugify(first_line)
-    if slug in _REJECT_TITLES:
+    if slug in REJECT_TITLES:
         return None
 
     # Gate 2 — Hard-negative gate (task-shape, narration, status, deixis,
     # path/URL titles, audit-shaped titles)
-    if _fails_hard_negatives(content, first_line):
+    if fails_hard_negatives(content, first_line):
         return None
 
     # Tag-based fast-path: explicit knowledge tags bypass positive scoring.
@@ -602,9 +217,9 @@ def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str
         "proposal",
         "journal",
         # 2026-05-18: ``code-reference`` / ``codebase`` removed from this
-        # set — they are audit tags (see ``_AUDIT_TAGS``) and rejected at
-        # Gate -1, so listing them here was dead code and a footgun. The
-        # wiki documents code structurally through scope pages
+        # set — they are audit tags (see ``wiki_classifier_patterns.AUDIT_TAGS``)
+        # and rejected at Gate -1, so listing them here was dead code and a
+        # footgun. The wiki documents code structurally through scope pages
         # (architecture / services / api / data-flow per project), not
         # via per-file dumps.
     }
@@ -612,33 +227,33 @@ def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str
 
     # Gate 3 — Positive scoring (only when no explicit knowledge tag)
     if not has_explicit_tag:
-        if _positive_score(content, tag_set) < _POSITIVE_SCORE_THRESHOLD:
+        if positive_score(content, tag_set) < POSITIVE_SCORE_THRESHOLD:
             return None
 
     # ─── Admitted — now route to the right kind ──────────────────────
 
-    for pat in _ADR_PATTERNS:
+    for pat in ADR_PATTERNS:
         if pat.search(content):
             return "adr"
 
     if tag_set & {"decision", "adr"}:
         return "adr"
 
-    for pat in _LESSON_PATTERNS:
+    for pat in LESSON_PATTERNS:
         if pat.search(content):
             return "lesson"
 
     if tag_set & {"lesson", "debugging", "fix", "bug-fix"}:
         return "lesson"
 
-    for pat in _CONVENTION_PATTERNS:
+    for pat in CONVENTION_PATTERNS:
         if pat.search(content):
             return "convention"
 
     if tag_set & {"convention", "rule", "standard"}:
         return "convention"
 
-    if tag_set & _SPEC_TAGS and len(content) > 200:
+    if tag_set & SPEC_TAGS and len(content) > 200:
         return "spec"
 
     if tag_set & {"architecture", "design"} and len(content) > 200:
@@ -649,121 +264,6 @@ def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str
 
 
 # ── ADR-2244 4-tuple classification (Phase 1) ─────────────────────────
-
-
-# Legacy → modern kind mapping. This is a one-time backward-compat shim
-# (the legacy classifier returns 5 kinds; the modern axis defines 8) and
-# stays in code rather than the registry: it is *transformational*, not
-# *configurable*. Per ADR-2244 §4.1.
-_LEGACY_KIND_MAP: dict[str, str] = {
-    "adr": "adr",
-    "lesson": "explanation",
-    "convention": "explanation",
-    "spec": "rfc",
-    "note": "explanation",
-    "reference": "reference",
-}
-
-
-def _detect_modern_kind(
-    content: str,
-    tags: list[str] | None,
-    legacy_kind: str,
-) -> str:
-    """Pick a modern kind for a content+tags pair.
-
-    Strategy (registry-driven per user direction 2026-05-12):
-      1. Ask the registry which kinds match content/tags via
-         ``match_axis``. The first hit wins; users add new kinds (with
-         their own detection patterns) by writing
-         ``wiki/_schema/kinds/<name>.md``.
-      2. If no registered kind matches, fall back to the legacy → modern
-         map (lesson/convention/note → explanation; spec → rfc; adr/
-         reference unchanged).
-
-    The legacy fallback is intentional: the upstream
-    ``_classify_to_legacy_kind`` returns one of the 5 legacy kinds when
-    no registered pattern fires, so we always have a kind to assign.
-    """
-    from mcp_server.core.wiki_axis_registry import AXIS_KIND, get_registry, match_axis
-
-    matches = match_axis(content, tags, AXIS_KIND, get_registry())
-    if matches:
-        return matches[0]
-    return _LEGACY_KIND_MAP.get(legacy_kind, "explanation")
-
-
-def _detect_provenance(tags: list[str] | None) -> str:
-    """Pick a provenance value via the registry.
-
-    Falls back to the default-flagged provenance value (``human`` in the
-    bootstrap seed) when no pattern or tag matches. Users register new
-    provenances by writing ``wiki/_schema/provenances/<name>.md``.
-    """
-    from mcp_server.core.wiki_axis_registry import (
-        AXIS_PROVENANCE,
-        get_registry,
-        match_axis,
-    )
-
-    reg = get_registry()
-    matches = match_axis("", tags, AXIS_PROVENANCE, reg)
-    if matches:
-        return matches[0]
-    default = reg.default_for(AXIS_PROVENANCE)
-    return default.name if default is not None else "human"
-
-
-def _detect_audiences(
-    content: str, tags: list[str] | None, kind: str
-) -> tuple[str, ...]:
-    """Pick one or more audience values via the registry.
-
-    Audience is multi-valued: a runbook may target ops + security. Any
-    matching registered audience contributes. Falls back to the
-    default audience when nothing matches.
-    """
-    from mcp_server.core.wiki_axis_registry import (
-        AXIS_AUDIENCE,
-        get_registry,
-        match_axis,
-    )
-
-    reg = get_registry()
-    matches = list(match_axis(content, tags, AXIS_AUDIENCE, reg))
-    if not matches:
-        default = reg.default_for(AXIS_AUDIENCE)
-        if default is not None:
-            matches.append(default.name)
-        else:
-            matches.append("developer")
-    # Deduplicate preserving order.
-    seen: set[str] = set()
-    return tuple(x for x in matches if not (x in seen or seen.add(x)))
-
-
-def _pick_lifecycle(kind: str) -> str:
-    """Pick the default lifecycle for a new page of the given kind.
-
-    Asks the registry for the lifecycle value flagged ``default=true``
-    among entries that apply to this kind. ADR-applicable lifecycle
-    values are filtered separately so a non-ADR cannot inherit ``proposed``.
-    """
-    from mcp_server.core.wiki_axis_registry import (
-        AXIS_LIFECYCLE,
-        get_registry,
-    )
-
-    reg = get_registry()
-    for v in reg.values(AXIS_LIFECYCLE):
-        if v.default and (
-            (kind == "adr" and "adr" in v.applies_to_kinds)
-            or (kind != "adr" and not v.applies_to_kinds)
-        ):
-            return v.name
-    # Last-resort hardcoded fallback (registry seed must always populate
-    # at least one default per axis, so this is unreachable in practice).
-    return "proposed" if kind == "adr" else "seedling"
 
 
 def classify_memory(
@@ -777,10 +277,10 @@ def classify_memory(
     the memory should be admitted, or ``None`` to reject.
 
     **Open-world dispatch.** Every axis consults
-    ``mcp_server.core.wiki_axis_registry`` — adding a new kind /
-    lifecycle / audience / provenance is a wiki schema edit, not a
-    Python edit (user direction 2026-05-12). Detection is regex- and
-    tag-driven via ``match_axis``.
+    ``mcp_server.core.wiki_axis_registry`` (via ``wiki_kind_detection``) —
+    adding a new kind / lifecycle / audience / provenance is a wiki schema
+    edit, not a Python edit (user direction 2026-05-12). Detection is
+    regex- and tag-driven via ``match_axis``.
 
     Admission gates (unchanged from the legacy single-kind classifier):
       1. Audit-tag gate — backfill / session-summary / stage-N / tool-output.
@@ -797,10 +297,10 @@ def classify_memory(
     if legacy_kind is None:
         return None
 
-    modern_kind = _detect_modern_kind(content, tags, legacy_kind)
-    provenance = _detect_provenance(tags)
-    lifecycle = _pick_lifecycle(modern_kind)
-    audiences = _detect_audiences(content, tags, modern_kind)
+    modern_kind = detect_modern_kind(content, tags, legacy_kind)
+    provenance = detect_provenance(tags)
+    lifecycle = pick_lifecycle(modern_kind)
+    audiences = detect_audiences(content, tags, modern_kind)
 
     # Provenance with full generator block when the registered provenance
     # requires it. The registry entry's ``requires_generator`` flag is the
@@ -829,94 +329,3 @@ def classify_memory(
         generator=generator,
         tags=out_tags,
     )
-
-
-def _line_is_title_candidate(cleaned: str) -> bool:
-    """Return True iff ``cleaned`` is acceptable as a wiki page title.
-
-    Rejects: empty/short, JSON braces, embedded paths/URLs, YAML metadata
-    key:value lines, bare timestamps. Callers that get False from every
-    candidate line should yield an empty title and let the deterministic
-    hash fallback kick in (see ``wiki_sync._sync_to_wiki``).
-    """
-    if len(cleaned) <= 10:
-        return False
-    if cleaned.startswith("{") or cleaned.startswith("["):
-        return False
-    for pat in _PATH_OR_URL_TITLE_PATTERNS:
-        if pat.search(cleaned):
-            return False
-    for pat in _YAML_KV_TITLE_PATTERNS:
-        if pat.search(cleaned):
-            return False
-    return True
-
-
-def derive_title(
-    content: str,
-    kind: str,
-    tags: list[str] | None = None,
-    entities: list[str] | None = None,
-) -> str:
-    """Derive a meaningful title for a wiki page.
-
-    Strategy (inspired by Alexander pattern-language P4 + Eco; framing only):
-    1. Strip known prefixes
-    2. Walk lines; accept the first that passes ``_line_is_title_candidate``
-    3. Fall back to entity-based title if 2+ entities are supplied
-    4. Otherwise return "" — caller is responsible for a deterministic
-       fallback (e.g. ``memory-<hash>``). Returning a raw 80-char content
-       prefix here used to leak filesystem paths, timestamps, and sentence
-       fragments into slugs.
-    """
-    lines = content.strip().split("\n")
-    first_meaningful = ""
-    for line in lines:
-        cleaned = line.strip()
-        # Unwrap markdown formatting first so the underlying text is
-        # what gets prefix-stripped and tested. Without this step,
-        # ``**File:** `/path` `` keeps its asterisks/backticks, the
-        # backtick blocks the path detector at line 178 from matching
-        # the embedded ``/Users/`` segment, and the raw markdown leaks
-        # through as the page title.
-        for unwrap in _TITLE_MARKDOWN_UNWRAP:
-            cleaned = unwrap.sub(r"\1", cleaned).strip()
-        for pat in _TITLE_STRIP_PREFIXES:
-            cleaned = pat.sub("", cleaned).strip()
-        if _line_is_title_candidate(cleaned):
-            first_meaningful = cleaned
-            break
-
-    # Truncate to reasonable title length
-    if len(first_meaningful) > 80:
-        first_meaningful = first_meaningful[:77].rsplit(" ", 1)[0] + "..."
-
-    # Kind-specific prefixing for clarity
-    prefix_map = {
-        "adr": "Decision",
-        "lesson": "Lesson",
-        "convention": "Convention",
-        "spec": "Spec",
-    }
-    prefix = prefix_map.get(kind, "")
-
-    # If we have entities, use them for a more specific title
-    if entities and len(entities) >= 2:
-        entity_title = " + ".join(entities[:2])
-        if prefix:
-            return f"{prefix}: {entity_title}"
-        return entity_title
-
-    if not first_meaningful:
-        return ""
-
-    if prefix and not first_meaningful.lower().startswith(prefix.lower()):
-        return f"{prefix}: {first_meaningful}"
-
-    return first_meaningful
-
-
-def _slugify(text: str) -> str:
-    """Convert text to a URL-safe slug."""
-    slug = re.sub(r"[^a-z0-9]+", "-", text.lower())
-    return slug.strip("-")[:80]
