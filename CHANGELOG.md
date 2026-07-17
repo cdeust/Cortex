@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.14.3] - 2026-07-17
+
+### Fixed
+- `write_class="deliberate"` (or omitted, source-fallback) was rejected by the novelty gate, violating the documented contract that deliberate writes are never rejected for low novelty. `write_class` is now threaded through `evaluate_gate` / `_compute_gate_decision` / `determine_bypass`, checked last so a more specific content-based bypass reason (`bypass_error`/`bypass_decision`/`bypass_important_tag`) still wins when it applies (#147, #148).
+- `force=True` (and plain) writes intermittently raised a misleading "check DATABASE_URL" hint on a bare `FileNotFoundError` — root cause was `validate_memory.grade_from_content(base_dir=os.getcwd())` in the write-time provenance grading step, unguarded unlike every sibling enrichment step, raising when the process cwd had been removed mid-session (e.g. a worktree cleanup), unrelated to the DB. Wrapped in the same defensive try/except pattern used elsewhere; `tool_error_handler.py`'s blanket DATABASE_URL hint no longer fires for exception types it doesn't recognize as DB-related (#147, #148).
+- Issue #149's Python-3.10-only flake: `pip_install`'s per-entry commit loop pruned superseded `*.dist-info` siblings immediately after each entry committed. `os.listdir()` order is unspecified by the stdlib and differs by OS/filesystem, so the prune could permanently delete the still-valid OLD dist-info right before the package-directory entry failed and rolled back, leaving `deps_dir` with reverted package files but no metadata for either version. The destructive prune now waits until the whole `tmp_dir` commits successfully, independent of listdir enumeration order (#149, #150).
+
+### Changed
+- `mcp` dependency bumped 1.27.0 -> 1.28.1 (uv group, dependabot) (#152).
+- `wiki_classifier.py` and `wiki_axis_registry.py` split into cohesive collaborators (`wiki_axis_defaults.py`, `wiki_classifier_gates.py`, `wiki_classifier_patterns.py`, `wiki_kind_detection.py`, `wiki_title.py`) to bring both files under the repo's 500-line limit; no behaviour change (#134, #153).
+
+### Verified
+- Pre-tag guard on the exact release tree (`benchmarks/reproduce.sh --no-ablation`, isolated ephemeral pgvector container, reranker loaded): **PENDING — orchestrator to run in background and fill this section with LongMemEval MRR/R@10, LoCoMo 3-run mean MRR/R@10 (+ each rep), BEAM MRR/R@10, floor-gate PASS/FAIL table (tolerance 0.005), reranker_state, and the evidence directory path** before tagging. See the "Bench command for the orchestrator" note in the release PR description / task report. #150/#152/#153 do not touch the recall path reproduce.sh's floors exercise; #148 touches the write-gate (write path) — the empirical floor-gate result below is the actual non-regression evidence, not an import-closure argument.
+
 ## [4.14.2] - 2026-07-15
 
 ### Fixed
