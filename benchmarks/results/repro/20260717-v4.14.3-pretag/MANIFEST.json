@@ -1,0 +1,25 @@
+{
+  "git_sha": "4e3a202b10c897fbc564b79d11314b2c0a1c5449",
+  "longmemeval_dataset_sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+  "pg_image": "pgvector/pgvector:pg16",
+  "bench_container_name": "cortex-bench-pg-47873-501b3391",
+  "bench_container_port": 32771,
+  "bench_runner_pid": 47873,
+  "python": "3.12.11",
+  "packages": {
+    "datasets": "4.8.4",
+    "sentence-transformers": "5.4.1",
+    "torch": "2.11.0",
+    "psycopg": "3.3.3",
+    "psycopg-pool": "3.3.0"
+  },
+  "embedding_model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "reranker_active": true,
+  "reranker_state": "loaded",
+  "reranker_model_sha256": "d3dd7b09fcf06b0c070081d6819b5effbb40b667bcad78b2d7543400271141d1",
+  "results_files": [
+    "beam-100K.json",
+    "locomo.json",
+    "longmemeval-s.json"
+  ]
+}
