@@ -183,6 +183,43 @@ class TestDiscoverCausalEdges:
         strengths = [e["strength"] for e in edges]
         assert strengths == sorted(strengths, reverse=True)
 
+    def test_duplicate_entity_names_do_not_crash_edge_unpack(self):
+        # entities.name carries no UNIQUE constraint (pg_schema.py /
+        # sqlite_schema.py), so a real store can hand this function the
+        # same name twice. Pre-fix, the duplicated name produced the
+        # degenerate skeleton edge frozenset(("A", "A")) == {"A"}: with A
+        # exactly independent of B, the A-B edge is removed at k=0,
+        # leaving {"A"} with no neighbours to condition on, so it
+        # survived to the consumption loop and crashed the 2-tuple
+        # unpack ("not enough values to unpack") — observed on a real
+        # 23k-entity store during setup.
+        pres: list[frozenset[str]] = []
+        for a, b in product((0, 1), repeat=2):
+            for _ in range(6):
+                s: set[str] = set()
+                if a:
+                    s.add("A")
+                if b:
+                    s.add("B")
+                pres.append(frozenset(s))
+
+        edges = discover_causal_edges(["A", "A", "B"], pres, min_observations=3)
+
+        assert all(e["source"] != e["target"] for e in edges)
+
+    def test_duplicate_entity_names_keep_real_edges(self):
+        # Dedup must not lose the genuine A-B dependency.
+        pres = [frozenset(("A", "B")) for _ in range(10)]
+        pres += [frozenset() for _ in range(10)]
+        edges = discover_causal_edges(
+            ["A", "A", "B"],
+            pres,
+            entity_first_seen={"A": "2026-01-01", "B": "2026-01-02"},
+            min_observations=3,
+        )
+        assert len(edges) == 1
+        assert edges[0]["source"] == "A" and edges[0]["target"] == "B"
+
 
 # ── build_presence ────────────────────────────────────────────────────────
 

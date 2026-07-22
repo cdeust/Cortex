@@ -140,6 +140,11 @@ def pc_skeleton(
 ) -> tuple[set[frozenset[str]], dict[frozenset[str], frozenset[str]]]:
     """Phase 1 of PC: learn the undirected skeleton.
 
+    Precondition: ``variables`` are pairwise distinct — a duplicated
+    variable yields a degenerate 1-element ``frozenset`` edge in the
+    complete-graph initialisation. ``discover_causal_edges``
+    (causal_graph.py) enforces this at the pipeline boundary.
+
     Starts from the complete graph and removes edge X–Y whenever some subset
     S of X's (or Y's) current neighbours renders them conditionally
     independent, recording S as the separating set. Conditioning-set size

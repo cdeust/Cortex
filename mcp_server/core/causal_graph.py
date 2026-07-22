@@ -155,6 +155,18 @@ def discover_causal_edges(
     if not entity_names or not presence:
         return []
 
+    # entities.name carries no UNIQUE constraint (pg_schema.py /
+    # sqlite_schema.py — the same name may legitimately recur across
+    # type/domain rows), so callers flattening store rows to names can
+    # pass duplicates. PC treats every list element as a distinct
+    # variable: a duplicated name turns the complete-graph
+    # initialisation's frozenset((a, a)) into a degenerate 1-element
+    # edge that crashes the 2-tuple unpack below, and hands
+    # orient_v_structures fake unshielded triples (X, X, Z). Establish
+    # the distinct-variables precondition once, at this boundary,
+    # order-preservingly (observed on a 23k-entity store, 2026-07-22).
+    entity_names = list(dict.fromkeys(entity_names))
+
     counts, pairs = _entity_and_pair_counts(presence, entity_names)
     total = len(presence)
     skeleton, sepsets = pc_skeleton(entity_names, presence, alpha, max_cond_size)
