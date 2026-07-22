@@ -2,7 +2,9 @@
 
 import asyncio
 
+from mcp_server.handlers import memory_stats
 from mcp_server.handlers.memory_stats import handler, _get_store
+from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 
 class TestMemoryStatsHandler:
@@ -73,3 +75,21 @@ class TestMemoryStatsHandler:
             if kind_stats["last_run_at"] is None:
                 assert kind_stats["stale"] is True
                 assert kind_stats["days_since_last_run"] is None
+
+    def test_works_on_sqlite_backend(self, monkeypatch):
+        """Plugin-default backend: memory_stats must not AttributeError.
+
+        Repro: get_grooming_ages existed only on PgStatsMixin, so this
+        handler crashed on every SQLite install -- observed on a real
+        30k-memory setup run, 2026-07-22."""
+        sqlite_store = SqliteMemoryStore(db_path=":memory:")
+        monkeypatch.setattr(memory_stats, "_store", sqlite_store)
+        try:
+            result = asyncio.run(handler())
+        finally:
+            sqlite_store.close()
+        staleness = result["grooming_staleness"]
+        assert set(staleness.keys()) == {"wiki", "distillation", "promotion"}
+        for kind_stats in staleness.values():
+            assert kind_stats["last_run_at"] is None
+            assert kind_stats["stale"] is True

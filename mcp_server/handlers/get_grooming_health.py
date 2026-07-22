@@ -38,6 +38,10 @@ from mcp_server.infrastructure.memory_store import get_shared_store
 from mcp_server.infrastructure.pg_store_lesson_promotion import (
     count_lesson_promotion_candidates,
 )
+from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
+from mcp_server.infrastructure.sqlite_store_lesson_promotion import (
+    count_lesson_promotion_candidates as count_promotion_candidates_sqlite,
+)
 
 schema = {
     "title": "Grooming health (backlog + staleness)",
@@ -88,6 +92,21 @@ schema = {
 }
 
 
+def _count_promotion_candidates(store: Any) -> int:
+    """Backend dispatch for the promotion backlog count.
+
+    Composition-root concern: the eligibility query exists in two SQL
+    dialects (pg_store_lesson_promotion / sqlite_store_lesson_promotion,
+    same WHERE semantics) because jsonb operators have no SQLite
+    translation. The PG count previously ran unconditionally and raised
+    on the SQLite backend (the plugin default) — this handler was one of
+    the setup-run failures observed 2026-07-22.
+    """
+    if isinstance(store, SqliteMemoryStore):
+        return count_promotion_candidates_sqlite(store._conn)
+    return count_lesson_promotion_candidates(store._conn)
+
+
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Aggregate backlog counts + staleness ages for the three grooming kinds.
 
@@ -106,7 +125,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     wiki_result = await curate_wiki.handler(
         {"limit": 1, "coverage_jobs_max": 0, "reauthor_jobs_max": 0}
     )
-    promotion_count = count_lesson_promotion_candidates(store._conn)
+    promotion_count = _count_promotion_candidates(store)
 
     kinds: dict[str, Any] = {}
     for kind, backlog_count, last_run_at in (

@@ -1,7 +1,11 @@
 """SQLite + FTS5 + sqlite-vec fallback memory store.
 
 Drop-in replacement for PgMemoryStore when PostgreSQL is unavailable.
-Uses the same public API — all 89 methods with identical signatures.
+Mirrors the PG public API for every method the handlers/hooks call on
+the shared store (117 shared methods; 18 PG-only remain — pool
+acquisition, ingest progress, decay iteration, procedural skills,
+tag-vector search — measured 2026-07-22 via an inspect.getmembers diff
+of the two classes; the prior "all 89 methods" claim here was stale).
 
 WRRF fusion and spread activation are computed client-side
 (vs server-side PL/pgSQL in the PG backend).
@@ -30,6 +34,7 @@ from mcp_server.infrastructure.sqlite_store_entities import SqliteEntityMixin
 from mcp_server.infrastructure.sqlite_store_entity_merge import (
     SqliteEntityMergeMixin,
 )
+from mcp_server.infrastructure.sqlite_store_grooming import SqliteGroomingMixin
 from mcp_server.infrastructure.sqlite_store_mood import SqliteMoodMixin
 from mcp_server.infrastructure.sqlite_store_queries import SqliteQueryMixin
 from mcp_server.infrastructure.sqlite_store_receipts import SqliteReceiptsMixin
@@ -62,6 +67,7 @@ class SqliteMemoryStore(
     SqliteReceiptsMixin,
     SqliteRuleMixin,
     SqliteStatsMixin,
+    SqliteGroomingMixin,
     SqliteAuxiliaryMixin,
     SqliteMoodMixin,
     SqliteSearchMixin,
