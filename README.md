@@ -112,6 +112,94 @@ The server is published on PyPI as **`hypermnesia-mcp`** (registry name `io.gith
 
 ---
 
+## Use with other MCP hosts
+
+The MCP server is host-agnostic: any host that can launch a stdio process gets the full tool surface — `remember`, `recall`, the wiki, navigation, consolidation, all 50 tools — on the default local SQLite store. What is **not** portable are the 9 lifecycle hooks, which are Claude Code plugin machinery.
+
+**What works where (honest matrix):**
+
+| Capability | Claude Code (plugin) | Other MCP hosts (Gemini CLI, Codex, Cursor, Windsurf, VS Code, Agents SDK) |
+|---|---|---|
+| All 50 memory tools (`remember`, `recall`, wiki, navigation, consolidation, triggers, rules) | ✅ | ✅ |
+| SQLite default store / PostgreSQL opt-in | ✅ | ✅ |
+| Auto-capture of significant tool output | ✅ (PostToolUse hook) | ❌ — store explicitly with `remember` |
+| Session-start context injection | ✅ (SessionStart hook) | ❌ — call `recall` / `query_methodology` yourself |
+| Per-prompt auto-recall | ✅ | ❌ |
+| Compaction checkpoints | ✅ | ❌ |
+| Autonomous wiki cycle (headless worker) | ✅ | ❌ — run `consolidate` / `curate_wiki` manually |
+| Cognitive profiling (`query_methodology`) | ✅ | ⚠️ profiles are mined from Claude Code session logs under `~/.claude/`; without them the profile is empty |
+
+In one sentence: on Claude Code memory is **ambient** (hooks capture and inject automatically); on every other host memory is **manual-tool-driven** — the agent stores and retrieves when instructed, and nothing happens between prompts.
+
+The launch command on every host is the PyPI package (the `[sqlite]` extra enables sqlite-vec vector search; without it the store still works, with vector search disabled):
+
+```bash
+uvx --from "hypermnesia-mcp[sqlite]" hypermnesia-mcp
+```
+
+**Gemini CLI** — this repo ships a `gemini-extension.json`:
+
+```bash
+gemini extensions install https://github.com/cdeust/Cortex
+```
+
+Or add it to `~/.gemini/settings.json` directly:
+
+```json
+{
+  "mcpServers": {
+    "cortex": {
+      "command": "uvx",
+      "args": ["--from", "hypermnesia-mcp[sqlite]", "hypermnesia-mcp"]
+    }
+  }
+}
+```
+
+**OpenAI Codex CLI** (shared with the ChatGPT desktop app and Codex IDE extension via `~/.codex/config.toml`):
+
+```bash
+codex mcp add cortex -- uvx --from "hypermnesia-mcp[sqlite]" hypermnesia-mcp
+```
+
+```toml
+[mcp_servers.cortex]
+command = "uvx"
+args = ["--from", "hypermnesia-mcp[sqlite]", "hypermnesia-mcp"]
+```
+
+**Cursor** — `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) — and **Windsurf** — `~/.codeium/windsurf/mcp_config.json` — take the same `mcpServers` block as Gemini above.
+
+**VS Code** — `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "cortex": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "hypermnesia-mcp[sqlite]", "hypermnesia-mcp"]
+    }
+  }
+}
+```
+
+**OpenAI Agents SDK (Python):**
+
+```python
+from agents.mcp import MCPServerStdio
+
+async with MCPServerStdio(
+    name="cortex",
+    params={"command": "uvx", "args": ["--from", "hypermnesia-mcp[sqlite]", "hypermnesia-mcp"]},
+) as server:
+    agent = Agent(name="Assistant", mcp_servers=[server])
+```
+
+`uvx` requires [uv](https://docs.astral.sh/uv/); `pip install "hypermnesia-mcp[sqlite]"` + the `hypermnesia-mcp` console script works identically. GUI hosts that don't inherit your shell `PATH` may need the absolute path from `which uvx`.
+
+---
+
 ## Configuration
 
 Cortex needs **no configuration** to run — the SQLite backend is the default and requires nothing. Two optional settings let you change the storage backend; in the single-click bundle they appear as fields in Claude Desktop's extension settings, and everywhere else they map to environment variables.
