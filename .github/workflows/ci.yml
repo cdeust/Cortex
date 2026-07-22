@@ -245,11 +245,14 @@ jobs:
       # on native Windows (Git Bash reports uname -s as MINGW64_NT-*/
       # MSYS_NT-*/CYGWIN_NT-*, matched by neither its Darwin nor Linux branch)
       # went undetected. The job-level CORTEX_MEMORY_STORE_BACKEND: sqlite
-      # (above) makes scripts/setup.py skip PostgreSQL provisioning (see its
-      # module docstring) so this runs without provisioning a PostgreSQL
-      # server on the runner, while still exercising the real OS dispatch in
-      # install-plugin.sh, the real scripts/setup.py subprocess calls, and
-      # the real embedding-model caching path.
+      # (above) makes install-plugin.sh/scripts/setup.py take the SQLite
+      # path — now the plugin's production DEFAULT, not a CI-only mode —
+      # so this runs without provisioning a PostgreSQL server on the
+      # runner, while still exercising the real backend selection +
+      # marker write in install-plugin.sh and the real scripts/setup.py
+      # subprocess calls. The embedding model is deliberately NOT cached
+      # by this path anymore (lazy first-use download); the HF
+      # pre-download step above provides the model for the test steps.
       - name: Exercise real postInstall path (install-plugin.sh -> setup.py)
         shell: bash
         env:

@@ -3,10 +3,23 @@ set -euo pipefail
 
 # Cortex plugin postInstall driver.
 #
+# Usage: install-plugin.sh [--postgres]
+#        CORTEX_BACKEND=postgres install-plugin.sh   (equivalent)
+#
 # Two responsibilities:
-#   1. Install Cortex — dispatches by OS to scripts/setup.sh (macOS/Linux:
-#      PostgreSQL + pgvector, Python deps, DB schema, embedding model) or
-#      scripts/setup.py (Windows via Git Bash: same steps, cross-platform).
+#   1. Install Cortex. Default backend is SQLite — zero-config: Python
+#      deps only, no PostgreSQL/pgvector system install, no eager
+#      embedding-model download (the model fetches lazily on first use).
+#      Runs scripts/setup.py in SQLite mode on every OS and persists the
+#      choice to ~/.claude/methodology/backend.json (read at launch by
+#      scripts/launcher.py -> mcp_server/infrastructure/backend_marker.py).
+#      PostgreSQL is an explicit opt-in (--postgres / CORTEX_BACKEND) —
+#      it dispatches by OS to scripts/setup.sh (macOS/Linux: PostgreSQL +
+#      pgvector + schema + model pre-cache) or scripts/setup.py (Windows
+#      via Git Bash). An EXISTING PostgreSQL install is auto-detected
+#      (env URL, prior marker, or a reachable local cortex database) and
+#      kept — an upgrade never silently downgrades a Postgres install
+#      to SQLite.
 #   2. Remove stale OTHER versions of Cortex installed elsewhere on the
 #      machine, so the freshly-installed plugin is the single source of
 #      truth.
@@ -79,30 +92,121 @@ print(json.load(open(os.environ['CORTEX_PLUGIN_JSON_PATH']))['version'])
 
 say "Installing Cortex v${CURRENT_VERSION}"
 
-# ── Phase 1: install (delegates to setup.sh or setup.py by OS) ─────────
+# ── Phase 0: backend selection ──────────────────────────────────────────
 #
-# This is the single, most-upstream OS-dispatch point for the install
-# path — do not duplicate this branch in setup.sh or plugin.json.
-# manifest.json declares win32 as a compatible platform, but
-# scripts/setup.sh only knows how to provision PostgreSQL via brew/apt
-# (macOS/Linux) and previously failed with a bare "Unsupported OS" on
-# every other uname -s, including the MINGW64_NT-*/MSYS_NT-*/CYGWIN_NT-*
-# values Git Bash reports on native Windows (fixes #113). Git Bash is the
-# shell postInstall actually runs under on Windows (plugin.json invokes
-# `bash ...`), so on those uname patterns we delegate to the already
-# cross-platform scripts/setup.py instead of scripts/setup.sh.
-case "$(uname -s)" in
-    MINGW*|MSYS*|CYGWIN*)
-        say "Detected Windows ($(uname -s)) — delegating to cross-platform scripts/setup.py"
-        "$PY" "$PLUGIN_ROOT/scripts/setup.py" || fail "scripts/setup.py failed. PostgreSQL must be installed and running first (https://www.postgresql.org/download/windows/, then also install pgvector: https://github.com/pgvector/pgvector#windows). Once that is done, re-run manually: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""
-        ;;
-    Darwin|Linux)
-        bash "$PLUGIN_ROOT/scripts/setup.sh"
-        ;;
-    *)
-        fail "Unsupported OS: $(uname -s). Cortex supports macOS, Linux, and Windows (via Git Bash). To retry manually once you've confirmed your shell environment, run: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\" (cross-platform) — see also https://github.com/cdeust/Cortex#readme"
-        ;;
+# Default: sqlite (zero-config). PostgreSQL only when explicitly
+# requested (--postgres flag, CORTEX_BACKEND, CORTEX_MEMORY_STORE_BACKEND)
+# or when an existing PostgreSQL install is detected — never downgrade.
+
+MARKER_PATH="${HOME}/.claude/methodology/backend.json"
+
+# Explicit request beats detection: a user who asks for a backend gets it.
+REQUESTED=""
+for arg in "$@"; do
+    case "$arg" in
+        --postgres) REQUESTED="postgresql" ;;
+        *) fail "Unknown argument: $arg (usage: install-plugin.sh [--postgres])" ;;
+    esac
+done
+case "${CORTEX_BACKEND:-}" in
+    postgres|postgresql) REQUESTED="postgresql" ;;
+    sqlite)              REQUESTED="${REQUESTED:-sqlite}" ;;
 esac
+# CI/testing contract from issue #113: CORTEX_MEMORY_STORE_BACKEND=sqlite
+# forces the SQLite path (scripts/setup.py honors the same variable).
+if [ "${CORTEX_MEMORY_STORE_BACKEND:-}" = "sqlite" ] && [ -z "$REQUESTED" ]; then
+    REQUESTED="sqlite"
+fi
+
+# detect_existing_postgres — protect a working PostgreSQL install.
+# Returns 0 (and says why) when any of these hold:
+#   a) an operator-configured URL is present in the environment
+#   b) a prior install persisted backend=postgresql in the marker
+#   c) a local PostgreSQL answers on 127.0.0.1:5432 AND already has a
+#      cortex database (i.e. a previous full install provisioned it)
+detect_existing_postgres() {
+    if [ -n "${DATABASE_URL:-}" ] || [ -n "${CORTEX_MEMORY_DATABASE_URL:-}" ]; then
+        say "Existing PostgreSQL config detected (DATABASE_URL/CORTEX_MEMORY_DATABASE_URL set)"
+        return 0
+    fi
+    if [ -f "$MARKER_PATH" ] && grep -q '"backend"[[:space:]]*:[[:space:]]*"postgresql"' "$MARKER_PATH" 2>/dev/null; then
+        say "Existing PostgreSQL install detected (marker: $MARKER_PATH)"
+        return 0
+    fi
+    # 127.0.0.1:5432 mirrors memory_config.MemorySettings.DATABASE_URL,
+    # the default every previous plugin install provisioned against.
+    if command -v psql >/dev/null 2>&1 \
+        && psql -h 127.0.0.1 -p 5432 -d cortex -tAc "SELECT 1" >/dev/null 2>&1; then
+        say "Existing local cortex database detected (127.0.0.1:5432)"
+        return 0
+    fi
+    return 1
+}
+
+if [ -n "$REQUESTED" ]; then
+    BACKEND="$REQUESTED"
+elif detect_existing_postgres; then
+    BACKEND="postgresql"
+else
+    BACKEND="sqlite"
+fi
+say "Backend: $BACKEND"
+
+# ── Phase 1: install ────────────────────────────────────────────────────
+#
+# SQLite (default): scripts/setup.py in SQLite mode on every OS —
+# Python deps + verification only; no PostgreSQL, no pgvector, no eager
+# embedding-model download (lazy on first use; see
+# mcp_server/infrastructure/embedding_engine.py).
+#
+# PostgreSQL (opt-in / protected existing install): the single,
+# most-upstream OS-dispatch point for that path — do not duplicate this
+# branch in setup.sh or plugin.json. manifest.json declares win32 as a
+# compatible platform, but scripts/setup.sh only knows how to provision
+# PostgreSQL via brew/apt (macOS/Linux) and previously failed with a
+# bare "Unsupported OS" on every other uname -s, including the
+# MINGW64_NT-*/MSYS_NT-*/CYGWIN_NT-* values Git Bash reports on native
+# Windows (fixes #113). Git Bash is the shell postInstall actually runs
+# under on Windows (plugin.json invokes `bash ...`), so on those uname
+# patterns we delegate to the already cross-platform scripts/setup.py
+# instead of scripts/setup.sh.
+if [ "$BACKEND" = "sqlite" ]; then
+    CORTEX_MEMORY_STORE_BACKEND=sqlite "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
+        || fail "scripts/setup.py failed. Re-run manually: CORTEX_MEMORY_STORE_BACKEND=sqlite \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""
+else
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+            say "Detected Windows ($(uname -s)) — delegating to cross-platform scripts/setup.py"
+            "$PY" "$PLUGIN_ROOT/scripts/setup.py" || fail "scripts/setup.py failed. PostgreSQL must be installed and running first (https://www.postgresql.org/download/windows/, then also install pgvector: https://github.com/pgvector/pgvector#windows). Once that is done, re-run manually: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""
+            ;;
+        Darwin|Linux)
+            bash "$PLUGIN_ROOT/scripts/setup.sh"
+            ;;
+        *)
+            fail "Unsupported OS: $(uname -s). Cortex supports macOS, Linux, and Windows (via Git Bash). To retry manually once you've confirmed your shell environment, run: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\" (cross-platform) — see also https://github.com/cdeust/Cortex#readme"
+            ;;
+    esac
+fi
+
+# Persist the provisioned backend for scripts/launcher.py (marker is the
+# backend NAME only — never a URL, so no credentials touch disk here).
+# The path is computed with Path.home() INSIDE python, not interpolated
+# from $HOME: on Windows Git Bash $HOME is a POSIX-style path (/c/Users/x)
+# that native python.exe would misresolve, while Path.home() matches
+# exactly how backend_marker.py resolves the marker at read time.
+MARKER_WRITTEN=$(CORTEX_BACKEND_MARKER_VALUE="$BACKEND" \
+CORTEX_BACKEND_MARKER_VERSION="$CURRENT_VERSION" "$PY" -c "
+import json, os, pathlib
+path = pathlib.Path.home() / '.claude' / 'methodology' / 'backend.json'
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps({
+    'backend': os.environ['CORTEX_BACKEND_MARKER_VALUE'],
+    'written_by': 'install-plugin.sh',
+    'plugin_version': os.environ['CORTEX_BACKEND_MARKER_VERSION'],
+}, indent=2) + '\n', encoding='utf-8')
+print(path)
+") || warn "could not persist backend marker (launcher falls back to auto)"
+[ -n "$MARKER_WRITTEN" ] && say "Backend persisted: $BACKEND -> $MARKER_WRITTEN"
 
 # ── Phase 2: prune stale OTHER versions ────────────────────────────────
 
@@ -186,4 +290,9 @@ else
     say "Pruned $PRUNED stale Cortex install(s)."
 fi
 
-say "Cortex v${CURRENT_VERSION} ready. Restart Claude Code to activate."
+if [ "$BACKEND" = "sqlite" ]; then
+    say "Cortex v${CURRENT_VERSION} ready (SQLite, zero-config). Restart Claude Code to activate."
+    say "Optional PostgreSQL upgrade: bash \"$PLUGIN_ROOT/scripts/install-plugin.sh\" --postgres"
+else
+    say "Cortex v${CURRENT_VERSION} ready (PostgreSQL). Restart Claude Code to activate."
+fi

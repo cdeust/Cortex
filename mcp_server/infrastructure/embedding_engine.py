@@ -288,11 +288,18 @@ class EmbeddingEngine:
                 )
             except _cache_miss:
                 # Model not in local cache (at all, or not at the pinned
-                # revision) — download it once.
+                # revision) — download it once. First use on the
+                # zero-config install path lands here by design: the
+                # plugin postInstall deliberately skips the eager
+                # pre-cache (scripts/setup.py SQLite mode). Size figure
+                # per PRIVACY.md "one-time model download" / the
+                # pre-cache step it replaces (scripts/setup.sh step 5).
                 logger.info(
-                    "Downloading embedding model: %s (revision=%s)",
+                    "Downloading embedding model %s (revision=%s) — "
+                    "~100 MB, one-time; cached under %s, then runs fully offline",
                     self._model_name,
                     self._revision or "refs/main",
+                    cache_folder or "$HF_HOME",
                 )
                 self._model = SentenceTransformer(
                     self._model_name,

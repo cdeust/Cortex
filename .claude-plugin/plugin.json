@@ -20,9 +20,9 @@
   "userConfig": {
     "database_url": {
       "type": "string",
-      "title": "Cortex database URL",
-      "description": "PostgreSQL connection string (postgresql://[user[:pass]@]host[:port]/dbname). Leave as the default for a local install; set this to point Cortex at a remote or credentialed database. Your value persists across plugin updates.",
-      "default": "postgresql://127.0.0.1:5432/cortex"
+      "title": "Cortex database URL (optional — PostgreSQL only)",
+      "description": "Leave empty for the default zero-config SQLite store (~/.claude/methodology/memory.db). To use PostgreSQL instead, set a connection string (postgresql://[user[:pass]@]host[:port]/dbname) — a non-empty value here always wins over the SQLite default and is never silently downgraded. Your value persists across plugin updates.",
+      "default": ""
     }
   },
   "mcpServers": {
@@ -41,7 +41,7 @@
   },
   "postInstall": {
     "command": "bash ${CLAUDE_PLUGIN_ROOT}/scripts/install-plugin.sh",
-    "message": "Installing Cortex (PostgreSQL + pgvector + Python deps + embedding model) and removing any stale older Cortex installs..."
+    "message": "Installing Cortex (Python deps + zero-config SQLite memory; existing PostgreSQL installs are detected and kept). Upgrade anytime: bash <plugin>/scripts/install-plugin.sh --postgres"
   },
   "hooks": {
     "SessionStart": [

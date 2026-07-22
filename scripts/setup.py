@@ -1,30 +1,32 @@
 #!/usr/bin/env python3
 """Cortex — Cross-platform setup script.
 
-Works on Windows, macOS, and Linux. Installs Python dependencies,
-sets up the database schema, and pre-caches the embedding model.
-
-PostgreSQL must be installed separately on Windows:
-  https://www.postgresql.org/download/windows/
-  Also install pgvector: https://github.com/pgvector/pgvector#windows
+Works on Windows, macOS, and Linux. Installs Python dependencies and,
+per backend, sets up the database schema and pre-caches the embedding
+model.
 
 Usage:
-    python3 scripts/setup.py
+    python3 scripts/setup.py                                # PostgreSQL path
+    CORTEX_MEMORY_STORE_BACKEND=sqlite python3 scripts/setup.py   # SQLite path
 
-CI/testing mode:
-    Set CORTEX_MEMORY_STORE_BACKEND=sqlite to skip the PostgreSQL
-    provisioning/verification steps entirely. This exists so CI can
-    exercise the real cross-platform install path (OS dispatch, Python
-    dependency install, embedding model caching) on a runner with no
-    PostgreSQL server, without needing to provision one (source: issue
-    #113 — the Windows postInstall path had zero CI coverage before this
-    flag existed, which is how the "Unsupported OS" regression on native
-    Windows shipped undetected).
+SQLite mode (the Claude Code plugin's zero-config DEFAULT since the
+sqlite-first install change; scripts/install-plugin.sh invokes this
+script with CORTEX_MEMORY_STORE_BACKEND=sqlite on every OS):
+    Skips PostgreSQL provisioning, schema setup, and the eager
+    embedding-model pre-cache entirely. The store schema auto-creates on
+    first open (SqliteMemoryStore._init_schema) and the embedding model
+    downloads lazily on first encode (~100 MB, one-time — source:
+    embedding_engine._ensure_model; size figure per PRIVACY.md /
+    scripts/setup.sh step 5). Result: Python deps + verification only.
+    This same flag is what gives the Windows postInstall path CI
+    coverage on a runner with no PostgreSQL server (source: issue #113).
 
-    This is a testing convenience only: it does NOT represent a supported
-    zero-PostgreSQL install for the Claude Code plugin channel. The
-    zero-setup SQLite-by-default experience is the separate manifest.json
-    / `uv run` MCP-bundle channel, which never goes through this script.
+PostgreSQL mode (default when the flag is unset — the --postgres opt-in
+path of scripts/install-plugin.sh on Windows, and the manual
+cross-platform path):
+    PostgreSQL must already be installed and running:
+      https://www.postgresql.org/download/windows/
+      Also install pgvector: https://github.com/pgvector/pgvector#windows
 """
 
 from __future__ import annotations
@@ -44,7 +46,7 @@ PLUGIN_DATA = os.environ.get("CLAUDE_PLUGIN_DATA", str(PROJECT_DIR))
 DEPS_DIR = os.path.join(PLUGIN_DATA, "deps")
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
 
-# CI/testing mode: see module docstring. Any other CORTEX_MEMORY_STORE_BACKEND
+# SQLite mode: see module docstring. Any other CORTEX_MEMORY_STORE_BACKEND
 # value (unset, "postgresql", "auto") keeps the normal PostgreSQL-required path.
 SKIP_POSTGRES = (
     os.environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip().lower() == "sqlite"
@@ -299,12 +301,13 @@ def cache_embedding_model() -> None:
 
 
 def _sqlite_checks() -> list[tuple[str, bool]]:
-    """CI/testing-mode checks when PostgreSQL provisioning was skipped.
+    """SQLite-mode checks when PostgreSQL provisioning was skipped.
 
     Pre:  SKIP_POSTGRES is True.
     Post: returns one (name, passed) pair confirming the sqlite3 stdlib
-          module — the only storage dependency this mode exercises — is
-          importable.
+          module — the only storage dependency this mode needs at
+          install time (the store schema auto-creates on first open) —
+          is importable.
     """
     try:
         import sqlite3  # noqa: F401
@@ -384,7 +387,7 @@ def verify() -> None:
 
     sys.path.insert(0, DEPS_DIR)
 
-    # CI/testing mode (see module docstring): no PostgreSQL server is
+    # SQLite mode (see module docstring): no PostgreSQL server is
     # provisioned, so skip the PG-specific checks rather than reporting a
     # false failure for a step that was intentionally not run.
     checks = _sqlite_checks() if SKIP_POSTGRES else _postgres_checks()
@@ -412,18 +415,25 @@ def main() -> None:
 
     check_python()
     if SKIP_POSTGRES:
-        warn(
-            "CORTEX_MEMORY_STORE_BACKEND=sqlite — skipping PostgreSQL "
-            "provisioning and schema steps (CI/testing mode; see module "
-            "docstring). Production installs via the Claude Code plugin "
-            "still require PostgreSQL + pgvector."
+        ok(
+            "SQLite backend (zero-config default) — no PostgreSQL install, "
+            "no schema step (auto-creates on first use). Upgrade anytime: "
+            "bash scripts/install-plugin.sh --postgres"
         )
     else:
         check_postgresql()
     install_deps()
-    if not SKIP_POSTGRES:
+    if SKIP_POSTGRES:
+        # Lazy model policy for the zero-config path: the embedding model
+        # downloads on first encode (embedding_engine._ensure_model), not
+        # at install time — this keeps postInstall inside its time budget.
+        print(
+            "Embedding model: downloads on first use "
+            "(~100 MB, one-time — see PRIVACY.md), then runs fully offline."
+        )
+    else:
         setup_database()
-    cache_embedding_model()
+        cache_embedding_model()
     verify()
 
     print(f"\n{GREEN}Cortex setup complete!{NC}")
@@ -435,7 +445,10 @@ def main() -> None:
     print("  2. Start a conversation — Cortex works automatically")
     print("  3. Use /cortex-recall to search memories")
     print()
-    print(f"Database: {_redact_db_url(DATABASE_URL)}")
+    if SKIP_POSTGRES:
+        print("Database: SQLite — ~/.claude/methodology/memory.db")
+    else:
+        print(f"Database: {_redact_db_url(DATABASE_URL)}")
     print(f"Deps:     {DEPS_DIR}")
 
 

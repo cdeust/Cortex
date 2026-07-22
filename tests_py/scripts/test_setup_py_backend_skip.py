@@ -116,6 +116,37 @@ def test_verify_selects_postgres_checks_when_not_skip_postgres(monkeypatch):
 
 
 @pytest.mark.parametrize("skip_postgres", [True, False])
+def test_main_model_download_is_lazy_in_sqlite_mode(monkeypatch, skip_postgres):
+    """SQLite mode (the plugin's zero-config default) must NOT pre-cache
+    the embedding model at install time — it downloads lazily on first
+    encode (embedding_engine._ensure_model). The PostgreSQL opt-in path
+    keeps the eager pre-cache. Source: sqlite-first install change."""
+    mod = _load_setup_module(monkeypatch, "sqlite" if skip_postgres else None)
+
+    for name in (
+        "check_python",
+        "check_postgresql",
+        "install_deps",
+        "setup_database",
+        "verify",
+    ):
+        monkeypatch.setattr(mod, name, mock.Mock())
+    cache_model = mock.Mock()
+    monkeypatch.setattr(mod, "cache_embedding_model", cache_model)
+
+    mod.main()
+
+    if skip_postgres:
+        cache_model.assert_not_called()
+        mod.setup_database.assert_not_called()
+        mod.check_postgresql.assert_not_called()
+    else:
+        cache_model.assert_called_once()
+        mod.setup_database.assert_called_once()
+        mod.check_postgresql.assert_called_once()
+
+
+@pytest.mark.parametrize("skip_postgres", [True, False])
 def test_verify_exits_when_any_mocked_check_fails(monkeypatch, skip_postgres):
     mod = _load_setup_module(monkeypatch, "sqlite" if skip_postgres else None)
 
