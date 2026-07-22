@@ -39,7 +39,7 @@ upstream MCP server is configured (54 total with both present).
 | `backfill_memories` | Auto-import prior Claude Code conversations | varies |
 | `unified_search` | Unified retrieval across memories, wiki, and code graph | <200ms |
 | `get_telemetry` | Retrieval and memory-system telemetry metrics | <50ms |
-| `check_setup` | Verify local install (Python, PG driver, DATABASE_URL, connection, extensions, FS) — facade over `mcp_server.doctor` | <500ms |
+| `check_setup` | Verify local install, backend-aware (SQLite: store open + FS; PostgreSQL: PG driver, DATABASE_URL, connection, extensions, FS) — facade over `mcp_server.doctor` | <500ms |
 
 ## Tier 2 — Navigation & Exploration (7 tools)
 
@@ -103,7 +103,7 @@ read-only.
 |---|---|---|
 | `/methodology` | Retrieves the cognitive methodology profile (via `query_methodology`) for the current working directory and offers `rebuild_profiles` / `list_domains` / `get_methodology_graph` follow-ups | Any user, any session — the general entry point into a domain's profile |
 | `/why` | Deterministic blame-path: resolves `⟦rcpt:id⟧` presence-in-context markers via the `why` tool, reports which memories were in context (never that they *caused* an answer — Pearl-rung-1 evidence only) | Anyone auditing why an answer looked the way it did |
-| `/preflight [symptôme]` | Runs `python -m mcp_server.doctor` (7 checks) and turns the output into a dependency-ordered, copy-paste repair plan; takes an optional symptom argument to prioritize the relevant check first. Read-only — modifies no files | New users whose install doesn't work yet; support; first-deploy DevOps (issue #119) |
+| `/preflight [symptôme]` | Runs `python -m mcp_server.doctor` (backend-aware check list) and turns the output into a dependency-ordered, copy-paste repair plan; takes an optional symptom argument to prioritize the relevant check first. Read-only — modifies no files | New users whose install doesn't work yet; support; first-deploy DevOps (issue #119) |
 
 **Convention for adding a new command:** one new `.md` file under
 `commands/` (frontmatter: `name`, `description`, and `allowed-tools` if the

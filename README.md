@@ -55,21 +55,31 @@ It runs immediately on the built-in **SQLite backend**: zero configuration, no d
 
 Want PostgreSQL + pgvector instead (for very large stores or a shared team database)? It's a single configuration field — see [Configuration](#configuration) below. SQLite is the default; PostgreSQL is opt-in.
 
-<details>
-<summary><strong>More options</strong> (Claude Code plugin, Clone, Docker)</summary>
-
 **Claude Code plugin (marketplace):**
 ```bash
 claude plugin marketplace add cdeust/Cortex
 claude plugin install cortex
 ```
-The plugin path also registers the lifecycle hooks (session-start context injection, compaction checkpointing, the autonomous wiki cycle) and the `/cortex-setup-project` command. If you point the plugin at PostgreSQL, run `/cortex-setup-project` once — it handles pgvector installation, database creation, the embedding-model download, profile building, codebase seeding, and hook registration.
+That is the whole install — zero configuration, no PostgreSQL, no system packages. The postInstall provisions Python dependencies and selects the local **SQLite** store (`~/.claude/methodology/memory.db`); the store schema auto-creates on first use. The embedding model is *not* downloaded at install time — it fetches lazily on first use (~100 MB, one-time; see [PRIVACY.md](PRIVACY.md)) and runs fully offline afterwards. The plugin path registers all lifecycle hooks (session-start context injection, per-prompt auto-recall, auto-capture, compaction checkpointing, the autonomous wiki cycle) and the `/cortex-setup-project` command.
 
-If you configured the **PostgreSQL** backend, verify the connection:
+An **existing PostgreSQL install is never downgraded**: the installer detects a configured `DATABASE_URL`, a prior PostgreSQL backend marker, or a reachable local `cortex` database and keeps using it across plugin updates.
+
+**Upgrading the plugin to PostgreSQL (optional):**
+```bash
+bash <plugin-dir>/scripts/install-plugin.sh --postgres   # <plugin-dir> = the installed plugin root
+```
+In one line: PostgreSQL adds connection-pooled concurrency (two `psycopg_pool` latency classes), server-side PL/pgSQL WRRF fusion, and pgvector HNSW ANN indexing — worth it for very large stores or a shared team database (see [Under the Hood](#under-the-hood)); the memory tools and retrieval contract are identical on both backends. After upgrading, run `/cortex-setup-project` once — it handles pgvector setup, database creation, the embedding-model pre-cache, profile building, codebase seeding, and hook registration.
+
+**What SQLite mode does *not* do (honest disclosure):** the WRRF fusion runs in-process instead of server-side, without HNSW ANN indexing (fine at personal-store scale, slower at very large scale); and three PostgreSQL-only hook enrichments degrade to silent no-ops — cross-agent team-decision injection (`agent_briefing`, plus the banner's Team Decisions section), file-based preemptive context (`preemptive_context`), and pipeline symbol heat-bumps (`pipeline_impact_bump`). Session-start banners, auto-recall injection, auto-capture, checkpoints, and all 50 memory tools work on both backends.
+
+Verify any install:
 ```bash
 python3 -m mcp_server.doctor
 ```
-Seven checks in two seconds: Python, the PG driver, `DATABASE_URL`, connection, extensions, a writable methodology dir, and the pool-capacity invariant. Exit 0 means the PostgreSQL path is ready. (On the default SQLite backend the PostgreSQL checks report "not set" and can be ignored — SQLite needs no doctor.)
+The check list is backend-aware: on SQLite it verifies Python, the store opens, a writable methodology dir, and the pool-capacity invariant; on PostgreSQL it additionally checks the PG driver, `DATABASE_URL`, connection, and extensions. Exit 0 means ready.
+
+<details>
+<summary><strong>More options</strong> (Clone, Docker, PyPI)</summary>
 
 **Clone + setup script:**
 ```bash

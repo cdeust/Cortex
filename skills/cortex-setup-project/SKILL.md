@@ -9,13 +9,11 @@ Execute all four phases sequentially without asking the user any questions. If a
 
 ## Phase 1: Infrastructure Verification
 
-1. Run `pg_isready` via bash to check if PostgreSQL is running.
-2. Call `cortex:memory_stats({})` to verify database connectivity.
-3. If **either** check fails:
-   - Run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` automatically. Do not ask for permission.
-   - After setup.sh completes, call `cortex:memory_stats({})` again to verify.
+1. Call `cortex:memory_stats({})` to verify store connectivity. If it succeeds, the store is healthy — this covers **both** backends (the zero-config SQLite default needs no PostgreSQL, so do NOT run `pg_isready` or any PostgreSQL setup when this passes). Proceed to Phase 2.
+2. Only if `memory_stats` fails: call `cortex:check_setup({})` (backend-aware diagnostics) to identify the failure.
+   - SQLite backend reported: fix per the check output (usually `~/.claude/methodology` permissions or a corrupt `memory.db`); do NOT install PostgreSQL.
+   - PostgreSQL backend reported: run `pg_isready` via bash, then `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` automatically. Do not ask for permission. After setup.sh completes, call `cortex:memory_stats({})` again to verify.
    - If it still fails, report the error output and **stop**. Do not continue to later phases.
-4. If both checks pass, proceed to Phase 2.
 
 ## Phase 2: Build Methodology Profiles
 

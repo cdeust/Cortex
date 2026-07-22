@@ -1,9 +1,12 @@
 # Cortex — Persistent Memory MCP Server
 
 Persistent memory and cognitive profiling MCP server for Claude Code.
-Python 3.10+, FastMCP, Pydantic, numpy. Storage: PostgreSQL+pgvector
-(plugin/CLI mode) or SQLite (`.mcpb`/Cowork sandboxed launches) — see
-`PRIVACY.md` for the per-surface truth.
+Python 3.10+, FastMCP, Pydantic, numpy. Storage: SQLite by default
+(plugin installs, `.mcpb`/Cowork sandboxed launches) or
+PostgreSQL+pgvector as the opt-in upgrade (`install-plugin.sh
+--postgres`, CLI/dev mode, team databases) — see `PRIVACY.md` for the
+per-surface truth and `mcp_server/infrastructure/backend_marker.py`
+for how the plugin persists the choice.
 
 ## Problem Statement
 
@@ -16,7 +19,7 @@ coding write gates, causal graphs, and intent-aware retrieval.
 ## Build & Test
 
 - Install (dev): `uv pip install -e ".[dev]"` — SQLite backend: `".[dev,sqlite]"`
-- Environment preflight: `python -m mcp_server.doctor` (7 checks, fix message per check)
+- Environment preflight: `python -m mcp_server.doctor` (backend-aware check list, fix message per check)
 - Tests: `pytest` (full suite, 3000+ tests) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`
 - Lint BEFORE every commit: `ruff check && ruff format --check` — the CI enforces **both**; passing only `ruff check` is not enough.
 - Release gate benchmarks (isolated, ephemeral container — the only source
@@ -44,8 +47,10 @@ separate **cortex-viz** MCP (reads this same store read-only).
 - @docs/module-inventory.md — per-layer module catalogue + dependency rules
 - @docs/mcp-tools.md — the 51 standalone + 3 conditionally-registered MCP
   tools, by tier, with purpose and target latency
-- @PRIVACY.md — storage truth by launch surface (lines 26–36): SQLite is
-  the default for `.mcpb`/Cowork; PostgreSQL is used in plugin/CLI mode
+- @PRIVACY.md — storage truth by launch surface (lines 26–38): SQLite is
+  the default for plugin installs and `.mcpb`/Cowork; PostgreSQL is the
+  opt-in upgrade (`install-plugin.sh --postgres` / configured
+  `DATABASE_URL`)
 
 ## Code Style
 
