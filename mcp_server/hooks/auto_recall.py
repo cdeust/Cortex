@@ -25,7 +25,9 @@ Source backing:
 
 Strategy:
   1. Receive user message text from stdin JSON
-  2. Run fast PG query: FTS match + heat filter (no embedding load)
+  2. Run a fast FTS query — PG plainto_tsquery, or SQLite FTS5 through
+     the store abstraction on the zero-config backend — plus heat filter
+     (no embedding load either way)
   3. If relevant memories found, format as compact context block
   4. Exit 0 → stdout injected into Claude's context
   5. If nothing found, exit 1 → no injection, no noise
@@ -33,7 +35,7 @@ Strategy:
 Performance constraints:
   - Must complete within 3s (hook timeout)
   - No embedding model load (takes 5-8s)
-  - FTS-only query on PG (plainto_tsquery, sub-100ms)
+  - FTS-only query (PG plainto_tsquery / SQLite FTS5, sub-100ms)
   - Max 3 memories injected (keep context compact)
   - Skip very short queries (<10 chars) to avoid noise
 
@@ -70,6 +72,7 @@ from typing import Any
 
 from mcp_server.handlers.injection_receipts import (
     emit_hook_receipt,
+    emit_injection_receipt,
     receipt_marker,
     session_id_from_transcript,
 )
@@ -200,6 +203,111 @@ def _recall_memories(conn, query: str) -> list[dict]:
     return results[:_MAX_MEMORIES]
 
 
+# ── SQLite backend path (zero-config plugin default) ─────────────────────
+
+
+def _backend_is_sqlite() -> bool:
+    """True when the resolved store backend is the SQLite store."""
+    try:
+        from mcp_server.infrastructure.backend_marker import effective_backend
+
+        return effective_backend(os.environ) == "sqlite"
+    except Exception:
+        return False
+
+
+def _fts_query_from_prompt(query: str) -> str:
+    """Build a defensive FTS5 OR-query from the prompt's content words.
+
+    PG's ``plainto_tsquery`` strips stopwords and stems before matching;
+    SQLite FTS5's default unicode61 tokenizer does neither, so MATCHing
+    the raw prompt ANDs every token ("why is the deploy script...") and
+    almost never hits. Mirror the stopword strip with the shared
+    ``STOPWORDS`` list, then OR the remaining terms: FTS5 has no
+    stemming, so exact-token AND would drop the whole injection on one
+    morphological miss ("scripts" vs "script"); bm25 rank still sorts
+    multi-term matches first. Each term is double-quoted (FTS5 string
+    syntax) so user text can never inject FTS5 operators. Term count is
+    bounded upstream by the existing ``query[:200]`` cap — no new
+    constant introduced.
+    """
+    from mcp_server.shared.text import STOPWORDS
+
+    # \W+ split mirrors shared.text._SPLIT_RE (kept private there).
+    terms = [
+        w for w in re.split(r"\W+", query.lower()) if len(w) >= 2 and w not in STOPWORDS
+    ]
+    return " OR ".join(f'"{t}"' for t in terms)
+
+
+def _recall_memories_sqlite(store, query: str) -> list[dict]:
+    """FTS-based recall through the SQLite store — no embedding load.
+
+    Mirror of the PG ``_recall_memories`` contract: FTS prefilter +
+    heat floor, protected-first ordering, benchmark rows excluded.
+    ``search_fts`` already restricts to supersession chain heads and
+    non-stale rows (current_memories join) and returns [] on any FTS5
+    error.
+    """
+    fts_query = _fts_query_from_prompt(query[:200])
+    if not fts_query:
+        return []
+    results = []
+    for memory_id, _score in store.search_fts(fts_query, limit=_MAX_MEMORIES + 2):
+        m = store.get_memory(memory_id)
+        if not m or m.get("is_benchmark"):
+            continue
+        heat = float(m.get("heat") or 0.0)
+        if heat < _MIN_HEAT:
+            continue
+        results.append(
+            {
+                "id": memory_id,
+                "content": m.get("content", ""),
+                "heat": heat,
+                "domain": m.get("domain", "") or "",
+                "agent": m.get("agent_context", "") or "",
+                "protected": bool(m.get("is_protected")),
+            }
+        )
+    # Protected (decision) memories first; stable sort keeps FTS rank
+    # order within each group — same ordering contract as the PG query.
+    results.sort(key=lambda m: not m["protected"])
+    return results[:_MAX_MEMORIES]
+
+
+def _process_event_sqlite(event: dict[str, Any], query: str) -> None:
+    """Inject relevant memories from the SQLite store; exit 0 always."""
+    try:
+        from mcp_server.infrastructure.memory_store import get_shared_store
+
+        store = get_shared_store()
+        memories = _recall_memories_sqlite(store, query)
+    except Exception as exc:
+        _log(f"sqlite recall failed (non-fatal): {exc}")
+        sys.exit(0)
+
+    injection, included = _format_injection(memories)
+    if not injection:
+        sys.exit(0)
+
+    receipt_id = emit_injection_receipt(
+        store,
+        [{"memory_id": m["id"]} for m in included],
+        channel="auto_recall",
+        session_id=session_id_from_transcript(event.get("transcript_path")),
+    )
+    if receipt_id is not None:
+        first, _, rest = injection.partition("\n")
+        injection = f"{first} {receipt_marker(receipt_id)}"
+        if rest:
+            injection += "\n" + rest
+
+    print(injection)
+    _log(f"injected {len(included)} memories (sqlite) for query: {query[:50]}...")
+    sys.exit(0)
+
+
 def _format_injection(memories: list[dict]) -> tuple[str, list[dict]]:
     """Format memories as a compact context block for injection.
 
@@ -272,6 +380,12 @@ def process_event(event: dict[str, Any]) -> None:
 
     if _should_skip(query):
         sys.exit(0)
+
+    # SQLite backend (zero-config plugin default): recall through the
+    # store abstraction — no psycopg connection to attempt.
+    if _backend_is_sqlite():
+        _process_event_sqlite(event, query)
+        return
 
     conn = _connect()
     if conn is None:

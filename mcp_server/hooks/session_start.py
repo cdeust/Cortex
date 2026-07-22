@@ -26,6 +26,7 @@ from pathlib import Path
 
 from mcp_server.handlers.injection_receipts import (
     emit_hook_receipt,
+    emit_injection_receipt,
     receipt_marker,
     session_id_from_transcript,
 )
@@ -381,6 +382,33 @@ def _fetch_grooming_staleness(conn) -> list[str]:
         return []
 
 
+def _parse_json_list(val) -> list:
+    """Tolerant list coercion for checkpoint columns (JSON text or list)."""
+    if not val:
+        return []
+    if isinstance(val, list):
+        return val
+    try:
+        return json.loads(val) or []
+    except Exception:
+        return [val] if isinstance(val, str) and val.strip() else []
+
+
+def _checkpoint_from_row(row: dict | None) -> dict | None:
+    """Map a checkpoint row (PG dict_row or SQLite normalized row) to the
+    banner's checkpoint shape. Shared by both backend paths."""
+    if not row:
+        return None
+    return {
+        "current_task": row.get("current_task", ""),
+        "next_steps": _parse_json_list(row.get("next_steps")),
+        "open_questions": _parse_json_list(row.get("open_questions")),
+        "active_errors": _parse_json_list(row.get("active_errors")),
+        "key_decisions": _parse_json_list(row.get("key_decisions")),
+        "directory": row.get("directory_context", ""),
+    }
+
+
 def _fetch_checkpoint(conn) -> dict | None:
     """Fetch the latest active checkpoint."""
     try:
@@ -393,27 +421,7 @@ def _fetch_checkpoint(conn) -> dict | None:
     except Exception:
         return None
 
-    if not row:
-        return None
-
-    def _parse_json_list(val) -> list:
-        if not val:
-            return []
-        if isinstance(val, list):
-            return val
-        try:
-            return json.loads(val) or []
-        except Exception:
-            return [val] if isinstance(val, str) and val.strip() else []
-
-    return {
-        "current_task": row.get("current_task", ""),
-        "next_steps": _parse_json_list(row.get("next_steps")),
-        "open_questions": _parse_json_list(row.get("open_questions")),
-        "active_errors": _parse_json_list(row.get("active_errors")),
-        "key_decisions": _parse_json_list(row.get("key_decisions")),
-        "directory": row.get("directory_context", ""),
-    }
+    return _checkpoint_from_row(row)
 
 
 def _count_memories(conn) -> int:
@@ -990,6 +998,123 @@ def _refresh_session_registry(event: dict) -> None:
         _log(f"session registry refresh skipped (non-fatal): {exc}")
 
 
+# ── SQLite backend path (zero-config plugin default) ─────────────────────
+#
+# The plugin's default install provisions no PostgreSQL server; the
+# launcher resolves CORTEX_MEMORY_STORE_BACKEND=sqlite from the install
+# marker (mcp_server/infrastructure/backend_marker.py). This path builds
+# the same banner (checkpoint + anchors + hot memories + injection
+# receipt) through the store abstraction instead of raw psycopg SQL.
+# PG-only banner extras — team decisions, pending wiki curation,
+# grooming staleness — are skipped here; README "Install" discloses the
+# difference.
+
+# Tier-1 noise excluded from the banner on both backends.
+# contract: zetetic-team-subagents memory/contract.md §8b
+_SQLITE_NOISE_TAGS = frozenset({"auto-captured", "memory-replica"})
+
+
+def _backend_is_sqlite() -> bool:
+    """True when the resolved store backend is the SQLite store."""
+    try:
+        from mcp_server.infrastructure.backend_marker import effective_backend
+
+        return effective_backend(os.environ) == "sqlite"
+    except Exception:
+        return False
+
+
+def _partition_banner_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Split hot rows into (anchors, hot) with the PG path's exclusions.
+
+    Mirrors _fetch_anchors/_fetch_hot_memories: tier-1 noise tags are
+    dropped, protected ``_anchor``-tagged rows become anchors, the rest
+    are hot-pool entries. Supersession exclusion already happened
+    upstream (``get_hot_memories(heads_only=True)`` routes through the
+    ``current_memories`` view).
+    """
+    anchors: list[dict] = []
+    hot: list[dict] = []
+    for r in rows:
+        tags = [t for t in (r.get("tags") or []) if isinstance(t, str)]
+        if _SQLITE_NOISE_TAGS & set(tags):
+            continue
+        entry = {
+            "id": r["id"],
+            "content": r.get("content", ""),
+            "domain": r.get("domain", "") or "",
+            "heat": float(r.get("heat") or 0.0),
+            "is_global": bool(r.get("is_global", False)),
+        }
+        is_anchor = bool(r.get("is_protected")) and any(
+            t == "_anchor" or t.startswith("_anchor:") for t in tags
+        )
+        (anchors if is_anchor else hot).append(entry)
+    return anchors[:_ANCHOR_LIMIT], hot[:_HOT_LIMIT]
+
+
+def _sqlite_banner_rows(store) -> tuple[list[dict], list[dict], dict | None]:
+    """Fetch (anchors, hot, checkpoint) from the SQLite store, tolerantly."""
+    try:
+        rows = store.get_hot_memories(
+            min_heat=_MIN_HEAT, limit=_HOT_LIMIT + _ANCHOR_LIMIT, heads_only=True
+        )
+    except Exception as exc:
+        _log(f"SQLite hot-memory fetch failed (non-fatal): {exc}")
+        rows = []
+    anchors, hot = _partition_banner_rows(rows)
+    try:
+        checkpoint = _checkpoint_from_row(store.get_active_checkpoint())
+    except Exception:
+        checkpoint = None
+    return anchors, hot, checkpoint
+
+
+def _sqlite_context(event: dict) -> None:
+    """Build and print the SessionStart banner on the SQLite backend."""
+    try:
+        from mcp_server.infrastructure.memory_store import get_shared_store
+
+        store = get_shared_store()
+        total = int(store.count_memories().get("total") or 0)
+    except Exception as exc:
+        _log(f"SQLite store unavailable (non-fatal): {exc}")
+        return
+
+    if total == 0:
+        session_files = _count_session_files()
+        _log(f"Empty SQLite store, {session_files} session files found")
+        msg = _build_cold_start_message(
+            {"status": "ready", "memories": 0, "session_files": session_files}
+        )
+        if msg:
+            print(msg)
+        return
+
+    anchors, hot, checkpoint = _sqlite_banner_rows(store)
+    receipt_id = None
+    payload = [{"memory_id": m["id"]} for m in (*anchors, *hot)]
+    if payload:
+        receipt_id = emit_injection_receipt(
+            store,
+            payload,
+            channel="session_start",
+            session_id=session_id_from_transcript(event.get("transcript_path")),
+        )
+
+    context = _build_context(anchors, hot, checkpoint, receipt_id=receipt_id)
+    if context:
+        print(context)
+        _log(
+            f"Injected {len(anchors)} anchors + {len(hot)} hot memories "
+            f"(total: {total}, backend: sqlite)"
+        )
+    else:
+        _log("No memories above threshold (backend: sqlite)")
+
+    _print_external_sources()
+
+
 def main() -> None:
     """Entry point — print context block to stdout."""
 
@@ -1017,6 +1142,12 @@ def main() -> None:
     # (default 6h). The user never invokes consolidate manually — every
     # session opens against a freshly-consolidated store.
     _maybe_background_consolidate()
+
+    # SQLite backend (zero-config plugin default): banner via the store
+    # abstraction — no psycopg connection to attempt.
+    if _backend_is_sqlite():
+        _sqlite_context(event)
+        return
 
     # Try connecting to PostgreSQL directly first
     conn = _connect_pg()
