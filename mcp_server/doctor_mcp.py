@@ -7,7 +7,7 @@ attempted and the exact error if it failed — never just "broken."
 Checks performed (in order):
   * Python interpreter — `which python3`, `which python`, `python --version`
   * `~/.claude/plugins/installed_plugins.json` — exists, parses, key
-    `cortex@cortex-plugins` present, installPath valid, launcher present
+    `hypermnesia-mcp@cortex-plugins` present, installPath valid, launcher present
   * `CLAUDE_PLUGIN_ROOT` env var presence (informational — only set by
     Claude Code at hook/MCP spawn time, normally absent in shells)
   * Launcher smoke probe: spawn the launcher with no module argv and
@@ -168,7 +168,7 @@ def _check_installed_plugins_json() -> tuple[McpCheck, dict | None]:
                 detail="not found",
                 attempted=attempted,
                 fix="Install Cortex via Claude Code: "
-                "`/plugin install cortex@cortex-plugins`. "
+                "`/plugin install hypermnesia-mcp@cortex-plugins`. "
                 "If installed but file missing, re-run the install.",
             ),
             None,
@@ -218,7 +218,7 @@ def _check_installed_plugins_json() -> tuple[McpCheck, dict | None]:
 
 
 def _check_cortex_plugin_entry(data: dict | None) -> tuple[McpCheck, str | None]:
-    """Look up the cortex@cortex-plugins entry and return its installPath."""
+    """Look up the hypermnesia-mcp@cortex-plugins entry and return its installPath."""
     if data is None:
         return (
             McpCheck(
@@ -229,15 +229,15 @@ def _check_cortex_plugin_entry(data: dict | None) -> tuple[McpCheck, str | None]
             None,
         )
     plugins = data.get("plugins", {})
-    entries = plugins.get("cortex@cortex-plugins")
+    entries = plugins.get("hypermnesia-mcp@cortex-plugins")
     if not entries:
         keys = list(plugins.keys())
         return (
             McpCheck(
                 name="cortex plugin entry",
                 ok=False,
-                detail=f"key 'cortex@cortex-plugins' missing; found: {keys}",
-                fix="Re-install: `/plugin install cortex@cortex-plugins`. "
+                detail=f"key 'hypermnesia-mcp@cortex-plugins' missing; found: {keys}",
+                fix="Re-install: `/plugin install hypermnesia-mcp@cortex-plugins`. "
                 "If you installed under a custom marketplace name, the "
                 "key shape will differ — `.mcp.json` now uses "
                 "${CLAUDE_PLUGIN_ROOT} substitution and no longer needs "

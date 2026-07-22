@@ -1,7 +1,7 @@
 name: Release
 
 # Cortex's SUPPORTED install path is Anthropic's plugin marketplace
-# (`/plugin install cortex@cortex-plugins`). The marketplace consumes the
+# (`/plugin install hypermnesia-mcp@cortex-plugins`). The marketplace consumes the
 # git tree directly via ``${CLAUDE_PLUGIN_ROOT}``. See ADR-0050.
 #
 # PyPI is a DEPRECATED secondary channel, kept best-effort for legacy

@@ -70,7 +70,7 @@ cortex:backfill_memories({"max_files": 500, "min_importance": 0.3, "force_reproc
 If `~/.claude-mem/claude-mem.db` exists, run:
 
 ```bash
-DEPS_DIR="$HOME/.claude/plugins/data/cortex-cortex-plugins/deps"
+DEPS_DIR="$HOME/.claude/plugins/data/hypermnesia-mcp-cortex-plugins/deps"
 PYTHONPATH="${CLAUDE_PLUGIN_ROOT:-/Users/cdeust/.claude/plugins/marketplaces/cortex-plugins}:$DEPS_DIR" \
 DATABASE_URL="${DATABASE_URL:-postgresql://localhost:5432/cortex}" \
 python3 -c "
@@ -116,7 +116,7 @@ conn.close()
 If a `conversations.json` file was found in Downloads, or the user provides one:
 
 ```bash
-DEPS_DIR="$HOME/.claude/plugins/data/cortex-cortex-plugins/deps"
+DEPS_DIR="$HOME/.claude/plugins/data/hypermnesia-mcp-cortex-plugins/deps"
 PYTHONPATH="${CLAUDE_PLUGIN_ROOT:-/Users/cdeust/.claude/plugins/marketplaces/cortex-plugins}:$DEPS_DIR" \
 DATABASE_URL="${DATABASE_URL:-postgresql://localhost:5432/cortex}" \
 python3 -c "
@@ -159,7 +159,7 @@ If no export file exists, tell the user:
 If Gemini Takeout JSON files found, scan the `Gemini Apps/` folder for conversation JSON:
 
 ```bash
-DEPS_DIR="$HOME/.claude/plugins/data/cortex-cortex-plugins/deps"
+DEPS_DIR="$HOME/.claude/plugins/data/hypermnesia-mcp-cortex-plugins/deps"
 PYTHONPATH="${CLAUDE_PLUGIN_ROOT:-/Users/cdeust/.claude/plugins/marketplaces/cortex-plugins}:$DEPS_DIR" \
 DATABASE_URL="${DATABASE_URL:-postgresql://localhost:5432/cortex}" \
 python3 -c "

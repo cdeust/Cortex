@@ -31,8 +31,8 @@ set -euo pipefail
 #       neuro-cortex-memory
 #   - pip / pip3 site-packages copies of: hypermnesia-mcp,
 #       neuro-cortex-memory, cortex-mcp
-#   - Older cortex versions sitting in
-#       ~/.claude/plugins/cache/cortex-plugins/cortex/<X.Y.Z>
+#   - Older plugin versions sitting in
+#       ~/.claude/plugins/cache/cortex-plugins/hypermnesia-mcp/<X.Y.Z>
 #       (only when this script runs from inside the cache, so dev installs
 #       at ~/Developments/Cortex never trigger cache pruning)
 #
@@ -247,7 +247,7 @@ done
 #     Only acts when this script is itself running from inside the
 #     plugin cache — a dev clone at ~/Developments/Cortex must never
 #     trigger cache pruning.
-CACHE_ROOT="${HOME}/.claude/plugins/cache/cortex-plugins/cortex"
+CACHE_ROOT="${HOME}/.claude/plugins/cache/cortex-plugins/hypermnesia-mcp"
 case "$PLUGIN_ROOT" in
     "$CACHE_ROOT"/*)
         if [ -d "$CACHE_ROOT" ]; then

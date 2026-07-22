@@ -19,12 +19,12 @@ concurrency:
 
 jobs:
   sync:
-    name: Sync cortex plugin bundle
+    name: Sync hypermnesia-mcp plugin bundle
     runs-on: ubuntu-latest
     env:
       UPSTREAM: ccplugins/awesome-claude-code-plugins
       FORK: cdeust/awesome-claude-code-plugins
-      PLUGIN_NAME: cortex
+      PLUGIN_NAME: hypermnesia-mcp
       CATEGORY: "Development Engineering"
     steps:
       - name: Guard — skip cleanly when CCPLUGINS_PAT is missing
@@ -117,7 +117,7 @@ jobs:
           ## Install
 
               claude plugin marketplace add cdeust/Cortex
-              claude plugin install cortex
+              claude plugin install hypermnesia-mcp
 
           ## Tag
 
@@ -178,7 +178,7 @@ jobs:
           BRANCH="$(echo "$BRANCH" | tr -c 'a-zA-Z0-9._/-' '-')"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
           git checkout -b "$BRANCH" || git checkout "$BRANCH"
-          git commit -m "Sync cortex plugin ${{ steps.tag.outputs.tag }}
+          git commit -m "Sync hypermnesia-mcp plugin ${{ steps.tag.outputs.tag }}
 
           Automated sync from cdeust/Cortex@${{ github.sha }}."
 
@@ -196,8 +196,8 @@ jobs:
           **Release:** ${{ steps.tag.outputs.tag }}
           **Commit:** cdeust/Cortex@${{ github.sha }}
           **What this updates:**
-          - \`plugins/cortex/.claude-plugin/plugin.json\` — MCP server manifest (homepage rewritten to this repo tree)
-          - \`plugins/cortex/README.md\` — slim mirror pointing at canonical docs
+          - \`plugins/hypermnesia-mcp/.claude-plugin/plugin.json\` — MCP server manifest (homepage rewritten to this repo tree)
+          - \`plugins/hypermnesia-mcp/README.md\` — slim mirror pointing at canonical docs
           - \`README.md\` index entry under _${CATEGORY}_ (alphabetical)
 
           The plugin is a thin manifest; the actual code runs via \`uvx\` from the \`hypermnesia-mcp\` PyPI package, so there is nothing to vendor."
@@ -207,7 +207,7 @@ jobs:
           else
             gh pr create --repo $UPSTREAM \
               --head "cdeust:$BRANCH" \
-              --title "Sync cortex plugin ${{ steps.tag.outputs.tag }}" \
+              --title "Sync hypermnesia-mcp plugin ${{ steps.tag.outputs.tag }}" \
               --body "$BODY"
           fi
 

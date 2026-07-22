@@ -43,8 +43,8 @@ Repository = "https://github.com/cdeust/Cortex"
 
 [project.scripts]
 # Cortex's only supported install path is Anthropic's plugin marketplace
-# (`/plugin install cortex@cortex-plugins`). The marketplace clones this
-# repo into ~/.claude/plugins/cache/cortex-plugins/cortex/<version>/ and
+# (`/plugin install hypermnesia-mcp@cortex-plugins`). The marketplace clones this
+# repo into ~/.claude/plugins/cache/cortex-plugins/hypermnesia-mcp/<version>/ and
 # Claude Code spawns the MCP server + hooks via scripts/launcher.py
 # (see .mcp.json + .claude-plugin/plugin.json). PyPI is a deprecated,
 # best-effort secondary channel (see .github/workflows/release.yml).

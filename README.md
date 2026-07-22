@@ -58,8 +58,10 @@ Want PostgreSQL + pgvector instead (for very large stores or a shared team datab
 **Claude Code plugin (marketplace):**
 ```bash
 claude plugin marketplace add cdeust/Cortex
-claude plugin install cortex
+claude plugin install hypermnesia-mcp
 ```
+> **Upgrading from the `cortex` plugin?** The plugin was renamed `hypermnesia-mcp` in v4.15.0 (a community-directory name collision with an unrelated `cortex` plugin): `claude plugin uninstall cortex && claude plugin install hypermnesia-mcp` — your memories and configuration are untouched, storage paths do not change.
+
 That is the whole install — zero configuration, no PostgreSQL, no system packages. The postInstall provisions Python dependencies and selects the local **SQLite** store (`~/.claude/methodology/memory.db`); the store schema auto-creates on first use. The embedding model is *not* downloaded at install time — it fetches lazily on first use (~100 MB, one-time; see [PRIVACY.md](PRIVACY.md)) and runs fully offline afterwards. The plugin path registers all lifecycle hooks (session-start context injection, per-prompt auto-recall, auto-capture, compaction checkpointing, the autonomous wiki cycle) and the `/cortex-setup-project` command.
 
 An **existing PostgreSQL install is never downgraded**: the installer detects a configured `DATABASE_URL`, a prior PostgreSQL backend marker, or a reachable local `cortex` database and keeps using it across plugin updates.

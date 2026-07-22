@@ -94,7 +94,7 @@ def test_cortex_entry_data_none():
 
 
 def test_cortex_entry_install_path_missing():
-    data = {"plugins": {"cortex@cortex-plugins": [{}]}}
+    data = {"plugins": {"hypermnesia-mcp@cortex-plugins": [{}]}}
     check, install_path = _check_cortex_plugin_entry(data)
     assert check.ok is False
     assert "installPath" in check.detail
@@ -104,7 +104,7 @@ def test_cortex_entry_install_path_missing():
 def test_cortex_entry_happy():
     data = {
         "plugins": {
-            "cortex@cortex-plugins": [{"installPath": "/some/path"}],
+            "hypermnesia-mcp@cortex-plugins": [{"installPath": "/some/path"}],
         }
     }
     check, install_path = _check_cortex_plugin_entry(data)

@@ -1,0 +1,19 @@
+{
+  "//": "Deprecation shim only. v4.15.0 renamed the plugin cortex -> hypermnesia-mcp;",
+  "//1": "every functional hook and the MCP server live in the hypermnesia-mcp plugin.",
+  "//2": "This file must never re-register them (double execution for users with both installed).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[cortex] DEPRECATED (v4.15.0): this plugin was renamed to hypermnesia-mcp. Install hypermnesia-mcp from this same marketplace, then uninstall cortex to silence this notice - your memories and configuration are untouched (storage paths do not change).'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -110,7 +110,7 @@ Integration surface (four phases, smallest first):
 Both plugins install side-by-side:
 
 ```
-claude plugin install cortex
+claude plugin install hypermnesia-mcp
 claude plugin install automatised-pipeline
 ```
 

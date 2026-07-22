@@ -1,0 +1,16 @@
+{
+  "name": "cortex",
+  "description": "DEPRECATED — renamed to hypermnesia-mcp. Install hypermnesia-mcp from this same marketplace.",
+  "version": "4.15.0",
+  "author": {
+    "name": "Clement Deust",
+    "email": "admin@ai-architect.tools"
+  },
+  "homepage": "https://github.com/cdeust/Cortex",
+  "repository": "https://github.com/cdeust/Cortex",
+  "license": "MIT",
+  "keywords": [
+    "deprecated",
+    "memory"
+  ]
+}

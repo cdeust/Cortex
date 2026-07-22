@@ -37,7 +37,7 @@ CURRENT_VERSION=$(python3 -c "
 import json
 with open('$INSTALLED_JSON') as f:
     d = json.load(f)
-entries = d.get('plugins', {}).get('cortex@cortex-plugins', [{}])
+entries = d.get('plugins', {}).get('hypermnesia-mcp@cortex-plugins', [{}])
 print(entries[0].get('version', 'none') if entries else 'none')
 " 2>/dev/null || echo "none")
 
@@ -60,8 +60,8 @@ import json
 path = '$INSTALLED_JSON'
 with open(path) as f:
     d = json.load(f)
-if 'cortex@cortex-plugins' in d.get('plugins', {}):
-    del d['plugins']['cortex@cortex-plugins']
+if 'hypermnesia-mcp@cortex-plugins' in d.get('plugins', {}):
+    del d['plugins']['hypermnesia-mcp@cortex-plugins']
     with open(path, 'w') as f:
         json.dump(d, f, indent=2)
     print('[cortex-update] Removed stale registry entry')
@@ -73,6 +73,6 @@ else:
 echo ""
 echo "[cortex-update] Cache cleared. Now run:"
 echo ""
-echo "  claude plugin install cortex"
+echo "  claude plugin install hypermnesia-mcp"
 echo ""
 echo "Then restart Claude Code to pick up v$NEW_VERSION."
