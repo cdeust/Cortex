@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.15.0] - 2026-07-22
+
+The plugin is renamed **`cortex` → `hypermnesia-mcp`** (a community-directory name collision with an unrelated `cortex` plugin; the new name matches the existing PyPI / MCP-registry identity). Existing users: `claude plugin uninstall cortex && claude plugin install hypermnesia-mcp` — memories and configuration are untouched, storage paths do not change. A minimal `cortex` deprecation shim (`plugins/cortex-deprecated/`) stays on the marketplace and announces the migration at session start.
+
+### Added
+- SQLite-first plugin install — full hook experience with zero system PostgreSQL; PostgreSQL stays the opt-in upgrade and existing installs are never downgraded (#160).
+- "Use with other MCP hosts" README section (Gemini CLI, Codex, Cursor, Windsurf, VS Code) + `gemini-extension.json`.
+- `cortex` deprecation shim plugin entry on the marketplace (SessionStart migration notice only, no functional hooks).
+
+### Fixed
+- Write-gate decision/error/success bypass cues are language-aware instead of English-only, so deliberate multilingual writes are no longer rejected by the novelty gate (#158, #161).
+- Three setup-run bugs (#163): entity names are deduplicated at the `discover_causal_edges` boundary, establishing the PC algorithm's distinct-variables precondition (duplicate names produced degenerate edges that crashed the 2-tuple unpack); the SQLite backend (the plugin default) now implements the grooming surface (`get_grooming_ages` + promotion count), so `memory_stats` and `get_grooming_health` no longer crash; and the scanner reads `FrontmatterResult` by attribute instead of string-key indexing — every legacy memory `.md` parse raised a swallowed `TypeError`, so legacy-memory imports silently did nothing.
+
+### Changed
+- Plugin renamed `hypermnesia-mcp`; hardcoded old-name paths updated (`scripts/install-plugin.sh` / `scripts/update-plugin.sh` marketplace-cache paths, `doctor_mcp.py`'s `hypermnesia-mcp@cortex-plugins` registry key, the cortex-import skill's plugin-data dir).
+
+### Verified
+- Pre-tag guard on the release tree (`benchmarks/reproduce.sh --no-ablation`, isolated ephemeral pgvector container, `reranker_state: "loaded"` in both MANIFESTs, same pinned embedding revision): LongMemEval-S MRR **0.9150** (floor 0.914, +0.0010 PASS) / R@10 **0.9820** (floor 0.982, +0.0000 PASS); LoCoMo single-run MRR **0.8008** (floor 0.805 tol 0.005, -0.0042 PASS — matches the v4.14.3 3-run mean 0.7998 within its standard error) / R@10 **0.9132** (floor 0.915, -0.0018 PASS); BEAM-100K MRR **0.5453** (not gated, inside the documented 0.539–0.547 noise band). Protocol note: the runner process was killed externally right after BEAM startup (LongMemEval + LoCoMo results already written); the run's remaining steps (`write_manifest`, `check_floors`) were executed with the script's own functions against the run's still-live container, and BEAM was completed as a separate `--only beam` run with its own container and MANIFEST. Evidence: `benchmarks/results/repro/20260722-v4.15.0-pretag/`.
+
 ## [4.14.3] - 2026-07-17
 
 ### Fixed
