@@ -1,17 +1,17 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.cdeust/hypermnesia-mcp",
   "description": "Scientifically-grounded persistent memory for Claude — local-first, hybrid retrieval, 72 references.",
   "repository": {
     "url": "https://github.com/cdeust/Cortex",
     "source": "github"
   },
-  "version": "3.25.0",
+  "version": "4.14.3",
   "packages": [
     {
-      "registry_type": "pypi",
+      "registryType": "pypi",
       "identifier": "hypermnesia-mcp",
-      "version": "3.25.0",
+      "version": "4.14.3",
       "transport": {
         "type": "stdio"
       }

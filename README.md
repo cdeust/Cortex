@@ -431,7 +431,23 @@ ruff format --check .     # Format
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
+
+This software is the independent work of Clément Deust. It was developed
+outside any employment relationship and is not affiliated with, endorsed by,
+or owned by any past or present employer. It is part of the ai-architect
+ecosystem ([zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents),
+[automatised-pipeline](https://github.com/cdeust/automatised-pipeline),
+[prd-spec-generator](https://github.com/cdeust/prd-spec-generator)).
+
+The neuroscience and information-retrieval algorithms encoded in this
+software are derived from published academic work cited in `docs/science.md`
+and inline in the source via `# source:` annotations (Friston on predictive
+coding, Anderson & Lebiere on rate-distortion forgetting, Nader et al. on
+retrieval-induced lability, McClelland et al. on consolidation, and others).
+The MIT license covers this implementation; it does not assert ownership over
+the underlying mechanisms, which remain attributable to their original
+authors and publications.
 
 ## Citation
 
