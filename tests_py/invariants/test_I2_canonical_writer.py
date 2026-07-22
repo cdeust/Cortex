@@ -69,11 +69,11 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # SQLite parity of the anchor transfer (same transactional rationale).
     # Shifted 389->440 when M-D3 (7.1) added
     # _migrate_homeostatic_state_write_class above it.
-    ("infrastructure/sqlite_store.py", 441),
+    ("infrastructure/sqlite_store.py", 447),
     # SQLite parity: canonical bump_heat_raw / update_memories_heat_batch.
     # Shifted 419->470, 463->534 for the same reason.
-    ("infrastructure/sqlite_store.py", 471),
-    ("infrastructure/sqlite_store.py", 535),
+    ("infrastructure/sqlite_store.py", 477),
+    ("infrastructure/sqlite_store.py", 541),
     # Homeostatic fold (amortized ~once/month per (domain, write_class)).
     # M-D3 (7.1, 2026-07-10): split out of homeostatic.py into
     # homeostatic_apply.py (§4.1 500-line file cap — stratification by
