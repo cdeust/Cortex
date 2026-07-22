@@ -122,8 +122,30 @@ def main() -> None:
         if p not in sys.path:
             sys.path.insert(0, p)
 
-    # Set DATABASE_URL default if not set
-    if "DATABASE_URL" not in os.environ:
+    # Persisted-backend resolution: translate the installer's
+    # ~/.claude/methodology/backend.json marker (SQLite zero-config
+    # default vs --postgres opt-in) into CORTEX_MEMORY_STORE_BACKEND.
+    # backend_marker is stdlib-only (json/pathlib), so this import is
+    # safe before ensure_deps has run. Best-effort: a broken marker or
+    # import must never block a hook or the server from starting — the
+    # engine's "auto" default then applies, exactly as before the
+    # marker existed.
+    try:
+        from mcp_server.infrastructure.backend_marker import (
+            apply_backend_resolution,
+        )
+
+        apply_backend_resolution(os.environ)
+    except Exception as exc:  # noqa: BLE001 — launch must survive any marker failure
+        print(f"[cortex-launcher] backend resolution skipped: {exc}", file=sys.stderr)
+
+    # Set DATABASE_URL default if not set — PostgreSQL paths only. On
+    # the SQLite backend the URL is unused, and injecting a PG default
+    # would make every hook attempt (and log) a doomed PG connection.
+    if (
+        "DATABASE_URL" not in os.environ
+        and os.environ.get("CORTEX_MEMORY_STORE_BACKEND", "") != "sqlite"
+    ):
         os.environ["DATABASE_URL"] = "postgresql://localhost:5432/cortex"
 
     # Install deps. The base-deps check is a stamp-gated no-op once a
