@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/tests-3000+_passing-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/references-97_papers-orange.svg" alt="References">
-  <img src="https://img.shields.io/badge/version-4.13.1-brightgreen.svg" alt="Version 4.13.1">
+  <img src="https://img.shields.io/badge/version-4.15.0-brightgreen.svg" alt="Version 4.15.0">
 </p>
 
 <p align="center">

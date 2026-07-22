@@ -6,12 +6,12 @@
     "url": "https://github.com/cdeust/Cortex",
     "source": "github"
   },
-  "version": "4.14.3",
+  "version": "4.15.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "hypermnesia-mcp",
-      "version": "4.14.3",
+      "version": "4.15.0",
       "transport": {
         "type": "stdio"
       }
