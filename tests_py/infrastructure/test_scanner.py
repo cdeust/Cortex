@@ -101,6 +101,49 @@ class TestDiscoverAllMemories:
         memories = discover_all_memories()
         assert isinstance(memories, list)
 
+    def test_parses_legacy_memory_file_with_frontmatter(self, tmp_path, monkeypatch):
+        """parse_yaml_frontmatter returns a NamedTuple; pre-fix the scanner
+        indexed it with strings ("tuple indices must be integers"), so every
+        legacy projects/*/memory/*.md read failed and setup imported zero
+        memory files (each failure swallowed to stderr by the caller)."""
+        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        mem_dir = tmp_path / "projects" / "proj-a" / "memory"
+        mem_dir.mkdir(parents=True)
+        (mem_dir / "auth-decision.md").write_text(
+            "---\n"
+            "name: auth-decision\n"
+            "description: JWT over sessions\n"
+            "type: decision\n"
+            "---\n"
+            "We chose JWT.\n",
+            encoding="utf-8",
+        )
+
+        memories = discover_all_memories()
+
+        assert len(memories) == 1
+        m = memories[0]
+        assert m["name"] == "auth-decision"
+        assert m["description"] == "JWT over sessions"
+        assert m["type"] == "decision"
+        assert m["body"] == "We chose JWT."
+        assert m["project"] == "proj-a"
+
+    def test_parses_memory_file_without_frontmatter(self, tmp_path, monkeypatch):
+        """No-frontmatter files fall back to filename-derived name and the
+        full content as body — same NamedTuple contract, empty meta."""
+        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        mem_dir = tmp_path / "projects" / "proj-b" / "memory"
+        mem_dir.mkdir(parents=True)
+        (mem_dir / "plain-note.md").write_text("just a plain note\n", encoding="utf-8")
+
+        memories = discover_all_memories()
+
+        assert len(memories) == 1
+        assert memories[0]["name"] == "plain-note"
+        assert memories[0]["type"] == "unknown"
+        assert memories[0]["body"] == "just a plain note"
+
 
 class TestDiscoverConversations:
     def test_returns_array(self):
