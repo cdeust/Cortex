@@ -42,6 +42,15 @@ flowchart TD
 
 The gate uses `CORTEX_MEMORY_SURPRISAL_THRESHOLD` (default 0.3) as the minimum combined novelty score. `force=True` bypasses the gate entirely.
 
+### Write Gate Bypass
+
+Decision and error content is never rejected by novelty gating (`bypass_decision` / `bypass_error` in `write_gate.determine_bypass`). Detection is language-aware (`core/content_cues.py`, issue #158), in two layers:
+
+1. **Structural markers** (any language): runtime-emitted error shapes — Python traceback headers and frame lines, JVM/Node stack frames, CamelCase exception class names (`ValueError`, `NullPointerException`), POSIX signal names (`SIGSEGV`, …). These are matched case-sensitively; casing is the signal.
+2. **Multilingual keyword sets** for: English, Spanish, Portuguese, Russian, Japanese (the four non-English languages Stack Overflow runs dedicated sites for), German and French (remaining top W3Techs web content languages), and Romanian (issue #158 repro language). The same coverage applies to the success cue that feeds neuromodulation salience.
+
+For any language not listed, structural error markers still work, and the universal fallbacks always work: `force=true`, or an `important` / `critical` tag. Both bypass the gate and are excluded from the per-domain calibration EMA, so they never skew the threshold.
+
 ## Memory Read Path (`recall`)
 
 The read path uses intent-aware routing and multi-signal fusion.

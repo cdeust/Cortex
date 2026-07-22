@@ -216,3 +216,11 @@ class TestContentDetectors:
 
     def test_non_decision_content(self):
         assert not is_decision_content("The weather is nice")
+
+    def test_non_english_content_detected(self):
+        # Issue #158: detectors are language-aware (see core/content_cues).
+        assert is_decision_content("Am decis sa alegem optiunea A")  # repro
+        assert is_error_content("Der Build ist fehlgeschlagen")
+
+    def test_structural_error_marker_detected(self):
+        assert is_error_content("Traceback (most recent call last):")

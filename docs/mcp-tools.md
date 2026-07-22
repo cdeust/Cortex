@@ -114,7 +114,7 @@ table above — the catalogue and the command ship in the same commit.
 
 ### Memory Write Path
 
-1. **Gate**: 4-signal novelty filter (embedding distance, entity overlap, temporal proximity, structural similarity)
+1. **Gate**: 4-signal novelty filter (embedding distance, entity overlap, temporal proximity, structural similarity). Decision/error content bypasses the gate — detection is language-aware (see `docs/data-flow.md` § Write Gate Bypass); `force=true` or an `important`/`critical` tag always bypasses, in any language
 2. **Curate**: Active curation — merge with similar, link to related, or create new
 3. **Store**: PostgreSQL + pgvector with auto tsvector indexing → entity extraction → knowledge graph
 

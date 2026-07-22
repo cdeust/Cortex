@@ -5,12 +5,12 @@ Pure business logic for the memory write path. No I/O.
 
 from __future__ import annotations
 
-import re
 from datetime import datetime, timezone
 from typing import Any
 
 from mcp_server.core import coupled_neuromodulation as coupled_nm
 from mcp_server.core import (
+    content_cues,
     goal_maintenance,
     habituation,
     knowledge_graph,
@@ -42,10 +42,6 @@ from mcp_server.core.separation_core import (
     orthogonalize_embedding,
 )
 from mcp_server.observability import silent_failure
-
-_SUCCESS_KW = re.compile(
-    r"\b(fixed|resolved|succeeded|passed|completed|done)\b", re.IGNORECASE
-)
 
 
 def compute_embedding_novelty(
@@ -224,7 +220,9 @@ def apply_neuromodulation(
     """Apply coupled neuromodulation. Returns (heat, importance, composite)."""
     try:
         is_err = thermodynamics.is_error_content(content)
-        is_succ = bool(_SUCCESS_KW.search(content))
+        # Language-aware success cue (issue #158) — same coverage rules as
+        # the decision/error detectors; see content_cues module docstring.
+        is_succ = content_cues.is_success_cue(content)
         novel_ent = len([n for n in new_entity_names if n not in known_entity_names])
         signals = coupled_nm.OperationSignals(
             error_encountered=is_err,

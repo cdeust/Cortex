@@ -80,6 +80,7 @@ Treat gaps as "undocumented," not "does not exist."
 
 *Memory Thermodynamics:*
 - `thermodynamics.py` — Heat, surprise, importance, valence, metamemory
+- `content_cues.py` — Language-aware decision/error/success cue detection for write-gate bypass (structural runtime markers + multilingual keyword sets, issue #158)
 - `hierarchical_predictive_coding.py` — 3-level Friston free energy gate (sensory/entity/schema) replacing flat 4-signal
 - `predictive_coding_flat.py` — Flat predictive coding fallback
 - `predictive_coding_gate.py` — Gate decision logic

@@ -38,6 +38,7 @@ import re
 from collections import Counter
 from datetime import datetime, timezone
 
+from mcp_server.core import content_cues
 from mcp_server.shared.vader import vader_compound
 
 # Dose-response sweep override for the Python-side hourly decay factor
@@ -116,18 +117,6 @@ _STIGMA_WORDS = frozenset(
 _CODE_BLOCK_RE = re.compile(r"```|`[^`]+`")
 _FILE_PATH_RE = re.compile(r"(?:\.{0,2}/)?(?:[\w@.-]+/)+[\w@.-]+\.\w+")
 _WORD_RE = re.compile(r"[a-z]+(?:'[a-z]+)?", re.IGNORECASE)
-
-# ── Keyword patterns for backward-compatible helper functions ─────────────
-
-_ERROR_KW = re.compile(
-    r"\b(error|exception|traceback|failed|failure|bug|crash|broken|timeout|"
-    r"denied|rejected|deprecated)\b",
-    re.IGNORECASE,
-)
-_DECISION_KW = re.compile(
-    r"\b(decided|chose|switched|migrated|selected|picked|opted)\b",
-    re.IGNORECASE,
-)
 
 
 def compute_surprise(content: str, existing_similarities: list[float]) -> float:
@@ -345,10 +334,19 @@ def compute_metamemory_confidence(access_count: int, useful_count: int) -> float
 
 
 def is_error_content(content: str) -> bool:
-    """Check if content contains error/exception keywords."""
-    return bool(_ERROR_KW.search(content))
+    """Check if content carries an error cue (issue #158: language-aware).
+
+    Delegates to ``content_cues.is_error_cue`` — structural runtime markers
+    (tracebacks, stack frames, exception class names, POSIX signals) plus
+    multilingual error keywords. See ``content_cues`` for language coverage.
+    """
+    return content_cues.is_error_cue(content)
 
 
 def is_decision_content(content: str) -> bool:
-    """Check if content contains decision keywords."""
-    return bool(_DECISION_KW.search(content))
+    """Check if content carries a decision cue (issue #158: language-aware).
+
+    Delegates to ``content_cues.is_decision_cue`` — multilingual decision
+    keywords. See ``content_cues`` for language coverage.
+    """
+    return content_cues.is_decision_cue(content)

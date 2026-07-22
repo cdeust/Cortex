@@ -99,6 +99,31 @@ class TestDetermineBypass:
         assert bypassed is True
         assert reason == "bypass_decision"
 
+    def test_non_english_decision_bypasses(self):
+        # Issue #158 exact repro: Romanian decision was rejected as duplicate.
+        bypassed, reason = wg.determine_bypass(
+            force=False, content="Am decis sa alegem optiunea A", tags=[]
+        )
+        assert bypassed is True
+        assert reason == "bypass_decision"
+
+    def test_non_english_error_bypasses(self):
+        bypassed, reason = wg.determine_bypass(
+            force=False, content="Произошла ошибка при сборке", tags=[]
+        )
+        assert bypassed is True
+        assert reason == "bypass_error"
+
+    def test_structural_stack_trace_bypasses_without_keywords(self):
+        # No keyword in any covered language — structural marker only.
+        bypassed, reason = wg.determine_bypass(
+            force=False,
+            content="Sovellus kaatui: at com.acme.Main.run(Main.java:42)",
+            tags=[],
+        )
+        assert bypassed is True
+        assert reason == "bypass_error"
+
     def test_important_tag_bypasses(self):
         bypassed, reason = wg.determine_bypass(
             force=False, content="Routine progress update", tags=["important"]
@@ -590,6 +615,15 @@ class TestApplyNeuromodulation:
 
     def test_success_keyword_does_not_raise(self):
         heat, importance, composite = self._call(content="Fixed the bug successfully.")
+        assert composite is not None
+        assert 0.0 <= heat <= 1.0
+
+    def test_non_english_success_keyword_detected(self):
+        # Issue #158: the success cue feeding error_resolved is
+        # language-aware; Romanian "rezolvat" must count as success.
+        heat, importance, composite = self._call(
+            content="Am rezolvat problema de memorie."
+        )
         assert composite is not None
         assert 0.0 <= heat <= 1.0
 
