@@ -1,12 +1,24 @@
 """`cortex doctor` — diagnostic CLI for plugin-marketplace users.
 
 Helps users verify Cortex has everything it needs before first
-interactive session. Checks:
+interactive session. The check list is backend-aware
+(``active_checks()``): on the zero-config SQLite default the PostgreSQL
+driver/connection/extension checks are replaced by a SQLite store-open
+check, so a healthy SQLite install reports green instead of four false
+failures.
+
+PostgreSQL backend checks:
   * Python version >= 3.10
   * psycopg + pgvector Python packages import
   * DATABASE_URL reachable, PG >= 15
   * pgvector + pg_trgm extensions installed
   * memories table exists (schema auto-init ran)
+  * cache dir ~/.claude/methodology is writable
+  * POOL_INTERACTIVE_MAX matches I10 invariant
+
+SQLite backend checks:
+  * Python version >= 3.10
+  * SQLite store opens and its schema initializes
   * cache dir ~/.claude/methodology is writable
   * POOL_INTERACTIVE_MAX matches I10 invariant
 
@@ -262,6 +274,35 @@ def _i10_config() -> Check:
         return Check("I10 pool capacity", False, f"{type(exc).__name__}: {exc}", "")
 
 
+def _sqlite_store() -> Check:
+    """SQLite backend: the store opens and its schema initializes.
+
+    One check replaces the four PG checks (driver, URL, connection,
+    extensions): SqliteMemoryStore's constructor runs the DDL +
+    migrations, so a successful open proves the whole storage path.
+    """
+    try:
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+        from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
+
+        path = get_memory_settings().SQLITE_FALLBACK_PATH
+        store = SqliteMemoryStore(db_path=path)
+        try:
+            total = int(store.count_memories().get("total") or 0)
+        finally:
+            store.close()
+        return Check("SQLite store", True, f"{path} ({total} memories)")
+    except Exception as exc:
+        return Check(
+            "SQLite store",
+            False,
+            f"{type(exc).__name__}: {exc}",
+            "Check that ~/.claude/methodology is writable and memory.db is "
+            "not corrupt (back it up, then delete it to let the schema "
+            "re-initialize).",
+        )
+
+
 CHECKS: list[Callable[[], Check]] = [
     _python_version,
     _pg_driver,
@@ -272,6 +313,34 @@ CHECKS: list[Callable[[], Check]] = [
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
 ]
+
+SQLITE_CHECKS: list[Callable[[], Check]] = [
+    _python_version,
+    _sqlite_store,
+    _methodology_dir,
+    _i10_config,
+    _codebase_pipeline,  # optional — doesn't fail doctor
+]
+
+
+def active_checks() -> list[Callable[[], Check]]:
+    """Backend-appropriate check list (single point of truth).
+
+    Resolves the backend exactly like the launcher/hooks do
+    (env var, then the installer's backend marker — see
+    ``infrastructure.backend_marker.effective_backend``), so doctor
+    diagnoses the same store the server would actually open. Any
+    resolution failure falls back to the PostgreSQL list — the
+    stricter, historical behaviour.
+    """
+    try:
+        from mcp_server.infrastructure.backend_marker import effective_backend
+
+        if effective_backend(os.environ) == "sqlite":
+            return SQLITE_CHECKS
+    except Exception:
+        pass
+    return CHECKS
 
 
 def run() -> int:
@@ -298,7 +367,7 @@ def run() -> int:
 
 def _run_full_check() -> int:
     """Full setup verification (legacy `cortex-doctor` behaviour)."""
-    checks = [c() for c in CHECKS]
+    checks = [c() for c in active_checks()]
     width = max(len(c.name) for c in checks) + 2
 
     print("Cortex doctor — setup verification")

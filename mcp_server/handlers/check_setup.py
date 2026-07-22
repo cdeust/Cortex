@@ -7,20 +7,22 @@ instead of console text, mirroring the `check_vision_setup` /
 plugins: call once before first interactive session to confirm the
 environment before install day.
 
-No check logic is duplicated here — every entry in `doctor.CHECKS` is
-imported and invoked as-is, in doctor's own dependency order (Python
-version -> PG driver -> DATABASE_URL -> live PG connection -> pgvector
-/pg_trgm extensions -> ~/.claude/methodology writability -> I10 pool
-config -> optional automatised-pipeline probe). A failure early in the
-list explains later ones (e.g. no DATABASE_URL implies no PG
-connection), so callers should fix in list order.
+No check logic is duplicated here — every entry in doctor's
+backend-aware `active_checks()` list is imported and invoked as-is, in
+doctor's own dependency order (PostgreSQL backend: Python version -> PG
+driver -> DATABASE_URL -> live PG connection -> pgvector/pg_trgm
+extensions -> ~/.claude/methodology writability -> I10 pool config ->
+optional automatised-pipeline probe; SQLite backend: Python version ->
+SQLite store open -> writability -> I10 -> pipeline probe). A failure
+early in the list explains later ones (e.g. no DATABASE_URL implies no
+PG connection), so callers should fix in list order.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.doctor import CHECKS, Check
+from mcp_server.doctor import Check, active_checks
 from mcp_server.handlers._tool_meta import READ_ONLY_EXTERNAL
 
 # ── Schema ────────────────────────────────────────────────────────────────
@@ -31,11 +33,14 @@ schema = {
     "description": (
         "Verify the local Cortex installation before first interactive "
         "use. Runs the identical check functions as `python -m "
-        "mcp_server.doctor` (no duplicated logic): Python >= 3.10, "
+        "mcp_server.doctor` (no duplicated logic), backend-aware. "
+        "PostgreSQL backend: Python >= 3.10, "
         "psycopg/psycopg_pool/pgvector driver imports, DATABASE_URL set, "
         "live PostgreSQL connection, pgvector + pg_trgm extensions, "
         "~/.claude/methodology writability, I10 pool-capacity invariant, "
         "and an optional automatised-pipeline codebase-tool probe. "
+        "SQLite backend (zero-config default): the PG checks are replaced "
+        "by a single SQLite store-open check. "
         "Checks run in doctor's own dependency order, so an early "
         "failure (e.g. missing DATABASE_URL) explains later ones (e.g. "
         "no PG connection) -- fix in list order. Call this once before "
@@ -58,16 +63,17 @@ schema = {
 
 def _run_checks() -> list[Check]:
     """precondition: none.
-    postcondition: returns one Check per `doctor.CHECKS` entry, in
-    doctor's own order -- this function performs no reordering or
-    filtering; it only invokes doctor's callables and collects results.
+    postcondition: returns one Check per `doctor.active_checks()` entry
+    (backend-aware list), in doctor's own order -- this function performs
+    no reordering or filtering; it only invokes doctor's callables and
+    collects results.
     """
-    return [check_fn() for check_fn in CHECKS]
+    return [check_fn() for check_fn in active_checks()]
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """precondition: none -- takes no arguments.
-    postcondition: `checks` has exactly `len(CHECKS)` entries in
+    postcondition: `checks` has exactly `len(active_checks())` entries in
     doctor's dependency order; `ready` is True iff no non-optional
     check failed; `fixes_needed` counts failing non-optional checks
     only (an optional-check failure, e.g. the codebase-pipeline probe,

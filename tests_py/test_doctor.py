@@ -13,10 +13,13 @@ from __future__ import annotations
 
 from mcp_server.doctor import (
     CHECKS,
+    SQLITE_CHECKS,
     _i10_config,
     _methodology_dir,
     _pg_driver,
     _python_version,
+    _sqlite_store,
+    active_checks,
     run,
 )
 
@@ -57,3 +60,34 @@ class TestRunReportFormat:
         assert len(CHECKS) >= 5
         for c in CHECKS:
             assert callable(c)
+
+
+class TestBackendAwareChecks:
+    """active_checks() mirrors the launcher/hook backend resolution
+    (sqlite-first install): SQLite installs must not fail four PG checks."""
+
+    def test_sqlite_backend_selects_sqlite_list(self, monkeypatch):
+        monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "sqlite")
+        assert active_checks() is SQLITE_CHECKS
+
+    def test_postgresql_backend_selects_pg_list(self, monkeypatch):
+        monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
+        assert active_checks() is CHECKS
+
+    def test_sqlite_list_has_no_pg_checks(self):
+        assert _pg_driver not in SQLITE_CHECKS
+        assert _sqlite_store in SQLITE_CHECKS
+
+    def test_sqlite_store_check_passes_on_fresh_store(self, tmp_path, monkeypatch):
+        from mcp_server.infrastructure import memory_config
+
+        monkeypatch.setenv(
+            "CORTEX_MEMORY_SQLITE_FALLBACK_PATH", str(tmp_path / "memory.db")
+        )
+        memory_config.get_memory_settings.cache_clear()
+        try:
+            check = _sqlite_store()
+        finally:
+            memory_config.get_memory_settings.cache_clear()
+        assert check.ok is True
+        assert "memories" in check.detail

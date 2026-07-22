@@ -1,7 +1,8 @@
 """Tests for mcp_server.handlers.check_setup — MCP facade over doctor.py.
 
 Contract under test (from check_setup.py docstrings and schema):
-  POST-1: `checks` has exactly len(CHECKS) entries, in CHECKS' own order
+  POST-1: `checks` has exactly len(active_checks()) entries, in that
+          list's own order
           (no reordering/filtering — mirrors doctor's dependency order:
           Python -> driver -> DATABASE_URL -> connection -> extensions -> FS).
   POST-2: `ready` is True iff no non-optional check failed.
@@ -9,7 +10,8 @@ Contract under test (from check_setup.py docstrings and schema):
           optional-check failure (e.g. codebase-pipeline probe) never
           blocks readiness or is counted.
   POST-4: no check logic is duplicated — the handler calls the exact
-          `Check` callables from `mcp_server.doctor.CHECKS`.
+          `Check` callables from `mcp_server.doctor.active_checks()`
+          (the backend-aware list).
   POST-5: schema takes no arguments (composition-root/facade, not a
           re-implementation).
 """
@@ -36,7 +38,9 @@ class TestCheckSetupHandlerAllGreen:
             lambda: _fake_check("pgvector + pg_trgm extensions", True),
             lambda: _fake_check("~/.claude/methodology writable", True),
         ]
-        monkeypatch.setattr("mcp_server.handlers.check_setup.CHECKS", checks)
+        monkeypatch.setattr(
+            "mcp_server.handlers.check_setup.active_checks", lambda: checks
+        )
 
         result = asyncio.run(handler())
 
@@ -67,7 +71,9 @@ class TestCheckSetupHandlerDbDown:
             # Optional probe also fails but must not count toward fixes_needed.
             lambda: _fake_check("codebase-pipeline (optional)", False, optional=True),
         ]
-        monkeypatch.setattr("mcp_server.handlers.check_setup.CHECKS", checks)
+        monkeypatch.setattr(
+            "mcp_server.handlers.check_setup.active_checks", lambda: checks
+        )
 
         result = asyncio.run(handler())
 
@@ -80,7 +86,9 @@ class TestCheckSetupHandlerDbDown:
             lambda: _fake_check("Python >= 3.10", True),
             lambda: _fake_check("codebase-pipeline (optional)", False, optional=True),
         ]
-        monkeypatch.setattr("mcp_server.handlers.check_setup.CHECKS", checks)
+        monkeypatch.setattr(
+            "mcp_server.handlers.check_setup.active_checks", lambda: checks
+        )
 
         result = asyncio.run(handler())
 
@@ -92,7 +100,9 @@ class TestCheckSetupHandlerDbDown:
         checks = [
             lambda: _fake_check("DATABASE_URL", False, fix="export DATABASE_URL=..."),
         ]
-        monkeypatch.setattr("mcp_server.handlers.check_setup.CHECKS", checks)
+        monkeypatch.setattr(
+            "mcp_server.handlers.check_setup.active_checks", lambda: checks
+        )
 
         result = asyncio.run(handler())
 
@@ -106,7 +116,9 @@ class TestCheckSetupHandlerOrder:
     def test_order_matches_checks_list(self, monkeypatch):
         names = ["Zebra check", "Alpha check", "Middle check"]
         checks = [lambda n=n: _fake_check(n, True) for n in names]
-        monkeypatch.setattr("mcp_server.handlers.check_setup.CHECKS", checks)
+        monkeypatch.setattr(
+            "mcp_server.handlers.check_setup.active_checks", lambda: checks
+        )
 
         result = asyncio.run(handler())
 
@@ -114,7 +126,7 @@ class TestCheckSetupHandlerOrder:
 
 
 class TestCheckSetupHandlerNoDuplication:
-    """POST-4: real doctor.CHECKS (unmocked) drives the handler — no
+    """POST-4: real doctor.active_checks() (unmocked) drives the handler — no
     reimplemented check logic, exercises the real Python-version check."""
 
     def test_uses_real_doctor_checks_python_version_passes(self):
