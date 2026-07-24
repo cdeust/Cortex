@@ -113,11 +113,20 @@ CREATE TABLE IF NOT EXISTS homeostatic_fold_log (
 
 MEMORIES_FTS_DDL = """
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
-    content,
-    content='memories',
-    content_rowid='id'
+    content
 );
 """
+# Regular (self-content) FTS5 table — NOT external-content (issue #169).
+# The store writes code-aware augmented content (identifier sub-tokens appended
+# by shared.code_tokenize.augment_content) so a query for `payment` matches a
+# memory that only wrote `normalizePaymentAmount`. An external-content table
+# (content='memories') would re-derive tokens from the ORIGINAL memories.content
+# on DELETE, orphaning the appended sub-tokens and corrupting the index
+# (verified 2026-07-24). A self-content table lets DELETE-by-rowid remove
+# exactly the tokens that were indexed. No code reads `content` back from this
+# table — every consumer uses rowid/rank/MATCH — so the external-content
+# storage saving was unused. Existing databases are converted by
+# sqlite_store._migrate_fts_code_tokenize (one-shot rebuild + reindex).
 
 MEMORIES_VEC_DDL = """
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(
@@ -453,4 +462,11 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     # pg_schema.py MIGRATIONS_DDL. Nullable pointer, no backfill needed.
     ("memory_rules", "source_memory_id", "INTEGER"),
     ("prospective_memories", "source_memory_id", "INTEGER"),
+    # Embedding provenance (issue #169). '' = unknown/legacy, 'neural' =
+    # sentence-transformers, 'fallback' = algorithmic (download-free). The
+    # vector search filters to rows matching the query's space so the two
+    # geometrically-incompatible spaces never silently cross-rank. Legacy rows
+    # ('') are treated as neural-compatible (they predate the fallback), the
+    # honest default for a store that only ever had the neural encoder.
+    ("memories", "embedding_model", "TEXT DEFAULT ''"),
 ]

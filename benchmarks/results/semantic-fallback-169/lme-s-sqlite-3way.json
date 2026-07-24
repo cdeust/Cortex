@@ -1,0 +1,27 @@
+{
+  "benchmark": "longmemeval_s_sqlite_fallback_169",
+  "git_sha": "ecdbadc",
+  "date": "2026-07-24T17:39:38.223447+00:00",
+  "limit": 50,
+  "n_questions": 50,
+  "results": {
+    "no-vector": {
+      "mrr": 0.2754945322708481,
+      "recall10": 0.46,
+      "elapsed_s": 5.1,
+      "n": 50
+    },
+    "fallback": {
+      "mrr": 0.3777399644043607,
+      "recall10": 0.66,
+      "elapsed_s": 36.0,
+      "n": 50
+    },
+    "sentence-transformers": {
+      "mrr": 0.6089621848739496,
+      "recall10": 0.94,
+      "elapsed_s": 44.1,
+      "n": 50
+    }
+  }
+}

@@ -62,6 +62,25 @@ DEFAULT_MODEL_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
 logger = logging.getLogger(__name__)
 
 
+class _FallbackRequired(Exception):
+    """Internal signal: no neural model is loadable, engage the fallback.
+
+    Raised inside ``_ensure_model`` (zero-download requested, or a download
+    failed) and caught in the same method to route to ``_engage_fallback``.
+    Never escapes the module.
+    """
+
+
+def _zero_download() -> bool:
+    """Whether the operator opted out of any model download (issue #169).
+
+    source: opt-in env contract — ``CORTEX_EMBEDDING_ZERO_DOWNLOAD`` in
+    {``1``, ``true``} forces the algorithmic fallback when the model is not
+    already cached, so a sandboxed / offline install never blocks on a fetch.
+    """
+    return os.environ.get("CORTEX_EMBEDDING_ZERO_DOWNLOAD", "").lower() in ("1", "true")
+
+
 def embedding_cache_dir() -> str | None:
     """Resolve the ``cache_folder`` to pass to ``SentenceTransformer``.
 
@@ -114,6 +133,21 @@ def reset_embedding_engine() -> None:
     _singleton = None
 
 
+def current_embedding_mode() -> str:
+    """Return the process-wide embedding provenance without a mandatory encode.
+
+    precondition: none.
+    postcondition: ``"neural"`` or ``"fallback"`` if the singleton exists and
+    has resolved (or can resolve) its model; ``"unknown"`` if no engine has been
+    constructed yet. Read by ``get_telemetry`` (to surface fallback mode) and by
+    the SQLite store (to stamp each vector's space so incompatible spaces never
+    cross-rank). Does not construct an engine as a side effect.
+    """
+    if _singleton is None:
+        return "unknown"
+    return _singleton.mode
+
+
 class EmbeddingEngine:
     """Lazy-loading embedding engine with graceful fallback.
 
@@ -145,6 +179,14 @@ class EmbeddingEngine:
         self._revision = revision
         self._model: Any = None
         self._unavailable = False
+        # Embedding provenance, resolved once model loading is attempted:
+        #   None      → not yet attempted (no encode() has run)
+        #   "neural"  → sentence-transformers model loaded; learned vectors
+        #   "fallback"→ algorithmic (download-free) vectors, see issue #169
+        # Exposed via ``mode`` and the module-level ``current_embedding_mode``
+        # so telemetry and the store can keep the two incompatible vector
+        # spaces from silently cross-ranking.
+        self._mode: str | None = None
         # Cache keyed by sha256(text)[:16] — see class docstring / ADR-0045 R5.
         self._cache: OrderedDict[str, bytes] = OrderedDict()
         self._cache_max = 128
@@ -178,6 +220,22 @@ class EmbeddingEngine:
     @property
     def dimensions(self) -> int:
         return self._dim
+
+    @property
+    def mode(self) -> str:
+        """Embedding provenance: ``"neural"`` or ``"fallback"``.
+
+        precondition: none.
+        postcondition: forces model resolution if it has not happened yet, then
+        returns ``"neural"`` when a sentence-transformers model is loaded, else
+        ``"fallback"`` (algorithmic, download-free — issue #169). Stable for the
+        life of the instance once resolved, except that a ``"fallback"``
+        instance is never silently promoted: a new session that finds the model
+        present resolves to ``"neural"`` from the start.
+        """
+        if self._mode is None:
+            self._ensure_model()
+        return self._mode or "fallback"
 
     @property
     def available(self) -> bool:
@@ -286,14 +344,21 @@ class EmbeddingEngine:
                     revision=self._revision,
                     cache_folder=cache_folder,
                 )
-            except _cache_miss:
+            except _cache_miss as exc:
                 # Model not in local cache (at all, or not at the pinned
-                # revision) — download it once. First use on the
-                # zero-config install path lands here by design: the
-                # plugin postInstall deliberately skips the eager
-                # pre-cache (scripts/setup.py SQLite mode). Size figure
-                # per PRIVACY.md "one-time model download" / the
-                # pre-cache step it replaces (scripts/setup.sh step 5).
+                # revision). Two ways forward:
+                #   * zero-download requested → engage the algorithmic
+                #     fallback immediately, never touch the network (#169);
+                #   * otherwise download once. First use on the zero-config
+                #     install path lands here by design (the plugin
+                #     postInstall skips the eager pre-cache). If the download
+                #     itself fails (offline install), we still fall back
+                #     LOUDLY instead of crashing. Size figure per PRIVACY.md
+                #     "one-time model download".
+                if _zero_download():
+                    raise _FallbackRequired(
+                        "CORTEX_EMBEDDING_ZERO_DOWNLOAD set and model not cached"
+                    ) from exc
                 logger.info(
                     "Downloading embedding model %s (revision=%s) — "
                     "~100 MB, one-time; cached under %s, then runs fully offline",
@@ -301,12 +366,17 @@ class EmbeddingEngine:
                     self._revision or "refs/main",
                     cache_folder or "$HF_HOME",
                 )
-                self._model = SentenceTransformer(
-                    self._model_name,
-                    device=device,
-                    revision=self._revision,
-                    cache_folder=cache_folder,
-                )
+                try:
+                    self._model = SentenceTransformer(
+                        self._model_name,
+                        device=device,
+                        revision=self._revision,
+                        cache_folder=cache_folder,
+                    )
+                except Exception as dl_exc:  # network/offline/hub errors
+                    raise _FallbackRequired(
+                        f"embedding model download failed: {dl_exc}"
+                    ) from dl_exc
 
             # sentence-transformers 5.x renamed get_sentence_embedding_dimension
             # → get_embedding_dimension. Prefer the new name; fall back for <5.
@@ -318,6 +388,7 @@ class EmbeddingEngine:
             actual_dim = get_dim()
             if actual_dim != self._dim:
                 self._dim = actual_dim
+            self._mode = "neural"
             logger.info(
                 "Loaded embedding model: %s (%dD, device=%s)",
                 self._model_name,
@@ -325,12 +396,31 @@ class EmbeddingEngine:
                 device,
             )
         except ImportError:
-            logger.warning(
-                "sentence-transformers not installed; using hash-based fallback embeddings. "
-                "Installing in background for next session..."
-            )
-            self._unavailable = True
+            self._engage_fallback("sentence-transformers not installed")
             self._trigger_background_install()
+        except _FallbackRequired as exc:
+            self._engage_fallback(str(exc))
+
+    def _engage_fallback(self, reason: str) -> None:
+        """Switch to the deterministic algorithmic embedder — LOUD (issue #169).
+
+        precondition: called from ``_ensure_model`` when no neural model can be
+        loaded.
+        postcondition: ``_unavailable`` is True and ``mode`` is ``"fallback"``;
+        exactly one WARNING is logged naming the reason, so the degrade is never
+        silent (CLAUDE.md "no silent fallbacks"). The next session upgrades
+        transparently once the model is present.
+        """
+        logger.warning(
+            "Embedding fallback ENGAGED (%s): using deterministic algorithmic "
+            "embeddings (issue #169) — download-free, lower fidelity than "
+            "sentence-transformers, upgrades automatically when the model is "
+            "present. Fallback vectors are tagged 'fallback' and are kept from "
+            "cross-ranking against neural vectors.",
+            reason,
+        )
+        self._unavailable = True
+        self._mode = "fallback"
 
     def _trigger_background_install(self) -> None:
         """Install sentence-transformers in the background.
@@ -474,33 +564,19 @@ class EmbeddingEngine:
         return arr
 
     def _fallback_encode(self, text: str) -> bytes:
-        """Hash-based deterministic embedding fallback.
+        """Deterministic, download-free algorithmic embedding (issue #169).
 
-        Uses character n-gram hashing to produce a fixed-dimension vector.
-        Quality is much lower than learned embeddings but provides basic
-        similarity ordering without any ML model.
+        precondition: ``text`` is a non-empty str.
+        postcondition: returns a ``self._dim``-dimension float32 blob in the
+        SAME dimension contract as the neural encoder (``dim`` from
+        ``EmbeddingEngine`` construction, itself sourced from
+        ``settings.EMBEDDING_DIM``), L2-normalized. The vector lives in a
+        DIFFERENT geometry from the neural space — the store tags it
+        ``"fallback"`` so the two never cross-rank. Delegates to the pure
+        ``shared.algorithmic_embedding`` (TF + Random Indexing + co-occurrence
+        bridging); see that module for the signal selection and sources.
         """
-        vec = np.zeros(self._dim, dtype=np.float32)
-        text_lower = text.lower()
+        from mcp_server.shared.algorithmic_embedding import embed_text
 
-        # Character trigram hashing
-        for i in range(len(text_lower) - 2):
-            trigram = text_lower[i : i + 3]
-            h = int(
-                hashlib.sha256(trigram.encode()).hexdigest(), 16
-            )  # non-security: deterministic bucketing
-            idx = h % self._dim
-            vec[idx] += 1.0
-
-        # Word-level hashing for semantic signal
-        words = text_lower.split()
-        for word in words:
-            if len(word) > 2:
-                h = int(
-                    hashlib.sha256(word.encode()).hexdigest(), 16
-                )  # non-security: deterministic bucketing
-                idx = h % self._dim
-                vec[idx] += 2.0  # Words weighted more than trigrams
-
-        vec = self._normalize(vec)
+        vec = embed_text(text, self._dim)
         return vec.astype(np.float32).tobytes()

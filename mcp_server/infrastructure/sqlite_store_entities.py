@@ -156,14 +156,23 @@ class SqliteEntityMixin:
         routes BOTH branches (FTS5 + LIKE fallback) through current_memories.
         """
         src = "current_memories" if heads_only else "memories"
-        # Try FTS5 first
-        rows = self._conn.execute(
-            f"SELECT m.* FROM {src} m "
-            "JOIN memories_fts f ON f.rowid = m.id "
-            "WHERE memories_fts MATCH ? "
-            "ORDER BY m.heat_base DESC LIMIT ?",
-            (entity_name, limit),
-        ).fetchall()
+        # Try FTS5 first — expand the entity name into its code-aware sub-tokens
+        # so a camelCase / snake_case entity still matches its split index terms
+        # (issue #169).
+        from mcp_server.shared.code_tokenize import expand_fts_query
+
+        match = expand_fts_query(entity_name)
+        rows = (
+            self._conn.execute(
+                f"SELECT m.* FROM {src} m "
+                "JOIN memories_fts f ON f.rowid = m.id "
+                "WHERE memories_fts MATCH ? "
+                "ORDER BY m.heat_base DESC LIMIT ?",
+                (match, limit),
+            ).fetchall()
+            if match
+            else []
+        )
         if not rows:
             # Fallback to LIKE
             rows = self._conn.execute(

@@ -16,6 +16,7 @@ from typing import Any
 
 from mcp_server.core import telemetry
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 
 schema = {
     "title": "Get Telemetry (read/write counters)",
@@ -59,6 +60,16 @@ schema = {
                     "environment when the process started."
                 ),
             },
+            "embedding_mode": {
+                "type": "string",
+                "description": (
+                    "Embedding provenance for this process (issue #169): "
+                    "'neural' = sentence-transformers, 'fallback' = "
+                    "download-free algorithmic embeddings (lower fidelity, "
+                    "engaged when the model is absent), 'unknown' = no encode "
+                    "has run yet. Fallback and neural vectors never cross-rank."
+                ),
+            },
         },
     },
     "description": (
@@ -79,6 +90,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Return current telemetry summary.
 
     precondition: none (read-only over in-memory dict).
-    postcondition: returns ``telemetry.summary()`` verbatim.
+    postcondition: returns ``telemetry.summary()`` augmented with
+    ``embedding_mode`` (issue #169) so a caller can tell whether semantic recall
+    is running on neural or download-free fallback embeddings.
     """
-    return telemetry.summary()
+    summary = telemetry.summary()
+    summary["embedding_mode"] = current_embedding_mode()
+    return summary

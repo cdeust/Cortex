@@ -12,6 +12,8 @@ from typing import Any
 
 import numpy as np
 
+from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
+
 
 def _decode_tags(raw: Any) -> list:
     """Deserialize a SQLite ``tags`` TEXT column into a list.
@@ -95,7 +97,17 @@ class SqliteSearchMixin:
                 "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
                 (vec.tobytes(), pool),
             ).fetchall()
-            for rank, r in enumerate(rows, 1):
+            # Keep only vectors that live in the SAME space as the query
+            # embedding (issue #169): a 'fallback' (algorithmic) vector and a
+            # 'neural' vector are geometrically incompatible, so their cosine
+            # distances are not comparable. Cross-space rows still surface via
+            # FTS/heat/recency — they are only barred from the vector signal.
+            keep = self._vec_rows_in_query_space([r["rowid"] for r in rows])
+            rank = 0
+            for r in rows:
+                if r["rowid"] not in keep:
+                    continue
+                rank += 1
                 scores[r["rowid"]] = scores.get(r["rowid"], 0) + weight / (k + rank)
         except Exception:
             pass
@@ -110,16 +122,47 @@ class SqliteSearchMixin:
     ) -> None:
         if not query_text or weight <= 0:
             return
+        match = _expand_fts_query(query_text)
+        if not match:
+            return
         try:
             rows = self._conn.execute(
                 "SELECT rowid, rank FROM memories_fts "
                 "WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?",
-                (query_text, pool),
+                (match, pool),
             ).fetchall()
             for rank, r in enumerate(rows, 1):
                 scores[r["rowid"]] = scores.get(r["rowid"], 0) + weight / (k + rank)
         except Exception:
             pass
+
+    def _vec_rows_in_query_space(self, rowids: list[int]) -> set[int]:
+        """Subset of ``rowids`` whose embedding space matches the query's.
+
+        precondition: ``rowids`` are memory ids returned by the vec KNN.
+        postcondition: returns the ids whose ``memories.embedding_model`` is
+        compatible with the current process embedding mode (issue #169):
+        a neural query keeps 'neural' and legacy '' rows; a fallback query keeps
+        only 'fallback' rows; an 'unknown' mode (no engine constructed — e.g. a
+        raw-vector unit test) keeps everything. Fail-open on a missing column.
+        """
+        if not rowids:
+            return set()
+        from mcp_server.infrastructure.embedding_engine import current_embedding_mode
+
+        mode = current_embedding_mode()
+        if mode == "unknown":
+            return set(rowids)
+        compatible = {"neural", ""} if mode == "neural" else {"fallback"}
+        placeholders = ",".join("?" * len(rowids))
+        try:
+            rows = self._conn.execute(
+                f"SELECT id, embedding_model FROM memories WHERE id IN ({placeholders})",
+                rowids,
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return set(rowids)
+        return {r["id"] for r in rows if (r["embedding_model"] or "") in compatible}
 
     def _signal_heat(
         self,
@@ -260,6 +303,13 @@ class SqliteSearchMixin:
         client-side with a fabricated score, so exclusion must happen here —
         no downstream ranking can demote a superseded or stale hit.
         """
+        # NOTE: ``query`` here is an already-built FTS5 expression — callers
+        # (auto_recall._fts_query_from_prompt, recall_helpers.build_expanded_query)
+        # construct their own OR/AND term lists — so it must be passed through
+        # verbatim, NOT re-expanded (re-wrapping their operators would turn an OR
+        # into a literal AND, issue #169 regression). Code-aware matching on this
+        # path is carried entirely by index-time augmentation (augment_content),
+        # which indexes both the full identifier and its sub-tokens.
         try:
             rows = self._conn.execute(
                 "SELECT memories_fts.rowid AS rowid, memories_fts.rank AS rank "
