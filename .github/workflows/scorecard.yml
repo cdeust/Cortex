@@ -21,13 +21,41 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# REVERSAL NOTE (post-merge fix, issue #178): the call-site pattern
+# (uses: cdeust/automatised-pipeline/.../scorecard.yml@main) produced
+# startup_failure on main — zero jobs spawned — and scorecard-action's
+# publish_results requires the OIDC subject to be THIS repo's own
+# default-branch workflow, so a cross-repo reusable call cannot publish
+# even when it starts. In-repo canonical template instead; the pinned
+# SHAs below match the AP definition and drift is caught by Scorecard
+# itself flagging unpinned/stale actions. This workflow only runs on
+# main/schedule, so PR CI could not have caught the failure: verified
+# post-merge via workflow_dispatch.
 permissions: read-all
 
 jobs:
-  scorecard:
-    uses: cdeust/automatised-pipeline/.github/workflows/scorecard.yml@main
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
     permissions:
       security-events: write   # upload SARIF to code scanning
       id-token: write          # publish signed results to the OpenSSF API
       contents: read
       actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@f49aabe0b5af0936a0987cfb85d86b75731b0186 # v2.4.1
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3
+        with:
+          sarif_file: results.sarif
