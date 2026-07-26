@@ -232,7 +232,15 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "AND array_length(entity_ids, 1) > 0"
         )
         row = cur.fetchone()
-        total_claims = row["count"] if isinstance(row, dict) else row[0]
+        # A `SELECT COUNT(*)` with no GROUP BY always returns exactly one row,
+        # so `row is None` is unreachable here; the guard makes that explicit
+        # for the type checker (fetchone is typed Optional) and degrades to the
+        # cold-start path (0 claims) rather than raising if the invariant ever
+        # breaks. No observable behavior change on the reachable path.
+        if row is None:
+            total_claims = 0
+        else:
+            total_claims = row["count"] if isinstance(row, dict) else row[0]
     cold_start = total_claims < COLD_START_MEMORY_THRESHOLD
     thresholds = cold_start_thresholds() if cold_start else None
 

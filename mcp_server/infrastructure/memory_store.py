@@ -14,6 +14,21 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mcp_server.infrastructure.pg_store import PgMemoryStore
+    from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
+
+    # `MemoryStore` is a *factory*: its __new__ (below) returns a fully-built
+    # PgMemoryStore or SqliteMemoryStore, never a bare `MemoryStore` instance.
+    # For the type checker the public name therefore resolves to the union of
+    # the concrete backends the factory can produce, so every
+    # `store: MemoryStore` annotation and every `MemoryStore(...)` /
+    # `get_shared_store()` result exposes the real store interface instead of
+    # an empty factory shell. At runtime the name is the class defined in the
+    # `else` branch below (a callable that dispatches to _construct_store).
+    MemoryStore = PgMemoryStore | SqliteMemoryStore
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +40,12 @@ logger = logging.getLogger(__name__)
 # connections at a single store's two pools regardless of handler count, and
 # fixes the same connection-quota leak in production.
 _shared_lock = threading.Lock()
-_shared_stores: dict[tuple[str, str, int], object] = {}
+_shared_stores: dict[tuple[str, str, int], "MemoryStore"] = {}
 
 
-def _try_pg_verbose(database_url: str):
+def _try_pg_verbose(
+    database_url: str,
+) -> tuple[PgMemoryStore | None, str | None]:
     """Try connecting to PostgreSQL. Returns (store, error_message)."""
     try:
         import psycopg  # noqa: F401
@@ -42,22 +59,29 @@ def _try_pg_verbose(database_url: str):
         return None, msg
 
 
-class MemoryStore:
-    """Runtime-aware store factory.
+if not TYPE_CHECKING:
 
-    CLI mode: PostgreSQL required (auto → postgresql). Raises on failure.
-    Cowork mode: tries PostgreSQL, falls back to SQLite.
-    Explicit sqlite backend always works (for testing).
-    """
+    class MemoryStore:
+        """Runtime-aware store factory.
 
-    def __new__(
-        cls,
-        db_path: str = "",
-        embedding_dim: int = 384,
-        *,
-        database_url: str | None = None,
-    ):
-        return _construct_store(db_path, embedding_dim, database_url=database_url)
+        CLI mode: PostgreSQL required (auto → postgresql). Raises on failure.
+        Cowork mode: tries PostgreSQL, falls back to SQLite.
+        Explicit sqlite backend always works (for testing).
+
+        This class is only the *runtime* callable. For the type checker the
+        `MemoryStore` name is bound (in the TYPE_CHECKING block at the top of
+        this module) to `PgMemoryStore | SqliteMemoryStore`, the actual union
+        of backends `__new__` returns — so annotations see the store interface.
+        """
+
+        def __new__(
+            cls,
+            db_path: str = "",
+            embedding_dim: int = 384,
+            *,
+            database_url: str | None = None,
+        ):
+            return _construct_store(db_path, embedding_dim, database_url=database_url)
 
 
 def get_shared_store(
@@ -65,7 +89,7 @@ def get_shared_store(
     embedding_dim: int = 384,
     *,
     database_url: str | None = None,
-):
+) -> "MemoryStore":
     """Return a process-wide cached store, one per (backend, url, dim) key.
 
     Handlers MUST use this instead of constructing MemoryStore(...) directly:
@@ -126,7 +150,7 @@ def _construct_store(
     embedding_dim: int = 384,
     *,
     database_url: str | None = None,
-):
+) -> "MemoryStore":
     """Build a fresh store using runtime-aware backend selection.
 
     CLI mode: PostgreSQL required (auto → postgresql). Raises on failure.
@@ -250,7 +274,7 @@ def _database_url_is_explicit(database_url_param: str | None) -> bool:
     return database_url_param is not None or "DATABASE_URL" in os.environ
 
 
-def _make_sqlite(path: str, embedding_dim: int):
+def _make_sqlite(path: str, embedding_dim: int) -> "SqliteMemoryStore":
     """Create SQLite fallback store."""
     from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
