@@ -176,6 +176,12 @@ Treat gaps as "undocumented," not "does not exist."
 - `session_critique_format.py` — Session critique output formatting
 - `session_extractor.py` — Extracts memories from session transcripts
 
+*Document Ingestion (issue #192):*
+- `document_model.py` — Typed model for ingested documents (`ParsedDocument`/`DocumentSection`/`DocumentTable`/`DocumentProvenance`) — the shared normalization seam every adapter and the live-Confluence REST connector (enterprise-backlog#28) target
+- `docx_parser.py` — Pure OOXML WordprocessingML parser (`word/document.xml` string → `ParsedDocument`); stdlib `xml.etree` only
+- `confluence_parser.py` — Pure Confluence storage-format XHTML parser (entities + ac:/ri: namespaces pre-resolved) → `ParsedDocument`
+- `document_normalizer.py` — `ParsedDocument` + provenance → wiki page markdown + memory payloads (skipped-image/empty notices, provenance stamping)
+
 *Undocumented (measured, not yet catalogued individually):* `core/streaming/`
 (5 files) and `core/context_assembly/` (9 files) plus ~100 additional
 top-level `core/` modules added since the last curation pass — ast
@@ -209,6 +215,7 @@ Run the measurement command in the header to get a current file listing.
 - `artifact_store.py` — Content-addressed raw-output artifacts (`~/.claude/methodology/artifacts/<yyyy-mm>/<sha256[:16]>.md`) backing gist+pointer memories
 - `agent_config.py` — Agent configuration and topic scoping
 - `wiki_schema_reader.py` — Filesystem adapter for `core/wiki_schema_loader.py`'s data model/parsers; walks `wiki/_kinds|_rules|_views|_triggers/` and builds a `WikiRegistry` (issue #126 port-and-adapter split)
+- `document_reader.py` — Reads a .docx (unzips `word/document.xml`) or a Confluence XHTML export off disk into the string its pure parser consumes; raises `DocumentReadError` on a bad container/decoding (issue #192)
 
 Note: `pg_store.py` persists to PostgreSQL when configured (the
 `install-plugin.sh --postgres` opt-in or an explicit `DATABASE_URL`);

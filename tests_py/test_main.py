@@ -46,15 +46,17 @@ class TestMain:
             # Should call mcp.run with stdio transport
             mock_run.assert_called_once_with(transport="stdio")
 
-    def test_standalone_baseline_is_51_tools(self):
-        """With no upstream available, exactly the 51 standalone tools register.
+    def test_standalone_baseline_is_52_tools(self):
+        """With no upstream available, exactly the 52 standalone tools register.
 
-        51 = the 49 tools re-derived 2026-07-12 (fix/bare-container-contract,
+        52 = the 49 tools re-derived 2026-07-12 (fix/bare-container-contract,
         live DB-less `tools/list` round-trip) + `wiki_migrate` (FS→PG wiki
         parity, commit 4be298a3) + `check_setup` (doctor.py facade, issue
-        #115). The 3 upstream-integration tools (ingest_codebase,
-        change_impact, ingest_prd) MUST NOT be advertised — every advertised
-        tool then works out of the box.
+        #115) + `ingest_document` (offline .docx / Confluence export ingest,
+        issue #192 — file-only, no upstream to gate on). The 3
+        upstream-integration tools (ingest_codebase, change_impact,
+        ingest_prd) MUST NOT be advertised — every advertised tool then works
+        out of the box.
         source: MCP Directory submission decision 2026-06-19.
         """
         names = _tool_names(codebase=False, prd=False)
@@ -96,22 +98,25 @@ class TestMain:
         assert "get_grooming_health" in names
         # Issue #115: doctor.py facade, no upstream needed.
         assert "check_setup" in names
+        # Issue #192: offline document ingest (.docx / Confluence export),
+        # file-only, no upstream needed.
+        assert "ingest_document" in names
         # The upstream-integration tools are gated OFF.
         assert names.isdisjoint(_UPSTREAM_TOOLS)
-        assert len(names) == 51
+        assert len(names) == 52
 
-    def test_with_upstreams_registers_54_tools(self):
+    def test_with_upstreams_registers_55_tools(self):
         """When both upstreams are available, the 3 integration tools register."""
         names = _tool_names(codebase=True, prd=True)
         assert _UPSTREAM_TOOLS <= names
-        assert len(names) == 54
+        assert len(names) == 55
 
     def test_codebase_only_adds_two_tools(self):
         """codebase upstream gates ingest_codebase + change_impact together."""
         names = _tool_names(codebase=True, prd=False)
         assert {"ingest_codebase", "change_impact"} <= names
         assert "ingest_prd" not in names
-        assert len(names) == 53
+        assert len(names) == 54
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"

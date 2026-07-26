@@ -4,14 +4,15 @@ description: "MCP tool catalogue (tiers, purpose, target latency) + slash comman
 
 # MCP Tools
 
-51 standalone tools register unconditionally; 3 more register only when an
-upstream MCP server is configured (54 total with both present).
+52 standalone tools register unconditionally; 3 more register only when an
+upstream MCP server is configured (55 total with both present).
 
 ```
-# source: tests_py/test_main.py::test_standalone_baseline_is_51_tools
+# source: tests_py/test_main.py::test_standalone_baseline_is_52_tools
 #   verified 2026-07-12 by a live DB-less `tools/list` stdio round-trip
 #   against `bare-container-contract` + `wiki_migrate`, commit 4be298a3;
-#   bumped to 51 by `check_setup` (issue #115).
+#   bumped to 51 by `check_setup` (issue #115), to 52 by `ingest_document`
+#   (offline .docx / Confluence export ingest, issue #192).
 ```
 
 ## Tier 1 — Core Memory & Profiling (22 tools)
@@ -53,7 +54,7 @@ upstream MCP server is configured (54 total with both present).
 | `recall_skills` | Recall learned procedural skills by situation | <200ms |
 | `why` | Resolve ⟦rcpt:id⟧ injection receipts into presence-in-context evidence (blame path, decision 4255039) | <100ms |
 
-## Tier 3 — Automation & Intelligence (9 tools)
+## Tier 3 — Automation & Intelligence (10 tools)
 
 | Tool | Purpose | Target Latency |
 |---|---|---|
@@ -66,6 +67,7 @@ upstream MCP server is configured (54 total with both present).
 | `codebase_analyze` | Native AST codebase analysis (tree-sitter, 7 languages) | varies |
 | `curate_wiki` | Auto-curate wiki pages from memory clusters | varies |
 | `curate_distill` | Return understanding-level distillation dossiers (error->success, co-access, entity family) for the LLM to author `lesson` memories from (M-D8) | ~200-500ms |
+| `ingest_document` | Ingest a .docx or Confluence storage-format XHTML export into the memory/wiki store, with provenance + idempotent re-ingest (issue #192). File-based, no upstream needed | varies |
 
 ## Tier 4 — Wiki (10 tools)
 
@@ -85,9 +87,9 @@ upstream MCP server is configured (54 total with both present).
 ## Upstream-integration tools (3, conditionally registered)
 
 These register only when their upstream MCP server is configured, bringing
-the total to 54: `ingest_codebase` + `change_impact` (automatised-pipeline)
+the total to 55: `ingest_codebase` + `change_impact` (automatised-pipeline)
 and `ingest_prd` (prd-spec-generator). With no upstream present, exactly the
-**51 standalone tools** above register. Driving the ai-architect pipeline
+**52 standalone tools** above register. Driving the ai-architect pipeline
 end-to-end (formerly `run_pipeline`) is **not** part of this server — it
 lives in the automatised-pipeline MCP.
 

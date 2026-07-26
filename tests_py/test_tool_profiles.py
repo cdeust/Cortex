@@ -97,10 +97,10 @@ class TestAllows:
 
 
 class TestSurface:
-    def test_full_lists_all_51_tools(self):
+    def test_full_lists_all_52_tools(self):
         server = _build(ToolProfile.FULL)
         names = _run(server, lambda c: c.list_tools())
-        assert len({t.name for t in names}) == 51
+        assert len({t.name for t in names}) == 52
 
     def test_lean_lists_exactly_the_lean_set(self):
         server = _build(ToolProfile.LEAN)

@@ -1,20 +1,22 @@
-"""Tool registration: upstream-integration tools (4 tools).
+"""Tool registration: ingestion tools.
 
 ingest_codebase — pulls from ai-automatised-pipeline MCP
 change_impact   — pulls from ai-automatised-pipeline MCP (ADR-0046)
 ingest_prd      — pulls from prd-spec-generator MCP
 ingest_findings — reads AP findings artifacts directly off disk (INC5.1)
+ingest_document — reads .docx / Confluence export files off disk (issue #192)
 
 Cortex consumes upstream artefacts; it does not drive those pipelines. The
 MCP-calling tools (ingest_codebase, change_impact, ingest_prd) are
 CONDITIONALLY registered: each only registers when its upstream MCP server
-is reachable (see register()). ``ingest_findings`` is registered
-UNCONDITIONALLY: per ADR-0052 D1 it never calls an upstream MCP server (AP's
-findings tools are not in APBridge's allowlist — this handler reads
-runs/<run_id>/ straight off disk), so there is no upstream-availability
-flag to gate it on. On a standalone install with no upstream configured,
-ingest_findings still registers but returns {"ingested": false,
-"reason": "output_dir_not_resolved"} until AP artifacts exist on disk.
+is reachable (see register()). ``ingest_findings`` and ``ingest_document``
+are registered UNCONDITIONALLY: neither calls an upstream MCP server
+(ingest_findings reads runs/<run_id>/ off disk per ADR-0052 D1;
+ingest_document reads a .docx zip or a Confluence XHTML export off disk per
+issue #192), so there is no upstream-availability flag to gate them on. On a
+standalone install with no upstream configured, ingest_findings still
+registers but returns {"ingested": false, "reason": "output_dir_not_resolved"}
+until AP artifacts exist on disk; ingest_document works fully offline.
 source: Anthropic MCP Directory submission decision 2026-06-19.
 """
 
@@ -28,6 +30,7 @@ from fastmcp import Context, FastMCP
 from mcp_server.handlers import (
     change_impact,
     ingest_codebase,
+    ingest_document,
     ingest_findings,
     ingest_prd,
 )
@@ -45,6 +48,7 @@ SCHEMAS: dict[str, dict] = {
     "change_impact": change_impact.schema,
     "ingest_prd": ingest_prd.schema,
     "ingest_findings": ingest_findings.schema,
+    "ingest_document": ingest_document.schema,
 }
 
 
@@ -59,8 +63,8 @@ def register(mcp: FastMCP, *, codebase: bool = True, prd: bool = True) -> None:
     NOT advertised — the standalone tool set is exactly what works without an
     upstream. source: Anthropic MCP Directory submission decision 2026-06-19.
 
-    ``ingest_findings`` always registers (see module docstring — file-only,
-    no upstream MCP dependency to gate on).
+    ``ingest_findings`` and ``ingest_document`` always register (see module
+    docstring — both file-only, no upstream MCP dependency to gate on).
     """
     if codebase:
         _register_ingest_codebase(mcp)
@@ -68,6 +72,7 @@ def register(mcp: FastMCP, *, codebase: bool = True, prd: bool = True) -> None:
     if prd:
         _register_ingest_prd(mcp)
     _register_ingest_findings(mcp)
+    _register_ingest_document(mcp)
 
 
 def _register_ingest_codebase(mcp: FastMCP) -> None:
@@ -185,4 +190,28 @@ def _register_ingest_findings(mcp: FastMCP) -> None:
                 "graph_key": graph_key,
             },
             tool_name="ingest_findings",
+        )
+
+
+def _register_ingest_document(mcp: FastMCP) -> None:
+    @mcp.tool(
+        name="ingest_document",
+        **tool_kwargs(ingest_document.schema),
+    )
+    async def tool_ingest_document(
+        path: str,
+        format: str = "auto",
+        title: str | None = None,
+        domain: str | None = None,
+    ) -> dict:
+        """Ingest a .docx or Confluence export into Cortex (issue #192)."""
+        return await safe_handler(
+            ingest_document.handler,
+            {
+                "path": path,
+                "format": format,
+                "title": title,
+                "domain": domain,
+            },
+            tool_name="ingest_document",
         )
