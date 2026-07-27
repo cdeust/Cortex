@@ -141,6 +141,30 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(len(failures), 1)
         self.assertIn("vacuously", failures[0])
 
+    def test_both_test_count_phrasings_state_the_same_claim(self):
+        """ "N tests" and "N-test suite" are one claim in two wordings."""
+        self._install("The suite has 5594 tests.\nCI runs a 5594-test suite.\n")
+        self.assertEqual(gate.check_counts(gate.TEST_CLAIM, 5594, "tests"), [])
+
+    def test_stale_hyphenated_test_count_is_reported(self):
+        """The wording that went unread while it drifted two corrections behind."""
+        self._install("The suite has 5594 tests.\nCI runs a 5571-test suite.\n")
+        failures = gate.check_counts(gate.TEST_CLAIM, 5594, "tests")
+        self.assertEqual(len(failures), 1)
+        self.assertIn("DOC.md:2", failures[0])
+        self.assertIn("advertises 5571 tests", failures[0])
+
+    def test_a_count_of_test_files_is_not_a_suite_size_claim(self):
+        """Widening the pattern must not turn every nearby number into a claim."""
+        self._install("The suite has 5594 tests.\nThere are 3 test files.\n")
+        self.assertEqual(gate.check_counts(gate.TEST_CLAIM, 5594, "tests"), [])
+
+    def test_the_openssf_answers_are_scanned(self):
+        """Its answers are transcribed into the badge questionnaire, so its
+        numbers are claims about the present — unscanned, three of them drifted.
+        """
+        self.assertIn(".bestpractices.json", gate.SCANNED_FILES)
+
 
 class VersionTests(unittest.TestCase):
     def setUp(self):

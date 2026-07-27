@@ -58,6 +58,11 @@ SCANNED_FILES = (
     "docs/module-inventory.md",
     "docs/api-reference.md",
     "docs/papers/bibliography.md",
+    # The OpenSSF Best Practices answers are claims about the present too: they
+    # are transcribed into the questionnaire, so a stale number here is
+    # published to the badge. Three of its test counts had drifted two
+    # corrections behind the repository before it was scanned (2026-07-27).
+    ".bestpractices.json",
 )
 
 # A line introducing a past release states that release's numbers.
@@ -69,7 +74,9 @@ REFERENCE_CLAIM = re.compile(r"(\d+)[-\s]reference\b")
 MECHANISM_CLAIM = re.compile(
     r"(\d+)\s+(?:neuroscience[- ]grounded|neuroscience|biological|brain)?\s*mechanisms\b"
 )
-TEST_CLAIM = re.compile(r"(\d+)\s+tests\b")
+# Both the "N tests" and the "N-test suite" phrasings state the count; matching
+# only the first let a stale number sit unread in .bestpractices.json.
+TEST_CLAIM = re.compile(r"(\d+)(?:\s+tests|-test suite)\b")
 VERSION_BADGE = re.compile(r"badge/version-(\d+\.\d+\.\d+)")
 
 
