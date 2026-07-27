@@ -152,7 +152,9 @@ Treat gaps as "undocumented," not "does not exist."
 - `retrieval_signals.py` — Retrieval signal definitions and computation
 - `query_router.py` — Query routing to appropriate retrieval tier
 - `pg_recall.py` — PostgreSQL recall orchestration
-- `reranker.py` — FlashRank ONNX cross-encoder reranking (client-side post-PG)
+- `reranker.py` — FlashRank ONNX cross-encoder reranking: lifecycle singleton + rerank entrypoints (client-side post-PG)
+- `reranker_model.py` — FlashRank model identity, durable cache_dir, offline-fetch gate, `RerankerStatus`, weights sha256
+- `reranker_scoring.py` — Pure score-blending math: confidence gate, adaptive alpha, WRRF/CE blend
 - `scoring.py` — BM25, n-gram, keyword scoring (reference; PG does this server-side)
 - `temporal.py` — Date parsing, distance decay, recency boost (reference; PG does this server-side)
 - `spreading_activation.py` — Collins & Loftus 1975 semantic priming over entity graph
