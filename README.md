@@ -8,7 +8,7 @@
   <a href="https://github.com/cdeust/Cortex/actions/workflows/ci.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/tests-5663_passing-brightgreen.svg" alt="5663 passing">
+  <img src="https://img.shields.io/badge/tests-5715_passing-brightgreen.svg" alt="5715 passing">
   <img src="https://img.shields.io/badge/references-97_papers-orange.svg" alt="References">
   <img src="https://img.shields.io/badge/version-4.16.0-brightgreen.svg" alt="Version 4.16.0">
   <a href="https://www.bestpractices.dev/projects/13836"><img src="https://www.bestpractices.dev/projects/13836/badge" alt="OpenSSF Best Practices"></a>
@@ -525,7 +525,7 @@ Cortex is **local-first**: your memories, conversations, and profiles stay on yo
 ## Development
 
 ```bash
-pytest                    # 5663 tests
+pytest                    # 5715 tests
 ruff check .              # Lint
 ruff format --check .     # Format
 python scripts/check_doc_claims.py   # advertised counts must match the repo
