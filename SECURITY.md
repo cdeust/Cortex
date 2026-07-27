@@ -60,6 +60,39 @@ As of issue #178, every Cortex release ships with verifiable provenance
   Scorecard via `scorecard.yml`. The Scorecard number is a recorded baseline,
   not a badge.
 
+- **Change control** — `main` is protected: direct pushes are refused, every
+  change lands through a pull request, and eleven status checks are *required*
+  to pass before merge (`Lint`, `Type Check`, `Build Package`, `CodeQL`,
+  `Docker Smoke`, `Test` on Python 3.10–3.13, `Test (SQLite backend)`, and
+  `Test (Windows, SQLite backend)`). Force-pushes and branch deletion are
+  blocked, and conversation resolution is required.
+
+### Why Scorecard's Code-Review check will not go green here
+
+Scorecard's `Code-Review` check scores a changeset as reviewed only when it
+carries an **approving review from someone other than its author**. Cortex has
+one maintainer, and GitHub structurally forbids approving your own pull request.
+The check is therefore **unattainable by construction**, not unimplemented — no
+configuration of this repository can satisfy it while it has a single
+maintainer.
+
+What is implemented instead is every part of the control that does not require a
+second human: the pull-request requirement above (so no change reaches `main`
+unreviewed by *machine* gates), the required-checks list, and the automated
+analysis (CodeQL, Scorecard, Dependabot). The required approving-review count is
+deliberately set to **0** rather than 1: at 1, a solo maintainer cannot merge at
+all, so the setting would be traded for a repository that cannot ship — security
+theatre that reduces real safety by pushing work outside the PR flow.
+
+**The residual risk is real and is not claimed away:** a logic error that all
+eleven automated gates accept will reach `main` without a second pair of human
+eyes. Mitigation is the gate breadth above plus post-merge scanning; the honest
+statement is that human code review is *absent*, not *satisfied*. This is why
+the corresponding Scorecard alert is dismissed as "won't fix" rather than left
+open — an alert that can never be actioned is noise that hides actionable ones.
+It becomes actionable the moment a second maintainer joins, at which point the
+approving-review count should be raised to 1 and this paragraph deleted.
+
 **What this does NOT claim.** Provenance proves *who built the artifact and
 from which commit*, not that the source is free of defects; and it is worth
 nothing to a user who does not run the verification commands above. The
