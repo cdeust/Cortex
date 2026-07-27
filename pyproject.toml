@@ -70,7 +70,7 @@ sqlite = [
     "sqlite-vec>=0.1.1",
 ]
 codebase = [
-    "tree-sitter>=0.24.0,<0.26",
+    "tree-sitter>=0.24.0,<0.27",
     # Pin <1.7 because tree-sitter-language-pack 1.7.0+ changed the Parser
     # API; calls like `parser.parse(...)` raise AttributeError on instances
     # of `builtins.Parser`. Migration to the new API is tracked separately.
