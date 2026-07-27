@@ -9,7 +9,7 @@ import pytest
 from mcp_server.handlers import ingest_codebase as icb
 from mcp_server.handlers import ingest_codebase_pages as icb_pages
 from mcp_server.handlers import ingest_helpers
-from tests_py.conftest import _TEST_DB_URL, _USE_PG  # type: ignore
+from tests_py.conftest import _TEST_DB_URL, _USE_PG_STORE  # type: ignore
 
 # The entity/edge writers now stream through PostgreSQL staging tables, so the
 # write-asserting tests need a live DB. The schema migration (the LOWER(name)
@@ -191,7 +191,15 @@ def _re(pattern: str) -> re.Pattern[str]:
 
 
 class TestIngestCodebaseHappyPath:
-    @pytest.mark.skipif(not _USE_PG, reason="staging write path needs live PG")
+    @pytest.mark.skipif(  # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
+        # PostgreSQL directly (raw DSN / PG-only migrations) while the product
+        # under test reads the resolved store. Under a sqlite-backend run they
+        # seeded one store and asserted against another, so they failed for a
+        # harness reason rather than a product one. SQLite coverage of these
+        # paths needs backend-agnostic fixtures — tracked in #220.
+        not _USE_PG_STORE,
+        reason="staging write path needs live PG",
+    )
     @pytest.mark.asyncio
     async def test_happy_path_writes_memories_entities_edges_and_pages(
         self, fake_store, fake_upstream, no_wiki
@@ -495,7 +503,15 @@ class TestIngestCodebaseFailures:
         assert ingest_helpers.find_cached_graph(fake_store, "/tmp/myproj") is None
 
     @pytest.mark.asyncio
-    @pytest.mark.skipif(not _USE_PG, reason="staging write path needs live PG")
+    @pytest.mark.skipif(  # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
+        # PostgreSQL directly (raw DSN / PG-only migrations) while the product
+        # under test reads the resolved store. Under a sqlite-backend run they
+        # seeded one store and asserted against another, so they failed for a
+        # harness reason rather than a product one. SQLite coverage of these
+        # paths needs backend-agnostic fixtures — tracked in #220.
+        not _USE_PG_STORE,
+        reason="staging write path needs live PG",
+    )
     async def test_file_attribution_uses_containment_not_qn_split(
         self, fake_store, fake_upstream, no_wiki
     ):

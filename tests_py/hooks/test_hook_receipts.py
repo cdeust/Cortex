@@ -26,10 +26,17 @@ import sys
 
 import pytest
 
-from tests_py.conftest import _USE_PG, _TEST_DB_URL  # type: ignore
+from tests_py.conftest import _USE_PG_STORE, _TEST_DB_URL  # type: ignore
 
 pytestmark = pytest.mark.skipif(
-    not _USE_PG, reason="PostgreSQL not available — hook receipts need PG schema"
+    # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
+    # PostgreSQL directly (raw DSN / PG-only migrations) while the product
+    # under test reads the resolved store. Under a sqlite-backend run they
+    # seeded one store and asserted against another, so they failed for a
+    # harness reason rather than a product one. SQLite coverage of these
+    # paths needs backend-agnostic fixtures — tracked in #220.
+    not _USE_PG_STORE,
+    reason="PostgreSQL not available — hook receipts need PG schema",
 )
 
 # The event's session_id field diverges from the transcript identity

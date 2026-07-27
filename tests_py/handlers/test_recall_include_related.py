@@ -24,10 +24,17 @@ import pytest
 
 from mcp_server.handlers import recall
 from mcp_server.infrastructure.pg_store import PgMemoryStore
-from tests_py.conftest import _USE_PG  # type: ignore
+from tests_py.conftest import _USE_PG_STORE  # type: ignore
 
 pytestmark = pytest.mark.skipif(
-    not _USE_PG, reason="PostgreSQL not available — relation-walk needs live schema"
+    # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
+    # PostgreSQL directly (raw DSN / PG-only migrations) while the product
+    # under test reads the resolved store. Under a sqlite-backend run they
+    # seeded one store and asserted against another, so they failed for a
+    # harness reason rather than a product one. SQLite coverage of these
+    # paths needs backend-agnostic fixtures — tracked in #220.
+    not _USE_PG_STORE,
+    reason="PostgreSQL not available — relation-walk needs live schema",
 )
 
 _DOMAIN = "include-related-test"

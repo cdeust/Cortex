@@ -78,7 +78,7 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # net +29 cause as the two entries above).
     ("infrastructure/pg_store.py", 834),
     # SQLite parity of the anchor transfer (same transactional rationale).
-    # Shifted 389->440->447->493->529 (M-D3, then #169 added _fts_augment /
+    # Shifted 389->440->447->493->529->531 (M-D3, then #169 added _fts_augment /
     # _migrate_fts_code_tokenize / unconditional embedding_model stamp above it;
     # then #206 added _register_json_codec above the class, +36 lines).
     ("infrastructure/sqlite_store.py", 543),

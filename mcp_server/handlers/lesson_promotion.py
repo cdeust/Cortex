@@ -19,6 +19,7 @@ job, exactly like ``curate_wiki`` never authors a page on its own.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from mcp_server.core.lesson_promotion import (
@@ -30,7 +31,30 @@ from mcp_server.infrastructure.memory_store import get_shared_store
 from mcp_server.infrastructure.pg_store_lesson_promotion import (
     list_lesson_promotion_candidates,
 )
+from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
+from mcp_server.infrastructure.sqlite_store_lesson_promotion import (
+    list_lesson_promotion_candidates as list_candidates_sqlite,
+)
 from mcp_server.observability import silent_failure
+
+logger = logging.getLogger(__name__)
+
+
+def _list_candidates(store: Any, limit: int) -> list[dict[str, Any]]:
+    """Backend dispatch for the candidate query.
+
+    Same composition-root concern, and the same shape, as
+    `get_grooming_health._count_promotion_candidates`: the eligibility
+    query exists in two SQL dialects because `@>` and
+    `jsonb_array_elements_text` have no SQLite translation, and the
+    psycopg-compat wrapper translates lexical conventions only, never
+    jsonb operators. Dispatching on the store type is what keeps this
+    handler working on the plugin's default backend (issue #220).
+    """
+    if isinstance(store, SqliteMemoryStore):
+        return list_candidates_sqlite(store._conn, limit=limit)
+    return list_lesson_promotion_candidates(store._conn, limit=limit)
+
 
 schema = {
     "title": "Lesson promotion",
@@ -78,11 +102,29 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     limit = int(args.get("limit") or 10)
 
+    store: Any = None
     try:
         store = get_shared_store()
-        candidates = list_lesson_promotion_candidates(store._conn, limit=limit)
-    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        candidates = _list_candidates(store, limit)
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure + the log below
+        # Was a bare swallow. The SQLite backend (the plugin DEFAULT) raised
+        # `unrecognized token: "@"` here on every call because the PG dialect
+        # ran unconditionally, and this handler reported an empty backlog
+        # instead of an error — the failure was invisible for as long as
+        # nobody compared it against the store (issue #220). The fallback
+        # stays (callers rely on the empty-list contract) but it is no longer
+        # silent: §13.1 F1 — every failure mode emits an actionable signal.
+        # Two signals, deliberately: `silent_failure` is the repo-wide
+        # machine-readable channel (#197 family 2), while the log names the
+        # BACKEND, which is the one fact that distinguishes this dialect bug
+        # from a genuinely empty store.
         silent_failure.note("lesson_promotion.candidates", exc)
+        logger.warning(
+            "lesson-promotion candidate query failed on %s; reporting an "
+            "empty backlog. This is a degraded result, not an empty store.",
+            type(store).__name__ if store is not None else "<unresolved store>",
+            exc_info=True,
+        )
         candidates = []
 
     jobs = build_promotion_jobs(candidates)

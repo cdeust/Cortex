@@ -22,10 +22,34 @@ import time
 from mcp_server.core.grooming_health import GROOMING_STALENESS_THRESHOLD_DAYS
 from mcp_server.handlers import get_grooming_health
 from mcp_server.infrastructure.memory_store import get_shared_store
-from mcp_server.infrastructure.pg_store_lesson_promotion import (
-    count_lesson_promotion_candidates,
-    list_lesson_promotion_candidates,
+from mcp_server.handlers.get_grooming_health import (
+    _count_promotion_candidates as _count_candidates,
 )
+from mcp_server.handlers.lesson_promotion import _list_candidates
+
+
+# These assertions are backend-agnostic contracts ("the count equals the
+# unbounded list length", "the count rises by one after a qualifying
+# rating"), so they must run against whichever dialect the resolved store
+# actually is. Importing the PG functions directly bound them to one
+# dialect while `get_shared_store()` returned the other, so on the SQLite
+# backend they raised `unrecognized token: "@"` instead of testing the
+# contract. Going through the handlers' dispatch also makes these tests
+# cover the composition root the product uses (issue #220).
+
+
+def count_lesson_promotion_candidates(conn) -> int:  # noqa: ARG001 - see below
+    """Count via the same backend dispatch the handler uses.
+
+    Takes and ignores `conn` so the call sites below read unchanged; the
+    dispatch needs the STORE (to type-check it), not its connection.
+    """
+    return _count_candidates(get_shared_store())
+
+
+def list_lesson_promotion_candidates(conn, limit: int = 20):  # noqa: ARG001
+    """List via the same backend dispatch the handler uses."""
+    return _list_candidates(get_shared_store(), limit)
 
 
 def _run(coro):
