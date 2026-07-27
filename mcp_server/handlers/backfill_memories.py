@@ -14,6 +14,7 @@ See backfill_helpers.py for discovery, hashing, and concept-linking logic.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,8 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.scanner import read_head_tail
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
+
+logger = logging.getLogger(__name__)
 
 # -- Schema --
 
@@ -330,6 +333,18 @@ async def _process_imports(
                 "pages_published": pipe.get("pages_published", 0),
             }
         except Exception as e:
+            # Log, don't just record. This clause ran the documented
+            # fresh-install path; swallowing the exception into a string
+            # meant a backfill that produced zero wiki pages still returned
+            # a success-shaped payload with no log line anywhere — the
+            # FlashRank silent-failure mode a third time (issue #206).
+            logger.error(
+                "backfill: wiki pipeline failed after importing %d memories; "
+                "no wiki pages were produced: %s",
+                total_imported,
+                e,
+                exc_info=True,
+            )
             result["pipeline"] = {"error": str(e)}
     return result
 

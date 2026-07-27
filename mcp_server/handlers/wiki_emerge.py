@@ -227,7 +227,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     # and fresh installs benefit from the relaxed thresholds.
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT COUNT(*) FROM wiki.claim_events "
+            # Aliased explicitly: psycopg names a bare COUNT(*) column
+            # "count", SQLite names it "COUNT(*)", and the row is read by
+            # key below. Naming it pins the contract on both backends.
+            "SELECT COUNT(*) AS count FROM wiki.claim_events "
             "WHERE entity_ids IS NOT NULL "
             "AND array_length(entity_ids, 1) > 0"
         )

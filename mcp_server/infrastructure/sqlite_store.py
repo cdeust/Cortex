@@ -60,6 +60,37 @@ def _fts_augment(content: str) -> str:
     return augment_content(content or "")
 
 
+_json_codec_registered = False
+
+
+def _register_json_codec() -> None:
+    """Make the wiki schema's `JSON` columns behave like PostgreSQL's.
+
+    Two halves of one contract (issue #206):
+
+    * READ — a converter bound to the `JSON` decltype, so `entity_ids` comes
+      back a `list[int]` like psycopg's `INTEGER[]` rather than the string
+      "[1,2]". Call sites iterate these (wiki_emerge.py:220); a raw string
+      would iterate character-wise and yield garbage ids without raising.
+    * WRITE — adapters so a handler can pass a Python `list`/`dict` straight
+      through as psycopg allows. sqlite3 raises InterfaceError on those types
+      by default, so nothing existing depends on the old behaviour.
+
+    Only the `JSON` decltype is affected; every pre-existing column is
+    declared INTEGER/TEXT/REAL and no converter is registered for those. No
+    column anywhere declares `date`/`timestamp`, so sqlite3's built-in
+    converters for those (the one behaviour PARSE_DECLTYPES turns on for
+    free) cannot fire either. Verified 2026-07-27.
+    """
+    global _json_codec_registered
+    if _json_codec_registered:
+        return
+    sqlite3.register_converter("JSON", json.loads)
+    sqlite3.register_adapter(list, json.dumps)
+    sqlite3.register_adapter(dict, json.dumps)
+    _json_codec_registered = True
+
+
 # Parity with PgMemoryStore's supersede_atomic operational bounds (engineering,
 # not algorithmic). Bounded optimistic-concurrency rebase retry; defensive
 # recursion cap on the acyclic chain walk.
@@ -88,7 +119,12 @@ class SqliteMemoryStore(
         path = db_path or ":memory:"
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        raw = sqlite3.connect(path, check_same_thread=False)
+        _register_json_codec()
+        raw = sqlite3.connect(
+            path,
+            check_same_thread=False,
+            detect_types=sqlite3.PARSE_DECLTYPES,
+        )
         raw.row_factory = sqlite3.Row
         raw.execute("PRAGMA journal_mode=WAL")
         raw.execute("PRAGMA foreign_keys=ON")

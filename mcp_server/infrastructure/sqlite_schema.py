@@ -8,6 +8,8 @@ Pure DDL — no connection management.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.sqlite_schema_wiki import get_wiki_ddl
+
 # ── Core Tables ───────────────────────────────────────────────────────────
 
 MEMORIES_DDL = """
@@ -408,6 +410,11 @@ def get_all_ddl() -> list[str]:
         USER_MOOD_DDL,
         USER_MOOD_SEED_DDL,
         *INDEXES_DDL,
+        # The wiki schema (issue #206). Every statement is CREATE ... IF NOT
+        # EXISTS and _init_schema runs on every store construction, so an
+        # existing database gains these tables on next open — that IS the
+        # migration, no back-compat shim.
+        *get_wiki_ddl(),
     ]
 
 

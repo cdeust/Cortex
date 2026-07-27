@@ -67,14 +67,16 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # net +29 cause as the two entries above).
     ("infrastructure/pg_store.py", 864),
     # SQLite parity of the anchor transfer (same transactional rationale).
-    # Shifted 389->440->447->493 (M-D3, then #169 added _fts_augment /
-    # _migrate_fts_code_tokenize / unconditional embedding_model stamp above it).
-    ("infrastructure/sqlite_store.py", 493),
+    # Shifted 389->440->447->493->529 (M-D3, then #169 added _fts_augment /
+    # _migrate_fts_code_tokenize / unconditional embedding_model stamp above it;
+    # then #206 added _register_json_codec above the class, +36 lines).
+    ("infrastructure/sqlite_store.py", 529),
     # SQLite parity: canonical bump_heat_raw / update_memories_heat_batch.
-    # Shifted 419->470->477->523, 463->534->541->587 for the same reasons
-    # (#169's _stamp_embedding_model / select_fallback_embeddings / reembed_memory).
-    ("infrastructure/sqlite_store.py", 523),
-    ("infrastructure/sqlite_store.py", 587),
+    # Shifted 419->470->477->523->559, 463->534->541->587->623 for the same
+    # reasons (#169's _stamp_embedding_model / select_fallback_embeddings /
+    # reembed_memory, then #206's _register_json_codec).
+    ("infrastructure/sqlite_store.py", 559),
+    ("infrastructure/sqlite_store.py", 623),
     # Homeostatic fold (amortized ~once/month per (domain, write_class)).
     # M-D3 (7.1, 2026-07-10): split out of homeostatic.py into
     # homeostatic_apply.py (§4.1 500-line file cap — stratification by

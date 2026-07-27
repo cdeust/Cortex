@@ -109,7 +109,14 @@ def _fetch_claims(conn, memory_id: int | None, limit: int) -> list[dict]:
             "SELECT id, memory_id, text, claim_type, entity_ids, "
             "supersedes, extracted_at "
             "FROM wiki.claim_events "
-            "WHERE entity_ids = '{}' OR entity_ids IS NULL "
+            # "unresolved" = no entities linked yet. Expressed through
+            # array_length rather than the PostgreSQL empty-array literal
+            # '{}': that literal never matches SQLite's JSON '[]', so this
+            # query returned zero rows on that backend and resolve was a
+            # permanent no-op (issue #206). COALESCE covers both the empty
+            # array (array_length -> NULL on PostgreSQL, 0 on SQLite) and
+            # a NULL column, identically on both.
+            "WHERE COALESCE(array_length(entity_ids, 1), 0) = 0 "
             "ORDER BY id LIMIT %s"
         )
         params = (limit,)
