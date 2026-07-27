@@ -22,10 +22,10 @@
 # Source: docs/program/phase-5-pool-admission-design.md §7.
 
 # Base image pinned by digest so a rebuild cannot silently pick up a
-# different python:3.13-slim. Digest resolved from the multi-arch manifest
+# different python:3.14-slim. Digest resolved from the multi-arch manifest
 # list, so it stays correct on both amd64 and arm64.
-#   source: registry-1.docker.io/v2/library/python/manifests/3.13-slim,
-#           docker-content-digest header, fetched 2026-07-27.
+#   source: registry-1.docker.io/v2/library/python/manifests/3.14-slim,
+#           docker-content-digest header, re-verified 2026-07-28.
 # Refresh: Dependabot's `docker` ecosystem (.github/dependabot.yml) opens a
 # PR when the tag moves; do not hand-edit without re-fetching the header.
 FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS builder
@@ -37,6 +37,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install into a virtualenv at a fixed, version-free path instead of the
+# interpreter's own site-packages. The runtime stage then copies exactly one
+# directory and no COPY anywhere names the Python version, so a base-image
+# bump touches only the two FROM lines.
+# Root cause this fixes: the runtime stage used to copy
+# /usr/local/lib/python3.13/site-packages by literal path. Dependabot bumps
+# the FROM tag but cannot know that path exists, so every bump failed the
+# blocking Docker Smoke job with `"/usr/local/lib/python3.13/site-packages":
+# not found` — observed on #211 (run 30297632187, 3.13 -> 3.14). Bumping the
+# literal to 3.14 would fix this PR and re-break the next one.
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 COPY pyproject.toml README.md ./
 COPY mcp_server ./mcp_server
@@ -68,8 +81,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 10001 cortex
 
-COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# One version-free path carries both the installed packages and the console
+# scripts (`hypermnesia-mcp`, `cortex-doctor`) that used to come from
+# /usr/local/bin. The venv's bin/python is a symlink into /usr/local, which
+# resolves here because this stage pins the same digest as the builder.
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 USER cortex
 WORKDIR /home/cortex
