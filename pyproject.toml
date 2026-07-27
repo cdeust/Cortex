@@ -146,6 +146,14 @@ pythonpath = ["."]
 # conflict with pytest-asyncio's non-main-thread test runs.
 timeout = 300
 timeout_method = "thread"
+# Fail closed when a plugin the config DEPENDS ON is absent. Without this,
+# an environment missing pytest-timeout only emits
+# `PytestConfigWarning: Unknown config option: timeout` and runs on with no
+# per-test timeout at all — the protection above silently evaporates and a
+# hang stalls the run indefinitely instead of failing at 300s (observed
+# 2026-07-28 while reproducing issue #219: a local run hung >600s because
+# the plugin was not installed).
+required_plugins = ["pytest-timeout", "pytest-asyncio"]
 markers = [
     "invariants: Phase 0.3+ testable invariant predicates (I1/I2/I3/I4 and parity tests)",
 ]

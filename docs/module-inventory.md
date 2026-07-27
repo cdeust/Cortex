@@ -192,7 +192,12 @@ Run the measurement command in the header to get a current file listing.
 
 ## infrastructure/ — All I/O
 
-- `config.py` — Centralized path constants via pathlib
+- `config.py` — Centralized path constants via pathlib. The root (`CLAUDE_DIR`,
+  default `~/.claude`) is overridable via `CORTEX_CLAUDE_DIR`; every other
+  constant derives from it, so that one variable redirects the SQLite store,
+  the wiki tree, profiles, and the session log together. This is the seam the
+  test suite uses to bind to a throwaway tree (issue #219) — constants are
+  bound at import time, so the variable must be set before the first import
 - `file_io.py` — Generic JSON/text read/write operations
 - `profile_store.py` — profiles.json persistence
 - `session_store.py` — session-log.json persistence

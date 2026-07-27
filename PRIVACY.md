@@ -26,7 +26,9 @@ like any other memory (locally) — avoid doing so.
 - **SQLite (default — Claude Code plugin installs, Claude Desktop `.mcpb`
   connector, Claude Cowork, and other sandboxed launches):** all memories,
   entities, the knowledge graph, and profiles are stored in a single local
-  database file at `~/.claude/methodology/memory.db`. If a configured
+  database file at `~/.claude/methodology/memory.db` (setting
+  `CORTEX_CLAUDE_DIR` relocates this root, and everything derived from it, to
+  a directory you choose). If a configured
   PostgreSQL instance is unreachable, Cortex falls back to this SQLite store
   with an explicit warning in the logs. Nothing is uploaded.
 - **PostgreSQL + pgvector (opt-in — `install-plugin.sh --postgres`, large

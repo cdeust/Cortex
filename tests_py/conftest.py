@@ -1,8 +1,12 @@
-"""Global test configuration — isolate tests on cortex_test database.
+"""Global test configuration — isolate tests from every real-data root.
 
 Handler/integration tests hit PostgreSQL when available. When PG is not
 available (CI without PG, sandboxed environments), falls back to SQLite
 with per-test isolation via temporary DB files.
+
+Isolation has three roots, and ALL THREE are redirected unconditionally
+before any `mcp_server` module is imported (see `_redirect_real_data_roots`):
+the PostgreSQL URL, the SQLite file, and the `~/.claude` filesystem tree.
 """
 
 import asyncio
@@ -12,6 +16,53 @@ import sys
 import tempfile
 
 import pytest
+
+# ── Redirect every real-data root — MUST run before importing mcp_server ──
+#
+# INCIDENT 2026-07-28 (issue #219): isolation used to be conditional on
+# PostgreSQL being *unavailable*. On a developer machine where PG is
+# reachable AND the SQLite backend is selected, the `if not _USE_PG:` block
+# below never ran, so `settings.DB_PATH` resolved to the operator's real
+# `~/.claude/methodology/memory.db` (reproduced 2026-07-28: a probe test
+# printed `binds to REAL DB = True`). The suite DELETEs every table between
+# tests, so running it locally wiped that store to 0 rows.
+#
+# The filesystem was worse, and unconditional: `consolidate.handler()` calls
+# `write_dashboards(WIKI_ROOT)`, which walked the developer's real wiki
+# (16,234 files — this is the "suite hangs at 58%" symptom, a slow scan, not
+# a deadlock) and WROTE generated pages into
+# `~/.claude/methodology/wiki/_dashboards/`.
+#
+# Both roots derive from `config.CLAUDE_DIR`, so one redirection closes both.
+# `mcp_server.infrastructure.config` binds its constants at import time and
+# importers do `from ... import METHODOLOGY_DIR` (a value copy, 40 modules),
+# so the env var must be set before the first import — conftest.py is loaded
+# before any test module, and nothing above this point imports mcp_server.
+_TEST_CLAUDE_DIR = tempfile.mkdtemp(prefix="cortex_test_claude_")
+
+
+def _redirect_real_data_roots() -> str:
+    """Point the filesystem root and the SQLite store at a throwaway tree.
+
+    Returns the isolated SQLite path. Unconditional by construction: an
+    exported `CORTEX_MEMORY_DB_PATH` / `CORTEX_MEMORY_SQLITE_FALLBACK_PATH`
+    is OVERWRITTEN, not respected — the backend a developer selects is their
+    choice, the physical location the suite writes to is not.
+    """
+    os.environ["CORTEX_CLAUDE_DIR"] = _TEST_CLAUDE_DIR
+    methodology = os.path.join(_TEST_CLAUDE_DIR, "methodology")
+    os.makedirs(methodology, exist_ok=True)
+    sqlite_path = os.path.join(methodology, "memory.db")
+    # Handlers read the deprecated DB_PATH; the store reads
+    # SQLITE_FALLBACK_PATH. Both must point at the throwaway file or the
+    # unset one falls back to the (now redirected, but explicit is better)
+    # default. source: memory_config.py:48-49.
+    os.environ["CORTEX_MEMORY_DB_PATH"] = sqlite_path
+    os.environ["CORTEX_MEMORY_SQLITE_FALLBACK_PATH"] = sqlite_path
+    return sqlite_path
+
+
+_ISOLATED_SQLITE_PATH = _redirect_real_data_roots()
 
 # On Windows asyncio defaults to ProactorEventLoop, whose GC-time teardown
 # emits a noisy "Event loop is closed" PytestUnraisableExceptionWarning that
@@ -215,6 +266,53 @@ def _guard_against_populated_db() -> None:
         )
 
 
+def _guard_against_real_data_roots() -> None:
+    """Refuse to run if any resolved root still points at real user data.
+
+    `_redirect_real_data_roots` sets the env vars, but the values that
+    actually matter are the ones `mcp_server` RESOLVED from them — an import
+    that happened too early, or a future edit that moves the redirection
+    below the first import, would leave the constants bound to the real
+    `~/.claude` while the env vars look correct. This checks the resolved
+    values, so it cannot be fooled by a correct-looking environment.
+
+    Fail-closed and unconditional: there is no override. A suite that DELETEs
+    every table between tests and rewrites the wiki has no safe way to run
+    against a real tree.
+
+    source: issue #219 — the previous isolation was conditional and its
+    failure was silent for as long as it took to notice a 0-row store.
+    """
+    from mcp_server.infrastructure.config import CLAUDE_DIR, WIKI_ROOT
+    from mcp_server.infrastructure.memory_config import get_memory_settings
+
+    settings = get_memory_settings()
+    real_root = os.path.realpath(os.path.expanduser("~/.claude"))
+    isolated = os.path.realpath(_TEST_CLAUDE_DIR)
+
+    offenders = [
+        (name, value)
+        for name, value in (
+            ("CLAUDE_DIR", str(CLAUDE_DIR)),
+            ("WIKI_ROOT", str(WIKI_ROOT)),
+            ("MemorySettings.DB_PATH", settings.DB_PATH),
+            ("MemorySettings.SQLITE_FALLBACK_PATH", settings.SQLITE_FALLBACK_PATH),
+        )
+        if not os.path.realpath(os.path.expanduser(value)).startswith(isolated)
+    ]
+    if offenders:
+        detail = "\n".join(f"    {name} -> {value}" for name, value in offenders)
+        pytest.exit(
+            "REFUSING to run: test isolation is not in effect. These roots "
+            f"still resolve outside the throwaway tree {isolated}:\n{detail}\n"
+            f"(real user root: {real_root}). The suite DELETEs every table "
+            "between tests and regenerates wiki dashboards — running it "
+            "against a real tree destroys data (issue #219). Ensure "
+            "_redirect_real_data_roots() runs before any mcp_server import.",
+            returncode=2,
+        )
+
+
 def _pg_available() -> bool:
     """Check if PostgreSQL is reachable."""
     try:
@@ -228,16 +326,40 @@ def _pg_available() -> bool:
 
 
 _guard_against_populated_db()
+_guard_against_real_data_roots()
 _USE_PG = _pg_available()
 
-# When PG isn't available, force SQLite backend with a temp dir
+# The SQLite PATHS are already isolated unconditionally by
+# _redirect_real_data_roots() above. Only the backend SELECTION is decided
+# here: with no PG to talk to, the suite must run on SQLite. When PG is
+# reachable the caller's choice of backend stands — an exported
+# CORTEX_MEMORY_STORE_BACKEND=sqlite is honored, and is now isolated too.
 if not _USE_PG:
-    _SQLITE_TEST_DIR = tempfile.mkdtemp(prefix="cortex_test_")
-    _sqlite_db = os.path.join(_SQLITE_TEST_DIR, "test.db")
     os.environ["CORTEX_MEMORY_STORE_BACKEND"] = "sqlite"
-    os.environ["CORTEX_MEMORY_SQLITE_FALLBACK_PATH"] = _sqlite_db
-    # Handlers pass settings.DB_PATH to MemoryStore(); override it too
-    os.environ["CORTEX_MEMORY_DB_PATH"] = _sqlite_db
+
+
+def _effective_backend() -> str:
+    """The store the suite actually writes to — "postgresql" or "sqlite".
+
+    `_USE_PG` answers a different question: "is PostgreSQL reachable". The
+    two diverge whenever a developer exports
+    `CORTEX_MEMORY_STORE_BACKEND=sqlite` on a machine where PG is also up —
+    the suite then writes to SQLite while every `if not _USE_PG:` branch
+    treats the run as PostgreSQL, so the between-test SQLite purge never
+    runs and rows leak from one test into the next.
+
+    Resolution mirrors `memory_store._construct_store`: an explicit backend
+    wins; "auto" (the default) means PostgreSQL when reachable and SQLite
+    otherwise. source: mcp_server/infrastructure/memory_store.py:164-214.
+    """
+    explicit = os.environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip().lower()
+    if explicit in ("sqlite", "postgresql"):
+        return explicit
+    return "postgresql" if _USE_PG else "sqlite"
+
+
+_BACKEND = _effective_backend()
+_USE_PG_STORE = _BACKEND == "postgresql"
 
 
 # ── Tables to clean between tests (order matters for FK constraints) ─────
@@ -281,7 +403,7 @@ _TABLES_TO_CLEAN = [
 
 def _get_raw_connection():
     """Get a raw psycopg connection to the test database."""
-    if not _USE_PG:
+    if not _USE_PG_STORE:
         return None
     try:
         import psycopg
@@ -300,7 +422,9 @@ def _clean_all_tables(conn) -> None:
             pass
 
 
-_SQLITE_DB_PATH = os.environ.get("CORTEX_MEMORY_SQLITE_FALLBACK_PATH", "")
+# Always the throwaway file from _redirect_real_data_roots() — never a path
+# inherited from the developer's environment (issue #219).
+_SQLITE_DB_PATH = _ISOLATED_SQLITE_PATH
 
 
 def _clean_sqlite_via_singleton() -> bool:
@@ -445,7 +569,7 @@ def _test_isolation():
     connections.
     """
     # Pre-test: clean with existing connections, then reset
-    if not _USE_PG:
+    if not _USE_PG_STORE:
         _clean_sqlite_store()
 
     conn = _get_raw_connection()
@@ -457,7 +581,7 @@ def _test_isolation():
     yield
 
     # Post-test: clean again, then reset
-    if not _USE_PG:
+    if not _USE_PG_STORE:
         _clean_sqlite_store()
 
     _reset_all_singletons()
