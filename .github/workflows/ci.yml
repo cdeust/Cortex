@@ -114,6 +114,21 @@ jobs:
           TRANSFORMERS_OFFLINE: "1"
         run: pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing
 
+      # The advertised test count is the one claim the static gate cannot check
+      # without collecting the suite, so it is checked in the job that already
+      # has the suite installed. `--collect-only` re-collects (~seconds) rather
+      # than parsing the run above, so the number is the collector's own.
+      - name: Check advertised test count
+        if: matrix.python-version == '3.12'
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+        run: |
+          set -euo pipefail
+          collected="$(pytest --collect-only -q | tail -1 | grep -oE '^[0-9]+')"
+          echo "collected ${collected} tests"
+          python scripts/check_doc_claims.py --test-count "${collected}"
+
       - name: Upload coverage
         if: matrix.python-version == '3.12'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -298,6 +313,14 @@ jobs:
 
       - name: Check linting
         run: ruff check .
+
+      # Advertised counts (tools, references, mechanisms, version) must match
+      # the repository. Runs here — on every push and PR — because doc drift is
+      # introduced at commit time, not at release time: on 2026-07-27 README,
+      # CONTRIBUTING, CLAUDE.md and the MCPB manifest each advertised a
+      # different tool count, and nothing failed. Static only (no imports).
+      - name: Check documentation claims
+        run: python scripts/check_doc_claims.py
 
   typecheck:
     name: Type Check

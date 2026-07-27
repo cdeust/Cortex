@@ -81,9 +81,8 @@ schema = {
         "domains to detect persistent behavioral features. Use this when "
         "facing an unfamiliar pattern and you want a behavioral "
         "explanation. Distinct from `query_methodology` (full profile, not the "
-        "interpretability internals), `get_methodology_graph` (graph "
-        "for visualization, no per-feature inspection), and "
-        "`list_domains` (overview, no analysis). Read-only on "
+        "interpretability internals) and `list_domains` (overview, no "
+        "analysis). Read-only on "
         "profiles.json. Latency <100ms. Returns mode-specific JSON: "
         "{dictionary | graph | persona | comparison}."
     ),

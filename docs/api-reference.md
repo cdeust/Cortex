@@ -1,6 +1,6 @@
 # API Reference — MCP Tool Schemas
 
-This document describes the input schemas, response formats, and error codes for all 34 MCP tools exposed by Cortex.
+This document describes the input schemas, response formats, and error codes for the tools detailed below. It is a schema reference, not the catalogue: the complete surface is 52 standalone tools (55 with the optional upstream integrations), listed with tier and target latency in [`mcp-tools.md`](mcp-tools.md).
 
 ## Protocol
 
@@ -91,31 +91,10 @@ Incremental profile update after a session ends. Appends to the rolling session 
 
 ---
 
-### `get_methodology_graph`
-
-Returns graph data for 3D visualization of the methodology map.
-
-**Input Schema:**
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `domain` | string | No | Focus on a specific domain |
-
-**Target Latency:** <100ms
-
----
-
-### `open_visualization`
-
-Launches the 3D methodology map in the default browser.
-
-**Input Schema:**
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `domain` | string | No | Focus domain for initial view |
-
----
+> **Moved out of Cortex.** `get_methodology_graph` and `open_visualization`
+> were extracted to the companion [cortex-viz](https://github.com/cdeust/cortex-viz)
+> MCP in v3.21.0 and are no longer registered here. Install cortex-viz to get
+> them back; their schemas are documented in that repository.
 
 ### `explore_features`
 

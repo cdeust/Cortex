@@ -20,7 +20,7 @@ coding write gates, causal graphs, and intent-aware retrieval.
 
 - Install (dev): `uv pip install -e ".[dev]"` — SQLite backend: `".[dev,sqlite]"`
 - Environment preflight: `python -m mcp_server.doctor` (backend-aware check list, fix message per check)
-- Tests: `pytest` (full suite, 5571 tests) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`
+- Tests: `pytest` (full suite, 5587 tests) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`
 - Lint BEFORE every commit: `ruff check && ruff format --check` — the CI enforces **both**; passing only `ruff check` is not enough.
 - Release gate benchmarks (isolated, ephemeral container — the only source
   of truth for pre-tag/floor decisions): `benchmarks/reproduce.sh`. Do NOT
@@ -56,8 +56,8 @@ separate **cortex-viz** MCP (reads this same store read-only).
 - @docs/adr/ — Architecture Decision Records (013 = thermodynamic memory
   model, 014 = biological mechanisms, 012 = Python migration from Node.js)
 - @docs/module-inventory.md — per-layer module catalogue + dependency rules
-- @docs/mcp-tools.md — the 51 standalone + 3 conditionally-registered MCP
-  tools, by tier, with purpose and target latency
+- @docs/mcp-tools.md — the 52 standalone tools + 3 conditionally-registered
+  MCP tools, by tier, with purpose and target latency
 - @PRIVACY.md — storage truth by launch surface (lines 26–38): SQLite is
   the default for plugin installs and `.mcpb`/Cowork; PostgreSQL is the
   opt-in upgrade (`install-plugin.sh --postgres` / configured

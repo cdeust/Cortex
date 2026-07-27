@@ -1,16 +1,18 @@
 # Contributing to Cortex
 
 Thanks for considering a contribution. Cortex is a persistent memory
-engine built on **23 biological mechanisms** with a **72-reference bibliography**
-backing the algorithms. Every change is held to that bar.
+engine built on **36 neuroscience-grounded mechanisms** with a
+**97-reference bibliography** ([`docs/papers/bibliography.md`](docs/papers/bibliography.md),
+the canonical list) backing the algorithms. Every change is held to that bar.
 
 ---
 
 ## What this project is
 
-A Python 3.10+ MCP server with **43 standalone tools** (46 with the optional
+A Python 3.10+ MCP server with **52 standalone tools** (55 with the optional
 automatised-pipeline + prd-spec-generator integrations) and **9 automatic
-hooks**, persisting to PostgreSQL + pgvector. Implements rate-distortion forgetting,
+hooks**, persisting to a local SQLite store by default or to PostgreSQL +
+pgvector when configured. Implements rate-distortion forgetting,
 predictive-coding write gating, retrieval-induced reconsolidation, pattern
 separation, sleep-cycle consolidation, emotional-valence weighting, and
 more. See [README](README.md) for the full architecture and benchmark
@@ -21,23 +23,24 @@ results (LongMemEval Recall@10 = 98.4%, LoCoMo Recall@10 = 94.2%, BEAM-10M
 
 ## Dev setup
 
-**Prerequisites:** Python 3.10+, PostgreSQL 17 + pgvector extension,
-`uvx` (`pip install uv` or `pipx install uv`).
+**Prerequisites:** Python 3.10+ and `uvx` (`pip install uv` or `pipx install uv`).
+The default store is a local SQLite file — nothing to provision. PostgreSQL 17
++ pgvector is only needed to run the PostgreSQL-backed integration tests.
 
 ```bash
 git clone https://github.com/cdeust/Cortex.git
 cd Cortex
 
-# Install with dev + benchmark extras
+# Install with dev + benchmark extras (add `postgresql` for the PG backend)
 pip install -e ".[postgresql,benchmarks,dev]"
 
-# Or use the setup script (handles PostgreSQL + pgvector + DB init)
+# Optional: the setup script provisions PostgreSQL + pgvector and inits the DB
 bash scripts/setup.sh        # macOS / Linux
 
 # Verify everything is wired
 uvx --python 3.13 --from "hypermnesia-mcp[postgresql]" cortex-doctor
 
-# Run tests (5571 tests under tests_py/)
+# Run tests (5587 tests under tests_py/)
 pytest
 
 # Run a benchmark
@@ -57,7 +60,7 @@ python benchmarks/longmemeval/run_benchmark.py --variant s
 
 ## Adding a biological mechanism
 
-Cortex's twenty mechanisms are not metaphors — each maps to a specific
+Cortex's mechanisms are not metaphors — each maps to a specific
 neuroscience finding with a specific algorithmic implementation.
 A new mechanism PR must include:
 
@@ -99,7 +102,9 @@ reranker. Changes here:
 
 ## Coding standards (excerpt)
 
-Standard Python style (`black`, `ruff`, `mypy --strict`) plus
+Standard Python style, enforced in CI by `ruff format --check .` and
+`ruff check .` (ruff pinned at 0.15.20 in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml)), plus
 project-specific rules:
 
 - **No `Any`** in production code. Use `Protocol` or generic typing.
@@ -108,7 +113,12 @@ project-specific rules:
 - **No mutable default arguments.** No globals except for read-once
   configuration objects.
 - **No bare `except:`.** Catch the specific exception you mean.
-- **Type-checked at `--strict`.** `mypy --strict src/cortex/` must pass.
+- **Type-checked under a ratchet.** `pyright` (pinned 1.1.410) runs over
+  `mcp_server/` and `scripts/check_pyright_ratchet.py` fails the build if any
+  rule's diagnostic count rises above its floor in
+  [`typecheck-baseline.json`](typecheck-baseline.json). New code must not add
+  diagnostics; the floors only come down. Remediation plan:
+  [`docs/provenance/pyright-remediation-plan.md`](docs/provenance/pyright-remediation-plan.md).
 - **§4.1 File ≤500 lines, §4.2 function ≤50 lines.**
 
 The full standard lives in
@@ -119,27 +129,51 @@ The full standard lives in
 ## Testing
 
 ```bash
-pytest                              # full suite (5571 tests)
+pytest                              # full suite (5587 tests)
 pytest tests_py/core                # core (pure business logic) only
 pytest tests_py/integration         # PostgreSQL-backed integration
 pytest tests_py/benchmarks -k locomo # subset
 pytest -x --ff                      # stop on first fail, run failures first
 ```
 
-Tests run against a local PostgreSQL instance. CI provisions a fresh DB
-per run.
+The suite runs on the default SQLite store; `tests_py/integration` needs a
+local PostgreSQL instance with pgvector. CI provisions a fresh database per
+run and additionally runs the suite against the SQLite backend and on Windows.
+
+### The testing policy (mandatory)
+
+**Every change that adds or alters externally observable behaviour must arrive
+with tests for that behaviour, in the same pull request.** Specifically:
+
+- **New functionality** — major or minor — ships with tests in the automated
+  suite. A new MCP tool carries a contract test; a new mechanism carries the
+  empirical validation and the ablation described above.
+- **A bug fix carries a regression test that fails on the pre-fix code.** If
+  the test passes without the fix, it does not pin the bug.
+- **Every failure path is tested like a happy path**: each error arm, fallback
+  and degraded mode asserts its observable effect, including the signal it
+  emits — not only a downstream side effect.
+- Changes that alter no behaviour (formatting, comments, documentation) are
+  exempt; say so in the PR description.
+
+This is checked in review: a PR that adds behaviour without tests is sent back
+rather than merged with a promise to follow up. Ask of each new test "what
+mutation would this fail to catch?" — `scripts/mutation_check.sh` answers it
+mechanically for the modules it is scoped to.
 
 ---
 
 ## Adding an MCP tool
 
-43 standalone tools currently (46 with the optional upstream integrations). Adding a new one:
+52 standalone tools currently (55 with the optional upstream integrations). Adding a new one:
 
 1. **Define the JSON schema** in the tool's module-level decorator.
 2. **Implement the handler** following the `BaseTool` protocol.
 3. **Add to the tool registry** at the canonical registration site.
-4. **Document in `docs/MCP-TOOLS.md`** with the tool's purpose, inputs,
-   outputs, and an example call.
+4. **Document in [`docs/mcp-tools.md`](docs/mcp-tools.md)** with the tool's
+   purpose, tier and target latency, and update the standalone tool count
+   there — `tests_py/test_main.py::test_standalone_baseline_is_52_tools` pins
+   it, and `scripts/check_doc_claims.py` fails the build if the docs disagree.
 5. **Add a unit test** for the tool's contract.
 6. **Add an integration test** if the tool touches the database.
 
@@ -153,7 +187,8 @@ per run.
   is not a citation.
 - Don't introduce a heavy ML model dependency that breaks the
   runs-on-your-machine guarantee.
-- Don't bypass `mypy --strict`. The type system is the contract.
+- Don't raise a pyright ratchet floor to make the build pass. The type system
+  is the contract; the floors only come down.
 - Don't relax a test that fails on your branch. The test exists for a
   reason; understand the reason before changing it.
 
@@ -169,10 +204,14 @@ This project follows [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
 See [`SECURITY.md`](SECURITY.md). The memory engine handles potentially
 sensitive user data (PII in conversation transcripts); any data-exposure
-or injection issue is high-priority. The `pre-tool-secret-shield` hook
-already gates `.env`, `.aws/credentials`, `*.pem`, `*.key`, and shell
-history — but new code paths that touch the filesystem need similar
-review.
+or injection issue is high-priority. In-repo, the defence is
+[`mcp_server/shared/redaction.py`](mcp_server/shared/redaction.py), which
+masks credentials in URLs and scrubs well-known secret shapes before content
+is stored — new code paths that capture or persist text must route through
+it. (The `pre-tool-secret-shield` file gate some maintainers run is part of
+their local agent tooling, not of Cortex; do not rely on it.) The security
+argument, its trust boundaries and its limits are in
+[`docs/ASSURANCE-CASE.md`](docs/ASSURANCE-CASE.md).
 
 ---
 

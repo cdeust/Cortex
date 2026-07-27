@@ -8,9 +8,10 @@
   <a href="https://github.com/cdeust/Cortex/actions/workflows/ci.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/tests-5571_passing-brightgreen.svg" alt="5571 passing">
+  <img src="https://img.shields.io/badge/tests-5587_passing-brightgreen.svg" alt="5587 passing">
   <img src="https://img.shields.io/badge/references-97_papers-orange.svg" alt="References">
-  <img src="https://img.shields.io/badge/version-4.15.0-brightgreen.svg" alt="Version 4.15.0">
+  <img src="https://img.shields.io/badge/version-4.16.0-brightgreen.svg" alt="Version 4.16.0">
+  <a href="https://www.bestpractices.dev/projects/13836"><img src="https://www.bestpractices.dev/projects/13836/badge" alt="OpenSSF Best Practices"></a>
 </p>
 
 <p align="center">
@@ -41,7 +42,7 @@ Cortex is a persistent memory engine for Claude built on computational neuroscie
 
 It runs **entirely on your machine** — a local SQLite database by default (zero setup, no services to install), or PostgreSQL + pgvector when you want it. A 22 MB embedding model, no LLM in the retrieval loop, no data leaving localhost.
 
-> **36 neuroscience mechanisms · 50 memory tools · 9 lifecycle hooks · a self-curating, continuously-groomed per-project wiki — all local, all open-source.**
+> **36 neuroscience mechanisms · 52 memory tools · 9 lifecycle hooks · a self-curating, continuously-groomed per-project wiki — all local, all open-source.**
 
 ---
 
@@ -72,7 +73,7 @@ bash <plugin-dir>/scripts/install-plugin.sh --postgres   # <plugin-dir> = the in
 ```
 In one line: PostgreSQL adds connection-pooled concurrency (two `psycopg_pool` latency classes), server-side PL/pgSQL WRRF fusion, and pgvector HNSW ANN indexing — worth it for very large stores or a shared team database (see [Under the Hood](#under-the-hood)); the memory tools and retrieval contract are identical on both backends. After upgrading, run `/cortex-setup-project` once — it handles pgvector setup, database creation, the embedding-model pre-cache, profile building, codebase seeding, and hook registration.
 
-**What SQLite mode does *not* do (honest disclosure):** the WRRF fusion runs in-process instead of server-side, without HNSW ANN indexing (fine at personal-store scale, slower at very large scale); and three PostgreSQL-only hook enrichments degrade to silent no-ops — cross-agent team-decision injection (`agent_briefing`, plus the banner's Team Decisions section), file-based preemptive context (`preemptive_context`), and pipeline symbol heat-bumps (`pipeline_impact_bump`). Session-start banners, auto-recall injection, auto-capture, checkpoints, and all 50 memory tools work on both backends.
+**What SQLite mode does *not* do (honest disclosure):** the WRRF fusion runs in-process instead of server-side, without HNSW ANN indexing (fine at personal-store scale, slower at very large scale); and three PostgreSQL-only hook enrichments degrade to silent no-ops — cross-agent team-decision injection (`agent_briefing`, plus the banner's Team Decisions section), file-based preemptive context (`preemptive_context`), and pipeline symbol heat-bumps (`pipeline_impact_bump`). Session-start banners, auto-recall injection, auto-capture, checkpoints, and all 52 memory tools work on both backends.
 
 Verify any install:
 ```bash
@@ -116,13 +117,13 @@ The server is published on PyPI as **`hypermnesia-mcp`** (registry name `io.gith
 
 ## Use with other MCP hosts
 
-The MCP server is host-agnostic: any host that can launch a stdio process gets the full tool surface — `remember`, `recall`, the wiki, navigation, consolidation, all 50 tools — on the default local SQLite store. What is **not** portable are the 9 lifecycle hooks, which are Claude Code plugin machinery.
+The MCP server is host-agnostic: any host that can launch a stdio process gets the full tool surface — `remember`, `recall`, the wiki, navigation, consolidation, all 52 tools — on the default local SQLite store. What is **not** portable are the 9 lifecycle hooks, which are Claude Code plugin machinery.
 
 **What works where (honest matrix):**
 
 | Capability | Claude Code (plugin) | Other MCP hosts (Gemini CLI, Codex, Cursor, Windsurf, VS Code, Agents SDK) |
 |---|---|---|
-| All 50 memory tools (`remember`, `recall`, wiki, navigation, consolidation, triggers, rules) | ✅ | ✅ |
+| All 52 memory tools (`remember`, `recall`, wiki, navigation, consolidation, triggers, rules) | ✅ | ✅ |
 | SQLite default store / PostgreSQL opt-in | ✅ | ✅ |
 | Auto-capture of significant tool output | ✅ (PostToolUse hook) | ❌ — store explicitly with `remember` |
 | Session-start context injection | ✅ (SessionStart hook) | ❌ — call `recall` / `query_methodology` yourself |
@@ -213,13 +214,13 @@ Cortex needs **no configuration** to run — the SQLite backend is the default a
 
 \* The single-click bundle pins the backend to `sqlite` through the manifest. If you run the server directly (clone / Docker) without setting the variable, the underlying code default is `auto` — it tries PostgreSQL and falls back to SQLite.
 
-That's the entire surface most users touch. Both backends expose the **same 50 memory tools** (53 with the optional automatised-pipeline + prd-spec-generator integrations) and the same retrieval contract; PostgreSQL adds server-side PL/pgSQL fusion and HNSW indexing that pays off at very large scale. Every other knob uses the `CORTEX_MEMORY_` prefix — see `mcp_server/infrastructure/memory_config.py`.
+That's the entire surface most users touch. Both backends expose the **same 52 memory tools** (55 with the optional automatised-pipeline + prd-spec-generator integrations) and the same retrieval contract; PostgreSQL adds server-side PL/pgSQL fusion and HNSW indexing that pays off at very large scale. Every other knob uses the `CORTEX_MEMORY_` prefix — see `mcp_server/infrastructure/memory_config.py`.
 
 ---
 
 ## Examples
 
-A live, end-to-end run on the **SQLite backend** (50 tools registered) — store three memories, recall them by meaning, then check the store. The output is taken from the in-process FastMCP client (recall lists trimmed to the top hit). The harness writes with `force: true` for determinism, and the demo store already held a few earlier memories — so `memory_stats` totals exceed the three inserted here.
+A live, end-to-end run on the **SQLite backend** — store three memories, recall them by meaning, then check the store. The output is taken from the in-process FastMCP client (recall lists trimmed to the top hit). The harness writes with `force: true` for determinism, and the demo store already held a few earlier memories — so `memory_stats` totals exceed the three inserted here.
 
 **1 — Store a memory.** It is stored with a heat score (`force: true` skips the dedup write-gate to keep the demo deterministic; omit it and a near-duplicate would be gated).
 
@@ -418,7 +419,7 @@ cortex:anchor({ content: "We're using event-sourcing. All state changes go throu
 
 Anchored memories get maximum protection — they always survive compaction, no matter what.
 
-> The compaction checkpoint, session-start injection, and the autonomous wiki cycle are **lifecycle hooks** registered by the Claude Code plugin install. The single-click `.mcpb` bundle is a Directory connector — it delivers the 50 memory tools but **no hooks** (the MCPB format carries none). For the automatic session-lifecycle memory (session-start injection, auto-capture, compaction checkpointing, the autonomous wiki cycle), install the Claude Code plugin (see [More options](#getting-started)); the plugin also auto-registers the 3 upstream-integration tools when automatised-pipeline / prd-spec-generator are present (53 total).
+> The compaction checkpoint, session-start injection, and the autonomous wiki cycle are **lifecycle hooks** registered by the Claude Code plugin install. The single-click `.mcpb` bundle is a Directory connector — it delivers the 52 memory tools but **no hooks** (the MCPB format carries none). For the automatic session-lifecycle memory (session-start injection, auto-capture, compaction checkpointing, the autonomous wiki cycle), install the Claude Code plugin (see [More options](#getting-started)); the plugin also auto-registers the 3 upstream-integration tools when automatised-pipeline / prd-spec-generator are present (55 total).
 
 ---
 
@@ -488,7 +489,7 @@ Clean Architecture with strict dependency rules — inner layers never import ou
 | **server/** | MCP tool registration + composition roots | — |
 | **observability/** | Prometheus text-format metrics | 2 |
 
-**Storage:** SQLite by default (a single local file, zero setup) or PostgreSQL 15+ with pgvector (HNSW) and pg_trgm. Both back the same 50 tools and the same WRRF fusion of five signals — vector search, FTS, trigram, heat, recency. On PostgreSQL it runs server-side in PL/pgSQL stored procedures; on SQLite the equivalent fusion runs in-process (vector search included, as the live `memory_stats` `has_vector_search` flag confirms).
+**Storage:** SQLite by default (a single local file, zero setup) or PostgreSQL 15+ with pgvector (HNSW) and pg_trgm. Both back the same 52 tools and the same WRRF fusion of five signals — vector search, FTS, trigram, heat, recency. On PostgreSQL it runs server-side in PL/pgSQL stored procedures; on SQLite the equivalent fusion runs in-process (vector search included, as the live `memory_stats` `has_vector_search` flag confirms).
 
 **Concurrency (PostgreSQL):** `psycopg_pool.ConnectionPool` with two latency classes — `interactive_pool` (min=2, max=8) for recall/remember/anchor, `batch_pool` (min=1, max=2) for consolidate/ingest. Tool handlers run on worker threads via `asyncio.to_thread`; per-tool admission semaphores bound fan-out. Heat is computed at read time by `effective_heat()`, so homeostatic maintenance writes one scalar per domain per run instead of N rows.
 
@@ -524,10 +525,16 @@ Cortex is **local-first**: your memories, conversations, and profiles stay on yo
 ## Development
 
 ```bash
-pytest                    # 3,000+ tests
+pytest                    # 5587 tests
 ruff check .              # Lint
 ruff format --check .     # Format
+python scripts/check_doc_claims.py   # advertised counts must match the repo
 ```
+
+Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) · Who decides and what happens
+if the maintainer stops: [GOVERNANCE.md](GOVERNANCE.md) · Where the project is
+going: [docs/ROADMAP.md](docs/ROADMAP.md) · The security argument and its
+limits: [docs/ASSURANCE-CASE.md](docs/ASSURANCE-CASE.md).
 
 ## License
 
@@ -541,8 +548,9 @@ ecosystem ([zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subag
 [prd-spec-generator](https://github.com/cdeust/prd-spec-generator)).
 
 The neuroscience and information-retrieval algorithms encoded in this
-software are derived from published academic work cited in `docs/science.md`
-and inline in the source via `# source:` annotations (Friston on predictive
+software are derived from published academic work cited in
+[`docs/papers/bibliography.md`](docs/papers/bibliography.md) and inline in the
+source via `# source:` annotations (Friston on predictive
 coding, Anderson & Lebiere on rate-distortion forgetting, Nader et al. on
 retrieval-induced lability, McClelland et al. on consolidation, and others).
 The MIT license covers this implementation; it does not assert ownership over
