@@ -25,7 +25,7 @@
 #           docker-content-digest header, fetched 2026-07-27.
 # Refresh: Dependabot's `docker` ecosystem (.github/dependabot.yml) opens a
 # PR when the tag moves; do not hand-edit without re-fetching the header.
-FROM python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b AS builder
+FROM python:3.14-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30 AS builder
 
 # Node.js 22 LTS
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -51,7 +51,7 @@ RUN python3 -c "from sentence_transformers import SentenceTransformer; \
 
 # ── Runtime ───────────────────────────────────────────────────────────────
 
-FROM python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b
+FROM python:3.14-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30
 
 # System: PostgreSQL 17 + pgvector + git + ripgrep
 RUN apt-get update && apt-get install -y --no-install-recommends \
