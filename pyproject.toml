@@ -74,7 +74,7 @@ codebase = [
     # Pin <1.7 because tree-sitter-language-pack 1.7.0+ changed the Parser
     # API; calls like `parser.parse(...)` raise AttributeError on instances
     # of `builtins.Parser`. Migration to the new API is tracked separately.
-    "tree-sitter-language-pack>=0.24.0,<1.7",
+    "tree-sitter-language-pack>=0.24.0,<1.14",
     "networkx>=3.0",
     # Leiden community detection (Traag et al. 2019) — strict improvement
     # over Louvain. igraph supplies the graph backend leidenalg runs on.
