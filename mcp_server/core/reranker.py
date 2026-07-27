@@ -76,6 +76,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -92,9 +93,40 @@ logger = logging.getLogger(__name__)
 _MODEL_NAME = "ms-marco-MiniLM-L-12-v2"
 _MODEL_FILE = "flashrank-MiniLM-L-12-v2_Q.onnx"
 
+# FlashRank downloads its model with a bare ``requests.get(..., stream=True)``
+# carrying NO timeout (verified by reading the installed 0.2.10
+# ``Ranker._download_model_files``), so a stalled TCP connect blocks the
+# calling thread forever rather than raising -- the ``except Exception``
+# in ``_ensure_reranker`` cannot engage against a hang. That is not
+# hypothetical: CI run 30263190266 (main, Python 3.13, 2026-07-27) hung in
+# ``sock.connect`` inside a recall test until pytest-timeout killed the whole
+# suite at 300s. ``HF_HUB_OFFLINE``/``TRANSFORMERS_OFFLINE`` do not reach
+# FlashRank because it bypasses the ``huggingface_hub`` client entirely, so
+# forbidding the fetch needs its own switch.
+_OFFLINE_ENV = "CORTEX_RERANKER_OFFLINE"
+
 _flashrank_instance: Any = None
 _flashrank_failed: bool = False
 _flashrank_load_error: str | None = None
+
+
+def _offline_requested() -> bool:
+    """True when the caller has forbidden a network fetch of the model.
+
+    Precondition: none.
+    Postcondition: True iff ``$CORTEX_RERANKER_OFFLINE`` is set to
+        anything other than the empty string, "0", "false", or "no"
+        (case- and whitespace-insensitive). Unset means False, so
+        production keeps FlashRank's self-provisioning first-run
+        download that PRIVACY.md documents; only callers that opt in
+        (CI test steps, air-gapped installs) get the strict behavior.
+    """
+    return os.environ.get(_OFFLINE_ENV, "").strip().lower() not in (
+        "",
+        "0",
+        "false",
+        "no",
+    )
 
 
 @dataclass(frozen=True)
@@ -142,6 +174,12 @@ def _ensure_reranker() -> Any:
         searched and the underlying exception — every call thereafter is
         silent (via the ``_flashrank_failed`` flag) to avoid log spam,
         but the state remains introspectable via ``reranker_status()``.
+        When ``$CORTEX_RERANKER_OFFLINE`` is set (see
+        ``_offline_requested``) and the model file is absent, the
+        download is refused and that same failure path is taken —
+        bounding what would otherwise be an unbounded network block,
+        and degrading to first-stage WRRF scores exactly as a corrupted
+        or unreadable cache already does.
     """
     global _flashrank_instance, _flashrank_failed, _flashrank_load_error
     if _flashrank_instance is not None:
@@ -150,6 +188,13 @@ def _ensure_reranker() -> Any:
         return None
     cache = reranker_cache_dir()
     try:
+        if _offline_requested() and not _model_path().is_file():
+            raise FileNotFoundError(
+                f"{_OFFLINE_ENV} is set and the cached model file is absent "
+                f"({_model_path()}); refusing to download it, because "
+                "FlashRank's fetch has no timeout and would block this "
+                "thread indefinitely on a stalled connection"
+            )
         from flashrank import Ranker
 
         _flashrank_instance = Ranker(model_name=_MODEL_NAME, cache_dir=str(cache))

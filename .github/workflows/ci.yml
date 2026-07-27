@@ -80,6 +80,20 @@ jobs:
           path: ~/.cache/huggingface
           key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
 
+      # FlashRank is NOT huggingface_hub. It fetches its ONNX model with a bare
+      # `requests.get(..., stream=True)` carrying no timeout, so HF_HUB_OFFLINE
+      # never reaches it and a stalled connect blocks the thread indefinitely
+      # instead of raising — reranker.py's `except Exception` cannot engage
+      # against a hang. CI run 30263190266 (main, Python 3.13, 2026-07-27) hung
+      # in `sock.connect` inside a recall test until pytest-timeout killed the
+      # whole suite at 300s, while every other leg happened to download fine.
+      # Cache the model so the fetch happens once, not once per leg.
+      - name: Cache FlashRank reranker model
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/flashrank
+          key: ${{ runner.os }}-flashrank-ms-marco-MiniLM-L-12-v2
+
       - name: Install dependencies
         run: pip install -e ".[dev,postgresql,codebase]"
 
@@ -99,12 +113,29 @@ jobs:
           echo "HF pre-download failed after 5 attempts" >&2
           exit 1
 
-      # Offline: the model is already cached by the step above, so tests must never
-      # reach out to huggingface.co mid-suite — deterministic and flake-free.
+      # Same retry-and-fail-loudly shape as the step above, for the reranker.
+      # Deliberately runs WITHOUT CORTEX_RERANKER_OFFLINE: this is the one place
+      # allowed to download the model, so that the test steps below never can.
+      # `ensure_reranker_loaded` reports the load state instead of degrading
+      # silently, so a failed fetch fails this step rather than surfacing later
+      # as first-stage-only recall scores (the 2026-07-10 FlashRank incident).
+      - name: Pre-download reranker model
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from mcp_server.core.reranker import ensure_reranker_loaded as e; s = e(); assert s.state == 'loaded', s" && exit 0
+            echo "FlashRank pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "FlashRank pre-download failed after 5 attempts" >&2
+          exit 1
+
+      # Offline: both models are already cached by the steps above, so tests must
+      # never reach out to huggingface.co mid-suite — deterministic and flake-free.
       - name: Run tests
         env:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
+          CORTEX_RERANKER_OFFLINE: "1"
         run: pytest --tb=short -q
 
       - name: Run tests with coverage
@@ -112,6 +143,7 @@ jobs:
         env:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
+          CORTEX_RERANKER_OFFLINE: "1"
         run: pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing
 
       # The advertised test count is the one claim the static gate cannot check
@@ -123,6 +155,7 @@ jobs:
         env:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
+          CORTEX_RERANKER_OFFLINE: "1"
         run: |
           set -euo pipefail
           # Parse the collector's own summary line ("N tests collected in Xs")

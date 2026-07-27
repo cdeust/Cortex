@@ -55,7 +55,12 @@ The only outbound network activity is:
    (`sentence-transformers`, all-MiniLM-L6-v2) and the reranking model
    (`flashrank`, ms-marco-MiniLM) are downloaded from the public Hugging Face
    model hub. These transfers fetch **model files only** — no user content is
-   sent. After the first download the models run fully offline.
+   sent. After the first download the models run fully offline. To forbid the
+   reranker fetch outright (air-gapped installs, or any environment where an
+   unexpected outbound connection is unacceptable), set
+   `CORTEX_RERANKER_OFFLINE=1`: Cortex then refuses the download when the model
+   is not already cached and degrades to first-stage retrieval scores, logging
+   a warning that names the path it expected, rather than reaching out.
 2. **Integrations you explicitly enable.** If you configure optional upstream MCP
    servers or a remote PostgreSQL database, Cortex communicates only with the
    endpoints you provided.

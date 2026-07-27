@@ -2,6 +2,8 @@
 
 from unittest.mock import patch
 
+import pytest
+
 import mcp_server.core.reranker as reranker_mod
 from mcp_server.core.reranker import (
     _compute_retrieval_confidence,
@@ -13,6 +15,20 @@ from mcp_server.core.reranker import (
     reranker_status,
 )
 from mcp_server.observability import silent_failure
+
+
+@pytest.fixture(autouse=True)
+def _neutral_offline_env(monkeypatch):
+    """Pin ``$CORTEX_RERANKER_OFFLINE`` off for every test in this module.
+
+    CI sets it to "1" for the whole pytest invocation (see ci.yml's "Run
+    tests" step), which would otherwise make the load-path tests below
+    depend on whether the real model happens to sit in the ambient
+    ``~/.cache/flashrank`` — ambient env plus real disk state deciding a
+    unit test's outcome. Tests that exercise the guard set the variable
+    themselves; everything else gets the deterministic default.
+    """
+    monkeypatch.delenv("CORTEX_RERANKER_OFFLINE", raising=False)
 
 
 class TestRetrievalConfidence:
@@ -257,3 +273,100 @@ class TestRerankResultsInferenceFailureIsObservable:
         assert result is None
         assert any("reranker.raw_ce_score" in rec.message for rec in caplog.records)
         silent_failure.reset()
+
+
+class TestOfflineGuard:
+    """``$CORTEX_RERANKER_OFFLINE`` bounds FlashRank's timeout-less download.
+
+    Regression cover for CI run 30263190266 (main, Python 3.13,
+    2026-07-27), where ``Ranker.__init__`` hung in ``sock.connect``
+    fetching the model until pytest-timeout killed the suite at 300s.
+    """
+
+    def _cache_with_model(self, monkeypatch, tmp_path, present):
+        """Point the cache at tmp_path; create the model file iff present."""
+        monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+        path = reranker_mod._model_path()
+        if present:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"not-a-real-onnx")
+        return path
+
+    def test_unset_env_does_not_request_offline(self, monkeypatch):
+        monkeypatch.delenv("CORTEX_RERANKER_OFFLINE", raising=False)
+        assert reranker_mod._offline_requested() is False
+
+    def test_falsey_values_do_not_request_offline(self, monkeypatch):
+        """Unset, empty, 0, false, no — case- and whitespace-insensitive."""
+        for value in ("", "0", "false", "FALSE", "no", "  No  "):
+            monkeypatch.setenv("CORTEX_RERANKER_OFFLINE", value)
+            assert reranker_mod._offline_requested() is False, value
+
+    def test_truthy_values_request_offline(self, monkeypatch):
+        for value in ("1", "true", "TRUE", "yes", "on"):
+            monkeypatch.setenv("CORTEX_RERANKER_OFFLINE", value)
+            assert reranker_mod._offline_requested() is True, value
+
+    def test_offline_with_absent_model_degrades_instead_of_downloading(
+        self, monkeypatch, tmp_path, caplog
+    ):
+        """The observable effect: None returned, status 'failed', no download."""
+        monkeypatch.setenv("CORTEX_RERANKER_OFFLINE", "1")
+        self._cache_with_model(monkeypatch, tmp_path, present=False)
+
+        with _ResetSingleton():
+            with patch("flashrank.Ranker") as ranker_cls:
+                with caplog.at_level("WARNING"):
+                    result = reranker_mod._ensure_reranker()
+
+            assert result is None
+            assert reranker_status().state == "failed"
+            # Negative assertion: absence of the network fetch IS the behavior.
+            ranker_cls.assert_not_called()
+
+    def test_offline_refusal_emits_an_actionable_warning(
+        self, monkeypatch, tmp_path, caplog
+    ):
+        """The signal itself is asserted, not merely its downstream effect."""
+        monkeypatch.setenv("CORTEX_RERANKER_OFFLINE", "1")
+        model_path = self._cache_with_model(monkeypatch, tmp_path, present=False)
+
+        with _ResetSingleton():
+            with patch("flashrank.Ranker"):
+                with caplog.at_level("WARNING"):
+                    reranker_mod._ensure_reranker()
+
+            # Inside the reset block: the helper restores the singleton on
+            # exit, so the recorded error is only observable here.
+            assert reranker_status().error is not None
+
+        message = "\n".join(rec.getMessage() for rec in caplog.records)
+        assert "CORTEX_RERANKER_OFFLINE" in message
+        assert str(model_path) in message
+
+    def test_offline_with_present_model_still_loads(self, monkeypatch, tmp_path):
+        """The guard fires on absence only — a warm cache is untouched."""
+        monkeypatch.setenv("CORTEX_RERANKER_OFFLINE", "1")
+        self._cache_with_model(monkeypatch, tmp_path, present=True)
+
+        with _ResetSingleton():
+            with patch("flashrank.Ranker") as ranker_cls:
+                result = reranker_mod._ensure_reranker()
+
+            assert result is ranker_cls.return_value
+            assert reranker_status().state == "loaded"
+            ranker_cls.assert_called_once()
+
+    def test_online_with_absent_model_still_attempts_the_download(
+        self, monkeypatch, tmp_path
+    ):
+        """Opt-in only: production keeps FlashRank's first-run self-provisioning."""
+        monkeypatch.delenv("CORTEX_RERANKER_OFFLINE", raising=False)
+        self._cache_with_model(monkeypatch, tmp_path, present=False)
+
+        with _ResetSingleton():
+            with patch("flashrank.Ranker") as ranker_cls:
+                result = reranker_mod._ensure_reranker()
+
+            assert result is ranker_cls.return_value
+            ranker_cls.assert_called_once()
