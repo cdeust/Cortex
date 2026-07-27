@@ -111,13 +111,13 @@
   "test_continuous_integration_justification": "The CI workflow runs the suite on every push and pull request across a Python version matrix, plus separate SQLite-backend and Windows legs: https://github.com/cdeust/Cortex/blob/main/.github/workflows/ci.yml",
 
   "test_policy_status": "Met",
-  "test_policy_justification": "CONTRIBUTING.md requires new functionality to arrive with tests: the 'Adding an MCP tool' checklist mandates a unit test for the tool's contract and an integration test when the tool touches the database: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md",
+  "test_policy_justification": "CONTRIBUTING.md carries an explicit, mandatory testing policy: new functionality ships with tests in the automated suite, a bug fix carries a regression test that fails on the pre-fix code, and each failure path asserts its observable effect including the signal it emits \u2014 https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md#the-testing-policy-mandatory. The per-tool checklist ('Add a unit test', 'Add an integration test if the tool touches the database') and the five-element mechanism checklist restate it per change type.",
 
   "tests_are_added_status": "Met",
   "tests_are_added_justification": "New functionality ships with its tests; the suite has grown to 5571 tests alongside the v4.x feature series, and CI runs it on every pull request.",
 
   "tests_documented_added_status": "Met",
-  "tests_documented_added_justification": "The requirement is written down in CONTRIBUTING.md's per-tool and per-mechanism checklists rather than left to convention: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md",
+  "tests_documented_added_justification": "The requirement is written into the documented instructions for change proposals: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md#the-testing-policy-mandatory states that every change adding or altering observable behaviour must arrive with tests in the same PR, the per-tool and per-mechanism checklists repeat it as a concrete step, and .github/PULL_REQUEST_TEMPLATE.md requires a Test plan section in every pull request.",
 
   "warnings_status": "Met",
   "warnings_justification": "CI runs 'ruff check .' and 'ruff format --check .' (ruff pinned at 0.15.20) in the lint job, and pinned pyright 1.1.410 in the typecheck job: https://github.com/cdeust/Cortex/blob/main/.github/workflows/ci.yml",
@@ -126,7 +126,7 @@
   "warnings_fixed_justification": "The lint job fails the build on any ruff finding, so warnings cannot accumulate on main; the typecheck job enforces a ratchet that fails if the pyright diagnostic count rises above its floor.",
 
   "warnings_strict_status": "Unmet",
-  "warnings_strict_justification": "Not yet maximally strict: pyrightconfig.json runs typeCheckingMode 'basic', and the CI typecheck job enforces a descending ratchet against a recorded floor rather than a clean strict-mode run. The remediation path is tracked in docs/provenance/pyright-remediation-plan.md; strict mode is the end state, not the current one.",
+  "warnings_strict_justification": "Not yet maximally strict, and reported as such. Ruff runs its default rule set rather than a broad selection (a run with `--select ALL` minus docstring/annotation/comma rules reports 3,545 findings, measured 2026-07-27), and pyright runs typeCheckingMode `basic` behind a per-rule ratchet whose committed floors still total 568 diagnostics. Both gates do block regression today \u2014 CI fails on any ruff finding and on any rule exceeding its floor \u2014 so warnings cannot accumulate, but the strictness level itself is not maximal. Tightening it rule by rule is tracked with acceptance criteria in https://github.com/cdeust/Cortex/issues/197 and is item 1 on the roadmap.",
 
   "know_secure_design_status": "Met",
   "know_secure_design_justification": "The design is local-first with an explicitly documented trust boundary: PRIVACY.md states what is processed, where it is stored, and precisely what leaves the machine (model downloads only, opt-in OTLP), and SECURITY.md documents what Cortex accesses and its supply-chain assurance: https://github.com/cdeust/Cortex/blob/main/PRIVACY.md",
@@ -168,8 +168,9 @@
   "delivery_unsigned_justification": "No build or install step retrieves a cryptographic hash over plain http. Dependencies come from PyPI over HTTPS, and the GitHub Actions used in the scorecard workflow are pinned to full commit SHAs.",
 
   "vulnerabilities_fixed_60_days_status": "Met",
-  "vulnerabilities_critical_fixed_status": "Met",
   "vulnerabilities_fixed_60_days_justification": "There are no known unpatched vulnerabilities: Dependabot alerts are enabled and report zero open alerts, and CodeQL reports zero open alerts (both verified via the GitHub API on 2026-07-27).",
+
+  "vulnerabilities_critical_fixed_status": "Met",
   "vulnerabilities_critical_fixed_justification": "No critical vulnerability is outstanding; the open items in the repository's Security tab are OpenSSF Scorecard posture findings, not vulnerabilities (verified 2026-07-27).",
 
   "no_leaked_credentials_status": "Met",
@@ -197,5 +198,149 @@
   "dynamic_analysis_enable_assertions_justification": "Assertions are not deliberately enabled as part of a dynamic analysis run, because no dynamic analysis run exists to enable them in. See the dynamic_analysis justification.",
 
   "dynamic_analysis_fixed_status": "N/A",
-  "dynamic_analysis_fixed_justification": "No dynamic analysis is performed, so no vulnerability has been discovered by it and none is outstanding."
+  "dynamic_analysis_fixed_justification": "No dynamic analysis is performed, so no vulnerability has been discovered by it and none is outstanding.",
+
+  "achieve_passing_status": "Met",
+  "achieve_passing_justification": "The passing badge was earned 2026-07-27: https://www.bestpractices.dev/projects/13836",
+
+  "dco_status": "Unmet",
+  "dco_justification": "There is no DCO sign-off requirement and no CLA today. All non-trivial code to date is the sole maintainer's own, licensed under MIT, and contributions are accepted under the same license. The position, and the intent to adopt a DCO (`git commit -s`) rather than a CLA if outside contributors start submitting non-trivial changes, is stated at https://github.com/cdeust/Cortex/blob/main/GOVERNANCE.md#contribution-licensing-dco--cla",
+
+  "governance_status": "Met",
+  "governance_justification": "https://github.com/cdeust/Cortex/blob/main/GOVERNANCE.md \u2014 the decision model (single maintainer with a written record), where each class of decision is recorded (ADR, PR review, roadmap, security policy), and how disputes are resolved.",
+
+  "code_of_conduct_status": "Met",
+  "code_of_conduct_justification": "https://github.com/cdeust/Cortex/blob/main/CODE_OF_CONDUCT.md \u2014 adopted and posted at the standard repository location; linked from CONTRIBUTING.md.",
+
+  "roles_responsibilities_status": "Met",
+  "roles_responsibilities_justification": "https://github.com/cdeust/Cortex/blob/main/GOVERNANCE.md#roles-and-responsibilities \u2014 maintainer, contributor and security reporter, each with the tasks the role owes. It states plainly that there is one maintainer today (@cdeust) and that no separate committer or release-manager role exists.",
+
+  "access_continuity_status": "Met",
+  "access_continuity_justification": "https://github.com/cdeust/Cortex/blob/main/GOVERNANCE.md#continuity-of-access \u2014 no release depends on a secret held by one person: PyPI publishing uses Trusted Publishing (OIDC, no long-lived token exists to recover) and artifact signing is Sigstore-keyless provenance minted by the workflow itself, so anyone with repository write access can cut a fully signed release. Source, history, issues, CI, the release pipeline and the SBOM are public under MIT, and the section states what is genuinely single-owner today (repository admin and the PyPI project) plus the fork path that keeps the software alive within days.",
+
+  "bus_factor_status": "Unmet",
+  "bus_factor_justification": "The bus factor is 1: one maintainer. This is stated rather than papered over, together with what survives their loss and how a fork continues, at https://github.com/cdeust/Cortex/blob/main/GOVERNANCE.md#continuity-of-access. Raising it by adding a second maintainer with repository admin is item 5 on the roadmap.",
+
+  "documentation_roadmap_status": "Met",
+  "documentation_roadmap_justification": "https://github.com/cdeust/Cortex/blob/main/docs/ROADMAP.md \u2014 covers the twelve months to 2027-07 (verification depth before features, supply-chain and project-health hardening, ingestion beyond Claude Code sessions, the research line, raising the bus factor) and an explicit 'What Cortex will not do' section. Linked from the README's Development section.",
+
+  "documentation_architecture_status": "Met",
+  "documentation_architecture_justification": "https://github.com/cdeust/Cortex/blob/main/docs/architecture.md plus the layer catalogue and dependency-rule table in https://github.com/cdeust/Cortex/blob/main/docs/module-inventory.md \u2014 concentric Clean Architecture layers (server -> handlers -> core <- shared, infrastructure -> shared), what each layer may import, and the per-module inventory. The README's Architecture section carries the same model with diagrams.",
+
+  "documentation_security_status": "Met",
+  "documentation_security_justification": "https://github.com/cdeust/Cortex/blob/main/docs/ASSURANCE-CASE.md#1-security-requirements--what-a-user-can-and-cannot-expect states the five security requirements and, explicitly, what a user must NOT expect (Cortex is not a sandbox; it runs with the user's permissions and authenticates nobody). https://github.com/cdeust/Cortex/blob/main/SECURITY.md covers the supply-chain guarantees and reporting; https://github.com/cdeust/Cortex/blob/main/PRIVACY.md covers what data is processed and what leaves the machine.",
+
+  "documentation_quick_start_status": "Met",
+  "documentation_quick_start_justification": "https://github.com/cdeust/Cortex#getting-started \u2014 download the .mcpb bundle and open it in Claude Desktop, or install the Claude Code plugin; it runs immediately on the built-in SQLite backend with no database to provision. The Examples section then shows a full store/recall round trip.",
+
+  "documentation_current_status": "Met",
+  "documentation_current_justification": "Documentation defects are treated as defects and fixed in the same PR, and the advertised numbers are now machine-checked rather than hand-maintained: https://github.com/cdeust/Cortex/blob/main/scripts/check_doc_claims.py fails the build when the tool count, reference count, mechanism count, version or test count in README, CONTRIBUTING, CLAUDE.md, GOVERNANCE.md, the MCPB manifest or the docs tree disagrees with the repository (the tool count is itself pinned to the live registry by tests_py/test_main.py::test_standalone_baseline_is_52_tools). It runs in the Lint job on every push and pull request, and with the live collected test count in the test job. Introducing it surfaced and fixed eight stale claims in this same PR, including a `mypy --strict` gate the project has never run and two MCP tools that moved to cortex-viz in v3.21.0 but were still documented here.",
+
+  "documentation_achievements_status": "Met",
+  "documentation_achievements_justification": "The OpenSSF Best Practices badge is displayed in the README badge row, hyperlinked to the project page, within hours of the passing level being awarded on 2026-07-27: https://github.com/cdeust/Cortex#readme (badge image https://www.bestpractices.dev/projects/13836/badge).",
+
+  "accessibility_best_practices_status": "Met",
+  "accessibility_best_practices_justification": "The project results have no graphical user interface: Cortex is an MCP server speaking stdio, and its output is plain text and JSON that the consuming host renders with its own accessibility affordances (the extracted visualization stack lives in the separate cortex-viz project). For the project site, every image in the README carries an alt attribute, information is never conveyed by colour alone, and the documentation is Markdown that reads correctly in a screen reader.",
+
+  "internationalization_status": "Unmet",
+  "internationalization_justification": "The server's user-facing strings \u2014 tool descriptions, session-start banners, error messages \u2014 are English literals and are not externalized for localization. Stored memory content is whatever language the user works in and is unaffected (content cues are already multilingual, mcp_server/core/content_cues.py), but the software itself has not been internationalized and is reported as such rather than argued into a pass.",
+
+  "sites_password_security_status": "N/A",
+  "sites_password_security_justification": "The project operates no site of its own that authenticates external users; the repository and release downloads are hosted on GitHub, and Cortex stores no passwords for inbound authentication.",
+
+  "maintenance_or_update_status": "Met",
+  "maintenance_or_update_justification": "The upgrade path is a normal version bump on a semantically versioned package: `claude plugin update`, a new .mcpb, or `pip install -U hypermnesia-mcp`. Store-format changes ship as one-shot migrations executed on startup (mcp_server/migrate.py, mcp_server/infrastructure/pg_schema.py) rather than back-compat shims, so an older store is upgraded in place. Every behaviour or contract change a consumer can observe is recorded in https://github.com/cdeust/Cortex/blob/main/CHANGELOG.md (Keep a Changelog), with breaking changes called out explicitly and the migration step named; SECURITY.md states that security patches target the latest minor release.",
+
+  "vulnerability_report_credit_status": "N/A",
+  "vulnerability_report_credit_justification": "No vulnerability has been reported and resolved in the last 12 months, so there is no reporter to credit. The standing commitment to credit reporters unless they request anonymity is documented at https://github.com/cdeust/Cortex/blob/main/SECURITY.md#recognition.",
+
+  "vulnerability_response_process_status": "Met",
+  "vulnerability_response_process_justification": "https://github.com/cdeust/Cortex/blob/main/SECURITY.md \u2014 private advisory channel, a per-severity response and patch SLA (24h/7d for critical, 3d/14d for high, 7d best-effort otherwise), and a five-step disclosure timeline ending in a public advisory on an agreed date. GitHub private vulnerability reporting is enabled on the repository.",
+
+  "coding_standards_status": "Met",
+  "coding_standards_justification": "https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md#coding-standards-excerpt names the standard for the primary language (Python): ruff formatting and linting as the style baseline, plus the project's own load-bearing rules (no `Any` in production code, sourced constants, no bare `except`, file and function size limits), with the full text at https://github.com/cdeust/zetetic-team-subagents/blob/main/rules/coding-standards.md. Compliance is required of contributions, not suggested.",
+
+  "coding_standards_enforced_status": "Met",
+  "coding_standards_enforced_justification": "Automatically enforced in CI on every push and pull request: `ruff format --check .` and `ruff check .` with ruff pinned at 0.15.20, plus a pyright per-rule ratchet (scripts/check_pyright_ratchet.py) that fails the build if any rule's diagnostic count rises above its committed floor. Style exceptions are per-line `# noqa` with the rule code named at the site. See .github/workflows/ci.yml (jobs `lint` and `typecheck`).",
+
+  "build_standard_variables_status": "N/A",
+  "build_standard_variables_justification": "No native binaries are produced. Cortex is pure Python packaged with hatchling; there is no compiler or linker invocation for CC/CFLAGS/LDFLAGS to reach.",
+
+  "build_preserve_debug_status": "N/A",
+  "build_preserve_debug_justification": "Nothing is compiled or stripped: the installed artifact is Python source in a wheel, so tracebacks always carry full file, line and symbol information. There is no debugging information a build or install step could discard.",
+
+  "build_non_recursive_status": "Met",
+  "build_non_recursive_justification": "The build is a single non-recursive hatchling invocation over one package (`[tool.hatch.build.targets.wheel] packages = [\"mcp_server\"]` in pyproject.toml). There is no per-subdirectory build and therefore no cross-directory dependency for a recursive build to get wrong.",
+
+  "build_repeatable_status": "N/A",
+  "build_repeatable_justification": "No compilation occurs \u2014 Python source is used directly, which is the case this criterion names as not applicable. The integrity of what is distributed is established instead by a SHA-256 per release asset and a Sigstore build-provenance attestation binding each artifact digest to the repository and workflow that produced it: https://github.com/cdeust/Cortex/blob/main/SECURITY.md#supply-chain-assurance.",
+
+  "installation_common_status": "Met",
+  "installation_common_justification": "Three commonly-used conventions, all documented in the README's Getting Started section: the single-click `.mcpb` bundle for Claude Desktop, the Claude Code plugin marketplace (`claude plugin install`, uninstalled with `claude plugin uninstall`), and the Python package manager (`pip install hypermnesia-mcp`, removed with `pip uninstall`). All state lives under ~/.claude/methodology/, which the user deletes to remove it fully (https://github.com/cdeust/Cortex/blob/main/PRIVACY.md#your-controls).",
+
+  "installation_standard_variables_status": "Met",
+  "installation_standard_variables_justification": "Installation is delegated to the language package manager, so it honours that ecosystem's standard conventions: pip/uv install into the active environment or the location `--target`/`--prefix`/VIRTUAL_ENV selects, and the plugin and .mcpb installs write where the host dictates. No bespoke prefix handling is implemented that could ignore them.",
+
+  "installation_development_quick_status": "Met",
+  "installation_development_quick_justification": "https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md#dev-setup \u2014 `git clone` then `pip install -e \".[postgresql,benchmarks,dev]\"` installs the project, the test environment and the benchmark extras in one command; the default SQLite store means the suite runs with nothing else provisioned. `bash scripts/setup.sh` additionally installs PostgreSQL + pgvector for the integration tests, and `python -m mcp_server.doctor` verifies the result.",
+
+  "external_dependencies_status": "Met",
+  "external_dependencies_justification": "Declared in computer-processable form: runtime and per-extra dependencies in https://github.com/cdeust/Cortex/blob/main/pyproject.toml, resolved and pinned transitively in https://github.com/cdeust/Cortex/blob/main/uv.lock, and republished per release as a CycloneDX SBOM (hypermnesia-mcp.cdx.json) generated from that lockfile and attached to the GitHub Release with its own provenance attestation.",
+
+  "dependency_monitoring_status": "Met",
+  "dependency_monitoring_justification": "GitHub Dependabot alerts and automated security fixes are both enabled on the repository (verified via the GitHub API on 2026-07-27: /vulnerability-alerts returns 204 and /automated-security-fixes reports enabled and not paused), so the dependency graph \u2014 including the ML stack that dominates the attack surface \u2014 is checked continuously against the advisory database and fixes are proposed automatically. Current state: zero open alerts. A CycloneDX SBOM ships with every release for downstream scanning.",
+
+  "updateable_reused_components_status": "Met",
+  "updateable_reused_components_justification": "No vendored or forked copies of external components are committed: every dependency is a normal versioned package resolved by pip/uv from pyproject.toml and uv.lock (the local `deps/` tree used when assembling the bundle is git-ignored and rebuilt from the lockfile, not maintained by hand). Updating a vulnerable component is a version bump in one place.",
+
+  "interfaces_current_status": "Met",
+  "interfaces_current_justification": "The stack targets currently supported runtimes and APIs: Python 3.10 through 3.13, all four in the CI matrix, with pgvector 0.3+/PostgreSQL 17 and current major versions of FastMCP, Pydantic v2, numpy and sentence-transformers. Deprecated interfaces are removed rather than wrapped \u2014 the standing rule is one-shot migrations with no back-compat shims (CLAUDE.md), and CI runs on the newest released Python so a deprecation surfaces as a warning in the build rather than as a surprise at end of life.",
+
+  "automated_integration_testing_status": "Met",
+  "automated_integration_testing_justification": "The full suite runs on every push and pull request to main via .github/workflows/ci.yml and reports success or failure per job: 5587 tests on Python 3.10-3.13 against PostgreSQL + pgvector, the same suite against the SQLite backend, the suite on Windows, and a Docker smoke job that boots the bare container and exercises the DB-less contract. tests_py/integration/ holds the database-backed integration tests specifically.",
+
+  "regression_tests_added50_status": "Met",
+  "regression_tests_added50_justification": "Measured on 2026-07-27 over the merged pull requests titled as fixes in the preceding six months (2026-01-27 onward): 23 of 30 \u2014 76.7% \u2014 changed the test tree in the same PR, against the 50% this criterion asks for. (The measure counts a PR as carrying tests when it touches tests_py/ or tests_js/, which is a proxy for 'added a regression test'; the policy behind it is written down at https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md#the-testing-policy-mandatory \u2014 a bug fix carries a regression test that fails on the pre-fix code.)",
+
+  "test_statement_coverage80_status": "Unmet",
+  "test_statement_coverage80_justification": "Statement coverage is 74.83% (27,746 of 37,078 statements in mcp_server), measured by coverage.py 7.15.2 in the CI coverage job on main, run 30195080156 \u2014 short of the 80% this criterion requires. The gap is not evenly spread: 21 modules sit at 0%, and four of them have no importer at all, meaning the intended call site was never built. Closing it is tracked with acceptance criteria in https://github.com/cdeust/Cortex/issues/196 (finish the missing wiring, add contract tests, then enforce a coverage floor in CI so the number cannot fall back), and it is item 1 on the roadmap. Reported as unmet rather than argued around.",
+
+  "test_policy_mandated_status": "Met",
+  "test_policy_mandated_justification": "https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md#the-testing-policy-mandatory states it as policy, not preference: every change that adds or alters externally observable behaviour must arrive with tests in the same pull request, new functionality ships with tests in the automated suite, a bug fix carries a regression test that fails on the pre-fix code, and each failure path asserts its observable effect including the signal it emits. The consequence is stated \u2014 such a PR is sent back rather than merged with a follow-up promise.",
+
+  "implement_secure_design_status": "Met",
+  "implement_secure_design_justification": "https://github.com/cdeust/Cortex/blob/main/docs/ASSURANCE-CASE.md#4-secure-design-principles-applied maps each principle to the code that implements it: least privilege and no ambient authority (no network listener, no privileged install, destructive tools rejected on call under the lean profile rather than merely hidden), fail-safe defaults (local SQLite by default, telemetry off until an env var is set, a malformed ingest writes nothing), complete mediation (one middleware chain and one schema check for every tool call), economy of mechanism (one write path, one retrieval path, one ingestion seam), and separation of concerns as a security property (the layer rule keeps all I/O auditable as a set).",
+
+  "crypto_algorithm_agility_status": "N/A",
+  "crypto_algorithm_agility_justification": "No security mechanism in Cortex depends on a cryptographic algorithm, so there is no algorithm choice for a user to switch. Hashing is used only for content addressing (SHA-256/BLAKE2b via hashlib) and for MinHash sketching, where the single SHA-1 call protects nothing.",
+
+  "crypto_credential_agility_status": "Met",
+  "crypto_credential_agility_justification": "The only credential Cortex handles is the PostgreSQL connection string, and it is read from the DATABASE_URL environment variable (or the user's own MCP host configuration) \u2014 never from source, and never written into the store. Changing or rotating it is an environment change with no code change and no recompilation; the value is masked structurally before it can reach a log or diagnostic output (mcp_server/shared/redaction.py::redact_url). Cortex generates and stores no private keys.",
+
+  "crypto_used_network_status": "Met",
+  "crypto_used_network_justification": "Every network communication Cortex initiates uses a secure protocol: HTTPS for the one-time embedding/reranker model download from Hugging Face and for the GitHub API calls in the optional pipeline installer, and libpq for PostgreSQL (with TLS controlled by the user's own connection string). No insecure protocol is supported or enabled by default \u2014 the server itself opens no socket and listens on no port; its control channel is stdio.",
+
+  "crypto_tls12_status": "Met",
+  "crypto_tls12_justification": "TLS is used through CPython's stdlib (urllib/ssl over OpenSSL) with default contexts, whose minimum accepted version on every supported Python (3.10-3.13) is TLS 1.2. No code path lowers the minimum version, sets a custom protocol constant, or weakens the cipher policy: `grep` over mcp_server for ssl context manipulation returns nothing.",
+
+  "crypto_certificate_verification_status": "Met",
+  "crypto_certificate_verification_justification": "Certificate verification is the stdlib default and is never disabled: there is no `verify=False`, no `ssl._create_unverified_context`, no `check_hostname = False` and no `CERT_NONE` anywhere in the codebase (verified by grep over mcp_server, scripts and hooks on 2026-07-27). Every outbound request goes through urllib with the default verified context.",
+
+  "crypto_verification_private_status": "Met",
+  "crypto_verification_private_justification": "The same default verified TLS context applies to every outbound request, so verification completes before any headers are sent. In practice Cortex sends no private information over TLS at all: the model download is an anonymous public fetch and the GitHub API calls are unauthenticated release lookups; memory content never leaves the machine.",
+
+  "signed_releases_status": "Met",
+  "signed_releases_justification": "Every release is cryptographically signed and the verification process is documented for users at https://github.com/cdeust/Cortex/blob/main/SECURITY.md#supply-chain-assurance. The wheel, the sdist and the CycloneDX SBOM each carry a Sigstore-backed build-provenance attestation minted in .github/workflows/release.yml (`gh attestation verify <file> --repo cdeust/Cortex`), the PyPI channel publishes with PEP 740 attestations via Trusted Publishing, and every release asset ships a `<asset>.sha256` companion checked by scripts/verify_release_artifact.py. Signing is keyless: there is no private key held on the distribution site, or anywhere else.",
+
+  "version_tags_signed_status": "Unmet",
+  "version_tags_signed_justification": "Release tags are plain (lightweight) git tags and are not cryptographically signed \u2014 `git tag -v v4.16.0` reports that it cannot verify a non-tag object. The release artifacts are covered instead, by Sigstore build-provenance attestations and published SHA-256 checksums. Signed annotated tags are on the roadmap (https://github.com/cdeust/Cortex/blob/main/docs/ROADMAP.md); until they exist this is reported as unmet.",
+
+  "input_validation_status": "Met",
+  "input_validation_justification": "Input from the host is validated against an allowlist before any handler runs: each MCP tool declares a typed signature and JSON schema, and FastMCP rejects arguments that do not match; mcp_server/validation/schemas.py adds a per-tool type and required-field check on top. Content parsed from untrusted documents is handled as data by pure stdlib parsers that fail loudly and write nothing on malformed input. Where a query has to become SQL, values cross as bound parameters and identifiers come from explicit allowlists (_TABLE_WHITELIST / _COLUMN_WHITELIST in mcp_server/core/wiki_view_executor.py) with unknown names refused rather than escaped, and result limits are clamped to a maximum. The full argument is in https://github.com/cdeust/Cortex/blob/main/docs/ASSURANCE-CASE.md#5-common-implementation-weaknesses-and-how-each-is-countered.",
+
+  "hardening_status": "Unmet",
+  "hardening_justification": "This criterion counts mechanisms such as HTTP response headers (CSP) or compiler hardening flags, and explicitly excludes least privilege. Cortex is a Python process speaking stdio: it serves no HTTP surface for a CSP to apply to, and CPython offers no equivalent of -fstack-protector to enable. The protections it does have \u2014 bounded responses, clamped query limits, network timeouts, destructive tools rejected on call under the lean profile, and no eval/exec/pickle anywhere in the source \u2014 are real but are not what this criterion measures, so it is reported as unmet rather than argued into a pass.",
+
+  "assurance_case_status": "Met",
+  "assurance_case_justification": "https://github.com/cdeust/Cortex/blob/main/docs/ASSURANCE-CASE.md \u2014 security requirements (including what a user must NOT expect), a six-entry threat model with the out-of-scope adversaries named, the five trust boundaries where data or execution changes trust level, secure design principles mapped to the code implementing each, a CWE-by-CWE table of countered implementation weaknesses with its evidence, and a closing section on what the case does not claim (prompt injection through recalled content, 74.83% coverage, warnings not yet maximally strict, no dynamic analysis)."
 }
