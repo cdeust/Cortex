@@ -104,7 +104,8 @@ def test_entity_triples_keeps_triple_lines_and_drops_prose() -> None:
         "Here is some narrative preamble that carries no triple.\n"
         "recall → uses → pgvector\n"
         "store -> writes -> memories\n"
-        + "More narrative filler that should not survive.\n" * 60
+        + "More narrative filler that should not survive.\n"
+        * 60
     )
 
     out = condense_entity_triples(text, 40)
