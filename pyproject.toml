@@ -154,6 +154,36 @@ timeout_method = "thread"
 # 2026-07-28 while reproducing issue #219: a local run hung >600s because
 # the plugin was not installed).
 required_plugins = ["pytest-timeout", "pytest-asyncio"]
+# Narrow, message-anchored suppression of three DeprecationWarnings emitted by
+# a SWIG-generated extension during import — never by mcp_server.
+#
+# source: SWIG did not set `__module__` on its three support types
+#   (SwigPyObject, SwigPyPacked, swigvarlink); CPython warns about builtin
+#   types lacking it. SWIG 4.4.0 fixes this by moving all three into the SWIG
+#   runtime module — https://github.com/swig/swig/issues/2881. Same defect
+#   tracked downstream at huggingface/transformers#42981 and
+#   facebookresearch/faiss#4481 ("Upgrade to SWIG 4.4").
+#
+# Emitter here is `sentencepiece` (measured 2026-07-28: it is the only
+#   distribution under the interpreter's site-packages containing
+#   `SwigPyObject`, and importing it reproduces all three warnings). It is
+#   NOT a declared Cortex dependency — it appears 0 times in `uv.lock` and
+#   `pyproject.toml` — but `transformers` imports it opportunistically when a
+#   developer's environment happens to provide it, so the warnings surface in
+#   some local runs and not others. That environment-dependence is exactly why
+#   this is pinned by message rather than by module: it must not depend on
+#   which package happens to trigger the import first.
+#
+# Anchored to the three type names, not a `SwigPy.*` prefix: `swigvarlink`
+#   does not share that prefix and would keep leaking through. Any OTHER
+#   DeprecationWarning, including one from our own code, still surfaces.
+#
+# Remove when: `sentencepiece` (or whichever SWIG-built package is installed)
+#   ships wheels built with SWIG >= 4.4.0 — verify with a full-suite run
+#   reporting 0 warnings after deleting this entry.
+filterwarnings = [
+    "ignore:builtin type (SwigPyObject|SwigPyPacked|swigvarlink) has no __module__ attribute:DeprecationWarning",
+]
 markers = [
     "invariants: Phase 0.3+ testable invariant predicates (I1/I2/I3/I4 and parity tests)",
 ]
