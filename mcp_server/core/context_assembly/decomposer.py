@@ -30,6 +30,7 @@ from mcp_server.core.context_assembly.budget import (
     Placeholder,
     available_budget,
     estimate_tokens,
+    proportional_share,
     truncate_to_budget,
 )
 from mcp_server.core.context_assembly.warning import build_truncation_banner
@@ -118,8 +119,7 @@ def assemble_prompt(
         for i, p in enumerate(sorted_ph):
             orig = metrics.original_tokens[p.key]
             # Proportional share of remaining budget among not-yet-assigned
-            not_yet = len(sorted_ph) - i
-            share = max(50, remaining // max(1, not_yet))
+            share = proportional_share(remaining, len(sorted_ph) - i)
 
             if orig <= share:
                 # Fits — use full content

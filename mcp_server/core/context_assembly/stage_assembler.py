@@ -55,7 +55,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from mcp_server.core.context_assembly.budget import estimate_tokens
 from mcp_server.core.context_assembly.coverage import submodular_select
 from mcp_server.core.context_assembly.ppr_traversal import (
     build_entity_adjacency,
@@ -63,6 +62,12 @@ from mcp_server.core.context_assembly.ppr_traversal import (
     score_memories_by_ppr,
 )
 from mcp_server.core.context_assembly.stage_detector import StageDetector
+from mcp_server.core.context_assembly.stage_phases import (
+    phase_budget,
+    render_adjacent,
+    render_own_stage,
+    render_summaries,
+)
 
 
 # ── Budget split ────────────────────────────────────────────────────────
@@ -178,137 +183,43 @@ class StageAwareContextAssembler:
         metric is rank-based. When a reader is downstream, the caller
         should pass ``reasoner.context_window * 0.75`` to enforce a
         real budget (the Swift ContextDecomposer pattern).
+
+        Under a budget every selected item still reaches the output: a
+        phase condenses over-share items (``stage_phases``) rather than
+        dropping them, so the selected-memory count never depends on
+        how long the individual memories happen to be.
         """
-        if token_budget is None:
-            adj_budget = None
-            sum_budget = None
-        else:
-            adj_budget = int(token_budget * budget_split.adjacent)
-            sum_budget = int(token_budget * budget_split.summaries)
-
-        # Track every memory we actually commit to the output so the
-        # caller can score retrieval hits on the full selected set,
-        # not just the text.
-        selected_memories: list[dict[str, Any]] = []
-
-        # ── Phase 1 — Own-stage ───────────────────────────────────────
-        # Selection is decoupled from token budget: we always pick up
-        # to max_chunks_per_phase items so retrieval ranking metrics
-        # stay well-defined regardless of individual memory size. The
-        # token budget is enforced at text-assembly time (below),
-        # which may truncate individual chunks but never reduces the
-        # count of selected items.
-        own_chunks = self._retrieve(query, current_stage, max_chunks_per_phase * 3)
-        selected_own = submodular_select(
-            own_chunks,
-            token_budget=None,
-            diversity_lambda=diversity_lambda,
-            max_chunks=max_chunks_per_phase,
+        selected_own = self._select_own_stage(
+            query, current_stage, max_chunks_per_phase, diversity_lambda
         )
-        for c in selected_own:
-            selected_memories.append(
-                {
-                    "memory_id": c.get("memory_id"),
-                    "content": c.get("content", ""),
-                    "score": c.get("score", 0.0),
-                    "phase": 1,
-                }
-            )
-        own_text = "\n\n".join(c.get("content", "") for c in selected_own).strip()
-        own_tokens = estimate_tokens(own_text)
-
-        # ── Phase 2 — Adjacent stages via PPR ─────────────────────────
-        # Extract entities from Phase 1 results
-        seed_entities: dict[str, float] = {}
-        for c in selected_own:
-            for eid in c.get("entity_ids", []) or []:
-                seed_entities[str(eid)] = seed_entities.get(str(eid), 0.0) + 1.0
-
-        adjacent_text = ""
-        adjacent_tokens = 0
-        covered_stages = {current_stage}
-
-        if seed_entities:
-            entities, relationships = self._graph()
-            adjacency = build_entity_adjacency(entities, relationships)
-            ppr = personalized_pagerank(adjacency, seed_entities)
-
-            # Fetch candidate memories that contain PPR-hot entities
-            top_entity_ids = sorted(ppr.keys(), key=lambda k: ppr[k], reverse=True)[:50]
-            candidate_mems = self._mem_by_ent(top_entity_ids)
-
-            # Filter to NOT-current-stage and score by PPR
-            cross_stage = [
-                m for m in candidate_mems if self._detector.stage_of(m) != current_stage
-            ]
-            scored = score_memories_by_ppr(cross_stage, ppr)
-
-            # Greedy pack within adjacent_budget (or ignore budget if None)
-            adjacent_parts: list[str] = []
-            used = 0
-            for m, score in scored[: max_chunks_per_phase * 2]:
-                content = m.get("content", "")
-                t = estimate_tokens(content)
-                if adj_budget is not None and used + t > adj_budget:
-                    continue
-                adjacent_parts.append(content)
-                selected_memories.append(
-                    {
-                        "memory_id": m.get("memory_id") or m.get("id"),
-                        "content": content,
-                        "score": float(score),
-                        "phase": 2,
-                    }
-                )
-                used += t
-                covered_stages.add(self._detector.stage_of(m))
-                if len(adjacent_parts) >= max_chunks_per_phase:
-                    break
-            adjacent_text = "\n\n".join(adjacent_parts).strip()
-            adjacent_tokens = used
-
-        # ── Phase 3 — Summary fallback ────────────────────────────────
-        summary_parts: list[str] = []
-        summary_tokens = 0
-        all_stages = self._detector.all_stages([])  # detectors may cache
-        uncovered_stages = [s for s in all_stages if s not in covered_stages]
-        for stage_id in uncovered_stages:
-            summary = self._summary(stage_id)
-            if not summary:
-                continue
-            t = estimate_tokens(summary)
-            if sum_budget is not None and summary_tokens + t > sum_budget:
-                break
-            summary_parts.append(f"[{stage_id}] {summary}")
-            summary_tokens += t
-        summary_text = "\n\n".join(summary_parts).strip()
-
-        # ── Assemble ──────────────────────────────────────────────────
-        parts: list[str] = []
-        if own_text:
-            parts.append(f"## Current Stage Context ({current_stage})\n\n{own_text}")
-        if adjacent_text:
-            parts.append(f"## Related Prior Context\n\n{adjacent_text}")
-        if summary_text:
-            parts.append(f"## Stage Summaries\n\n{summary_text}")
-        assembled = "\n\n".join(parts)
-
-        total_tokens = own_tokens + adjacent_tokens + summary_tokens
-
+        own_text, own_tokens, own_records = render_own_stage(
+            selected_own, phase_budget(token_budget, budget_split.own_stage)
+        )
+        adjacent_text, adjacent_tokens, adj_records, covered_stages = self._adjacent(
+            selected_own,
+            current_stage,
+            phase_budget(token_budget, budget_split.adjacent),
+            max_chunks_per_phase,
+        )
+        summary_text, summary_tokens, summary_stages = self._summaries(
+            covered_stages, phase_budget(token_budget, budget_split.summaries)
+        )
         return StageContextResult(
             own_stage_context=own_text,
             adjacent_stage_context=adjacent_text,
             stage_summaries=summary_text,
-            assembled_context=assembled,
-            selected_memories=selected_memories,
+            assembled_context=_join_sections(
+                current_stage, own_text, adjacent_text, summary_text
+            ),
+            selected_memories=own_records + adj_records,
             metadata={
                 "own_stage_chunks": len(selected_own),
                 "own_stage_tokens": own_tokens,
                 "adjacent_stages": sorted(covered_stages - {current_stage}),
                 "adjacent_tokens": adjacent_tokens,
-                "summary_stages": uncovered_stages[: len(summary_parts)],
+                "summary_stages": summary_stages,
                 "summary_tokens": summary_tokens,
-                "total_tokens": total_tokens,
+                "total_tokens": own_tokens + adjacent_tokens + summary_tokens,
                 "token_budget": token_budget,
                 "budget_split": (
                     budget_split.own_stage,
@@ -317,3 +228,89 @@ class StageAwareContextAssembler:
                 ),
             },
         )
+
+    # ── Phase 1 ───────────────────────────────────────────────────────
+
+    def _select_own_stage(
+        self,
+        query: str,
+        current_stage: str,
+        max_chunks_per_phase: int,
+        diversity_lambda: float,
+    ) -> list[dict[str, Any]]:
+        """Select the own-stage chunks. Selection ignores the budget.
+
+        Ranking metrics must not depend on memory length, so selection
+        picks up to ``max_chunks_per_phase`` items and leaves the budget
+        to text assembly, which condenses instead of dropping.
+        """
+        candidates = self._retrieve(query, current_stage, max_chunks_per_phase * 3)
+        return submodular_select(
+            candidates,
+            token_budget=None,
+            diversity_lambda=diversity_lambda,
+            max_chunks=max_chunks_per_phase,
+        )
+
+    # ── Phase 2 ───────────────────────────────────────────────────────
+
+    def _adjacent(
+        self,
+        selected_own: list[dict[str, Any]],
+        current_stage: str,
+        budget: int | None,
+        max_chunks_per_phase: int,
+    ) -> tuple[str, int, list[dict[str, Any]], set[str]]:
+        """Cross-stage context reached by PPR from Phase 1's entities."""
+        seed_entities: dict[str, float] = {}
+        for chunk in selected_own:
+            for entity_id in chunk.get("entity_ids", []) or []:
+                key = str(entity_id)
+                seed_entities[key] = seed_entities.get(key, 0.0) + 1.0
+        if not seed_entities:
+            return "", 0, [], {current_stage}
+
+        entities, relationships = self._graph()
+        ppr = personalized_pagerank(
+            build_entity_adjacency(entities, relationships), seed_entities
+        )
+        top_entity_ids = sorted(ppr.keys(), key=lambda k: ppr[k], reverse=True)[:50]
+        cross_stage = [
+            m
+            for m in self._mem_by_ent(top_entity_ids)
+            if self._detector.stage_of(m) != current_stage
+        ]
+        scored = score_memories_by_ppr(cross_stage, ppr)
+        text, used, records = render_adjacent(scored, budget, max_chunks_per_phase)
+        covered = {current_stage} | {
+            self._detector.stage_of(m) for m, _ in scored[:max_chunks_per_phase]
+        }
+        return text, used, records, covered
+
+    # ── Phase 3 ───────────────────────────────────────────────────────
+
+    def _summaries(
+        self, covered_stages: set[str], budget: int | None
+    ) -> tuple[str, int, list[str]]:
+        """Schema summaries for the stages Phases 1-2 did not cover."""
+        all_stages = self._detector.all_stages([])  # detectors may cache
+        pairs = []
+        for stage_id in all_stages:
+            if stage_id in covered_stages:
+                continue
+            summary = self._summary(stage_id)
+            if summary:
+                pairs.append((stage_id, summary))
+        return render_summaries(pairs, budget)
+
+
+def _join_sections(
+    current_stage: str, own_text: str, adjacent_text: str, summary_text: str
+) -> str:
+    """Concatenate the non-empty phase texts under their section headers."""
+    sections = [
+        (own_text, f"## Current Stage Context ({current_stage})"),
+        (adjacent_text, "## Related Prior Context"),
+        (summary_text, "## Stage Summaries"),
+    ]
+    return "\n\n".join(f"{header}\n\n{text}" for text, header in sections if text)

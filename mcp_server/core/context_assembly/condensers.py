@@ -74,6 +74,11 @@ def condense_assistant_message(text: str, token_budget: int) -> str:
                 break
             kept.append(p)
             used += t
+        # A single block bigger than the whole budget keeps nothing, and
+        # returning "" would delete the memory outright. Degrade to the
+        # generic truncation the sibling condensers fall back to.
+        if not kept:
+            return truncate_to_budget(text, token_budget)
         return "\n\n".join(kept)
 
     prose_budget = token_budget - code_tokens
@@ -92,7 +97,8 @@ def condense_assistant_message(text: str, token_budget: int) -> str:
                 if pi < len(compressed_prose):
                     out.append(compressed_prose[pi])
                     pi += 1
-        return "\n\n".join(s for s in out if s.strip())
+        joined = "\n\n".join(s for s in out if s.strip())
+        return joined if joined else truncate_to_budget(text, token_budget)
     # No prose budget — just concatenate code
     return "\n\n".join(code_parts)
 

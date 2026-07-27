@@ -45,6 +45,26 @@ def available_budget(context_window: int, headroom: float = 0.75) -> int:
     return int(context_window * headroom)
 
 
+# Floor on a single item's share of the remaining budget. Below this an
+# item condenses to a fragment that carries no usable meaning, so the
+# share rule never allocates less.
+# source: Swift ContextDecomposer progressive-condensation loop
+#   (ai-architect-prd-builder, ContextDecomposer.swift) — the same `max(50,
+#   remaining / notYetAssigned)` rule this port has used since the
+#   decomposer landed.
+MIN_ITEM_SHARE_TOKENS = 50
+
+
+def proportional_share(remaining: int, not_yet_assigned: int) -> int:
+    """Share of ``remaining`` allocated to the next of N unassigned items.
+
+    Even split of what is left, floored at ``MIN_ITEM_SHARE_TOKENS``. The
+    floor is what lets a packing loop condense every item instead of
+    dropping the ones that arrive after the budget runs out.
+    """
+    return max(MIN_ITEM_SHARE_TOKENS, remaining // max(1, not_yet_assigned))
+
+
 # ── Placeholder types ────────────────────────────────────────────────────
 
 
