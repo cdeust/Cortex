@@ -402,8 +402,21 @@ _TABLES_TO_CLEAN = [
 
 
 def _get_raw_connection():
-    """Get a raw psycopg connection to the test database."""
-    if not _USE_PG_STORE:
+    """Get a raw psycopg connection to the test database.
+
+    Gated on REACHABILITY (`_USE_PG`), not on the effective backend. These
+    are different questions and conflating them regresses the suite: dozens
+    of tests are marked `skipif(not _USE_PG)` and construct `PgMemoryStore()`
+    in their own fixture, bypassing backend selection entirely. They run
+    whenever PostgreSQL is reachable — including a `CORTEX_MEMORY_STORE_BACKEND
+    =sqlite` run — and they depend on this between-test purge. Gating it on
+    `_USE_PG_STORE` left their rows in place and broke 15 of them (measured
+    2026-07-28, paired control against cc08a16).
+
+    The SQLite purge below is the one that belongs to the effective backend.
+    Both can be required in the same run; they are not alternatives.
+    """
+    if not _USE_PG:
         return None
     try:
         import psycopg
