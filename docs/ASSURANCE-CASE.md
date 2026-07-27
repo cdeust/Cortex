@@ -144,9 +144,12 @@ four Python versions, two backends and Windows.
   Statement coverage is 74.83% (measured in CI, 2026-07-27), and mutation
   testing is wired for one module rather than the load-bearing set. Raising
   both is item 1 on [ROADMAP.md](ROADMAP.md).
-- **Warnings are not yet maximally strict.** Ruff runs its default rule set
-  and pyright runs `basic` behind a per-rule ratchet, so some weakness classes
-  a stricter configuration would flag are currently invisible to the build.
+- **Warnings are not yet maximally strict.** Ruff runs its default rule set, so
+  the weakness classes a broader rule set would flag are currently invisible to
+  the build. Pyright runs `standard` (raised from `basic` 2026-07-27) behind a
+  per-rule ratchet; `strict` remains out of reach — it reports 10,231 errors,
+  ~9,300 of them the Unknown-type family, which is an annotation-coverage
+  project rather than a configuration change (measured, issue #197).
 - **No dynamic analysis is performed.** There is no fuzzer and no sanitizer
   run; the language removes the memory-safety motivation for one, but that is
   an argument about a class of bug, not a substitute for the technique.

@@ -4,6 +4,6 @@
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.10",
-  "typeCheckingMode": "basic",
+  "typeCheckingMode": "standard",
   "reportMissingModuleSource": "none"
 }

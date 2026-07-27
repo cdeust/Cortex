@@ -16,7 +16,7 @@ All signatures mirror PgMemoryStore exactly (duck-type compatibility).
 
 from __future__ import annotations
 
-import sqlite3
+from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 
 
 class SqliteMoodMixin:
@@ -25,7 +25,7 @@ class SqliteMoodMixin:
     Source references are on each method below.
     """
 
-    _conn: sqlite3.Connection
+    _conn: PsycopgCompatConnection
     _has_vec: bool
 
     # ── User mood (Bower 1981 mood-congruent recall) ──────────────────

@@ -7,14 +7,14 @@ plans the merge; this performs it atomically). Kept in its own mixin so
 
 from __future__ import annotations
 
-import sqlite3
 from typing import Any
+from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 
 
 class SqliteEntityMergeMixin:
     """Atomic entity collapse on SQLite."""
 
-    _conn: sqlite3.Connection
+    _conn: PsycopgCompatConnection
 
     def merge_entities(self, survivor_id: int, alias_id: int) -> dict[str, Any]:
         """Collapse ``alias_id`` into ``survivor_id`` in one transaction.

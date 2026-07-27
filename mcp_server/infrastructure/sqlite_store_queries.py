@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from typing import Any
+from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 
 
 class SqliteQueryMixin:
     """Read-only memory queries on SQLite."""
 
-    _conn: sqlite3.Connection
+    _conn: PsycopgCompatConnection
 
     def _normalize_memory_row(self, row: dict) -> dict:
         """Provided by SqliteMemoryStore."""

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import sqlite3
+from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from typing import Any
 
 
 class SqliteStatsMixin:
     """Diagnostics, consolidation stages, CLS queries on SQLite."""
 
-    _conn: sqlite3.Connection
+    _conn: PsycopgCompatConnection
     _raw_conn: sqlite3.Connection
 
     def _normalize_memory_row(self, row: dict) -> dict:

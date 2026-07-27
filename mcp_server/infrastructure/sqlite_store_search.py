@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from typing import Any
 
 import numpy as np
@@ -33,7 +34,7 @@ def _decode_tags(raw: Any) -> list:
 class SqliteSearchMixin:
     """Search operations on SQLite with client-side WRRF fusion."""
 
-    _conn: sqlite3.Connection
+    _conn: PsycopgCompatConnection
     _has_vec: bool
 
     @staticmethod

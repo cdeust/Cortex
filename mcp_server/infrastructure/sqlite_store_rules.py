@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import sqlite3
+from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from typing import Any
 
 
 class SqliteRuleMixin:
     """Memory rule persistence operations on SQLite."""
 
-    _conn: sqlite3.Connection
+    _conn: PsycopgCompatConnection
 
     def insert_rule(self, data: dict[str, Any]) -> int:
         cur = self._conn.execute(

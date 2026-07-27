@@ -4,6 +4,16 @@
 **Author:** engineer agent
 **Input:** taxonomy of 566 errors / 5 warnings from measured pyright run
 
+> **Update 2026-07-27 (issue #197).** The `typeCheckingMode: "basic"` in the
+> configuration blocks below records what this plan proposed in June; the
+> committed `pyrightconfig.json` now runs **`standard`**. Measured at pyright
+> 1.1.410 in a CI-equivalent env, `standard` and `basic` both report **418
+> errors** — raising the level costs nothing once `SqliteMemoryStore._conn` is
+> annotated with the type actually assigned (`PsycopgCompatConnection`, not
+> `sqlite3.Connection`). `strict` reports 10,231 and stays out of scope.
+> The blocking rules (`reportOptionalMemberAccess`, `reportOptionalSubscript`)
+> are at 0 and `typecheck-baseline.json` is unchanged — no floor was raised.
+
 ---
 
 ## 1. Reality Check — Env-Import Noise vs Real Backlog

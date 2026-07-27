@@ -43,8 +43,8 @@ from mcp_server.tool_profiles import ToolProfile
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     import mcp.types as mt
-    from fastmcp.prompts.prompt import Prompt
-    from fastmcp.tools.tool import Tool, ToolResult
+    from fastmcp.prompts import Prompt
+    from fastmcp.tools import Tool, ToolResult
 
 
 class ToolProfileMiddleware(Middleware):
