@@ -89,7 +89,7 @@
         "repo": "cdeust/zetetic-team-subagents"
       },
       "description": "Zetetic agent team for Cortex — 97 genius reasoning patterns from history's greatest minds + 23 team specialists (architect, engineer, code-reviewer, refactorer, …), 78 skills, 26 commands, 42 tools, 20 hooks, under one epistemic standard none of them can bypass. Composes with Cortex memory: every agent recalls/remembers through the Cortex MCP and routes via /genius, /agent, /zetetic, /quality, /research commands.",
-      "version": "2.35.0",
+      "version": "2.36.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
