@@ -70,7 +70,6 @@ for current file counts per layer.
 | `project_ids.py` | Path <-> project ID <-> label <-> domain ID conversion |
 | `linear_algebra.py` | Dense vector math via numpy (dot, norm, cosine, project, clamp) |
 | `sparse.py` | Sparse vector operations (dict-based, top-K, conversions) |
-| `memory_types.py` | Runtime validation types for the memory subsystem |
 
 ### `core/` — Pure domain logic (imports shared/ only)
 

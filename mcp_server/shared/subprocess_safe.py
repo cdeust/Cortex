@@ -16,8 +16,10 @@ caller ever runs.
 ``communicate()`` and, on timeout, kills the process and returns the
 degraded result (``None``) without ever calling ``communicate()`` again —
 breaking the trap at its source rather than catching the hang after the
-fact. Two call sites share this: ``infrastructure/git_diff_exec.py`` and
-``handlers/auto_task_record_writer.py`` (see cdeust/Cortex#94).
+fact. Its call sites are ``handlers/auto_task_record_writer.py`` and
+``handlers/validate_memory.py`` (see cdeust/Cortex#94); a third,
+``infrastructure/git_diff_exec.py``, was removed with the unwired
+git-diff module in #196.
 
 Pure stdlib — no I/O policy beyond running the given argv. Shared layer:
 depends on the standard library only.

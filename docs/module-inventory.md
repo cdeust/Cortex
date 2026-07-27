@@ -11,12 +11,12 @@ was already described there; nothing has been dropped. Counts below are
 zetetic source rule:
 
 ```
-# source: measured on 2026-07-14 via
+# source: measured on 2026-07-27 via
 #   find mcp_server/<layer> -name "*.py" | grep -v __init__ | grep -v __pycache__ | wc -l
-shared/           25 files   (11 documented below — curated subset)
-core/            208 files   (~90 documented below — curated subset, incl. core/streaming, core/context_assembly)
-infrastructure/   77 files   (21 documented below — curated subset)
-handlers/        131 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
+shared/           26 files   (10 documented below — curated subset)
+core/            220 files   (~90 documented below — curated subset, incl. core/streaming, core/context_assembly)
+infrastructure/   87 files   (20 documented below — curated subset)
+handlers/        135 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
 ```
 
 The prior CLAUDE.md text asserted "108 modules" for `core/` and similar
@@ -52,7 +52,6 @@ Treat gaps as "undocumented," not "does not exist."
 - `types_profiles.py` — Profile-specific Pydantic models
 - `linear_algebra.py` — Dense vector math via numpy (dot, norm, cosine, project, clamp)
 - `sparse.py` — Sparse vector operations (dict-based, topK, conversions)
-- `memory_types.py` — Runtime validation types for the memory subsystem
 
 ## core/ — Pure business logic, zero I/O
 

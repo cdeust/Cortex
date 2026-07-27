@@ -53,7 +53,6 @@ tests_py/
     test_linear_algebra.py              # numpy vector math
     test_sparse.py                      # Sparse vector operations
     test_types.py                       # Pydantic model validation
-    test_memory_types.py                # Memory type validation
   core/
     test_domain_detector.py             # Domain classification
     test_context_generator.py           # Profile text generation

@@ -1,9 +1,10 @@
 """Tests for shared.subprocess_safe.run_with_hard_timeout — the #94 fix.
 
-``subprocess.run``/``check_output`` with ``timeout=`` used to be the two
+``subprocess.run``/``check_output`` with ``timeout=`` used to be the
 remaining high-risk call sites reachable from live MCP tool handlers
 (``handlers/auto_task_record_writer.py::_git_commits_in_window`` and
-``infrastructure/git_diff_exec.py::git_cmd_safe``). On Windows, CPython's
+``handlers/validate_memory.py``; a third, ``git_diff_exec.py::git_cmd_safe``,
+went away with the unwired git-diff module in #196). On Windows, CPython's
 own ``TimeoutExpired`` handling inside ``subprocess.run`` calls
 ``Popen.communicate()`` a *second* time with no deadline, which can hang
 forever if a concurrent sibling process inherited the pipe's write handle
