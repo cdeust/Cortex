@@ -1,0 +1,201 @@
+{
+  "description_good_status": "Met",
+  "description_good_justification": "README.md opens by identifying Cortex as a persistent memory and cognitive profiling MCP server for Claude Code, with the storage model (SQLite by default, PostgreSQL+pgvector opt-in) stated up front: https://github.com/cdeust/Cortex#readme",
+
+  "interact_status": "Met",
+  "interact_justification": "CONTRIBUTING.md covers dev setup, branching and workflow, testing, coding standards, and an explicit 'What NOT to do' section: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md",
+
+  "contribution_status": "Met",
+  "contribution_justification": "CONTRIBUTING.md documents how to contribute and the process a change goes through: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md",
+
+  "contribution_requirements_status": "Met",
+  "contribution_requirements_justification": "CONTRIBUTING.md states the requirements a contribution must meet (coding standards excerpt, testing, per-mechanism and per-tool checklists), and CLAUDE.md carries the full engineering standard including the sourced-constant rule: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md",
+
+  "floss_license_status": "Met",
+  "floss_license_justification": "Released under the MIT License: https://github.com/cdeust/Cortex/blob/main/LICENSE",
+
+  "floss_license_osi_status": "Met",
+  "floss_license_osi_justification": "MIT is an OSI-approved license: https://opensource.org/license/mit",
+
+  "license_location_status": "Met",
+  "license_location_justification": "LICENSE file in the repository root: https://github.com/cdeust/Cortex/blob/main/LICENSE",
+
+  "documentation_basics_status": "Met",
+  "documentation_basics_justification": "README.md covers Getting Started, Configuration, Examples, Architecture, Security and Development; docs/ adds architecture.md, data-flow.md, deployment-scenarios.md, testing-guide.md and troubleshooting.md: https://github.com/cdeust/Cortex/tree/main/docs",
+
+  "documentation_interface_status": "Met",
+  "documentation_interface_justification": "The external interface is the MCP tool surface, documented tool by tool with purpose and target latency in docs/mcp-tools.md, plus docs/api-reference.md: https://github.com/cdeust/Cortex/blob/main/docs/mcp-tools.md",
+
+  "sites_https_status": "Met",
+  "sites_https_justification": "The project site and repository are both GitHub URLs served over HTTPS: https://github.com/cdeust/Cortex",
+
+  "discussion_status": "Met",
+  "discussion_justification": "GitHub Issues is the discussion channel: https://github.com/cdeust/Cortex/issues",
+
+  "english_status": "Met",
+  "english_justification": "README, CONTRIBUTING, SECURITY, PRIVACY, CHANGELOG, the docs/ tree and all issue discussion are written in English.",
+
+  "maintained_status": "Met",
+  "maintained_justification": "Actively maintained: v4.16.0 was released 2026-07-24, and releases have shipped continuously through the v4.x series: https://github.com/cdeust/Cortex/releases",
+
+  "repo_public_status": "Met",
+  "repo_public_justification": "The repository is public and readable without an account: https://github.com/cdeust/Cortex",
+
+  "repo_track_status": "Met",
+  "repo_track_justification": "Tracked in git, with full history public on GitHub: https://github.com/cdeust/Cortex",
+
+  "repo_interim_status": "Met",
+  "repo_interim_justification": "Work lands on main as reviewable pull requests between tagged releases, so the repository holds interim states and not only release snapshots: https://github.com/cdeust/Cortex/commits/main",
+
+  "repo_distributed_status": "Met",
+  "repo_distributed_justification": "git is a distributed version control system.",
+
+  "version_unique_status": "Met",
+  "version_unique_justification": "Every release carries a unique semantic version tag (latest v4.16.0): https://github.com/cdeust/Cortex/releases",
+
+  "version_semver_status": "Met",
+  "version_semver_justification": "Versions follow Semantic Versioning, tagged vMAJOR.MINOR.PATCH (v4.14.3, v4.15.0, v4.16.0): https://github.com/cdeust/Cortex/releases",
+
+  "version_tags_status": "Met",
+  "version_tags_justification": "Each release has a corresponding git tag: https://github.com/cdeust/Cortex/tags",
+
+  "release_notes_status": "Met",
+  "release_notes_justification": "CHANGELOG.md records each release, and every GitHub release carries notes: https://github.com/cdeust/Cortex/blob/main/CHANGELOG.md",
+
+  "release_notes_vulns_status": "Met",
+  "release_notes_vulns_justification": "No publicly known vulnerability has been fixed in any Cortex release to date, so there is none to enumerate; Dependabot and CodeQL both report zero open alerts as of 2026-07-27. CHANGELOG.md is where such a fix would be recorded: https://github.com/cdeust/Cortex/blob/main/CHANGELOG.md",
+
+  "report_process_status": "Met",
+  "report_process_justification": "Bug reports go through GitHub Issues, described in CONTRIBUTING.md; vulnerabilities follow SECURITY.md instead: https://github.com/cdeust/Cortex/issues",
+
+  "report_tracker_status": "Met",
+  "report_tracker_justification": "GitHub Issues is used as the bug tracker: https://github.com/cdeust/Cortex/issues",
+
+  "report_responses_status": "Met",
+  "report_responses_justification": "Measured 2026-07-27 via the GitHub API: all 58 issues filed to date are closed, and every one of them received at least one response comment.",
+
+  "enhancement_responses_status": "Met",
+  "enhancement_responses_justification": "Enhancement requests are handled in the same tracker and answered on the same record: all 58 issues to date are closed with at least one response comment (measured 2026-07-27).",
+
+  "report_archive_status": "Met",
+  "report_archive_justification": "The full issue history, open and closed, is publicly archived and searchable: https://github.com/cdeust/Cortex/issues?q=is%3Aissue",
+
+  "vulnerability_report_process_status": "Met",
+  "vulnerability_report_process_justification": "SECURITY.md documents the reporting process under 'Reporting a Vulnerability', with a disclosure timeline and supported versions: https://github.com/cdeust/Cortex/blob/main/SECURITY.md",
+
+  "vulnerability_report_private_status": "Met",
+  "vulnerability_report_private_justification": "GitHub private vulnerability reporting is enabled on the repository (verified via the API, 2026-07-27), so reports are submitted privately rather than in public issues; SECURITY.md points reporters at it: https://github.com/cdeust/Cortex/security/advisories/new",
+
+  "vulnerability_report_response_status": "Met",
+  "vulnerability_report_response_justification": "SECURITY.md states a response SLA and a disclosure timeline for reports: https://github.com/cdeust/Cortex/blob/main/SECURITY.md",
+
+  "build_status": "Met",
+  "build_justification": "Standard Python packaging via pyproject.toml (hatchling); installed with 'uv pip install -e \".[dev]\"' as documented in CONTRIBUTING.md, and built in CI by the 'build' job.",
+
+  "build_common_tools_status": "Met",
+  "build_common_tools_justification": "The build uses pip/uv with hatchling, the common tooling for Python packages.",
+
+  "build_floss_tools_status": "Met",
+  "build_floss_tools_justification": "pip, uv, hatchling, pytest, ruff and pyright are all FLOSS, and the build runs on ubuntu-latest and windows-latest GitHub runners.",
+
+  "test_status": "Met",
+  "test_justification": "An automated test suite of 5571 tests lives under tests_py/ (measured 2026-07-27 with 'pytest --collect-only -q'), covering core, handlers, infrastructure, integration, invariants and architecture: https://github.com/cdeust/Cortex/tree/main/tests_py",
+
+  "test_invocation_status": "Met",
+  "test_invocation_justification": "The whole suite runs with a single 'pytest' command, documented in CONTRIBUTING.md under Testing along with per-layer subsets: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md",
+
+  "test_most_status": "Met",
+  "test_most_justification": "The suite spans every architectural layer (core, handlers, infrastructure, validation, hooks, integration, invariants) and CI runs it with coverage reporting on each push and pull request.",
+
+  "test_continuous_integration_status": "Met",
+  "test_continuous_integration_justification": "The CI workflow runs the suite on every push and pull request across a Python version matrix, plus separate SQLite-backend and Windows legs: https://github.com/cdeust/Cortex/blob/main/.github/workflows/ci.yml",
+
+  "test_policy_status": "Met",
+  "test_policy_justification": "CONTRIBUTING.md requires new functionality to arrive with tests: the 'Adding an MCP tool' checklist mandates a unit test for the tool's contract and an integration test when the tool touches the database: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md",
+
+  "tests_are_added_status": "Met",
+  "tests_are_added_justification": "New functionality ships with its tests; the suite has grown to 5571 tests alongside the v4.x feature series, and CI runs it on every pull request.",
+
+  "tests_documented_added_status": "Met",
+  "tests_documented_added_justification": "The requirement is written down in CONTRIBUTING.md's per-tool and per-mechanism checklists rather than left to convention: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md",
+
+  "warnings_status": "Met",
+  "warnings_justification": "CI runs 'ruff check .' and 'ruff format --check .' (ruff pinned at 0.15.20) in the lint job, and pinned pyright 1.1.410 in the typecheck job: https://github.com/cdeust/Cortex/blob/main/.github/workflows/ci.yml",
+
+  "warnings_fixed_status": "Met",
+  "warnings_fixed_justification": "The lint job fails the build on any ruff finding, so warnings cannot accumulate on main; the typecheck job enforces a ratchet that fails if the pyright diagnostic count rises above its floor.",
+
+  "warnings_strict_status": "Unmet",
+  "warnings_strict_justification": "Not yet maximally strict: pyrightconfig.json runs typeCheckingMode 'basic', and the CI typecheck job enforces a descending ratchet against a recorded floor rather than a clean strict-mode run. The remediation path is tracked in docs/provenance/pyright-remediation-plan.md; strict mode is the end state, not the current one.",
+
+  "know_secure_design_status": "Met",
+  "know_secure_design_justification": "The design is local-first with an explicitly documented trust boundary: PRIVACY.md states what is processed, where it is stored, and precisely what leaves the machine (model downloads only, opt-in OTLP), and SECURITY.md documents what Cortex accesses and its supply-chain assurance: https://github.com/cdeust/Cortex/blob/main/PRIVACY.md",
+
+  "know_common_errors_status": "Met",
+  "know_common_errors_justification": "Common error classes are checked mechanically rather than by memory: CodeQL default setup scans Python and JavaScript/TypeScript with the default query suite, GitHub secret scanning is enabled, and Dependabot tracks vulnerable dependencies. CLAUDE.md additionally forbids the project's own recurring failure modes (silent fallbacks, unsourced constants).",
+
+  "crypto_published_status": "Met",
+  "crypto_published_justification": "Only published, widely reviewed algorithms are used, and only for content addressing rather than as a security mechanism: SHA-256 and BLAKE2b from CPython's hashlib. No algorithm is invented or re-implemented here.",
+
+  "crypto_call_status": "Met",
+  "crypto_call_justification": "Cortex calls CPython's standard hashlib and never re-implements a hash or cipher; implementing cryptography is not the project's purpose.",
+
+  "crypto_floss_status": "Met",
+  "crypto_floss_justification": "All hashing depends on CPython's hashlib over OpenSSL, both FLOSS.",
+
+  "crypto_keylength_status": "N/A",
+  "crypto_keylength_justification": "Cortex generates and uses no cryptographic keys. It stores memories in a local SQLite file or a user-configured PostgreSQL database and implements no key-based security mechanism, so there is no keylength to configure.",
+
+  "crypto_working_status": "N/A",
+  "crypto_working_justification": "No security mechanism in Cortex depends on a cryptographic algorithm. The one SHA-1 call in the codebase is in mcp_server/shared/minhash.py, where it produces MinHash sketches for near-duplicate detection; SHA-1's collision weakness is irrelevant to locality-sensitive hashing and it protects nothing.",
+
+  "crypto_weaknesses_status": "N/A",
+  "crypto_weaknesses_justification": "No security mechanism depends on cryptography, so there is no default algorithm choice whose weakening would matter. See the crypto_working justification for the single non-security SHA-1 use.",
+
+  "crypto_pfs_status": "N/A",
+  "crypto_pfs_justification": "Cortex implements no network cryptographic protocol. It runs as a local MCP server over stdio and connects only to a database the user configured, so there is no key agreement protocol to give forward secrecy.",
+
+  "crypto_password_storage_status": "N/A",
+  "crypto_password_storage_justification": "Cortex authenticates no external users and stores no passwords. PRIVACY.md states explicitly that it does not ask for, collect, or process passwords or credentials.",
+
+  "crypto_random_status": "N/A",
+  "crypto_random_justification": "Cortex generates no cryptographic keys or nonces. Randomness is used only for non-security purposes such as MinHash permutation coefficients and test fixtures.",
+
+  "delivery_mitm_status": "Met",
+  "delivery_mitm_justification": "The project is distributed through PyPI and GitHub, both fetched over HTTPS/TLS, so the delivery channel is authenticated and integrity-protected.",
+
+  "delivery_unsigned_status": "Met",
+  "delivery_unsigned_justification": "No build or install step retrieves a cryptographic hash over plain http. Dependencies come from PyPI over HTTPS, and the GitHub Actions used in the scorecard workflow are pinned to full commit SHAs.",
+
+  "vulnerabilities_fixed_60_days_status": "Met",
+  "vulnerabilities_critical_fixed_status": "Met",
+  "vulnerabilities_fixed_60_days_justification": "There are no known unpatched vulnerabilities: Dependabot alerts are enabled and report zero open alerts, and CodeQL reports zero open alerts (both verified via the GitHub API on 2026-07-27).",
+  "vulnerabilities_critical_fixed_justification": "No critical vulnerability is outstanding; the open items in the repository's Security tab are OpenSSF Scorecard posture findings, not vulnerabilities (verified 2026-07-27).",
+
+  "no_leaked_credentials_status": "Met",
+  "no_leaked_credentials_justification": "GitHub secret scanning is enabled on the repository and reports zero open alerts (verified via the API on 2026-07-27). Cortex stores its database connection string in the DATABASE_URL environment variable rather than in the repository.",
+
+  "static_analysis_status": "Met",
+  "static_analysis_justification": "CodeQL runs through GitHub's default setup across python, javascript-typescript and actions with the default query suite (verified via the code-scanning API on 2026-07-27), and ruff runs in the CI lint job on every push and pull request: https://github.com/cdeust/Cortex/security/code-scanning",
+
+  "static_analysis_common_vulnerabilities_status": "Met",
+  "static_analysis_common_vulnerabilities_justification": "CodeQL's default query suite is specifically a vulnerability-detection suite (injection, path traversal, unsafe deserialization and similar), and it is configured with the 'remote' threat model.",
+
+  "static_analysis_fixed_status": "Met",
+  "static_analysis_fixed_justification": "CodeQL currently reports zero open alerts on the repository (verified via the GitHub API on 2026-07-27), so nothing found by static analysis is outstanding.",
+
+  "static_analysis_often_status": "Met",
+  "static_analysis_often_justification": "CodeQL default setup analyses each push and pull request and additionally runs on a weekly schedule, so analysis happens per change rather than per release.",
+
+  "dynamic_analysis_status": "Unmet",
+  "dynamic_analysis_justification": "No dynamic analysis tool in the badge's sense (fuzzer, sanitizer, or scanner) is applied. The project runs a 5571-test suite with coverage on every change, but a test suite is not a dynamic analysis tool and is not claimed as one here.",
+
+  "dynamic_analysis_unsafe_status": "N/A",
+  "dynamic_analysis_unsafe_justification": "Cortex is written in Python, a memory-safe language, so the memory-safety tooling this criterion asks about (ASan, Valgrind) does not apply.",
+
+  "dynamic_analysis_enable_assertions_status": "Unmet",
+  "dynamic_analysis_enable_assertions_justification": "Assertions are not deliberately enabled as part of a dynamic analysis run, because no dynamic analysis run exists to enable them in. See the dynamic_analysis justification.",
+
+  "dynamic_analysis_fixed_status": "N/A",
+  "dynamic_analysis_fixed_justification": "No dynamic analysis is performed, so no vulnerability has been discovered by it and none is outstanding."
+}

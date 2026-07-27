@@ -37,7 +37,7 @@ bash scripts/setup.sh        # macOS / Linux
 # Verify everything is wired
 uvx --python 3.13 --from "hypermnesia-mcp[postgresql]" cortex-doctor
 
-# Run tests (3000+ tests across functional + benchmark suites)
+# Run tests (5571 tests under tests_py/)
 pytest
 
 # Run a benchmark
@@ -119,11 +119,11 @@ The full standard lives in
 ## Testing
 
 ```bash
-pytest                           # full suite (~2500 tests)
-pytest tests/unit                # unit only
-pytest tests/integration         # PostgreSQL-backed integration
-pytest tests/benchmark -k locomo # subset
-pytest -x --ff                   # stop on first fail, run failures first
+pytest                              # full suite (5571 tests)
+pytest tests_py/core                # core (pure business logic) only
+pytest tests_py/integration         # PostgreSQL-backed integration
+pytest tests_py/benchmarks -k locomo # subset
+pytest -x --ff                      # stop on first fail, run failures first
 ```
 
 Tests run against a local PostgreSQL instance. CI provisions a fresh DB

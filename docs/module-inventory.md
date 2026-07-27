@@ -16,7 +16,7 @@ zetetic source rule:
 shared/           25 files   (11 documented below — curated subset)
 core/            208 files   (~90 documented below — curated subset, incl. core/streaming, core/context_assembly)
 infrastructure/   77 files   (21 documented below — curated subset)
-handlers/        131 files   (53 registered tools — see docs/mcp-tools.md — + composition-root helpers)
+handlers/        131 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
 ```
 
 The prior CLAUDE.md text asserted "108 modules" for `core/` and similar
@@ -225,8 +225,8 @@ was the drift #114 was filed against).
 
 ## handlers/ — Composition roots
 
-50 standalone tools + 3 upstream-integration tools conditionally registered
-(53 total) + a `handlers/consolidation/` subpackage + per-tool helpers. See
+52 standalone tools + 3 upstream-integration tools conditionally registered
+(55 total) + a `handlers/consolidation/` subpackage + per-tool helpers. See
 `docs/mcp-tools.md` for the full tool catalogue with purpose and target
 latency.
 
