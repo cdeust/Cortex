@@ -14,7 +14,14 @@
 # (normally invoked by the Dev Containers CLI / VS Code "Reopen in
 # Container", never by hand.)
 
-FROM python:3.13-slim
+# Base image pinned by digest so a rebuild cannot silently pick up a
+# different python:3.13-slim. Digest resolved from the multi-arch manifest
+# list, so it stays correct on both amd64 and arm64.
+#   source: registry-1.docker.io/v2/library/python/manifests/3.13-slim,
+#           docker-content-digest header, fetched 2026-07-27.
+# Refresh: Dependabot's `docker` ecosystem (.github/dependabot.yml) opens a
+# PR when the tag moves; do not hand-edit without re-fetching the header.
+FROM python:3.13-slim@sha256:6771159cd4fa5d9bba1258caf0b82e6b73458c694d178ad97c5e925c2d0e1a91
 
 LABEL org.opencontainers.image.source="https://github.com/cdeust/Cortex"
 LABEL org.opencontainers.image.description="Cortex development container (issue #118)"

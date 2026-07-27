@@ -18,7 +18,14 @@
 
 # ── Builder ───────────────────────────────────────────────────────────────
 
-FROM python:3.12-slim-bookworm AS builder
+# Base image pinned by digest so a rebuild cannot silently pick up a
+# different python:3.12-slim-bookworm. Digest resolved from the multi-arch manifest
+# list, so it stays correct on both amd64 and arm64.
+#   source: registry-1.docker.io/v2/library/python/manifests/3.12-slim-bookworm,
+#           docker-content-digest header, fetched 2026-07-27.
+# Refresh: Dependabot's `docker` ecosystem (.github/dependabot.yml) opens a
+# PR when the tag moves; do not hand-edit without re-fetching the header.
+FROM python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b AS builder
 
 # Node.js 22 LTS
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -44,7 +51,7 @@ RUN python3 -c "from sentence_transformers import SentenceTransformer; \
 
 # ── Runtime ───────────────────────────────────────────────────────────────
 
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b
 
 # System: PostgreSQL 17 + pgvector + git + ripgrep
 RUN apt-get update && apt-get install -y --no-install-recommends \

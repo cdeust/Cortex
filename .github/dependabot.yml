@@ -1,0 +1,57 @@
+# Dependabot config.
+#
+# This file exists because this repo pins by hash: every `uses:` in
+# .github/workflows is a 40-char commit SHA, and every `FROM` in the three
+# Dockerfiles is a digest. A hash pin that nothing refreshes is strictly worse
+# than a tag — it freezes the dependency at the day it was pinned and stops
+# receiving upstream security fixes. Dependabot is the half of "pinned
+# dependencies" that makes the pins safe rather than merely reproducible.
+#
+# Scope note: `open-pull-requests-limit` is deliberately low. The point is a
+# steady trickle that gets reviewed, not a queue nobody reads.
+version: 2
+updates:
+  # Keeps the SHA pins in .github/workflows fresh. Dependabot rewrites the SHA
+  # and updates the trailing `# vX.Y.Z` comment in the same edit.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+
+  # One entry per Dockerfile: Dependabot's docker ecosystem scans a directory,
+  # not a file tree, so a single "/" entry would miss docker/ and .devcontainer/.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "build"
+
+  - package-ecosystem: "docker"
+    directory: "/docker"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "build"
+
+  - package-ecosystem: "docker"
+    directory: "/.devcontainer"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "build"
+
+  # Python dependencies are declared in pyproject.toml and locked in uv.lock.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
