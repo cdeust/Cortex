@@ -20,6 +20,16 @@ from mcp_server.core.context_assembly.budget import (
     truncate_to_budget,
 )
 
+# source: structural — the condenser keeps first + last sentence, so texts
+# of two or fewer sentences have no middle filler to drop.
+_FIRST_PLUS_LAST_SENTENCES = 2
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ARROWS_FOR_TRIPLES = 2
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_INDENT_RUNS_FOR_CODE = 3
+
 
 # ── User message condenser ──────────────────────────────────────────────
 # Strategy: keep the first sentence (establishes intent), any questions
@@ -32,7 +42,7 @@ def condense_user_message(text: str, token_budget: int) -> str:
     if estimate_tokens(text) <= token_budget:
         return text
     sentences = _split_sentences(text)
-    if len(sentences) <= 2:
+    if len(sentences) <= _FIRST_PLUS_LAST_SENTENCES:
         return truncate_to_budget(text, token_budget)
 
     kept: list[str] = [sentences[0]]
@@ -330,7 +340,7 @@ def condense_memory_content(
     # Heuristic dispatch by content shape
     if _has_code_blocks(content):
         return condense_assistant_message(content, token_budget)
-    if content.count("→") + content.count("->") >= 2:
+    if content.count("→") + content.count("->") >= _MIN_ARROWS_FOR_TRIPLES:
         return condense_entity_triples(content, token_budget)
     if content.lstrip().startswith("[user]:") or content.lstrip().startswith(
         "[assistant]:"
@@ -359,7 +369,7 @@ def _first_sentence(text: str) -> str:
 
 
 def _has_code_blocks(text: str) -> bool:
-    return "```" in text or text.count("    ") >= 3
+    return "```" in text or text.count("    ") >= _MIN_INDENT_RUNS_FOR_CODE
 
 
 def _split_by_code_blocks(text: str) -> list[tuple[bool, str]]:

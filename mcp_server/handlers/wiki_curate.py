@@ -99,6 +99,12 @@ schema = {
 }
 
 
+# Cap on the held-draft examples included in the response payload.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SAMPLE_HOLDS_CAP = 5
+
+
 def _get_store() -> MemoryStore:
     settings = get_memory_settings()
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
@@ -148,7 +154,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             decision = evaluate_draft(d, kdef)
             if decision.verdict == "hold":
                 counts["hold"] += 1
-                if len(sample_holds) < 5:
+                if len(sample_holds) < _SAMPLE_HOLDS_CAP:
                     sample_holds.append(
                         {
                             "id": d["id"],

@@ -187,9 +187,13 @@ def modulate_retrieval_temperature(base_temp: float, ser: float) -> float:
     return base_temp * ser
 
 
+# source: hand-tuned threshold documented in compute_cascade_gate docstring
+_CASCADE_GATE_THRESHOLD = 0.7
+
+
 def compute_cascade_gate(da: float, importance: float) -> bool:
     """DA gates consolidation advancement. Threshold 0.7 is hand-tuned."""
-    return (da * importance) > 0.7
+    return (da * importance) > _CASCADE_GATE_THRESHOLD
 
 
 # ── Composite Modulation ────────────────────────────────────────────────

@@ -1,4 +1,5 @@
-"""Memory system configuration — extends Cortex config with thermodynamic memory settings.
+"""Memory system configuration — extends Cortex config with thermodynamic
+memory settings.
 
 All settings are overridable via CORTEX_MEMORY_ env prefix.
 Defaults tuned from production parameters.
@@ -41,10 +42,13 @@ class MemorySettings(BaseSettings):
     """
 
     # ── Runtime ──────────────────────────────────────────────────────────
-    RUNTIME: str = ""  # "cli" | "cowork" — set by validator from CORTEX_RUNTIME or CLAUDE_ENVIRONMENT
+    # "cli" | "cowork" — set by validator from CORTEX_RUNTIME or
+    # CLAUDE_ENVIRONMENT
+    RUNTIME: str = ""
 
     # ── Storage ──────────────────────────────────────────────────────────
-    DATABASE_URL: str = "postgresql://127.0.0.1:5432/cortex"  # 127.0.0.1 not localhost: avoids IPv6 ::1 / peer-auth ambiguity
+    # 127.0.0.1 not localhost: avoids IPv6 ::1 / peer-auth ambiguity
+    DATABASE_URL: str = "postgresql://127.0.0.1:5432/cortex"
     DB_PATH: str = str(METHODOLOGY_DIR / "memory.db")  # deprecated, kept for migration
     SQLITE_FALLBACK_PATH: str = str(METHODOLOGY_DIR / "memory.db")
     STORE_BACKEND: str = "auto"  # "auto" | "postgresql" | "sqlite"

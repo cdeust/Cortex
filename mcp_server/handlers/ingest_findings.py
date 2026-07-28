@@ -132,7 +132,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         return {
             "ingested": False,
             "reason": "output_dir_not_resolved",
-            "detail": "no output_dir given and no graph roster entry has runs/<run_id>/",
+            "detail": (
+                "no output_dir given and no graph roster entry has runs/<run_id>/"
+            ),
         }
 
     try:

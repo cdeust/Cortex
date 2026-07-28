@@ -24,6 +24,17 @@ _DECISION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# ── Heuristic thresholds ──────────────────────────────────────────────────
+# source (all constants in this block): pre-existing tuned values, extracted
+# unchanged (#197 family 3); provenance not recorded at introduction.
+
+# More reversals than this triggers an "upfront analysis" suggestion.
+_MAX_REVERSALS_BEFORE_SUGGESTION = 2
+# Below this average confidence, decisions count as low-confidence.
+_LOW_CONFIDENCE_THRESHOLD = 0.5
+# Missing-decision suggestion fires only above this many session memories.
+_MIN_MEMORIES_FOR_DECISION_CHECK = 5
+
 
 def _is_decision_memory(m: dict[str, Any]) -> bool:
     """Check if a memory represents a decision."""
@@ -41,15 +52,15 @@ def _decision_suggestions(
 ) -> list[str]:
     """Generate suggestions from decision analysis metrics."""
     suggestions: list[str] = []
-    if reversal_count > 2:
+    if reversal_count > _MAX_REVERSALS_BEFORE_SUGGESTION:
         suggestions.append(
             f"{reversal_count} reversals detected — consider more upfront analysis"
         )
-    if avg_confidence < 0.5:
+    if avg_confidence < _LOW_CONFIDENCE_THRESHOLD:
         suggestions.append(
             "Low average decision confidence — gather more info before deciding"
         )
-    if decision_count == 0 and memory_count > 5:
+    if decision_count == 0 and memory_count > _MIN_MEMORIES_FOR_DECISION_CHECK:
         suggestions.append(
             "No explicit decisions recorded — consider documenting key choices"
         )

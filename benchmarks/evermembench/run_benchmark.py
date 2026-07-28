@@ -56,10 +56,15 @@ MINOR_MAP = {
 }
 
 
+# source: structural — a question ID carries a major and a minor prefix,
+# e.g. "F_SH_Top004_001" splits on "_" into at least those two fields
+_QID_MIN_PARTS = 2
+
+
 def parse_question_id(qid: str) -> tuple[str, str]:
     """Parse question ID like 'F_SH_Top004_001' into (major, minor)."""
     parts = qid.split("_")
-    if len(parts) >= 2:
+    if len(parts) >= _QID_MIN_PARTS:
         major = MAJOR_MAP.get(parts[0], parts[0])
         minor = MINOR_MAP.get(parts[1], parts[1])
         return major, minor
@@ -159,7 +164,10 @@ class EverMemRetriever:
 
 
 def evaluate_qa(retriever: EverMemRetriever, qa_items: list[dict]) -> dict[str, list]:
-    """Evaluate QA items against retriever. Checks answer substring in retrieved context."""
+    """Evaluate QA items against retriever.
+
+    Checks answer substring in retrieved context.
+    """
     results: dict[str, list] = defaultdict(list)
 
     for qa in qa_items:
@@ -233,7 +241,10 @@ def run_benchmark(limit: int | None = None, topic_filter: str | None = None):
             if isinstance(messages, list):
                 for msg in messages:
                     if isinstance(msg, dict):
-                        content = f"[{date}] [{group_name}] {msg.get('speaker', '')}: {msg.get('dialogue', '')}"
+                        content = (
+                            f"[{date}] [{group_name}] "
+                            f"{msg.get('speaker', '')}: {msg.get('dialogue', '')}"
+                        )
                         topic_dialogues[tid].append(content)
 
     # Group QA by topic

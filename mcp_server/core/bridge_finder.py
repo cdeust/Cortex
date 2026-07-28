@@ -12,6 +12,10 @@ from typing import Any
 
 from mcp_server.shared.project_ids import normalize_project_id
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_EXAMPLES_PER_PAIR = 5  # cap example edges carried per domain pair
+
 _ANALOGY_RE = re.compile(
     r"(like|similar to|analogous to|reminds me of|just as|the same way)"
     r"\s+(?:a\s+)?(.{5,40})",
@@ -116,7 +120,7 @@ def _accumulate_edge(
     pair = pairs[pair_key]
     pair["totalWeight"] += weight
     pair["edgeCount"] += 1
-    if len(pair["examples"]) < 5:
+    if len(pair["examples"]) < _MAX_EXAMPLES_PER_PAIR:
         pair["examples"].append({"fromId": from_id, "toId": to_id})
 
 

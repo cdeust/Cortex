@@ -46,7 +46,9 @@ schema = {
         "properties": {
             "content": {
                 "type": "string",
-                "description": "The reminder text Cortex will surface when the trigger fires.",
+                "description": (
+                    "The reminder text Cortex will surface when the trigger fires."
+                ),
                 "examples": [
                     "Before changing pg_recall.py, re-read ADR-0042 on WRRF weights.",
                     "Push the v3.10 release notes draft tonight.",
@@ -75,7 +77,10 @@ schema = {
             },
             "target_directory": {
                 "type": "string",
-                "description": "If set, the trigger only fires when the active project directory matches.",
+                "description": (
+                    "If set, the trigger only fires when the active project directory "
+                    "matches."
+                ),
                 "examples": ["/Users/alice/code/cortex"],
             },
             "source_memory_id": {

@@ -64,7 +64,8 @@ schema = {
                 "type": "string",
                 "description": (
                     "The first user message of the session. Used for keyword-"
-                    "based domain inference and to fire keyword-trigger prospective memories."
+                    "based domain inference and to fire keyword-trigger prospective "
+                    "memories."
                 ),
                 "examples": ["debug the recall regression in pg_recall.py"],
             },
@@ -321,7 +322,10 @@ async def handler(args: dict | None = None) -> dict:
         resp = _empty_response(
             domain=domain_id,
             confidence=detection.get("confidence", 0),
-            context=f'Domain "{domain_id}" detected but no profile built yet. Run rebuild_profiles to analyze session history.',
+            context=(
+                f'Domain "{domain_id}" detected but no profile built yet. '
+                "Run rebuild_profiles to analyze session history."
+            ),
         )
         resp["hotMemories"] = hot_memories
         resp["firedTriggers"] = fired_triggers

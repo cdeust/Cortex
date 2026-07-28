@@ -56,7 +56,10 @@ from benchmarks.locomo.data import (  # noqa: E402
     CATEGORY_NAMES,
 )
 
-DATA_PATH = "/Users/cdeust/Documents/Developments/personal/Cortex/benchmarks/locomo/locomo10.json"
+DATA_PATH = "/Users/cdeust/Documents/Developments/personal/Cortex/benchmarks/locomo/locomo10.json"  # noqa: E501 — absolute dataset path, one token with no whitespace to split on
+
+# source: structural — the K in the reported R@10 metric
+_RECALL_AT_10_K = 10
 
 # Theoretical minima per signal (mirrors pg_schema.py: cosine in [-1,1] -> m=-1;
 # all other signals are already in [0,1] -> m=0). Our vector signal is clamped
@@ -176,13 +179,15 @@ def eval_fusion(fuse_fn, model, all_convos, top_k=10):
     all_ranks = [r for rs in cat_hits.values() for r in rs]
     n = len(all_ranks)
     mrr = sum(1.0 / r for r in all_ranks if r) / n if n else 0.0
-    r10 = sum(1 for r in all_ranks if r and r <= 10) / n if n else 0.0
+    r10 = sum(1 for r in all_ranks if r and r <= _RECALL_AT_10_K) / n if n else 0.0
     per_cat = {}
     for cat, ranks in cat_hits.items():
         nn = len(ranks)
         per_cat[cat] = {
             "mrr": sum(1.0 / r for r in ranks if r) / nn if nn else 0.0,
-            "r10": sum(1 for r in ranks if r and r <= 10) / nn if nn else 0.0,
+            "r10": sum(1 for r in ranks if r and r <= _RECALL_AT_10_K) / nn
+            if nn
+            else 0.0,
             "n": nn,
         }
     return mrr, r10, per_cat, n
@@ -237,7 +242,7 @@ def main():
     print("\n=== DELTA (TMM - RRF) ===")
     print(f"  MRR: {delta_mrr:+.4f}   R@10: {delta_r10:+.4f}")
 
-    out = "/Users/cdeust/Documents/Developments/personal/Cortex/benchmarks/results/rrf_vs_tmm_locomo.json"
+    out = "/Users/cdeust/Documents/Developments/personal/Cortex/benchmarks/results/rrf_vs_tmm_locomo.json"  # noqa: E501 — absolute output path, one token with no whitespace to split on
     with open(out, "w") as f:
         json.dump(results, f, indent=2)
     print(f"\nWrote {out}")

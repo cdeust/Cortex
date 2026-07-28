@@ -140,7 +140,8 @@ def _pg_connection() -> Check:
             "PG connection",
             False,
             f"{type(exc).__name__}: {exc}",
-            "Start PostgreSQL and createdb: `brew services start postgresql@17 && createdb cortex`",
+            "Start PostgreSQL and createdb: "
+            "`brew services start postgresql@17 && createdb cortex`",
         )
 
 
@@ -157,7 +158,8 @@ def _pg_extensions() -> Check:
     try:
         with psycopg.connect(url, connect_timeout=5) as conn:
             rows = conn.execute(
-                "SELECT extname FROM pg_extension WHERE extname IN ('vector', 'pg_trgm')"
+                "SELECT extname FROM pg_extension "
+                "WHERE extname IN ('vector', 'pg_trgm')"
             ).fetchall()
             names = {r[0] for r in rows}
             missing = {"vector", "pg_trgm"} - names
@@ -263,7 +265,8 @@ def _i10_config() -> Check:
             and s.POOL_BATCH_MAX >= DEFAULT_SEMAPHORE["batch"] + 1
         )
         detail = (
-            f"interactive={s.POOL_INTERACTIVE_MAX} (>= {DEFAULT_SEMAPHORE['interactive'] + 1}), "
+            f"interactive={s.POOL_INTERACTIVE_MAX} "
+            f"(>= {DEFAULT_SEMAPHORE['interactive'] + 1}), "
             f"batch={s.POOL_BATCH_MAX} (>= {DEFAULT_SEMAPHORE['batch'] + 1})"
         )
         fix = (

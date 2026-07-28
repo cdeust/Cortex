@@ -59,7 +59,8 @@ class SqliteQueryMixin:
         src = "current_memories" if heads_only else "memories"
         if include_benchmarks:
             rows = self._conn.execute(
-                f"SELECT * FROM {src} WHERE heat_base >= ? ORDER BY heat_base DESC LIMIT ?",
+                f"SELECT * FROM {src} WHERE heat_base >= ? "
+                f"ORDER BY heat_base DESC LIMIT ?",
                 (min_heat, limit),
             ).fetchall()
         else:

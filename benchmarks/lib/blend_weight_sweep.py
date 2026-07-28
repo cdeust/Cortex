@@ -291,8 +291,14 @@ def write_summary_csv(records: list[dict[str, Any]], out_dir: Path) -> None:
             w.writerow(row)
 
 
+# source: structural — a marginal effect needs at least two distinct levels of
+# a knob to have a range at all
+_MIN_LEVELS_FOR_EFFECT = 2
+
+
 def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """Pick the best cell by MRR (R@10 tiebreak), report plateau and per-knob effects."""
+    """Pick the best cell by MRR (R@10 tiebreak), report plateau and per-knob
+    effects."""
     valid = [r for r in records if r.get("mrr") is not None and r["returncode"] == 0]
     if not valid:
         return {"best": None, "note": "no valid cells"}
@@ -304,7 +310,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         per_level: dict[float, list[float]] = {}
         for r in valid:
             per_level.setdefault(r["weights"][k], []).append(r["mrr"])
-        if len(per_level) < 2:
+        if len(per_level) < _MIN_LEVELS_FOR_EFFECT:
             continue
         means = {lv: sum(xs) / len(xs) for lv, xs in per_level.items()}
         marginal[k] = {

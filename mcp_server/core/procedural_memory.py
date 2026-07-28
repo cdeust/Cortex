@@ -76,6 +76,16 @@ PROFICIENCY_ALPHA: float = 0.2
 _PRIOR_SUCCESS: float = 1.0
 _PRIOR_TOTAL: float = 2.0
 
+# Reward at or above this counts a run as a success.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SUCCESS_REWARD: float = 0.5
+
+# Context-similarity score at or above this counts as a context match.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_CONTEXT_MATCH_THRESHOLD: float = 0.5
+
 
 # ── Data model ──────────────────────────────────────────────────────────────
 @dataclass(frozen=True)
@@ -272,7 +282,7 @@ def mine_skills(
             )
             slot["sessions"] += 1
             if reward is not None:
-                if reward >= 0.5:
+                if reward >= _SUCCESS_REWARD:
                     slot["succ"] += 1
                 else:
                     slot["fail"] += 1
@@ -363,7 +373,7 @@ def reinforce(skill: ProceduralSkill, outcome) -> ProceduralSkill:
             proficiency = _PRIOR_SUCCESS / _PRIOR_TOTAL
         proficiency = proficiency + PROFICIENCY_ALPHA * (reward - proficiency)
         proficiency = max(0.0, min(1.0, proficiency))
-        if reward >= 0.5:
+        if reward >= _SUCCESS_REWARD:
             success_count += 1
         else:
             failure_count += 1
@@ -456,7 +466,7 @@ def _explain_match(skill: ProceduralSkill, ctx_score: float, prime: float) -> st
     ]
     if skill.is_habitual:
         bits.append("habitual")
-    if ctx_score >= 0.5:
+    if ctx_score >= _CONTEXT_MATCH_THRESHOLD:
         bits.append(f"matches context '{skill.context_signature}'")
     if prime:
         bits.append("primed by current action")

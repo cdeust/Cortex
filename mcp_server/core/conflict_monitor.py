@@ -230,6 +230,11 @@ def _tokens(text: str) -> list[str]:
     return _TOKEN_RE.findall((text or "").lower())
 
 
+# source: floor documented in the _topic_tokens docstring ("keeping only
+# tokens of length >= 3"); tuning provenance not recorded
+_MIN_TOKEN_CHARS = 3
+
+
 def _topic_tokens(text: str) -> set[str]:
     """Content tokens for topic overlap: tokens minus stopwords and negation
     markers, keeping only tokens of length >= 3 (drops noise like single chars).
@@ -239,7 +244,7 @@ def _topic_tokens(text: str) -> set[str]:
     """
     out: set[str] = set()
     for t in _tokens(text):
-        if len(t) < 3:
+        if len(t) < _MIN_TOKEN_CHARS:
             continue
         if t in _STOPWORDS or t in _NEGATION_MARKERS:
             continue

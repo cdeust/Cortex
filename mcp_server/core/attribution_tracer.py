@@ -197,6 +197,11 @@ def _compute_mean_baseline(conversations: list[dict], max_samples: int) -> list[
     return mean
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_EDGE_WEIGHT = 0.01  # perturbation weights at or below this are noise
+
+
 def _compute_input_to_extractor_edges(
     mean_baseline: list[float],
     epsilon: float,
@@ -215,7 +220,7 @@ def _compute_input_to_extractor_edges(
         diff = norm(subtract(perturbed, mean_baseline))
         weight = diff / epsilon
 
-        if weight > 0.01:
+        if weight > _MIN_EDGE_WEIGHT:
             edges.append(
                 AttributionEdge(
                     source=f"input:{signal}",

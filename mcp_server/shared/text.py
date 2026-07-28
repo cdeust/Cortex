@@ -174,6 +174,12 @@ STOPWORDS: frozenset[str] = frozenset(
 _SPLIT_RE = re.compile(r"\W+")
 
 
+# source: two-tier filter documented in extract_keywords docstring —
+# tokens >6 chars pass unconditionally, 2-6 char tokens only if technical
+_LONG_TOKEN_CHARS = 6
+_MIN_SHORT_TOKEN_CHARS = 2
+
+
 def extract_keywords(text: str | None) -> set[str]:
     """Extract meaningful keywords from text as a set.
 
@@ -186,7 +192,8 @@ def extract_keywords(text: str | None) -> set[str]:
     return {
         w
         for w in _SPLIT_RE.split(text.lower())
-        if len(w) > 6 or (len(w) >= 2 and w in TECHNICAL_SHORT_TERMS)
+        if len(w) > _LONG_TOKEN_CHARS
+        or (len(w) >= _MIN_SHORT_TOKEN_CHARS and w in TECHNICAL_SHORT_TERMS)
     }
 
 

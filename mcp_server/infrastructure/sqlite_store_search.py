@@ -159,7 +159,8 @@ class SqliteSearchMixin:
         placeholders = ",".join("?" * len(rowids))
         try:
             rows = self._conn.execute(
-                f"SELECT id, embedding_model FROM memories WHERE id IN ({placeholders})",
+                f"SELECT id, embedding_model FROM memories "
+                f"WHERE id IN ({placeholders})",
                 rowids,
             ).fetchall()
         except sqlite3.OperationalError:

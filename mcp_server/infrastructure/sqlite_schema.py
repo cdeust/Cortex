@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS memories (
     source_attribution      TEXT DEFAULT 'unknown',
     stimulus_signature      TEXT DEFAULT '',
     extinction_strength     REAL DEFAULT 0.0
-                            CHECK (extinction_strength >= 0.0 AND extinction_strength <= 1.0),
+                            CHECK (extinction_strength >= 0.0
+                                   AND extinction_strength <= 1.0),
     plasticity              REAL DEFAULT 1.0,
     stability               REAL DEFAULT 0.0,
     reconsolidation_count   INTEGER DEFAULT 0,
@@ -369,9 +370,11 @@ INDEXES_DDL: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_memories_stage ON memories (consolidation_stage)",
     "CREATE INDEX IF NOT EXISTS idx_entities_name ON entities (name)",
     "CREATE INDEX IF NOT EXISTS idx_entities_heat ON entities (heat)",
-    "CREATE INDEX IF NOT EXISTS idx_prospective_active ON prospective_memories (is_active)",
+    "CREATE INDEX IF NOT EXISTS idx_prospective_active "
+    "ON prospective_memories (is_active)",
     "CREATE INDEX IF NOT EXISTS idx_schemas_domain ON schemas (domain)",
-    "CREATE INDEX IF NOT EXISTS idx_rel_pair_type ON relationships (source_entity_id, target_entity_id, relationship_type)",
+    "CREATE INDEX IF NOT EXISTS idx_rel_pair_type ON relationships "
+    "(source_entity_id, target_entity_id, relationship_type)",
     "CREATE INDEX IF NOT EXISTS idx_memories_agent_context ON memories (agent_context)",
 ]
 

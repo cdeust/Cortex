@@ -79,6 +79,12 @@ def _entry_outcome(entry: dict) -> Any:
     return entry.get("outcome")
 
 
+# Minimum sessions of history before skill mining is attempted.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_MINING_SESSIONS = 3
+
+
 def maybe_mine_skills(
     sessions: list[dict],
     store: Any,
@@ -90,7 +96,7 @@ def maybe_mine_skills(
     """
     try:
         mining_input = _session_log_to_mining_input(sessions)
-        if len(mining_input) < 3:
+        if len(mining_input) < _MIN_MINING_SESSIONS:
             return {
                 "status": "skipped",
                 "reason": "insufficient_history",

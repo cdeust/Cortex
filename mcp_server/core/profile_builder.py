@@ -20,6 +20,21 @@ _BURST_THRESHOLD_MS = 600_000
 _EXPLORATION_THRESHOLD_TURNS = 20
 _EMA_ALPHA = 0.1
 
+# Ratio above which one session mode dominates.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_DOMINANT_MODE_RATIO = 0.6
+
+# Session duration (ms) above which behavior reads as reflective (30 min).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_REFLECTIVE_THRESHOLD_MS = 1_800_000
+
+# Fraction of the tool mix above which one tool family dominates.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_TOOL_MIX_DOMINANCE = 0.4
+
 
 def _update_session_shape(
     ss: dict,
@@ -39,9 +54,9 @@ def _update_session_shape(
         ss["explorationRatio"] + (is_exploration - ss["explorationRatio"]) / new_count
     )
 
-    if ss["burstRatio"] > 0.6:
+    if ss["burstRatio"] > _DOMINANT_MODE_RATIO:
         ss["dominantMode"] = "burst"
-    elif ss["explorationRatio"] > 0.6:
+    elif ss["explorationRatio"] > _DOMINANT_MODE_RATIO:
         ss["dominantMode"] = "exploration"
     else:
         ss["dominantMode"] = "mixed"
@@ -82,7 +97,7 @@ def _build_style_observation(
     if duration is not None:
         if duration < _BURST_THRESHOLD_MS:
             observation["activeReflective"] = 0.5
-        elif duration > 1_800_000:
+        elif duration > _REFLECTIVE_THRESHOLD_MS:
             observation["activeReflective"] = -0.5
         else:
             observation["activeReflective"] = 0.0
@@ -91,11 +106,11 @@ def _build_style_observation(
         edit_count = sum(1 for t in tools_used if t in ("Edit", "Write"))
         read_count = sum(1 for t in tools_used if t in ("Read", "Grep"))
         total = len(tools_used)
-        if edit_count / total > 0.4:
+        if edit_count / total > _TOOL_MIX_DOMINANCE:
             observation["activeReflective"] = (
                 observation.get("activeReflective", 0) + 0.3
             )
-        if read_count / total > 0.4:
+        if read_count / total > _TOOL_MIX_DOMINANCE:
             observation["activeReflective"] = (
                 observation.get("activeReflective", 0) - 0.3
             )

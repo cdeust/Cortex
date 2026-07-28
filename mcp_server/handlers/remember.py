@@ -253,7 +253,8 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         # snapshot (tagged 'memory-replica' + 'vpath:…'), refresh the existing row
         # in-place rather than inserting a new one (one row per block file).
         # Normal writes are completely unaffected — this branch exits early on
-        # any write that isn't a replica. contract: zetetic-team-subagents memory/contract.md §8b
+        # any write that isn't a replica.
+        # contract: zetetic-team-subagents memory/contract.md §8b
         upserted, upsert_id = try_block_replica_upsert(
             content, embedding, tags, source, store
         )

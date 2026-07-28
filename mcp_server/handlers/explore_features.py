@@ -44,7 +44,9 @@ schema = {
             },
             "features": {
                 "type": "array",
-                "description": "Active sparse-dictionary behavioral features (mode=features).",
+                "description": (
+                    "Active sparse-dictionary behavioral features (mode=features)."
+                ),
                 "items": {
                     "type": "object",
                     "properties": {
@@ -55,16 +57,23 @@ schema = {
             },
             "attribution": {
                 "type": "array",
-                "description": "Signal → decision attribution edges (mode=attribution).",
+                "description": (
+                    "Signal → decision attribution edges (mode=attribution)."
+                ),
                 "items": {"type": "object"},
             },
             "persona": {
                 "type": "object",
-                "description": "12-dimensional persona vector + drift-from-baseline (mode=persona).",
+                "description": (
+                    "12-dimensional persona vector + drift-from-baseline "
+                    "(mode=persona)."
+                ),
             },
             "crosscoder": {
                 "type": "object",
-                "description": "Cross-domain persistent-feature comparison (mode=crosscoder).",
+                "description": (
+                    "Cross-domain persistent-feature comparison (mode=crosscoder)."
+                ),
             },
         },
     },
@@ -103,12 +112,17 @@ schema = {
             },
             "domain": {
                 "type": "string",
-                "description": "Cognitive domain to inspect. Omit for global aggregate where supported.",
+                "description": (
+                    "Cognitive domain to inspect. Omit for global aggregate where "
+                    "supported."
+                ),
                 "examples": ["cortex", "auth-service"],
             },
             "compare_domain": {
                 "type": "string",
-                "description": "Second cognitive domain for the 'crosscoder' mode comparison.",
+                "description": (
+                    "Second cognitive domain for the 'crosscoder' mode comparison."
+                ),
                 "examples": ["ai-architect"],
             },
         },

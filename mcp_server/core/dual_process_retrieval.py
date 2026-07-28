@@ -88,6 +88,10 @@ METHOD_SCORE_PROXY = "score_proxy"  # fallback: fused WRRF score, never skips
 METHOD_EMPTY = "empty"  # no candidates / no similarities
 METHOD_DISABLED = "disabled"  # ablation guard fired upstream
 
+# source: structural — a top1↔top2 margin exists only when at least two
+# candidates compete
+_MIN_CANDIDATES_FOR_MARGIN = 2
+
 
 @dataclass
 class FamiliaritySignal:
@@ -173,7 +177,7 @@ def assess_familiarity(
     top = ordered[0]
     mean = sum(sims) / n
     # top1 − top2; for a singleton there is no competitor, so margin = top.
-    margin = ordered[0] - ordered[1] if n >= 2 else ordered[0]
+    margin = ordered[0] - ordered[1] if n >= _MIN_CANDIDATES_FOR_MARGIN else ordered[0]
     return FamiliaritySignal(top, mean, margin, n, method)
 
 
@@ -202,7 +206,7 @@ def recollection_needed(
         # A proxy signal (e.g. fused WRRF score) is not an a-contextual vector
         # similarity; we do not trust it to license skipping recollection.
         return True
-    dominant = signal.n < 2 or signal.margin >= margin
+    dominant = signal.n < _MIN_CANDIDATES_FOR_MARGIN or signal.margin >= margin
     sufficient = signal.familiarity >= threshold and dominant
     return not sufficient
 

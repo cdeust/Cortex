@@ -37,6 +37,11 @@ from benchmarks.locomo.data import (
     parse_evidence_refs,
 )
 
+# source: structural — the K in the reported R@5 / R@10 metrics (the "top 10"
+# the missed-question listing reports is the same cutoff)
+_RECALL_AT_5_K = 5
+_RECALL_AT_10_K = 10
+
 
 # ── Evaluation ───────────────────────────────────────────────────────────
 
@@ -114,8 +119,8 @@ def print_results(
         if not rs:
             continue
         mrr_sum = sum(1.0 / r["hit_rank"] for r in rs if r["hit_rank"])
-        r5 = sum(1 for r in rs if r["hit_rank"] and r["hit_rank"] <= 5)
-        r10 = sum(1 for r in rs if r["hit_rank"] and r["hit_rank"] <= 10)
+        r5 = sum(1 for r in rs if r["hit_rank"] and r["hit_rank"] <= _RECALL_AT_5_K)
+        r10 = sum(1 for r in rs if r["hit_rank"] and r["hit_rank"] <= _RECALL_AT_10_K)
         n = len(rs)
         print(f"{cat:<20} {mrr_sum / n:>6.3f} {r5 / n:>5.1%} {r10 / n:>5.1%} {n:>5}")
         overall_mrr_sum += mrr_sum
@@ -268,7 +273,12 @@ def run_benchmark(
         if verbose:
             print("\nMissed questions (no hit in top 10):")
             for cat, rs in all_results.items():
-                for m in [r for r in rs if not r["hit_rank"] or r["hit_rank"] > 10][:3]:
+                missed = [
+                    r
+                    for r in rs
+                    if not r["hit_rank"] or r["hit_rank"] > _RECALL_AT_10_K
+                ]
+                for m in missed[:3]:
                     print(f"  [{cat}] {m['question'][:80]}")
 
         # Aggregate metrics for this run.
@@ -281,7 +291,9 @@ def run_benchmark(
             if not rs:
                 continue
             mrr_sum = sum(1.0 / r["hit_rank"] for r in rs if r["hit_rank"])
-            r10 = sum(1 for r in rs if r["hit_rank"] and r["hit_rank"] <= 10)
+            r10 = sum(
+                1 for r in rs if r["hit_rank"] and r["hit_rank"] <= _RECALL_AT_10_K
+            )
             n = len(rs)
             category_mrr_run[cat] = mrr_sum / n
             category_recall10_run[cat] = r10 / n
@@ -330,7 +342,8 @@ def run_benchmark(
         print(
             f"  R@10:    mean={stats_recall10['mean']:.3f}  "
             f"std={stats_recall10['std']:.3f}  "
-            f"95% CI [{stats_recall10['ci95_lower']:.3f}, {stats_recall10['ci95_upper']:.3f}]"
+            f"95% CI [{stats_recall10['ci95_lower']:.3f}, "
+            f"{stats_recall10['ci95_upper']:.3f}]"
         )
 
     manifest = {

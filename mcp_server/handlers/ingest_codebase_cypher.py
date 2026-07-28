@@ -49,6 +49,15 @@ _TRANSPORT_ERRORS: tuple[type[Exception], ...] = (
     TypeError,
 )
 
+# source: structural — the call-edge and file-containment queries RETURN
+# exactly two columns; shorter rows are malformed and skipped
+_PAIR_ROW_ARITY = 2
+
+
+def _optional_col(row: list, idx: int) -> Any:
+    """Positional column value, or None when the paged row is too short."""
+    return row[idx] if len(row) > idx else None
+
 
 def file_path_from_qn(qn: str) -> list[str]:
     """Last-resort heuristic: derive plausible file-path candidates
@@ -308,7 +317,7 @@ async def iter_call_edges(
             rows = result.get("rows") or []
             batch: list[tuple[str, str]] = []
             for row in rows:
-                if len(row) < 2:
+                if len(row) < _PAIR_ROW_ARITY:
                     continue
                 src, dst = row[0], row[1]
                 if src and dst and src != dst:
@@ -350,7 +359,7 @@ async def iter_containment_edges(
         rows = result.get("rows") or []
         batch: list[tuple[str, str]] = []
         for row in rows:
-            if len(row) < 2:
+            if len(row) < _PAIR_ROW_ARITY:
                 continue
             f, qn = row[0], row[1]
             if f and qn and f in known_files:
@@ -409,9 +418,9 @@ async def fetch_files(
             rows.append(
                 {
                     "path": row[0],
-                    "name": row[1] if len(row) > 1 else None,
-                    "extension": row[2] if len(row) > 2 else None,
-                    "size_bytes": row[3] if len(row) > 3 else None,
+                    "name": _optional_col(row, 1),
+                    "extension": _optional_col(row, 2),
+                    "size_bytes": _optional_col(row, 3),
                 }
             )
         if len(page_rows) < page_limit:

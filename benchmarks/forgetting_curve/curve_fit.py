@@ -34,6 +34,12 @@ import math
 # Inference, 2nd ed., §2.6 (the "rules of thumb" for ΔAIC).
 AIC_INDISTINGUISHABLE = 2.0
 
+# Magnitude at or below which a float counts as zero, guarding the degenerate
+# cases (singular OLS denominator, zero total variance, zero decay rate).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_NEAR_ZERO_TOL = 1e-12
+
 
 def _ols(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
     """Ordinary least squares of ys on xs. Returns (slope, intercept, r2)."""
@@ -43,14 +49,14 @@ def _ols(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
     sxy = sum(x * y for x, y in zip(xs, ys))
     sx2 = sum(x * x for x in xs)
     denom = n * sx2 - sx * sx
-    if abs(denom) < 1e-12:
+    if abs(denom) < _NEAR_ZERO_TOL:
         return 0.0, sy / n if n else 0.0, 0.0
     slope = (n * sxy - sx * sy) / denom
     intercept = (sy - slope * sx) / n
     mean_y = sy / n
     ss_tot = sum((y - mean_y) ** 2 for y in ys)
     ss_res = sum((y - (intercept + slope * x)) ** 2 for x, y in zip(xs, ys))
-    r2 = 1.0 - ss_res / ss_tot if ss_tot > 1e-12 else 0.0
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > _NEAR_ZERO_TOL else 0.0
     return slope, intercept, r2
 
 
@@ -60,7 +66,7 @@ def _r2_hspace(points: list[tuple[float, float]], pred) -> tuple[float, float]:
     mean_h = sum(heats) / len(heats)
     ss_tot = sum((h - mean_h) ** 2 for h in heats)
     ss_res = sum((h - pred(t)) ** 2 for t, h in points)
-    r2 = 1.0 - ss_res / ss_tot if ss_tot > 1e-12 else 0.0
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > _NEAR_ZERO_TOL else 0.0
     return r2, ss_res
 
 
@@ -82,7 +88,7 @@ def fit_exponential(points: list[tuple[float, float]]) -> dict:
         return a * math.exp(-b * t)
 
     r2_h, rss_h = _r2_hspace(points, pred)
-    half_life = math.log(2) / b if b > 1e-12 else float("inf")
+    half_life = math.log(2) / b if b > _NEAR_ZERO_TOL else float("inf")
     return {
         "model": "exponential",
         "a": round(a, 6),
@@ -107,7 +113,7 @@ def fit_power_law(points: list[tuple[float, float]]) -> dict:
 
     r2_h, rss_h = _r2_hspace(points, pred)
     # Power-law half-life: t at which h = a·t^-b falls to half of h(1h)=a.
-    half_life = 2.0 ** (1.0 / b) if b > 1e-12 else float("inf")
+    half_life = 2.0 ** (1.0 / b) if b > _NEAR_ZERO_TOL else float("inf")
     return {
         "model": "power_law",
         "a": round(a, 6),

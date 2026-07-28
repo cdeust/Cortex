@@ -73,6 +73,20 @@ _DECIDED_RE = re.compile(
 _FILE_PATH_RE = re.compile(r"(?:\.{0,2}/)?(?:[\w@.-]+/)+[\w@.-]+\.\w+")
 _CAMELCASE_RE = re.compile(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b")
 
+# Private function names shorter than this are noise (e.g. "_x").
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_PRIVATE_NAME_LEN = 3
+
+# CamelCase tokens of length <= 2 are ignored as noise.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_IGNORED_CAMEL_LEN = 2
+
+# source: structural — a decided_to_use edge links the first two decisions,
+# so at least two are required
+_MIN_DECISIONS_FOR_EDGE = 2
+
 
 def _extract_import_entities(content: str) -> list[tuple[str, str, str]]:
     """Extract dependency and function entities from import statements."""
@@ -93,13 +107,14 @@ def _extract_import_entities(content: str) -> list[tuple[str, str, str]]:
 def _extract_definition_entities(
     content: str,
 ) -> tuple[list[tuple[str, str, str]], set[str]]:
-    """Extract function and class definition entities. Returns (entities, defined_func_names)."""
+    """Extract function and class definition entities. Returns
+    (entities, defined_func_names)."""
     results: list[tuple[str, str, str]] = []
     defined_funcs: set[str] = set()
 
     for m in _DEF_RE.finditer(content):
         fname = m.group(1)
-        if fname.startswith("_") and len(fname) < 3:
+        if fname.startswith("_") and len(fname) < _MIN_PRIVATE_NAME_LEN:
             continue
         defined_funcs.add(fname)
         results.append((fname, "function", ""))
@@ -128,7 +143,7 @@ def _extract_pattern_entities(
 
     for m in _CAMELCASE_RE.finditer(content):
         name = m.group(0)
-        if name not in defined_funcs and len(name) > 2:
+        if name not in defined_funcs and len(name) > _MAX_IGNORED_CAMEL_LEN:
             results.append((name, "technology", ""))
 
     return results
@@ -270,7 +285,7 @@ def infer_relationships(
             }
         )
 
-    if len(decisions) >= 2:
+    if len(decisions) >= _MIN_DECISIONS_FOR_EDGE:
         relationships.append(
             {
                 "source": decisions[0],

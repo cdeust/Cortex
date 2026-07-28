@@ -96,7 +96,10 @@ def main() -> int:
         _REPO_ROOT
         / "docs"
         / "campaigns"
-        / f"i6d1_memory_dedup_exact_{'apply' if args.apply else 'dry-run'}_{timestamp}.json"
+        / (
+            f"i6d1_memory_dedup_exact_"
+            f"{'apply' if args.apply else 'dry-run'}_{timestamp}.json"
+        )
     )
     journal_path.parent.mkdir(parents=True, exist_ok=True)
     journal_path.write_text(

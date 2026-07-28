@@ -311,7 +311,8 @@ def _format_report(records: list[PageRecord], wiki_root: Path) -> str:
         f"- **Rejected (admission gate):** {n_rejected} ({_pct(n_rejected, n)})"
     )
     lines.append(
-        f"- **Kind kept (legacy → modern direct map):** {n_kept} ({_pct(n_kept, n_admitted)} of admitted)"
+        f"- **Kind kept (legacy → modern direct map):** {n_kept} "
+        f"({_pct(n_kept, n_admitted)} of admitted)"
     )
     lines.append(
         f"- **Kind changed:** {n_changed} ({_pct(n_changed, n_admitted)} of admitted)"
@@ -391,7 +392,8 @@ def _format_report(records: list[PageRecord], wiki_root: Path) -> str:
             audience = ", ".join(f"`{a}`" for a in r.proposed_audience)
             provenance = f"`{r.proposed_provenance}`"
         lines.append(
-            f"| `{r.path}` | {transition} | {lifecycle} | {audience} | {provenance} | {status} |"
+            f"| `{r.path}` | {transition} | {lifecycle} "
+            f"| {audience} | {provenance} | {status} |"
         )
     lines.append("")
     return "\n".join(lines)

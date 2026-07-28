@@ -20,6 +20,10 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 logger = logging.getLogger(__name__)
 
+# source: structural — compression levels documented in the module
+# docstring: full text (0) -> gist (1) -> tag (2)
+_TAG_LEVEL = 2
+
 
 def run_compression_cycle(
     store: MemoryStore,
@@ -88,11 +92,11 @@ def _compress_memory(
             #   computed — no redundant re-encode. Exactly 2 encode() calls
             #   (one for the gist, one for the tag).
             gist, gist_emb = _compress_full_to_gist(store, embeddings, mem, stats)
-            if target_level >= 2:
+            if target_level >= _TAG_LEVEL:
                 _compress_to_tag_from_gist(
                     store, embeddings, mem, stats, gist=gist, gist_emb=gist_emb
                 )
-        elif target_level >= 2 and current_level == 1:
+        elif target_level >= _TAG_LEVEL and current_level == 1:
             _compress_gist_to_tag(store, embeddings, mem, stats)
     except Exception:
         logger.exception("Failed to compress memory %d", mem["id"])

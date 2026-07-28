@@ -85,7 +85,8 @@ def ap_provenance_tags(version: str | None) -> list[str]:
 
 
 def native_provenance_tags() -> list[str]:
-    """Provenance tag for a memory written via the native (``codebase_analyze``) path."""
+    """Provenance tag for a memory written via the native (``codebase_analyze``)
+    path."""
     return [SRC_NATIVE_TAG]
 
 

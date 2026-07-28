@@ -45,6 +45,12 @@ def _rank(cur, tid, query):
     return ids.index(tid) + 1 if tid in ids else None
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_FIRST_LINE_CHARS = 20
+# source: structural — the guard reports a top-10 (R@10) tally
+_TOP_RANK_CUTOFF = 10
+
 rows_out = []
 conn = psycopg.connect("postgresql://cdeust@127.0.0.1:5432/cortex")
 with conn.cursor() as cur:
@@ -52,7 +58,11 @@ with conn.cursor() as cur:
         cur.execute("SELECT content FROM memories WHERE id=%s", (tid,))
         (content,) = cur.fetchone()
         first_line = next(
-            (ln.strip() for ln in content.splitlines() if len(ln.strip()) > 20),
+            (
+                ln.strip()
+                for ln in content.splitlines()
+                if len(ln.strip()) > _MIN_FIRST_LINE_CHARS
+            ),
             content[:90],
         )
         query = first_line[:90]
@@ -74,7 +84,8 @@ with conn.cursor() as cur:
 conn.close()
 
 print(
-    f"{'id':>8} {'label':<26} {'hb_avant':>9} {'rang_avant':>11} {'rang_apres':>11}  requete"
+    f"{'id':>8} {'label':<26} {'hb_avant':>9} "
+    f"{'rang_avant':>11} {'rang_apres':>11}  requete"
 )
 for tid, label, hb, rb, ra, q in rows_out:
     rb_s = str(rb) if rb else ">60"
@@ -82,6 +93,8 @@ for tid, label, hb, rb, ra, q in rows_out:
     print(f"{tid:>8} {label:<26} {hb:>9.4f} {rb_s:>11} {ra_s:>11}  {q}")
 
 n_improved = sum(1 for _, _, _, rb, ra, _ in rows_out if (ra or 999) <= (rb or 999))
-n_top10_after = sum(1 for *_, ra, _ in rows_out if ra is not None and ra <= 10)
+n_top10_after = sum(
+    1 for *_, ra, _ in rows_out if ra is not None and ra <= _TOP_RANK_CUTOFF
+)
 print(f"\nAmeliore ou stable: {n_improved}/{len(rows_out)}")
 print(f"Top-10 apres: {n_top10_after}/{len(rows_out)}")

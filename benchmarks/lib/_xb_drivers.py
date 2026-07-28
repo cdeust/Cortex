@@ -1,6 +1,7 @@
 """Subprocess drivers for cross_benchmark_runner.
 
-Each driver is invoked as `python -m benchmarks.lib._xb_drivers <bench> <data_path> <limit>`
+Each driver is invoked as
+`python -m benchmarks.lib._xb_drivers <bench> <data_path> <limit>`
 in a fresh subprocess. Env vars (CORTEX_DECAY_LAMBDA, CORTEX_MEMORY_*) are set
 by the parent before exec — the driver does not parse them. The driver runs
 the inner benchmark loop and emits a single line `__JSON__{...}` to stdout.
@@ -19,6 +20,12 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+# source: structural — the K in the reported recall_at_10 metric
+_RECALL_AT_10_K = 10
+
+# source: structural — argv is [script, bench, data_path, limit]
+_EXPECTED_ARGC = 4
 
 
 def _drive_longmemeval(data_path: str, limit: int) -> dict:
@@ -73,7 +80,7 @@ def _drive_locomo(data_path: str, limit: int) -> dict:
     n = len(all_rs)
     mrr = sum(1.0 / r["hit_rank"] for r in all_rs if r["hit_rank"]) / n if n else 0.0
     r10 = (
-        sum(1 for r in all_rs if r["hit_rank"] and r["hit_rank"] <= 10) / n
+        sum(1 for r in all_rs if r["hit_rank"] and r["hit_rank"] <= _RECALL_AT_10_K) / n
         if n
         else 0.0
     )
@@ -84,7 +91,9 @@ def _drive_locomo(data_path: str, limit: int) -> dict:
             continue
         m = len(rs)
         cat_mrr[cat] = sum(1.0 / r["hit_rank"] for r in rs if r["hit_rank"]) / m
-        cat_r10[cat] = sum(1 for r in rs if r["hit_rank"] and r["hit_rank"] <= 10) / m
+        cat_r10[cat] = (
+            sum(1 for r in rs if r["hit_rank"] and r["hit_rank"] <= _RECALL_AT_10_K) / m
+        )
     return {
         "mrr": mrr,
         "recall_at_10": r10,
@@ -96,7 +105,7 @@ def _drive_locomo(data_path: str, limit: int) -> dict:
 
 
 def main() -> int:
-    if len(sys.argv) != 4:
+    if len(sys.argv) != _EXPECTED_ARGC:
         print(
             "usage: _xb_drivers.py <longmemeval|locomo> <data_path> <limit>",
             file=sys.stderr,

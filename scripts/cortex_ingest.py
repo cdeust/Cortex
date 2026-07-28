@@ -1,7 +1,8 @@
 """User-facing CLI for Cortex codebase ingest with rich progress display.
 
 Usage (exact form referenced in docs):
-    uv run python scripts/cortex_ingest.py <path> [--force] [--output-dir DIR] [--language LANG]
+    uv run python scripts/cortex_ingest.py <path> [--force] \
+        [--output-dir DIR] [--language LANG]
 
 Implements CliProgress backed by rich.progress for a live progress bar.
 rich is already a dependency (rich==15.0.0 in uv.lock); no new deps added.
@@ -27,6 +28,10 @@ from rich.progress import (
 from mcp_server.handlers.ingest_codebase import handler
 
 _console = Console()
+
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_DIAGNOSTICS_SHOWN = 5
 
 
 class CliProgress:
@@ -150,10 +155,10 @@ def _print_summary(result: dict) -> None:
     diagnostics = result.get("diagnostics")
     if diagnostics:
         _console.print(f"\n[yellow]Diagnostics ({len(diagnostics)}):[/yellow]")
-        for d in diagnostics[:5]:
+        for d in diagnostics[:_MAX_DIAGNOSTICS_SHOWN]:
             _console.print(f"  {d}")
-        if len(diagnostics) > 5:
-            _console.print(f"  … and {len(diagnostics) - 5} more.")
+        if len(diagnostics) > _MAX_DIAGNOSTICS_SHOWN:
+            _console.print(f"  … and {len(diagnostics) - _MAX_DIAGNOSTICS_SHOWN} more.")
 
 
 async def _run(args: argparse.Namespace) -> int:

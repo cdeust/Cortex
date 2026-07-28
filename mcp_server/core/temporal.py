@@ -69,6 +69,13 @@ def extract_date_hints(text: str) -> list[str]:
     return list(hints)
 
 
+# Date-hint sub-tokens at or below this length are too generic to count as a
+# partial match.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_HINT_TOKEN_LEN = 3
+
+
 def compute_temporal_proximity(
     doc_text: str,
     date_hints: list[str],
@@ -82,7 +89,9 @@ def compute_temporal_proximity(
         hint_lower = hint.lower()
         if hint_lower in doc_lower:
             score = max(score, 1.0)
-        elif any(p in doc_lower for p in hint_lower.split() if len(p) > 3):
+        elif any(
+            p in doc_lower for p in hint_lower.split() if len(p) > _MIN_HINT_TOKEN_LEN
+        ):
             score = max(score, 0.5)
     return score
 
@@ -139,6 +148,11 @@ def parse_date(date_str: str) -> datetime | None:
     return _try_parse_named_date(date_str)
 
 
+# source: structural — "YYYY-MM-DDTHH:MM:SS" is 19 characters, so an ISO
+# string at least this long already carries a time component.
+_ISO_DATETIME_MIN_LEN = 19
+
+
 def normalize_date_to_iso(raw: str) -> str | None:
     """Normalize a free-form date string to ISO 8601 for storage.
 
@@ -152,7 +166,7 @@ def normalize_date_to_iso(raw: str) -> str | None:
         return None
     raw = raw.strip()
     # Already ISO with time — pass through
-    if "T" in raw and len(raw) >= 19:
+    if "T" in raw and len(raw) >= _ISO_DATETIME_MIN_LEN:
         return raw
     # Try our fast built-in parsers first
     dt = parse_date(raw)

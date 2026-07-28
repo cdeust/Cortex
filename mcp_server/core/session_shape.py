@@ -95,10 +95,16 @@ def _parse_session_metrics(conv: dict) -> tuple[int, int, int]:
     return duration, turn_count, message_count
 
 
+# A mode whose ratio exceeds this share of the session dominates it.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_DOMINANT_MODE_RATIO = 0.6
+
+
 def _classify_dominant_mode(burst_ratio: float, exploration_ratio: float) -> str:
-    if burst_ratio > 0.6:
+    if burst_ratio > _DOMINANT_MODE_RATIO:
         return "burst"
-    if exploration_ratio > 0.6:
+    if exploration_ratio > _DOMINANT_MODE_RATIO:
         return "exploration"
     return "mixed"
 

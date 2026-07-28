@@ -61,7 +61,8 @@ def main() -> int:
         "--limit",
         type=int,
         default=5000,
-        help="Max rows to scan in this run (default 5000, covers the known ~1355 stock).",
+        help="Max rows to scan in this run "
+        "(default 5000, covers the known ~1355 stock).",
     )
     parser.add_argument(
         "--journal",
@@ -97,7 +98,8 @@ def main() -> int:
     print(f"  Status:                 {result['status']}", file=sys.stderr)
     print(f"  Scanned:                {result['scanned']}", file=sys.stderr)
     print(
-        f"  Filled (directory_context): {result['by_evidence'].get('directory_context', 0)}",
+        f"  Filled (directory_context): "
+        f"{result['by_evidence'].get('directory_context', 0)}",
         file=sys.stderr,
     )
     print(
@@ -111,7 +113,10 @@ def main() -> int:
     journal_path = args.journal or (
         _REPO_ROOT
         / "scratchpad"
-        / f"memory_domain_backfill_{'apply' if args.apply else 'dry-run'}_{timestamp}.json"
+        / (
+            f"memory_domain_backfill_"
+            f"{'apply' if args.apply else 'dry-run'}_{timestamp}.json"
+        )
     )
     journal_path.parent.mkdir(parents=True, exist_ok=True)
     journal_path.write_text(

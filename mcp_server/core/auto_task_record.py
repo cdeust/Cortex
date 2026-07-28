@@ -153,12 +153,18 @@ def _section_entry(inputs: TaskRecordInputs) -> str:
     )
 
 
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_COMMITS_LISTED = 10  # draft-body cap; the rest is summarised as a count
+_MAX_FILES_LISTED = 20  # draft-body cap; the rest is summarised as a count
+
+
 def _section_how(inputs: TaskRecordInputs) -> str:
     """Draft the How section from the commit list + changed files."""
     lines: list[str] = []
     if inputs.commits:
         lines.append("Implementation moves (commit-by-commit):\n")
-        for c in inputs.commits[:10]:
+        for c in inputs.commits[:_MAX_COMMITS_LISTED]:
             hsh = (c.get("hash") or "")[:8]
             msg = (
                 (c.get("message") or "").splitlines()[0]
@@ -166,14 +172,18 @@ def _section_how(inputs: TaskRecordInputs) -> str:
                 else "(no message)"
             )
             lines.append(f"- `{hsh}` — {msg}")
-        if len(inputs.commits) > 10:
-            lines.append(f"- … and {len(inputs.commits) - 10} more commits.")
+        if len(inputs.commits) > _MAX_COMMITS_LISTED:
+            lines.append(
+                f"- … and {len(inputs.commits) - _MAX_COMMITS_LISTED} more commits."
+            )
     if inputs.changed_files:
         lines.append("\nFiles touched:")
-        for f in inputs.changed_files[:20]:
+        for f in inputs.changed_files[:_MAX_FILES_LISTED]:
             lines.append(f"- `{f}`")
-        if len(inputs.changed_files) > 20:
-            lines.append(f"- … and {len(inputs.changed_files) - 20} more files.")
+        if len(inputs.changed_files) > _MAX_FILES_LISTED:
+            lines.append(
+                f"- … and {len(inputs.changed_files) - _MAX_FILES_LISTED} more files."
+            )
     if not lines:
         lines.append(
             "(no commits or file changes recorded — session was likely "
@@ -208,7 +218,8 @@ def _section_mandatory() -> str:
         "memories captured. Typical constraints to enumerate:_\n\n"
         "- Clean Architecture layer rule (core ← shared, infra → core)\n"
         "- SOLID — single responsibility, dependency inversion\n"
-        "- Source-citation discipline — every algorithm/constant has a paper or benchmark\n"
+        "- Source-citation discipline — every algorithm/constant has a "
+        "paper or benchmark\n"
         "- File-size limits (300 lines per file, 40 per method)\n"
         "- No SQLite / no in-memory fallbacks (Cortex constraint)\n"
         "- Existing PG schema invariants if the work touched migrations"
@@ -269,13 +280,17 @@ def build_task_record(
     body_parts: list[str] = [
         fm_lines,
         f"\n# ADR-{adr_number:04d}: {title}",
-        "\n## Status\n\nproposed (auto-draft — LLM to verify and flip to `accepted` once refined)",
+        "\n## Status\n\nproposed (auto-draft — LLM to verify and flip to "
+        "`accepted` once refined)",
         f"\n## Entry\n\n{_section_entry(inputs)}",
         f"\n## Mandatory elements\n\n{_section_mandatory()}",
         f"\n## How\n\n{_section_how(inputs)}",
         f"\n## Result\n\n{_section_result(inputs)}",
         f"\n## Serves\n\n{_section_serves(inputs)}",
-        "\n## Alternatives considered\n\n_The LLM should enumerate alternatives discussed in session memories tagged `decision` / `alternative` and any rejected approaches captured in commit messages._",
+        "\n## Alternatives considered\n\n_The LLM should enumerate "
+        "alternatives discussed in session memories tagged `decision` / "
+        "`alternative` and any rejected approaches captured in commit "
+        "messages._",
         "\n## References\n\n"
         + (
             "Memories captured during this session:\n\n"
@@ -285,7 +300,8 @@ def build_task_record(
                 for m in inputs.memories[:8]
             )
             if inputs.memories
-            else "_no memories captured in session; the LLM should look up related entries via `recall`._"
+            else "_no memories captured in session; the LLM should look up "
+            "related entries via `recall`._"
         ),
     ]
     body = "\n".join(body_parts) + "\n"

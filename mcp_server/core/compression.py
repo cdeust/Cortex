@@ -39,7 +39,8 @@ def _parse_ingested_at(memory: dict) -> datetime | None:
     since the original event. Backfilled / imported memories carry a
     backdated created_at (e.g. a 2023 conversation imported in 2026);
     using created_at would compress them on the first consolidation
-    pass, before retrieval ever runs (see docs/benchmarks/e1-v3-locomo-smoke-finding.md).
+    pass, before retrieval ever runs (see
+    docs/benchmarks/e1-v3-locomo-smoke-finding.md).
 
     Falls back to created_at for legacy rows that predate the
     ingested_at column (the schema migration in pg_schema.py backfills
@@ -59,6 +60,14 @@ def _parse_ingested_at(memory: dict) -> datetime | None:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+# source: thresholds documented per-multiplier in the _compute_resistance
+# docstring (engineering choices; calibration pending — see ablation)
+_HIGH_IMPORTANCE = 0.7
+_HIGH_SURPRISE = 0.6
+_HIGH_CONFIDENCE = 0.8
+_HIGH_ACCESS_COUNT = 10
 
 
 def _compute_resistance(memory: dict) -> float:
@@ -86,13 +95,13 @@ def _compute_resistance(memory: dict) -> float:
           pending — see ablation.
     """
     resistance = 1.0
-    if memory.get("importance", 0.5) > 0.7:
+    if memory.get("importance", 0.5) > _HIGH_IMPORTANCE:
         resistance *= 2.0  # source: engineering choice — see docstring
-    if memory.get("surprise_score", 0.0) > 0.6:
+    if memory.get("surprise_score", 0.0) > _HIGH_SURPRISE:
         resistance *= 1.5  # source: engineering choice — see docstring
-    if memory.get("confidence", 1.0) > 0.8:
+    if memory.get("confidence", 1.0) > _HIGH_CONFIDENCE:
         resistance *= 1.3  # source: engineering choice — see docstring
-    if memory.get("access_count", 0) > 10:
+    if memory.get("access_count", 0) > _HIGH_ACCESS_COUNT:
         resistance *= 1.5  # source: engineering choice — see docstring
     return resistance
 
@@ -178,6 +187,11 @@ def _select_gist_sentences(
     return [sentences[i] for i in sorted(selected)]
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_SENTENCES_KEPT_VERBATIM = 3  # at or below this, gisting keeps everything
+
+
 def extract_gist(content: str, target_ratio: float = 0.3) -> str:
     """Extract gist from full content (compression level 1).
 
@@ -194,7 +208,7 @@ def extract_gist(content: str, target_ratio: float = 0.3) -> str:
     if not sentences:
         return "\n\n".join(code_blocks) if code_blocks else content
 
-    if len(sentences) <= 3:
+    if len(sentences) <= _MAX_SENTENCES_KEPT_VERBATIM:
         parts = list(sentences)
         if code_blocks:
             parts.extend(code_blocks)
@@ -234,20 +248,30 @@ def _format_created_date(memory: dict) -> str:
         return created[:10]
 
 
+# source: cap documented in the _truncate_tag_repr docstring ("truncate tag
+# representation to 200 chars"); tuning provenance not recorded
+_MAX_TAG_REPR_CHARS = 200
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_SUMMARY_CHARS = 10  # below this, fall back to a fixed-width summary
+
+
 def _truncate_tag_repr(
     summary: str, tag_part: str, date_str: str, entity_list: list[str]
 ) -> str:
     """Assemble and truncate tag representation to 200 chars."""
     tag_repr = f"{summary} | Tags: {tag_part} | Created: {date_str}"
-    if len(tag_repr) > 200:
-        available = 200 - len(f" | Tags: {tag_part} | Created: {date_str}")
-        if available > 10:
+    if len(tag_repr) > _MAX_TAG_REPR_CHARS:
+        available = _MAX_TAG_REPR_CHARS - len(
+            f" | Tags: {tag_part} | Created: {date_str}"
+        )
+        if available > _MIN_SUMMARY_CHARS:
             summary = summary[: available - 3] + "..."
         else:
             summary = summary[:30] + "..."
             tag_part = ", ".join(entity_list[:2]) if entity_list else "general"
         tag_repr = f"{summary} | Tags: {tag_part} | Created: {date_str}"
-    if len(tag_repr) > 200:
+    if len(tag_repr) > _MAX_TAG_REPR_CHARS:
         tag_repr = tag_repr[:197] + "..."
     return tag_repr
 

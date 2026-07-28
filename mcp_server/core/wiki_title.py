@@ -41,6 +41,21 @@ _TITLE_MARKDOWN_UNWRAP = [
 ]
 
 
+# Lines at or below this length are too short to serve as a page title.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_TITLE_CHARS = 10
+
+# Titles longer than this are truncated to a word boundary before the ellipsis.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_TITLE_CHARS = 80
+
+# An entity-derived title joins this many leading entities.
+# source: structural — the title is built as "A + B" from entities[:2]
+_ENTITY_TITLE_PARTS = 2
+
+
 def _line_is_title_candidate(cleaned: str) -> bool:
     """Return True iff ``cleaned`` is acceptable as a wiki page title.
 
@@ -49,7 +64,7 @@ def _line_is_title_candidate(cleaned: str) -> bool:
     candidate line should yield an empty title and let the deterministic
     hash fallback kick in (see ``wiki_sync._sync_to_wiki``).
     """
-    if len(cleaned) <= 10:
+    if len(cleaned) <= _MIN_TITLE_CHARS:
         return False
     if cleaned.startswith("{") or cleaned.startswith("["):
         return False
@@ -98,7 +113,7 @@ def derive_title(
             break
 
     # Truncate to reasonable title length
-    if len(first_meaningful) > 80:
+    if len(first_meaningful) > _MAX_TITLE_CHARS:
         first_meaningful = first_meaningful[:77].rsplit(" ", 1)[0] + "..."
 
     # Kind-specific prefixing for clarity
@@ -111,8 +126,8 @@ def derive_title(
     prefix = prefix_map.get(kind, "")
 
     # If we have entities, use them for a more specific title
-    if entities and len(entities) >= 2:
-        entity_title = " + ".join(entities[:2])
+    if entities and len(entities) >= _ENTITY_TITLE_PARTS:
+        entity_title = " + ".join(entities[:_ENTITY_TITLE_PARTS])
         if prefix:
             return f"{prefix}: {entity_title}"
         return entity_title

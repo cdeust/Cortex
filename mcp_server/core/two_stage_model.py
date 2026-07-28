@@ -97,6 +97,16 @@ _HIPPOCAMPAL_CAPACITY = 100
 # source: engineering choice
 _CORTICAL_INDEPENDENCE_THRESHOLD = 0.15
 
+# Above this dependency a memory is still primarily hippocampal.
+# source: the "still hippocampal" cutoff (0.7) named in the
+# _CORTICAL_INDEPENDENCE_THRESHOLD comment above — engineering choice
+_STILL_HIPPOCAMPAL_THRESHOLD = 0.7
+
+# A trace is only released while the memory is not hot (not actively used).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_RELEASE_MAX_HEAT = 0.3
+
 # _HIPPOCAMPAL_RELEASE_THRESHOLD is defined once in two_stage_transfer.py
 # (the lower-level module two_stage_model already imports from) and re-used
 # here — it must not be redefined, or the two copies can drift independently.
@@ -116,7 +126,7 @@ def classify_memory_store(
         "transitional" — being transferred (partial cortical trace)
         "cortical" — cortically independent
     """
-    if hippocampal_dependency > 0.7:
+    if hippocampal_dependency > _STILL_HIPPOCAMPAL_THRESHOLD:
         return "hippocampal"
     if hippocampal_dependency > _CORTICAL_INDEPENDENCE_THRESHOLD:
         return "transitional"
@@ -143,7 +153,7 @@ def should_release_hippocampal_trace(
     return (
         hippocampal_dependency <= _HIPPOCAMPAL_RELEASE_THRESHOLD
         and consolidation_stage == "consolidated"
-        and heat < 0.3
+        and heat < _RELEASE_MAX_HEAT
     )
 
 

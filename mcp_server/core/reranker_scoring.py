@@ -77,6 +77,15 @@ def _compute_retrieval_confidence(
     return suppression
 
 
+# source: structural — score spread (max − min) needs at least two CE scores.
+_MIN_SCORES_FOR_SPREAD = 2
+
+# Below this CE score spread the result is ambiguous and alpha stays at base.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SPREAD_BOOST_FLOOR = 0.3
+
+
 def _compute_adaptive_alpha(
     ce_scores: list[float],
     base_alpha: float,
@@ -108,7 +117,7 @@ def _compute_adaptive_alpha(
     Returns:
         Adaptive alpha in [base_alpha, base_alpha + 0.15].
     """
-    if len(ce_scores) < 2:
+    if len(ce_scores) < _MIN_SCORES_FOR_SPREAD:
         return base_alpha
 
     spread = max(ce_scores) - min(ce_scores)
@@ -117,10 +126,10 @@ def _compute_adaptive_alpha(
     # High spread (>0.5) → CE found clear winner → small alpha boost.
     # Low spread → ambiguous → keep base alpha (don't reduce!).
     max_boost = 0.15  # Conservative: max alpha = base + 0.15 = 0.85
-    if spread < 0.3:
+    if spread < _SPREAD_BOOST_FLOOR:
         return base_alpha
-    # Linear boost above spread=0.3, capped at max_boost
-    normalized = min((spread - 0.3) / 0.7, 1.0)
+    # Linear boost above the floor, capped at max_boost
+    normalized = min((spread - _SPREAD_BOOST_FLOOR) / 0.7, 1.0)
     return min(base_alpha + max_boost * normalized, 1.0)
 
 

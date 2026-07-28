@@ -95,6 +95,21 @@ SWR_BURST_STEPS = 5
 # Refractory period after SWR (consolidation steps)
 SWR_REFRACTORY_STEPS = 3
 
+# Minimum operations since the last SWR before another may trigger.
+# source: hand-tuned (see should_generate_swr docstring: "Thresholds are
+# hand-tuned")
+_SWR_MIN_OPERATIONS = 3
+
+# Clamp for math.exp arguments to avoid overflow.
+# source: structural — IEEE 754 double exp() overflows above ≈ 709 and
+# underflows below ≈ -745; ±500 is a conservative pre-existing cutoff,
+# extracted unchanged (#197 family 3)
+_EXP_ARG_CLAMP = 500.0
+
+# source: structural — half of the normalized theta cycle; encoding is
+# [0, 0.5) and retrieval [0.5, 1.0) per classify_theta_phase docstring
+_THETA_HALF_CYCLE = 0.5
+
 
 # -- Oscillatory State --------------------------------------------------------
 
@@ -127,9 +142,9 @@ def _sigmoid_gate(phase: float, k: float = SIGMOID_STEEPNESS) -> float:
     """
     exponent = -k * (phase - 0.5)
     # Clamp to avoid overflow in exp()
-    if exponent > 500.0:
+    if exponent > _EXP_ARG_CLAMP:
         return 0.0
-    if exponent < -500.0:
+    if exponent < -_EXP_ARG_CLAMP:
         return 1.0
     return 1.0 / (1.0 + math.exp(exponent))
 
@@ -151,7 +166,7 @@ def classify_theta_phase(phase: float) -> ThetaPhase:
     if abs(phase - 0.5) < TRANSITION_WIDTH:
         return ThetaPhase.TRANSITION
 
-    if phase < 0.5:
+    if phase < _THETA_HALF_CYCLE:
         return ThetaPhase.ENCODING
     return ThetaPhase.RETRIEVAL
 
@@ -247,7 +262,7 @@ def should_generate_swr(
     """
     if hours_since_last_swr < min_interval_hours:
         return False
-    if operations_since_swr < 3:
+    if operations_since_swr < _SWR_MIN_OPERATIONS:
         return False
 
     probability = _compute_swr_probability(

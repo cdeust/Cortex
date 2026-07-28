@@ -12,6 +12,29 @@ from __future__ import annotations
 import re
 from typing import Any
 
+# ── Heuristic thresholds ──────────────────────────────────────────────────
+# source (all constants in this block): pre-existing tuned values, extracted
+# unchanged (#197 family 3); provenance not recorded at introduction.
+
+# Sessions shorter than this many minutes read as active bursts.
+_ACTIVE_SESSION_MAX_MINUTES = 10
+# Sessions longer than this many minutes read as reflective.
+_REFLECTIVE_SESSION_MIN_MINUTES = 30
+# Above this share of tool calls, edits (or reads) dominate the session.
+_DOMINANT_TOOL_SHARE = 0.4
+# Touching more than this many files signals a sensing (concrete) style.
+_MANY_FILES_TOUCHED = 5
+# Calls-per-file below this reads as global (skimming) behavior.
+_GLOBAL_CALLS_PER_FILE_MAX = 2
+# Calls-per-file above this reads as sequential (dwelling) behavior.
+_SEQUENTIAL_CALLS_PER_FILE_MIN = 6
+# More planning-keyword hits than this signals top-down decomposition.
+_PLANNING_HITS_FOR_TOP_DOWN = 2
+# Calls-per-file above this counts a conversation as depth-first.
+_DEPTH_CALLS_PER_FILE_MIN = 5
+# Calls-per-file below this counts a conversation as breadth-first.
+_BREADTH_CALLS_PER_FILE_MAX = 3
+
 ABSTRACT_KEYWORDS = [
     "architecture",
     "pattern",
@@ -137,19 +160,19 @@ def _score_active_reflective(conversations: list[dict]) -> float:
         score = 0.0
         signals = 0.0
         if dur > 0:
-            if dur < 10:
+            if dur < _ACTIVE_SESSION_MAX_MINUTES:
                 score += 1
                 signals += 1
-            elif dur > 30:
+            elif dur > _REFLECTIVE_SESSION_MIN_MINUTES:
                 score -= 1
                 signals += 1
         if total > 0:
             edit_count = _count_tool(conv, "Edit") + _count_tool(conv, "Write")
             read_count = _count_tool(conv, "Read") + _count_tool(conv, "Grep")
-            if edit_count / total > 0.4:
+            if edit_count / total > _DOMINANT_TOOL_SHARE:
                 score += 1
                 signals += 1
-            if read_count / total > 0.4:
+            if read_count / total > _DOMINANT_TOOL_SHARE:
                 score -= 1
                 signals += 1
         trial = _count_keywords(summary, TRIAL_KEYWORDS)
@@ -183,7 +206,7 @@ def _score_sensing_intuitive(conversations: list[dict]) -> float:
             mx = max(concrete, abstract)
             score += net / mx
             signals += 1
-        if files > 5:
+        if files > _MANY_FILES_TOUCHED:
             score += 0.5
             signals += 0.5
         if signals > 0:
@@ -214,10 +237,10 @@ def _score_sequential_global(conversations: list[dict]) -> float:
             signals += 0.5
         if total > 0 and files > 0:
             cpf = total / files
-            if cpf < 2:
+            if cpf < _GLOBAL_CALLS_PER_FILE_MAX:
                 score -= 0.5
                 signals += 0.5
-            elif cpf > 6:
+            elif cpf > _SEQUENTIAL_CALLS_PER_FILE_MIN:
                 score += 0.5
                 signals += 0.5
         if signals > 0:
@@ -240,7 +263,7 @@ def _classify_problem_decomposition(conversations: list[dict]) -> str:
             + _count_tool(conv, "Glob")
         )
         edit_count = _count_tool(conv, "Edit") + _count_tool(conv, "Write")
-        if plan_hits > 2 and edit_count > read_first:
+        if plan_hits > _PLANNING_HITS_FOR_TOP_DOWN and edit_count > read_first:
             top_down += 1
         elif read_first > edit_count:
             bottom_up += 1
@@ -262,9 +285,9 @@ def _classify_exploration_style(conversations: list[dict]) -> str:
         if files == 0 or total == 0:
             continue
         cpf = total / files
-        if cpf > 5:
+        if cpf > _DEPTH_CALLS_PER_FILE_MIN:
             depth += 1
-        elif cpf < 3:
+        elif cpf < _BREADTH_CALLS_PER_FILE_MAX:
             breadth += 1
     if depth == breadth:
         return "depth-first"

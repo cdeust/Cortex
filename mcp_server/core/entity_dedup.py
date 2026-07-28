@@ -53,6 +53,9 @@ from mcp_server.shared.string_distance import jaro_winkler_similarity
 # identity is the symbol/path, not a fuzzy label (graphify #1205).
 FUZZY_ELIGIBLE_TYPES = frozenset({"technology", "decision", "error", "dependency"})
 
+# source: structural — a merge pair needs at least two candidates
+_MIN_CANDIDATES_FOR_PAIRING = 2
+
 
 @dataclass(frozen=True)
 class EntityMerge:
@@ -253,7 +256,7 @@ def _fuzzy_pass(
 ) -> None:
     """Pass 2 — MinHash/LSH blocking then Jaro-Winkler verification."""
     candidates, norm_cache = _gather_candidates(group)
-    if len(candidates) < 2:
+    if len(candidates) < _MIN_CANDIDATES_FOR_PAIRING:
         return
     lsh, minhashes = _build_lsh(candidates, norm_cache)
     for e in candidates:

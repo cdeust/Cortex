@@ -140,6 +140,12 @@ def _fix_stale_embeddings(
     return count
 
 
+# Minimum memories behind a narration for it to be worth storing.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_NARRATION_MEMORIES = 5
+
+
 def _store_narration(
     store: MemoryStore,
     embeddings: EmbeddingEngine,
@@ -147,7 +153,7 @@ def _store_narration(
 ) -> bool:
     """Store auto-narration as a semantic memory if meaningful."""
     narrative_text = narration.get("narrative_text", "")
-    if not narrative_text or narration.get("memory_count", 0) < 5:
+    if not narrative_text or narration.get("memory_count", 0) < _MIN_NARRATION_MEMORIES:
         return False
 
     try:

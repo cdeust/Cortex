@@ -111,6 +111,13 @@ def _global_exploration_ratio(all_conversations: list[dict]) -> float:
 # Detection functions
 # ---------------------------------------------------------------------------
 
+# source: rarity bar documented in the module docstring ("<5% of sessions")
+_RARE_SESSION_RATIO = 0.05
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_HIGH_SEVERITY_RATIO = 0.01  # below this share of sessions, severity is high
+_HIGH_SEVERITY_OVERLAP = 2  # >= this many relevant categories, severity is high
+
 
 def _detect_category_blind_spots(
     domain_conversations: list[dict],
@@ -125,14 +132,16 @@ def _detect_category_blind_spots(
             1 for conv in domain_conversations if category in _get_categories(conv)
         )
         ratio = sessions_with / total
-        if ratio < 0.05:
+        if ratio < _RARE_SESSION_RATIO:
             blind_spots.append(
                 {
                     "type": "category",
                     "value": category,
-                    "severity": "high" if ratio < 0.01 else "medium",
-                    "description": f'Category "{category}" appears in only {ratio * 100:.1f}% of sessions (threshold: 5%).',
-                    "suggestion": f"Consider intentionally including {category} work in this domain to broaden coverage.",
+                    "severity": "high" if ratio < _HIGH_SEVERITY_RATIO else "medium",
+                    "description": f'Category "{category}" appears in only '
+                    f"{ratio * 100:.1f}% of sessions (threshold: 5%).",
+                    "suggestion": f"Consider intentionally including {category} "
+                    "work in this domain to broaden coverage.",
                 }
             )
     return blind_spots
@@ -153,7 +162,7 @@ def _detect_tool_blind_spots(
             1 for conv in domain_conversations if tool in _get_tools_used(conv)
         )
         ratio = sessions_using / total
-        if ratio >= 0.05:
+        if ratio >= _RARE_SESSION_RATIO:
             continue
 
         relevant_categories = TOOL_CATEGORY_RELEVANCE.get(tool, [])
@@ -162,15 +171,23 @@ def _detect_tool_blind_spots(
             continue
 
         overlap = [cat for cat in relevant_categories if cat in top_cat_set]
-        severity = "high" if len(overlap) >= 2 or ratio < 0.01 else "medium"
+        severity = (
+            "high"
+            if len(overlap) >= _HIGH_SEVERITY_OVERLAP or ratio < _HIGH_SEVERITY_RATIO
+            else "medium"
+        )
 
         blind_spots.append(
             {
                 "type": "tool",
                 "value": tool,
                 "severity": severity,
-                "description": f'Tool "{tool}" used in only {ratio * 100:.1f}% of sessions, yet is relevant to domain categories: {", ".join(overlap)}.',
-                "suggestion": f'Incorporate "{tool}" more regularly in {"/".join(top_domain_categories)} tasks to leverage its full potential.',
+                "description": f'Tool "{tool}" used in only {ratio * 100:.1f}% of '
+                f"sessions, yet is relevant to domain categories: "
+                f"{', '.join(overlap)}.",
+                "suggestion": f'Incorporate "{tool}" more regularly in '
+                f"{'/'.join(top_domain_categories)} tasks to leverage its "
+                "full potential.",
             }
         )
     return blind_spots

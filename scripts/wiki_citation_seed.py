@@ -118,7 +118,10 @@ def main() -> int:
         _REPO_ROOT
         / "docs"
         / "campaigns"
-        / f"i7d7_wiki_citation_seed_{'apply' if args.apply else 'dry-run'}_{timestamp}.json"
+        / (
+            f"i7d7_wiki_citation_seed_"
+            f"{'apply' if args.apply else 'dry-run'}_{timestamp}.json"
+        )
     )
     journal_path.parent.mkdir(parents=True, exist_ok=True)
     journal_path.write_text(

@@ -61,21 +61,26 @@ REJECT_PATTERNS = [
 
 ADR_PATTERNS = [
     re.compile(
-        r"\b(decided to|decision:|the decision is|chose .+ because|rejected .+ (due to|because)|we will use|selected .+ over)\b",
+        r"\b(decided to|decision:|the decision is|"
+        r"chose .+ because|rejected .+ (due to|because)|"
+        r"we will use|selected .+ over)\b",
         re.IGNORECASE,
     ),
 ]
 
 LESSON_PATTERNS = [
     re.compile(
-        r"\b(the bug was|root cause|lesson learned|mistake was|never again|fix:|fixed by|the issue was|the problem was|turned out)\b",
+        r"\b(the bug was|root cause|lesson learned|mistake was|"
+        r"never again|fix:|fixed by|"
+        r"the issue was|the problem was|turned out)\b",
         re.IGNORECASE,
     ),
 ]
 
 CONVENTION_PATTERNS = [
     re.compile(
-        r"\b(always use|never |the canonical|convention:|rule:|standard:|must follow|naming convention|coding standard)\b",
+        r"\b(always use|never |the canonical|convention:|rule:|standard:|"
+        r"must follow|naming convention|coding standard)\b",
         re.IGNORECASE,
     ),
 ]

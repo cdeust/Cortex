@@ -148,7 +148,10 @@ def _load_subsample_into_db(
     condition: str,
     sub_probes: list[QueryProbe],
 ) -> tuple[float, float, float, float, float]:
-    """Open BenchmarkDB, load memories, evaluate. Returns (r1, r10, mrr, wall_ms, rss_mb)."""
+    """Open BenchmarkDB, load memories, evaluate.
+
+    Returns (r1, r10, mrr, wall_ms, rss_mb).
+    """
     saved_db_url = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = db_url
     tracemalloc.start()

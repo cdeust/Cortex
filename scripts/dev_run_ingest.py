@@ -14,9 +14,11 @@ import asyncio
 import json
 import sys
 
+_MIN_ARGC = 2  # source: structural — program name + <project_path>
+
 
 async def main() -> int:
-    if len(sys.argv) < 2:
+    if len(sys.argv) < _MIN_ARGC:
         print("usage: dev_run_ingest.py <project_path> [--force]")
         return 2
     project_path = sys.argv[1]

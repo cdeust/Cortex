@@ -206,6 +206,11 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
     return meta, body
 
 
+# source: structural — the wiki layout is kind/domain/filename, so a valid
+# relative path splits into at least three segments.
+_KIND_DOMAIN_PATH_PARTS = 3
+
+
 def _kind_and_domain_from_path(rel_path: str) -> tuple[str, str]:
     """Path ``adr/cortex/0042-foo.md`` → ``("adr", "cortex")``.
 
@@ -213,7 +218,7 @@ def _kind_and_domain_from_path(rel_path: str) -> tuple[str, str]:
     kind/domain/filename layout.
     """
     parts = rel_path.split("/")
-    if len(parts) < 3:
+    if len(parts) < _KIND_DOMAIN_PATH_PARTS:
         return "", ""
     return parts[0], parts[1]
 

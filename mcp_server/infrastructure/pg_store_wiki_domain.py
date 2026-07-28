@@ -38,7 +38,9 @@ def list_catchall_pages_with_sources(
 
     sql = """
     SELECT p.id, p.domain,
-           COALESCE(array_agg(ps.source_path) FILTER (WHERE ps.source_path IS NOT NULL), '{}') AS source_paths
+           COALESCE(array_agg(ps.source_path)
+                    FILTER (WHERE ps.source_path IS NOT NULL),
+                    '{}') AS source_paths
       FROM wiki.pages p
       LEFT JOIN wiki.page_sources ps ON ps.page_id = p.id
      WHERE p.domain IS NULL OR NOT (p.domain = ANY(%(known)s))

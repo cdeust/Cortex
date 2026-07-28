@@ -78,7 +78,8 @@ class PgEntityMixin:
                 self._conn.commit()
             return existing["id"]
         row = self._execute(
-            "INSERT INTO entities (name, type, domain, origin, created_at, last_accessed, heat) "
+            "INSERT INTO entities "
+            "(name, type, domain, origin, created_at, last_accessed, heat) "
             "VALUES (%s, %s, %s, %s, COALESCE(%s, NOW()), NOW(), %s) RETURNING id",
             (
                 canonical,

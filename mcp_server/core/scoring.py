@@ -135,6 +135,12 @@ def _extract_ngrams(tokens: list[str], n: int) -> set[tuple[str, ...]]:
     return {tuple(tokens[i : i + n]) for i in range(len(tokens) - n + 1)}
 
 
+# Query tokens at or below this length are not counted as content words.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SHORT_TOKEN_MAX_LEN = 2
+
+
 def compute_keyword_overlap(query: str, document: str) -> float:
     """Simple keyword overlap ratio."""
     q_terms = set(tokenize_raw(query))
@@ -163,7 +169,7 @@ def compute_ngram_score(query: str, document: str) -> float:
     d_bi = _extract_ngrams(d_tok, 2)
     bi = len(q_bi & d_bi) / max(len(q_bi), 1) if q_bi else 0.0
 
-    q_cw = {t for t in q_tok if t not in _STOPWORDS and len(t) > 2}
+    q_cw = {t for t in q_tok if t not in _STOPWORDS and len(t) > _SHORT_TOKEN_MAX_LEN}
     d_cw = {t for t in d_tok if t not in _STOPWORDS}
     cw = len(q_cw & d_cw) / max(len(q_cw), 1) if q_cw else 0.0
 

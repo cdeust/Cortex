@@ -49,6 +49,12 @@ _IDENTITY_THRESHOLD = 0.95
 # embedding, preventing orthogonalization from destroying semantic content.
 _MIN_POST_SEPARATION_SIMILARITY = 0.3
 
+# Vectors with a norm below this epsilon are treated as degenerate (zero) and
+# left untouched by projection/normalization.
+# source: pre-existing numerical-tolerance value, extracted unchanged
+# (#197 family 3); provenance not recorded at introduction
+_DEGENERATE_NORM_EPSILON = 1e-10
+
 # DG granule cell activation sparsity: 2-5% of cells active.
 # Leutgeb et al. (2007) Science 315:961-966; Rolls (2013) Front Syst Neurosci.
 # We use 4%, within the published 2-5% range (toward the active end).
@@ -98,7 +104,7 @@ def _project_away_from_single(
     projection would violate the minimum similarity constraint.
     """
     interferer_norm = norm(interferer)
-    if interferer_norm < 1e-10:
+    if interferer_norm < _DEGENERATE_NORM_EPSILON:
         return result
 
     projection_coeff = dot(result, interferer) / (interferer_norm**2)
@@ -106,7 +112,7 @@ def _project_away_from_single(
     candidate = subtract(result, projection)
 
     candidate_norm = norm(candidate)
-    if candidate_norm < 1e-10:
+    if candidate_norm < _DEGENERATE_NORM_EPSILON:
         return result
 
     candidate = scale(candidate, 1.0 / candidate_norm)
@@ -120,7 +126,7 @@ def _project_away_from_single(
 def _normalize_result(result: list[float]) -> list[float]:
     """Normalize to unit length if non-degenerate."""
     result_norm = norm(result)
-    if result_norm > 1e-10:
+    if result_norm > _DEGENERATE_NORM_EPSILON:
         return scale(result, 1.0 / result_norm)
     return result
 
@@ -196,7 +202,7 @@ def apply_sparsification(
     result = [v if i in keep_indices else 0.0 for i, v in enumerate(embedding)]
 
     result_norm = norm(result)
-    if result_norm > 1e-10:
+    if result_norm > _DEGENERATE_NORM_EPSILON:
         result = scale(result, 1.0 / result_norm)
 
     return result

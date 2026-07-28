@@ -126,6 +126,10 @@ _NEGATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+# source: structural — a contradiction requires at least two memories to
+# compare
+_MIN_MEMORIES_FOR_CONTRADICTION = 2
+
 
 def check_consistency(memories: list[dict[str, Any]]) -> dict[str, Any]:
     """Check a cluster of memories for contradictions.
@@ -133,7 +137,7 @@ def check_consistency(memories: list[dict[str, Any]]) -> dict[str, Any]:
     Simple heuristic: if one memory has negation words and another doesn't,
     flag as potential contradiction.
     """
-    if len(memories) < 2:
+    if len(memories) < _MIN_MEMORIES_FOR_CONTRADICTION:
         return {"consistent": True, "contradictions": []}
 
     contradictions: list[str] = []

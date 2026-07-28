@@ -116,13 +116,18 @@ def run_beam(quick: bool) -> dict:
     return _parse_beam_output(buf.getvalue())
 
 
+# source: structural — a BEAM table row is
+# "<ability> <mrr> <r5> <r10> <n_questions>"
+_BEAM_ROW_MIN_FIELDS = 5
+
+
 def _parse_beam_output(out: str) -> dict:
     """Parse the printed BEAM table into structured metrics."""
     abilities: dict[str, dict] = {}
     overall = {"mrr": 0.0, "r5": 0.0, "r10": 0.0}
     for line in out.splitlines():
         parts = line.split()
-        if len(parts) < 5:
+        if len(parts) < _BEAM_ROW_MIN_FIELDS:
             continue
         name = parts[0]
         try:

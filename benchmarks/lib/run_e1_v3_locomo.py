@@ -294,6 +294,11 @@ def _write_summary(rows: list[dict]) -> None:
     print(f"[E1v3-LoCoMo] summary → {summary_path}", flush=True)
 
 
+# source: CLAUDE.md sanity tolerance — "±0.05 around 0.794" for the
+# BASELINE_NO_CONSOLIDATION LoCoMo MRR headline (see the check below)
+_BASELINE_MRR_TOLERANCE = 0.05
+
+
 def main() -> int:
     _OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -347,7 +352,7 @@ def main() -> int:
 
     # CLAUDE.md sanity tolerance: ±0.05 around 0.794. Soft warning if outside.
     bn_mrr = rows[0]["mrr"]
-    if abs(bn_mrr - 0.794) > 0.05:
+    if abs(bn_mrr - 0.794) > _BASELINE_MRR_TOLERANCE:
         print(
             f"[E1v3-LoCoMo][WARN] BASELINE_NO_CONSOLIDATION MRR={bn_mrr:.3f} "
             f"deviates >0.05 from CLAUDE.md headline 0.794. Continuing — "

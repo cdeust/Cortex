@@ -129,6 +129,12 @@ class EmergenceStats:
 # ── Helpers ───────────────────────────────────────────────────────────
 
 
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_TERM_CHARS = 3  # shorter tokens are too generic to label a concept
+_MAX_TERM_CHARS = 40  # longer tokens are pasted blobs, not terms
+
+
 def _entity_label(claim_texts: list[str], entity_id: int) -> str:
     """Pick a stable label for the candidate concept.
 
@@ -143,7 +149,7 @@ def _entity_label(claim_texts: list[str], entity_id: int) -> str:
     for t in claim_texts:
         for m in re.finditer(r"\b([A-Z][a-zA-Z]+|[a-z]+_[a-z_]+)\b", t):
             tok = m.group(1)
-            if 3 <= len(tok) <= 40:
+            if _MIN_TERM_CHARS <= len(tok) <= _MAX_TERM_CHARS:
                 counts[tok] += 1
     if not counts:
         return f"concept-{entity_id}"

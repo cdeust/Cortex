@@ -122,6 +122,13 @@ class ReconsolidationResult:
     emotional_multiplier: float = 1.0
 
 
+# Above this plasticity a memory counts as recently accessed and its
+# destabilization thresholds are lowered.
+# source: engineering default (calibration pending) — see module docstring
+# "Modulation" note: every numeric coefficient here is an engineering default.
+_HIGH_PLASTICITY_THRESHOLD: float = 0.5
+
+
 def decide_action(
     mismatch: float,
     stability: float = 0.0,
@@ -177,7 +184,7 @@ def decide_action(
     effective_high = high_threshold + (stability * 0.1)
 
     # Recently accessed (high plasticity) memories are MORE susceptible
-    if plasticity > 0.5:
+    if plasticity > _HIGH_PLASTICITY_THRESHOLD:
         effective_low -= 0.1
         effective_high -= 0.1
 
@@ -207,6 +214,11 @@ def decide_action(
     )
 
 
+# source: merge_content docstring — over-length merges keep the first 500 +
+# last 500 characters of the old content.
+_MERGE_KEEP_CHARS: int = 500
+
+
 def merge_content(old_content: str, new_context: str, max_length: int = 2000) -> str:
     """Merge new context into existing memory content.
 
@@ -216,8 +228,10 @@ def merge_content(old_content: str, new_context: str, max_length: int = 2000) ->
     if len(merged) <= max_length:
         return merged
 
-    old_prefix = old_content[:500]
-    old_suffix = old_content[-500:] if len(old_content) > 500 else ""
+    old_prefix = old_content[:_MERGE_KEEP_CHARS]
+    old_suffix = (
+        old_content[-_MERGE_KEEP_CHARS:] if len(old_content) > _MERGE_KEEP_CHARS else ""
+    )
     if old_suffix:
         return (
             f"{old_prefix}\n...\n{old_suffix}\n--- Updated context ---\n{new_context}"
@@ -240,6 +254,13 @@ def compute_plasticity_decay(
     return min(current_plasticity + spike, 1.0)
 
 
+# Above this access count, repeated non-useful retrievals start eroding
+# stability.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_NON_USEFUL_ACCESS_THRESHOLD: int = 5
+
+
 def update_stability(
     current_stability: float,
     was_useful: bool,
@@ -252,7 +273,7 @@ def update_stability(
     """
     if was_useful:
         return min(current_stability + increment, 1.0)
-    if access_count > 5:
+    if access_count > _NON_USEFUL_ACCESS_THRESHOLD:
         return max(current_stability - increment * 0.5, 0.0)
     return current_stability
 

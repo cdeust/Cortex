@@ -58,21 +58,33 @@ METABOLIC_BOOST = 1.5
 METABOLIC_STARVATION = 0.6
 
 
+# Denominators below this epsilon are treated as zero, so the corresponding
+# steady-state fraction degenerates instead of dividing by ~0.
+# source: pre-existing numerical-tolerance value, extracted unchanged
+# (#197 family 3); provenance not recorded at introduction
+_DEGENERATE_DENOM_EPSILON = 1e-15
+
+# Euler iteration stops once the Ca2+ step falls below this epsilon (uM).
+# source: pre-existing numerical-tolerance value, extracted unchanged
+# (#197 family 3); provenance not recorded at introduction
+_CALCIUM_CONVERGENCE_EPSILON = 1e-6
+
+
 # ── De Pitta Steady-State Solver ─────────────────────────────────────────
 
 
 def _h_inf(ip3: float, ca: float) -> float:
     """Steady-state inactivation variable (Li-Rinzel / De Pitta)."""
     denom = (ip3 + D_3) * (ca + D_2)
-    if denom < 1e-15:
+    if denom < _DEGENERATE_DENOM_EPSILON:
         return 1.0
     return D_2 * (ip3 + D_1) / denom
 
 
 def _m_inf(ip3: float, ca: float) -> float:
     """Steady-state activation: IP3 fraction * Ca2+ fraction."""
-    ip3_frac = ip3 / (ip3 + D_1) if (ip3 + D_1) > 1e-15 else 0.0
-    ca_frac = ca / (ca + D_5) if (ca + D_5) > 1e-15 else 0.0
+    ip3_frac = ip3 / (ip3 + D_1) if (ip3 + D_1) > _DEGENERATE_DENOM_EPSILON else 0.0
+    ca_frac = ca / (ca + D_5) if (ca + D_5) > _DEGENERATE_DENOM_EPSILON else 0.0
     return ip3_frac * ca_frac
 
 
@@ -89,7 +101,7 @@ def _j_leak(ca: float) -> float:
 def _j_chan(ip3: float, ca: float, h: float) -> float:
     """IP3R channel flux."""
     m = _m_inf(ip3, ca)
-    ip3_frac = ip3 / (ip3 + D_1) if (ip3 + D_1) > 1e-15 else 0.0
+    ip3_frac = ip3 / (ip3 + D_1) if (ip3 + D_1) > _DEGENERATE_DENOM_EPSILON else 0.0
     return R_C * m**3 * h * ip3_frac * (C_0 - ca) / C_1
 
 
@@ -105,7 +117,7 @@ def _steady_state_calcium(ip3: float, *, max_iter: int = 200) -> float:
         h = _h_inf(ip3, ca)
         flux = _j_chan(ip3, ca, h) + _j_leak(ca) - _j_pump(ca)
         ca_new = max(0.001, min(C_0 * 0.95, ca + flux * dt))
-        if abs(ca_new - ca) < 1e-6:
+        if abs(ca_new - ca) < _CALCIUM_CONVERGENCE_EPSILON:
             return ca_new
         ca = ca_new
     return ca

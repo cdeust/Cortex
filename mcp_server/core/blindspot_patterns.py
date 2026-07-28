@@ -11,13 +11,23 @@ from __future__ import annotations
 
 from typing import Any
 
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_GLOBAL_EXPLORATION_NORM = 0.4  # global share making zero exploration a gap
+_MIN_GLOBAL_EXPLORATION = 0.2  # global floor for the below-average check
+_GLOBAL_DURATION_NORM = 0.3  # global share making a missing bucket a gap
+# source: session-length buckets documented in the count_duration_buckets
+# docstring ("short (<10 min) and long (>30 min)")
+_SHORT_SESSION_MINUTES = 10
+_LONG_SESSION_MINUTES = 30
+
 
 def check_exploration_gap(
     domain_exploration_ratio: float,
     global_exp_ratio: float,
 ) -> list[dict[str, Any]]:
     """Check for exploration session gaps vs global average."""
-    if domain_exploration_ratio == 0 and global_exp_ratio >= 0.4:
+    if domain_exploration_ratio == 0 and global_exp_ratio >= _GLOBAL_EXPLORATION_NORM:
         return [
             {
                 "type": "pattern",
@@ -25,15 +35,17 @@ def check_exploration_gap(
                 "severity": "high",
                 "description": (
                     "This domain has zero exploration sessions (research/architecture),"
-                    f" while globally {global_exp_ratio * 100:.0f}% of sessions are exploratory."
+                    f" while globally {global_exp_ratio * 100:.0f}% of "
+                    "sessions are exploratory."
                 ),
-                "suggestion": "Schedule dedicated research or architecture sessions to avoid tunnel vision.",
+                "suggestion": "Schedule dedicated research or architecture "
+                "sessions to avoid tunnel vision.",
             }
         ]
     if (
         domain_exploration_ratio > 0
         and domain_exploration_ratio < global_exp_ratio * 0.25
-        and global_exp_ratio >= 0.2
+        and global_exp_ratio >= _MIN_GLOBAL_EXPLORATION
     ):
         return [
             {
@@ -41,10 +53,12 @@ def check_exploration_gap(
                 "value": "exploration",
                 "severity": "medium",
                 "description": (
-                    f"Exploration ratio ({domain_exploration_ratio * 100:.1f}%) is significantly"
+                    f"Exploration ratio ({domain_exploration_ratio * 100:.1f}%) "
+                    "is significantly"
                     f" below global average ({global_exp_ratio * 100:.1f}%)."
                 ),
-                "suggestion": "Increase research/architecture sessions to keep up with global breadth.",
+                "suggestion": "Increase research/architecture sessions to keep "
+                "up with global breadth.",
             }
         ]
     return []
@@ -56,9 +70,9 @@ def count_duration_buckets(conversations: list[dict]) -> tuple[int, int]:
     long = 0
     for conv in conversations:
         dur = conv.get("durationMinutes") or conv.get("duration") or 0
-        if dur > 0 and dur < 10:
+        if dur > 0 and dur < _SHORT_SESSION_MINUTES:
             short += 1
-        if dur > 30:
+        if dur > _LONG_SESSION_MINUTES:
             long += 1
     return short, long
 
@@ -72,7 +86,7 @@ def check_duration_gaps(
 ) -> list[dict[str, Any]]:
     """Check for missing deep-work or quick-iteration sessions."""
     gaps: list[dict[str, Any]] = []
-    if domain_long / domain_total == 0 and global_long_ratio >= 0.3:
+    if domain_long / domain_total == 0 and global_long_ratio >= _GLOBAL_DURATION_NORM:
         gaps.append(
             {
                 "type": "pattern",
@@ -80,12 +94,14 @@ def check_duration_gaps(
                 "severity": "medium",
                 "description": (
                     "No deep-work sessions (>30 min) found in this domain,"
-                    f" while globally {global_long_ratio * 100:.0f}% of sessions are deep."
+                    f" while globally {global_long_ratio * 100:.0f}% of "
+                    "sessions are deep."
                 ),
-                "suggestion": "Allocate longer focused sessions for complex problems in this domain.",
+                "suggestion": "Allocate longer focused sessions for complex "
+                "problems in this domain.",
             }
         )
-    if domain_short / domain_total == 0 and global_short_ratio >= 0.3:
+    if domain_short / domain_total == 0 and global_short_ratio >= _GLOBAL_DURATION_NORM:
         gaps.append(
             {
                 "type": "pattern",
@@ -93,9 +109,11 @@ def check_duration_gaps(
                 "severity": "low",
                 "description": (
                     "No short iteration sessions (<10 min) found in this domain,"
-                    f" while globally {global_short_ratio * 100:.0f}% of sessions are short."
+                    f" while globally {global_short_ratio * 100:.0f}% of "
+                    "sessions are short."
                 ),
-                "suggestion": "Consider quick experiment or fix sessions to build faster feedback loops.",
+                "suggestion": "Consider quick experiment or fix sessions to "
+                "build faster feedback loops.",
             }
         )
     return gaps

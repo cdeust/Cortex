@@ -121,6 +121,11 @@ _SEED_PATTERNS: list[str] = [
     ".claude/**/*.md",
 ]
 
+# Skip files larger than this (2 MB) — seed docs are prose, not blobs.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_SEED_FILE_BYTES = 2_000_000
+
 # Skip these paths even if they match a pattern (vendored / generated).
 _SKIP_PATH_FRAGMENTS = (
     "/node_modules/",
@@ -186,7 +191,7 @@ def _collect_files(
                 size = pr.stat().st_size
             except OSError:
                 continue
-            if size == 0 or size > 2_000_000:
+            if size == 0 or size > _MAX_SEED_FILE_BYTES:
                 continue
             _ = max_bytes  # capped at read time, not filter time
             results.append((pr, rel))

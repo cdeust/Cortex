@@ -23,6 +23,14 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+# source: _shared_prefix comment — >= 4 chars lets "cortex" group
+# cortex-cowork but rejects "ai" from falsely grouping unrelated ai-* repos
+_MIN_MEANINGFUL_FRAGMENT_CHARS = 4
+
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_SLUG_CHARS = 10
+
 
 @dataclass
 class RepoInfo:
@@ -174,7 +182,7 @@ def _shared_prefix(a: str, b: str) -> str:
     # Require prefix to be meaningful: at least 4 chars
     # This allows "cortex" (6 chars, 1 segment) to group cortex-cowork
     # but rejects "ai" (2 chars) from falsely grouping unrelated ai-* repos
-    return prefix if len(prefix) >= 4 else ""
+    return prefix if len(prefix) >= _MIN_MEANINGFUL_FRAGMENT_CHARS else ""
 
 
 def _group_repos(repos: list[RepoInfo]) -> dict[str, str]:
@@ -197,7 +205,8 @@ def _group_repos(repos: list[RepoInfo]) -> dict[str, str]:
                     {all_names[i][0], all_names[j][0]}
                 )
 
-    # Merge overlapping groups (if name appears in multiple prefix groups, use longest prefix)
+    # Merge overlapping groups (if name appears in multiple prefix groups,
+    # use longest prefix)
     name_to_canonical: dict[str, str] = {}
     for prefix, members in sorted(prefix_groups.items(), key=lambda x: -len(x[0])):
         for member in members:
@@ -274,7 +283,7 @@ def _build_fragment_index(
             for i in range(len(parts)):
                 for j in range(i + 1, len(parts) + 1):
                     fragment = "-".join(parts[i:j])
-                    if len(fragment) < 4:
+                    if len(fragment) < _MIN_MEANINGFUL_FRAGMENT_CHARS:
                         continue
                     existing = fragments.get(fragment)
                     if existing is None or len(fragment) > existing[1]:
@@ -500,7 +509,7 @@ def resolve_domain(input_str: str) -> str:
                 return repo.canonical
 
     # 2. Is it a slug? (starts with - and looks path-like)
-    if clean.startswith("-") and len(clean) > 10:
+    if clean.startswith("-") and len(clean) > _MIN_SLUG_CHARS:
         repo = _match_slug(clean, registry.slug_index)
         if repo:
             return repo.canonical
@@ -518,7 +527,11 @@ def resolve_domain(input_str: str) -> str:
     best_frag = ""
     best_frag_len = 0
     for frag, canonical in registry.fragment_index.items():
-        if len(frag) >= 4 and frag in lower and len(frag) > best_frag_len:
+        if (
+            len(frag) >= _MIN_MEANINGFUL_FRAGMENT_CHARS
+            and frag in lower
+            and len(frag) > best_frag_len
+        ):
             best_frag = canonical
             best_frag_len = len(frag)
     if best_frag:

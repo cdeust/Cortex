@@ -90,6 +90,10 @@ def _headers() -> dict[str, str]:
     return headers
 
 
+# source: RFC 9110 §15.5.5 — HTTP 404 Not Found
+_HTTP_NOT_FOUND = 404
+
+
 def latest_release_tag(repo: str) -> str | None:
     """Latest release tag; None when the repo has no releases (404)."""
     req = urllib.request.Request(
@@ -99,7 +103,7 @@ def latest_release_tag(repo: str) -> str | None:
         with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:
             return json.load(resp).get("tag_name")
     except urllib.error.HTTPError as e:
-        if e.code == 404:
+        if e.code == _HTTP_NOT_FOUND:
             return None
         raise
 
@@ -130,7 +134,8 @@ def check_github_pin(
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         return (
             None,
-            f"NOTICE: {name}: network degraded ({e.__class__.__name__}); pin not verified this run",
+            f"NOTICE: {name}: network degraded ({e.__class__.__name__}); "
+            f"pin not verified this run",
         )
     if tag is None:
         return (
@@ -144,7 +149,8 @@ def check_github_pin(
         n = count(repo, pinned, latest)
         behind = f"{n} release(s)" if n is not None else "release(s)"
         return (
-            f"PIN_BEHIND_RELEASE: {name}: pins {pin}, {repo} latest is {tag} ({behind} never delivered)",
+            f"PIN_BEHIND_RELEASE: {name}: pins {pin}, {repo} latest is {tag} "
+            f"({behind} never delivered)",
             None,
         )
     return None, None
@@ -159,10 +165,12 @@ def check_self_pin(name: str, source: str, pin: str, root: Path) -> list[str]:
         actual = json.loads(plugin_json.read_text()).get("version", "")
         if actual and actual != pin:
             failures.append(
-                f"SELF_PIN_MISMATCH: {name}: pins {pin} but {plugin_json.relative_to(root)} says {actual}"
+                f"SELF_PIN_MISMATCH: {name}: pins {pin} "
+                f"but {plugin_json.relative_to(root)} says {actual}"
             )
     if name in FROZEN_PINS:
-        return failures  # frozen: manifest coherence still checked, tag advance is by-design
+        # frozen: manifest coherence still checked, tag advance is by-design
+        return failures
     tag = latest_local_tag(root)
     pinned = parse_semver(pin)
     if tag and pinned and (latest := parse_semver(tag)) and pinned < latest:
@@ -180,7 +188,10 @@ def check_server_json(root: Path, primary_pin: str) -> str | None:
         return None
     version = json.loads(server.read_text()).get("version", "")
     if version and version != primary_pin:
-        return f"SERVER_JSON_SPLIT: server.json says {version} but the primary marketplace pin is {primary_pin}"
+        return (
+            f"SERVER_JSON_SPLIT: server.json says {version} "
+            f"but the primary marketplace pin is {primary_pin}"
+        )
     return None
 
 
@@ -219,7 +230,9 @@ def main() -> int:
         print(line)
     if failures:
         print(
-            f"\n{len(failures)} stale pin(s). A release is not shipped until its pin moves — bump .claude-plugin/marketplace.json (and server.json)."
+            f"\n{len(failures)} stale pin(s). A release is not shipped until "
+            f"its pin moves — bump .claude-plugin/marketplace.json "
+            f"(and server.json)."
         )
         return 1
     print(

@@ -156,10 +156,13 @@ def wiki_stats(conn: Connection) -> dict:
             """
             SELECT
               (SELECT COUNT(*) FROM wiki.pages) AS pages,
-              (SELECT COUNT(*) FROM wiki.pages WHERE lifecycle_state='active') AS active,
-              (SELECT COUNT(*) FROM wiki.pages WHERE lifecycle_state='archived') AS archived,
+              (SELECT COUNT(*) FROM wiki.pages
+                WHERE lifecycle_state='active') AS active,
+              (SELECT COUNT(*) FROM wiki.pages
+                WHERE lifecycle_state='archived') AS archived,
               (SELECT COUNT(*) FROM wiki.concepts) AS concepts,
-              (SELECT COUNT(*) FROM wiki.drafts WHERE status='pending') AS pending_drafts,
+              (SELECT COUNT(*) FROM wiki.drafts
+                WHERE status='pending') AS pending_drafts,
               (SELECT COUNT(*) FROM wiki.claim_events) AS claim_events,
               (SELECT COUNT(*) FROM wiki.links) AS links,
               (SELECT COUNT(*) FROM wiki.citations) AS citations,

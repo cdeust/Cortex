@@ -289,6 +289,10 @@ _SYMBOL_LABELS = (
 # DOES carry) so they still flow into the graph.
 _NON_QUALIFIED_LABELS = {"Import"}
 
+# source: "Cap at 10 tails to keep the WHERE clause tractable"
+# (comment in _symbol_batches_async._where_for_tails)
+_MAX_WHERE_TAILS = 10
+
 
 def _symbol_type_from_label(label: str) -> str:
     """Map AP's label → workflow-graph symbol_type.
@@ -530,7 +534,7 @@ class WorkflowGraphASTSource:
                 if any(t == k or k.endswith(t) for k in kept):
                     continue  # already covered by a longer tail
                 kept.append(t)
-                if len(kept) >= 10:
+                if len(kept) >= _MAX_WHERE_TAILS:
                     break
             escaped = [t.replace("'", "\\'") for t in kept]
             preds = " OR ".join(f"{prop} STARTS WITH '{t}::'" for t in escaped)

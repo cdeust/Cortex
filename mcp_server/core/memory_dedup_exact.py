@@ -21,6 +21,10 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
+# source: structural — a duplicate group has at least two rows by
+# construction (see elect_survivor docstring)
+_MIN_GROUP_SIZE = 2
+
 
 class DuplicateMember(NamedTuple):
     """One row in an exact-duplicate group, the fields the election needs.
@@ -79,9 +83,10 @@ def elect_survivor(members: list[DuplicateMember]) -> ElectionResult:
                     calling this on a non-group is a caller bug, not a
                     recoverable runtime condition.
     """
-    if len(members) < 2:
+    if len(members) < _MIN_GROUP_SIZE:
         raise ValueError(
-            f"elect_survivor requires a group of >= 2 duplicate rows, got {len(members)}"
+            f"elect_survivor requires a group of >= 2 duplicate rows, "
+            f"got {len(members)}"
         )
 
     # min() with key=(-effective_heat, created_at): negating heat turns

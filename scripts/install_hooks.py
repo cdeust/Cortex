@@ -34,7 +34,8 @@ def _save_settings(settings: dict) -> None:
 
 
 def _remove_cortex_hooks(hooks: dict) -> tuple[dict, int]:
-    """Remove all cortex-managed hook entries. Returns cleaned hooks and count removed."""
+    """Remove all cortex-managed hook entries. Returns cleaned hooks and
+    count removed."""
     cleaned = {}
     removed = 0
     for event, entries in hooks.items():

@@ -55,6 +55,13 @@ _EXCLUDE_RE = re.compile(
 )
 
 
+# Candidate paths at or above this length are rejected as non-filesystem
+# strings.
+# source: pre-existing tuned bound, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_PATH_CHARS = 256
+
+
 def extract_file_references(content: str) -> list[str]:
     """Extract file path references from memory content.
 
@@ -68,7 +75,7 @@ def extract_file_references(content: str) -> list[str]:
 
     for m in _PATH_RE.finditer(content):
         path = m.group(1).strip()
-        if path and not _EXCLUDE_RE.search(path) and len(path) < 256:
+        if path and not _EXCLUDE_RE.search(path) and len(path) < _MAX_PATH_CHARS:
             refs.add(path)
 
     # Backslash paths are normalized to '/' so a single ref is stored
@@ -76,12 +83,12 @@ def extract_file_references(content: str) -> list[str]:
     # forward slashes on every OS.
     for m in _WIN_PATH_RE.finditer(content):
         path = m.group(1).strip().replace("\\", "/")
-        if path and not _EXCLUDE_RE.search(path) and len(path) < 256:
+        if path and not _EXCLUDE_RE.search(path) and len(path) < _MAX_PATH_CHARS:
             refs.add(path)
 
     for m in _IMPORT_PATH_RE.finditer(content):
         path = m.group(1).strip()
-        if path and len(path) < 256:
+        if path and len(path) < _MAX_PATH_CHARS:
             refs.add(path)
 
     return sorted(refs)

@@ -32,6 +32,11 @@ from abc import ABC, abstractmethod
 from mcp_server.observability import silent_failure
 from typing import Any
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction. The adjacent comment in
+# KeywordExtractor documents the intent ("words of length >= 4").
+_MIN_KEYWORD_LEN = 4
+
 
 class ActiveRetriever(ABC):
     """Rewrites a raw query into a search-optimized form."""
@@ -138,7 +143,7 @@ class KeywordExtractor(ActiveRetriever):
             wl = w.lower()
             if wl in self._QUESTION_WORDS:
                 continue
-            if w[0].isupper() or len(w) >= 4:
+            if w[0].isupper() or len(w) >= _MIN_KEYWORD_LEN:
                 keywords.append(w)
 
         combined = quoted_terms + dates + keywords

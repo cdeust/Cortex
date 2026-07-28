@@ -51,7 +51,9 @@ schema = {
             },
             "period": {
                 "type": "string",
-                "description": "Time window for the story. 'all' uses the full memory history.",
+                "description": (
+                    "Time window for the story. 'all' uses the full memory history."
+                ),
                 "enum": ["day", "week", "month", "all"],
                 "default": "week",
                 "examples": ["day", "week"],

@@ -45,12 +45,17 @@ schema = {
         "properties": {
             "directory": {
                 "type": "string",
-                "description": "Project directory containing the CLAUDE.md to update. Defaults to current working directory.",
+                "description": (
+                    "Project directory containing the CLAUDE.md to update. Defaults to "
+                    "current working directory."
+                ),
                 "examples": ["/Users/alice/code/cortex"],
             },
             "max_insights": {
                 "type": "integer",
-                "description": "Maximum number of insight bullets to include in the section.",
+                "description": (
+                    "Maximum number of insight bullets to include in the section."
+                ),
                 "default": 10,
                 "minimum": 1,
                 "maximum": 50,
@@ -58,7 +63,9 @@ schema = {
             },
             "min_heat": {
                 "type": "number",
-                "description": "Minimum heat (0.0-1.0) for a memory to qualify as an insight.",
+                "description": (
+                    "Minimum heat (0.0-1.0) for a memory to qualify as an insight."
+                ),
                 "default": 0.3,
                 "minimum": 0.0,
                 "maximum": 1.0,
@@ -66,7 +73,9 @@ schema = {
             },
             "dry_run": {
                 "type": "boolean",
-                "description": "Preview the rendered section without writing to CLAUDE.md.",
+                "description": (
+                    "Preview the rendered section without writing to CLAUDE.md."
+                ),
                 "default": False,
             },
         },

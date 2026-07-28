@@ -116,7 +116,10 @@ def main() -> int:
     journal_path = args.journal or (
         _REPO_ROOT
         / "scratchpad"
-        / f"backfill_write_class_{'apply' if args.apply else 'dry-run'}_{timestamp}.json"
+        / (
+            f"backfill_write_class_"
+            f"{'apply' if args.apply else 'dry-run'}_{timestamp}.json"
+        )
     )
     journal_path.parent.mkdir(parents=True, exist_ok=True)
     journal_path.write_text(

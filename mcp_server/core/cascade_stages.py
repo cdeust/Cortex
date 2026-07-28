@@ -133,7 +133,10 @@ def get_stage_properties(stage: ConsolidationStage) -> StageProperties:
 
 
 def get_stage_properties_by_name(stage_name: str) -> StageProperties:
-    """Get properties by stage name string. Returns LABILE properties for unknown stages."""
+    """Get properties by stage name string.
+
+    Returns LABILE properties for unknown stages.
+    """
     try:
         stage = ConsolidationStage(stage_name)
         return _STAGE_PROPERTIES[stage]

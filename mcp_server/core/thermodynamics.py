@@ -155,6 +155,11 @@ def _edmundson_cue(words: list[str]) -> float:
     return max(0.0, min(1.0, raw))
 
 
+# source: structural — the top-quartile TF concentration is degenerate with
+# fewer than two distinct terms (see _edmundson_key docstring).
+_MIN_DISTINCT_TERMS = 2
+
+
 def _edmundson_key(words: list[str]) -> float:
     """Edmundson key feature: TF concentration in top quartile.
 
@@ -164,7 +169,7 @@ def _edmundson_key(words: list[str]) -> float:
     if not words:
         return 0.0
     freq = Counter(words)
-    if len(freq) < 2:
+    if len(freq) < _MIN_DISTINCT_TERMS:
         return 0.0
     sorted_counts = sorted(freq.values(), reverse=True)
     total_mass = sum(sorted_counts)
@@ -233,6 +238,12 @@ def compute_valence(content: str) -> float:
     return vader_compound(content)
 
 
+# Above this importance the slower importance_decay_factor applies.
+# source: compute_decay docstring — "Importance > 0.7: λ increases to
+# importance_decay_factor (slower decay)"; rationale Craik & Lockhart (1972).
+_HIGH_IMPORTANCE = 0.7
+
+
 def compute_decay(
     current_heat: float,
     hours_elapsed: float,
@@ -277,7 +288,7 @@ def compute_decay(
         # adaptation; classic Ebbinghaus exponential.
         return current_heat * (decay_factor**hours_elapsed)
 
-    base = importance_decay_factor if importance > 0.7 else decay_factor
+    base = importance_decay_factor if importance > _HIGH_IMPORTANCE else decay_factor
 
     # Emotional resistance: time-dependent (Yonelinas & Ritchey 2015).
     # Emotional advantage grows with delay (Kleinsmith & Kaplan 1963 crossover).
@@ -326,9 +337,16 @@ def compute_session_coherence(
     return heat
 
 
+# Confidence is only computed above this many accesses ("enough data points"
+# in the docstring below).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ACCESSES_FOR_CONFIDENCE = 3
+
+
 def compute_metamemory_confidence(access_count: int, useful_count: int) -> float | None:
     """Update confidence after enough data points. Returns None if not enough data."""
-    if access_count <= 3:
+    if access_count <= _MIN_ACCESSES_FOR_CONFIDENCE:
         return None
     return useful_count / access_count
 

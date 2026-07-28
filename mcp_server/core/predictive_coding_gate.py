@@ -166,9 +166,15 @@ def check_calibration(
     )
 
 
+# Minimum recorded outcomes before the calibration score is trusted.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_CALIBRATION_SAMPLES = 5
+
+
 def calibration_score(state: PrecisionState) -> float:
     """Compute calibration accuracy. Returns 0.5 if insufficient data."""
-    if state.calibration_total < 5:
+    if state.calibration_total < _MIN_CALIBRATION_SAMPLES:
         return 0.5
     return state.calibration_hits / state.calibration_total
 

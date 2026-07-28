@@ -31,6 +31,16 @@ from typing import Any
 
 from mcp_server.shared.vader import vader_compound
 
+# Arousal below this floor gives no decay resistance.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_AROUSAL_FOR_RESISTANCE = 0.1
+
+# Arousal above this threshold marks a memory as emotionally significant.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_EMOTIONAL_AROUSAL_THRESHOLD = 0.2
+
 # ── Domain keyword sets for emotion classification ────────────────────────
 # These co-occur with VADER polarity to disambiguate emotion categories.
 
@@ -261,7 +271,7 @@ def compute_decay_resistance(
     if is_mechanism_disabled(Mechanism.EMOTIONAL_DECAY):
         # No-op: no emotion-modulated decay slowdown.
         return 1.0
-    if arousal < 0.1:
+    if arousal < _MIN_AROUSAL_FOR_RESISTANCE:
         return 1.0
 
     # All emotions contribute to decay resistance
@@ -286,7 +296,7 @@ def tag_memory_emotions(content: str) -> dict[str, Any]:
     decay_resistance = compute_decay_resistance(emotions, arousal)
 
     # Is this memory emotionally significant?
-    is_emotional = arousal > 0.2
+    is_emotional = arousal > _EMOTIONAL_AROUSAL_THRESHOLD
 
     # Dominant emotion
     dominant = max(emotions, key=emotions.get) if is_emotional else "neutral"

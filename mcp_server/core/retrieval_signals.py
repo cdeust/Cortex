@@ -16,6 +16,11 @@ from mcp_server.core.hdc_encoder import compute_hdc_scores
 from mcp_server.core.query_decomposition import extract_query_entities
 from mcp_server.observability import silent_failure
 
+# Tokens at or below this length are dropped from SA query terms.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SHORT_TOKEN_MAX_LEN = 2
+
 
 def compute_hopfield_hdc(
     query: str,
@@ -123,7 +128,8 @@ def _compute_sa(
     try:
         terms = list(
             set(
-                extract_query_entities(query) + [w for w in query.split() if len(w) > 2]
+                extract_query_entities(query)
+                + [w for w in query.split() if len(w) > _SHORT_TOKEN_MAX_LEN]
             )
         )
         if not terms:

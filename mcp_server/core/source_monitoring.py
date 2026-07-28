@@ -141,6 +141,13 @@ class SourceJudgement:
 
 
 # ── Feature extraction ──────────────────────────────────────────────────────
+# source: structural — git abbreviates object names to 7 hex chars by default
+# (git-rev-parse --short), and a full SHA-1 hex digest is 40 chars; tokens
+# outside that range cannot be commit hashes.
+_GIT_SHORT_SHA_LEN = 7
+_GIT_FULL_SHA_LEN = 40
+
+
 def extract_grounding(content: str) -> list[str]:
     """Return the verifiable external references in ``content`` (Johnson's
     perceptual-detail proxy): URLs, DOIs, file paths, commit SHAs."""
@@ -152,7 +159,7 @@ def extract_grounding(content: str) -> list[str]:
     # like commit hashes standing alone, not embedded in longer tokens.
     for m in _SHA_RE.finditer(text):
         tok = m.group(0)
-        if 7 <= len(tok) <= 40 and not tok.isdigit():
+        if _GIT_SHORT_SHA_LEN <= len(tok) <= _GIT_FULL_SHA_LEN and (not tok.isdigit()):
             refs.append(tok)
     # de-dup preserving order
     seen: set[str] = set()

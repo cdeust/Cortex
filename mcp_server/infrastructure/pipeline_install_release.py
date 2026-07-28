@@ -41,6 +41,8 @@ _RELEASES_URL = (
 )
 _REQUEST_TIMEOUT = 30  # seconds
 _DISABLE_ENV = "CORTEX_DISABLE_PREBUILT"
+# source: FIPS 180-4 — a SHA-256 digest is 32 bytes = 64 hex characters
+_SHA256_HEX_LEN = 64
 
 
 def _platform_tag() -> Optional[str]:
@@ -166,7 +168,7 @@ def try_install_prebuilt(symlink_dest: Path) -> dict:
         # — first whitespace-separated token is the digest.
         digest_text = sha_bytes.decode("utf-8", errors="replace").strip()
         expected_sha = digest_text.split()[0] if digest_text else ""
-        if len(expected_sha) != 64:
+        if len(expected_sha) != _SHA256_HEX_LEN:
             return {
                 "action": "prebuilt_unavailable",
                 "detail": "malformed sha256 manifest",

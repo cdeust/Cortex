@@ -158,7 +158,9 @@ schema = {
                     "preference",
                     "general",
                 ],
-                "description": "Classified query intent that drove the signal-weight profile.",
+                "description": (
+                    "Classified query intent that drove the signal-weight profile."
+                ),
             },
             "count": {"type": "integer", "description": "Number of memories returned."},
             "receipt_id": {
@@ -238,7 +240,8 @@ schema = {
                 "type": "number",
                 "description": (
                     "Minimum heat (0.0-1.0) for a memory to be considered. "
-                    "Lower = include colder/older memories. Use 0 to include everything."
+                    "Lower = include colder/older memories. Use 0 to include "
+                    "everything."
                 ),
                 "default": 0.05,
                 "minimum": 0.0,
@@ -412,6 +415,13 @@ def _get_store() -> MemoryStore:
     return _store
 
 
+# Below this many results the head/middle/tail reorder is a no-op split.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction (Liu et al. 2023 motivates the
+# reorder, not this minimum)
+_MIN_RESULTS_FOR_REORDER = 5
+
+
 def _apply_strategic_ordering(
     results: list[dict],
     top_fraction: float = 0.3,
@@ -419,13 +429,16 @@ def _apply_strategic_ordering(
 ) -> list[dict]:
     """Reorder to mitigate 'Lost in the Middle' (Liu et al. 2023)."""
     n = len(results)
-    if n < 5:
+    if n < _MIN_RESULTS_FOR_REORDER:
         return results
     top_n = max(1, int(n * top_fraction))
     bottom_n = max(1, int(n * bottom_fraction))
     if n - top_n - bottom_n <= 0:
         return results
     return results[:top_n] + results[n - bottom_n :] + results[top_n : n - bottom_n]
+
+
+_MIN_CO_RETRIEVED_RESULTS = 2
 
 
 def _apply_co_activation(
@@ -437,7 +450,9 @@ def _apply_co_activation(
     if is_mechanism_disabled(Mechanism.CO_ACTIVATION):
         # No-op: do not strengthen co-retrieved entity edges.
         return
-    if not settings.CO_ACTIVATION_ENABLED or len(results) < 2:
+    # source: structural — co-activation strengthens pairs of co-retrieved
+    # entities, so it needs at least two results
+    if not settings.CO_ACTIVATION_ENABLED or len(results) < _MIN_CO_RETRIEVED_RESULTS:
         return
     min_score = settings.CO_ACTIVATION_MIN_SCORE
     lr = settings.CO_ACTIVATION_LEARNING_RATE

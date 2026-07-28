@@ -61,7 +61,10 @@ schema = {
             },
             "max_depth": {
                 "type": "integer",
-                "description": "BFS depth from the seed. Higher = wider exploration. Hard-capped at 4.",
+                "description": (
+                    "BFS depth from the seed. Higher = wider exploration. Hard-capped "
+                    "at 4."
+                ),
                 "default": 2,
                 "minimum": 1,
                 "maximum": 4,
@@ -69,7 +72,10 @@ schema = {
             },
             "include_2d_map": {
                 "type": "boolean",
-                "description": "If true, include 2D coordinates (UMAP/PCA projection) for each returned memory.",
+                "description": (
+                    "If true, include 2D coordinates (UMAP/PCA projection) for each "
+                    "returned memory."
+                ),
                 "default": False,
             },
             "window_hours": {

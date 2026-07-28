@@ -120,9 +120,22 @@ def extract_entry_points(conversations: list[dict]) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
+# Minimum token length kept by the tokenizer.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_TOKEN_LEN = 2
+
+# Minimum shared keywords for two ngrams to join the same group.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_SHARED_KEYWORDS = 2
+
+
 def _tokenize(text: str) -> list[str]:
     return [
-        w for w in _SPLIT_RE.split(text.lower()) if len(w) >= 2 and w not in STOPWORDS
+        w
+        for w in _SPLIT_RE.split(text.lower())
+        if len(w) >= _MIN_TOKEN_LEN and w not in STOPWORDS
     ]
 
 
@@ -165,7 +178,7 @@ def _group_qualified_ngrams(
         merged = False
         for group in groups:
             overlaps = any(
-                _shared_keyword_count(item["ngram"], existing) >= 2
+                _shared_keyword_count(item["ngram"], existing) >= _MIN_SHARED_KEYWORDS
                 for existing in group["ngrams"]
             )
             if overlaps:

@@ -79,12 +79,25 @@ def _format_result_section(result: AblationResult) -> list[str]:
     ]
 
 
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction. Mirror the interpretation
+# thresholds in mcp_server.core.ablation.generate_interpretation.
+_CRITICAL_IMPACT_THRESHOLD = 0.5
+_IMPORTANT_IMPACT_THRESHOLD = 0.3
+
+
 def _format_summary_section(results: list[AblationResult]) -> list[str]:
     """Format the summary section of the ablation report."""
     sorted_results = sorted(results, key=lambda r: r.impact_score, reverse=True)
-    critical = [r for r in sorted_results if r.impact_score > 0.5]
-    important = [r for r in sorted_results if 0.3 < r.impact_score <= 0.5]
-    minor = [r for r in sorted_results if r.impact_score <= 0.3]
+    critical = [
+        r for r in sorted_results if r.impact_score > _CRITICAL_IMPACT_THRESHOLD
+    ]
+    important = [
+        r
+        for r in sorted_results
+        if _IMPORTANT_IMPACT_THRESHOLD < r.impact_score <= _CRITICAL_IMPACT_THRESHOLD
+    ]
+    minor = [r for r in sorted_results if r.impact_score <= _IMPORTANT_IMPACT_THRESHOLD]
 
     return [
         "## Summary",

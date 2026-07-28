@@ -65,7 +65,8 @@ def parse_condition(condition: str) -> tuple[str, str, str]:
         "importance > 0.7"  → ("importance", ">", "0.7")
         "tag contains architecture" → ("tag", "contains", "architecture")
         "content not_contains password" → ("content", "not_contains", "password")
-        "directory_context matches /project/*" → ("directory_context", "matches", "/project/*")
+        "directory_context matches /project/*" →
+            ("directory_context", "matches", "/project/*")
 
     Raises ValueError if condition cannot be parsed.
     """

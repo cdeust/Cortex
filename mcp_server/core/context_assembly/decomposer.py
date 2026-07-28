@@ -35,6 +35,10 @@ from mcp_server.core.context_assembly.budget import (
 )
 from mcp_server.core.context_assembly.warning import build_truncation_banner
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_HALVABLE_TOKENS = 50
+
 
 # ── Main entry point ────────────────────────────────────────────────────
 
@@ -110,7 +114,8 @@ def assemble_prompt(
             effective[p.key] = p.value
     else:
         # Step 4: progressive condensation
-        # Sort by priority DESC (high priority number → least important → condensed first)
+        # Sort by priority DESC (high priority number → least important →
+        # condensed first)
         sorted_ph = sorted(placeholders, key=lambda p: p.priority, reverse=True)
 
         remaining = variable_budget
@@ -160,7 +165,7 @@ def assemble_prompt(
         did_trim = False
         for p in sorted_desc:
             val = current_values.get(p.key, p.value)
-            if estimator(val) <= 50:
+            if estimator(val) <= _MIN_HALVABLE_TOKENS:
                 continue  # Can't meaningfully halve further
             # Halve at the nearest line boundary in the first half
             half_idx = len(val) // 2

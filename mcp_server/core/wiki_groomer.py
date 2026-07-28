@@ -64,6 +64,10 @@ class PageAudit:
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
+# source: structural — a quoted scalar needs both an opening and a closing
+# quote character, so it is at least two characters long.
+_MIN_QUOTED_SCALAR_LEN = 2
+
 
 def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
     """Split a Markdown file into (frontmatter_dict, body).
@@ -90,7 +94,11 @@ def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
         key = key.strip()
         value = value.strip()
         # Strip surrounding quotes.
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        if (
+            len(value) >= _MIN_QUOTED_SCALAR_LEN
+            and value[0] == value[-1]
+            and value[0] in "'\""
+        ):
             value = value[1:-1]
         frontmatter[key] = value
     return frontmatter, body

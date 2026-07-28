@@ -71,7 +71,10 @@ schema = {
             },
             "domain": {
                 "type": "string",
-                "description": "Restrict import to sessions classified under this cognitive domain.",
+                "description": (
+                    "Restrict import to sessions classified under this cognitive "
+                    "domain."
+                ),
                 "examples": ["cortex", "ai-architect"],
             },
             "min_importance": {
@@ -196,6 +199,13 @@ async def _store_memory(
     return bool(result and result.get("stored"))
 
 
+# Dry-run preview truncation caps.
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_PREVIEW_CONTENT_CHARS = 120
+_PREVIEW_ITEMS_CAP = 50
+
+
 def _build_preview_item(
     item: dict[str, Any],
     project_name: str,
@@ -204,7 +214,10 @@ def _build_preview_item(
     """Build a truncated preview dict for dry-run mode."""
     content = item["content"]
     return {
-        "content": content[:120] + ("..." if len(content) > 120 else ""),
+        "content": (
+            content[:_PREVIEW_CONTENT_CHARS]
+            + ("..." if len(content) > _PREVIEW_CONTENT_CHARS else "")
+        ),
         "tags": item["tags"],
         "importance": round(item["importance"], 3),
         "project": project_name,
@@ -257,8 +270,8 @@ def _build_result(
         "dry_run": dry_run,
     }
     if dry_run and preview_items:
-        result["preview"] = preview_items[:50]
-        result["preview_truncated"] = len(preview_items) > 50
+        result["preview"] = preview_items[:_PREVIEW_ITEMS_CAP]
+        result["preview_truncated"] = len(preview_items) > _PREVIEW_ITEMS_CAP
     if errors:
         result["errors"] = errors[:10]
     return result

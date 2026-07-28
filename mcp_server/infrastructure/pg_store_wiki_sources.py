@@ -52,6 +52,10 @@ def list_pages_missing_source_link(conn: Connection, *, limit: int) -> list[dict
 
 SourceEntry = str | tuple[str, str] | tuple[str, str, float]
 
+# source: structural — a (path, source, confidence) SourceEntry tuple has
+# three elements; shorter tuples fall back to the call-level defaults
+_ENTRY_WITH_CONFIDENCE = 3
+
 
 def _entry_row(
     entry: SourceEntry,
@@ -74,7 +78,9 @@ def _entry_row(
     if isinstance(entry, tuple):
         path = entry[0]
         entry_source = entry[1] if len(entry) > 1 else default_source
-        entry_confidence = entry[2] if len(entry) > 2 else default_confidence
+        entry_confidence = (
+            entry[2] if len(entry) >= _ENTRY_WITH_CONFIDENCE else default_confidence
+        )
         return page_id, path, link_kind, entry_confidence, entry_source
     return page_id, entry, link_kind, default_confidence, default_source
 
@@ -127,7 +133,8 @@ def upsert_page_sources(
         ]
         cur.executemany(
             """
-            INSERT INTO wiki.page_sources (page_id, source_path, link_kind, confidence, source)
+            INSERT INTO wiki.page_sources
+                (page_id, source_path, link_kind, confidence, source)
             VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (page_id, source_path, link_kind) DO UPDATE SET
                 confidence = EXCLUDED.confidence,

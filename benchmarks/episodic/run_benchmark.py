@@ -33,6 +33,27 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# source: structural — an event is the 5-tuple
+# (date, location, entity, content, content_detail) documented in the module
+# docstring; the first four fields are what every question is built from
+_EVENT_MIN_FIELDS = 4
+_EVENT_FULL_FIELDS = 5
+
+# source: structural — "latest" and "chronological" questions need at least a
+# pair of events to be non-trivial
+_MIN_EVENTS_FOR_ORDERING = 2
+
+# Retrieved-text length under which a bin-0 (non-existent entity) answer counts
+# as a clean abstention rather than a hallucination.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_ABSTENTION_TEXT_CHARS = 50
+
+# source: Simple Recall Score bins {0,1,2,3-5,6+} documented in the module
+# docstring (Huet et al., ICLR 2025)
+_BIN_2_ITEMS = 2
+_BIN_3_5_MAX_ITEMS = 5
+
 
 # ── Data Loading ─────────────────────────────────────────────────────────
 
@@ -75,7 +96,7 @@ def generate_qa_from_events(events: list[list[str]]) -> list[dict]:
     # Build entity -> events index
     entity_events: dict[str, list] = defaultdict(list)
     for event in events:
-        if len(event) >= 4:
+        if len(event) >= _EVENT_MIN_FIELDS:
             entity_events[event[2]].append(event)
 
     # Per-entity questions
@@ -97,7 +118,9 @@ def generate_qa_from_events(events: list[list[str]]) -> list[dict]:
         locations = [e[1] for e in ent_events]
         qa_pairs.append(
             {
-                "question": f"In what locations did events involving {entity} take place?",
+                "question": (
+                    f"In what locations did events involving {entity} take place?"
+                ),
                 "answers": set(locations),
                 "n_items": len(locations),
                 "get": "all",
@@ -107,13 +130,15 @@ def generate_qa_from_events(events: list[list[str]]) -> list[dict]:
         )
 
         # "latest location" question (if multiple events)
-        if len(ent_events) >= 2:
+        if len(ent_events) >= _MIN_EVENTS_FOR_ORDERING:
             # Sort by date string (assumes consistent date format)
             sorted_events = sorted(ent_events, key=lambda e: e[0])
             latest = sorted_events[-1]
             qa_pairs.append(
                 {
-                    "question": f"What is the most recent location where {entity} was seen?",
+                    "question": (
+                        f"What is the most recent location where {entity} was seen?"
+                    ),
                     "answers": {latest[1]},
                     "n_items": 1,
                     "get": "latest",
@@ -126,7 +151,10 @@ def generate_qa_from_events(events: list[list[str]]) -> list[dict]:
             ordered_dates = [e[0] for e in sorted_events]
             qa_pairs.append(
                 {
-                    "question": f"List all dates when {entity} was observed, from earliest to latest.",
+                    "question": (
+                        f"List all dates when {entity} was observed, "
+                        f"from earliest to latest."
+                    ),
                     "answers": set(ordered_dates),
                     "ordered_answers": ordered_dates,
                     "n_items": len(ordered_dates),
@@ -137,7 +165,7 @@ def generate_qa_from_events(events: list[list[str]]) -> list[dict]:
             )
 
     # Bin 0: non-existent entity questions (hallucination test)
-    all_entities = set(e[2] for e in events if len(e) >= 4)
+    all_entities = set(e[2] for e in events if len(e) >= _EVENT_MIN_FIELDS)
     fake_names = ["Zephyr Nightingale", "Quantum McPherson", "Aria Starweaver"]
     for fake in fake_names:
         if fake not in all_entities:
@@ -182,12 +210,12 @@ class EpisodicRetriever:
     def ingest_events_as_chapters(self, events: list[list[str]]):
         """Create synthetic chapters from raw events."""
         for event in events:
-            if len(event) >= 5:
+            if len(event) >= _EVENT_FULL_FIELDS:
                 ch = (
                     f"On {event[0]}, at {event[1]}, {event[2]} "
                     f"participated in {event[3]}. {event[4]}."
                 )
-            elif len(event) >= 4:
+            elif len(event) >= _EVENT_MIN_FIELDS:
                 ch = (
                     f"On {event[0]}, at {event[1]}, {event[2]} "
                     f"was involved in {event[3]}."
@@ -211,7 +239,7 @@ def compute_recall_f1(retrieved_text: str, answers: set[str]) -> float:
     if not answers:
         # Bin 0: no answers expected. Check for hallucination.
         # If retrieved text doesn't contain any answer-like content, score = 1.0
-        return 1.0 if len(retrieved_text.strip()) < 50 else 0.5
+        return 1.0 if len(retrieved_text.strip()) < _ABSTENTION_TEXT_CHARS else 0.5
 
     found = sum(1 for a in answers if a.lower() in retrieved_text.lower())
     if found == 0:
@@ -342,9 +370,9 @@ def run_benchmark(
             bin_name = "bin_0"
         elif n == 1:
             bin_name = "bin_1"
-        elif n == 2:
+        elif n == _BIN_2_ITEMS:
             bin_name = "bin_2"
-        elif n <= 5:
+        elif n <= _BIN_3_5_MAX_ITEMS:
             bin_name = "bin_3-5"
         else:
             bin_name = "bin_6+"

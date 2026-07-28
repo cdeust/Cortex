@@ -110,6 +110,12 @@ def _kind_page_counts(wiki_root: Path, domain: str) -> dict[str, int]:
     return counts
 
 
+# How many uncovered source files the dashboard lists before truncating.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_UNCOVERED_FILES_SHOWN = 30
+
+
 def render_dashboard(wiki_root: str, domain: str) -> str:
     """Render the dashboard Markdown for one project.
 
@@ -234,10 +240,12 @@ def render_dashboard(wiki_root: str, domain: str) -> str:
         )
         lines.append("")
         lines.append("```")
-        for f in file_cov.uncovered_files[:30]:
+        for f in file_cov.uncovered_files[:_UNCOVERED_FILES_SHOWN]:
             lines.append(f)
-        if len(file_cov.uncovered_files) > 30:
-            lines.append(f"… +{len(file_cov.uncovered_files) - 30} more")
+        if len(file_cov.uncovered_files) > _UNCOVERED_FILES_SHOWN:
+            lines.append(
+                f"… +{len(file_cov.uncovered_files) - _UNCOVERED_FILES_SHOWN} more"
+            )
         lines.append("```")
         lines.append("")
 

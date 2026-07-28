@@ -72,12 +72,17 @@ TOOL_CLAIM = re.compile(r"(\d+)\s+(?:memory|standalone|MCP)\s+tools\b")
 TOOL_TOTAL_CLAIM = re.compile(r"\((\d+)\s+(?:total\s+)?with\b[^)]*\)")
 REFERENCE_CLAIM = re.compile(r"(\d+)[-\s]reference\b")
 MECHANISM_CLAIM = re.compile(
-    r"(\d+)\s+(?:neuroscience[- ]grounded|neuroscience|biological|brain)?\s*mechanisms\b"
+    r"(\d+)\s+(?:neuroscience[- ]grounded|neuroscience|biological|brain)?"
+    r"\s*mechanisms\b"
 )
 # Both the "N tests" and the "N-test suite" phrasings state the count; matching
 # only the first let a stale number sit unread in .bestpractices.json.
 TEST_CLAIM = re.compile(r"(\d+)(?:\s+tests|-test suite)\b")
 VERSION_BADGE = re.compile(r"badge/version-(\d+\.\d+\.\d+)")
+
+# source: structural — str.split(marker, 1) yields exactly (before, after)
+# when the marker is present
+_MARKER_SPLIT_PARTS = 2
 
 
 class ClaimError(Exception):
@@ -98,7 +103,8 @@ def canonical_tool_counts() -> tuple[int, int]:
     """
     header = read("docs/mcp-tools.md")
     match = re.search(
-        r"(\d+)\s+standalone tools register unconditionally;\s*(\d+)\s+more[^(]*\((\d+)\s+total",
+        r"(\d+)\s+standalone tools register unconditionally;"
+        r"\s*(\d+)\s+more[^(]*\((\d+)\s+total",
         header,
     )
     if not match:
@@ -123,7 +129,7 @@ def canonical_tool_counts() -> tuple[int, int]:
 def canonical_reference_count() -> int:
     """Entries counted in the bibliography, which declares itself canonical."""
     body = read("docs/papers/bibliography.md").split("## References", 1)
-    if len(body) != 2:
+    if len(body) != _MARKER_SPLIT_PARTS:
         raise ClaimError(
             "docs/papers/bibliography.md: '## References' section not found"
         )
@@ -181,7 +187,8 @@ def check_counts(pattern: re.Pattern[str], expected: int, label: str) -> list[st
     claims = scan_claims(pattern)
     if not claims:
         return [
-            f"no {label} claim found in any scanned file — the gate would pass vacuously"
+            f"no {label} claim found in any scanned file — "
+            f"the gate would pass vacuously"
         ]
     return [
         f"{path}:{line}: advertises {claimed} {label}, canonical is {expected}"
@@ -220,7 +227,8 @@ def collect_failures(test_count: int | None) -> list[str]:
             "no with-integrations tool claim found — the gate would pass vacuously"
         )
     failures += [
-        f"{path}:{line}: advertises {claimed} tools with integrations, canonical is {total}"
+        f"{path}:{line}: advertises {claimed} tools with integrations, "
+        f"canonical is {total}"
         for path, line, claimed in total_claims
         if claimed != total
     ]
@@ -232,7 +240,8 @@ def collect_failures(test_count: int | None) -> list[str]:
         badge = re.search(r"badge/tests-(\d+)_passing", read("README.md"))
         if badge and int(badge.group(1)) != test_count:
             failures.append(
-                f"README.md: test badge says {badge.group(1)}, the suite collects {test_count}"
+                f"README.md: test badge says {badge.group(1)}, "
+                f"the suite collects {test_count}"
             )
     return failures
 

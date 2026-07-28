@@ -19,11 +19,17 @@ schema = {
         "properties": {
             "stored": {
                 "type": "boolean",
-                "description": "True if content landed in the memory store (as new row or a merge into an existing one).",
+                "description": (
+                    "True if content landed in the memory store (as new row or a merge "
+                    "into an existing one)."
+                ),
             },
             "memory_id": {
                 "type": "integer",
-                "description": "ID of the resulting memory row (PG bigint). Present when stored=true.",
+                "description": (
+                    "ID of the resulting memory row (PG bigint). Present when "
+                    "stored=true."
+                ),
             },
             "action": {
                 "type": "string",
@@ -34,15 +40,26 @@ schema = {
                     "superseded",
                     "superseded_conflict",
                 ],
-                "description": "stored=new row; merged=folded into the most-similar existing memory; rejected=redundant per the predictive-coding gate; superseded=new row replaces an older version (append-only edge posted); superseded_conflict=another writer superseded the target first — nothing was kept, rebase and retry.",
+                "description": (
+                    "stored=new row; merged=folded into the most-similar existing "
+                    "memory; rejected=redundant per the predictive-coding gate; "
+                    "superseded=new row replaces an older version (append-only edge "
+                    "posted); superseded_conflict=another writer superseded the target "
+                    "first — nothing was kept, rebase and retry."
+                ),
             },
             "reason": {
                 "type": "string",
-                "description": "Human-readable explanation of the gate decision (e.g. 'low surprise', 'high entity overlap').",
+                "description": (
+                    "Human-readable explanation of the gate decision (e.g. 'low "
+                    "surprise', 'high entity overlap')."
+                ),
             },
             "merged_with": {
                 "type": "integer",
-                "description": "ID of the existing memory (PG bigint) when action=merged.",
+                "description": (
+                    "ID of the existing memory (PG bigint) when action=merged."
+                ),
             },
             "superseded_id": {
                 "type": "integer",
@@ -50,11 +67,17 @@ schema = {
             },
             "supersede_target_id": {
                 "type": "integer",
-                "description": "Requested supersession target when the supersede path rejected or conflicted.",
+                "description": (
+                    "Requested supersession target when the supersede path rejected or "
+                    "conflicted."
+                ),
             },
             "current_superseded_by_id": {
                 "type": ["integer", "null"],
-                "description": "The version that currently supersedes the target (present on supersede rejection/conflict so the caller can rebase).",
+                "description": (
+                    "The version that currently supersedes the target (present on "
+                    "supersede rejection/conflict so the caller can rebase)."
+                ),
             },
             "heat": {
                 "type": "number",
@@ -93,11 +116,16 @@ schema = {
                     },
                     "checkable_refs": {
                         "type": "object",
-                        "description": "Count per reference type: file, commit, url, artifact, citation.",
+                        "description": (
+                            "Count per reference type: file, commit, url, artifact, "
+                            "citation."
+                        ),
                     },
                     "hint": {
                         "type": "string",
-                        "description": "Human-readable nudge — what to add for a higher grade.",
+                        "description": (
+                            "Human-readable nudge — what to add for a higher grade."
+                        ),
                     },
                 },
             },
@@ -140,8 +168,10 @@ schema = {
                     "with enough context to be intelligible standalone."
                 ),
                 "examples": [
-                    "Recall regression on 2026-03-12 traced to FlashRank ONNX cache; clearing fixed it.",
-                    "Decided to use pgvector HNSW (m=16, ef_construction=64) for ANN — 3x faster than IVFFlat.",
+                    "Recall regression on 2026-03-12 traced to FlashRank ONNX cache; "
+                    "clearing fixed it.",
+                    "Decided to use pgvector HNSW (m=16, ef_construction=64) for ANN — "
+                    "3x faster than IVFFlat.",
                 ],
             },
             "tags": {
@@ -175,7 +205,8 @@ schema = {
             "source": {
                 "type": "string",
                 "description": "Origin tag for provenance and replay scoring.",
-                # source: mcp_server/core/distillation_reporting.py::build_distill_prompt
+                # source:
+                # mcp_server/core/distillation_reporting.py::build_distill_prompt
                 # is the sole emitter of source='distillation' (grep-verified,
                 # 2026-07-12) — the required-call-shape prompt for M-D8
                 # distillation dossiers. classify_write_class (core/write_class.py)

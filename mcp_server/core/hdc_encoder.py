@@ -29,6 +29,10 @@ HDC_DIM = 1024
 # Random-projection seed for reproducibility across processes
 _SEED = 0xDEADBEEF
 
+# source: structural — a bigram is a pair of adjacent words, so at least
+# two words are required
+_MIN_WORDS_FOR_BIGRAM = 2
+
 # ── Atom generation ───────────────────────────────────────────────────────
 
 
@@ -182,7 +186,7 @@ def encode_text(text: str, dim: int = HDC_DIM, use_bigrams: bool = True) -> np.n
         vecs.append(_word_to_hdc(w, dim))
 
     # Bigram bound pairs (encode context/association)
-    if use_bigrams and len(words) >= 2:
+    if use_bigrams and len(words) >= _MIN_WORDS_FOR_BIGRAM:
         for i in range(len(words) - 1):
             bound = bind(_word_to_hdc(words[i], dim), _word_to_hdc(words[i + 1], dim))
             vecs.append(bound)

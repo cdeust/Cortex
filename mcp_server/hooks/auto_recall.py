@@ -83,6 +83,10 @@ _MAX_MEMORIES = 3
 _MIN_HEAT = 0.15
 _MIN_QUERY_LENGTH = 10
 _MAX_INJECTION_CHARS = 800  # Keep compact — don't flood context
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_FTS_TERM_CHARS = 2
+_MAX_MEMORY_CHARS = 200
 
 # Skip recall for meta/system messages
 _SKIP_PATTERNS = re.compile(
@@ -235,7 +239,9 @@ def _fts_query_from_prompt(query: str) -> str:
 
     # \W+ split mirrors shared.text._SPLIT_RE (kept private there).
     terms = [
-        w for w in re.split(r"\W+", query.lower()) if len(w) >= 2 and w not in STOPWORDS
+        w
+        for w in re.split(r"\W+", query.lower())
+        if len(w) >= _MIN_FTS_TERM_CHARS and w not in STOPWORDS
     ]
     return " OR ".join(f'"{t}"' for t in terms)
 
@@ -325,8 +331,8 @@ def _format_injection(memories: list[dict]) -> tuple[str, list[dict]]:
     for m in memories:
         content = m["content"].replace("\n", " ").strip()
         # Truncate individual memories
-        if len(content) > 200:
-            content = content[:197] + "..."
+        if len(content) > _MAX_MEMORY_CHARS:
+            content = content[: _MAX_MEMORY_CHARS - 3] + "..."
 
         agent = m.get("agent", "")
         prefix = f"[{agent}] " if agent else ""

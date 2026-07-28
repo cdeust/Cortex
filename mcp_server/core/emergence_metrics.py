@@ -12,6 +12,43 @@ from __future__ import annotations
 import math
 from datetime import datetime, timezone
 
+# Numerical guard against division by a near-zero denominator.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_OLS_EPSILON = 1e-10
+
+# source: thresholds documented in _fit_quality_for docstring
+# (darval's v3.13.2 P3)
+_FIT_R2_POOR = 0.10
+_FIT_R2_WEAK = 0.50
+
+# Minimum raw points / bins entering the log-linear fit.
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_FIT_POINTS = 5
+_MIN_FIT_BINS = 3
+
+# Heat below this floor is treated as negligible (log-domain floor and
+# age-binning cutoff).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_HEAT_FLOOR = 0.01
+
+# Schema-match cohort thresholds for the streaming report.
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SCHEMA_MATCH_HIGH = 0.5
+_SCHEMA_MATCH_LOW = 0.3
+
+# source: structural — normalized theta phase lies in [0, 1); the first
+# half-cycle is the encoding phase
+_THETA_PHASE_SPLIT = 0.5
+
+# Minimum heat for a memory to count as "alive" in phase cohorts.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_ALIVE_HEAT = 0.1
+
 # ── Forgetting Curve ─────────────────────────────────────────────────────
 
 
@@ -73,7 +110,7 @@ def _fit_log_linear(
     n, sum_x, sum_y, sum_xy, sum_x2 = _ols_sums(log_heats)
 
     denom = n * sum_x2 - sum_x**2
-    if abs(denom) < 1e-10:
+    if abs(denom) < _OLS_EPSILON:
         return dict(_DEGENERATE_RESULT)
 
     b = -(n * sum_xy - sum_x * sum_y) / denom
@@ -114,9 +151,9 @@ def _fit_quality_for(r_squared: float) -> str:
                                is an oversimplification.
       else     → "good"      — explains ≥ 50% of variance.
     """
-    if r_squared < 0.10:
+    if r_squared < _FIT_R2_POOR:
         return "poor"
-    if r_squared < 0.50:
+    if r_squared < _FIT_R2_WEAK:
         return "weak"
     return "good"
 
@@ -150,7 +187,7 @@ def compute_forgetting_curve(
     Returns:
         Dict with: curve_type, r_squared, half_life_hours, retention_at_24h.
     """
-    if len(memories_by_age) < 5:
+    if len(memories_by_age) < _MIN_FIT_POINTS:
         return dict(_INSUFFICIENT)
 
     bin_means = _bin_memories_by_age(memories_by_age)
@@ -166,9 +203,9 @@ def _forgetting_from_bin_means(
     emergence report, which accumulates the bins online and so never holds the
     raw point set.
     """
-    if n_points < 5:
+    if n_points < _MIN_FIT_POINTS:
         return dict(_INSUFFICIENT)
-    if len(bin_means) < 3:
+    if len(bin_means) < _MIN_FIT_BINS:
         return {
             "curve_type": "insufficient_bins",
             "r_squared": 0.0,
@@ -177,8 +214,10 @@ def _forgetting_from_bin_means(
             "retention_at_24h": 0.0,
         }
 
-    log_heats = [(t, math.log(max(h, 0.01))) for t, h in bin_means if h > 0.01]
-    if len(log_heats) < 3:
+    log_heats = [
+        (t, math.log(max(h, _HEAT_FLOOR))) for t, h in bin_means if h > _HEAT_FLOOR
+    ]
+    if len(log_heats) < _MIN_FIT_BINS:
         return {
             "curve_type": "no_fit",
             "r_squared": 0.0,
@@ -303,7 +342,7 @@ def generate_emergence_report_streamed(
         for m in chunk:
             total += 1
             heat = m.get("heat", 0)
-            if heat > 0.01:
+            if heat > _HEAT_FLOOR:
                 bucket = bins.setdefault(
                     max(0, int((m.get("hours_in_stage", 0) + 1.0) / 6.0)), [0.0, 0]
                 )
@@ -312,14 +351,16 @@ def generate_emergence_report_streamed(
                 n_age += 1
             score = m.get("schema_match_score", 0)
             consolidated = m.get("consolidation_stage") == "consolidated"
-            if score >= 0.5:
+            if score >= _SCHEMA_MATCH_HIGH:
                 _fold_schema_cohort(cons, m, consolidated)
-            elif score < 0.3:
+            elif score < _SCHEMA_MATCH_LOW:
                 _fold_schema_cohort(incons, m, consolidated)
-            phase = enc if m.get("theta_phase_at_encoding", 0) < 0.5 else ret
+            phase = (
+                enc if m.get("theta_phase_at_encoding", 0) < _THETA_PHASE_SPLIT else ret
+            )
             phase["count"] += 1
             phase["heat_sum"] += m.get("heat", 0)
-            if m.get("heat", 0) >= 0.1:
+            if m.get("heat", 0) >= _ALIVE_HEAT:
                 phase["alive"] += 1
             stage = m.get("consolidation_stage", "unknown")
             stage_dist[stage] = stage_dist.get(stage, 0) + 1

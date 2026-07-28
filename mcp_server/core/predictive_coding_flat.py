@@ -80,18 +80,24 @@ def compute_temporal_novelty(hours_since_similar: float | None) -> float:
 # -- Structural novelty -------------------------------------------------------
 
 
+# source: engineering default — order-of-magnitude length buckets
+# (snippet / paragraph / section / page / document) for shape comparison.
+_SNIPPET_MAX_CHARS = 100
+_PARAGRAPH_MAX_CHARS = 500
+_SECTION_MAX_CHARS = 2000
+_PAGE_MAX_CHARS = 8000
+
+
 def _structural_features(content: str) -> dict[str, int | float]:
     """Extract structural shape features from content."""
     n = max(len(content), 1)
-    # source: engineering default — order-of-magnitude length buckets
-    # (snippet / paragraph / section / page / document) for shape comparison.
-    if n < 100:
+    if n < _SNIPPET_MAX_CHARS:
         length_bucket = 0
-    elif n < 500:
+    elif n < _PARAGRAPH_MAX_CHARS:
         length_bucket = 1
-    elif n < 2000:
+    elif n < _SECTION_MAX_CHARS:
         length_bucket = 2
-    elif n < 8000:
+    elif n < _PAGE_MAX_CHARS:
         length_bucket = 3
     else:
         length_bucket = 4

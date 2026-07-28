@@ -56,6 +56,15 @@ _ACT_R_NOISE_S: float = 1.0
 # Minimum hours to avoid log(0)
 _MIN_LIFETIME_HOURS: float = 0.01
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_HIGH_IMPORTANCE_THRESHOLD: float = 0.7
+
+# Minimum heat change worth persisting as an update.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_HEAT_DELTA: float = 0.001
+
 
 def _parse_datetime(value) -> datetime | None:
     """Parse a datetime from either a string or native datetime object.
@@ -180,7 +189,7 @@ def _compute_actr_decay(
 
     # Modulate d based on importance and emotion
     d = _ACT_R_DECAY_D
-    if importance > 0.7:
+    if importance > _HIGH_IMPORTANCE_THRESHOLD:
         d *= 0.8  # Important memories decay 20% slower
     d *= 1.0 - abs(valence) * 0.3  # Emotional memories resist decay
     d = max(0.1, d)  # Floor to prevent d=0
@@ -247,7 +256,7 @@ def _compute_single_decay(
     # Enforce permastore floor (Bahrick 1984)
     new_heat = max(floor, new_heat)
 
-    if abs(new_heat - current_heat) > 0.001:
+    if abs(new_heat - current_heat) > _MIN_HEAT_DELTA:
         return (mem["id"], round(new_heat, 6))
     return None
 
@@ -335,7 +344,7 @@ def compute_entity_decay(
         if hours is None:
             continue
         new_heat = current_heat * (decay_factor**hours)
-        if abs(new_heat - current_heat) > 0.001:
+        if abs(new_heat - current_heat) > _MIN_HEAT_DELTA:
             updates.append((entity["id"], round(new_heat, 6)))
 
     return updates

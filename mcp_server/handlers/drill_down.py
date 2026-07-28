@@ -57,12 +57,18 @@ schema = {
             },
             "domain": {
                 "type": "string",
-                "description": "Cognitive domain to build the underlying hierarchy from. Omit for global.",
+                "description": (
+                    "Cognitive domain to build the underlying hierarchy from. Omit for "
+                    "global."
+                ),
                 "examples": ["cortex", "auth-service"],
             },
             "min_heat": {
                 "type": "number",
-                "description": "Minimum heat (0.0-1.0) for a memory to be eligible for the hierarchy.",
+                "description": (
+                    "Minimum heat (0.0-1.0) for a memory to be eligible for the "
+                    "hierarchy."
+                ),
                 "default": 0.05,
                 "minimum": 0.0,
                 "maximum": 1.0,

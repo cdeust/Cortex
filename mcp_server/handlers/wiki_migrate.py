@@ -54,6 +54,10 @@ from mcp_server.shared.wiki_source_paths import extract_document_paths
 # Wiki-link syntax: [[slug]] or [[slug|display text]]
 _WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
 
+# source: structural — a "kind/domain/page.md" relative path has three
+# components; shorter paths carry no domain segment
+_DOMAIN_PATH_PARTS = 3
+
 # wiki.pages.status's DB CHECK constraint (pg_schema.py) accepts the union
 # of: the digital-garden maturity vocabulary ('seedling'/'budding'/
 # 'evergreen', the column default) plus 'living' (emitted by
@@ -183,7 +187,8 @@ def page_row_from_md(
 
     # Domain is the second path component
     parts = rel_path.split("/")
-    domain = fm.get("domain") or (parts[1] if len(parts) >= 3 else "_general")
+    has_domain_component = len(parts) >= _DOMAIN_PATH_PARTS
+    domain = fm.get("domain") or (parts[1] if has_domain_component else "_general")
 
     tags = fm.get("tags", [])
     if isinstance(tags, str):

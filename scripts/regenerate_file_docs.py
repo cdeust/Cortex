@@ -43,6 +43,11 @@ def _flatten_source_path(rel_path: str) -> str:
     return rel_path.replace("/", "-").replace("\\", "-")
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_SUBSTANTIVE_PROSE_CHARS = 1500
+
+
 def _existing_substantive(page_path: Path) -> bool:
     """Skip overwrite when an existing page already has real content."""
     if not page_path.is_file():
@@ -56,7 +61,7 @@ def _existing_substantive(page_path: Path) -> bool:
             end = text.find("\n---", 3)
             if end >= 0:
                 text = text[end + 4 :]
-        return prose_char_count(text) >= 1500
+        return prose_char_count(text) >= _MIN_SUBSTANTIVE_PROSE_CHARS
     except (ImportError, OSError):
         return False
 

@@ -43,6 +43,15 @@ _HIGH_MATCH_THRESHOLD = 0.7
 _MEDIUM_MATCH_THRESHOLD = 0.3
 _MAX_VIOLATIONS_BEFORE_REVISION = 10
 _SCHEMA_EMA_ALPHA = 0.1
+# Best-match scores below this floor count as no schema match.
+# source: hand-tuned — module docstring "All thresholds are hand-tuned"
+_MIN_MATCH_SCORE = 0.1
+# Signature weights decayed below this floor are pruned from the EMA dict.
+# source: hand-tuned — module docstring "All thresholds are hand-tuned"
+_SIGNATURE_PRUNE_FLOOR = 0.05
+# Above this violation/usage ratio a schema needs revision.
+# source: hand-tuned — module docstring "All thresholds are hand-tuned"
+_REVISION_VIOLATION_RATIO = 0.4
 
 
 # ── Schema Matching ───────────────────────────────────────────────────────
@@ -137,7 +146,7 @@ def find_best_matching_schema(
             best_score = score
             best_schema = schema
 
-    if best_score < 0.1:
+    if best_score < _MIN_MATCH_SCORE:
         return None, 0.0
     return best_schema, best_score
 
@@ -208,7 +217,7 @@ def _ema_update_signature(
     for item in list(updated):
         if item not in observed_set:
             updated[item] *= 1 - alpha * 0.5
-            if updated[item] < 0.05:
+            if updated[item] < _SIGNATURE_PRUNE_FLOOR:
                 del updated[item]
 
     return updated
@@ -227,7 +236,7 @@ def should_revise_schema(schema: Schema) -> bool:
 
     return (
         schema.violation_count >= _MAX_VIOLATIONS_BEFORE_REVISION
-        or violation_ratio > 0.4
+        or violation_ratio > _REVISION_VIOLATION_RATIO
     )
 
 

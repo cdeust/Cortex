@@ -23,6 +23,11 @@ from mcp_server.core.reranker import rerank_results
 from mcp_server.core.titans_memory import TitansMemory
 from mcp_server.observability import silent_failure
 
+# Entity names shorter than this are too generic to match against content.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ENTITY_NAME_LEN = 3
+
 # Singleton Titans memory module (persists across recalls within a session)
 _titans: TitansMemory | None = None
 
@@ -509,7 +514,8 @@ def recall(
     # Re-enable when v0.2 ships with cross-validated training data.
     # Code path preserved for future use:
     # from mcp_server.core.abstention_gate import filter_by_abstention
-    # filtered, _ = filter_by_abstention(query, candidates, threshold=0.45, keep_at_least=1)
+    # filtered, _ = filter_by_abstention(
+    #     query, candidates, threshold=0.45, keep_at_least=1)
     # candidates = filtered
 
     # 8. MMR diversity reranking — DISABLED after ablation (see above).
@@ -687,7 +693,7 @@ def assemble_context(
         for e in graph.get("entities", []):
             name = (e.get("name") or "").strip().lower()
             eid = str(e.get("id", ""))
-            if len(name) >= 3 and eid:
+            if len(name) >= _MIN_ENTITY_NAME_LEN and eid:
                 entity_pairs.append((name, eid))
 
         filtered: list[dict[str, Any]] = []
@@ -734,7 +740,7 @@ def assemble_context(
         for e in graph.get("entities", []):
             nm = (e.get("name") or "").strip().lower()
             eid = str(e.get("id", ""))
-            if len(nm) >= 3 and eid:
+            if len(nm) >= _MIN_ENTITY_NAME_LEN and eid:
                 entity_pairs.append((nm, eid))
 
         out: list[dict[str, Any]] = []

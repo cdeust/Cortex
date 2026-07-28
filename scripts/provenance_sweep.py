@@ -52,6 +52,10 @@ if str(_REPO_ROOT) not in sys.path:
 
 _GRADES = ("verified", "verifiable", "unverifiable")
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_SAMPLE_REPORTS = 200
+
 
 async def _fetch_current_distribution(store) -> dict[str, int]:
     """Raw count of every row's CURRENT source_attribution value — the
@@ -122,7 +126,7 @@ async def _run(
             # Reclassification transitions are read from the CURRENT (not
             # yet mutated on dry-run) DB row via the report's memory_id —
             # cheap because reports already carry the field we need.
-            if len(sample_reports) < 200:
+            if len(sample_reports) < _MAX_SAMPLE_REPORTS:
                 sample_reports.append(
                     {
                         "memory_id": r["memory_id"],
@@ -223,7 +227,10 @@ def main() -> int:
         _REPO_ROOT
         / "docs"
         / "campaigns"
-        / f"i7d5_provenance_sweep_{'apply' if args.apply else 'dry-run'}_{timestamp}.json"
+        / (
+            f"i7d5_provenance_sweep_"
+            f"{'apply' if args.apply else 'dry-run'}_{timestamp}.json"
+        )
     )
     journal_path.parent.mkdir(parents=True, exist_ok=True)
     journal_path.write_text(

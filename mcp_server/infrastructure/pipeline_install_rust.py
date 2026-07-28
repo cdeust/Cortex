@@ -37,6 +37,9 @@ from mcp_server.infrastructure.pipeline_installer_common import _run_quiet
 _DISABLE_RUST_ENV = "CORTEX_AUTO_INSTALL_RUST"
 _DISABLE_HASH_PIN_ENV = "CORTEX_RUSTUP_PIN_HASH"
 
+# source: FIPS 180-4 — a SHA-256 digest is 32 bytes = 64 hex characters
+_SHA256_HEX_LEN = 64
+
 # Canonical rustup installer URL — official Rust project mirror.
 _RUSTUP_URL = "https://sh.rustup.rs"
 
@@ -72,7 +75,9 @@ def _read_pinned_hash() -> Optional[str]:
         line = line.strip()
         if line and not line.startswith("#"):
             token = line.split()[0]
-            if len(token) == 64 and all(c in "0123456789abcdef" for c in token.lower()):
+            if len(token) == _SHA256_HEX_LEN and all(
+                c in "0123456789abcdef" for c in token.lower()
+            ):
                 return token.lower()
     return None
 

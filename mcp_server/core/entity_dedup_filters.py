@@ -115,6 +115,12 @@ def is_affix_extension(a: str, b: str) -> bool:
     return hi != lo and (hi.startswith(lo) or hi.endswith(lo))
 
 
+# source: rule documented in is_structural_identifier docstring (graphify
+# #1205 exemption) — multi-segment dotted paths have >= 2 dots; single-dot
+# names like "Node.js" do not qualify
+_MIN_DOTS_FOR_MODULE_PATH = 2
+
+
 def is_structural_identifier(label: str) -> bool:
     """True for dotted module paths or slash file paths (code identifiers).
 
@@ -128,7 +134,7 @@ def is_structural_identifier(label: str) -> bool:
     ``Vue.js``) do not.
     """
     s = label.strip()
-    return "/" in s or s.count(".") >= 2
+    return "/" in s or s.count(".") >= _MIN_DOTS_FOR_MODULE_PATH
 
 
 def _common_prefix_len(a: str, b: str) -> int:

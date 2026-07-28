@@ -147,7 +147,8 @@ def main() -> int:
         if gate:
             fired += 1
         print(
-            f"{qi:>2} {topic:<26} {sim:>6.3f} {jacc:>6.3f} {str(c_ok):>7} {str(gate):>6}"
+            f"{qi:>2} {topic:<26} {sim:>6.3f} {jacc:>6.3f} "
+            f"{str(c_ok):>7} {str(gate):>6}"
         )
     print("-" * 78)
     n = len(PAIRS)
@@ -161,7 +162,8 @@ def main() -> int:
     ok = fired == expected
     print("-" * 78)
     print(
-        f"PASS criterion: fired == {expected}  (detect_contradictions blind to value swaps)"
+        f"PASS criterion: fired == {expected}  "
+        f"(detect_contradictions blind to value swaps)"
     )
     print(f"RESULT: {'PASS' if ok else 'FAIL'} (fired={fired}/{n})")
     if not ok:

@@ -320,6 +320,11 @@ def find_near_duplicates(
 # ── Action Log Summarization ─────────────────────────────────────────────
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_FILES_IN_SUMMARY = 5  # summary lists this many files, then a count
+
+
 def summarize_action_group(
     actions: list[dict[str, Any]],
     min_actions: int = 3,
@@ -347,15 +352,22 @@ def summarize_action_group(
 
     summary = f"Session activity: {', '.join(parts)}"
     if files_touched:
-        file_list = ", ".join(sorted(files_touched)[:5])
-        if len(files_touched) > 5:
-            file_list += f" (+{len(files_touched) - 5} more)"
+        file_list = ", ".join(sorted(files_touched)[:_MAX_FILES_IN_SUMMARY])
+        if len(files_touched) > _MAX_FILES_IN_SUMMARY:
+            file_list += f" (+{len(files_touched) - _MAX_FILES_IN_SUMMARY} more)"
         summary += f". Files: {file_list}"
 
     return summary
 
 
 # ── Entity Classification Enhancement ────────────────────────────────────
+
+
+# source: graduation conditions documented in the should_reclassify
+# docstring ("Accessed >= 5 times", ">= 3 related semantic memories");
+# tuning provenance not recorded
+_MIN_ACCESSES_FOR_SEMANTIC = 5
+_MIN_RELATED_SEMANTICS = 3
 
 
 def should_reclassify(
@@ -382,4 +394,7 @@ def should_reclassify(
     if content_class != "semantic":
         return False
 
-    return access_count >= 5 or related_semantics >= 3
+    return (
+        access_count >= _MIN_ACCESSES_FOR_SEMANTIC
+        or related_semantics >= _MIN_RELATED_SEMANTICS
+    )

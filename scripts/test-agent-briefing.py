@@ -116,7 +116,8 @@ class TestAgentBriefing(unittest.TestCase):
             "session_id": "test-session-001",
             "agent_name": "feynman",
             "agent_type": "genius",
-            "prompt": "Explain the zetetic scientific standard and verify the implementation",
+            "prompt": "Explain the zetetic scientific standard and verify "
+            "the implementation",
             "cwd": "/tmp",
         }
         stdout, stderr, code = _run_process_event(event, stub_rows)
@@ -124,7 +125,8 @@ class TestAgentBriefing(unittest.TestCase):
         self.assertIn(
             "Cortex Briefing",
             stdout,
-            f"Expected 'Cortex Briefing' in stdout.\nstdout: {stdout!r}\nstderr: {stderr!r}",
+            f"Expected 'Cortex Briefing' in stdout."
+            f"\nstdout: {stdout!r}\nstderr: {stderr!r}",
         )
 
     def test_nonexistent_agent_skips_gracefully(self) -> None:

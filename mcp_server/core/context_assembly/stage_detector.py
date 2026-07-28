@@ -26,6 +26,9 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Any
 
+# source: structural — "Month-DD-YYYY" splits on two "-" into three fields
+_MONTH_DAY_YEAR_PARTS = 3
+
 
 class StageDetector(ABC):
     """Assigns each memory to a stage ID.
@@ -158,7 +161,7 @@ class TemporalStageDetector(StageDetector):
 
             try:
                 parts = value.split("-")
-                if len(parts) == 3 and parts[0].isalpha():
+                if len(parts) == _MONTH_DAY_YEAR_PARTS and parts[0].isalpha():
                     month_name = parts[0]
                     day = int(parts[1])
                     year = int(parts[2])

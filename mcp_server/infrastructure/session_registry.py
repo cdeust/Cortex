@@ -60,6 +60,10 @@ _MAX_ANCESTOR_DEPTH = 15
 # local darwin — bound is a hang-guard, not a tuned value.
 _PS_TIMEOUT_S = 1.0
 
+# source: structural — `ps -o ppid=,comm=` output splits once on
+# whitespace into exactly (ppid, comm)
+_PPID_COMM_PARTS = 2
+
 
 def registry_dir() -> Path:
     """Registry dir — mirrors ``viz-server.json`` prior art (F6)."""
@@ -221,7 +225,7 @@ def _ppid_and_comm(pid: int) -> tuple[int, str] | None:
     except (OSError, subprocess.SubprocessError):
         return None
     parts = out.stdout.strip().split(None, 1)
-    if len(parts) != 2:
+    if len(parts) != _PPID_COMM_PARTS:
         return None
     try:
         ppid = int(parts[0])

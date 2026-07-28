@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS memories (
     id              SERIAL PRIMARY KEY,
     content         TEXT NOT NULL,
     embedding       vector(384),
-    content_tsv     tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
+    content_tsv     tsvector GENERATED ALWAYS AS
+                        (to_tsvector('english', content)) STORED,
     tags            JSONB DEFAULT '[]'::jsonb,
     source          TEXT DEFAULT '',
     domain          TEXT DEFAULT '',
@@ -83,7 +84,8 @@ CREATE TABLE IF NOT EXISTS memories (
     -- backfill window on pre-existing installs (MIGRATIONS_DDL below +
     -- the one-shot handlers/consolidation/write_class_backfill.py pass).
     write_class     TEXT NOT NULL DEFAULT 'deliberate'
-                    CHECK (write_class IN ('auto', 'deliberate', 'derived', 'mechanical'))
+                    CHECK (write_class IN
+                        ('auto', 'deliberate', 'derived', 'mechanical'))
 );
 """
 
@@ -221,7 +223,8 @@ CREATE TABLE IF NOT EXISTS wiki.claim_events (
                     )),
     entity_ids      INTEGER[] NOT NULL DEFAULT '{}',
     evidence_refs   JSONB NOT NULL DEFAULT '[]'::jsonb,
-    confidence      REAL NOT NULL DEFAULT 0.5 CHECK (confidence >= 0.0 AND confidence <= 1.0),
+    confidence      REAL NOT NULL DEFAULT 0.5
+                    CHECK (confidence >= 0.0 AND confidence <= 1.0),
     embedding       vector(384),
     supersedes      BIGINT REFERENCES wiki.claim_events(id) ON DELETE SET NULL,
     extracted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -657,7 +660,8 @@ CREATE INDEX IF NOT EXISTS idx_injection_receipts_time
 -- value once the memory is gone).
 CREATE TABLE IF NOT EXISTS injection_receipt_items (
     id                  SERIAL PRIMARY KEY,
-    receipt_id          INTEGER NOT NULL REFERENCES injection_receipts(id) ON DELETE CASCADE,
+    receipt_id          INTEGER NOT NULL
+                        REFERENCES injection_receipts(id) ON DELETE CASCADE,
     memory_id           INTEGER NOT NULL,
     rank                INTEGER NOT NULL,
     score               REAL
@@ -786,7 +790,8 @@ CREATE TABLE IF NOT EXISTS procedural_skills (
 
 INDEXES_DDL = """
 CREATE INDEX IF NOT EXISTS idx_memories_embedding
-    ON memories USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
+    ON memories USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
 CREATE INDEX IF NOT EXISTS idx_memories_content_tsv
     ON memories USING gin (content_tsv);
 CREATE INDEX IF NOT EXISTS idx_memories_content_trgm
@@ -1273,7 +1278,8 @@ DECLARE
         ARRAY(SELECT w FROM unnest(v_words) w WHERE length(w) > 1),
         ' | '
     );
-    v_tsq  tsquery := CASE WHEN v_or_expr = '' THEN plainto_tsquery('english', p_query_text)
+    v_tsq  tsquery := CASE WHEN v_or_expr = ''
+                            THEN plainto_tsquery('english', p_query_text)
                             ELSE to_tsquery('english', v_or_expr) END;
     v_min_heat_base REAL;
 BEGIN
@@ -1370,7 +1376,8 @@ BEGIN
     -- Signal 5: Recency via exponential decay
     recency AS (
         SELECT c.id,
-               EXP(-0.01 * EXTRACT(EPOCH FROM (NOW() - c.created_at)) / 86400.0)::REAL AS raw_score
+               EXP(-0.01 * EXTRACT(EPOCH FROM (NOW() - c.created_at))
+                   / 86400.0)::REAL AS raw_score
         FROM candidates c
         WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
           AND c.source <> 'post_tool_capture'
@@ -1387,7 +1394,8 @@ BEGIN
         SELECT id, SUM(contribution) AS fused_score
         FROM (
             SELECT v.id,
-                   p_w_vector * (v.raw_score - (-1.0)) / GREATEST(b.hi - (-1.0), 0.001) AS contribution
+                   p_w_vector * (v.raw_score - (-1.0))
+                       / GREATEST(b.hi - (-1.0), 0.001) AS contribution
             FROM vec v, vec_max b
             UNION ALL
             SELECT f.id,
@@ -1662,7 +1670,8 @@ BEGIN
     WHERE m.heat_base >= p_min_heat
       AND NOT m.is_stale
       AND m.embedding IS NOT NULL
-      AND (p_domain IS NULL OR m.domain = p_domain OR (p_include_globals AND m.is_global = TRUE))
+      AND (p_domain IS NULL OR m.domain = p_domain
+           OR (p_include_globals AND m.is_global = TRUE))
     ORDER BY m.heat_base DESC
     LIMIT p_limit;
 END;
@@ -1736,8 +1745,10 @@ BEGIN
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'memories' AND column_name = 'heat_base_set_at'
     ) THEN
-        ALTER TABLE memories ADD COLUMN heat_base_set_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-        UPDATE memories SET heat_base_set_at = COALESCE(last_accessed, created_at, NOW());
+        ALTER TABLE memories ADD COLUMN heat_base_set_at TIMESTAMPTZ
+            NOT NULL DEFAULT NOW();
+        UPDATE memories
+            SET heat_base_set_at = COALESCE(last_accessed, created_at, NOW());
     END IF;
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
@@ -1965,7 +1976,8 @@ BEGIN
     ) THEN
         ALTER TABLE memories ADD COLUMN stage_entered_at TIMESTAMPTZ;
         -- Backfill: set to created_at for existing memories
-        UPDATE memories SET stage_entered_at = created_at WHERE stage_entered_at IS NULL;
+        UPDATE memories SET stage_entered_at = created_at
+            WHERE stage_entered_at IS NULL;
     END IF;
 END $$;
 
@@ -1998,15 +2010,21 @@ END $$;
 
 -- Migration: persist arousal and dominant_emotion from emotional tagging
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='memories' AND column_name='arousal')
-    THEN ALTER TABLE memories ADD COLUMN arousal REAL NOT NULL DEFAULT 0.0 CHECK (arousal >= 0.0 AND arousal <= 1.0);
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='memories' AND column_name='arousal')
+    THEN ALTER TABLE memories ADD COLUMN arousal REAL NOT NULL DEFAULT 0.0
+        CHECK (arousal >= 0.0 AND arousal <= 1.0);
     END IF;
 END $$;
 
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='memories' AND column_name='dominant_emotion')
-    THEN ALTER TABLE memories ADD COLUMN dominant_emotion TEXT NOT NULL DEFAULT 'neutral'
-        CHECK (dominant_emotion IN ('frustration','satisfaction','confusion','urgency','discovery','neutral'));
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='memories'
+                   AND column_name='dominant_emotion')
+    THEN ALTER TABLE memories ADD COLUMN dominant_emotion TEXT
+        NOT NULL DEFAULT 'neutral'
+        CHECK (dominant_emotion IN ('frustration','satisfaction','confusion',
+                                    'urgency','discovery','neutral'));
     END IF;
 END $$;
 
@@ -2023,15 +2041,19 @@ END;
 $$ LANGUAGE plpgsql;
 
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_memories_domain_normalize') THEN
-        CREATE TRIGGER trg_memories_domain_normalize BEFORE INSERT OR UPDATE OF domain ON memories
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger
+                   WHERE tgname = 'trg_memories_domain_normalize') THEN
+        CREATE TRIGGER trg_memories_domain_normalize
+        BEFORE INSERT OR UPDATE OF domain ON memories
         FOR EACH ROW EXECUTE FUNCTION normalize_domain();
     END IF;
 END $$;
 
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_entities_domain_normalize') THEN
-        CREATE TRIGGER trg_entities_domain_normalize BEFORE INSERT OR UPDATE OF domain ON entities
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger
+                   WHERE tgname = 'trg_entities_domain_normalize') THEN
+        CREATE TRIGGER trg_entities_domain_normalize
+        BEFORE INSERT OR UPDATE OF domain ON entities
         FOR EACH ROW EXECUTE FUNCTION normalize_domain();
     END IF;
 END $$;
@@ -2091,8 +2113,11 @@ CREATE TABLE IF NOT EXISTS ingest_progress (
 -- harvested from raw tool dumps by write_post_store.extract_triggers —
 -- see docs/provenance/bounded-io-phase2-design.md M1.
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prospective_memories' AND column_name='created_by')
-    THEN ALTER TABLE prospective_memories ADD COLUMN created_by TEXT NOT NULL DEFAULT '';
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='prospective_memories'
+                   AND column_name='created_by')
+    THEN ALTER TABLE prospective_memories ADD COLUMN created_by TEXT
+        NOT NULL DEFAULT '';
     END IF;
 END $$;
 
@@ -2104,7 +2129,8 @@ END $$;
 -- path or a dotted module path (>= 2 dots, mirrors entity_dedup_filters.
 -- is_structural_identifier), are ast_symbol; everything else stays text_concept.
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='entities' AND column_name='origin')
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='entities' AND column_name='origin')
     THEN
         ALTER TABLE entities ADD COLUMN origin TEXT NOT NULL DEFAULT 'text_concept'
             CHECK (origin IN ('ast_symbol', 'text_concept'));
@@ -2253,7 +2279,8 @@ BEGIN
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'homeostatic_state' AND column_name = 'write_class'
     ) THEN
-        ALTER TABLE homeostatic_state ADD COLUMN write_class TEXT NOT NULL DEFAULT 'auto'
+        ALTER TABLE homeostatic_state ADD COLUMN write_class TEXT
+            NOT NULL DEFAULT 'auto'
             CHECK (write_class IN ('auto', 'deliberate', 'derived', 'mechanical'));
         -- Old PK was (domain) alone; the CHECK above already guarantees
         -- every legacy row is 'auto', so dropping and re-adding as

@@ -77,6 +77,11 @@ class ResolveStats:
 # ── Entity linking ────────────────────────────────────────────────────
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ENTITY_NAME_CHARS = 3  # 1-2 char names match too promiscuously
+
+
 def plan_entity_links(
     claims: list[dict],
     entities_by_memory: dict[int, list[int]],
@@ -99,7 +104,7 @@ def plan_entity_links(
             # Word-bounded substring — cheap pre-filter, no false positives
             # on partial words. Misses fuzzy matches; that's a Phase 3 problem.
             for name, eid in name_map.items():
-                if len(name) < 3:
+                if len(name) < _MIN_ENTITY_NAME_CHARS:
                     continue
                 if re.search(rf"\b{re.escape(name)}\b", text):
                     ids.add(eid)

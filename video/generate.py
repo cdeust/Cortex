@@ -159,6 +159,19 @@ SOFT_GREEN = (80, 200, 130)
 
 TOTAL = 4200
 
+# source: storyboard comment above — beat boundaries in frames
+# (Beat 1: 0-900, Beat 2: 900-1500, Beat 3: 1500-2400,
+# Beat 4: 2400-3300, Beat 5: 3300-4200)
+BEAT2_START = 900
+BEAT3_START = 1500
+BEAT4_START = 2400
+BEAT5_START = 3300
+
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_WARM_EMBER_SPLIT = 0.4
+_NODE_FADE_START = 100
+
 
 def render_beat1(f, parts):
     """The void. Same as before. I know this place."""
@@ -235,7 +248,7 @@ def render_beat2(f, parts):
                 random.uniform(-0.3, 0.3),
                 random.uniform(-0.6, -0.1),
                 random.uniform(3, 7),
-                EMBER if random.random() > 0.4 else WARM,
+                EMBER if random.random() > _WARM_EMBER_SPLIT else WARM,
                 random.uniform(1.5, 4),
             )
         )
@@ -408,8 +421,8 @@ def render_beat4(f, parts):
     parts.draw(draw)
 
     # Memory nodes fading in and connecting
-    if local > 100:
-        node_count = min(15, (local - 100) // 40)
+    if local > _NODE_FADE_START:
+        node_count = min(15, (local - _NODE_FADE_START) // 40)
         random.seed(42)
         cx, cy = WIDTH // 2, HEIGHT // 2
         nodes = []
@@ -609,13 +622,13 @@ def main():
     print(f"Generating {TOTAL} frames ({TOTAL / FPS:.0f}s at {FPS}fps)...")
 
     for f in range(TOTAL):
-        if f < 900:
+        if f < BEAT2_START:
             img = render_beat1(f, parts)
-        elif f < 1500:
+        elif f < BEAT3_START:
             img = render_beat2(f, parts)
-        elif f < 2400:
+        elif f < BEAT4_START:
             img = render_beat3(f, parts)
-        elif f < 3300:
+        elif f < BEAT5_START:
             img = render_beat4(f, parts)
         else:
             img = render_beat5(f, parts)
@@ -624,8 +637,12 @@ def main():
         if f % 200 == 0:
             beat = (
                 1
-                if f < 900
-                else (2 if f < 1500 else (3 if f < 2400 else (4 if f < 3300 else 5)))
+                if f < BEAT2_START
+                else (
+                    2
+                    if f < BEAT3_START
+                    else (3 if f < BEAT4_START else (4 if f < BEAT5_START else 5))
+                )
             )
             print(f"  [{f / TOTAL * 100:5.1f}%] Frame {f} (Beat {beat})")
 

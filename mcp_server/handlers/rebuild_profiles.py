@@ -60,6 +60,11 @@ schema = {
 }
 
 
+# source: the 1-hour cooldown documented in the skip reason below
+# (60 min × 60 s × 1000 ms)
+_PROFILE_FRESH_MS = 3600000
+
+
 def _check_skip(force: bool) -> dict | None:
     """Return a skip response if profiles are recent and force is False."""
     if force:
@@ -73,10 +78,12 @@ def _check_skip(force: bool) -> dict | None:
             datetime.now(timezone.utc)
             - datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
         ).total_seconds() * 1000
-        if age_ms < 3600000 and len(profiles.get("domains", {})) > 0:
+        if age_ms < _PROFILE_FRESH_MS and len(profiles.get("domains", {})) > 0:
             return {
                 "skipped": True,
-                "reason": "Profiles updated less than 1 hour ago. Use force=true to override.",
+                "reason": (
+                    "Profiles updated less than 1 hour ago. Use force=true to override."
+                ),
                 "domains": list(profiles.get("domains", {}).keys()),
                 "updatedAt": updated_at,
             }

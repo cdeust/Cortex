@@ -17,7 +17,8 @@ from mcp_server.observability import silent_failure
 # intent. Harvesting "TODO"/"later"/"make sure" phrases from raw tool dumps
 # minted 317 garbage keyword triggers (100% of sampled conditions were shell
 # fragments / regex shards, production DB audit 2026-06-10) which then flooded
-# recall via inject_triggered_memories. See docs/provenance/bounded-io-phase2-design.md M1.
+# recall via inject_triggered_memories. See
+# docs/provenance/bounded-io-phase2-design.md M1.
 _AUTO_CAPTURE_SOURCES = frozenset({"post_tool_capture"})
 
 
@@ -78,6 +79,10 @@ def persist_entities(
     return entity_ids
 
 
+# source: structural — a co-occurrence pair needs at least two entities.
+_MIN_CO_OCCURRENCE_ENTITIES = 2
+
+
 def _create_co_occurrences(
     entities: list[dict],
     content: str,
@@ -85,7 +90,7 @@ def _create_co_occurrences(
     entity_ids: list[int],
 ) -> None:
     """Create co-occurrence relationships between extracted entities."""
-    if len(entity_ids) < 2:
+    if len(entity_ids) < _MIN_CO_OCCURRENCE_ENTITIES:
         return
     names = [e["name"] for e in entities]
     co_ocs = knowledge_graph.detect_co_occurrences(names, content)
@@ -103,6 +108,12 @@ def _create_co_occurrences(
             )
 
 
+# Only memories at or above this importance trigger retroactive tagging.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_TAGGING_IMPORTANCE = 0.7
+
+
 def run_synaptic_tagging(
     mem_id: int,
     importance: float,
@@ -112,7 +123,7 @@ def run_synaptic_tagging(
     """Retroactively boost weak memories sharing entities (Frey & Morris 1997)."""
     tagged: list[dict] = []
     try:
-        if importance < 0.7 or not new_entity_names:
+        if importance < _MIN_TAGGING_IMPORTANCE or not new_entity_names:
             return tagged
         recent = store.get_hot_memories(min_heat=0.0, limit=50)
         candidates = _build_tagging_candidates(

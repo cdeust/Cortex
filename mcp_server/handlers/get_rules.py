@@ -55,7 +55,9 @@ schema = {
             },
             "include_inactive": {
                 "type": "boolean",
-                "description": "Include rules that have been deactivated (default omits them).",
+                "description": (
+                    "Include rules that have been deactivated (default omits them)."
+                ),
                 "default": False,
             },
         },

@@ -139,6 +139,11 @@ def _git_commits_in_window(cwd: str, since_minutes: float) -> list[dict]:
     return commits
 
 
+# source: cap documented in the _session_memories docstring ("at most 50
+# entries to keep the draft tractable")
+_SESSION_MEMORIES_CAP = 50
+
+
 def _session_memories(store, session_id: str, domain: str) -> list[dict]:
     """Pull memories captured during this session.
 
@@ -160,7 +165,7 @@ def _session_memories(store, session_id: str, domain: str) -> list[dict]:
             m.get("domain") == domain and m.get("session_id") == session_id
         ):
             out.append(m)
-        if len(out) >= 50:
+        if len(out) >= _SESSION_MEMORIES_CAP:
             break
     return out
 

@@ -33,11 +33,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+_MIN_ARGC = 2  # source: structural — program name + <project_root>
+
 
 def main() -> None:
-    if len(sys.argv) < 2:
+    if len(sys.argv) < _MIN_ARGC:
         print(
-            "Usage: python -m mcp_server.hooks.ingest_codebase_background <project_root>",
+            "Usage: python -m mcp_server.hooks.ingest_codebase_background "
+            "<project_root>",
             file=sys.stderr,
         )
         sys.exit(2)

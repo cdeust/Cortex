@@ -76,7 +76,8 @@ from __future__ import annotations
 
 import re
 
-# ── Auto-capture template markers (hooks/post_tool_capture.py::_build_memory_content) ──
+# ── Auto-capture template markers
+# (hooks/post_tool_capture.py::_build_memory_content) ──
 
 _AUTO_CAPTURE_HEADER_RE = re.compile(r"^# Tool: \S")
 

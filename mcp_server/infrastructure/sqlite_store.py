@@ -227,15 +227,19 @@ class SqliteMemoryStore(
                 "CREATE TABLE homeostatic_state ("
                 "  domain TEXT NOT NULL,"
                 "  write_class TEXT NOT NULL DEFAULT 'auto'"
-                "    CHECK (write_class IN ('auto','deliberate','derived','mechanical')),"
-                "  factor REAL NOT NULL DEFAULT 1.0 CHECK (factor > 0.0 AND factor < 10.0),"
+                "    CHECK (write_class IN "
+                "('auto','deliberate','derived','mechanical')),"
+                "  factor REAL NOT NULL DEFAULT 1.0 "
+                "CHECK (factor > 0.0 AND factor < 10.0),"
                 "  updated_at TEXT NOT NULL DEFAULT (datetime('now')),"
                 "  PRIMARY KEY (domain, write_class)"
                 ")"
             )
             self._conn.execute(
-                "INSERT INTO homeostatic_state (domain, write_class, factor, updated_at) "
-                "SELECT domain, 'auto', factor, updated_at FROM homeostatic_state_legacy"
+                "INSERT INTO homeostatic_state "
+                "(domain, write_class, factor, updated_at) "
+                "SELECT domain, 'auto', factor, updated_at "
+                "FROM homeostatic_state_legacy"
             )
             self._conn.execute("DROP TABLE homeostatic_state_legacy")
         except sqlite3.OperationalError:
@@ -291,7 +295,8 @@ class SqliteMemoryStore(
         if "no_decay" not in names:
             try:
                 self._conn.execute(
-                    "ALTER TABLE memories ADD COLUMN no_decay INTEGER NOT NULL DEFAULT 0"
+                    "ALTER TABLE memories ADD COLUMN no_decay "
+                    "INTEGER NOT NULL DEFAULT 0"
                 )
             except sqlite3.OperationalError:
                 pass

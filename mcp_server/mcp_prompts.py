@@ -94,7 +94,8 @@ PROMOTE_MEMORIES = _Spec(
     steps=(
         _Step(
             "consolidate",
-            "Run the maintenance cycle — this drives CLS episodic→semantic abstraction.",
+            "Run the maintenance cycle — this drives CLS episodic→semantic "
+            "abstraction.",
         ),
         _Step(
             "memory_stats",
@@ -102,11 +103,13 @@ PROMOTE_MEMORIES = _Spec(
         ),
         _Step(
             "curate_distill",
-            "Pull understanding-level dossiers (error→success, co-access, entity family) to author lessons from.",
+            "Pull understanding-level dossiers (error→success, co-access, "
+            "entity family) to author lessons from.",
         ),
         _Step(
             "remember",
-            "Write each distilled insight back as a `lesson` memory so it survives as semantic knowledge.",
+            "Write each distilled insight back as a `lesson` memory so it "
+            "survives as semantic knowledge.",
         ),
     ),
     closing=(
@@ -119,7 +122,8 @@ PROMOTE_MEMORIES = _Spec(
 CURATE_WIKI = _Spec(
     name="curate_wiki",
     title="Wiki curation kickoff",
-    description="Turn a topic's memory + code evidence into a verified first-class wiki page.",
+    description="Turn a topic's memory + code evidence into a verified "
+    "first-class wiki page.",
     steps=(
         _Step(
             "unified_search",
@@ -131,13 +135,15 @@ CURATE_WIKI = _Spec(
         ),
         _Step(
             "wiki_write",
-            "Author or refine the first-class page (ADR/spec/note) from the curated material.",
+            "Author or refine the first-class page (ADR/spec/note) from the "
+            "curated material.",
         ),
         _Step("wiki_verify", "Verify the page's integrity and links before finishing."),
     ),
     closing=(
-        "Curate from evidence, not intuition — every claim on the page should trace to a "
-        "memory or code reference you gathered. Verify links so the page stays navigable."
+        "Curate from evidence, not intuition — every claim on the page should "
+        "trace to a memory or code reference you gathered. Verify links so "
+        "the page stays navigable."
     ),
 )
 

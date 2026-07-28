@@ -46,6 +46,27 @@ from benchmarks.beam.data import (
 )
 from benchmarks.lib.bench_db import BenchmarkDB
 
+# Minimum turn length for a turn to seed an 80-char prefix match key.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_SOURCE_TURN_CHARS = 10
+
+# Top-1 retrieval score below which the system counts as having found nothing
+# confident (abstention success).
+# source: engineering heuristic documented in evaluate_retrieval below —
+# "BEAM paper uses LLM-as-judge to evaluate abstention quality. We approximate
+# by checking if top retrieval score is low"
+_ABSTENTION_SCORE_GATE = 0.3
+
+# Minimum answer length for an answer substring match to carry signal.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ANSWER_MATCH_CHARS = 2
+
+# source: structural — the K in the reported Recall@5 / Recall@10 metrics
+_RECALL_AT_5_K = 5
+_RECALL_AT_10_K = 10
+
 
 # ── Evaluation ───────────────────────────────────────────────────────────
 
@@ -205,7 +226,7 @@ def evaluate_retrieval(
                 turn_id = turn.get("id", -1)
                 if turn_id in source_ids:
                     text = turn.get("content", "")
-                    if text and len(text) > 10:
+                    if text and len(text) > _MIN_SOURCE_TURN_CHARS:
                         source_contents.add(text[:80].lower())
 
             # Find rank of first hit
@@ -219,14 +240,17 @@ def evaluate_retrieval(
                 # by checking if top retrieval score is low (indicating the
                 # system correctly found nothing relevant). Needs calibration
                 # against actual abstention accuracy.
-                if not retrieved or retrieved[0].get("score", 0) < 0.3:
+                if (
+                    not retrieved
+                    or retrieved[0].get("score", 0) < _ABSTENTION_SCORE_GATE
+                ):
                     hit_rank = 1
             else:
                 for rank, r in enumerate(retrieved):
                     content_lower = r["content"].lower()
                     if (
                         answer_lower
-                        and len(answer_lower) > 2
+                        and len(answer_lower) > _MIN_ANSWER_MATCH_CHARS
                         and answer_lower in content_lower
                     ):
                         hit_rank = rank + 1
@@ -259,9 +283,9 @@ def evaluate_retrieval(
             rank = r["hit_rank"]
             if rank is not None:
                 mrr_sum += 1.0 / rank
-                if rank <= 5:
+                if rank <= _RECALL_AT_5_K:
                     recall_at_5 += 1
-                if rank <= 10:
+                if rank <= _RECALL_AT_10_K:
                     recall_at_10 += 1
 
         metrics[ability] = {
@@ -418,6 +442,9 @@ def run_benchmark(
         avg_mrr_run = (
             sum(run_overall_mrr) / len(run_overall_mrr) if run_overall_mrr else 0.0
         )
+        avg_r5_run = (
+            sum(run_overall_r5) / len(run_overall_r5) if run_overall_r5 else 0.0
+        )
         avg_r10_run = (
             sum(run_overall_r10) / len(run_overall_r10) if run_overall_r10 else 0.0
         )
@@ -462,7 +489,7 @@ def run_benchmark(
             light_overall = sum(light_scores.values()) / len(light_scores)
             print(
                 f"{'OVERALL':<28} {avg_mrr_run:>6.3f} "
-                f"{sum(run_overall_r5) / len(run_overall_r5) if run_overall_r5 else 0.0:>5.1%} "
+                f"{avg_r5_run:>5.1%} "
                 f"{avg_r10_run:>5.1%} {total_qs:>4}  "
                 f"{light_overall:>6.3f}"
             )
@@ -476,7 +503,8 @@ def run_benchmark(
         print()
         print("Note: LIGHT scores are full QA (LLM-as-judge), not retrieval-only.")
         print(
-            "      Cortex scores here are retrieval MRR/Recall — not directly comparable"
+            "      Cortex scores here are retrieval MRR/Recall — "
+            "not directly comparable"
         )
         print("      but show retrieval quality that feeds downstream QA.")
 

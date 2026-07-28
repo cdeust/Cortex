@@ -100,9 +100,11 @@ _CHECKS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         CATEGORY_BINARY_CONTRAST,
         re.compile(
-            r"((?:It|This|That)(?:'s| is) not [^.]{2,60}\.\s*(?:It|This|That)(?:'s| is)\b"
+            r"((?:It|This|That)(?:'s| is) not [^.]{2,60}\."
+            r"\s*(?:It|This|That)(?:'s| is)\b"
             r"|\bnot just [^,.;]{2,40}, but\b"
-            r"|\b(?:question|problem|point|issue) (?:is|was)n'?t [^.]{2,40}[.,]\s*(?:it|It)(?:'s| is)\b)",
+            r"|\b(?:question|problem|point|issue) (?:is|was)n'?t "
+            r"[^.]{2,40}[.,]\s*(?:it|It)(?:'s| is)\b)",
         ),
     ),
     # source: no-ai-slop "negative listing" ("Not a X. Not a Y. A Z.").
@@ -197,7 +199,9 @@ _CHECKS: tuple[tuple[str, re.Pattern[str]], ...] = (
 
 _FENCE = re.compile(r"^\s*(```|~~~)")
 
-_EXCERPT_MAX = 80  # source: keeps a finding to one terminal line; excerpt is a locator, not the evidence itself
+# source: keeps a finding to one terminal line; excerpt is a locator, not
+# the evidence itself
+_EXCERPT_MAX = 80
 
 
 @dataclass(frozen=True)

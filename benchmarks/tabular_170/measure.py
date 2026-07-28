@@ -51,6 +51,12 @@ N_QUERIES = 100
 # (Claude Code 2.1.170 binary: Xz(text) = round(len(text) / 4)).
 CHARS_PER_TOKEN = 4
 
+# Char-reduction gate that flips the recall default to tabular. source: issue
+# #170 as quoted in the module docstring — "if the tabular encoding cuts
+# serialized size by >= 25% vs the current JSON encoding, ship tabular as the
+# default".
+DECISION_THRESHOLD_PCT = 25.0
+
 
 def _est_tokens(chars: int) -> int:
     return round(chars / CHARS_PER_TOKEN)
@@ -143,8 +149,8 @@ def measure() -> dict:
             "tabular_tokens_est": tok_tab,
             "token_reduction_pct": round(tok_reduction, 2),
         },
-        "decision_threshold_pct": 25.0,
-        "default": "tabular" if char_reduction >= 25.0 else "json",
+        "decision_threshold_pct": DECISION_THRESHOLD_PCT,
+        "default": "tabular" if char_reduction >= DECISION_THRESHOLD_PCT else "json",
         "per_query_reduction_pct_min": min(q["reduction_pct"] for q in per_query),
         "per_query_reduction_pct_max": max(q["reduction_pct"] for q in per_query),
     }
@@ -225,7 +231,8 @@ def main() -> None:
     print(f"char_reduction={t['char_reduction_pct']}%")
     print(f"token_reduction={t['token_reduction_pct']}%")
     print(
-        f"default -> {result['default']} (threshold {result['decision_threshold_pct']}%)"
+        f"default -> {result['default']} "
+        f"(threshold {result['decision_threshold_pct']}%)"
     )
 
 

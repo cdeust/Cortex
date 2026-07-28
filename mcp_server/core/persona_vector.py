@@ -1,7 +1,8 @@
 """Extended 12D persona vector (9 numeric + 3 categorical).
 
 Dimensions 1-3: activeReflective, sensingIntuitive, sequentialGlobal (CognitiveStyle)
-Dimensions 4-9: thoroughness, autonomy, verbosity, riskTolerance, focusScope, iterationSpeed
+Dimensions 4-9: thoroughness, autonomy, verbosity, riskTolerance,
+focusScope, iterationSpeed
 """
 
 from __future__ import annotations

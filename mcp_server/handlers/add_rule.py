@@ -113,12 +113,18 @@ schema = {
             },
             "scope_value": {
                 "type": "string",
-                "description": "Domain id or absolute directory path. Required when scope is 'domain' or 'directory'.",
+                "description": (
+                    "Domain id or absolute directory path. Required when scope is "
+                    "'domain' or 'directory'."
+                ),
                 "examples": ["cortex", "/Users/alice/code/cortex"],
             },
             "priority": {
                 "type": "integer",
-                "description": "Higher priority rules apply first. Use to break ties among overlapping rules.",
+                "description": (
+                    "Higher priority rules apply first. Use to break ties among "
+                    "overlapping rules."
+                ),
                 "default": 0,
                 "minimum": -100,
                 "maximum": 100,

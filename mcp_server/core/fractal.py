@@ -35,6 +35,16 @@ __all__ = [
     "roll_up",
 ]
 
+# Query-length bands for level weighting.
+# source: thresholds documented in the compute_level_weights docstring
+# (short <10 words -> broad, long >30 words -> specific)
+_SHORT_QUERY_WORDS = 10
+_LONG_QUERY_WORDS = 30
+
+# source: structural — the fractal tree has three levels (L0 memories,
+# L1 clusters, L2 super-clusters); L2 is the top level
+_LEVEL_L2 = 2
+
 
 # ── Hierarchy Construction ────────────────────────────────────────────────
 
@@ -89,9 +99,9 @@ def compute_level_weights(query: str) -> tuple[float, float, float]:
     """
     word_count = len(query.split())
 
-    if word_count < 10:
+    if word_count < _SHORT_QUERY_WORDS:
         return 0.3, 0.5, 1.0
-    elif word_count > 30:
+    elif word_count > _LONG_QUERY_WORDS:
         return 1.0, 0.5, 0.3
     else:
         return 0.7, 0.7, 0.7
@@ -217,7 +227,7 @@ def drill_down(
     if not cluster:
         return []
 
-    if cluster["level"] == 2:
+    if cluster["level"] == _LEVEL_L2:
         children = []
         for child_id in cluster.get("child_clusters", []):
             child = hierarchy["cluster_map"].get(child_id)

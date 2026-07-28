@@ -38,6 +38,13 @@ def _strip_code_fences(text: str) -> str:
     return _FENCE_RE.sub("", text)
 
 
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_ATOMIC_PARA_MAX_CHARS = 120  # shorter paragraphs pass through unsplit
+_MIN_SENTENCE_CHARS = 12  # shorter fragments carry no classifiable claim
+_MAX_SENTENCE_CHARS = 1500  # longer blobs are dumps, not sentences
+
+
 def _split_sentences(content: str) -> list[str]:
     """Split content into candidate sentences for classification."""
     cleaned = _strip_code_fences(content)
@@ -53,7 +60,7 @@ def _split_sentences(content: str) -> list[str]:
             para.startswith("#")
             or re.match(r"^\s*[-*+]\s", para)
             or re.match(r"^\s*\d+[.)]\s", para)
-            or len(para) < 120
+            or len(para) < _ATOMIC_PARA_MAX_CHARS
         ):
             sentences.append(para.strip("#").strip("- *+").strip())
             continue
@@ -62,7 +69,9 @@ def _split_sentences(content: str) -> list[str]:
             s = s.strip()
             if s:
                 sentences.append(s)
-    return [s for s in sentences if 12 <= len(s) <= 1500]
+    return [
+        s for s in sentences if _MIN_SENTENCE_CHARS <= len(s) <= _MAX_SENTENCE_CHARS
+    ]
 
 
 # ── Claim-type pattern matchers ──────────────────────────────────────
@@ -121,7 +130,8 @@ _CLAIM_PATTERNS: list[tuple[re.Pattern, ClaimType, float]] = [
     (
         re.compile(
             r"\b(noticed that|noticed|found that|discovered|observed|surprising(?:ly)?"
-            r"|turns out|it appears|it seems|interesting(?:ly)?|the (issue|problem|bug) (was|is))\b",
+            r"|turns out|it appears|it seems|interesting(?:ly)?"
+            r"|the (issue|problem|bug) (was|is))\b",
             re.IGNORECASE,
         ),
         "observation",

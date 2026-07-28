@@ -52,6 +52,16 @@ _MIN_SAFE_MEAN = 0.01
 # Matches the legacy Turrigiano α=0.05 ceiling (~3% per cycle).
 _MAX_STEP = 0.03
 
+# Health score at or above which (absent bimodality) no rescaling runs.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_HEALTHY_SCORE_MIN = 0.6
+
+# Minimum per-row heat change worth a write; smaller deltas are noise.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_HEAT_WRITE_EPSILON = 0.001
+
 
 def dispatch(
     store: MemoryStore,
@@ -77,7 +87,10 @@ def dispatch(
     mean = health["mean"]
     std = health["std"]
 
-    if health["health_score"] >= 0.6 and bimodality <= BIMODALITY_TRIGGER:
+    if (
+        health["health_score"] >= _HEALTHY_SCORE_MIN
+        and bimodality <= BIMODALITY_TRIGGER
+    ):
         return {
             "scaling_applied": False,
             "scaling_kind": "none",
@@ -321,7 +334,7 @@ def apply_cohort(
     writes = 0
     for i, new_heat in enumerate(scaled):
         delta = new_heat - heats[i]
-        if abs(delta) > 0.001:
+        if abs(delta) > _HEAT_WRITE_EPSILON:
             store.bump_heat_raw(memories[i]["id"], round(new_heat, 4))
             writes += 1
         if i in set(cohort_idx):

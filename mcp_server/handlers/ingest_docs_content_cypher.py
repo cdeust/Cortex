@@ -40,6 +40,15 @@ DOC_EXTENSIONS: tuple[str, ...] = ("md", "markdown", "mdx")
 # query here declares its own SKIP/LIMIT below that injection threshold.
 _PAGE_SIZE: int = 500
 
+# source: structural — the doc-refs query RETURNs exactly two columns
+# (src, dst); shorter rows are malformed and skipped
+_PAIR_ROW_ARITY = 2
+
+
+def _optional_col(row: list, idx: int) -> Any:
+    """Positional column value, or None when the paged row is too short."""
+    return row[idx] if len(row) > idx else None
+
 
 async def _run_query(graph_path: str, cypher: str) -> tuple[dict[str, Any], str | None]:
     """One Cypher query, following upstream's byte-budget pagination.
@@ -114,9 +123,9 @@ async def fetch_doc_files(graph_path: str) -> tuple[list[dict[str, Any]], list[s
             rows.append(
                 {
                     "path": row[0],
-                    "name": row[1] if len(row) > 1 else None,
-                    "extension": row[2] if len(row) > 2 else None,
-                    "size_bytes": row[3] if len(row) > 3 else None,
+                    "name": _optional_col(row, 1),
+                    "extension": _optional_col(row, 2),
+                    "size_bytes": _optional_col(row, 3),
                 }
             )
         if len(page_rows) < _PAGE_SIZE:
@@ -163,7 +172,7 @@ async def fetch_doc_references(
             return rows, [f"doc-refs@{offset}: {err}"]
         page_rows = result.get("rows") or []
         for row in page_rows:
-            if len(row) < 2 or not row[0] or not row[1]:
+            if len(row) < _PAIR_ROW_ARITY or not row[0] or not row[1]:
                 continue
             src, dst = row[0], row[1]
             if src == dst or src not in known_doc_paths:

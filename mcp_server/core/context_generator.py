@@ -47,7 +47,10 @@ def _describe_bridges(profile: dict[str, Any]) -> str | None:
     if not bridges:
         return None
     top = bridges[0]
-    return f"You often connect this to {top.get('toDomain', '')} ({top.get('pattern', '')})."
+    return (
+        f"You often connect this to {top.get('toDomain', '')} "
+        f"({top.get('pattern', '')})."
+    )
 
 
 def _describe_metacognitive(profile: dict[str, Any]) -> str | None:
@@ -103,7 +106,8 @@ def generate_context(domain: str | None, profile: dict[str, Any] | None) -> str:
     session_count = profile.get("sessionCount", 0) or 0
     confidence = profile.get("confidence", 0) or 0
     parts.append(
-        f"Based on {session_count} prior sessions with {round(confidence * 100)}% confidence."
+        f"Based on {session_count} prior sessions "
+        f"with {round(confidence * 100)}% confidence."
     )
 
     return " ".join(parts)

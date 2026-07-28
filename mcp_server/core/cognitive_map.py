@@ -248,6 +248,12 @@ def _active_node_degrees(
     return active
 
 
+# source: structural — spectral embedding axes exist only past these node
+# counts (one non-trivial eigenvector needs >= 2 nodes; a second needs >= 3)
+_MIN_NODES_FOR_EMBEDDING = 2
+_MIN_NODES_FOR_SECOND_AXIS = 3
+
+
 def project_to_2d(
     sr_graph: dict[int, dict[int, float]],
     memory_ids: list[int],
@@ -277,7 +283,7 @@ def project_to_2d(
         mid: (0.0, 0.0) for mid in memory_ids if mid not in active
     }
     active_ids = [mid for mid in memory_ids if mid in active]
-    if len(active_ids) < 2:
+    if len(active_ids) < _MIN_NODES_FOR_EMBEDDING:
         # 0 or 1 connected node: no non-trivial axis to embed along.
         coords.update({mid: (0.0, 0.0) for mid in active_ids})
         return coords
@@ -288,7 +294,11 @@ def project_to_2d(
     order = np.argsort(eigvals)[::-1]  # descending: index 0 is the trivial top
     # Subdominant eigenvectors as the two embedding axes (skip the stationary).
     x_axis = eigvecs[:, order[1]]
-    y_axis = eigvecs[:, order[2]] if len(active_ids) >= 3 else np.zeros(len(active_ids))
+    y_axis = (
+        eigvecs[:, order[2]]
+        if len(active_ids) >= _MIN_NODES_FOR_SECOND_AXIS
+        else np.zeros(len(active_ids))
+    )
 
     xy = np.column_stack((x_axis, y_axis))
     max_abs = max(float(np.abs(xy).max()), 1e-9)

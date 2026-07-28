@@ -10,6 +10,9 @@ from __future__ import annotations
 from typing import Any
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 
+# source: structural — the id-lookup fetches exactly the survivor + alias pair
+_MERGE_PAIR_COUNT = 2
+
 
 class SqliteEntityMergeMixin:
     """Atomic entity collapse on SQLite."""
@@ -39,7 +42,7 @@ class SqliteEntityMergeMixin:
             (int(survivor_id), int(alias_id)),
         ).fetchall()
         origins = {r["id"]: (r["origin"] or "text_concept") for r in rows}
-        if len(origins) != 2 or "ast_symbol" in origins.values():
+        if len(origins) != _MERGE_PAIR_COUNT or "ast_symbol" in origins.values():
             return result
         try:
             self._conn.execute(

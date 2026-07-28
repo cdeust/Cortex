@@ -61,7 +61,8 @@ DEFAULT_KINDS: tuple[AxisValue, ...] = (
         display_name="Tutorial",
         patterns=(
             _re(
-                r"\b(tutorial:|in this tutorial|we['']?ll (learn|build|create|walk through))\b"
+                r"\b(tutorial:|in this tutorial|"
+                r"we['']?ll (learn|build|create|walk through))\b"
             ),
             _re(r"\b(by the end of this tutorial|getting started:|step 1[:.])\b"),
         ),
@@ -265,7 +266,8 @@ DEFAULT_AUDIENCES: tuple[AxisValue, ...] = (
         # count, not the abbreviation.
         patterns=(
             _re(
-                r"\b(authentication|authorization|cryptograph(y|ic)|vulnerab(le|ility)|cve|threat model)\b"
+                r"\b(authentication|authorization|cryptograph(y|ic)|"
+                r"vulnerab(le|ility)|cve|threat model)\b"
             ),
             _re(
                 r"\b(credential|oauth|sso|encryption|decrypt(ed|ion)?|"

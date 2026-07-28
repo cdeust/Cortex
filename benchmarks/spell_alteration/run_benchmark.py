@@ -34,6 +34,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from benchmarks.lib.bench_db import BenchmarkDB
 
 CHUNK_SIZE = 2000
+
+# source: benchmark design fixed in the module docstring — "2 fake spells
+# injected" (TEST A) / "2 spells replaced" (TEST B)
+N_REPLACED_SPELLS = 2
+
+# source: adjacent comment — "Keep only meaningful context words (3+ chars)"
+_MIN_CONTEXT_WORD_CHARS = 3
+
+# Minimum occurrences of a spell in the source text for it to be eligible for
+# replacement (so the altered corpus carries enough evidence).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_SPELL_OCCURRENCES = 10
 DOMAIN_ORIGINAL = "hp-original"
 DOMAIN_ALTERED = "hp-altered"
 
@@ -156,15 +169,19 @@ def test_a_spot_the_fakes(db: BenchmarkDB, mapping: dict[str, str]) -> dict:
         found_spells[spell] = found
 
     # The 2 fakes should be found
-    fakes_found = [FAKE_NAMES[i] for i in range(2) if found_spells.get(FAKE_NAMES[i])]
+    fakes_found = [
+        FAKE_NAMES[i]
+        for i in range(N_REPLACED_SPELLS)
+        if found_spells.get(FAKE_NAMES[i])
+    ]
     # The 2 replaced originals should NOT be found
     replaced_originals = list(mapping.keys())
     originals_absent = [
         orig for orig in replaced_originals if not found_spells.get(orig)
     ]
 
-    t_a1 = len(fakes_found) == 2
-    t_a2 = len(originals_absent) == 2
+    t_a1 = len(fakes_found) == N_REPLACED_SPELLS
+    t_a2 = len(originals_absent) == N_REPLACED_SPELLS
 
     print(f"  Fake spells found: {fakes_found} — {'PASS' if t_a1 else 'FAIL'}")
     print(f"  Originals absent:  {originals_absent} — {'PASS' if t_a2 else 'FAIL'}")
@@ -260,7 +277,9 @@ def test_b_compare_versions(
         end = min(len(context), idx + len(orig) + 40)
         window = context[start:end].replace(orig, "").strip()
         # Keep only meaningful context words (3+ chars)
-        words = [w for w in re.split(r"\W+", window) if len(w) >= 3]
+        words = [
+            w for w in re.split(r"\W+", window) if len(w) >= _MIN_CONTEXT_WORD_CHARS
+        ]
         context_query = " ".join(words[:8])
 
         # Search altered corpus with this context
@@ -293,7 +312,8 @@ def test_b_compare_versions(
     print(f"\n  Identified removed spells: {'PASS' if t_b1 else 'FAIL'}")
     print(f"  Identified fake spells:    {'PASS' if t_b2 else 'FAIL'}")
     print(
-        f"  Correct pairings:          {correct_pairs}/{len(mapping)} {'PASS' if t_b3 else 'FAIL'}"
+        f"  Correct pairings:          {correct_pairs}/{len(mapping)} "
+        f"{'PASS' if t_b3 else 'FAIL'}"
     )
 
     return {
@@ -318,9 +338,10 @@ def run_benchmark(pdf_path: str, seed: int = 42) -> dict:
     eligible = [
         s
         for s in KNOWN_REAL_SPELLS
-        if len(re.findall(re.escape(s), full_text, re.IGNORECASE)) >= 10
+        if len(re.findall(re.escape(s), full_text, re.IGNORECASE))
+        >= _MIN_SPELL_OCCURRENCES
     ]
-    targets = rng.sample(eligible, 2)
+    targets = rng.sample(eligible, N_REPLACED_SPELLS)
 
     for i, t in enumerate(targets):
         n = len(re.findall(re.escape(t), full_text, re.IGNORECASE))

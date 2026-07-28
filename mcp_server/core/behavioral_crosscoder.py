@@ -96,6 +96,11 @@ def _build_feature_activations(
     return feature_activations
 
 
+# source: structural — cross-domain persistence needs at least two
+# domains to compare
+_MIN_DOMAINS_FOR_PERSISTENCE = 2
+
+
 def detect_persistent_features(
     profiles: dict | None,
     dictionary: FeatureDictionary | None,
@@ -105,7 +110,7 @@ def detect_persistent_features(
         return []
 
     domain_ids = list((profiles or {}).keys())
-    if len(domain_ids) < 2:
+    if len(domain_ids) < _MIN_DOMAINS_FOR_PERSISTENCE:
         return []
 
     feature_activations = _build_feature_activations(

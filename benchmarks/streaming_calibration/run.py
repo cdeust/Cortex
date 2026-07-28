@@ -205,7 +205,8 @@ def main() -> int:
     out_path.write_text(json.dumps(result, indent=2))
 
     print(
-        f"{'kind':7} {'batch':>7} {'p50_ms':>9} {'p99_ms':>9} {'rows/s':>10} {'row_B':>6}"
+        f"{'kind':7} {'batch':>7} {'p50_ms':>9} {'p99_ms':>9} "
+        f"{'rows/s':>10} {'row_B':>6}"
     )
     for r in ent + edge:
         print(

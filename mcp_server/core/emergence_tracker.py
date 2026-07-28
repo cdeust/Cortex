@@ -42,6 +42,16 @@ class MemoryEvent:
 
 # ── Spacing Effect ───────────────────────────────────────────────────────
 
+# source: structural — interval variability needs at least two intervals,
+# i.e. at least three access timestamps
+_MIN_ACCESSES_FOR_SPACING = 3
+
+# Minimum mean inter-access interval (hours) below which accesses count
+# as fully massed.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_MEAN_INTERVAL_HOURS = 0.01
+
 
 def compute_spacing_benefit(
     access_times: list[float],
@@ -60,7 +70,7 @@ def compute_spacing_benefit(
     Returns:
         Spacing regularity score.
     """
-    if len(access_times) < 3:
+    if len(access_times) < _MIN_ACCESSES_FOR_SPACING:
         return 0.5
 
     intervals = [
@@ -70,7 +80,7 @@ def compute_spacing_benefit(
         return 0.5
 
     mean_interval = sum(intervals) / len(intervals)
-    if mean_interval < 0.01:
+    if mean_interval < _MIN_MEAN_INTERVAL_HOURS:
         return 0.0
 
     variance = sum((x - mean_interval) ** 2 for x in intervals) / len(intervals)

@@ -35,6 +35,8 @@ _SEMANTICS_SAMPLE_CAP = 2000
 # the exact same pairing regime used by the plan.
 _MIN_PATTERN_SIZE = 3
 _CLUSTER_THRESHOLD = 0.6
+# source: structural — a cluster is at least a pair of memories
+_MIN_CLUSTER_MEMBERS = 2
 
 
 def _is_promotion_noise(mem: dict) -> bool:
@@ -247,7 +249,7 @@ def _count_multi_member_clusters(
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
         silent_failure.note("cls.cluster_count", exc)
         return 0
-    return sum(1 for c in clusters if len(c) >= 2)
+    return sum(1 for c in clusters if len(c) >= _MIN_CLUSTER_MEMBERS)
 
 
 def _log_if_passed_through(

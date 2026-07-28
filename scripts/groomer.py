@@ -279,7 +279,8 @@ def _write_journal(result: dict[str, Any], journal_dir: Path, mode: str) -> Path
         "",
         "## Promotion backlog (reported only, never executed)",
         "",
-        f"```json\n{json.dumps(result['promotion_backlog_reported_only'], indent=2)}\n```",
+        f"```json\n"
+        f"{json.dumps(result['promotion_backlog_reported_only'], indent=2)}\n```",
         "",
     ]
     md_path.write_text("\n".join(lines), encoding="utf-8")

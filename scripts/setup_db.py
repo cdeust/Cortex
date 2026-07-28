@@ -176,7 +176,8 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
                 "-d",
                 dbname,
                 "-c",
-                "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;",
+                "CREATE EXTENSION IF NOT EXISTS vector; "
+                "CREATE EXTENSION IF NOT EXISTS pg_trgm;",
             ],
             capture_output=True,
             timeout=10,

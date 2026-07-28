@@ -67,6 +67,11 @@ def _extract_tools_from_content(content: Any, tools_used: set[str]) -> None:
                 tools_used.add(block["name"])
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_USER_TEXT_CHARS = 4000
+
+
 def extract_message_stats(raw_records: list[dict]) -> dict[str, Any]:
     """Extract per-message statistics: counts, tools, text content."""
     user_count = 0
@@ -86,8 +91,8 @@ def extract_message_stats(raw_records: list[dict]) -> dict[str, Any]:
                 if text and not text.startswith("[Request interrupted"):
                     if not first_message:
                         first_message = text
-                    if all_text_len < 4000:
-                        chunk = text[: 4000 - all_text_len]
+                    if all_text_len < _MAX_USER_TEXT_CHARS:
+                        chunk = text[: _MAX_USER_TEXT_CHARS - all_text_len]
                         all_text_parts.append(chunk)
                         all_text_len += len(chunk)
 

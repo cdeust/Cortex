@@ -118,6 +118,16 @@ def _extract_keyword_densities(
     activation[10] = _count_keyword_density(text, TRIAL_KEYWORDS)
 
 
+# Sessions shorter than this (10 minutes in milliseconds) count as short bursts.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SHORT_SESSION_MS = 600000
+# Conversations with more than this many turns count as long back-and-forths.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_HIGH_TURN_COUNT = 20
+
+
 def _extract_temporal_signals(
     activation: list[float],
     conv: dict,
@@ -127,8 +137,8 @@ def _extract_temporal_signals(
     duration = conv.get("duration") or 0
     activation[11] = min(duration / 3600000, 1)
     activation[12] = min((conv.get("turnCount") or 0) / 50, 1)
-    activation[13] = 1 if (duration > 0 and duration < 600000) else 0
-    activation[14] = 1 if (conv.get("turnCount") or 0) > 20 else 0
+    activation[13] = 1 if (duration > 0 and duration < _SHORT_SESSION_MS) else 0
+    activation[14] = 1 if (conv.get("turnCount") or 0) > _HIGH_TURN_COUNT else 0
 
     total = len(tools) or 1
     glob_count = _count_tool(tools, "Glob")

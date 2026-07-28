@@ -1,9 +1,12 @@
 """Metacognition — coverage assessment, gap detection, and cognitive load management.
 
 Implements:
-  - Coverage assessment: 4-signal weighted analysis (density, entity, recency, confidence)
-  - Gap detection: 5 gap types (isolated, stale, low-confidence, missing links, unresolved)
-  - Cognitive load management: Cowan's 4+/-1 chunk limit with primacy-recency positioning
+  - Coverage assessment: 4-signal weighted analysis (density, entity,
+    recency, confidence)
+  - Gap detection: 5 gap types (isolated, stale, low-confidence, missing
+    links, unresolved)
+  - Cognitive load management: Cowan's 4+/-1 chunk limit with
+    primacy-recency positioning
 
 Coverage, chunking, and context management live in metacognition_analysis.py.
 This module provides gap detection.
@@ -40,7 +43,8 @@ def detect_isolated_entities(
             gaps.append(
                 {
                     "type": "isolated_entity",
-                    "description": f"Entity '{ent['name']}' has only {degree} connection(s)",
+                    "description": f"Entity '{ent['name']}' has only "
+                    f"{degree} connection(s)",
                     "severity": severity,
                     "entities": [ent["name"]],
                     "suggestion": f"Add context or relationships for '{ent['name']}'",
@@ -71,7 +75,8 @@ def detect_stale_regions(
             gaps.append(
                 {
                     "type": "stale_region",
-                    "description": f"{len(stale_mems)} stale memories in domain '{domain}'",
+                    "description": f"{len(stale_mems)} stale memories "
+                    f"in domain '{domain}'",
                     "severity": round(severity, 2),
                     "entities": [],
                     "suggestion": f"Review or refresh memories in '{domain}'",
@@ -93,7 +98,8 @@ def detect_low_confidence(
     return [
         {
             "type": "low_confidence",
-            "description": f"{len(low_conf)} memories have confidence < {confidence_threshold}",
+            "description": f"{len(low_conf)} memories have confidence "
+            f"< {confidence_threshold}",
             "severity": round(severity, 2),
             "entities": [],
             "suggestion": "Verify or strengthen low-confidence memories",
@@ -127,7 +133,8 @@ def detect_missing_connections(
     return [
         {
             "type": "missing_connection",
-            "description": f"{len(missing)} entity pairs co-occur but have no relationship",
+            "description": f"{len(missing)} entity pairs co-occur "
+            f"but have no relationship",
             "severity": round(severity, 2),
             "entities": entity_names,
             "suggestion": "Consider linking frequently co-occurring entities",

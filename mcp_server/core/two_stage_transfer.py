@@ -71,8 +71,8 @@ def compute_transfer_delta(
     Each SWR replay strengthens the cortical trace and weakens hippocampal
     dependency. The base rate (0.02) is C-HORSE's hippocampal learning rate
     (Ketz et al., 2023, eLife 12:e77185), used here as the per-replay transfer
-    rate — an engineering choice (see module constant note). Schema consistency accelerates
-    transfer per Tse et al. (2007), adapted to compressed timescale.
+    rate — an engineering choice (see module constant note). Schema consistency
+    accelerates transfer per Tse et al. (2007), adapted to compressed timescale.
 
     Args:
         current_dependency: Current hippocampal dependency [0, 1].

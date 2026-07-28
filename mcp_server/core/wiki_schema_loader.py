@@ -128,6 +128,11 @@ def parse_kind(rel_path: str, content: str) -> KindDefinition | None:
 _TABLE_ROW_RE = re.compile(r"^\|(.+)\|$", re.MULTILINE)
 
 
+# source: structural — a markdown table needs a header row plus a separator
+# row before any rule row can exist (see the row indexing below).
+_MIN_TABLE_ROWS = 2
+
+
 def parse_rules_table(body: str) -> list[ClassifierRule]:
     """Extract rules from a markdown table.
 
@@ -135,7 +140,7 @@ def parse_rules_table(body: str) -> list[ClassifierRule]:
         pattern | kind | target | weight | note
     """
     rows = _TABLE_ROW_RE.findall(body)
-    if len(rows) < 2:
+    if len(rows) < _MIN_TABLE_ROWS:
         return []
     # First row is header
     header_cells = [c.strip().lower() for c in rows[0].split("|")]

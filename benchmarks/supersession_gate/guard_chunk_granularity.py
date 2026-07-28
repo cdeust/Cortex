@@ -39,6 +39,14 @@ from mcp_server.core import curation  # noqa: E402
 from mcp_server.core.memory_decomposer import decompose_memory  # noqa: E402
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine  # noqa: E402
 
+# source: structural — an edge needs a pair of chunks to compare
+_MIN_CHUNKS_FOR_PAIR = 2
+
+# Cap on the worked examples printed for a regression.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_EXAMPLES = 8
+
 DATA = REPO / "benchmarks/longmemeval/longmemeval_s.json"
 MERGE_THRESHOLD = curation.MERGE_THRESHOLD  # 0.85
 OVERLAP_MIN = 0.5  # remember_helpers.py:349 — compute_textual_overlap(...) > 0.5
@@ -81,7 +89,7 @@ def main() -> int:
                 chunk_sid.append(sid)
         total_chunks += len(chunk_texts)
 
-        if len(chunk_texts) < 2:
+        if len(chunk_texts) < _MIN_CHUNKS_FOR_PAIR:
             per_q_edges.append(0)
             continue
 
@@ -123,7 +131,7 @@ def main() -> int:
                     touch = chunk_sid[i] in answer_sids or chunk_sid[j] in answer_sids
                     if touch:
                         edges_touch_answer += 1
-                    if len(examples) < 8:
+                    if len(examples) < _MAX_EXAMPLES:
                         examples.append(
                             f"Q{qi} sids({chunk_sid[i]},{chunk_sid[j]}) sim={sim:.3f} "
                             f"overlap={overlap:.3f} ans_touch={touch}"
@@ -131,7 +139,8 @@ def main() -> int:
         per_q_edges.append(q_edges)
         if (qi + 1) % 20 == 0:
             print(
-                f"  [{qi + 1}/{len(ku)}] cumulative edges={full_gate} chunks={total_chunks}",
+                f"  [{qi + 1}/{len(ku)}] cumulative edges={full_gate} "
+                f"chunks={total_chunks}",
                 file=sys.stderr,
             )
 
@@ -142,7 +151,8 @@ def main() -> int:
     print(f"Total chunks (decomposed)    : {total_chunks}")
     print(f"Cross-session chunk pairs    : {tot_pairs}")
     print(
-        f"max cosine sim seen          : {max_sim_seen:.4f}  (gate needs >= {MERGE_THRESHOLD})"
+        f"max cosine sim seen          : {max_sim_seen:.4f}  "
+        f"(gate needs >= {MERGE_THRESHOLD})"
     )
     print(f"pairs sim>=0.85              : {sim_pass}")
     print(f"  + jaccard overlap>0.5      : {sim_overlap_pass}")

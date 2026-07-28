@@ -102,13 +102,21 @@ def build_note(
     return render_page(PageDocument(frontmatter=fm, body=f"# {title}\n\n{body}\n"))
 
 
+# Source-memory counts at which a page's maturity label steps up.
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_STABLE_SOURCE_COUNT = 8
+_REVIEWED_SOURCE_COUNT = 4
+_DRAFT_SOURCE_COUNT = 2
+
+
 def maturity_label(source_count: int) -> str:
     """Compute maturity from number of source memories."""
-    if source_count >= 8:
+    if source_count >= _STABLE_SOURCE_COUNT:
         return "stable"
-    if source_count >= 4:
+    if source_count >= _REVIEWED_SOURCE_COUNT:
         return "reviewed"
-    if source_count >= 2:
+    if source_count >= _DRAFT_SOURCE_COUNT:
         return "draft"
     return "stub"
 

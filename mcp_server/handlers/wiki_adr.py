@@ -60,16 +60,19 @@ schema = {
                     "alternatives exist. Markdown allowed."
                 ),
                 "examples": [
-                    "Recall latency exceeded 1s on 100k memories with cosine-only ranking."
+                    "Recall latency exceeded 1s on 100k memories with cosine-only "
+                    "ranking."
                 ],
             },
             "decision": {
                 "type": "string",
                 "description": (
-                    "What was decided, in active voice. State the rule, not the discussion."
+                    "What was decided, in active voice. State the rule, not the "
+                    "discussion."
                 ),
                 "examples": [
-                    "Adopt pgvector with HNSW index for first-stage ANN; FlashRank reranks top-N."
+                    "Adopt pgvector with HNSW index for first-stage ANN; FlashRank "
+                    "reranks top-N."
                 ],
             },
             "consequences": {

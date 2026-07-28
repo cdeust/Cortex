@@ -68,16 +68,21 @@ def _check_cooldown(file_path: str) -> bool:
     return False
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_COOLDOWN_ENTRIES = 50
+
+
 def _update_cooldown(file_path: str) -> None:
     try:
         data = {}
         if _COOLDOWN_FILE.exists():
             data = json.loads(_COOLDOWN_FILE.read_text())
         data[file_path] = time.time()
-        if len(data) > 50:
+        if len(data) > _MAX_COOLDOWN_ENTRIES:
             # Prune oldest entries.
             sorted_items = sorted(data.items(), key=lambda x: x[1], reverse=True)
-            data = dict(sorted_items[:50])
+            data = dict(sorted_items[:_MAX_COOLDOWN_ENTRIES])
         _COOLDOWN_FILE.write_text(json.dumps(data))
     except (OSError, ValueError, TypeError):
         # Cooldown cache is disposable: a failed write only means the next

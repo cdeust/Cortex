@@ -24,7 +24,8 @@ Usage
 -----
 
     uv run python scripts/near_dup_calibrate.py sample
-    uv run python scripts/near_dup_calibrate.py calibrate --labels docs/campaigns/i6d2_labels.json
+    uv run python scripts/near_dup_calibrate.py calibrate \
+        --labels docs/campaigns/i6d2_labels.json
     uv run python scripts/near_dup_calibrate.py apply --threshold 0.90
     uv run python scripts/near_dup_calibrate.py apply --threshold 0.90 --apply
 """
@@ -130,8 +131,11 @@ def _cmd_calibrate(args: argparse.Namespace) -> int:
             f"dup={s.n_duplicate:3d}  precision={s.precision:.3f}",
             file=sys.stderr,
         )
+    selected = (
+        threshold if threshold is not None else "NONE — no band reached 100% precision"
+    )
     print(
-        f"  Selected threshold S: {threshold if threshold is not None else 'NONE — no band reached 100% precision'}",
+        f"  Selected threshold S: {selected}",
         file=sys.stderr,
     )
 

@@ -108,7 +108,8 @@ def _register_curate_distill(mcp: FastMCP) -> None:
         min_avg_heat: float = 0.3,
         memory_pool_size: int = 500,
     ) -> dict:
-        """Return distillation dossiers for the in-session LLM to author lessons from."""
+        """Return distillation dossiers for the in-session LLM to author
+        lessons from."""
         return await safe_handler(
             curate_distill.handler,
             {

@@ -63,6 +63,16 @@ _TIME_WEEKDAY_RE = re.compile(r"^weekday:(\d)$")
 
 _STOP_WORDS = frozenset({"the", "and", "for", "with", "that", "this", "from"})
 
+# Actionable phrases shorter than this are noise.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ACTIONABLE_CHARS = 5
+
+# Keywords of length <= 2 are ignored as noise.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_IGNORED_KEYWORD_LEN = 2
+
 
 def extract_prospective_intents(content: str) -> list[dict[str, str]]:
     """Scan content for future-oriented phrases.
@@ -73,13 +83,13 @@ def extract_prospective_intents(content: str) -> list[dict[str, str]]:
     for pattern, trigger_type in _PROSPECTIVE_PATTERNS:
         for match in pattern.finditer(content):
             actionable = match.group(1).strip()
-            if not actionable or len(actionable) < 5:
+            if not actionable or len(actionable) < _MIN_ACTIONABLE_CHARS:
                 continue
 
             keywords = " ".join(
                 w
                 for w in actionable.split()
-                if len(w) > 2 and w.lower() not in _STOP_WORDS
+                if len(w) > _MAX_IGNORED_KEYWORD_LEN and w.lower() not in _STOP_WORDS
             )
             if not keywords:
                 continue
@@ -114,7 +124,8 @@ def check_trigger(
         # Word-boundary match, not substring containment: the pre-2026-06-10
         # `kw in content_lower` fired "ask" on "task" — with 317 harvested
         # triggers active, nearly every recall query matched something.
-        # Correctness fix, not tuning. See docs/provenance/bounded-io-phase2-design.md M1.
+        # Correctness fix, not tuning.
+        # See docs/provenance/bounded-io-phase2-design.md M1.
         keywords = condition.lower().split()
         content_lower = content.lower()
         return any(re.search(rf"\b{re.escape(kw)}\b", content_lower) for kw in keywords)

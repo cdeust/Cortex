@@ -65,12 +65,17 @@ schema = {
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Absolute path to a markdown PRD file. Mutually exclusive with content/pipeline_id.",
+                "description": (
+                    "Absolute path to a markdown PRD file. Mutually exclusive with "
+                    "content/pipeline_id."
+                ),
                 "examples": ["/Users/alice/code/myapp/docs/prd-auth-v2.md"],
             },
             "content": {
                 "type": "string",
-                "description": "Raw PRD markdown. Mutually exclusive with path/pipeline_id.",
+                "description": (
+                    "Raw PRD markdown. Mutually exclusive with path/pipeline_id."
+                ),
             },
             "pipeline_id": {
                 "type": "string",
@@ -82,7 +87,10 @@ schema = {
             },
             "title": {
                 "type": "string",
-                "description": "Override the PRD title (otherwise parsed from the first # heading or filename).",
+                "description": (
+                    "Override the PRD title (otherwise parsed from the first # heading "
+                    "or filename)."
+                ),
                 "examples": ["Auth v2 redesign"],
             },
             "validate": {
@@ -188,6 +196,12 @@ _REQUIREMENT_HEADINGS = {
 }
 
 
+# Minimum bullet length worth keeping (filters list-marker noise).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_BULLET_CHARS = 8
+
+
 def _extract_bullets(body: str) -> list[str]:
     """Pull list bullets out of a section body."""
     out: list[str] = []
@@ -197,7 +211,7 @@ def _extract_bullets(body: str) -> list[str]:
             out.append(stripped[2:].strip())
         elif re.match(r"^\d+[.)]\s+", stripped):
             out.append(re.sub(r"^\d+[.)]\s+", "", stripped).strip())
-    return [b for b in out if len(b) >= 8]
+    return [b for b in out if len(b) >= _MIN_BULLET_CHARS]
 
 
 def _slugify(text: str) -> str:

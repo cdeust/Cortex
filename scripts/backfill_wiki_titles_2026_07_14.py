@@ -67,7 +67,8 @@ def find_affected_rows(conn) -> list[tuple[int, str, str]]:
     """
     with conn.cursor() as cur:
         cur.execute(
-            f"SELECT id, rel_path, title FROM wiki.pages WHERE {_CORRUPTION_SIGNATURE_SQL} ORDER BY id"
+            f"SELECT id, rel_path, title FROM wiki.pages "
+            f"WHERE {_CORRUPTION_SIGNATURE_SQL} ORDER BY id"
         )
         raw_rows = cur.fetchall()
     out: list[tuple[int, str, str]] = []
@@ -138,7 +139,8 @@ def main() -> int:
     if not args.dry_run:
         with conn.cursor() as cur:
             cur.execute(
-                f"SELECT count(*) AS n FROM wiki.pages WHERE {_CORRUPTION_SIGNATURE_SQL}"
+                f"SELECT count(*) AS n FROM wiki.pages "
+                f"WHERE {_CORRUPTION_SIGNATURE_SQL}"
             )
             row = cur.fetchone()
             remaining = row["n"] if isinstance(row, dict) else row[0]

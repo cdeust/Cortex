@@ -23,6 +23,13 @@ from mcp_server.core.targeted_reactivation import cue_match_score
 # ── Dream Replay ──────────────────────────────────────────────────────────────
 
 
+# Content shorter than this many characters is skipped by dream replay
+# enrichment.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ENRICHABLE_CONTENT_CHARS = 30
+
+
 def _replay_updates_for(
     hottest: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -35,7 +42,7 @@ def _replay_updates_for(
     updates = []
     for mem in hottest:
         content = mem.get("content", "")
-        if not content or len(content) < 30:
+        if not content or len(content) < _MIN_ENRICHABLE_CONTENT_CHARS:
             continue
         # Skip already-enriched content to avoid double-appending.
         if "<!-- doc2query -->" in content:

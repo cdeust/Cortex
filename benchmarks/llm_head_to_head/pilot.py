@@ -76,10 +76,14 @@ SMOKE_COST_CEILING_USD = 0.15
 STAGE2_1_CONDITIONS = ("A", "B", "C", "D")
 
 
+# source: structural — the k-suffix in a token count is the thousands unit
+_TOKENS_PER_K = 1_000
+
+
 def _pretty_token_count(n: int) -> str:
-    if n < 1_000:
+    if n < _TOKENS_PER_K:
         return f"{n} tok"
-    return f"{n / 1_000:.1f}k tok"
+    return f"{n / _TOKENS_PER_K:.1f}k tok"
 
 
 def _build_dryrun_context(condition: str, item: BeamItem) -> tuple[str, dict[str, Any]]:

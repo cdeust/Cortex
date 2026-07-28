@@ -59,11 +59,23 @@ PLAUSIBLE_B_LOW, PLAUSIBLE_B_HIGH = 0.1, 0.6
 SQRT_T_B_LOW, SQRT_T_B_HIGH = 0.4, 0.6
 
 
+# Upper cut just below heat_base (1.0): excludes the pre-decay plateau so both
+# models fit the strictly-decaying regime only.
+# source: transient_points docstring ("heat in (floor·1.05, heat_base)"); the
+# 1e-4 standoff from heat_base is a pre-existing tuned value, extracted
+# unchanged (#197 family 3)
+HEAT_BASE_EXCLUSIVE_CEIL = 0.9999
+
+
 def transient_points(traj: list[dict], floor: float) -> list[tuple[float, float]]:
     """Strictly-decaying regime: heat in (floor·1.05, heat_base). Excludes the
     floored tail and underflow zeros so both models fit the same data."""
     low = max(floor * 1.05, 1e-3)
-    return [(p["age_hours"], p["heat"]) for p in traj if low < p["heat"] < 0.9999]
+    return [
+        (p["age_hours"], p["heat"])
+        for p in traj
+        if low < p["heat"] < HEAT_BASE_EXCLUSIVE_CEIL
+    ]
 
 
 def criterion_power_over_exp(traj_b: list[dict]) -> dict:

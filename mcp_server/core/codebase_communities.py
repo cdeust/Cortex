@@ -23,6 +23,12 @@ Sources:
 
 from __future__ import annotations
 
+# source: structural — a graph needs at least two nodes before community
+# partitioning or centrality ranking is meaningful
+_MIN_NODES_FOR_GRAPH_ANALYSIS = 2
+# source: structural — standard deviation needs at least two samples
+_MIN_SAMPLES_FOR_STD = 2
+
 
 def _build_dependency_graph(
     file_edges: list[tuple[str, str]],
@@ -87,7 +93,7 @@ def detect_communities(
         return {}
 
     g = _build_dependency_graph(file_edges, call_edges)
-    if g.number_of_nodes() < 2:
+    if g.number_of_nodes() < _MIN_NODES_FOR_GRAPH_ANALYSIS:
         return {n: 0 for n in g.nodes()}
 
     leiden = _leiden_partition(g)
@@ -121,7 +127,7 @@ def compute_centrality(
         return {}
 
     g = _build_dependency_graph(file_edges, call_edges)
-    if g.number_of_nodes() < 2:
+    if g.number_of_nodes() < _MIN_NODES_FOR_GRAPH_ANALYSIS:
         return {}
 
     degree = nx.degree_centrality(g)
@@ -156,7 +162,7 @@ def detect_god_nodes(
 
     Returns the god-node file paths sorted by descending degree centrality.
     """
-    if len(centrality) < 2:
+    if len(centrality) < _MIN_SAMPLES_FOR_STD:
         return []
 
     degrees = [c["degree"] for c in centrality.values()]

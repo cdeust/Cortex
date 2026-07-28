@@ -30,7 +30,8 @@ def build_distill_prompt(
     embedding the exact required tool call.
     """
     lines = [
-        f"Distillation dossier ({dossier.kind}) — topic: {dossier.topic or '(untitled)'}",
+        f"Distillation dossier ({dossier.kind}) — "
+        f"topic: {dossier.topic or '(untitled)'}",
         "",
         "Sources (read these, then write the WHY, not the WHAT):",
     ]

@@ -41,6 +41,11 @@ _STDP_A_PLUS: float = 0.03
 _STDP_A_MINUS: float = 0.02
 _STDP_TAU_PLUS: float = 24.0
 _STDP_TAU_MINUS: float = 24.0
+# Coincidence window: |dt| below this many hours is treated as simultaneous,
+# so STDP neither potentiates nor depresses.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_STDP_COINCIDENCE_HOURS: float = 0.001
 
 
 def compute_bcm_phi(
@@ -208,7 +213,7 @@ def compute_stdp_update(
     max_weight: float = _MAX_WEIGHT,
 ) -> float:
     """STDP: dt>0 (pre before post) -> LTP, dt<0 -> LTD."""
-    if abs(delta_t_hours) < 0.001:
+    if abs(delta_t_hours) < _STDP_COINCIDENCE_HOURS:
         return current_weight
     if delta_t_hours > 0:
         delta_w = a_plus * math.exp(-delta_t_hours / tau_plus)
@@ -229,9 +234,9 @@ def _stdp_single(
     dt = pair.get("delta_t_hours", 0)
     w = pair.get("current_weight", 1.0)
     new_w = compute_stdp_update(w, dt, a_plus, a_minus, tau_plus, tau_minus)
-    if dt > 0.001:
+    if dt > _STDP_COINCIDENCE_HOURS:
         direction = "causal"
-    elif dt < -0.001:
+    elif dt < -_STDP_COINCIDENCE_HOURS:
         direction = "anti-causal"
     else:
         direction = "none"

@@ -104,6 +104,12 @@ def _resolve_domain(event: dict[str, Any], profiles: dict) -> str:
     return "unknown"
 
 
+# source: session-length gates documented in _run_consolidation docstring
+# ("engineering heuristics — thresholds not paper-prescribed")
+_SHORT_SESSION_TURNS = 5
+_LONG_SESSION_TURNS = 20
+
+
 def _run_consolidation(turn_count: int = 0) -> None:
     """Run memory consolidation ("dream" cycle) at session end.
 
@@ -130,10 +136,10 @@ def _run_consolidation(turn_count: int = 0) -> None:
 
         # Gate consolidation depth by session activity
         # (Borbely 1982: pressure accumulates with waking activity)
-        if turn_count < 5:
+        if turn_count < _SHORT_SESSION_TURNS:
             args = {"decay": True, "compress": False}
             mode = "light"
-        elif turn_count < 20:
+        elif turn_count < _LONG_SESSION_TURNS:
             args = {"decay": True, "compress": True}
             mode = "standard"
         else:

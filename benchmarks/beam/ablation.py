@@ -37,6 +37,27 @@ from benchmarks.beam.data import (
 from benchmarks.lib.bench_db import BenchmarkDB
 from mcp_server.core.pg_recall import recall as pg_recall
 
+# Minimum turn length for a turn to seed an 80-char prefix match key.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_SOURCE_TURN_CHARS = 10
+
+# Top-1 retrieval score below which the system counts as having found nothing
+# confident (abstention success).
+# source: engineering heuristic documented at benchmarks/beam/run_benchmark.py
+# — "BEAM paper uses LLM-as-judge to evaluate abstention quality. We approximate
+# by checking if top retrieval score is low"
+_ABSTENTION_SCORE_GATE = 0.3
+
+# Minimum answer length for an answer substring match to carry signal.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ANSWER_MATCH_CHARS = 2
+
+# source: structural — the K in the reported Recall@5 / Recall@10 metrics
+_RECALL_AT_5_K = 5
+_RECALL_AT_10_K = 10
+
 
 def _evaluate_with_params(db, questions, turns, **recall_kwargs):
     """Evaluate retrieval with custom recall parameters."""
@@ -83,21 +104,24 @@ def _evaluate_with_params(db, questions, turns, **recall_kwargs):
                 turn_id = turn.get("id", -1)
                 if turn_id in source_ids:
                     text = turn.get("content", "")
-                    if text and len(text) > 10:
+                    if text and len(text) > _MIN_SOURCE_TURN_CHARS:
                         source_contents.add(text[:80].lower())
 
             hit_rank = None
             answer_lower = answer.lower().strip() if answer else ""
 
             if ability == "abstention":
-                if not retrieved or retrieved[0].get("score", 0) < 0.3:
+                if (
+                    not retrieved
+                    or retrieved[0].get("score", 0) < _ABSTENTION_SCORE_GATE
+                ):
                     hit_rank = 1
             else:
                 for rank, r in enumerate(retrieved):
                     content_lower = r["content"].lower()
                     if (
                         answer_lower
-                        and len(answer_lower) > 2
+                        and len(answer_lower) > _MIN_ANSWER_MATCH_CHARS
                         and answer_lower in content_lower
                     ):
                         hit_rank = rank + 1
@@ -128,9 +152,9 @@ def _evaluate_with_params(db, questions, turns, **recall_kwargs):
             rank = r["hit_rank"]
             if rank is not None:
                 mrr_sum += 1.0 / rank
-                if rank <= 5:
+                if rank <= _RECALL_AT_5_K:
                     recall_at_5 += 1
-                if rank <= 10:
+                if rank <= _RECALL_AT_10_K:
                     recall_at_10 += 1
         metrics[ability] = {
             "mrr": mrr_sum / total if total > 0 else 0.0,

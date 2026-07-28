@@ -166,6 +166,10 @@ def _log(msg: str) -> None:
     print(f"{_LOG_PREFIX} {msg}", file=sys.stderr)
 
 
+# source: "words longer than 3 chars" per _extract_task_keywords docstring
+_MIN_KEYWORD_CHARS = 3
+
+
 def _extract_task_keywords(prompt: str) -> list[str]:
     """Extract key terms from the agent prompt for FTS query.
 
@@ -234,7 +238,8 @@ def _extract_task_keywords(prompt: str) -> list[str]:
     keywords = [
         w.strip(".,;:!?\"'()[]{}")
         for w in words
-        if len(w) > 3 and w.lower().strip(".,;:!?\"'()[]{}") not in stops
+        if len(w) > _MIN_KEYWORD_CHARS
+        and w.lower().strip(".,;:!?\"'()[]{}") not in stops
     ]
     # Return unique keywords, max 8
     seen = set()
@@ -351,6 +356,11 @@ def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dic
     return results
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_PROMPT_CHARS = 20
+
+
 def process_event(event: dict[str, Any]) -> None:
     """Process SubagentStart event and inject briefing context."""
     agent_name = (event.get("agent_name") or "").lower()
@@ -360,7 +370,7 @@ def process_event(event: dict[str, Any]) -> None:
         _log(f"skip: agent '{agent_name}' not a specialist")
         sys.exit(0)
 
-    if not prompt or len(prompt) < 20:
+    if not prompt or len(prompt) < _MIN_PROMPT_CHARS:
         _log("skip: prompt too short")
         sys.exit(0)
 

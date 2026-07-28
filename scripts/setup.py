@@ -136,10 +136,21 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 # ── Step 1: Python version check ──────────────────────────────────────
 
 
+# source: pyproject.toml requires-python = ">=3.10"
+_MIN_PY_MAJOR = 3
+_MIN_PY_MINOR = 10
+
+# source: structural — the probe counts the two required extensions
+# ('vector', 'pg_trgm'); both present == 2 rows
+_REQUIRED_PG_EXTENSIONS = 2
+
+
 def check_python() -> None:
     step("Python")
     v = sys.version_info
-    if v.major < 3 or (v.major == 3 and v.minor < 10):
+    if v.major < _MIN_PY_MAJOR or (
+        v.major == _MIN_PY_MAJOR and v.minor < _MIN_PY_MINOR
+    ):
         fail(f"Python 3.10+ required (found {v.major}.{v.minor})")
     ok(f"Python {v.major}.{v.minor}.{v.micro}")
 
@@ -182,11 +193,13 @@ def check_postgresql() -> None:
             warn("Then start the PostgreSQL service from Windows Services.")
         elif sys.platform == "darwin":
             warn(
-                "PostgreSQL not running. Install with: brew install postgresql@17 && brew services start postgresql@17"
+                "PostgreSQL not running. Install with: "
+                "brew install postgresql@17 && brew services start postgresql@17"
             )
         else:
             warn(
-                "PostgreSQL not running. Install with: sudo apt install postgresql && sudo systemctl start postgresql"
+                "PostgreSQL not running. Install with: "
+                "sudo apt install postgresql && sudo systemctl start postgresql"
             )
         fail(
             "PostgreSQL must be running before setup. Start it and re-run this script."
@@ -342,7 +355,9 @@ def _postgres_checks() -> list[tuple[str, bool]]:
         row = conn.execute(
             "SELECT COUNT(*) FROM pg_extension WHERE extname IN ('vector', 'pg_trgm')"
         ).fetchone()
-        checks.append(("Extensions (pgvector, pg_trgm)", row[0] == 2))
+        checks.append(
+            ("Extensions (pgvector, pg_trgm)", row[0] == _REQUIRED_PG_EXTENSIONS)
+        )
     except Exception:  # noqa: BLE001 — setup verification probe — failure becomes a failed check row, never an exception
         checks.append(("Extensions", False))
 

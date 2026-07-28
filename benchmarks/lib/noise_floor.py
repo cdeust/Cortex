@@ -54,11 +54,16 @@ class RunSample:
     wall_seconds: float
 
 
+# source: structural — a sample standard deviation is undefined below two
+# samples
+_MIN_SAMPLES_FOR_STD = 2
+
+
 def _stats(samples: list[float]) -> dict[str, float]:
     """Return summary stats for a list of samples (n>=1)."""
     n = len(samples)
     mean = statistics.fmean(samples)
-    std = statistics.stdev(samples) if n >= 2 else 0.0
+    std = statistics.stdev(samples) if n >= _MIN_SAMPLES_FOR_STD else 0.0
     p95 = sorted(samples)[max(0, math.ceil(0.95 * n) - 1)]
     return {
         "mean": round(mean, 6),
@@ -118,7 +123,7 @@ def measure_noise_floor(
     """
     if benchmark not in BENCHMARK_IDS:
         raise ValueError(f"unknown benchmark: {benchmark}")
-    if n_reruns < 2:
+    if n_reruns < _MIN_SAMPLES_FOR_STD:
         raise ValueError("n_reruns must be >= 2 for std to be defined")
     sha = fingerprint(snapshot_path)
     samples: list[RunSample] = []

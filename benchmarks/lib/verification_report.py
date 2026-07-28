@@ -8,7 +8,8 @@ Sources:
     E2 N-scan         → benchmarks/results/n_scan/<run>/result.json
     E3 decay sweep    → benchmarks/results/decay_sweep/<run>/result.json
     E4 longitudinal   → benchmarks/results/longitudinal/<run>/result.json
-    E5 cross-benchmark → benchmarks/results/cross_benchmark/<run>/{calibration,evaluation,reference}.json
+    E5 cross-benchmark →
+        benchmarks/results/cross_benchmark/<run>/{calibration,evaluation,reference}.json
     E6 telemetry      → ~/.claude/methodology/telemetry.jsonl
 
 Critical contract:
@@ -40,35 +41,48 @@ from typing import Any
 HYPOTHESES: dict[str, dict[str, Any]] = {
     "E1": {
         "name": "Ablation — each claimed component contributes",
-        "claim": "Removing any single load-bearing module reduces overall MRR by ≥0.01.",
+        "claim": (
+            "Removing any single load-bearing module reduces overall MRR by ≥0.01."
+        ),
         "threshold": "every ablated module shows ΔMRR ≥ +0.01 vs baseline",
         "pass_op": ">=",
         "pass_value": 0.01,
     },
     "E2": {
         "name": "N-scan — retrieval scales with corpus size",
-        "claim": "MRR does not collapse (>20% relative drop) as N grows from 100K to 1M.",
+        "claim": (
+            "MRR does not collapse (>20% relative drop) as N grows from 100K to 1M."
+        ),
         "threshold": "MRR(1M) ≥ 0.80 × MRR(100K)",
         "pass_op": ">=",
         "pass_value": 0.80,
     },
     "E3": {
         "name": "Decay sweep — heat decay is not the dominant signal",
-        "claim": "Sweeping decay λ from 0.85 to 0.999 changes overall MRR by <0.05 absolute.",
+        "claim": (
+            "Sweeping decay λ from 0.85 to 0.999 changes overall MRR by <0.05 absolute."
+        ),
         "threshold": "MRR_max - MRR_min < 0.05 across the sweep",
         "pass_op": "<",
         "pass_value": 0.05,
     },
     "E4": {
         "name": "Longitudinal — no drift over a 30-day window",
-        "claim": "Repeated calibration over 30 simulated days holds MRR within ±0.02 of day-1.",
+        "claim": (
+            "Repeated calibration over 30 simulated days holds MRR within "
+            "±0.02 of day-1."
+        ),
         "threshold": "|MRR(day=k) - MRR(day=1)| < 0.02 for all k",
         "pass_op": "<",
         "pass_value": 0.02,
     },
     "E5": {
-        "name": "Cross-benchmark — config calibrated on LongMemEval transfers to LoCoMo",
-        "claim": "Phase-B (LongMemEval-tuned, AS-IS to LoCoMo) MRR ≥ 0.92 × Phase-C ceiling.",
+        "name": (
+            "Cross-benchmark — config calibrated on LongMemEval transfers to LoCoMo"
+        ),
+        "claim": (
+            "Phase-B (LongMemEval-tuned, AS-IS to LoCoMo) MRR ≥ 0.92 × Phase-C ceiling."
+        ),
         "threshold": "Phase-B MRR / Phase-C MRR ≥ 0.92",
         "pass_op": ">=",
         "pass_value": 0.92,
@@ -115,11 +129,17 @@ class ExpResult:
         return "PASS" if cmp.get(op, False) else "FAIL"
 
 
+# source: contract stated in the _bootstrap_ci docstring ("None if <10
+# values"); the 10-sample minimum is a pre-existing tuned value, extracted
+# unchanged (#197 family 3), provenance not recorded at introduction
+_MIN_VALUES_FOR_CI = 10
+
+
 def _bootstrap_ci(
     values: list[float], n_resamples: int = 1000
 ) -> tuple[float, float] | None:
     """Percentile bootstrap 95% CI for the mean. None if <10 values."""
-    if not values or len(values) < 10:
+    if not values or len(values) < _MIN_VALUES_FOR_CI:
         return None
     import random
 
@@ -230,6 +250,12 @@ def _read_e5(results_dir: Path) -> ExpResult:
     return out
 
 
+# Minimum telemetry samples before a p95 recall latency is reported at all.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_LATENCIES_FOR_P95 = 100
+
+
 def _read_e6(telemetry_path: Path) -> ExpResult:
     """Telemetry: p95 recall latency over recent sessions."""
     out = ExpResult(exp_id="E6")
@@ -251,7 +277,7 @@ def _read_e6(telemetry_path: Path) -> ExpResult:
                     latencies.append(float(v))
     except OSError:
         return out
-    if len(latencies) < 100:
+    if len(latencies) < _MIN_LATENCIES_FOR_P95:
         return out
     latencies.sort()
     p95 = latencies[
@@ -295,6 +321,12 @@ def _render_section(r: ExpResult) -> str:
     return "\n".join(parts) + "\n"
 
 
+# Claim-column width in the Markdown summary table; longer claims are elided.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_CLAIM_COLUMN_CHARS = 60
+
+
 def _render_summary(results: list[ExpResult]) -> str:
     lines = [
         "| Exp | Claim | Threshold | Observed | Verdict |",
@@ -302,7 +334,9 @@ def _render_summary(results: list[ExpResult]) -> str:
     ]
     for r in results:
         h = HYPOTHESES[r.exp_id]
-        claim = h["claim"][:60] + ("…" if len(h["claim"]) > 60 else "")
+        claim = h["claim"][:_CLAIM_COLUMN_CHARS] + (
+            "…" if len(h["claim"]) > _CLAIM_COLUMN_CHARS else ""
+        )
         if not r.found:
             obs, verdict = "// TODO: not yet run", "—"
         else:

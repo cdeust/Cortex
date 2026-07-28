@@ -522,7 +522,8 @@ class PgMemoryStore(
                 write_class
             ) VALUES (
                 %(content)s, %(embedding)s, %(tags)s::jsonb, %(source)s, %(domain)s,
-                %(directory_context)s, %(created_at)s, %(last_accessed)s, %(heat_base_set_at)s,
+                %(directory_context)s, %(created_at)s, %(last_accessed)s,
+                %(heat_base_set_at)s,
                 %(heat)s, %(surprise_score)s, %(importance)s,
                 %(emotional_valence)s, %(confidence)s, %(store_type)s,
                 %(is_protected)s, %(consolidation_stage)s,
@@ -1124,7 +1125,8 @@ class PgMemoryStore(
         here, no downstream ranking can demote a superseded or stale hit.
         """
         rows = self._execute(
-            "SELECT id, ts_rank_cd(content_tsv, plainto_tsquery('english', %s)) AS score "
+            "SELECT id, ts_rank_cd(content_tsv, "
+            "plainto_tsquery('english', %s)) AS score "
             "FROM current_memories "
             "WHERE content_tsv @@ plainto_tsquery('english', %s) AND NOT is_stale "
             "ORDER BY score DESC LIMIT %s",
@@ -1243,7 +1245,8 @@ class PgMemoryStore(
     def _isoformat_datetime_fields(
         d: dict[str, Any], fields: tuple[str, ...] = _DATETIME_FIELDS
     ) -> dict[str, Any]:
-        """Convert any `datetime.datetime` value in ``fields`` to ISO-8601 text, in place.
+        """Convert any `datetime.datetime` value in ``fields`` to ISO-8601
+        text, in place.
 
         Precondition: none. Postcondition: for every ``f`` in ``fields``,
         ``d[f]`` is never a ``datetime.datetime`` instance -- either it was

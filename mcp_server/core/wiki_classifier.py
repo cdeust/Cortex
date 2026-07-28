@@ -75,6 +75,18 @@ __all__ = [
 # ``configure_user_rules_provider`` once at boot; no provider configured
 # falls back to the hardcoded defaults below, same as a load failure.
 
+# Content shorter than this many stripped characters is never admitted as a
+# wiki page.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ADMISSIBLE_CHARS = 50
+
+# A tagged memory is only promoted to "spec" above this many characters.
+# source: the 200–3000 char "atomic scope" band documented in
+# wiki_classifier_gates.positive_score — an unsourced engineering default
+# for "a self-contained note" (calibration pending)
+_MIN_SPEC_CHARS = 200
+
 _USER_RULES_CACHE = None  # None = not loaded; [] = loaded but empty
 _USER_RULES_PROVIDER: Callable[[], list] | None = None
 
@@ -142,7 +154,7 @@ def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str
     Internal-only — direct callers should use ``classify_memory`` so they
     receive a full ``Classification`` tuple, not just the kind.
     """
-    if not content or len(content.strip()) < 50:
+    if not content or len(content.strip()) < _MIN_ADMISSIBLE_CHARS:
         return None
 
     stripped = content.strip()
@@ -255,10 +267,10 @@ def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str
     if tag_set & {"convention", "rule", "standard"}:
         return "convention"
 
-    if tag_set & SPEC_TAGS and len(content) > 200:
+    if tag_set & SPEC_TAGS and len(content) > _MIN_SPEC_CHARS:
         return "spec"
 
-    if tag_set & {"architecture", "design"} and len(content) > 200:
+    if tag_set & {"architecture", "design"} and len(content) > _MIN_SPEC_CHARS:
         return "spec"
 
     # Catch-all: meaningful content that passed the gate

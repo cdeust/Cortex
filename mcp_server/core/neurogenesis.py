@@ -34,6 +34,11 @@ from mcp_server.shared.linear_algebra import (
 
 # ── Configuration ─────────────────────────────────────────────────────────
 
+# Numerical floor below which a vector norm is treated as zero.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_NORM_EPSILON = 1e-10
+
 # Extra weight applied to the "young" (recently-boosted) dimension subset at
 # zero age. No paper prescribes this magnitude — Aimone 2011 is a review with
 # no formula.
@@ -148,7 +153,7 @@ def apply_temporal_weights(
     # only the shorter prefix.
     weighted = [e * w for e, w in zip(embedding, weights, strict=True)]
     weighted_norm = norm(weighted)
-    if weighted_norm > 1e-10:
+    if weighted_norm > _NORM_EPSILON:
         weighted = scale(weighted, 1.0 / weighted_norm)
     return weighted
 

@@ -31,6 +31,12 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+# Determinant magnitude below which the 2x2 Hessian is treated as
+# singular.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SINGULAR_DET_EPS = 1e-12
+
 # ── Defaults ───────────────────────────────────────────────────────────
 
 # source: engineering default (Platt 1999 prescribes no minimum); calibration
@@ -163,7 +169,7 @@ def fit_platt(
 
         # Solve 2x2 Hessian: [[h_aa, h_ab], [h_ab, h_bb]] @ delta = grad
         det = h_aa * h_bb - h_ab * h_ab
-        if abs(det) < 1e-12:
+        if abs(det) < _SINGULAR_DET_EPS:
             break  # Hessian singular — cannot step.
         inv = 1.0 / det
         d_a = inv * (h_bb * g_a - h_ab * g_b)
@@ -214,7 +220,8 @@ def pairwise_discrimination(
     useful_scores: list[float],
     not_useful_scores: list[float],
 ) -> float:
-    """Fraction of (useful, not-useful) pairs where calibrated(useful) > calibrated(not-useful).
+    """Fraction of (useful, not-useful) pairs where calibrated(useful) >
+    calibrated(not-useful).
 
     Used as the post-training sanity check: a correctly-fit Platt must
     rank useful above not-useful on its training support at least as

@@ -97,6 +97,11 @@ class Summary:
 # ── Slug derivation ─────────────────────────────────────────────────────
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_TITLE_CHARS = 4
+
+
 def _clean_title_candidate(title: str) -> bool:
     """True iff a title is suitable to drive a slug.
 
@@ -112,7 +117,7 @@ def _clean_title_candidate(title: str) -> bool:
     to the source. Reject the *slugified* form against the timestamp
     pattern so both spacings are caught.
     """
-    if not title or len(title.strip()) < 4:
+    if not title or len(title.strip()) < _MIN_TITLE_CHARS:
         return False
     t = title.strip()
     if t.lower().startswith("memory-"):
@@ -283,7 +288,8 @@ def plan(wiki_root: Path) -> list[Pollution]:
                     proposed_path="",
                     reason="",
                     page_id=None,
-                    skipped_reason="missing frontmatter id — run wiki_backfill_ids.py first",
+                    skipped_reason="missing frontmatter id — "
+                    "run wiki_backfill_ids.py first",
                 )
             )
             continue

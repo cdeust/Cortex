@@ -54,7 +54,10 @@ schema = {
             },
             "triggers_created": {
                 "type": "integer",
-                "description": "Count of prospective triggers extracted from session TODOs/decisions.",
+                "description": (
+                    "Count of prospective triggers extracted from session "
+                    "TODOs/decisions."
+                ),
             },
             "critique": {
                 "type": "string",
@@ -249,11 +252,15 @@ def _try_generate_critique(
         return None
 
 
+# source: rolling cap documented in the _append_session_log docstring
+_SESSION_LOG_CAP = 1000
+
+
 def _append_session_log(log: dict, entry: dict) -> None:
     """Append entry to session log with rolling 1000 cap."""
     log["sessions"].append(entry)
-    if len(log["sessions"]) > 1000:
-        log["sessions"] = log["sessions"][-1000:]
+    if len(log["sessions"]) > _SESSION_LOG_CAP:
+        log["sessions"] = log["sessions"][-_SESSION_LOG_CAP:]
     save_session_log(log)
 
 

@@ -90,7 +90,9 @@ SIGNAL_POOL = [
         "id": "G1",
         "newer_sims": [0.52, 0.61, 0.48, 0.55, 0.67, 0.50, 0.58, 0.49, 0.63, 0.54],
         "exp_chronic_zero": True,
-        "note": "10 background neighbours (~0.5) ⇒ chronic 0 (NON-SATURATION, load-bearing)",
+        "note": (
+            "10 background neighbours (~0.5) ⇒ chronic 0 (NON-SATURATION, load-bearing)"
+        ),
     },
     {
         "id": "G2",
@@ -124,7 +126,8 @@ SIGNAL_POOL = [
 # ``fire_by`` is the cycle index (1-based) at which the memory MUST be stale;
 # ``recovers`` asserts the accumulator leaks back below Θ by the final cycle
 # (reinstatement). chronic 0.667 ≈ one 0.95 near-dup ⇒ labile pressure ≈ 0.60.
-_P = 0.667  # per-cycle chronic when a genuine interferer is present (labile pressure 0.60)
+# per-cycle chronic when a genuine interferer is present (labile pressure 0.60)
+_P = 0.667
 SERIES_POOL = [
     {
         "id": "S1",
@@ -148,7 +151,9 @@ SERIES_POOL = [
         "fire_by": None,
         "recovers": False,
         "cycles": [(_P, False), (_P, True), (_P, True), (_P, False), (_P, True)],
-        "note": "interference present but mostly sleep-protected ⇒ leak dominates, NEVER",
+        "note": (
+            "interference present but mostly sleep-protected ⇒ leak dominates, NEVER"
+        ),
     },
     {
         "id": "S4",
@@ -178,7 +183,9 @@ SERIES_POOL = [
             (0.0, False),
             (0.0, False),
         ],
-        "note": "decay-recovery ⇒ fires then accumulator leaks back below Θ (reinstatement)",
+        "note": (
+            "decay-recovery ⇒ fires then accumulator leaks back below Θ (reinstatement)"
+        ),
     },
 ]
 
@@ -194,7 +201,9 @@ TRANSIENT_POOL = [
         "is_protected": False,
         "recently_active": False,
         "exp_transient": True,
-        "note": "consolidated-stage acute recent interferer ⇒ transient (STAGE-INDEPENDENT)",
+        "note": (
+            "consolidated-stage acute recent interferer ⇒ transient (STAGE-INDEPENDENT)"
+        ),
     },
     {
         "id": "T2",
@@ -273,6 +282,12 @@ def _trajectory(
 
 # ── Constant derivation (this benchmark IS the source for the core constants) ─────
 
+# Age ceiling that makes a negative fixture count as "recent", so it isolates the
+# overlap axis X from the recency axis W.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_RECENT_NEGATIVE_AGE_HOURS = 12.0
+
 
 def derive_thresholds() -> dict:
     """Read every separating constant off the labelled fixtures.
@@ -323,7 +338,7 @@ def derive_thresholds() -> dict:
         for m in TRANSIENT_POOL
         if not m["exp_transient"]
         and not m["is_protected"]
-        and m["acute_age_hours"] <= 12.0
+        and m["acute_age_hours"] <= _RECENT_NEGATIVE_AGE_HOURS
     ]
     x = (max(recent_no_overlap) + yes_overlap_min) / 2.0
     yes_age_max = max(m["acute_age_hours"] for m in yes)
@@ -367,13 +382,19 @@ def signal_reproduced() -> dict:
     return {"passed": not mismatches, "mismatches": mismatches, "n": len(SIGNAL_POOL)}
 
 
+# Chronic value above which a single near-exact duplicate counts as "high".
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_CHRONIC_HIGH_BAND = 0.5
+
+
 def fixture_non_saturation() -> dict:
     """A full field of background neighbours stays at chronic 0; one exact
     duplicate alone goes high. The exact guard against the 46%-saturation bug."""
     background = chronic_interference([0.5] * 10, TAU_DUP)
     one_dup = chronic_interference([0.5] * 10 + [0.99], TAU_DUP)
     return {
-        "passed": background == 0.0 and one_dup > 0.5,
+        "passed": background == 0.0 and one_dup > _CHRONIC_HIGH_BAND,
         "background_chronic": round(background, 6),
         "one_dup_chronic": round(one_dup, 4),
     }
@@ -622,13 +643,16 @@ def main() -> int:
         f"  TAU_DUP                    = {TAU_DUP:.4f}   (== curation.MERGE_THRESHOLD)"
     )
     print(
-        f"  ACUTE_OVERLAP_THRESHOLD    = {th['X']:.5f}   (margin {th['overlap_margin']:.4f})"
+        f"  ACUTE_OVERLAP_THRESHOLD    = {th['X']:.5f}   "
+        f"(margin {th['overlap_margin']:.4f})"
     )
     print(
-        f"  ACUTE_RECENCY_WINDOW_HOURS = {th['W']:.5f}   (margin {th['age_margin']:.4f}h)"
+        f"  ACUTE_RECENCY_WINDOW_HOURS = {th['W']:.5f}   "
+        f"(margin {th['age_margin']:.4f}h)"
     )
     print(
-        f"\n[baked in core] λ={PRESSURE_LEAK_LAMBDA}  Θ_accum={PERMANENT_ACCUM_THRESHOLD}"
+        f"\n[baked in core] λ={PRESSURE_LEAK_LAMBDA}  "
+        f"Θ_accum={PERMANENT_ACCUM_THRESHOLD}"
         f"  X={ACUTE_OVERLAP_THRESHOLD}  W={ACUTE_RECENCY_WINDOW_HOURS}"
     )
 
@@ -649,17 +673,21 @@ def main() -> int:
     f_dep_nonzero = fixture_hippocampal_dependency_never_zeroes_pressure()
 
     print(
-        f"\n[signal construction] passed={sig['passed']}  mismatches={sig['mismatches']}"
+        f"\n[signal construction] passed={sig['passed']}  "
+        f"mismatches={sig['mismatches']}"
     )
     print(
-        f"[series (λ,Θ) reproduced] passed={ser['passed']}  mismatches={ser['mismatches']}"
+        f"[series (λ,Θ) reproduced] passed={ser['passed']}  "
+        f"mismatches={ser['mismatches']}"
     )
     print(
-        f"[transient reproduced] passed={tran['passed']}  mismatches={tran['mismatches']}"
+        f"[transient reproduced] passed={tran['passed']}  "
+        f"mismatches={tran['mismatches']}"
     )
     print("\n[falsifiers]")
     print(
-        f"  non-saturation (background 0, one dup high)  passed={f_sat['passed']}  {f_sat}"
+        f"  non-saturation (background 0, one dup high)  "
+        f"passed={f_sat['passed']}  {f_sat}"
     )
     print(f"  τ_dup == curation.MERGE_THRESHOLD            passed={f_tau['passed']}")
     print(f"  consolidated graded-resistant, not immune    passed={f_graded['passed']}")
@@ -675,11 +703,13 @@ def main() -> int:
     print(f"  both modes reversible                        passed={f_rev['passed']}")
     print("\n[CLS-B gate C — cortical_availability(hippocampal_dependency)]")
     print(
-        f"  (i)  non-regression (dep=0.0 matches S1 baseline)   passed={f_dep_nonreg['passed']}"
+        f"  (i)  non-regression (dep=0.0 matches S1 baseline)   "
+        f"passed={f_dep_nonreg['passed']}"
         f"  fire_cycle={f_dep_nonreg['fire_cycle']}"
     )
     print(
-        f"  (ii) protection (dep=1.0 resists longer, still grows) passed={f_dep_protect['passed']}"
+        f"  (ii) protection (dep=1.0 resists longer, still grows) "
+        f"passed={f_dep_protect['passed']}"
     )
     print(
         f"  pressure never zeroed at dep=1.0 (β={CORTICAL_AVAILABILITY_BETA})    "

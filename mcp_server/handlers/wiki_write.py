@@ -98,7 +98,8 @@ schema = {
                 "type": "string",
                 "description": (
                     "Raw markdown content. Used when structured fields "
-                    "(title/summary/body) are not provided. Markdown is preserved verbatim."
+                    "(title/summary/body) are not provided. Markdown is preserved "
+                    "verbatim."
                 ),
             },
             "mode": {
@@ -118,7 +119,9 @@ schema = {
             },
             "summary": {
                 "type": "string",
-                "description": "One-paragraph summary placed near the top of the rendered page.",
+                "description": (
+                    "One-paragraph summary placed near the top of the rendered page."
+                ),
                 "examples": ["FlashRank ONNX cache divergence; clearing fixed it."],
             },
             "body": {
@@ -127,7 +130,10 @@ schema = {
             },
             "tags": {
                 "type": "array",
-                "description": "Free-form tags attached to both the wiki frontmatter and the pointer memory.",
+                "description": (
+                    "Free-form tags attached to both the wiki frontmatter and the "
+                    "pointer memory."
+                ),
                 "items": {"type": "string"},
                 "default": [],
                 "examples": [["lesson", "recall"], ["adr", "embeddings"]],

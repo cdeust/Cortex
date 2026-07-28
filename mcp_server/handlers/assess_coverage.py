@@ -58,17 +58,25 @@ schema = {
         "properties": {
             "directory": {
                 "type": "string",
-                "description": "Absolute project directory to assess. Defaults to current working directory.",
+                "description": (
+                    "Absolute project directory to assess. Defaults to current working "
+                    "directory."
+                ),
                 "examples": ["/Users/alice/code/cortex"],
             },
             "domain": {
                 "type": "string",
-                "description": "Cognitive domain to assess when 'directory' is not supplied.",
+                "description": (
+                    "Cognitive domain to assess when 'directory' is not supplied."
+                ),
                 "examples": ["cortex", "auth-service"],
             },
             "stale_days": {
                 "type": "integer",
-                "description": "Days since last access for a memory to count as stale in the age-distribution score.",
+                "description": (
+                    "Days since last access for a memory to count as stale in the "
+                    "age-distribution score."
+                ),
                 "default": 14,
                 "minimum": 1,
                 "maximum": 365,
@@ -210,6 +218,15 @@ def _compute_coverage_score(
     return int(max(0, min(100, raw * 100)))
 
 
+# Recommendation thresholds. Like the weighting constants flagged in the
+# module docstring, these are hand-picked — coding-standards §8 debt.
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_SEEDED_TOTAL = 20
+_MIN_ENTITY_DENSITY = 0.5
+_MIN_BALANCE_SCORE = 0.4
+
+
 def _recommendations(
     total: int,
     fresh: int,
@@ -219,21 +236,22 @@ def _recommendations(
     balance_score: float,
 ) -> list[str]:
     recs = []
-    if total < 20:
+    if total < _MIN_SEEDED_TOTAL:
         recs.append("Run `seed_project` to bootstrap memory from the codebase.")
     if stale > total * 0.4:
         recs.append("Run `validate_memory` — more than 40% of memories are stale.")
-    if entity_density < 0.5:
+    if entity_density < _MIN_ENTITY_DENSITY:
         recs.append("Low entity density. Use `remember` with more specific content.")
     if compressed > total * 0.5:
         recs.append("High compression ratio — consider re-seeding with `seed_project`.")
-    if balance_score < 0.4:
+    if balance_score < _MIN_BALANCE_SCORE:
         recs.append(
             "Unbalanced domain coverage. Use `remember` with explicit `domain` tags."
         )
     if not recs:
         recs.append(
-            "Coverage looks healthy. Run `consolidate` periodically to maintain quality."
+            "Coverage looks healthy. Run `consolidate` periodically to maintain "
+            "quality."
         )
     return recs
 

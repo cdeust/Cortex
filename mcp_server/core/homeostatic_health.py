@@ -18,6 +18,18 @@ from __future__ import annotations
 
 import math
 
+# Numerical floor below which the standard deviation is treated as zero
+# (skew/kurtosis are undefined).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_STD_EPSILON = 1e-10
+
+# Standard deviation below which the heat distribution counts as
+# under-dispersed and is penalized.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_LOW_STD_THRESHOLD = 0.05
+
 
 def _compute_moments(
     values: list[float],
@@ -91,7 +103,7 @@ def _compute_moments(
     variance = m2 / max(n - 1, 1)
     std = math.sqrt(variance)
 
-    if std > 1e-10:
+    if std > _STD_EPSILON:
         skew = m3 / (n * std**3)
         kurtosis = m4 / (n * std**4) - 3.0
     else:
@@ -125,7 +137,7 @@ def _compute_health_score(
     health -= min(deviation * 2.0, 0.4)
     health -= min(max(bimodality - 0.4, 0) * 1.5, 0.3)
     health -= min(abs(skew) * 0.15, 0.2)
-    if std < 0.05:
+    if std < _LOW_STD_THRESHOLD:
         health -= 0.1
     return max(0.0, min(1.0, health))
 
@@ -288,7 +300,7 @@ def _moments_to_health(
     streaming reducers — list-based and per-class)."""
     variance = m2 / max(n - 1, 1)
     std = math.sqrt(variance)
-    if std > 1e-10:
+    if std > _STD_EPSILON:
         skew = m3 / (n * std**3)
         kurtosis = m4 / (n * std**4) - 3.0
     else:

@@ -6,6 +6,12 @@ Groups wiki pages by domain then kind into a structured markdown index.
 from __future__ import annotations
 
 
+# source: structural — a wiki path is kind/filename (2 parts) or
+# kind/domain/filename (3 parts); see the build_index docstring below.
+_FLAT_PATH_PARTS = 2
+_DOMAIN_SCOPED_PATH_PARTS = 3
+
+
 def build_index(page_paths: list[str]) -> str:
     """Build a structured INDEX.md grouped by domain then kind.
 
@@ -19,9 +25,9 @@ def build_index(page_paths: list[str]) -> str:
     entries: list[tuple[str, str, str, str]] = []
     for p in page_paths:
         parts = p.split("/")
-        if len(parts) >= 2 and parts[0] in PAGE_KINDS:
+        if len(parts) >= _FLAT_PATH_PARTS and parts[0] in PAGE_KINDS:
             kind = parts[0]
-            if len(parts) >= 3:
+            if len(parts) >= _DOMAIN_SCOPED_PATH_PARTS:
                 domain = parts[1]
                 filename = parts[-1].removesuffix(".md")
             else:

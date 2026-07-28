@@ -46,6 +46,13 @@ MIN_AVG_HEAT_FOR_PAGE = 0.3
 MIN_ENTITY_FREQ_FOR_TOPIC = 3
 MAX_MEMORIES_PER_PROMPT = 25  # cap prompt size; cross-encoder picks the best
 
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ENTITY_LEN = 4  # shorter identifiers are too generic to name a topic
+_MIN_SNAKE_ENTITY_LEN = 6  # snake_case identifiers below this are noise
+_MEMORY_HEAD_CHARS = 1200  # per-memory excerpt cap in authoring prompts
+_EXISTING_BODY_CHARS = 4000  # existing-page excerpt cap in re-author prompts
+
 # ── Data structures ─────────────────────────────────────────────────────
 
 
@@ -199,14 +206,14 @@ def extract_entities_from_content(content: str) -> list[str]:
     for m in _FILE_EXT_RE.finditer(content):
         full = m.group(1)  # the part before the dot
         basename = full.rsplit("/", 1)[-1]
-        if len(basename) >= 4:
+        if len(basename) >= _MIN_ENTITY_LEN:
             entities.append(basename)
     # CamelCase identifiers
     for m in _CAMEL_RE.finditer(content):
         entities.append(m.group(0))
     # snake_case identifiers ≥ 6 chars
     for m in _SNAKE_RE.finditer(content):
-        if len(m.group(0)) >= 6:
+        if len(m.group(0)) >= _MIN_SNAKE_ENTITY_LEN:
             entities.append(m.group(0))
     return entities
 
@@ -264,7 +271,7 @@ def build_clusters(
         # Dominant entity = most frequent
         top_entity = Counter(entities).most_common(1)[0][0]
         # Skip too-generic entities
-        if top_entity.lower() in _TOPIC_STOPWORDS or len(top_entity) < 4:
+        if top_entity.lower() in _TOPIC_STOPWORDS or len(top_entity) < _MIN_ENTITY_LEN:
             continue
         buckets[top_entity].append(mem)
 
@@ -366,7 +373,10 @@ def count_pending_clusters_streamed(
             if not entities:
                 continue
             top_entity = Counter(entities).most_common(1)[0][0]
-            if top_entity.lower() in _TOPIC_STOPWORDS or len(top_entity) < 4:
+            if (
+                top_entity.lower() in _TOPIC_STOPWORDS
+                or len(top_entity) < _MIN_ENTITY_LEN
+            ):
                 continue
             b = buckets.get(top_entity)
             if b is None:
@@ -430,48 +440,84 @@ def _kind_dir(kind: str) -> str:
 
 
 _ADR_TASK_RECORD_SECTIONS = """\
-For kind = `adr` (task-record): the body MUST carry these sections in this exact order. They are mandatory — no skipping:
+For kind = `adr` (task-record): the body MUST carry these sections in this exact \
+order. They are mandatory — no skipping:
 
-1. **## Status** — `proposed` / `accepted` / `rejected` / `superseded`. New task-records default to `accepted` (the work is done).
-2. **## Entry** — the problem, task, or trigger as it stood before the work began. State the symptom or the request; do not speculate about root cause yet.
-3. **## Mandatory elements** — constraints that had to be respected: Clean Architecture / SOLID rules, layer dependency rule, project invariants (no SQLite, source-citation discipline, file-size limits), compatibility windows, security gates, paper-grounded equations, contracts with upstream/downstream systems. Be specific. List, not prose.
-4. **## How** — the approach taken: implementation steps, technical choices, the sequence of moves. Reference specific source files with full paths. Name alternatives that were tried and abandoned.
-5. **## Result** — what was actually delivered. Cite the commit hash, the benchmark run, or the artifact that proves the outcome. If partial, state precisely what is and is not done.
-6. **## Serves** — what this enables downstream. Which subsystem depends on it, which invariant it upholds, which user-visible behaviour it supports. The "why it stays in the codebase" answer.
-7. **## Alternatives considered** — formally-considered-and-rejected designs (distinct from "things we tried"; those go in How).
-8. **## References** — paper citations, ADR cross-refs as `[[adr/...]]`, related task-records.
+1. **## Status** — `proposed` / `accepted` / `rejected` / `superseded`. New \
+task-records default to `accepted` (the work is done).
+2. **## Entry** — the problem, task, or trigger as it stood before the work began. \
+State the symptom or the request; do not speculate about root cause yet.
+3. **## Mandatory elements** — constraints that had to be respected: Clean \
+Architecture / SOLID rules, layer dependency rule, project invariants (no SQLite, \
+source-citation discipline, file-size limits), compatibility windows, security gates, \
+paper-grounded equations, contracts with upstream/downstream systems. Be specific. \
+List, not prose.
+4. **## How** — the approach taken: implementation steps, technical choices, the \
+sequence of moves. Reference specific source files with full paths. Name alternatives \
+that were tried and abandoned.
+5. **## Result** — what was actually delivered. Cite the commit hash, the benchmark \
+run, or the artifact that proves the outcome. If partial, state precisely what is and \
+is not done.
+6. **## Serves** — what this enables downstream. Which subsystem depends on it, which \
+invariant it upholds, which user-visible behaviour it supports. The "why it stays in \
+the codebase" answer.
+7. **## Alternatives considered** — formally-considered-and-rejected designs (distinct \
+from "things we tried"; those go in How).
+8. **## References** — paper citations, ADR cross-refs as `[[adr/...]]`, related \
+task-records.
 """
 
 _GENERIC_STRUCTURE_SECTIONS = """\
-For kind = `reference` / `explanation` / other: the body should follow this conventional shape:
+For kind = `reference` / `explanation` / other: the body should follow this \
+conventional shape:
 
 1. **# <title>** — H1 matching frontmatter title.
-2. **Lead paragraph** — one paragraph saying what the page is and why a reader should care.
+2. **Lead paragraph** — one paragraph saying what the page is and why a reader should \
+care.
 3. **Sections explaining the topic**:
-   - Use ```mermaid``` fences for flowcharts, sequence diagrams, state diagrams when the topic involves dataflow or state transitions.
+   - Use ```mermaid``` fences for flowcharts, sequence diagrams, state diagrams when \
+the topic involves dataflow or state transitions.
    - Use tables for taxonomies, parameter lists, comparisons.
    - Use ``` fences with language for code snippets.
-   - Cite specific source files with full paths (e.g. ``mcp_server/core/predictive_coding_gate.py``).
-4. **## Why this design and not the alternatives** — explain the architectural choice. What was considered, what was rejected, why.
-5. **## What can go wrong** — failure modes the next reader should know about, with concrete symptoms.
-6. **## See also** — cross-links to related pages using `[[wiki/path]]` notation, plus specific source files.
-7. **## Primary sources** — if the topic touches research literature, cite the actual papers with full citations.
+   - Cite specific source files with full paths (e.g. \
+``mcp_server/core/predictive_coding_gate.py``).
+4. **## Why this design and not the alternatives** — explain the architectural choice. \
+What was considered, what was rejected, why.
+5. **## What can go wrong** — failure modes the next reader should know about, with \
+concrete symptoms.
+6. **## See also** — cross-links to related pages using `[[wiki/path]]` notation, plus \
+specific source files.
+7. **## Primary sources** — if the topic touches research literature, cite the actual \
+papers with full citations.
 """
 
 
-WIKI_AUTHORING_PROMPT = """You are Opus 4.7 authoring a single wiki page for the Cortex persistent-memory MCP server.
+WIKI_AUTHORING_PROMPT = """You are Opus 4.7 authoring a single wiki page for the \
+Cortex persistent-memory MCP server.
 
-You are given a topic-cohesive cluster of PG memories (tool events, decisions, lessons, notes) plus the suggested wiki path and any existing related wiki pages for cross-linking.
+You are given a topic-cohesive cluster of PG memories (tool events, decisions, \
+lessons, notes) plus the suggested wiki path and any existing related wiki pages for \
+cross-linking.
 
 # Your task
 
-Author **one** curated wiki page in Markdown that follows the Cortex documentation conventions below. The page must be substantive (target 8-15 KB), with structure, prose, diagrams, and citations. Do **not** produce a mechanical template. Do **not** dump raw memory content; synthesise.
+Author **one** curated wiki page in Markdown that follows the Cortex documentation \
+conventions below. The page must be substantive (target 8-15 KB), with structure, \
+prose, diagrams, and citations. Do **not** produce a mechanical template. Do **not** \
+dump raw memory content; synthesise.
 
-The wiki is the durable record of how this project works AND of every task done on it. Pages of kind `adr` are the canonical task-record format — every completed task gets one, structured so a future reader can reconstruct: what triggered the work, what constraints applied, how it was solved, what was delivered, and what it enables. Pages of kind `reference` / `explanation` cover stable scopes (architecture, services, api, data-flow, operations) so a reader opening the wiki cold can understand the codebase end-to-end.
+The wiki is the durable record of how this project works AND of every task done on it. \
+Pages of kind `adr` are the canonical task-record format — every completed task gets \
+one, structured so a future reader can reconstruct: what triggered the work, what \
+constraints applied, how it was solved, what was delivered, and what it enables. Pages \
+of kind `reference` / `explanation` cover stable scopes (architecture, services, api, \
+data-flow, operations) so a reader opening the wiki cold can understand the codebase \
+end-to-end.
 
 # Output format
 
-Output **only** the wiki page body, starting with YAML frontmatter, then the body. No preamble, no explanation, no surrounding fences.
+Output **only** the wiki page body, starting with YAML frontmatter, then the body. No \
+preamble, no explanation, no surrounding fences.
 
 # Frontmatter (required)
 
@@ -494,14 +540,18 @@ audience: [developer, ...]
 
 # Conventions
 
-- Write authoritative declarative prose. No filler ("It's worth noting that..."). State facts directly.
-- When a number is given, name its source ("p50 latency 125ms — measured in benchmarks/longmemeval/run_benchmark.py 2026-04").
+- Write authoritative declarative prose. No filler ("It's worth noting that..."). \
+State facts directly.
+- When a number is given, name its source ("p50 latency 125ms — measured in \
+benchmarks/longmemeval/run_benchmark.py 2026-04").
 - When the topic has biological inspiration, name the paper that motivated the design.
-- Don't repeat what's already in [[reference/{domain}/architecture-overview]] — link to it.
+- Don't repeat what's already in [[reference/{domain}/architecture-overview]] — link \
+to it.
 - Each diagram must add information that the table or prose cannot convey efficiently.
 - No phrases like "in this section we will" — just say it.
 {redaction_conventions}
-- Mandatory elements means *constraints*, not steps. A constraint says "MUST honour X"; a step says "did X".
+- Mandatory elements means *constraints*, not steps. A constraint says "MUST honour \
+X"; a step says "did X".
 
 # The cluster
 
@@ -525,9 +575,14 @@ Author the wiki page now. Output only the Markdown body, frontmatter first.
 """
 
 
-WIKI_COVERAGE_PROMPT = """You are Opus 4.7 authoring a structural wiki page for the Cortex persistent-memory MCP server.
+WIKI_COVERAGE_PROMPT = """You are Opus 4.7 authoring a structural wiki page for the \
+Cortex persistent-memory MCP server.
 
-This is a **coverage-driven** job, not a cluster-driven one: the auto-curator found that the project `{domain}` has no substantive page for the scope `{scope_name}` ("{scope_title}"), and the wiki contract says every project must document this scope. Author the page from the source tree, the existing related pages, and any memories provided.
+This is a **coverage-driven** job, not a cluster-driven one: the auto-curator found \
+that the project `{domain}` has no substantive page for the scope `{scope_name}` \
+("{scope_title}"), and the wiki contract says every project must document this scope. \
+Author the page from the source tree, the existing related pages, and any memories \
+provided.
 
 # What this scope is
 
@@ -535,7 +590,8 @@ This is a **coverage-driven** job, not a cluster-driven one: the auto-curator fo
 
 # Output format
 
-Output **only** the wiki page body, starting with YAML frontmatter, then the body. No preamble, no explanation, no surrounding fences.
+Output **only** the wiki page body, starting with YAML frontmatter, then the body. No \
+preamble, no explanation, no surrounding fences.
 
 # Frontmatter (required)
 
@@ -556,23 +612,32 @@ scope: {scope_name}
 # Required structural sections (in this order)
 
 1. **# <title>** — H1 matching frontmatter title.
-2. **Lead paragraph** — one paragraph that states the scope of this page and what a reader will learn.
+2. **Lead paragraph** — one paragraph that states the scope of this page and what a \
+reader will learn.
 3. **Body sections** specific to the scope. For:
-   - `architecture` — layers + dependency rule + a Mermaid diagram of the major subsystems; cite the directories that map to each layer.
-   - `services` — table or list of every major component / handler / module, with one-line responsibility statements and the file paths that define each.
-   - `api` — exhaustive enumeration of the public surface (CLI flags, HTTP endpoints, MCP tools, library functions) with one-line semantics and a stability flag.
-   - `data-flow` — a Mermaid sequence or flow diagram of one record's lifecycle through the system, with prose explaining each hop and the file that performs it.
-   - `operations` — how to deploy, monitor, and recover. Triggers → diagnosis → recovery → rollback. Failure modes with symptoms.
+   - `architecture` — layers + dependency rule + a Mermaid diagram of the major \
+subsystems; cite the directories that map to each layer.
+   - `services` — table or list of every major component / handler / module, with \
+one-line responsibility statements and the file paths that define each.
+   - `api` — exhaustive enumeration of the public surface (CLI flags, HTTP endpoints, \
+MCP tools, library functions) with one-line semantics and a stability flag.
+   - `data-flow` — a Mermaid sequence or flow diagram of one record's lifecycle \
+through the system, with prose explaining each hop and the file that performs it.
+   - `operations` — how to deploy, monitor, and recover. Triggers → diagnosis → \
+recovery → rollback. Failure modes with symptoms.
 4. **## See also** — cross-links to related pages using `[[wiki/path]]` notation.
-5. **## Source files** — the files in the codebase a reader should open to verify what this page says. Full paths.
+5. **## Source files** — the files in the codebase a reader should open to verify what \
+this page says. Full paths.
 
 # Conventions
 {redaction_conventions}
 
-- Walk the source tree if you need to ground the content; the wiki must reflect the codebase as it is, not as it was.
+- Walk the source tree if you need to ground the content; the wiki must reflect the \
+codebase as it is, not as it was.
 - When a number is given, name its source.
 - Don't invent components that don't exist in the repo.
-- If a scope has nothing yet (e.g. the project has no HTTP API), say so explicitly with a one-paragraph "currently none" page rather than fabricating endpoints.
+- If a scope has nothing yet (e.g. the project has no HTTP API), say so explicitly \
+with a one-paragraph "currently none" page rather than fabricating endpoints.
 
 # The job
 
@@ -584,7 +649,8 @@ scope: {scope_name}
 **Existing related wiki pages** (for cross-linking via `[[path]]`):
 {related_pages_block}
 
-**Supporting memories** (use as ground truth where they exist; otherwise consult the source tree):
+**Supporting memories** (use as ground truth where they exist; otherwise consult the \
+source tree):
 
 {memories_block}
 
@@ -608,8 +674,8 @@ def _memories_block(
     mem_blocks: list[str] = []
     for idx, content in enumerate(capped, 1):
         t = tags[idx - 1] if idx - 1 < len(tags) else []
-        head = content[:1200].rstrip()
-        if len(content) > 1200:
+        head = content[:_MEMORY_HEAD_CHARS].rstrip()
+        if len(content) > _MEMORY_HEAD_CHARS:
             head += "\n...[memory truncated, full content available via recall]"
         tag_str = ", ".join(t) if t else "(no tags)"
         mem_blocks.append(f"### Memory {idx} (tags: {tag_str})\n\n{head}")
@@ -718,9 +784,13 @@ def build_jobs(
     return jobs
 
 
-WIKI_REAUTHOR_PROMPT = """You are Opus 4.7 re-authoring an existing wiki page for the Cortex persistent-memory MCP server.
+WIKI_REAUTHOR_PROMPT = """You are Opus 4.7 re-authoring an existing wiki page for the \
+Cortex persistent-memory MCP server.
 
-The auto-curator detected drift between this page and the codebase. Your job is to refine, verify, and update the existing page so it once again matches the current source tree. Preserve every accurate claim; replace stale ones; fill gaps; do NOT delete sections the author wrote unless they are demonstrably false.
+The auto-curator detected drift between this page and the codebase. Your job is to \
+refine, verify, and update the existing page so it once again matches the current \
+source tree. Preserve every accurate claim; replace stale ones; fill gaps; do NOT \
+delete sections the author wrote unless they are demonstrably false.
 
 # What drifted
 
@@ -730,14 +800,19 @@ The auto-curator detected drift between this page and the codebase. Your job is 
 
 Re-author the page in Markdown so:
 
-1. Every cited source file path resolves to an actual file in the codebase. Replace moved paths with current ones; remove citations of deleted files only when the referenced behaviour no longer exists; otherwise update to the new file path.
-2. The body matches the current code behaviour — read the cited files (and any new files that have appeared in the same module) before rewriting.
-3. Required sections for kind `{kind}` are present and substantive. For `adr`: Status, Entry, Mandatory elements, How, Result, Serves, Alternatives, References.
+1. Every cited source file path resolves to an actual file in the codebase. Replace \
+moved paths with current ones; remove citations of deleted files only when the \
+referenced behaviour no longer exists; otherwise update to the new file path.
+2. The body matches the current code behaviour — read the cited files (and any new \
+files that have appeared in the same module) before rewriting.
+3. Required sections for kind `{kind}` are present and substantive. For `adr`: Status, \
+Entry, Mandatory elements, How, Result, Serves, Alternatives, References.
 4. Update the frontmatter `updated:` field to today, and `last_reviewed: {today}`.
 
 # Output format
 
-Output ONLY the wiki page body, starting with YAML frontmatter, then the body. No preamble, no surrounding fences, no explanation.
+Output ONLY the wiki page body, starting with YAML frontmatter, then the body. No \
+preamble, no surrounding fences, no explanation.
 
 # Existing page (for context — synthesise, do not blindly copy)
 
@@ -748,9 +823,15 @@ Output ONLY the wiki page body, starting with YAML frontmatter, then the body. N
 # Conventions
 {redaction_conventions}
 
-- Same conventions as a fresh authoring job: authoritative declarative prose, citations with full paths, mermaid diagrams where dataflow benefits from one, no filler phrases.
-- "Refine and verify and update" means: cross-check claims against the current source. If a paragraph says "implemented via X" and X no longer exists, the paragraph is wrong — rewrite it from what actually exists.
-- If the page covers a removed feature in its entirety, do NOT silently delete the page. Instead, prefix the title with "(deprecated)" and add a one-paragraph note pointing to whatever replaced it. Pages with historical value stay.
+- Same conventions as a fresh authoring job: authoritative declarative prose, \
+citations with full paths, mermaid diagrams where dataflow benefits from one, no \
+filler phrases.
+- "Refine and verify and update" means: cross-check claims against the current source. \
+If a paragraph says "implemented via X" and X no longer exists, the paragraph is wrong \
+— rewrite it from what actually exists.
+- If the page covers a removed feature in its entirety, do NOT silently delete the \
+page. Instead, prefix the title with "(deprecated)" and add a one-paragraph note \
+pointing to whatever replaced it. Pages with historical value stay.
 
 # The job
 
@@ -822,8 +903,8 @@ def build_reauthor_prompt(
         last_updated=drift.last_updated or "(unknown)",
         reasons=", ".join(drift.reasons),
         source_root=source_root or "(unresolved — verify against memory + repo)",
-        existing_body=existing_body[:4000]
-        + ("\n…[truncated]" if len(existing_body) > 4000 else ""),
+        existing_body=existing_body[:_EXISTING_BODY_CHARS]
+        + ("\n…[truncated]" if len(existing_body) > _EXISTING_BODY_CHARS else ""),
         today=today,
     )
 

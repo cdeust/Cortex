@@ -161,7 +161,10 @@ ORDER BY ns.nspname, c.relname, idx.relname
 
 
 def _hnsw_indexes(conn: psycopg.Connection) -> list[dict]:
-    """All HNSW indexes: [{schema,table,index_name,column,ops,m,ef_construction}, ...]."""
+    """All HNSW indexes.
+
+    Shape: [{schema,table,index_name,column,ops,m,ef_construction}, ...].
+    """
     try:
         rows = conn.execute(_HNSW_SQL).fetchall()
     except psycopg.Error:
@@ -287,7 +290,8 @@ def create_snapshot(
         n_memories=n_mem,
         n_entities=n_ent,
         source_db_url=_redact(db_url),
-        **state,  # pg_version + pg_server_version_num + pgvector + locale + settings + hnsw
+        # pg_version + pg_server_version_num + pgvector + locale + settings + hnsw
+        **state,
     )
     _meta_path(snapshot_path).write_text(json.dumps(asdict(meta), indent=2))
     return meta
@@ -423,7 +427,8 @@ def _cmd_create(args: argparse.Namespace) -> int:
     )
     print(f"snapshot: {m.path} size={m.size_bytes:,}B sha={m.sha256[:12]}")
     print(
-        f"  pg={m.pg_server_version_num} pgvector={m.pgvector_version} locale={m.pg_locale_collate}"
+        f"  pg={m.pg_server_version_num} pgvector={m.pgvector_version} "
+        f"locale={m.pg_locale_collate}"
     )
     print(f"  rows: memories={m.n_memories} entities={m.n_entities}")
     print(

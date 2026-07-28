@@ -72,6 +72,10 @@ from mcp_server.core.replay_types import (
 
 _MIN_SEQUENCE_LENGTH = 2
 _MAX_SEQUENCES_PER_SWR = 5
+# Sequences above this priority emit a schema-extraction signal.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SCHEMA_SIGNAL_PRIORITY_THRESHOLD = 0.5
 
 
 # ── Full SWR Replay Cycle ────────────────────────────────────────────────
@@ -203,7 +207,7 @@ def _aggregate_results(selected: list[ReplaySequence]) -> ReplayResult:
         else:
             result.reverse_count += 1
 
-        if seq.priority_score > 0.5:
+        if seq.priority_score > _SCHEMA_SIGNAL_PRIORITY_THRESHOLD:
             schema_signals.append(
                 {
                     "entities": [e for ev in seq.events for e in ev.entities],

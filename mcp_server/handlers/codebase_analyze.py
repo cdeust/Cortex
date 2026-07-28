@@ -71,7 +71,10 @@ schema = {
         "properties": {
             "directory": {
                 "type": "string",
-                "description": "Root directory of the codebase to analyze. Defaults to the current working directory.",
+                "description": (
+                    "Root directory of the codebase to analyze. Defaults to the "
+                    "current working directory."
+                ),
                 "examples": ["/Users/alice/code/cortex"],
             },
             "languages": {
@@ -100,14 +103,21 @@ schema = {
             },
             "max_files": {
                 "type": "integer",
-                "description": "Maximum number of files to process per call. Set to 0 (default) for no limit — process every matching file. Use a positive cap only to bound runaway analysis on extremely large monorepos.",
+                "description": (
+                    "Maximum number of files to process per call. Set to 0 (default) "
+                    "for no limit — process every matching file. Use a positive cap "
+                    "only to bound runaway analysis on extremely large monorepos."
+                ),
                 "default": 0,
                 "minimum": 0,
                 "examples": [0, 500, 5000],
             },
             "max_file_size_kb": {
                 "type": "integer",
-                "description": "Skip files larger than this many kilobytes (typically generated files or binary blobs).",
+                "description": (
+                    "Skip files larger than this many kilobytes (typically generated "
+                    "files or binary blobs)."
+                ),
                 "default": 100,
                 "minimum": 1,
                 "maximum": 4096,
@@ -115,17 +125,26 @@ schema = {
             },
             "incremental": {
                 "type": "boolean",
-                "description": "Only re-process files whose content hash changed since the last analysis. Disable for a clean rescan.",
+                "description": (
+                    "Only re-process files whose content hash changed since the last "
+                    "analysis. Disable for a clean rescan."
+                ),
                 "default": True,
             },
             "dry_run": {
                 "type": "boolean",
-                "description": "Report what would be analyzed and stored without writing any memories.",
+                "description": (
+                    "Report what would be analyzed and stored without writing any "
+                    "memories."
+                ),
                 "default": False,
             },
             "domain": {
                 "type": "string",
-                "description": "Cognitive domain to tag analysis memories with. Auto-detected from directory if omitted.",
+                "description": (
+                    "Cognitive domain to tag analysis memories with. Auto-detected "
+                    "from directory if omitted."
+                ),
                 "examples": ["cortex", "auth-service"],
             },
         },

@@ -37,13 +37,20 @@ def _blend_continuous(
     return ar, si, sg
 
 
+# At or above this EMA alpha the new observation outweighs the stored style,
+# so categorical dimensions adopt the new observation.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_CATEGORICAL_ADOPT_ALPHA = 0.5
+
+
 def _select_categorical(
     old_style: dict,
     new_observation: dict,
     alpha: float,
 ) -> tuple[str, str, str]:
     """Select categorical dimensions based on alpha threshold."""
-    adopt_new = alpha >= 0.5
+    adopt_new = alpha >= _CATEGORICAL_ADOPT_ALPHA
     primary = new_observation if adopt_new else old_style
     fallback = old_style if adopt_new else new_observation
 

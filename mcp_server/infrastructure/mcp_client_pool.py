@@ -28,7 +28,8 @@ def _load_server_config(server_name: str) -> dict[str, Any]:
     config = read_json(MCP_CONNECTIONS_PATH)
     if not config or not config.get("servers"):
         raise McpConnectionError(
-            f"MCP connections config not found at {MCP_CONNECTIONS_PATH}. Create it with server definitions.",
+            f"MCP connections config not found at {MCP_CONNECTIONS_PATH}. "
+            f"Create it with server definitions.",
             {"path": str(MCP_CONNECTIONS_PATH)},
         )
 
@@ -36,7 +37,8 @@ def _load_server_config(server_name: str) -> dict[str, Any]:
     if not server_config:
         available = ", ".join(config["servers"].keys())
         raise McpConnectionError(
-            f'Server "{server_name}" not found in MCP connections config. Available: {available}',
+            f'Server "{server_name}" not found in MCP connections config. '
+            f"Available: {available}",
             {"serverName": server_name, "available": list(config["servers"].keys())},
         )
 

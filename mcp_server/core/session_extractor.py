@@ -106,6 +106,12 @@ def classify_message(text: str) -> list[str]:
     return categories
 
 
+# Messages longer than this many characters get an importance boost.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_LONG_MESSAGE_CHARS = 200
+
+
 def score_importance(text: str, categories: list[str]) -> float:
     """Score how important a message is for long-term memory."""
     score = 0.3  # baseline
@@ -121,7 +127,7 @@ def score_importance(text: str, categories: list[str]) -> float:
         score += 0.3
 
     # Content signals
-    if len(text) > 200:
+    if len(text) > _LONG_MESSAGE_CHARS:
         score += 0.1
     if re.search(r"```", text):
         score += 0.05  # contains code

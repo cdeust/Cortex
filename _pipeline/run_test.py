@@ -18,7 +18,9 @@ async def main():
     result = await handler(
         {
             "codebase_path": "/Users/cdeust/Developments/ai-architect-prd-builder",
-            "task_path": "/Users/cdeust/Downloads/TechnicalVeil/2026-03-20/findings_parsed.json",
+            "task_path": (
+                "/Users/cdeust/Downloads/TechnicalVeil/2026-03-20/findings_parsed.json"
+            ),
             "github_repo": "cdeust/ai-architect-prd-builder",
             "max_findings": 1,
         }

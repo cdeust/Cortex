@@ -43,15 +43,24 @@ schema = {
                 # actual return value); fixed alongside since it blocks the
                 # "every return dict validates" verification for this file.
                 "type": "integer",
-                "description": "ID of the saved or restored checkpoint row (serial PK, not a UUID).",
+                "description": (
+                    "ID of the saved or restored checkpoint row (serial PK, not a "
+                    "UUID)."
+                ),
             },
             "restored_context": {
                 "type": "string",
-                "description": "Human-readable reconstruction of prior session state. Present on restore.",
+                "description": (
+                    "Human-readable reconstruction of prior session state. Present on "
+                    "restore."
+                ),
             },
             "memories_attached": {
                 "type": "integer",
-                "description": "Count of hot + anchored + directory-relevant memories fused into the restore payload.",
+                "description": (
+                    "Count of hot + anchored + directory-relevant memories fused into "
+                    "the restore payload."
+                ),
             },
             "epoch": {
                 "type": "integer",
@@ -103,7 +112,10 @@ schema = {
             },
             "files_being_edited": {
                 "type": "array",
-                "description": "Absolute or repo-relative paths of files currently open for editing.",
+                "description": (
+                    "Absolute or repo-relative paths of files currently open for "
+                    "editing."
+                ),
                 "items": {"type": "string"},
                 "default": [],
                 "examples": [
@@ -112,7 +124,10 @@ schema = {
             },
             "key_decisions": {
                 "type": "array",
-                "description": "Important decisions made during this session that the next session must respect.",
+                "description": (
+                    "Important decisions made during this session that the next "
+                    "session must respect."
+                ),
                 "items": {"type": "string"},
                 "default": [],
                 "examples": [
@@ -144,7 +159,9 @@ schema = {
             },
             "custom_context": {
                 "type": "string",
-                "description": "Free-form additional context worth preserving across compaction.",
+                "description": (
+                    "Free-form additional context worth preserving across compaction."
+                ),
             },
             "session_id": {
                 "type": "string",

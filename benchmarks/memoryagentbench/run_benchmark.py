@@ -10,7 +10,8 @@ Evaluation: F1, Exact Match, Substring Match per split.
 Dataset: HuggingFace "ai-hyz/MemoryAgentBench" (146 rows)
 
 Run:
-    python3 benchmarks/memoryagentbench/run_benchmark.py [--split Accurate_Retrieval] [--limit N]
+    python3 benchmarks/memoryagentbench/run_benchmark.py
+        [--split Accurate_Retrieval] [--limit N]
 """
 
 from __future__ import annotations
@@ -176,8 +177,9 @@ def run_benchmark(splits: list[str] | None = None, limit: int | None = None):
                 # Retrieve relevant chunks
                 retrieved_context = retriever.retrieve(question, top_k=5)
 
-                # For retrieval-only evaluation, we check if the answer appears in retrieved context
-                # This tests retrieval quality without requiring an LLM reader
+                # For retrieval-only evaluation, we check if the answer
+                # appears in retrieved context. This tests retrieval quality
+                # without requiring an LLM reader
                 prediction = retrieved_context
 
                 f1 = best_score(prediction, flat_answers, compute_f1)

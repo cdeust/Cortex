@@ -33,6 +33,12 @@ _HEADLESS_TAG = "headless-authoring"
 # enough for the LLM to write a substantive anchor page.
 _CONTEXT_BYTES_CAP = 16000
 
+# Cap on a single source file's text handed to the LLM: larger files are
+# truncated to head + tail with a "[truncated]" marker (see use site).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_FILE_TEXT_CAP = 8000
+
 
 def _project_source_for_page(
     page_meta: dict[str, Any],
@@ -63,7 +69,7 @@ def _project_source_for_page(
         return full, None
     # Cap at 8 KB. Files larger than this rarely need their full
     # body — the LLM gets the head + tail with a "[truncated]" marker.
-    if len(text) > 8000:
+    if len(text) > _FILE_TEXT_CAP:
         text = text[:6000] + "\n\n…[truncated middle]…\n\n" + text[-1500:]
     return full, text
 

@@ -70,6 +70,22 @@ def fails_audit_tag_gate(tags: set[str]) -> bool:
     return bool(tags & AUDIT_TAGS)
 
 
+# At least this many declarative claims are needed to earn the claims point.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_DECLARATIVE_CLAIMS = 2
+
+# Atomic-scope band. source: comment at gate 6 below — the 200–3000 char band
+# is an unsourced engineering default for "a self-contained note"
+# (calibration pending), NOT a value from Luhmann's Zettelkasten method.
+_ATOMIC_SCOPE_MIN_CHARS = 200
+_ATOMIC_SCOPE_MAX_CHARS = 3000
+
+# source: comment at gate 7 below — "at least 3 distinct CamelCase/snake_case
+# technical tokens".
+_MIN_TECH_TOKENS = 3
+
+
 def positive_score(content: str, tags: set[str]) -> int:
     """Count how many positive quality signals the content exhibits.
 
@@ -95,7 +111,7 @@ def positive_score(content: str, tags: set[str]) -> int:
         score += 1
 
     # 2. Declarative claims
-    if len(DECLARATIVE.findall(content)) >= 2:
+    if len(DECLARATIVE.findall(content)) >= _MIN_DECLARATIVE_CLAIMS:
         score += 1
 
     # 3. Citations / references
@@ -103,7 +119,7 @@ def positive_score(content: str, tags: set[str]) -> int:
         score += 1
 
     # 4. Substantive length
-    if length >= 200:
+    if length >= _ATOMIC_SCOPE_MIN_CHARS:
         score += 1
 
     # 5. Knowledge tag
@@ -113,7 +129,7 @@ def positive_score(content: str, tags: set[str]) -> int:
     # 6. Atomic scope. The 200–3000 char band is an unsourced engineering
     #    default for "a self-contained note" (calibration pending), NOT a
     #    value from Luhmann's Zettelkasten method, which sets no char range.
-    if 200 <= length <= 3000:
+    if _ATOMIC_SCOPE_MIN_CHARS <= length <= _ATOMIC_SCOPE_MAX_CHARS:
         score += 1
 
     # 7. Domain vocabulary density — at least 3 distinct CamelCase/snake_case
@@ -121,7 +137,7 @@ def positive_score(content: str, tags: set[str]) -> int:
     tech_tokens = set(
         re.findall(r"\b(?:[A-Z][a-z]+[A-Z]\w*|[a-z]+_[a-z_]+)\b", content)
     )
-    if len(tech_tokens) >= 3:
+    if len(tech_tokens) >= _MIN_TECH_TOKENS:
         score += 1
 
     # 8. File/entity references

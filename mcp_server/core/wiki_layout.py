@@ -110,12 +110,17 @@ def index_path() -> PurePosixPath:
     return PurePosixPath(".generated") / "INDEX.md"
 
 
+# source: structural — a page path is at minimum kind/filename, so fewer than
+# two parts cannot name a page.
+_MIN_PAGE_PATH_PARTS = 2
+
+
 def parse_page_path(path: str) -> tuple[str, str] | None:
     """Given a path like ``adr/0001-foo.md`` return ``(kind, filename)``.
 
     Returns None for unrecognised paths (including the generated INDEX).
     """
     parts = PurePosixPath(path).parts
-    if len(parts) < 2 or parts[0] not in PAGE_KINDS:
+    if len(parts) < _MIN_PAGE_PATH_PARTS or parts[0] not in PAGE_KINDS:
         return None
     return parts[0], parts[-1]

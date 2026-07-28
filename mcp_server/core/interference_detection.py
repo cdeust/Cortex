@@ -55,6 +55,21 @@ _CONTEXT_DISCOUNT = 0.3
 # Hand-tuned.
 _CRITICAL_INTERFERENCE = 0.85
 
+# Similarity above which two memories are near-duplicates (merge/update).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_NEAR_DUPLICATE_SIMILARITY = 0.9
+
+# Heat below which a consolidated memory is cold enough to accept
+# overwrite.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_COLD_HEAT = 0.2
+
+# source: hand-tuned threshold documented at the use site
+# ("below 0.2 risk is negligible")
+_NEGLIGIBLE_RISK = 0.2
+
 
 # ── Resolution Hints ─────────────────────────────────────────────────────
 
@@ -69,7 +84,7 @@ def _suggest_pi_resolution(score: float, similarity: float, stage: str) -> str:
     """
     if score >= _CRITICAL_INTERFERENCE:
         return "pattern_separation"
-    if similarity > 0.9:
+    if similarity > _NEAR_DUPLICATE_SIMILARITY:
         return "merge_or_update"
     if stage == "consolidated":
         return "context_binding"
@@ -88,7 +103,7 @@ def _suggest_ri_resolution(score: float, stage: str, heat: float) -> str:
         return "protect_old_memory"
     if stage in ("labile", "early_ltp"):
         return "accelerate_consolidation"
-    if heat < 0.2:
+    if heat < _COLD_HEAT:
         return "accept_overwrite"
     return "orthogonalize_at_sleep"
 
@@ -285,7 +300,7 @@ def _evaluate_ri_candidate(
     risk_score = vulnerability * overwrite_pressure
 
     # Hand-tuned threshold: below 0.2 risk is negligible.
-    if risk_score <= 0.2:
+    if risk_score <= _NEGLIGIBLE_RISK:
         return None
 
     return {

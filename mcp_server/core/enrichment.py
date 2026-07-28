@@ -52,12 +52,20 @@ _STOP = {
 }
 
 
+# Candidate-length floors: code tokens of length <= 2 and plain words of
+# length <= 4 are ignored as noise.
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_IGNORED_TOKEN_LEN = 2
+_MAX_IGNORED_WORD_LEN = 4
+
+
 def _extract_key_nouns(content: str, max_nouns: int = 8) -> list[str]:
     """Extract the most salient noun phrases from content."""
     candidates: Counter = Counter()
     for m in _CODE_TOKEN_RE.finditer(content):
         token = (m.group(1) or m.group(2) or "").strip()
-        if token and len(token) > 2:
+        if token and len(token) > _MAX_IGNORED_TOKEN_LEN:
             candidates[token] += 3
     for m in _ERROR_NAME_RE.finditer(content):
         candidates[m.group(1)] += 2
@@ -65,7 +73,7 @@ def _extract_key_nouns(content: str, max_nouns: int = 8) -> list[str]:
         candidates[m.group(1).strip()] += 2
     for w in content.split():
         clean = w.strip(".,!?;:()[]{}\"'`-").lower()
-        if len(clean) > 4 and clean.isalpha():
+        if len(clean) > _MAX_IGNORED_WORD_LEN and clean.isalpha():
             candidates[clean] += 1
     top = [
         (n, c)

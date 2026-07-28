@@ -147,7 +147,8 @@ def render() -> str:
                     bucket_labels = dict(lt) if lt else {}
                     bucket_labels["le"] = le
                     lines.append(
-                        f"{name}_bucket{_render_labels(_labels_tuple(bucket_labels))} {count}"
+                        f"{name}_bucket"
+                        f"{_render_labels(_labels_tuple(bucket_labels))} {count}"
                     )
                 lines.append(
                     f"{name}_sum{_render_labels(lt)} {_hist_sums.get((name, lt), 0.0)}"

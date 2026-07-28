@@ -43,7 +43,8 @@ class SqliteEntityMixin:
         if origin not in ("ast_symbol", "text_concept"):
             origin = "text_concept"
         cur = self._conn.execute(
-            "INSERT INTO entities (name, type, domain, origin, created_at, last_accessed, heat) "
+            "INSERT INTO entities "
+            "(name, type, domain, origin, created_at, last_accessed, heat) "
             "VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')), datetime('now'), ?)",
             (
                 data["name"],

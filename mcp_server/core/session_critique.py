@@ -22,6 +22,31 @@ from mcp_server.core.session_critique_format import (
     format_critique_text,
 )
 
+# ── Heuristic thresholds ──────────────────────────────────────────────────
+# source (all constants in this block): pre-existing tuned values, extracted
+# unchanged (#197 family 3); provenance not recorded at introduction.
+
+# More unused tools than this triggers an "unused tools" suggestion.
+_MAX_UNDER_USED_BEFORE_SUGGESTION = 3
+# Below this diversity score tool usage counts as very low diversity.
+_LOW_DIVERSITY_THRESHOLD = 0.3
+# A tool taking more than this share of calls counts as over-reliance.
+_OVER_RELIANCE_SHARE = 0.5
+# Over-reliance is only assessed once more than this many calls were made.
+_MIN_CALLS_FOR_OVER_RELIANCE = 5
+# Below this breadth score the session counts as narrowly focused.
+_NARROW_FOCUS_BREADTH = 0.2
+# Narrow focus is only flagged once more than this many files were touched.
+_MIN_FILES_FOR_BREADTH_SUGGESTION = 3
+# Above this depth score the session counts as deep.
+_DEEP_FOCUS_DEPTH = 0.8
+# Below this breadth score a deep session counts as deep-but-narrow.
+_NARROW_BREADTH_THRESHOLD = 0.3
+# Below this entity-coverage ratio the session under-referenced known entities.
+_LOW_ENTITY_COVERAGE = 0.1
+# Coverage is only assessed once more than this many entities are known.
+_MIN_ENTITIES_FOR_COVERAGE_SUGGESTION = 10
+
 # ── Tool Usage Analysis ───────────────────────────────────────────────────
 
 EXPECTED_TOOL_DISTRIBUTION = {
@@ -57,11 +82,11 @@ def _tool_usage_suggestions(
             f"Heavy reliance on {', '.join(over_reliance)} — "
             "consider diversifying tool usage"
         )
-    if len(under_used) > 3:
+    if len(under_used) > _MAX_UNDER_USED_BEFORE_SUGGESTION:
         suggestions.append(
             f"Unused tools: {', '.join(under_used[:3])} — these might have been useful"
         )
-    if diversity < 0.3:
+    if diversity < _LOW_DIVERSITY_THRESHOLD:
         suggestions.append("Very low tool diversity — explore more tools")
     return suggestions
 
@@ -90,7 +115,11 @@ def analyze_tool_usage(
     counts = _count_tools(tools_used)
 
     diversity = min(1.0, len(counts) / max(1, len(EXPECTED_TOOL_DISTRIBUTION) * 0.6))
-    over_reliance = [t for t, c in counts.items() if c / total > 0.5 and total > 5]
+    over_reliance = [
+        t
+        for t, c in counts.items()
+        if c / total > _OVER_RELIANCE_SHARE and total > _MIN_CALLS_FOR_OVER_RELIANCE
+    ]
     under_used = [t for t in EXPECTED_TOOL_DISTRIBUTION if t not in counts]
     suggestions = _tool_usage_suggestions(diversity, over_reliance, under_used)
 
@@ -131,11 +160,15 @@ def _coverage_suggestions(
 ) -> list[str]:
     """Generate suggestions from coverage metrics."""
     suggestions: list[str] = []
-    if breadth < 0.2 and files_touched_count > 3:
+    if breadth < _NARROW_FOCUS_BREADTH and (
+        files_touched_count > _MIN_FILES_FOR_BREADTH_SUGGESTION
+    ):
         suggestions.append("Narrow focus — consider exploring adjacent files/modules")
-    if depth > 0.8 and breadth < 0.3:
+    if depth > _DEEP_FOCUS_DEPTH and breadth < _NARROW_BREADTH_THRESHOLD:
         suggestions.append("Deep but narrow — might be missing the bigger picture")
-    if entity_coverage < 0.1 and total_entities > 10:
+    if entity_coverage < _LOW_ENTITY_COVERAGE and (
+        total_entities > _MIN_ENTITIES_FOR_COVERAGE_SUGGESTION
+    ):
         suggestions.append(
             "Low entity coverage — many known entities weren't referenced"
         )

@@ -30,6 +30,9 @@ from mcp_server.core.replay_types import (
 
 _PRIORITY_THRESHOLD = 0.3
 _MAX_SEQUENCES_PER_SWR = 5
+# source: structural — heat variance is degenerate on fewer than two events,
+# so shorter sequences score 0.0.
+_MIN_PRIORITY_EVENTS = 2
 
 
 # ── Priority Scoring ────────────────────────────────────────────────────
@@ -48,7 +51,7 @@ def compute_sequence_priority(
     Returns:
         Priority score in [0, 1].
     """
-    if len(events) < 2:
+    if len(events) < _MIN_PRIORITY_EVENTS:
         return 0.0
 
     heats = [e.heat for e in events]

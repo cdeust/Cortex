@@ -42,6 +42,11 @@ DATA = REPO / "benchmarks/longmemeval/longmemeval_s.json"
 MERGE_THRESHOLD = curation.MERGE_THRESHOLD  # 0.85
 OVERLAP_MIN = 0.5  # remember_helpers.py:349 — compute_textual_overlap(...) > 0.5
 
+# Cap on the worked examples printed for a regression.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_EXAMPLES = 5
+
 
 def session_text(session: list[dict]) -> str:
     return "\n".join(
@@ -100,12 +105,13 @@ def main() -> int:
                 if c_ij or c_ji:
                     full_gate += 1
                     q_edges += 1
-                    if sids[i] in answer_sids or sids[j] in answer_sids:
+                    touch = sids[i] in answer_sids or sids[j] in answer_sids
+                    if touch:
                         edges_touch_answer += 1
-                    if len(examples) < 5:
+                    if len(examples) < _MAX_EXAMPLES:
                         examples.append(
                             f"Q{qi} sids({sids[i]},{sids[j]}) sim={sim:.3f} "
-                            f"overlap={overlap:.3f} ans_touch={sids[i] in answer_sids or sids[j] in answer_sids}"
+                            f"overlap={overlap:.3f} ans_touch={touch}"
                         )
         per_q_edges.append(q_edges)
         if (qi + 1) % 20 == 0:
@@ -120,7 +126,8 @@ def main() -> int:
     print(f"KU questions               : {len(ku)}")
     print(f"Total session pairs tested : {tot_pairs}")
     print(
-        f"max cosine sim seen        : {max_sim_seen:.4f}  (gate needs >= {MERGE_THRESHOLD})"
+        f"max cosine sim seen        : {max_sim_seen:.4f}  "
+        f"(gate needs >= {MERGE_THRESHOLD})"
     )
     print(f"pairs sim>=0.85            : {sim_pass}")
     print(f"  + jaccard overlap>0.5    : {sim_overlap_pass}")

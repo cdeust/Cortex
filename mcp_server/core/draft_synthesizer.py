@@ -91,6 +91,14 @@ def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# Lead-fitness length band (chars).
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_LEAD_MIN_CHARS = 50
+_LEAD_MAX_CHARS = 300
+_LEAD_ESSAY_CHARS = 600
+
+
 def _lead_score(claim: dict, kind: str) -> float:
     """Score a claim's fitness to become the lead paragraph."""
     base = float(claim.get("confidence", 0.5))
@@ -100,11 +108,11 @@ def _lead_score(claim: dict, kind: str) -> float:
     length = len(claim.get("text", ""))
     # Mid-length claims (50-300 chars) make better leads than fragments
     # or essay-length blobs.
-    if 50 <= length <= 300:
+    if _LEAD_MIN_CHARS <= length <= _LEAD_MAX_CHARS:
         length_bonus = 0.1
-    elif length < 50:
+    elif length < _LEAD_MIN_CHARS:
         length_bonus = -0.2
-    elif length > 600:
+    elif length > _LEAD_ESSAY_CHARS:
         length_bonus = -0.1
     else:
         length_bonus = 0.0
@@ -195,6 +203,14 @@ def _format_claims_as_prose(claims: list[dict]) -> str:
     return "\n".join(f"- {c.get('text', '').strip()}" for c in claims)
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_TITLE_SENTENCE_SCAN_CHARS = 120
+# source: title cap documented in _derive_title docstring
+# ("Cap at 80 chars on word boundary")
+_TITLE_MAX_CHARS = 80
+
+
 def _derive_title(claims: list[dict], kind: str, lead_claim: dict | None) -> str:
     """Derive a noun-phrase title from the claim corpus.
 
@@ -208,14 +224,14 @@ def _derive_title(claims: list[dict], kind: str, lead_claim: dict | None) -> str
     # Take up to first sentence terminator
     for term in (". ", "! ", "? ", "\n"):
         i = source.find(term)
-        if 0 < i < 120:
+        if 0 < i < _TITLE_SENTENCE_SCAN_CHARS:
             source = source[:i].strip()
             break
     # Strip common imperative / first-person prefixes
     for prefix in ("We ", "I ", "Let's ", "Decision: ", "Decided: "):
         if source.lower().startswith(prefix.lower()):
             source = source[len(prefix) :].strip()
-    if len(source) > 80:
+    if len(source) > _TITLE_MAX_CHARS:
         source = source[:77].rsplit(" ", 1)[0] + "…"
     return source or f"Untitled {kind}"
 

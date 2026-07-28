@@ -43,7 +43,10 @@ schema = {
         "properties": {
             "memory_id": {
                 "type": "integer",
-                "description": "Integer ID of the memory to anchor (returned by recall or remember).",
+                "description": (
+                    "Integer ID of the memory to anchor (returned by recall or "
+                    "remember)."
+                ),
                 "minimum": 1,
                 "examples": [42, 1024],
             },
@@ -51,7 +54,8 @@ schema = {
                 "type": "string",
                 "description": (
                     "Short justification for why this memory is being anchored. "
-                    "Stored as a contextual prefix on the content (max 40 chars used in tag)."
+                    "Stored as a contextual prefix on the content (max 40 chars used "
+                    "in tag)."
                 ),
                 "examples": [
                     "Load-bearing architectural decision",
@@ -60,7 +64,10 @@ schema = {
             },
             "is_global": {
                 "type": "boolean",
-                "description": "If true, mark the memory as visible to all projects/domains, not just its origin.",
+                "description": (
+                    "If true, mark the memory as visible to all projects/domains, not "
+                    "just its origin."
+                ),
                 "default": False,
             },
         },

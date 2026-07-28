@@ -182,7 +182,8 @@ def _register_wiki_purge(mcp: FastMCP) -> None:
 def _register_wiki_verify(mcp: FastMCP) -> None:
     @mcp.tool(name="wiki_verify", **tool_kwargs(wiki_verify.schema))
     async def tool_wiki_verify(path: str | None = None) -> dict:
-        """Verify wiki-page symbol citations against AP's code graph (ADR-0046 Phase 2)."""
+        """Verify wiki-page symbol citations against AP's code graph
+        (ADR-0046 Phase 2)."""
         return await safe_handler(
             wiki_verify.handler,
             {"path": path} if path else {},

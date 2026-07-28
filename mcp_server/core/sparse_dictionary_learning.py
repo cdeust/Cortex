@@ -26,6 +26,13 @@ from mcp_server.shared.linear_algebra import (
 # ---------------------------------------------------------------------------
 
 
+# Determinants with an absolute value below this epsilon are treated as
+# singular and yield a zero solution.
+# source: pre-existing numerical-tolerance value, extracted unchanged
+# (#197 family 3); provenance not recorded at introduction
+_SINGULAR_DET_EPSILON = 1e-12
+
+
 def _solve_least_squares_1(
     G: list[list[float]],
     h: list[float],
@@ -40,7 +47,7 @@ def _solve_least_squares_2(
 ) -> list[float]:
     """Solve 2x2 least-squares system via Cramer's rule."""
     det = G[0][0] * G[1][1] - G[0][1] * G[1][0]
-    if abs(det) < 1e-12:
+    if abs(det) < _SINGULAR_DET_EPSILON:
         return [0, 0]
     return [
         (h[0] * G[1][1] - h[1] * G[0][1]) / det,
@@ -63,7 +70,7 @@ def _solve_least_squares_3(
 ) -> list[float]:
     """Solve 3x3 least-squares system via Cramer's rule."""
     det_g = _det3(G)
-    if abs(det_g) < 1e-12:
+    if abs(det_g) < _SINGULAR_DET_EPSILON:
         return [0, 0, 0]
     result = []
     for col in range(3):
@@ -72,6 +79,15 @@ def _solve_least_squares_3(
             M[row][col] = h[row]
         result.append(_det3(M) / det_g)
     return result
+
+
+# Closed-form least-squares solvers by system size (larger systems fall back
+# to a zero solution, as before).
+_LS_SOLVERS = {
+    1: _solve_least_squares_1,
+    2: _solve_least_squares_2,
+    3: _solve_least_squares_3,
+}
 
 
 def _solve_least_squares(
@@ -90,14 +106,18 @@ def _solve_least_squares(
     ]
     h = [dot(atoms[selected[i]], b) for i in range(n)]
 
-    if n == 1:
-        return _solve_least_squares_1(G, h)
-    if n == 2:
-        return _solve_least_squares_2(G, h)
-    if n == 3:
-        return _solve_least_squares_3(G, h)
+    solver = _LS_SOLVERS.get(n)
+    if solver is not None:
+        return solver(G, h)
 
     return [0] * n
+
+
+# Residual correlations below this epsilon are numerically zero — no atom
+# meaningfully matches the residual, so the pursuit stops.
+# source: pre-existing numerical-tolerance value, extracted unchanged
+# (#197 family 3); provenance not recorded at introduction
+_OMP_STOP_CORRELATION_EPSILON = 1e-10
 
 
 def omp(
@@ -125,7 +145,7 @@ def omp(
                 best_corr = corr
                 best_idx = k
 
-        if best_idx == -1 or best_corr < 1e-10:
+        if best_idx == -1 or best_corr < _OMP_STOP_CORRELATION_EPSILON:
             break
         selected_indices.append(best_idx)
 

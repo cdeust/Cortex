@@ -121,7 +121,8 @@ def verify_from_checksum_file(artifact: Path, checksum_file: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI: ``verify_release_artifact.py <artifact> (<sha256-hex> | --checksum-file FILE)``.
+    """CLI: ``verify_release_artifact.py <artifact>
+    (<sha256-hex> | --checksum-file FILE)``.
 
     Returns 0 on a verified match, 1 on integrity failure, 2 on usage/IO error.
     Exit codes are the contract callers (install scripts) branch on.

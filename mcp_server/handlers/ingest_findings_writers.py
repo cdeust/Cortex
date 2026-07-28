@@ -271,7 +271,10 @@ def write_receipt_memos(conn: Any, finding: FindingRecord, page_id: int) -> int:
             subject_type="page",
             subject_id=page_id,
             decision=receipt.verdict,
-            rationale=f"AP {receipt.stage} receipt for {finding.finding_id} (run {finding.run_id})",
+            rationale=(
+                f"AP {receipt.stage} receipt for {finding.finding_id} "
+                f"(run {finding.run_id})"
+            ),
             inputs=inputs,
             confidence=1.0 if receipt.verdict in ("verified", "gates_passed") else 0.5,
             author=_MEMO_AUTHOR,

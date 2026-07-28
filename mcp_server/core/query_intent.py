@@ -90,6 +90,9 @@ _PREFERENCE_QUERY_RE = re.compile(
     re.IGNORECASE,
 )
 
+# source: structural — "multi-entity" means at least two named entities
+_MIN_ENTITIES_FOR_MULTI_HOP = 2
+
 # Question words that boost certain intents
 _QUESTION_WHY = re.compile(r"^\s*why\b", re.IGNORECASE)
 _QUESTION_WHEN = re.compile(r"^\s*when\b", re.IGNORECASE)
@@ -159,7 +162,7 @@ def _score_patterns(query: str) -> dict[str, float]:
 
     # Multi-entity detection boosts multi-hop
     named_entities = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", query)
-    if len(named_entities) >= 2:
+    if len(named_entities) >= _MIN_ENTITIES_FOR_MULTI_HOP:
         scores[QueryIntent.MULTI_HOP] += 0.5
 
     return scores

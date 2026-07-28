@@ -30,6 +30,9 @@ CurationVerdict = Literal["approved", "rejected", "hold"]
 
 MIN_CONFIDENCE_APPROVE = 0.6
 MIN_CONFIDENCE_HOLD = 0.4
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+MIN_SCORE_HOLD = 0.3
 MAX_LEAD_WORDS = 80
 PLACEHOLDER_PREFIX = "_(to be filled)_"
 PLACEHOLDER_LEAD_MARKERS = ("_(no claims yet", "_(to be filled)_")
@@ -150,6 +153,6 @@ def evaluate_draft(
 
     if not reasons:
         return CurationDecision(verdict="approved", reasons=(), score=score)
-    if confidence < MIN_CONFIDENCE_HOLD or score < 0.3:
+    if confidence < MIN_CONFIDENCE_HOLD or score < MIN_SCORE_HOLD:
         return CurationDecision(verdict="rejected", reasons=tuple(reasons), score=score)
     return CurationDecision(verdict="hold", reasons=tuple(reasons), score=score)

@@ -140,6 +140,11 @@ _SPEAKER_LINE_RE = re.compile(r"^\[([^\]]+)\]:\s*", re.MULTILINE)
 _HEADING_RE = re.compile(r"^##\s+", re.MULTILINE)
 _DATE_PREFIX_RE = re.compile(r"^(\[Date:[^\]]*\])\s*\n?")
 
+# Person-name candidates of length <= 2 are ignored as noise.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_IGNORED_NAME_LEN = 2
+
 
 # ── Entity extraction ────────────────────────────────────────────────────
 
@@ -150,7 +155,11 @@ def extract_conversational_entities(content: str) -> dict:
     seen: set[str] = set()
     for m in _PERSON_RE.finditer(content):
         name = m.group(1)
-        if name not in _COMMON_WORDS and len(name) > 2 and name not in seen:
+        if (
+            name not in _COMMON_WORDS
+            and len(name) > _MAX_IGNORED_NAME_LEN
+            and name not in seen
+        ):
             seen.add(name)
             persons.append(name)
 

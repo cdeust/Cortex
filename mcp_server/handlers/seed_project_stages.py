@@ -186,7 +186,9 @@ def _scan_cicd_dir(root: Path, directory: Path) -> list[dict]:
             found.append(
                 {
                     "title": f"CI/CD: {f.relative_to(root)}",
-                    "content": f"# CI/CD: {f.relative_to(root)}\n\n```yaml\n{content}\n```",
+                    "content": (
+                        f"# CI/CD: {f.relative_to(root)}\n\n```yaml\n{content}\n```"
+                    ),
                     "tags": ["ci-cd", "devops"],
                 }
             )

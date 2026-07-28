@@ -33,6 +33,11 @@ _PRUNE_CONFIDENCE_THRESHOLD = 0.3
 _STRENGTHEN_MIN_ACCESS = 5
 _STRENGTHEN_MIN_CONFIDENCE = 0.8
 
+# Heat below which the diagnostic `heat_lt05` flag counts a memory as cool.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_LOW_HEAT_THRESHOLD = 0.5
+
 
 def run_memify_cycle(
     store: MemoryStore,
@@ -93,7 +98,7 @@ def _accumulate_memify_flags(flags: dict[str, bool], mem: dict) -> None:
         flags["strengthen_cand"] = True
     if access > 0:
         flags["access_gt0"] = True
-    if heat < 0.5:
+    if heat < _LOW_HEAT_THRESHOLD:
         flags["heat_lt05"] = True
 
 

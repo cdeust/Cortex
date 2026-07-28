@@ -50,7 +50,9 @@ schema = {
             },
             "memory_id": {
                 "type": "integer",
-                "description": "Memory ID whose extracted entities seed the BFS frontier.",
+                "description": (
+                    "Memory ID whose extracted entities seed the BFS frontier."
+                ),
                 "minimum": 1,
                 "examples": [42, 1024],
             },
@@ -67,7 +69,10 @@ schema = {
             },
             "max_depth": {
                 "type": "integer",
-                "description": "Maximum BFS depth from the seed entities. Higher = wider blast radius.",
+                "description": (
+                    "Maximum BFS depth from the seed entities. Higher = wider blast "
+                    "radius."
+                ),
                 "default": 3,
                 "minimum": 1,
                 "maximum": 10,
@@ -75,7 +80,9 @@ schema = {
             },
             "max_edges": {
                 "type": "integer",
-                "description": "Hard cap on the number of edges returned to keep payloads small.",
+                "description": (
+                    "Hard cap on the number of edges returned to keep payloads small."
+                ),
                 "default": 200,
                 "minimum": 10,
                 "maximum": 5000,

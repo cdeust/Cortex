@@ -82,6 +82,14 @@ def run_plasticity_cycle(
 # substring loop under ~25M ops on darval's store size.
 _CO_ACCESS_SAMPLE_CAP = 2000
 
+# Heat floor for the co-access sample (hot memories only).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_CO_ACCESS_MIN_HEAT = 0.1
+
+# source: structural — a co-access edge needs at least a pair of entities
+_MIN_PAIR_ENTITIES = 2
+
 
 def _select_co_access_sample(
     store: MemoryStore,
@@ -94,8 +102,10 @@ def _select_co_access_sample(
     a larger cap than the pre-#13 value.
     """
     if memories is None:
-        return store.get_hot_memories(min_heat=0.1, limit=_CO_ACCESS_SAMPLE_CAP)
-    hot = [m for m in memories if float(m.get("heat", 0.0)) >= 0.1]
+        return store.get_hot_memories(
+            min_heat=_CO_ACCESS_MIN_HEAT, limit=_CO_ACCESS_SAMPLE_CAP
+        )
+    hot = [m for m in memories if float(m.get("heat", 0.0)) >= _CO_ACCESS_MIN_HEAT]
     if len(hot) <= _CO_ACCESS_SAMPLE_CAP:
         return hot
     hot.sort(key=lambda m: float(m.get("heat", 0.0)), reverse=True)
@@ -140,7 +150,7 @@ def _find_co_accessed_pairs(
             continue
         mem_entities = [eid for (name, eid) in index if name in content_lower]
         n = len(mem_entities)
-        if n < 2:
+        if n < _MIN_PAIR_ENTITIES:
             continue
         for i in range(n):
             a = mem_entities[i]

@@ -15,6 +15,10 @@ from mcp_server.core.codebase_parser import ImportInfo, SymbolDef
 if TYPE_CHECKING:
     from tree_sitter import Node
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_CALL_NAME_LEN = 100  # sanity cap: longer "callee names" are noise
+
 
 def _text(node: Node, source: bytes) -> str:
     """Get node text."""
@@ -218,7 +222,7 @@ def extract_calls_generic(root: Node, source: bytes) -> list[str]:
             if not func:
                 continue
             name = _text(func, source).strip()
-            if name and name not in seen and len(name) < 100:
+            if name and name not in seen and len(name) < _MAX_CALL_NAME_LEN:
                 calls.append(name)
                 seen.add(name)
     return calls
@@ -307,7 +311,11 @@ def extract_calls_per_function(
                     for call_type in _CALL_NODE_TYPES:
                         for call in _walk_type(body, call_type):
                             base = _callee_basename(call, source)
-                            if base and base not in seen and len(base) < 100:
+                            if (
+                                base
+                                and base not in seen
+                                and len(base) < _MAX_CALL_NAME_LEN
+                            ):
                                 calls.append(base)
                                 seen.add(base)
                     out[qname] = calls

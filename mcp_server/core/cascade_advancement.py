@@ -39,6 +39,15 @@ from mcp_server.core.cascade_stages import (
 
 # ── Stage Transitions ─────────────────────────────────────────────────────
 
+# source: advancement thresholds documented in the docstrings below
+# (_check_labile_advancement: Frey & Morris 1997 synaptic tagging;
+# _check_early_ltp_advancement: Kandel 2001; _check_late_ltp_advancement:
+# Tse 2007 schema acceleration). The numeric values themselves are
+# engineering choices consistent with those docstrings.
+_LABILE_IMPORTANCE_THRESHOLD = 0.3  # "importance > 0.3 (moderately important)"
+_EARLY_LTP_IMPORTANCE_BOOST = 0.4  # "importance > 0.4 (strong encoding)"
+_SCHEMA_FAST_CONSOLIDATION_MATCH = 0.5  # "1 with schema > 0.5"
+
 
 def _check_labile_advancement(
     dopamine_level: float,
@@ -56,7 +65,7 @@ def _check_labile_advancement(
       - importance > 0.3 (moderately important)
     """
     da_ready = dopamine_level >= 1.0
-    importance_ready = importance > 0.3
+    importance_ready = importance > _LABILE_IMPORTANCE_THRESHOLD
     readiness = min(1.0, (dopamine_level - 0.5) / 1.5 + importance * 0.5)
     if da_ready or importance_ready:
         return True, ConsolidationStage.EARLY_LTP.value, readiness
@@ -79,7 +88,7 @@ def _check_early_ltp_advancement(
       - importance > 0.4 (strong encoding)
     """
     replay_ready = replay_count >= 1
-    importance_boost = importance > 0.4
+    importance_boost = importance > _EARLY_LTP_IMPORTANCE_BOOST
     readiness = min(1.0, replay_count / 2.0 + importance * 0.5)
     if replay_ready or importance_boost:
         return True, ConsolidationStage.LATE_LTP.value, readiness
@@ -100,7 +109,7 @@ def _check_late_ltp_advancement(
     Advances if:
       - replay_count >= replay_threshold (3 normally, 1 with schema > 0.5)
     """
-    replay_threshold = 3 if schema_match < 0.5 else 1
+    replay_threshold = 3 if schema_match < _SCHEMA_FAST_CONSOLIDATION_MATCH else 1
     replay_ready = replay_count >= replay_threshold
     readiness = min(1.0, replay_count / max(replay_threshold, 1))
     if replay_ready:

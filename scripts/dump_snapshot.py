@@ -20,7 +20,9 @@ try:
 except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
     print(f"[dump] Failed to fetch graph: {e}", file=sys.stderr)
     print(
-        "[dump] Make sure the server is running: CORTEX_IDLE_TIMEOUT=7200 uv run python3 mcp_server/server/http_standalone.py --type unified --port 3458",
+        "[dump] Make sure the server is running: CORTEX_IDLE_TIMEOUT=7200 "
+        "uv run python3 mcp_server/server/http_standalone.py "
+        "--type unified --port 3458",
         file=sys.stderr,
     )
     sys.exit(1)

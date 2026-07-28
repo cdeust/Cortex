@@ -144,6 +144,12 @@ _PROJECT_ANCHORS = re.compile(
     re.IGNORECASE,
 )
 
+# Number of project-specific anchors at which content is treated as
+# strongly project-bound.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_HEAVY_ANCHOR_COUNT = 3
+
 # Tool log prefix — auto-captured tool output is never global
 _TOOL_LOG_PREFIX = re.compile(r"^#\s*Tool:\s", re.MULTILINE)
 
@@ -238,7 +244,7 @@ def detect_global(
 
     # Penalize project-specific anchors (but not zero — infra can have paths)
     anchor_count = len(_PROJECT_ANCHORS.findall(content))
-    if anchor_count >= 3:
+    if anchor_count >= _HEAVY_ANCHOR_COUNT:
         score *= 0.4
     elif anchor_count >= 1:
         score *= 0.7

@@ -32,6 +32,8 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import launcher_deps  # noqa: E402
 
+_MIN_ARGC = 2  # source: structural — program name + <module>
+
 
 def _resolve_paths() -> tuple[str, str]:
     """Resolve plugin root and deps directory."""
@@ -97,7 +99,7 @@ def main() -> None:
     # every one of them from a single site (issue #96).
     _reconfigure_streams_utf8()
 
-    if len(sys.argv) < 2:
+    if len(sys.argv) < _MIN_ARGC:
         print(
             "Usage: python3 scripts/launcher.py <module> [--install-deps]",
             file=sys.stderr,

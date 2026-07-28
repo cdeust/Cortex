@@ -72,6 +72,10 @@ from mcp_server.core.context_assembly.stage_phases import (
 
 # ── Budget split ────────────────────────────────────────────────────────
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SPLIT_SUM_TOLERANCE = 1e-3
+
 
 @dataclass(frozen=True)
 class BudgetSplit:
@@ -83,7 +87,7 @@ class BudgetSplit:
 
     def __post_init__(self) -> None:
         total = self.own_stage + self.adjacent + self.summaries
-        if abs(total - 1.0) > 1e-3:
+        if abs(total - 1.0) > _SPLIT_SUM_TOLERANCE:
             raise ValueError(f"BudgetSplit must sum to 1.0, got {total}")
 
 

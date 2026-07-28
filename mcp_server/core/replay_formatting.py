@@ -23,6 +23,11 @@ _MICRO_DECISION_RE = re.compile(
 
 _CRITICAL_TAGS = {"critical", "important", "architecture", "breaking"}
 
+# Above this surprise value an event alone warrants a micro-checkpoint.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_HIGH_SURPRISE_THRESHOLD = 0.8
+
 
 def should_micro_checkpoint(
     content: str,
@@ -45,7 +50,7 @@ def should_micro_checkpoint(
     if _MICRO_DECISION_RE.search(content):
         return True, "decision_made"
 
-    if surprise > 0.8:
+    if surprise > _HIGH_SURPRISE_THRESHOLD:
         return True, "high_surprise_event"
 
     tag_set = {t.lower() for t in tags}

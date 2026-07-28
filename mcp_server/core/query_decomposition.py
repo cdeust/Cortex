@@ -148,6 +148,16 @@ _TIME_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Keywords of length <= 2 are ignored as noise.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MAX_IGNORED_KEYWORD_LEN = 2
+
+# Number of leading keywords combined into a fallback sub-query.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_COMBO_KEYWORDS = 3
+
 
 def decompose_query(query: str) -> dict[str, Any]:
     """Decompose a query into its constituent parts for multi-signal retrieval.
@@ -163,7 +173,9 @@ def decompose_query(query: str) -> dict[str, Any]:
     entities = extract_query_entities(query)
 
     words = re.findall(r"\b\w+\b", query.lower())
-    keywords = [w for w in words if w not in _STOP_WORDS and len(w) > 2]
+    keywords = [
+        w for w in words if w not in _STOP_WORDS and len(w) > _MAX_IGNORED_KEYWORD_LEN
+    ]
 
     time_hints = _TIME_RE.findall(query)
     sub_queries = generate_sub_queries(query, entities, keywords)
@@ -208,7 +220,7 @@ def generate_sub_queries(
             sub_queries.append(phrase)
 
     # Key content-word combinations (2-3 keywords together)
-    if len(keywords) >= 3 and not sub_queries:
-        sub_queries.append(" ".join(keywords[:3]))
+    if len(keywords) >= _COMBO_KEYWORDS and not sub_queries:
+        sub_queries.append(" ".join(keywords[:_COMBO_KEYWORDS]))
 
     return sub_queries[:6]

@@ -1,4 +1,5 @@
-"""Interference management — orthogonalization, retrieval suppression, and domain metrics.
+"""Interference management — orthogonalization, retrieval suppression, and
+domain metrics.
 
 Memory interference is the primary cause of forgetting in both biological and
 artificial systems. Detection helpers live in interference_detection.py;
@@ -84,6 +85,21 @@ _RETRIEVAL_SUPPRESSION = 0.3
 # pattern separation mechanisms would engage in hippocampus (Yassa & Stark 2011).
 _INTERFERENCE_THRESHOLD = 0.7
 
+# Numerical floor below which a vector norm is treated as zero.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_NORM_EPSILON = 1e-10
+
+# Pressure-level cutoffs on the average interference score.
+# source: hand-tuned thresholds documented in _classify_pressure docstring
+# (observed domain statistics; no Norman et al. 2007 mapping)
+_PRESSURE_CRITICAL = 0.5
+_PRESSURE_HIGH = 0.3
+_PRESSURE_MEDIUM = 0.1
+
+# source: structural — pairwise interference needs at least two embeddings
+_MIN_EMBEDDINGS_FOR_PAIRS = 2
+
 
 # ── Orthogonalization Helpers ─────────────────────────────────────────────
 
@@ -101,7 +117,7 @@ def _project_away(
     consolidation cycle.
     """
     basis_norm_sq = sum(v * v for v in basis)
-    if basis_norm_sq < 1e-10:
+    if basis_norm_sq < _NORM_EPSILON:
         return list(vec)
     proj_coeff = dot(vec, basis) / basis_norm_sq
     projection = scale(basis, proj_coeff * rate * 0.5)
@@ -111,7 +127,7 @@ def _project_away(
 def _renormalize(vec: list[float], fallback: list[float]) -> list[float]:
     """Normalize vec to unit length, falling back if degenerate."""
     n = norm(vec)
-    if n > 1e-10:
+    if n > _NORM_EPSILON:
         return scale(vec, 1.0 / n)
     return list(fallback)
 
@@ -277,11 +293,11 @@ def _classify_pressure(avg_score: float) -> str:
     Thresholds are hand-tuned based on observed domain statistics.
     No direct mapping to Norman et al. 2007 parameters.
     """
-    if avg_score >= 0.5:
+    if avg_score >= _PRESSURE_CRITICAL:
         return "critical"
-    if avg_score >= 0.3:
+    if avg_score >= _PRESSURE_HIGH:
         return "high"
-    if avg_score >= 0.1:
+    if avg_score >= _PRESSURE_MEDIUM:
         return "medium"
     return "low"
 
@@ -311,7 +327,7 @@ def compute_domain_interference_pressure(
         Dict with: mean_max_similarity, interfering_pair_fraction,
         avg_interference_score, pressure_level (low/medium/high/critical).
     """
-    if len(embeddings) < 2:
+    if len(embeddings) < _MIN_EMBEDDINGS_FOR_PAIRS:
         return dict(_LOW_PRESSURE)
 
     n = min(len(embeddings), sample_limit)

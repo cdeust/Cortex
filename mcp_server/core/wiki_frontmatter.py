@@ -53,6 +53,11 @@ def _strip_inline_list(value: str) -> list[str]:
     return [item.strip() for item in inner.split(",") if item.strip()]
 
 
+# source: structural — a quoted scalar needs both an opening and a closing
+# quote character, so it is at least two characters long.
+_MIN_QUOTED_SCALAR_LEN = 2
+
+
 def _clean_scalar_value(key: str, raw_stripped: str) -> str:
     """Normalize a non-list frontmatter scalar value.
 
@@ -84,7 +89,11 @@ def _clean_scalar_value(key: str, raw_stripped: str) -> str:
     dup_prefix = f"{key}:"
     if value.lower().startswith(dup_prefix.lower()):
         value = value[len(dup_prefix) :].strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+    if (
+        len(value) >= _MIN_QUOTED_SCALAR_LEN
+        and value[0] == value[-1]
+        and value[0] in "\"'"
+    ):
         value = value[1:-1]
     return value
 

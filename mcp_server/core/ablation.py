@@ -174,13 +174,21 @@ def compute_impact_score(deltas: dict[str, float]) -> float:
     return round(1.0 / (1.0 + 2.718 ** (-5.0 * rms)), 4)
 
 
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MINIMAL_IMPACT_THRESHOLD = 0.1
+_NEGLIGIBLE_DELTA_MAGNITUDE = 0.01
+_CRITICAL_IMPACT_THRESHOLD = 0.5
+_MEANINGFUL_IMPACT_THRESHOLD = 0.3
+
+
 def generate_interpretation(
     mechanism: str,
     deltas: dict[str, float],
     impact_score: float,
 ) -> str:
     """Generate human-readable interpretation of ablation results."""
-    if impact_score < 0.1:
+    if impact_score < _MINIMAL_IMPACT_THRESHOLD:
         return f"Ablation of {mechanism} had minimal impact on system behavior."
 
     sorted_deltas = sorted(deltas.items(), key=lambda x: abs(x[1]), reverse=True)
@@ -190,12 +198,12 @@ def generate_interpretation(
     for metric, delta in top_effects:
         direction = "increased" if delta > 0 else "decreased"
         magnitude = abs(delta)
-        if magnitude > 0.01:
+        if magnitude > _NEGLIGIBLE_DELTA_MAGNITUDE:
             parts.append(f"  {metric} {direction} by {magnitude:.4f}")
 
-    if impact_score > 0.5:
+    if impact_score > _CRITICAL_IMPACT_THRESHOLD:
         parts.append("  This mechanism appears CRITICAL for system function.")
-    elif impact_score > 0.3:
+    elif impact_score > _MEANINGFUL_IMPACT_THRESHOLD:
         parts.append("  This mechanism contributes meaningfully to system behavior.")
     else:
         parts.append("  This mechanism has a minor but measurable contribution.")

@@ -41,6 +41,21 @@ logger = logging.getLogger(__name__)
 # used elsewhere in pg_recall (_chronological_rerank).
 _RRF_K: int = 60
 
+# Tokens at or below this length are dropped by the token-proxy filters in
+# this module (query terms, candidate entities, tag Jaccard).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SHORT_TOKEN_MAX_LEN: int = 2
+
+# source: structural — a rerank stage no-ops on fewer than two candidates
+# (nothing to reorder); each stage docstring states "No-op on fewer than
+# two candidates".
+_MIN_RERANK_CANDIDATES: int = 2
+
+# source: adjacent comment at _resolve_query_entity_ids — only tokens of
+# length ≥ 4 are tried, to avoid swamping the entity index with junk lookups.
+_ENTITY_FALLBACK_TOKEN_MIN_LEN: int = 4
+
 
 def _env_float(name: str, default: float) -> float:
     """Read a float from ``os.environ[name]`` falling back to ``default``.
@@ -82,23 +97,23 @@ def _env_float(name: str, default: float) -> float:
 # unique plateau winner at MRR=0.84, R@10=0.94. Marginal effects 0.035–0.045
 # confirm the knobs DO affect retrieval (not no-ops); the defaults happen to
 # be the optimal levels. See docs/provenance/blend-weight-calibration.md Results §A.
-_HOPFIELD_BETA: float = _env_float(
-    "CORTEX_HOPFIELD_BETA", 0.30
-)  # engineering default — confirmed near-optimum, docs/provenance/blend-weight-calibration.md Results §HOPFIELD_BETA
-_HDC_BETA: float = _env_float(
-    "CORTEX_HDC_BETA", 0.20
-)  # engineering default — confirmed near-optimum, docs/provenance/blend-weight-calibration.md Results §HDC_BETA
-_SA_BETA: float = _env_float(
-    "CORTEX_SA_BETA", 0.25
-)  # engineering default — confirmed near-optimum, docs/provenance/blend-weight-calibration.md Results §SA_BETA
+# engineering default — confirmed near-optimum,
+# docs/provenance/blend-weight-calibration.md Results §HOPFIELD_BETA
+_HOPFIELD_BETA: float = _env_float("CORTEX_HOPFIELD_BETA", 0.30)
+# engineering default — confirmed near-optimum,
+# docs/provenance/blend-weight-calibration.md Results §HDC_BETA
+_HDC_BETA: float = _env_float("CORTEX_HDC_BETA", 0.20)
+# engineering default — confirmed near-optimum,
+# docs/provenance/blend-weight-calibration.md Results §SA_BETA
+_SA_BETA: float = _env_float("CORTEX_SA_BETA", 0.25)
 
 # Dendritic multiplicative range — bounded perturbation from Poirazi (2003)
 # soma scale of 0.96. We use [1 - DELTA, 1 + DELTA] so a 1.0 baseline
 # (no cluster match) leaves the score unchanged, while high-affinity
 # matches get a +DELTA bump and conflicting branches get -DELTA.
-_DENDRITIC_DELTA: float = _env_float(
-    "CORTEX_DENDRITIC_DELTA", 0.10
-)  # engineering default — confirmed near-optimum, docs/provenance/blend-weight-calibration.md Results §DENDRITIC_DELTA
+# engineering default — confirmed near-optimum,
+# docs/provenance/blend-weight-calibration.md Results §DENDRITIC_DELTA
+_DENDRITIC_DELTA: float = _env_float("CORTEX_DENDRITIC_DELTA", 0.10)
 
 # Emotional / mood-congruent rerank blend weights.
 # Bower (1981) "Mood and Memory," Am. Psychologist 36(2) does not prescribe
@@ -119,12 +134,14 @@ _DENDRITIC_DELTA: float = _env_float(
 # Constants are kept at the conservative engineering defaults for the
 # benefit of benchmarks that DO exercise these gates (emotion-laden corpora,
 # user-mood-aware deployments).
-_EMOTIONAL_RETRIEVAL_BETA: float = _env_float(
-    "CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.20
-)  # engineering default — no observable effect on LongMemEval-S (upstream VADER gate); docs/provenance/blend-weight-calibration.md Results §EMOTIONAL_RETRIEVAL_BETA
-_MOOD_CONGRUENT_BETA: float = _env_float(
-    "CORTEX_MOOD_CONGRUENT_BETA", 0.15
-)  # engineering default — no observable effect on LongMemEval-S (no user-mood adapter); docs/provenance/blend-weight-calibration.md Results §MOOD_CONGRUENT_BETA
+# engineering default — no observable effect on LongMemEval-S (upstream
+# VADER gate); docs/provenance/blend-weight-calibration.md Results
+# §EMOTIONAL_RETRIEVAL_BETA
+_EMOTIONAL_RETRIEVAL_BETA: float = _env_float("CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.20)
+# engineering default — no observable effect on LongMemEval-S (no
+# user-mood adapter); docs/provenance/blend-weight-calibration.md Results
+# §MOOD_CONGRUENT_BETA
+_MOOD_CONGRUENT_BETA: float = _env_float("CORTEX_MOOD_CONGRUENT_BETA", 0.15)
 
 # Below this absolute compound-valence value the query is treated as
 # emotionally neutral and the EMOTIONAL_RETRIEVAL stage no-ops. VADER
@@ -423,7 +440,10 @@ def _sa_query_terms(query: str) -> list[str]:
     from mcp_server.core.query_decomposition import extract_query_entities
 
     return list(
-        set(extract_query_entities(query) + [w for w in query.split() if len(w) > 2])
+        set(
+            extract_query_entities(query)
+            + [w for w in query.split() if len(w) > _SHORT_TOKEN_MAX_LEN]
+        )
     )
 
 
@@ -727,7 +747,11 @@ def _candidate_entities(c: dict[str, Any]) -> set[str]:
     content = (c.get("content") or "").lower()
     # Token-level proxy for entity overlap — same shape used by
     # dendritic_clusters.compute_branch_affinity (Jaccard over sets).
-    return {t.strip(".,!?;:()[]{}\"'`") for t in content.split() if len(t) > 2}
+    return {
+        t.strip(".,!?;:()[]{}\"'`")
+        for t in content.split()
+        if len(t) > _SHORT_TOKEN_MAX_LEN
+    }
 
 
 def _candidate_tags(c: dict[str, Any]) -> set[str]:
@@ -782,7 +806,7 @@ def _resolve_query_entity_ids(query: str, store: Any) -> set[int]:
     # to avoid swamping the entity index with junk lookups.
     try:
         for token in extract_keywords(query):
-            if len(token) < 4 or token in seen_names:
+            if len(token) < _ENTITY_FALLBACK_TOKEN_MIN_LEN or token in seen_names:
                 continue
             seen_names.add(token)
             row = store.get_entity_by_name(token)
@@ -858,7 +882,9 @@ def dendritic_modulate(
     # Token-proxy query set, used both as primary signal in the fallback
     # path and as the tag-Jaccard signal in the entity-graph path.
     q_tokens = {
-        t.strip(".,!?;:()[]{}\"'`").lower() for t in query.split() if len(t) > 2
+        t.strip(".,!?;:()[]{}\"'`").lower()
+        for t in query.split()
+        if len(t) > _SHORT_TOKEN_MAX_LEN
     }
     if not q_tokens and not q_eids:
         return candidates
@@ -973,7 +999,7 @@ def value_priority_rerank(
     """
     if is_mechanism_disabled(Mechanism.VALUE_PRIORITY):
         return candidates
-    if not candidates or len(candidates) < 2:
+    if not candidates or len(candidates) < _MIN_RERANK_CANDIDATES:
         return candidates
 
     from mcp_server.core.value_learning import retrieval_priority
@@ -1024,7 +1050,7 @@ def goal_maintenance_rerank(
     """
     if is_mechanism_disabled(Mechanism.GOAL_MAINTENANCE):
         return candidates
-    if not candidates or len(candidates) < 2:
+    if not candidates or len(candidates) < _MIN_RERANK_CANDIDATES:
         return candidates
     if goal is None or not getattr(goal, "is_active", False):
         return candidates
@@ -1102,7 +1128,7 @@ def attentional_focus_rerank(
     """
     if is_mechanism_disabled(Mechanism.ATTENTIONAL_CONTROL):
         return candidates
-    if not candidates or len(candidates) < 2:
+    if not candidates or len(candidates) < _MIN_RERANK_CANDIDATES:
         return candidates
 
     from mcp_server.core.attentional_control import allocate_attention
@@ -1191,7 +1217,9 @@ def reconsolidation_apply(
 
     q_valence = vader_compound(query) if query else 0.0
     q_tokens: set[str] = {
-        t.strip(".,!?;:()[]{}\"'`").lower() for t in (query or "").split() if len(t) > 2
+        t.strip(".,!?;:()[]{}\"'`").lower()
+        for t in (query or "").split()
+        if len(t) > _SHORT_TOKEN_MAX_LEN
     }
 
     limit = len(candidates) if top_k is None else min(top_k, len(candidates))
@@ -1344,7 +1372,7 @@ def conflict_monitor_rerank(
     """
     if is_mechanism_disabled(Mechanism.CONFLICT_MONITOR):
         return candidates
-    if not candidates or len(candidates) < 2:
+    if not candidates or len(candidates) < _MIN_RERANK_CANDIDATES:
         return candidates
 
     from mcp_server.core import conflict_monitor

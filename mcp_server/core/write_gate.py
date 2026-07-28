@@ -279,6 +279,13 @@ def _collect_existing_embeddings(
     return existing_embs
 
 
+# Only a separation that actually moved the embedding (index above this
+# epsilon) replaces the original vector.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_SEPARATION_INDEX = 0.01
+
+
 def apply_pattern_separation(
     embedding: Any,
     similarities: list[float],
@@ -304,7 +311,7 @@ def apply_pattern_separation(
             separated, sep_index = orthogonalize_embedding(
                 new_emb_list, interfering, strength=0.3
             )
-            if sep_index > 0.01:
+            if sep_index > _MIN_SEPARATION_INDEX:
                 embedding = embeddings.from_list(separated)
         interference = compute_interference_score(new_emb_list, existing_embs)
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_gate.pattern_separation")

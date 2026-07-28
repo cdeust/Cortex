@@ -89,7 +89,8 @@ schema = {
                 "type": "boolean",
                 "description": (
                     "Run Complementary Learning Systems consolidation: extract "
-                    "semantic memories from clusters of episodic ones (McClelland 1995)."
+                    "semantic memories from clusters of episodic ones (McClelland "
+                    "1995)."
                 ),
                 "default": True,
             },

@@ -92,12 +92,17 @@ def _count_pages(page_paths: list[str]) -> dict[str, int]:
     return dict(counts)
 
 
+# source: structural — a domain-scoped page path is kind/domain/filename, so
+# fewer than three parts carries no domain (root-level page).
+_DOMAIN_SCOPED_PATH_PARTS = 3
+
+
 def _count_by_domain(page_paths: list[str]) -> dict[str, int]:
     """Count pages per domain, excluding the catch-all ``_general``."""
     counts: dict[str, int] = defaultdict(int)
     for p in page_paths:
         parts = PurePosixPath(p).parts
-        if len(parts) < 3:
+        if len(parts) < _DOMAIN_SCOPED_PATH_PARTS:
             continue  # root-level or missing domain
         if parts[0] not in PAGE_KINDS:
             continue

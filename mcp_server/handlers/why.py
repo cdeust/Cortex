@@ -57,7 +57,9 @@ schema = {
                         "channel": {
                             "type": "string",
                             "enum": sorted(INJECTION_CHANNELS),
-                            "description": "Injection channel that emitted the receipt.",
+                            "description": (
+                                "Injection channel that emitted the receipt."
+                            ),
                         },
                         "session_id": {
                             "type": ["string", "null"],
@@ -130,7 +132,9 @@ schema = {
                         },
                         "content_length": {
                             "type": "integer",
-                            "description": "Original content size (set when truncated).",
+                            "description": (
+                                "Original content size (set when truncated)."
+                            ),
                         },
                     },
                 },

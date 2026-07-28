@@ -1109,6 +1109,17 @@ _DOMAIN_REJECT_RE = (
 )
 
 
+# source: structural — a bare year slug ("2026") is 4 digits; see the
+# "Bare years" rejection documented in _is_plausible_domain below.
+_YEAR_SLUG_DIGITS = 4
+
+# A directory name must appear under at least this many kind directories to
+# count as a real domain rather than a one-off.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_KIND_DIRS_FOR_DOMAIN = 2
+
+
 def _is_plausible_domain(name: str) -> bool:
     """Filter for ``list_domains`` — accept project names, reject buckets.
 
@@ -1120,7 +1131,7 @@ def _is_plausible_domain(name: str) -> bool:
     """
     if not name or name.startswith((".", "_")):
         return False
-    if name.isdigit() and len(name) == 4:  # bare year
+    if name.isdigit() and len(name) == _YEAR_SLUG_DIGITS:  # bare year
         return False
     return True
 
@@ -1169,7 +1180,7 @@ def list_domains(wiki_root: str) -> list[str]:
                 continue
             if os.path.isdir(os.path.join(kind_dir, entry)):
                 counts[entry] = counts.get(entry, 0) + 1
-    return sorted(d for d, c in counts.items() if c >= 2)
+    return sorted(d for d, c in counts.items() if c >= _MIN_KIND_DIRS_FOR_DOMAIN)
 
 
 def audit_all_domains(

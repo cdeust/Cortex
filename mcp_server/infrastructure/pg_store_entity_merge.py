@@ -15,6 +15,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import psycopg
 
+# source: structural — the id-lookup fetches exactly the survivor + alias pair
+_MERGE_PAIR_COUNT = 2
+
 
 class PgEntityMergeMixin:
     """Atomic entity collapse on PostgreSQL."""
@@ -53,7 +56,7 @@ class PgEntityMergeMixin:
             ([int(survivor_id), int(alias_id)],),
         ).fetchall()
         origins = {r["id"]: r.get("origin", "text_concept") for r in rows}
-        if len(origins) != 2 or "ast_symbol" in origins.values():
+        if len(origins) != _MERGE_PAIR_COUNT or "ast_symbol" in origins.values():
             return result
         try:
             self._execute(

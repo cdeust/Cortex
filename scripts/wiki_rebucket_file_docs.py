@@ -260,7 +260,8 @@ def plan(wiki_root: Path) -> list[FileDocMove]:
                     target_path="",
                     page_id=None,
                     source_file_path=source_file_path,
-                    skip_reason="missing frontmatter id — run wiki_backfill_ids.py first",
+                    skip_reason="missing frontmatter id — "
+                    "run wiki_backfill_ids.py first",
                 )
             )
             continue

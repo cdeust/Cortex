@@ -100,7 +100,8 @@ def mark_backfilled(store: MemoryStore, path: Path, fhash: str, count: int) -> N
     """
     with store.acquire_batch() as conn:
         conn.execute(
-            """INSERT INTO backfill_log (file_path, file_hash, memories_imported, processed_at)
+            "INSERT INTO backfill_log "
+            """(file_path, file_hash, memories_imported, processed_at)
                VALUES (%s, %s, %s, NOW())
                ON CONFLICT(file_path) DO UPDATE SET
                  file_hash = EXCLUDED.file_hash,

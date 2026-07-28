@@ -87,7 +87,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     summary = (
         "ready"
         if ready
-        else f"{len(required_fails)} fix{'es' if len(required_fails) != 1 else ''} needed"
+        else (
+            f"{len(required_fails)} "
+            f"fix{'es' if len(required_fails) != 1 else ''} needed"
+        )
     )
 
     return {

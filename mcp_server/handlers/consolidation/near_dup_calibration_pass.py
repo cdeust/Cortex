@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PER_STRATUM = 20
 
+# source: structural — a near-duplicate component is at least a pair
+_MIN_COMPONENT_MEMBERS = 2
+
 
 async def run_near_dup_sample(
     store: Any,
@@ -141,7 +144,7 @@ def _elect_and_journal_component(
         for mid in member_ids
         if mid in stats
     ]
-    if len(members) < 2:
+    if len(members) < _MIN_COMPONENT_MEMBERS:
         out["skipped_vanished"] += len(member_ids) - len(members)
         return
 

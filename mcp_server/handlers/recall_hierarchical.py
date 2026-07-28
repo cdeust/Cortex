@@ -55,7 +55,9 @@ schema = {
         "properties": {
             "query": {
                 "type": "string",
-                "description": "Natural-language query. Length influences level weighting.",
+                "description": (
+                    "Natural-language query. Length influences level weighting."
+                ),
                 "examples": [
                     "recall regression",
                     "why did pgvector beat IVFFlat on small corpus",
@@ -115,6 +117,13 @@ schema = {
 # ── Singletons ────────────────────────────────────────────────────────────
 
 _store: MemoryStore | None = None
+
+
+# Minimum embedded memories before hierarchical clustering is attempted;
+# below this the handler falls back to flat vector search.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_MEMORIES_FOR_CLUSTERING = 3
 
 
 def _get_store() -> MemoryStore:
@@ -258,7 +267,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     # Filter memories that have embeddings (newly stored may lack them)
     memories_with_emb = [m for m in memories if m.get("embedding")]
-    if len(memories_with_emb) < 3:
+    if len(memories_with_emb) < _MIN_MEMORIES_FOR_CLUSTERING:
         # Too few embeddings for clustering — fall back to flat vector search.
         # Adapt the flat response to THIS handler's contract (results/total/
         # hierarchy) instead of leaking the flat shape through; previously the

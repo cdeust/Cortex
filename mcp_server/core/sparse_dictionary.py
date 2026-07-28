@@ -144,6 +144,11 @@ def build_seed_dictionary() -> FeatureDictionary:
 # ---------------------------------------------------------------------------
 
 
+# source: learn_dictionary docstring — fall back to the seed dictionary when
+# fewer than 10 conversations are available.
+_MIN_CONVERSATIONS_FOR_LEARNING = 10
+
+
 def learn_dictionary(
     conversations: list[dict] | None,
     options: dict | None = None,
@@ -157,7 +162,7 @@ def learn_dictionary(
     sparsity = options.get("sparsity", 3)
     iterations = options.get("iterations", 5)
 
-    if not conversations or len(conversations) < 10:
+    if not conversations or len(conversations) < _MIN_CONVERSATIONS_FOR_LEARNING:
         return build_seed_dictionary()
 
     data = [extract_session_activation(c) for c in conversations]
@@ -211,12 +216,19 @@ _SIGNAL_LABELS = {
 }
 
 
+# Signals with an absolute weight at or below this floor are ignored when
+# labeling a feature atom.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_LABEL_SIGNAL_WEIGHT = 0.05
+
+
 def label_feature(direction: list[float], index: int) -> Feature:
     """Generate a human-readable label and description for a feature atom."""
     weighted = [
         TopSignal(signal=SIGNAL_NAMES[i], weight=direction[i])
         for i in range(len(SIGNAL_NAMES))
-        if i < len(direction) and abs(direction[i]) > 0.05
+        if i < len(direction) and abs(direction[i]) > _MIN_LABEL_SIGNAL_WEIGHT
     ]
     weighted.sort(key=lambda ts: abs(ts.weight), reverse=True)
     top_signals = weighted[:5]
@@ -243,6 +255,13 @@ def label_feature(direction: list[float], index: int) -> Feature:
     )
 
 
+# OMP coefficients with an absolute value at or below this epsilon are
+# numerically zero and dropped from the session weights.
+# source: pre-existing numerical-tolerance value, extracted unchanged
+# (#197 family 3); provenance not recorded at introduction
+_ZERO_COEFFICIENT_EPSILON = 1e-10
+
+
 def encode_session(conversation: dict, dictionary: FeatureDictionary) -> EncodedSession:
     """Encode a single conversation against a learned dictionary."""
     activation = extract_session_activation(conversation)
@@ -252,7 +271,7 @@ def encode_session(conversation: dict, dictionary: FeatureDictionary) -> Encoded
     weights: dict[str, float] = {}
     for i, idx in enumerate(result["indices"]):
         feature = dictionary.features[idx]
-        if feature and abs(result["coefficients"][i]) > 1e-10:
+        if feature and abs(result["coefficients"][i]) > _ZERO_COEFFICIENT_EPSILON:
             weights[feature.label] = result["coefficients"][i]
 
     return EncodedSession(

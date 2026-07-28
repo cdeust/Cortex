@@ -24,6 +24,11 @@ from typing import Any
 
 _ALPHA_THRESHOLD: float = 0.05  # Standard significance level (Serrano 2009)
 _TEMPORAL_HALF_LIFE_HOURS: float = 168.0  # 7 days (Aggarwal & Subbian 2014)
+
+# Heat below which both edge endpoints count as cold.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_COLD_ENDPOINT_HEAT: float = 0.1
 _MIN_ENTITY_HEAT: float = 0.02
 _MIN_ACCESS_COUNT: int = 2
 _PROTECTION_ACCESS_THRESHOLD: int = 5
@@ -155,7 +160,7 @@ def _classify_prune_reasons(
         reasons.append("stale")
     src_heat = entity_heat.get(edge["source_entity_id"], 0)
     tgt_heat = entity_heat.get(edge["target_entity_id"], 0)
-    if src_heat < 0.1 and tgt_heat < 0.1:
+    if src_heat < _COLD_ENDPOINT_HEAT and tgt_heat < _COLD_ENDPOINT_HEAT:
         reasons.append("cold_endpoints")
     return reasons
 

@@ -20,7 +20,8 @@ AGENT_REGISTRY: list[dict] = [
         "project": "cortex",
         "agent_file": "orchestrator.md",
         "topic": "orchestrator",
-        "description": "Decomposes tasks, spawns specialized agents in parallel worktrees, coordinates and merges",
+        "description": "Decomposes tasks, spawns specialized agents in "
+        "parallel worktrees, coordinates and merges",
         "recalls": [
             "recall",
             "recall_hierarchical",
@@ -50,7 +51,8 @@ AGENT_REGISTRY: list[dict] = [
         "project": "cortex",
         "agent_file": "engineer.md",
         "topic": "engineer",
-        "description": "Clean Architecture, SOLID, root-cause problem solving — adapts to any language",
+        "description": "Clean Architecture, SOLID, root-cause problem "
+        "solving — adapts to any language",
         "recalls": ["recall", "get_causal_chain", "get_rules", "recall_hierarchical"],
         "remembers": ["remember"],
         "tools": [
@@ -89,7 +91,8 @@ AGENT_REGISTRY: list[dict] = [
         "project": "cortex",
         "agent_file": "ux.md",
         "topic": "ux",
-        "description": "UX decisions, accessibility, design rationale, user constraints",
+        "description": "UX decisions, accessibility, design rationale, "
+        "user constraints",
         "recalls": ["recall", "recall_hierarchical"],
         "remembers": ["remember"],
         "tools": ["recall", "recall_hierarchical", "remember"],
@@ -111,7 +114,8 @@ AGENT_REGISTRY: list[dict] = [
         "project": "cortex",
         "agent_file": "security.md",
         "topic": "security",
-        "description": "Threat models, accepted risks, dependency audits, data flow analysis",
+        "description": "Threat models, accepted risks, dependency audits, "
+        "data flow analysis",
         "recalls": ["recall", "get_causal_chain", "detect_gaps"],
         "remembers": ["remember", "add_rule"],
         "tools": ["recall", "get_causal_chain", "detect_gaps", "remember", "add_rule"],
@@ -122,7 +126,8 @@ AGENT_REGISTRY: list[dict] = [
         "project": "cortex",
         "agent_file": "researcher.md",
         "topic": "researcher",
-        "description": "Paper reviews, benchmark analysis, competitive intelligence, negative results",
+        "description": "Paper reviews, benchmark analysis, competitive "
+        "intelligence, negative results",
         "recalls": ["recall", "recall_hierarchical", "detect_gaps", "assess_coverage"],
         "remembers": ["remember"],
         "tools": [

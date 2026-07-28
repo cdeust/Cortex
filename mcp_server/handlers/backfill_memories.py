@@ -137,6 +137,12 @@ def _parse_args(args: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+# Minimum content length worth importing as a memory.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_CONTENT_CHARS = 20
+
+
 async def _import_single_item(
     store: MemoryStore,
     item: dict,
@@ -151,7 +157,7 @@ async def _import_single_item(
     from mcp_server.handlers.remember import handler as remember_handler
 
     content = item.get("content", "")
-    if not content or len(content) < 20:
+    if not content or len(content) < _MIN_CONTENT_CHARS:
         return None
 
     content = gist_oversized_content(content)

@@ -105,6 +105,11 @@ def get_entities_by_memory(
     return out
 
 
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_MIN_ENTITY_NAME_CHARS = 3
+
+
 def get_entity_name_index(conn: Connection, limit: int = 5000) -> dict[str, int]:
     """Return name → entity_id map for inline-mention matching.
 
@@ -123,7 +128,7 @@ def get_entity_name_index(conn: Connection, limit: int = 5000) -> dict[str, int]
             name, eid = r["name"], r["id"]
         else:
             name, eid = r[0], r[1]
-        if name and len(name) >= 3:
+        if name and len(name) >= _MIN_ENTITY_NAME_CHARS:
             out[name] = eid
     return out
 

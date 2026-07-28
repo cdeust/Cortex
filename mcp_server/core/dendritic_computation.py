@@ -57,6 +57,16 @@ BRANCH_ADMISSION_THRESHOLD = 0.3
 MAX_BRANCH_SIZE = 15
 PRIMING_STRENGTH = 0.3
 
+# Guard for math.exp arguments.
+# source: structural — IEEE 754 double exp() underflows to 0.0 below
+# ≈ -745; -500 is a conservative pre-existing cutoff, extracted unchanged
+# (#197 family 3)
+_EXP_ARG_FLOOR = -500.0
+
+# source: structural — a sigmoid crosses 0.5 exactly at its
+# half-activation point, so >0.5 means n > SUBUNIT_HALF_ACTIVATION
+_SIGMOID_MIDPOINT = 0.5
+
 
 # ── Branch Model ─────────────────────────────────────────────────────────
 
@@ -152,7 +162,7 @@ def soma_output(
     # Guard against overflow in exp for very negative arguments.
     # When x is large, exp(-0.26*x) -> 0 and denominator -> 1.
     exponent = -steepness * x
-    if exponent < -500.0:
+    if exponent < _EXP_ARG_FLOOR:
         return scale * x
 
     return scale * x / (1.0 + offset * math.exp(exponent))
@@ -208,7 +218,7 @@ def compute_dendritic_integration(
     sigmoid_component = 1.0 / (
         1.0 + math.exp((SUBUNIT_HALF_ACTIVATION - n) / SUBUNIT_SLOPE)
     )
-    spiked = sigmoid_component > 0.5
+    spiked = sigmoid_component > _SIGMOID_MIDPOINT
 
     return output, spiked
 

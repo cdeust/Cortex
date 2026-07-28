@@ -18,6 +18,21 @@ _RECENCY_THRESHOLDS = [
 ]
 _RECENCY_DEFAULT = 0.2
 
+# Coverage classification cutoffs.
+# source: pre-existing tuned values, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_COVERAGE_SUFFICIENT = 0.7
+_COVERAGE_PARTIAL = 0.4
+
+# source: structural — primacy + recency positioning needs at least two
+# selected chunks
+_MIN_CHUNKS_FOR_PRIMACY_RECENCY = 2
+
+# Overflow-summary text cap (chars).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_SUMMARY_MAX_CHARS = 300
+
 
 def _compute_density(matching_count: int) -> float:
     """Map memory count to a density signal via thresholds."""
@@ -39,9 +54,9 @@ def _compute_recency(newest_age: timedelta | None) -> float:
 
 def _classify_coverage(score: float) -> str:
     """Classify coverage as sufficient/partial/insufficient."""
-    if score >= 0.7:
+    if score >= _COVERAGE_SUFFICIENT:
         return "sufficient"
-    if score >= 0.4:
+    if score >= _COVERAGE_PARTIAL:
         return "partial"
     return "insufficient"
 
@@ -210,7 +225,7 @@ def _position_selected_chunks(
     """Apply primacy-recency positioning to selected chunks."""
     result: list[dict] = []
 
-    if len(selected) >= 2:
+    if len(selected) >= _MIN_CHUNKS_FOR_PRIMACY_RECENCY:
         primacy = selected[0]
         recency = selected[1]
         middle = selected[2:]
@@ -288,8 +303,8 @@ def summarize_overflow(
     if to_summarize and target_count > 0:
         contents = [m.get("content", "")[:80] for m in to_summarize]
         summary_text = "; ".join(contents)
-        if len(summary_text) > 300:
-            summary_text = summary_text[:297] + "..."
+        if len(summary_text) > _SUMMARY_MAX_CHARS:
+            summary_text = summary_text[: _SUMMARY_MAX_CHARS - 3] + "..."
         result.append(
             {
                 "content": f"[Summary of {len(to_summarize)} memories] {summary_text}",

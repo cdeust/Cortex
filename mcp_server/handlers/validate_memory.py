@@ -51,6 +51,11 @@ _DEFAULT_URL_CHECK_LIMIT = 10
 _URL_CHECK_TIMEOUT_S = 3.0
 _GIT_CHECK_TIMEOUT_S = 2.0
 
+# source: RFC 9110 §15 — 2xx (success) and 3xx (redirection) status
+# codes count as reachable; 4xx/5xx do not
+_HTTP_REACHABLE_MIN = 200
+_HTTP_REACHABLE_END = 400
+
 # ── Schema ────────────────────────────────────────────────────────────────
 
 schema = {
@@ -89,7 +94,10 @@ schema = {
         "properties": {
             "memory_id": {
                 "type": "integer",
-                "description": "Validate a single memory by its integer ID. Mutually exclusive with the domain/directory scopes.",
+                "description": (
+                    "Validate a single memory by its integer ID. Mutually exclusive "
+                    "with the domain/directory scopes."
+                ),
                 "minimum": 1,
                 "examples": [42, 1024],
             },
@@ -100,7 +108,9 @@ schema = {
             },
             "directory": {
                 "type": "string",
-                "description": "Validate every memory tagged to this absolute project directory.",
+                "description": (
+                    "Validate every memory tagged to this absolute project directory."
+                ),
                 "examples": ["/Users/alice/code/cortex"],
             },
             "base_dir": {
@@ -147,7 +157,10 @@ schema = {
             },
             "dry_run": {
                 "type": "boolean",
-                "description": "Assess and report results without updating is_stale or source_attribution in the database.",
+                "description": (
+                    "Assess and report results without updating is_stale or "
+                    "source_attribution in the database."
+                ),
                 "default": False,
             },
         },
@@ -257,9 +270,9 @@ def _check_url_reachable(url: str, *, timeout: float) -> bool:
     try:
         req = urllib.request.Request(url, method="HEAD")
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
-            return 200 <= resp.status < 400
+            return _HTTP_REACHABLE_MIN <= resp.status < _HTTP_REACHABLE_END
     except urllib.error.HTTPError as exc:
-        return 200 <= exc.code < 400
+        return _HTTP_REACHABLE_MIN <= exc.code < _HTTP_REACHABLE_END
     except (OSError, ValueError, http.client.HTTPException):
         return False
 

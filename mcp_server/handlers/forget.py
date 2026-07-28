@@ -36,7 +36,10 @@ schema = {
         "properties": {
             "memory_id": {
                 "type": "integer",
-                "description": "Integer ID of the memory to delete (returned by recall or memory_stats).",
+                "description": (
+                    "Integer ID of the memory to delete (returned by recall or "
+                    "memory_stats)."
+                ),
                 "minimum": 1,
                 "examples": [42, 1024],
             },

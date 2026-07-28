@@ -39,6 +39,13 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
 
 
+# Textual-overlap fraction above which a near-duplicate candidate counts
+# as overlapping for the curation decision.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+_TEXTUAL_OVERLAP_THRESHOLD = 0.5
+
+
 def compute_similarities(
     embedding: Any,
     store: MemoryStore,
@@ -485,7 +492,10 @@ def try_curation(
             if cand.get("superseded_by_id") is not None:
                 continue
             sim = emb_engine.similarity(embedding, cand["embedding"])
-            overlap = curation.compute_textual_overlap(content, cand["content"]) > 0.5
+            overlap = (
+                curation.compute_textual_overlap(content, cand["content"])
+                > _TEXTUAL_OVERLAP_THRESHOLD
+            )
             action = curation.decide_curation_action(sim, overlap)
             if action == "merge":
                 # A near-duplicate that CONTRADICTS the existing fact is a
