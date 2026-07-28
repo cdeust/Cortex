@@ -22,13 +22,21 @@ import itertools
 
 import pytest
 
-from mcp_server.core.cascade_advancement import (
+
+# psycopg ships in the optional [postgresql] extra, absent from the
+# SQLite-default install. The mcp_server import below pulls it in, so
+# without this guard the module raises ModuleNotFoundError at COLLECTION
+# time — an error, not a skip, which fails the whole run (#220). Skip the
+# module cleanly instead; the PG gate below still applies when it is present.
+pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+
+from mcp_server.core.cascade_advancement import (  # noqa: E402
     _effective_min_dwell,
     compute_advancement_readiness,
 )
-from mcp_server.core.cascade_stages import _STAGE_PROPERTIES, ConsolidationStage
-from mcp_server.infrastructure.pg_store import PgMemoryStore
-from tests_py.conftest import _USE_PG  # type: ignore
+from mcp_server.core.cascade_stages import _STAGE_PROPERTIES, ConsolidationStage  # noqa: E402
+from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: E402
+from tests_py.conftest import _USE_PG  # type: ignore  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     not _USE_PG, reason="PostgreSQL not available — effective_stage needs live schema"
@@ -122,17 +130,14 @@ def test_sql_matches_python_iteration(store: PgMemoryStore) -> None:
 def test_monotonic_never_demotes(store: PgMemoryStore) -> None:
     """A derived stage is never earlier than the stored stage (forward-only)."""
     order = {name: i for i, name in enumerate(_FORWARD_CHAIN)}
-    for stored in _FORWARD_CHAIN:
-        for hours in (0.0, 0.5, 9000.0):
-            for importance in (0.2, 0.6):
-                for access in (0, 5):
-                    for schema in (0.0, 0.6):
-                        got = _sql_effective_stage(
-                            store, stored, hours, importance, access, schema
-                        )
-                        assert order[got] >= order[stored], (
-                            f"demotion: stored={stored} -> {got}"
-                        )
+    # itertools.product over the same four axes the nested loops walked —
+    # identical cases, one level of nesting (§4.5 caps depth at 3).
+    grid = itertools.product(
+        _FORWARD_CHAIN, (0.0, 0.5, 9000.0), (0.2, 0.6), (0, 5), (0.0, 0.6)
+    )
+    for stored, hours, importance, access, schema in grid:
+        got = _sql_effective_stage(store, stored, hours, importance, access, schema)
+        assert order[got] >= order[stored], f"demotion: stored={stored} -> {got}"
 
 
 def test_offchain_stage_passthrough(store: PgMemoryStore) -> None:

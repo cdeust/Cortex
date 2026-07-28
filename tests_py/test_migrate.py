@@ -21,13 +21,21 @@ import os
 
 import pytest
 
-from mcp_server.infrastructure.pg_store import (
+
+# psycopg ships in the optional [postgresql] extra, absent from the
+# SQLite-default install. The mcp_server import below pulls it in, so
+# without this guard the module raises ModuleNotFoundError at COLLECTION
+# time — an error, not a skip, which fails the whole run (#220). Skip the
+# module cleanly instead; the PG gate below still applies when it is present.
+pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+
+from mcp_server.infrastructure.pg_store import (  # noqa: E402
     _get_database_url,
     compute_ddl_hash,
     read_schema_hash,
 )
-from mcp_server.migrate import _run
-from tests_py.conftest import _TEST_DB_URL, _USE_PG  # type: ignore
+from mcp_server.migrate import _run  # noqa: E402
+from tests_py.conftest import _TEST_DB_URL, _USE_PG  # type: ignore  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     not _USE_PG, reason="PostgreSQL not available — migrate needs a live DB"

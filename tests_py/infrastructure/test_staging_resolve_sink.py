@@ -14,16 +14,24 @@ schema). Post: conservation + idempotency hold.
 
 from __future__ import annotations
 
-import psycopg
 import pytest
-from psycopg_pool import ConnectionPool
 
-from mcp_server.core.streaming.backpressure_pipeline import BackpressurePipeline
-from mcp_server.infrastructure.staging_resolve_sink import (
+# psycopg ships in the optional [postgresql] extra, absent from the
+# SQLite-default install. This module imports it DIRECTLY (below), so without
+# this guard it raises ModuleNotFoundError at COLLECTION time — an error, not
+# a skip, which fails the whole run (#220). The guard must therefore precede
+# the psycopg imports themselves, not just the mcp_server ones.
+pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+
+import psycopg  # noqa: E402
+from psycopg_pool import ConnectionPool  # noqa: E402
+
+from mcp_server.core.streaming.backpressure_pipeline import BackpressurePipeline  # noqa: E402
+from mcp_server.infrastructure.staging_resolve_sink import (  # noqa: E402
     build_edge_sink,
     build_entity_sink,
 )
-from tests_py.conftest import _TEST_DB_URL, _USE_PG  # type: ignore
+from tests_py.conftest import _TEST_DB_URL, _USE_PG  # type: ignore  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     not _USE_PG, reason="PostgreSQL not available — staging path needs live schema"

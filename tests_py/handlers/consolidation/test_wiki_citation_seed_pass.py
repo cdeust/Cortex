@@ -17,13 +17,21 @@ import asyncio
 import uuid
 
 import pytest
-from psycopg.rows import dict_row
 
-from mcp_server.handlers.consolidation.wiki_citation_seed_pass import (
+# psycopg ships in the optional [postgresql] extra, absent from the
+# SQLite-default install. This module imports it DIRECTLY (below), so without
+# this guard it raises ModuleNotFoundError at COLLECTION time — an error, not
+# a skip, which fails the whole run (#220). The guard must therefore precede
+# the psycopg imports themselves, not just the mcp_server ones.
+pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+
+from psycopg.rows import dict_row  # noqa: E402
+
+from mcp_server.handlers.consolidation.wiki_citation_seed_pass import (  # noqa: E402
     run_wiki_citation_seed_pass,
 )
-from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.memory_store import get_shared_store
+from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
+from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
 
 
 def _store():

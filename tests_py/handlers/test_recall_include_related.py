@@ -5,9 +5,10 @@ recall(include_related=True) attaches a ONE-HOP walk to each surfaced memory:
   - related.entities  — directly related entities via the knowledge graph
 
 It is a cheap mid-tier enrichment, distinct from the full PageRank/HippoRAG
-context assembler. This file proves the behavior end-to-end against live PG
-and guards the latency stays bounded (within a small factor of flat recall,
-NOT the whole-graph assembler — the walk is one hop with bounded fanout).
+context assembler. This file proves the behavior end-to-end on WHICHEVER
+backend the run resolves — PostgreSQL or the SQLite default — and guards the
+latency stays bounded (within a small factor of flat recall, NOT the
+whole-graph assembler — the walk is one hop with bounded fanout).
 
 External signals (handover acceptance):
   - neighbors are present inline only when include_related=True;
@@ -23,19 +24,14 @@ import numpy as np
 import pytest
 
 from mcp_server.handlers import recall
-from mcp_server.infrastructure.pg_store import PgMemoryStore
-from tests_py.conftest import _USE_PG_STORE  # type: ignore
+from mcp_server.infrastructure.memory_store import get_shared_store
 
-pytestmark = pytest.mark.skipif(
-    # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
-    # PostgreSQL directly (raw DSN / PG-only migrations) while the product
-    # under test reads the resolved store. Under a sqlite-backend run they
-    # seeded one store and asserted against another, so they failed for a
-    # harness reason rather than a product one. SQLite coverage of these
-    # paths needs backend-agnostic fixtures — tracked in #220.
-    not _USE_PG_STORE,
-    reason="PostgreSQL not available — relation-walk needs live schema",
-)
+# No backend gate. This file used to construct PgMemoryStore() directly and
+# skip whenever the effective backend was not PostgreSQL, which meant the
+# relation-walk — a backend-agnostic FEATURE — was never exercised on the
+# plugin's DEFAULT backend (#220). It now seeds through the same resolved
+# store the handler reads, so the assertions below run on both backends and a
+# SQLite-only regression in the walk can no longer pass CI unseen.
 
 _DOMAIN = "include-related-test"
 _DIM = 384
@@ -50,24 +46,19 @@ def _emb() -> bytes:
 
 @pytest.fixture
 def store():
-    s = PgMemoryStore()
-    yield s
-    try:
-        s._execute("DELETE FROM memories WHERE domain = %s", (_DOMAIN,))
-        # Relationships FK-reference entities — drop them before the entities.
-        s._execute(
-            "DELETE FROM relationships WHERE source_entity_id IN "
-            "(SELECT id FROM entities WHERE domain = %s) "
-            "OR target_entity_id IN (SELECT id FROM entities WHERE domain = %s)",
-            (_DOMAIN, _DOMAIN),
-        )
-        s._execute("DELETE FROM entities WHERE domain = %s", (_DOMAIN,))
-        s._conn.commit()
-    finally:
-        s.close()
+    """The process-wide resolved store — the same instance the handler reads.
+
+    Deliberately does NOT close the store or hand-delete rows: conftest's
+    autouse ``clean_between_tests`` already purges memories/entities/
+    relationships on both backends before AND after every test, and closing a
+    shared store here would leave the next test with a dead handle. The old
+    per-dialect DELETEs also hard-coded ``%s`` placeholders, which is half of
+    why this file was PG-only.
+    """
+    return get_shared_store()
 
 
-def _seed(store: PgMemoryStore) -> dict:
+def _seed(store) -> dict:
     """Seed a superseded/current memory pair plus a 2-entity relationship."""
     common = {"embedding": _emb(), "source": "user", "domain": _DOMAIN, "heat": 0.6}
     old_id = store.insert_memory(

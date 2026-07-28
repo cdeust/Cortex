@@ -24,8 +24,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mcp_server.infrastructure.pg_store import PgMemoryStore
-from tests_py.conftest import _USE_PG  # type: ignore
+
+# psycopg ships in the optional [postgresql] extra, absent from the
+# SQLite-default install. The mcp_server import below pulls it in, so
+# without this guard the module raises ModuleNotFoundError at COLLECTION
+# time — an error, not a skip, which fails the whole run (#220). Skip the
+# module cleanly instead; the PG gate below still applies when it is present.
+pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+
+from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: E402
+from tests_py.conftest import _USE_PG  # type: ignore  # noqa: E402
 
 pytestmark = pytest.mark.skipif(
     not _USE_PG, reason="PostgreSQL not available — e2e recall needs live schema"
@@ -347,6 +355,46 @@ class TestDomainScoping:
         )
 
 
+def _seed_ranked_trio(store) -> tuple[int, int, int]:
+    """Seed high/medium/low (relevance, heat) memories; return their ids.
+
+    Split out of the test below purely to keep that function under the
+    50-line cap (§4.2) — the three inserts, their query alignment and their
+    heat values are unchanged.
+    """
+    high_id = store.insert_memory(
+        {
+            "content": (
+                "PostgreSQL pgvector HNSW index cosine similarity recall "
+                "retrieval embedding vector search production database"
+            ),
+            "embedding": _query_aligned_emb(1.0),
+            "source": "user",
+            "domain": _DOMAIN,
+            "heat": 0.9,
+        }
+    )
+    mid_id = store.insert_memory(
+        {
+            "content": "vector similarity embedding recall production",
+            "embedding": _query_aligned_emb(0.8, seed=10),
+            "source": "user",
+            "domain": _DOMAIN,
+            "heat": 0.5,
+        }
+    )
+    low_id = store.insert_memory(
+        {
+            "content": "unrelated grocery list bread milk eggs",
+            "embedding": _query_aligned_emb(0.2, seed=20),
+            "source": "user",
+            "domain": _DOMAIN,
+            "heat": 0.1,
+        }
+    )
+    return high_id, mid_id, low_id
+
+
 class TestMultipleMemoriesRanking:
     """End-to-end: store several memories with distinct relevance, verify
     the stored procedure returns them in the expected order.
@@ -357,36 +405,7 @@ class TestMultipleMemoriesRanking:
         + medium-heat, low-relevance + low-heat. Verify the stored procedure
         orders them correctly under balanced weights.
         """
-        high_id = store.insert_memory(
-            {
-                "content": (
-                    "PostgreSQL pgvector HNSW index cosine similarity recall "
-                    "retrieval embedding vector search production database"
-                ),
-                "embedding": _query_aligned_emb(1.0),
-                "source": "user",
-                "domain": _DOMAIN,
-                "heat": 0.9,
-            }
-        )
-        mid_id = store.insert_memory(
-            {
-                "content": "vector similarity embedding recall production",
-                "embedding": _query_aligned_emb(0.8, seed=10),
-                "source": "user",
-                "domain": _DOMAIN,
-                "heat": 0.5,
-            }
-        )
-        low_id = store.insert_memory(
-            {
-                "content": "unrelated grocery list bread milk eggs",
-                "embedding": _query_aligned_emb(0.2, seed=20),
-                "source": "user",
-                "domain": _DOMAIN,
-                "heat": 0.1,
-            }
-        )
+        high_id, mid_id, low_id = _seed_ranked_trio(store)
 
         rows = _recall(
             store,
