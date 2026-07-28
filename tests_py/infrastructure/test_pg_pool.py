@@ -14,6 +14,17 @@ from __future__ import annotations
 import pytest
 
 from mcp_server.infrastructure.pg_store import PgMemoryStore
+from tests_py.conftest import _USE_PG  # type: ignore
+
+# These construct PgMemoryStore() directly and exercise the psycopg pools, so
+# they need a live PostgreSQL — they had NO gate and therefore errored on any
+# run without one. Harmless while CI's SQLite job ran a single file; broadening
+# that job to the full suite (#220) made it a hard failure, 27 errors + 1
+# failure. Gated on reachability, which is the right question for a test whose
+# subject IS the PG connection pool.
+pytestmark = pytest.mark.skipif(
+    not _USE_PG, reason="PostgreSQL not available — pool tests need a live DB"
+)
 
 
 @pytest.fixture

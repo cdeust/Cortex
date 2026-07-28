@@ -235,13 +235,26 @@ jobs:
         env:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
-        # Scope: the SQLite fallback is intentionally NOT at full feature parity
-        # with the mandatory PostgreSQL backend (some SqliteMemoryStore methods
-        # and PG-specific tests do not apply). Run the dedicated SQLite backend
-        # suite, which exercises CRUD, heat_base columns/indexes, FTS, and
-        # backend selection on the fallback path. Broadening to the full suite
-        # on SQLite is tracked separately (full-parity effort).
-        run: pytest tests_py/infrastructure/test_sqlite_backend.py --tb=short -q
+          # SQLite is the plugin's DEFAULT backend, so it gets the same gate
+          # PostgreSQL does. Explicit rather than inferred: this job has no PG
+          # service container, and conftest would select SQLite on its own, but
+          # a future runner with PG reachable must not silently turn this into
+          # a second PostgreSQL run.
+          CORTEX_MEMORY_STORE_BACKEND: sqlite
+          # No model download from a CI runner; degrade to first-stage scores.
+          CORTEX_RERANKER_OFFLINE: "1"
+        # Scope: THE FULL SUITE. This job previously ran one file
+        # (test_sqlite_backend.py) and deferred the rest to a "full-parity
+        # effort" that named no issue. That gap let three real defects ship on
+        # the default backend — missing acquire_interactive/acquire_batch, the
+        # PG-only lesson-promotion query, and a bare except that reported the
+        # resulting failure as an empty backlog (issue #220).
+        #
+        # Measured 2026-07-28 on this tree: 5639 passed, 96 skipped, exit 0.
+        # The 96 skips are tests whose fixtures seed PostgreSQL directly (raw
+        # DSN / PG-only migrations); making them backend-agnostic is the
+        # remaining #220 work and is tracked there, not deferred silently here.
+        run: pytest --tb=short -q -p no:randomly
 
   test-windows:
     name: Test (Windows, SQLite backend)
