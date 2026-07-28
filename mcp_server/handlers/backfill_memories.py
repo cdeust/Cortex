@@ -32,6 +32,7 @@ from mcp_server.handlers.backfill_helpers import (
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.scanner import read_head_tail
+from mcp_server.observability import silent_failure
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 
 logger = logging.getLogger(__name__)
@@ -349,6 +350,27 @@ async def _process_imports(
     return result
 
 
+def _advance_cascade(store: MemoryStore, result: dict[str, Any]) -> None:
+    """Run cascade advancement after backfill to place imported memories
+    in the correct consolidation stage based on their real timestamps.
+
+    Mutates ``result`` in place (adds ``cascade_advanced``). No-op when
+    nothing was backfilled; a cascade failure is recorded via
+    ``silent_failure`` and never fails the backfill itself.
+    """
+    if result.get("backfilled", 0) <= 0:
+        return
+    try:
+        from mcp_server.handlers.consolidation.cascade import (
+            run_cascade_advancement,
+        )
+
+        cascade = run_cascade_advancement(store)
+        result["cascade_advanced"] = cascade.get("advanced", 0)
+    except Exception as exc:  # noqa: BLE001 — cascade is optional post-processing
+        silent_failure.note("backfill.cascade_advancement", exc)
+
+
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Backfill prior conversations into the memory store."""
     parsed = _parse_args(args)
@@ -389,17 +411,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         run_pipeline=parsed["run_pipeline"],
     )
 
-    # Run cascade advancement after backfill to place imported memories
-    # in the correct consolidation stage based on their real timestamps
-    if result.get("backfilled", 0) > 0:
-        try:
-            from mcp_server.handlers.consolidation.cascade import (
-                run_cascade_advancement,
-            )
-
-            cascade = run_cascade_advancement(store)
-            result["cascade_advanced"] = cascade.get("advanced", 0)
-        except Exception:
-            pass
+    _advance_cascade(store, result)
 
     return result

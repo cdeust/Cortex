@@ -16,6 +16,8 @@ All signatures mirror PgMemoryStore exactly (duck-type compatibility).
 
 from __future__ import annotations
 
+import sqlite3
+
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 
 
@@ -124,7 +126,7 @@ class SqliteMoodMixin:
                 (user_id, v, a),
             )
             self._conn.commit()
-        except Exception:
+        except sqlite3.Error:
             # user_mood table absent (pre-migration DB) — safe no-op.
             pass
 

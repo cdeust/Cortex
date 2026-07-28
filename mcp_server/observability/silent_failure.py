@@ -75,7 +75,7 @@ def note(component: str, exc: BaseException) -> None:
                 message,
             )
         metrics.inc_counter("cortex_silent_failures_total", {"component": component})
-    except Exception:  # noqa: BLE001 — instrumentation must never break the caller
+    except Exception:  # noqa: BLE001, S110 — instrumentation must never break the caller
         pass
 
 

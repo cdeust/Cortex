@@ -13,6 +13,7 @@ from typing import Any
 
 import numpy as np
 
+from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
 
 
@@ -110,8 +111,8 @@ class SqliteSearchMixin:
                     continue
                 rank += 1
                 scores[r["rowid"]] = scores.get(r["rowid"], 0) + weight / (k + rank)
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
+            silent_failure.note("sqlite_store.rrf_vector_signal", exc)
 
     def _signal_fts(
         self,
@@ -134,8 +135,8 @@ class SqliteSearchMixin:
             ).fetchall()
             for rank, r in enumerate(rows, 1):
                 scores[r["rowid"]] = scores.get(r["rowid"], 0) + weight / (k + rank)
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
+            silent_failure.note("sqlite_store.rrf_fts_signal", exc)
 
     def _vec_rows_in_query_space(self, rowids: list[int]) -> set[int]:
         """Subset of ``rowids`` whose embedding space matches the query's.

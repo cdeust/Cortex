@@ -30,12 +30,33 @@ from .authoring_prompts import (
     _parse_sectioned_response,
     _replace_gap_marker,
 )
+from mcp_server.observability import silent_failure
+
 from .page_io import (
     _project_source_for_page,
     _rewrite_page,
     _scope_anchor_prompt,
     _write_anchor_page,
 )
+
+
+def _optional_source_root(meta: dict[str, Any]) -> str | None:
+    """Resolve source_root for --add-dir scope extension (audit B-1).
+
+    NOTE: --add-dir extends readable scope; it does NOT confine reads.
+    Returns None when the domain is absent or resolution fails — the
+    drain proceeds without the extra scope either way.
+    """
+    domain = meta.get("domain")
+    if not domain or not isinstance(domain, str):
+        return None
+    try:
+        from mcp_server.core.wiki_coverage import _project_source_root
+
+        return _project_source_root(domain)
+    except Exception as exc:  # noqa: BLE001 — source-root scope is optional enrichment
+        silent_failure.note("consolidation.project_source_root", exc)
+        return None
 
 
 async def drain_one(
@@ -68,17 +89,7 @@ async def drain_one(
     gap_name = gaps[0]
     gap_desc = _GAP_DESCRIPTIONS.get(gap_name) or gap_name
     _, source_text = _project_source_for_page(meta)
-    # Resolve source_root for --add-dir scope extension (audit B-1).
-    # NOTE: --add-dir extends readable scope; it does NOT confine reads.
-    src_root: str | None = None
-    domain = meta.get("domain")
-    if domain and isinstance(domain, str):
-        try:
-            from mcp_server.core.wiki_coverage import _project_source_root
-
-            src_root = _project_source_root(domain)
-        except Exception:
-            pass
+    src_root = _optional_source_root(meta)
     prompt = _build_section_prompt(
         page_path=str(page_path),
         page_meta=meta,
@@ -170,17 +181,7 @@ async def drain_all_gaps_on_page(
     if not gaps:
         return []
 
-    # Resolve source_root for --add-dir scope extension (audit B-1).
-    # NOTE: --add-dir extends readable scope; it does NOT confine reads.
-    src_root: str | None = None
-    domain = meta.get("domain")
-    if domain and isinstance(domain, str):
-        try:
-            from mcp_server.core.wiki_coverage import _project_source_root
-
-            src_root = _project_source_root(domain)
-        except Exception:
-            pass
+    src_root = _optional_source_root(meta)
     _, source_text = _project_source_for_page(meta)
     prompt = _build_page_prompt(
         page_path=str(page_path),

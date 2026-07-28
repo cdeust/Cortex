@@ -19,12 +19,15 @@ Infrastructure layer only. No core imports.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sys
 from typing import Any
 
 from mcp_server.errors import McpConnectionError
 from mcp_server.infrastructure.mcp_client import MCPClient
+
+logger = logging.getLogger(__name__)
 
 _AP_TOOLS = frozenset(
     {
@@ -447,8 +450,8 @@ class APBridge:
                 # MCPClient.close() is SYNCHRONOUS — ``await self._client.close()``
                 # was ``await None`` → TypeError on every teardown.
                 self._client.close()
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — teardown continues past a failed close
+                logger.debug("AP client close failed during teardown: %s", exc)
             self._client = None
         self._connected = False
 

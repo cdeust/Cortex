@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
+from mcp_server.observability import silent_failure
 
 
 class SqliteQueryMixin:
@@ -173,8 +174,8 @@ class SqliteQueryMixin:
                 f"DELETE FROM memories_vec WHERE rowid IN ({placeholders})",
                 ids_to_delete,
             )
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — orphan vec rows must not block the purge
+            silent_failure.note("sqlite_store.vec_index_delete", exc)
         # Delete from memories
         cur = self._conn.execute(
             f"DELETE FROM memories WHERE id IN ({placeholders})",

@@ -40,7 +40,7 @@ bash scripts/setup.sh        # macOS / Linux
 # Verify everything is wired
 uvx --python 3.13 --from "hypermnesia-mcp[postgresql]" cortex-doctor
 
-# Run tests (6135 tests under tests_py/)
+# Run tests (6199 tests under tests_py/)
 pytest
 
 # Run a benchmark
@@ -129,7 +129,7 @@ The full standard lives in
 ## Testing
 
 ```bash
-pytest                              # full suite (6135 tests)
+pytest                              # full suite (6199 tests)
 pytest tests_py/core                # core (pure business logic) only
 pytest tests_py/integration         # PostgreSQL-backed integration
 pytest tests_py/benchmarks -k locomo # subset

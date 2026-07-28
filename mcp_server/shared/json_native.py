@@ -28,8 +28,11 @@ shared/ layer: Python stdlib only. numpy is handled by duck typing
 from __future__ import annotations
 
 import datetime as _dt
+import logging
 import numbers
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def to_json_native(obj: Any) -> Any:
@@ -73,8 +76,8 @@ def to_json_native(obj: Any) -> Any:
     if callable(tolist):
         try:
             return to_json_native(tolist())
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — stringify fallback below keeps the wire safe
+            logger.debug("tolist() conversion failed for %r: %s", type(obj), exc)
     # Last resort: stringify so the wire payload stays JSON-safe rather
     # than dropping structuredContent entirely.
     return str(obj)

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.observability import silent_failure
 
 # Core concept keywords for entity linking
 _CORE_CONCEPTS = {
@@ -247,6 +248,6 @@ def link_concepts(store: MemoryStore, memory_id: int, concepts: list[str]) -> in
                 }
             )
             linked += 1
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — per-link failure must not abort the batch
+            silent_failure.note("backfill.concept_link", exc)
     return linked

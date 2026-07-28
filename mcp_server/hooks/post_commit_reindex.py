@@ -167,7 +167,9 @@ def _check_cooldown(root: str) -> bool:
             data = json.loads(_COOLDOWN_FILE.read_text())
             last = data.get(root, 0)
             return (time.time() - last) < _cooldown_seconds()
-    except Exception:
+    except (OSError, ValueError, TypeError):
+        # Cooldown cache is disposable: unreadable/corrupt state means
+        # "no cooldown", and the next _update_cooldown rewrites the file.
         pass
     return False
 
@@ -182,7 +184,9 @@ def _update_cooldown(root: str) -> None:
             newest = sorted(data.items(), key=lambda kv: kv[1], reverse=True)
             data = dict(newest[:50])
         _COOLDOWN_FILE.write_text(json.dumps(data))
-    except Exception:
+    except (OSError, ValueError, TypeError):
+        # Cooldown cache is disposable: a failed write only means the next
+        # run skips the cooldown, which is safe.
         pass
 
 

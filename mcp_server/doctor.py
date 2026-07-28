@@ -40,6 +40,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
+from mcp_server.observability import silent_failure
 from mcp_server.shared.platform import home_dir
 
 
@@ -338,8 +339,8 @@ def active_checks() -> list[Callable[[], Check]]:
 
         if effective_backend(os.environ) == "sqlite":
             return SQLITE_CHECKS
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001 — PG check list is the documented fallback
+        silent_failure.note("doctor.backend_resolution", exc)
     return CHECKS
 
 

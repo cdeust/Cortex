@@ -294,15 +294,15 @@ class PgMemoryStore(
         """
         try:
             self._conn.execute("DEALLOCATE ALL")
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — stale-plan flush is best-effort
+            logger.debug("DEALLOCATE ALL after schema init failed: %s", exc)
 
     def _reconnect(self) -> None:
         """Drop the current connection and create a fresh one."""
         try:
             self._conn.close()
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — the old connection is being replaced anyway
+            logger.debug("close of stale connection failed during reconnect: %s", exc)
         self._conn = self._create_connection()
         register_vector(self._conn)
 
@@ -352,12 +352,14 @@ class PgMemoryStore(
             logger.info("Stale prepared plan detected, deallocating and retrying")
             try:
                 conn.rollback()
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — recovery continues to the retry below
+                logger.debug("rollback during stale-plan recovery failed: %s", exc)
             try:
                 conn.execute("DEALLOCATE ALL")
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — recovery continues to the retry below
+                logger.debug(
+                    "DEALLOCATE ALL during stale-plan recovery failed: %s", exc
+                )
             cur = conn.execute(query, params, **kwargs)
         except psycopg.OperationalError:
             logger.warning("Database connection lost on pool checkout, retrying")
@@ -1390,13 +1392,13 @@ class PgMemoryStore(
         if self._interactive_pool is not None:
             try:
                 self._interactive_pool.close()
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — teardown continues past a failed close
+                logger.debug("interactive pool close failed: %s", exc)
             self._interactive_pool = None
         if self._batch_pool is not None:
             try:
                 self._batch_pool.close()
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — teardown continues past a failed close
+                logger.debug("batch pool close failed: %s", exc)
             self._batch_pool = None
         self._conn.close()

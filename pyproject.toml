@@ -137,6 +137,32 @@ packages = ["mcp_server"]
 # trips on whatever uncommitted state an agent worktree happens to hold.
 extend-exclude = [".claude"]
 
+[tool.ruff.lint]
+# Explicit rule set (issue #197: maximal-strictness program, grown one rule
+# family per PR so every family lands with its findings fixed, not ignored).
+# The first four entries are ruff's former implicit defaults, pinned
+# explicitly so future additions are deliberate config changes.
+select = [
+    "E4",   # pycodestyle: import placement
+    "E7",   # pycodestyle: statement/comparison errors
+    "E9",   # pycodestyle: syntax/io errors
+    "F",    # pyflakes
+    # S110 try-except-pass: a swallowed exception with no signal is the
+    # exact shape of the FlashRank and spreading-activation incidents
+    # (docs/audits/silent-except-audit-2026-07-11.md). Every production
+    # site either narrows to the expected exception class (typed excepts
+    # are exempt under the default check-typed-exception=false) or emits
+    # a signal (silent_failure.note / logger).
+    "S110",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test code: try/except/pass in tests is deliberate teardown or
+# optional-path handling; a real failure surfaces through the assertion
+# or the harness, not through a log signal. The production-code ban
+# (mcp_server/) stays fully enforced.
+"tests_py/**" = ["S110"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests_py"]
 pythonpath = ["."]

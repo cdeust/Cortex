@@ -1354,8 +1354,8 @@ requires-dist = [
     { name = "sentence-transformers", marker = "extra == 'benchmarks'", specifier = ">=3.0.0" },
     { name = "sentence-transformers", marker = "extra == 'dev'", specifier = ">=3.0.0" },
     { name = "sqlite-vec", marker = "extra == 'sqlite'", specifier = ">=0.1.1" },
-    { name = "tree-sitter", marker = "extra == 'codebase'", specifier = ">=0.24.0,<0.26" },
-    { name = "tree-sitter-language-pack", marker = "extra == 'codebase'", specifier = ">=0.24.0,<1.7" },
+    { name = "tree-sitter", marker = "extra == 'codebase'", specifier = ">=0.24.0,<0.27" },
+    { name = "tree-sitter-language-pack", marker = "extra == 'codebase'", specifier = ">=0.24.0,<1.14" },
 ]
 provides-extras = ["postgresql", "sqlite", "codebase", "viz-tile", "benchmarks", "otel", "dev"]
 

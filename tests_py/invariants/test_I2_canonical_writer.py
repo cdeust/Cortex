@@ -44,20 +44,23 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Shifted 685->686 by the silent-except-sweep audit (2026-07-11) adding
     # one `from mcp_server.observability import silent_failure` import line
     # above this site.
+    # Shifted 724->726 (and the two entries below by the same +2/+3) by the
+    # S110 sweep (#197): teardown/DEALLOCATE excepts above these sites grew
+    # a logger.debug line each.
     # Shifted 695->724 by the module-level hash helpers extraction
     # (feat/migrate-entrypoint, PR #101): compute_ddl_hash()/
     # read_schema_hash() were pulled out of PgMemoryStore as module-level
     # functions (net +29 lines above this site — 33 lines of new function
     # bodies/docstrings added, 4 lines of inline hash-computation removed
     # from _recorded_schema_hash, which now delegates to read_schema_hash).
-    ("infrastructure/pg_store.py", 724),
+    ("infrastructure/pg_store.py", 726),
     # Canonical single-row writer (all callers route through this).
     # bump_heat_raw — the one canonical single-row site (re-pinned after
     # rebasing the read-path PR onto blame-path injection-receipts).
     # Shifted 727->728 by the same import-line addition above.
     # Shifted 737->766 by the module-level hash helpers extraction (same
     # net +29 cause as the entry above).
-    ("infrastructure/pg_store.py", 766),
+    ("infrastructure/pg_store.py", 768),
     # A3 batched writer (homeostatic cohort branch + any other batch consumer).
     # update_memories_heat_batch. Shifted 787->825 when M-D3 (7.1) added
     # get_homeostatic_factor/set_homeostatic_factor's write_class parameter
@@ -65,18 +68,19 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # silent-except-sweep import-line addition.
     # Shifted 835->864 by the module-level hash helpers extraction (same
     # net +29 cause as the two entries above).
-    ("infrastructure/pg_store.py", 864),
+    ("infrastructure/pg_store.py", 866),
     # SQLite parity of the anchor transfer (same transactional rationale).
     # Shifted 389->440->447->493->529 (M-D3, then #169 added _fts_augment /
     # _migrate_fts_code_tokenize / unconditional embedding_model stamp above it;
     # then #206 added _register_json_codec above the class, +36 lines).
-    ("infrastructure/sqlite_store.py", 529),
+    ("infrastructure/sqlite_store.py", 532),
     # SQLite parity: canonical bump_heat_raw / update_memories_heat_batch.
-    # Shifted 419->470->477->523->559, 463->534->541->587->623 for the same
+    # Shifted 419->470->477->523->559->562, 463->534->541->587->623->626 for
+    # the same
     # reasons (#169's _stamp_embedding_model / select_fallback_embeddings /
     # reembed_memory, then #206's _register_json_codec).
-    ("infrastructure/sqlite_store.py", 559),
-    ("infrastructure/sqlite_store.py", 623),
+    ("infrastructure/sqlite_store.py", 562),
+    ("infrastructure/sqlite_store.py", 626),
     # Homeostatic fold (amortized ~once/month per (domain, write_class)).
     # M-D3 (7.1, 2026-07-10): split out of homeostatic.py into
     # homeostatic_apply.py (§4.1 500-line file cap — stratification by
@@ -86,10 +90,10 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Anchor pin: heat_base=1.0 + no_decay=TRUE preserves resist-decay.
     ("handlers/anchor.py", 143),
     # Preemptive boost: heat_base += 0.1 on Read/Edit/Write hook.
-    ("hooks/preemptive_context.py", 136),
+    ("hooks/preemptive_context.py", 140),
     # Pipeline-impact boost: heat_base += 0.15 for symbols touched by an
     # edit, resolved via pipeline detect_changes (PostToolUse hook).
-    ("hooks/pipeline_impact_bump.py", 167),
+    ("hooks/pipeline_impact_bump.py", 171),
     # I6-D5 deliberate re-heat campaign (INC6.6): CAS-guarded single-row
     # writer. Cannot route through bump_heat_raw — that would (1) turn a
     # concurrent-write race into a silent overwrite instead of a detected

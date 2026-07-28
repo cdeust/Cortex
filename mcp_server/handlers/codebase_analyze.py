@@ -34,6 +34,7 @@ from mcp_server.handlers.remember import handler as remember_handler
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.observability import silent_failure
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -199,8 +200,8 @@ def _set_memory_metadata(store: MemoryStore, memory_id: int) -> None:
                 "importance = 0.5 WHERE id = %s",
                 (memory_id,),
             )
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001 — promotion is best-effort post-processing
+        silent_failure.note("codebase_analyze.semantic_promotion", exc)
 
 
 async def _store_file(

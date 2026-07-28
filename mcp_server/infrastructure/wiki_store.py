@@ -37,6 +37,7 @@ from pathlib import Path
 
 from mcp_server.core.wiki_frontmatter_validation import normalize_frontmatter
 from mcp_server.core.wiki_layout import PAGE_KINDS
+from mcp_server.observability import silent_failure
 from mcp_server.core.wiki_sync import build_from_memory
 from mcp_server.infrastructure.file_io import ensure_dir
 
@@ -316,16 +317,21 @@ def _try_reindex(root: Path) -> None:
                 existing = readme_path.read_text()
                 if auto_marker not in existing:
                     should_write = False  # hand-written, don't touch
-            except Exception:
-                pass
+            except (OSError, UnicodeDecodeError) as exc:
+                # Bug fix (issue #197 sweep): an unreadable README used to
+                # fall through with should_write=True and get OVERWRITTEN —
+                # the opposite of "never clobber a hand-written README".
+                # If we cannot read it, we must not replace it.
+                should_write = False
+                silent_failure.note("wiki_store.readme_read", exc)
         if should_write:
             readme_md = build_plain_readme(page_paths)
             readme_md += f"\n{auto_marker}\n"
             readme_path.write_text(readme_md)
 
         cleanup_id_prefixed_pages(root)
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001 — index rebuild is best-effort after a write
+        silent_failure.note("wiki_store.reindex", exc)
 
 
 def sync_memory_strict(

@@ -32,6 +32,7 @@ import os as _os
 from typing import Any
 
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -787,10 +788,10 @@ def _resolve_query_entity_ids(query: str, store: Any) -> set[int]:
             row = store.get_entity_by_name(token)
             if row and row.get("id") is not None:
                 ids.add(int(row["id"]))
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         # Fallback path is non-load-bearing; if the keyword extractor
         # ever fails on a malformed query we still have the stage-1 ids.
-        pass
+        silent_failure.note("recall_pipeline.keyword_entity_fallback", exc)
 
     return ids
 
@@ -1222,15 +1223,15 @@ def reconsolidation_apply(
                 new_heat = max(0.0, min(1.0, cur_heat + outcome.heat_delta))
                 store.bump_heat_raw(c["memory_id"], new_heat)
                 c["heat"] = new_heat  # reflect in candidate for downstream use
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                silent_failure.note("recall_pipeline.heat_writeback", exc)
 
         # last_accessed + access_count refresh.
         if has_access and outcome.update_last_accessed:
             try:
                 store.update_memory_access(c["memory_id"])
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                silent_failure.note("recall_pipeline.access_writeback", exc)
 
         # Optional valence shift (only when the store supports it AND the
         # outcome carries a non-zero shift — Bower 1981 mood-congruent
@@ -1241,8 +1242,8 @@ def reconsolidation_apply(
                 new_val = max(-1.0, min(1.0, cur_val + outcome.valence_delta))
                 store.update_memory_emotional_valence(c["memory_id"], new_val)
                 c["emotional_valence"] = new_val
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                silent_failure.note("recall_pipeline.valence_writeback", exc)
 
     return candidates
 

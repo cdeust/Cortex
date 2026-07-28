@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sys
 from typing import Any
 
 from mcp_server.errors import McpConnectionError
 from mcp_server.infrastructure.mcp_call_timeout import default_call_timeout_s
+
+logger = logging.getLogger(__name__)
 
 CLIENT_INFO = {"name": "cortex", "version": "1.0.0"}
 PROTOCOL_VERSION = "2025-11-25"
@@ -318,12 +321,12 @@ class MCPClient:
         if self._proc:
             try:
                 self._proc.stdin.close()  # type: ignore
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — teardown continues past a failed close
+                logger.debug("stdin close failed during client teardown: %s", exc)
             try:
                 self._proc.terminate()
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — process may already be gone
+                logger.debug("terminate failed during client teardown: %s", exc)
             self._proc = None
 
     # ── Private ──────────────────────────────────────────────────────────────
@@ -382,7 +385,9 @@ class MCPClient:
     def _touch_activity(self) -> None:
         try:
             self._last_activity = asyncio.get_running_loop().time()
-        except Exception:
+        except RuntimeError:
+            # No running event loop (sync caller) — activity tracking is
+            # only meaningful inside the loop; skipping it is safe.
             pass
 
     async def _read_loop(self) -> None:
@@ -484,17 +489,20 @@ class MCPClient:
                     try:
                         log_fh.write(decoded + "\n")
                         log_fh.flush()
-                    except Exception:
+                    except OSError:
+                        # Mirror log file unwritable (disk full, rotated away);
+                        # the stderr passthrough above already carried the line.
                         pass
         except asyncio.CancelledError:
             pass
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — pump death must not kill the client
+            logger.debug("stderr pump terminated: %s", exc)
         finally:
             if log_fh is not None:
                 try:
                     log_fh.close()
-                except Exception:
+                except OSError:
+                    # Best-effort close of the mirror log; nothing to salvage.
                     pass
 
     def _open_stderr_log(self):

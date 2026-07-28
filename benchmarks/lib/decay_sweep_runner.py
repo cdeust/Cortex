@@ -79,8 +79,8 @@ def override_p_factor(p_factor: float) -> None:
         try:
             store._conn.execute("DEALLOCATE ALL")
             store._conn.commit()
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — stale-plan flush is best-effort
+            print(f"[decay-sweep] DEALLOCATE ALL failed (continuing): {exc}")
     finally:
         store.close()
 

@@ -981,8 +981,8 @@ def _lookup_cached_graph_path(project_root: str) -> str | None:
     finally:
         try:
             conn.close()
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — teardown must not mask the lookup result
+            _log(f"pg connection close failed: {exc}")
     return None
 
 

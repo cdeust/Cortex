@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Any, Iterable, Iterator
 
@@ -29,6 +30,8 @@ from mcp_server.infrastructure.ap_bridge import (
     resolve_graph_path,
     resolve_graph_paths,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _ap_sync_timeout_s() -> float:
@@ -177,16 +180,20 @@ class _SyncLoop:
         if self._loop and not self._loop.is_closed():
             try:
                 self._loop.call_soon_threadsafe(self._loop.stop)
-            except Exception:
+            except RuntimeError:
+                # Loop already closed between the check and the call.
                 pass
             try:
                 if self._thread is not None:
                     self._thread.join(timeout=2.0)
-            except Exception:
+            except RuntimeError:
+                # Joining the current thread — nothing to wait for.
                 pass
             try:
                 self._loop.close()
-            except Exception:
+            except RuntimeError:
+                # Loop still running (stop not yet processed); leaked loop
+                # is reclaimed at interpreter exit.
                 pass
         self._loop = None
         self._thread = None
@@ -341,8 +348,8 @@ class WorkflowGraphASTSource:
         """Close the underlying bridge + pinned loop. Idempotent."""
         try:
             self._loop_owner.run(self._bridge.close())
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — teardown continues to the loop close
+            logger.debug("AP bridge close failed during teardown: %s", exc)
         self._loop_owner.close()
 
     def iter_symbols(

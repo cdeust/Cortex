@@ -67,8 +67,10 @@ class McpProgress:
         """Fire-and-forget coroutine on the main loop; swallow all errors."""
         try:
             asyncio.run_coroutine_threadsafe(coro, self._loop)
-        except Exception:
-            pass
+        except RuntimeError:
+            # Loop already closed (server shutting down mid-operation) —
+            # progress updates are cosmetic and safe to drop.
+            coro.close()
 
     # -- ProgressReporter interface --
 

@@ -141,7 +141,9 @@ def _run_coroutine_on_thread(
     finally:
         try:
             loop.close()
-        except Exception:
+        except RuntimeError:
+            # Loop still running (handler leaked a task); the thread-local
+            # loop is abandoned and reclaimed at interpreter exit.
             pass
 
 
@@ -236,8 +238,10 @@ async def safe_handler(
                     "cortex_tool_calls_total",
                     {"tool": tool_name, "status": "error"},
                 )
-            except Exception:
-                pass
+            # NOT ``as exc``: rebinding the outer ``exc`` here would unbind
+            # it when this handler exits, breaking ``raise ... from exc``.
+            except Exception as metrics_exc:  # noqa: BLE001 — metrics must never mask the tool error
+                logger.debug("error-counter increment failed: %s", metrics_exc)
         # issue #147: this used to append the DATABASE_URL hint to EVERY
         # unclassified exception type (FileNotFoundError, ValueError, ...),
         # not just DB-related ones -- misleading a user chasing a genuine

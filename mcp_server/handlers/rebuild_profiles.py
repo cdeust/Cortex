@@ -14,6 +14,7 @@ from mcp_server.infrastructure.scanner import (
     group_by_project,
 )
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.observability import silent_failure
 
 schema = {
     "title": "Rebuild profiles",
@@ -79,8 +80,8 @@ def _check_skip(force: bool) -> dict | None:
                 "domains": list(profiles.get("domains", {}).keys()),
                 "updatedAt": updated_at,
             }
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001 — freshness check failure degrades to a rebuild
+        silent_failure.note("rebuild_profiles.freshness_check", exc)
     return None
 
 

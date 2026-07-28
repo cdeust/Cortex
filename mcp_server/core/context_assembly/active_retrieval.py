@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
+
+from mcp_server.observability import silent_failure
 from typing import Any
 
 
@@ -183,6 +185,6 @@ class LLMReformulator(ActiveRetriever):
             result = self._llm_fn(prompt)
             if isinstance(result, str) and result.strip():
                 return result.strip()
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — fallback to the raw query is intentional
+            silent_failure.note("active_retrieval.llm_reformulate", exc)
         return query

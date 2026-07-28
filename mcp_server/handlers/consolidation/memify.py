@@ -19,6 +19,7 @@ from mcp_server.core.curation import (
 )
 from mcp_server.handlers.consolidation.chunks import iter_memory_chunks
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -124,14 +125,14 @@ def _stream_prune_strengthen(
             try:
                 store.delete_memory(mid)
                 pruned += 1
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — per-memory failure must not abort the pass
+                silent_failure.note("consolidation.memify_prune", exc)
         for mid, new_importance in identify_strengtheneable(chunk):
             try:
                 store.update_memory_importance(mid, new_importance)
                 strengthened += 1
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — per-memory failure must not abort the pass
+                silent_failure.note("consolidation.memify_strengthen", exc)
     return pruned, strengthened, flags, scanned
 
 

@@ -34,6 +34,7 @@ fs + lock primitives live in ``groomer_coordinator_io.py``.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -45,6 +46,8 @@ from mcp_server.infrastructure.groomer_coordinator_io import (
     pid_alive,
 )
 from mcp_server.shared.platform import cache_dir
+
+logger = logging.getLogger(__name__)
 
 # Outcomes of ``ensure_cycle`` — a small closed set of strings so callers
 # and tests can branch/observe without importing an Enum across the
@@ -245,8 +248,8 @@ class GroomerCoordinator:
         if stop_fn is not None:
             try:
                 stop_fn()
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — shutdown callback must not block exit
+                logger.debug("groomer stop callback failed: %s", exc)
         self._log_run("stopped_last_exit", datetime.now(timezone.utc))
         return True
 

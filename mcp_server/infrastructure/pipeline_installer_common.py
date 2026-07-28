@@ -48,5 +48,7 @@ def _rmtree_quiet(path: Path) -> None:
     """``shutil.rmtree`` with no error escalation (best-effort cleanup)."""
     try:
         shutil.rmtree(path, ignore_errors=True)
-    except Exception:
+    except OSError:
+        # ignore_errors=True already swallows per-entry failures; this
+        # guards path-level errors (e.g. unstatable mount) the flag misses.
         pass

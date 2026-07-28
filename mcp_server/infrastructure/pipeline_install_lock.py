@@ -54,7 +54,8 @@ def install_lock() -> Iterator[None]:
     finally:
         try:
             os.close(fd)
-        except Exception:
+        except OSError:
+            # fd already closed (e.g. by a failed _acquire); nothing to release.
             pass
 
 
@@ -71,7 +72,8 @@ if IS_WINDOWS:
     def _release(fd: int) -> None:
         try:
             msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
-        except Exception:
+        except OSError:
+            # Unlock is best-effort: closing the fd releases the lock anyway.
             pass
 
 else:
@@ -87,5 +89,6 @@ else:
     def _release(fd: int) -> None:
         try:
             fcntl.flock(fd, fcntl.LOCK_UN)
-        except Exception:
+        except OSError:
+            # Unlock is best-effort: closing the fd releases the lock anyway.
             pass

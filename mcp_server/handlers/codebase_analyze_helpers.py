@@ -10,6 +10,7 @@ from mcp_server.core.codebase_parser import EXT_TO_LANG, FileAnalysis
 from mcp_server.handlers.seed_project_constants import IGNORE_DIRS
 from mcp_server.handlers.source_walk import walk_pruned
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.observability import silent_failure
 
 CODEBASE_AGENT_CONTEXT = "codebase"
 FILE_TAG_PREFIX = "file:"
@@ -332,8 +333,8 @@ def persist_file_edge(
                 }
             )
             count += 1
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — per-edge failure must not abort the batch
+            silent_failure.note("codebase_analyze.import_edge", exc)
     return count
 
 
@@ -357,8 +358,8 @@ def persist_inheritance_edge(
                 }
             )
             count += 1
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — per-edge failure must not abort the batch
+            silent_failure.note("codebase_analyze.extends_edge", exc)
     return count
 
 
@@ -393,8 +394,8 @@ def persist_god_node_tags(
                             "UPDATE memories SET tags = %s WHERE id = %s",
                             (json.dumps(tags), row["id"]),
                         )
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — per-file failure must not abort the batch
+                silent_failure.note("codebase_analyze.god_node_tag", exc)
 
 
 def persist_community_tags(
@@ -427,5 +428,5 @@ def persist_community_tags(
                             "UPDATE memories SET tags = %s WHERE id = %s",
                             (json.dumps(tags), row["id"]),
                         )
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — per-file failure must not abort the batch
+                silent_failure.note("codebase_analyze.community_tag", exc)

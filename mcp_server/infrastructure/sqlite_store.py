@@ -45,6 +45,7 @@ from mcp_server.infrastructure.sqlite_store_relationships import (
 from mcp_server.infrastructure.sqlite_store_rules import SqliteRuleMixin
 from mcp_server.infrastructure.sqlite_store_search import SqliteSearchMixin
 from mcp_server.infrastructure.sqlite_store_stats import SqliteStatsMixin
+from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +142,10 @@ class SqliteMemoryStore(
         for ddl in get_all_ddl():
             try:
                 self._conn.execute(ddl)
-            except Exception:
-                pass
+            except sqlite3.Error as exc:
+                # Expected when an optional capability is absent (e.g. the
+                # sqlite-vec extension); the remaining DDL still runs.
+                logger.debug("DDL statement skipped: %s", exc)
         self._run_migrations()
         # After migrations: older databases only gain superseded_by_id via
         # MIGRATIONS, and the current_memories view references that column.
@@ -661,7 +664,8 @@ class SqliteMemoryStore(
                 (value, memory_id),
             )
             self._conn.commit()
-        except Exception:
+        except sqlite3.Error:
+            # `value` column absent (pre-migration store) — documented no-op.
             pass
 
     def update_memory_extinction(
@@ -683,7 +687,9 @@ class SqliteMemoryStore(
                 (e, memory_id),
             )
             self._conn.commit()
-        except Exception:
+        except sqlite3.Error:
+            # `extinction_strength` column absent (pre-migration store) —
+            # documented no-op per the docstring above.
             pass
 
     def _stamp_embedding_model(self, memory_id: int, model: str | None) -> None:
@@ -760,8 +766,8 @@ class SqliteMemoryStore(
                         "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
                         (memory_id, vec.tobytes()),
                     )
-                except Exception:
-                    pass
+                except Exception as exc:  # noqa: BLE001 — row keeps its old vector on failure
+                    silent_failure.note("sqlite_store.vec_index_update", exc)
         self._stamp_embedding_model(memory_id, None)
         self._conn.commit()
 
@@ -772,8 +778,8 @@ class SqliteMemoryStore(
                 self._conn.execute(
                     "DELETE FROM memories_vec WHERE rowid = ?", (memory_id,)
                 )
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 — an orphan vec row must not block deletion
+                silent_failure.note("sqlite_store.vec_index_delete", exc)
         cur = self._conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         self._conn.commit()
         return cur.rowcount > 0
@@ -848,8 +854,8 @@ class SqliteMemoryStore(
                             "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
                             (memory_id, vec.tobytes()),
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:  # noqa: BLE001 — row keeps its old vector on failure
+                        silent_failure.note("sqlite_store.vec_index_update", exc)
         self._conn.commit()
 
     # ── Row normalization ─────────────────────────────────────────────

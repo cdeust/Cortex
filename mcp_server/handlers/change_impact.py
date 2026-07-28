@@ -31,6 +31,7 @@ from mcp_server.infrastructure.ap_bridge import (
     resolve_graph_path,
 )
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.observability import silent_failure
 
 
 _IMPACT_BOOST = 0.15  # matches hooks/pipeline_impact_bump.py
@@ -159,8 +160,8 @@ def _apply_heat_bumps(store: Any, matches: list, boost: float) -> int:
         try:
             store.update_memory_heat(int(mid), new_heat)
             bumped += 1
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001 — per-memory failure must not abort the batch
+            silent_failure.note("change_impact.heat_bump", exc)
     return bumped
 
 
