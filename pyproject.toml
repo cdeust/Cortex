@@ -154,14 +154,22 @@ select = [
     # are exempt under the default check-typed-exception=false) or emits
     # a signal (silent_failure.note / logger).
     "S110",
+    # BLE001 blind-except (issue #197, family 2): a broad `except Exception`
+    # is allowed only at a genuine last-resort boundary (tool handlers,
+    # degraded-mechanism wrappers, hook/CLI entry points) and then MUST
+    # carry a per-site `# noqa: BLE001 — <reason>` naming the signal it
+    # emits (silent_failure.note / logger / the returned error report).
+    # Everything else narrows to the exceptions the body can actually
+    # raise, or re-raises (both exempt under ruff's BLE001 semantics).
+    "BLE001",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Test code: try/except/pass in tests is deliberate teardown or
-# optional-path handling; a real failure surfaces through the assertion
-# or the harness, not through a log signal. The production-code ban
-# (mcp_server/) stays fully enforced.
-"tests_py/**" = ["S110"]
+# Test code: try/except/pass and broad excepts in tests are deliberate
+# teardown or optional-path handling; a real failure surfaces through the
+# assertion or the harness, not through a log signal. The production-code
+# ban (mcp_server/) stays fully enforced.
+"tests_py/**" = ["S110", "BLE001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests_py"]
