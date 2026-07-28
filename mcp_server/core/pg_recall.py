@@ -793,8 +793,31 @@ def assemble_context(
         diversity_lambda=diversity_lambda,
     )
 
+    # Truncation-awareness pass: each phase above enforces its own
+    # sub-budget independently (per-phase submodular selection caps),
+    # so their sum can still exceed the caller's total token_budget —
+    # estimate_tokens is a heuristic and per-phase caps do not
+    # renegotiate against each other. condense_assembled_context is a
+    # no-op (returns the identical header+concatenation) whenever the
+    # three phases already fit; only priority-condenses when they don't.
+    # Skipped when token_budget is None (stage_assembler's own
+    # "no token truncation" mode — nothing to condense against).
+    assembled_context = result.assembled_context
+    if token_budget is not None:
+        from mcp_server.core.context_assembly.condensers import (
+            condense_assembled_context,
+        )
+
+        assembled_context = condense_assembled_context(
+            result.own_stage_context,
+            result.adjacent_stage_context,
+            result.stage_summaries,
+            current_stage,
+            token_budget,
+        )
+
     return {
-        "assembled_context": result.assembled_context,
+        "assembled_context": assembled_context,
         "own_stage_context": result.own_stage_context,
         "adjacent_stage_context": result.adjacent_stage_context,
         "stage_summaries": result.stage_summaries,

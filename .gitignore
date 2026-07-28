@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.pyo
 .coverage
+coverage.xml
 htmlcov/
 *.egg-info/
 dist/

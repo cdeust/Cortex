@@ -99,8 +99,22 @@ def condense_assistant_message(text: str, token_budget: int) -> str:
                     pi += 1
         joined = "\n\n".join(s for s in out if s.strip())
         return joined if joined else truncate_to_budget(text, token_budget)
-    # No prose budget — just concatenate code
-    return "\n\n".join(code_parts)
+    # No prose budget — just concatenate code.
+    # NOTE (issue #196 coverage audit): prose_parts can only be empty
+    # when _split_by_code_blocks returned a single segment — any closed
+    # or re-opened fence emits the fence line into a following prose
+    # segment, so two code segments always have a prose segment between
+    # them. A single code segment IS the whole input text, so
+    # code_tokens == estimate_tokens(text) exactly. The fast-path guard
+    # at the top (`estimate_tokens(text) <= token_budget` returns early)
+    # ensures we only reach here when estimate_tokens(text) >
+    # token_budget — which, combined with the equality above, forces
+    # code_tokens > token_budget, so the `code_tokens >= token_budget`
+    # branch earlier in this function always returns first. This line is
+    # provably unreachable through this function's own arithmetic; kept
+    # (not deleted) as the correct fallback should a future edit to
+    # _split_by_code_blocks break that single-segment invariant.
+    return "\n\n".join(code_parts)  # pragma: no cover
 
 
 # ── Entity-triple condenser ─────────────────────────────────────────────
@@ -198,6 +212,90 @@ def condense_code_block(text: str, token_budget: int) -> str:
     if kept:
         return "\n".join(kept)
     return truncate_to_budget(text, token_budget)
+
+
+# ── Stage-assembler integration point ────────────────────────────────────
+# StageAwareContextAssembler (stage_assembler.py) allocates a per-phase
+# token sub-budget to each of own/adjacent/summaries independently
+# (submodular selection caps chunk count per phase), so the sum can
+# still exceed the caller's total token_budget: estimate_tokens is a
+# heuristic (chars // 3), and per-phase caps do not renegotiate against
+# each other. pg_recall.assemble_context() promises a "budgeted,
+# slot-filled prompt with truncation awareness" (module docstring) —
+# this function is the truncation-awareness step: it is the caller that
+# was missing, wiring condense_memory_content + assemble_prompt's
+# priority-condensation into the one place that already computes the
+# three raw text blocks.
+
+
+def condense_assembled_context(
+    own_stage_context: str,
+    adjacent_stage_context: str,
+    stage_summaries: str,
+    current_stage: str,
+    token_budget: int,
+) -> str:
+    """Fit stage_assembler's three raw text blocks into ``token_budget``.
+
+    Precondition: ``token_budget > 0``; the three text args are the raw
+    (uncondensed) own/adjacent/summary blocks ``StageAwareContextAssembler
+    .assemble()`` produced (``StageContextResult.own_stage_context`` etc.,
+    not the already-headered ``assembled_context``).
+
+    Postcondition: returns a single string with the same ``"## <Section>"``
+    headers ``StageAwareContextAssembler`` uses, sections with empty
+    content omitted (byte-identical formatting to the assembler's own
+    concatenation). When the combined estimated token count of the three
+    inputs is within ``token_budget``, the return value is exactly that
+    header+concatenation (no condensation applied — zero behavior change
+    for the already-common case). When it exceeds ``token_budget``, each
+    section is priority-condensed (own > adjacent > summaries, matching
+    ``StageAwareContextAssembler``'s own emphasis order) via
+    ``condense_memory_content`` through ``decomposer.assemble_prompt``'s
+    progressive-condensation + post-assembly safety loop, so the
+    condensed *content* is within ``token_budget`` up to that loop's
+    fixed safety margin. Caveat inherited from ``assemble_prompt``: its
+    truncation-warning banner is prepended *after* that loop and is not
+    itself counted against the budget, so the returned string (banner
+    included) can exceed ``token_budget`` by the banner's own length.
+    """
+    own = own_stage_context.strip()
+    adjacent = adjacent_stage_context.strip()
+    summaries = stage_summaries.strip()
+
+    # (header, content, priority, key) — priority mirrors StageAware
+    # ContextAssembler's own emphasis order (own > adjacent > summaries);
+    # lower number = more important = condensed last (decomposer.py
+    # semantics). Keys are human-readable so build_truncation_banner's
+    # warning lines (which label by raw placeholder key) name the actual
+    # section, not an opaque index.
+    sections = [
+        (f"## Current Stage Context ({current_stage})", own, 1, "{{OWN_STAGE}}"),
+        ("## Related Prior Context", adjacent, 2, "{{ADJACENT_STAGE}}"),
+        ("## Stage Summaries", summaries, 3, "{{STAGE_SUMMARIES}}"),
+    ]
+    present = [(h, c, pr, k) for h, c, pr, k in sections if c]
+
+    total = sum(estimate_tokens(c) for _h, c, _pr, _k in present)
+    if total <= token_budget:
+        return "\n\n".join(f"{h}\n\n{c}" for h, c, _pr, _k in present)
+
+    # Late import: decomposer depends on budget only, condensers depends
+    # on budget only — importing decomposer here (not at module scope)
+    # keeps condensers.py's own import graph unchanged for every caller
+    # that never hits the over-budget path.
+    from mcp_server.core.context_assembly.budget import Placeholder
+    from mcp_server.core.context_assembly.decomposer import assemble_prompt
+
+    template = "\n\n".join(f"{h}\n\n{k}" for h, _c, _pr, k in present)
+    placeholders = [
+        Placeholder(k, c, priority=pr, condenser=condense_memory_content)
+        for _h, c, pr, k in present
+    ]
+    prompt, _metrics = assemble_prompt(
+        template, placeholders, context_window=token_budget, headroom=1.0
+    )
+    return prompt
 
 
 # ── Generic memory condenser ────────────────────────────────────────────

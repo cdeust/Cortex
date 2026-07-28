@@ -128,7 +128,7 @@ decoratively:
 
 Standing analysis: CodeQL default setup (Python, JavaScript/TypeScript,
 Actions) on every push and pull request plus weekly, currently 0 open alerts;
-OpenSSF Scorecard via `.github/workflows/scorecard.yml`; and 5735 tests run on
+OpenSSF Scorecard via `.github/workflows/scorecard.yml`; and 6135 tests run on
 four Python versions, two backends and Windows.
 
 ## 6. What this assurance case does NOT claim
@@ -141,9 +141,15 @@ four Python versions, two backends and Windows.
   policy; Cortex's contribution is provenance on ingested pages so a suspect
   source can be traced and purged.
 - **The test suite is not yet strong enough to carry this argument alone.**
-  Statement coverage is 74.83% (measured in CI, 2026-07-27), and mutation
-  testing is wired for one module rather than the load-bearing set. Raising
-  both is item 1 on [ROADMAP.md](ROADMAP.md).
+  Statement coverage is 82.02% (measured in the CI coverage job, run
+  30316539703, 2026-07-28) and is held by a `--cov-fail-under=82` floor in
+  that job, but coverage proves execution, not detection: mutation testing
+  is wired for one module rather than the load-bearing set (the changed
+  code of #196 was mutation-triaged to zero non-equivalent survivors;
+  the pre-existing condensers backlog is
+  [#228](https://github.com/cdeust/Cortex/issues/228)). Raising mutation
+  strength across the load-bearing set remains item 1 on
+  [ROADMAP.md](ROADMAP.md).
 - **Warnings are not yet maximally strict.** Ruff runs its default rule set, so
   the weakness classes a broader rule set would flag are currently invisible to
   the build. Pyright runs `standard` (raised from `basic` 2026-07-27) behind a

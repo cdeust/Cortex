@@ -144,7 +144,12 @@ jobs:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
           CORTEX_RERANKER_OFFLINE: "1"
-        run: pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing
+        # --cov-fail-under is the statement-coverage floor (issue #196
+        # criterion 4): seeded at the number this job itself achieved
+        # (82.02% — 30,229 of 36,854 statements, run 30316539703,
+        # coverage.py 7.15.2) so the figure can only ratchet up, never
+        # silently fall back. Raise the floor when coverage rises.
+        run: pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing --cov-fail-under=82
 
       # The advertised test count is the one claim the static gate cannot check
       # without collecting the suite, so it is checked in the job that already
