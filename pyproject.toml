@@ -201,6 +201,41 @@ select = [
     # any NEW string-built SQL fails CI until it states its mechanism.
     "S608",
 ]
+# ── Families deliberately NOT selected (issue #197, criterion 1) ────────────
+# Counts measured against mcp_server/ 2026-07-28, ruff 0.15.20 — what
+# enabling each would face. The program's bar: a family lands only with every
+# finding fixed or per-site-justified, never blanket-ignored. Three stated
+# reasons for exclusion:
+#
+# (a) REJECTED — polices style this project delegates elsewhere:
+#     D (1,094): docstring FORMATTING conventions (blank lines, imperative
+#       mood). Docstring content — contracts, pre/postconditions — is
+#       reviewed under the completion checklist; the formatting rules find
+#       no defects.
+#     ANN (347): annotation-PRESENCE checks. The pyright gate holds
+#       mcp_server/ at zero diagnostics and checks annotation CORRECTNESS;
+#       ANN would duplicate it textually.
+#     COM (937): trailing-comma style is owned by the pinned formatter;
+#       ruff's own documentation recommends against COM alongside
+#       `ruff format`.
+#     TD/FIX (0): deferral governance lives in filed issues with acceptance
+#       criteria, not in TODO-comment metadata shape.
+#     I (271): import-ORDER cosmetics — repo-wide churn, no defect-finding
+#       power. Import PLACEMENT, the failure-relevant half, is enforced by
+#       PLC0415 above.
+#
+# (b) REWRITE-SUGGESTION families — UP (91), C4 (13), SIM (68), PIE (10),
+#     RSE (1), PERF (94), RUF (725): stylistic/modernization transformations
+#     of working code. None targets the silent-failure, injection, or
+#     contract-lie defect classes this program exists for; each is a
+#     dedicated-PR-sized diff under the fix-with-landing bar.
+#
+# (c) JUDGEMENT families not yet triaged — B (16), TRY (163), RET (20),
+#     ARG (53), PTH (91), N (43), ERA (43), FBT (254), DTZ (4), S beyond
+#     S110/S608 (34): tracked as the program's continuation in issue #239.
+#     Enabling any of them without the per-finding triage the first six
+#     families received would mean blanket ignores — the exact anti-pattern
+#     this explicit select list exists to prevent.
 
 [tool.ruff.lint.per-file-ignores]
 # Test code: try/except/pass and broad excepts in tests are deliberate
