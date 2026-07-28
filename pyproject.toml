@@ -162,14 +162,38 @@ select = [
     # Everything else narrows to the exceptions the body can actually
     # raise, or re-raises (both exempt under ruff's BLE001 semantics).
     "BLE001",
+    # PLR2004 magic-value-comparison (issue #197, family 3): every literal
+    # compared against in production code becomes a NAMED constant carrying
+    # a `# source:` comment (coding standard §8: citation, benchmark,
+    # measurement, structural rationale, or an explicit statement that the
+    # value predates provenance tracking — never an invented source).
+    # Structural arities (e.g. `len(parts) == 2` after a single-separator
+    # split) prefer unpacking or a named arity constant with a one-line
+    # rationale. No production noqa for this rule; ruff already exempts
+    # the sentinels -1/0/1 and str/bytes comparisons.
+    "PLR2004",
+    # E501 line-too-long (issue #197, family 3): the limit is the
+    # formatter's line-length (ruff default, 88 — unchanged; findings are
+    # fixed by rewrapping, never by raising the limit). `ruff format`
+    # cannot split long strings/comments, so E501 is what makes those
+    # lines a CI failure instead of a drift. Per-site
+    # `# noqa: E501 — <reason>` only for unsplittable tokens (URLs,
+    # hashes, verbatim log/schema lines).
+    "E501",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 # Test code: try/except/pass and broad excepts in tests are deliberate
 # teardown or optional-path handling; a real failure surfaces through the
-# assertion or the harness, not through a log signal. The production-code
-# ban (mcp_server/) stays fully enforced.
-"tests_py/**" = ["S110", "BLE001"]
+# assertion or the harness, not through a log signal. PLR2004 is ignored in
+# tests because the compared literal IS the expected value under test — the
+# assertion's spec. Naming `assert len(rows) == 3` as `EXPECTED_ROWS` moves
+# the contract away from the assertion site and adds nothing a reader needs
+# (ruff's own default exempts assert-heavy test idioms poorly; 1,216 sites
+# measured 2026-07-28). E501 is NOT ignored in tests: long lines are equally
+# unreadable there, and every finding was rewrapped. The production-code
+# bans (mcp_server/) stay fully enforced.
+"tests_py/**" = ["S110", "BLE001", "PLR2004"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests_py"]
