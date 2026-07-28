@@ -34,6 +34,21 @@ def _mem(content: str, **overrides) -> dict:
     return data
 
 
+def _sqlite_vec_available() -> bool:
+    s = SqliteMemoryStore(db_path=":memory:", embedding_dim=384)
+    try:
+        return bool(s._has_vec)
+    finally:
+        s.close()
+
+
+_HAS_VEC = _sqlite_vec_available()
+_needs_vec = pytest.mark.skipif(
+    not _HAS_VEC,
+    reason="sqlite-vec not installed ([sqlite] extra); vector path unavailable",
+)
+
+
 @pytest.fixture()
 def store() -> SqliteMemoryStore:
     return SqliteMemoryStore(db_path=":memory:", embedding_dim=384)
@@ -127,6 +142,7 @@ class TestFindCoAccessedPairs:
         assert store.find_co_accessed_pairs([]) == []
 
 
+@_needs_vec
 class TestSearchNewerNeighbors:
     def test_newer_only_excludes_self_and_orders_by_similarity(self, store):
         base = datetime(2026, 1, 1, tzinfo=timezone.utc)
