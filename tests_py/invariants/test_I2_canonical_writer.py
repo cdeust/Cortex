@@ -61,14 +61,14 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # family 4): function-level imports above these sites hoisted to the
     # module top; same writers, no new ones (the test was the oracle,
     # as on every prior re-pin).
-    ("infrastructure/pg_store.py", 720),
+    ("infrastructure/pg_store.py", 694),
     # Canonical single-row writer (all callers route through this).
     # bump_heat_raw — the one canonical single-row site (re-pinned after
     # rebasing the read-path PR onto blame-path injection-receipts).
     # Shifted 727->728 by the same import-line addition above.
     # Shifted 737->766 by the module-level hash helpers extraction (same
     # net +29 cause as the entry above).
-    ("infrastructure/pg_store.py", 762),
+    ("infrastructure/pg_store.py", 736),
     # A3 batched writer (homeostatic cohort branch + any other batch consumer).
     # update_memories_heat_batch. Shifted 787->825 when M-D3 (7.1) added
     # get_homeostatic_factor/set_homeostatic_factor's write_class parameter
@@ -76,19 +76,19 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # silent-except-sweep import-line addition.
     # Shifted 835->864 by the module-level hash helpers extraction (same
     # net +29 cause as the two entries above).
-    ("infrastructure/pg_store.py", 860),
+    ("infrastructure/pg_store.py", 834),
     # SQLite parity of the anchor transfer (same transactional rationale).
     # Shifted 389->440->447->493->529 (M-D3, then #169 added _fts_augment /
     # _migrate_fts_code_tokenize / unconditional embedding_model stamp above it;
     # then #206 added _register_json_codec above the class, +36 lines).
-    ("infrastructure/sqlite_store.py", 537),
+    ("infrastructure/sqlite_store.py", 543),
     # SQLite parity: canonical bump_heat_raw / update_memories_heat_batch.
     # Shifted 419->470->477->523->559->562, 463->534->541->587->623->626 for
     # the same
     # reasons (#169's _stamp_embedding_model / select_fallback_embeddings /
     # reembed_memory, then #206's _register_json_codec).
-    ("infrastructure/sqlite_store.py", 567),
-    ("infrastructure/sqlite_store.py", 631),
+    ("infrastructure/sqlite_store.py", 573),
+    ("infrastructure/sqlite_store.py", 637),
     # Homeostatic fold (amortized ~once/month per (domain, write_class)).
     # M-D3 (7.1, 2026-07-10): split out of homeostatic.py into
     # homeostatic_apply.py (§4.1 500-line file cap — stratification by
@@ -101,7 +101,7 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     ("hooks/preemptive_context.py", 145),
     # Pipeline-impact boost: heat_base += 0.15 for symbols touched by an
     # edit, resolved via pipeline detect_changes (PostToolUse hook).
-    ("hooks/pipeline_impact_bump.py", 177),
+    ("hooks/pipeline_impact_bump.py", 182),
     # I6-D5 deliberate re-heat campaign (INC6.6): CAS-guarded single-row
     # writer. Cannot route through bump_heat_raw — that would (1) turn a
     # concurrent-write race into a silent overwrite instead of a detected
