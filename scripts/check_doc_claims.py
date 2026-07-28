@@ -27,6 +27,14 @@ Release history is exempt: a line describing v4.13.0 may legitimately say
 "49 memory tools". Lines carrying a ``**vX.Y.Z`` marker, and files that are
 history by nature (CHANGELOG, docs/release-notes/), are skipped.
 
+A line may also state a number that counts something *other* than the
+advertised total, in a wording the claim patterns cannot tell apart ("12
+tests skipped locally"). Such a line declares
+``[not-a-count-claim: <label>]`` and is skipped for that one family only —
+see ``NOT_A_CLAIM``. The declared set is a registry: it is printed on every
+successful run and pinned by a test naming each member, so an exemption is
+added deliberately or not at all.
+
 Usage::
 
     python scripts/check_doc_claims.py                 # static claims
@@ -39,6 +47,7 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -67,6 +76,14 @@ SCANNED_FILES = (
 
 # A line introducing a past release states that release's numbers.
 HISTORY_MARKER = re.compile(r"\*\*v\d+\.\d+\.\d+")
+
+# A line whose number counts something else declares which family it is not a
+# claim for. Rewording the prose to dodge a pattern would hide a true, measured
+# number to keep the gate quiet; declaring it keeps the number and puts the
+# exemption on the record, at the one site that knows why it is not a claim.
+# The label must match a claim family exactly — an unrecognised or misspelled
+# label exempts nothing, so the marker fails closed.
+NOT_A_CLAIM = re.compile(r"\[not-a-count-claim: ([a-z][a-z ]*)\]")
 
 TOOL_CLAIM = re.compile(r"(\d+)\s+(?:memory|standalone|MCP)\s+tools\b")
 TOOL_TOTAL_CLAIM = re.compile(r"\((\d+)\s+(?:total\s+)?with\b[^)]*\)")
@@ -164,17 +181,36 @@ def canonical_version() -> str:
     return match.group(1)
 
 
-def scan_claims(pattern: re.Pattern[str]) -> list[tuple[str, int, int]]:
-    """Every (file, line number, claimed value) outside release history."""
-    found: list[tuple[str, int, int]] = []
+def scannable_lines() -> Iterator[tuple[str, int, str]]:
+    """Every (file, line number, text) that describes the present."""
     for relative_path in SCANNED_FILES:
         for number, line in enumerate(read(relative_path).splitlines(), start=1):
-            if HISTORY_MARKER.search(line):
-                continue
-            found.extend(
-                (relative_path, number, int(m.group(1))) for m in pattern.finditer(line)
-            )
-    return found
+            if not HISTORY_MARKER.search(line):
+                yield relative_path, number, line
+
+
+def exemption_registry() -> list[tuple[str, int, str]]:
+    """Every declared not-a-claim marker: (file, line, the family it exempts)."""
+    return [
+        (path, number, match.group(1))
+        for path, number, line in scannable_lines()
+        for match in NOT_A_CLAIM.finditer(line)
+    ]
+
+
+def scan_claims(pattern: re.Pattern[str], label: str) -> list[tuple[str, int, int]]:
+    """Every (file, line number, claimed value) that claims `label`.
+
+    A line declaring ``[not-a-count-claim: <label>]`` states that its number
+    counts something else; it is skipped for that family only, so the same
+    line still has to answer to every other one.
+    """
+    return [
+        (path, number, int(match.group(1)))
+        for path, number, line in scannable_lines()
+        if label not in {m.group(1) for m in NOT_A_CLAIM.finditer(line)}
+        for match in pattern.finditer(line)
+    ]
 
 
 def check_counts(pattern: re.Pattern[str], expected: int, label: str) -> list[str]:
@@ -184,7 +220,7 @@ def check_counts(pattern: re.Pattern[str], expected: int, label: str) -> list[st
     gate becomes decorative: the vacuity guard makes a reworded (or deleted)
     claim a build failure rather than an unnoticed loss of coverage.
     """
-    claims = scan_claims(pattern)
+    claims = scan_claims(pattern, label)
     if not claims:
         return [
             f"no {label} claim found in any scanned file — "
@@ -221,17 +257,7 @@ def check_versions(expected: str) -> list[str]:
 def collect_failures(test_count: int | None) -> list[str]:
     standalone, total = canonical_tool_counts()
     failures = check_counts(TOOL_CLAIM, standalone, "tools")
-    total_claims = scan_claims(TOOL_TOTAL_CLAIM)
-    if not total_claims:
-        failures.append(
-            "no with-integrations tool claim found — the gate would pass vacuously"
-        )
-    failures += [
-        f"{path}:{line}: advertises {claimed} tools with integrations, "
-        f"canonical is {total}"
-        for path, line, claimed in total_claims
-        if claimed != total
-    ]
+    failures += check_counts(TOOL_TOTAL_CLAIM, total, "tools with integrations")
     failures += check_counts(REFERENCE_CLAIM, canonical_reference_count(), "references")
     failures += check_counts(MECHANISM_CLAIM, canonical_mechanism_count(), "mechanisms")
     failures += check_versions(canonical_version())
@@ -267,7 +293,10 @@ def main() -> int:
         for failure in failures:
             print(f"  {failure}", file=sys.stderr)
         return 1
-    print("doc claims OK")
+    exemptions = exemption_registry()
+    print(f"doc claims OK ({len(exemptions)} declared not-a-claim exemption(s))")
+    for path, line, label in exemptions:
+        print(f"  {path}:{line}: exempt from the {label} claim")
     return 0
 
 
