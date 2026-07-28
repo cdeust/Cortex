@@ -21,3 +21,10 @@
 *.dylib binary
 *.dll  binary
 *.exe  binary
+
+# Fuzz corpus inputs are opaque byte sequences, not text. Git's end-of-line
+# normalisation would rewrite CRLF seeds to LF on checkout and silently
+# change what the harness is fed — fuzz/corpus/fuzz_yaml_frontmatter/seed-crlf
+# exists precisely to exercise CRLF handling, so normalising it deletes the
+# case. -text disables that; -diff keeps binary junk out of diffs.
+fuzz/corpus/** -text -diff

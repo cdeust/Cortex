@@ -93,7 +93,10 @@ jobs:
           key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
 
       - name: Install dependencies
-        run: pip install -e ".[dev,postgresql]"
+        # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
+        run: |
+          pip install --require-hashes -r requirements/release.txt
+          pip install --no-deps -e .
 
       - name: Pre-download embedding model
         run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"
@@ -154,7 +157,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: pip install build
+        run: pip install --require-hashes -r requirements/packaging.txt
 
       - name: Build sdist and wheel
         run: python -m build

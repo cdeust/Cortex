@@ -1,0 +1,9 @@
+{
+  "name": "cortex-runtime-claude-code",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pins the Claude Code CLI installed into docker/Dockerfile. Exists so the image can use `npm ci` against a committed lockfile: OpenSSF Scorecard treats every other npm install form as unpinned, and a lockfile additionally records an integrity hash for each transitive package, which a bare `npm install -g pkg` does not.",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.220"
+  }
+}

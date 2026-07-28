@@ -130,6 +130,42 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["mcp_server"]
 
+# ── CPU-only torch, resolved through the lock ────────────────────────────
+#
+# Every container in this repo installs torch from the PyTorch CPU index,
+# because sentence-transformers pulls torch as a mandatory base dependency
+# and the default index serves the CUDA build — ~2GB of nvidia-cu13-* wheels
+# in an image that never sees a GPU (measured 2026-07-12, root Dockerfile).
+#
+# That was done with a bare `--index-url` flag at each call site, which has
+# two defects this section fixes at the root instead of at the three throw
+# sites:
+#
+#   * The wheels came from an index the lockfile knew nothing about, so
+#     uv.lock recorded the PyPI torch and its PyPI hashes. There was no
+#     source of truth that could produce a hash for the artifact actually
+#     installed, which is why --require-hashes was not reachable before.
+#   * Three Dockerfiles each re-stated the index URL and the rationale.
+#
+# Declaring the index here makes uv.lock record the CPU wheels and their
+# hashes, which is what scripts/generate_pip_constraints.py then exports.
+# `explicit = true` means this index is used ONLY for packages that name it
+# below — it never becomes a general fallback that could shadow PyPI.
+#
+# The marker keeps the change to the platforms that had the problem: on
+# Linux (all containers, all CI runners) torch comes from the CPU index; on
+# macOS the PyPI wheel is already CPU-only, so contributors on a Mac resolve
+# exactly as before.
+# source: uv indexes documentation, "Using multiple indexes" —
+#         https://docs.astral.sh/uv/concepts/indexes/
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
 [tool.ruff]
 # Agent worktrees under .claude/worktrees/ are transient copies of the
 # repo (for parallel agent runs) — they are not project source and must
@@ -318,6 +354,69 @@ show_missing = true
 [dependency-groups]
 dev = [
     "mutmut>=3.6.0",
+]
+
+# CI's own tooling lives here rather than as bare `pip install ruff==X` lines
+# in the workflow. Two reasons, in order of weight:
+#
+#   1. A version is not a hash. Scorecard's Pinned-Dependencies check treats
+#      any pip install without --require-hashes as unpinned, and it is right
+#      to: an exact version still resolves to whatever artifact the index
+#      serves for it today. Only a hash pins the bytes. Putting these in the
+#      lock is what lets scripts/generate_pip_constraints.py emit a hashed
+#      requirements file for them.
+#   2. The pins were duplicated across workflow files with no mechanism
+#      keeping them equal. One lock entry per tool removes the drift.
+#
+# Groups are per-job so no job installs a tool it does not run (ISP applied
+# to dependencies: a lint job that drags in pyright pays for it in cold-start
+# time and in supply-chain surface).
+lint = [
+    "ruff==0.15.20",
+]
+typecheck = [
+    "pyright==1.1.410",
+]
+packaging = [
+    "build>=1.2.0",
+    # The build backend from [build-system].requires, pinned here as well so
+    # `python -m build --no-isolation` can run against an already-hashed
+    # environment. With isolation (the default) build downloads hatchling from
+    # PyPI at build time, outside every hash check in this repository — a real
+    # gap even though Scorecard does not parse implicit build-isolation
+    # fetches, since it executes third-party code to produce our artifact.
+    "hatchling>=1.24",
+]
+# torch is named here ONLY so [tool.uv.sources] can bind to it. uv applies a
+# source to the project's own direct dependencies; torch reaches this project
+# transitively through sentence-transformers, so without this line the source
+# below is silently inert — the lock keeps resolving the PyPI CUDA build and
+# the exported hashes would install ~2GB of nvidia-cu13-* wheels into every
+# container. Verified inert before this group existed: `uv lock` left torch at
+# `source = { registry = "https://pypi.org/simple" }` with cuda-toolkit deps.
+#
+# A dependency-group and not an extra, deliberately: PEP 735 groups are local
+# to this repository and are NOT published in the wheel's metadata, so naming
+# torch here does not add a dependency that anyone installing hypermnesia-mcp
+# from PyPI would see. It only steers OUR resolution.
+container = [
+    "torch",
+]
+# Coverage-guided fuzzing of the pure parsers (see fuzz/). Atheris is the
+# libFuzzer binding for CPython and is what ClusterFuzzLite runs in CI.
+# source: https://github.com/google/atheris — the reference Python engine,
+# and the one OSS-Fuzz's python builder installs.
+#
+# The marker is not defensive vagueness, it is the actual wheel matrix:
+# atheris 3.1.0 publishes cp312/cp313/cp314 manylinux_2_17_x86_64 wheels and
+# NOTHING else — no macOS, no aarch64 (checked on the PyPI JSON API,
+# 2026-07-28). Without the marker, `uv lock` would try to satisfy atheris on
+# an arm64 Mac and fall back to building libFuzzer from source. The harnesses
+# in fuzz/ are therefore CI-only by construction; each one keeps a pure-python
+# entry point so its corpus can still be replayed anywhere (see
+# fuzz/replay_corpus.py).
+fuzz = [
+    "atheris>=3.1.0; python_version >= '3.12' and sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
 [tool.mutmut]

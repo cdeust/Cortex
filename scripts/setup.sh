@@ -226,20 +226,21 @@ ok "Python $PY_VERSION"
 echo "Installing Python packages..."
 mkdir -p "$DEPS_DIR"
 
-python3 -m pip install -q --target "$DEPS_DIR" \
-    "fastmcp>=2.0.0" \
-    "pydantic>=2.0.0" \
-    "pydantic-settings>=2.0.0" \
-    "numpy>=1.24.0" \
-    "psycopg[binary]>=3.1" \
-    "pgvector>=0.3" \
-    "sentence-transformers>=2.2.0" \
-    "flashrank>=0.2.0" \
-    "datasets>=2.14.0" \
-    "networkx>=3.0" \
-    "tree-sitter>=0.24.0" \
-    "tree-sitter-language-pack>=0.24.0" \
-    2>/dev/null
+# Hash-pinned from uv.lock (scripts/generate_pip_constraints.py). This
+# replaced a hand-written package list that duplicated pyproject.toml and had
+# already drifted from it — the list asked for "sentence-transformers>=2.2.0"
+# against a real floor of >=3.0.0, so a machine set up by this script could
+# run a version the project does not support. A floor is also not a pin at
+# all: it accepts whatever the index serves today.
+#
+# 2>/dev/null is gone with it. It was hiding pip's stderr, which is where a
+# resolution failure, a hash mismatch and a network error all appear — the
+# script would print "Python packages installed" over any of them. The exit
+# status is now checked instead.
+if ! python3 -m pip install -q --target "$DEPS_DIR" \
+    --require-hashes -r "$PROJECT_DIR/requirements/setup.txt"; then
+    fail "Dependency install failed (see pip output above)"
+fi
 
 ok "Python packages installed"
 

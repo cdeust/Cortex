@@ -46,20 +46,24 @@ WORKDIR /workspace
 COPY pyproject.toml README.md ./
 COPY mcp_server ./mcp_server
 
-# CPU-only torch wheel: sentence-transformers pulls torch transitively as a
-# mandatory base dependency (pyproject.toml); pip's default index resolves
-# the full CUDA build (~2GB across torch/cudnn/cusparselt/cublas/etc.) even
-# though this container never uses a GPU — identical rationale to
-# ../Dockerfile:38-45 and benchmarks/reproduce.sh's own CPU-only builds.
-# Versions pinned exactly to this repo's lockfile so the devcontainer
-# never silently drifts from what CI/production actually run.
-# source: uv.lock (this repo, checked 2026-07-14) — torch==2.11.0,
-# sentence-transformers==5.4.1, flashrank==0.2.10.
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir ".[postgresql,codebase]" \
-        "sentence-transformers==5.4.1" \
-        "flashrank==0.2.10"
+# Dependencies, hash-pinned from uv.lock via
+# scripts/generate_pip_constraints.py — the same lock CI and production
+# resolve from, so the devcontainer cannot silently drift from them.
+#
+# This replaces three hand-copied version pins (torch==2.11.0,
+# sentence-transformers==5.4.1, flashrank==0.2.10) that had already drifted:
+# the lock had moved to torch 2.13.0 while this file still said 2.11.0. An
+# exact version is also not a hash — it names a release, not the bytes the
+# index serves for it. The CPU-only torch build is carried by the file (see
+# [[tool.uv.index]] in pyproject.toml) rather than by an --index-url flag
+# here; the rationale for CPU-only is unchanged and lives in ../Dockerfile.
+COPY requirements/devcontainer.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt
+
+# The project itself, editable so a contributor's edits take effect without
+# a rebuild. --no-deps because the hashed file above is the complete
+# dependency graph; without it pip would re-resolve, unpinned.
+RUN pip install --no-cache-dir --no-deps -e .
 
 # ── Model prewarming AT BUILD TIME ─────────────────────────────────────────
 # HF_HOME / XDG_CACHE_HOME point at a durable image path baked into a layer

@@ -55,17 +55,38 @@ COPY pyproject.toml README.md ./
 COPY mcp_server ./mcp_server
 COPY tests_py ./tests_py
 
-# CPU-only torch wheel: sentence-transformers pulls torch transitively as
-# a mandatory base dependency (pyproject.toml); pip's default index
-# resolves the full CUDA build (~2GB across torch/cudnn/cusparselt/
-# cublas/etc.) even though this image never uses a GPU. Pinning the CPU
-# wheel index first, same as docker/Dockerfile:33-34, keeps this layer's
-# download bounded — source: measured 2026-07-12, root Dockerfile build
-# pulled 2GB+ of nvidia-cu13-* wheels before this pin was added (H2,
-# fix/bare-container-contract root-cause report).
-RUN pip install --no-cache-dir --upgrade pip build && \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir .[postgresql]
+# Dependencies, hash-pinned from uv.lock via
+# scripts/generate_pip_constraints.py. Every requirement carries a hash and
+# pip refuses anything whose bytes do not match, so this layer is
+# reproducible and cannot be substituted at the index.
+#
+# The CPU-only torch build is part of that file rather than a separate
+# `--index-url` flag. sentence-transformers pulls torch as a mandatory base
+# dependency, and the default index serves the CUDA build — ~2GB of
+# nvidia-cu13-* wheels in an image that never sees a GPU (measured
+# 2026-07-12, H2 of the fix/bare-container-contract root-cause report). The
+# index is declared once in pyproject.toml's [[tool.uv.index]]; the lock
+# records the +cpu wheels and their hashes.
+#
+# `--upgrade pip build` is gone: it was itself an unpinned install, and
+# `build` was never invoked in this file. The base image is digest-pinned,
+# so its pip is a known quantity.
+COPY requirements/runtime-postgresql.txt requirements/packaging.txt /tmp/
+RUN pip install --no-cache-dir --require-hashes -r /tmp/runtime-postgresql.txt
+
+# The project itself, as a built wheel installed with --no-deps.
+#
+# Not `pip install .[postgresql]` (that re-resolves every dependency,
+# unpinned) and not `-e .` (an editable install leaves a .pth pointing at
+# /build, which the runtime stage does not copy — the venv would arrive
+# broken). A wheel is a self-contained artifact, and --no-deps guarantees
+# the hashed set above is the whole dependency graph.
+#
+# --no-isolation so the build backend is the hashed hatchling from
+# packaging.txt rather than one fetched from PyPI mid-build.
+RUN pip install --no-cache-dir --require-hashes -r /tmp/packaging.txt && \
+    python -m build --wheel --no-isolation --outdir /tmp/dist . && \
+    pip install --no-cache-dir --no-deps /tmp/dist/*.whl
 
 # ── Runtime stage ────────────────────────────────────────────────────────
 

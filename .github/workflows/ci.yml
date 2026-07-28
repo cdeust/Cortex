@@ -95,7 +95,12 @@ jobs:
           key: ${{ runner.os }}-flashrank-ms-marco-MiniLM-L-12-v2
 
       - name: Install dependencies
-        run: pip install -e ".[dev,postgresql,codebase]"
+        # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
+        # --no-deps on the project install because the file above IS the
+        # complete dependency graph; re-resolving here would be unpinned.
+        run: |
+          pip install --require-hashes -r requirements/ci-postgresql.txt
+          pip install --no-deps -e .
 
       # Populate the HuggingFace cache before the (offline) test run. A transient
       # huggingface.co blip must not leave the cache empty — that surfaced as 58
@@ -222,7 +227,12 @@ jobs:
       # codebase-analysis regression could reach the default backend unseen.
       # Measured 2026-07-28 locally: 8 skips from tree-sitter, 1 from leidenalg.
       - name: Install dependencies (no postgresql extra)
-        run: pip install -e ".[dev,sqlite,codebase]"
+        # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
+        # --no-deps on the project install because the file above IS the
+        # complete dependency graph; re-resolving here would be unpinned.
+        run: |
+          pip install --require-hashes -r requirements/ci-sqlite.txt
+          pip install --no-deps -e .
 
       # Retry-with-backoff, fail-loudly: see the `test` job's pre-download step
       # for the root-cause rationale (CI run 28495801728, 2026-07-01).
@@ -298,7 +308,12 @@ jobs:
           key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
 
       - name: Install dependencies (no postgresql extra)
-        run: pip install -e ".[dev,sqlite]"
+        # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
+        # --no-deps on the project install because the file above IS the
+        # complete dependency graph; re-resolving here would be unpinned.
+        run: |
+          pip install --require-hashes -r requirements/ci-sqlite-min.txt
+          pip install --no-deps -e .
 
       # Import smoke: the modules that previously crashed at load on Windows
       # (fcntl import) or silently misbehaved. If any fails to import, the
@@ -379,7 +394,7 @@ jobs:
         # Pinned: ruff's formatter output changes across minor versions
         # (0.15.6 vs 0.15.20 divergence broke Lint on PR #83). The repo is
         # formatted with 0.15.20; bump this pin and reformat together.
-        run: pip install ruff==0.15.20
+        run: pip install --require-hashes -r requirements/lint.txt
 
       - name: Check formatting
         run: ruff format --check .
@@ -394,6 +409,17 @@ jobs:
       # different tool count, and nothing failed. Static only (no imports).
       - name: Check documentation claims
         run: python scripts/check_doc_claims.py
+
+      # The requirements/ files are the ONLY thing standing between a pip
+      # install and an unpinned one, and they are generated — so a lock
+      # change that is not re-exported leaves them describing dependencies
+      # nobody resolved. Checked here, on every push and PR, because that
+      # drift is introduced at commit time. Static: reads uv.lock, installs
+      # nothing.
+      - name: Check hash-pinned requirements match uv.lock
+        run: |
+          pipx install uv==0.11.3 2>/dev/null || pip install uv==0.11.3
+          python scripts/generate_pip_constraints.py --check
 
   typecheck:
     name: Type Check
@@ -417,11 +443,11 @@ jobs:
       - name: Create .venv with the full type-check environment
         run: |
           python -m venv .venv
-          .venv/bin/pip install -U pip
-          .venv/bin/pip install -e ".[dev,postgresql,sqlite,codebase,otel]" flashrank
+          .venv/bin/pip install --require-hashes -r requirements/ci-typecheck.txt
+          .venv/bin/pip install --no-deps -e .
           # Pin pyright — diagnostic output drifts between releases, so a
           # zero-diagnostic tree is only comparable against the pinned version.
-          .venv/bin/pip install pyright==1.1.410
+          .venv/bin/pip install --require-hashes -r requirements/typecheck-tool.txt
 
       # pyright IS the gate: the backlog was burned to zero (issue #197,
       # 568 baselined diagnostics -> 0 measured 2026-07-28), so ANY
@@ -444,7 +470,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: pip install build
+        run: pip install --require-hashes -r requirements/packaging.txt
 
       - name: Build sdist and wheel
         run: python -m build

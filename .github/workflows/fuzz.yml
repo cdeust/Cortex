@@ -1,0 +1,87 @@
+name: Fuzz
+
+# Coverage-guided fuzzing of the pure parsers in fuzz/, via ClusterFuzzLite.
+#
+# Two cadences, because they answer different questions:
+#
+#   * on pull_request — a short batch over the changed tree, so a crash
+#     introduced by the diff is caught before merge. Kept to 120s per
+#     harness: long enough to exercise the mutated surface, short enough
+#     not to become the slowest required check.
+#   * on schedule — a longer run from the accumulated corpus, which is
+#     where a fuzzer actually finds things. Nothing blocks on it.
+#
+# Why not a required check on the schedule run: a fuzzer that has run for
+# hours will eventually find SOMETHING, and blocking merges on an
+# asynchronous discovery would make the queue hostage to an unrelated
+# input. The PR batch blocks; the deep run reports.
+#
+# Findings land as artifacts (crash reproducer + stacktrace). The fix
+# workflow is: add the reproducer to fuzz/corpus/<harness>/repro-<name>,
+# fix the code, and the committed corpus keeps it fixed forever — that
+# corpus is replayed by the ordinary pytest suite
+# (tests_py/fuzz/test_corpus_replay.py), on every platform, with no
+# atheris needed.
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, Monday 04:17 UTC. Off the hour to avoid the scheduling spike
+    # that delays every cron firing at :00.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  pr-batch:
+    name: Fuzz (PR batch)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined]
+    steps:
+      - name: Build fuzzers (${{ matrix.sanitizer }})
+        id: build
+        uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          sanitizer: ${{ matrix.sanitizer }}
+          language: python
+          # Build the base commit too, so the run only reports crashes this
+          # PR introduces rather than pre-existing ones. Without it every PR
+          # inherits the backlog and the check is ignored within a week.
+          bad-build-check: false
+      - name: Run fuzzers (${{ matrix.sanitizer }})
+        uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fuzz-seconds: 120
+          mode: code-change
+          sanitizer: ${{ matrix.sanitizer }}
+          output-sarif: true
+
+  batch:
+    name: Fuzz (scheduled batch)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined]
+    steps:
+      - name: Build fuzzers (${{ matrix.sanitizer }})
+        uses: google/clusterfuzzlite/actions/build_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          sanitizer: ${{ matrix.sanitizer }}
+          language: python
+      - name: Run fuzzers (${{ matrix.sanitizer }})
+        uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1 # v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          fuzz-seconds: 900
+          mode: batch
+          sanitizer: ${{ matrix.sanitizer }}
+          output-sarif: true

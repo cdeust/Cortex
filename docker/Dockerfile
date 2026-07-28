@@ -27,23 +27,71 @@
 # PR when the tag moves; do not hand-edit without re-fetching the header.
 FROM python:3.14-slim-bookworm@sha256:86f975aca15cf04a40b399eebede9aea7c82eae084d1f1a0a6ef6bcaae871a30 AS builder
 
-# Node.js 22 LTS
+# Node.js 22 LTS.
+#
+# This used to be `curl -fsSL https://deb.nodesource.com/setup_22.x | bash -`,
+# which executes an unreviewed remote script as root at build time — whatever
+# that URL serves, whenever it is fetched. It is the single largest piece of
+# trust this image extended to a third party, and it cannot be pinned: there
+# is no hash to check a pipe against. (OpenSSF Scorecard reports it as
+# `downloadThenRun not pinned by hash`.)
+#
+# Replaced by what the script itself does, spelled out: fetch the signing
+# key, register the signed apt source, install the signed package. curl now
+# feeds `gpg --dearmor`, which is not an interpreter — nothing is executed.
+# apt then verifies the package signature against that key.
+#
+# source: https://github.com/nodesource/distributions#installation-instructions
+#         (the manual instructions the setup script automates)
+ARG NODE_MAJOR=22
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+       | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && chmod a+r /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+       > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Claude Code CLI
-RUN npm install -g @anthropic-ai/claude-code
+# Claude Code CLI, installed with `npm ci` against a committed lockfile
+# instead of `npm install -g @anthropic-ai/claude-code`.
+#
+# The old form was unversioned, so the image tracked whatever the registry
+# served that minute — no way to reproduce a build, and no integrity check.
+# `npm ci` is also the only install form Scorecard accepts as pinned (the
+# other being a git URL at a commit SHA); an exact version on the command
+# line is NOT enough. The lockfile additionally records a sha512 integrity
+# hash for every transitive package, which npm verifies on extract.
+#
+# Bumping the CLI is `npm install --package-lock-only` in that directory,
+# which is a reviewable diff rather than a silent change of image contents.
+COPY docker/claude-code/package.json docker/claude-code/package-lock.json /opt/claude-code/
+RUN cd /opt/claude-code && npm ci --omit=dev --ignore-scripts
 
-# PyTorch CPU-only (saves ~1.5GB vs full CUDA)
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# Python dependencies, hash-pinned. Every requirement in this file carries a
+# hash from uv.lock (scripts/generate_pip_constraints.py), including the
+# CPU-only torch build that keeps ~2GB of nvidia-cu13-* wheels out of the
+# image — that used to be a bare `--index-url` flag whose artifact no
+# lockfile described. `--require-hashes` makes pip refuse anything whose
+# bytes do not match.
+#
+# Installed into a virtualenv at a version-free path so the runtime stage
+# copies one directory and no COPY names the Python version. See the root
+# Dockerfile for the incident that rule comes from: a literal
+# .../python3.13/site-packages path broke on every base-image bump.
+COPY requirements/docker-runtime.txt /tmp/requirements.txt
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt
 
-# Cortex — copy full source for editable install
+# Cortex itself: --no-deps because every dependency was just installed from
+# the hashed file above, and re-resolving here would reintroduce unpinned
+# installs. An editable install of a local path with --no-deps is the form
+# Scorecard recognises as pinned.
 COPY . /opt/cortex
-RUN pip install --no-cache-dir -e "/opt/cortex[postgresql,codebase]" \
-    && pip install --no-cache-dir sentence-transformers flashrank
+RUN pip install --no-cache-dir --no-deps -e /opt/cortex
 
 # Pre-cache embedding model
 RUN python3 -c "from sentence_transformers import SentenceTransformer; \
@@ -64,11 +112,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        postgresql-17 postgresql-17-pgvector \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Node.js + Claude CLI from builder
+# Copy Node.js + Claude CLI from builder. The CLI now lives in the project
+# directory `npm ci` installed it into, not in the global prefix.
 COPY --from=builder /usr/bin/node /usr/bin/node
-COPY --from=builder /usr/lib/node_modules /usr/lib/node_modules
-COPY --from=builder /usr/bin/claude /usr/bin/claude
-RUN ln -sf /usr/bin/node /usr/bin/nodejs
+COPY --from=builder /opt/claude-code /opt/claude-code
+RUN ln -sf /usr/bin/node /usr/bin/nodejs \
+    && ln -sf /opt/claude-code/node_modules/.bin/claude /usr/bin/claude
 
 # ripgrep vendor symlink for Claude Code
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -81,8 +130,17 @@ RUN ARCH=$(dpkg --print-architecture) && \
         fi; \
     done
 
-# Copy Python packages + cached models from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+# Copy Python packages + cached models from builder.
+#
+# This was `COPY --from=builder /usr/local/lib/python3.12/site-packages ...`
+# against a python:3.14 base — a path that has not existed in either stage
+# since the base image moved off 3.12, so this image could not build at all.
+# It went unnoticed because nothing in CI builds this Dockerfile; the job
+# added in .github/workflows/ci.yml alongside this change is what makes the
+# next such breakage visible. The venv path carries no version, so a future
+# base bump cannot reintroduce the same class of failure.
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 COPY --from=builder /root/.cache/huggingface /home/cortex/.cache/huggingface
 
 # Non-root user
