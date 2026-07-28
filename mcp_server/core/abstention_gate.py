@@ -62,7 +62,7 @@ def _get_classifier() -> Any:
             "Install: pip install cortex-beam-abstain"
         )
         _classifier = None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("Failed to load abstention classifier: %s", e)
         _classifier = None
 

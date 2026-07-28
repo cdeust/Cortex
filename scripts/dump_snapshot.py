@@ -17,7 +17,7 @@ print("[dump] Fetching full graph from server…", flush=True)
 try:
     with urllib.request.urlopen(f"{SERVER}/api/graph", timeout=120) as r:
         data = json.load(r)
-except Exception as e:
+except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
     print(f"[dump] Failed to fetch graph: {e}", file=sys.stderr)
     print(
         "[dump] Make sure the server is running: CORTEX_IDLE_TIMEOUT=7200 uv run python3 mcp_server/server/http_standalone.py --type unified --port 3458",

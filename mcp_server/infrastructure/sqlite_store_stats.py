@@ -61,7 +61,7 @@ class SqliteStatsMixin:
                 "FROM memories WHERE stimulus_signature = ?",
                 (signature,),
             ).fetchone()
-        except Exception:
+        except sqlite3.Error:
             return 0, None
         if not row or not row["c"]:
             return 0, None
@@ -96,7 +96,7 @@ class SqliteStatsMixin:
                 "WHERE extinction_strength >= ? AND NOT is_stale",
                 (threshold,),
             ).fetchone()
-        except Exception:
+        except sqlite3.Error:
             return 0
         if not row or not row["c"]:
             return 0

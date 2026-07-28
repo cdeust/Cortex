@@ -174,7 +174,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             total_claims += len(claims)
             for c in claims:
                 claims_per_type[c.claim_type] = claims_per_type.get(c.claim_type, 0) + 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — per-memory batch isolation — failure is reported in the returned errors list
             errors.append(f"memory {row['id']}: {e}")
 
     store._conn.commit()

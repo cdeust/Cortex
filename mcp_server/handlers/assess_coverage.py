@@ -25,6 +25,7 @@ from typing import Any
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.observability import silent_failure
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -144,7 +145,8 @@ def _entity_density(
             "avg_entities_per_memory": round(avg, 2),
             "total_entities": total_entities,
         }
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("assess_coverage.entity_density", exc)
         return {"avg_entities_per_memory": 0.0, "total_entities": 0}
 
 

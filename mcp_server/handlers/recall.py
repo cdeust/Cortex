@@ -399,7 +399,7 @@ def _resolve_session_id() -> str | None:
     """
     try:
         return current_window_session()
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("session registry lookup failed", exc_info=True)
         return None
 
@@ -454,7 +454,7 @@ def _apply_co_activation(
                     for b in list(ents_b)[:5]:
                         if a != b:
                             store.reinforce_or_create_relationship(a, b, lr)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("recall.hebbian_co_activation")
         silent_failure.note("recall.hebbian_co_activation", exc)
 
 
@@ -466,7 +466,7 @@ def _apply_rules_and_order(
         rules = store.get_all_active_rules()
         if rules:
             results = memory_rules.apply_rules(results, rules, score_field="score")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("recall.neuro_symbolic_rules")
         silent_failure.note("recall.neuro_symbolic_rules", exc)
     results = results[:max_results]
     if settings.STRATEGIC_ORDERING_ENABLED:

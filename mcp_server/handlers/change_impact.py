@@ -152,7 +152,8 @@ def _apply_heat_bumps(store: Any, matches: list, boost: float) -> int:
         mid = m.memory_id
         try:
             cur = store.get_memory(int(mid)) if str(mid).isdigit() else None
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — per-memory failure must not abort the batch; observable via silent_failure
+            silent_failure.note("change_impact.memory_read", exc)
             cur = None
         if not cur:
             continue

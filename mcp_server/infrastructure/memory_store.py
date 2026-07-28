@@ -53,7 +53,7 @@ def _try_pg_verbose(
         from mcp_server.infrastructure.pg_store import PgMemoryStore
 
         return PgMemoryStore(database_url=database_url), None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         msg = f"{type(exc).__name__}: {exc}"
         logger.warning("PostgreSQL unavailable (%s), falling back to SQLite", msg)
         return None, msg
@@ -118,7 +118,7 @@ def reset_shared_store() -> None:
             if callable(close):
                 try:
                     close()
-                except Exception:  # pragma: no cover - defensive teardown
+                except Exception:  # noqa: BLE001 — pragma: no cover - defensive teardown
                     logger.warning("error closing shared store", exc_info=True)
         _shared_stores.clear()
 

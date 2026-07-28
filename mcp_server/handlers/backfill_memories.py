@@ -195,7 +195,7 @@ async def _import_file(
 
     try:
         records = read_head_tail(path)
-    except Exception:
+    except OSError:
         return 0, 0
 
     if not records:
@@ -238,7 +238,8 @@ def _build_dry_run_preview(
                 {c for item in items for c in find_concepts(item.get("content", ""))}
             ),
         }
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("backfill.preview", exc)
         return None
 
 

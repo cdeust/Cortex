@@ -26,6 +26,7 @@ from typing import Any
 
 from mcp_server.errors import McpConnectionError
 from mcp_server.infrastructure.mcp_client import MCPClient
+from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,8 @@ def is_enabled() -> bool:
         from mcp_server.infrastructure.memory_config import get_memory_settings
 
         return bool(get_memory_settings().AP_ENABLED)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — config unavailable (test import-order edge case): on-by-default; observable via silent_failure
+        silent_failure.note("ap_bridge.settings_read", exc)
         # Config system unavailable (e.g. test import-order edge case):
         # fall back to the on-by-default contract.
         return True
@@ -275,7 +277,7 @@ class APBridge:
                 self._connected = True
                 self._unavailable_reason = None  # clear any stale poison
                 return True
-            except (McpConnectionError, Exception) as exc:
+            except (McpConnectionError, Exception) as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
                 # Leave _connected False so the NEXT call retries (cold-start
                 # / transient failures self-heal instead of poisoning the
                 # bridge for the process lifetime).
@@ -298,7 +300,7 @@ class APBridge:
             return None
         try:
             return await self._client.call(tool, args or {})
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
             self._unavailable_reason = f"{type(exc).__name__}: {exc}"
             print(
                 f"[cortex] AP call {tool} failed: {exc}",

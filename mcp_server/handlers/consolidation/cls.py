@@ -52,7 +52,7 @@ def _is_promotion_noise(mem: dict) -> bool:
     if isinstance(tags, str):
         try:
             tags = _json.loads(tags)
-        except Exception:
+        except ValueError:
             tags = []
     tag_set = {str(t) for t in tags}
     return bool(tag_set & {"auto-captured", "memory-replica"})
@@ -244,7 +244,8 @@ def _count_multi_member_clusters(
         clusters = cluster_by_similarity(
             episodic, similarity_fn, threshold=_CLUSTER_THRESHOLD
         )
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("cls.cluster_count", exc)
         return 0
     return sum(1 for c in clusters if len(c) >= 2)
 
@@ -468,7 +469,7 @@ def _discover_causal_edges(
             min_observations=_PC_MIN_OBSERVATIONS,
         )
         return _store_causal_edges(store, all_entities, edges), qualifying
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("Causal discovery failed: %s", exc, exc_info=True)
         return 0, 0
 
@@ -523,6 +524,6 @@ def _store_causal_edges(
                 }
             )
             count += 1
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("cls.causal_edge_persist")
             silent_failure.note("cls.causal_edge_persist", exc)
     return count

@@ -52,7 +52,7 @@ class SqliteMoodMixin:
                 "SELECT valence FROM user_mood WHERE user_id = ?",
                 (user_id,),
             ).fetchone()
-        except Exception:
+        except sqlite3.Error:
             # user_mood table absent (pre-migration DB) — safe no-op.
             return None
         if row is None:
@@ -81,7 +81,7 @@ class SqliteMoodMixin:
                 "SELECT valence, arousal FROM user_mood WHERE user_id = ?",
                 (user_id,),
             ).fetchone()
-        except Exception:
+        except sqlite3.Error:
             return None
         if row is None:
             return None
@@ -167,6 +167,6 @@ class SqliteMoodMixin:
                 raw = row["embedding"] if hasattr(row, "__getitem__") else row[0]
                 if raw is not None:
                     result[int(mid)] = bytes(raw)
-            except Exception:
+            except sqlite3.Error:
                 continue
         return result

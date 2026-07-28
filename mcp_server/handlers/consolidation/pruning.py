@@ -48,7 +48,7 @@ def run_pruning_cycle(store: MemoryStore) -> dict:
             "edges_pruned": edges_pruned,
             "entities_archived": entities_archived,
         }
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Pruning cycle failed (non-fatal)")
         return {"edges_pruned": 0, "entities_archived": 0}
 

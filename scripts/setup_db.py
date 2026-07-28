@@ -85,7 +85,7 @@ def _pg_is_running(host: str, port: str) -> bool:
             timeout=5,
         )
         return r.returncode == 0
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         return False
 
 
@@ -135,7 +135,7 @@ def _probe_database(host: str, port: str, dbname: str) -> tuple[str, str]:
             timeout=5,
             text=True,
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — setup probe contract — failure is returned as ('error', message)
         return "error", str(e)
     if r.returncode != 0:
         detail = r.stderr.strip()
@@ -156,7 +156,7 @@ def _create_db(host: str, port: str, dbname: str) -> tuple[bool, str]:
             text=True,
         )
         return r.returncode == 0, r.stderr.strip()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — setup step contract — failure is returned as (False, message)
         return False, str(e)
 
 
@@ -185,7 +185,7 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
         if r.returncode != 0:
             return False, r.stderr.strip()
         return True, ""
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — setup step contract — failure is returned as (False, message)
         return False, str(e)
 
 
@@ -206,7 +206,7 @@ def _init_schema(database_url: str) -> tuple[bool, str]:
         for ddl in get_all_ddl():
             try:
                 conn.execute(ddl)
-            except Exception as stmt_err:
+            except Exception as stmt_err:  # noqa: BLE001 — per-statement DDL isolation — failure is reported in the schema-warnings list
                 first_line = ddl.strip().split("\n")[0][:60]
                 errors.append(f"{first_line}: {stmt_err}")
         conn.close()
@@ -217,7 +217,7 @@ def _init_schema(database_url: str) -> tuple[bool, str]:
         return True, ""
     except ImportError:
         return False, "psycopg not installed (run: pip install psycopg[binary])"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — setup step contract — failure is returned as (False, message)
         return False, str(e)
 
 
@@ -230,7 +230,8 @@ def _count_memories(database_url: str) -> int:
         row = conn.execute("SELECT COUNT(*) as c FROM memories").fetchone()
         conn.close()
         return row[0] if row else 0
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — cosmetic preflight count; failure is logged and reports 0
+        _log(f"memory count unavailable: {exc}")
         return 0
 
 

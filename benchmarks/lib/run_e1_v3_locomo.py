@@ -217,7 +217,7 @@ def _run_row(row: Row) -> dict:
             r10 = data.get("overall_recall10")
             cat_mrr = data.get("category_mrr", {}) or {}
             cat_r10 = data.get("category_recall10", {}) or {}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
             print(
                 f"[E1v3-LoCoMo][WARN] {row.label} parse {out_path}: {e}",
                 file=sys.stderr,

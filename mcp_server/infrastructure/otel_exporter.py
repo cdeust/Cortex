@@ -94,7 +94,7 @@ class OtelTelemetryExporter:
             result_count = sample.get("result_count", 0)
             if result_count:
                 self._results.record(float(result_count), attributes)
-        except Exception:
+        except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             # Telemetry export must never break the calling tool.
             logger.debug("OTLP metric export failed", exc_info=True)
 

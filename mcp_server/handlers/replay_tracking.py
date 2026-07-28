@@ -58,7 +58,7 @@ def track_replay_event(memory_id: int, store: Any) -> None:
     try:
         store.update_memory_access(memory_id)
         stats = store.increment_replay_count(memory_id)
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Replay tracking failed for memory %s", memory_id, exc_info=True)
         return
 
@@ -77,7 +77,7 @@ def track_replay_event(memory_id: int, store: Any) -> None:
 
     try:
         store.update_memory_hippocampal_dependency(memory_id, new_dependency)
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug(
             "Hippocampal dependency write failed for memory %s",
             memory_id,

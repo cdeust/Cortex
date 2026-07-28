@@ -198,7 +198,7 @@ def _pipeline_available() -> bool:
         )
 
         return discover_pipeline_command() is not None
-    except Exception:
+    except ImportError:
         return False
 
 
@@ -235,7 +235,7 @@ def _spawn_reanalyze(root: str) -> bool:
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"spawn failed: {exc}")
         return False
     return True
@@ -278,7 +278,7 @@ def main() -> None:
         return
     try:
         process_event(event)
-    except Exception as exc:  # never break the commit flow
+    except Exception as exc:  # noqa: BLE001 — never break the commit flow
         _log(f"unexpected error (ignored): {exc}")
 
 

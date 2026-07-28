@@ -126,7 +126,7 @@ async def run_domain_backfill_pass(
             out["pages_scanned"] = len(pages)
             for page in pages:
                 _process_page(conn, page, containing, apply=apply, out=out)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("wiki_domain_backfill_pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"
     return out

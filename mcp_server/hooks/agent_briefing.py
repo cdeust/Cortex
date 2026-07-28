@@ -255,7 +255,7 @@ def _connect():
         return None
     try:
         return psycopg.connect(_DATABASE_URL, row_factory=dict_row, autocommit=True)
-    except Exception:
+    except psycopg.Error:
         return None
 
 
@@ -309,7 +309,7 @@ def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dic
                         "source": "agent-prior",
                     }
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
             _log(f"agent-scoped query failed: {exc}")
 
     # Pass 2: Team decisions (protected + global)
@@ -345,7 +345,7 @@ def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dic
                         "source": f"team:{r.get('agent_context', '')}",
                     }
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
             _log(f"team decisions query failed: {exc}")
 
     return results

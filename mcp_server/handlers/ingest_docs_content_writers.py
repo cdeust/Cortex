@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Any
+from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,8 @@ def find_existing_doc_memory(store: Any, domain: str, rel_path: str) -> int | No
     tag = doc_tag(domain, rel_path)
     try:
         mems = store.get_memories_by_tag(tag, limit=5)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("ingest_docs_content.find_existing_doc", exc)
         return None
     for mem in mems:
         if tag in _memory_tags(mem):

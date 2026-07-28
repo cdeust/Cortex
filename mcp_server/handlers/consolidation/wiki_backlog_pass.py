@@ -49,7 +49,7 @@ def _lesson_promotion_backlog(store: Any) -> int | None:
 
         with store.batch_pool.connection() as conn:
             return count_lesson_promotion_candidates(conn)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("wiki_backlog_pass.lesson_promotion_backlog")
         silent_failure.note("wiki_backlog_pass.lesson_promotion_backlog", exc)
         return None
 

@@ -146,7 +146,7 @@ class TitansMemory:
 
             return max(0.0, min(1.0, surprise))
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.debug("Titans surprise computation failed: %s", e)
             return 0.5
 
@@ -211,7 +211,7 @@ class TitansMemory:
             surprise_raw = torch.norm(grad, p="fro").item()
             return max(0.0, min(1.0, float(np.tanh(surprise_raw))))
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.debug("Titans memory update failed: %s", e)
             return 0.5
 

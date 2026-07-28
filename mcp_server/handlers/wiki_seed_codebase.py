@@ -256,7 +256,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             )
             if result.get("stored") or result.get("memory_id"):
                 imported += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — per-file batch isolation — failure is reported in the returned errors list
             errors.append(f"{rel}: {e}")
 
     summary: dict[str, Any] = {
@@ -278,7 +278,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
                 "drafts_approved": pipe.get("drafts_approved", 0),
                 "pages_published": pipe.get("pages_published", 0),
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — optional pipeline step — failure is returned as summary['pipeline']['error']
             summary["pipeline"] = {"error": str(e)}
 
     return summary

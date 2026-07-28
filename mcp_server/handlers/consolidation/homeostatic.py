@@ -157,7 +157,7 @@ def run_homeostatic_cycle(
             "by_class": outcomes,
             "memories_scanned": total,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("Homeostatic cycle failed: %s", exc, exc_info=True)
         return {
             "scaling_applied": False,

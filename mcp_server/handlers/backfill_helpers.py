@@ -192,7 +192,8 @@ def gist_oversized_content(content: str) -> str:
         from mcp_server.infrastructure.artifact_store import store_artifact
 
         path = store_artifact(content)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("backfill.artifact_store", exc)
         return content
     pointer = f"**Artifact:** `{path}` ({len(content)} chars full output)"
     return f"{extract_gist(content)}\n\n{pointer}"
@@ -226,7 +227,8 @@ def _upsert_concept_entity(store: MemoryStore, concept: str) -> int | None:
                 "heat": 0.8,
             }
         )
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("backfill.concept_entity_upsert", exc)
         return None
 
 

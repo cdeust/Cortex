@@ -408,7 +408,7 @@ def main() -> int:
         for cond in _conditions_iter(args.quick):
             try:
                 result = run_trial(n, cond, args.seed, args.queries, args.db_url)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
                 print(f"  [n={n} cond={cond}] FAILED: {exc!r}")
                 continue
             saved_path = _save_trial(out_dir, result)

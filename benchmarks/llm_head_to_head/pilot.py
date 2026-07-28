@@ -151,7 +151,7 @@ def dry_run(n: int, split: str = "10M") -> int:
 
     try:
         items_iter = data_loader.iter_items(split)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
         print(
             f"[pilot] could not load BEAM-{split} dataset: {type(e).__name__}: {e}",
             file=sys.stderr,
@@ -278,7 +278,7 @@ def run_pilot_live(
             if len(items) >= n:
                 break
             items.append(it)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
         print(
             f"[pilot] failed to load BEAM-{split}: {type(e).__name__}: {e}",
             file=sys.stderr,
@@ -296,7 +296,7 @@ def run_pilot_live(
     # the same ground-truth memory population.
     try:
         from benchmarks.lib.bench_db import BenchmarkDB
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
         print(
             f"[pilot] could not import BenchmarkDB: {type(e).__name__}: {e}",
             file=sys.stderr,

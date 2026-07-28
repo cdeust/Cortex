@@ -32,7 +32,7 @@ def run_entity_merge_cycle(store: MemoryStore) -> dict:
         result = deduplicate_entities(entities)
         applied = _apply_merges(store, result.remap)
         return {"merges_applied": applied, "pairs_planned": len(result.remap)}
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Entity-merge cycle failed (non-fatal)")
         return {"merges_applied": 0, "pairs_planned": 0}
 

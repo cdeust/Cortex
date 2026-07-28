@@ -136,7 +136,7 @@ async def run_write_class_backfill_pass(
             out["scanned_groups"] = len(rows)
             for row in rows:
                 _process_source_group(conn, row, apply=apply, out=out)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("write_class_backfill_pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"
     return out

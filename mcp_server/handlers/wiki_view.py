@@ -134,7 +134,7 @@ def _execute_view(store: object, compiled: object, view_meta: dict) -> dict:
         try:
             cur.execute(compiled.sql, compiled.params)
             rows = list(cur.fetchall())
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — view execution boundary — any SQL failure is returned as the view's error report
             return {
                 "view": view_meta,
                 "error": f"execution failed: {e}",

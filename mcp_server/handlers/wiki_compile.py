@@ -215,7 +215,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
             result = _publish_one(conn, d, dry_run=dry_run)
             published.append(result)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — per-draft batch isolation — failure is reported in the returned errors list
             errors.append(f"draft {d.get('id')}: {e}")
 
     if not dry_run:

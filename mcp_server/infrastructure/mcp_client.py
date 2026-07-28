@@ -167,7 +167,7 @@ class MCPClient:
             raise McpConnectionError(
                 f"Failed to spawn: {e}",
                 {"command": command, "args": args},
-            )
+            ) from e
 
     async def _perform_handshake(self) -> None:
         """Initialize protocol, negotiate version, and discover tools."""
@@ -202,7 +202,7 @@ class MCPClient:
             raise McpConnectionError(
                 f"Handshake failed: {e}",
                 {"command": command},
-            )
+            ) from e
 
     async def call(self, name: str, args: dict | None = None) -> Any:
         """Call a tool on the remote MCP server."""
@@ -523,7 +523,7 @@ class MCPClient:
             safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in stem)
             pid = os.getpid()
             return open(base / f"{safe}.{pid}.log", "a", encoding="utf-8")
-        except Exception:
+        except OSError:
             return None
 
     async def _idle_loop(self) -> None:

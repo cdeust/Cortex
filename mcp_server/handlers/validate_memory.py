@@ -30,6 +30,7 @@ Can target a single memory, a domain, a directory, or all memories
 from __future__ import annotations
 
 import hashlib
+import http.client
 import os
 import urllib.error
 import urllib.request
@@ -259,7 +260,7 @@ def _check_url_reachable(url: str, *, timeout: float) -> bool:
             return 200 <= resp.status < 400
     except urllib.error.HTTPError as exc:
         return 200 <= exc.code < 400
-    except Exception:
+    except (OSError, ValueError, http.client.HTTPException):
         return False
 
 

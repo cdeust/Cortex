@@ -77,7 +77,7 @@ def _redact_db_url(url: str) -> str:
     _pw_keys = ("password", "pgpassword")
     try:
         parsed = urllib.parse.urlparse(url)
-    except Exception:
+    except ValueError:
         return url
     if not parsed.scheme:
         return url
@@ -158,7 +158,7 @@ def _parse_db_host_port(url: str) -> tuple[str, str]:
         parsed = urllib.parse.urlparse(url)
         host = parsed.hostname or "localhost"
         port = str(parsed.port) if parsed.port else "5432"
-    except Exception:
+    except ValueError:
         host, port = "localhost", "5432"
     return host, port
 
@@ -334,7 +334,7 @@ def _postgres_checks() -> list[tuple[str, bool]]:
         conn = psycopg.connect(DATABASE_URL, autocommit=True)
         conn.execute("SELECT 1")
         checks.append(("PostgreSQL connection", True))
-    except Exception:
+    except Exception:  # noqa: BLE001 — setup verification probe — failure becomes a failed check row, never an exception
         checks.append(("PostgreSQL connection", False))
         return checks
 
@@ -343,7 +343,7 @@ def _postgres_checks() -> list[tuple[str, bool]]:
             "SELECT COUNT(*) FROM pg_extension WHERE extname IN ('vector', 'pg_trgm')"
         ).fetchone()
         checks.append(("Extensions (pgvector, pg_trgm)", row[0] == 2))
-    except Exception:
+    except Exception:  # noqa: BLE001 — setup verification probe — failure becomes a failed check row, never an exception
         checks.append(("Extensions", False))
 
     try:
@@ -351,7 +351,7 @@ def _postgres_checks() -> list[tuple[str, bool]]:
             "SELECT COUNT(*) FROM pg_proc WHERE proname = 'recall_memories'"
         ).fetchone()
         checks.append(("PL/pgSQL recall_memories()", row[0] > 0))
-    except Exception:
+    except Exception:  # noqa: BLE001 — setup verification probe — failure becomes a failed check row, never an exception
         checks.append(("PL/pgSQL procedures", False))
 
     conn.close()

@@ -96,9 +96,9 @@ def process_event(event: dict[str, Any] | None) -> None:
             advanced = cascade_result.get("advanced", 0)
             if advanced > 0:
                 _log(f"Cascade: {advanced} memories advanced during compaction")
-        except Exception as cascade_exc:
+        except Exception as cascade_exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
             _log(f"Cascade failed (non-fatal): {cascade_exc}")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"Auto-checkpoint failed (non-fatal): {exc}")
 
 

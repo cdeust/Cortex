@@ -156,7 +156,7 @@ def _tags_of(mem: dict[str, Any]) -> list[str]:
     if isinstance(tags, str):
         try:
             tags = json.loads(tags)
-        except Exception:
+        except ValueError:
             tags = []
     return [str(t) for t in tags]
 
@@ -172,7 +172,7 @@ def _existing_distill_markers(store: Any) -> set[str]:
         return set()
     try:
         mems = store.get_memories_by_tag("lesson", limit=_TAG_SCAN_LIMIT)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("curate_distill.existing_markers")
         silent_failure.note("curate_distill.existing_markers", exc)
         return set()
     return {
@@ -185,7 +185,7 @@ def _fetch_tag_pool(store: Any, tag: str) -> list[dict[str, Any]]:
         return []
     try:
         return store.get_memories_by_tag(tag, limit=_TAG_SCAN_LIMIT)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("component")
         silent_failure.note(f"curate_distill.fetch_tag_pool.{tag}", exc)
         return []
 
@@ -199,7 +199,7 @@ def _fetch_co_access_pairs(store: Any) -> list[tuple[int, int, float]]:
             min_access=_MIN_RECURRING_ACCESS,
             limit=_CO_ACCESS_SCAN_LIMIT,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("curate_distill.fetch_co_access_pairs")
         silent_failure.note("curate_distill.fetch_co_access_pairs", exc)
         return []
 
@@ -215,7 +215,7 @@ def _fetch_memory_previews(
         if mem is None:
             try:
                 mem = store.get_memory(mid)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("curate_distill.fetch_memory_preview")
                 silent_failure.note("curate_distill.fetch_memory_preview", exc)
                 mem = None
             if mem:
@@ -307,7 +307,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             if mem is None:
                 try:
                     mem = store.get_memory(mid)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("curate_distill.co_access_heat_lookup")
                     silent_failure.note("curate_distill.co_access_heat_lookup", exc)
                     mem = None
                 if mem:

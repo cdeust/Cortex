@@ -154,7 +154,7 @@ def ingest_memory(
 
             extracted = knowledge_graph.extract_entities(chunk_content)
             write_post_store.persist_entities(extracted, domain, chunk_content, store)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("memory_ingest.entity_extraction")
             # Entity extraction failures must not block ingest -- but a
             # failure that repeats on every chunk (e.g. a persist_entities
             # regression) must still be observable, not just non-fatal.

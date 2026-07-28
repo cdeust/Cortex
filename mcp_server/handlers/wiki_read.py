@@ -145,7 +145,7 @@ def _resolve_session_id() -> str | None:
     """
     try:
         return current_window_session()
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("session registry lookup failed", exc_info=True)
         return None
 
@@ -186,7 +186,7 @@ def _cite_page(rel_path: str) -> None:
             memory_id=page.get("memory_id"),
         )
         conn.commit()
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug(
             "wiki_read citation side-effect failed for %s", rel_path, exc_info=True
         )

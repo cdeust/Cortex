@@ -98,7 +98,7 @@ def write_process_pages(processes: list[dict[str, Any]]) -> list[str]:
             rel_path, markdown = render_process_page(proc)
             write_page(WIKI_ROOT, rel_path, markdown, mode="replace")
             written.append(rel_path)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.debug("process page write failed: %s", exc)
     if skipped_empty:
         logger.info("skipped %d empty process pages (symbol_count=0)", skipped_empty)

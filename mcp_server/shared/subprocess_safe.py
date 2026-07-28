@@ -80,7 +80,7 @@ def run_with_hard_timeout(
         except subprocess.TimeoutExpired:
             pass
         return None
-    except Exception:
+    except (OSError, ValueError):
         proc.kill()
         return None
 

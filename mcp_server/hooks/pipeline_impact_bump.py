@@ -99,13 +99,14 @@ async def _pipeline_detect_changes(project_root: str, file_path: str) -> list[st
             normalise_mcp_payload,
         )
         from mcp_server.infrastructure.memory_store import MemoryStore
-    except Exception:
+    except ImportError:
         return []
 
     try:
         store = MemoryStore()
         graph_path = find_cached_graph(store, project_root)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
+        _log(f"cached-graph lookup failed: {exc}")
         return []
 
     if not graph_path:
@@ -122,7 +123,7 @@ async def _pipeline_detect_changes(project_root: str, file_path: str) -> list[st
             "detect_changes",
             {"graph_path": graph_path, "diff_text": diff_text},
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"detect_changes failed: {exc}")
         return []
 
@@ -159,7 +160,7 @@ def _bump_heat_for_symbols(symbol_names: list[str]) -> int:
     db_url = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
     try:
         conn = psycopg.connect(db_url, autocommit=True)
-    except Exception:
+    except psycopg.Error:
         return 0
 
     # Build an ILIKE OR clause with bounded params. Match any qualified name.
@@ -178,7 +179,7 @@ def _bump_heat_for_symbols(symbol_names: list[str]) -> int:
         )
         result = conn.execute(sql, [_IMPACT_BOOST, *params])
         count = result.rowcount if result else 0
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"heat bump failed: {exc}")
         count = 0
     finally:
@@ -202,7 +203,7 @@ def process_event(event: dict[str, Any]) -> None:
     project_root = os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd()
     try:
         symbols = asyncio.run(_pipeline_detect_changes(project_root, file_path))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"pipeline call failed: {exc}")
         return
 

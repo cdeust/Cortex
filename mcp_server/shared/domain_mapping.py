@@ -102,7 +102,7 @@ def _get_remote_url(repo_path: Path) -> str:
                 if value.strip():
                     return value.strip()
         return ""
-    except Exception:
+    except OSError:
         return ""
 
 

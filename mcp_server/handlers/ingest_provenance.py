@@ -141,9 +141,7 @@ async def fetch_ap_version_via_bridge() -> str | None:
     bridge = APBridge()
     try:
         payload = await bridge.health_check()
-    except (
-        Exception
-    ) as exc:  # pragma: no cover - defensive, bridge.call already swallows
+    except Exception as exc:  # noqa: BLE001 — defensive bridge boundary; failure is logged, returns None  # pragma: no cover
         logger.debug("ap version (bridge path) unavailable: %s", exc)
         return None
     finally:
@@ -160,7 +158,7 @@ async def fetch_ap_version_via_pool() -> str | None:
     """
     try:
         payload = await call_upstream(_UPSTREAM_SERVER, "health_check", {})
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("ap version (pool path) unavailable: %s", exc)
         return None
     return _extract_version(payload)

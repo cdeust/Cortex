@@ -65,7 +65,7 @@ def read_head_tail(file_path: str | Path) -> list[dict]:
                 records.extend(_parse_jsonl_lines(tail_lines))
 
         return records
-    except Exception:
+    except OSError:
         return []
 
 
@@ -180,7 +180,7 @@ def discover_all_memories() -> list[dict[str, Any]]:
                 )
                 if result:
                     memories.append(result)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
                 print(
                     f"[methodology-agent] Failed to read {memory_dir / file_name}: {e}",
                     file=sys.stderr,
@@ -235,7 +235,7 @@ def _scan_project_conversations(
             record = _parse_conversation_file(file_path, project_name)
             if record:
                 out.append(record)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
             print(
                 f"[methodology-agent] Failed to read conversation {file_path}: {e}",
                 file=sys.stderr,

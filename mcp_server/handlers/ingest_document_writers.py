@@ -16,6 +16,7 @@ from typing import Any
 
 from mcp_server.core.document_model import DocumentProvenance
 from mcp_server.core.document_normalizer import NormalizedDocument
+from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,8 @@ def already_ingested(store: Any, prov: DocumentProvenance) -> int | None:
     tag = prov.dedup_tag()
     try:
         mems = store.get_memories_by_tag(tag, limit=5)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("ingest_document.already_ingested", exc)
         return None
     for mem in mems:
         if tag in _memory_tags(mem):
@@ -103,7 +105,7 @@ def write_document_memories(
     summary_id: int | None = None
     try:
         summary_id = store.insert_memory(summary_record)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("ingest_document summary insert failed: %s", exc)
 
     section_ids: list[int] = []
@@ -122,7 +124,7 @@ def write_document_memories(
         }
         try:
             section_ids.append(store.insert_memory(record))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.warning(
                 "ingest_document section insert failed (%s): %s", mem.heading, exc
             )

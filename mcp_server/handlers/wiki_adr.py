@@ -19,6 +19,7 @@ from mcp_server.infrastructure.wiki_store import (
 )
 
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.observability import silent_failure
 
 schema = {
     "annotations": IDEMPOTENT_WRITE,
@@ -119,7 +120,8 @@ async def _store_pointer_memory(rel_path: str, content: str, tags: list[str]) ->
                 "force": True,
             }
         )
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("wiki_adr.pointer_memory", exc)
         return
 
 

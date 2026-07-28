@@ -192,7 +192,7 @@ def _gist_or_full(output: str) -> tuple[str, str | None]:
         from mcp_server.infrastructure.artifact_store import store_artifact
 
         path = store_artifact(output)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"artifact write failed (non-fatal, full output kept): {exc}")
         return output, None
     pointer = f"**Artifact:** `{path}` ({len(output)} chars full output)"
@@ -358,7 +358,7 @@ def _maybe_run_cascade() -> None:
         advanced = result.get("advanced", 0)
         if advanced > 0:
             _log(f"cascade: {advanced} memories advanced")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"cascade failed (non-fatal): {exc}")
 
 
@@ -396,7 +396,7 @@ def process_event(event: dict[str, Any]) -> None:
 
     try:
         _store_memory(tool_name, content, tags, cwd)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"capture failed (non-fatal): {exc}")
 
 

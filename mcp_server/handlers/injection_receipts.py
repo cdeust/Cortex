@@ -113,7 +113,7 @@ def emit_injection_receipt(
         return store.insert_injection_receipt(
             channel=channel, items=items, session_id=session_id
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("injection receipt emission failed", exc_info=True)
         return None
 
@@ -145,6 +145,6 @@ def emit_hook_receipt(
         return insert_receipt_on_connection(
             conn, channel=channel, items=items, session_id=session_id
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("hook receipt emission failed", exc_info=True)
         return None

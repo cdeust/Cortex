@@ -19,6 +19,7 @@ from typing import Any
 
 from . import headless_authoring as _root
 from .page_io import _parse_frontmatter
+from mcp_server.observability import silent_failure
 
 
 def _scan_pages_with_gaps(wiki_root: Path) -> list[tuple[Path, dict[str, Any], str]]:
@@ -40,7 +41,7 @@ def _scan_pages_with_gaps(wiki_root: Path) -> list[tuple[Path, dict[str, Any], s
     # Lazy import to keep this module self-contained.
     try:
         from mcp_server.core.wiki_curation_gaps import missing_sections
-    except Exception:
+    except ImportError:
         missing_sections = None  # type: ignore[assignment]
 
     out: list[tuple[Path, dict[str, Any], str]] = []
@@ -67,7 +68,8 @@ def _scan_pages_with_gaps(wiki_root: Path) -> list[tuple[Path, dict[str, Any], s
         ):
             try:
                 live = missing_sections(body)
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+                silent_failure.note("candidate_scan.live_audit", exc)
                 live = []
             if live:
                 out.append((md, meta, body))
@@ -90,7 +92,8 @@ def _collect_anchor_candidates(
         from mcp_server.shared.domain_mapping import _build_registry
 
         domains = sorted({r.canonical for r in _build_registry().repos})
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("candidate_scan.registry", exc)
         return []
 
     candidates: list[Any] = []
@@ -100,7 +103,8 @@ def _collect_anchor_candidates(
             continue
         try:
             cov = audit_domain(str(wiki_root), domain)
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+            silent_failure.note("candidate_scan.audit_domain", exc)
             continue
         for sc in cov.scopes:
             if sc.covered:

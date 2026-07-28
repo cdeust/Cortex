@@ -52,6 +52,7 @@ from typing import Any
 
 from mcp_server.core.curation import identify_derivable_facts
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,7 @@ def _tags_of(mem: dict[str, Any]) -> list[str]:
     if isinstance(tags, str):
         try:
             tags = json.loads(tags)
-        except Exception:
+        except ValueError:
             tags = []
     return [str(t) for t in tags]
 
@@ -181,7 +182,8 @@ def _existing_derived_markers(store: MemoryStore) -> set[str]:
         if not hasattr(store, "get_memories_by_tag"):
             return set()
         mems = store.get_memories_by_tag("derived", limit=_CANDIDATE_SCAN_LIMIT)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("memify_derive.derived_markers", exc)
         return set()
     markers: set[str] = set()
     for mem in mems:
@@ -214,7 +216,8 @@ def _provenance_memory_ids(store: MemoryStore, rel: dict[str, Any]) -> list[int]
     for entity_id in (rel["source_entity_id"], rel["target_entity_id"]):
         try:
             mems = store.get_memories_for_entity(entity_id)
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+            silent_failure.note("memify_derive.provenance_memories", exc)
             mems = []
         for mem in mems[:per_entity_cap]:
             mid = mem.get("id")

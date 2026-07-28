@@ -205,7 +205,7 @@ def _resolve_session_id(explicit: str | None) -> str:
         return explicit
     try:
         return current_window_session() or "default"
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("session registry lookup failed", exc_info=True)
         return "default"
 
@@ -251,7 +251,7 @@ def _is_tier_noise(mem: dict) -> bool:
             import json as _json
 
             tags = _json.loads(tags)
-        except Exception:
+        except ValueError:
             tags = []
     tag_set = {str(t) for t in tags}
     return bool(tag_set & {"auto-captured", "memory-replica"})

@@ -108,7 +108,7 @@ def _ensure_reranker() -> Any:
 
         _flashrank_instance = Ranker(model_name=_MODEL_NAME, cache_dir=str(cache))
         return _flashrank_instance
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         _flashrank_failed = True
         _flashrank_load_error = str(exc)
         logger.warning(
@@ -196,7 +196,7 @@ def rerank_results(
         return _blend_scores(
             candidates, ce_scores, alpha, adaptive=adaptive, apply_platt=apply_platt
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("reranker.rerank_call")
         # Distinct failure point from _ensure_reranker's load failure (see
         # reranker_model.py docstring, bb1c581f): the model loaded fine but
         # THIS inference call raised (malformed passage, ONNX runtime error,
@@ -233,6 +233,6 @@ def get_raw_ce_score(
         if not results:
             return None
         return float(results[0].get("score", 0.0))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("reranker.raw_ce_score")
         silent_failure.note("reranker.raw_ce_score", exc)
         return None

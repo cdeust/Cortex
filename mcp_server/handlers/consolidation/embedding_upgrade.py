@@ -47,7 +47,7 @@ def run_embedding_upgrade_cycle(
         return {"upgraded": 0, "reason": "no neural model available yet"}
     try:
         candidates = store.select_fallback_embeddings(limit=_MAX_UPGRADE_PER_CYCLE)
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Embedding-upgrade cycle: worklist query failed (non-fatal)")
         return {"upgraded": 0}
 
@@ -61,7 +61,7 @@ def run_embedding_upgrade_cycle(
             if emb:
                 store.reembed_memory(item["memory_id"], emb)
                 upgraded += 1
-        except Exception:
+        except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.debug(
                 "Embedding-upgrade failed for memory %s (non-fatal)",
                 item.get("memory_id"),

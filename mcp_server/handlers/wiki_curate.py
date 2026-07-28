@@ -172,7 +172,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
                 author="curator_auto",
             )
             counts[decision.verdict] += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — per-draft batch isolation — failure is reported in the returned errors list
             errors.append(f"draft {d.get('id')}: {e}")
 
     conn.commit()

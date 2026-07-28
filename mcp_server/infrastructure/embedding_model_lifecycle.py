@@ -245,7 +245,7 @@ class _EmbeddingLifecycleMixin:
             return
         except ImportError:
             raise  # PACKAGE_ABSENT — handled by _ensure_model
-        except Exception as exc:  # corrupt cache / unexpected — do NOT crash
+        except Exception as exc:  # noqa: BLE001 — corrupt cache / unexpected — do NOT crash
             self._engage_fallback(
                 ModelState.LOAD_RAISED, f"embedding model load failed: {exc}"
             )

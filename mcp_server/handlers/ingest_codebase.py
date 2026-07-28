@@ -420,7 +420,7 @@ async def _pull_processes(
                 logger.warning("get_processes: non-advancing cursor at %d", offset)
                 break
             offset = int(next_offset)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("get_processes failed: %s", exc)
     return procs
 
@@ -522,7 +522,7 @@ async def handler(
             "reason": "upstream_mcp_unreachable",
             "error": str(exc),
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("ingest_codebase analyze step failed: %s", exc, exc_info=True)
         _progress.close()
         return {

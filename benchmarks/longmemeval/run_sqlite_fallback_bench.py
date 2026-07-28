@@ -145,7 +145,7 @@ def _git_sha() -> str:
         return subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], text=True
         ).strip()
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         return "unknown"
 
 

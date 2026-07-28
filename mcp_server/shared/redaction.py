@@ -57,7 +57,7 @@ def redact_url(url: str) -> str:
         return url
     try:
         parsed = urllib.parse.urlparse(url)
-    except Exception:
+    except ValueError:
         return url  # postcondition: non-parseable → unchanged
 
     # urllib.parse treats a bare string like "not a url" as a path-only URL

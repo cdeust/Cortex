@@ -93,7 +93,7 @@ def _try_get_memory_store():
         _memory_store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
         _memory_available = True
         return _memory_store
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Memory system not available: %s", e)
         _memory_available = False
         return None
@@ -141,7 +141,7 @@ def _get_hot_memories(
             }
             for m in mems
         ]
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Failed to retrieve hot memories: %s", e)
         return []
 
@@ -179,7 +179,7 @@ def _get_fired_triggers(directory: str, first_message: str) -> list[dict[str, An
                     }
                 )
         return fired
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Failed to check prospective triggers: %s", e)
         return []
 

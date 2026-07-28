@@ -117,7 +117,7 @@ def _run() -> int:
 
     try:
         was_current = _probe_was_current(url, target_hash)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         print(f"cortex-migrate: cannot connect to database: {exc}", file=sys.stderr)
         return 1
 
@@ -128,7 +128,7 @@ def _run() -> int:
         # lock iff the recorded hash is stale. Single source of truth —
         # this module never re-applies DDL itself.
         store = PgMemoryStore(database_url=url)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         print(f"cortex-migrate: schema migration failed: {exc}", file=sys.stderr)
         return 1
     finally:

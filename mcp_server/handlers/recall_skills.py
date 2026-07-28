@@ -133,7 +133,7 @@ async def handler(args: dict) -> dict:
     store = get_shared_store()
     try:
         rows = store.get_procedural_skills(min_proficiency=min_proficiency)
-    except Exception as exc:  # store not migrated / unavailable
+    except Exception as exc:  # noqa: BLE001 — store not migrated / unavailable
         logger.warning("recall_skills store read failed: %s", exc)
         return {"skills": [], "count": 0}
 

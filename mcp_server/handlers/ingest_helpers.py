@@ -22,6 +22,7 @@ from typing import Any
 
 from mcp_server.infrastructure.mcp_client_pool import get_client
 from mcp_server.infrastructure.upstream_governor import govern
+from mcp_server.observability import silent_failure
 
 CODE_GRAPH_TAG_PREFIX = "_code_graph:"
 
@@ -119,7 +120,8 @@ def find_cached_graph(store, project_path: str) -> str | None:
             mems = store.get_memories_by_tag(tag, limit=20)
         else:  # test fakes / stores without the tag query
             mems = store.get_all_memories_for_decay()
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("ingest_helpers.cached_graph_lookup", exc)
         return None
 
     candidates: list[tuple[str, str]] = []  # (recency_key, graph_path)
@@ -245,7 +247,8 @@ def memoise_graph_path(
     }
     try:
         return store.insert_memory(record)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("ingest_helpers.graph_memo_insert", exc)
         return None
 
 

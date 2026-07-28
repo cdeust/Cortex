@@ -49,7 +49,7 @@ def main() -> None:
     # still installing on first session.
     try:
         from mcp_server.handlers.ingest_codebase import handler
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         print(f"[bg-ingest] ingest_codebase import failed: {exc}", file=sys.stderr)
         sys.exit(1)
 
@@ -63,7 +63,7 @@ def main() -> None:
 
     try:
         result = asyncio.run(handler(args))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         print(f"[bg-ingest] handler crashed: {exc}", file=sys.stderr)
         sys.exit(1)
 

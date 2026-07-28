@@ -48,7 +48,7 @@ def compute_hopfield_hdc(
                     hop = hopfield.retrieve(
                         q_emb, mat, ids, beta=settings.HOPFIELD_BETA, top_k=pool
                     )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("retrieval_signals.hopfield")
             silent_failure.note("retrieval_signals.hopfield", exc)
     try:
         if hot_mems:
@@ -58,7 +58,7 @@ def compute_hopfield_hdc(
                 threshold=0.05,
             )
             hdc = [(mid, (s + 1.0) / 2.0) for mid, s in raw]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("retrieval_signals.hdc")
         silent_failure.note("retrieval_signals.hdc", exc)
     return hop, hdc
 
@@ -101,7 +101,7 @@ def _compute_sr(
             g.setdefault(mem_b, {})[mem_a] = proximity * 0.45  # back-link weaker
         seeds = [m for m, _ in vec_results[:3]]
         return compute_sr_scores(seeds, g, top_k=pool)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("retrieval_signals.successor_representation")
         silent_failure.note("retrieval_signals.successor_representation", exc)
         return []
 
@@ -136,5 +136,6 @@ def _compute_sa(
             max_results=settings.SA_MAX_NODES,
             min_heat=min_heat,
         )
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("retrieval_signals.spreading_activation", exc)
         return []

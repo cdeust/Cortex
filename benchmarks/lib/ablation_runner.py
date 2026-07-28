@@ -176,7 +176,7 @@ def _git_sha() -> str:
             ["git", "rev-parse", "HEAD"], cwd=_ROOT, stderr=subprocess.DEVNULL
         )
         return out.decode().strip()
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         return "unknown"
 
 
@@ -450,7 +450,7 @@ def main() -> int:
                 quick=args.quick,
                 run_id=run_id if snapshot else None,
             )
-        except Exception as exc:  # source: ablation must be fail-soft per mech
+        except Exception as exc:  # noqa: BLE001 — source: ablation must be fail-soft per mech
             print(f"  [{mech.name}] FAILED: {exc!r}")
             continue
         out = _save(args.benchmark, mech, metrics, baseline, wall, rss, db_seed=db_seed)

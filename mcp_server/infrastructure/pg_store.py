@@ -74,7 +74,7 @@ def read_schema_hash(conn: psycopg.Connection) -> str | None:
     try:
         row = conn.execute("SELECT ddl_hash FROM schema_meta WHERE id = 1;").fetchone()
         return row["ddl_hash"] if row else None
-    except Exception:
+    except psycopg.Error:
         return None
 
 
@@ -454,7 +454,7 @@ class PgMemoryStore(
             for ddl in ddl_list:
                 try:
                     self._conn.execute(ddl)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
                     logger.warning(
                         "Schema statement failed: %s — %s",
                         ddl.split("\n")[0][:50],
@@ -468,7 +468,7 @@ class PgMemoryStore(
                     "SELECT pg_advisory_unlock(%s);", (self._SCHEMA_LOCK_ID,)
                 )
                 self._conn.commit()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
                 logger.warning("Failed to release schema advisory lock: %s", exc)
 
     @property
@@ -912,7 +912,7 @@ class PgMemoryStore(
                 (value, memory_id),
             )
             self._conn.commit()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("pg_store.update_memory_value")
             silent_failure.note("pg_store.update_memory_value", exc)
 
     def update_memory_extinction(
@@ -937,7 +937,7 @@ class PgMemoryStore(
                 (e, memory_id),
             )
             self._conn.commit()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("pg_store.update_memory_extinction")
             silent_failure.note("pg_store.update_memory_extinction", exc)
 
     # ── User mood (Bower 1981 mood-congruent recall) ──────────────────

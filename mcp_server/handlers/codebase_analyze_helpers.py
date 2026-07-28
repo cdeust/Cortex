@@ -162,7 +162,7 @@ def load_existing_hashes(store: MemoryStore) -> dict[str, tuple[int, str]]:
             file_path, content_hash = _extract_file_hash(tags)
             if file_path and content_hash:
                 hashes[file_path] = (mem_id, content_hash)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"hash load failed: {exc}")
     return hashes
 
@@ -198,7 +198,7 @@ def mark_stale(store: MemoryStore, memory_ids: list[int]) -> int:
                     (mid,),
                 )
         return len(memory_ids)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"mark stale failed: {exc}")
         return 0
 
@@ -304,7 +304,7 @@ def persist_entities(
         ie, ir = _persist_import_entities(store, analysis, file_eid, domain)
         entities += ie
         relationships += ir
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"entity persist failed for {analysis.path}: {exc}")
 
     return entities, relationships

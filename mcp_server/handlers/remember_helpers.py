@@ -410,7 +410,7 @@ def try_block_replica_upsert(
             "LIMIT 1",
             (vpath_json,),
         ).fetchall()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("remember_helpers.block_supersede_select")
         # Same shape as the spread_activation incident: a broken SELECT
         # here is indistinguishable from "no existing block row", so the
         # caller silently falls through to inserting a DUPLICATE row
@@ -430,7 +430,7 @@ def try_block_replica_upsert(
     if embedding is not None:
         try:
             emb_bytes = _np.asarray(embedding, dtype=_np.float32).tobytes()
-        except Exception:
+        except (ValueError, TypeError):
             emb_bytes = None
 
     try:
@@ -452,7 +452,7 @@ def try_block_replica_upsert(
                 "WHERE id = %s",
                 (content, _json.dumps(tags), source, existing_id),
             )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("remember_helpers.block_supersede_update")
         silent_failure.note("remember_helpers.block_supersede_update", exc)
         return False, None
 
@@ -593,7 +593,8 @@ def _build_insert_record(
         record["source_attribution"] = source_monitoring.classify_source(
             content, source_field=source
         ).attribution
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("remember_helpers.source_attribution", exc)
         record["source_attribution"] = "unknown"
     # E1 habituation: persist the normalised stimulus-identity key so that the
     # next presentation of this same content is counted as a repeat by the write
@@ -603,7 +604,8 @@ def _build_insert_record(
         from mcp_server.core import habituation
 
         record["stimulus_signature"] = habituation.stimulus_signature(content)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("remember_helpers.stimulus_signature", exc)
         record["stimulus_signature"] = ""
     etag = mod.get("emotional_tag")
     record["arousal"] = round(etag["arousal"], 4) if etag and "arousal" in etag else 0.0

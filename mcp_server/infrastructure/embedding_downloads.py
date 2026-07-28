@@ -43,7 +43,7 @@ def _spawn_detached(cmd: list[str], what: str) -> None:
             start_new_session=True,
         )
         logger.info("Background %s started", what)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Background %s failed to start: %s", what, exc)
 
 

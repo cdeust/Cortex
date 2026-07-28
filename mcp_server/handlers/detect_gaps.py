@@ -20,6 +20,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.observability import silent_failure
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -222,7 +223,8 @@ def _cognitive_style_gaps(domain: str | None) -> list[dict[str, Any]]:
                 spot["gap_type"] = "cognitive_blind_spot"
                 gaps.append(spot)
         return gaps[:10]
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("detect_gaps.blind_spots", exc)
         return []
 
 

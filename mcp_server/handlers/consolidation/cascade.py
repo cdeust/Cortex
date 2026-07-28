@@ -66,7 +66,7 @@ def run_cascade_advancement(store: MemoryStore) -> dict:
             "transitions_count": len(transitions),
             "transitions_preview": transitions[:_TRANSITION_PREVIEW_CAP],
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("Cascade advancement failed: %s", exc, exc_info=True)
         return {
             "advanced": 0,

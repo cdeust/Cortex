@@ -324,7 +324,7 @@ async def _claude_invoke(
     except FileNotFoundError:
         logger.warning("headless-authoring: claude binary not found on PATH")
         return InvokeResult(text=None, cost_usd=0.0)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("headless-authoring: failed to start claude subprocess: %s", exc)
         return InvokeResult(text=None, cost_usd=0.0)
 
@@ -337,7 +337,7 @@ async def _claude_invoke(
             "headless-authoring: claude -p timed out after %.0fs", call_timeout
         )
         return InvokeResult(text=None, cost_usd=0.0)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("headless-authoring: claude -p communicate failed: %s", exc)
         return InvokeResult(text=None, cost_usd=0.0)
     finally:

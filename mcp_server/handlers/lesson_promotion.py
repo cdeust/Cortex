@@ -30,6 +30,7 @@ from mcp_server.infrastructure.memory_store import get_shared_store
 from mcp_server.infrastructure.pg_store_lesson_promotion import (
     list_lesson_promotion_candidates,
 )
+from mcp_server.observability import silent_failure
 
 schema = {
     "title": "Lesson promotion",
@@ -80,7 +81,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
         store = get_shared_store()
         candidates = list_lesson_promotion_candidates(store._conn, limit=limit)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("lesson_promotion.candidates", exc)
         candidates = []
 
     jobs = build_promotion_jobs(candidates)

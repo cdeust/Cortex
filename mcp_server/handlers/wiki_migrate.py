@@ -350,7 +350,7 @@ def _upsert_all_pages(
                 written += 1
             else:
                 unchanged += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — per-page batch isolation — failure is reported in the returned errors list
             errors.append(f"{rp}: {e}")
     return id_by_rel, written, unchanged, errors, warnings
 
@@ -374,7 +374,7 @@ def _upsert_all_links(
             for slug in set(targets):
                 upsert_link(conn, page_id, slug, link_kind="inline")
                 written += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — per-page batch isolation — failure is reported in the returned errors list
             errors.append(f"{rp} links: {e}")
     return written, errors
 

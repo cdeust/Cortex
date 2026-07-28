@@ -114,7 +114,7 @@ def compute_duration(first_ts: str | None, last_ts: str | None) -> int | None:
         t1 = datetime.fromisoformat(first_ts.replace("Z", "+00:00"))
         t2 = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
         return int((t2 - t1).total_seconds() * 1000)
-    except Exception:
+    except (ValueError, TypeError):
         return None
 
 

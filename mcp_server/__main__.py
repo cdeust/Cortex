@@ -35,7 +35,7 @@ try:  # pragma: no cover — defensive; sentence-transformers is mandatory
     import scipy.special  # noqa: F401
     import sklearn.utils  # noqa: F401
     import sklearn.utils.validation  # noqa: F401
-except Exception as _preload_exc:
+except Exception as _preload_exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
     # Degraded install: the lazy import inside embedding_engine will fail
     # loudly on first use; here we only lose the deadlock-avoidance preload.
     print(

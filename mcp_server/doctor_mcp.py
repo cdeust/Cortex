@@ -457,7 +457,7 @@ def _check_pg_reachable() -> McpCheck:
     try:
         with psycopg.connect(url, connect_timeout=5) as conn:
             row = conn.execute("SELECT 1").fetchone()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — diagnostic probe — any failure becomes the check's failure report
         # Catch-all here is intentional: psycopg raises a wide variety of
         # subclasses (OperationalError, DatabaseError, etc.) and we want
         # the precise exception type + message in the report.
@@ -515,7 +515,7 @@ def _check_pg_extensions() -> McpCheck:
     try:
         with psycopg.connect(url, connect_timeout=5) as conn:
             rows = conn.execute(attempted).fetchall()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — diagnostic probe — any failure becomes the check's failure report
         # scrub_secrets guards against psycopg OperationalError embedding the
         # full DSN (including password) in its message on connection failure.
         return McpCheck(

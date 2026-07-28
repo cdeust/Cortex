@@ -165,7 +165,7 @@ async def run_memory_domain_backfill_pass(
                     out=out,
                 )
         out["filled"] = sum(out["by_evidence"].values())
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("memory_domain_backfill_pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"
     return out

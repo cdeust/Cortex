@@ -257,10 +257,10 @@ def _safe_get_factor(store: MemoryStore, domain: str, cls: str) -> float:
         # shape rather than fail the cycle.
         try:
             return float(store.get_homeostatic_factor(domain))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.debug("get_homeostatic_factor(%r) failed: %s", domain, exc)
             return 1.0
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("get_homeostatic_factor(%r, %r) failed: %s", domain, cls, exc)
         return 1.0
 

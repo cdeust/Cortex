@@ -54,6 +54,7 @@ from mcp_server.infrastructure.wiki_store import (
 )
 
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +169,8 @@ async def _store_pointer_memory(rel_path: str, content: str, tags: list[str]) ->
                 "force": True,
             }
         )
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("wiki_write.pointer_memory", exc)
         return
 
 
@@ -207,7 +209,8 @@ def _sync_page_and_cite(rel_path: str, content: str, memory_ids: list[int]) -> i
             return 0
         try:
             session_id = current_window_session() or ""
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+            silent_failure.note("wiki_write.session_lookup", exc)
             session_id = ""
         written = 0
         for mid in memory_ids:
@@ -222,7 +225,7 @@ def _sync_page_and_cite(rel_path: str, content: str, memory_ids: list[int]) -> i
                 written += 1
         conn.commit()
         return written
-    except Exception:
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug(
             "wiki_write page-sync/citation side-effect failed for %s",
             rel_path,

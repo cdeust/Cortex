@@ -57,7 +57,7 @@ def _existing_substantive(page_path: Path) -> bool:
             if end >= 0:
                 text = text[end + 4 :]
         return prose_char_count(text) >= 1500
-    except Exception:
+    except (ImportError, OSError):
         return False
 
 

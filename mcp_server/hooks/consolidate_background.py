@@ -64,7 +64,7 @@ def main() -> None:
     # Lazy import so a failure here doesn't crash the spawn loop.
     try:
         from mcp_server.handlers.consolidate import handler
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         print(f"[bg-consolidate] import failed: {exc}", file=sys.stderr)
         sys.exit(1)
 
@@ -86,7 +86,7 @@ def main() -> None:
     print(f"[bg-consolidate] starting at {start} deep={deep}", file=sys.stderr)
     try:
         result = asyncio.run(handler(args))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         # Non-fatal: keep the stamp untouched so the next session retries.
         print(f"[bg-consolidate] handler raised: {exc}", file=sys.stderr)
         sys.exit(1)

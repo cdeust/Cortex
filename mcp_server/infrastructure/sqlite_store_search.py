@@ -322,7 +322,7 @@ class SqliteSearchMixin:
                 (query, limit),
             ).fetchall()
             return [(r["rowid"], -r["rank"]) for r in rows]
-        except Exception:
+        except sqlite3.Error:
             return []
 
     def search_vectors(
@@ -363,7 +363,7 @@ class SqliteSearchMixin:
                 }
                 results = [(rid, d) for rid, d in results if rid in current]
             return results
-        except Exception:
+        except (sqlite3.Error, ValueError):
             return []
 
     def spread_activation_memories(
@@ -549,7 +549,7 @@ class SqliteSearchMixin:
                 return None
             # sqlite-vec returns a buffer/memoryview; convert to bytes.
             return bytes(raw)
-        except Exception:
+        except sqlite3.Error:
             return None
 
     def get_temporal_co_access(

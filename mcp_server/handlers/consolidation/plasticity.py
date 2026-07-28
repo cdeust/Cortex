@@ -66,7 +66,7 @@ def run_plasticity_cycle(
             "co_access_pairs": len(co_accessed),
             "memories_sampled": len(sample),
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("Plasticity cycle failed: %s", exc, exc_info=True)
         return {
             "ltp": 0,

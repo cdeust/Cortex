@@ -93,7 +93,8 @@ def _marketplace_pipeline_binary() -> Optional[str]:
             binary = Path(install_path) / _AP_BINARY_RELATIVE
             if binary.is_file() and os.access(binary, os.X_OK):
                 return str(binary)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — plugin-registry probe; failure is logged, discovery reports not-installed
+        logger.debug("AP plugin discovery failed (non-fatal): %s", exc)
         return None
     return None
 
@@ -192,7 +193,7 @@ def ensure_pipeline_connection() -> dict:
         existing = {**existing, "servers": servers}
         try:
             write_json(path, existing)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.warning(
                 "Failed to purge stale codebase entry from %s: %s", path, exc
             )
@@ -233,7 +234,7 @@ def ensure_pipeline_connection() -> dict:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         write_json(path, config)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("Failed to write %s: %s", path, exc)
         return {
             "action": "write_failed",

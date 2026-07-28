@@ -227,7 +227,7 @@ def _collect_provenance() -> dict:
                 timeout=10,
             ).stdout.strip()
         )
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         sha, dirty = "unknown", None
     raw_url = os.environ.get("DATABASE_URL", "")
     # Strip credentials: keep scheme, host, port, dbname only.
@@ -257,7 +257,7 @@ def run_sweep(lambdas: list[float], quick: bool) -> Path:
             t0 = time.time()
             try:
                 metrics = run_beam(quick=quick)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
                 print(f"[sweep] λ={lam} FAILED: {exc!r}")
                 metrics = {
                     "overall": {"mrr": 0.0, "r5": 0.0, "r10": 0.0},
@@ -289,7 +289,7 @@ def run_sweep(lambdas: list[float], quick: bool) -> Path:
         print("\n[sweep] restoring production p_factor…")
         try:
             reset_p_factor()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
             print(f"[sweep] WARN: reset failed: {exc!r}")
 
     analysis = analyze_curve(points)

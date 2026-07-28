@@ -66,7 +66,12 @@ class BenchmarkRetriever:
                 return
             texts = self._build_embedding_texts()
             self._embeddings = self._emb_engine.encode_batch(texts)
-        except Exception:
+        except Exception:  # noqa: BLE001 — bench retriever is fail-soft; failure is logged, vector signal disabled
+            logger.warning(
+                "embedding init failed in BenchmarkRetriever -- vector signal "
+                "disabled for this run.",
+                exc_info=True,
+            )
             self._embeddings = []
 
     def _build_embedding_texts(self) -> list[str]:
@@ -100,7 +105,7 @@ class BenchmarkRetriever:
                 model_name="ms-marco-MiniLM-L-12-v2",
                 cache_dir=str(reranker_cache_dir()),
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.warning(
                 "FlashRank reranker failed to load in BenchmarkRetriever "
                 "-- falling back to first-stage scores only.",
@@ -188,7 +193,10 @@ class BenchmarkRetriever:
                 reranked.append((doc_id, (1 - alpha) * wrrf_score + alpha * ce))
             reranked.sort(key=lambda x: x[1], reverse=True)
             return reranked
-        except Exception:
+        except Exception:  # noqa: BLE001 — bench retriever is fail-soft; failure is logged, first-stage order kept
+            logger.debug(
+                "FlashRank rerank failed; keeping first-stage order", exc_info=True
+            )
             return candidates
 
     # ── Main retrieve ────────────────────────────────────────────────

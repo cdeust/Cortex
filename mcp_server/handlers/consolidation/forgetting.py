@@ -104,7 +104,7 @@ def run_forgetting_cycle(
             counts["scanned"] += 1
             try:
                 effect = _evaluate_memory(store, mem, recently_active_ids)
-            except Exception:
+            except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
                 logger.debug("Forgetting eval failed for memory %s", mem.get("id"))
                 continue
             if effect in ("permanent", "transient"):

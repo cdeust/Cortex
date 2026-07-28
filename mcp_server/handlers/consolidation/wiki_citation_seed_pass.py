@@ -146,7 +146,7 @@ async def run_wiki_citation_seed_pass(
                         "outcome": "seeded" if apply else "would_seed",
                     }
                 )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("wiki_citation_seed_pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"
     return out

@@ -126,7 +126,7 @@ def _prime_file_memories(file_path: str) -> int:
 
     try:
         conn = psycopg.connect(_DATABASE_URL, autocommit=True)
-    except Exception:
+    except psycopg.Error:
         return 0
 
     filename = Path(file_path).name
@@ -147,7 +147,7 @@ def _prime_file_memories(file_path: str) -> int:
             (_HEAT_BOOST, f"%{file_path}%", f"%{filename}%"),
         )
         count = result.rowcount if result else 0
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"prime failed: {exc}")
         count = 0
 

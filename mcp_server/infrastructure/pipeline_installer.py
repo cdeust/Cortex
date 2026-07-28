@@ -204,6 +204,6 @@ def _swap_symlink(binary: Path) -> dict:
             tmp_link.unlink()
         tmp_link.symlink_to(binary)
         os.replace(str(tmp_link), str(_INSTALL_SYMLINK))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — install-step boundary — failure is returned as {action: symlink_failed, detail}
         return {"action": "symlink_failed", "detail": str(exc)}
     return {"action": "installed", "binary": str(_INSTALL_SYMLINK)}

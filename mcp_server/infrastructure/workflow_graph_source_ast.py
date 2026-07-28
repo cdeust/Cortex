@@ -439,8 +439,10 @@ class WorkflowGraphASTSource:
                 async for batch in self._symbol_batches_async(gp, paths):
                     if batch:
                         yield batch
-            except Exception:
-                # One corrupt / missing graph never kills the whole stream.
+            except Exception as exc:  # noqa: BLE001 — one corrupt/missing graph never kills the whole stream; logged per skip
+                logger.debug(
+                    "symbol batches failed for graph %s (skipped): %s", gp, exc
+                )
                 continue
 
     async def _iter_edges_async(
@@ -454,7 +456,8 @@ class WorkflowGraphASTSource:
                 async for batch in self._edge_batches_async(gp, paths):
                     if batch:
                         yield batch
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 — one corrupt/missing graph never kills the whole stream; logged per skip
+                logger.debug("edge batches failed for graph %s (skipped): %s", gp, exc)
                 continue
 
     async def _load_symbols_async(

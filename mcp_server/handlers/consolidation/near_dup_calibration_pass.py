@@ -110,7 +110,7 @@ async def run_near_dup_sample(
                 }
                 for pair in sample
             ]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("near_dup sample scan failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"
     return out
@@ -251,7 +251,7 @@ async def run_near_dup_apply_pass(
                     }
                     for p in below
                 ]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("near_dup apply pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"
     return out

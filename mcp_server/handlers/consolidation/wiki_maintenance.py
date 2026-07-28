@@ -196,7 +196,7 @@ async def run_wiki_maintenance(
         out["stub"]["purged"] = r.get("purged", 0)
         out["stub"]["deferred"] = r.get("deferred", 0)
         out["stub"]["placeholder_lines_purged"] = r.get("placeholder_lines_purged", 0)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("wiki_maintenance: stub purge failed (non-fatal): %s", exc)
         out["status"] = f"stub_error: {type(exc).__name__}: {exc}"
 
@@ -209,7 +209,7 @@ async def run_wiki_maintenance(
         )
         out["classifier"]["purged"] = r.get("purged", 0)
         out["classifier"]["deferred"] = r.get("deferred", 0)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("wiki_maintenance: classifier purge failed (non-fatal): %s", exc)
         if out["status"] == "ok":
             out["status"] = f"classifier_error: {type(exc).__name__}: {exc}"
@@ -243,7 +243,7 @@ async def run_wiki_maintenance(
                 "wall_clock_ms": cycle.wall_clock_ms,
                 "skipped_budget": cycle.skipped_budget,
             }
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.debug(
                 "wiki_maintenance: headless authoring drain failed (non-fatal): %s",
                 exc,
@@ -262,7 +262,7 @@ async def run_wiki_maintenance(
             "written": len(dashboards),
             "projects": sorted(dashboards.keys())[:20],
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("wiki_maintenance: dashboard render failed (non-fatal): %s", exc)
         out["dashboards"] = {"status": f"error: {type(exc).__name__}: {exc}"}
 
@@ -278,7 +278,7 @@ async def run_wiki_maintenance(
         out["source_backfill"] = await run_source_backfill_pass(
             store, apply=not source_backfill_dry_run
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("wiki_maintenance: source backfill failed (non-fatal): %s", exc)
         out["source_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
         if out["status"] == "ok":
@@ -293,7 +293,7 @@ async def run_wiki_maintenance(
         out["domain_backfill"] = await run_domain_backfill_pass(
             store, apply=not domain_backfill_dry_run
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("wiki_maintenance: domain backfill failed (non-fatal): %s", exc)
         out["domain_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
         if out["status"] == "ok":
@@ -317,7 +317,7 @@ async def run_wiki_maintenance(
             apply=apply_citation_seed,
             limit=citation_seed_limit or DEFAULT_SEED_SCAN_LIMIT,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning(
             "wiki_maintenance: citation seed pass failed (non-fatal): %s", exc
         )
@@ -330,7 +330,7 @@ async def run_wiki_maintenance(
         from mcp_server.handlers.consolidation.wiki_backlog_pass import run_backlog_pass
 
         out.update(await run_backlog_pass(store))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("wiki_maintenance: backlog count failed (non-fatal): %s", exc)
         if out["status"] == "ok":
             out["status"] = f"backlog_error: {type(exc).__name__}: {exc}"

@@ -131,7 +131,7 @@ def run_synaptic_tagging(
             store.update_memory_importance(tag["memory_id"], tag["new_importance"])
             store.update_memory_heat(tag["memory_id"], tag["new_heat"])
             tagged.append(tag)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_post_store.synaptic_tagging")
         silent_failure.note("write_post_store.synaptic_tagging", exc)
     return tagged
 
@@ -200,7 +200,7 @@ def _find_shared_entities(
         for ent in store.get_all_entities(min_heat=0.0) or []:
             if ent.get("id") is not None and ent.get("name"):
                 id_to_name[int(ent["id"])] = ent["name"]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_post_store.entity_id_resolution")
         silent_failure.note("write_post_store.entity_id_resolution", exc)
         return set()
 
@@ -217,7 +217,7 @@ def _find_shared_entities(
             mentioning = store.get_memories_mentioning_entity(ename, limit=50)
             if any(m["id"] == mem_id for m in mentioning):
                 shared_ids.append(eid)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_post_store.shared_entities_lookup")
         silent_failure.note("write_post_store.shared_entities_lookup", exc)
         return set()
 
@@ -317,6 +317,6 @@ def allocate_engram_slot(
             "slot_index": best_slot,
             "temporally_linked": linked_count,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_post_store.engram_allocation")
         silent_failure.note("write_post_store.engram_allocation", exc)
         return None

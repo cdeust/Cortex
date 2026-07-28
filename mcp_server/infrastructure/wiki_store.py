@@ -402,7 +402,8 @@ def sync_memory(
             tags=tags,
             domain=domain,
         )
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("wiki_store.sync_memory", exc)
         return None
 
 

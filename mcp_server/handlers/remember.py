@@ -330,7 +330,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
             )
             if wiki_path:
                 result["wiki_page"] = wiki_path
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — partial-failure boundary — wiki-sync failure is surfaced in result['warnings'] with type+message
             # Partial failure — memory is stored but wiki sync failed.
             # Surfacing the exception type + message preserves the ability
             # to diagnose recurring failures (e.g., disk full, path escape).

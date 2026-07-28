@@ -24,6 +24,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers._telemetry_wrap import instrument
+from mcp_server.observability import silent_failure
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -170,7 +171,8 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         )
         new_value, _delta = value_learning.td_update(float(current_value), reward)
         store.update_memory_value(memory_id, new_value)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — value column may predate the migration (non-fatal); observable via silent_failure
+        silent_failure.note("rate_memory.value_update", exc)
         new_value = None  # value column may predate the migration — non-fatal
 
     # AF-2: collect Platt training sample when caller provided the surfacing

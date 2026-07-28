@@ -230,14 +230,14 @@ def dispatch_retrieval(
     if tier == "mixed" and hop_fn is not None:
         try:
             fused = _run_multihop(query, fused, hop_fn)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("retrieval_dispatch.multihop")
             silent_failure.note("retrieval_dispatch.multihop", exc)
 
     rerank_pool = fused[: max_results * 3]
     if content_lookup:
         try:
             rerank_pool = rerank_results(query, rerank_pool, content_lookup)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("retrieval_dispatch.rerank_wrapper")
             # rerank_results already catches its own inference errors
             # (core/reranker.py) — reaching this handler means something
             # else in the call (e.g. content_lookup shape) raised.

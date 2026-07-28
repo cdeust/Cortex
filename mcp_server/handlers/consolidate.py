@@ -208,7 +208,7 @@ def _timed(fn, *args, **kwargs) -> dict[str, Any]:
     t0 = time.monotonic()
     try:
         result = fn(*args, **kwargs) or {}
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — per-stage timing wrapper — any cycle failure becomes the stage's {error, duration_ms} report
         ms = int((time.monotonic() - t0) * 1000)
         return {"error": f"{type(exc).__name__}: {exc}", "duration_ms": ms}
     ms = int((time.monotonic() - t0) * 1000)
@@ -222,7 +222,7 @@ async def _atimed(fn, *args, **kwargs) -> dict[str, Any]:
     t0 = time.monotonic()
     try:
         result = await fn(*args, **kwargs) or {}
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — per-stage timing wrapper — any cycle failure becomes the stage's {error, duration_ms} report
         ms = int((time.monotonic() - t0) * 1000)
         return {"error": f"{type(exc).__name__}: {exc}", "duration_ms": ms}
     ms = int((time.monotonic() - t0) * 1000)
@@ -309,7 +309,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         from mcp_server.hooks.consolidate_background import _write_stamp
 
         _write_stamp()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("consolidate stamp write failed (non-fatal): %s", exc)
 
     return stats

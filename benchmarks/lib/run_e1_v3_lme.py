@@ -112,7 +112,7 @@ def _run_row(label: str, ablate: str | None) -> dict:
             data = json.loads(out_path.read_text())
             mrr = data.get("overall_mrr")
             r10 = data.get("overall_recall10")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
             print(
                 f"[E1v3][WARN] {label} could not parse {out_path}: {e}",
                 file=sys.stderr,

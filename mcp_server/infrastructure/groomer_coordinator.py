@@ -46,6 +46,7 @@ from mcp_server.infrastructure.groomer_coordinator_io import (
     pid_alive,
 )
 from mcp_server.shared.platform import cache_dir
+from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,8 @@ def resolve_store_key(env: dict[str, str] | None = None) -> str:
             identity = str(settings.SQLITE_FALLBACK_PATH)
         else:
             identity = e.get("DATABASE_URL") or str(settings.DATABASE_URL)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("groomer_coordinator.store_identity", exc)
         return "default"
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
 

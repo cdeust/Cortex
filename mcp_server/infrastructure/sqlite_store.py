@@ -308,7 +308,7 @@ class SqliteMemoryStore(
             self._conn.commit()
             self._has_vec = True
             logger.info("sqlite-vec loaded — vector search enabled")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.info("sqlite-vec unavailable (%s) — vector search disabled", exc)
             self._has_vec = False
 

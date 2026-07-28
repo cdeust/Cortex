@@ -22,6 +22,7 @@ header probe instead of a multi-MB drain.
 
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.request
 from pathlib import Path
@@ -65,7 +66,7 @@ def _get_json(port: int, path: str) -> dict | None:
             f"http://127.0.0.1:{port}{path}", timeout=_TIMEOUT_S
         ) as resp:
             return json.loads(resp.read().decode("utf-8"))
-    except Exception:
+    except (OSError, ValueError, http.client.HTTPException):
         return None
 
 

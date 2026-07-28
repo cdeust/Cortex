@@ -469,7 +469,7 @@ def _run_spread_activation(
             domain=None if cross_domain else domain,
             include_globals=include_globals,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         # First-failure-only logging (reranker.py precedent, bb1c581f):
         # a per-query stage like this one can be called on every recall,
         # so logging every occurrence would spam at the same rate as the

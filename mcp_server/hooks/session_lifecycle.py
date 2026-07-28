@@ -151,7 +151,7 @@ def _run_consolidation(turn_count: int = 0) -> None:
             f"Dream ({mode}): {decayed} decayed, {compressed} compressed"
             + (f", {cls_count} CLS abstractions" if cls_count else "")
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"Consolidation failed (non-fatal): {exc}")
 
 
@@ -223,7 +223,7 @@ def _tombstone_session_registry() -> None:
         pid = find_claude_ancestor()
         if pid is not None:
             tombstone(pid)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"session registry tombstone skipped (non-fatal): {exc}")
 
 
@@ -246,7 +246,7 @@ def _deregister_groomer_coordinator() -> None:
         coord = GroomerCoordinator(resolve_store_key())
         if coord.stop_if_last(os.getpid()):
             _log("groomer coordinator: last session exited, groomer stopped")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"groomer coordinator deregister skipped (non-fatal): {exc}")
 
 

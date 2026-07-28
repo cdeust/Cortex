@@ -26,6 +26,7 @@ from mcp_server.core.wiki_schema_loader import (
     parse_trigger,
     parse_view,
 )
+from mcp_server.observability import silent_failure
 
 
 def _load_folder_direct(root: Path, folder: str, parser):
@@ -45,11 +46,12 @@ def _load_folder_direct(root: Path, folder: str, parser):
         rel = str(p.relative_to(root)).replace("\\", "/")
         try:
             content = p.read_text(encoding="utf-8")
-        except Exception:
+        except OSError:
             continue
         try:
             parsed = parser(rel, content)
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+            silent_failure.note("wiki_schema_reader.page_parse", exc)
             continue
         if parsed is None:
             continue
@@ -77,7 +79,8 @@ def load_registry(wiki_root: Path | str) -> WikiRegistry:
                 content = p.read_text(encoding="utf-8")
                 body = parse_page(content).body or ""
                 rules.extend(parse_rules_table(body))
-            except Exception:
+            except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+                silent_failure.note("wiki_schema_reader.rules_parse", exc)
                 continue
 
     views = _load_folder_direct(root, "_views", parse_view)

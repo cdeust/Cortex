@@ -57,7 +57,7 @@ def _read_event() -> dict:
     try:
         raw = sys.stdin.read().strip()
         return json.loads(raw) if raw else {}
-    except Exception:
+    except (OSError, ValueError):
         return {}
 
 
@@ -101,7 +101,7 @@ def _try_setup_db() -> dict | None:
         if r.stdout.strip():
             return json.loads(r.stdout.strip())
         return None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"setup_db failed: {exc}")
         return None
 
@@ -114,7 +114,7 @@ def _connect_pg():
 
         conn = psycopg.connect(_DATABASE_URL, row_factory=dict_row, autocommit=True)
         return conn
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"PostgreSQL connect failed: {exc}")
         return None
 
@@ -155,7 +155,8 @@ def _fetch_anchors(conn) -> list[dict]:
             "ORDER BY effective_heat(m, NOW()) DESC LIMIT %s",
             (int(_ANCHOR_LIMIT),),
         ).fetchall()
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
+        _log(f"anchor fetch failed (non-fatal): {exc}")
         return []
 
     anchors = []
@@ -164,7 +165,7 @@ def _fetch_anchors(conn) -> list[dict]:
         if isinstance(tags, str):
             try:
                 tags = json.loads(tags)
-            except Exception:
+            except ValueError:
                 tags = []
         if "_anchor" in tags or any(
             isinstance(t, str) and t.startswith("_anchor:") for t in tags
@@ -208,7 +209,8 @@ def _fetch_team_decisions(conn, exclude_ids: set) -> list[dict]:
             "AND m.superseded_by_id IS NULL "
             "ORDER BY effective_heat(m, NOW()) DESC LIMIT 5",
         ).fetchall()
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
+        _log(f"team-decision fetch failed (non-fatal): {exc}")
         return []
 
     decisions = []
@@ -252,7 +254,8 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
             "ORDER BY heat_base DESC LIMIT %s",
             (float(_MIN_HEAT), int(_HOT_LIMIT + len(exclude_ids))),
         ).fetchall()
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
+        _log(f"hot-memory fetch failed (non-fatal): {exc}")
         return []
 
     hot = []
@@ -321,10 +324,11 @@ def _count_pending_curations(conn) -> int:
             from mcp_server.infrastructure.config import WIKI_ROOT
 
             wiki_root = str(WIKI_ROOT)
-        except Exception:
+        except ImportError:
             wiki_root = None
         return count_pending_clusters(memories, wiki_root=wiki_root)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
+        _log(f"pending-cluster count failed (non-fatal): {exc}")
         return 0
 
 
@@ -378,7 +382,8 @@ def _fetch_grooming_staleness(conn) -> list[str]:
             if is_stale(last_iso):
                 stale.append(kind)
         return stale
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
+        _log(f"grooming-staleness fetch failed (non-fatal): {exc}")
         return []
 
 
@@ -390,7 +395,7 @@ def _parse_json_list(val) -> list:
         return val
     try:
         return json.loads(val) or []
-    except Exception:
+    except (ValueError, TypeError):
         return [val] if isinstance(val, str) and val.strip() else []
 
 
@@ -418,7 +423,8 @@ def _fetch_checkpoint(conn) -> dict | None:
             "FROM checkpoints WHERE is_active = TRUE "
             "ORDER BY created_at DESC LIMIT 1"
         ).fetchone()
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
+        _log(f"checkpoint fetch failed (non-fatal): {exc}")
         return None
 
     return _checkpoint_from_row(row)
@@ -429,7 +435,8 @@ def _count_memories(conn) -> int:
     try:
         row = conn.execute("SELECT COUNT(*) as c FROM memories").fetchone()
         return row["c"] if row else 0
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
+        _log(f"memory count failed (non-fatal): {exc}")
         return 0
 
 
@@ -465,7 +472,7 @@ def _detect_external_sources() -> list[dict]:
                 sources.append(
                     {"name": "claude-mem", "count": count, "path": str(claude_mem_db)}
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001 — external-source probe — failure is reported as a count-0 source entry in the banner
             sources.append(
                 {"name": "claude-mem", "count": 0, "path": str(claude_mem_db)}
             )
@@ -521,7 +528,7 @@ def _auto_backfill() -> int:
         cascade_advanced = result.get("cascade_advanced", 0)
         _log(f"Auto-backfill: {imported} imported, {cascade_advanced} cascaded")
         return imported
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"Auto-backfill failed (non-fatal): {exc}")
         return 0
 
@@ -768,7 +775,7 @@ def _auto_wire_pipeline() -> None:
             _log(
                 f"pipeline auto-wired ({result.get('binary')}) in {result.get('path')}"
             )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"pipeline auto-wire skipped: {exc}")
 
 
@@ -845,7 +852,7 @@ def _maybe_background_consolidate() -> None:
             spawn_fn=_spawn_consolidate_cycle,
         )
         _log(f"groomer coordinator: {outcome}")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(
             f"NOTICE: groomer coordinator unavailable ({exc}); falling back "
             "to legacy per-session consolidate spawn"
@@ -888,7 +895,7 @@ def _legacy_background_consolidate() -> None:
         except OSError:
             pass
         _spawn_consolidate_cycle()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"background consolidate skipped: {exc}")
 
 
@@ -950,7 +957,7 @@ def _maybe_background_reanalyze() -> None:
             start_new_session=True,
         )
         _log(f"background pipeline reanalysis spawned → {log_path}")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"background pipeline reanalysis skipped: {exc}")
 
 
@@ -960,7 +967,7 @@ def _lookup_cached_graph_path(project_root: str) -> str | None:
         from mcp_server.handlers.ingest_helpers import (
             code_graph_tag,
         )
-    except Exception:
+    except ImportError:
         return None
     conn = _connect_pg()
     if conn is None:
@@ -976,7 +983,8 @@ def _lookup_cached_graph_path(project_root: str) -> str | None:
             content = row.get("content") or ""
             if content.startswith("graph_path="):
                 return content[len("graph_path=") :].strip()
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
+        _log(f"cached-graph lookup failed (non-fatal): {exc}")
         return None
     finally:
         try:
@@ -1019,7 +1027,7 @@ def _refresh_session_registry(event: dict) -> None:
 
         write_session(session_id_from_transcript(event.get("transcript_path")))
         purge_dead_entries()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"session registry refresh skipped (non-fatal): {exc}")
 
 
@@ -1045,7 +1053,7 @@ def _backend_is_sqlite() -> bool:
         from mcp_server.infrastructure.backend_marker import effective_backend
 
         return effective_backend(os.environ) == "sqlite"
-    except Exception:
+    except ImportError:
         return False
 
 
@@ -1084,13 +1092,14 @@ def _sqlite_banner_rows(store) -> tuple[list[dict], list[dict], dict | None]:
         rows = store.get_hot_memories(
             min_heat=_MIN_HEAT, limit=_HOT_LIMIT + _ANCHOR_LIMIT, heads_only=True
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"SQLite hot-memory fetch failed (non-fatal): {exc}")
         rows = []
     anchors, hot = _partition_banner_rows(rows)
     try:
         checkpoint = _checkpoint_from_row(store.get_active_checkpoint())
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
+        _log(f"SQLite checkpoint fetch failed (non-fatal): {exc}")
         checkpoint = None
     return anchors, hot, checkpoint
 
@@ -1102,7 +1111,7 @@ def _sqlite_context(event: dict) -> None:
 
         store = get_shared_store()
         total = int(store.count_memories().get("total") or 0)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"SQLite store unavailable (non-fatal): {exc}")
         return
 
@@ -1267,7 +1276,7 @@ def _print_external_sources() -> None:
         lines.append("\nUse `/cortex-import` to import these into Cortex.")
         print("\n".join(lines))
         _log(f"Detected {len(sources)} external memory sources")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"External source detection failed (non-fatal): {exc}")
 
 

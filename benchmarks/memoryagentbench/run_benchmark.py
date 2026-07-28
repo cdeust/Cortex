@@ -131,7 +131,7 @@ def run_benchmark(splits: list[str] | None = None, limit: int | None = None):
         print(f"\n--- {split_name} ---")
         try:
             ds = load_dataset("ai-hyz/MemoryAgentBench", split=split_name)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
             print(f"  Error loading split: {e}")
             continue
 

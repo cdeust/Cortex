@@ -244,7 +244,7 @@ def _try_generate_critique(
             "overall_score": critique_data["overall_score"],
             "top_suggestions": critique_data["top_suggestions"],
         }
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Session critique generation failed (non-fatal): %s", e)
         return None
 
@@ -362,7 +362,7 @@ async def handler(args: dict) -> dict:
             tools_used=tools_used or [],
             store=get_shared_store(),
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — optional side-channel — failure is returned as task_record_status {status: error}
         task_record_status = {
             "status": "error",
             "reason": f"{type(exc).__name__}: {exc}",
@@ -383,7 +383,7 @@ async def handler(args: dict) -> dict:
             sessions=load_session_log().get("sessions", []),
             store=get_shared_store(),
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — optional side-channel — failure is returned as procedural_status {status: error}
         procedural_status = {
             "status": "error",
             "reason": f"{type(exc).__name__}: {exc}",

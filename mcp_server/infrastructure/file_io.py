@@ -20,7 +20,7 @@ def read_json(file_path: str | Path) -> Any | None:
         p = Path(file_path)
         if p.exists():
             return json.loads(p.read_text(encoding="utf-8"))
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         print(f"[methodology-agent] Failed to read {file_path}: {e}", file=sys.stderr)
     return None
 
@@ -38,7 +38,7 @@ def read_text_file(file_path: str | Path) -> str | None:
         p = Path(file_path)
         if p.exists():
             return p.read_text(encoding="utf-8")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         print(f"[methodology-agent] Failed to read {file_path}: {e}", file=sys.stderr)
     return None
 
@@ -56,7 +56,7 @@ def list_dir(dir_path: str | Path, *, with_file_types: bool = False) -> list | N
             if with_file_types:
                 return list(p.iterdir())
             return [entry.name for entry in p.iterdir()]
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         print(f"[methodology-agent] Failed to list {dir_path}: {e}", file=sys.stderr)
     return None
 
@@ -65,5 +65,5 @@ def stat_file(file_path: str | Path) -> os.stat_result | None:
     """Get file stats. Returns None if missing."""
     try:
         return Path(file_path).stat()
-    except Exception:
+    except OSError:
         return None

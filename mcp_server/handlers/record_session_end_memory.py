@@ -93,7 +93,7 @@ def _store_session_memory(
             "write_class": "deliberate",
             "force": False,
         }
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Memory system not available for session recording: %s", e)
         _memory_available = False
         return None
@@ -108,7 +108,7 @@ async def _try_store_memory(memory_args: dict[str, Any] | None) -> bool:
 
         mem_result = await remember_handler(memory_args)
         return mem_result.get("stored", False)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Failed to store session memory: %s", e)
         return False
 
@@ -168,6 +168,6 @@ async def _try_store_lesson_candidates(
             result = await remember_handler(args)
             if result.get("stored"):
                 stored += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.debug("Failed to store lesson-candidate suggestion: %s", e)
     return stored

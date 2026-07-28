@@ -51,6 +51,7 @@ from mcp_server.core.wiki_kind_detection import (
     pick_lifecycle,
 )
 from mcp_server.core.wiki_title import derive_title, slugify as _slugify
+from mcp_server.observability import silent_failure
 
 __all__ = [
     "classify_memory",
@@ -96,7 +97,8 @@ def _load_user_rules():
         _USER_RULES_CACHE = (
             list(_USER_RULES_PROVIDER()) if _USER_RULES_PROVIDER is not None else []
         )
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("wiki_classifier.user_rules_load", exc)
         _USER_RULES_CACHE = []
     return _USER_RULES_CACHE
 

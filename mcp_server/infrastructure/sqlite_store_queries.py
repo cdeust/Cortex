@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from typing import Any
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.observability import silent_failure
@@ -85,7 +86,7 @@ class SqliteQueryMixin:
                 if vec_row and vec_row["embedding"] is not None:
                     d["embedding"] = bytes(vec_row["embedding"])
                     results.append(d)
-            except Exception:
+            except sqlite3.Error:
                 continue
         return results
 

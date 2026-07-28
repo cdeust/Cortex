@@ -136,7 +136,7 @@ def _connect():
         return None
     try:
         return psycopg.connect(_DATABASE_URL, row_factory=dict_row, autocommit=True)
-    except Exception:
+    except psycopg.Error:
         return None
 
 
@@ -197,7 +197,7 @@ def _recall_memories(conn, query: str) -> list[dict]:
                     "protected": bool(r.get("is_protected")),
                 }
             )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"FTS query failed: {exc}")
 
     return results[:_MAX_MEMORIES]
@@ -212,7 +212,7 @@ def _backend_is_sqlite() -> bool:
         from mcp_server.infrastructure.backend_marker import effective_backend
 
         return effective_backend(os.environ) == "sqlite"
-    except Exception:
+    except ImportError:
         return False
 
 
@@ -283,7 +283,7 @@ def _process_event_sqlite(event: dict[str, Any], query: str) -> None:
 
         store = get_shared_store()
         memories = _recall_memories_sqlite(store, query)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"sqlite recall failed (non-fatal): {exc}")
         sys.exit(0)
 
@@ -366,7 +366,7 @@ def _refresh_session_registry(event: dict[str, Any]) -> None:
         from mcp_server.infrastructure.session_registry import write_session
 
         write_session(session_id_from_transcript(event.get("transcript_path")))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"session registry refresh skipped (non-fatal): {exc}")
 
 

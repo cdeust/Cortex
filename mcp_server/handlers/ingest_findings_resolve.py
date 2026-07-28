@@ -22,13 +22,15 @@ from pathlib import Path
 
 from mcp_server.infrastructure import ap_bridge
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.observability import silent_failure
 
 
 def _from_graph_key(store: MemoryStore, graph_key: str) -> Path | None:
     tag = f"_code_graph:{graph_key}"
     try:
         mems = store.get_memories_by_tag(tag, limit=5)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("ingest_findings.graph_key_lookup", exc)
         return None
     for mem in mems:
         content = mem.get("content") or ""

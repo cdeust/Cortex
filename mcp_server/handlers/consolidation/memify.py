@@ -232,5 +232,6 @@ def _reweight_relationships(store: MemoryStore) -> int:
                 )
                 count += 1
         return count
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("memify.relationship_reweight", exc)
         return 0

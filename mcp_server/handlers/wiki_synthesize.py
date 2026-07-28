@@ -313,7 +313,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
                 confidence=draft.confidence,
                 author="synthesizer_template",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — per-memory batch isolation; failure is reported in the returned errors list
             errors.append(f"memory {mid}: {e}")
 
     conn.commit()

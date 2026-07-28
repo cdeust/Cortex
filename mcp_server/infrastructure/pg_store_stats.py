@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import psycopg
+
 if TYPE_CHECKING:
     import psycopg
 
@@ -60,7 +62,7 @@ class PgStatsMixin:
                 "FROM memories WHERE stimulus_signature = %s",
                 (signature,),
             ).fetchone()
-        except Exception:
+        except psycopg.Error:
             return 0, None
         if not row or not row["c"]:
             return 0, None
@@ -83,7 +85,7 @@ class PgStatsMixin:
                 "WHERE extinction_strength >= %s AND NOT is_stale",
                 (threshold,),
             ).fetchone()
-        except Exception:
+        except psycopg.Error:
             return 0
         if not row or not row["c"]:
             return 0

@@ -333,7 +333,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             total_gated += gated
             total_skipped += skipped
             sessions_scanned += int(scanned)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
             errors.append(f"{file_path.name}: {e}")
             print(
                 f"[import_sessions] Error processing {file_path.name}: {e}",

@@ -170,7 +170,7 @@ def main() -> None:
         run_module(module, run_name="__main__", alter_sys=True)
     except SystemExit:
         raise
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         print(f"[cortex-launcher] Failed to run {module}: {e}", file=sys.stderr)
         sys.exit(1)
 

@@ -21,6 +21,7 @@ from mcp_server.core.scoring import compute_bm25_scores, compute_ngram_score
 from mcp_server.core.temporal import compute_recency_boost
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.observability import silent_failure
 
 
 def compute_vector_fts(
@@ -313,7 +314,8 @@ def inject_triggered_memories(
     """
     try:
         triggers = store.get_active_prospective_memories()
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("recall_helpers.prospective_triggers", exc)
         return results
     if not triggers:
         return results

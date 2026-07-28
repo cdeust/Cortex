@@ -148,7 +148,7 @@ async def run_memory_reheat_pass(
             out["scanned_rows"] = len(rows)
             for row in rows:
                 _process_row(conn, row, target=target, apply=apply, out=out)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("memory_reheat_pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"
     return out

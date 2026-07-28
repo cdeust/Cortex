@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from mcp_server.observability import silent_failure
 
 _CURATION_BANNER_RE = re.compile(r"_\(missing — needs:\s*([^)]+?)\s*\)_", re.DOTALL)
 
@@ -452,7 +453,8 @@ def _live_audit_gaps(body: str, frozen_gaps: list[str]) -> list[str]:
         from mcp_server.core.wiki_curation_gaps import missing_sections
 
         live = [s.name for s in missing_sections(body)]
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("authoring_prompts.live_gap_audit", exc)
         return frozen_gaps
     # Preserve the FROZEN order for backward-compat (the LLM expects
     # the sections in this order), append any new ones discovered.

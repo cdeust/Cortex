@@ -40,7 +40,7 @@ def _run_quiet(
         return proc.returncode, tail
     except subprocess.TimeoutExpired:
         return -1, f"timeout after {timeout}s"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — subprocess wrapper contract — any spawn failure is returned as (-2, message)
         return -2, str(exc)
 
 

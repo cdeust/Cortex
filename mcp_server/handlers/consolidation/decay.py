@@ -98,6 +98,6 @@ def _update_metabolic_state(
                 hours_elapsed=1.0,
             )
             apply_metabolic_modulation(settings.DECAY_FACTOR, territory.metabolic_rate)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Metabolic observability update failed: %s", exc)
     return total

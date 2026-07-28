@@ -35,7 +35,7 @@ def load_beam_dataset(split: str = "100K"):
         if split == "10M":
             return load_dataset("Mohammadta/BEAM-10M", split="10M")
         return load_dataset("Mohammadta/BEAM", split=split)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
         print(f"Error loading dataset: {e}")
         print("Install: pip install datasets")
         sys.exit(1)

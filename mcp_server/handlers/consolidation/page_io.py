@@ -51,7 +51,7 @@ def _project_source_for_page(
         return None, None
     try:
         from mcp_server.core.wiki_coverage import _project_source_root
-    except Exception:
+    except ImportError:
         return None, None
     src_root = _project_source_root(domain)
     if not src_root:

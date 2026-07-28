@@ -1271,7 +1271,7 @@ def _project_source_root(domain: str) -> str | None:
     """
     try:
         from mcp_server.shared.domain_mapping import _build_registry
-    except Exception:
+    except ImportError:
         return None
     registry = _build_registry()
     for repo in registry.repos:

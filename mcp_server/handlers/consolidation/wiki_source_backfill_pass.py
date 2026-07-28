@@ -112,7 +112,7 @@ async def run_source_backfill_pass(
                 _process_one_page(
                     conn, page, claim_refs.get(page["id"], []), apply=apply, out=out
                 )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("wiki_source_backfill_pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"
     return out

@@ -115,7 +115,7 @@ def maybe_mine_skills(
             )
             written += 1
         return {"status": "ok", "skills_written": written, "candidates": len(skills)}
-    except Exception as exc:  # non-fatal: session-end must continue
+    except Exception as exc:  # noqa: BLE001 — non-fatal: session-end must continue
         logger.warning("procedural skill mining failed: %s", exc)
         return {
             "status": "error",

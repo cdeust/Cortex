@@ -135,7 +135,7 @@ def _pg_connection() -> Check:
         with psycopg.connect(url, connect_timeout=5) as conn:
             row = conn.execute("SELECT version()").fetchone()
             return Check("PG connection", True, row[0] if row else "ok")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — diagnostic probe — any failure becomes the check's failure report
         return Check(
             "PG connection",
             False,
@@ -170,7 +170,7 @@ def _pg_extensions() -> Check:
                     'CREATE EXTENSION IF NOT EXISTS pg_trgm;"',
                 )
             return Check("pgvector + pg_trgm extensions", True, "both installed")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — diagnostic probe — any failure becomes the check's failure report
         return Check(
             "pgvector + pg_trgm extensions",
             False,
@@ -189,7 +189,7 @@ def _methodology_dir() -> Check:
         probe.write_text("ok")
         probe.unlink()
         return Check("~/.claude/methodology writable", True, str(path))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — diagnostic probe — any failure becomes the check's failure report
         return Check(
             "~/.claude/methodology writable",
             False,
@@ -271,7 +271,7 @@ def _i10_config() -> Check:
             "CORTEX_MEMORY_POOL_BATCH_MAX until I10 is satisfied."
         )
         return Check("I10 pool capacity", ok, detail, fix if not ok else "")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — diagnostic probe — any failure becomes the check's failure report
         return Check("I10 pool capacity", False, f"{type(exc).__name__}: {exc}", "")
 
 
@@ -293,7 +293,7 @@ def _sqlite_store() -> Check:
         finally:
             store.close()
         return Check("SQLite store", True, f"{path} ({total} memories)")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — diagnostic probe — any failure becomes the check's failure report
         return Check(
             "SQLite store",
             False,

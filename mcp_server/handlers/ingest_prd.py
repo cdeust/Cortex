@@ -252,7 +252,7 @@ def _write_bullet_memories(
         try:
             mem_id = store.insert_memory(record)
             ids.append(mem_id)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.debug("%s memory insert failed: %s", tag, exc)
     return ids
 
@@ -269,7 +269,7 @@ async def _maybe_validate(text: str) -> dict[str, Any] | None:
     except McpConnectionError as exc:
         logger.debug("prd-gen unreachable for validation: %s", exc)
         return {"skipped": True, "reason": "upstream_unreachable"}
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("validate_prd_document failed: %s", exc)
         return {"skipped": True, "reason": f"{type(exc).__name__}"}
 
@@ -291,7 +291,7 @@ async def _fetch_quality_history(limit: int = 20) -> dict[str, Any] | None:
     except McpConnectionError as exc:
         logger.debug("prd-gen unreachable for quality history: %s", exc)
         return None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("get_quality_history failed: %s", exc)
         return None
 
@@ -321,7 +321,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     rel_path, markdown = _render_prd_spec_page(title, text, source)
     try:
         write_page(WIKI_ROOT, rel_path, markdown, mode="replace")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("PRD spec page write failed: %s", exc)
         rel_path = None
 
@@ -360,7 +360,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     summary_id: int | None = None
     try:
         summary_id = store.insert_memory(summary_record)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("PRD summary memory insert failed: %s", exc)
 
     # 4. Optional validation + prd-gen quality evidence.

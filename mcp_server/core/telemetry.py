@@ -173,7 +173,7 @@ def record(
     if exporter is not None:
         try:
             exporter.export(record_line)
-        except Exception:
+        except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.debug("telemetry exporter raised; sample dropped", exc_info=True)
 
 

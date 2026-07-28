@@ -37,6 +37,7 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.pg_store_wiki import insert_memo, upsert_page
 from mcp_server.infrastructure.pg_store_wiki_sources import upsert_page_sources
 from mcp_server.infrastructure.wiki_store import write_page
+from mcp_server.observability import silent_failure
 
 _FINDING_LINK_KIND = "finding"
 # Distinct from _FINDING_LINK_KIND ('finding' = code files the finding is
@@ -68,7 +69,8 @@ def find_existing_memory(
     tag = finding_tag(run_id, finding_id)
     try:
         mems = store.get_memories_by_tag(tag, limit=5)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("ingest_findings.find_existing", exc)
         return None
     for mem in mems:
         if tag in _memory_tags(mem):

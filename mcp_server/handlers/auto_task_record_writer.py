@@ -32,6 +32,7 @@ from mcp_server.core.auto_task_record import (
 )
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
+from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +149,8 @@ def _session_memories(store, session_id: str, domain: str) -> list[dict]:
         # heads_only: task-record drafts fold memory content in —
         # supersession chain heads only.
         recent = store.get_recently_accessed_memories(limit=200, heads_only=True)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("auto_task_record.recent_memories", exc)
         recent = []
     out: list[dict] = []
     target_tag = f"session:{session_id}"
@@ -238,7 +240,7 @@ def maybe_write_task_record(
                 "changed_files": len(changed_files),
             },
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("auto-task-record write failed (non-fatal): %s", exc)
         return {"status": "error", "reason": f"{type(exc).__name__}: {exc}"}
 
