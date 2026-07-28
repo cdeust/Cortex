@@ -10,6 +10,8 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -34,8 +36,6 @@ def list_catchall_pages_with_sources(
                     ``wiki.page_sources.source_path`` values (empty list
                     when the page has none).
     """
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     sql = """
     SELECT p.id, p.domain,
            COALESCE(array_agg(ps.source_path)
@@ -47,7 +47,7 @@ def list_catchall_pages_with_sources(
      GROUP BY p.id, p.domain
      LIMIT %(limit)s
     """
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(sql, {"known": known_domains, "limit": limit})
         return list(cur.fetchall())
 

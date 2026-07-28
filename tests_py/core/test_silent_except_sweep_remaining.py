@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mcp_server.observability import silent_failure
+from tests_py.conftest import requires_psycopg  # type: ignore
 
 
 @pytest.fixture(autouse=True)
@@ -169,6 +170,7 @@ class TestMemoryIngestFailuresAreObservable:
         )
 
 
+@requires_psycopg
 class TestPgStoreFailuresAreObservable:
     def test_update_memory_value_failure_is_logged(self, caplog):
         from mcp_server.infrastructure.pg_store import PgMemoryStore

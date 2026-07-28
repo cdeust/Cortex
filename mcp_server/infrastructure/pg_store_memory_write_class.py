@@ -34,6 +34,8 @@ schema migration landing and this one-shot script's first run (see
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -60,8 +62,6 @@ def list_source_groups_at_default(conn: StoreConnection, limit: int) -> list[dic
                     a full apply finds nothing left to reclassify
                     (idempotence).
     """
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     sql = (
         "SELECT COALESCE(source, '') AS source, COUNT(*) AS row_count\n"
         "  FROM current_memories\n"
@@ -71,7 +71,7 @@ def list_source_groups_at_default(conn: StoreConnection, limit: int) -> list[dic
         " ORDER BY source\n"
         " LIMIT %(limit)s"
     )
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(sql, {"sentinel": _DEFAULT_SENTINEL, "limit": limit})
         return list(cur.fetchall())
 

@@ -9,6 +9,8 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -72,9 +74,7 @@ def delete_claims_for_memory(conn: StoreConnection, memory_id: int) -> int:
 
 def get_claims_for_memory(conn: StoreConnection, memory_id: int) -> list[dict]:
     """Return all claim_events derived from a single memory."""
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(
             "SELECT * FROM wiki.claim_events WHERE memory_id = %s ORDER BY id",
             (memory_id,),
@@ -143,12 +143,10 @@ def get_claims_by_entity(
     Used by the resolver to find supersedes / conflict candidates.
     Excludes the claims being resolved (avoid self-matches).
     """
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     if not entity_ids:
         return {}
     excl = exclude_claim_ids or []
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(
             """
             SELECT id, memory_id, text, claim_type, entity_ids, supersedes,

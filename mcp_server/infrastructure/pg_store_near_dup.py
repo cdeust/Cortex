@@ -30,6 +30,8 @@ and is documented as such in the campaign artifact (I6-D2 step 2:
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -73,8 +75,6 @@ def list_candidate_pairs(
                     by ``(id_a, id_b)`` for deterministic downstream
                     stratified sampling.
     """
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     sql = """
         WITH anchors AS (
             SELECT id, embedding
@@ -100,7 +100,7 @@ def list_candidate_pairs(
          GROUP BY 1, 2
          ORDER BY 1, 2
     """
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(
             sql,
             {
@@ -126,11 +126,9 @@ def fetch_contents(conn: StoreConnection, ids: list[int]) -> dict[int, str]:
                     caller must handle a missing key, not assume
                     completeness.
     """
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     if not ids:
         return {}
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(
             "SELECT id, content FROM current_memories WHERE id = ANY(%(ids)s)",
             {"ids": ids},
@@ -154,8 +152,6 @@ def fetch_member_stats(conn: StoreConnection, ids: list[int]) -> dict[int, dict]
                     still present in ``current_memories``; missing ids
                     (superseded concurrently) are simply absent.
     """
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     if not ids:
         return {}
     sql = """
@@ -177,7 +173,7 @@ def fetch_member_stats(conn: StoreConnection, ids: list[int]) -> dict[int, dict]
      LEFT JOIN homeostatic_state hs ON hs.domain = c.domain AND hs.write_class = 'auto'
          WHERE c.id = ANY(%(ids)s)
     """
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(sql, {"ids": ids})
         return {
             row["id"]: {

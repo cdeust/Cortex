@@ -16,6 +16,8 @@ views dict; wiki_view_executor compiles; pg_store executes.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
@@ -134,10 +136,7 @@ def _execute_view(
     postcondition: returns {view, table, row_count, rows, sql} on success,
                    or {view, error, sql} on execution failure
     """
-    # psycopg import deferred to here — only reachable on the PG path
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
-    with store._conn.cursor(row_factory=dict_row) as cur:
+    with store._conn.cursor(row_factory=DICT_ROW) as cur:
         try:
             # compiled.sql comes from the safe view compiler: table/column
             # whitelists, values as bound params (wiki_view_executor) — the

@@ -9,6 +9,8 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -54,9 +56,7 @@ def delete_links_from(conn: StoreConnection, src_page_id: int) -> int:
 
 def get_backlinks(conn: StoreConnection, dst_page_id: int) -> list[dict]:
     """Return rows linking TO this page."""
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(
             """
             SELECT l.*, p.title AS src_title, p.rel_path AS src_rel_path

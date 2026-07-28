@@ -22,6 +22,8 @@ diverge from the single classification contract again (INC7.2).
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -91,8 +93,6 @@ def list_deliberate_below_target(
                     memories`` is a VIEW with its own composite type that
                     Postgres will not implicitly cast to ``memories``.
     """
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     sql = """
         WITH candidates AS (
             SELECT m.*
@@ -126,7 +126,7 @@ def list_deliberate_below_target(
          ORDER BY id
          LIMIT %(limit)s
     """
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(
             sql,
             {

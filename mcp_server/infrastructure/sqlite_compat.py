@@ -301,7 +301,7 @@ class PsycopgCompatConnection:
         with AttributeError on SQLite and the caller recorded it as a string.
 
         `row_factory` is accepted for signature parity with psycopg's
-        `conn.cursor(row_factory=dict_row)` — 29 shared call sites use it —
+        `conn.cursor(row_factory=DICT_ROW)` — 29 shared call sites use it —
         and is then ignored: this cursor already returns dict rows
         unconditionally, which is exactly what `dict_row` asks for. psycopg's
         other keyword, `name=` (server-side cursor), is deliberately NOT

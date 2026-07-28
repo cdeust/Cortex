@@ -191,12 +191,13 @@ def _re(pattern: str) -> re.Pattern[str]:
 
 
 class TestIngestCodebaseHappyPath:
-    @pytest.mark.skipif(  # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
-        # PostgreSQL directly (raw DSN / PG-only migrations) while the product
-        # under test reads the resolved store. Under a sqlite-backend run they
-        # seeded one store and asserted against another, so they failed for a
-        # harness reason rather than a product one. SQLite coverage of these
-        # paths needs backend-agnostic fixtures — tracked in #220.
+    # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
+    # PostgreSQL directly (raw DSN / PG-only migrations) while the product
+    # under test reads the resolved store. Under a sqlite-backend run they
+    # seeded one store and asserted against another, so they failed for a
+    # harness reason rather than a product one. SQLite coverage of these
+    # paths needs backend-agnostic fixtures — tracked in #220.
+    @pytest.mark.skipif(
         not _USE_PG_STORE,
         reason="staging write path needs live PG",
     )
@@ -503,12 +504,13 @@ class TestIngestCodebaseFailures:
         assert ingest_helpers.find_cached_graph(fake_store, "/tmp/myproj") is None
 
     @pytest.mark.asyncio
-    @pytest.mark.skipif(  # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
-        # PostgreSQL directly (raw DSN / PG-only migrations) while the product
-        # under test reads the resolved store. Under a sqlite-backend run they
-        # seeded one store and asserted against another, so they failed for a
-        # harness reason rather than a product one. SQLite coverage of these
-        # paths needs backend-agnostic fixtures — tracked in #220.
+    # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
+    # PostgreSQL directly (raw DSN / PG-only migrations) while the product
+    # under test reads the resolved store. Under a sqlite-backend run they
+    # seeded one store and asserted against another, so they failed for a
+    # harness reason rather than a product one. SQLite coverage of these
+    # paths needs backend-agnostic fixtures — tracked in #220.
+    @pytest.mark.skipif(
         not _USE_PG_STORE,
         reason="staging write path needs live PG",
     )

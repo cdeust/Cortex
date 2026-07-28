@@ -9,6 +9,8 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -60,9 +62,7 @@ def insert_draft(conn: StoreConnection, draft: dict[str, Any]) -> int:
 
 
 def get_draft(conn: StoreConnection, draft_id: int) -> dict | None:
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute("SELECT * FROM wiki.drafts WHERE id = %s", (draft_id,))
         return cur.fetchone()
 
@@ -74,8 +74,6 @@ def list_drafts(
     kind: str | None = None,
     limit: int = 50,
 ) -> list[dict]:
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     where: list[str] = []
     params: list = []
     if status:
@@ -90,7 +88,7 @@ def list_drafts(
     ORDER BY created_at DESC LIMIT %s
     """  # noqa: S608 — WHERE built from in-code literal fragments; values are bound parameters (docs/ASSURANCE-CASE.md §5)
     params.append(limit)
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(cast("LiteralString", sql), params)
         return list(cur.fetchall())
 
@@ -176,8 +174,6 @@ def find_draft_for_source(
     concept_id: int | None = None,
 ) -> dict | None:
     """Return the most recent draft for a given source, or None."""
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     if not memory_id and not concept_id:
         return None
     if memory_id is not None:
@@ -192,6 +188,6 @@ def find_draft_for_source(
             "ORDER BY created_at DESC LIMIT 1"
         )
         params = (concept_id,)
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(sql, params)
         return cur.fetchone()

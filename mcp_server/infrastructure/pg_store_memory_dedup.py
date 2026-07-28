@@ -27,6 +27,8 @@ non-current survivor or double-supersede an already-superseded row.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
@@ -72,8 +74,6 @@ def list_exact_duplicate_groups(conn: StoreConnection, limit: int) -> list[dict]
                     group consecutive rows by a single pass
                     (``itertools.groupby``) without an extra sort.
     """
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     # candidates: re-selects `m.*` into its own CTE before calling
     # effective_heat(). Required, not stylistic — current_memories is a
     # VIEW with its own composite row type, which PostgreSQL will NOT
@@ -116,7 +116,7 @@ def list_exact_duplicate_groups(conn: StoreConnection, limit: int) -> list[dict]
          ORDER BY dk.dup_key, c.id
          LIMIT %(limit)s
     """  # noqa: S608 — expression from hardcoded identifiers only (documented contract at _dup_key_expr); values are bound parameters (docs/ASSURANCE-CASE.md §5)
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(cast("LiteralString", sql), {"limit": limit})
         return list(cur.fetchall())
 

@@ -9,6 +9,8 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -123,8 +125,6 @@ def list_uncited_deliberate_memories(
     values — this query already reads that column so it benefits
     automatically once D6 lands, without needing a schema change here.
     """
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     sql = """
     SELECT m.id, LEFT(m.content, 200) AS content_preview, m.domain,
            m.importance, m.is_protected, m.source_attribution,
@@ -144,16 +144,14 @@ def list_uncited_deliberate_memories(
     ORDER BY m.importance DESC, m.created_at DESC
     LIMIT %s;
     """
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(sql, (limit,))
         return list(cur.fetchall())
 
 
 def wiki_stats(conn: StoreConnection) -> dict[str, Any]:
     """Counts across the wiki schema."""
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(
             """
             SELECT

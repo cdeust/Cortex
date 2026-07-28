@@ -11,6 +11,8 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from collections.abc import Sequence
 
 from typing import TYPE_CHECKING
@@ -34,8 +36,6 @@ def list_pages_missing_source_link(conn: StoreConnection, *, limit: int) -> list
                     zero 'documents' rows in wiki.page_sources and a
                     NULL documents_primary.
     """
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     sql = """
     SELECT p.id, p.memory_id, p.rel_path, p.title, p.domain, p.lead, p.sections
       FROM wiki.pages p
@@ -47,7 +47,7 @@ def list_pages_missing_source_link(conn: StoreConnection, *, limit: int) -> list
      ORDER BY p.id
      LIMIT %s
     """
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(sql, (limit,))
         return list(cur.fetchall())
 

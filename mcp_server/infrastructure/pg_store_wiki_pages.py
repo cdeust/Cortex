@@ -9,6 +9,8 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -159,9 +161,7 @@ def delete_pages_by_rel_path(conn: StoreConnection, rel_paths: list[str]) -> lis
     """
     if not rel_paths:
         return []
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(
             "DELETE FROM wiki.pages WHERE rel_path = ANY(%s) RETURNING id, rel_path",
             (list(rel_paths),),
@@ -171,17 +171,13 @@ def delete_pages_by_rel_path(conn: StoreConnection, rel_paths: list[str]) -> lis
 
 def get_page_by_slug(conn: StoreConnection, slug: str) -> dict | None:
     """Return a page row by slug, or None."""
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute("SELECT * FROM wiki.pages WHERE slug = %s LIMIT 1", (slug,))
         return cur.fetchone()
 
 
 def get_page_by_rel_path(conn: StoreConnection, rel_path: str) -> dict | None:
     """Return a page row by rel_path, or None."""
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute("SELECT * FROM wiki.pages WHERE rel_path = %s LIMIT 1", (rel_path,))
         return cur.fetchone()

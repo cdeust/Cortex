@@ -3,8 +3,9 @@
 Drop-in replacement for PgMemoryStore when PostgreSQL is unavailable.
 Mirrors the PG public API for every method the handlers/hooks call on
 the shared store (119 shared methods; 16 PG-only remain — ingest
-progress, decay iteration, procedural skills, tag-vector search — measured 2026-07-22 via an inspect.getmembers diff
-of the two classes; the prior "all 89 methods" claim here was stale).
+progress, decay iteration, procedural skills, tag-vector search — measured
+2026-07-22 via an inspect.getmembers diff of the two classes; the prior
+"all 89 methods" claim here was stale).
 
 WRRF fusion and spread activation are computed client-side
 (vs server-side PL/pgSQL in the PG backend).
@@ -1019,34 +1020,6 @@ class SqliteMemoryStore(
             if field in d and isinstance(d[field], int):
                 d[field] = bool(d[field])
         return d
-
-    # ── Connection acquisition (PgMemoryStore parity) ─────────────────
-    #
-    # PgMemoryStore splits connections across an interactive pool and a batch
-    # pool so long-running jobs cannot starve the hot path. SQLite has no
-    # such split to make: the store owns exactly one WAL-mode connection, and
-    # a second competing connection is what produced the `database is locked`
-    # / stale-read failures documented in conftest's `_clean_sqlite_via_
-    # singleton`. Both accessors therefore yield the same persistent
-    # connection — the identical shape PgMemoryStore itself yields when
-    # POOL_DISABLED is set (pg_store.py:270).
-    #
-    # These exist so handlers stay backend-agnostic: `anchor.py:141` and
-    # `get_rules.py:97` call `store.acquire_interactive()` unconditionally.
-    # Without them a SQLite-backed install raised
-    # `AttributeError: 'SqliteMemoryStore' object has no attribute
-    # 'acquire_interactive'` — an LSP break, not a missing feature, since the
-    # handler cannot know which store it was handed (issue #220).
-
-    @contextmanager
-    def acquire_interactive(self) -> Iterator[PsycopgCompatConnection]:
-        """Yield the store's connection for a short-lived hot-path operation."""
-        yield self._conn
-
-    @contextmanager
-    def acquire_batch(self) -> Iterator[PsycopgCompatConnection]:
-        """Yield the store's connection for long-running batch work."""
-        yield self._conn
 
     # ── Lifecycle ─────────────────────────────────────────────────────
 

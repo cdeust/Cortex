@@ -18,6 +18,7 @@ import numpy as np
 import pytest
 
 from mcp_server.observability import silent_failure
+from tests_py.conftest import requires_psycopg  # type: ignore
 
 WARN_LOGGER = "mcp_server.observability.silent_failure"
 
@@ -202,6 +203,7 @@ class TestWikiStoreReadmeGuard:
         _assert_noted("wiki_store.reindex", "index builder broke")
 
 
+@requires_psycopg
 class TestPgStoreTeardownSignals:
     def test_pool_close_failures_are_logged_and_pools_cleared(self, caplog):
         from mcp_server.infrastructure.pg_store import PgMemoryStore
@@ -389,6 +391,7 @@ class TestSessionStartPgClose:
         assert "pg connection close failed" in err
 
 
+@requires_psycopg
 class TestPgStoreRecoverySignals:
     def test_reconnect_survives_failed_close_and_logs_debug(self, caplog, monkeypatch):
         from mcp_server.infrastructure.pg_store import PgMemoryStore

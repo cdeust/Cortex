@@ -61,7 +61,7 @@ def list_lesson_promotion_candidates(
     WHERE {_ELIGIBLE_WHERE}
     ORDER BY m.useful_count DESC, m.access_count DESC, m.created_at DESC
     LIMIT ?
-    """
+    """  # noqa: S608 — interpolated fragment is the module-level literal _ELIGIBLE_WHERE; values are bound parameters (docs/ASSURANCE-CASE.md §5)
     rows = conn.execute(sql, (limit,)).fetchall()
     return [dict(row) for row in rows]
 

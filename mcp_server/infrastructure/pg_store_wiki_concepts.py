@@ -9,6 +9,8 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.row_factory import DICT_ROW
+
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -28,15 +30,13 @@ def list_concepts(
     limit: int = 200,
 ) -> list[dict]:
     """Return concept rows, optionally filtered by status."""
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     if status:
         sql = "SELECT * FROM wiki.concepts WHERE status = %s ORDER BY id LIMIT %s"
         params: tuple = (status, limit)
     else:
         sql = "SELECT * FROM wiki.concepts ORDER BY id LIMIT %s"
         params = (limit,)
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(sql, params)
         return list(cur.fetchall())
 
@@ -45,11 +45,9 @@ def get_concepts_by_entity_overlap(
     conn: StoreConnection, entity_ids: list[int]
 ) -> list[dict]:
     """Return concepts whose entity_ids intersect the given list."""
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-
     if not entity_ids:
         return []
-    with conn.cursor(row_factory=dict_row) as cur:
+    with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute(
             "SELECT * FROM wiki.concepts WHERE entity_ids && %s::int[]",
             (list(entity_ids),),

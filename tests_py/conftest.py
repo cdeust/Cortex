@@ -10,6 +10,7 @@ the PostgreSQL URL, the SQLite file, and the `~/.claude` filesystem tree.
 """
 
 import asyncio
+import importlib.util
 import os
 import sys
 import tempfile
@@ -372,6 +373,19 @@ def _effective_backend() -> str:
 
 _BACKEND = _effective_backend()
 _USE_PG_STORE = _BACKEND == "postgresql"
+
+# Reusable gate for tests whose SUBJECT is PgMemoryStore itself — they import
+# it inside the test body (often via object.__new__, with no live DB), so they
+# need psycopg importable even though they never connect. psycopg ships in the
+# optional [postgresql] extra, absent from the SQLite-default install, where
+# the import raises ModuleNotFoundError and FAILS the test instead of skipping
+# it (#220). This is a narrower question than `_USE_PG` (is a server
+# reachable?) and than `_USE_PG_STORE` (which backend did we resolve?): it asks
+# only whether the driver can be imported.
+requires_psycopg = pytest.mark.skipif(
+    importlib.util.find_spec("psycopg") is None,
+    reason="psycopg not installed ([postgresql] extra); PgMemoryStore is PG-only",
+)
 
 
 # ── Isolate domain_mapping's dev-root scan from the real filesystem ──────

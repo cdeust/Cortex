@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_server.hooks import pipeline_impact_bump as hook
+from tests_py.conftest import requires_psycopg  # type: ignore
 
 
 @pytest.fixture(autouse=True)
@@ -76,6 +77,7 @@ class TestCooldown:
             mock_run.assert_not_called()
 
 
+@requires_psycopg
 class TestHeatBump:
     def test_no_symbols_returns_zero(self):
         assert hook._bump_heat_for_symbols([]) == 0
