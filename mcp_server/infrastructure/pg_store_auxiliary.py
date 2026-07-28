@@ -8,7 +8,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    import psycopg
+    pass
 
 
 class PgAuxiliaryMixin(PgStoreHost):

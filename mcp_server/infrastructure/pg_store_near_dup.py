@@ -33,7 +33,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
 from mcp_server.core.near_dup_calibration import SCAN_FLOOR, CandidatePair
@@ -50,7 +50,7 @@ DEFAULT_ANCHOR_LIMIT = 20000
 
 
 def list_candidate_pairs(
-    conn: Connection,
+    conn: StoreConnection,
     *,
     top_k: int = DEFAULT_TOP_K,
     min_similarity: float = SCAN_FLOOR,
@@ -116,7 +116,7 @@ def list_candidate_pairs(
     ]
 
 
-def fetch_contents(conn: Connection, ids: list[int]) -> dict[int, str]:
+def fetch_contents(conn: StoreConnection, ids: list[int]) -> dict[int, str]:
     """Content text for a set of memory ids (for labeling artifacts).
 
     Post-condition: returns ``{id: content}`` for every id in ``ids``
@@ -138,7 +138,7 @@ def fetch_contents(conn: Connection, ids: list[int]) -> dict[int, str]:
         return {row["id"]: row["content"] for row in cur.fetchall()}
 
 
-def fetch_member_stats(conn: Connection, ids: list[int]) -> dict[int, dict]:
+def fetch_member_stats(conn: StoreConnection, ids: list[int]) -> dict[int, dict]:
     """``effective_heat`` and ``created_at`` for a set of memory ids
     (for survivor election across a near-dup component).
 

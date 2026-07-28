@@ -22,10 +22,11 @@ import logging
 import os
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterator, cast
 
 import numpy as np
 import psycopg
+from psycopg import sql
 from pgvector import Vector
 from pgvector.psycopg import register_vector
 from psycopg.rows import DictRow, dict_row
@@ -45,6 +46,9 @@ from mcp_server.observability import silent_failure
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.core.temporal import normalize_date_to_iso
 
+if TYPE_CHECKING:
+    from typing_extensions import LiteralString
+
 logger = logging.getLogger(__name__)
 
 
@@ -62,7 +66,7 @@ def compute_ddl_hash() -> str:
     return hashlib.sha256("\n".join(get_all_ddl()).encode("utf-8")).hexdigest()
 
 
-def read_schema_hash(conn: psycopg.Connection) -> str | None:
+def read_schema_hash(conn: psycopg.Connection[DictRow]) -> str | None:
     """Read the recorded DDL hash from ``schema_meta`` on ``conn``, or None.
 
     Pre: ``conn`` is a live psycopg connection opened with
@@ -143,12 +147,16 @@ class PgMemoryStore(
         register_vector(self._conn)
         # Phase 5 pools — lazy-constructed; opening on first acquire
         # avoids paying pool-open cost for short-lived usages (tests).
-        self._interactive_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = None
+        self._interactive_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = (
+            None
+        )
         self._batch_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = None
 
     def _create_connection(self) -> psycopg.Connection[DictRow]:
         """Create a new database connection."""
-        return psycopg.connect(self._url, row_factory=dict_row, autocommit=True)
+        return psycopg.Connection[DictRow].connect(
+            self._url, row_factory=dict_row, autocommit=True
+        )
 
     # ── Phase 5: connection pools ────────────────────────────────────────
 
@@ -165,7 +173,7 @@ class PgMemoryStore(
         """Open the hot-path pool on first use."""
 
         settings = get_memory_settings()
-        pool = ConnectionPool(
+        pool: ConnectionPool[psycopg.Connection[DictRow]] = ConnectionPool(
             conninfo=self._url,
             min_size=settings.POOL_INTERACTIVE_MIN,
             max_size=settings.POOL_INTERACTIVE_MAX,
@@ -180,7 +188,7 @@ class PgMemoryStore(
         """Open the batch/long-running pool on first use."""
 
         settings = get_memory_settings()
-        pool = ConnectionPool(
+        pool: ConnectionPool[psycopg.Connection[DictRow]] = ConnectionPool(
             conninfo=self._url,
             min_size=settings.POOL_BATCH_MIN,
             max_size=settings.POOL_BATCH_MAX,
@@ -261,7 +269,7 @@ class PgMemoryStore(
         register_vector(self._conn)
 
     def _execute(
-        self, query: str | psycopg.sql.Composable, params: Any = None, **kwargs: Any
+        self, query: str | sql.Composable, params: Any = None, **kwargs: Any
     ) -> MaterializedCursor:
         """Execute a query with stale-plan recovery and reconnection.
 
@@ -289,7 +297,7 @@ class PgMemoryStore(
     def _execute_on_conn(
         self,
         conn: psycopg.Connection[DictRow],
-        query: str | psycopg.sql.Composable,
+        query: str | sql.Composable,
         params: Any,
         **kwargs: Any,
     ) -> MaterializedCursor:
@@ -299,8 +307,14 @@ class PgMemoryStore(
         keep using .fetchone() / .fetchall() after the connection is
         returned to the pool.
         """
+        # Single trust boundary for psycopg's LiteralString query typing:
+        # every str reaching here is either a module literal or an
+        # allowlist-gated build whose mechanism its site names under the
+        # ruff S608 gate (docs/ASSURANCE-CASE.md §5) — values always travel
+        # separately as bound params.
+        typed_query = cast("LiteralString | sql.SQL | sql.Composed", query)
         try:
-            cur = conn.execute(query, params, **kwargs)
+            cur = conn.execute(typed_query, params, **kwargs)
         except psycopg.errors.FeatureNotSupported:
             logger.info("Stale prepared plan detected, deallocating and retrying")
             try:
@@ -313,10 +327,10 @@ class PgMemoryStore(
                 logger.debug(
                     "DEALLOCATE ALL during stale-plan recovery failed: %s", exc
                 )
-            cur = conn.execute(query, params, **kwargs)
+            cur = conn.execute(typed_query, params, **kwargs)
         except psycopg.OperationalError:
             logger.warning("Database connection lost on pool checkout, retrying")
-            cur = conn.execute(query, params, **kwargs)
+            cur = conn.execute(typed_query, params, **kwargs)
         return MaterializedCursor(cur)
 
     # Advisory lock id for schema bootstrap. Two processes hitting a
@@ -553,7 +567,9 @@ class PgMemoryStore(
             "write_class": data.get("write_class") or "deliberate",
         }
 
-    def _insert_memory_on(self, conn: psycopg.Connection, data: dict[str, Any]) -> int:
+    def _insert_memory_on(
+        self, conn: psycopg.Connection[DictRow], data: dict[str, Any]
+    ) -> int:
         """Run the memory INSERT on ``conn`` WITHOUT committing.
 
         The caller owns the transaction boundary: insert_memory() commits on a
@@ -578,7 +594,7 @@ class PgMemoryStore(
         return int(row["id"])
 
     def _current_chain_head(
-        self, conn: psycopg.Connection, target_id: int
+        self, conn: psycopg.Connection[DictRow], target_id: int
     ) -> int | None:
         """Walk ``target_id``'s supersession chain to its open head.
 
@@ -651,7 +667,7 @@ class PgMemoryStore(
 
     @staticmethod
     def _transfer_anchor_on(
-        conn: psycopg.Connection, head_id: int, new_id: int
+        conn: psycopg.Connection[DictRow], head_id: int, new_id: int
     ) -> None:
         """Anchor follows the chain head at supersession (decision 2026-07-07).
 
@@ -1318,11 +1334,12 @@ class PgMemoryStore(
             "WHERE id = ANY(%s::int[]) AND embedding IS NOT NULL",
             ([int(m) for m in memory_ids],),
         ).fetchall()
-        return {
-            int(r["id"]): self._vector_to_bytes(r["embedding"])
-            for r in rows
-            if r.get("embedding") is not None
-        }
+        out: dict[int, bytes] = {}
+        for r in rows:
+            emb = self._vector_to_bytes(r.get("embedding"))
+            if emb is not None:
+                out[int(r["id"])] = emb
+        return out
 
     def get_temporal_co_access(
         self,

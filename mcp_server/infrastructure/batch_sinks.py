@@ -13,6 +13,11 @@ Pure infrastructure — no core imports.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing_extensions import LiteralString
+
 from typing import Any
 
 from mcp_server.infrastructure.pooled_sink import (
@@ -29,11 +34,11 @@ class CopyBatchSink(PooledConnectionSink):
         self,
         acquire: ConnectAcquire,
         *,
-        copy_sql: str,
+        copy_sql: LiteralString,
         row_adapter: RowAdapter | None = None,
     ) -> None:
         super().__init__(acquire, row_adapter)
-        self._copy_sql = copy_sql
+        self._copy_sql: LiteralString = copy_sql
 
     def write_batch(self, batch: list[Any]) -> int:
         if not batch:
@@ -60,11 +65,11 @@ class ExecuteManyBatchSink(PooledConnectionSink):
         self,
         acquire: ConnectAcquire,
         *,
-        insert_sql: str,
+        insert_sql: LiteralString,
         row_adapter: RowAdapter | None = None,
     ) -> None:
         super().__init__(acquire, row_adapter)
-        self._insert_sql = insert_sql
+        self._insert_sql: LiteralString = insert_sql
 
     def write_batch(self, batch: list[Any]) -> int:
         if not batch:

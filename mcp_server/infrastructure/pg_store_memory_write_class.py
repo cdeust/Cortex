@@ -37,13 +37,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
 _DEFAULT_SENTINEL = "deliberate"
 
 
-def list_source_groups_at_default(conn: Connection, limit: int) -> list[dict]:
+def list_source_groups_at_default(conn: StoreConnection, limit: int) -> list[dict]:
     """Distinct ``source`` values among active rows still at the column
     DEFAULT, with their row counts.
 
@@ -76,7 +76,9 @@ def list_source_groups_at_default(conn: Connection, limit: int) -> list[dict]:
         return list(cur.fetchall())
 
 
-def bulk_reclassify_source(conn: Connection, source: str, target_class: str) -> int:
+def bulk_reclassify_source(
+    conn: StoreConnection, source: str, target_class: str
+) -> int:
     """Rewrite every active, still-default row sharing ``source`` to
     ``target_class``.
 

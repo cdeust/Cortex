@@ -58,7 +58,7 @@ class SqliteMoodMixin:
         if row is None:
             return None
         try:
-            val = row["valence"] if hasattr(row, "__getitem__") else row[0]
+            val = row["valence"]
             return float(val)
         except (KeyError, TypeError, ValueError, IndexError):
             return None
@@ -86,10 +86,7 @@ class SqliteMoodMixin:
         if row is None:
             return None
         try:
-            if hasattr(row, "__getitem__"):
-                valence, arousal = row["valence"], row["arousal"]
-            else:
-                valence, arousal = row[0], row[1]
+            valence, arousal = row["valence"], row["arousal"]
             return {"valence": float(valence), "arousal": float(arousal)}
         except (KeyError, TypeError, ValueError, IndexError):
             return None
@@ -164,7 +161,7 @@ class SqliteMoodMixin:
                 ).fetchone()
                 if row is None:
                     continue
-                raw = row["embedding"] if hasattr(row, "__getitem__") else row[0]
+                raw = row["embedding"]
                 if raw is not None:
                     result[int(mid)] = bytes(raw)
             except sqlite3.Error:

@@ -9,10 +9,11 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from typing_extensions import LiteralString
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 import json
 
@@ -20,7 +21,7 @@ import json
 from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
 
 
-def insert_draft(conn: Connection, draft: dict[str, Any]) -> int:
+def insert_draft(conn: StoreConnection, draft: dict[str, Any]) -> int:
     """Insert a draft row. Returns the new wiki.drafts.id.
 
     Required: title, kind. Optional: concept_id, memory_id, lead,
@@ -58,7 +59,7 @@ def insert_draft(conn: Connection, draft: dict[str, Any]) -> int:
         return _returning_id(cur.fetchone())
 
 
-def get_draft(conn: Connection, draft_id: int) -> dict | None:
+def get_draft(conn: StoreConnection, draft_id: int) -> dict | None:
     from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     with conn.cursor(row_factory=dict_row) as cur:
@@ -67,7 +68,7 @@ def get_draft(conn: Connection, draft_id: int) -> dict | None:
 
 
 def list_drafts(
-    conn: Connection,
+    conn: StoreConnection,
     *,
     status: str | None = None,
     kind: str | None = None,
@@ -90,12 +91,12 @@ def list_drafts(
     """  # noqa: S608 — WHERE built from in-code literal fragments; values are bound parameters (docs/ASSURANCE-CASE.md §5)
     params.append(limit)
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(sql, params)
+        cur.execute(cast("LiteralString", sql), params)
         return list(cur.fetchall())
 
 
 def update_draft(
-    conn: Connection,
+    conn: StoreConnection,
     draft_id: int,
     *,
     title: str | None = None,
@@ -140,12 +141,12 @@ def update_draft(
     params.append(draft_id)
     sql = f"UPDATE wiki.drafts SET {', '.join(sets)} WHERE id = %s"  # noqa: S608 — SET fragments are in-code literals appended per known field; values are bound parameters (docs/ASSURANCE-CASE.md §5)
     with conn.cursor() as cur:
-        cur.execute(sql, params)
+        cur.execute(cast("LiteralString", sql), params)
         return cur.rowcount > 0
 
 
 def update_draft_status(
-    conn: Connection,
+    conn: StoreConnection,
     draft_id: int,
     *,
     status: str,
@@ -169,7 +170,10 @@ def update_draft_status(
 
 
 def find_draft_for_source(
-    conn: Connection, *, memory_id: int | None = None, concept_id: int | None = None
+    conn: StoreConnection,
+    *,
+    memory_id: int | None = None,
+    concept_id: int | None = None,
 ) -> dict | None:
     """Return the most recent draft for a given source, or None."""
     from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working

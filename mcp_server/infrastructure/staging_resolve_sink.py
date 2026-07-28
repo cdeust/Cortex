@@ -31,6 +31,7 @@ from mcp_server.infrastructure.pooled_sink import (
 )
 
 if TYPE_CHECKING:
+    from typing_extensions import LiteralString
     import psycopg
 
 
@@ -46,15 +47,15 @@ class StagingResolveSink(PooledConnectionSink):
         self,
         acquire: ConnectAcquire,
         *,
-        stage_ddl: str,
-        copy_sql: str,
-        resolve_sql: str,
+        stage_ddl: LiteralString,
+        copy_sql: LiteralString,
+        resolve_sql: LiteralString,
         row_adapter: RowAdapter | None = None,
     ) -> None:
         super().__init__(acquire, row_adapter)
-        self._stage_ddl = stage_ddl
-        self._copy_sql = copy_sql
-        self._resolve_sql = resolve_sql
+        self._stage_ddl: LiteralString = stage_ddl
+        self._copy_sql: LiteralString = copy_sql
+        self._resolve_sql: LiteralString = resolve_sql
 
     def _on_connect(self, conn: psycopg.Connection) -> None:
         """Declare the session-temp staging table once per borrowed connection.

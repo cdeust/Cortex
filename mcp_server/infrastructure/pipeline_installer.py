@@ -119,9 +119,14 @@ def _install_locked(force_rebuild: bool, git_url: Optional[str]) -> dict:
     cargo = resolve_cargo()
     if not cargo:
         rust_result = install_rust_toolchain()
-        if rust_result.get("action") in {"rust_installed", "rust_already_present"}:
-            cargo = rust_result.get("cargo")
-        else:
+        installed = rust_result.get("action") in {
+            "rust_installed",
+            "rust_already_present",
+        }
+        cargo = rust_result.get("cargo")
+        # A success action with no usable cargo path would previously flow a
+        # None into the build command; refuse it as missing_toolchain instead.
+        if not installed or not isinstance(cargo, str) or not cargo:
             return {
                 "action": "missing_toolchain",
                 "missing": ["cargo"],

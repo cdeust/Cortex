@@ -8,6 +8,11 @@ Pure DDL — no connection management.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from typing_extensions import LiteralString
+
 # ── Extensions ────────────────────────────────────────────────────────────
 
 EXTENSIONS_DDL = """
@@ -2424,7 +2429,7 @@ def _split_statements(ddl: str) -> list[str]:
     return statements
 
 
-def get_all_ddl() -> list[str]:
+def get_all_ddl() -> list[LiteralString]:
     """Return all DDL as individual statements for safe per-statement execution.
 
     Each statement can be executed independently — if one fails, the
@@ -2471,4 +2476,7 @@ def get_all_ddl() -> list[str]:
     result: list[str] = []
     for block in blocks:
         result.extend(_split_statements(block))
-    return result
+    # Every element derives from the module-literal *_DDL blocks above;
+    # _split_statements only strips comments/whitespace (regex ops erase
+    # LiteralString provenance for the checker, so it is re-asserted here).
+    return cast("list[LiteralString]", result)

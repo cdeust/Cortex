@@ -7,7 +7,7 @@ from mcp_server.infrastructure.pg_store_host import PgStoreHost
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    import psycopg
+    pass
 
 
 class PgRelationshipMixin(PgStoreHost):

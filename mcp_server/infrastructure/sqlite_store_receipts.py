@@ -8,9 +8,18 @@ pg_store_receipts.py.
 
 from __future__ import annotations
 
+import sqlite3
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
+
 
 class SqliteReceiptsMixin:
     """Append-only injection receipts (blame path T1)."""
+
+    _conn: PsycopgCompatConnection
+    _raw_conn: sqlite3.Connection
 
     def insert_injection_receipt(
         self,
@@ -25,7 +34,9 @@ class SqliteReceiptsMixin:
             "INSERT INTO injection_receipts (session_id, channel) VALUES (?, ?)",
             (session_id, channel),
         )
-        receipt_id = int(cur.lastrowid)
+        receipt_id = cur.lastrowid
+        if receipt_id is None:
+            raise sqlite3.ProgrammingError("receipt INSERT produced no lastrowid")
         self._raw_conn.executemany(
             "INSERT INTO injection_receipt_items"
             " (receipt_id, memory_id, rank, score) VALUES (?, ?, ?, ?)",

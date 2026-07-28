@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from mcp_server.shared.entity_canonical import canonicalize_entity_name
 
 if TYPE_CHECKING:
-    import psycopg
+    pass
 
 
 class PgEntityMixin(PgStoreHost):

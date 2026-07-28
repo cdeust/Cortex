@@ -10,7 +10,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 import numpy as np
 
 if TYPE_CHECKING:
-    import psycopg
+    pass
 
 
 class PgQueryMixin(PgStoreHost):

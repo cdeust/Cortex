@@ -9,10 +9,11 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from typing_extensions import LiteralString
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 import json
 
@@ -21,7 +22,7 @@ from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
 
 
 def list_concepts(
-    conn: Connection,
+    conn: StoreConnection,
     *,
     status: str | None = None,
     limit: int = 200,
@@ -41,7 +42,7 @@ def list_concepts(
 
 
 def get_concepts_by_entity_overlap(
-    conn: Connection, entity_ids: list[int]
+    conn: StoreConnection, entity_ids: list[int]
 ) -> list[dict]:
     """Return concepts whose entity_ids intersect the given list."""
     from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
@@ -56,7 +57,7 @@ def get_concepts_by_entity_overlap(
         return list(cur.fetchall())
 
 
-def insert_concept(conn: Connection, concept: dict[str, Any]) -> int:
+def insert_concept(conn: StoreConnection, concept: dict[str, Any]) -> int:
     """Insert a new concept. Returns wiki.concepts.id."""
     sql = """
     INSERT INTO wiki.concepts (
@@ -112,7 +113,9 @@ _UPDATABLE_COLUMNS: frozenset[str] = frozenset(
 )
 
 
-def update_concept(conn: Connection, concept_id: int, fields: dict[str, Any]) -> bool:
+def update_concept(
+    conn: StoreConnection, concept_id: int, fields: dict[str, Any]
+) -> bool:
     """Patch a concept row. Returns True if updated.
 
     Precondition: every key of ``fields`` is in ``_UPDATABLE_COLUMNS``;
@@ -143,5 +146,5 @@ def update_concept(conn: Connection, concept_id: int, fields: dict[str, Any]) ->
     params.append(concept_id)
     sql = f"UPDATE wiki.concepts SET {', '.join(sets)} WHERE id = %s"  # noqa: S608 — column names gated by the _UPDATABLE_COLUMNS allowlist (unknown keys refused); values are bound parameters (docs/ASSURANCE-CASE.md §5)
     with conn.cursor() as cur:
-        cur.execute(sql, params)
+        cur.execute(cast("LiteralString", sql), params)
         return cur.rowcount > 0

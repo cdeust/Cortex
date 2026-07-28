@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
 # Shared by both queries below so the eligibility definition cannot drift
@@ -34,7 +34,7 @@ _ELIGIBLE_WHERE = """
 
 
 def list_lesson_promotion_candidates(
-    conn: Connection, limit: int = 20
+    conn: StoreConnection, limit: int = 20
 ) -> list[dict[str, Any]]:
     """List active lesson/lesson-candidate memories with usage evidence.
 
@@ -64,7 +64,7 @@ def list_lesson_promotion_candidates(
         return list(cur.fetchall())
 
 
-def count_lesson_promotion_candidates(conn: Connection) -> int:
+def count_lesson_promotion_candidates(conn: StoreConnection) -> int:
     """Total count of lesson-promotion candidates, unbounded by any limit.
 
     Precondition: same as ``list_lesson_promotion_candidates``.

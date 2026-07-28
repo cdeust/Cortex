@@ -12,14 +12,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
 from mcp_server.infrastructure.pg_store_wiki_pages import get_page_by_slug
 
 
 def upsert_link(
-    conn: Connection,
+    conn: StoreConnection,
     src_page_id: int,
     dst_slug: str,
     link_kind: str = "see-also",
@@ -45,14 +45,14 @@ def upsert_link(
         cur.execute(sql, (src_page_id, dst_slug, dst_page_id, link_kind))
 
 
-def delete_links_from(conn: Connection, src_page_id: int) -> int:
+def delete_links_from(conn: StoreConnection, src_page_id: int) -> int:
     """Remove all outgoing links from a page (used before re-indexing)."""
     with conn.cursor() as cur:
         cur.execute("DELETE FROM wiki.links WHERE src_page_id = %s", (src_page_id,))
         return cur.rowcount
 
 
-def get_backlinks(conn: Connection, dst_page_id: int) -> list[dict]:
+def get_backlinks(conn: StoreConnection, dst_page_id: int) -> list[dict]:
     """Return rows linking TO this page."""
     from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
@@ -69,7 +69,7 @@ def get_backlinks(conn: Connection, dst_page_id: int) -> list[dict]:
         return list(cur.fetchall())
 
 
-def resolve_unresolved_links(conn: Connection) -> int:
+def resolve_unresolved_links(conn: StoreConnection) -> int:
     """Second-pass link resolution: fill in dst_page_id for links whose
     target didn't exist at insert time. Returns rows updated."""
     with conn.cursor() as cur:

@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 import json
 
@@ -20,7 +20,7 @@ import json
 from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
 
 
-def insert_claim_events(conn: Connection, claims: list[dict]) -> list[int]:
+def insert_claim_events(conn: StoreConnection, claims: list[dict]) -> list[int]:
     """Bulk insert ClaimEvent rows. Returns the new ids in order.
 
     Each ``claims`` dict requires: ``text``, ``claim_type``. Optional:
@@ -60,7 +60,7 @@ def insert_claim_events(conn: Connection, claims: list[dict]) -> list[int]:
     return out
 
 
-def delete_claims_for_memory(conn: Connection, memory_id: int) -> int:
+def delete_claims_for_memory(conn: StoreConnection, memory_id: int) -> int:
     """Remove all claim_events derived from a single memory.
 
     Used before re-extraction to keep the table clean of stale claims.
@@ -70,7 +70,7 @@ def delete_claims_for_memory(conn: Connection, memory_id: int) -> int:
         return cur.rowcount
 
 
-def get_claims_for_memory(conn: Connection, memory_id: int) -> list[dict]:
+def get_claims_for_memory(conn: StoreConnection, memory_id: int) -> list[dict]:
     """Return all claim_events derived from a single memory."""
     from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
@@ -83,7 +83,7 @@ def get_claims_for_memory(conn: Connection, memory_id: int) -> list[dict]:
 
 
 def get_entities_by_memory(
-    conn: Connection, memory_ids: list[int]
+    conn: StoreConnection, memory_ids: list[int]
 ) -> dict[int, list[int]]:
     """Pre-fetch memory_id → list[entity_id] for a batch of memories."""
     if not memory_ids:
@@ -110,7 +110,7 @@ def get_entities_by_memory(
 _MIN_ENTITY_NAME_CHARS = 3
 
 
-def get_entity_name_index(conn: Connection, limit: int = 5000) -> dict[str, int]:
+def get_entity_name_index(conn: StoreConnection, limit: int = 5000) -> dict[str, int]:
     """Return name → entity_id map for inline-mention matching.
 
     Limit caps the index size for in-memory matching against claim text.
@@ -134,7 +134,7 @@ def get_entity_name_index(conn: Connection, limit: int = 5000) -> dict[str, int]
 
 
 def get_claims_by_entity(
-    conn: Connection,
+    conn: StoreConnection,
     entity_ids: list[int],
     exclude_claim_ids: list[int] | None = None,
 ) -> dict[int, list[dict]]:
@@ -170,7 +170,7 @@ def get_claims_by_entity(
 
 
 def update_claim_entities(
-    conn: Connection, updates: list[tuple[int, list[int]]]
+    conn: StoreConnection, updates: list[tuple[int, list[int]]]
 ) -> int:
     """Bulk update wiki.claim_events.entity_ids. Returns rows updated.
 
@@ -194,7 +194,9 @@ def update_claim_entities(
     return written
 
 
-def update_claim_supersedes(conn: Connection, updates: list[tuple[int, int]]) -> int:
+def update_claim_supersedes(
+    conn: StoreConnection, updates: list[tuple[int, int]]
+) -> int:
     """Bulk update wiki.claim_events.supersedes. Returns rows updated.
 
     ``updates`` is [(new_claim_id, superseded_claim_id), ...].

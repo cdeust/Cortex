@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
 # Measured 20 rows on the dev DB (2026-07-11); comfortably above any
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 DEFAULT_SEED_SCAN_LIMIT = 5000
 
 
-def list_page_memory_seed_candidates(conn: Connection, limit: int) -> list[dict]:
+def list_page_memory_seed_candidates(conn: StoreConnection, limit: int) -> list[dict]:
     """Every ``wiki.pages`` row with a non-null, FK-valid ``memory_id``.
 
     Precondition: none beyond a provisioned ``wiki`` schema.
@@ -57,7 +57,7 @@ def list_page_memory_seed_candidates(conn: Connection, limit: int) -> list[dict]
 
 
 def list_existing_page_memory_citations(
-    conn: Connection, page_ids: list[int]
+    conn: StoreConnection, page_ids: list[int]
 ) -> set[tuple[int, int]]:
     """(page_id, memory_id) pairs already recorded in ``wiki.citations``.
 

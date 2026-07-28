@@ -35,6 +35,10 @@ class MCPClient:
         self._server_info: dict | None = None
         self._negotiated_version: str | None = None
         self._connected = False
+        # Extra binaries allowed beyond _ALLOWED_COMMANDS (CWE-78 allowlist).
+        # Callers (ap_bridge, mcp_client_pool) extend this for upstream
+        # servers whose binaries the default list cannot know.
+        self._extra_allowed_commands: set[str] = set()
         self._connect_timeout_ms = config.get("connectTimeoutMs") or 10000
         # callTimeoutMs: positive int = ms, 0 or None = no per-call timeout
         # (used for long-running upstream indexing).
@@ -134,9 +138,7 @@ class MCPClient:
 
         # Validate command against allowlist (CWE-78 mitigation).
         # In test/dev, extra commands can be allowed via _extra_allowed_commands.
-        allowed = self._ALLOWED_COMMANDS | getattr(
-            self, "_extra_allowed_commands", set()
-        )
+        allowed = self._ALLOWED_COMMANDS | self._extra_allowed_commands
         base_cmd = raw_command.split("/")[-1] if "/" in raw_command else raw_command
         if base_cmd not in allowed:
             raise McpConnectionError(

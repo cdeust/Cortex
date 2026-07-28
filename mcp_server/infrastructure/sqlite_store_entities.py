@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sqlite3
+
 from typing import Any
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.shared.code_tokenize import expand_fts_query
@@ -11,6 +13,7 @@ class SqliteEntityMixin:
     """Entity persistence operations on SQLite."""
 
     _conn: PsycopgCompatConnection
+    _raw_conn: sqlite3.Connection
 
     def _normalize_memory_row(self, row: dict) -> dict:
         """Provided by SqliteMemoryStore."""

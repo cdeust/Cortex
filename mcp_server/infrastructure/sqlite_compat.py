@@ -174,7 +174,7 @@ class _CompatCursor:
     def __init__(
         self,
         cursor: sqlite3.Cursor,
-        lastrowid: int,
+        lastrowid: int | None,
         *,
         had_returning: bool = False,
     ) -> None:
@@ -226,6 +226,22 @@ class _CompatExecutingCursor:
             self._cursor.execute(translated, params)
         else:
             self._cursor.execute(translated)
+        self.lastrowid = self._cursor.lastrowid
+        self.rowcount = self._cursor.rowcount
+        return self
+
+    def executemany(self, sql: str, params_seq: Any) -> "_CompatExecutingCursor":
+        """psycopg-parity executemany with SQL translation.
+
+        Shared query modules (e.g. ``pg_store_wiki_sources.upsert_page_sources``)
+        batch their inserts through ``cur.executemany``; without this method the
+        whole call chain raised ``AttributeError`` on the SQLite backend — the
+        same silent-degradation class as issue #206. RETURNING is not supported
+        here (psycopg's ``executemany`` does not return rows either).
+        """
+        translated = _translate_sql(sql)
+        self._had_returning = False
+        self._cursor.executemany(translated, params_seq)
         self.lastrowid = self._cursor.lastrowid
         self.rowcount = self._cursor.rowcount
         return self

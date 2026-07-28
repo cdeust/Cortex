@@ -27,10 +27,11 @@ non-current survivor or double-supersede an already-superseded row.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from typing_extensions import LiteralString
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
 # Per-run scan cap on GROUP MEMBER ROWS (not groups) — mirrors
@@ -50,7 +51,7 @@ def _dup_key_expr(column: str) -> str:
     return f"md5(lower(regexp_replace({column}, '\\s+', ' ', 'g')))"
 
 
-def list_exact_duplicate_groups(conn: Connection, limit: int) -> list[dict]:
+def list_exact_duplicate_groups(conn: StoreConnection, limit: int) -> list[dict]:
     """Every member row of every active exact-duplicate group.
 
     Pre-condition:  ``limit`` bounds the number of member rows returned
@@ -116,12 +117,12 @@ def list_exact_duplicate_groups(conn: Connection, limit: int) -> list[dict]:
          LIMIT %(limit)s
     """  # noqa: S608 — expression from hardcoded identifiers only (documented contract at _dup_key_expr); values are bound parameters (docs/ASSURANCE-CASE.md §5)
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(sql, {"limit": limit})
+        cur.execute(cast("LiteralString", sql), {"limit": limit})
         return list(cur.fetchall())
 
 
 def supersede_to_existing(
-    conn: Connection, duplicate_id: int, survivor_id: int
+    conn: StoreConnection, duplicate_id: int, survivor_id: int
 ) -> bool:
     """Point ``duplicate_id``'s ``superseded_by_id`` at ``survivor_id``,
     CAS-guarded, without inserting any row.

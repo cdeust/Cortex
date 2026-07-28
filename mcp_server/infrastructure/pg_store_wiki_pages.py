@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 import json
 
@@ -21,7 +21,7 @@ from mcp_server.infrastructure.pg_store_wiki_common import body_hash
 from mcp_server.infrastructure.pg_store_wiki_sources import upsert_page_sources
 
 
-def upsert_page(conn: Connection, page: dict[str, Any]) -> tuple[int, bool]:
+def upsert_page(conn: StoreConnection, page: dict[str, Any]) -> tuple[int, bool]:
     """Upsert a page row by rel_path.
 
     Returns ``(page_id, was_modified)`` where ``was_modified`` is True
@@ -131,7 +131,7 @@ def upsert_page(conn: Connection, page: dict[str, Any]) -> tuple[int, bool]:
         return existing_id, False
 
 
-def list_all_rel_paths(conn: Connection) -> list[str]:
+def list_all_rel_paths(conn: StoreConnection) -> list[str]:
     """Return every rel_path currently stored in wiki.pages.
 
     Used by the migration reconciliation phase to compute which rows
@@ -143,7 +143,7 @@ def list_all_rel_paths(conn: Connection) -> list[str]:
     return [r["rel_path"] if isinstance(r, dict) else r[0] for r in rows]
 
 
-def delete_pages_by_rel_path(conn: Connection, rel_paths: list[str]) -> list[dict]:
+def delete_pages_by_rel_path(conn: StoreConnection, rel_paths: list[str]) -> list[dict]:
     """Delete wiki.pages rows for the given rel_paths.
 
     Cascades to wiki.links (src_page_id ON DELETE CASCADE), wiki.page_sources
@@ -169,7 +169,7 @@ def delete_pages_by_rel_path(conn: Connection, rel_paths: list[str]) -> list[dic
         return list(cur.fetchall())
 
 
-def get_page_by_slug(conn: Connection, slug: str) -> dict | None:
+def get_page_by_slug(conn: StoreConnection, slug: str) -> dict | None:
     """Return a page row by slug, or None."""
     from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
@@ -178,7 +178,7 @@ def get_page_by_slug(conn: Connection, slug: str) -> dict | None:
         return cur.fetchone()
 
 
-def get_page_by_rel_path(conn: Connection, rel_path: str) -> dict | None:
+def get_page_by_rel_path(conn: StoreConnection, rel_path: str) -> dict | None:
     """Return a page row by rel_path, or None."""
     from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 

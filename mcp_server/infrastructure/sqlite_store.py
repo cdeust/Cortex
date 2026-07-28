@@ -415,6 +415,10 @@ class SqliteMemoryStore(
             ),
         )
         memory_id = cur.lastrowid
+        if memory_id is None:
+            # An INSERT always assigns a rowid; None means the statement did
+            # not execute as an INSERT — a broken contract, not a data state.
+            raise sqlite3.ProgrammingError("memory INSERT produced no lastrowid")
         self._conn.execute(
             "INSERT INTO memories_fts(rowid, content) VALUES (?, ?)",
             (memory_id, _fts_augment(content)),
@@ -437,7 +441,7 @@ class SqliteMemoryStore(
                         "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
                         (memory_id, vec.tobytes()),
                     )
-        return memory_id  # type: ignore[return-value]
+        return memory_id
 
     def insert_memory(self, data: dict[str, Any]) -> int:
         """Insert a memory into memories + FTS5 + vec tables."""
@@ -584,7 +588,7 @@ class SqliteMemoryStore(
         if row is None:
             return 1.0
         try:
-            return float(row["factor"] if hasattr(row, "__getitem__") else row[0])
+            return float(row["factor"])
         except (KeyError, TypeError, IndexError):
             return 1.0
 

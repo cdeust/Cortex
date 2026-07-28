@@ -12,11 +12,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
 def list_pages_for_decay(
-    conn: Connection,
+    conn: StoreConnection,
     *,
     limit: int = 5000,
     include_archived: bool = False,
@@ -43,7 +43,7 @@ def list_pages_for_decay(
         return list(cur.fetchall())
 
 
-def apply_thermo_decisions(conn: Connection, decisions: list[Any]) -> int:
+def apply_thermo_decisions(conn: StoreConnection, decisions: list[Any]) -> int:
     """Bulk apply HeatDecision rows. Returns count of pages written.
 
     Idempotent — UPDATE only fires when at least one of (heat,
@@ -82,7 +82,7 @@ def apply_thermo_decisions(conn: Connection, decisions: list[Any]) -> int:
     return written
 
 
-def apply_staleness_decisions(conn: Connection, decisions: list[Any]) -> int:
+def apply_staleness_decisions(conn: StoreConnection, decisions: list[Any]) -> int:
     """Bulk apply StalenessDecision rows. Returns transitions written."""
     if not decisions:
         return 0
@@ -100,7 +100,7 @@ def apply_staleness_decisions(conn: Connection, decisions: list[Any]) -> int:
 
 
 def get_claim_file_refs_for_pages(
-    conn: Connection, page_ids: list[int]
+    conn: StoreConnection, page_ids: list[int]
 ) -> dict[int, list[str]]:
     """For each page, return the file paths cited by its source memory's claims.
 

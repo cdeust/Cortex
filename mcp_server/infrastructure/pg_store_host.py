@@ -25,9 +25,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Iterator
 
 import psycopg
+from psycopg import sql
 
 if TYPE_CHECKING:
     from psycopg.rows import DictRow
+    from psycopg_pool import ConnectionPool
 
 
 class MaterializedCursor:
@@ -98,8 +100,6 @@ class PgStoreHost:
     """
 
     if TYPE_CHECKING:
-        from psycopg_pool import ConnectionPool
-
         _conn: psycopg.Connection[DictRow]
 
         @property
@@ -107,7 +107,7 @@ class PgStoreHost:
 
         def _execute(
             self,
-            query: str | psycopg.sql.Composable,
+            query: str | sql.Composable,
             params: Any = None,
             **kwargs: Any,
         ) -> MaterializedCursor: ...

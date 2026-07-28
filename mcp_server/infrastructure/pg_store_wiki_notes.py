@@ -9,10 +9,10 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 import json
 
@@ -21,7 +21,7 @@ from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
 
 
 def insert_citation(
-    conn: Connection,
+    conn: StoreConnection,
     page_id: int,
     session_id: str = "",
     domain: str = "",
@@ -63,7 +63,7 @@ def insert_citation(
 
 
 def insert_memo(
-    conn: Connection,
+    conn: StoreConnection,
     subject_type: str,
     subject_id: int,
     decision: str,
@@ -98,7 +98,9 @@ def insert_memo(
         return _returning_id(cur.fetchone())
 
 
-def list_uncited_deliberate_memories(conn: Connection, limit: int = 20) -> list[dict]:
+def list_uncited_deliberate_memories(
+    conn: StoreConnection, limit: int = 20
+) -> list[dict]:
     """List active, deliberate, verifiably-important memories with zero
     wiki.citations rows — I6-D7's reverse loop ("orphelines délibérées").
 
@@ -147,7 +149,7 @@ def list_uncited_deliberate_memories(conn: Connection, limit: int = 20) -> list[
         return list(cur.fetchall())
 
 
-def wiki_stats(conn: Connection) -> dict:
+def wiki_stats(conn: StoreConnection) -> dict[str, Any]:
     """Counts across the wiki schema."""
     from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
@@ -169,4 +171,9 @@ def wiki_stats(conn: Connection) -> dict:
               (SELECT COUNT(*) FROM wiki.memos) AS memos
             """
         )
-        return cur.fetchone()
+        row = cur.fetchone()
+        if row is None:
+            # An aggregate SELECT always yields one row; None means the
+            # backend broke its contract — surface it, never return a fake.
+            raise RuntimeError("wiki_stats aggregate SELECT produced no row")
+        return dict(row)

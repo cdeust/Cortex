@@ -21,14 +21,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
 _ORPHAN_TAG = "domain-orphan"
 
 
 def list_domainless_memories(
-    conn: Connection, limit: int, *, include_orphans: bool = False
+    conn: StoreConnection, limit: int, *, include_orphans: bool = False
 ) -> list[dict]:
     """Active (chain-head) memories whose domain is empty, with evidence.
 
@@ -73,7 +73,7 @@ def list_domainless_memories(
         return list(cur.fetchall())
 
 
-def update_memory_domain(conn: Connection, memory_id: int, domain: str) -> bool:
+def update_memory_domain(conn: StoreConnection, memory_id: int, domain: str) -> bool:
     """Set one memory's domain, but only if it is still empty.
 
     Pre-condition:  ``memory_id`` refers to an existing ``memories`` row;
@@ -103,7 +103,7 @@ def update_memory_domain(conn: Connection, memory_id: int, domain: str) -> bool:
         return cur.rowcount > 0
 
 
-def tag_memory_orphan(conn: Connection, memory_id: int) -> bool:
+def tag_memory_orphan(conn: StoreConnection, memory_id: int) -> bool:
     """Append the ``domain-orphan`` tag, but only if the domain is still
     empty and the tag isn't already present.
 

@@ -13,11 +13,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
 def list_catchall_pages_with_sources(
-    conn: Connection, known_domains: list[str], limit: int
+    conn: StoreConnection, known_domains: list[str], limit: int
 ) -> list[dict]:
     """Pages whose domain isn't a registered project, with source paths.
 
@@ -52,7 +52,7 @@ def list_catchall_pages_with_sources(
         return list(cur.fetchall())
 
 
-def update_page_domain(conn: Connection, page_id: int, domain: str) -> None:
+def update_page_domain(conn: StoreConnection, page_id: int, domain: str) -> None:
     """Overwrite one page's ``domain`` column.
 
     Pre-condition:  ``page_id`` refers to an existing ``wiki.pages`` row.

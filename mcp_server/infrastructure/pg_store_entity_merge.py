@@ -15,7 +15,7 @@ from mcp_server.infrastructure.pg_store_host import PgStoreHost
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    import psycopg
+    pass
 
 # source: structural — the id-lookup fetches exactly the survivor + alias pair
 _MERGE_PAIR_COUNT = 2

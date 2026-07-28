@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
 from mcp_server.core.write_class import (
@@ -57,7 +57,7 @@ DEFAULT_REHEAT_SCAN_LIMIT = 5000
 
 
 def list_deliberate_below_target(
-    conn: Connection, target: float, limit: int
+    conn: StoreConnection, target: float, limit: int
 ) -> list[dict]:
     """Every active deliberate memory whose ``effective_heat`` < ``target``.
 
@@ -140,7 +140,7 @@ def list_deliberate_below_target(
 
 
 def apply_reheat(
-    conn: Connection, memory_id: int, old_heat_base: float, new_heat_base: float
+    conn: StoreConnection, memory_id: int, old_heat_base: float, new_heat_base: float
 ) -> bool:
     """Raise ``memory_id``'s ``heat_base`` to ``new_heat_base``, CAS-guarded.
 

@@ -20,10 +20,11 @@ source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.4
 from __future__ import annotations
 
 import os
+import sys
 from contextlib import contextmanager
 from typing import Iterator
 
-from mcp_server.shared.platform import IS_WINDOWS, home_dir
+from mcp_server.shared.platform import home_dir
 
 _LOCK_FILE = home_dir() / ".claude" / "methodology" / ".install.lock"
 
@@ -59,7 +60,8 @@ def install_lock() -> Iterator[None]:
             pass
 
 
-if IS_WINDOWS:
+if sys.platform == "win32":  # == shared.platform.IS_WINDOWS; literal so the checker
+    # resolves the msvcrt/fcntl split per-platform instead of flagging both.
     import msvcrt
 
     def _acquire(fd: int) -> None:

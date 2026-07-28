@@ -14,10 +14,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from psycopg import Connection
+    from mcp_server.infrastructure.db_types import StoreConnection
 
 
-def list_pages_missing_source_link(conn: Connection, *, limit: int) -> list[dict]:
+def list_pages_missing_source_link(conn: StoreConnection, *, limit: int) -> list[dict]:
     """Pages with no primary 'documents' source link (ADR-0051 STEP 3).
 
     Selects pages where ``documents_primary IS NULL`` (the fast-path
@@ -52,10 +52,6 @@ def list_pages_missing_source_link(conn: Connection, *, limit: int) -> list[dict
 
 SourceEntry = str | tuple[str, str] | tuple[str, str, float]
 
-# source: structural — a (path, source, confidence) SourceEntry tuple has
-# three elements; shorter tuples fall back to the call-level defaults
-_ENTRY_WITH_CONFIDENCE = 3
-
 
 def _entry_row(
     entry: SourceEntry,
@@ -75,18 +71,17 @@ def _entry_row(
     provenance in one call, which a single call-level ``source`` cannot
     express).
     """
-    if isinstance(entry, tuple):
-        path = entry[0]
-        entry_source = entry[1] if len(entry) > 1 else default_source
-        entry_confidence = (
-            entry[2] if len(entry) >= _ENTRY_WITH_CONFIDENCE else default_confidence
-        )
-        return page_id, path, link_kind, entry_confidence, entry_source
-    return page_id, entry, link_kind, default_confidence, default_source
+    match entry:
+        case (path, entry_source, entry_confidence):
+            return page_id, path, link_kind, entry_confidence, entry_source
+        case (path, entry_source):
+            return page_id, path, link_kind, default_confidence, entry_source
+        case _:
+            return page_id, entry, link_kind, default_confidence, default_source
 
 
 def upsert_page_sources(
-    conn: Connection,
+    conn: StoreConnection,
     page_id: int,
     documents: list[SourceEntry],
     *,
