@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.cdeust%2Fhypermnesia-mcp.svg)](https://mcptoplist.com/server/io.github.cdeust%2Fhypermnesia-mcp)
+
 <!-- mcp-name: io.github.cdeust/hypermnesia-mcp -->
 
 <p align="center">
