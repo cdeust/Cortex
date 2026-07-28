@@ -25,17 +25,25 @@ cp "$PY" "$BAK"
 cleanup() { cp "$BAK" "$PY"; rm -f "$BAK"; rm -rf "$ROOT/mutants" "$ROOT/.mutmut-cache"; }
 trap cleanup EXIT
 
-# Repoint only_mutate + the test selection at the change under test. The rest
-# of [tool.mutmut] (source_paths, also_copy, use_setproctitle) is preserved.
+# Repoint only_mutate, source_paths and the test selection at the change under
+# test. source_paths must contain the roots the sources live under: mutmut only
+# copies those into mutants/, and a source outside them is silently never
+# mutated — the run then reports 0 survivors because it mutated nothing. Rooted
+# at the committed value so a run inside mcp_server/ keeps its existing scope.
 python3 - "$PY" "$TESTS" "$@" <<'PYEOF'
 import re, sys
 path, tests, *sources = sys.argv[1], sys.argv[2], *sys.argv[3:]
 fmt = lambda xs: "[" + ", ".join(f'"{x}"' for x in xs) + "]"
 src = open(path).read()
+roots = sorted({s.split("/", 1)[0] for s in sources})
+declared = re.search(r'^source_paths = \[(.*)\]$', src, flags=re.M)
+existing = re.findall(r'"([^"]+)"', declared.group(1)) if declared else []
 src, n1 = re.subn(r'^only_mutate = .*$', "only_mutate = " + fmt(sources), src, count=1, flags=re.M)
 src, n2 = re.subn(r'^pytest_add_cli_args_test_selection = .*$',
                   "pytest_add_cli_args_test_selection = " + fmt([tests]), src, count=1, flags=re.M)
-assert n1 and n2, "pyproject [tool.mutmut] must define only_mutate and pytest_add_cli_args_test_selection"
+src, n3 = re.subn(r'^source_paths = .*$',
+                  "source_paths = " + fmt(sorted(set(existing) | set(roots))), src, count=1, flags=re.M)
+assert n1 and n2 and n3, "pyproject [tool.mutmut] must define only_mutate, source_paths and pytest_add_cli_args_test_selection"
 open(path, "w").write(src)
 PYEOF
 

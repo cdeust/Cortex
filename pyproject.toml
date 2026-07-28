@@ -274,6 +274,23 @@ dev = [
 # selection at the changed file and its test.
 source_paths = ["mcp_server"]
 only_mutate = ["mcp_server/shared/json_native.py"]
-also_copy = ["tests_py", "deps"]
+# A module that READS repository files needs them in the mutants/ working copy
+# too: scripts/check_doc_claims.py resolves its canonical sources relative to
+# its own location, so without these its repository-level tests raise
+# FileNotFoundError under every mutant and the run reports no usable result.
+also_copy = [
+    "tests_py",
+    "deps",
+    "docs",
+    "README.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CLAUDE.md",
+    "GOVERNANCE.md",
+    "manifest.json",
+    "server.json",
+    "package.json",
+    ".bestpractices.json",
+]
 pytest_add_cli_args_test_selection = ["tests_py/shared/test_json_native.py"]
 use_setproctitle = false
