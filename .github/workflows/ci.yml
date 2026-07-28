@@ -416,10 +416,20 @@ jobs:
       # nobody resolved. Checked here, on every push and PR, because that
       # drift is introduced at commit time. Static: reads uv.lock, installs
       # nothing.
+      # uv arrives via the SHA-pinned action, not `pip install uv==0.11.3`:
+      # Scorecard scores a bare version specifier as "pipCommand not pinned
+      # by hash" (an `==` resolves to whatever bytes the index serves under
+      # that version today), so installing the pinning tool with pip would
+      # have minted the 22nd Pinned-Dependencies alert in the very commit
+      # that closes the other 21 — and the policy clears the check only at
+      # score 10. Same form as release.yml's SBOM job.
+      - name: Install uv (pinned)
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.3"
+
       - name: Check hash-pinned requirements match uv.lock
-        run: |
-          pipx install uv==0.11.3 2>/dev/null || pip install uv==0.11.3
-          python scripts/generate_pip_constraints.py --check
+        run: python scripts/generate_pip_constraints.py --check
 
   typecheck:
     name: Type Check
