@@ -15,6 +15,12 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from mcp_server.handlers.wiki_compile import handler as h_compile
+from mcp_server.handlers.wiki_curate import handler as h_curate
+from mcp_server.handlers.wiki_emerge import handler as h_emerge
+from mcp_server.handlers.wiki_extract import handler as h_extract
+from mcp_server.handlers.wiki_resolve import handler as h_resolve
+from mcp_server.handlers.wiki_synthesize import handler as h_synth
 
 logger = logging.getLogger(__name__)
 
@@ -90,13 +96,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     limit = int(args.get("limit_per_stage", 500))
     skip_compile = bool(args.get("skip_compile", False))
-
-    from mcp_server.handlers.wiki_compile import handler as h_compile
-    from mcp_server.handlers.wiki_curate import handler as h_curate
-    from mcp_server.handlers.wiki_emerge import handler as h_emerge
-    from mcp_server.handlers.wiki_extract import handler as h_extract
-    from mcp_server.handlers.wiki_resolve import handler as h_resolve
-    from mcp_server.handlers.wiki_synthesize import handler as h_synth
 
     stages: list[tuple[str, dict]] = []
 

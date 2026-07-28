@@ -15,6 +15,8 @@ import logging
 import os
 import threading
 from typing import TYPE_CHECKING
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 if TYPE_CHECKING:
     from mcp_server.infrastructure.pg_store import PgMemoryStore
@@ -48,9 +50,9 @@ def _try_pg_verbose(
 ) -> tuple[PgMemoryStore | None, str | None]:
     """Try connecting to PostgreSQL. Returns (store, error_message)."""
     try:
-        import psycopg  # noqa: F401
+        import psycopg  # noqa: PLC0415, F401 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
-        from mcp_server.infrastructure.pg_store import PgMemoryStore
+        from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
         return PgMemoryStore(database_url=database_url), None
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
@@ -128,7 +130,6 @@ def _resolve_backend_url(
 ) -> tuple[str, str]:
     """Resolve the (backend, url) a construction would target — the cache key
     discriminators. Mirrors the branch selection in _construct_store."""
-    from mcp_server.infrastructure.memory_config import get_memory_settings
 
     settings = get_memory_settings()
     backend = settings.STORE_BACKEND
@@ -157,7 +158,6 @@ def _construct_store(
     Cowork mode: tries PostgreSQL, falls back to SQLite.
     Explicit sqlite backend always works (for testing).
     """
-    from mcp_server.infrastructure.memory_config import get_memory_settings
 
     settings = get_memory_settings()
     runtime = settings.RUNTIME
@@ -276,7 +276,6 @@ def _database_url_is_explicit(database_url_param: str | None) -> bool:
 
 def _make_sqlite(path: str, embedding_dim: int) -> "SqliteMemoryStore":
     """Create SQLite fallback store."""
-    from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
     logger.info("Using SQLite fallback at %s", path)
     return SqliteMemoryStore(db_path=path, embedding_dim=embedding_dim)

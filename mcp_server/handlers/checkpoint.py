@@ -18,6 +18,7 @@ from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.session_registry import current_window_session
+import json as _json
 
 logger = logging.getLogger(__name__)
 
@@ -265,8 +266,6 @@ def _is_tier_noise(mem: dict) -> bool:
     tags = mem.get("tags") or []
     if isinstance(tags, str):
         try:
-            import json as _json
-
             tags = _json.loads(tags)
         except ValueError:
             tags = []

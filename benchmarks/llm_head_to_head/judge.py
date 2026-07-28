@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from benchmarks.llm_head_to_head.generator import GeneratorResponse, call_generator
+from benchmarks.llm_head_to_head.data_loader import JUDGE_SHUFFLE_BASE
 
 
 # Protocol §3 cross-vendor pairing table.
@@ -74,7 +75,6 @@ def _shuffle_seed_for(question_id: str) -> int:
     # Add the protocol-fixed shuffle-seed base so different runs of the
     # same code produce the SAME shuffles (protocol §10 manifest field
     # ``shuffle_seed_base: 20260501``).
-    from benchmarks.llm_head_to_head.data_loader import JUDGE_SHUFFLE_BASE
 
     return JUDGE_SHUFFLE_BASE + h
 

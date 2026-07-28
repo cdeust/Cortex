@@ -20,6 +20,12 @@ from mcp_server.core.dual_store_cls_abstraction import cluster_by_similarity
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
+import json as _json
+import os as _os
+from mcp_server.core.stress_modulation import (
+    compute_session_stress,
+    detect_stress_markers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +54,6 @@ def _is_promotion_noise(mem: dict) -> bool:
     and produce incoherent semantic patterns when consolidated.
     # contract: zetetic-team-subagents memory/contract.md §8b
     """
-    import json as _json
 
     tags = mem.get("tags") or []
     if isinstance(tags, str):
@@ -108,7 +113,6 @@ def run_cls_cycle(
     ``no_qualifying_entities``, ``passed_through``. When any mutational
     counter is non-zero, ``reason_for_zero`` is omitted.
     """
-    import os as _os
 
     if _os.environ.get("CORTEX_CONSOLIDATION_DISABLED") == "1":
         return dict(_EMPTY_CLS_STATS)
@@ -294,10 +298,6 @@ def _compute_session_stress(episodic: list[dict]) -> float:
     Mechanism.STRESS_MODULATION's ablation guard flows through the gain, so an
     ablated run consolidates at unmodulated strength regardless of this scalar.
     """
-    from mcp_server.core.stress_modulation import (
-        compute_session_stress,
-        detect_stress_markers,
-    )
 
     if not episodic:
         return 0.0

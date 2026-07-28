@@ -42,11 +42,20 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
+from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
+from mcp_server.handlers.consolidation.near_dup_calibration_pass import (  # noqa: E402
+    run_near_dup_sample,
+    run_near_dup_apply_pass,
+)
+from mcp_server.core.near_dup_calibration import (  # noqa: E402
+    LabeledPair,
+    precision_by_threshold,
+    select_threshold,
+)
 
 
 async def _get_store():
-    from mcp_server.infrastructure.memory_config import get_memory_settings
-    from mcp_server.infrastructure.memory_store import get_shared_store
 
     settings = get_memory_settings()
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
@@ -57,9 +66,6 @@ def _timestamp() -> str:
 
 
 async def _cmd_sample(args: argparse.Namespace) -> int:
-    from mcp_server.handlers.consolidation.near_dup_calibration_pass import (
-        run_near_dup_sample,
-    )
 
     store = await _get_store()
     result = await run_near_dup_sample(
@@ -102,11 +108,6 @@ async def _cmd_sample(args: argparse.Namespace) -> int:
 
 
 def _cmd_calibrate(args: argparse.Namespace) -> int:
-    from mcp_server.core.near_dup_calibration import (
-        LabeledPair,
-        precision_by_threshold,
-        select_threshold,
-    )
 
     labels_data = json.loads(args.labels.read_text(encoding="utf-8"))
     labeled = [
@@ -170,9 +171,6 @@ def _cmd_calibrate(args: argparse.Namespace) -> int:
 
 
 async def _cmd_apply(args: argparse.Namespace) -> int:
-    from mcp_server.handlers.consolidation.near_dup_calibration_pass import (
-        run_near_dup_apply_pass,
-    )
 
     store = await _get_store()
     result = await run_near_dup_apply_pass(

@@ -22,6 +22,9 @@ from mcp_server.core.dual_store_cls_abstraction import (
     cluster_by_similarity,
     filter_recurring_patterns,
 )
+from mcp_server.core.stress_modulation import consolidation_gain
+from mcp_server.core.source_monitoring import promotion_confabulation_risk
+from datetime import datetime, timezone
 
 # ── Consolidation Actions ─────────────────────────────────────────────────
 
@@ -80,7 +83,6 @@ def stress_scaled_min_occurrences(base_min_occurrences: int, stress: float) -> i
     consolidation scope, not a validated glucocorticoid model; see
     stress_modulation.py's honesty note.
     """
-    from mcp_server.core.stress_modulation import consolidation_gain
 
     gain = consolidation_gain(stress)
     if gain == 1.0:
@@ -118,7 +120,6 @@ def plan_cls_consolidation(
     Mechanism.STRESS_MODULATION is ablated the gain is forced to 1.0, so this is
     likewise a no-op.
     """
-    from mcp_server.core.stress_modulation import consolidation_gain
 
     gain = consolidation_gain(session_stress)
     effective_min_occurrences = stress_scaled_min_occurrences(
@@ -174,8 +175,6 @@ def _try_abstract_pattern(
         return None
     confabulation_risk = False
     if not is_mechanism_disabled(Mechanism.CONFABULATION_GATE):
-        from mcp_server.core.source_monitoring import promotion_confabulation_risk
-
         confabulation_risk = promotion_confabulation_risk(cluster_mems)
     return {
         "schema": schema,
@@ -239,7 +238,6 @@ def _parse_created_at(memory: dict[str, Any]) -> float:
     Postcondition: returns a non-negative float (unix timestamp); 0.0 means
     the timestamp was absent or unparseable.
     """
-    from datetime import datetime, timezone
 
     raw = memory.get("created_at")
     if raw is None:

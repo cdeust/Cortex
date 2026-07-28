@@ -37,6 +37,7 @@ from mcp_server.core.dendritic_computation import (
     DendriticBranch,
 )
 from mcp_server.shared.similarity import jaccard_similarity
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # ── Branch Assignment ────────────────────────────────────────────────────
 
@@ -80,7 +81,6 @@ def find_best_branch(
     Returns:
         (best_branch, affinity_score). None if no branch qualifies.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.DENDRITIC_CLUSTERS):
         # No-op: no branch-based modulation; no cluster match.

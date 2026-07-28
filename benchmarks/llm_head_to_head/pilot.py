@@ -299,7 +299,7 @@ def run_pilot_live(
     # That's by design — protocol §2.B/C compares retrieval STACKS over
     # the same ground-truth memory population.
     try:
-        from benchmarks.lib.bench_db import BenchmarkDB
+        from benchmarks.lib.bench_db import BenchmarkDB  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
     except Exception as e:  # noqa: BLE001 — bench harness is fail-soft — failure is printed and the run continues or exits with a report
         print(
             f"[pilot] could not import BenchmarkDB: {type(e).__name__}: {e}",

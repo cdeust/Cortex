@@ -357,7 +357,7 @@ def compile_view(text: str) -> CompiledView:
     limit = max(1, min(_MAX_LIMIT, limit))
 
     where_clause = (" WHERE " + " AND ".join(where_frags)) if where_frags else ""
-    sql = f"SELECT {proj} FROM {real_table}{where_clause}{order_clause} LIMIT %s"
+    sql = f"SELECT {proj} FROM {real_table}{where_clause}{order_clause} LIMIT %s"  # noqa: S608 — identifiers gated by _TABLE_WHITELIST/_COLUMN_WHITELIST — unknown names are refused, values are bound parameters (docs/ASSURANCE-CASE.md §5)
     params = where_params + [limit]
     return CompiledView(sql=sql, params=params, errors=errors, table=table)
 

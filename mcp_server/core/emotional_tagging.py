@@ -30,6 +30,7 @@ import re
 from typing import Any
 
 from mcp_server.shared.vader import vader_compound
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # Arousal below this floor gives no decay resistance.
 # source: pre-existing tuned value, extracted unchanged (#197 family 3);
@@ -234,7 +235,6 @@ def compute_importance_boost(
 
     Returns multiplier in [1.0, 2.0].
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.EMOTIONAL_TAGGING):
         # No-op: base priority (no Yerkes-Dodson modulation).
@@ -266,7 +266,6 @@ def compute_decay_resistance(
 
     Returns multiplier in [1.0, 2.0].
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.EMOTIONAL_DECAY):
         # No-op: no emotion-modulated decay slowdown.

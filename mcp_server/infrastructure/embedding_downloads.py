@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,6 @@ def zero_download_requested() -> bool:
 
 def _spawn_detached(cmd: list[str], what: str) -> None:
     """Start ``cmd`` as a detached, output-suppressed subprocess; swallow errors."""
-    import subprocess
 
     try:
         subprocess.Popen(
@@ -55,7 +56,6 @@ def trigger_background_install() -> None:
     """
     if zero_download_requested():
         return
-    import sys
 
     target = os.environ.get("CLAUDE_PLUGIN_DATA", "")
     if target:
@@ -85,7 +85,6 @@ def trigger_background_model_download(
     """
     if zero_download_requested():
         return
-    import sys
 
     # The child constructs the model once to force the download into the cache.
     prog = (

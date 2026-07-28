@@ -138,7 +138,7 @@ def run(quick: bool) -> Path:
     ages = AGES_HOURS_QUICK if quick else AGES_HOURS_FULL
     reset_database(PROD_URL, DB_NAME)
     url = configure_environment(PROD_URL, DB_NAME)
-    from mcp_server.infrastructure.pg_store import PgMemoryStore
+    from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
     store = PgMemoryStore(database_url=url)  # applies schema + SQL functions
     conn = psycopg.connect(url, autocommit=True)

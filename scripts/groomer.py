@@ -94,6 +94,16 @@ from typing import Any
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+from mcp_server.core.grooming_health import legs_due  # noqa: E402
+from mcp_server.handlers.get_grooming_health import handler as health_handler  # noqa: E402
+from mcp_server.handlers.curate_distill import handler as distill_handler  # noqa: E402
+from mcp_server.infrastructure.session_registry import has_active_session_window  # noqa: E402
+from mcp_server.handlers.consolidation.headless_authoring import (  # noqa: E402
+    run_headless_authoring_cycle,
+    CORTEX_HEADLESS_MAX_ANCHOR_DRAINS,
+    CORTEX_HEADLESS_MAX_FILE_DRAINS,
+)
+from mcp_server.handlers.consolidation.distill_drain import run_distill_drain_cycle  # noqa: E402
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -132,8 +142,6 @@ async def _run(
     active-session guard; ``lesson_promotion.handler`` is NEVER called by
     this function, in either mode.
     """
-    from mcp_server.core.grooming_health import legs_due
-    from mcp_server.handlers.get_grooming_health import handler as health_handler
 
     health = await health_handler({})
     due = legs_due(health["kinds"], force=force)
@@ -157,8 +165,6 @@ async def _run(
 
         distill_preview: dict[str, Any] = {"would_run": due["distillation"]}
         if due["distillation"]:
-            from mcp_server.handlers.curate_distill import handler as distill_handler
-
             preview = await distill_handler({"limit": distill_limit})
             distill_preview["jobs_offered"] = preview["returned"]
             distill_preview["total_dossiers_eligible"] = preview[
@@ -182,8 +188,6 @@ async def _run(
             "opt-in gate). Refusing to write without it."
         )
 
-    from mcp_server.infrastructure.session_registry import has_active_session_window
-
     if has_active_session_window():
         result["active_session_guard"] = (
             "skipped: an interactive Claude Code session window is active"
@@ -191,10 +195,6 @@ async def _run(
         return result
 
     if due["wiki"]:
-        from mcp_server.handlers.consolidation.headless_authoring import (
-            run_headless_authoring_cycle,
-        )
-
         wiki_summary = await run_headless_authoring_cycle(
             max_drains=wiki_max_drains, max_anchor_drains=wiki_max_anchor_drains
         )
@@ -203,11 +203,6 @@ async def _run(
         result["wiki"] = {"ran": False, "reason": "not due (fresh or empty backlog)"}
 
     if due["distillation"]:
-        from mcp_server.handlers.consolidation.distill_drain import (
-            run_distill_drain_cycle,
-        )
-        from mcp_server.handlers.curate_distill import handler as distill_handler
-
         distill_jobs = await distill_handler({"limit": distill_limit})
         distill_summary = await run_distill_drain_cycle(distill_jobs["jobs"])
         result["distill"] = {"ran": True, **_to_jsonable(distill_summary)}
@@ -334,11 +329,6 @@ def main() -> int:
         help="Directory for the JSON+Markdown journal artifacts.",
     )
     args = parser.parse_args()
-
-    from mcp_server.handlers.consolidation.headless_authoring import (
-        CORTEX_HEADLESS_MAX_ANCHOR_DRAINS,
-        CORTEX_HEADLESS_MAX_FILE_DRAINS,
-    )
 
     wiki_max_drains = (
         args.wiki_max_drains

@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 import psycopg
 from psycopg.rows import tuple_row
+from urllib.parse import urlparse
 
 
 def _scalar(conn: psycopg.Connection, sql: str) -> str:
@@ -400,7 +401,6 @@ def verify_session_matches_snapshot(
 
 def _dbname(db_url: str) -> str:
     """Extract dbname from a postgres URL; refuse names with embedded quote."""
-    from urllib.parse import urlparse
 
     name = (urlparse(db_url).path or "/").lstrip("/")
     if not name:

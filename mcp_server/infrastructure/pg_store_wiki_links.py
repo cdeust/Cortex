@@ -54,7 +54,7 @@ def delete_links_from(conn: Connection, src_page_id: int) -> int:
 
 def get_backlinks(conn: Connection, dst_page_id: int) -> list[dict]:
     """Return rows linking TO this page."""
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(

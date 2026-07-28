@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+import os as _os
 
 # source: _shared_prefix comment — >= 4 chars lets "cortex" group
 # cortex-cowork but rejects "ai" from falsely grouping unrelated ai-* repos
@@ -438,7 +439,6 @@ def _candidate_dev_roots() -> list[Path]:
     registry returns zero repos on systems where the user keeps source
     under ``~/Documents`` (a real layout in production today).
     """
-    import os as _os
 
     cands: list[Path] = []
     env = _os.environ.get("CORTEX_DEV_ROOT")

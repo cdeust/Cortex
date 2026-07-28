@@ -133,7 +133,7 @@ def main() -> None:
     # engine's "auto" default then applies, exactly as before the
     # marker existed.
     try:
-        from mcp_server.infrastructure.backend_marker import (
+        from mcp_server.infrastructure.backend_marker import (  # noqa: PLC0415 — plugin root joins sys.path inside main() a few lines above; this module is only resolvable after that
             apply_backend_resolution,
         )
 
@@ -167,7 +167,7 @@ def main() -> None:
     # Run the target module
     sys.argv = [module] + [a for a in sys.argv[2:] if a != "--install-deps"]
     try:
-        from runpy import run_module
+        from runpy import run_module  # noqa: PLC0415 — runpy is imported at dispatch time inside the launch boundary try so a corrupt stdlib install is reported, not a crash
 
         run_module(module, run_name="__main__", alter_sys=True)
     except SystemExit:

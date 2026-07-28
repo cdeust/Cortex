@@ -66,6 +66,7 @@ except ImportError as _imp_exc:
         file=sys.stderr,
     )
     sys.exit(1)
+import asyncio
 
 _LOG_PREFIX = "[methodology-hook]"
 
@@ -130,9 +131,7 @@ def _run_consolidation(turn_count: int = 0) -> None:
     Non-blocking: logs errors but never raises.
     """
     try:
-        import asyncio
-
-        from mcp_server.handlers.consolidate import handler as consolidate_handler
+        from mcp_server.handlers.consolidate import handler as consolidate_handler  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         # Gate consolidation depth by session activity
         # (Borbely 1982: pressure accumulates with waking activity)
@@ -221,7 +220,7 @@ def _tombstone_session_registry() -> None:
     or empty SessionEnd event.
     """
     try:
-        from mcp_server.infrastructure.session_registry import (
+        from mcp_server.infrastructure.session_registry import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             find_claude_ancestor,
             tombstone,
         )
@@ -244,7 +243,7 @@ def _deregister_groomer_coordinator() -> None:
     not block the profile update / consolidation that follows.
     """
     try:
-        from mcp_server.infrastructure.groomer_coordinator import (
+        from mcp_server.infrastructure.groomer_coordinator import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             GroomerCoordinator,
             resolve_store_key,
         )

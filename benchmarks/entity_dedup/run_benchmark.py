@@ -46,7 +46,7 @@ _FIXTURE = [
 
 def _load_live(samples: int) -> list[dict]:
     """Load fuzzy-eligible entities from the live store (read-only)."""
-    from mcp_server.infrastructure.pg_store import PgMemoryStore
+    from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
     store = PgMemoryStore()
     try:

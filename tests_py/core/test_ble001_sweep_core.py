@@ -75,13 +75,15 @@ class TestDashboardRegistry:
     def test_registry_failure_degrades_to_no_dashboards_and_is_logged(
         self, caplog, monkeypatch, tmp_path
     ):
+        from mcp_server.core import wiki_coverage_dashboard
         from mcp_server.core.wiki_coverage_dashboard import write_dashboards
-        from mcp_server.shared import domain_mapping
 
         def broken():
             raise RuntimeError("registry unreadable")
 
-        monkeypatch.setattr(domain_mapping, "_build_registry", broken)
+        # Patch the consumer's own binding: the import is at module top
+        # (#197 family 4), so patching domain_mapping no longer reaches it.
+        monkeypatch.setattr(wiki_coverage_dashboard, "_build_registry", broken)
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
             out = write_dashboards(tmp_path)
         assert out == {}

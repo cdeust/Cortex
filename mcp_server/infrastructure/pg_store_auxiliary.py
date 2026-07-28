@@ -206,7 +206,7 @@ class PgAuxiliaryMixin:
     # ── Archive ───────────────────────────────────────────────────────
 
     def insert_archive(self, data: dict[str, Any]) -> int:
-        from mcp_server.infrastructure.pg_store import PgMemoryStore
+        from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
         emb = PgMemoryStore._bytes_to_vector(data.get("embedding"))
         row = self._execute(
@@ -319,7 +319,7 @@ class PgAuxiliaryMixin:
     # ── Schemas (cortical structures) ─────────────────────────────────
 
     def insert_schema(self, data: dict[str, Any]) -> int:
-        import psycopg
+        import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
         try:
             row = self._execute(

@@ -43,12 +43,12 @@ class TestDoctorBackendResolution:
         self, caplog, monkeypatch
     ):
         from mcp_server import doctor
-        from mcp_server.infrastructure import backend_marker
 
         def broken(environ):
             raise RuntimeError("marker unreadable")
 
-        monkeypatch.setattr(backend_marker, "effective_backend", broken)
+        # Patch the consumer's binding (top-level import, #197 family 4).
+        monkeypatch.setattr(doctor, "effective_backend", broken)
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
             checks = doctor.active_checks()
         assert checks is doctor.CHECKS
@@ -75,12 +75,12 @@ class TestBackfillConceptLink:
 class TestBackfillCascadeAdvancement:
     def test_cascade_failure_is_logged_and_result_unpoisoned(self, caplog, monkeypatch):
         from mcp_server.handlers import backfill_memories
-        from mcp_server.handlers.consolidation import cascade
 
         def broken(store):
             raise RuntimeError("cascade broke")
 
-        monkeypatch.setattr(cascade, "run_cascade_advancement", broken)
+        # Patch the consumer's binding (top-level import, #197 family 4).
+        monkeypatch.setattr(backfill_memories, "run_cascade_advancement", broken)
         result = {"backfilled": 3}
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
             backfill_memories._advance_cascade(MagicMock(), result)
@@ -90,10 +90,11 @@ class TestBackfillCascadeAdvancement:
 
     def test_cascade_success_records_advanced_count(self, monkeypatch):
         from mcp_server.handlers import backfill_memories
-        from mcp_server.handlers.consolidation import cascade
 
         monkeypatch.setattr(
-            cascade, "run_cascade_advancement", lambda store: {"advanced": 2}
+            backfill_memories,
+            "run_cascade_advancement",
+            lambda store: {"advanced": 2},
         )
         result = {"backfilled": 3}
         backfill_memories._advance_cascade(MagicMock(), result)
@@ -101,10 +102,9 @@ class TestBackfillCascadeAdvancement:
 
     def test_nothing_backfilled_skips_cascade(self, monkeypatch):
         from mcp_server.handlers import backfill_memories
-        from mcp_server.handlers.consolidation import cascade
 
         called = MagicMock()
-        monkeypatch.setattr(cascade, "run_cascade_advancement", called)
+        monkeypatch.setattr(backfill_memories, "run_cascade_advancement", called)
         result = {"backfilled": 0}
         backfill_memories._advance_cascade(MagicMock(), result)
         called.assert_not_called()
@@ -206,11 +206,10 @@ class TestConsolidationSites:
         _assert_noted("consolidation.stage_timestamp", "pool closed")
 
     def test_source_root_failure_returns_none_and_is_logged(self, caplog, monkeypatch):
-        from mcp_server.core import wiki_coverage
-
         # headless_authoring first: drain_operations participates in a
         # deliberate load-order-sensitive circular import (see its header).
         from mcp_server.handlers.consolidation import headless_authoring  # noqa: F401
+        from mcp_server.handlers.consolidation import drain_operations
         from mcp_server.handlers.consolidation.drain_operations import (
             _optional_source_root,
         )
@@ -218,7 +217,8 @@ class TestConsolidationSites:
         def broken(domain):
             raise RuntimeError("no source map")
 
-        monkeypatch.setattr(wiki_coverage, "_project_source_root", broken)
+        # Patch the consumer's binding (top-level import, #197 family 4).
+        monkeypatch.setattr(drain_operations, "_project_source_root", broken)
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
             assert _optional_source_root({"domain": "cortex"}) is None
         assert any(

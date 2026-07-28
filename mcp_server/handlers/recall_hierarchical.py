@@ -22,6 +22,7 @@ from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers.replay_tracking import track_replay_event
+from mcp_server.handlers.recall import handler as flat_recall
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -273,7 +274,6 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         # hierarchy) instead of leaking the flat shape through; previously the
         # passthrough only satisfied the contract via recall's now-removed
         # duplicate `results`/`total` alias keys.
-        from mcp_server.handlers.recall import handler as flat_recall
 
         flat = await flat_recall(args)
         return {

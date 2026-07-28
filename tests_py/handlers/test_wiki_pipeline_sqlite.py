@@ -546,12 +546,13 @@ async def test_backfill_logs_pipeline_failure(caplog, monkeypatch, sqlite_store)
     `{"error": ...}` and return a success-shaped payload with no log line.
     """
     import mcp_server.handlers.backfill_memories as bm
-    import mcp_server.handlers.wiki_pipeline as wp
 
     async def boom(_args=None):
         raise RuntimeError("pipeline exploded")
 
-    monkeypatch.setattr(wp, "handler", boom)
+    # backfill_memories binds the pipeline handler at module top as
+    # _pipeline (#197 family 4) — patch the consumer's binding.
+    monkeypatch.setattr(bm, "_pipeline", boom)
 
     async def one_import(*_args, **_kwargs):
         return 1, 0

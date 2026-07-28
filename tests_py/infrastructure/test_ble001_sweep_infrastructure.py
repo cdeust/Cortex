@@ -34,24 +34,26 @@ def _assert_noted(component: str, error_text: str) -> None:
 
 class TestApBridgeSettingsRead:
     def test_settings_failure_keeps_on_by_default_and_is_logged(self, monkeypatch):
-        from mcp_server.infrastructure import ap_bridge, memory_config
+        from mcp_server.infrastructure import ap_bridge
 
         def broken():
             raise RuntimeError("pydantic broke")
 
-        monkeypatch.setattr(memory_config, "get_memory_settings", broken)
+        # Patch the consumer's own binding (top-level import, #197 family 4).
+        monkeypatch.setattr(ap_bridge, "get_memory_settings", broken)
         assert ap_bridge.is_enabled() is True
         _assert_noted("ap_bridge.settings_read", "pydantic broke")
 
 
 class TestGroomerCoordinatorStoreIdentity:
     def test_settings_failure_degrades_to_default_key_and_is_logged(self, monkeypatch):
-        from mcp_server.infrastructure import groomer_coordinator, memory_config
+        from mcp_server.infrastructure import groomer_coordinator
 
         def broken():
             raise RuntimeError("pydantic broke")
 
-        monkeypatch.setattr(memory_config, "get_memory_settings", broken)
+        # Patch the consumer's own binding (top-level import, #197 family 4).
+        monkeypatch.setattr(groomer_coordinator, "get_memory_settings", broken)
         assert groomer_coordinator.resolve_store_key({}) == "default"
         _assert_noted("groomer_coordinator.store_identity", "pydantic broke")
 

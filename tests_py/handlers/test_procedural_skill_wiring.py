@@ -155,7 +155,7 @@ def test_recall_rebuilds_and_matches(monkeypatch):
     ]
     store = _FakeStore(rows)
     monkeypatch.setattr(
-        "mcp_server.infrastructure.memory_store.get_shared_store",
+        "mcp_server.handlers.recall_skills.get_shared_store",
         lambda: store,
     )
     out = asyncio.run(
@@ -190,7 +190,7 @@ def test_recall_filters_low_proficiency(monkeypatch):
     ]
     store = _FakeStore(rows)
     monkeypatch.setattr(
-        "mcp_server.infrastructure.memory_store.get_shared_store",
+        "mcp_server.handlers.recall_skills.get_shared_store",
         lambda: store,
     )
     out = asyncio.run(
@@ -204,7 +204,7 @@ def test_recall_filters_low_proficiency(monkeypatch):
 def test_recall_empty_store_returns_empty(monkeypatch):
     store = _FakeStore([])
     monkeypatch.setattr(
-        "mcp_server.infrastructure.memory_store.get_shared_store",
+        "mcp_server.handlers.recall_skills.get_shared_store",
         lambda: store,
     )
     out = asyncio.run(recall_skills.handler({"domain": "cortex", "cwd": "/x"}))

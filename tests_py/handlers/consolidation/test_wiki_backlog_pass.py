@@ -45,10 +45,9 @@ class _StoreWithoutPool:
 
 class TestLessonPromotionBacklog:
     def test_returns_count_on_success(self, monkeypatch) -> None:
+        # Patch the consumer's binding (top-level import, #197 family 4).
         monkeypatch.setattr(
-            "mcp_server.infrastructure.pg_store_lesson_promotion"
-            ".count_lesson_promotion_candidates",
-            lambda conn: 133,
+            wiki_backlog_pass, "count_lesson_promotion_candidates", lambda conn: 133
         )
 
         result = wiki_backlog_pass._lesson_promotion_backlog(_StoreWithPool())
@@ -67,9 +66,7 @@ class TestLessonPromotionBacklog:
             raise RuntimeError("PG connection reset")
 
         monkeypatch.setattr(
-            "mcp_server.infrastructure.pg_store_lesson_promotion"
-            ".count_lesson_promotion_candidates",
-            _boom,
+            wiki_backlog_pass, "count_lesson_promotion_candidates", _boom
         )
 
         result = wiki_backlog_pass._lesson_promotion_backlog(_StoreWithPool())
@@ -80,9 +77,7 @@ class TestLessonPromotionBacklog:
         """None means 'query failed'; 0 means 'queue is genuinely empty' —
         callers must be able to tell these apart."""
         monkeypatch.setattr(
-            "mcp_server.infrastructure.pg_store_lesson_promotion"
-            ".count_lesson_promotion_candidates",
-            lambda conn: 0,
+            wiki_backlog_pass, "count_lesson_promotion_candidates", lambda conn: 0
         )
 
         result = wiki_backlog_pass._lesson_promotion_backlog(_StoreWithPool())

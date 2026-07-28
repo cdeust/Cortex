@@ -24,6 +24,7 @@ from typing import Any
 from mcp_server.core.predictive_coding_signals import (
     HierarchicalPrediction,
 )
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # -- Precision state -----------------------------------------------------------
 
@@ -191,7 +192,6 @@ def gate_decision(
     bypass: bool = False,
 ) -> tuple[bool, str]:
     """Backward-compatible flat gate decision."""
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.PREDICTIVE_CODING):
         # No-op: always-write decision (gate=True, no novelty filter).
@@ -213,7 +213,6 @@ def hierarchical_gate_decision(
     bypass: bool = False,
 ) -> tuple[bool, str]:
     """Gate decision using hierarchical free energy."""
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.PREDICTIVE_CODING):
         return True, "ablated_predictive_coding"

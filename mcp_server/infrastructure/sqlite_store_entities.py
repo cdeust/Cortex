@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
+from mcp_server.shared.code_tokenize import expand_fts_query
 
 
 class SqliteEntityMixin:
@@ -32,7 +33,7 @@ class SqliteEntityMixin:
             return 0
         placeholders = ",".join("?" * len(entity_ids))
         self._conn.execute(
-            f"UPDATE entities SET heat = 0 WHERE id IN ({placeholders})",
+            f"UPDATE entities SET heat = 0 WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
             tuple(int(e) for e in entity_ids),
         )
         self._conn.commit()
@@ -160,12 +161,11 @@ class SqliteEntityMixin:
         # Try FTS5 first — expand the entity name into its code-aware sub-tokens
         # so a camelCase / snake_case entity still matches its split index terms
         # (issue #169).
-        from mcp_server.shared.code_tokenize import expand_fts_query
 
         match = expand_fts_query(entity_name)
         rows = (
             self._conn.execute(
-                f"SELECT m.* FROM {src} m "
+                f"SELECT m.* FROM {src} m "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "JOIN memories_fts f ON f.rowid = m.id "
                 "WHERE memories_fts MATCH ? "
                 "ORDER BY m.heat_base DESC LIMIT ?",
@@ -177,7 +177,7 @@ class SqliteEntityMixin:
         if not rows:
             # Fallback to LIKE
             rows = self._conn.execute(
-                f"SELECT * FROM {src} WHERE content LIKE ? "
+                f"SELECT * FROM {src} WHERE content LIKE ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "AND NOT is_stale ORDER BY heat_base DESC LIMIT ?",
                 (f"%{entity_name}%", limit),
             ).fetchall()

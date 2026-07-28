@@ -42,6 +42,9 @@ from mcp_server.core.predictive_coding_signals import (
     compute_sensory_errors,
     compute_sensory_prediction,
 )
+from mcp_server.core.forward_model import prediction_error, scalar_of
+from mcp_server.core.predictive_coding_signals import extract_sensory_features
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 __all__ = [
     "PredictionLevel",
@@ -176,11 +179,6 @@ def _forward_model_error(
     against a *corrected running estimate of the trajectory*, the genuinely-new
     B3 contribution (see forward_model.py honesty note). Kept small and additive.
     """
-    from mcp_server.core.forward_model import (
-        prediction_error,
-        scalar_of,
-    )
-    from mcp_server.core.predictive_coding_signals import extract_sensory_features
 
     if not recent_memories_features:
         return 0.0
@@ -231,8 +229,6 @@ def compute_hierarchical_novelty(
 
     fm_error = 0.0
     if include_forward_model:
-        from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
-
         if not is_mechanism_disabled(Mechanism.FORWARD_MODEL):
             fm_error = _forward_model_error(content, recent_memories_features)
             if fm_error > 0.0:

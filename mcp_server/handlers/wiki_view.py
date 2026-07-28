@@ -128,7 +128,7 @@ def _execute_view(store: object, compiled: object, view_meta: dict) -> dict:
                    or {view, error, sql} on execution failure
     """
     # psycopg import deferred to here — only reachable on the PG path
-    from psycopg.rows import dict_row  # noqa: PLC0415
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     with store._conn.cursor(row_factory=dict_row) as cur:
         try:

@@ -198,7 +198,7 @@ def _update_cooldown(root: str) -> None:
 def _pipeline_available() -> bool:
     """True when the upstream analyzer is installed (else nothing to do)."""
     try:
-        from mcp_server.infrastructure.pipeline_discovery import (
+        from mcp_server.infrastructure.pipeline_discovery import (  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
             discover_pipeline_command,
         )
 

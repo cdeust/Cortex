@@ -246,7 +246,7 @@ def _call_anthropic(
     retries: list[RetryAttempt],
 ) -> GeneratorResponse:
     try:
-        import anthropic  # type: ignore[import-not-found]
+        import anthropic  # type: ignore[import-not-found]  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError as e:
         raise GeneratorError(
             "anthropic SDK not installed. `uv pip install anthropic` before "
@@ -284,7 +284,7 @@ def _call_google(
     retries: list[RetryAttempt],
 ) -> GeneratorResponse:
     try:
-        from google import genai  # type: ignore[import-not-found]
+        from google import genai  # type: ignore[import-not-found]  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError as e:
         raise GeneratorError(
             "google-genai SDK not installed. `uv pip install google-genai` "
@@ -334,7 +334,7 @@ def _call_openai(
     retries: list[RetryAttempt],
 ) -> GeneratorResponse:
     try:
-        from openai import OpenAI  # type: ignore[import-not-found]
+        from openai import OpenAI  # type: ignore[import-not-found]  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError as e:
         raise GeneratorError(
             "openai SDK not installed. `uv pip install openai` before running "

@@ -32,7 +32,7 @@ def list_pages_missing_source_link(conn: Connection, *, limit: int) -> list[dict
                     zero 'documents' rows in wiki.page_sources and a
                     NULL documents_primary.
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     sql = """
     SELECT p.id, p.memory_id, p.rel_path, p.title, p.domain, p.lead, p.sections

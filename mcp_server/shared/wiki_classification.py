@@ -101,7 +101,7 @@ class Classification:
         """Raise ValueError (with did-you-mean) if any axis violates the schema."""
         # Local import avoids importing the registry at module-load time
         # (the registry reads the wiki on first call).
-        from mcp_server.core.wiki_axis_registry import (
+        from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — documented deferral: the registry reads the wiki on first call; a module-load import would also invert the shared->core layer rule at import time
             AXIS_AUDIENCE,
             AXIS_KIND,
             AXIS_LIFECYCLE,
@@ -212,6 +212,6 @@ def is_legacy_kind(kind: str) -> bool:
 
 def all_known_kinds() -> frozenset[str]:
     """Modern (registered) + legacy kinds. For read paths that must accept either."""
-    from mcp_server.core.wiki_axis_registry import AXIS_KIND, get_registry
+    from mcp_server.core.wiki_axis_registry import AXIS_KIND, get_registry  # noqa: PLC0415 — documented deferral: the registry reads the wiki on first call; a module-load import would also invert the shared->core layer rule at import time
 
     return frozenset(get_registry().names(AXIS_KIND)) | LEGACY_KINDS

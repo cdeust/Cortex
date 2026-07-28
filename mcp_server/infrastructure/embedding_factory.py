@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from mcp_server.infrastructure.embedding_model_lifecycle import ModelState
+from mcp_server.infrastructure.memory_config import get_memory_settings
 
 if TYPE_CHECKING:
     from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
@@ -77,8 +78,7 @@ def get_embedding_engine() -> "EmbeddingEngine":
     """
     global _singleton
     if _singleton is None:
-        from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
-        from mcp_server.infrastructure.memory_config import get_memory_settings
+        from mcp_server.infrastructure.embedding_engine import EmbeddingEngine  # noqa: PLC0415 — import cycle with mcp_server.infrastructure.embedding_engine; a top-level import fails at boot
 
         s = get_memory_settings()
         _singleton = EmbeddingEngine(dim=s.EMBEDDING_DIM, device=s.EMBEDDING_DEVICE)

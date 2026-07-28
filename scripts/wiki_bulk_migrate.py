@@ -49,6 +49,8 @@ if str(_REPO_ROOT) not in sys.path:
 from mcp_server.core.wiki_identity import extract_page_id  # noqa: E402
 from mcp_server.core.wiki_layout import slugify  # noqa: E402
 from mcp_server.core.wiki_redirect import is_redirect, parse_frontmatter  # noqa: E402
+import hashlib  # noqa: E402
+from mcp_server.handlers import wiki_rename  # noqa: E402
 
 
 # ── Pollution classifiers ───────────────────────────────────────────────
@@ -158,7 +160,6 @@ def _derive_clean_slug(
                 return slugify(heading)
 
     # Final fallback — short hash of the body content to keep the slug stable.
-    import hashlib
 
     digest = hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:6]
     return f"{fallback_prefix}-{digest}"
@@ -357,7 +358,6 @@ async def _apply_plan(
     function is testable against a tmp_path.
     """
     # Local import keeps test fixtures lightweight when --apply isn't used.
-    from mcp_server.handlers import wiki_rename
 
     # Point the handler at our wiki_root.
     original = wiki_rename.WIKI_ROOT

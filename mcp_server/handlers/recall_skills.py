@@ -19,6 +19,7 @@ from mcp_server.core.procedural_memory import (
     match_skills,
 )
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.infrastructure.memory_store import get_shared_store
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,6 @@ def _row_to_skill(row: dict) -> ProceduralSkill:
 
 
 async def handler(args: dict) -> dict:
-    from mcp_server.infrastructure.memory_store import get_shared_store
 
     cwd = args.get("cwd") or ""
     domain = args.get("domain") or ""

@@ -191,12 +191,11 @@ def test_write_dashboards_on_missing_root_writes_nothing(tmp_path: Path):
 
 
 def test_write_dashboards_registry_failure_writes_nothing(tmp_path: Path, monkeypatch):
-    from mcp_server.shared import domain_mapping
-
     def _boom():
         raise RuntimeError("registry unavailable")
 
-    monkeypatch.setattr(domain_mapping, "_build_registry", _boom)
+    # Patch the consumer's binding (top-level import, #197 family 4).
+    monkeypatch.setattr(dash, "_build_registry", _boom)
 
     assert dash.write_dashboards(tmp_path) == {}
     assert not (tmp_path / "_dashboards").exists(), "no partial output"
@@ -227,7 +226,6 @@ def test_write_dashboards_default_domains_come_from_the_registry(
     # The registry is isolated to zero repos by conftest; patch the
     # discovery seam the module actually calls to prove the default
     # path flows registry domains into pages.
-    from mcp_server.shared import domain_mapping
     from mcp_server.shared.domain_mapping import RepoInfo
 
     class _Registry:
@@ -242,7 +240,8 @@ def test_write_dashboards_default_domains_come_from_the_registry(
             )
         ]
 
-    monkeypatch.setattr(domain_mapping, "_build_registry", lambda: _Registry())
+    # Patch the consumer's binding (top-level import, #197 family 4).
+    monkeypatch.setattr(dash, "_build_registry", lambda: _Registry())
 
     written = dash.write_dashboards(tmp_path)
 

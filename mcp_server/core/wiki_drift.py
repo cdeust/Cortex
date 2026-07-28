@@ -35,6 +35,7 @@ from typing import Final
 
 from mcp_server.shared.platform import to_posix
 from mcp_server.shared.wiki_source_paths import extract_document_paths
+from mcp_server.core.wiki_coverage import _SKIP_DIRECTORIES
 
 
 @dataclass
@@ -239,7 +240,6 @@ def _file_exists_under(source_root: str, cited: str) -> bool:
     # root makes this per-cited-path fallback walk tens of thousands of files,
     # turning one consolidate cycle into a multi-minute stall. The skip set is
     # the single source of truth for "not a source tree".
-    from mcp_server.core.wiki_coverage import _SKIP_DIRECTORIES
 
     for dirpath, dirnames, filenames in os.walk(source_root):
         dirnames[:] = [

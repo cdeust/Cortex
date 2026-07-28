@@ -21,6 +21,11 @@ from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
 from mcp_server.core import thermodynamics
+from mcp_server.core.attentional_control import (
+    FOCUS_CAPACITY_DEFAULT,
+    ATTENTION_TEMPERATURE,
+    allocate_attention,
+)
 
 if TYPE_CHECKING:
     from mcp_server.core.attentional_control import AttentionAllocation
@@ -162,11 +167,6 @@ class SensoryBuffer:
         BufferItem payload plus an ``attention_weight``). An empty buffer yields
         an empty allocation.
         """
-        from mcp_server.core.attentional_control import (
-            FOCUS_CAPACITY_DEFAULT,
-            ATTENTION_TEMPERATURE,
-            allocate_attention,
-        )
 
         items = [item.to_dict() for item in self._buffer]
         return allocate_attention(

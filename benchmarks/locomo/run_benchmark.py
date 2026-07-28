@@ -36,6 +36,7 @@ from benchmarks.locomo.data import (
     load_locomo,
     parse_evidence_refs,
 )
+from mcp_server.handlers import consolidate as consolidate_handler
 
 # source: structural — the K in the reported R@5 / R@10 metrics (the "top 10"
 # the missed-question listing reports is the same cutoff)
@@ -157,7 +158,6 @@ def _run_consolidation_pass() -> float:
     LoCoMo evaluates a conversation's QA against its own multi-session
     haystack, not across conversations).
     """
-    from mcp_server.handlers import consolidate as consolidate_handler
 
     t0 = time.monotonic()
     asyncio.run(consolidate_handler.handler({}))

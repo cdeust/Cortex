@@ -40,27 +40,23 @@ def _silence_everything_except_citation_seed(monkeypatch) -> None:
     def _noop_dashboards(_root):
         return {}
 
-    monkeypatch.setattr(
-        "mcp_server.core.wiki_coverage_dashboard.write_dashboards",
-        _noop_dashboards,
-    )
+    # All patches below target wiki_maintenance's own bindings — the
+    # imports are at module top (#197 family 4), so patching the defining
+    # modules would no longer reach the bound references.
+    monkeypatch.setattr(wiki_maintenance, "write_dashboards", _noop_dashboards)
 
     async def _noop_source_backfill(store, *, apply):
         return {"pages_scanned": 0, "primaries_written": 0, "status": "ok"}
 
     monkeypatch.setattr(
-        "mcp_server.handlers.consolidation.wiki_source_backfill_pass"
-        ".run_source_backfill_pass",
-        _noop_source_backfill,
+        wiki_maintenance, "run_source_backfill_pass", _noop_source_backfill
     )
 
     async def _noop_domain_backfill(store, *, apply):
         return {"pages_scanned": 0, "domains_reassigned": 0, "status": "ok"}
 
     monkeypatch.setattr(
-        "mcp_server.handlers.consolidation.wiki_domain_backfill_pass"
-        ".run_domain_backfill_pass",
-        _noop_domain_backfill,
+        wiki_maintenance, "run_domain_backfill_pass", _noop_domain_backfill
     )
 
     async def _noop_backlog(store):
@@ -73,10 +69,7 @@ def _silence_everything_except_citation_seed(monkeypatch) -> None:
             "pending_total": 0,
         }
 
-    monkeypatch.setattr(
-        "mcp_server.handlers.consolidation.wiki_backlog_pass.run_backlog_pass",
-        _noop_backlog,
-    )
+    monkeypatch.setattr(wiki_maintenance, "run_backlog_pass", _noop_backlog)
 
 
 class TestCitationSeedWiring:
@@ -96,9 +89,10 @@ class TestCitationSeedWiring:
                 "status": "ok",
             }
 
+        # Patch the consumer's binding (top-level import, #197 family 4).
         monkeypatch.setattr(
-            "mcp_server.handlers.consolidation.wiki_citation_seed_pass"
-            ".run_wiki_citation_seed_pass",
+            wiki_maintenance,
+            "run_wiki_citation_seed_pass",
             _fake_seed_pass,
         )
 
@@ -124,9 +118,10 @@ class TestCitationSeedWiring:
             seen["limit"] = limit
             return {"status": "ok", "journal": []}
 
+        # Patch the consumer's binding (top-level import, #197 family 4).
         monkeypatch.setattr(
-            "mcp_server.handlers.consolidation.wiki_citation_seed_pass"
-            ".run_wiki_citation_seed_pass",
+            wiki_maintenance,
+            "run_wiki_citation_seed_pass",
             _fake_seed_pass,
         )
 
@@ -152,9 +147,10 @@ class TestCitationSeedWiring:
         async def _boom(store, *, apply, limit):
             raise RuntimeError("PG connection reset")
 
+        # Patch the consumer's binding (top-level import, #197 family 4).
         monkeypatch.setattr(
-            "mcp_server.handlers.consolidation.wiki_citation_seed_pass"
-            ".run_wiki_citation_seed_pass",
+            wiki_maintenance,
+            "run_wiki_citation_seed_pass",
             _boom,
         )
 

@@ -20,6 +20,7 @@ from mcp_server.infrastructure.wiki_store import (
 
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.observability import silent_failure
+from mcp_server.handlers import remember
 
 schema = {
     "annotations": IDEMPOTENT_WRITE,
@@ -110,8 +111,6 @@ schema = {
 
 async def _store_pointer_memory(rel_path: str, content: str, tags: list[str]) -> None:
     try:
-        from mcp_server.handlers import remember
-
         await remember.handler(
             {
                 "content": content[:500],

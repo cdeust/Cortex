@@ -66,7 +66,7 @@ def _redact_db_url(url: str) -> str:
     try:
         # engineering choice: import the canonical implementation when
         # available so both code paths stay in sync.
-        from mcp_server.shared.redaction import redact_url
+        from mcp_server.shared.redaction import redact_url  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
         return redact_url(url)
     except ImportError:
@@ -323,7 +323,7 @@ def _sqlite_checks() -> list[tuple[str, bool]]:
           is importable.
     """
     try:
-        import sqlite3  # noqa: F401
+        import sqlite3  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
 
         return [("sqlite3 stdlib", True)]
     except ImportError:
@@ -342,7 +342,7 @@ def _postgres_checks() -> list[tuple[str, bool]]:
     """
     checks: list[tuple[str, bool]] = []
     try:
-        import psycopg
+        import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
         conn = psycopg.connect(DATABASE_URL, autocommit=True)
         conn.execute("SELECT 1")
@@ -381,14 +381,14 @@ def _model_checks() -> list[tuple[str, bool]]:
     """
     checks: list[tuple[str, bool]] = []
     try:
-        import sentence_transformers  # noqa: F401
+        import sentence_transformers  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
 
         checks.append(("sentence-transformers", True))
     except ImportError:
         checks.append(("sentence-transformers", False))
 
     try:
-        from flashrank import Ranker  # noqa: F401
+        from flashrank import Ranker  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
 
         checks.append(("FlashRank reranker", True))
     except ImportError:

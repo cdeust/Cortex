@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from mcp_server.shared.entity_canonical import canonicalize_entity_name
 
 if TYPE_CHECKING:
     import psycopg
@@ -57,7 +58,6 @@ class PgEntityMixin:
         found 111 case-variant duplicate groups; policy defined in
         `mcp_server/shared/entity_canonical.canonicalize_entity_name`.
         """
-        from mcp_server.shared.entity_canonical import canonicalize_entity_name
 
         canonical = canonicalize_entity_name(data["name"])
         origin = data.get("origin", "text_concept")
@@ -188,14 +188,14 @@ class PgEntityMixin:
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._execute(
-            f"SELECT * FROM {src} "
+            f"SELECT * FROM {src} "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "WHERE content_tsv @@ phraseto_tsquery('english', %s) "
             "ORDER BY heat_base DESC LIMIT %s",
             (entity_name, limit),
         ).fetchall()
         if not rows:
             rows = self._execute(
-                f"SELECT * FROM {src} WHERE content ILIKE %s "
+                f"SELECT * FROM {src} WHERE content ILIKE %s "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "AND NOT is_stale ORDER BY heat_base DESC LIMIT %s",
                 (
                     "%{}%".format(

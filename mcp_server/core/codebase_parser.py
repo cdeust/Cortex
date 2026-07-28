@@ -96,7 +96,7 @@ def parse_file(path: str, content: str) -> FileAnalysis:
     Returns:
         FileAnalysis with imports, definitions, docstring, and content hash.
     """
-    from mcp_server.core.codebase_extractors import (
+    from mcp_server.core.codebase_extractors import (  # noqa: PLC0415 — import cycle with mcp_server.core.codebase_extractors; a top-level import fails at boot
         IMPORT_EXTRACTORS,
         SYMBOL_EXTRACTORS,
         extract_docstring,

@@ -36,6 +36,13 @@ from mcp_server.core.near_dup_calibration import (
     build_components,
     stratified_sample,
 )
+from mcp_server.core.near_dup_calibration import bucket_by_stratum
+from mcp_server.infrastructure.pg_store_near_dup import (
+    fetch_contents,
+    list_candidate_pairs,
+    fetch_member_stats,
+)
+from mcp_server.infrastructure.pg_store_memory_dedup import supersede_to_existing
 
 logger = logging.getLogger(__name__)
 
@@ -70,11 +77,6 @@ async def run_near_dup_sample(
                     contents fetched for manual labeling. Writes nothing
                     to the DB — read-only measurement pass.
     """
-    from mcp_server.core.near_dup_calibration import bucket_by_stratum
-    from mcp_server.infrastructure.pg_store_near_dup import (
-        fetch_contents,
-        list_candidate_pairs,
-    )
 
     out: dict[str, Any] = {
         "candidate_total": 0,
@@ -128,7 +130,6 @@ def _elect_and_journal_component(
     out: dict[str, Any],
 ) -> None:
     """Elect one component's survivor and supersede the rest, journaling both."""
-    from mcp_server.infrastructure.pg_store_memory_dedup import supersede_to_existing
 
     # Members superseded concurrently between the pair scan and this
     # write have no stats row (fetch_member_stats only returns ids still
@@ -203,11 +204,6 @@ async def run_near_dup_apply_pass(
                     contents) in ``result["review_queue"]`` (Q2: file de
                     revue, no auto-collapse below the measured boundary).
     """
-    from mcp_server.infrastructure.pg_store_near_dup import (
-        fetch_contents,
-        fetch_member_stats,
-        list_candidate_pairs,
-    )
 
     out: dict[str, Any] = {
         "candidate_total": 0,

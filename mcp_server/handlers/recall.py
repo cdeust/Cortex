@@ -42,6 +42,7 @@ from mcp_server.infrastructure.memory_config import (
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.session_registry import current_window_session
 from mcp_server.observability import silent_failure
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 schema = {
     "title": "Recall (retrieve memories)",
@@ -445,7 +446,6 @@ def _apply_co_activation(
     results: list[dict], store: MemoryStore, settings: Any
 ) -> None:
     """Dragon Hatchling Hebbian: co-retrieved entities strengthen edges."""
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.CO_ACTIVATION):
         # No-op: do not strengthen co-retrieved entity edges.

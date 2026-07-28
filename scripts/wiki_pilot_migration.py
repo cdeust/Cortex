@@ -42,6 +42,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from mcp_server.core.wiki_classifier import classify_memory  # noqa: E402
+from mcp_server.shared.wiki_classification import normalize_legacy_kind  # noqa: E402
 
 
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n(?P<fm>.*?)\n---\s*\n?", re.DOTALL)
@@ -200,7 +201,6 @@ def _evaluate(
         )
 
     # Map legacy directory name → modern kind for the "kept vs changed" view.
-    from mcp_server.shared.wiki_classification import normalize_legacy_kind
 
     normalized_legacy = normalize_legacy_kind(legacy_kind)
     agreement = "kept" if verdict.kind == normalized_legacy else "changed"

@@ -20,6 +20,10 @@ import logging
 from typing import Any
 
 from mcp_server.core.memory_reheat import DEFAULT_REHEAT_TARGET, compute_reheat_target
+from mcp_server.infrastructure.pg_store_memory_reheat import (
+    apply_reheat,
+    list_deliberate_below_target,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +41,6 @@ def _process_row(
     out: dict[str, Any],
 ) -> None:
     """Decide and (optionally) apply one row's heat_base raise, journaling it."""
-    from mcp_server.infrastructure.pg_store_memory_reheat import apply_reheat
 
     decision = compute_reheat_target(
         heat_base_before=row["heat_base"],
@@ -128,9 +131,6 @@ async def run_memory_reheat_pass(
                     ``max(heat_base_before, needed)`` floor) — the
                     invariant every test in this campaign checks.
     """
-    from mcp_server.infrastructure.pg_store_memory_reheat import (
-        list_deliberate_below_target,
-    )
 
     out: dict[str, Any] = {
         "scanned_rows": 0,

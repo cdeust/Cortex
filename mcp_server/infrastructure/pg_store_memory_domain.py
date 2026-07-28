@@ -55,13 +55,13 @@ def list_domainless_memories(
                     successful re-resolution, so a rescanned-and-resolved
                     row will not be re-selected as an orphan again.
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     orphan_filter = (
         "" if include_orphans else "AND NOT tags @> '[\"domain-orphan\"]'::jsonb"
     )
     sql = (
-        "SELECT id, directory_context, tags\n"
+        "SELECT id, directory_context, tags\n"  # noqa: S608 — interpolated fragment is an in-code literal ternary; values are bound parameters (docs/ASSURANCE-CASE.md §5)
         "  FROM current_memories\n"
         " WHERE (domain IS NULL OR domain = '')\n"
         f"   {orphan_filter}\n"

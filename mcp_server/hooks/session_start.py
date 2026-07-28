@@ -30,6 +30,9 @@ from mcp_server.handlers.injection_receipts import (
     receipt_marker,
     session_id_from_transcript,
 )
+import sqlite3
+import asyncio
+from datetime import datetime as _dt, timezone as _tz
 
 # ── Config ────────────────────────────────────────────────────────────────
 
@@ -64,7 +67,7 @@ def _read_event() -> dict:
 def _has_sentence_transformers() -> bool:
     """Check if sentence-transformers is importable."""
     try:
-        import sentence_transformers  # noqa: F401
+        import sentence_transformers  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
 
         return True
     except ImportError:
@@ -109,8 +112,8 @@ def _try_setup_db() -> dict | None:
 def _connect_pg():
     """Try to connect to PostgreSQL. Returns connection or None."""
     try:
-        import psycopg
-        from psycopg.rows import dict_row
+        import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
+        from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
         conn = psycopg.connect(_DATABASE_URL, row_factory=dict_row, autocommit=True)
         return conn
@@ -287,7 +290,7 @@ def _count_pending_curations(conn) -> int:
     break the SessionStart preamble. We return 0 and move on.
     """
     try:
-        from mcp_server.core.auto_curator import count_pending_clusters
+        from mcp_server.core.auto_curator import count_pending_clusters  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         # `effective_heat` is a PL/pgSQL function, not a column —
         # mirror the form used in _fetch_hot_memories above. Without
@@ -321,7 +324,7 @@ def _count_pending_curations(conn) -> int:
         # WIKI_ROOT lookup so the curator can skip already-authored
         # clusters by filesystem mtime.
         try:
-            from mcp_server.infrastructure.config import WIKI_ROOT
+            from mcp_server.infrastructure.config import WIKI_ROOT  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
             wiki_root = str(WIKI_ROOT)
         except ImportError:
@@ -354,7 +357,7 @@ def _fetch_grooming_staleness(conn) -> list[str]:
     break the SessionStart preamble. Returns [] on any error.
     """
     try:
-        from mcp_server.core.grooming_health import is_stale
+        from mcp_server.core.grooming_health import is_stale  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         row = conn.execute(
             "SELECT "
@@ -463,8 +466,6 @@ def _detect_external_sources() -> list[dict]:
     claude_mem_db = Path.home() / ".claude-mem" / "claude-mem.db"
     if claude_mem_db.exists():
         try:
-            import sqlite3
-
             conn = sqlite3.connect(str(claude_mem_db))
             count = conn.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
             conn.close()
@@ -511,9 +512,7 @@ def _auto_backfill() -> int:
     Returns number of memories imported.
     """
     try:
-        import asyncio
-
-        from mcp_server.handlers.backfill_memories import handler as backfill_handler
+        from mcp_server.handlers.backfill_memories import handler as backfill_handler  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         result = asyncio.run(
             backfill_handler(
@@ -766,7 +765,7 @@ def _auto_wire_pipeline() -> None:
     config keep their customization.
     """
     try:
-        from mcp_server.infrastructure.pipeline_discovery import (
+        from mcp_server.infrastructure.pipeline_discovery import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             ensure_pipeline_connection,
         )
 
@@ -841,7 +840,7 @@ def _maybe_background_consolidate() -> None:
     never silently skip grooming entirely.
     """
     try:
-        from mcp_server.infrastructure.groomer_coordinator import (
+        from mcp_server.infrastructure.groomer_coordinator import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             GroomerCoordinator,
             resolve_store_key,
         )
@@ -871,15 +870,13 @@ def _legacy_background_consolidate() -> None:
     no guard at all.
     """
     try:
-        from mcp_server.hooks.consolidate_background import (
+        from mcp_server.hooks.consolidate_background import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             STAMP_PATH,
             read_stamp,
         )
 
         last = read_stamp()
         if last is not None:
-            from datetime import datetime as _dt, timezone as _tz
-
             age_hours = (_dt.now(_tz.utc) - last).total_seconds() / 3600.0
             if age_hours < _CONSOLIDATE_TTL_HOURS:
                 return  # Fresh enough; skip.
@@ -913,10 +910,10 @@ def _maybe_background_reanalyze() -> None:
     project Claude was started in.
     """
     try:
-        from mcp_server.infrastructure.pipeline_discovery import (
+        from mcp_server.infrastructure.pipeline_discovery import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             discover_pipeline_command,
         )
-        from mcp_server.infrastructure.pipeline_graph_ttl import graph_is_stale
+        from mcp_server.infrastructure.pipeline_graph_ttl import graph_is_stale  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         if discover_pipeline_command() is None:
             return  # Pipeline not installed — nothing to do.
@@ -965,7 +962,7 @@ def _maybe_background_reanalyze() -> None:
 def _lookup_cached_graph_path(project_root: str) -> str | None:
     """Read the cached ``graph_path=...`` memo for this project, if any."""
     try:
-        from mcp_server.handlers.ingest_helpers import (
+        from mcp_server.handlers.ingest_helpers import (  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
             code_graph_tag,
         )
     except ImportError:
@@ -1021,7 +1018,7 @@ def _refresh_session_registry(event: dict) -> None:
     satisfies identically (produces no stdout, no exception escapes).
     """
     try:
-        from mcp_server.infrastructure.session_registry import (
+        from mcp_server.infrastructure.session_registry import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             purge_dead_entries,
             write_session,
         )
@@ -1051,7 +1048,7 @@ _SQLITE_NOISE_TAGS = frozenset({"auto-captured", "memory-replica"})
 def _backend_is_sqlite() -> bool:
     """True when the resolved store backend is the SQLite store."""
     try:
-        from mcp_server.infrastructure.backend_marker import effective_backend
+        from mcp_server.infrastructure.backend_marker import effective_backend  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
         return effective_backend(os.environ) == "sqlite"
     except ImportError:
@@ -1108,7 +1105,7 @@ def _sqlite_banner_rows(store) -> tuple[list[dict], list[dict], dict | None]:
 def _sqlite_context(event: dict) -> None:
     """Build and print the SessionStart banner on the SQLite backend."""
     try:
-        from mcp_server.infrastructure.memory_store import get_shared_store
+        from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         store = get_shared_store()
         total = int(store.count_memories().get("total") or 0)

@@ -40,6 +40,10 @@ from mcp_server.core.wiki_layout import PAGE_KINDS
 from mcp_server.observability import silent_failure
 from mcp_server.core.wiki_sync import build_from_memory
 from mcp_server.infrastructure.file_io import ensure_dir
+import os
+from mcp_server.core.wiki_pages import build_index
+from mcp_server.core.wiki_readme import build_plain_readme
+import re as _re
 
 WriteMode = str  # "create" | "append" | "replace"
 
@@ -75,7 +79,6 @@ def _safe_join(root: Path, rel_path: str) -> Path:
     Returns the validated absolute target path. Raises ValueError on
     any failure.
     """
-    import os
 
     if not rel_path or "\x00" in rel_path:
         raise ValueError("invalid wiki path: empty or contains null byte")
@@ -103,7 +106,6 @@ _abs = _safe_join
 
 
 def read_page(root: Path | str, rel_path: str) -> str | None:
-    import os
 
     # CWE-22 sanitization. Structure matches CodeQL's py/path-injection
     # example VERBATIM so the sanitizer is unambiguously recognised:
@@ -168,7 +170,6 @@ def write_page(
     propagated uncaught) for ``create``/``replace`` when ``content`` opens
     a frontmatter fence it never closes.
     """
-    import os
 
     # CWE-22 sanitization matching CodeQL's py/path-injection example
     # VERBATIM (see read_page for references).
@@ -222,7 +223,6 @@ def _atomic_write_bytes_str(safe_path: str, content: str) -> int:
     ``write_page`` doesn't rebind through ``Path(...)`` — keeps the
     sanitizer→sink chain on the same variable for static analysis.
     """
-    import os
 
     parent = os.path.dirname(safe_path)
     if parent and not os.path.isdir(parent):
@@ -297,9 +297,6 @@ def _try_reindex(root: Path) -> None:
         hand-written README exists at the root.
     """
     try:
-        from mcp_server.core.wiki_pages import build_index
-        from mcp_server.core.wiki_readme import build_plain_readme
-
         page_paths = list_pages(root)
         index_md = build_index(page_paths)
         gen_dir = root / ".generated"
@@ -409,7 +406,6 @@ def sync_memory(
 
 def cleanup_id_prefixed_pages(root: Path | str) -> int:
     """Remove old {id}-{slug}.md files that have a {slug}.md counterpart."""
-    import re as _re
 
     notes_dir = Path(root) / "notes"
     if not notes_dir.exists():

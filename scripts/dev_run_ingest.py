@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from mcp_server.handlers.ingest_codebase import handler
 
 _MIN_ARGC = 2  # source: structural — program name + <project_path>
 
@@ -23,8 +24,6 @@ async def main() -> int:
         return 2
     project_path = sys.argv[1]
     force = "--force" in sys.argv[2:]
-
-    from mcp_server.handlers.ingest_codebase import handler
 
     result = await handler({"project_path": project_path, "force_reindex": force})
     print(json.dumps(result, indent=2, default=str))

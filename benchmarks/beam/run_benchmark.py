@@ -45,6 +45,10 @@ from benchmarks.beam.data import (
     turns_to_memories,
 )
 from benchmarks.lib.bench_db import BenchmarkDB
+from mcp_server.core.context_assembly.stage_detector import (
+    TemporalStageDetector,
+    ExplicitStageDetector,
+)
 
 # Minimum turn length for a turn to seed an 80-char prefix match key.
 # source: pre-existing tuned value, extracted unchanged (#197 family 3);
@@ -79,16 +83,8 @@ def _get_stage_detector():
     """
     mode = os.environ.get("CORTEX_STAGE_DETECTOR", "oracle")
     if mode == "temporal":
-        from mcp_server.core.context_assembly.stage_detector import (
-            TemporalStageDetector,
-        )
-
         return TemporalStageDetector(gap_hours=24.0, time_field="created_at")
     else:
-        from mcp_server.core.context_assembly.stage_detector import (
-            ExplicitStageDetector,
-        )
-
         return ExplicitStageDetector(field="agent_context")
 
 
@@ -123,9 +119,6 @@ def _current_stage_for_question(q: dict, conversation_turns: list[dict]) -> str:
             if mode == "temporal":
                 # Return the day-bucket format that TemporalStageDetector
                 # produces from created_at timestamps.
-                from mcp_server.core.context_assembly.stage_detector import (
-                    TemporalStageDetector,
-                )
 
                 ts = TemporalStageDetector._parse_ts(last_anchor)
                 if ts:
@@ -134,10 +127,6 @@ def _current_stage_for_question(q: dict, conversation_turns: list[dict]) -> str:
             else:
                 return last_plan if last_plan else last_anchor
     if mode == "temporal":
-        from mcp_server.core.context_assembly.stage_detector import (
-            TemporalStageDetector,
-        )
-
         ts = TemporalStageDetector._parse_ts(last_anchor)
         if ts:
             return f"day-{ts.date().isoformat()}"

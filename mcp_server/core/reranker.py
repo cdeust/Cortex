@@ -104,7 +104,7 @@ def _ensure_reranker() -> Any:
                 "FlashRank's fetch has no timeout and would block this "
                 "thread indefinitely on a stalled connection"
             )
-        from flashrank import Ranker
+        from flashrank import Ranker  # noqa: PLC0415 — optional dependency (flashrank (multi-second reranker model load)); imported where used so environments without it keep working
 
         _flashrank_instance = Ranker(model_name=_MODEL_NAME, cache_dir=str(cache))
         return _flashrank_instance
@@ -185,7 +185,7 @@ def rerank_results(
     if ranker is None or not candidates:
         return candidates
     try:
-        from flashrank import RerankRequest
+        from flashrank import RerankRequest  # noqa: PLC0415 — optional dependency (flashrank (multi-second reranker model load)); imported where used so environments without it keep working
 
         passages = [
             {"id": i, "text": content_lookup.get(mid, "")[:max_content_len]}
@@ -222,7 +222,7 @@ def get_raw_ce_score(
     if ranker is None or not query or not content:
         return None
     try:
-        from flashrank import RerankRequest
+        from flashrank import RerankRequest  # noqa: PLC0415 — optional dependency (flashrank (multi-second reranker model load)); imported where used so environments without it keep working
 
         results = ranker.rerank(
             RerankRequest(

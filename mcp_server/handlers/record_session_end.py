@@ -30,6 +30,9 @@ from mcp_server.shared.project_ids import (
     normalize_project_id,
     project_id_to_label,
 )
+from mcp_server.handlers.auto_task_record_writer import maybe_write_task_record
+from mcp_server.infrastructure.memory_store import get_shared_store
+from mcp_server.handlers.procedural_skill_writer import maybe_mine_skills
 
 logger = logging.getLogger(__name__)
 
@@ -355,11 +358,6 @@ async def handler(args: dict) -> dict:
         "reason": "not_attempted",
     }
     try:
-        from mcp_server.handlers.auto_task_record_writer import (
-            maybe_write_task_record,
-        )
-        from mcp_server.infrastructure.memory_store import get_shared_store
-
         task_record_status = maybe_write_task_record(
             session_id=session_id,
             domain=domain_id,
@@ -383,9 +381,6 @@ async def handler(args: dict) -> dict:
         "reason": "not_attempted",
     }
     try:
-        from mcp_server.handlers.procedural_skill_writer import maybe_mine_skills
-        from mcp_server.infrastructure.memory_store import get_shared_store
-
         procedural_status = maybe_mine_skills(
             sessions=load_session_log().get("sessions", []),
             store=get_shared_store(),

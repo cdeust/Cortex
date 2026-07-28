@@ -62,6 +62,7 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import launcher_deps_fs as _fs  # noqa: E402
+import importlib  # noqa: E402
 
 # Re-exported at the original names: these were this module's own
 # private helpers before the SRP split and remain part of its tested
@@ -126,7 +127,6 @@ def _importable(import_name: str, deps_dir: str) -> bool:
     ``_dist_info_satisfies``) so the cold/common-case path never pays
     an import cost or searches the host's global site-packages.
     """
-    import importlib
 
     try:
         mod = importlib.import_module(import_name)

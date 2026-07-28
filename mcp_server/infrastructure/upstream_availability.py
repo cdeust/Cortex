@@ -51,7 +51,7 @@ def codebase_upstream_available() -> bool:
         return True
     # Lazy import: pipeline_discovery is infra-internal and heavier than this
     # module; importing at call time keeps the gate cheap when already wired.
-    from mcp_server.infrastructure.pipeline_discovery import (
+    from mcp_server.infrastructure.pipeline_discovery import (  # noqa: PLC0415 — documented deferral: pipeline_discovery is heavier than this module; the gate stays cheap when already wired
         discover_pipeline_command,
     )
 

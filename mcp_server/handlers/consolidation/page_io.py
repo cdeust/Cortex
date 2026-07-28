@@ -56,7 +56,7 @@ def _project_source_for_page(
     if not domain or not isinstance(domain, str):
         return None, None
     try:
-        from mcp_server.core.wiki_coverage import _project_source_root
+        from mcp_server.core.wiki_coverage import _project_source_root  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return None, None
     src_root = _project_source_root(domain)

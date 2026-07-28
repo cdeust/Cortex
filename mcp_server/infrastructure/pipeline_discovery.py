@@ -203,7 +203,7 @@ def ensure_pipeline_connection() -> dict:
     # before giving up. Lazy import to avoid a module-load cycle —
     # pipeline_installer imports from this module.
     if command is None:
-        from mcp_server.infrastructure.pipeline_installer import install_pipeline
+        from mcp_server.infrastructure.pipeline_installer import install_pipeline  # noqa: PLC0415 — import cycle with mcp_server.infrastructure.pipeline_installer; a top-level import fails at boot
 
         install_result = install_pipeline()
         if install_result.get("action") == "installed":

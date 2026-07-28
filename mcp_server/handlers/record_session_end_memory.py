@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from mcp_server.handlers.remember import handler as remember_handler
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +105,6 @@ async def _try_store_memory(memory_args: dict[str, Any] | None) -> bool:
     if memory_args is None:
         return False
     try:
-        from mcp_server.handlers.remember import handler as remember_handler
-
         mem_result = await remember_handler(memory_args)
         return mem_result.get("stored", False)
     except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
@@ -156,7 +155,6 @@ async def _try_store_lesson_candidates(
     Never raises — best-effort, same contract as `_try_store_memory`: a
     self-critique persistence failure must not fail session-end.
     """
-    from mcp_server.handlers.remember import handler as remember_handler
 
     stored = 0
     for suggestion in suggestions:

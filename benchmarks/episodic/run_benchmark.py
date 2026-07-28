@@ -32,6 +32,8 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from benchmarks.lib.retriever import BenchmarkRetriever
+import random
 
 # source: structural — an event is the 5-tuple
 # (date, location, entity, content, content_detail) documented in the module
@@ -190,7 +192,6 @@ class EpisodicRetriever:
     """Adapter wrapping shared BenchmarkRetriever for episodic benchmark."""
 
     def __init__(self):
-        from benchmarks.lib.retriever import BenchmarkRetriever
 
         self._retriever = BenchmarkRetriever()
         self.chapters: list[str] = []
@@ -275,7 +276,6 @@ def run_benchmark(
     else:
         print("  No data directory specified. Generating synthetic events...")
         # Generate minimal synthetic events for testing
-        import random
 
         random.seed(42)
         names = [

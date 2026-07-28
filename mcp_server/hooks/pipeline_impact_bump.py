@@ -98,12 +98,12 @@ async def _pipeline_detect_changes(project_root: str, file_path: str) -> list[st
     impact is detected (e.g., file isn't in the indexed graph).
     """
     try:
-        from mcp_server.handlers.ingest_helpers import (
+        from mcp_server.handlers.ingest_helpers import (  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
             call_upstream,
             find_cached_graph,
             normalise_mcp_payload,
         )
-        from mcp_server.infrastructure.memory_store import MemoryStore
+        from mcp_server.infrastructure.memory_store import MemoryStore  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return []
 
@@ -158,7 +158,7 @@ def _bump_heat_for_symbols(symbol_names: list[str]) -> int:
     if not symbol_names:
         return 0
     try:
-        import psycopg
+        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return 0
 

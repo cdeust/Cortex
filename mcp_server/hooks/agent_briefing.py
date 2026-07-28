@@ -254,8 +254,8 @@ def _extract_task_keywords(prompt: str) -> list[str]:
 def _connect():
     """Open the briefing's PG connection; None when PG is unreachable."""
     try:
-        import psycopg
-        from psycopg.rows import dict_row
+        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from psycopg.rows import dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return None
     try:

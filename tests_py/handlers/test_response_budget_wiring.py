@@ -65,13 +65,10 @@ def small_budget(monkeypatch):
 
     base = get_memory_settings()
     settings = _Settings(base, MAX_RESPONSE_CHARS=5_000, CO_ACTIVATION_ENABLED=False)
-    for mod in (recall, unified_search, wiki_read):
+    # query_methodology joined the per-consumer loop when its lazy
+    # memory_config import moved to module top (#197 family 4).
+    for mod in (recall, unified_search, wiki_read, query_methodology):
         monkeypatch.setattr(mod, "get_memory_settings", lambda: settings)
-    # query_methodology._bounded imports lazily from memory_config.
-    monkeypatch.setattr(
-        "mcp_server.infrastructure.memory_config.get_memory_settings",
-        lambda: settings,
-    )
     return settings
 
 

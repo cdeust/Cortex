@@ -18,7 +18,10 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from mcp_server.core.session_extractor import extract_memorable_items
+from mcp_server.core.session_extractor import (
+    extract_memorable_items,
+    extract_session_summary,
+)
 from mcp_server.handlers.backfill_helpers import (
     discover_files,
     ensure_backfill_log,
@@ -34,6 +37,10 @@ from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.scanner import read_head_tail
 from mcp_server.observability import silent_failure
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
+from mcp_server.handlers.backfill_helpers import gist_oversized_content
+from mcp_server.handlers.remember import handler as remember_handler
+from mcp_server.handlers.wiki_pipeline import handler as _pipeline
+from mcp_server.handlers.consolidation.cascade import run_cascade_advancement
 
 logger = logging.getLogger(__name__)
 
@@ -151,10 +158,6 @@ async def _import_single_item(
     project_slug: str,
 ) -> int | None:
     """Store one extracted item. Returns memory_id if stored, else None."""
-    from mcp_server.handlers.backfill_helpers import (
-        gist_oversized_content,
-    )
-    from mcp_server.handlers.remember import handler as remember_handler
 
     content = item.get("content", "")
     if not content or len(content) < _MIN_CONTENT_CHARS:
@@ -197,7 +200,6 @@ async def _import_file(
     min_importance: float,
 ) -> tuple[int, int]:
     """Import one JSONL file. Returns (imported, skipped)."""
-    from mcp_server.core.session_extractor import extract_session_summary
 
     try:
         records = read_head_tail(path)
@@ -331,8 +333,6 @@ async def _process_imports(
 
     if run_pipeline and total_imported > 0:
         try:
-            from mcp_server.handlers.wiki_pipeline import handler as _pipeline
-
             pipe = await _pipeline({"limit_per_stage": 1000})
             result["pipeline"] = {
                 "claims_inserted": pipe.get("claims_inserted", 0),
@@ -368,10 +368,6 @@ def _advance_cascade(store: MemoryStore, result: dict[str, Any]) -> None:
     if result.get("backfilled", 0) <= 0:
         return
     try:
-        from mcp_server.handlers.consolidation.cascade import (
-            run_cascade_advancement,
-        )
-
         cascade = run_cascade_advancement(store)
         result["cascade_advanced"] = cascade.get("advanced", 0)
     except Exception as exc:  # noqa: BLE001 — cascade is optional post-processing

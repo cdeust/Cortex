@@ -33,6 +33,7 @@ from __future__ import annotations
 import logging
 
 import numpy as np
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ def _ensure_torch():
     if _torch is not None:
         return _torch
     try:
-        import torch
+        import torch  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
         _torch = torch
         return torch
@@ -163,7 +164,6 @@ class TitansMemory:
 
         Returns the surprise value (gradient magnitude).
         """
-        from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
         if is_mechanism_disabled(Mechanism.SURPRISE_MOMENTUM):
             # No-op: no momentum update; returns 0 so downstream uses

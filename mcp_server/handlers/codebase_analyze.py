@@ -35,6 +35,21 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.observability import silent_failure
+from mcp_server.core.ast_parser import is_available, parse_file_ast
+from mcp_server.core.codebase_graph import (
+    compute_centrality,
+    detect_communities,
+    detect_god_nodes,
+    extract_inheritance,
+    resolve_all_imports,
+)
+from mcp_server.core.codebase_type_resolver import resolve_type_references
+from mcp_server.handlers.codebase_analyze_helpers import (
+    persist_community_tags,
+    persist_file_edge,
+    persist_god_node_tags,
+    persist_inheritance_edge,
+)
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -259,7 +274,6 @@ async def _store_file(
 
 def _parse_one_file(path: str, content: str) -> Any:
     """Parse a file with tree-sitter AST or regex fallback."""
-    from mcp_server.core.ast_parser import is_available, parse_file_ast
 
     if is_available():
         return parse_file_ast(path, content.encode(errors="replace"))
@@ -393,20 +407,6 @@ def _run_graph_analysis(
     domain: str,
 ) -> dict[str, int]:
     """Run cross-file resolution, type references, and communities."""
-    from mcp_server.core.codebase_graph import (
-        compute_centrality,
-        detect_communities,
-        detect_god_nodes,
-        extract_inheritance,
-        resolve_all_imports,
-    )
-    from mcp_server.core.codebase_type_resolver import resolve_type_references
-    from mcp_server.handlers.codebase_analyze_helpers import (
-        persist_community_tags,
-        persist_file_edge,
-        persist_god_node_tags,
-        persist_inheritance_edge,
-    )
 
     import_edges = resolve_all_imports(analyses)
     type_ref_edges = resolve_type_references(analyses, file_contents)

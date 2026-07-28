@@ -61,13 +61,14 @@ class TestAutoTaskRecordRecentMemories:
 
 class TestBackfillArtifactStore:
     def test_artifact_failure_keeps_full_content_and_is_logged(self, monkeypatch):
+        from mcp_server.handlers import backfill_helpers
         from mcp_server.handlers.backfill_helpers import gist_oversized_content
-        from mcp_server.infrastructure import artifact_store
 
         def broken(content):
             raise RuntimeError("disk full")
 
-        monkeypatch.setattr(artifact_store, "store_artifact", broken)
+        # Patch the consumer's own binding (top-level import, #197 family 4).
+        monkeypatch.setattr(backfill_helpers, "store_artifact", broken)
         content = "x" * 20_000
         assert gist_oversized_content(content) == content
         _assert_noted("backfill.artifact_store", "disk full")
@@ -115,7 +116,7 @@ class TestChangeImpactMemoryRead:
 
 class TestAuthoringPromptsLiveGapAudit:
     def test_audit_failure_falls_back_to_frozen_gaps_and_is_logged(self, monkeypatch):
-        from mcp_server.core import wiki_curation_gaps
+        from mcp_server.handlers.consolidation import authoring_prompts
         from mcp_server.handlers.consolidation.authoring_prompts import (
             _live_audit_gaps,
         )
@@ -123,7 +124,8 @@ class TestAuthoringPromptsLiveGapAudit:
         def broken(body):
             raise RuntimeError("section catalogue broke")
 
-        monkeypatch.setattr(wiki_curation_gaps, "missing_sections", broken)
+        # Patch the consumer's own binding (top-level import, #197 family 4).
+        monkeypatch.setattr(authoring_prompts, "missing_sections", broken)
         assert _live_audit_gaps("body", ["overview"]) == ["overview"]
         _assert_noted("authoring_prompts.live_gap_audit", "section catalogue broke")
 
@@ -152,37 +154,39 @@ class TestCandidateScanSites:
     def test_registry_failure_degrades_to_no_candidates_and_is_logged(
         self, monkeypatch, tmp_path
     ):
+        from mcp_server.handlers.consolidation import candidate_scan
         from mcp_server.handlers.consolidation.candidate_scan import (
             _collect_anchor_candidates,
         )
-        from mcp_server.shared import domain_mapping
 
         def broken():
             raise RuntimeError("registry unreadable")
 
-        monkeypatch.setattr(domain_mapping, "_build_registry", broken)
+        # Patch the consumer's own binding: the import is at module top
+        # (#197 family 4), so patching domain_mapping no longer reaches it.
+        monkeypatch.setattr(candidate_scan, "_build_registry", broken)
         assert _collect_anchor_candidates(tmp_path, 3) == []
         _assert_noted("candidate_scan.registry", "registry unreadable")
 
     def test_audit_domain_failure_skips_domain_and_is_logged(
         self, monkeypatch, tmp_path
     ):
-        from mcp_server.core import wiki_coverage
+        from mcp_server.handlers.consolidation import candidate_scan
         from mcp_server.handlers.consolidation.candidate_scan import (
             _collect_anchor_candidates,
         )
-        from mcp_server.shared import domain_mapping
 
         registry = SimpleNamespace(repos=[SimpleNamespace(canonical="d1")])
-        monkeypatch.setattr(domain_mapping, "_build_registry", lambda: registry)
+        # Patch the consumer's own bindings (top-level imports, #197 family 4).
+        monkeypatch.setattr(candidate_scan, "_build_registry", lambda: registry)
         monkeypatch.setattr(
-            wiki_coverage, "_project_source_root", lambda d: str(tmp_path)
+            candidate_scan, "_project_source_root", lambda d: str(tmp_path)
         )
 
         def broken(root, domain):
             raise RuntimeError("audit broke")
 
-        monkeypatch.setattr(wiki_coverage, "audit_domain", broken)
+        monkeypatch.setattr(candidate_scan, "audit_domain", broken)
         assert _collect_anchor_candidates(tmp_path, 3) == []
         _assert_noted("candidate_scan.audit_domain", "audit broke")
 

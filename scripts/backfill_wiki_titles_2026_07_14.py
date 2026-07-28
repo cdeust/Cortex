@@ -67,7 +67,7 @@ def find_affected_rows(conn) -> list[tuple[int, str, str]]:
     """
     with conn.cursor() as cur:
         cur.execute(
-            f"SELECT id, rel_path, title FROM wiki.pages "
+            f"SELECT id, rel_path, title FROM wiki.pages "  # noqa: S608 — interpolated fragment is the module-level literal _CORRUPTION_SIGNATURE_SQL; no external input (docs/ASSURANCE-CASE.md §5)
             f"WHERE {_CORRUPTION_SIGNATURE_SQL} ORDER BY id"
         )
         raw_rows = cur.fetchall()
@@ -139,7 +139,7 @@ def main() -> int:
     if not args.dry_run:
         with conn.cursor() as cur:
             cur.execute(
-                f"SELECT count(*) AS n FROM wiki.pages "
+                f"SELECT count(*) AS n FROM wiki.pages "  # noqa: S608 — interpolated fragment is the module-level literal _CORRUPTION_SIGNATURE_SQL; no external input (docs/ASSURANCE-CASE.md §5)
                 f"WHERE {_CORRUPTION_SIGNATURE_SQL}"
             )
             row = cur.fetchone()

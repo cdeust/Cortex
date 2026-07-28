@@ -21,6 +21,7 @@ from collections import defaultdict
 from typing import Any
 
 import numpy as np
+from datetime import datetime, timezone
 
 # ── SR parameters ─────────────────────────────────────────────────────────
 
@@ -40,7 +41,6 @@ _MAX_NAVIGATE_DEPTH = 3
 
 def _parse_iso_timestamp(s: str) -> float:
     """Parse ISO timestamp to Unix float, return 0 on error."""
-    from datetime import datetime, timezone
 
     try:
         dt = datetime.fromisoformat(s)

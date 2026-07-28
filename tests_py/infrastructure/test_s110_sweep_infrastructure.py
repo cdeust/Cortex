@@ -188,13 +188,14 @@ class TestWikiStoreReadmeGuard:
         assert "old body" not in refreshed
 
     def test_reindex_failure_is_logged(self, caplog, tmp_path, monkeypatch):
-        from mcp_server.core import wiki_pages
+        from mcp_server.infrastructure import wiki_store
         from mcp_server.infrastructure.wiki_store import _try_reindex
 
         def broken(paths):
             raise RuntimeError("index builder broke")
 
-        monkeypatch.setattr(wiki_pages, "build_index", broken)
+        # Patch the consumer's own binding (top-level import, #197 family 4).
+        monkeypatch.setattr(wiki_store, "build_index", broken)
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
             _try_reindex(tmp_path)
         assert any("wiki_store.reindex" in r.message for r in caplog.records)

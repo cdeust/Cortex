@@ -189,7 +189,7 @@ def _gist_or_full(output: str) -> tuple[str, str | None]:
     if not needs_gist(output):
         return output, None
     try:
-        from mcp_server.infrastructure.artifact_store import store_artifact
+        from mcp_server.infrastructure.artifact_store import store_artifact  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         path = store_artifact(output)
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
@@ -290,8 +290,8 @@ def _load_remember():
     """Import the async remember handler, fail loudly if the package
     isn't installed (the hook depends on the core distribution)."""
     try:
-        import asyncio
-        from mcp_server.handlers.remember import handler
+        import asyncio  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from mcp_server.handlers.remember import handler  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
         return asyncio, handler
     except ImportError as exc:
@@ -348,10 +348,10 @@ def _maybe_run_cascade() -> None:
     _tool_call_counter = 0
 
     try:
-        from mcp_server.handlers.consolidation.cascade import (
+        from mcp_server.handlers.consolidation.cascade import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             run_cascade_advancement,
         )
-        from mcp_server.infrastructure.memory_store import MemoryStore
+        from mcp_server.infrastructure.memory_store import MemoryStore  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         store = MemoryStore()
         result = run_cascade_advancement(store)

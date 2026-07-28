@@ -37,6 +37,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from typing import Any
+from importlib.metadata import version
+from mcp_server.core.reranker import ensure_reranker_loaded, model_sha256
 
 
 def _git_sha() -> str:
@@ -88,8 +90,6 @@ def _git_dirty() -> bool | None:
 def _lib_version(package_name: str) -> str:
     """Return the installed version of *package_name*, or 'not-installed'."""
     try:
-        from importlib.metadata import version
-
         return version(package_name)
     except Exception:  # noqa: BLE001 — best-effort, no specific exception set
         return "not-installed"
@@ -109,8 +109,6 @@ def _reranker_manifest_fields() -> dict[str, Any]:
     in the calling environment (e.g. a stripped-down repro checkout).
     """
     try:
-        from mcp_server.core.reranker import ensure_reranker_loaded, model_sha256
-
         status = ensure_reranker_loaded()
         return {
             "reranker_active": status.state == "loaded",

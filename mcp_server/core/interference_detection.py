@@ -35,6 +35,7 @@ from __future__ import annotations
 
 from mcp_server.shared.linear_algebra import cosine_similarity
 from mcp_server.shared.similarity import jaccard_similarity
+from mcp_server.core.cascade_stages import compute_interference_resistance
 
 # ── Configuration ─────────────────────────────────────────────────────────
 # All constants are hand-tuned for this system's operating regime.
@@ -270,7 +271,6 @@ def _compute_vulnerability(
     strength). The formula: (1 - resistance) * (1 - heat_boost) *
     (1 - importance_boost). All scaling factors are hand-tuned.
     """
-    from mcp_server.core.cascade_stages import compute_interference_resistance
 
     resistance = compute_interference_resistance(old_stage, sim)
     return (1.0 - resistance) * (1.0 - old_heat * 0.5) * (1.0 - old_importance * 0.3)

@@ -37,6 +37,9 @@ from mcp_server.core.prose_redaction import REDACTION_CONVENTIONS
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+import os
+import time
+import os as _os
 
 # 2026-05-17: thresholds tuned to mirror the cluster-quality bar of the
 # hand-authored pages from this session. Below these, a cluster doesn't
@@ -102,8 +105,6 @@ def is_path_recently_authored(
     user edits a page by hand, the mtime updates and the cluster stays
     skipped (their edits aren't clobbered).
     """
-    import os
-    import time
 
     full = os.path.join(wiki_root, suggested_path)
     if not os.path.isfile(full):
@@ -921,7 +922,6 @@ def build_reauthor_jobs(
     (matches ``wiki_coverage._project_source_root``). Returns jobs in
     input order — callers can sort by reason severity if desired.
     """
-    import os as _os
 
     jobs: list[ReauthorJob] = []
     for d in drifts:

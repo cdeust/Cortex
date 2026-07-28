@@ -11,8 +11,10 @@ import pytest
 from mcp_server.handlers import codebase_analyze as ca
 from mcp_server.handlers import ingest_provenance as ip
 
+# ingest_provenance binds the probe at module top (#197 family 4), so the
+# patch targets the consumer's binding, not the defining module.
 _UPSTREAM_AVAILABLE_PATH = (
-    "mcp_server.infrastructure.upstream_availability.codebase_upstream_available"
+    "mcp_server.handlers.ingest_provenance.codebase_upstream_available"
 )
 
 

@@ -37,6 +37,16 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from mcp_server.core.wiki_citation_seed import (
+    SeedCandidate,
+    SeedReliability,
+    classify_seed_candidates,
+)
+from mcp_server.infrastructure.pg_store_wiki import insert_citation
+from mcp_server.infrastructure.pg_store_wiki_citation_seed import (
+    list_existing_page_memory_citations,
+    list_page_memory_seed_candidates,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +54,6 @@ DEFAULT_SEED_SCAN_LIMIT = 5000
 
 
 def _to_candidates(rows: list[dict]) -> list[Any]:
-    from mcp_server.core.wiki_citation_seed import SeedCandidate, SeedReliability
 
     return [
         SeedCandidate(
@@ -93,12 +102,6 @@ async def run_wiki_citation_seed_pass(
                     now in ``existing_pairs``, so ``seeded`` is 0 on
                     immediate re-run (idempotence).
     """
-    from mcp_server.core.wiki_citation_seed import classify_seed_candidates
-    from mcp_server.infrastructure.pg_store_wiki import insert_citation
-    from mcp_server.infrastructure.pg_store_wiki_citation_seed import (
-        list_existing_page_memory_citations,
-        list_page_memory_seed_candidates,
-    )
 
     out: dict[str, Any] = {
         "scanned_rows": 0,

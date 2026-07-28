@@ -42,6 +42,7 @@ from mcp_server.core.separation_core import (
     orthogonalize_embedding,
 )
 from mcp_server.observability import silent_failure
+import json as _json
 
 
 def compute_embedding_novelty(
@@ -186,7 +187,6 @@ def apply_oscillatory_context(
     heat: float,
 ) -> tuple[float, float, float, Any]:
     """Apply oscillatory phase gating. Returns (heat, theta, encoding_mod, state)."""
-    import json as _json
 
     osc_state = oscillatory_clock.OscillatoryState()
     theta_phase = 0.0

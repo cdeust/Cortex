@@ -35,7 +35,7 @@ def _build_dependency_graph(
     call_edges: list[tuple[str, str, str]],
 ) -> object:
     """Build a weighted networkx graph from file and call edges."""
-    import networkx as nx
+    import networkx as nx  # noqa: PLC0415 — optional dependency ([codebase] extra); imported where used so environments without it keep working
 
     g = nx.Graph()
     for src, tgt in file_edges:
@@ -56,8 +56,8 @@ def _leiden_partition(g: object) -> dict[str, int] | None:
     with the Louvain fallback. seed=42 for determinism.
     """
     try:
-        import igraph
-        import leidenalg
+        import igraph  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        import leidenalg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return None
 
@@ -88,7 +88,7 @@ def detect_communities(
         Map of file_path -> community_id.
     """
     try:
-        import networkx as nx
+        import networkx as nx  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return {}
 
@@ -122,7 +122,7 @@ def compute_centrality(
     Freeman (1979) degree centrality.
     """
     try:
-        import networkx as nx
+        import networkx as nx  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return {}
 

@@ -25,6 +25,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Any
+import calendar
 
 # source: structural — "Month-DD-YYYY" splits on two "-" into three fields
 _MONTH_DAY_YEAR_PARTS = 3
@@ -157,7 +158,6 @@ class TemporalStageDetector(StageDetector):
             except (ValueError, AttributeError):
                 pass
             # Try BEAM's "Month-DD-YYYY" format (March-15-2024)
-            import calendar
 
             try:
                 parts = value.split("-")

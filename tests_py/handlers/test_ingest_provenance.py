@@ -40,8 +40,9 @@ class TestProvenanceTags:
 
 class TestNativeFallbackStatus:
     def test_legitimate_when_ap_unreachable(self, monkeypatch):
+        # Patch the consumer's binding (top-level import, #197 family 4).
         monkeypatch.setattr(
-            "mcp_server.infrastructure.upstream_availability."
+            ip,
             "codebase_upstream_available",
             lambda: False,
         )
@@ -50,8 +51,9 @@ class TestNativeFallbackStatus:
         assert warning is None
 
     def test_precedence_violation_when_ap_reachable(self, monkeypatch):
+        # Patch the consumer's binding (top-level import, #197 family 4).
         monkeypatch.setattr(
-            "mcp_server.infrastructure.upstream_availability."
+            ip,
             "codebase_upstream_available",
             lambda: True,
         )

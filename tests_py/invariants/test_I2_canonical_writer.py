@@ -57,14 +57,18 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # functions (net +29 lines above this site — 33 lines of new function
     # bodies/docstrings added, 4 lines of inline hash-computation removed
     # from _recorded_schema_hash, which now delegates to read_schema_hash).
-    ("infrastructure/pg_store.py", 727),
+    # Shifted -7 (pg_store) / -1 (anchor) by the PLC0415 sweep (#197
+    # family 4): function-level imports above these sites hoisted to the
+    # module top; same writers, no new ones (the test was the oracle,
+    # as on every prior re-pin).
+    ("infrastructure/pg_store.py", 720),
     # Canonical single-row writer (all callers route through this).
     # bump_heat_raw — the one canonical single-row site (re-pinned after
     # rebasing the read-path PR onto blame-path injection-receipts).
     # Shifted 727->728 by the same import-line addition above.
     # Shifted 737->766 by the module-level hash helpers extraction (same
     # net +29 cause as the entry above).
-    ("infrastructure/pg_store.py", 769),
+    ("infrastructure/pg_store.py", 762),
     # A3 batched writer (homeostatic cohort branch + any other batch consumer).
     # update_memories_heat_batch. Shifted 787->825 when M-D3 (7.1) added
     # get_homeostatic_factor/set_homeostatic_factor's write_class parameter
@@ -72,7 +76,7 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # silent-except-sweep import-line addition.
     # Shifted 835->864 by the module-level hash helpers extraction (same
     # net +29 cause as the two entries above).
-    ("infrastructure/pg_store.py", 867),
+    ("infrastructure/pg_store.py", 860),
     # SQLite parity of the anchor transfer (same transactional rationale).
     # Shifted 389->440->447->493->529 (M-D3, then #169 added _fts_augment /
     # _migrate_fts_code_tokenize / unconditional embedding_model stamp above it;
@@ -92,7 +96,7 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # amortized fold UPDATE, now scoped to a class's own source values.
     ("handlers/consolidation/homeostatic_apply.py", 233),
     # Anchor pin: heat_base=1.0 + no_decay=TRUE preserves resist-decay.
-    ("handlers/anchor.py", 150),
+    ("handlers/anchor.py", 149),
     # Preemptive boost: heat_base += 0.1 on Read/Edit/Write hook.
     ("hooks/preemptive_context.py", 145),
     # Pipeline-impact boost: heat_base += 0.15 for symbols touched by an

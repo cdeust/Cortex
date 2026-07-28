@@ -57,6 +57,7 @@ from dataclasses import dataclass, field
 from typing import Final
 
 from mcp_server.shared.platform import to_posix
+import time
 
 
 # Minimum useful page size in bytes. Below this, a page is a stub —
@@ -988,7 +989,6 @@ def _has_substantive_anchor(
     coverage discipline as missing ones — the wiki stays in sync with
     the codebase without a human in the loop.
     """
-    import time
 
     for directory in directories:
         for filename in anchor_filenames:
@@ -1281,7 +1281,7 @@ def _project_source_root(domain: str) -> str | None:
     a memory tag without a checked-out tree).
     """
     try:
-        from mcp_server.shared.domain_mapping import _build_registry
+        from mcp_server.shared.domain_mapping import _build_registry  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return None
     registry = _build_registry()

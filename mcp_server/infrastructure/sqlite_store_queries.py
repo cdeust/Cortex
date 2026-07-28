@@ -30,7 +30,7 @@ class SqliteQueryMixin:
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._conn.execute(
-            f"SELECT * FROM {src} WHERE (domain = ? OR is_global = 1) "
+            f"SELECT * FROM {src} WHERE (domain = ? OR is_global = 1) "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "AND heat_base >= ? ORDER BY heat_base DESC LIMIT ?",
             (domain, min_heat, limit),
         ).fetchall()
@@ -59,13 +59,13 @@ class SqliteQueryMixin:
         src = "current_memories" if heads_only else "memories"
         if include_benchmarks:
             rows = self._conn.execute(
-                f"SELECT * FROM {src} WHERE heat_base >= ? "
+                f"SELECT * FROM {src} WHERE heat_base >= ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 f"ORDER BY heat_base DESC LIMIT ?",
                 (min_heat, limit),
             ).fetchall()
         else:
             rows = self._conn.execute(
-                f"SELECT * FROM {src} WHERE heat_base >= ? "
+                f"SELECT * FROM {src} WHERE heat_base >= ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "AND NOT COALESCE(is_benchmark, 0) "
                 "ORDER BY heat_base DESC LIMIT ?",
                 (min_heat, limit),
@@ -167,20 +167,20 @@ class SqliteQueryMixin:
         placeholders = ",".join("?" * len(ids_to_delete))
         # Delete from FTS
         self._conn.execute(
-            f"DELETE FROM memories_fts WHERE rowid IN ({placeholders})",
+            f"DELETE FROM memories_fts WHERE rowid IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
             ids_to_delete,
         )
         # Delete from vec (best effort)
         try:
             self._conn.execute(
-                f"DELETE FROM memories_vec WHERE rowid IN ({placeholders})",
+                f"DELETE FROM memories_vec WHERE rowid IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
                 ids_to_delete,
             )
         except Exception as exc:  # noqa: BLE001 — orphan vec rows must not block the purge
             silent_failure.note("sqlite_store.vec_index_delete", exc)
         # Delete from memories
         cur = self._conn.execute(
-            f"DELETE FROM memories WHERE id IN ({placeholders})",
+            f"DELETE FROM memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
             ids_to_delete,
         )
         self._conn.commit()

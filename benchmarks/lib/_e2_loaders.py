@@ -17,6 +17,17 @@ import json
 import random
 from dataclasses import dataclass
 from pathlib import Path
+from benchmarks.locomo.data import (
+    extract_sessions,
+    load_locomo as _load_locomo_data,
+    parse_evidence_refs,
+)
+from benchmarks.beam.data import (
+    extract_conversation_turns,
+    load_beam_dataset,
+    parse_probing_questions,
+    turns_to_memories,
+)
 
 _ROOT = Path(__file__).resolve().parents[2]
 
@@ -35,7 +46,7 @@ class QueryProbe:
 
 def load_longmemeval(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
     """LongMemEval-S: one memory per haystack session; one probe per question."""
-    from benchmarks.longmemeval.run_benchmark import (
+    from benchmarks.longmemeval.run_benchmark import (  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
         parse_longmemeval_date,
         session_to_memory_content,
     )
@@ -77,11 +88,6 @@ def load_longmemeval(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
 
 def load_locomo(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
     """LoCoMo: one memory per session across all conversations."""
-    from benchmarks.locomo.data import (
-        extract_sessions,
-        load_locomo as _load_locomo_data,
-        parse_evidence_refs,
-    )
 
     data_path = _ROOT / "benchmarks" / "locomo" / "locomo10.json"
     data = _load_locomo_data(str(data_path))
@@ -131,12 +137,6 @@ def _beam_question_targets(q: dict, turn_id_to_key: dict[int, str]) -> list[str]
 
 def load_beam_100k(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
     """BEAM-100K: one memory per (user, assistant) turn pair via turns_to_memories."""
-    from benchmarks.beam.data import (
-        extract_conversation_turns,
-        load_beam_dataset,
-        parse_probing_questions,
-        turns_to_memories,
-    )
 
     ds = load_beam_dataset("100K")
     items: list[SubsampleItem] = []

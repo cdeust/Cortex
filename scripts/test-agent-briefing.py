@@ -25,6 +25,7 @@ from unittest.mock import MagicMock, patch
 repo_root = Path(__file__).resolve().parent.parent
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
+import mcp_server.hooks.agent_briefing as module  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +80,6 @@ def _run_process_event(event: dict, stub_rows: list[dict]) -> tuple[str, str, in
         # Force re-import so patched psycopg is visible inside _fetch_agent_context.
         if "mcp_server.hooks.agent_briefing" in sys.modules:
             del sys.modules["mcp_server.hooks.agent_briefing"]
-        import mcp_server.hooks.agent_briefing as module
 
         try:
             with patch("sys.stdout", stdout_buf), patch("sys.stderr", stderr_buf):

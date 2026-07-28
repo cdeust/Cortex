@@ -35,6 +35,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import random
 
 # Pre-registered hypotheses + thresholds (locked at protocol-write time).
 # Source: docs/provenance/verification-protocol.md §1-6.
@@ -141,7 +142,6 @@ def _bootstrap_ci(
     """Percentile bootstrap 95% CI for the mean. None if <10 values."""
     if not values or len(values) < _MIN_VALUES_FOR_CI:
         return None
-    import random
 
     rng = random.Random(42)
     n = len(values)

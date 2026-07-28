@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from mcp_server.shared.hash import simple_hash
+from mcp_server.core.auto_curator import extract_entities_from_content
 
 if TYPE_CHECKING:
     from mcp_server.core.auto_curator import CurationCluster
@@ -150,7 +151,6 @@ def build_error_success_dossiers(
     id); a given success memory is consumed by at most one pairing
     (``used_success_ids``), so two errors never both claim the same fix.
     """
-    from mcp_server.core.auto_curator import extract_entities_from_content
 
     def _entities(mem: dict[str, Any]) -> set[str]:
         return set(extract_entities_from_content(mem.get("content") or ""))

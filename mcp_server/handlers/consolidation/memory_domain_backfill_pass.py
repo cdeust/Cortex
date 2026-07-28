@@ -29,6 +29,13 @@ from mcp_server.core.memory_domain_backfill import (
     ResolveProjectTagFn,
     derive_memory_domain,
 )
+from mcp_server.shared.domain_mapping import resolve_cwd
+from mcp_server.handlers.backfill_helpers import slug_to_domain
+from mcp_server.infrastructure.pg_store_memory_domain import (
+    tag_memory_orphan,
+    update_memory_domain,
+    list_domainless_memories,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +48,11 @@ DEFAULT_MEMORY_DOMAIN_BACKFILL_LIMIT = 5000
 
 
 def _default_resolve_directory() -> ResolveDirectoryFn:
-    from mcp_server.shared.domain_mapping import resolve_cwd
 
     return resolve_cwd
 
 
 def _default_resolve_project_tag() -> ResolveProjectTagFn:
-    from mcp_server.handlers.backfill_helpers import slug_to_domain
 
     return slug_to_domain
 
@@ -62,10 +67,6 @@ def _process_memory(
     out: dict[str, Any],
 ) -> None:
     """Derive one memory's domain and persist the outcome (fill or orphan-tag)."""
-    from mcp_server.infrastructure.pg_store_memory_domain import (
-        tag_memory_orphan,
-        update_memory_domain,
-    )
 
     memory_id = row["id"]
     directory_context = row.get("directory_context") or ""
@@ -134,9 +135,6 @@ async def run_memory_domain_backfill_pass(
                     overwrites a non-empty ``domain`` (enforced at the
                     SQL layer, ``pg_store_memory_domain.py``).
     """
-    from mcp_server.infrastructure.pg_store_memory_domain import (
-        list_domainless_memories,
-    )
 
     resolve_directory = resolve_directory or _default_resolve_directory()
     resolve_project_tag = resolve_project_tag or _default_resolve_project_tag()

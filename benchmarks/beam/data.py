@@ -30,7 +30,7 @@ def load_beam_dataset(split: str = "100K"):
     array of 10 sub-plans whose chats together form ~10M tokens.
     """
     try:
-        from datasets import load_dataset
+        from datasets import load_dataset  # noqa: PLC0415 — optional dependency ([benchmarks] extra); imported where used so environments without it keep working
 
         if split == "10M":
             return load_dataset("Mohammadta/BEAM-10M", split="10M")

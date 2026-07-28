@@ -42,6 +42,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: E402
+from mcp_server.infrastructure.pg_schema import EFFECTIVE_HEAT_FN  # noqa: E402
+import os  # noqa: E402
+import subprocess  # noqa: E402
 
 RESULTS_ROOT = REPO_ROOT / "benchmarks" / "results" / "decay_sweep"
 
@@ -59,7 +62,6 @@ def _build_effective_heat_ddl(p_factor: float) -> str:
     pg_schema.py rather than duplicating the function body — this avoids
     semantic drift if the production formula ever changes.
     """
-    from mcp_server.infrastructure.pg_schema import EFFECTIVE_HEAT_FN
 
     replaced = _PFACTOR_RE.sub(
         f"p_factor    REAL DEFAULT {p_factor!r}", EFFECTIVE_HEAT_FN, count=1
@@ -89,7 +91,6 @@ def reset_p_factor() -> None:
     """Restore production default by re-applying the schema."""
     # Re-importing the schema module and applying EFFECTIVE_HEAT_FN
     # restores the canonical 0.99787 default.
-    from mcp_server.infrastructure.pg_schema import EFFECTIVE_HEAT_FN
 
     store = PgMemoryStore()
     try:
@@ -107,7 +108,7 @@ def run_beam(quick: bool) -> dict:
 
     Returns: {"mrr": float, "r5": float, "r10": float, "abilities": {...}}
     """
-    from benchmarks.beam.run_benchmark import run_benchmark
+    from benchmarks.beam.run_benchmark import run_benchmark  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
     buf = io.StringIO()
     limit = 3 if quick else None  # 3 conversations is enough to detect signal
@@ -212,8 +213,6 @@ def _collect_provenance() -> dict:
     commit produced it, which cost a day of factor isolation.
     Credentials are stripped from the DB URL before recording.
     """
-    import os
-    import subprocess
 
     try:
         sha = subprocess.run(

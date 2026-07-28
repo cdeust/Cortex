@@ -37,6 +37,11 @@ from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
+from mcp_server.core import knowledge_graph, source_monitoring, habituation
+from mcp_server.core.hierarchical_predictive_coding import compute_hierarchical_novelty
+from mcp_server.core.predictive_coding_signals import extract_sensory_features
+import json as _json
+import numpy as _np
 
 
 # Textual-overlap fraction above which a near-duplicate candidate counts
@@ -131,7 +136,6 @@ def compute_entity_info(
     content: str, store: MemoryStore
 ) -> tuple[list[dict], list[str], set[str], float]:
     """Extract entities and compute entity novelty score."""
-    from mcp_server.core import knowledge_graph
 
     extracted = knowledge_graph.extract_entities(content)
     names = [e["name"] for e in extracted]
@@ -164,10 +168,6 @@ def _hierarchical_novelty_score(
     Kept behind WRITE_GATE_HIERARCHICAL=False pending an L0/L2 redesign;
     any change must re-run benchmarks/gate_precision/run_benchmark.py.
     """
-    from mcp_server.core.hierarchical_predictive_coding import (
-        compute_hierarchical_novelty,
-    )
-    from mcp_server.core.predictive_coding_signals import extract_sensory_features
 
     features = [
         extract_sensory_features(m["content"]) for m in recent if m.get("content")
@@ -395,7 +395,6 @@ def try_block_replica_upsert(
                    maintained.
     # contract: zetetic-team-subagents memory/contract.md §8b
     """
-    import json as _json
 
     tag_set = {str(t) for t in tags}
     if "memory-replica" not in tag_set:
@@ -431,7 +430,6 @@ def try_block_replica_upsert(
     existing_id = rows[0]["id"] if isinstance(rows[0], dict) else rows[0][0]
 
     # Refresh content, embedding, tags, source; preserve heat and is_protected.
-    import numpy as _np
 
     emb_bytes = None
     if embedding is not None:
@@ -598,8 +596,6 @@ def _build_insert_record(
     # for (it landed on this column after the design's audit commit). See
     # /memories/engineer/inc6.5-provenance-verifier.md for the full rationale.
     try:
-        from mcp_server.core import source_monitoring
-
         record["source_attribution"] = source_monitoring.classify_source(
             content, source_field=source
         ).attribution
@@ -611,8 +607,6 @@ def _build_insert_record(
     # gate (signature_repeat_stats -> response decrement, Rankin 2009).
     # Best-effort — a signature failure must never block a write.
     try:
-        from mcp_server.core import habituation
-
         record["stimulus_signature"] = habituation.stimulus_signature(content)
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
         silent_failure.note("remember_helpers.stimulus_signature", exc)

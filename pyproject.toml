@@ -180,6 +180,26 @@ select = [
     # `# noqa: E501 — <reason>` only for unsplittable tokens (URLs,
     # hashes, verbatim log/schema lines).
     "E501",
+    # PLC0415 import-outside-top-level (issue #197, family 4): imports live
+    # at module top so the import graph is static and a broken module fails
+    # at boot, not mid-operation. A function-level import survives only with
+    # a per-site `# noqa: PLC0415 — <reason>` naming one of: an optional
+    # dependency or a module whose top-level closure hard-imports one
+    # (importing it eagerly would break installs without that extra), an
+    # ImportError-probe boundary (the except arm IS the degraded mode), an
+    # import cycle (partner named; the pre-existing #233 family), a hook
+    # latency boundary (per-event hook processes boot in ~0.05 s vs ~0.6 s
+    # for the registry closure, measured 2026-07-28), or a deferral the
+    # module itself documents.
+    "PLC0415",
+    # S608 hardcoded-sql-expression (issue #197, family 4): every value
+    # crosses to the store as a bound parameter; the only interpolated SQL
+    # fragments are in-code literals or identifiers gated by an in-code
+    # allowlist that REFUSES unknown names — never escaping
+    # (docs/ASSURANCE-CASE.md §5). Each site carries a per-site
+    # `# noqa: S608 — <mechanism>` naming which of those forms it uses, so
+    # any NEW string-built SQL fails CI until it states its mechanism.
+    "S608",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -191,9 +211,17 @@ select = [
 # the contract away from the assertion site and adds nothing a reader needs
 # (ruff's own default exempts assert-heavy test idioms poorly; 1,216 sites
 # measured 2026-07-28). E501 is NOT ignored in tests: long lines are equally
-# unreadable there, and every finding was rewrapped. The production-code
-# bans (mcp_server/) stay fully enforced.
-"tests_py/**" = ["S110", "BLE001", "PLR2004"]
+# unreadable there, and every finding was rewrapped. PLC0415 is ignored in
+# tests because a function-level import in a test IS the fixture mechanism:
+# deferring the module under test past monkeypatching/env setup, importing
+# inside the test so an optional-backend ImportError skips rather than kills
+# collection, and keeping each test's dependency surface local to it
+# (745 sites measured 2026-07-28). S608 is ignored in tests because the
+# interpolated SQL there is fixture setup/inspection against a test-owned
+# throwaway database — the assertion is the boundary, and no untrusted input
+# exists (6 sites measured 2026-07-28). The production-code bans
+# (mcp_server/) stay fully enforced.
+"tests_py/**" = ["S110", "BLE001", "PLR2004", "PLC0415", "S608"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests_py"]

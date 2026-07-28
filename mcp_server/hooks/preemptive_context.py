@@ -125,7 +125,7 @@ def _prime_file_memories(file_path: str) -> int:
     Returns number of memories primed.
     """
     try:
-        import psycopg
+        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return 0
 

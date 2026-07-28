@@ -7,8 +7,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core import thermodynamics, write_gate
-from mcp_server.core import write_class as write_class_module
+from mcp_server.core import (
+    thermodynamics,
+    write_gate,
+    write_class as write_class_module,
+)
 from mcp_server.errors import ValidationError
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.core.domain_detector import detect_domain
@@ -33,6 +36,8 @@ from mcp_server.infrastructure.memory_config import (
 )
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.profile_store import load_profiles
+from mcp_server.shared.domain_mapping import resolve_cwd, resolve_domain as resolve_hint
+from mcp_server.shared.content_hardening import harden_content
 
 __all__ = ["schema", "handler"]
 
@@ -48,10 +53,6 @@ def _get_store() -> MemoryStore:
 
 
 def _resolve_domain(directory: str, domain: str) -> str:
-    from mcp_server.shared.domain_mapping import (
-        resolve_cwd,
-        resolve_domain as resolve_hint,
-    )
 
     # Shannon: cwd is the minimum sufficient statistic for domain identity.
     # Try git-root resolution first (most reliable), then profile detection fallback.
@@ -125,7 +126,6 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     # Phase 7: harden user-controlled content at the ingestion boundary
     # (NFC normalization, control/bidi strip, byte cap).
-    from mcp_server.shared.content_hardening import harden_content
 
     args["content"] = harden_content(args["content"])
     if not args["content"]:

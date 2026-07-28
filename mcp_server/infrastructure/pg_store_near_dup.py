@@ -73,7 +73,7 @@ def list_candidate_pairs(
                     by ``(id_a, id_b)`` for deterministic downstream
                     stratified sampling.
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     sql = """
         WITH anchors AS (
@@ -126,7 +126,7 @@ def fetch_contents(conn: Connection, ids: list[int]) -> dict[int, str]:
                     caller must handle a missing key, not assume
                     completeness.
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     if not ids:
         return {}
@@ -154,7 +154,7 @@ def fetch_member_stats(conn: Connection, ids: list[int]) -> dict[int, dict]:
                     still present in ``current_memories``; missing ids
                     (superseded concurrently) are simply absent.
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     if not ids:
         return {}

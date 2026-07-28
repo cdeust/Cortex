@@ -9,12 +9,10 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from psycopg import Connection
-
-from typing import Any
 
 
 def list_pages_for_decay(
@@ -29,7 +27,7 @@ def list_pages_for_decay(
     ``include_archived`` is True (only useful to detect revivals,
     which we handle via the citation trigger anyway).
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     states = ["active", "area"]
     if include_archived:
@@ -109,7 +107,7 @@ def get_claim_file_refs_for_pages(
     Joins wiki.pages → memories → wiki.claim_events; pulls evidence_refs
     of kind='file'. Returns {page_id: [file_path, ...]}.
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     if not page_ids:
         return {}

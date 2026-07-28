@@ -11,6 +11,7 @@ Pure business logic — no I/O.
 """
 
 from __future__ import annotations
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # ── Defaults ──────────────────────────────────────────────────────────────
 
@@ -92,7 +93,6 @@ def spread_activation(
 
     Returns dict of {entity_id: activation_score} for all reached entities.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.SPREADING_ACTIVATION):
         # No-op: only seeds activated, no propagation.

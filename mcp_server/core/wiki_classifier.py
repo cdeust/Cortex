@@ -52,6 +52,9 @@ from mcp_server.core.wiki_kind_detection import (
 )
 from mcp_server.core.wiki_title import derive_title, slugify as _slugify
 from mcp_server.observability import silent_failure
+from mcp_server.core.wiki_rule_engine import apply_rules
+from mcp_server.shared.wiki_classification import Classification, Generator
+from mcp_server.core.wiki_axis_registry import AXIS_PROVENANCE, get_registry
 
 __all__ = [
     "classify_memory",
@@ -135,7 +138,6 @@ def _apply_user_rules(content: str, tags: list[str] | None):
     rules = _load_user_rules()
     if not rules:
         return None
-    from mcp_server.core.wiki_rule_engine import apply_rules
 
     match = apply_rules(content, tags, rules)
     if match.matched_rule is None:
@@ -305,7 +307,6 @@ def classify_memory(
       5. Positive scoring — ≥ 4 of 8 signals, unless an explicit knowledge
          tag bypasses.
     """
-    from mcp_server.shared.wiki_classification import Classification, Generator
 
     legacy_kind = _classify_to_legacy_kind(content, tags)
     if legacy_kind is None:
@@ -320,7 +321,6 @@ def classify_memory(
     # requires it. The registry entry's ``requires_generator`` flag is the
     # source of truth — no hardcoded set of provenance names here.
     generator: Generator | None = None
-    from mcp_server.core.wiki_axis_registry import AXIS_PROVENANCE, get_registry
 
     prov_value = get_registry().get(AXIS_PROVENANCE, provenance)
     if prov_value is not None and prov_value.requires_generator:

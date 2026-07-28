@@ -53,6 +53,7 @@ from typing import Any
 from mcp_server.core.curation import identify_derivable_facts
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
+from mcp_server.handlers.remember import handler as remember_handler
 
 logger = logging.getLogger(__name__)
 
@@ -236,7 +237,6 @@ async def _derive_one(
     corpus) or "derived_rejected" (gate said no -- a valid outcome) or
     "derived_error" (the remember call itself raised).
     """
-    from mcp_server.handlers.remember import handler as remember_handler
 
     src_ids = _provenance_memory_ids(store, rel)
     tags = ["derived", marker] + [f"derived-src:{mid}" for mid in src_ids]

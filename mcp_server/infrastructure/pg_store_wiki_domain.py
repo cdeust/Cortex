@@ -34,7 +34,7 @@ def list_catchall_pages_with_sources(
                     ``wiki.page_sources.source_path`` values (empty list
                     when the page has none).
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     sql = """
     SELECT p.id, p.domain,

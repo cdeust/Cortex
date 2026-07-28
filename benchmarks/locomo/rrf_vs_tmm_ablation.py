@@ -55,6 +55,7 @@ from benchmarks.locomo.data import (  # noqa: E402
     extract_sessions,
     CATEGORY_NAMES,
 )
+import os  # noqa: E402
 
 DATA_PATH = "/Users/cdeust/Documents/Developments/personal/Cortex/benchmarks/locomo/locomo10.json"  # noqa: E501 — absolute dataset path, one token with no whitespace to split on
 
@@ -198,10 +199,9 @@ def rrf_fuse(signals, weights):
 
 
 def main():
-    import os
 
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
-    from sentence_transformers import SentenceTransformer
+    from sentence_transformers import SentenceTransformer  # noqa: PLC0415 — optional dependency (sentence-transformers (multi-second model load)); imported where used so environments without it keep working
 
     model_path = os.environ.get("MINILM_PATH", "/tmp/minilm")
     model = SentenceTransformer(model_path)

@@ -20,6 +20,10 @@ import logging
 from typing import Any
 
 from mcp_server.core.write_class import DELIBERATE, classify_write_class
+from mcp_server.infrastructure.pg_store_memory_write_class import (
+    bulk_reclassify_source,
+    list_source_groups_at_default,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +46,6 @@ def _process_source_group(
     out: dict[str, Any],
 ) -> None:
     """Reclassify one source group, journaling only actual changes."""
-    from mcp_server.infrastructure.pg_store_memory_write_class import (
-        bulk_reclassify_source,
-    )
 
     source = row["source"]
     row_count = row["row_count"]
@@ -117,9 +118,6 @@ async def run_write_class_backfill_pass(
                     at the sentinel genuinely resolves to ``deliberate``),
                     so it reclassifies nothing.
     """
-    from mcp_server.infrastructure.pg_store_memory_write_class import (
-        list_source_groups_at_default,
-    )
 
     out: dict[str, Any] = {
         "scanned_groups": 0,

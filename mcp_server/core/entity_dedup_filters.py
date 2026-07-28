@@ -18,7 +18,7 @@ import unicodedata
 from collections import defaultdict
 
 from mcp_server.shared.minhash import MinHash
-from mcp_server.shared.string_distance import osa_distance
+from mcp_server.shared.string_distance import osa_distance, jaro_winkler_similarity
 
 # ── tunable constants (source: graphify graphify/dedup.py) ──────────────────
 ENTROPY_THRESHOLD = 2.5  # bits/char; gate out low-information labels (Shannon 1948)
@@ -166,7 +166,6 @@ def affixes_sandwich_difference(a: str, b: str) -> bool:
     mid_a, mid_b = a[p : len(a) - s], b[p : len(b) - s]
     if not mid_a or not mid_b:
         return False
-    from mcp_server.shared.string_distance import jaro_winkler_similarity
 
     return jaro_winkler_similarity(mid_a, mid_b) < MERGE_THRESHOLD
 
@@ -188,6 +187,5 @@ def shared_prefix_masks_difference(a: str, b: str) -> bool:
     ra, rb = a[p:], b[p:]
     if not ra or not rb:  # one is a prefix of the other → is_suffix_extension's job
         return False
-    from mcp_server.shared.string_distance import jaro_winkler_similarity
 
     return jaro_winkler_similarity(ra, rb) < MERGE_THRESHOLD

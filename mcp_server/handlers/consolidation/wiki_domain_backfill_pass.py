@@ -20,6 +20,12 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any, Callable
+from mcp_server.shared.domain_mapping import _build_registry
+from mcp_server.core.wiki_domain_backfill import derive_page_domain
+from mcp_server.infrastructure.pg_store_wiki_domain import (
+    update_page_domain,
+    list_catchall_pages_with_sources,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +42,6 @@ def _registry_domain_roots() -> dict[str, list[str]]:
     Several repos can share one ``canonical`` (a repo family); each of
     their filesystem roots is a valid containment root for that domain.
     """
-    from mcp_server.shared.domain_mapping import _build_registry
 
     registry = _build_registry()
     roots: dict[str, list[str]] = {}
@@ -76,8 +81,6 @@ def _process_page(
     out: dict[str, Any],
 ) -> None:
     """Derive one page's true domain and, if it differs, persist it."""
-    from mcp_server.core.wiki_domain_backfill import derive_page_domain
-    from mcp_server.infrastructure.pg_store_wiki_domain import update_page_domain
 
     domain = derive_page_domain(page["source_paths"], containing)
     if domain is None or domain == page["domain"]:
@@ -106,9 +109,6 @@ async def run_domain_backfill_pass(
                     writing (dry run) — the returned counts are
                     identical either way.
     """
-    from mcp_server.infrastructure.pg_store_wiki_domain import (
-        list_catchall_pages_with_sources,
-    )
 
     out: dict[str, Any] = {
         "pages_scanned": 0,

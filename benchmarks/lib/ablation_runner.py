@@ -148,19 +148,19 @@ def _parse_metrics(stdout: str) -> BenchMetrics:
 def _resolve_benchmark(bench_id: str, quick: bool) -> tuple[Callable[[], None], int]:
     """Return (callable that runs the benchmark, declared n_queries-or-0)."""
     if bench_id == "longmemeval-s":
-        from benchmarks.longmemeval.run_benchmark import run_benchmark as r
+        from benchmarks.longmemeval.run_benchmark import run_benchmark as r  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
         data_path = _ROOT / "benchmarks" / "longmemeval" / "longmemeval_s.json"
         limit = QUICK_LIMIT if quick else 0
         return (lambda: r(str(data_path), limit=limit, verbose=False), limit)
     if bench_id == "locomo":
-        from benchmarks.locomo.run_benchmark import run_benchmark as r
+        from benchmarks.locomo.run_benchmark import run_benchmark as r  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
         data_path = _ROOT / "benchmarks" / "locomo" / "locomo10.json"
         limit = max(1, QUICK_LIMIT // 10) if quick else None
         return (lambda: r(str(data_path), limit=limit, verbose=False), limit or 0)
     if bench_id == "beam-100K":
-        from benchmarks.beam.run_benchmark import run_benchmark as r
+        from benchmarks.beam.run_benchmark import run_benchmark as r  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
         limit = max(1, QUICK_LIMIT // 10) if quick else None
         return (lambda: r(split="100K", limit=limit, verbose=False), limit or 0)

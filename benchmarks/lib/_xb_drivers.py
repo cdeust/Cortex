@@ -20,6 +20,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from benchmarks.locomo.data import extract_sessions, load_locomo
 
 # source: structural — the K in the reported recall_at_10 metric
 _RECALL_AT_10_K = 10
@@ -29,7 +30,7 @@ _EXPECTED_ARGC = 4
 
 
 def _drive_longmemeval(data_path: str, limit: int) -> dict:
-    from benchmarks.longmemeval.run_benchmark import run_benchmark
+    from benchmarks.longmemeval.run_benchmark import run_benchmark  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
     r = run_benchmark(data_path, limit=limit)
     return {
@@ -42,9 +43,8 @@ def _drive_longmemeval(data_path: str, limit: int) -> dict:
 
 
 def _drive_locomo(data_path: str, limit: int) -> dict:
-    from benchmarks.lib.bench_db import BenchmarkDB
-    from benchmarks.locomo.data import extract_sessions, load_locomo
-    from benchmarks.locomo.run_benchmark import evaluate_conversation
+    from benchmarks.lib.bench_db import BenchmarkDB  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
+    from benchmarks.locomo.run_benchmark import evaluate_conversation  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
     data = load_locomo(data_path)
     if limit:

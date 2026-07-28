@@ -19,6 +19,7 @@ from mcp_server.core.memory_decomposer import (
     decompose_memory,
 )
 from mcp_server.observability import silent_failure
+from mcp_server.core import knowledge_graph, write_post_store
 
 
 def ingest_memory(
@@ -150,8 +151,6 @@ def ingest_memory(
         # broke Phase 2 of the structured context assembler. Running
         # it inline here makes benchmark and production paths consistent.
         try:
-            from mcp_server.core import knowledge_graph, write_post_store
-
             extracted = knowledge_graph.extract_entities(chunk_content)
             write_post_store.persist_entities(extracted, domain, chunk_content, store)
         except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("memory_ingest.entity_extraction")

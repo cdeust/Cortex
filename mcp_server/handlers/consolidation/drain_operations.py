@@ -38,6 +38,9 @@ from .page_io import (
     _scope_anchor_prompt,
     _write_anchor_page,
 )
+from mcp_server.core.wiki_coverage import _project_source_root, audit_domain
+from datetime import datetime, timezone
+from mcp_server.shared.domain_mapping import _build_registry
 
 
 def _optional_source_root(meta: dict[str, Any]) -> str | None:
@@ -51,8 +54,6 @@ def _optional_source_root(meta: dict[str, Any]) -> str | None:
     if not domain or not isinstance(domain, str):
         return None
     try:
-        from mcp_server.core.wiki_coverage import _project_source_root
-
         return _project_source_root(domain)
     except Exception as exc:  # noqa: BLE001 — source-root scope is optional enrichment
         silent_failure.note("consolidation.project_source_root", exc)
@@ -304,13 +305,6 @@ async def drain_missing_anchors(
     Post-condition: up to ``max_drains`` new anchor pages written to disk;
                     ungroundable scopes are omitted (not skipped-with-result).
     """
-    from datetime import datetime, timezone
-
-    from mcp_server.core.wiki_coverage import (
-        _project_source_root,
-        audit_domain,
-    )
-    from mcp_server.shared.domain_mapping import _build_registry
 
     today = today or datetime.now(timezone.utc).date().isoformat()
     domains = sorted({r.canonical for r in _build_registry().repos})

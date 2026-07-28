@@ -8,7 +8,7 @@ Logs every transition to stage_transitions table for timeline visualization.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from mcp_server.core.cascade_advancement import compute_advancement_readiness
 from mcp_server.infrastructure.memory_store import MemoryStore
@@ -144,7 +144,6 @@ def _try_advance(
         # they would have spent in the previous stage (min_dwell hours).
         dwell = _MIN_DWELL.get(stage_name, 1.0)
         remaining_hours = max(0.0, hours - dwell)
-        from datetime import timedelta
 
         new_entered = now - timedelta(hours=remaining_hours)
 

@@ -18,6 +18,7 @@ from mcp_server.core.wiki_axis_registry import (
     get_registry,
     match_axis,
 )
+from mcp_server.core.wiki_axis_registry import AXIS_KIND
 
 # Legacy → modern kind mapping. This is a one-time backward-compat shim
 # (the legacy classifier returns 5 kinds; the modern axis defines 8) and
@@ -54,7 +55,6 @@ def detect_modern_kind(
     legacy kinds when no registered pattern fires, so we always have a
     kind to assign.
     """
-    from mcp_server.core.wiki_axis_registry import AXIS_KIND
 
     matches = match_axis(content, tags, AXIS_KIND, get_registry())
     if matches:

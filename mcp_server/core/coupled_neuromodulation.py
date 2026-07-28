@@ -45,6 +45,7 @@ from mcp_server.core.neuromodulation_channels import (
     compute_norepinephrine_arousal,
     compute_serotonin_exploration,
 )
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # ── Neuromodulatory State ────────────────────────────────────────────────
 
@@ -133,7 +134,6 @@ def update_state(
     Takes current state + operation signals, returns new state with all
     channels updated and cross-coupled. Original not mutated.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.NEUROMODULATION):
         # No-op: state is frozen at the current values; no DA/NE/ACh/5-HT updates.

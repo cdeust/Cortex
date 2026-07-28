@@ -30,7 +30,7 @@ class SqliteRelationshipMixin:
             return 0
         placeholders = ",".join("?" * len(rel_ids))
         self._conn.execute(
-            f"DELETE FROM relationships WHERE id IN ({placeholders})",
+            f"DELETE FROM relationships WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
             tuple(int(r) for r in rel_ids),
         )
         self._conn.commit()

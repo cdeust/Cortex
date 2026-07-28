@@ -134,7 +134,7 @@ def _run_consolidation_pass() -> float:
     """
     # Imported lazily so callers that never pass --with-consolidation don't
     # incur the import cost (and can't be broken by handler-side changes).
-    from mcp_server.handlers import consolidate as consolidate_handler
+    from mcp_server.handlers import consolidate as consolidate_handler  # noqa: PLC0415 — documented deferral: only --with-consolidation callers pay the handler-stack import cost
 
     t0 = time.monotonic()
     asyncio.run(consolidate_handler.handler({}))

@@ -171,7 +171,7 @@ def build_default_registry() -> AxisRegistry:
     this one to build its default seed data — a module-level import
     here would be circular.
     """
-    from mcp_server.core.wiki_axis_defaults import ALL_DEFAULTS
+    from mcp_server.core.wiki_axis_defaults import ALL_DEFAULTS  # noqa: PLC0415 — import cycle with mcp_server.core.wiki_axis_defaults; a top-level import fails at boot
 
     reg = _empty_registry()
     for v in ALL_DEFAULTS:

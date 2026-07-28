@@ -14,6 +14,9 @@ from typing import Any
 
 from mcp_server.errors import McpConnectionError
 from mcp_server.infrastructure.mcp_call_timeout import default_call_timeout_s
+import os
+import shutil
+import pathlib
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +119,6 @@ class MCPClient:
         Args are passed as a list (no shell=True). Environment is
         merged from os.environ + config, not constructed from user input.
         """
-        import os
-        import shutil
 
         raw_command: str = self._config["command"]
         args = self._config.get("args") or []
@@ -512,8 +513,6 @@ class MCPClient:
         for post-hoc investigation. Returns None on any error — logging
         failure must not break the connection.
         """
-        import os
-        import pathlib
 
         try:
             base = pathlib.Path.home() / ".cache" / "cortex" / "mcp-logs"

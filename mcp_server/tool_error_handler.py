@@ -51,6 +51,8 @@ from typing import Any, Callable, Coroutine
 from fastmcp.exceptions import ToolError
 
 from mcp_server.shared.json_native import to_json_native
+from mcp_server.handlers.admission import admit
+from mcp_server.observability import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -184,9 +186,6 @@ async def safe_handler(
     """
     try:
         if tool_name:
-            from mcp_server.handlers.admission import admit
-            from mcp_server.observability import metrics
-
             async with admit(tool_name):
                 with metrics.Timer(
                     "cortex_tool_duration_seconds",
@@ -232,8 +231,6 @@ async def safe_handler(
         error_type, message = _classify_error(exc)
         if tool_name:
             try:
-                from mcp_server.observability import metrics
-
                 metrics.inc_counter(
                     "cortex_tool_calls_total",
                     {"tool": tool_name, "status": "error"},

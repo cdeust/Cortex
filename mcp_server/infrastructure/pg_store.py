@@ -41,6 +41,8 @@ from mcp_server.infrastructure.pg_store_relationships import PgRelationshipMixin
 from mcp_server.infrastructure.pg_store_rules import PgRuleMixin
 from mcp_server.infrastructure.pg_store_stats import PgStatsMixin
 from mcp_server.observability import silent_failure
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.core.temporal import normalize_date_to_iso
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +89,6 @@ def _get_database_url() -> str:
     """
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url or "${" in url:
-        from mcp_server.infrastructure.memory_config import get_memory_settings
-
         url = get_memory_settings().DATABASE_URL
     return url
 
@@ -205,7 +205,6 @@ class PgMemoryStore(
 
     def _open_interactive_pool(self) -> ConnectionPool:
         """Open the hot-path pool on first use."""
-        from mcp_server.infrastructure.memory_config import get_memory_settings
 
         settings = get_memory_settings()
         pool = ConnectionPool(
@@ -221,7 +220,6 @@ class PgMemoryStore(
 
     def _open_batch_pool(self) -> ConnectionPool:
         """Open the batch/long-running pool on first use."""
-        from mcp_server.infrastructure.memory_config import get_memory_settings
 
         settings = get_memory_settings()
         pool = ConnectionPool(
@@ -266,7 +264,6 @@ class PgMemoryStore(
         When ``POOL_DISABLED=true`` the store's persistent ``_conn`` is
         yielded instead (pre-Phase-5 behavior, kill switch per §6).
         """
-        from mcp_server.infrastructure.memory_config import get_memory_settings
 
         if get_memory_settings().POOL_DISABLED:
             yield self._conn
@@ -277,7 +274,6 @@ class PgMemoryStore(
     @contextmanager
     def acquire_batch(self) -> Iterator[psycopg.Connection]:
         """Context manager borrowing a connection from the batch pool."""
-        from mcp_server.infrastructure.memory_config import get_memory_settings
 
         if get_memory_settings().POOL_DISABLED:
             yield self._conn
@@ -325,7 +321,6 @@ class PgMemoryStore(
         When ``POOL_DISABLED`` is set (kill switch), falls back to the
         persistent ``_conn`` — pre-Phase-5 behavior.
         """
-        from mcp_server.infrastructure.memory_config import get_memory_settings
 
         if get_memory_settings().POOL_DISABLED:
             return self._execute_on_conn(self._conn, query, params, **kwargs)
@@ -554,8 +549,6 @@ class PgMemoryStore(
         # Normalize free-form dates to ISO 8601 for proper recency ranking
         raw_created = data.get("created_at")
         if raw_created and isinstance(raw_created, str) and "T" not in raw_created:
-            from mcp_server.core.temporal import normalize_date_to_iso
-
             raw_created = normalize_date_to_iso(raw_created) or raw_created
         heat_base_anchor = data.get("heat_base_set_at") or raw_created or now
         return {
@@ -1152,7 +1145,7 @@ class PgMemoryStore(
         src = "current_memories" if heads_only else "memories"
         emb = self._bytes_to_vector(query_embedding)
         rows = self._execute(
-            "SELECT id, embedding <=> %s AS distance "
+            "SELECT id, embedding <=> %s AS distance "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             f"FROM {src} "
             "WHERE heat_base >= %s AND NOT is_stale AND embedding IS NOT NULL "
             "ORDER BY embedding <=> %s "

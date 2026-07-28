@@ -59,6 +59,7 @@ from mcp_server.shared.linear_algebra import (
     scale,
     subtract,
 )
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # ── Configuration ─────────────────────────────────────────────────────────
 # All constants below are hand-tuned for this system's operating regime
@@ -173,7 +174,6 @@ def orthogonalize_pair(
     One step of gradual rotation per call. Multiple sleep cycles
     achieve full separation. Returns (new_a, new_b, remaining_sim).
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.INTERFERENCE):
         # No-op: identity; no orthogonalization.
@@ -240,7 +240,6 @@ def compute_retrieval_suppression(
     Returns:
         Suppressed retrieval score [0, target_score].
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.INTERFERENCE):
         # No-op: no lateral suppression at retrieval.

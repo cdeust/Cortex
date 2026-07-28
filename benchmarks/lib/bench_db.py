@@ -16,8 +16,10 @@ import os
 from typing import Any, Callable
 
 from mcp_server.core.memory_ingest import ingest_memories_batch
-from mcp_server.core.pg_recall import assemble_context as pg_assemble_context
-from mcp_server.core.pg_recall import recall as pg_recall
+from mcp_server.core.pg_recall import (
+    assemble_context as pg_assemble_context,
+    recall as pg_recall,
+)
 from mcp_server.core.reranker import ensure_reranker_loaded
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.pg_store import PgMemoryStore
@@ -122,7 +124,7 @@ class BenchmarkDB:
         # var (playbook §8); benchmarks/lib/ablation_runner sets it per row.
         run_id = os.environ.get("CORTEX_BENCH_DETERMINISTIC_RUN_ID")
         if run_id and self._on_connection_open is None:
-            from benchmarks.lib import db_setup
+            from benchmarks.lib import db_setup  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
             db_setup.apply_deterministic_session(self._store._conn, run_id=run_id)
         elif self._on_connection_open is not None:
@@ -247,7 +249,8 @@ class BenchmarkDB:
             batch = self._memory_ids[i : i + batch_size]
             placeholders = ",".join(["%s"] * len(batch))
             self._store._conn.execute(
-                f"DELETE FROM memories WHERE id IN ({placeholders})", batch
+                f"DELETE FROM memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
+                batch,
             )
         self._store._conn.commit()
         self._memory_ids.clear()

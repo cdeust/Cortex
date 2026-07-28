@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import sys
 from typing import Any
+import asyncio
 
 _LOG_PREFIX = "[methodology-compaction-hook]"
 
@@ -49,14 +50,12 @@ def process_event(event: dict[str, Any] | None) -> None:
     Creates an auto-checkpoint capturing whatever state is available.
     """
     try:
-        import asyncio
-
-        from mcp_server.handlers.checkpoint import handler as checkpoint_handler
-        from mcp_server.handlers.injection_receipts import (
+        from mcp_server.handlers.checkpoint import handler as checkpoint_handler  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+        from mcp_server.handlers.injection_receipts import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             session_id_from_transcript,
         )
-        from mcp_server.infrastructure.memory_config import get_memory_settings
-        from mcp_server.infrastructure.memory_store import MemoryStore
+        from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+        from mcp_server.infrastructure.memory_store import MemoryStore  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         # Increment epoch BEFORE saving checkpoint so the new epoch is recorded
         settings = get_memory_settings()
@@ -88,7 +87,7 @@ def process_event(event: dict[str, Any] | None) -> None:
         # Run cascade advancement on compaction — consolidation during rest
         # (Dewar et al. 2012: rest after encoding boosts retention)
         try:
-            from mcp_server.handlers.consolidation.cascade import (
+            from mcp_server.handlers.consolidation.cascade import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
                 run_cascade_advancement,
             )
 

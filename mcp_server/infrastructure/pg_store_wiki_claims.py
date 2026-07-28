@@ -72,7 +72,7 @@ def delete_claims_for_memory(conn: Connection, memory_id: int) -> int:
 
 def get_claims_for_memory(conn: Connection, memory_id: int) -> list[dict]:
     """Return all claim_events derived from a single memory."""
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
@@ -143,7 +143,7 @@ def get_claims_by_entity(
     Used by the resolver to find supersedes / conflict candidates.
     Excludes the claims being resolved (avoid self-matches).
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     if not entity_ids:
         return {}

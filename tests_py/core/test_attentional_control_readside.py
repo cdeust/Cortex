@@ -148,15 +148,17 @@ def test_bounded_nudge_does_not_override_strong_match():
 
 def test_reuses_allocate_attention(monkeypatch):
     # The stage must delegate to A1's pure allocate_attention, not reimplement.
+    # Patch the name where recall_pipeline binds it: the import is at module
+    # top (#197 family 4), so patching the defining module no longer reaches
+    # the already-bound reference.
     called = {"n": 0}
-    import mcp_server.core.attentional_control as ac
 
-    real = ac.allocate_attention
+    real = rp.allocate_attention
 
     def _spy(*a, **k):
         called["n"] += 1
         return real(*a, **k)
 
-    monkeypatch.setattr(ac, "allocate_attention", _spy)
+    monkeypatch.setattr(rp, "allocate_attention", _spy)
     rp.attentional_focus_rerank(_cands(), "memory decay half-life")
     assert called["n"] == 1

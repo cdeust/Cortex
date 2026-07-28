@@ -125,7 +125,7 @@ class _EmbeddingLifecycleMixin:
     def _detect_device() -> str:
         """Probe hardware: CUDA > MPS > CPU."""
         try:
-            import torch
+            import torch  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
             if torch.cuda.is_available():
                 logger.info("GPU auto-detect: CUDA available")
@@ -172,7 +172,7 @@ class _EmbeddingLifecycleMixin:
         local-only cache miss.
         """
         try:
-            from huggingface_hub.errors import LocalEntryNotFoundError
+            from huggingface_hub.errors import LocalEntryNotFoundError  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
             return (OSError, LocalEntryNotFoundError)
         except ImportError:
@@ -188,7 +188,7 @@ class _EmbeddingLifecycleMixin:
         first import (reproduced 2026-07-03). source: kwarg added in
         sentence-transformers v3.0.0.
         """
-        from sentence_transformers import SentenceTransformer
+        from sentence_transformers import SentenceTransformer  # noqa: PLC0415 — optional dependency (sentence-transformers (multi-second model load)); imported where used so environments without it keep working
 
         kwargs: dict[str, Any] = {
             "device": device,

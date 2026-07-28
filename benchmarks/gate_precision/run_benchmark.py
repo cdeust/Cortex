@@ -63,6 +63,9 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from benchmarks.lib.bench_db import BenchmarkDB
+from mcp_server.core import write_gate_calibration
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.handlers.remember_helpers import evaluate_gate
 
 DATA_PATH = Path(__file__).parent.parent / "longmemeval" / "longmemeval_s.json"
 RESULTS_DIR = Path(__file__).parent.parent / "results" / "gate_precision"
@@ -150,8 +153,6 @@ def build_dataset(
 
 def _set_mode(mode: str) -> None:
     """Toggle the hierarchical flag and bust the settings/calibration caches."""
-    from mcp_server.core import write_gate_calibration
-    from mcp_server.infrastructure.memory_config import get_memory_settings
 
     if mode == "hierarchical":
         os.environ[HIER_FLAG] = "1"
@@ -163,8 +164,6 @@ def _set_mode(mode: str) -> None:
 
 def run_mode(mode: str, seeds: list[str], candidates: list[dict]) -> list[dict]:
     """Seed a clean store, run evaluate_gate on every candidate."""
-    from mcp_server.handlers.remember_helpers import evaluate_gate
-    from mcp_server.infrastructure.memory_config import get_memory_settings
 
     _set_mode(mode)
     assert get_memory_settings().WRITE_GATE_HIERARCHICAL == (mode == "hierarchical")
@@ -270,8 +269,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=DATA_PATH)
     args = parser.parse_args()
-
-    from mcp_server.infrastructure.memory_config import get_memory_settings
 
     default_threshold = get_memory_settings().WRITE_GATE_THRESHOLD
     corpus = extract_corpus(args.data)

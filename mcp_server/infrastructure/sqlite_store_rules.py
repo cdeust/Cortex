@@ -64,7 +64,7 @@ class SqliteRuleMixin:
         if sets:
             vals.append(rule_id)
             self._conn.execute(
-                f"UPDATE memory_rules SET {', '.join(sets)} WHERE id = ?",
+                f"UPDATE memory_rules SET {', '.join(sets)} WHERE id = ?",  # noqa: S608 — column names filtered against the allowed set; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 tuple(vals),
             )
             self._conn.commit()

@@ -83,7 +83,7 @@ FAKE_NAMES = ["Veritanox", "Crepusculum"]
 
 def extract_text(pdf_path: str) -> str:
     """Extract full text from PDF."""
-    import pymupdf
+    import pymupdf  # noqa: PLC0415 — optional dependency ([benchmarks] extra); imported where used so environments without it keep working
 
     doc = pymupdf.open(pdf_path)
     return "".join(page.get_text() for page in doc)

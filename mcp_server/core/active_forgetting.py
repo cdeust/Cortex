@@ -91,6 +91,7 @@ from typing import Iterable
 
 from mcp_server.core.cascade_stages import get_stage_properties_by_name
 from mcp_server.core.curation import MERGE_THRESHOLD
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # Near-duplicate cutoff for the redundancy gate. NOT a free constant: it is the
 # committed curation cosine cutoff at which the write path already declares two
@@ -331,7 +332,6 @@ def should_extinguish(
     when the mechanism is lesioned, so no extinction tag is ever grown → no
     behaviour change).
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.EXTINCTION):
         return False

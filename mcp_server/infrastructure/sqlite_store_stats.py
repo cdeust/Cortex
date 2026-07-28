@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from typing import Any
+from datetime import datetime, timezone
 
 
 class SqliteStatsMixin:
@@ -70,8 +71,6 @@ class SqliteStatsMixin:
         last_seen = row["last_seen"]
         if last_seen:
             try:
-                from datetime import datetime, timezone
-
                 dt = datetime.fromisoformat(str(last_seen))
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
@@ -126,7 +125,7 @@ class SqliteStatsMixin:
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._conn.execute(
-            f"SELECT * FROM {src} WHERE access_count >= ? "
+            f"SELECT * FROM {src} WHERE access_count >= ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "AND NOT is_stale ORDER BY last_accessed DESC LIMIT ?",
             (min_access_count, limit),
         ).fetchall()
@@ -290,7 +289,7 @@ class SqliteStatsMixin:
         params.append(limit)
         where = " AND ".join(conditions)
         rows = self._conn.execute(
-            f"SELECT * FROM current_memories WHERE {where} "
+            f"SELECT * FROM current_memories WHERE {where} "  # noqa: S608 — WHERE built from in-code literal fragments; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "ORDER BY created_at DESC LIMIT ?",
             params,
         ).fetchall()

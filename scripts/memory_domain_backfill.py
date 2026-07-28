@@ -34,14 +34,14 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+from mcp_server.handlers.consolidation.memory_domain_backfill_pass import (  # noqa: E402
+    run_memory_domain_backfill_pass,
+)
+from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
+from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
 
 
 async def _run(apply: bool, limit: int, include_orphans: bool) -> dict:
-    from mcp_server.handlers.consolidation.memory_domain_backfill_pass import (
-        run_memory_domain_backfill_pass,
-    )
-    from mcp_server.infrastructure.memory_config import get_memory_settings
-    from mcp_server.infrastructure.memory_store import get_shared_store
 
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)

@@ -57,7 +57,7 @@ class SqliteReceiptsMixin:
             return []
         placeholders = ",".join("?" for _ in receipt_ids)
         rows = self._conn.execute(
-            "SELECT r.id AS receipt_id, r.session_id, r.channel, r.emitted_at,"
+            "SELECT r.id AS receipt_id, r.session_id, r.channel, r.emitted_at,"  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
             "       i.memory_id, i.rank, i.score,"
             "       m.id AS memory_row_id, m.content,"
             "       m.created_at AS memory_created_at,"

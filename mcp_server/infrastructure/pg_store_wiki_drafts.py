@@ -9,13 +9,12 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from psycopg import Connection
 
 import json
-from typing import Any
 
 
 from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
@@ -60,7 +59,7 @@ def insert_draft(conn: Connection, draft: dict[str, Any]) -> int:
 
 
 def get_draft(conn: Connection, draft_id: int) -> dict | None:
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("SELECT * FROM wiki.drafts WHERE id = %s", (draft_id,))
@@ -74,7 +73,7 @@ def list_drafts(
     kind: str | None = None,
     limit: int = 50,
 ) -> list[dict]:
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     where: list[str] = []
     params: list = []
@@ -88,7 +87,7 @@ def list_drafts(
     sql = f"""
     SELECT * FROM wiki.drafts {where_sql}
     ORDER BY created_at DESC LIMIT %s
-    """
+    """  # noqa: S608 — WHERE built from in-code literal fragments; values are bound parameters (docs/ASSURANCE-CASE.md §5)
     params.append(limit)
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(sql, params)
@@ -139,7 +138,7 @@ def update_draft(
     if not sets:
         return False
     params.append(draft_id)
-    sql = f"UPDATE wiki.drafts SET {', '.join(sets)} WHERE id = %s"
+    sql = f"UPDATE wiki.drafts SET {', '.join(sets)} WHERE id = %s"  # noqa: S608 — SET fragments are in-code literals appended per known field; values are bound parameters (docs/ASSURANCE-CASE.md §5)
     with conn.cursor() as cur:
         cur.execute(sql, params)
         return cur.rowcount > 0
@@ -173,7 +172,7 @@ def find_draft_for_source(
     conn: Connection, *, memory_id: int | None = None, concept_id: int | None = None
 ) -> dict | None:
     """Return the most recent draft for a given source, or None."""
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     if not memory_id and not concept_id:
         return None

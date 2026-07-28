@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from mcp_server.handlers.remember import handler as h_remember
+from mcp_server.handlers.wiki_pipeline import handler as h_pipeline
 
 
 schema = {
@@ -208,8 +210,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     dry_run = bool(args.get("dry_run", False))
     run_pipeline = bool(args.get("run_pipeline", True))
 
-    from mcp_server.handlers.remember import handler as h_remember
-
     files = _collect_files(repo_root, max_files, max_bytes)
     if not files:
         return {
@@ -274,8 +274,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     if run_pipeline and imported > 0:
         try:
-            from mcp_server.handlers.wiki_pipeline import handler as h_pipeline
-
             pipe = await h_pipeline({"limit_per_stage": 1000})
             summary["pipeline"] = {
                 "claims_inserted": pipe.get("claims_inserted", 0),

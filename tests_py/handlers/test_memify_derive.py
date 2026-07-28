@@ -111,7 +111,7 @@ class TestDerivationCreatesProvenance:
     async def test_stored_fact_carries_relationship_and_source_tags(self, monkeypatch):
         calls: list[dict] = []
         monkeypatch.setattr(
-            "mcp_server.handlers.remember.handler",
+            "mcp_server.handlers.consolidation.memify_derive.remember_handler",
             _make_remember(
                 {"stored": True, "action": "stored", "memory_id": 99}, calls
             ),
@@ -146,7 +146,7 @@ class TestDerivationCreatesProvenance:
     async def test_low_weight_relationship_produces_no_candidate(self, monkeypatch):
         calls: list[dict] = []
         monkeypatch.setattr(
-            "mcp_server.handlers.remember.handler",
+            "mcp_server.handlers.consolidation.memify_derive.remember_handler",
             _make_remember({"stored": True, "action": "stored"}, calls),
         )
         store = _FakeStore(
@@ -170,7 +170,7 @@ class TestIdempotence:
     async def test_existing_marker_skips_without_calling_gate(self, monkeypatch):
         calls: list[dict] = []
         monkeypatch.setattr(
-            "mcp_server.handlers.remember.handler",
+            "mcp_server.handlers.consolidation.memify_derive.remember_handler",
             _make_remember({"stored": True, "action": "stored"}, calls),
         )
         store = _FakeStore(
@@ -193,7 +193,7 @@ class TestIdempotence:
         appears in get_memories_by_tag, so the second run must not re-derive."""
         calls: list[dict] = []
         monkeypatch.setattr(
-            "mcp_server.handlers.remember.handler",
+            "mcp_server.handlers.consolidation.memify_derive.remember_handler",
             _make_remember({"stored": True, "action": "stored"}, calls),
         )
         rel = _rel()
@@ -221,7 +221,7 @@ class TestIdempotence:
         just can't dedupe against history within this call."""
         calls: list[dict] = []
         monkeypatch.setattr(
-            "mcp_server.handlers.remember.handler",
+            "mcp_server.handlers.consolidation.memify_derive.remember_handler",
             _make_remember({"stored": True, "action": "stored"}, calls),
         )
         store = _FakeStore(
@@ -239,7 +239,7 @@ class TestBound:
     async def test_attempts_capped_at_max_derivations_per_run(self, monkeypatch):
         calls: list[dict] = []
         monkeypatch.setattr(
-            "mcp_server.handlers.remember.handler",
+            "mcp_server.handlers.consolidation.memify_derive.remember_handler",
             _make_remember({"stored": True, "action": "stored"}, calls),
         )
         monkeypatch.setattr(memify_derive, "_MAX_DERIVATIONS_PER_RUN", 2)
@@ -261,7 +261,7 @@ class TestGateRejectionIsValid:
     async def test_gate_rejection_counted_never_forced(self, monkeypatch):
         calls: list[dict] = []
         monkeypatch.setattr(
-            "mcp_server.handlers.remember.handler",
+            "mcp_server.handlers.consolidation.memify_derive.remember_handler",
             _make_remember(
                 {"stored": False, "action": "rejected", "reason": "low_novelty"},
                 calls,
@@ -280,7 +280,7 @@ class TestGateRejectionIsValid:
         async def _raising(args: dict) -> dict:
             raise RuntimeError("boom")
 
-        monkeypatch.setattr("mcp_server.handlers.remember.handler", _raising)
+        monkeypatch.setattr(memify_derive, "remember_handler", _raising)
         store = _FakeStore(relationships=[_rel()], entities=_entities())
 
         stats = await run_memify_derivation_cycle(store)

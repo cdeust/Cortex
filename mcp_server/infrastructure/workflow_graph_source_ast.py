@@ -30,6 +30,8 @@ from mcp_server.infrastructure.ap_bridge import (
     resolve_graph_path,
     resolve_graph_paths,
 )
+from mcp_server.infrastructure.memory_config import get_memory_settings
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +43,6 @@ def _ap_sync_timeout_s() -> float:
     derivation comment — floored at the in-loop 3600 s AP-call ceiling
     plus a drain margin). Read lazily so env overrides apply per-process.
     """
-    from mcp_server.infrastructure.memory_config import get_memory_settings
 
     return float(get_memory_settings().AP_SYNC_RESULT_TIMEOUT_S)
 
@@ -98,7 +99,6 @@ class _SyncLoop:
         if self._loop is None or self._loop.is_closed():
             self._loop = asyncio.new_event_loop()
             loop = self._loop  # non-Optional local captured by the loop thread
-            import threading
 
             def _run_forever():
                 asyncio.set_event_loop(loop)

@@ -4,6 +4,7 @@ Groups wiki pages by domain then kind into a structured markdown index.
 """
 
 from __future__ import annotations
+from mcp_server.core.wiki_layout import PAGE_KINDS
 
 
 # source: structural — a wiki path is kind/filename (2 parts) or
@@ -19,7 +20,6 @@ def build_index(page_paths: list[str]) -> str:
     (``notes/foo.md``) and domain-scoped (``notes/cortex/foo.md``) paths.
     Pure function — no I/O.
     """
-    from mcp_server.core.wiki_layout import PAGE_KINDS
 
     # Parse paths into (kind, domain, filename, full_path)
     entries: list[tuple[str, str, str, str]] = []

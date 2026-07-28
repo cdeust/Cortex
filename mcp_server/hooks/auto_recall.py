@@ -134,8 +134,8 @@ def _should_skip(query: str) -> bool:
 def _connect():
     """Open the hook's PG connection; None when PG is unreachable."""
     try:
-        import psycopg
-        from psycopg.rows import dict_row
+        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from psycopg.rows import dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return None
     try:
@@ -213,7 +213,7 @@ def _recall_memories(conn, query: str) -> list[dict]:
 def _backend_is_sqlite() -> bool:
     """True when the resolved store backend is the SQLite store."""
     try:
-        from mcp_server.infrastructure.backend_marker import effective_backend
+        from mcp_server.infrastructure.backend_marker import effective_backend  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
         return effective_backend(os.environ) == "sqlite"
     except ImportError:
@@ -235,7 +235,7 @@ def _fts_query_from_prompt(query: str) -> str:
     bounded upstream by the existing ``query[:200]`` cap — no new
     constant introduced.
     """
-    from mcp_server.shared.text import STOPWORDS
+    from mcp_server.shared.text import STOPWORDS  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
     # \W+ split mirrors shared.text._SPLIT_RE (kept private there).
     terms = [
@@ -285,7 +285,7 @@ def _recall_memories_sqlite(store, query: str) -> list[dict]:
 def _process_event_sqlite(event: dict[str, Any], query: str) -> None:
     """Inject relevant memories from the SQLite store; exit 0 always."""
     try:
-        from mcp_server.infrastructure.memory_store import get_shared_store
+        from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         store = get_shared_store()
         memories = _recall_memories_sqlite(store, query)
@@ -369,7 +369,7 @@ def _refresh_session_registry(event: dict[str, Any]) -> None:
     every prompt regardless of whether THIS prompt triggers a recall.
     """
     try:
-        from mcp_server.infrastructure.session_registry import write_session
+        from mcp_server.infrastructure.session_registry import write_session  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         write_session(session_id_from_transcript(event.get("transcript_path")))
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal

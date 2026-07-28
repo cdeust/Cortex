@@ -63,7 +63,7 @@ def main() -> None:
 
     # Lazy import so a failure here doesn't crash the spawn loop.
     try:
-        from mcp_server.handlers.consolidate import handler
+        from mcp_server.handlers.consolidate import handler  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
     except Exception as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
         print(f"[bg-consolidate] import failed: {exc}", file=sys.stderr)
         sys.exit(1)

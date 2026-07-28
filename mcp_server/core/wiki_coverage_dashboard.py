@@ -27,6 +27,7 @@ from mcp_server.core.wiki_coverage import (
     audit_files,
 )
 from mcp_server.observability import silent_failure
+from mcp_server.shared.domain_mapping import _build_registry
 
 
 @dataclass(frozen=True)
@@ -267,8 +268,6 @@ def write_dashboards(
         return {}
     if domains is None:
         try:
-            from mcp_server.shared.domain_mapping import _build_registry
-
             domains = sorted({r.canonical for r in _build_registry().repos})
         except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
             silent_failure.note("wiki_coverage_dashboard.registry", exc)

@@ -30,6 +30,7 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from benchmarks.lib.retriever import BenchmarkRetriever
 
 SPLITS = [
     "Accurate_Retrieval",
@@ -89,7 +90,6 @@ class MABRetriever:
     """Chunk-and-retrieve adapter wrapping shared BenchmarkRetriever."""
 
     def __init__(self, chunk_size: int = 500):
-        from benchmarks.lib.retriever import BenchmarkRetriever
 
         self._retriever = BenchmarkRetriever()
         self.chunk_size = chunk_size
@@ -118,7 +118,7 @@ class MABRetriever:
 
 def run_benchmark(splits: list[str] | None = None, limit: int | None = None):
     """Run MemoryAgentBench retrieval benchmark."""
-    from datasets import load_dataset
+    from datasets import load_dataset  # noqa: PLC0415 — optional dependency ([benchmarks] extra); imported where used so environments without it keep working
 
     splits = splits or SPLITS
     retriever = MABRetriever(chunk_size=500)

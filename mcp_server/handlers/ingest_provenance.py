@@ -32,6 +32,7 @@ from typing import Any
 
 from mcp_server.handlers.ingest_helpers import call_upstream, normalise_mcp_payload
 from mcp_server.infrastructure.ap_bridge import APBridge
+from mcp_server.infrastructure.upstream_availability import codebase_upstream_available
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +109,6 @@ def native_fallback_status() -> tuple[str, str | None]:
                    this function never logs itself, keeping it a pure
                    decision).
     """
-    from mcp_server.infrastructure.upstream_availability import (
-        codebase_upstream_available,
-    )
 
     if codebase_upstream_available():
         return (

@@ -17,6 +17,8 @@ from mcp_server.core.prospective import check_trigger
 from mcp_server.core.response_budget import ListTarget, TextTarget, bound_payload
 from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.memory_store import get_shared_store
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +89,6 @@ def _try_get_memory_store():
     if _memory_store is not None:
         return _memory_store
     try:
-        from mcp_server.infrastructure.memory_config import get_memory_settings
-        from mcp_server.infrastructure.memory_store import get_shared_store
-
         settings = get_memory_settings()
         _memory_store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
         _memory_available = True
@@ -281,7 +280,6 @@ def _bounded(resp: dict) -> dict:
     retrieval via recall); the assembled ``context`` string is the other
     unbounded text (core/response_budget.py for the measured budget).
     """
-    from mcp_server.infrastructure.memory_config import get_memory_settings
 
     return bound_payload(
         resp,

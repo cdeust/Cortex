@@ -35,6 +35,8 @@ from mcp_server.core.session_extractor import (
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.infrastructure.scanner import read_head_tail
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
+from mcp_server.handlers.backfill_helpers import gist_oversized_content
+from mcp_server.handlers.remember import handler as remember_handler
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -171,10 +173,6 @@ async def _store_memory(
     domain: str,
 ) -> bool:
     """Store a single extracted item via the remember handler."""
-    from mcp_server.handlers.backfill_helpers import (
-        gist_oversized_content,
-    )
-    from mcp_server.handlers.remember import handler as remember_handler
 
     remember_args = {
         "content": gist_oversized_content(item["content"]),

@@ -24,6 +24,7 @@ from __future__ import annotations
 import re
 from typing import Any
 from mcp_server.observability import silent_failure
+from mcp_server.core.wiki_curation_gaps import missing_sections
 
 _CURATION_BANNER_RE = re.compile(r"_\(missing — needs:\s*([^)]+?)\s*\)_", re.DOTALL)
 
@@ -450,8 +451,6 @@ def _live_audit_gaps(body: str, frozen_gaps: list[str]) -> list[str]:
     after a page was already generated.
     """
     try:
-        from mcp_server.core.wiki_curation_gaps import missing_sections
-
         live = [s.name for s in missing_sections(body)]
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
         silent_failure.note("authoring_prompts.live_gap_audit", exc)

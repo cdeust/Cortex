@@ -91,7 +91,7 @@ def list_deliberate_below_target(
                     memories`` is a VIEW with its own composite type that
                     Postgres will not implicitly cast to ``memories``.
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     sql = """
         WITH candidates AS (

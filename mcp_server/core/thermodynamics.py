@@ -40,6 +40,8 @@ from datetime import datetime, timezone
 
 from mcp_server.core import content_cues
 from mcp_server.shared.vader import vader_compound
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.core.value_learning import retention_bonus
 
 # Dose-response sweep override for the Python-side hourly decay factor
 # (Ebbinghaus λ in heat(t) = heat(0)·λ^t). The SQL-side analogue is
@@ -281,8 +283,6 @@ def compute_decay(
     if hours_elapsed <= 0:
         return current_heat
 
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
-
     if is_mechanism_disabled(Mechanism.ADAPTIVE_DECAY):
         # No-op: constant lambda (decay_factor), no importance/valence/confidence
         # adaptation; classic Ebbinghaus exponential.
@@ -304,7 +304,6 @@ def compute_decay(
     # Value modifier (B2): high learned value resists decay. retention_bonus maps
     # value in [0,1] to a factor in [1, 1.5] (neutral 0.5 -> 1.0), applied the
     # same way as the confidence modifier so value>0.5 pushes λ toward 1.0.
-    from mcp_server.core.value_learning import retention_bonus
 
     value_mod = retention_bonus(value)
     effective = 1.0 - (1.0 - effective) / value_mod

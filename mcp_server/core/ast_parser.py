@@ -24,6 +24,23 @@ from mcp_server.core.codebase_parser import (
     SymbolDef,
     detect_language,
 )
+from mcp_server.core.codebase_parser import parse_file
+from mcp_server.core.ast_extractors import (
+    extract_calls_per_function,
+    extract_calls_generic,
+    extract_python_definitions,
+    extract_python_imports,
+    extract_js_definitions,
+    extract_js_imports,
+)
+from mcp_server.core.ast_extractors_extra import (
+    extract_go_definitions,
+    extract_go_imports,
+    extract_swift_definitions,
+    extract_swift_imports,
+    extract_rust_definitions,
+    extract_rust_imports,
+)
 
 if TYPE_CHECKING:
     from tree_sitter import Node
@@ -49,7 +66,7 @@ AST_SUPPORTED = {
 def is_available() -> bool:
     """Check if tree-sitter is installed."""
     try:
-        from tree_sitter_language_pack import get_parser  # noqa: F401
+        from tree_sitter_language_pack import get_parser  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
 
         return True
     except ImportError:
@@ -64,7 +81,7 @@ def _get_extractor_and_tree(language: str, content: bytes) -> tuple | None:
     if not extractor:
         return None
     try:
-        from tree_sitter_language_pack import get_parser
+        from tree_sitter_language_pack import get_parser  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return None
 
@@ -88,8 +105,6 @@ def parse_file_ast(path: str, content: bytes) -> FileAnalysis:
 
     result = _get_extractor_and_tree(language, content)
     if not result:
-        from mcp_server.core.codebase_parser import parse_file
-
         return parse_file(path, text)
 
     extractor, tree = result
@@ -100,7 +115,6 @@ def parse_file_ast(path: str, content: bytes) -> FileAnalysis:
     # across grammars (function_definition, function_declaration,
     # method_definition, call, call_expression). Empty on regex fallback
     # or when a grammar doesn't expose those names.
-    from mcp_server.core.ast_extractors import extract_calls_per_function
 
     calls_per_function = extract_calls_per_function(tree.root_node, content)
 
@@ -151,11 +165,6 @@ def _extract_python(
     source: bytes,
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract Python imports, definitions, and call sites."""
-    from mcp_server.core.ast_extractors import (
-        extract_calls_generic,
-        extract_python_definitions,
-        extract_python_imports,
-    )
 
     imports = extract_python_imports(root, source)
     definitions = extract_python_definitions(root, source)
@@ -171,11 +180,6 @@ def _extract_js(
     source: bytes,
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract JavaScript/TypeScript imports, definitions, and calls."""
-    from mcp_server.core.ast_extractors import (
-        extract_calls_generic,
-        extract_js_definitions,
-        extract_js_imports,
-    )
 
     imports = extract_js_imports(root, source)
     definitions = extract_js_definitions(root, source)
@@ -191,11 +195,6 @@ def _extract_go(
     source: bytes,
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract Go imports, definitions, and calls."""
-    from mcp_server.core.ast_extractors import extract_calls_generic
-    from mcp_server.core.ast_extractors_extra import (
-        extract_go_definitions,
-        extract_go_imports,
-    )
 
     return (
         extract_go_imports(root, source),
@@ -209,11 +208,6 @@ def _extract_swift(
     source: bytes,
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract Swift imports, definitions, and calls."""
-    from mcp_server.core.ast_extractors import extract_calls_generic
-    from mcp_server.core.ast_extractors_extra import (
-        extract_swift_definitions,
-        extract_swift_imports,
-    )
 
     return (
         extract_swift_imports(root, source),
@@ -227,11 +221,6 @@ def _extract_rust(
     source: bytes,
 ) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
     """Extract Rust imports, definitions, and calls."""
-    from mcp_server.core.ast_extractors import extract_calls_generic
-    from mcp_server.core.ast_extractors_extra import (
-        extract_rust_definitions,
-        extract_rust_imports,
-    )
 
     return (
         extract_rust_imports(root, source),

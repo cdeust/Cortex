@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # Patterns for scoring sentence information density
 _CODE_BLOCK_RE = re.compile(r"```[\s\S]*?```")
@@ -131,7 +132,6 @@ def get_compression_schedule(
     Returns:
         0 = full fidelity, 1 = gist, 2 = tag
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.COMPRESSION):
         # No-op: skip compression entirely; all memories remain at full fidelity.

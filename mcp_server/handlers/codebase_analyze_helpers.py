@@ -11,6 +11,7 @@ from mcp_server.handlers.seed_project_constants import IGNORE_DIRS
 from mcp_server.handlers.source_walk import walk_pruned
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
+import json
 
 CODEBASE_AGENT_CONTEXT = "codebase"
 FILE_TAG_PREFIX = "file:"
@@ -134,8 +135,6 @@ def _parse_tags(raw: object) -> list:
     if isinstance(raw, list):
         return raw
     if isinstance(raw, str):
-        import json
-
         try:
             return json.loads(raw)
         except (ValueError, TypeError):
@@ -373,7 +372,6 @@ def persist_god_node_tags(
     detect_god_nodes). Tagging them lets the graph viz and recall surface
     architectural hotspots. Phase 5: batch pool.
     """
-    import json
 
     if not god_nodes:
         return
@@ -406,7 +404,6 @@ def persist_community_tags(
 
     Phase 5: batch pool (part of a codebase-analyze job).
     """
-    import json
 
     if not communities:
         return

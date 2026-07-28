@@ -60,6 +60,7 @@ statement tolerates being re-run.
 from __future__ import annotations
 
 import sys
+from mcp_server.infrastructure.pg_schema import get_all_ddl
 
 
 def _probe_was_current(url: str, target_hash: str) -> bool:
@@ -78,10 +79,10 @@ def _probe_was_current(url: str, target_hash: str) -> bool:
     not swallow it, so "cannot connect" and "migration failed" stay two
     distinct, separately-tested error paths (see module docstring).
     """
-    import psycopg
-    from psycopg.rows import dict_row
+    import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
-    from mcp_server.infrastructure.pg_store import read_schema_hash
+    from mcp_server.infrastructure.pg_store import read_schema_hash  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
     with psycopg.connect(
         url,
@@ -105,8 +106,7 @@ def _run() -> int:
     exactly one line to stderr on failure (return 1). Never raises —
     every exception is caught and mapped to the frozen exit contract.
     """
-    from mcp_server.infrastructure.pg_schema import get_all_ddl
-    from mcp_server.infrastructure.pg_store import (
+    from mcp_server.infrastructure.pg_store import (  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
         PgMemoryStore,
         _get_database_url,
         compute_ddl_hash,

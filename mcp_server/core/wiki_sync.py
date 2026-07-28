@@ -27,6 +27,7 @@ from mcp_server.core.wiki_classifier import classify_memory, derive_title
 from mcp_server.core.wiki_identity import generate_page_id
 from mcp_server.core.wiki_layout import slugify
 from mcp_server.core.wiki_pages import build_note
+import hashlib
 
 _DECISION_TAGS = frozenset({"decision", "adr", "architecture", "spec", "design"})
 
@@ -104,8 +105,6 @@ def build_from_memory(
 
     title = derive_title(content, classification.kind, tags)
     if not title:
-        import hashlib
-
         title = f"memory-{hashlib.sha256(content.encode()).hexdigest()[:8]}"
 
     slug = slugify(title)

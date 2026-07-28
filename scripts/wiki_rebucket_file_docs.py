@@ -65,6 +65,7 @@ from mcp_server.core.wiki_redirect import (  # noqa: E402
     is_redirect,
     parse_frontmatter,
 )
+from datetime import datetime, timezone  # noqa: E402
 
 
 _FILE_TAG_RE = re.compile(r"file:([^\s,]+)")
@@ -160,7 +161,6 @@ def _strip_frontmatter(text: str) -> tuple[str, str]:
 
 
 def _now_iso() -> str:
-    from datetime import datetime, timezone
 
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 

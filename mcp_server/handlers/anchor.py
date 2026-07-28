@@ -17,6 +17,7 @@ from typing import Any
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+import json as _json
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -92,7 +93,6 @@ def _get_store() -> MemoryStore:
 
 def _build_anchor_tags(mem: dict[str, Any], reason: str) -> list[str]:
     """Build updated tag list with anchor tags added."""
-    import json as _json
 
     existing_tags = mem.get("tags", [])
     if isinstance(existing_tags, str):
@@ -120,7 +120,6 @@ def _build_anchor_content(content: str, reason: str) -> str:
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Anchor a memory — make it compaction-resistant."""
-    import json as _json
 
     args = args or {}
     memory_id = args.get("memory_id")

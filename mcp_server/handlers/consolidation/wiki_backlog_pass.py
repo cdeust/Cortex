@@ -27,6 +27,18 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from mcp_server.observability import silent_failure
+from mcp_server.infrastructure.pg_store_lesson_promotion import (
+    count_lesson_promotion_candidates,
+)
+from mcp_server.core.auto_curator import count_pending_clusters_streamed
+from mcp_server.core.wiki_coverage import (
+    _project_source_root,
+    audit_all_domains,
+    audit_all_file_coverage,
+)
+from mcp_server.core.wiki_drift import audit_wiki_drift
+from mcp_server.infrastructure.config import WIKI_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +52,8 @@ def _lesson_promotion_backlog(store: Any) -> int | None:
     Postcondition: returns the exact eligible-candidate count on
     success; never raises.
     """
-    from mcp_server.observability import silent_failure
 
     try:
-        from mcp_server.infrastructure.pg_store_lesson_promotion import (
-            count_lesson_promotion_candidates,
-        )
-
         with store.batch_pool.connection() as conn:
             return count_lesson_promotion_candidates(conn)
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("wiki_backlog_pass.lesson_promotion_backlog")
@@ -71,14 +78,6 @@ async def run_backlog_pass(store: Any) -> dict[str, Any]:
                     tool, not a wiki-authoring job) — read-only, no rows
                     written.
     """
-    from mcp_server.core.auto_curator import count_pending_clusters_streamed
-    from mcp_server.core.wiki_coverage import (
-        _project_source_root,
-        audit_all_domains,
-        audit_all_file_coverage,
-    )
-    from mcp_server.core.wiki_drift import audit_wiki_drift
-    from mcp_server.infrastructure.config import WIKI_ROOT
 
     out: dict[str, Any] = {}
     chunks = (

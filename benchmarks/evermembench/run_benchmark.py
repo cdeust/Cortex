@@ -35,6 +35,7 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from benchmarks.lib.retriever import BenchmarkRetriever
 
 
 # Question ID taxonomy
@@ -76,7 +77,7 @@ def parse_question_id(qid: str) -> tuple[str, str]:
 
 def load_evermembench():
     """Load EverMemBench from HuggingFace (dialogues + qars configs)."""
-    from datasets import load_dataset
+    from datasets import load_dataset  # noqa: PLC0415 — optional dependency ([benchmarks] extra); imported where used so environments without it keep working
 
     dialogues_ds = load_dataset(
         "EverMind-AI/EverMemBench-Dynamic", "dialogues", split="train"
@@ -142,7 +143,6 @@ class EverMemRetriever:
     """Adapter wrapping shared BenchmarkRetriever for EverMemBench."""
 
     def __init__(self):
-        from benchmarks.lib.retriever import BenchmarkRetriever
 
         self._retriever = BenchmarkRetriever()
 

@@ -117,7 +117,7 @@ class PgStatsMixin:
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._execute(
-            f"SELECT * FROM {src} WHERE access_count >= %s "
+            f"SELECT * FROM {src} WHERE access_count >= %s "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "AND NOT is_stale ORDER BY last_accessed DESC LIMIT %s",
             (min_access_count, limit),
         ).fetchall()
@@ -282,7 +282,7 @@ class PgStatsMixin:
         params.append(limit)
         where = " AND ".join(conditions)
         rows = self._execute(
-            f"SELECT * FROM current_memories WHERE {where} "
+            f"SELECT * FROM current_memories WHERE {where} "  # noqa: S608 — WHERE built from in-code literal fragments; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "ORDER BY created_at DESC LIMIT %s",
             params,
         ).fetchall()

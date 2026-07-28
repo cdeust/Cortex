@@ -444,7 +444,7 @@ def _check_pg_reachable() -> McpCheck:
             fix="Set DATABASE_URL first.",
         )
     try:
-        import psycopg
+        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError as exc:
         return McpCheck(
             name="postgresql reachable",
@@ -503,7 +503,7 @@ def _check_pg_extensions() -> McpCheck:
             detail="DATABASE_URL not set",
         )
     try:
-        import psycopg
+        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError as exc:
         return McpCheck(
             name="postgresql extensions",

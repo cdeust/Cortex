@@ -31,6 +31,7 @@ Storage operations are handled by the caller.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 
 def compute_decayed_excitability(
@@ -73,7 +74,6 @@ def find_best_slot(
     Returns:
         (best_slot_index, best_excitability).
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.ENGRAM_ALLOCATION):
         # No-op: baseline allocation -- always slot 0 with neutral excitability.

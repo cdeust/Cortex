@@ -33,6 +33,7 @@ from mcp_server.core.synaptic_plasticity import (
     _MAX_WEIGHT,
     _MIN_WEIGHT,
 )
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 _LTP_RATE: float = 0.05
 _LTD_RATE: float = 0.02
@@ -170,7 +171,6 @@ def apply_hebbian_update(
     ltd_rate: float = _LTD_RATE,
 ) -> list[dict[str, Any]]:
     """Apply Hebbian LTP/LTD to a batch of edges."""
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.SYNAPTIC_PLASTICITY):
         # No-op identity: zero weight change but the result-shape contract

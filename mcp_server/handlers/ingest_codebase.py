@@ -31,13 +31,19 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.errors import McpConnectionError
-from mcp_server.handlers import ingest_codebase_cypher as cypher
-from mcp_server.handlers import ingest_codebase_graph as graphmod
-from mcp_server.handlers import ingest_codebase_pages as pages
-from mcp_server.handlers import ingest_codebase_writers as writers
-from mcp_server.handlers import ingest_docs_content
+from mcp_server.handlers import (
+    ingest_codebase_cypher as cypher,
+    ingest_codebase_graph as graphmod,
+    ingest_codebase_pages as pages,
+    ingest_codebase_writers as writers,
+    ingest_docs_content,
+)
 from mcp_server.handlers.ingest_codebase_schema import schema  # re-exported
-from mcp_server.handlers.ingest_helpers import call_upstream, normalise_mcp_payload
+from mcp_server.handlers.ingest_helpers import (
+    call_upstream,
+    normalise_mcp_payload,
+    project_key,
+)
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.core.streaming.adaptive_writer import (
@@ -54,6 +60,7 @@ from mcp_server.infrastructure.staging_resolve_sink import (
     build_entity_sink,
 )
 from mcp_server.shared.progress import NullProgress, ProgressReporter
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +122,6 @@ def _get_store() -> MemoryStore:
 
 def _default_output_dir(project_path: str) -> str:
     """Default graph location under ~/.cache/cortex/code-graphs/."""
-    from mcp_server.handlers.ingest_helpers import project_key
 
     return str(
         Path.home() / ".cache" / "cortex" / "code-graphs" / project_key(project_path)
@@ -133,7 +139,6 @@ def _prune_precedent_graphs(output_dir: str) -> list[str]:
     the precedent", drop every sibling sharing this project's name prefix
     except the one we just wrote. Returns removed dir names.
     """
-    import shutil
 
     cur = Path(output_dir)
     parent = cur.parent

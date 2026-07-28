@@ -42,6 +42,7 @@ from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.sqlite_store_lesson_promotion import (
     count_lesson_promotion_candidates as count_promotion_candidates_sqlite,
 )
+from mcp_server.handlers import curate_distill, curate_wiki
 
 schema = {
     "title": "Grooming health (backlog + staleness)",
@@ -116,7 +117,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     kind's stale flag is computed by ``core.grooming_health.is_stale``
     against the shared, sourced threshold.
     """
-    from mcp_server.handlers import curate_distill, curate_wiki
 
     store = get_shared_store()
     ages = store.get_grooming_ages()

@@ -76,6 +76,7 @@ store; elapsed time is supplied by the caller as hours.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # ── Constants (fixed engineering values — see the honesty note) ───────────────
 
@@ -248,7 +249,6 @@ def deprecate(
     ``new_extinction_strength == current_extinction`` and ``operation ==
     "noop"``.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.EXTINCTION):
         return ExtinctionOutcome(

@@ -46,6 +46,8 @@ from mcp_server.infrastructure.sqlite_store_rules import SqliteRuleMixin
 from mcp_server.infrastructure.sqlite_store_search import SqliteSearchMixin
 from mcp_server.infrastructure.sqlite_store_stats import SqliteStatsMixin
 from mcp_server.observability import silent_failure
+from mcp_server.shared.code_tokenize import augment_content
+from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +58,6 @@ def _now_iso() -> str:
 
 def _fts_augment(content: str) -> str:
     """Append identifier sub-tokens to FTS content (code-aware, issue #169)."""
-    from mcp_server.shared.code_tokenize import augment_content
 
     return augment_content(content or "")
 
@@ -180,7 +181,6 @@ class SqliteMemoryStore(
         sql = (row["sql"] if row else None) or ""
         if "content=" not in sql:
             return  # already self-content (fresh DB or prior migration)
-        from mcp_server.shared.code_tokenize import augment_content
 
         self._conn.execute("DROP TABLE IF EXISTS memories_fts")
         self._conn.execute(MEMORIES_FTS_DDL)
@@ -304,7 +304,7 @@ class SqliteMemoryStore(
     def _try_load_vec(self) -> None:
         """Attempt to load sqlite-vec extension and create vec table."""
         try:
-            import sqlite_vec  # noqa: F401
+            import sqlite_vec  # noqa: PLC0415, F401 — optional dependency ([sqlite] extra); imported where used so environments without it keep working
 
             self._raw_conn.enable_load_extension(True)
             sqlite_vec.load(self._raw_conn)
@@ -352,7 +352,7 @@ class SqliteMemoryStore(
         raw_created = data.get("created_at")
         if raw_created and isinstance(raw_created, str) and "T" not in raw_created:
             try:
-                from mcp_server.core.temporal import normalize_date_to_iso
+                from mcp_server.core.temporal import normalize_date_to_iso  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
                 raw_created = normalize_date_to_iso(raw_created) or raw_created
             except ImportError:
@@ -709,10 +709,6 @@ class SqliteMemoryStore(
         a race) is swallowed, same discipline as the vec insert it accompanies.
         """
         if not model:
-            from mcp_server.infrastructure.embedding_engine import (
-                current_embedding_mode,
-            )
-
             model = current_embedding_mode()
         # 'unknown' means no engine was constructed (e.g. a direct store test
         # that inserts a raw vector); leave the column at its '' default rather

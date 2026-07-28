@@ -17,6 +17,14 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Callable
+from mcp_server.core.wiki_drift import _file_exists_under
+from mcp_server.core.wiki_coverage import _project_source_root
+from mcp_server.core.wiki_source_backfill import derive_primary_source
+from mcp_server.infrastructure.pg_store_wiki_sources import (
+    upsert_page_sources,
+    list_pages_missing_source_link,
+)
+from mcp_server.infrastructure.pg_store_wiki_thermo import get_claim_file_refs_for_pages
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +38,11 @@ DEFAULT_BACKFILL_LIMIT = 500
 def _build_exists_fn(source_root: str | None) -> Callable[[str], bool]:
     if source_root is None:
         return lambda _path: False
-    from mcp_server.core.wiki_drift import _file_exists_under
 
     return lambda path: _file_exists_under(source_root, path)
 
 
 def _resolve_source_root(domain: str) -> str | None:
-    from mcp_server.core.wiki_coverage import _project_source_root
 
     return _project_source_root(domain)
 
@@ -50,8 +56,6 @@ def _process_one_page(
     out: dict[str, Any],
 ) -> None:
     """Derive one page's primary source and, if found, persist it."""
-    from mcp_server.core.wiki_source_backfill import derive_primary_source
-    from mcp_server.infrastructure.pg_store_wiki_sources import upsert_page_sources
 
     exists_fn = _build_exists_fn(_resolve_source_root(str(page.get("domain") or "")))
     result = derive_primary_source(page, claim_files, exists_fn)
@@ -88,12 +92,6 @@ async def run_source_backfill_pass(
                     the same derivation without writing (dry run) — the
                     returned counts are identical either way.
     """
-    from mcp_server.infrastructure.pg_store_wiki_sources import (
-        list_pages_missing_source_link,
-    )
-    from mcp_server.infrastructure.pg_store_wiki_thermo import (
-        get_claim_file_refs_for_pages,
-    )
 
     out: dict[str, Any] = {
         "pages_scanned": 0,

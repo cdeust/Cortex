@@ -19,6 +19,8 @@ from mcp_server.core.context_assembly.budget import (
     estimate_tokens,
     truncate_to_budget,
 )
+from mcp_server.core.context_assembly.budget import Placeholder
+from mcp_server.core.context_assembly.decomposer import assemble_prompt
 
 # source: structural — the condenser keeps first + last sentence, so texts
 # of two or fewer sentences have no middle filler to drop.
@@ -294,8 +296,6 @@ def condense_assembled_context(
     # on budget only — importing decomposer here (not at module scope)
     # keeps condensers.py's own import graph unchanged for every caller
     # that never hits the over-budget path.
-    from mcp_server.core.context_assembly.budget import Placeholder
-    from mcp_server.core.context_assembly.decomposer import assemble_prompt
 
     template = "\n\n".join(f"{h}\n\n{k}" for h, _c, _pr, k in present)
     placeholders = [

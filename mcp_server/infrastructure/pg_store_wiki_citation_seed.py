@@ -40,7 +40,7 @@ def list_page_memory_seed_candidates(conn: Connection, limit: int) -> list[dict]
     change cannot silently admit a stale id without this query
     reflecting it.
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     sql = """
     SELECT p.id AS page_id, p.memory_id AS memory_id,
@@ -72,7 +72,7 @@ def list_existing_page_memory_citations(
     time), and after ``--apply`` a set equal to the full candidate list
     (proving idempotence on re-run).
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     if not page_ids:
         return set()

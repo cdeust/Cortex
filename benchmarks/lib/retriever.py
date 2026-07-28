@@ -30,6 +30,8 @@ from benchmarks.lib.fusion import (
     enforce_chunk_limit,
     wrrf_fuse,
 )
+from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.core.reranker import reranker_cache_dir
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +59,6 @@ class BenchmarkRetriever:
         if self._embeddings is not None:
             return
         try:
-            from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
-
             if self._emb_engine is None:
                 self._emb_engine = EmbeddingEngine()
             if not self._emb_engine.available:
@@ -97,9 +97,7 @@ class BenchmarkRetriever:
         if self._flashrank is not None:
             return
         try:
-            from flashrank import Ranker
-
-            from mcp_server.core.reranker import reranker_cache_dir
+            from flashrank import Ranker  # noqa: PLC0415 — optional dependency (flashrank (multi-second reranker model load)); imported where used so environments without it keep working
 
             self._flashrank = Ranker(
                 model_name="ms-marco-MiniLM-L-12-v2",
@@ -178,7 +176,7 @@ class BenchmarkRetriever:
         if not self._flashrank or not candidates:
             return candidates
         try:
-            from flashrank import RerankRequest
+            from flashrank import RerankRequest  # noqa: PLC0415 — optional dependency (flashrank (multi-second reranker model load)); imported where used so environments without it keep working
 
             passages = [
                 {"id": i, "text": self.documents[doc_id]["content"][:1200]}

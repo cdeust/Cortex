@@ -22,6 +22,8 @@ from mcp_server.core.temporal import compute_recency_boost
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.core.source_monitoring import recall_confabulation_risk
 
 
 def compute_vector_fts(
@@ -490,8 +492,6 @@ def annotate_source_attribution(results: list[dict[str, Any]]) -> None:
     its ``source_attribution`` (pure provenance passthrough) but ``confabulation
     _risk`` is left False, so the gate contributes nothing to the response.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
-    from mcp_server.core.source_monitoring import recall_confabulation_risk
 
     gate_on = not is_mechanism_disabled(Mechanism.CONFABULATION_GATE)
     for mem in results:

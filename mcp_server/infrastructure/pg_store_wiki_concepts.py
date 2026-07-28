@@ -9,13 +9,12 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from psycopg import Connection
 
 import json
-from typing import Any
 
 
 from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
@@ -28,7 +27,7 @@ def list_concepts(
     limit: int = 200,
 ) -> list[dict]:
     """Return concept rows, optionally filtered by status."""
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     if status:
         sql = "SELECT * FROM wiki.concepts WHERE status = %s ORDER BY id LIMIT %s"
@@ -45,7 +44,7 @@ def get_concepts_by_entity_overlap(
     conn: Connection, entity_ids: list[int]
 ) -> list[dict]:
     """Return concepts whose entity_ids intersect the given list."""
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     if not entity_ids:
         return []
@@ -87,10 +86,43 @@ def insert_concept(conn: Connection, concept: dict[str, Any]) -> int:
         return _returning_id(cur.fetchone())
 
 
+# Column allowlist for update_concept: every patchable wiki.concepts column
+# (pg_schema.py DDL), enumerated in code so an unknown key is REFUSED rather
+# than interpolated into SQL — the same refuse-not-escape mechanism as
+# wiki_view_executor._TABLE_WHITELIST (docs/ASSURANCE-CASE.md §5). Before this
+# allowlist, any dict key reached the SET clause verbatim; the single caller
+# (wiki_emerge) passes literal keys, but the boundary now enforces it.
+_UPDATABLE_COLUMNS: frozenset[str] = frozenset(
+    {
+        "label",
+        "status",
+        "entity_ids",
+        "grounding_memory_ids",
+        "grounding_claim_ids",
+        "properties",
+        "axial_slots",
+        "saturation_rate",
+        "saturation_streak",
+        "last_property_at",
+        "promoted_page_id",
+        "merged_into_id",
+        "split_into_ids",
+        "core_category_link",
+    }
+)
+
+
 def update_concept(conn: Connection, concept_id: int, fields: dict[str, Any]) -> bool:
-    """Patch a concept row. Returns True if updated."""
+    """Patch a concept row. Returns True if updated.
+
+    Precondition: every key of ``fields`` is in ``_UPDATABLE_COLUMNS``;
+    an unknown key raises ValueError before any SQL is built.
+    """
     if not fields:
         return False
+    unknown = set(fields) - _UPDATABLE_COLUMNS
+    if unknown:
+        raise ValueError(f"update_concept: unknown column(s) {sorted(unknown)!r}")
     sets: list[str] = []
     params: list = []
     for k, v in fields.items():
@@ -109,7 +141,7 @@ def update_concept(conn: Connection, concept_id: int, fields: dict[str, Any]) ->
             sets.append(f"{k} = %s")
             params.append(v)
     params.append(concept_id)
-    sql = f"UPDATE wiki.concepts SET {', '.join(sets)} WHERE id = %s"
+    sql = f"UPDATE wiki.concepts SET {', '.join(sets)} WHERE id = %s"  # noqa: S608 — column names gated by the _UPDATABLE_COLUMNS allowlist (unknown keys refused); values are bound parameters (docs/ASSURANCE-CASE.md §5)
     with conn.cursor() as cur:
         cur.execute(sql, params)
         return cur.rowcount > 0

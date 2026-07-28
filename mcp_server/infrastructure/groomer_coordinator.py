@@ -47,6 +47,10 @@ from mcp_server.infrastructure.groomer_coordinator_io import (
 )
 from mcp_server.shared.platform import cache_dir
 from mcp_server.observability import silent_failure
+import hashlib
+import os
+from mcp_server.infrastructure.backend_marker import effective_backend
+from mcp_server.infrastructure.memory_config import get_memory_settings
 
 logger = logging.getLogger(__name__)
 
@@ -72,14 +76,9 @@ def resolve_store_key(env: dict[str, str] | None = None) -> str:
     (never raises) when backend resolution fails, so coordination still
     happens (one shared coordinator) rather than silently splitting.
     """
-    import hashlib
-    import os
 
     e = env if env is not None else dict(os.environ)
     try:
-        from mcp_server.infrastructure.backend_marker import effective_backend
-        from mcp_server.infrastructure.memory_config import get_memory_settings
-
         settings = get_memory_settings()
         # str(...) coercion: MemorySettings is a pydantic BaseSettings whose
         # attributes the type checker resolves as Unknown; these values ARE

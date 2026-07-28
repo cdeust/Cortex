@@ -50,6 +50,12 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Literal
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.core.extinction import (
+    deprecate as _deprecate,
+    spontaneous_recovery as _recover,
+    reinstate as _reinstate,
+)
 
 
 def _temporal_distance(memory_last_accessed: str | None) -> float:
@@ -162,7 +168,6 @@ def decide_action(
     Returns ReconsolidationResult with action, prediction_error,
     strength_delta, and emotional_multiplier.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.RECONSOLIDATION):
         # No-op: never reconsolidate; memory left unchanged.
@@ -521,12 +526,6 @@ def compute_extinction_action(
     (a deprecation is not a retrieval); ``extinction_strength`` is the new tag
     in [0, 1], or None when ablated.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
-    from mcp_server.core.extinction import (
-        deprecate as _deprecate,
-        spontaneous_recovery as _recover,
-        reinstate as _reinstate,
-    )
 
     if memory is None:
         return ReconsolidationOutcome(action="none")

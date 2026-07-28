@@ -17,6 +17,7 @@ Key capabilities:
 from __future__ import annotations
 
 import numpy as np
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 
 def _softmax(logits: np.ndarray) -> np.ndarray:
@@ -95,7 +96,6 @@ def retrieve(
     Computes: attention = softmax(beta * X * query)
     Returns top_k (memory_id, attention_weight) sorted descending.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.HOPFIELD):
         # No-op: no Hopfield-attention contribution.

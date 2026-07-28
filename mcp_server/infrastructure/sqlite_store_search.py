@@ -15,6 +15,7 @@ import numpy as np
 
 from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
+from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 
 
 def _decode_tags(raw: Any) -> list:
@@ -150,7 +151,6 @@ class SqliteSearchMixin:
         """
         if not rowids:
             return set()
-        from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 
         mode = current_embedding_mode()
         if mode == "unknown":
@@ -159,7 +159,7 @@ class SqliteSearchMixin:
         placeholders = ",".join("?" * len(rowids))
         try:
             rows = self._conn.execute(
-                f"SELECT id, embedding_model FROM memories "
+                f"SELECT id, embedding_model FROM memories "  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
                 f"WHERE id IN ({placeholders})",
                 rowids,
             ).fetchall()
@@ -182,7 +182,7 @@ class SqliteSearchMixin:
         conds, params = self._build_filter(min_heat, domain, directory)
         params.append(pool)
         rows = self._conn.execute(
-            f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "
+            f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             f"ORDER BY heat_base DESC LIMIT ?",
             params,
         ).fetchall()
@@ -204,7 +204,7 @@ class SqliteSearchMixin:
         conds, params = self._build_filter(min_heat, domain, directory)
         params.append(pool)
         rows = self._conn.execute(
-            f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "
+            f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             f"ORDER BY created_at DESC LIMIT ?",
             params,
         ).fetchall()
@@ -240,7 +240,7 @@ class SqliteSearchMixin:
         ids = list(scores.keys())
         placeholders = ",".join("?" * len(ids))
         rows = self._conn.execute(
-            f"SELECT id FROM memories WHERE id IN ({placeholders}) "
+            f"SELECT id FROM memories WHERE id IN ({placeholders}) "  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
             f"AND agent_context = ?",
             [*ids, agent_topic],
         ).fetchall()
@@ -265,7 +265,7 @@ class SqliteSearchMixin:
         # consume vector/FTS pool slots — acceptable at fallback scale, same
         # argument as the O(N) embedding join in get_hot_embeddings.
         rows = self._conn.execute(
-            f"SELECT * FROM current_memories WHERE id IN ({placeholders})",
+            f"SELECT * FROM current_memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
             top_ids,
         ).fetchall()
         row_map = {r["id"]: r for r in rows}
@@ -358,7 +358,7 @@ class SqliteSearchMixin:
                 current = {
                     r["id"]
                     for r in self._conn.execute(
-                        f"SELECT id FROM current_memories WHERE id IN ({placeholders})",
+                        f"SELECT id FROM current_memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
                         ids,
                     ).fetchall()
                 }
@@ -512,7 +512,7 @@ class SqliteSearchMixin:
             params.append(domain)
         params.append(limit)
         rows = self._conn.execute(
-            f"SELECT id, heat_base FROM memories WHERE {' AND '.join(conds)} "
+            f"SELECT id, heat_base FROM memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             f"ORDER BY heat_base DESC LIMIT ?",
             params,
         ).fetchall()

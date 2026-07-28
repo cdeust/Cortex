@@ -43,6 +43,7 @@ Pure business logic — no I/O.
 """
 
 from __future__ import annotations
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # ── Configuration ─────────────────────────────────────────────────────────
 
@@ -95,7 +96,6 @@ def compute_scaling_factor(
     Returns:
         Multiplicative scaling factor. Apply to all heats in domain.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.HOMEOSTATIC_PLASTICITY):
         # No-op: factor 1.0 -> no scaling applied.

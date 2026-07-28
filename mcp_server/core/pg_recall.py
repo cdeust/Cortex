@@ -22,6 +22,30 @@ from mcp_server.core.query_intent import QueryIntent, classify_query_intent
 from mcp_server.core.reranker import rerank_results
 from mcp_server.core.titans_memory import TitansMemory
 from mcp_server.observability import silent_failure
+from mcp_server.core import goal_maintenance
+import os as _os
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.core.recall_pipeline import (
+    familiarity_triage,
+    attentional_focus_rerank,
+    conflict_monitor_rerank,
+    dendritic_modulate,
+    emotional_retrieval_rerank,
+    goal_maintenance_rerank,
+    hdc_rerank,
+    hopfield_complete,
+    mood_congruent_rerank,
+    reconsolidation_apply,
+    spreading_activation_expand,
+    spreading_activation_tail_fill,
+    value_priority_rerank,
+)
+from mcp_server.core.context_assembly.stage_assembler import (
+    BudgetSplit,
+    StageAwareContextAssembler,
+)
+from mcp_server.core.context_assembly.stage_detector import ExplicitStageDetector
+from mcp_server.core.context_assembly.condensers import condense_assembled_context
 
 # Entity names shorter than this are too generic to match against content.
 # source: pre-existing tuned value, extracted unchanged (#197 family 3);
@@ -52,7 +76,6 @@ def _get_active_goal(store: Any) -> Any:
     the store is None, lacks the reader, has no active triggers, or the read
     fails. Per the source-discipline rule we never fabricate a goal signal.
     """
-    from mcp_server.core import goal_maintenance
 
     if store is None:
         return goal_maintenance.EMPTY_GOAL
@@ -212,9 +235,6 @@ def compute_pg_weights(
     Source: docs/provenance/verification-protocol.md E2 (N-scan); env vars defined
     by benchmarks/lib/n_scan_runner.py:_apply_condition.
     """
-    import os as _os
-
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     cw = core_weights or {}
     # Vector is always 1.0 in the PG path — it's the primary discovery signal.
@@ -360,7 +380,6 @@ def recall(
     # instead of running Hopfield/HDC/spreading/dendritic/emotional/mood/
     # reconsolidation/FlashRank/value/conflict. Ablation-guarded
     # (CORTEX_ABLATE_DUAL_PROCESS=1 → identity). Non-fatal.
-    from mcp_server.core.recall_pipeline import familiarity_triage
 
     triage = familiarity_triage(
         candidates, q_emb, store, allow_shortcut=familiarity_shortcut
@@ -379,20 +398,6 @@ def recall(
     # DENDRITIC_CLUSTERS (Poirazi 2003 multiplicative modulation).
     # See mcp_server/core/recall_pipeline.py for the per-stage RRF blend
     # constants and citations.
-    from mcp_server.core.recall_pipeline import (
-        attentional_focus_rerank,
-        conflict_monitor_rerank,
-        dendritic_modulate,
-        emotional_retrieval_rerank,
-        goal_maintenance_rerank,
-        hdc_rerank,
-        hopfield_complete,
-        mood_congruent_rerank,
-        reconsolidation_apply,
-        spreading_activation_expand,
-        spreading_activation_tail_fill,
-        value_priority_rerank,
-    )
 
     candidates = hopfield_complete(
         candidates,
@@ -622,13 +627,6 @@ def assemble_context(
         diversity_lambda: MMR diversity weight for Phase 1 submodular
             selection. Default 0.5.
     """
-    from mcp_server.core.context_assembly.stage_assembler import (
-        BudgetSplit,
-        StageAwareContextAssembler,
-    )
-    from mcp_server.core.context_assembly.stage_detector import (
-        ExplicitStageDetector,
-    )
 
     split = BudgetSplit(
         own_stage=budget_split[0],
@@ -810,10 +808,6 @@ def assemble_context(
     # "no token truncation" mode — nothing to condense against).
     assembled_context = result.assembled_context
     if token_budget is not None:
-        from mcp_server.core.context_assembly.condensers import (
-            condense_assembled_context,
-        )
-
         assembled_context = condense_assembled_context(
             result.own_stage_context,
             result.adjacent_stage_context,

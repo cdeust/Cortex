@@ -50,6 +50,9 @@ from mcp_server.infrastructure.pg_store_wiki import (
 )
 from mcp_server.infrastructure.wiki_store import list_pages, read_page
 from mcp_server.shared.wiki_source_paths import extract_document_paths
+from mcp_server.infrastructure.config import WIKI_ROOT
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.memory_store import get_shared_store
 
 # Wiki-link syntax: [[slug]] or [[slug|display text]]
 _WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
@@ -446,9 +449,6 @@ def migrate_wiki(wiki_root: Path | str, conn, *, dry_run: bool = True) -> dict:
 
 async def handler(args: dict | None = None) -> dict:
     """MCP tool entry: run migration + ghost-page reconciliation, return summary."""
-    from mcp_server.infrastructure.config import WIKI_ROOT
-    from mcp_server.infrastructure.memory_config import get_memory_settings
-    from mcp_server.infrastructure.memory_store import get_shared_store
 
     args = args or {}
     dry_run = bool(args.get("dry_run", True))

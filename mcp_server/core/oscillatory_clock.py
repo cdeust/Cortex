@@ -18,6 +18,7 @@ from mcp_server.core.oscillatory_phases import (
     compute_encoding_strength,
     compute_retrieval_strength,
 )
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 __all__ = [
     "OscillatoryState",
@@ -153,7 +154,6 @@ def modulate_encoding(
 
     SWR suppresses new encoding (hippocampus busy with replay).
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.OSCILLATORY_CLOCK):
         return base_strength
@@ -171,7 +171,6 @@ def modulate_retrieval(
     state: OscillatoryState,
 ) -> float:
     """Apply oscillatory modulation to a retrieval operation."""
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.OSCILLATORY_CLOCK):
         return base_score
@@ -188,7 +187,6 @@ def modulate_plasticity(
     During SWR, replay-driven plasticity is boosted.
     Normal operation: phase-dependent.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.OSCILLATORY_CLOCK):
         return base_delta

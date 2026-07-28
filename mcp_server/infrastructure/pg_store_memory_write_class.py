@@ -60,7 +60,7 @@ def list_source_groups_at_default(conn: Connection, limit: int) -> list[dict]:
                     a full apply finds nothing left to reclassify
                     (idempotence).
     """
-    from psycopg.rows import dict_row
+    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     sql = (
         "SELECT COALESCE(source, '') AS source, COUNT(*) AS row_count\n"

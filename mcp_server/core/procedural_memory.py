@@ -48,6 +48,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import math
 
 # ── Tuning constants ────────────────────────────────────────────────────────
 # Minimum number of distinct sessions a subsequence must appear in to count as
@@ -327,7 +328,6 @@ def _skill_priority(skill: ProceduralSkill) -> float:
     support is dampened (log) so a very common 2-step pair doesn't dominate a
     reliable 5-step routine.
     """
-    import math
 
     support = math.log1p(skill.occurrences)
     length_bonus = 1.0 + 0.1 * (skill.length - MIN_SKILL_LEN)

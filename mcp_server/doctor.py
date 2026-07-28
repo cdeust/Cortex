@@ -42,6 +42,11 @@ from typing import Callable
 
 from mcp_server.observability import silent_failure
 from mcp_server.shared.platform import home_dir
+from mcp_server.handlers.admission import DEFAULT_SEMAPHORE
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
+from mcp_server.infrastructure.backend_marker import effective_backend
+from mcp_server.doctor_mcp import run_mcp
 
 
 class Check:
@@ -82,7 +87,7 @@ def _python_version() -> Check:
 
 def _pg_driver() -> Check:
     try:
-        import psycopg  # noqa: F401
+        import psycopg  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return Check(
             "psycopg driver",
@@ -91,7 +96,7 @@ def _pg_driver() -> Check:
             "Install the postgresql extra: `pip install hypermnesia-mcp[postgresql]`",
         )
     try:
-        import psycopg_pool  # noqa: F401
+        import psycopg_pool  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return Check(
             "psycopg_pool",
@@ -100,7 +105,7 @@ def _pg_driver() -> Check:
             "Upgrade to v3.13.0+: `pip install -U hypermnesia-mcp[postgresql]`",
         )
     try:
-        import pgvector  # noqa: F401
+        import pgvector  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return Check(
             "pgvector python binding",
@@ -125,7 +130,7 @@ def _database_url() -> Check:
 
 def _pg_connection() -> Check:
     try:
-        import psycopg
+        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return Check("PG connection", False, "psycopg not installed", "")
     url = os.environ.get("DATABASE_URL", "")
@@ -147,7 +152,7 @@ def _pg_connection() -> Check:
 
 def _pg_extensions() -> Check:
     try:
-        import psycopg
+        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return Check(
             "pgvector + pg_trgm extensions", False, "psycopg not installed", ""
@@ -256,9 +261,6 @@ def _codebase_pipeline() -> Check:
 def _i10_config() -> Check:
     """Verify pool config respects I10 invariant without opening a pool."""
     try:
-        from mcp_server.handlers.admission import DEFAULT_SEMAPHORE
-        from mcp_server.infrastructure.memory_config import get_memory_settings
-
         s = get_memory_settings()
         ok = (
             s.POOL_INTERACTIVE_MAX >= DEFAULT_SEMAPHORE["interactive"] + 1
@@ -286,9 +288,6 @@ def _sqlite_store() -> Check:
     migrations, so a successful open proves the whole storage path.
     """
     try:
-        from mcp_server.infrastructure.memory_config import get_memory_settings
-        from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
-
         path = get_memory_settings().SQLITE_FALLBACK_PATH
         store = SqliteMemoryStore(db_path=path)
         try:
@@ -338,8 +337,6 @@ def active_checks() -> list[Callable[[], Check]]:
     stricter, historical behaviour.
     """
     try:
-        from mcp_server.infrastructure.backend_marker import effective_backend
-
         if effective_backend(os.environ) == "sqlite":
             return SQLITE_CHECKS
     except Exception as exc:  # noqa: BLE001 — PG check list is the documented fallback
@@ -360,8 +357,6 @@ def run() -> int:
     """
     argv = sys.argv[1:]
     if argv and argv[0] == "mcp":
-        from mcp_server.doctor_mcp import run_mcp
-
         flags = argv[1:]
         json_output = "--json" in flags
         copy_header = "--copy" in flags

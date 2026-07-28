@@ -16,6 +16,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.handlers._telemetry_wrap import instrument
+from mcp_server.core.knowledge_graph import extract_entities
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -201,8 +202,6 @@ def _resolve_start_entity_from_memory(
     mem = store.get_memory(memory_id)
     if not mem:
         return None
-
-    from mcp_server.core.knowledge_graph import extract_entities
 
     extracted = extract_entities(mem.get("content", ""))
     for ent in extracted:

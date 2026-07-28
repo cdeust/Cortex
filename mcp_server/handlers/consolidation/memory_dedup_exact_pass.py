@@ -20,6 +20,10 @@ from itertools import groupby
 from typing import Any
 
 from mcp_server.core.memory_dedup_exact import DuplicateMember, elect_survivor
+from mcp_server.infrastructure.pg_store_memory_dedup import (
+    supersede_to_existing,
+    list_exact_duplicate_groups,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +56,6 @@ def _process_group(
     out: dict[str, Any],
 ) -> None:
     """Elect one group's survivor and supersede the rest, journaling both."""
-    from mcp_server.infrastructure.pg_store_memory_dedup import supersede_to_existing
 
     members = [
         DuplicateMember(
@@ -127,9 +130,6 @@ async def run_memory_dedup_exact_pass(
                     domains observed across the group for the campaign
                     report only — it is not written back anywhere.
     """
-    from mcp_server.infrastructure.pg_store_memory_dedup import (
-        list_exact_duplicate_groups,
-    )
 
     out: dict[str, Any] = {
         "scanned_rows": 0,

@@ -69,17 +69,19 @@ class TestResolveQueryEntityIds:
     def test_keyword_stage_failure_keeps_stage1_ids_and_is_logged(
         self, caplog, monkeypatch
     ):
-        from mcp_server.core import query_decomposition, recall_pipeline
-        from mcp_server.shared import text as shared_text
+        from mcp_server.core import recall_pipeline
 
+        # Patch the consumer's own bindings: both imports are at module top
+        # (#197 family 4), so patching the defining modules no longer
+        # reaches the already-bound references.
         monkeypatch.setattr(
-            query_decomposition, "extract_query_entities", lambda q: ["Alpha"]
+            recall_pipeline, "extract_query_entities", lambda q: ["Alpha"]
         )
 
         def broken_keywords(query: str):
             raise RuntimeError("tokenizer exploded")
 
-        monkeypatch.setattr(shared_text, "extract_keywords", broken_keywords)
+        monkeypatch.setattr(recall_pipeline, "extract_keywords", broken_keywords)
         store = MagicMock()
         store.get_entity_by_name.return_value = {"id": 7}
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
@@ -109,11 +111,12 @@ class TestReconsolidationApplyWritebacks:
         return [{"memory_id": 1, "heat": 0.5, "emotional_valence": 0.0}]
 
     def _run(self, monkeypatch, outcome, store):
-        from mcp_server.core import reconsolidation
+        from mcp_server.core import recall_pipeline
         from mcp_server.core.recall_pipeline import reconsolidation_apply
 
+        # Patch the consumer's own binding (top-level import, #197 family 4).
         monkeypatch.setattr(
-            reconsolidation,
+            recall_pipeline,
             "compute_reconsolidation_action",
             lambda *a, **k: outcome,
         )

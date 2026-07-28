@@ -32,6 +32,10 @@ import argparse
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from mcp_server.core.wiki_coverage import _project_source_root, list_source_files
+from mcp_server.core.wiki_file_doc_skeleton import build_file_doc
+from mcp_server.infrastructure.config import WIKI_ROOT
+from mcp_server.shared.domain_mapping import _build_registry
 
 
 def _today() -> str:
@@ -53,7 +57,7 @@ def _existing_substantive(page_path: Path) -> bool:
     if not page_path.is_file():
         return False
     try:
-        from mcp_server.core.wiki_stub_detector import prose_char_count
+        from mcp_server.core.wiki_stub_detector import prose_char_count  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
         text = page_path.read_text(encoding="utf-8", errors="ignore")
         # Drop frontmatter before measuring prose.
@@ -87,13 +91,6 @@ def main() -> int:
     args = parser.parse_args()
 
     # Imports here so the script bails clean if PYTHONPATH is wrong.
-    from mcp_server.core.wiki_coverage import (
-        _project_source_root,
-        list_source_files,
-    )
-    from mcp_server.core.wiki_file_doc_skeleton import build_file_doc
-    from mcp_server.infrastructure.config import WIKI_ROOT
-    from mcp_server.shared.domain_mapping import _build_registry
 
     wiki_root = Path(WIKI_ROOT).expanduser()
     today = _today()

@@ -82,6 +82,7 @@ import os as _os
 import re
 from dataclasses import dataclass
 from typing import Any
+from mcp_server.core import claim_resolver
 
 # ── Tunable constants (env-overridable, like the recall_pipeline stages) ──────
 # A set is "in conflict" when the gated score crosses this threshold. Chosen so
@@ -502,7 +503,6 @@ def route_to_resolver(candidates: list[dict[str, Any]]) -> list:
     memories) or when the resolver finds no typed conflict. The lexical
     contradiction path in ``assess_conflict`` is the fallback that always runs.
     """
-    from mcp_server.core import claim_resolver
 
     claim_like: list[dict[str, Any]] = []
     for idx, c in enumerate(candidates):

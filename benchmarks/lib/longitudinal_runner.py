@@ -140,7 +140,7 @@ def insert_memories(
 
     Returns list of (uid, memory_id, bucket_idx).
     """
-    from benchmarks.beam.run_benchmark import run_benchmark  # noqa: F401
+    from benchmarks.beam.run_benchmark import run_benchmark  # noqa: PLC0415, F401 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
     print(f"[long] generating {n} synthetic memories…")
     payloads = []
@@ -262,7 +262,7 @@ def run(n_memories: int, queries_per_bucket: int, seed: int, quick: bool) -> Pat
     configure_environment(prod_url, db_name)
 
     # Import AFTER env override so PgMemoryStore picks up the test DB.
-    from benchmarks.lib.bench_db import BenchmarkDB
+    from benchmarks.lib.bench_db import BenchmarkDB  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
     timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     out_dir = RESULTS_ROOT / timestamp

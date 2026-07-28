@@ -28,6 +28,7 @@ from mcp_server.handlers.seed_project_stages import (
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
+from mcp_server.handlers.seed_project_constants import is_transient_seed_root
 
 _store: MemoryStore | None = None
 
@@ -189,7 +190,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     # ``Spec: Project structure: repo-a`` from fixture runs — both
     # noise that lives forever in the wiki because the underlying path
     # is gone by the next test run.
-    from mcp_server.handlers.seed_project_constants import is_transient_seed_root
 
     if is_transient_seed_root(str(root)):
         return {

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING, Any, Iterator
+from mcp_server.infrastructure.memory_config import get_memory_settings
+import numpy as np
 
 if TYPE_CHECKING:
     import psycopg
@@ -32,7 +34,7 @@ class PgQueryMixin:
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._execute(
-            f"SELECT * FROM {src} WHERE (domain = %s OR is_global = TRUE) "
+            f"SELECT * FROM {src} WHERE (domain = %s OR is_global = TRUE) "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "AND heat_base >= %s ORDER BY heat_base DESC LIMIT %s",
             (domain, min_heat, limit),
         ).fetchall()
@@ -66,13 +68,13 @@ class PgQueryMixin:
         )
         if limit > 0:
             rows = self._execute(
-                f"SELECT * FROM {src} WHERE heat_base >= %s {bench_filter}"
+                f"SELECT * FROM {src} WHERE heat_base >= %s {bench_filter}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "ORDER BY heat_base DESC LIMIT %s",
                 (min_heat, limit),
             ).fetchall()
         else:
             rows = self._execute(
-                f"SELECT * FROM {src} WHERE heat_base >= %s {bench_filter}"
+                f"SELECT * FROM {src} WHERE heat_base >= %s {bench_filter}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "ORDER BY heat_base DESC",
                 (min_heat,),
             ).fetchall()
@@ -137,7 +139,7 @@ class PgQueryMixin:
                 where = "heat_base >= %s AND (heat_base, id) < (%s, %s) "
                 params = [min_heat, last_heat, last_id]
             sql = (
-                f"SELECT {columns} FROM memories WHERE {where}{bench_filter}"
+                f"SELECT {columns} FROM memories WHERE {where}{bench_filter}"  # noqa: S608 — columns is the documented internal projection allowlist; page is int(); keyset values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 f"ORDER BY heat_base DESC, id DESC LIMIT {page}"
             )
             rows = self._execute(sql, tuple(params)).fetchall()
@@ -159,7 +161,7 @@ class PgQueryMixin:
         for r in rows:
             d = dict(r)
             if d.get("embedding") is not None:
-                from mcp_server.infrastructure.pg_store import PgMemoryStore
+                from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
                 d["embedding"] = PgMemoryStore._vector_to_bytes(d["embedding"])
             results.append(d)
@@ -252,7 +254,6 @@ class PgQueryMixin:
         Source: docs/program/phase-5-pool-admission-design.md (Phase 4
         chunked consolidate).
         """
-        from mcp_server.infrastructure.memory_config import get_memory_settings
 
         if get_memory_settings().POOL_DISABLED:
             # Kill-switch path: materialize in one call for compat.
@@ -292,7 +293,6 @@ class PgQueryMixin:
         ENGRAM (arxiv 2511.12960): per-type retrieval pools guarantee
         typed memories (preference, instruction) are not drowned out.
         """
-        import numpy as np
 
         emb = (
             np.frombuffer(query_embedding, dtype=np.float32)

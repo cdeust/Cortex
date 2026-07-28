@@ -36,6 +36,7 @@ from __future__ import annotations
 
 from mcp_server.core.schema_extraction import Schema, generate_label
 from mcp_server.shared.similarity import jaccard_similarity
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 # ── Configuration ─────────────────────────────────────────────────────────
 
@@ -131,7 +132,6 @@ def find_best_matching_schema(
     Returns:
         (best_schema, match_score). None if no schema scores above 0.1.
     """
-    from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
     if is_mechanism_disabled(Mechanism.SCHEMA_ENGINE):
         # No-op: never match a schema.

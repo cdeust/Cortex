@@ -30,6 +30,23 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any
+from mcp_server.handlers.wiki_purge import handler as wiki_purge_handler
+from mcp_server.handlers.consolidation.headless_authoring import (
+    run_headless_authoring_cycle,
+)
+from mcp_server.core.wiki_coverage_dashboard import write_dashboards
+from mcp_server.infrastructure.config import WIKI_ROOT as _WR
+from mcp_server.handlers.consolidation.wiki_source_backfill_pass import (
+    run_source_backfill_pass,
+)
+from mcp_server.handlers.consolidation.wiki_domain_backfill_pass import (
+    run_domain_backfill_pass,
+)
+from mcp_server.handlers.consolidation.wiki_citation_seed_pass import (
+    DEFAULT_SEED_SCAN_LIMIT,
+    run_wiki_citation_seed_pass,
+)
+from mcp_server.handlers.consolidation.wiki_backlog_pass import run_backlog_pass
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +109,6 @@ MAX_PURGES_PER_CYCLE = 500
 
 async def _invoke_wiki_purge(args: dict[str, Any]) -> dict[str, Any]:
     """Await the wiki_purge handler on the caller's event loop."""
-    from mcp_server.handlers.wiki_purge import handler as wiki_purge_handler
 
     return await wiki_purge_handler(args)
 
@@ -228,10 +244,6 @@ async def run_wiki_maintenance(
         out["headless_authoring"] = {"status": "disabled"}
     else:
         try:
-            from mcp_server.handlers.consolidation.headless_authoring import (
-                run_headless_authoring_cycle,
-            )
-
             cycle = await run_headless_authoring_cycle()
             out["headless_authoring"] = {
                 "pages_with_gaps": cycle.pages_with_gaps,
@@ -254,9 +266,6 @@ async def run_wiki_maintenance(
 
     # Per-project coverage dashboards (Meadows L6 information surface).
     try:
-        from mcp_server.core.wiki_coverage_dashboard import write_dashboards
-        from mcp_server.infrastructure.config import WIKI_ROOT as _WR
-
         dashboards = write_dashboards(str(_WR))
         out["dashboards"] = {
             "written": len(dashboards),
@@ -271,10 +280,6 @@ async def run_wiki_maintenance(
     # reflects pages still unlinked *after* this cycle's backfill, not
     # before it.
     try:
-        from mcp_server.handlers.consolidation.wiki_source_backfill_pass import (
-            run_source_backfill_pass,
-        )
-
         out["source_backfill"] = await run_source_backfill_pass(
             store, apply=not source_backfill_dry_run
         )
@@ -286,10 +291,6 @@ async def run_wiki_maintenance(
 
     # Domain backfill (Volet 4): re-derives true domain for catch-all pages.
     try:
-        from mcp_server.handlers.consolidation.wiki_domain_backfill_pass import (
-            run_domain_backfill_pass,
-        )
-
         out["domain_backfill"] = await run_domain_backfill_pass(
             store, apply=not domain_backfill_dry_run
         )
@@ -307,11 +308,6 @@ async def run_wiki_maintenance(
     # dict) but wrapped here anyway for defense in depth, matching every
     # other axis in this function.
     try:
-        from mcp_server.handlers.consolidation.wiki_citation_seed_pass import (
-            DEFAULT_SEED_SCAN_LIMIT,
-            run_wiki_citation_seed_pass,
-        )
-
         out["citation_seed"] = await run_wiki_citation_seed_pass(
             store,
             apply=apply_citation_seed,
@@ -327,8 +323,6 @@ async def run_wiki_maintenance(
 
     # Curation backlog.
     try:
-        from mcp_server.handlers.consolidation.wiki_backlog_pass import run_backlog_pass
-
         out.update(await run_backlog_pass(store))
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("wiki_maintenance: backlog count failed (non-fatal): %s", exc)

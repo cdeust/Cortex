@@ -174,7 +174,7 @@ def normalize_date_to_iso(raw: str) -> str | None:
         return dt.isoformat()
     # Fall back to dateutil for complex formats (e.g. "1:56 pm on 8 May, 2023")
     try:
-        from dateutil import parser as dateutil_parser
+        from dateutil import parser as dateutil_parser  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
         return dateutil_parser.parse(raw).isoformat()
     except (ValueError, OverflowError, ImportError):

@@ -260,7 +260,7 @@ def _count_rows(db_url: str) -> tuple[int, int]:
     with psycopg.connect(db_url, autocommit=True) as conn:
         for table in counts:
             try:
-                row = conn.execute(f"SELECT count(*) FROM {table}").fetchone()
+                row = conn.execute(f"SELECT count(*) FROM {table}").fetchone()  # noqa: S608 — table iterates the in-code literal dict keys memories/entities (docs/ASSURANCE-CASE.md §5)
                 if row:
                     counts[table] = int(row[0])
             except psycopg.errors.UndefinedTable:

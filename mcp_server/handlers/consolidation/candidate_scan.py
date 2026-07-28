@@ -20,6 +20,8 @@ from typing import Any
 from . import headless_authoring as _root
 from .page_io import _parse_frontmatter
 from mcp_server.observability import silent_failure
+from mcp_server.core.wiki_coverage import _project_source_root, audit_domain
+from mcp_server.shared.domain_mapping import _build_registry
 
 
 def _scan_pages_with_gaps(wiki_root: Path) -> list[tuple[Path, dict[str, Any], str]]:
@@ -40,7 +42,7 @@ def _scan_pages_with_gaps(wiki_root: Path) -> list[tuple[Path, dict[str, Any], s
         return []
     # Lazy import to keep this module self-contained.
     try:
-        from mcp_server.core.wiki_curation_gaps import missing_sections
+        from mcp_server.core.wiki_curation_gaps import missing_sections  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         missing_sections = None  # type: ignore[assignment]
 
@@ -88,9 +90,6 @@ def _collect_anchor_candidates(
                     filter and has a resolvable source root.
     """
     try:
-        from mcp_server.core.wiki_coverage import _project_source_root, audit_domain
-        from mcp_server.shared.domain_mapping import _build_registry
-
         domains = sorted({r.canonical for r in _build_registry().repos})
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
         silent_failure.note("candidate_scan.registry", exc)

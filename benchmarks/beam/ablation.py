@@ -36,6 +36,7 @@ from benchmarks.beam.data import (
 )
 from benchmarks.lib.bench_db import BenchmarkDB
 from mcp_server.core.pg_recall import recall as pg_recall
+import mcp_server.core.pg_recall as pgr
 
 # Minimum turn length for a turn to seed an 80-char prefix match key.
 # source: pre-existing tuned value, extracted unchanged (#197 family 3);
@@ -237,7 +238,6 @@ def ablation_signal_weights(ds, db):
     # Test FTS weight variations
     print("\n--- FTS weight ---")
     # We need to monkey-patch compute_pg_weights for this
-    import mcp_server.core.pg_recall as pgr
 
     original_compute = pgr.compute_pg_weights
 

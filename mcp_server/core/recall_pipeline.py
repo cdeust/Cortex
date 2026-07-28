@@ -33,6 +33,17 @@ from typing import Any
 
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 from mcp_server.observability import silent_failure
+from mcp_server.core import dual_process_retrieval as dpr, hopfield, conflict_monitor
+from mcp_server.core.hopfield import cosine_similarity
+from mcp_server.core.hdc_encoder import compute_hdc_scores
+from mcp_server.core.query_decomposition import extract_query_entities
+from mcp_server.shared.text import extract_keywords
+from mcp_server.shared.similarity import jaccard_similarity
+from mcp_server.shared.vader import vader_compound
+from mcp_server.core.value_learning import retrieval_priority
+from mcp_server.core.goal_maintenance import goal_recall_multiplier
+from mcp_server.core.attentional_control import allocate_attention
+from mcp_server.core.reconsolidation import compute_reconsolidation_action
 
 logger = logging.getLogger(__name__)
 
@@ -242,7 +253,6 @@ def familiarity_triage(
       - Yonelinas (2002). J. Mem. Lang. 46(3):441-517.
       - Diana, Yonelinas & Ranganath (2007). Trends Cogn. Sci. 11(9):379-386.
     """
-    from mcp_server.core import dual_process_retrieval as dpr
 
     # Ablation / degenerate guards: identity triage (full recollection runs).
     if is_mechanism_disabled(Mechanism.DUAL_PROCESS) or not candidates or q_emb is None:
@@ -252,8 +262,6 @@ def familiarity_triage(
             recollection_needed=True,
             shortcut=False,
         )
-
-    from mcp_server.core.hopfield import cosine_similarity
 
     ids = [c["memory_id"] for c in candidates]
     emb_by_id: dict[Any, bytes] = {}
@@ -336,8 +344,6 @@ def hopfield_complete(
     if not candidates or q_emb is None:
         return candidates
 
-    from mcp_server.core import hopfield
-
     # Single bulk round trip when the store supports it; else fall back.
     ids = [c["memory_id"] for c in candidates]
     pairs: list[tuple[int, bytes]] = []
@@ -394,8 +400,6 @@ def hdc_rerank(
     if not candidates:
         return candidates
 
-    from mcp_server.core.hdc_encoder import compute_hdc_scores
-
     pairs = [(c["memory_id"], c.get("content", "") or "") for c in candidates]
     hdc = compute_hdc_scores(query, pairs, threshold=-1.0)  # keep all ranks
     if not hdc:
@@ -437,7 +441,6 @@ def spreading_activation_status() -> dict[str, str | None]:
 def _sa_query_terms(query: str) -> list[str]:
     """Extract query terms for entity-name seed resolution (shared by
     both SA modes)."""
-    from mcp_server.core.query_decomposition import extract_query_entities
 
     return list(
         set(
@@ -783,8 +786,6 @@ def _resolve_query_entity_ids(query: str, store: Any) -> set[int]:
     empty set if nothing resolves; callers fall back to the
     token-Jaccard proxy.
     """
-    from mcp_server.core.query_decomposition import extract_query_entities
-    from mcp_server.shared.text import extract_keywords
 
     if not hasattr(store, "get_entity_by_name"):
         return set()
@@ -867,8 +868,6 @@ def dendritic_modulate(
     if not candidates or delta <= 0.0:
         return candidates
 
-    from mcp_server.shared.similarity import jaccard_similarity
-
     # Try the real entity-graph path first. q_eids is non-empty only
     # when both the store supports bulk-by-id AND the query resolves.
     q_eids: set[int] = set()
@@ -950,8 +949,6 @@ def emotional_retrieval_rerank(
     if not candidates:
         return candidates
 
-    from mcp_server.shared.vader import vader_compound
-
     q_valence = vader_compound(query)
     if abs(q_valence) < valence_floor:
         # Neutral query — no useful congruence signal to inject.
@@ -1001,8 +998,6 @@ def value_priority_rerank(
         return candidates
     if not candidates or len(candidates) < _MIN_RERANK_CANDIDATES:
         return candidates
-
-    from mcp_server.core.value_learning import retrieval_priority
 
     for c in candidates:
         base = c.get("score", 0.0) or 0.0
@@ -1054,8 +1049,6 @@ def goal_maintenance_rerank(
         return candidates
     if goal is None or not getattr(goal, "is_active", False):
         return candidates
-
-    from mcp_server.core.goal_maintenance import goal_recall_multiplier
 
     for c in candidates:
         base = c.get("score", 0.0) or 0.0
@@ -1130,8 +1123,6 @@ def attentional_focus_rerank(
         return candidates
     if not candidates or len(candidates) < _MIN_RERANK_CANDIDATES:
         return candidates
-
-    from mcp_server.core.attentional_control import allocate_attention
 
     n = len(candidates)
     # Map recall-candidate fields onto the item shape allocate_attention reads
@@ -1211,9 +1202,6 @@ def reconsolidation_apply(
         return candidates
     if store is None:
         return candidates
-
-    from mcp_server.core.reconsolidation import compute_reconsolidation_action
-    from mcp_server.shared.vader import vader_compound
 
     q_valence = vader_compound(query) if query else 0.0
     q_tokens: set[str] = {
@@ -1374,8 +1362,6 @@ def conflict_monitor_rerank(
         return candidates
     if not candidates or len(candidates) < _MIN_RERANK_CANDIDATES:
         return candidates
-
-    from mcp_server.core import conflict_monitor
 
     try:
         assessment = conflict_monitor.assess_conflict(candidates)

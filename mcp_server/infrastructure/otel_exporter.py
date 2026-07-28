@@ -116,12 +116,12 @@ def build_otel_exporter() -> OtelTelemetryExporter | None:
     if not endpoint:
         return None
     try:
-        from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
+        from opentelemetry.exporter.otlp.proto.http.metric_exporter import (  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
             OTLPMetricExporter,
         )
-        from opentelemetry.sdk.metrics import MeterProvider
-        from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.metrics import MeterProvider  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from opentelemetry.sdk.resources import Resource  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         _warn_missing_sdk_once()
         return None

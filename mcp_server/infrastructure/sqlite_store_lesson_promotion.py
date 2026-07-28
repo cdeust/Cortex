@@ -44,6 +44,6 @@ def count_lesson_promotion_candidates(conn: PsycopgCompatConnection) -> int:
     counts. Read-only.
     """
     row = conn.execute(
-        f"SELECT count(*) AS n FROM current_memories m WHERE {_ELIGIBLE_WHERE}"
+        f"SELECT count(*) AS n FROM current_memories m WHERE {_ELIGIBLE_WHERE}"  # noqa: S608 — interpolated fragment is the module-level literal _ELIGIBLE_WHERE; values are bound parameters (docs/ASSURANCE-CASE.md §5)
     ).fetchone()
     return int(row["n"]) if row else 0

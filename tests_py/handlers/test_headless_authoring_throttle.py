@@ -378,11 +378,11 @@ class TestGroundableFilter:
         fake_registry = MagicMock()
         fake_registry.repos = [fake_repo]
         monkeypatch.setattr(
-            "mcp_server.shared.domain_mapping._build_registry",
+            "mcp_server.handlers.consolidation.drain_operations._build_registry",
             lambda: fake_registry,
         )
         monkeypatch.setattr(
-            "mcp_server.core.wiki_coverage._project_source_root",
+            "mcp_server.handlers.consolidation.drain_operations._project_source_root",
             lambda d: str(tmp_path) if d == "test-proj" else None,
         )
 
@@ -393,7 +393,7 @@ class TestGroundableFilter:
         fake_cov = MagicMock()
         fake_cov.scopes = [groundable_sc, ungroundable_sc]
         monkeypatch.setattr(
-            "mcp_server.core.wiki_coverage.audit_domain",
+            "mcp_server.handlers.consolidation.drain_operations.audit_domain",
             lambda wiki_root, domain: fake_cov,
         )
 
@@ -426,11 +426,11 @@ class TestGroundableFilter:
         fake_registry = MagicMock()
         fake_registry.repos = [fake_repo]
         monkeypatch.setattr(
-            "mcp_server.shared.domain_mapping._build_registry",
+            "mcp_server.handlers.consolidation.candidate_scan._build_registry",
             lambda: fake_registry,
         )
         monkeypatch.setattr(
-            "mcp_server.core.wiki_coverage._project_source_root",
+            "mcp_server.handlers.consolidation.candidate_scan._project_source_root",
             lambda d: str(tmp_path),
         )
 
@@ -441,7 +441,7 @@ class TestGroundableFilter:
         fake_cov = MagicMock()
         fake_cov.scopes = [groundable_sc, ungroundable_sc, another_ungroundable]
         monkeypatch.setattr(
-            "mcp_server.core.wiki_coverage.audit_domain",
+            "mcp_server.handlers.consolidation.candidate_scan.audit_domain",
             lambda wiki_root, domain: fake_cov,
         )
 

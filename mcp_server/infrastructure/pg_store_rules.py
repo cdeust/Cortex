@@ -53,7 +53,7 @@ class PgRuleMixin:
         return [dict(r) for r in rows]
 
     def update_rule(self, rule_id: int, updates: dict[str, Any]) -> None:
-        from psycopg import sql
+        from psycopg import sql  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
         allowed = {
             "rule_type",

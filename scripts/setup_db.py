@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 
 def _safe_ident(name: str) -> str:
@@ -129,7 +130,7 @@ def _probe_database(host: str, port: str, dbname: str) -> tuple[str, str]:
                 "-d",
                 "postgres",
                 "-tAc",
-                f"SELECT 1 FROM pg_database WHERE datname = '{_safe_ident(dbname)}'",
+                f"SELECT 1 FROM pg_database WHERE datname = '{_safe_ident(dbname)}'",  # noqa: S608 — dbname validated by _safe_ident (strict identifier regex, refuses on mismatch) — refuse-not-escape (docs/ASSURANCE-CASE.md §5)
             ],
             capture_output=True,
             timeout=5,
@@ -198,9 +199,9 @@ def _init_schema(database_url: str) -> tuple[bool, str]:
     the remaining tables and functions from being created.
     """
     try:
-        import psycopg
-        from psycopg.rows import dict_row
-        from mcp_server.infrastructure.pg_schema import get_all_ddl
+        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from psycopg.rows import dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from mcp_server.infrastructure.pg_schema import get_all_ddl  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
         conn = psycopg.connect(database_url, row_factory=dict_row, autocommit=True)
         errors: list[str] = []
@@ -225,7 +226,7 @@ def _init_schema(database_url: str) -> tuple[bool, str]:
 def _count_memories(database_url: str) -> int:
     """Count existing memories in the database."""
     try:
-        import psycopg
+        import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
         conn = psycopg.connect(database_url, autocommit=True)
         row = conn.execute("SELECT COUNT(*) as c FROM memories").fetchone()
@@ -238,7 +239,6 @@ def _count_memories(database_url: str) -> int:
 
 def _count_session_files() -> int:
     """Count JSONL session files in ~/.claude/projects/."""
-    from pathlib import Path
 
     projects_dir = Path.home() / ".claude" / "projects"
     if not projects_dir.exists():

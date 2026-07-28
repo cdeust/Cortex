@@ -172,7 +172,7 @@ class EmbeddingEngine(_EmbeddingLifecycleMixin, _EmbeddingMathMixin):
         if self._unavailable:
             return False
         try:
-            import sentence_transformers  # noqa: F401
+            import sentence_transformers  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
 
             return True
         except ImportError:

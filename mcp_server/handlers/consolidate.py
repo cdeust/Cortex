@@ -37,6 +37,7 @@ from mcp_server.infrastructure.embedding_engine import (
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.hooks.consolidate_background import _write_stamp
 
 logger = logging.getLogger(__name__)
 
@@ -307,8 +308,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     # User directive 2026-05-18: consolidate must never require manual
     # invocation; the stamp closes the loop with the SessionStart hook.
     try:
-        from mcp_server.hooks.consolidate_background import _write_stamp
-
         _write_stamp()
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("consolidate stamp write failed (non-fatal): %s", exc)

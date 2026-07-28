@@ -62,6 +62,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
+from .authoring_prompts import _delegation_hint
 
 logger = logging.getLogger(__name__)
 
@@ -402,7 +403,6 @@ def _delegation_hint_for(kind: str) -> str | None:
     """
     if not CORTEX_HEADLESS_AGENTS:
         return None
-    from .authoring_prompts import _delegation_hint
 
     return _delegation_hint(kind)
 

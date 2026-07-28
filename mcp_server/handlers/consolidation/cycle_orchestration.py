@@ -39,6 +39,8 @@ from typing import Any
 from . import headless_authoring as _root
 from .drain_operations import drain_all_gaps_on_page
 from .page_io import _scope_anchor_prompt, _write_anchor_page
+from datetime import datetime, timezone
+from mcp_server.infrastructure.config import WIKI_ROOT
 
 
 async def run_headless_authoring_cycle(
@@ -64,12 +66,9 @@ async def run_headless_authoring_cycle(
     Invariant:      no more than CORTEX_HEADLESS_CONCURRENCY in-flight
                     subprocess calls at any point in the cycle.
     """
-    from datetime import datetime, timezone
 
     cycle_start = time.monotonic()
     if wiki_root is None:
-        from mcp_server.infrastructure.config import WIKI_ROOT
-
         wiki_root = Path(WIKI_ROOT)
 
     today = datetime.now(timezone.utc).date().isoformat()

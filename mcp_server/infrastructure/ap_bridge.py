@@ -27,6 +27,9 @@ from typing import Any
 from mcp_server.errors import McpConnectionError
 from mcp_server.infrastructure.mcp_client import MCPClient
 from mcp_server.observability import silent_failure
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from pathlib import Path
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +64,6 @@ def is_enabled() -> bool:
     in-process AST source fills the L6 ring.
     """
     try:
-        from mcp_server.infrastructure.memory_config import get_memory_settings
-
         return bool(get_memory_settings().AP_ENABLED)
     except Exception as exc:  # noqa: BLE001 — config unavailable (test import-order edge case): on-by-default; observable via silent_failure
         silent_failure.note("ap_bridge.settings_read", exc)
@@ -82,7 +83,6 @@ def resolve_graph_path() -> str | None:
     raw = (os.environ.get("CORTEX_AP_GRAPH_PATH") or "").strip()
     if raw:
         return raw
-    from pathlib import Path
 
     default = Path.home() / ".cortex" / "ap_graph" / "graph"
     if default.exists():
@@ -117,11 +117,7 @@ def resolve_graph_paths() -> list[str]:
 
     raw = (os.environ.get("CORTEX_AP_GRAPH_PATH") or "").strip()
     if raw:
-        from pathlib import Path
-
         _add(Path(raw))
-
-    from pathlib import Path
 
     legacy = Path.home() / ".cortex" / "ap_graph" / "graph"
     _add(legacy)
@@ -158,15 +154,12 @@ def _resolve_command() -> dict | None:
     """
     raw = os.environ.get("CORTEX_AP_COMMAND")
     if raw:
-        import json
-
         try:
             cfg = json.loads(raw)
         except ValueError:
             return None
         if isinstance(cfg, dict) and "command" in cfg:
             return cfg
-    from pathlib import Path
 
     home = Path.home()
     # Methodology bin symlink (preferred — same path the live MCP
@@ -184,7 +177,6 @@ def _resolve_command() -> dict | None:
     # ``node ensure-binary.sh`` → SyntaxError. Resolve the active install the
     # way the plugin's launcher does. source: user report (two installs:
     # 0.0.9 + 0.2.0; must pick the active one, not glob).
-    import json
 
     installed = home / ".claude/plugins/installed_plugins.json"
     try:

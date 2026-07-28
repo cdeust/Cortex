@@ -31,6 +31,7 @@ from mcp_server.shared.algorithmic_embedding import (  # noqa: E402
     _WINDOW,
     index_vector,
 )
+import json  # noqa: E402
 
 
 def _tf_weights(tokens):
@@ -133,8 +134,7 @@ VARIANTS = {
 
 
 def main() -> None:
-    import benchmarks.longmemeval.run_sqlite_fallback_bench as bench
-    import json
+    import benchmarks.longmemeval.run_sqlite_fallback_bench as bench  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
     data_path = REPO / "benchmarks/longmemeval/longmemeval_s.json"
     dataset = json.loads(data_path.read_text())[:50]
