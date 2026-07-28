@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="216" height="20" viewBox="0 0 216 20" role="img" aria-label="MCP Toplist: Top 1.2%, July 2026">
+  <title>MCP Toplist: Top 1.2% (July 2026)</title>
+  <!-- Snapshot badge. Source: mcptoplist.com ranked hypermnesia-mcp #964 of 81,919
+       tracked MCP servers on 2026-07-28 (964/81919 = 1.18% -> "Top 1.2%").
+       Verify: https://mcptoplist.com/server/io.github.cdeust%2Fhypermnesia-mcp
+       Their score is a popularity/activity signal, not a quality assessment, and
+       ~25% of its weighting is undisclosed. Static by design: it cannot silently
+       restate itself, so the date is part of the claim. Re-check before bumping. -->
+  <clipPath id="r">
+    <rect width="216" height="20" rx="3" fill="#fff"/>
+  </clipPath>
+  <g clip-path="url(#r)">
+    <rect width="92" height="20" fill="#3b3129"/>
+    <rect x="92" width="124" height="20" fill="#a53e00"/>
+  </g>
+  <!-- bar-chart glyph -->
+  <g fill="#f1eee7">
+    <rect x="7" y="10" width="2.6" height="5" rx="0.6"/>
+    <rect x="11.2" y="6.5" width="2.6" height="8.5" rx="0.6"/>
+    <rect x="15.4" y="8.4" width="2.6" height="6.6" rx="0.6"/>
+  </g>
+  <g font-family="Verdana,DejaVu Sans,Geneva,sans-serif" font-size="11">
+    <text x="54" y="15" fill="#000" fill-opacity="0.25" text-anchor="middle" textLength="64" lengthAdjust="spacingAndGlyphs">MCP Toplist</text>
+    <text x="54" y="14" fill="#f8f7f2" text-anchor="middle" textLength="64" lengthAdjust="spacingAndGlyphs">MCP Toplist</text>
+    <text x="154" y="15" fill="#000" fill-opacity="0.25" text-anchor="middle" textLength="110" lengthAdjust="spacingAndGlyphs">Top 1.2% · Jul 2026</text>
+    <text x="154" y="14" fill="#fff" text-anchor="middle" textLength="110" lengthAdjust="spacingAndGlyphs">Top 1.2% · Jul 2026</text>
+  </g>
+</svg>

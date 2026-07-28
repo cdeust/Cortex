@@ -12,6 +12,7 @@
   <img src="https://img.shields.io/badge/references-97_papers-orange.svg" alt="References">
   <img src="https://img.shields.io/badge/version-4.16.0-brightgreen.svg" alt="Version 4.16.0">
   <a href="https://www.bestpractices.dev/projects/13836"><img src="https://www.bestpractices.dev/projects/13836/badge" alt="OpenSSF Best Practices"></a>
+  <a href="https://mcptoplist.com/server/io.github.cdeust%2Fhypermnesia-mcp"><img src="assets/badge-mcp-toplist.svg" alt="MCP Toplist: Top 1.2% of 81,919 tracked MCP servers, July 2026"></a>
 </p>
 
 <p align="center">
