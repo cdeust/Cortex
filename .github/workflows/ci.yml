@@ -481,6 +481,70 @@ jobs:
           name: dist
           path: dist/
 
+  # The two images below had NO CI build at all until this change, so a
+  # regression in either was invisible until someone built it by hand. That
+  # is not hypothetical: docker/Dockerfile copied a python3.12 site-packages
+  # path against a python:3.14 base and could not build, and nothing said so.
+  #
+  # These build only — no smoke run. docker/Dockerfile brings up PostgreSQL
+  # and pre-caches models, and .devcontainer/Dockerfile is opened by the Dev
+  # Containers CLI; asserting their runtime behaviour is a separate job with
+  # separate services. The claim here is narrow and worth making on its own:
+  # the image still builds, and its hash-pinned installs still resolve.
+  docker-runtime-build:
+    name: Docker Build (runtime image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # This image carries PostgreSQL 17, Node 22, torch and a pre-cached
+      # embedding model. A stock runner has ~14GB free, which the build can
+      # exhaust; the preinstalled toolchains below are worth ~10GB and are
+      # not used by it.
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo rm -rf /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          df -h /
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build docker/Dockerfile
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          tags: cortex-runtime:ci
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  devcontainer-build:
+    name: Docker Build (devcontainer image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo rm -rf /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          df -h /
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build .devcontainer/Dockerfile
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ./.devcontainer/Dockerfile
+          tags: cortex-devcontainer:ci
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   docker-smoke:
     name: Docker Smoke (bare-container DB-less contract)
     runs-on: ubuntu-latest
