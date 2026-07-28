@@ -128,7 +128,7 @@ decoratively:
 
 Standing analysis: CodeQL default setup (Python, JavaScript/TypeScript,
 Actions) on every push and pull request plus weekly, currently 0 open alerts;
-OpenSSF Scorecard via `.github/workflows/scorecard.yml`; and 6275 tests run on
+OpenSSF Scorecard via `.github/workflows/scorecard.yml`; and 6297 tests run on
 four Python versions, two backends and Windows.
 
 ## 6. What this assurance case does NOT claim
@@ -150,12 +150,15 @@ four Python versions, two backends and Windows.
   [#228](https://github.com/cdeust/Cortex/issues/228)). Raising mutation
   strength across the load-bearing set remains item 1 on
   [ROADMAP.md](ROADMAP.md).
-- **Warnings are not yet maximally strict.** Ruff runs its default rule set, so
-  the weakness classes a broader rule set would flag are currently invisible to
-  the build. Pyright runs `standard` (raised from `basic` 2026-07-27) behind a
-  per-rule ratchet; `strict` remains out of reach — it reports 10,231 errors,
-  ~9,300 of them the Unknown-type family, which is an annotation-coverage
-  project rather than a configuration change (measured, issue #197).
+- **Pyright `strict` is not the operating mode.** The build type-checks at
+  `standard` with **zero diagnostics** (568-diagnostic backlog burned down,
+  issue #197, 2026-07-28) and ruff enforces an explicit, broadened rule set
+  (`E4/E7/E9/F/S110/BLE001/PLR2004/E501/PLC0415/S608`, each finding fixed or
+  carrying a per-site named mechanism) — that is the "maximally strict, where
+  practical" posture. `strict` mode remains out of reach: it reports 10,231
+  errors, ~9,300 of them the Unknown-type family, which is an
+  annotation-coverage project rather than a configuration change (measured,
+  issue #197).
 - **No dynamic analysis is performed.** There is no fuzzer and no sanitizer
   run; the language removes the memory-safety motivation for one, but that is
   an argument about a class of bug, not a substitute for the technique.

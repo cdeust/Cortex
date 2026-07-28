@@ -381,30 +381,28 @@ jobs:
       # Pyright resolves third-party imports from ./.venv (pinned in
       # pyrightconfig.json: venvPath="."/venv=".venv"). The full stub set MUST
       # be installed or every import collapses to Unknown — and Unknown
-      # SUPPRESSES downstream type errors, making the baseline meaningless.
+      # SUPPRESSES downstream type errors, silently masking real defects.
       # source: measured 2026-06-18 — an unresolved env reports 566 errors, a
       # fully-resolved env reports 593 (Unknown was masking 27+ real errors).
-      # flashrank (core reranker) + sqlite-vec live outside dev/postgresql/codebase.
+      # flashrank (core reranker) + sqlite-vec live outside dev/postgresql/
+      # codebase; [otel] resolves the opentelemetry exporter imports.
       - name: Create .venv with the full type-check environment
         run: |
           python -m venv .venv
           .venv/bin/pip install -U pip
-          .venv/bin/pip install -e ".[dev,postgresql,sqlite,codebase]" flashrank
-          # Pin pyright — diagnostic output drifts between releases, so the
-          # committed baseline is only comparable against the pinned version.
+          .venv/bin/pip install -e ".[dev,postgresql,sqlite,codebase,otel]" flashrank
+          # Pin pyright — diagnostic output drifts between releases, so a
+          # zero-diagnostic tree is only comparable against the pinned version.
           .venv/bin/pip install pyright==1.1.410
 
-      # The ratchet IS the gate. pyright always exits non-zero while the
-      # 568-error backlog stands, so its own exit is ignored (|| true); the
-      # build fails only when a --blocking rule regresses past its committed
-      # baseline (0). Add rules to --blocking as each batch drives them to
-      # their floor — see docs/provenance/pyright-remediation-plan.md.
-      - name: Run pyright + per-rule ratchet gate
-        run: |
-          .venv/bin/python -m pyright --outputjson mcp_server/ > pyright-current.json || true
-          .venv/bin/python scripts/check_pyright_ratchet.py \
-            pyright-current.json typecheck-baseline.json \
-            --blocking reportOptionalMemberAccess reportOptionalSubscript
+      # pyright IS the gate: the backlog was burned to zero (issue #197,
+      # 568 baselined diagnostics -> 0 measured 2026-07-28), so ANY
+      # diagnostic — any rule, any severity-error — fails the build via
+      # pyright's own exit code. The former per-rule ratchet
+      # (scripts/check_pyright_ratchet.py + typecheck-baseline.json) is
+      # retired: a floor file only exists to tolerate a backlog.
+      - name: Run pyright (zero-diagnostic gate)
+        run: .venv/bin/python -m pyright mcp_server/
 
   build:
     name: Build Package

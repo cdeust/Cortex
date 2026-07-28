@@ -40,7 +40,7 @@ bash scripts/setup.sh        # macOS / Linux
 # Verify everything is wired
 uvx --python 3.13 --from "hypermnesia-mcp[postgresql]" cortex-doctor
 
-# Run tests (6275 tests under tests_py/)
+# Run tests (6297 tests under tests_py/)
 pytest
 
 # Run a benchmark
@@ -113,11 +113,10 @@ project-specific rules:
 - **No mutable default arguments.** No globals except for read-once
   configuration objects.
 - **No bare `except:`.** Catch the specific exception you mean.
-- **Type-checked under a ratchet.** `pyright` (pinned 1.1.410) runs over
-  `mcp_server/` and `scripts/check_pyright_ratchet.py` fails the build if any
-  rule's diagnostic count rises above its floor in
-  [`typecheck-baseline.json`](typecheck-baseline.json). New code must not add
-  diagnostics; the floors only come down. Remediation plan:
+- **Type-checked at zero.** `pyright` (pinned 1.1.410, `typeCheckingMode:
+  "standard"`) runs over `mcp_server/` and ANY diagnostic fails the build —
+  the 568-diagnostic ratchet backlog was burned to zero in issue #197
+  (2026-07-28) and the ratchet retired. History:
   [`docs/provenance/pyright-remediation-plan.md`](docs/provenance/pyright-remediation-plan.md).
 - **§4.1 File ≤500 lines, §4.2 function ≤50 lines.**
 
@@ -129,7 +128,7 @@ The full standard lives in
 ## Testing
 
 ```bash
-pytest                              # full suite (6275 tests)
+pytest                              # full suite (6297 tests)
 pytest tests_py/core                # core (pure business logic) only
 pytest tests_py/integration         # PostgreSQL-backed integration
 pytest tests_py/benchmarks -k locomo # subset
@@ -187,8 +186,8 @@ mechanically for the modules it is scoped to.
   is not a citation.
 - Don't introduce a heavy ML model dependency that breaks the
   runs-on-your-machine guarantee.
-- Don't raise a pyright ratchet floor to make the build pass. The type system
-  is the contract; the floors only come down.
+- Don't suppress a pyright diagnostic to make the build pass. The type
+  system is the contract; the tree stays at zero diagnostics.
 - Don't relax a test that fails on your branch. The test exists for a
   reason; understand the reason before changing it.
 

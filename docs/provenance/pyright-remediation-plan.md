@@ -13,6 +13,14 @@
 > `sqlite3.Connection`). `strict` reports 10,231 and stays out of scope.
 > The blocking rules (`reportOptionalMemberAccess`, `reportOptionalSubscript`)
 > are at 0 and `typecheck-baseline.json` is unchanged — no floor was raised.
+>
+> **Update 2026-07-28 (issue #197, final).** The backlog is **zero**: all 568
+> baselined diagnostics were fixed (no rule disabled, no floor raised; the
+> only per-site suppression is the unpublished optional `cortex_beam_abstain`
+> import, whose `except ImportError` arm is the documented degraded mode).
+> `typecheck-baseline.json` and `scripts/check_pyright_ratchet.py` are
+> retired; CI now fails on ANY pyright diagnostic via pyright's own exit
+> code. This document is historical.
 
 ---
 

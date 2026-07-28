@@ -80,6 +80,15 @@ class TestGetMemoriesByTag:
             second
         ]
 
+    def test_default_limit_caps_at_twenty(self, store):
+        # Pins the documented default (mutation run 2026-07-28: the 20->21
+        # mutant survived every other assertion).
+        for i in range(21):
+            store.insert_memory(
+                _mem(f"m{i}", tags=["cap-tag"], created_at=f"2026-01-{i + 1:02d}")
+            )
+        assert len(store.get_memories_by_tag("cap-tag")) == 20
+
     def test_stale_rows_are_excluded(self, store):
         mid = store.insert_memory(_mem("stale", tags=["x-tag"]))
         store._conn.execute("UPDATE memories SET is_stale = 1 WHERE id = ?", (mid,))

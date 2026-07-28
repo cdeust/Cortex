@@ -96,10 +96,10 @@ def submodular_select(
                 continue
 
             # Marginal relevance = score - λ * max sim to already-selected
-            if not selected_embs or embeddings[i] is None:
+            emb = embeddings[i]
+            if not selected_embs or emb is None:
                 penalty = 0.0
             else:
-                emb = embeddings[i]
                 sims = [
                     float(
                         np.dot(emb, s)

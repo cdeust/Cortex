@@ -756,22 +756,35 @@ class SqliteMemoryStore(
         ``<=>`` operator, so the candidate rows are scored with the same
         numpy cosine the fallback vector search uses.
         """
+        if not self._has_vec:
+            # Without sqlite-vec no vectors are persisted at all, so there is
+            # no interference signal to compute — same empty result the PG
+            # query yields for a corpus with NULL embeddings.
+            return []
         query_vec = self._bytes_to_vector(query_embedding)
         if query_vec is None:
             return []
         q_norm = float(np.linalg.norm(query_vec))
         if q_norm == 0.0:
             return []
+        # Embeddings live in the memories_vec virtual table; join client-side
+        # per the established idiom (sqlite_store_search.get_hot_embeddings):
+        # fetch candidate rows, then the vector per rowid.
         rows = self._conn.execute(
-            "SELECT id, embedding, created_at FROM memories "
-            "WHERE created_at > ? AND id != ? AND is_stale = 0 "
-            "AND embedding IS NOT NULL",
+            "SELECT id, created_at FROM memories "
+            "WHERE created_at > ? AND id != ? AND is_stale = 0",
             (after, exclude_id),
         ).fetchall()
         now = datetime.now(timezone.utc)
         scored: list[tuple[float, float]] = []
         for r in rows:
-            vec = self._bytes_to_vector(r["embedding"])
+            vec_row = self._conn.execute(
+                "SELECT embedding FROM memories_vec WHERE rowid = ?",
+                (int(r["id"]),),
+            ).fetchone()
+            if vec_row is None:
+                continue
+            vec = self._bytes_to_vector(vec_row["embedding"])
             if vec is None or vec.shape != query_vec.shape:
                 continue
             denom = q_norm * float(np.linalg.norm(vec))
