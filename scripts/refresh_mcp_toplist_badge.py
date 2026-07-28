@@ -44,7 +44,17 @@ from dataclasses import dataclass
 from datetime import date, timezone, datetime
 from pathlib import Path
 from typing import Callable, Iterable
-from xml.sax.saxutils import escape
+
+# badge_render.py is a stdlib-only sibling module (the shields-style SVG
+# geometry, shared with generate_repo_badges.py). Path-based import for the
+# same reason the launcher family path-imports its siblings: resolves
+# identically whether this file is run as a script (script dir already on
+# sys.path) or loaded directly via importlib.util.spec_from_file_location
+# from a test.
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+import badge_render  # noqa: E402
 
 SERVER_ID = "io.github.cdeust/hypermnesia-mcp"
 LEADERBOARD_URL = "https://mcptoplist.com/data/leaderboard.json"
@@ -199,41 +209,6 @@ def parse_server_page(html: str) -> Ranking:
     return validate(match.group(1), match.group(2), "server page")
 
 
-def _text_width(text: str) -> int:
-    """Nominal px width of badge text at font-size 11.
-
-    source: measured 2026-07-28 — the 19-character string
-    "Top 1.2% · Jul 2026" renders correctly at textLength=110 in
-    Verdana/DejaVu Sans, i.e. 5.79 px/char across this badge's glyph set
-    (digits, lowercase, '%', '·', '<'). The set is narrow and fixed, so a
-    per-character mean is adequate here.
-
-    Correctness does not depend on this estimate: every <text> is emitted
-    with textLength + lengthAdjust, which SCALES the glyphs into the width
-    given. An inaccurate estimate therefore costs letter-spacing, never
-    overflow past the panel edge.
-    """
-    return max(1, round(5.79 * len(text)))
-
-
-def _text_pair(x: float, width: int, text: str, fill: str) -> list[str]:
-    """The drop-shadow run and the face run for one label.
-
-    Emitted as a pair because they always occur together: the faint offset
-    copy is what keeps light text legible on the panel fill.
-    """
-    shared = (
-        f'text-anchor="middle" textLength="{width}" lengthAdjust="spacingAndGlyphs"'
-    )
-    return [
-        (
-            f'    <text x="{x:g}" y="15" fill="#000" fill-opacity="0.25" '
-            f"{shared}>{text}</text>"
-        ),
-        f'    <text x="{x:g}" y="14" fill="{fill}" {shared}>{text}</text>',
-    ]
-
-
 def _provenance_comment(ranking: Ranking, as_of: date) -> list[str]:
     """The audit trail the badge carries in its own source.
 
@@ -260,51 +235,39 @@ def _provenance_comment(ranking: Ranking, as_of: date) -> list[str]:
 def render_badge(ranking: Ranking, as_of: date) -> str:
     """Render the badge SVG.
 
-    No <style> block and no external font: GitHub's SVG sanitizer strips
-    both, so a badge depending on either renders unstyled on the one
-    surface it exists for. Palette is assets/banner.svg's.
+    Geometry, escaping and the no-<style>/no-external-font constraints live
+    in badge_render; what stays here is what makes this badge THIS badge —
+    the bar icon, the banner palette, and the wording of the claim.
     """
     tier = ranking.tier_text()
     stamp = f"{_MONTHS[as_of.month - 1]} {as_of.year}"
-    message = f"{tier} · {stamp}"
-    msg_w = _text_width(message)
-    right_w = msg_w + 14  # 7px padding each side
-    label_w = _LABEL_PANEL_W
-    total_w = label_w + right_w
-    msg_mid = label_w + right_w / 2
     alt = f"MCP Toplist: {tier} of {ranking.total:,} tracked MCP servers, {stamp}"
-    # A top-of-field rank renders the tier as "Top <0.1%"; that '<' must not
-    # reach markup unescaped or the badge stops being parseable XML.
-    message_xml = escape(message)
-    alt_xml = escape(alt, {'"': "&quot;"})
-    lines = [
-        (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{total_w}"'
-            f' height="20" viewBox="0 0 {total_w} 20" role="img"'
-            f' aria-label="{alt_xml}">'
+    label = badge_render.Panel(
+        text="MCP Toplist",
+        fill="#3b3129",
+        text_fill="#f8f7f2",
+        # Explicit, not derived: the bar icon displaces the label text, so
+        # this panel is not centred on its own midpoint.
+        width=_LABEL_PANEL_W,
+        text_width=_LABEL_TEXT_W,
+        text_x=54,
+    )
+    spec = badge_render.BadgeSpec(
+        label=label,
+        message=f"{tier} · {stamp}",
+        message_fill="#a53e00",
+        message_text_fill="#fff",
+        alt=alt,
+        provenance=tuple(_provenance_comment(ranking, as_of)),
+        icon=(
+            '  <g fill="#f1eee7">',
+            '    <rect x="7" y="10" width="2.6" height="5" rx="0.6"/>',
+            '    <rect x="11.2" y="6.5" width="2.6" height="8.5" rx="0.6"/>',
+            '    <rect x="15.4" y="8.4" width="2.6" height="6.6" rx="0.6"/>',
+            "  </g>",
         ),
-        f"  <title>{alt_xml}</title>",
-        *_provenance_comment(ranking, as_of),
-        '  <clipPath id="r">',
-        f'    <rect width="{total_w}" height="20" rx="3" fill="#fff"/>',
-        "  </clipPath>",
-        '  <g clip-path="url(#r)">',
-        f'    <rect width="{label_w}" height="20" fill="#3b3129"/>',
-        f'    <rect x="{label_w}" width="{right_w}" height="20" fill="#a53e00"/>',
-        "  </g>",
-        '  <g fill="#f1eee7">',
-        '    <rect x="7" y="10" width="2.6" height="5" rx="0.6"/>',
-        '    <rect x="11.2" y="6.5" width="2.6" height="8.5" rx="0.6"/>',
-        '    <rect x="15.4" y="8.4" width="2.6" height="6.6" rx="0.6"/>',
-        "  </g>",
-        '  <g font-family="Verdana,DejaVu Sans,Geneva,sans-serif" font-size="11">',
-        *_text_pair(54, _LABEL_TEXT_W, "MCP Toplist", "#f8f7f2"),
-        *_text_pair(msg_mid, msg_w, message_xml, "#fff"),
-        "  </g>",
-        "</svg>",
-        "",
-    ]
-    return "\n".join(lines)
+    )
+    return badge_render.render(spec)
 
 
 def fetch(url: str, opener: Callable = urllib.request.urlopen) -> bytes:
