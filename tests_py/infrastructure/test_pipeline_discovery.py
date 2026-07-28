@@ -474,3 +474,30 @@ class TestInstallPipeline:
         result = pipeline_discovery.ensure_pipeline_connection()
         assert result["action"] == "no_pipeline_found"
         assert not config_path.exists()
+
+
+class TestInstallToolchainCargoGuard:
+    """Regression (#197 type burn-down): a rust_install result whose action
+    claims success but carries no usable cargo path used to flow ``None``
+    into the build argv; it must be refused as missing_toolchain."""
+
+    def test_success_action_without_cargo_path_is_missing_toolchain(
+        self, monkeypatch, tmp_path
+    ):
+        from mcp_server.infrastructure import pipeline_installer as pi
+
+        monkeypatch.setattr(pi, "_binary_is_usable", lambda _p: False)
+        monkeypatch.setattr(pi, "resolve_cargo", lambda: None)
+        monkeypatch.setattr(
+            pi,
+            "install_rust_toolchain",
+            lambda: {"action": "rust_installed"},  # no "cargo" key
+        )
+        # Prebuilt fast path must not short-circuit the guard under test.
+        monkeypatch.setattr(
+            pi, "try_install_prebuilt", lambda _dest: {"action": "skipped"}
+        )
+        out = pi._install_locked(force_rebuild=False, git_url=None)
+        assert out["action"] == "missing_toolchain"
+        assert out["missing"] == ["cargo"]
+        assert out["rust_install_action"] == "rust_installed"

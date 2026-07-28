@@ -224,3 +224,22 @@ def test_ablation_short_circuits_cycle(monkeypatch):
     out = run_forgetting_cycle(_FakeStore([(0.9, 1.0)]), set())
     assert out["ablated"] is True
     assert out["scanned"] == 0
+
+
+def test_memory_without_created_at_has_no_newer_neighbors():
+    """Regression (#197 type burn-down): a row missing created_at used to send
+    None into the store's ``after`` parameter (an implicit SQL NULL-comparison
+    no-op on PG, a type error on the SQLite parity path). The contract is now
+    explicit: no timestamp -> no newer neighbors -> no interference signal —
+    and the store is never queried with a None bound."""
+
+    class _ExplodingStore(_FakeStore):
+        def search_newer_neighbors(self, embedding, after, exclude_id, top_k=10):
+            raise AssertionError("store must not be queried without created_at")
+
+    store = _ExplodingStore([])
+    mem = _memory(created_at=None)
+    effect = _evaluate_memory(store, mem, recently_active_ids=set())
+    assert effect == "retain"
+    # The leaky integrator still advances (leak-down) and is persisted.
+    assert 1 in store.accum_writes

@@ -148,6 +148,11 @@ class TestClassifyStyle:
 
 
 class TestUpdateStyleEMA:
+    def test_both_none_returns_empty_dict(self):
+        # Regression (#197 type burn-down): (None, None) used to return None
+        # while the signature promised dict[str, Any].
+        assert update_style_ema(None, None) == {}
+
     def test_none_old_returns_new(self):
         obs = {
             "activeReflective": 0.5,

@@ -208,3 +208,34 @@ class TestLabelFeature:
     def test_handles_zero_direction(self):
         result = label_feature([0.0] * 27, 5)
         assert result.label == "feature-5"
+
+
+class TestEncodeSessionDirectionContract:
+    def test_directionless_feature_raises_with_identity(self):
+        # Regression (#197 type burn-down): Feature.direction is Optional
+        # (extra="ignore" deserialization); encoding against a
+        # direction-less dictionary used to die inside omp with a bare
+        # TypeError. Positional alignment forbids skipping, so it must
+        # refuse loudly, naming the offending feature.
+        import pytest
+
+        from mcp_server.shared.types_features import Feature, FeatureDictionary
+
+        broken = FeatureDictionary(
+            K=1,
+            D=27,
+            sparsity=2,
+            signalNames=[],
+            learnedFromSessions=0,
+            features=[
+                Feature(
+                    index=0,
+                    label="no-direction",
+                    description="",
+                    topSignals=[],
+                    direction=None,
+                )
+            ],
+        )
+        with pytest.raises(ValueError, match="no-direction"):
+            encode_session({"toolCounts": {}}, broken)
