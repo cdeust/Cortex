@@ -36,6 +36,10 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Line pins re-computed on the 2026-07-11 merge train (7.2 + 7.4 +
     # silent-except-sweep + spread-activation) — each branch had pinned its own
     # pre-merge offsets; the test itself was used as the oracle.
+    # All eleven pins shifted +1..+13 on the PLR2004/E501 sweep
+    # (#197 family 3): named-constant extractions and line rewraps above
+    # the writer sites moved them down; same writers, no new ones (the
+    # test itself was the oracle, as on the 2026-07-11 re-pin).
     # Anchor transfer at supersession (read-path PR, decision 2026-07-07):
     # _transfer_anchor_on runs INSIDE the supersede transaction (bump_heat_raw
     # commits on its own connection, so routing through it would break
@@ -53,14 +57,14 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # functions (net +29 lines above this site — 33 lines of new function
     # bodies/docstrings added, 4 lines of inline hash-computation removed
     # from _recorded_schema_hash, which now delegates to read_schema_hash).
-    ("infrastructure/pg_store.py", 726),
+    ("infrastructure/pg_store.py", 727),
     # Canonical single-row writer (all callers route through this).
     # bump_heat_raw — the one canonical single-row site (re-pinned after
     # rebasing the read-path PR onto blame-path injection-receipts).
     # Shifted 727->728 by the same import-line addition above.
     # Shifted 737->766 by the module-level hash helpers extraction (same
     # net +29 cause as the entry above).
-    ("infrastructure/pg_store.py", 768),
+    ("infrastructure/pg_store.py", 769),
     # A3 batched writer (homeostatic cohort branch + any other batch consumer).
     # update_memories_heat_batch. Shifted 787->825 when M-D3 (7.1) added
     # get_homeostatic_factor/set_homeostatic_factor's write_class parameter
@@ -68,32 +72,32 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # silent-except-sweep import-line addition.
     # Shifted 835->864 by the module-level hash helpers extraction (same
     # net +29 cause as the two entries above).
-    ("infrastructure/pg_store.py", 866),
+    ("infrastructure/pg_store.py", 867),
     # SQLite parity of the anchor transfer (same transactional rationale).
     # Shifted 389->440->447->493->529 (M-D3, then #169 added _fts_augment /
     # _migrate_fts_code_tokenize / unconditional embedding_model stamp above it;
     # then #206 added _register_json_codec above the class, +36 lines).
-    ("infrastructure/sqlite_store.py", 532),
+    ("infrastructure/sqlite_store.py", 537),
     # SQLite parity: canonical bump_heat_raw / update_memories_heat_batch.
     # Shifted 419->470->477->523->559->562, 463->534->541->587->623->626 for
     # the same
     # reasons (#169's _stamp_embedding_model / select_fallback_embeddings /
     # reembed_memory, then #206's _register_json_codec).
-    ("infrastructure/sqlite_store.py", 562),
-    ("infrastructure/sqlite_store.py", 626),
+    ("infrastructure/sqlite_store.py", 567),
+    ("infrastructure/sqlite_store.py", 631),
     # Homeostatic fold (amortized ~once/month per (domain, write_class)).
     # M-D3 (7.1, 2026-07-10): split out of homeostatic.py into
     # homeostatic_apply.py (§4.1 500-line file cap — stratification by
     # write class grew homeostatic.py past the limit). Same rare
     # amortized fold UPDATE, now scoped to a class's own source values.
-    ("handlers/consolidation/homeostatic_apply.py", 220),
+    ("handlers/consolidation/homeostatic_apply.py", 233),
     # Anchor pin: heat_base=1.0 + no_decay=TRUE preserves resist-decay.
-    ("handlers/anchor.py", 143),
+    ("handlers/anchor.py", 150),
     # Preemptive boost: heat_base += 0.1 on Read/Edit/Write hook.
-    ("hooks/preemptive_context.py", 140),
+    ("hooks/preemptive_context.py", 145),
     # Pipeline-impact boost: heat_base += 0.15 for symbols touched by an
     # edit, resolved via pipeline detect_changes (PostToolUse hook).
-    ("hooks/pipeline_impact_bump.py", 172),
+    ("hooks/pipeline_impact_bump.py", 177),
     # I6-D5 deliberate re-heat campaign (INC6.6): CAS-guarded single-row
     # writer. Cannot route through bump_heat_raw — that would (1) turn a
     # concurrent-write race into a silent overwrite instead of a detected
@@ -107,7 +111,7 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Shifted 177->182 when the bare-container contract fix (5d71069c)
     # moved the module's psycopg import under TYPE_CHECKING, adding the
     # guard block above this writer.
-    ("infrastructure/pg_store_memory_reheat.py", 182),
+    ("infrastructure/pg_store_memory_reheat.py", 183),
 }
 
 
