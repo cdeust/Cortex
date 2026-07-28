@@ -334,7 +334,7 @@ async def handler(args: dict | None = None) -> dict:
 
     return _bounded(
         _build_profile_response(
-            domain_id,
+            str(domain_id),
             profile,
             detection,
             context,

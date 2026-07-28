@@ -356,13 +356,10 @@ def read_active_goal(store: Any) -> Any:
     the store is None, lacks the reader, has no active triggers, or the read
     fails. Per the source-discipline rule we never fabricate a goal signal.
     """
-    if store is None:
-        return goal_maintenance.EMPTY_GOAL
-    reader = getattr(store, "get_active_prospective_memories", None)
-    if not callable(reader):
+    if store is None or not hasattr(store, "get_active_prospective_memories"):
         return goal_maintenance.EMPTY_GOAL
     try:
-        triggers = reader()
+        triggers = store.get_active_prospective_memories()
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_gate.active_goal_read")
         silent_failure.note("write_gate.active_goal_read", exc)
         return goal_maintenance.EMPTY_GOAL
@@ -460,9 +457,8 @@ def apply_habituation(
         signature = habituation.stimulus_signature(content)
         repeat_count, hours_since_last = 0, None
         salience, hours_since_salient = 0.0, None
-        reader = getattr(store, "signature_repeat_stats", None)
-        if callable(reader):
-            repeat_count, hours_since_last = reader(signature)
+        if hasattr(store, "signature_repeat_stats"):
+            repeat_count, hours_since_last = store.signature_repeat_stats(signature)
         # The current write's own importance is the salience source: a salient
         # write dishabituates itself and briefly sensitizes related inputs
         # (Rankin criteria 8/9). hours_since_salient=0.0 = the event is now.

@@ -11,6 +11,8 @@ existing episodic/semantic recall behaviour.
 
 from __future__ import annotations
 
+from typing import Protocol, runtime_checkable
+
 import logging
 
 from mcp_server.core.procedural_memory import (
@@ -94,6 +96,20 @@ schema = {
 }
 
 
+@runtime_checkable
+class _ProceduralSkillsStore(Protocol):
+    """Capability contract for the procedural-skills subsystem (PG-only).
+
+    The SQLite backend has no procedural_skills table; the empty result is
+    the named degraded mode, decided by a static member check rather than
+    an AttributeError swallowed by the broad except below.
+    """
+
+    def get_procedural_skills(
+        self, min_proficiency: float = ..., limit: int = ...
+    ) -> list[dict]: ...
+
+
 def _row_to_skill(row: dict) -> ProceduralSkill:
     """Rebuild a ProceduralSkill from a stored procedural_skills row.
 
@@ -131,6 +147,9 @@ async def handler(args: dict) -> dict:
     min_proficiency = float(args.get("min_proficiency", 0.5))
 
     store = get_shared_store()
+    if not isinstance(store, _ProceduralSkillsStore):
+        logger.info("recall_skills: backend has no procedural-skills store")
+        return {"skills": [], "count": 0}
     try:
         rows = store.get_procedural_skills(min_proficiency=min_proficiency)
     except Exception as exc:  # noqa: BLE001 — store not migrated / unavailable

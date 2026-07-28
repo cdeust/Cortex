@@ -77,13 +77,10 @@ def _get_active_goal(store: Any) -> Any:
     fails. Per the source-discipline rule we never fabricate a goal signal.
     """
 
-    if store is None:
-        return goal_maintenance.EMPTY_GOAL
-    reader = getattr(store, "get_active_prospective_memories", None)
-    if not callable(reader):
+    if store is None or not hasattr(store, "get_active_prospective_memories"):
         return goal_maintenance.EMPTY_GOAL
     try:
-        triggers = reader()
+        triggers = store.get_active_prospective_memories()
         return goal_maintenance.build_goal_from_triggers(triggers)
     except Exception as exc:  # noqa: BLE001 — non-load-bearing; absence is fine
         silent_failure.note("pg_recall.active_goal", exc)

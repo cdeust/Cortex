@@ -255,11 +255,13 @@ def _connect():
     """Open the briefing's PG connection; None when PG is unreachable."""
     try:
         import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-        from psycopg.rows import dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return None
     try:
-        return psycopg.connect(_DATABASE_URL, row_factory=dict_row, autocommit=True)
+        return psycopg.Connection[DictRow].connect(
+            _DATABASE_URL, row_factory=dict_row, autocommit=True
+        )
     except psycopg.Error:
         return None
 

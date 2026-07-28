@@ -98,7 +98,12 @@ def plan_entity_links(
     plans: list[EntityLinkPlan] = []
     name_map = {k.lower(): v for k, v in (entity_name_to_id or {}).items()}
     for c in claims:
-        ids = set(entities_by_memory.get(c.get("memory_id"), []))
+        memory_id = c.get("memory_id")
+        ids = (
+            set(entities_by_memory.get(memory_id, []))
+            if memory_id is not None
+            else set()
+        )
         if name_map:
             text = (c.get("text") or "").lower()
             # Word-bounded substring — cheap pre-filter, no false positives

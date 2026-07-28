@@ -80,11 +80,11 @@ def _probe_was_current(url: str, target_hash: str) -> bool:
     distinct, separately-tested error paths (see module docstring).
     """
     import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-    from psycopg.rows import dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
+    from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
     from mcp_server.infrastructure.pg_store import read_schema_hash  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
-    with psycopg.connect(
+    with psycopg.Connection[DictRow].connect(
         url,
         # source: doctor.py::_pg_connection / doctor_mcp.py:458 use
         # connect_timeout=5 for a live health-check probe; this probe is

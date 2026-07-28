@@ -273,9 +273,10 @@ def _get_slot_cache(store: Any, num_slots: int) -> list[dict]:
         store.init_engram_slots(num_slots)
         _slots_initialised = True
 
-    _slot_cache = store.get_all_engram_slots()
+    slots: list[dict] = store.get_all_engram_slots()
+    _slot_cache = slots
     _slot_cache_store_id = store_id
-    return _slot_cache
+    return slots
 
 
 def _update_slot_cache(

@@ -273,7 +273,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     store = _get_store()
     start_entity, error = _resolve_start_entity(args, store)
     if not start_entity:
-        return _build_empty_result(error)
+        return _build_empty_result(error or "start entity not found")
 
     edges = _bfs_entity_graph(
         start_entity_id=start_entity["id"],

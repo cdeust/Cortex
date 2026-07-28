@@ -132,8 +132,15 @@ def _evaluate_memory(
         return "retain"
 
     memory_id = int(mem["id"])
-    neighbors = store.search_newer_neighbors(
-        embedding, mem.get("created_at"), memory_id, top_k=NEIGHBOR_K
+    created_at = mem.get("created_at")
+    # A row without created_at cannot have "newer" neighbors — the SQL
+    # comparison against NULL matched no rows; make that explicit.
+    neighbors = (
+        store.search_newer_neighbors(
+            embedding, str(created_at), memory_id, top_k=NEIGHBOR_K
+        )
+        if created_at is not None
+        else []
     )
     chronic = chronic_interference(sim for sim, _ in neighbors)
     acute_overlap, acute_age_hours = neighbors[0] if neighbors else (0.0, float("inf"))

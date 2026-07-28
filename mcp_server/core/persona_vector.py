@@ -79,10 +79,10 @@ def build_persona_vector(profile: dict) -> dict[str, float]:
     ss = profile.get("sessionShape") or {}
     tp = profile.get("toolPreferences") or {}
 
-    result = {
-        "activeReflective": mc.get("activeReflective") or 0,
-        "sensingIntuitive": mc.get("sensingIntuitive") or 0,
-        "sequentialGlobal": mc.get("sequentialGlobal") or 0,
+    result: dict[str, float] = {
+        "activeReflective": float(mc.get("activeReflective") or 0),
+        "sensingIntuitive": float(mc.get("sensingIntuitive") or 0),
+        "sequentialGlobal": float(mc.get("sequentialGlobal") or 0),
     }
     result.update(_compute_behavioral_dims(ss, tp))
     return result

@@ -171,7 +171,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     # Compute the planned entity sets so we can pull priors for THOSE entities
     candidate_entities: set[int] = set()
     for c in claims:
-        candidate_entities.update(entities_by_memory.get(c.get("memory_id"), []))
+        claim_memory_id = c.get("memory_id")
+        if claim_memory_id is not None:
+            candidate_entities.update(entities_by_memory.get(claim_memory_id, []))
     excl_ids = [c["id"] for c in claims]
     prior_claims_by_entity = get_claims_by_entity(
         conn, list(candidate_entities), exclude_claim_ids=excl_ids

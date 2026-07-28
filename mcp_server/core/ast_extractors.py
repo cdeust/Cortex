@@ -69,8 +69,17 @@ def extract_python_definitions(
     parent_class: str = "",
 ) -> list[SymbolDef]:
     """Extract Python def/class with class-method binding."""
+    return _extract_python_children(root.children, source, parent_class)
+
+
+def _extract_python_children(
+    children: list[Node],
+    source: bytes,
+    parent_class: str,
+) -> list[SymbolDef]:
+    """Dispatch definition extraction over a sequence of sibling nodes."""
     defs: list[SymbolDef] = []
-    for node in root.children:
+    for node in children:
         if node.type == "function_definition":
             _extract_python_func(node, source, defs, parent_class)
         elif node.type == "decorated_definition":
@@ -105,8 +114,7 @@ def _extract_python_decorated(
     """Extract definitions from decorated blocks."""
     for child in node.children:
         if child.type in ("function_definition", "class_definition"):
-            fake = type("N", (), {"children": [child]})()
-            defs.extend(extract_python_definitions(fake, source, parent))
+            defs.extend(_extract_python_children([child], source, parent))
 
 
 def _extract_python_class(

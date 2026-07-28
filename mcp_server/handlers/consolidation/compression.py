@@ -107,7 +107,7 @@ def _compress_full_to_gist(
     embeddings: EmbeddingEngine,
     mem: dict,
     stats: dict,
-) -> tuple[str, list[float]]:
+) -> tuple[str, bytes | None]:
     """Compress from full text (level 0) to gist (level 1).
 
     Returns the freshly computed ``(gist, gist_embedding)`` so a caller
@@ -144,7 +144,7 @@ def _compress_to_tag_from_gist(
     stats: dict,
     *,
     gist: str | None = None,
-    gist_emb: list[float] | None = None,
+    gist_emb: bytes | None = None,
 ) -> None:
     """Continue compression from a freshly created gist to tag (level 2).
 

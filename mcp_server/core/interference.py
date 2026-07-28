@@ -314,7 +314,7 @@ def compute_domain_interference_pressure(
     *,
     threshold: float = _INTERFERENCE_THRESHOLD,
     sample_limit: int = 100,
-) -> dict[str, float]:
+) -> dict[str, float | str]:
     """Compute aggregate interference metrics for a domain.
 
     Args:

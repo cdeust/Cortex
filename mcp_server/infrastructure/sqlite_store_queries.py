@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any
+from typing import Any, Iterator
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.observability import silent_failure
 
@@ -135,6 +135,64 @@ class SqliteQueryMixin:
             "SELECT * FROM memories WHERE NOT is_stale"
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
+
+    def get_memories_by_tag(self, tag: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Most-recent-first memories carrying ``tag``.
+
+        PgMemoryStore parity (``pg_store_queries.py::get_memories_by_tag``).
+        SQLite lacks the ``@>`` jsonb containment operator; ``json_each``
+        (JSON1 — already a baseline: the compat translator expands
+        ``= ANY(...)`` through it) gives the same containment predicate
+        without a full-table Python filter.
+        """
+        rows = self._conn.execute(
+            "SELECT m.* FROM memories m "
+            "WHERE m.is_stale = 0 AND EXISTS ("
+            "  SELECT 1 FROM json_each(m.tags) je WHERE je.value = ?"
+            ") ORDER BY m.created_at DESC LIMIT ?",
+            (tag, limit),
+        ).fetchall()
+        return [self._normalize_memory_row(r) for r in rows]
+
+    def iter_memories_for_decay(
+        self,
+        chunk_size: int = 1000,
+    ) -> Iterator[list[dict[str, Any]]]:
+        """Stream active memories for decay — PgMemoryStore parity.
+
+        PG streams chunks through a server-side cursor because its corpora
+        reach 500k+ rows; SQLite serves the local plugin install, where the
+        corpus fits in memory and the store already materializes it for
+        every other decay path. One yielded chunk therefore matches
+        PgMemoryStore's own ``POOL_DISABLED`` compatibility path exactly.
+        ``chunk_size`` is accepted for signature parity and unused.
+        """
+        del chunk_size  # signature parity with PgMemoryStore
+        yield self.get_all_memories_for_decay()
+
+    def find_co_accessed_pairs(self, memory_ids: list[int]) -> list[tuple[int, int]]:
+        """Entity pairs co-occurring in any of the sampled memories.
+
+        PgMemoryStore parity (``pg_store_queries.py::find_co_accessed_pairs``):
+        the same ``memory_entities`` self-join, with SQLite's two-argument
+        ``MIN``/``MAX`` scalars standing in for ``LEAST``/``GREATEST`` and an
+        expanded ``IN`` list standing in for ``= ANY``.
+        """
+        if not memory_ids:
+            return []
+        placeholders = ", ".join("?" for _ in memory_ids)
+        rows = self._conn.execute(
+            "SELECT DISTINCT "  # noqa: S608 — placeholders are generated "?" markers; ids travel as bound parameters (docs/ASSURANCE-CASE.md §5)
+            "  MIN(me1.entity_id, me2.entity_id) AS a, "
+            "  MAX(me1.entity_id, me2.entity_id) AS b "
+            "FROM memory_entities me1 "
+            "JOIN memory_entities me2 "
+            "  ON me1.memory_id = me2.memory_id "
+            " AND me1.entity_id < me2.entity_id "
+            f"WHERE me1.memory_id IN ({placeholders})",
+            [int(m) for m in memory_ids],
+        ).fetchall()
+        return [(int(r["a"]), int(r["b"])) for r in rows]
 
     def delete_memories_by_tag(self, tag: str, domain: str | None = None) -> int:
         """Delete memories with the given tag, optionally scoped to a domain.

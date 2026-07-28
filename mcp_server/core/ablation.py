@@ -38,7 +38,7 @@ def is_mechanism_disabled(mechanism: "Mechanism | str") -> bool:
     Accepts either a Mechanism enum (uses .name -> e.g. "OSCILLATORY_CLOCK")
     or a string (upper-cased, hyphens normalized).
     """
-    if hasattr(mechanism, "name"):
+    if isinstance(mechanism, Mechanism):
         name = mechanism.name
     else:
         name = str(mechanism).upper().replace("-", "_")

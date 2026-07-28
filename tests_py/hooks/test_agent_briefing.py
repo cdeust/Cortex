@@ -131,7 +131,11 @@ class _FakePgError(Exception):
 def test_connect_with_unreachable_database_returns_none(monkeypatch):
     module = MagicMock()
     module.Error = _FakePgError
-    module.connect.side_effect = _FakePgError("connection refused")
+    # The hook connects via psycopg.Connection[DictRow].connect(...) so the
+    # returned connection is typed with dict rows; mirror that call path.
+    module.Connection.__getitem__.return_value.connect.side_effect = _FakePgError(
+        "connection refused"
+    )
     monkeypatch.setitem(sys.modules, "psycopg", module)
     assert hook._connect() is None
 

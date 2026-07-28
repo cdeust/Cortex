@@ -118,8 +118,9 @@ def submodular_select(
         if best_i < 0:
             break  # No candidate fits budget
         selected.append(best_i)
-        if embeddings[best_i] is not None:
-            selected_embs.append(embeddings[best_i])
+        best_emb = embeddings[best_i]
+        if best_emb is not None:
+            selected_embs.append(best_emb)
         used_tokens += token_counts[best_i]
 
     # Return in original ranking order for readability

@@ -14,6 +14,8 @@ Two concerns live here:
 
 from __future__ import annotations
 
+from datetime import date, datetime
+
 import hashlib
 import json
 import os
@@ -91,8 +93,9 @@ def _memo_recency_key(mem: dict) -> str:
         val = mem.get(field)
         if val is None or val == "":
             continue
-        iso = getattr(val, "isoformat", None)
-        return iso() if callable(iso) else str(val)
+        if isinstance(val, (datetime, date)):
+            return val.isoformat()
+        return str(val)
     return ""
 
 

@@ -166,7 +166,7 @@ class TemporalStageDetector(StageDetector):
                     day = int(parts[1])
                     year = int(parts[2])
                     month_abbrs = {
-                        m.lower(): i for i, m in enumerate(calendar.month_name) if m
+                        calendar.month_name[i].lower(): i for i in range(1, 13)
                     }
                     month_num = month_abbrs.get(month_name.lower())
                     if month_num:

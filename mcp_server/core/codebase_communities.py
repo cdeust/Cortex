@@ -23,6 +23,11 @@ Sources:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import networkx as nx
+
 # source: structural — a graph needs at least two nodes before community
 # partitioning or centrality ranking is meaningful
 _MIN_NODES_FOR_GRAPH_ANALYSIS = 2
@@ -33,7 +38,7 @@ _MIN_SAMPLES_FOR_STD = 2
 def _build_dependency_graph(
     file_edges: list[tuple[str, str]],
     call_edges: list[tuple[str, str, str]],
-) -> object:
+) -> nx.Graph:
     """Build a weighted networkx graph from file and call edges."""
     import networkx as nx  # noqa: PLC0415 — optional dependency ([codebase] extra); imported where used so environments without it keep working
 
@@ -48,7 +53,7 @@ def _build_dependency_graph(
     return g
 
 
-def _leiden_partition(g: object) -> dict[str, int] | None:
+def _leiden_partition(g: nx.Graph) -> dict[str, int] | None:
     """Partition g with the Leiden algorithm, or None if deps are absent.
 
     Implements Traag et al. (2019) via the authors' reference library

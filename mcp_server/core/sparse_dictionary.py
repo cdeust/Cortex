@@ -265,7 +265,16 @@ _ZERO_COEFFICIENT_EPSILON = 1e-10
 def encode_session(conversation: dict, dictionary: FeatureDictionary) -> EncodedSession:
     """Encode a single conversation against a learned dictionary."""
     activation = extract_session_activation(conversation)
-    atoms = [f.direction for f in dictionary.features]
+    atoms: list[list[float]] = []
+    for f in dictionary.features:
+        if f.direction is None:
+            # Positional alignment between atoms and result["indices"] forbids
+            # skipping; a dictionary missing directions is unencodable input.
+            raise ValueError(
+                f"feature {f.index} ({f.label!r}) has no direction; "
+                "dictionary cannot encode sessions"
+            )
+        atoms.append(f.direction)
     result = omp(activation, atoms, dictionary.sparsity)
 
     weights: dict[str, float] = {}

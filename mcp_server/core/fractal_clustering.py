@@ -96,7 +96,7 @@ def agglomerative_cluster(
 
 
 def compute_centroid(
-    embeddings: list[bytes],
+    embeddings: list[bytes | None],
     dim: int,
 ) -> bytes | None:
     """Compute mean centroid of byte-encoded float32 embeddings.
@@ -210,4 +210,4 @@ def _find_dominant_directory(
             d = mem.get("directory_context") or mem.get("domain") or "global"
             dirs[d] = dirs.get(d, 0) + 1
 
-    return max(dirs, key=dirs.get) if dirs else "global"
+    return max(dirs, key=lambda k: dirs[k]) if dirs else "global"

@@ -193,16 +193,20 @@ def page_row_from_md(
     has_domain_component = len(parts) >= _DOMAIN_PATH_PARTS
     domain = fm.get("domain") or (parts[1] if has_domain_component else "_general")
 
-    tags = fm.get("tags", [])
-    if isinstance(tags, str):
-        tags = [tags]
+    raw_tags = fm.get("tags", [])
+    if isinstance(raw_tags, str):
+        tags = [raw_tags]
+    elif isinstance(raw_tags, list):
+        tags = [str(t) for t in raw_tags]
+    else:
+        tags = []
 
     # ADR-0051 STEP 2: extract every legacy documented-file form
     # (documents:/source_file_path:/file:/file:<path> tag) into the
     # canonical list. documents_primary is the 1:1 fast-path scalar.
     documents = extract_document_paths(fm, tags)
 
-    raw_status = fm.get("status") or fm.get("maturity") or "seedling"
+    raw_status = str(fm.get("status") or fm.get("maturity") or "seedling")
     status, status_warning = _normalize_status(raw_status, rel_path)
 
     return {

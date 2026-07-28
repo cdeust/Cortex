@@ -124,11 +124,11 @@ def extract_memory_id(frontmatter: dict[str, object]) -> int | None:
     that want to round-trip the field without re-parsing.
     """
     raw = frontmatter.get("memory_id")
-    if raw is None:
+    if not isinstance(raw, (int, float, str)):
         return None
     try:
         return int(raw)
-    except (TypeError, ValueError):
+    except ValueError:
         return None
 
 

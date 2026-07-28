@@ -11,6 +11,8 @@ Pure infrastructure — no core imports, no handler imports.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -83,7 +85,7 @@ def _entry_row(
 def upsert_page_sources(
     conn: StoreConnection,
     page_id: int,
-    documents: list[SourceEntry],
+    documents: Sequence[SourceEntry],
     *,
     link_kind: str = "documents",
     source: str = "frontmatter",

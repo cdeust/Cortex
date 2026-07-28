@@ -48,7 +48,9 @@ def _get_classifier() -> Any:
     _load_attempted = True
     try:
         # Lazy import — package is optional
-        from cortex_beam_abstain import AbstentionClassifier  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from cortex_beam_abstain import (  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode # pyright: ignore[reportMissingImports] — optional package, not installed in the type-check env; the except ImportError arm IS the contract
+            AbstentionClassifier,
+        )
 
         cache = Path.home() / ".cache" / "cortex-abstention" / "model.onnx"
         if cache.exists():

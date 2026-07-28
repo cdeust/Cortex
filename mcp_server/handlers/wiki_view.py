@@ -17,7 +17,12 @@ views dict; wiki_view_executor compiles; pg_store executes.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeGuard, cast
+
+if TYPE_CHECKING:
+    from typing_extensions import LiteralString
+
+    from mcp_server.infrastructure.pg_store import PgMemoryStore
 
 # psycopg.rows is imported lazily inside _execute_view() — only reached on
 # the PG path. Under the SQLite fallback psycopg may not be installed, so an
@@ -27,7 +32,7 @@ from typing import Any
 # // which also defers `import psycopg` to _try_pg_verbose).
 
 from mcp_server.infrastructure.wiki_schema_reader import load_registry
-from mcp_server.core.wiki_view_executor import compile_view
+from mcp_server.core.wiki_view_executor import CompiledView, compile_view
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
@@ -106,7 +111,7 @@ def _get_store() -> MemoryStore:
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
-def _is_pg(store: object) -> bool:
+def _is_pg(store: object) -> TypeGuard[PgMemoryStore]:
     """Return True iff the store is the PostgreSQL backend.
 
     precondition: store is a MemoryStore produced by get_shared_store()
@@ -120,7 +125,9 @@ def _is_pg(store: object) -> bool:
     return type(store).__name__ == "PgMemoryStore"
 
 
-def _execute_view(store: object, compiled: object, view_meta: dict) -> dict:
+def _execute_view(
+    store: PgMemoryStore, compiled: CompiledView, view_meta: dict
+) -> dict:
     """Run a compiled view against the PG store and return the result dict.
 
     precondition: _is_pg(store) is True; compiled.ok is True
@@ -132,7 +139,10 @@ def _execute_view(store: object, compiled: object, view_meta: dict) -> dict:
 
     with store._conn.cursor(row_factory=dict_row) as cur:
         try:
-            cur.execute(compiled.sql, compiled.params)
+            # compiled.sql comes from the safe view compiler: table/column
+            # whitelists, values as bound params (wiki_view_executor) — the
+            # LiteralString discipline is re-asserted at this one boundary.
+            cur.execute(cast("LiteralString", compiled.sql), compiled.params)
             rows = list(cur.fetchall())
         except Exception as e:  # noqa: BLE001 — view execution boundary — any SQL failure is returned as the view's error report
             return {

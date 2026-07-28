@@ -190,7 +190,7 @@ def compile_draft(
         body = s.get("body") if isinstance(s, dict) else getattr(s, "body", "")
         if not heading:
             continue
-        body_parts.append(_section_md(heading, body))
+        body_parts.append(_section_md(str(heading), str(body or "")))
 
     if backlinks:
         body_parts.append("## See also\n")

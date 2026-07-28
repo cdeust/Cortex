@@ -48,8 +48,11 @@ def _select_categorical(
     old_style: dict,
     new_observation: dict,
     alpha: float,
-) -> tuple[str, str, str]:
-    """Select categorical dimensions based on alpha threshold."""
+) -> tuple[str | None, str | None, str | None]:
+    """Select categorical dimensions based on alpha threshold.
+
+    A dimension absent from both inputs stays None.
+    """
     adopt_new = alpha >= _CATEGORICAL_ADOPT_ALPHA
     primary = new_observation if adopt_new else old_style
     fallback = old_style if adopt_new else new_observation
@@ -67,7 +70,7 @@ def update_style_ema(
 ) -> dict[str, Any]:
     """Blend an existing style with a new observation using EMA."""
     if not old_style:
-        return new_observation
+        return new_observation or {}
     if not new_observation:
         return old_style
 

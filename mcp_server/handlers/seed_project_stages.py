@@ -148,7 +148,7 @@ def _harvest_doc_dirs(root: Path, max_bytes: int, seen: set[Path]) -> list[dict]
 def stage_docs(root: Path, max_bytes: int) -> list[dict]:
     """Harvest documentation files."""
     root_docs = _harvest_root_docs(root, max_bytes)
-    seen = {d.get("_path") for d in root_docs if "_path" in d}
+    seen = {p for d in root_docs if (p := d.get("_path")) is not None}
     for d in root_docs:
         d.pop("_path", None)
     dir_docs = _harvest_doc_dirs(root, max_bytes, seen)

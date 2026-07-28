@@ -30,7 +30,7 @@ from __future__ import annotations
 import datetime as _dt
 import logging
 import numbers
-from typing import Any
+from typing import Any, SupportsFloat, cast
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,9 @@ def to_json_native(obj: Any) -> Any:
         # to Decimal via psycopg). complex has no float() → falls through to
         # the str fallback below, which stays JSON-safe.
         try:
-            return float(obj)
+            # Decimal implements __float__; complex does not and lands in
+            # the except arm — exactly the documented fallback contract.
+            return float(cast("SupportsFloat", obj))
         except (TypeError, ValueError):
             pass
     # numpy arrays AND 0-d scalars (incl. numpy.bool_) expose tolist(),

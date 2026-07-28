@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, Coroutine
+from typing import Any, Awaitable, Callable
 
 from fastmcp.exceptions import ToolError
 
@@ -124,7 +124,7 @@ def _classify_error(exc: Exception) -> tuple[str, str]:
 
 
 def _run_coroutine_on_thread(
-    handler_fn: Callable[..., Coroutine[Any, Any, dict]],
+    handler_fn: Callable[..., Awaitable[dict]],
     args: dict[str, Any],
 ) -> dict:
     """Run an async handler's coroutine on a fresh event loop in a worker thread.
@@ -150,7 +150,7 @@ def _run_coroutine_on_thread(
 
 
 async def safe_handler(
-    handler_fn: Callable[..., Coroutine[Any, Any, dict]],
+    handler_fn: Callable[..., Awaitable[dict]],
     args: dict[str, Any],
     tool_name: str | None = None,
 ) -> dict[str, Any]:

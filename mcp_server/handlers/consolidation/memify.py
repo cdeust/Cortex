@@ -63,7 +63,7 @@ def run_memify_cycle(
     pruned, strengthened, flags, scanned = _stream_prune_strengthen(store, memories)
     reweighted = _reweight_relationships(store)
 
-    stats = {
+    stats: dict[str, int | str] = {
         "pruned": pruned,
         "strengthened": strengthened,
         "reweighted": reweighted,

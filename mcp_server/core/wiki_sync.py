@@ -143,10 +143,11 @@ def _render_with_frontmatter(
     """
     # Use the existing note builder for the body shape, then replace its
     # frontmatter with the 4-tuple-aware version.
+    raw_tags = frontmatter.get("tags")
     note_md = build_note(
         title=title,
         body=body,
-        tags=list(frontmatter.get("tags") or []),
+        tags=[str(t) for t in raw_tags] if isinstance(raw_tags, list) else [],
         updated=str(frontmatter.get("updated", "")),
     )
     body_only = _strip_frontmatter(note_md)

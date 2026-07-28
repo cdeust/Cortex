@@ -55,11 +55,11 @@ def process_event(event: dict[str, Any] | None) -> None:
             session_id_from_transcript,
         )
         from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
-        from mcp_server.infrastructure.memory_store import MemoryStore  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+        from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         # Increment epoch BEFORE saving checkpoint so the new epoch is recorded
         settings = get_memory_settings()
-        store = MemoryStore(settings.DB_PATH, settings.EMBEDDING_DIM)
+        store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
         new_epoch = store.increment_epoch()
         _log(f"Epoch incremented to {new_epoch}")
 

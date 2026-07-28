@@ -200,7 +200,7 @@ def _enrich_results(
 
 def _score_memories_against_hierarchy(
     memories: list[dict],
-    query_embedding: list[float],
+    query_embedding: bytes,
     query: str,
     embeddings: EmbeddingEngine,
     cluster_threshold: float,

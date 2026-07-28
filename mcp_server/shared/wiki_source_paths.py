@@ -26,6 +26,8 @@ Post-condition: every path returned by ``extract_document_paths`` is
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 _FILE_TAG_PREFIX = "file:"
 
 
@@ -48,7 +50,7 @@ def normalize_source_path(raw: str) -> str | None:
 
 
 def extract_document_paths(
-    frontmatter: dict[str, object], tags: list[str] | None = None
+    frontmatter: Mapping[str, object], tags: list[str] | None = None
 ) -> list[str]:
     """Pull every documented-file path out of a page's frontmatter + tags.
 

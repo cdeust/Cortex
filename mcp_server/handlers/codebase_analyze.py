@@ -405,7 +405,7 @@ def _run_graph_analysis(
     file_contents: dict[str, str],
     store: MemoryStore,
     domain: str,
-) -> dict[str, int]:
+) -> dict[str, int | list[str]]:
     """Run cross-file resolution, type references, and communities."""
 
     import_edges = resolve_all_imports(analyses)

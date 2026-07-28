@@ -86,7 +86,7 @@ class TestPipelineImpactBumpCachedGraph:
         def broken(*args, **kwargs):
             raise RuntimeError("store init broke")
 
-        monkeypatch.setattr(memory_store, "MemoryStore", broken)
+        monkeypatch.setattr(memory_store, "get_shared_store", broken)
         out = asyncio.run(
             pipeline_impact_bump._pipeline_detect_changes("/proj", "/proj/a.py")
         )

@@ -17,6 +17,8 @@ default, mirroring the wiki classifier's positive-signal philosophy.
 
 from __future__ import annotations
 
+from typing import Literal
+
 import re
 from dataclasses import dataclass
 
@@ -192,7 +194,11 @@ def _extract_evidence(content: str) -> list[EvidenceRef]:
     refs: list[EvidenceRef] = []
     seen: set[tuple[str, str]] = set()
 
-    def _add(kind: str, target: str, context: str | None = None) -> None:
+    def _add(
+        kind: Literal["file", "commit", "paper", "memory", "claim", "benchmark", "url"],
+        target: str,
+        context: str | None = None,
+    ) -> None:
         target = target.strip().rstrip(".,;:")
         key = (kind, target)
         if not target or key in seen:

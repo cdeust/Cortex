@@ -427,7 +427,7 @@ def try_block_replica_upsert(
     if not rows:
         return False, None
 
-    existing_id = rows[0]["id"] if isinstance(rows[0], dict) else rows[0][0]
+    existing_id = rows[0]["id"]
 
     # Refresh content, embedding, tags, source; preserve heat and is_protected.
 

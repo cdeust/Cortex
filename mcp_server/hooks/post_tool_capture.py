@@ -351,9 +351,9 @@ def _maybe_run_cascade() -> None:
         from mcp_server.handlers.consolidation.cascade import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             run_cascade_advancement,
         )
-        from mcp_server.infrastructure.memory_store import MemoryStore  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+        from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
-        store = MemoryStore()
+        store = get_shared_store()
         result = run_cascade_advancement(store)
         advanced = result.get("advanced", 0)
         if advanced > 0:

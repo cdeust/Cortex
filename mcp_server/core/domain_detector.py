@@ -176,9 +176,7 @@ def detect_domain(
     project = context.get("project")
     first_message = context.get("first_message")
 
-    has_domains = profiles and profiles.get("domains") and len(profiles["domains"]) > 0
-
-    if not has_domains:
+    if not profiles or not profiles.get("domains"):
         return _build_cold_start_result()
 
     project_id = project or cwd_to_project_id(cwd)

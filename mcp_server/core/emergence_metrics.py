@@ -99,7 +99,7 @@ def _ols_sums(
 
 def _fit_log_linear(
     log_heats: list[tuple[float, float]],
-) -> dict[str, float]:
+) -> dict[str, float | str]:
     """Fit log-linear regression: log(heat) = log(a) - b * age via OLS.
 
     Returns dict with curve_type, r_squared, half_life_hours,
@@ -169,7 +169,7 @@ _INSUFFICIENT = {
 
 def compute_forgetting_curve(
     memories_by_age: list[tuple[float, float]],
-) -> dict[str, float]:
+) -> dict[str, float | str]:
     """Fit a forgetting curve to memory age vs heat data.
 
     Fits a single EXPONENTIAL R(t) = a · exp(-b · t) by OLS of ln(heat) on
@@ -196,7 +196,7 @@ def compute_forgetting_curve(
 
 def _forgetting_from_bin_means(
     bin_means: list[tuple[float, float]], n_points: int
-) -> dict[str, float]:
+) -> dict[str, float | str]:
     """Fit the curve from already-binned (center, mean_heat) data.
 
     Shared by ``compute_forgetting_curve`` (list path) and the streaming

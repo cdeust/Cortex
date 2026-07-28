@@ -140,7 +140,7 @@ def _consolidated_fraction(mems: list[dict]) -> float:
 def compute_schema_acceleration_metric(
     schema_consistent_memories: list[dict],
     schema_inconsistent_memories: list[dict],
-) -> dict[str, float]:
+) -> dict[str, float | str]:
     """Measure schema acceleration: do schema-consistent memories consolidate faster?
 
     Compares average hours to reach CONSOLIDATED stage.

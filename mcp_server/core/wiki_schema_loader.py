@@ -111,16 +111,23 @@ class WikiRegistry:
 def parse_kind(rel_path: str, content: str) -> KindDefinition | None:
     doc = parse_page(content)
     fm = doc.frontmatter or {}
-    name = fm.get("name") or Path(rel_path).stem
+    name = str(fm.get("name") or Path(rel_path).stem)
     if not name:
         return None
+    required = fm.get("required_sections")
+    optional = fm.get("optional_sections")
+    parent = fm.get("parent_kind")
     return KindDefinition(
-        name=str(name),
+        name=name,
         display_name=str(fm.get("display_name", name)),
-        dir_name=str(fm.get("dir_name", name + "s")),
-        required_sections=[str(s) for s in fm.get("required_sections", []) or []],
-        optional_sections=[str(s) for s in fm.get("optional_sections", []) or []],
-        parent_kind=fm.get("parent_kind") or None,
+        dir_name=str(fm.get("dir_name", f"{name}s")),
+        required_sections=(
+            [str(s) for s in required] if isinstance(required, list) else []
+        ),
+        optional_sections=(
+            [str(s) for s in optional] if isinstance(optional, list) else []
+        ),
+        parent_kind=str(parent) if parent else None,
         autofill_prompt=str(fm.get("autofill_prompt", "")),
     )
 

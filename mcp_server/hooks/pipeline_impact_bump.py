@@ -33,13 +33,18 @@ Paper backing
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing_extensions import LiteralString
+
 import asyncio
 import json
 import os
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 _LOG_PREFIX = "[pipeline-impact-bump]"
 _COOLDOWN_SECONDS = 30
@@ -103,12 +108,12 @@ async def _pipeline_detect_changes(project_root: str, file_path: str) -> list[st
             find_cached_graph,
             normalise_mcp_payload,
         )
-        from mcp_server.infrastructure.memory_store import MemoryStore  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return []
 
     try:
-        store = MemoryStore()
+        store = get_shared_store()
         graph_path = find_cached_graph(store, project_root)
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"cached-graph lookup failed: {exc}")
@@ -182,7 +187,7 @@ def _bump_heat_for_symbols(symbol_names: list[str]) -> int:
             "  AND heat_base < 1.0 "
             "  AND (" + like_clauses + ")"
         )
-        result = conn.execute(sql, [_IMPACT_BOOST, *params])
+        result = conn.execute(cast("LiteralString", sql), [_IMPACT_BOOST, *params])
         count = result.rowcount if result else 0
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"heat bump failed: {exc}")

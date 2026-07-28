@@ -298,7 +298,7 @@ def tag_memory_emotions(content: str) -> dict[str, Any]:
     is_emotional = arousal > _EMOTIONAL_AROUSAL_THRESHOLD
 
     # Dominant emotion
-    dominant = max(emotions, key=emotions.get) if is_emotional else "neutral"
+    dominant = max(emotions, key=lambda k: emotions[k]) if is_emotional else "neutral"
 
     return {
         "emotions": emotions,

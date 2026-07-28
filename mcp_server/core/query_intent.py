@@ -198,7 +198,7 @@ def classify_query_intent(query: str) -> dict[str, Any]:
     if max_score == 0:
         primary = QueryIntent.GENERAL
     else:
-        primary = max(scores, key=scores.get)
+        primary = max(scores, key=lambda k: scores[k])
 
     weights = compute_retrieval_weights(primary, scores)
 
