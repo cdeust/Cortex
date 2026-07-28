@@ -145,8 +145,13 @@ def test_update_cooldown_recovers_from_a_corrupt_file():
 # ── Priming ───────────────────────────────────────────────────────────
 
 
+class _FakePgError(Exception):
+    """Stands in for psycopg.Error — the class the hook's typed except pins."""
+
+
 def _fake_psycopg(connect_result):
     module = MagicMock()
+    module.Error = _FakePgError
     if isinstance(connect_result, Exception):
         module.connect.side_effect = connect_result
     else:
@@ -199,7 +204,7 @@ def test_missing_psycopg_is_silent(monkeypatch, capsys):
 
 def test_unreachable_database_is_silent(monkeypatch, capsys):
     monkeypatch.setitem(
-        sys.modules, "psycopg", _fake_psycopg(RuntimeError("connection refused"))
+        sys.modules, "psycopg", _fake_psycopg(_FakePgError("connection refused"))
     )
 
     assert hook._prime_file_memories("/a.py") == 0

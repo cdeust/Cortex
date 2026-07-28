@@ -124,9 +124,14 @@ def test_connect_without_psycopg_returns_none(monkeypatch):
     assert hook._connect() is None
 
 
+class _FakePgError(Exception):
+    """Stands in for psycopg.Error — the class the hook's typed except pins."""
+
+
 def test_connect_with_unreachable_database_returns_none(monkeypatch):
     module = MagicMock()
-    module.connect.side_effect = RuntimeError("connection refused")
+    module.Error = _FakePgError
+    module.connect.side_effect = _FakePgError("connection refused")
     monkeypatch.setitem(sys.modules, "psycopg", module)
     assert hook._connect() is None
 
