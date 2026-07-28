@@ -1,0 +1,73 @@
+name: MCP Toplist badge refresh
+
+# assets/badge-mcp-toplist.svg is a committed static file rather than a
+# hotlinked remote image, so its claim cannot be restated without a commit
+# here. The cost of that choice is that the badge cannot self-update: the
+# date it carries is part of the claim and goes stale by INACTION, and
+# inaction never opens a PR. This workflow is what closes that loop.
+#
+# Monthly, not weekly: the badge stamps a month, so a monthly run is the
+# least frequent cadence that keeps the date honest and the most frequent
+# one that does not churn a PR proposing an identical file.
+#
+# No pull_request trigger on purpose. The script reads a third-party site;
+# wiring that into PR CI would make a required check depend on someone
+# else's uptime. The unit tests in tests_py/scripts/ cover the logic and
+# run in the normal suite with no network at all.
+
+on:
+  schedule:
+    - cron: "0 7 1 * *" # 1st of the month, 07:00 UTC — monthly bound on badge staleness
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    name: refresh rank badge from upstream
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # Fails the job when no source yields a figure that passes validation.
+      # A red run is the intended outcome there: the badge keeps its last
+      # good value, and the failure is visible rather than silently skipped.
+      - name: Regenerate badge
+        run: python3 scripts/refresh_mcp_toplist_badge.py
+
+      # No-ops when the regenerated file is byte-identical to the committed
+      # one, which is the expected result most months.
+      #
+      # BADGE_REFRESH_TOKEN is optional. Without it the PR is authored by
+      # GITHUB_TOKEN, and GitHub deliberately does not trigger workflows on
+      # such PRs — so main's required checks never start and the PR cannot
+      # be merged until a maintainer pushes to the branch. Set a PAT with
+      # `repo` scope as BADGE_REFRESH_TOKEN to make these PRs self-checking.
+      - name: Open refresh PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.BADGE_REFRESH_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: chore/mcp-toplist-badge-refresh
+          delete-branch: true
+          add-paths: assets/badge-mcp-toplist.svg
+          commit-message: "chore: refresh MCP Toplist rank badge"
+          title: "chore: refresh MCP Toplist rank badge"
+          body: |
+            Automated refresh of `assets/badge-mcp-toplist.svg` from upstream.
+
+            The regenerated SVG carries its own provenance in a comment: the
+            source path it came from, the raw rank and field size, the
+            percentile arithmetic, and the date read. Check that comment
+            against the linked listing before merging — this workflow
+            proposes a claim for your README, it does not certify one.
+
+            Opened by `.github/workflows/mcp-toplist-badge.yml`.
