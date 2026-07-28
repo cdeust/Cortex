@@ -390,8 +390,18 @@ class RepositoryTests(unittest.TestCase):
         An undeclared marker, or one moved onto a line that really does state
         the suite size, fails this test — so the hole stays auditable rather
         than becoming a way to quietly silence the gate.
+
+        The one member: CONTRIBUTING.md's install block reports how many tests
+        SKIP when the optional extras are missing (measured 2026-07-28, #220).
+        That is a true, dated measurement of something other than the suite
+        size, and `TEST_CLAIM` cannot tell the two apart from the wording. It
+        is declared rather than reworded, because rewording a real measurement
+        to keep a gate quiet hides the measurement instead of fixing the gate.
         """
-        self.assertEqual([(p, label) for p, _, label in gate.exemption_registry()], [])
+        self.assertEqual(
+            [(p, label) for p, _, label in gate.exemption_registry()],
+            [("CONTRIBUTING.md", "tests")],
+        )
 
     def test_every_advertised_test_count_states_the_same_number(self):
         """The test-count family, checked without a live pytest collection.

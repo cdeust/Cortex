@@ -33,8 +33,9 @@ cd Cortex
 
 # Install every extra CI installs. Missing extras do not fail — they SKIP, so
 # a local run looks green while covering less than CI does. Measured
-# 2026-07-28 on a tree without them: 12 tests skipped locally that CI runs
-# (8 tree-sitter, 1 leidenalg — both `codebase`; 3 sqlite-vec — `sqlite`).
+# 2026-07-28 on a tree without them, 12 tests skipped [not-a-count-claim: tests]
+# locally that CI runs (8 tree-sitter, 1 leidenalg — both `codebase`;
+# 3 sqlite-vec — `sqlite`).
 # CI's SQLite job installs ".[dev,sqlite,codebase]"; its PG job adds
 # `postgresql`. Install all of them so your run is the stricter one.
 pip install -e ".[postgresql,sqlite,codebase,benchmarks,dev]"
