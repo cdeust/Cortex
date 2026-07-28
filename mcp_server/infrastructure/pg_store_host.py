@@ -24,10 +24,31 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Iterator
 
-import psycopg
-from psycopg import sql
+# This module is reachable by import from the SQLite-default install (hooks ->
+# injection_receipts -> pg_store_receipts -> here), and psycopg ships only in
+# the optional [postgresql] extra. A module-scope `import psycopg` therefore
+# made `import mcp_server.hooks.session_lifecycle` raise ModuleNotFoundError on
+# every launch surface in PRIVACY.md lines 26-38. Only ProgrammingError is
+# needed at RUNTIME (the rest are annotations, stringified by
+# `from __future__ import annotations`), so the PG-only paths that raise it are
+# unreachable without psycopg and the stand-in below is never matched.
+# Surfaced by #220 broadening the SQLite CI job to the full suite.
+_ProgrammingError: type[Exception]
+try:  # PostgreSQL backend — the optional [postgresql] extra is installed.
+    from psycopg import ProgrammingError as _PsycopgProgrammingError
+
+    _ProgrammingError = _PsycopgProgrammingError
+except ModuleNotFoundError:  # SQLite-default install — no psycopg present.
+
+    class _MissingPsycopgProgrammingError(Exception):
+        """Stand-in so this module imports without the [postgresql] extra."""
+
+    _ProgrammingError = _MissingPsycopgProgrammingError
+
 
 if TYPE_CHECKING:
+    import psycopg
+    from psycopg import sql
     from psycopg.rows import DictRow
     from psycopg_pool import ConnectionPool
 
@@ -49,7 +70,7 @@ class MaterializedCursor:
         self._rowcount = cursor.rowcount
         try:
             self._rows: list[DictRow] = cursor.fetchall()
-        except (psycopg.ProgrammingError, TypeError):
+        except (_ProgrammingError, TypeError):
             # DDL / DML statements without a result set — fetchall raises.
             self._rows = []
         self._idx = 0
@@ -72,7 +93,7 @@ class MaterializedCursor:
         """
         row = self.fetchone()
         if row is None:
-            raise psycopg.ProgrammingError(
+            raise _ProgrammingError(
                 "statement guaranteed a row (RETURNING/aggregate) but produced none"
             )
         return row

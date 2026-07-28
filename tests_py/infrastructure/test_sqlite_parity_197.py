@@ -16,9 +16,18 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import pytest
 
-from mcp_server.infrastructure.pg_store_host import MaterializedCursor
-from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
-from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
+# pg_store_host imports psycopg at module scope, and psycopg ships only in the
+# optional [postgresql] extra — absent from the SQLite-default install this
+# suite's own subject runs on. A missing import at collection time is an ERROR,
+# not a skip, so it aborts the whole run; skip the module cleanly instead
+# (issue #220, same guard as the other PG-touching suites).
+pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+
+from mcp_server.infrastructure.pg_store_host import MaterializedCursor  # noqa: E402
+from mcp_server.infrastructure.sqlite_compat import (  # noqa: E402
+    PsycopgCompatConnection,
+)
+from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore  # noqa: E402
 
 
 def _vec(*values: float) -> bytes:
