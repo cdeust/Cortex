@@ -189,7 +189,8 @@ class TestRecallHandler:
                 }
             )
         )
-        # Should include results (may include both via FTS, but domain-scoped heat signal favors alpha)
+        # Should include results (may include both via FTS, but domain-scoped heat
+        # signal favors alpha)
         assert result["count"] >= 1
 
     def test_global_memory_visible_across_domains(self):

@@ -27,7 +27,8 @@ def tmp_claude_dir(tmp_path):
         {
             "type": "user",
             "message": {
-                "content": "We decided to use clean architecture with six concentric layers"
+                "content": "We decided to use clean architecture "
+                "with six concentric layers"
             },
             "timestamp": "2026-01-01T10:00:00Z",
             "sessionId": "session-001",
@@ -47,7 +48,8 @@ def tmp_claude_dir(tmp_path):
         {
             "type": "user",
             "message": {
-                "content": "The root cause was the singleton not being reset between tests"
+                "content": "The root cause was the singleton "
+                "not being reset between tests"
             },
             "timestamp": "2026-01-01T10:05:00Z",
             "sessionId": "session-001",

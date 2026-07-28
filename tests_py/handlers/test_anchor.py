@@ -2,13 +2,16 @@
 
 Contract under test (from anchor.py docstring and schema):
   POST-1: anchored=True + memory_id in response when memory exists.
-  POST-2: heat_base=1.0, no_decay=TRUE, is_protected=TRUE, importance=1.0 written to store.
+  POST-2: heat_base=1.0, no_decay=TRUE, is_protected=TRUE, importance=1.0
+    written to store.
   POST-3: _anchor tag added to tag list; existing tags preserved.
-  POST-4: reason stored as [ANCHOR: <reason>] content prefix; _anchor:<reason[:40]> tag added.
+  POST-4: reason stored as [ANCHOR: <reason>] content prefix;
+    _anchor:<reason[:40]> tag added.
   POST-5: is_global flag stored to memories.is_global.
   POST-6: anchored=False + reason when memory_id is missing from args.
   POST-7: anchored=False + reason when memory_id refers to a nonexistent memory.
-  POST-8: idempotent — anchoring an already-anchored memory does not duplicate _anchor tag.
+  POST-8: idempotent — anchoring an already-anchored memory does not
+    duplicate _anchor tag.
 """
 
 import pytest

@@ -1,4 +1,5 @@
-"""Tests for mcp_server.handlers.record_session_end — ported from record-session-end.test.js."""
+"""Tests for mcp_server.handlers.record_session_end — ported from
+record-session-end.test.js."""
 
 import asyncio
 import time
@@ -77,7 +78,8 @@ class TestRecordSessionEndHandler:
             result = asyncio.run(
                 handler(
                     {
-                        "session_id": f"test-session-patterns-{int(time.time() * 1000)}",
+                        "session_id": "test-session-patterns-"
+                        f"{int(time.time() * 1000)}",
                     }
                 )
             )

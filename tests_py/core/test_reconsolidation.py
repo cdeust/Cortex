@@ -93,7 +93,8 @@ class TestDecideAction:
     def test_stable_memory_needs_more_mismatch(self):
         # Without stability: PE=0.35, effective_low=0.15 => update
         assert decide_action(0.35, stability=0.0).action == "update"
-        # With high stability: PE=0.35*(1-0.5)=0.175, effective_low=0.15+0.2=0.35 => none
+        # With high stability: PE=0.35*(1-0.5)=0.175, effective_low=0.15+0.2=0.35 =>
+        # none
         assert decide_action(0.35, stability=1.0).action == "none"
 
     def test_high_plasticity_lowers_thresholds(self):

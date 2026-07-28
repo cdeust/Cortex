@@ -1,4 +1,5 @@
-"""Tests for mcp_server.handlers.rebuild_profiles — ported from rebuild-profiles.test.js."""
+"""Tests for mcp_server.handlers.rebuild_profiles — ported from
+rebuild-profiles.test.js."""
 
 import asyncio
 import json

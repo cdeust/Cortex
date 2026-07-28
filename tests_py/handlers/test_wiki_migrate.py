@@ -96,24 +96,31 @@ def test_normalize_status_unknown_falls_back_to_seedling_with_warning() -> None:
     status, warning = _normalize_status("garbage", "notes/cortex/1-foo.md")
     assert status == "seedling"
     assert (
-        warning
-        == "notes/cortex/1-foo.md: unknown status 'garbage' -> falling back to 'seedling'"
+        warning == "notes/cortex/1-foo.md: unknown status 'garbage' "
+        "-> falling back to 'seedling'"
     )
 
 
 def testpage_row_from_md_valid_adr_status_passes_through_unwarned() -> None:
-    content = "---\ntitle: Some ADR\nkind: adr\ndomain: cortex\nstatus: accepted\n---\n\nBody.\n"
+    content = (
+        "---\ntitle: Some ADR\nkind: adr\ndomain: cortex\n"
+        "status: accepted\n---\n\nBody.\n"
+    )
     row = page_row_from_md("adr/cortex/1-some-adr.md", content)
     assert row["status"] == "accepted"
     assert row["status_warning"] is None
 
 
 def testpage_row_from_md_unknown_status_falls_back_and_warns() -> None:
-    content = "---\ntitle: Some Note\nkind: notes\ndomain: cortex\nstatus: garbage\n---\n\nBody.\n"
+    content = (
+        "---\ntitle: Some Note\nkind: notes\ndomain: cortex\n"
+        "status: garbage\n---\n\nBody.\n"
+    )
     row = page_row_from_md("notes/cortex/1-some-note.md", content)
     assert row["status"] == "seedling"
     assert row["status_warning"] == (
-        "notes/cortex/1-some-note.md: unknown status 'garbage' -> falling back to 'seedling'"
+        "notes/cortex/1-some-note.md: unknown status 'garbage' -> falling back to "
+        "'seedling'"
     )
 
 
@@ -347,7 +354,8 @@ def test_migrate_wiki_reports_status_warning_without_failing_the_page(
     full = tmp_path / "notes/cortex/garbage-status.md"
     full.parent.mkdir(parents=True, exist_ok=True)
     full.write_text(
-        "---\ntitle: Garbage\nkind: notes\ndomain: cortex\nstatus: garbage\n---\n\nBody.\n"
+        "---\ntitle: Garbage\nkind: notes\ndomain: cortex\n"
+        "status: garbage\n---\n\nBody.\n"
     )
 
     summary = migrate_wiki(tmp_path, conn=MagicMock(), dry_run=True)
@@ -355,7 +363,8 @@ def test_migrate_wiki_reports_status_warning_without_failing_the_page(
     assert summary["error_count"] == 0
     assert summary["warning_count"] == 1
     assert summary["warnings"] == [
-        "notes/cortex/garbage-status.md: unknown status 'garbage' -> falling back to 'seedling'"
+        "notes/cortex/garbage-status.md: unknown status 'garbage' -> falling back to "
+        "'seedling'"
     ]
     assert "notes/cortex/garbage-status.md" in fake_store.rows
 

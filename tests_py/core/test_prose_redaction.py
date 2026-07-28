@@ -1,4 +1,5 @@
-"""Tests for core/prose_redaction.py — the native AI-writing-tell inventory (issue #166)."""
+"""Tests for core/prose_redaction.py — the native AI-writing-tell inventory (issue
+#166)."""
 
 from __future__ import annotations
 

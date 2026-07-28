@@ -159,7 +159,8 @@ def test_merge_drops_self_loop(store):
     assert (
         _count(
             store,
-            "SELECT COUNT(*) c FROM relationships WHERE source_entity_id=target_entity_id",
+            "SELECT COUNT(*) c FROM relationships WHERE "
+            "source_entity_id=target_entity_id",
             (),
         )
         == 0

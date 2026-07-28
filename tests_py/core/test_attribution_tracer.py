@@ -1,4 +1,5 @@
-"""Tests for mcp_server.core.attribution_tracer — ported from attribution-tracer.test.js."""
+"""Tests for mcp_server.core.attribution_tracer — ported from
+attribution-tracer.test.js."""
 
 from mcp_server.core.attribution_tracer import (
     trace_attribution,

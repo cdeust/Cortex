@@ -114,7 +114,8 @@ def _looks_like_sql(blob: str) -> bool:
 
 def _prepare_for_explain(blob: str) -> str:
     """Substitute placeholders with typed NULLs so EXPLAIN can plan."""
-    # Drop docstring tail like ``\n    """`` artifacts (we already stripped triple quotes).
+    # Drop docstring tail like ``\n    """`` artifacts (we already stripped triple
+    # quotes).
     sql = blob.strip()
     # Replace f-string-style braces with NULL.
     sql = _PYFMT_BRACES.sub("NULL", sql)

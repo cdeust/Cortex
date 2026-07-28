@@ -1,4 +1,5 @@
-"""Tests for mcp_server.infrastructure.profile_store — ported from profile-store.test.js.
+"""Tests for mcp_server.infrastructure.profile_store — ported from
+profile-store.test.js.
 
 Updated for D5 per-domain split: save_profiles now splits into per-domain
 files + index, so tests that patch PROFILES_PATH must also patch the

@@ -328,7 +328,9 @@ _CHILD = textwrap.dedent(
         "normalizePaymentAmount rounds the charge to cents before billing",
         "we hiked in the alps under sunny weather all week",
     ]:
-        store.insert_memory({"content": text, "embedding": eng.encode(text), "heat": 0.8})
+        store.insert_memory(
+            {"content": text, "embedding": eng.encode(text), "heat": 0.8}
+        )
 
     stamp = store._conn.execute(
         "SELECT embedding_model FROM memories LIMIT 1"

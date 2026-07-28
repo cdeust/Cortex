@@ -203,7 +203,8 @@ class TestTypeReferenceResolution:
         ]
         contents = {
             "Models/PRDDocument.swift": "class PRDDocument { var title: String }",
-            "Views/DocumentView.swift": "struct DocumentView: View {\n  let doc: PRDDocument\n}",
+            "Views/DocumentView.swift": "struct DocumentView: View {\n"
+            "  let doc: PRDDocument\n}",
         }
         edges = resolve_type_references(analyses, contents)
         assert ("Views/DocumentView.swift", "Models/PRDDocument.swift") in edges

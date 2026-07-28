@@ -146,7 +146,8 @@ class TestFindBridges:
             "memories": {
                 "m1": {
                     "projectId": "proj-a",
-                    "body": "This approach is similar to the pattern used in microservices",
+                    "body": "This approach is similar to the pattern "
+                    "used in microservices",
                     "crossRefs": [],
                 },
             },

@@ -1,4 +1,5 @@
-"""Tests for precision-weighted prediction errors in hierarchical_predictive_coding.py."""
+"""Tests for precision-weighted prediction errors in
+hierarchical_predictive_coding.py."""
 
 import pytest
 

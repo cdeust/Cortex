@@ -38,7 +38,8 @@ class TestProvenanceTagOnCreate:
         result = asyncio.run(
             handler(
                 {
-                    "content": "A plain testimony sentence with no anchors at all today.",
+                    "content": "A plain testimony sentence "
+                    "with no anchors at all today.",
                     "force": True,
                 }
             )
@@ -80,7 +81,8 @@ class TestProvenanceTagOnCreate:
         result = asyncio.run(
             handler(
                 {
-                    "content": "A durable decision with zero checkable reference in it.",
+                    "content": "A durable decision "
+                    "with zero checkable reference in it.",
                     "force": True,
                     "write_class": "deliberate",
                 }
@@ -93,7 +95,8 @@ class TestProvenanceTagOnCreate:
         result = asyncio.run(
             handler(
                 {
-                    "content": "Auto-captured tool output with no anchors whatsoever here.",
+                    "content": "Auto-captured tool output "
+                    "with no anchors whatsoever here.",
                     "force": True,
                     "write_class": "auto",
                 }

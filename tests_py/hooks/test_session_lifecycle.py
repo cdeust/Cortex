@@ -1,4 +1,5 @@
-"""Tests for mcp_server.hooks.session_lifecycle — ported from session-lifecycle.test.js."""
+"""Tests for mcp_server.hooks.session_lifecycle — ported from
+session-lifecycle.test.js."""
 
 from __future__ import annotations
 

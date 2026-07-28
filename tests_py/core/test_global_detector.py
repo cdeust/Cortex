@@ -1,4 +1,5 @@
-"""Tests for mcp_server.core.global_detector — auto-classification of global memories."""
+"""Tests for mcp_server.core.global_detector — auto-classification of global
+memories."""
 
 from mcp_server.core.global_detector import detect_global, GLOBAL_THRESHOLD
 

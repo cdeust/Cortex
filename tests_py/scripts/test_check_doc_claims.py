@@ -28,7 +28,8 @@ CATALOGUE = (
 PINNED_TEST = "    def test_standalone_baseline_is_52_tools(self):\n"
 BIBLIOGRAPHY = (
     "The 97-reference bibliography behind Cortex's 36 neuroscience-grounded\n"
-    "mechanisms.\n\n## References\n\nAuthor, A. (2001). One.\n\nAuthor, B. (2002). Two.\n"
+    "mechanisms.\n\n## References\n\nAuthor, A. (2001). One.\n\n"
+    "Author, B. (2002). Two.\n"
 )
 
 

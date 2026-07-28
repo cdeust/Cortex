@@ -180,7 +180,8 @@ class _FakeStoreForReplica:
 
 
 def test_block_replica_upsert_updates_existing_row():
-    """Second write with same vpath: tag updates rather than inserts — row count stable."""
+    """Second write with same vpath: tag updates rather than inserts — row
+    count stable."""
     from mcp_server.handlers.remember_helpers import try_block_replica_upsert
 
     store = _FakeStoreForReplica(existing_id=42)

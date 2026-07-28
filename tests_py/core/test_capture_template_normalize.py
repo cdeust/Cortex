@@ -33,7 +33,10 @@ class TestIsAutoCaptureTemplate:
 
 class TestIsDerivedFactTemplate:
     def test_detects_linked_sentence(self):
-        content = "PaymentGateway and StripeAdapter are strongly linked (depends_on, weight=12.5)"
+        content = (
+            "PaymentGateway and StripeAdapter are strongly linked "
+            "(depends_on, weight=12.5)"
+        )
         assert is_derived_fact_template(content)
 
     def test_rejects_free_prose_mentioning_linked(self):
@@ -121,7 +124,10 @@ class TestNormalizeAutoCaptureHighValue:
 
 class TestNormalizeDerivedFact:
     def test_strips_connective_keeps_entities_and_weight(self):
-        raw = "PaymentGateway and StripeAdapter are strongly linked (depends_on, weight=12.5)"
+        raw = (
+            "PaymentGateway and StripeAdapter are strongly linked "
+            "(depends_on, weight=12.5)"
+        )
         out = capture_template_normalize(raw)
         assert "are strongly linked" not in out
         assert "PaymentGateway" in out

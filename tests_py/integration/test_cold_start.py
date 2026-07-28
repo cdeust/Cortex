@@ -96,7 +96,8 @@ class TestSessionStartHook:
         assert "brew install" not in output
 
     def test_empty_db_with_session_files_auto_backfills(self):
-        """When DB is empty but sessions exist, auto-backfill runs and reports result."""
+        """When DB is empty but sessions exist, auto-backfill runs and
+        reports result."""
         from unittest.mock import patch
 
         from mcp_server.hooks.session_start import _build_cold_start_message
@@ -307,7 +308,8 @@ class TestSetupScript:
         assert os.path.exists(os.path.abspath(script))
 
     def test_setup_reports_ready_or_needs_install(self):
-        """Setup script reports 'ready' when PG is available, 'needs_install' when not."""
+        """Setup script reports 'ready' when PG is available, 'needs_install'
+        when not."""
         script = os.path.join(
             os.path.dirname(__file__), "..", "..", "scripts", "setup_db.py"
         )

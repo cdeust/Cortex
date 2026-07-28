@@ -54,7 +54,8 @@ class TestCategorize:
 
     def test_tie_breaking_prefers_phrase_match(self):
         """When two categories have similar scores, phrase matches should win."""
-        # "clean up" is a phrase (1.5) for refactor; "simplify" is single (1.0) for refactor
+        # "clean up" is a phrase (1.5) for refactor; "simplify" is single (1.0) for
+        # refactor
         # vs some other category with same single-word score
         result = categorize("clean up the code")
         assert result == "refactor"
@@ -79,7 +80,8 @@ class TestCategorize:
 
     def test_equal_score_equal_phrase_count_picks_higher_score(self):
         """When phrase counts are equal, higher score wins in the elif branch."""
-        # Both "fix" (bug-fix, 1.0) and "test" (testing, 1.0) — single words, equal phrase count (0)
+        # Both "fix" (bug-fix, 1.0) and "test" (testing, 1.0) — single words, equal
+        # phrase count (0)
         result = categorize("fix test")
         assert result in ("bug-fix", "testing")
 

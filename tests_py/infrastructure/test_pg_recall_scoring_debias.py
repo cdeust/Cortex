@@ -140,7 +140,8 @@ class TestAutoCaptureDebias:
         auto-capture still surfaces via the content pools."""
         auto_id = store.insert_memory(
             {
-                "content": "# Tool: Bash\n**Output:**\nunique pgvector hnsw rebuild log",
+                "content": "# Tool: Bash\n**Output:**\n"
+                "unique pgvector hnsw rebuild log",
                 "embedding": _emb(0, 1.0),
                 "source": "post_tool_capture",
                 "domain": _DOMAIN,

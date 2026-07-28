@@ -349,7 +349,8 @@ class TestGPUFallback:
         engine = EmbeddingEngine(dim=32, device="mps")
         engine._unavailable = False
         mock_model = MagicMock()
-        # First call raises RuntimeError (GPU failure), second succeeds (after CPU reload)
+        # First call raises RuntimeError (GPU failure), second succeeds (after CPU
+        # reload)
         mock_model.encode.side_effect = [
             RuntimeError("MPS backend error"),
             np.random.randn(32).astype(np.float32),

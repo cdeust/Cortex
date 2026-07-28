@@ -2,16 +2,19 @@
 
 Contract under test (from handler docstring and schema):
   - No args / missing memory_id  → {"neighbors": [], "total": 0}
-  - memory_id not in store       → {"neighbors": [], "total": 0, "reason": "memory_not_found"}
+  - memory_id not in store       → {"neighbors": [], "total": 0,
+                                    "reason": "memory_not_found"}
   - Seed exists, no co-access    → {"start_memory_id": int, "neighbors": [], "total": 0,
-                                    "sr_graph_size": int, "reason": "no_co_access_neighbors_found"}
+                                    "sr_graph_size": int,
+                                    "reason": "no_co_access_neighbors_found"}
   - Seed + neighbors reachable   → {"start_memory_id": int, "start_content": str,
                                     "neighbors": [...], "total": int, "max_depth": int,
                                     "sr_graph_size": int}
   - max_depth hard-capped at 4 regardless of caller input
   - include_2d_map=True with neighbors → result contains "coordinates_2d"
   - neighbors sorted ascending by sr_distance
-  - each neighbor carries: memory_id, sr_distance, hops, path, content, heat, domain, tags
+  - each neighbor carries: memory_id, sr_distance, hops, path, content, heat,
+    domain, tags
 """
 
 from __future__ import annotations
@@ -126,7 +129,8 @@ class TestNavigateMemoryNotFound:
 
 
 class TestNavigateIsolatedSeed:
-    """A seed that exists but has no co-accessed neighbors returns the empty-graph shape."""
+    """A seed that exists but has no co-accessed neighbors returns the empty-graph
+    shape."""
 
     def test_isolated_seed_reason(self):
         mid = _store_memory("isolated memory with unique content xyz987")
@@ -339,7 +343,8 @@ class TestNavigateMaxDepthCap:
 
 
 class TestNavigate2DMap:
-    """include_2d_map=False must not add coordinates_2d; True adds it when neighbors exist."""
+    """include_2d_map=False must not add coordinates_2d; True adds it when neighbors
+    exist."""
 
     def test_no_2d_map_by_default(self):
         mid = _store_memory("no 2d map test memory xzx991")

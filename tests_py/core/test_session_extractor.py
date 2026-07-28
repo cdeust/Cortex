@@ -103,7 +103,8 @@ class TestExtractUserMessages:
             {
                 "type": "user",
                 "message": {
-                    "content": "[Request interrupted by user] some very long content here"
+                    "content": "[Request interrupted by user] "
+                    "some very long content here"
                 },
             },
         ]
@@ -205,10 +206,12 @@ class TestExtractMemorableItems:
     def test_extracts_important_items(self):
         records = [
             self._make_record(
-                "We decided to use the factory pattern for all handler composition roots"
+                "We decided to use the factory pattern for all handler composition "
+                "roots"
             ),
             self._make_record(
-                "The root cause of the crash was a missing null check in the parser module"
+                "The root cause of the crash was a missing null check in the parser "
+                "module"
             ),
         ]
         items = extract_memorable_items(records, min_importance=0.3)
@@ -258,7 +261,8 @@ class TestExtractSessionSummary:
             {
                 "type": "user",
                 "message": {
-                    "content": "Build the import_sessions MCP tool for Cortex memory system"
+                    "content": "Build the import_sessions MCP tool "
+                    "for Cortex memory system"
                 },
                 "timestamp": "2026-01-01T10:00:00Z",
                 "sessionId": "s123",
@@ -296,7 +300,8 @@ class TestExtractSessionSummary:
             {
                 "type": "user",
                 "message": {
-                    "content": "This is the real first message from the user in the conversation"
+                    "content": "This is the real first message "
+                    "from the user in the conversation"
                 },
                 "timestamp": "2026-01-01T00:00:00Z",
                 "sessionId": "s1",

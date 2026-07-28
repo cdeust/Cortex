@@ -182,7 +182,8 @@ class TestMemifyReasonForZero:
 
 
 class TestMemifyReasonForInaction:
-    """`pruned == 0 AND strengthened == 0 AND reweighted > 0` → `reason_for_inaction`."""
+    """`pruned == 0 AND strengthened == 0 AND reweighted > 0`
+    → `reason_for_inaction`."""
 
     def test_reweight_only_gate_emits_inaction(self):
         """Reweight fires (entity heats cross thresholds) but no prune/

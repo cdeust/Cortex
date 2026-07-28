@@ -1,4 +1,5 @@
-"""Tests for mcp_server.infrastructure.mcp_client_pool — ported from mcp-client-pool.test.js."""
+"""Tests for mcp_server.infrastructure.mcp_client_pool — ported from
+mcp-client-pool.test.js."""
 
 import asyncio
 import os

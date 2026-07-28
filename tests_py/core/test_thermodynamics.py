@@ -1,4 +1,5 @@
-"""Tests for mcp_server.core.thermodynamics — heat, surprise, decay, importance, valence."""
+"""Tests for mcp_server.core.thermodynamics — heat, surprise, decay, importance,
+valence."""
 
 from datetime import datetime, timezone, timedelta
 

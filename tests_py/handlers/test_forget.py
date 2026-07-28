@@ -2,11 +2,15 @@
 
 Contract under test (from forget.py docstring and handler logic):
   - POST: memory_id is required; missing → {deleted: False, reason: "no_memory_id"}
-  - POST: memory_id not in store → {deleted: False, reason: "not_found", memory_id: <id>}
-  - POST: is_protected=True without force → {deleted: False, reason: "protected …", memory_id: <id>}
+  - POST: memory_id not in store →
+    {deleted: False, reason: "not_found", memory_id: <id>}
+  - POST: is_protected=True without force →
+    {deleted: False, reason: "protected …", memory_id: <id>}
   - POST: is_protected=True with force=True → hard-delete proceeds
-  - POST: soft=False (default) → hard delete, returns {deleted: True, method: "hard", memory_id, content_preview}
-  - POST: soft=True → marks is_stale=True and heat=0, returns {deleted: True, method: "soft", memory_id, content_preview}
+  - POST: soft=False (default) → hard delete, returns
+    {deleted: True, method: "hard", memory_id, content_preview}
+  - POST: soft=True → marks is_stale=True and heat=0, returns
+    {deleted: True, method: "soft", memory_id, content_preview}
 
 The handler delegates to MemoryStore which uses SQLite when PG is absent.
 No PG-skip needed — the store backend auto-selects via conftest.
@@ -66,7 +70,8 @@ def _seed_protected_memory(content: str = "protected forget test memory") -> int
     mem = store.get_memory(mid)
     assert mem is not None, "precondition: memory must exist after insert"
     assert mem.get("is_protected") in (True, 1), (
-        f"precondition: memory must be protected after insert, got {mem.get('is_protected')!r}"
+        "precondition: memory must be protected after insert, "
+        f"got {mem.get('is_protected')!r}"
     )
     return mid
 
@@ -123,7 +128,8 @@ class TestForgetMissingArgs:
 class TestForgetHardDelete:
     @pytest.mark.asyncio
     async def test_hard_delete_output_shape(self):
-        """Postcondition: hard delete returns {deleted, method, memory_id, content_preview}."""
+        """Postcondition: hard delete returns {deleted, method, memory_id,
+        content_preview}."""
         mid = _seed_memory("hard delete target")
         result = await forget_handler({"memory_id": mid})
         assert result["deleted"] is True
@@ -173,7 +179,8 @@ class TestForgetHardDelete:
 class TestForgetSoftDelete:
     @pytest.mark.asyncio
     async def test_soft_delete_output_shape(self):
-        """Postcondition: soft delete returns {deleted, method, memory_id, content_preview}."""
+        """Postcondition: soft delete returns {deleted, method, memory_id,
+        content_preview}."""
         mid = _seed_memory("soft delete target")
         result = await forget_handler({"memory_id": mid, "soft": True})
         assert result["deleted"] is True
@@ -261,7 +268,8 @@ class TestForgetProtectedGuard:
 
     @pytest.mark.asyncio
     async def test_protected_soft_delete_refused_without_force(self):
-        """Protected guard applies to soft deletes too — is_protected blocks any delete path."""
+        """Protected guard applies to soft deletes too — is_protected blocks any delete
+        path."""
         mid = _seed_protected_memory("protected soft target")
         result = await forget_handler({"memory_id": mid, "soft": True})
         assert result["deleted"] is False

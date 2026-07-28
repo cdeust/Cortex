@@ -76,7 +76,8 @@ class TestClassifyStyle:
         convs = [
             {
                 "toolsUsed": [],
-                "summary": "example specifically instance step-by-step file line function",
+                "summary": "example specifically instance step-by-step "
+                "file line function",
                 "filesTouched": [f"src/file{i}.js" for i in range(10)],
             }
             for _ in range(5)
@@ -88,7 +89,8 @@ class TestClassifyStyle:
         convs = [
             {
                 "toolsUsed": [],
-                "summary": "architecture pattern system design module abstraction principle paradigm framework",
+                "summary": "architecture pattern system design module "
+                "abstraction principle paradigm framework",
                 "filesTouched": [],
             }
             for _ in range(5)

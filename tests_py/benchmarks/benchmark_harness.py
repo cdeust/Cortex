@@ -19,35 +19,55 @@ from dataclasses import dataclass
 
 # Realistic memory content samples by category
 _ERROR_MEMORIES = [
-    "TypeError: cannot read property 'map' of undefined in UserList.tsx — fixed by adding null check before rendering",
-    "Production outage: database connection pool exhausted, urgent hotfix deployed at 3am. Root cause was missing connection timeout",
-    "Spent 3 hours debugging a frustrating race condition in the auth middleware. The JWT refresh token was being used after invalidation",
-    "CRITICAL: Memory leak in WebSocket handler causing OOM kills. Finally found it — event listeners not cleaned up on disconnect",
-    "Build keeps failing on CI: node-gyp rebuild error for sharp dependency. Terrible DX. Switched to @squoosh/lib as workaround",
+    "TypeError: cannot read property 'map' of undefined in UserList.tsx — fixed by "
+    "adding null check before rendering",
+    "Production outage: database connection pool exhausted, urgent hotfix deployed at "
+    "3am. Root cause was missing connection timeout",
+    "Spent 3 hours debugging a frustrating race condition in the auth middleware. The "
+    "JWT refresh token was being used after invalidation",
+    "CRITICAL: Memory leak in WebSocket handler causing OOM kills. Finally found it — "
+    "event listeners not cleaned up on disconnect",
+    "Build keeps failing on CI: node-gyp rebuild error for sharp dependency. Terrible "
+    "DX. Switched to @squoosh/lib as workaround",
 ]
 
 _DECISION_MEMORIES = [
-    "Decided to use PostgreSQL over MongoDB for the analytics pipeline. Reasoning: need ACID transactions for billing data, joins for reporting",
-    "Architecture decision: move from monolith to event-driven microservices. Key insight: domain boundaries align well with team boundaries",
-    "Chose FastAPI over Flask for the new API. Async support, automatic OpenAPI docs, and Pydantic validation out of the box",
-    "Decided against GraphQL for now — REST is simpler, team doesn't have GraphQL experience, and our API surface is small enough",
-    "Important lesson: always use database migrations, never manual ALTER TABLE. Discovered this after a production schema mismatch",
+    "Decided to use PostgreSQL over MongoDB for the analytics pipeline. Reasoning: "
+    "need ACID transactions for billing data, joins for reporting",
+    "Architecture decision: move from monolith to event-driven microservices. Key "
+    "insight: domain boundaries align well with team boundaries",
+    "Chose FastAPI over Flask for the new API. Async support, automatic OpenAPI docs, "
+    "and Pydantic validation out of the box",
+    "Decided against GraphQL for now — REST is simpler, team doesn't have GraphQL "
+    "experience, and our API surface is small enough",
+    "Important lesson: always use database migrations, never manual ALTER TABLE. "
+    "Discovered this after a production schema mismatch",
 ]
 
 _CODE_MEMORIES = [
-    "Implemented rate limiter using token bucket algorithm in middleware.py. Config: 100 req/min per user, 1000 req/min global",
-    "Added Redis-backed session store replacing in-memory sessions. Key pattern: JSON serialization with TTL-based expiry",
-    "Refactored the payment processor to use the Strategy pattern. Now supports Stripe, PayPal, and crypto via a unified interface",
-    "Created a custom React hook useDebounce(value, delay) for search-as-you-type. Reduces API calls from ~20/sec to 2/sec",
-    "Built a CLI tool for database seeding using Click. Supports --environment flag and reads fixtures from YAML files",
+    "Implemented rate limiter using token bucket algorithm in middleware.py. Config: "
+    "100 req/min per user, 1000 req/min global",
+    "Added Redis-backed session store replacing in-memory sessions. Key pattern: JSON "
+    "serialization with TTL-based expiry",
+    "Refactored the payment processor to use the Strategy pattern. Now supports "
+    "Stripe, PayPal, and crypto via a unified interface",
+    "Created a custom React hook useDebounce(value, delay) for search-as-you-type. "
+    "Reduces API calls from ~20/sec to 2/sec",
+    "Built a CLI tool for database seeding using Click. Supports --environment flag "
+    "and reads fixtures from YAML files",
 ]
 
 _DISCOVERY_MEMORIES = [
-    "Realized that our caching layer was actually making things slower — cache invalidation was more expensive than the DB query itself",
-    "TIL: Python's functools.lru_cache uses a doubly-linked list internally. Interesting insight for our custom LRU implementation",
-    "Discovered that the performance bottleneck was in JSON serialization, not the database. Switching to msgpack gave 3x throughput",
-    "Found out that our Docker images were 2.3GB because of dev dependencies. Multi-stage builds reduced to 180MB. Huge improvement",
-    "Key finding: 80% of our API traffic comes from 3 endpoints. Optimizing just those gave us the headroom we needed for launch",
+    "Realized that our caching layer was actually making things slower — cache "
+    "invalidation was more expensive than the DB query itself",
+    "TIL: Python's functools.lru_cache uses a doubly-linked list internally. "
+    "Interesting insight for our custom LRU implementation",
+    "Discovered that the performance bottleneck was in JSON serialization, not the "
+    "database. Switching to msgpack gave 3x throughput",
+    "Found out that our Docker images were 2.3GB because of dev dependencies. "
+    "Multi-stage builds reduced to 180MB. Huge improvement",
+    "Key finding: 80% of our API traffic comes from 3 endpoints. Optimizing just those "
+    "gave us the headroom we needed for launch",
 ]
 
 _ROUTINE_MEMORIES = [
@@ -201,7 +221,8 @@ def benchmark_write_gate() -> dict[str, dict[str, float]]:
 
     def _simulate_signals(content: str, idx: int, all_contents: list[str]) -> dict:
         """Simulate the 4 novelty signals for a piece of content."""
-        # Embedding novelty: approximate via word overlap (lower overlap = higher novelty)
+        # Embedding novelty: approximate via word overlap (lower overlap = higher
+        # novelty)
         words = set(content.lower().split())
         sims = []
         for j, other in enumerate(all_contents):
@@ -364,7 +385,8 @@ def benchmark_emotional_tagging() -> dict[str, dict[str, float]]:
 
 
 def benchmark_synaptic_tagging() -> dict[str, float]:
-    """Benchmark synaptic tagging: do weak memories get promoted when strong memories share entities?
+    """Benchmark synaptic tagging: do weak memories get promoted when strong
+    memories share entities?
 
     Tests: Retroactive promotion effect (Frey & Morris 1997).
     """
@@ -373,7 +395,8 @@ def benchmark_synaptic_tagging() -> dict[str, float]:
         compute_tag_boosts,
     )
 
-    # Simulate: 10 weak memories, then a strong memory arrives sharing entities with some
+    # Simulate: 10 weak memories, then a strong memory arrives sharing entities with
+    # some
     weak_memories = []
     for i in range(10):
         entities = {f"entity_{i}", f"entity_{i + 1}", "shared_concept"}
@@ -435,7 +458,8 @@ def benchmark_synaptic_tagging() -> dict[str, float]:
 
 
 def benchmark_spreading_activation() -> dict[str, dict[str, float]]:
-    """Benchmark spreading activation: does multi-hop entity graph traversal improve retrieval?
+    """Benchmark spreading activation: does multi-hop entity graph traversal
+    improve retrieval?
 
     Tests: Collins & Loftus 1975 semantic priming.
     """
@@ -520,9 +544,11 @@ def benchmark_spreading_activation() -> dict[str, dict[str, float]]:
 
 
 def benchmark_synaptic_plasticity() -> dict[str, dict[str, float]]:
-    """Benchmark LTP/LTD + STDP: do co-accessed entities strengthen and inactive ones weaken?
+    """Benchmark LTP/LTD + STDP: do co-accessed entities strengthen and
+    inactive ones weaken?
 
-    Tests: Hebbian learning (Hebb 1949) + spike-timing dependent plasticity (Bi & Poo 1998).
+    Tests: Hebbian learning (Hebb 1949) + spike-timing dependent plasticity
+    (Bi & Poo 1998).
     """
     from mcp_server.core.synaptic_plasticity import (
         compute_ltp,
@@ -1187,7 +1213,8 @@ def run_all_benchmarks() -> str:
     sections.append(f"\n*Benchmark duration: {dur:.1f}ms*")
 
     sections.append(
-        f"\n**Finding**: {st['promotion_rate']:.0%} of weak memories were retroactively "
+        f"\n**Finding**: {st['promotion_rate']:.0%} of weak memories "
+        "were retroactively "
         f"promoted when a strong memory sharing entities arrived. "
         f"Mean importance boost: +{st['mean_importance_boost']:.4f}.\n"
     )
@@ -1312,7 +1339,8 @@ def run_all_benchmarks() -> str:
     sections.append("## 6. Microglial Pruning (Complement-Dependent Elimination)")
     sections.append("")
     sections.append(
-        "**Question**: Are weak/stale edges pruned while healthy connections preserved?\n"
+        "**Question**: Are weak/stale edges pruned while healthy "
+        "connections preserved?\n"
     )
 
     t0 = time.monotonic()
@@ -1472,13 +1500,17 @@ def run_all_benchmarks() -> str:
 
     rows = []
     for scenario, metrics in hp.items():
+        heat_after = metrics.get("avg_heat_after", metrics.get("avg_heat_before", 0))
+        health = metrics.get(
+            "health_improvement", metrics.get("deviation_from_identity", 0)
+        )
         rows.append(
             [
                 scenario,
                 f"{metrics.get('avg_heat_before', 0):.4f}",
-                f"{metrics.get('avg_heat_after', metrics.get('avg_heat_before', 0)):.4f}",
+                f"{heat_after:.4f}",
                 f"{metrics.get('scaling_factor', 1.0):.4f}",
-                f"{metrics.get('health_improvement', metrics.get('deviation_from_identity', 0)):.4f}",
+                f"{health:.4f}",
             ]
         )
     sections.append(
@@ -1546,7 +1578,8 @@ def run_all_benchmarks() -> str:
         ],
         [
             "Pattern Separation",
-            f"Interference {det['max_similarity_pre']:.2f}→{orth['max_similarity_post']:.2f}",
+            f"Interference "
+            f"{det['max_similarity_pre']:.2f}→{orth['max_similarity_post']:.2f}",
             f"-{orth['interference_reduction']:.3f}",
             _verdict(orth["interference_reduction"]),
         ],

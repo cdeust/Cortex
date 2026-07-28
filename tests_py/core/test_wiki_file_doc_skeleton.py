@@ -69,7 +69,10 @@ def test_non_code_language_yields_no_imports():
 
 
 def test_python_top_level_defs_and_classes_are_extracted():
-    src = "def alpha():\n    def nested():\n        pass\nclass Beta:\n    pass\nasync def gamma():\n    pass\n"
+    src = (
+        "def alpha():\n    def nested():\n        pass\n"
+        "class Beta:\n    pass\nasync def gamma():\n    pass\n"
+    )
     assert _extract_symbols("python", src) == ["alpha", "Beta", "gamma"]
 
 

@@ -44,7 +44,8 @@ class TestRememberHandler:
         result = asyncio.run(
             handler(
                 {
-                    "content": "RuntimeError: connection refused. The server crashed with a traceback.",
+                    "content": "RuntimeError: connection refused. "
+                    "The server crashed with a traceback.",
                 }
             )
         )
@@ -55,7 +56,8 @@ class TestRememberHandler:
         result = asyncio.run(
             handler(
                 {
-                    "content": "We decided to migrate from MySQL to PostgreSQL for the new project.",
+                    "content": "We decided to migrate from MySQL "
+                    "to PostgreSQL for the new project.",
                 }
             )
         )
@@ -78,7 +80,8 @@ class TestRememberHandler:
         result = asyncio.run(
             handler(
                 {
-                    "content": "TODO: fix the parser before release. Remember to update docs.",
+                    "content": "TODO: fix the parser before release. "
+                    "Remember to update docs.",
                     "force": True,
                 }
             )
@@ -127,7 +130,8 @@ class TestRememberHandler:
         result = asyncio.run(
             handler(
                 {
-                    "content": "Shape test content with error keyword to ensure storage",
+                    "content": "Shape test content with error keyword "
+                    "to ensure storage",
                     "force": True,
                 }
             )

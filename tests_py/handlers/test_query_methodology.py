@@ -1,4 +1,5 @@
-"""Tests for mcp_server.handlers.query_methodology — ported from query-methodology.test.js."""
+"""Tests for mcp_server.handlers.query_methodology — ported from
+query-methodology.test.js."""
 
 import asyncio
 from unittest.mock import patch

@@ -1,4 +1,5 @@
-"""Tests for mcp_server.core.context_generator — ported from context-generator.test.js."""
+"""Tests for mcp_server.core.context_generator — ported from
+context-generator.test.js."""
 
 from mcp_server.core.context_generator import generate_context, generate_short_context
 

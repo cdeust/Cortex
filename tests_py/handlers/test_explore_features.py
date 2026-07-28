@@ -1,4 +1,5 @@
-"""Tests for mcp_server.handlers.explore_features — ported from explore-features.test.js."""
+"""Tests for mcp_server.handlers.explore_features — ported from
+explore-features.test.js."""
 
 import asyncio
 import json

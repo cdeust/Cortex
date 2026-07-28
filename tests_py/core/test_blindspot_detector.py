@@ -1,4 +1,5 @@
-"""Tests for mcp_server.core.blindspot_detector — ported from blindspot-detector.test.js."""
+"""Tests for mcp_server.core.blindspot_detector — ported from
+blindspot-detector.test.js."""
 
 from mcp_server.core.blindspot_detector import detect_blind_spots
 

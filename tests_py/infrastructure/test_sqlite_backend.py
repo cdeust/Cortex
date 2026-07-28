@@ -55,7 +55,8 @@ class TestSchemaInit:
         assert store is not None
 
     def test_has_vec_is_bool(self, store):
-        """has_vec must be a bool (True when sqlite-vec is installed, False otherwise)."""
+        """has_vec must be a bool (True when sqlite-vec is installed, False
+        otherwise)."""
         assert isinstance(store.has_vec, bool)
 
     def test_schema_idempotent_file(self, tmp_path):
@@ -121,7 +122,8 @@ class TestMemoryCRUD:
 
 class TestHeat:
     def test_update_heat_persists(self, store):
-        """update_memory_heat must write heat_base and be reflected in get_memory['heat']."""
+        """update_memory_heat must write heat_base and be reflected in
+        get_memory['heat']."""
         mem_id = store.insert_memory({"content": "heat test", "heat": 1.0})
         store.update_memory_heat(mem_id, 0.42)
         mem = store.get_memory(mem_id)

@@ -129,11 +129,15 @@ def test_parse_page_strips_duplicated_key_label() -> None:
     against the actual on-disk file (id 913,
     ``reference/_general/4196397-title-public-api-surface-automatised-pipeline.md``).
     """
-    text = '---\ntitle: title: "Public API surface: automatised-pipeline"\nkind: reference\n---\n\nbody\n'
+    text = (
+        '---\ntitle: title: "Public API surface: automatised-pipeline"\n'
+        "kind: reference\n---\n\nbody\n"
+    )
     doc = parse_page(text)
     assert doc.frontmatter["title"] == "Public API surface: automatised-pipeline"
 
-    # Unquoted duplicated-label variant (id 2916 on disk: title: title: agentic-ai — tutorials)
+    # Unquoted duplicated-label variant (id 2916 on disk: title: title: agentic-ai —
+    # tutorials)
     text2 = (
         "---\ntitle: title: agentic-ai — tutorials\nkind: explanation\n---\n\nbody\n"
     )

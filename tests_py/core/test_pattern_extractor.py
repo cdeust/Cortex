@@ -1,4 +1,5 @@
-"""Tests for mcp_server.core.pattern_extractor — ported from pattern-extractor.test.js."""
+"""Tests for mcp_server.core.pattern_extractor — ported from
+pattern-extractor.test.js."""
 
 from mcp_server.core.pattern_extractor import (
     extract_entry_points,

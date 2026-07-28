@@ -1,4 +1,5 @@
-"""Tests for mcp_server.core.behavioral_crosscoder — ported from behavioral-crosscoder.test.js."""
+"""Tests for mcp_server.core.behavioral_crosscoder — ported from
+behavioral-crosscoder.test.js."""
 
 from mcp_server.core.behavioral_crosscoder import (
     detect_persistent_features,

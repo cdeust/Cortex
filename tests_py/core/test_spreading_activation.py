@@ -1,4 +1,5 @@
-"""Tests for mcp_server.core.spreading_activation — Collins & Loftus semantic priming."""
+"""Tests for mcp_server.core.spreading_activation — Collins & Loftus semantic
+priming."""
 
 import pytest
 

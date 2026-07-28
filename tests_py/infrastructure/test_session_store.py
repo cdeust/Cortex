@@ -1,4 +1,5 @@
-"""Tests for mcp_server.infrastructure.session_store — ported from session-store.test.js."""
+"""Tests for mcp_server.infrastructure.session_store — ported from
+session-store.test.js."""
 
 from unittest.mock import patch
 

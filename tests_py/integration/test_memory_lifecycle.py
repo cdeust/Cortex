@@ -42,7 +42,8 @@ class TestFullLifecycle:
 
         await remember(
             {
-                "content": "Remember to add index on created_at column for the queries table",
+                "content": "Remember to add index on created_at column "
+                "for the queries table",
                 "tags": ["todo", "database"],
                 "directory": "/project/src",
                 "domain": "backend",

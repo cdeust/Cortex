@@ -63,7 +63,10 @@ def test_small_output_stored_full_no_artifact(tmp_path, monkeypatch):
     monkeypatch.setattr(artifact_store, "ARTIFACTS_DIR", tmp_path / "artifacts")
     captured = _capture_store(monkeypatch)
 
-    small_stdout = "short build output that is comfortably over the\n50-char minimum capture floor\nall good"
+    small_stdout = (
+        "short build output that is comfortably over the\n"
+        "50-char minimum capture floor\nall good"
+    )
     hook.process_event(_bash_event(small_stdout))
 
     assert len(captured) == 1

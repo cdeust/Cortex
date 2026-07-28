@@ -140,7 +140,8 @@ def test_plan_skips_pages_without_file_tag(tmp_path: Path) -> None:
     pid = generate_page_id()
     _write(
         tmp_path / "notes/cortex/98814-file-x.py.md",
-        f"---\nid: {pid}\nkind: note\ntitle: No file tag\ntags:\n  - codebase\n---\n\nbody\n",
+        f"---\nid: {pid}\nkind: note\ntitle: No file tag\n"
+        "tags:\n  - codebase\n---\n\nbody\n",
     )
     moves = plan(tmp_path)
     assert len(moves) == 1

@@ -281,7 +281,8 @@ class TestAssessCoverageHandlerEmptyStore:
         from mcp_server.handlers.assess_coverage import handler
 
         result = await handler()
-        # The early-return dict has only: coverage_score, total_memories, recommendations
+        # The early-return dict has only: coverage_score, total_memories,
+        # recommendations
         assert set(result.keys()) == {
             "coverage_score",
             "total_memories",

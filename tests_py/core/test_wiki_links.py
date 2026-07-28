@@ -48,7 +48,10 @@ def test_apply_link_sorts_entries() -> None:
 
 
 def test_apply_link_preserves_trailing_sections() -> None:
-    body = "# T\n\nbody\n\n## Related\n\n- see_also → [old.md](old.md)\n\n## Notes\n\ntrailing\n"
+    body = (
+        "# T\n\nbody\n\n## Related\n\n- see_also → [old.md](old.md)\n\n"
+        "## Notes\n\ntrailing\n"
+    )
     result = apply_link(body, LinkEntry(relation="see_also", target="new.md"))
     assert "## Notes" in result
     assert "trailing" in result

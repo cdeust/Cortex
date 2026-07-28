@@ -1,4 +1,5 @@
-"""Tests for mcp_server.core.sparse_dictionary — ported from sparse-dictionary.test.js."""
+"""Tests for mcp_server.core.sparse_dictionary — ported from
+sparse-dictionary.test.js."""
 
 from mcp_server.core.sparse_dictionary import (
     build_seed_dictionary,
@@ -142,7 +143,8 @@ class TestLearnDictionary:
         convs = _make_conversations(
             15,
             toolsUsed=["Read", "Edit", "Grep", "Bash", "Glob"],
-            allText="implement the new feature with proper testing and architecture design",
+            allText="implement the new feature with proper testing "
+            "and architecture design",
             duration=1200000,
             turnCount=15,
         )

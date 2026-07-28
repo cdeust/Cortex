@@ -1,4 +1,5 @@
-"""Tests for mcp_server.core.query_router — intent classification and retrieval routing."""
+"""Tests for mcp_server.core.query_router — intent classification and retrieval
+routing."""
 
 from mcp_server.core.query_intent import (
     QueryIntent,

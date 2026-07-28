@@ -236,7 +236,8 @@ class TestRankingInvariants:
             "irrelevant memory must also be retrievable (not excluded)"
         )
         assert ids.index(high_id) < ids.index(low_id), (
-            f"relevant memory {high_id} must outrank irrelevant {low_id}, got order {ids}"
+            f"relevant memory {high_id} must outrank irrelevant {low_id}, "
+            f"got order {ids}"
         )
 
     def test_heat_signal_breaks_tie_among_identical_content(self, store):

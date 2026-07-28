@@ -80,7 +80,8 @@ class TestResolveExistingPaths:
 
 
 class TestAssessMemories:
-    """_assess_memories: postcondition — staleness correctly classified per threshold."""
+    """_assess_memories: postcondition — staleness correctly classified per
+    threshold."""
 
     def _make_mem(self, memory_id: int, content: str) -> dict:
         return {"id": memory_id, "content": content}
