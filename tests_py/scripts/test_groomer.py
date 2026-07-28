@@ -158,10 +158,10 @@ class TestActiveSessionGuard:
     async def test_apply_skipped_when_session_active(self, groomer_module, monkeypatch):
         _pg_only()
         monkeypatch.setenv("CORTEX_HEADLESS_AUTHORING", "1")
-        monkeypatch.setattr(
-            "mcp_server.infrastructure.session_registry.has_active_session_window",
-            lambda: True,
-        )
+        # Patch the consumer binding: groomer.py imports the guard at module
+        # top (PLC0415 hoist), so patching the defining module cannot reach
+        # the copy the fixture already bound at exec time.
+        monkeypatch.setattr(groomer_module, "has_active_session_window", lambda: True)
         result = await groomer_module._run(
             apply=True,
             wiki_max_drains=1,
