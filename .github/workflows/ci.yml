@@ -216,8 +216,13 @@ jobs:
           path: ~/.cache/huggingface
           key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
 
+      # The `codebase` extra is included even though this job is about the
+      # storage backend: without tree-sitter/leidenalg, 9 tests SKIP here that
+      # the PostgreSQL job runs, so the two gates would not be equal and a
+      # codebase-analysis regression could reach the default backend unseen.
+      # Measured 2026-07-28 locally: 8 skips from tree-sitter, 1 from leidenalg.
       - name: Install dependencies (no postgresql extra)
-        run: pip install -e ".[dev,sqlite]"
+        run: pip install -e ".[dev,sqlite,codebase]"
 
       # Retry-with-backoff, fail-loudly: see the `test` job's pre-download step
       # for the root-cause rationale (CI run 28495801728, 2026-07-01).
@@ -250,10 +255,20 @@ jobs:
         # PG-only lesson-promotion query, and a bare except that reported the
         # resulting failure as an empty backlog (issue #220).
         #
-        # Measured 2026-07-28 on this tree: 5639 passed, 96 skipped, exit 0.
-        # The 96 skips are tests whose fixtures seed PostgreSQL directly (raw
-        # DSN / PG-only migrations); making them backend-agnostic is the
-        # remaining #220 work and is tracked there, not deferred silently here.
+        # Measured 2026-07-28 on this tree (rebased onto 575f2f1, so it
+        # includes the tests #229/#230 added), macOS 15 / Python 3.13,
+        # `CORTEX_MEMORY_STORE_BACKEND=sqlite`: 6103 passed, 96 skipped,
+        # exit 0 in 247s.
+        #
+        # Those 96 skips, counted (not estimated) from a `-rs` run:
+        #   84  PostgreSQL-only — the test's SUBJECT is the PG implementation
+        #       (pg_store_* dialect modules, PG-only maintenance passes). These
+        #       SHOULD skip here; making them "backend-agnostic" would mean
+        #       testing PG code without PG.
+        #   12  optional deps absent from that local env (8 tree-sitter,
+        #       1 leidenalg, 3 sqlite-vec). All three ARE installed on this
+        #       job, so it should report ~84 skips, not 96 — if it reports
+        #       more, an extra is missing and the gate has silently narrowed.
         run: pytest --tb=short -q -p no:randomly
 
   test-windows:

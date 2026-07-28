@@ -23,6 +23,15 @@ from __future__ import annotations
 import pytest
 
 from mcp_server.infrastructure.pg_store import PgMemoryStore
+from tests_py.conftest import _USE_PG  # type: ignore
+
+# Constructs PgMemoryStore() directly, so it needs a live PostgreSQL. It had no
+# gate and therefore errored on any PG-less run — invisible while CI's SQLite
+# job ran a single file, a hard failure once that job runs the full suite
+# (#220). Gated on reachability: the subject of these tests IS the PG backend.
+pytestmark = pytest.mark.skipif(
+    not _USE_PG, reason="PostgreSQL not available — this suite needs a live DB"
+)
 
 
 @pytest.fixture
