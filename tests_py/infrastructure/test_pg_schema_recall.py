@@ -23,9 +23,13 @@ def test_recall_memories_returns_source_column() -> None:
     assert "source          TEXT" in RECALL_MEMORIES_LAZY_FN, (
         "recall_memories() RETURNS TABLE must declare source TEXT"
     )
-    assert (
-        "c.source" in RECALL_MEMORIES_LAZY_FN or "m.source" in RECALL_MEMORIES_LAZY_FN
-    ), "recall_memories() final SELECT must include the source column"
+    # Pin the alias the DDL actually uses: the final SELECT reads from the
+    # candidates CTE (`c.source`). A former `or "m.source"` arm never matched
+    # (verified against RECALL_MEMORIES_LAZY_FN, 2026-07-28) and only
+    # weakened the assertion — boy-scout fix, #197 family-3 sweep.
+    assert "c.source" in RECALL_MEMORIES_LAZY_FN, (
+        "recall_memories() final SELECT must include the source column"
+    )
 
 
 def test_recall_memories_drop_guard_present() -> None:

@@ -140,7 +140,12 @@ def extract_events(
         if is_event:
             cleaned = _clean_auto_captured(content)
             text = cleaned[:_SNIPPET_MAX_CHARS].strip()
-            if len(content) > _SNIPPET_MAX_CHARS:
+            # Gate the ellipsis on the CLEANED length — what was truncated —
+            # not the raw content: a stripped tool header used to trigger a
+            # spurious "..." with nothing cut (latent bug surfaced by the
+            # #197 family-3 constant extraction; extract_decisions was
+            # already correct).
+            if len(cleaned) > _SNIPPET_MAX_CHARS:
                 text += "..."
             events.append(text)
 

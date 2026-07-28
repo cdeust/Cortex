@@ -69,6 +69,17 @@ class TestExtractEvents:
         events = extract_events(mems)
         assert len(events) == 0
 
+    def test_no_spurious_ellipsis_when_cleaning_shrinks_below_cap(self):
+        """Regression (#197 family-3 sweep): the ellipsis gate compared the
+        RAW content length while truncating the CLEANED text, so an
+        auto-captured memory whose stripped tool header pushed the raw
+        length over the cap got a '...' with nothing actually cut."""
+        header = "# Tool: Edit\n**File:** `" + "x" * 130 + "`\n"
+        body = "Fixed the authentication bug"
+        mems = [{"content": header + body, "importance": 0.2, "tags": []}]
+        events = extract_events(mems)
+        assert events == [body]  # cleaned text is short: no "..." appended
+
 
 class TestExtractTopEntities:
     def test_camel_case_entities(self):
