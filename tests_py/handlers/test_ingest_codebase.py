@@ -87,9 +87,51 @@ class _FakeStore:
         return list(self.memories)
 
 
+def _ensure_base_schema():
+    """Provision the base schema these incremental migrations build on.
+
+    `_INGEST_MIGRATIONS` starts with `CREATE INDEX ... ON entities`, so it
+    presupposes the base tables. The suite gate is `_USE_PG_STORE`, which
+    says PostgreSQL is the SELECTED backend — not that this database has
+    ever been migrated. On a reachable-but-unprovisioned test DB the two
+    come apart and the first statement dies with `UndefinedTable: relation
+    "entities" does not exist`, which reads as a product failure but is a
+    missing precondition (issue #220's "harness reason, not a product one").
+
+    Constructing `PgMemoryStore` IS the migration: `__init__` runs
+    `_init_schema()`, which applies `pg_schema.get_all_ddl()` under an
+    advisory lock iff the recorded hash is stale. `mcp_server/migrate.py`
+    calls that the single source of truth and never re-applies DDL itself;
+    neither does this, so the tests cannot drift from the shipped schema.
+
+    Guarded on the missing precondition rather than run unconditionally.
+    Applying the DDL mid-suite is not free — measured on this branch, an
+    unconditional call turned a clean full run into
+    `test_near_dup_calibration_pass::
+    test_pairs_above_threshold_collapse_onto_hottest_member` failing
+    (6259 passed / 0 failed -> 6258 passed / 1 failed, paired control on
+    the same commit). Provisioning only when `entities` is genuinely
+    absent makes this a no-op everywhere the precondition already holds —
+    CI, and any developer DB that has been migrated — so it repairs the
+    unprovisioned case without perturbing the provisioned one.
+    """
+    import psycopg
+
+    from mcp_server.infrastructure.pg_store import PgMemoryStore
+
+    with psycopg.connect(_TEST_DB_URL, autocommit=True) as conn:
+        row = conn.execute("SELECT to_regclass('public.entities')").fetchone()
+    if row is not None and row[0] is not None:
+        return
+
+    store = PgMemoryStore(database_url=_TEST_DB_URL)
+    store.close()
+
+
 def _apply_ingest_migrations_and_clean():
     import psycopg
 
+    _ensure_base_schema()
     with psycopg.connect(_TEST_DB_URL, autocommit=True) as conn:
         for stmt in _INGEST_MIGRATIONS:
             conn.execute(stmt)
