@@ -25,7 +25,13 @@ that bug by forgetting it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from xml.etree import ElementTree
 from xml.sax.saxutils import escape
+
+
+class BadgeMarkupError(RuntimeError):
+    """The rendered badge is not well-formed XML."""
+
 
 # source: measured 2026-07-28 — the 19-character string "Top 1.2% · Jul 2026"
 # renders correctly at textLength=110 in Verdana/DejaVu Sans, i.e.
@@ -166,4 +172,16 @@ def render(spec: BadgeSpec) -> str:
         "</svg>",
         "",
     ]
-    return "\n".join(lines)
+    svg = "\n".join(lines)
+    # Parse what we just built, and refuse to return anything that is not
+    # well-formed. Escaping the text runs is not sufficient on its own: a
+    # provenance comment containing "--" (as "--check" or "--collect-only"
+    # readily does) is illegal inside an XML comment and produces a badge
+    # that no strict renderer will draw. Both defects have been introduced
+    # here in practice, so the guard is on the finished artifact rather than
+    # on any one of the ways to break it.
+    try:
+        ElementTree.fromstring(svg)
+    except ElementTree.ParseError as error:
+        raise BadgeMarkupError(f"rendered badge is not well-formed XML: {error}")
+    return svg

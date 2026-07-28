@@ -173,6 +173,10 @@ jobs:
           fi
           echo "collected ${collected} tests"
           python scripts/check_doc_claims.py --test-count "${collected}"
+          # The tests badge is a committed SVG carrying this same number, so
+          # it is checked where the number is known. The other repo-derived
+          # badges are checked in the static job, which needs no suite.
+          python scripts/generate_repo_badges.py --check --test-count "${collected}"
 
       - name: Upload coverage
         if: matrix.python-version == '3.12'
@@ -394,6 +398,15 @@ jobs:
       # different tool count, and nothing failed. Static only (no imports).
       - name: Check documentation claims
         run: python scripts/check_doc_claims.py
+
+      # The README's repo-derived badges are committed SVGs, not hotlinked
+      # images, so nothing regenerates them on view: a figure that moves
+      # leaves the badge asserting the old one. Checked here, on every push
+      # and PR, because that drift is introduced at commit time. Static only
+      # (no network, no suite) — the tests badge needs a collected count and
+      # is checked in the test job instead.
+      - name: Check committed badges
+        run: python scripts/generate_repo_badges.py --check
 
   typecheck:
     name: Type Check
