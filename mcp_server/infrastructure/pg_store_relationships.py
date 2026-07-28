@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.pg_store_host import PgStoreHost
+
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import psycopg
 
 
-class PgRelationshipMixin:
+class PgRelationshipMixin(PgStoreHost):
     """Relationship persistence operations on PostgreSQL."""
-
-    _conn: psycopg.Connection
 
     def update_relationships_weight_batch(
         self, updates: list[tuple[int, float]]
@@ -77,7 +77,7 @@ class PgRelationshipMixin:
                 data.get("confidence", 1.0),
                 data.get("created_at"),
             ),
-        ).fetchone()
+        ).one()
         self._conn.commit()
         return row["id"]
 

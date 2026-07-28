@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.pg_store_host import PgStoreHost
+
 from typing import TYPE_CHECKING, Any
 
 import psycopg
@@ -10,14 +12,8 @@ if TYPE_CHECKING:
     import psycopg
 
 
-class PgStatsMixin:
+class PgStatsMixin(PgStoreHost):
     """Diagnostics, consolidation stages, CLS queries on PostgreSQL."""
-
-    _conn: psycopg.Connection
-
-    def _normalize_memory_row(self, row: dict) -> dict:
-        """Provided by PgMemoryStore."""
-        return dict(row)
 
     # ── Counts ────────────────────────────────────────────────────────
 
@@ -330,7 +326,7 @@ class PgStatsMixin:
                 data.get("memories_archived", 0),
                 data.get("duration_ms", 0),
             ),
-        ).fetchone()
+        ).one()
         self._conn.commit()
         return row["id"]
 

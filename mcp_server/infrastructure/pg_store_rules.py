@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.pg_store_host import PgStoreHost
+
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -9,14 +11,8 @@ if TYPE_CHECKING:
     from psycopg import sql
 
 
-class PgRuleMixin:
+class PgRuleMixin(PgStoreHost):
     """Memory rule persistence operations on PostgreSQL."""
-
-    _conn: psycopg.Connection
-
-    def _normalize_memory_row(self, row: dict) -> dict:
-        """Provided by PgMemoryStore."""
-        return dict(row)
 
     def insert_rule(self, data: dict[str, Any]) -> int:
         row = self._execute(
@@ -34,7 +30,7 @@ class PgRuleMixin:
                 data.get("is_active", True),
                 data.get("source_memory_id"),
             ),
-        ).fetchone()
+        ).one()
         self._conn.commit()
         return row["id"]
 

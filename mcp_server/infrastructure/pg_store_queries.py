@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.pg_store_host import PgStoreHost
+
 import json
 from typing import TYPE_CHECKING, Any, Iterator
 from mcp_server.infrastructure.memory_config import get_memory_settings
@@ -11,14 +13,8 @@ if TYPE_CHECKING:
     import psycopg
 
 
-class PgQueryMixin:
+class PgQueryMixin(PgStoreHost):
     """Read-only memory queries on PostgreSQL."""
-
-    _conn: psycopg.Connection
-
-    def _normalize_memory_row(self, row: dict) -> dict:
-        """Provided by PgMemoryStore."""
-        return dict(row)
 
     def get_memories_for_domain(
         self,

@@ -17,6 +17,8 @@ Two write paths share the single-statement SQL below:
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.pg_store_host import PgStoreHost
+
 # Single data-modifying-CTE statement on purpose: the store's
 # ``_execute`` borrows a pool connection per call, so two separate
 # INSERTs could land on two connections and lose header/items atomicity.
@@ -87,7 +89,7 @@ _FETCH_RECEIPTS_SQL = (
 )
 
 
-class PgReceiptsMixin:
+class PgReceiptsMixin(PgStoreHost):
     """Append-only injection receipts (blame path T1)."""
 
     def insert_injection_receipt(
@@ -99,7 +101,7 @@ class PgReceiptsMixin:
         """Insert one receipt header + its items atomically; return receipt_id."""
         row = self._execute(
             _INSERT_RECEIPT_SQL, _receipt_params(channel, items, session_id)
-        ).fetchone()
+        ).one()
         self._conn.commit()
         return int(row["receipt_id"])
 

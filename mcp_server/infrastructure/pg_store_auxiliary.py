@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.pg_store_host import PgStoreHost
+
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -9,14 +11,8 @@ if TYPE_CHECKING:
     import psycopg
 
 
-class PgAuxiliaryMixin:
+class PgAuxiliaryMixin(PgStoreHost):
     """Prospective memory, checkpoint, archive, engram operations on PostgreSQL."""
-
-    _conn: psycopg.Connection
-
-    def _normalize_memory_row(self, row: dict) -> dict:
-        """Provided by PgMemoryStore."""
-        return dict(row)
 
     # ── Ingest checkpoint (resumable streaming ingest) ────────────────
 
@@ -76,7 +72,7 @@ class PgAuxiliaryMixin:
                 data.get("created_by", ""),
                 data.get("source_memory_id"),
             ),
-        ).fetchone()
+        ).one()
         self._conn.commit()
         return row["id"]
 
@@ -137,7 +133,7 @@ class PgAuxiliaryMixin:
                 data.get("proficiency", 0.0),
                 data.get("is_habitual", False),
             ),
-        ).fetchone()
+        ).one()
         self._conn.commit()
         return row["id"]
 
@@ -175,7 +171,7 @@ class PgAuxiliaryMixin:
                 data.get("custom_context", ""),
                 data.get("epoch", 0),
             ),
-        ).fetchone()
+        ).one()
         self._conn.commit()
         return row["id"]
 
@@ -221,7 +217,7 @@ class PgAuxiliaryMixin:
                 data.get("mismatch_score", 0.0),
                 data.get("archive_reason", ""),
             ),
-        ).fetchone()
+        ).one()
         self._conn.commit()
         return row["id"]
 
@@ -342,7 +338,7 @@ class PgAuxiliaryMixin:
                     data.get("assimilation_count", 0),
                     data.get("violation_count", 0),
                 ),
-            ).fetchone()
+            ).one()
             self._conn.commit()
             return row["id"]
         except psycopg.errors.UniqueViolation:

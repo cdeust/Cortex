@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.pg_store_host import PgStoreHost
+
 from typing import TYPE_CHECKING, Any
 from mcp_server.shared.entity_canonical import canonicalize_entity_name
 
@@ -9,14 +11,8 @@ if TYPE_CHECKING:
     import psycopg
 
 
-class PgEntityMixin:
+class PgEntityMixin(PgStoreHost):
     """Entity persistence operations on PostgreSQL."""
-
-    _conn: psycopg.Connection
-
-    def _normalize_memory_row(self, row: dict) -> dict:
-        """Provided by PgMemoryStore."""
-        return dict(row)
 
     def update_entities_heat_batch(self, updates: list[tuple[int, float]]) -> int:
         """Batch-update entity heat. Single round-trip, single commit.
@@ -89,7 +85,7 @@ class PgEntityMixin:
                 data.get("created_at"),
                 data.get("heat", 1.0),
             ),
-        ).fetchone()
+        ).one()
         self._conn.commit()
         return row["id"]
 

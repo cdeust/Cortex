@@ -28,10 +28,11 @@ import numpy as np
 import psycopg
 from pgvector import Vector
 from pgvector.psycopg import register_vector
-from psycopg.rows import dict_row
+from psycopg.rows import DictRow, dict_row
 from psycopg_pool import ConnectionPool
 
 from mcp_server.infrastructure.pg_schema import get_all_ddl
+from mcp_server.infrastructure.pg_store_host import MaterializedCursor
 from mcp_server.infrastructure.pg_store_auxiliary import PgAuxiliaryMixin
 from mcp_server.infrastructure.pg_store_entities import PgEntityMixin
 from mcp_server.infrastructure.pg_store_entity_merge import PgEntityMergeMixin
@@ -93,49 +94,6 @@ def _get_database_url() -> str:
     return url
 
 
-class _MaterializedCursor:
-    """Lightweight cursor surrogate that pre-fetches rows.
-
-    Phase 5: connections are checked out from the pool per query and
-    returned at the end of ``_execute``. The original ``psycopg.Cursor``
-    becomes unusable once the connection is returned to the pool, so we
-    eagerly read all rows into memory here and expose the subset of the
-    Cursor API that production code actually uses: ``fetchone``,
-    ``fetchall``, and ``rowcount``.
-    """
-
-    __slots__ = ("_rows", "_idx", "_rowcount")
-
-    def __init__(self, cursor: psycopg.Cursor) -> None:
-        self._rowcount = cursor.rowcount
-        try:
-            self._rows = cursor.fetchall()
-        except (psycopg.ProgrammingError, TypeError):
-            # DDL / DML statements without a result set — fetchall raises.
-            self._rows = []
-        self._idx = 0
-
-    def fetchone(self) -> dict | None:
-        if self._idx >= len(self._rows):
-            return None
-        row = self._rows[self._idx]
-        self._idx += 1
-        return row
-
-    def fetchall(self) -> list:
-        remaining = self._rows[self._idx :]
-        self._idx = len(self._rows)
-        return remaining
-
-    @property
-    def rowcount(self) -> int:
-        return self._rowcount
-
-    def __iter__(self):
-        while (row := self.fetchone()) is not None:
-            yield row
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -185,16 +143,16 @@ class PgMemoryStore(
         register_vector(self._conn)
         # Phase 5 pools — lazy-constructed; opening on first acquire
         # avoids paying pool-open cost for short-lived usages (tests).
-        self._interactive_pool: ConnectionPool | None = None
-        self._batch_pool: ConnectionPool | None = None
+        self._interactive_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = None
+        self._batch_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = None
 
-    def _create_connection(self) -> psycopg.Connection:
+    def _create_connection(self) -> psycopg.Connection[DictRow]:
         """Create a new database connection."""
         return psycopg.connect(self._url, row_factory=dict_row, autocommit=True)
 
     # ── Phase 5: connection pools ────────────────────────────────────────
 
-    def _configure_pool_connection(self, conn: psycopg.Connection) -> None:
+    def _configure_pool_connection(self, conn: psycopg.Connection[DictRow]) -> None:
         """Pool callback: set up each checked-out connection.
 
         Registers the pgvector adapter so callers can bind `vector` params.
@@ -203,7 +161,7 @@ class PgMemoryStore(
         """
         register_vector(conn)
 
-    def _open_interactive_pool(self) -> ConnectionPool:
+    def _open_interactive_pool(self) -> ConnectionPool[psycopg.Connection[DictRow]]:
         """Open the hot-path pool on first use."""
 
         settings = get_memory_settings()
@@ -218,7 +176,7 @@ class PgMemoryStore(
         )
         return pool
 
-    def _open_batch_pool(self) -> ConnectionPool:
+    def _open_batch_pool(self) -> ConnectionPool[psycopg.Connection[DictRow]]:
         """Open the batch/long-running pool on first use."""
 
         settings = get_memory_settings()
@@ -234,7 +192,7 @@ class PgMemoryStore(
         return pool
 
     @property
-    def interactive_pool(self) -> ConnectionPool:
+    def interactive_pool(self) -> ConnectionPool[psycopg.Connection[DictRow]]:
         """Hot-path ConnectionPool for recall / remember / anchor / etc.
 
         See docs/program/phase-5-pool-admission-design.md §1.1 for the
@@ -245,7 +203,7 @@ class PgMemoryStore(
         return self._interactive_pool
 
     @property
-    def batch_pool(self) -> ConnectionPool:
+    def batch_pool(self) -> ConnectionPool[psycopg.Connection[DictRow]]:
         """Batch/long-running ConnectionPool for consolidate / wiki_pipeline /
         ingest / seed_project / backfill_memories.
 
@@ -256,7 +214,7 @@ class PgMemoryStore(
         return self._batch_pool
 
     @contextmanager
-    def acquire_interactive(self) -> Iterator[psycopg.Connection]:
+    def acquire_interactive(self) -> Iterator[psycopg.Connection[DictRow]]:
         """Context manager borrowing a connection from the interactive pool.
 
         Use this for short-lived hot-path operations. For long-running
@@ -272,7 +230,7 @@ class PgMemoryStore(
             yield conn
 
     @contextmanager
-    def acquire_batch(self) -> Iterator[psycopg.Connection]:
+    def acquire_batch(self) -> Iterator[psycopg.Connection[DictRow]]:
         """Context manager borrowing a connection from the batch pool."""
 
         if get_memory_settings().POOL_DISABLED:
@@ -304,7 +262,7 @@ class PgMemoryStore(
 
     def _execute(
         self, query: str | psycopg.sql.Composable, params: Any = None, **kwargs: Any
-    ) -> psycopg.Cursor:
+    ) -> MaterializedCursor:
         """Execute a query with stale-plan recovery and reconnection.
 
         Phase 5: borrows a connection from ``interactive_pool`` for each
@@ -330,11 +288,11 @@ class PgMemoryStore(
 
     def _execute_on_conn(
         self,
-        conn: psycopg.Connection,
+        conn: psycopg.Connection[DictRow],
         query: str | psycopg.sql.Composable,
         params: Any,
         **kwargs: Any,
-    ) -> psycopg.Cursor:
+    ) -> MaterializedCursor:
         """Run a query on a given connection with retry-on-stale-plan.
 
         Returns a materialized cursor (rows pre-fetched) so callers can
@@ -359,7 +317,7 @@ class PgMemoryStore(
         except psycopg.OperationalError:
             logger.warning("Database connection lost on pool checkout, retrying")
             cur = conn.execute(query, params, **kwargs)
-        return _MaterializedCursor(cur)
+        return MaterializedCursor(cur)
 
     # Advisory lock id for schema bootstrap. Two processes hitting a
     # fresh DB simultaneously (e.g. http_standalone + a worker subproc)
