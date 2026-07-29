@@ -141,7 +141,8 @@ Treat gaps as "undocumented," not "does not exist."
 - `replay_execution.py` — Replay execution logic
 - `replay_formatting.py` — Replay result formatting
 - `sleep_compute.py` — Dream replay, cluster summarization, re-embedding, auto-narration
-- `synaptic_plasticity.py` — LTP/LTD Hebbian learning + STDP causal direction + stochastic transmission + phase-gated plasticity (Hebb 1949, BCM 1982, Bi & Poo 1998, Markram 1998)
+- `synaptic_plasticity.py` — Public facade re-exporting LTP/LTD Hebbian learning + STDP causal direction + stochastic transmission + phase-gated plasticity (Hebb 1949, BCM 1982, Bi & Poo 1998, Markram 1998). Holds no implementation
+- `synaptic_plasticity_stp.py` — Tsodyks-Markram short-term plasticity state/dynamics, noise injection, theta-phase gating; the leaf the other two depend on (stdlib-only imports, issue #233)
 - `synaptic_plasticity_hebbian.py` — Hebbian learning algorithms
 - `synaptic_plasticity_stochastic.py` — Stochastic transmission
 - `microglial_pruning.py` — Complement-dependent edge elimination + orphan archival (Wang et al. 2020)

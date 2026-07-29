@@ -12,7 +12,13 @@ from __future__ import annotations
 import random
 from typing import Any
 
-from mcp_server.core.synaptic_plasticity import (
+from mcp_server.core.synaptic_plasticity_hebbian import (
+    _LTD_RATE,
+    _LTP_RATE,
+    compute_ltd,
+    compute_ltp,
+)
+from mcp_server.core.synaptic_plasticity_stp import (
     _MAX_WEIGHT,
     _MIN_WEIGHT,
     SynapticState,
@@ -20,12 +26,6 @@ from mcp_server.core.synaptic_plasticity import (
     phase_modulate_plasticity,
     stochastic_transmit,
     update_short_term_dynamics,
-)
-from mcp_server.core.synaptic_plasticity_hebbian import (
-    _LTD_RATE,
-    _LTP_RATE,
-    compute_ltd,
-    compute_ltp,
 )
 
 

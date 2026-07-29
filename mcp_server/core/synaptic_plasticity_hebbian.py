@@ -29,11 +29,11 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from mcp_server.core.synaptic_plasticity import (
+from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.core.synaptic_plasticity_stp import (
     _MAX_WEIGHT,
     _MIN_WEIGHT,
 )
-from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 _LTP_RATE: float = 0.05
 _LTD_RATE: float = 0.02
