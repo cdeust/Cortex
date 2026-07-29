@@ -38,9 +38,10 @@ def _load_setup_module(monkeypatch, store_backend: str | None):
     else:
         monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", store_backend)
 
-    spec = importlib.util.spec_from_file_location(
-        "_cortex_setup_script", SETUP_MODULE_PATH
-    )
+    # Dotted to match the path-derived name mutmut keys mutant trampolines
+    # on ("scripts.setup.*") — a synthetic name makes every mutant look
+    # unreached to a scoped mutation run (issue #262).
+    spec = importlib.util.spec_from_file_location("scripts.setup", SETUP_MODULE_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

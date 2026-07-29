@@ -6,11 +6,16 @@ import sys
 from pathlib import Path
 
 
+# Imported by its dotted path (scripts/ is an implicit namespace package
+# once the repo root is on sys.path) rather than a bare module name:
+# mutmut keys mutant trampolines on "scripts.wiki_rebucket_file_docs.*",
+# and a bare `import wiki_rebucket_file_docs` makes every mutant look
+# unreached to a scoped mutation run (issue #262).
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 sys.path.insert(0, str(_REPO_ROOT))
 
-from wiki_rebucket_file_docs import (  # noqa: E402
+from scripts.wiki_rebucket_file_docs import (  # noqa: E402
     _derive_target_path,
     _extract_file_tag,
     _is_file_doc_path,

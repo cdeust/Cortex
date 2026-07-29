@@ -24,13 +24,16 @@ _SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
+# Dotted to match the path-derived name mutmut keys mutant trampolines on
+# ("scripts.generate_repo_badges.*") — a bare module name makes every mutant
+# look unreached to a scoped mutation run (issue #262).
 _spec = importlib.util.spec_from_file_location(
-    "generate_repo_badges", _SCRIPTS / "generate_repo_badges.py"
+    "scripts.generate_repo_badges", _SCRIPTS / "generate_repo_badges.py"
 )
 gen = importlib.util.module_from_spec(_spec)
 # Register before exec: @dataclass resolves its owning module through
 # sys.modules, and RepoBadge is defined at import time.
-sys.modules["generate_repo_badges"] = gen
+sys.modules[_spec.name] = gen
 _spec.loader.exec_module(gen)
 
 import badge_render  # noqa: E402

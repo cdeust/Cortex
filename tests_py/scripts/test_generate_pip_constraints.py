@@ -26,8 +26,14 @@ from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[2]
 
+# The module name must be the dotted path mutmut derives from the file's
+# location: it keys its mutant trampolines on
+# "scripts.generate_pip_constraints.*", and a bare "generate_pip_constraints"
+# makes every mutant look unreached, so a scoped mutation run stops early
+# instead of scoring the suite (issue #262).
 _spec = importlib.util.spec_from_file_location(
-    "generate_pip_constraints", REPO / "scripts" / "generate_pip_constraints.py"
+    "scripts.generate_pip_constraints",
+    REPO / "scripts" / "generate_pip_constraints.py",
 )
 gen = importlib.util.module_from_spec(_spec)
 # Registered before exec: @dataclass resolves its class's module through

@@ -501,6 +501,9 @@ only_mutate = ["mcp_server/shared/json_native.py"]
 # too: scripts/check_doc_claims.py resolves its canonical sources relative to
 # its own location, so without these its repository-level tests raise
 # FileNotFoundError under every mutant and the run reports no usable result.
+# uv.lock/requirements/pyproject.toml: scripts/generate_pip_constraints.py and
+# its test read these directly (uv.lock registries, requirements/*.txt,
+# pyproject.toml's [[tool.uv.index]] entries) — issue #262.
 also_copy = [
     "tests_py",
     "deps",
@@ -514,6 +517,9 @@ also_copy = [
     "server.json",
     "package.json",
     ".bestpractices.json",
+    "uv.lock",
+    "requirements",
+    "pyproject.toml",
 ]
 pytest_add_cli_args_test_selection = ["tests_py/shared/test_json_native.py"]
 use_setproctitle = false

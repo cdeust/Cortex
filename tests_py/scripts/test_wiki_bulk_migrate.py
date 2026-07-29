@@ -7,11 +7,16 @@ import sys
 from pathlib import Path
 
 
+# Imported by its dotted path (scripts/ is an implicit namespace package
+# once the repo root is on sys.path) rather than a bare module name:
+# mutmut keys mutant trampolines on "scripts.wiki_bulk_migrate.*", and a
+# bare `import wiki_bulk_migrate` makes every mutant look unreached to a
+# scoped mutation run (issue #262).
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 sys.path.insert(0, str(_REPO_ROOT))
 
-from wiki_bulk_migrate import (  # noqa: E402
+from scripts.wiki_bulk_migrate import (  # noqa: E402
     _apply_plan,
     _clean_title_candidate,
     _detect_double_md,

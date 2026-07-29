@@ -5,13 +5,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-# The backfill script lives under scripts/ rather than the package. Add
-# scripts/ to sys.path so we can import it as a module.
+# The backfill script lives under scripts/ rather than the package.
+# Imported by its dotted path (scripts/ is an implicit namespace package
+# once the repo root is on sys.path) rather than a bare module name:
+# mutmut keys mutant trampolines on "scripts.wiki_backfill_ids.*", and a
+# bare `import wiki_backfill_ids` makes every mutant look unreached to a
+# scoped mutation run (issue #262).
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO_ROOT / "scripts"))
 sys.path.insert(0, str(_REPO_ROOT))
 
-from wiki_backfill_ids import run  # noqa: E402
+from scripts.wiki_backfill_ids import run  # noqa: E402
 
 from mcp_server.core.wiki_identity import extract_page_id, is_valid_page_id  # noqa: E402
 from mcp_server.core.wiki_redirect import parse_frontmatter  # noqa: E402

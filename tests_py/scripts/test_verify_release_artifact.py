@@ -17,8 +17,11 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+# Dotted to match the path-derived name mutmut keys mutant trampolines on
+# ("scripts.verify_release_artifact.*") — a bare module name makes every
+# mutant look unreached to a scoped mutation run (issue #262).
 _spec = importlib.util.spec_from_file_location(
-    "verify_release_artifact",
+    "scripts.verify_release_artifact",
     Path(__file__).resolve().parents[2] / "scripts" / "verify_release_artifact.py",
 )
 assert _spec is not None and _spec.loader is not None

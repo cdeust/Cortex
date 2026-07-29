@@ -22,8 +22,11 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 from xml.etree import ElementTree
 
+# Dotted to match the path-derived name mutmut keys mutant trampolines on
+# ("scripts.refresh_mcp_toplist_badge.*") — a bare module name makes every
+# mutant look unreached to a scoped mutation run (issue #262).
 _spec = importlib.util.spec_from_file_location(
-    "refresh_mcp_toplist_badge",
+    "scripts.refresh_mcp_toplist_badge",
     Path(__file__).resolve().parents[2] / "scripts" / "refresh_mcp_toplist_badge.py",
 )
 badge = importlib.util.module_from_spec(_spec)

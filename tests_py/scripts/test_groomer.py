@@ -23,7 +23,10 @@ GROOMER_PATH = REPO_ROOT / "scripts" / "groomer.py"
 
 @pytest.fixture
 def groomer_module():
-    spec = importlib.util.spec_from_file_location("_cortex_groomer", GROOMER_PATH)
+    # Dotted to match the path-derived name mutmut keys mutant trampolines
+    # on ("scripts.groomer.*") — a synthetic name makes every mutant look
+    # unreached to a scoped mutation run (issue #262).
+    spec = importlib.util.spec_from_file_location("scripts.groomer", GROOMER_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

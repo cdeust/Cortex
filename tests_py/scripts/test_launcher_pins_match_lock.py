@@ -58,9 +58,15 @@ def _marker_of(requirement_line: str) -> Marker | None:
 
 @pytest.fixture(scope="module")
 def deps_mod():
-    """Import scripts/launcher_deps.py by path (it is a script, not a package)."""
+    """Import scripts/launcher_deps.py by path (it is a script, not a package).
+
+    Named "scripts.launcher_deps" (the dotted path mutmut derives from the
+    file's location), not a synthetic name — mutmut keys mutant trampolines
+    on the path-derived name, and a synthetic one makes every mutant look
+    unreached (issue #262).
+    """
     spec = importlib.util.spec_from_file_location(
-        "_cortex_launcher_deps_pins", DEPS_MODULE_PATH
+        "scripts.launcher_deps", DEPS_MODULE_PATH
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

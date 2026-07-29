@@ -26,8 +26,14 @@ LAUNCHER_PATH = REPO_ROOT / "scripts" / "launcher.py"
 
 @pytest.fixture
 def launcher_module():
-    """Load scripts/launcher.py as a module without executing main()."""
-    spec = importlib.util.spec_from_file_location("_cortex_launcher", LAUNCHER_PATH)
+    """Load scripts/launcher.py as a module without executing main().
+
+    Named "scripts.launcher" (the dotted path mutmut derives from the
+    file's location), not a synthetic name — mutmut keys mutant
+    trampolines on the path-derived name, and a synthetic one makes every
+    mutant look unreached (issue #262).
+    """
+    spec = importlib.util.spec_from_file_location("scripts.launcher", LAUNCHER_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

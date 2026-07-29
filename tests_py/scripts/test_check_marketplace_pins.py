@@ -15,8 +15,11 @@ import urllib.error
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+# Dotted to match the path-derived name mutmut keys mutant trampolines on
+# ("scripts.check_marketplace_pins.*") — a bare module name makes every
+# mutant look unreached to a scoped mutation run (issue #262).
 _spec = importlib.util.spec_from_file_location(
-    "check_marketplace_pins",
+    "scripts.check_marketplace_pins",
     Path(__file__).resolve().parents[2] / "scripts" / "check_marketplace_pins.py",
 )
 gate = importlib.util.module_from_spec(_spec)

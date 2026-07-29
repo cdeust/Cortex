@@ -32,8 +32,17 @@ DEPS_MODULE_PATH = REPO_ROOT / "scripts" / "launcher_deps.py"
 
 @pytest.fixture
 def deps_mod():
+    # The module name must be the dotted path mutmut derives from the
+    # file's location: it keys its mutant trampolines on
+    # "scripts.launcher_deps.*", and a synthetic name (e.g. the prior
+    # "_cortex_launcher_deps") makes every mutant look unreached, so a
+    # scoped mutation run stops early instead of scoring the suite
+    # (issue #262). This does not change launcher_deps.py's own runtime
+    # import: scripts/launcher.py still loads it via a bare
+    # `import launcher_deps` (see that module's docstring) — only this
+    # test's OWN module handle is renamed.
     spec = importlib.util.spec_from_file_location(
-        "_cortex_launcher_deps", DEPS_MODULE_PATH
+        "scripts.launcher_deps", DEPS_MODULE_PATH
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -734,3 +743,4 @@ def test_pip_install_no_constraints_file_when_none_given(
     monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
     deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"])
     assert "-c" not in captured_cmd["cmd"]
+
