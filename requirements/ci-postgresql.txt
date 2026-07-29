@@ -26,6 +26,10 @@ aiofile==3.11.1 ; python_full_version >= '3.11' \
     --hash=sha256:1f91912c6643d2a4e49ca4ae3514f0bf3867ce948a36d99a6411b8f4755f4cf9 \
     --hash=sha256:ce77d14ac07f77bc2b757834a5c129321f3f705c474593deed5ab209079a52c9
     # via py-key-value-aio
+annotated-doc==0.0.5 \
+    --hash=sha256:117bac03a25ede5df5440e855b32d556049ca169ead221505badf432fed4b101 \
+    --hash=sha256:c7e58ce09192557605d8bbd92836d7e1d520ac9580096042c0bfd197efacf1bb
+    # via typer
 annotated-types==0.8.0 \
     --hash=sha256:13b2beaad985e05e2d6407ee4c4f35590b11f8d693a258a561055cac8f64cab7 \
     --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
@@ -286,7 +290,9 @@ charset-normalizer==3.4.9 \
 click==8.4.2 \
     --hash=sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6 \
     --hash=sha256:e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76
-    # via uvicorn
+    # via
+    #   huggingface-hub
+    #   uvicorn
 colorama==0.4.6 ; sys_platform == 'win32' \
     --hash=sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44 \
     --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
@@ -294,6 +300,7 @@ colorama==0.4.6 ; sys_platform == 'win32' \
     #   click
     #   pytest
     #   tqdm
+    #   typer
 coloredlogs==15.0.1 ; python_full_version < '3.11' \
     --hash=sha256:612ee75c546f53e92e70049c9dbfcc18c935a2b9a53b66085ce9ef6a6e5c0934 \
     --hash=sha256:7c991aa71a4577af2f82600d8f8f3a89f936baeaf9b50a9c197da014e5bf16b0
@@ -480,7 +487,6 @@ filelock==3.32.0 \
     # via
     #   huggingface-hub
     #   torch
-    #   transformers
 flashrank==0.2.10 \
     --hash=sha256:5d3272ae657d793c132d1e7917ed9e2adf49e0e1c60735583a67b051c6f0434a \
     --hash=sha256:f8f82a25c32fdfc668a09dc4089421d6aab8e7f71308424b541f40bb3f01d9db
@@ -488,15 +494,9 @@ flashrank==0.2.10 \
 flatbuffers==25.12.19 \
     --hash=sha256:7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4
     # via onnxruntime
-fsspec==2026.6.0 ; (python_full_version >= '3.11' and python_full_version < '3.14') or (python_full_version >= '3.11' and platform_machine != 'x86_64') or (python_full_version >= '3.11' and sys_platform != 'linux') \
+fsspec==2026.6.0 \
     --hash=sha256:02e0b71817df9b2169dc30a16832045764def1191b43dcff5bb85bdee212d2a1 \
     --hash=sha256:f5bac145310fe30e16e1471bd6840b2d990d609e872251d7e674241822abf01a
-    # via
-    #   huggingface-hub
-    #   torch
-fsspec==2026.7.0 ; python_full_version < '3.11' or (python_full_version >= '3.14' and platform_machine == 'x86_64' and sys_platform == 'linux') \
-    --hash=sha256:b57ddbafedfaef7018c1ecab32aa200a9d7ca26b77965f64e48b70061249d279 \
-    --hash=sha256:c803c40f4cf860b49dea58ee3e1c33cb9c790520e233537e1340049f89b82a88
     # via
     #   huggingface-hub
     #   torch
@@ -510,7 +510,7 @@ h11==0.16.0 \
     # via
     #   httpcore
     #   uvicorn
-hf-xet==1.5.2 ; platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64' \
+hf-xet==1.5.2 ; platform_machine == 'AMD64' or platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64' \
     --hash=sha256:045f84440c55cdeb659cf1a1dd48c77bcd0d2e93632e2fea8f2c3bdee79f38ed \
     --hash=sha256:1da28519496eb7c8094c11e4d25509b4a468457a0302d58136099db2fd9a671d \
     --hash=sha256:4a5ecb9cda8512ba2aa8ee5d37c87a1422992165892d653098c7b90247481c3b \
@@ -538,14 +538,15 @@ httpx==0.28.1 \
     --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
     # via
     #   fastmcp-slim
+    #   huggingface-hub
     #   mcp
 httpx-sse==0.4.3 \
     --hash=sha256:0ac1c9fe3c0afad2e0ebb25a934a59f4c7823b60792691f779fad2c5568830fc \
     --hash=sha256:9b1ed0127459a66014aec3c56bebd93da3c1bc8bb6618c8082039a44889a755d
     # via mcp
-huggingface-hub==0.36.2 \
-    --hash=sha256:1934304d2fb224f8afa3b87007d58501acfda9215b334eed53072dd5e815ff7a \
-    --hash=sha256:48f0c8eac16145dfce371e9d2d7772854a4f591bcb56c9cf548accf531d54270
+huggingface-hub==1.25.1 \
+    --hash=sha256:004d4e70350517e24c68a7dbb7dc5e40b2b6aefef8f94bf7a85f6f9835102ea5 \
+    --hash=sha256:21129595ca7a753be479b319913e22cc8808361ac118bd76cc413db831b28a99
     # via
     #   sentence-transformers
     #   tokenizers
@@ -1530,10 +1531,7 @@ regex==2026.7.19 \
 requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
     --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
-    # via
-    #   flashrank
-    #   huggingface-hub
-    #   transformers
+    # via flashrank
 rich==15.0.0 \
     --hash=sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb \
     --hash=sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36
@@ -1541,6 +1539,7 @@ rich==15.0.0 \
     #   cyclopts
     #   fastmcp-slim
     #   rich-rst
+    #   typer
 rich-rst==2.1.0 \
     --hash=sha256:7ecd1343ee12c879d0e7ae74c3eb6d263b023d2929c6d114212eb1fd91057255 \
     --hash=sha256:f4d117b49697f338769759fa5cacf5197da4888b347b9fda2e50aef5cd8d93bd
@@ -2041,6 +2040,10 @@ setuptools==83.0.0 \
     --hash=sha256:025bccbbf0fa05b6192bc64ae1e7b16e001fd6d6d4d5de03c97b1c1ade523bef \
     --hash=sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3
     # via torch
+shellingham==1.5.4 \
+    --hash=sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686 \
+    --hash=sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de
+    # via typer
 sse-starlette==3.4.6 \
     --hash=sha256:56217ab4c9a9f9c5db7b21e08732d3e7c2b807f45231ad23de0551a24c4a41f6 \
     --hash=sha256:725f8a1bd6d26ae1b2c9610c0ef5065dfdd496f3988d28adcf8c4b49dc25c627
@@ -2188,9 +2191,9 @@ tqdm==4.70.0 \
     #   huggingface-hub
     #   sentence-transformers
     #   transformers
-transformers==4.57.6 \
-    --hash=sha256:4c9e9de11333ddfe5114bc872c9f370509198acf0b87a832a0ab9458e2bd0550 \
-    --hash=sha256:55e44126ece9dc0a291521b7e5492b572e6ef2766338a610b9ab5afbb70689d3
+transformers==5.14.1 \
+    --hash=sha256:60d196c27781eacf8637e2b533f517582907ad6f9ae142046d6b69431a5b2173 \
+    --hash=sha256:9db974c4079ede2d1a3ea7ca5a240df33f2cc26fc2b36ba64c5f2a4f43b6e725
     # via sentence-transformers
 tree-sitter==0.26.0 \
     --hash=sha256:00289bfe7978f3e0dc0ce69813a20fa9f44ea4c100b3ec62043e5eb74ccfc3a2 \
@@ -2246,6 +2249,10 @@ tree-sitter-language-pack==1.13.5 \
     --hash=sha256:eae20d7fe006ef8fcbfdaf37ebaa647750a4f885d90ca4c2bad1c1844bf9053a \
     --hash=sha256:fb864927710e092a7201cc4bcd0647d6578655cd6951a3485fa9b0df043715c0
     # via hypermnesia-mcp
+typer==0.27.0 \
+    --hash=sha256:629bd12ea5d13a17148125d9a264f949eb171fb3f120f9b04d85873cab054fa5 \
+    --hash=sha256:6f4b27631e47f077871b7dc30e933ec0131c1390fbe0e387ea5574b5bac9ccf1
+    # via transformers
 typing-extensions==4.16.0 \
     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8 \
     --hash=sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5
