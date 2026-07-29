@@ -27,7 +27,6 @@ from mcp_server.core.codebase_parser import (
 from mcp_server.core.codebase_parser import parse_file
 from mcp_server.core.ast_extractors import (
     extract_calls_per_function,
-    extract_calls_generic,
     extract_python_definitions,
     extract_python_imports,
     extract_js_definitions,
@@ -101,7 +100,7 @@ def parse_file_ast(path: str, content: bytes) -> FileAnalysis:
         return parse_file(path, text)
 
     extractor, tree = result
-    imports, definitions, calls = extractor(tree.root_node, content)
+    imports, definitions = extractor(tree.root_node, content)
     docstring = _extract_module_doc(tree.root_node, language, content)
     # Caller-qualified call map — works across every language the
     # extractor covers because it targets tree-sitter node types shared
@@ -156,13 +155,12 @@ def _extract_module_doc(
 def _extract_python(
     root: Node,
     source: bytes,
-) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
-    """Extract Python imports, definitions, and call sites."""
+) -> tuple[list[ImportInfo], list[SymbolDef]]:
+    """Extract Python imports and definitions."""
 
     imports = extract_python_imports(root, source)
     definitions = extract_python_definitions(root, source)
-    calls = extract_calls_generic(root, source)
-    return imports, definitions, calls
+    return imports, definitions
 
 
 # ── JS/TS extractor ──────────────────────────────────────────────────────
@@ -171,13 +169,10 @@ def _extract_python(
 def _extract_js(
     root: Node,
     source: bytes,
-) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
-    """Extract JavaScript/TypeScript imports, definitions, and calls."""
+) -> tuple[list[ImportInfo], list[SymbolDef]]:
+    """Extract JavaScript/TypeScript imports and definitions."""
 
-    imports = extract_js_imports(root, source)
-    definitions = extract_js_definitions(root, source)
-    calls = extract_calls_generic(root, source)
-    return imports, definitions, calls
+    return extract_js_imports(root, source), extract_js_definitions(root, source)
 
 
 # ── Go extractor ─────────────────────────────────────────────────────────
@@ -186,40 +181,28 @@ def _extract_js(
 def _extract_go(
     root: Node,
     source: bytes,
-) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
-    """Extract Go imports, definitions, and calls."""
+) -> tuple[list[ImportInfo], list[SymbolDef]]:
+    """Extract Go imports and definitions."""
 
-    return (
-        extract_go_imports(root, source),
-        extract_go_definitions(root, source),
-        extract_calls_generic(root, source),
-    )
+    return extract_go_imports(root, source), extract_go_definitions(root, source)
 
 
 def _extract_swift(
     root: Node,
     source: bytes,
-) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
-    """Extract Swift imports, definitions, and calls."""
+) -> tuple[list[ImportInfo], list[SymbolDef]]:
+    """Extract Swift imports and definitions."""
 
-    return (
-        extract_swift_imports(root, source),
-        extract_swift_definitions(root, source),
-        extract_calls_generic(root, source),
-    )
+    return extract_swift_imports(root, source), extract_swift_definitions(root, source)
 
 
 def _extract_rust(
     root: Node,
     source: bytes,
-) -> tuple[list[ImportInfo], list[SymbolDef], list[str]]:
-    """Extract Rust imports, definitions, and calls."""
+) -> tuple[list[ImportInfo], list[SymbolDef]]:
+    """Extract Rust imports and definitions."""
 
-    return (
-        extract_rust_imports(root, source),
-        extract_rust_definitions(root, source),
-        extract_calls_generic(root, source),
-    )
+    return extract_rust_imports(root, source), extract_rust_definitions(root, source)
 
 
 # Keyed by the language pack's own `SupportedLanguage` literal, not by `str`:
