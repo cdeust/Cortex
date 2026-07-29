@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -744,3 +746,37 @@ def test_pip_install_no_constraints_file_when_none_given(
     deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"])
     assert "-c" not in captured_cmd["cmd"]
 
+
+# ---------------------------------------------------- bare-import at runtime
+
+
+def test_launcher_deps_stays_bare_importable_by_launcher_py():
+    """scripts/launcher.py's own ``import launcher_deps`` must still work.
+
+    launcher_deps.py's docstring requires it stay loadable by a BARE
+    module name at real runtime: launcher.py runs before the plugin's own
+    dependencies exist on sys.path, inserts scripts/ onto sys.path, then
+    does a plain ``import launcher_deps`` (see launcher.py's docstring —
+    "not a bare `import launcher_deps`" is explicitly the OTHER case it
+    guards against for itself, contrasted with launcher_deps.py's own
+    unqualified import of its siblings).
+
+    This test's OWN loader (``deps_mod`` in this file) was renamed to
+    "scripts.launcher_deps" so mutmut can attribute mutants (issue #262)
+    — a test-only concern. This test instead proves, via a REAL `python3`
+    subprocess that never goes through pytest's sys.path or any test
+    loader, that PRODUCTION bare-importability is unaffected. A regression
+    here would raise ModuleNotFoundError at module scope, before main()
+    even runs, printing a traceback instead of the plain usage message.
+    """
+    result = subprocess.run(  # noqa: S603 — fixed argv, no shell, no user input
+        [sys.executable, str(REPO_ROOT / "scripts" / "launcher.py")],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(REPO_ROOT),
+    )
+    assert result.returncode == 1, result.stderr
+    assert "Usage: python3 scripts/launcher.py" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert "ModuleNotFoundError" not in result.stderr
