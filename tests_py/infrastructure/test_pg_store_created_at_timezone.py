@@ -19,7 +19,14 @@ from datetime import datetime, timezone
 
 import pytest
 
-from mcp_server.infrastructure.pg_store import PgMemoryStore
+# No live PostgreSQL is needed — `_build_insert_params` is a pure mapping — but
+# `pg_store` hard-imports psycopg at module level, and the CI-SQLite job
+# installs no driver. Skip there rather than break collection; the SQLite half
+# of the contract runs in that job through test_sqlite_backend.py, and the
+# parity assertion below runs in the four PostgreSQL matrix jobs.
+pytest.importorskip("psycopg", reason="PgMemoryStore requires the psycopg driver")
+
+from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: E402
 
 
 def _params(created_at: str) -> dict:
