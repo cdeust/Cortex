@@ -130,6 +130,34 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["mcp_server"]
 
+# ── Resolver constraints ─────────────────────────────────────────────────
+#
+# This table is declared before the `[[tool.uv.index]]` / `[tool.uv.sources]`
+# tables below so it never re-opens a `tool.uv` super-table those sub-tables
+# already created implicitly.
+#
+# onnxruntime 1.24.x publishes NO cp310 artifact: 1.24.3 ships 24 files whose
+# lowest interpreter tag is cp311, and no sdist; 1.24.0 declares no
+# Requires-Python at all. uv therefore accepts it for the python<3.11 fork and
+# locks it there with a wheel list that contains nothing installable on 3.10,
+# so pip dies with "No matching distribution found for onnxruntime==1.24.3"
+# (CI run 30436365825, "Test (Python 3.10)"; reproduced 2026-07-29 in
+# python:3.10-slim/linux-amd64 against requirements/ci-postgresql.txt, which
+# reported "from versions: ..., 1.23.0, 1.23.1, 1.23.2").
+# 1.23.2 is the highest release carrying a cp310 manylinux_2_17_x86_64 wheel.
+#
+# A constraint and not a project dependency: constraints steer OUR resolution
+# only and are never published in the wheel metadata, so a consumer installing
+# Cortex on 3.11+ is unaffected and still resolves the current onnxruntime.
+# source: PyPI JSON API https://pypi.org/pypi/onnxruntime/json, read 2026-07-29
+#         (1.23.0/1.23.1/1.23.2 each ship 5 cp310 files; 1.24.0 ships 0).
+# source: uv settings reference, "constraint-dependencies" —
+#         https://docs.astral.sh/uv/reference/settings/#constraint-dependencies
+[tool.uv]
+constraint-dependencies = [
+    "onnxruntime<1.24 ; python_full_version < '3.11'",
+]
+
 # ── CPU-only torch, resolved through the lock ────────────────────────────
 #
 # Every container in this repo installs torch from the PyTorch CPU index,
