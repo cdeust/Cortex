@@ -85,16 +85,36 @@ jobs:
             -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list
-          for i in 1 2 3; do sudo apt-get update && break || sleep 5; done
-          for i in 1 2 3; do sudo apt-get install -y "postgresql-${PG_VER}-pgvector" && break || sleep 5; done
+          # Structured retry (not `A && break || sleep`, shellcheck SC2015: that
+          # form silently swallows exhaustion — see issue #247): each loop fails
+          # the step loudly if every attempt is exhausted, and reports the
+          # attempt number it is on (shellcheck SC2034: the counter must be read).
+          apt_update_ok=""
+          for attempt in 1 2 3; do
+            if sudo apt-get update; then apt_update_ok=1; break; fi
+            echo "apt-get update attempt ${attempt}/3 failed; retrying in 5s" >&2
+            sleep 5
+          done
+          [ -n "$apt_update_ok" ] || { echo "apt-get update failed after 3 attempts" >&2; exit 1; }
+          apt_install_ok=""
+          for attempt in 1 2 3; do
+            if sudo apt-get install -y "postgresql-${PG_VER}-pgvector"; then apt_install_ok=1; break; fi
+            echo "apt-get install attempt ${attempt}/3 failed; retrying in 5s" >&2
+            sleep 5
+          done
+          [ -n "$apt_install_ok" ] || { echo "apt-get install postgresql-${PG_VER}-pgvector failed after 3 attempts" >&2; exit 1; }
           sudo -u postgres psql -v ON_ERROR_STOP=1 \
             -c "CREATE ROLE cortex LOGIN SUPERUSER PASSWORD 'cortex';"
           sudo -u postgres createdb -O cortex cortex
           sudo -u postgres psql -v ON_ERROR_STOP=1 -d cortex \
             -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
-          for i in $(seq 1 30); do
-            PGPASSWORD=cortex pg_isready -h localhost -U cortex -d cortex && break || sleep 1
+          pg_ready=""
+          for attempt in $(seq 1 30); do
+            if PGPASSWORD=cortex pg_isready -h localhost -U cortex -d cortex; then pg_ready=1; break; fi
+            echo "postgres not ready yet (attempt ${attempt}/30); retrying in 1s" >&2
+            sleep 1
           done
+          [ -n "$pg_ready" ] || { echo "postgres failed to become ready after 30 attempts" >&2; exit 1; }
           PGPASSWORD=cortex psql -h localhost -U cortex -d cortex -c "SELECT version();"
 
       - name: Cache HuggingFace models
@@ -119,8 +139,10 @@ jobs:
   github-release:
     name: GitHub Release
     needs: test
-    # Real releases only (issue #246) — a workflow_dispatch verification
-    # run must never create a GitHub Release.
+    # Real releases only (issues #246 + #247 criterion 5) — a workflow_dispatch
+    # verification run must never create a GitHub Release; matches the
+    # `github.event_name == 'push'` gate documented in the header and used by
+    # every other release-producing step below.
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
@@ -138,7 +160,7 @@ jobs:
           if [ -z "$PREV_TAG" ]; then
             CHANGELOG=$(git log --pretty=format:"- %s" HEAD)
           else
-            CHANGELOG=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD)
+            CHANGELOG=$(git log --pretty=format:"- %s" "${PREV_TAG}"..HEAD)
           fi
           # Write to file to avoid escaping issues
           echo "$CHANGELOG" > changelog.txt
@@ -157,6 +179,9 @@ jobs:
   build:
     name: Build sdist + wheel + attest (deprecated PyPI channel)
     needs: test
+    # Only the real tag-triggered event ships a release artifact; a
+    # workflow_dispatch verification run (issue #247 criterion 5) stops after `test`.
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write       # upload attested wheel/sdist + checksums to release
@@ -233,6 +258,9 @@ jobs:
   sbom:
     name: SBOM (CycloneDX, from uv.lock)
     needs: test
+    # Only the real tag-triggered event ships an SBOM to a release; a
+    # workflow_dispatch verification run (issue #247 criterion 5) stops after `test`.
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write       # upload SBOM + checksum to the release
@@ -290,6 +318,10 @@ jobs:
   publish-pypi:
     name: Publish to PyPI (deprecated channel)
     needs: build
+    # `build` already skips on a non-tag run (which also skips this job by
+    # GitHub's default needs-skip propagation); stated explicitly so the
+    # tag-only contract survives a future edit to `build`'s condition.
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     # OIDC Trusted Publishing — no stored secret. Verified by PyPI against
     # the trusted-publisher entry for (cdeust/Cortex, release.yml,

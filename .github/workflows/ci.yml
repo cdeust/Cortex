@@ -52,17 +52,24 @@ jobs:
             -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list
-          # `if ...; then break; fi` and not `... && break || sleep`: in the
-          # && || form the fallback runs whenever the middle command fails,
-          # which reads as if-then-else and is not (shellcheck SC2015).
-          for _ in 1 2 3; do
-            if sudo apt-get update; then break; fi
+          # Structured retry (not `A && break || sleep`, shellcheck SC2015: that
+          # form silently swallows exhaustion — see issue #247): each loop fails
+          # the step loudly if every attempt is exhausted, and reports the
+          # attempt number it is on (shellcheck SC2034: the counter must be read).
+          apt_update_ok=""
+          for attempt in 1 2 3; do
+            if sudo apt-get update; then apt_update_ok=1; break; fi
+            echo "apt-get update attempt ${attempt}/3 failed; retrying in 5s" >&2
             sleep 5
           done
-          for _ in 1 2 3; do
-            if sudo apt-get install -y "postgresql-${PG_VER}-pgvector"; then break; fi
+          [ -n "$apt_update_ok" ] || { echo "apt-get update failed after 3 attempts" >&2; exit 1; }
+          apt_install_ok=""
+          for attempt in 1 2 3; do
+            if sudo apt-get install -y "postgresql-${PG_VER}-pgvector"; then apt_install_ok=1; break; fi
+            echo "apt-get install attempt ${attempt}/3 failed; retrying in 5s" >&2
             sleep 5
           done
+          [ -n "$apt_install_ok" ] || { echo "apt-get install postgresql-${PG_VER}-pgvector failed after 3 attempts" >&2; exit 1; }
           # Role + DB expected by DATABASE_URL.
           sudo -u postgres psql -v ON_ERROR_STOP=1 \
             -c "CREATE ROLE cortex LOGIN SUPERUSER PASSWORD 'cortex';"
@@ -70,12 +77,13 @@ jobs:
           sudo -u postgres psql -v ON_ERROR_STOP=1 -d cortex \
             -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
           # Wait until reachable over TCP with password auth.
-          for _ in $(seq 1 30); do
-            if PGPASSWORD=cortex pg_isready -h localhost -U cortex -d cortex; then
-              break
-            fi
+          pg_ready=""
+          for attempt in $(seq 1 30); do
+            if PGPASSWORD=cortex pg_isready -h localhost -U cortex -d cortex; then pg_ready=1; break; fi
+            echo "postgres not ready yet (attempt ${attempt}/30); retrying in 1s" >&2
             sleep 1
           done
+          [ -n "$pg_ready" ] || { echo "postgres failed to become ready after 30 attempts" >&2; exit 1; }
           PGPASSWORD=cortex psql -h localhost -U cortex -d cortex -c "SELECT version();"
 
       - name: Cache pip
@@ -455,6 +463,27 @@ jobs:
 
       - name: Check hash-pinned requirements match uv.lock
         run: python scripts/generate_pip_constraints.py --check
+
+      # actionlint (which shells out to the runner's preinstalled shellcheck for
+      # each `run:` block) was never wired into any gate — issue #247, found by
+      # hand after these findings had been latent since before the Node24 action
+      # bump. Pinned by release tag + checksum (not `go install @latest` /
+      # curl|bash), matching this repo's supply-chain-hardening stance (release.yml).
+      # source: https://github.com/rhysd/actionlint/releases/tag/v1.7.12,
+      # actionlint_1.7.12_checksums.txt, linux_amd64 entry, verified 2026-07-29.
+      - name: Install actionlint (pinned, checksum-verified)
+        run: |
+          set -euxo pipefail
+          VERSION="1.7.12"
+          ARCHIVE="actionlint_${VERSION}_linux_amd64.tar.gz"
+          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${ARCHIVE}"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  ${ARCHIVE}" | sha256sum -c -
+          tar -xzf "${ARCHIVE}" actionlint
+          sudo install -m 0755 actionlint /usr/local/bin/actionlint
+          actionlint -version
+
+      - name: Check workflow files (actionlint + shellcheck)
+        run: actionlint -color
 
   typecheck:
     name: Type Check

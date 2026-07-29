@@ -82,7 +82,9 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "## ccplugins fork sync" >> "$GITHUB_STEP_SUMMARY"
-          echo "- fork: \`${{ env.FORK }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- upstream: \`${{ env.UPSTREAM }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- ran at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## ccplugins fork sync"
+            echo "- fork: \`${{ env.FORK }}\`"
+            echo "- upstream: \`${{ env.UPSTREAM }}\`"
+            echo "- ran at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_STEP_SUMMARY"

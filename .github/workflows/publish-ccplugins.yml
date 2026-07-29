@@ -53,7 +53,7 @@ jobs:
           if [ "${{ github.event_name }}" = "release" ]; then
             TAG="${{ github.event.release.tag_name }}"
           else
-            TAG="$(git -C cortex describe --tags --abbrev=0 2>/dev/null || echo manual-$(date -u +%Y%m%d))"
+            TAG="$(git -C cortex describe --tags --abbrev=0 2>/dev/null || echo "manual-$(date -u +%Y%m%d)")"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Release tag: $TAG"
@@ -190,7 +190,7 @@ jobs:
         run: |
           BRANCH="${{ steps.diff.outputs.branch }}"
           git push -u origin "$BRANCH" --force-with-lease
-          EXISTING="$(gh pr list --repo $UPSTREAM --head "cdeust:$BRANCH" --state open --json number -q '.[0].number' || echo '')"
+          EXISTING="$(gh pr list --repo "$UPSTREAM" --head "cdeust:$BRANCH" --state open --json number -q '.[0].number' || echo '')"
           BODY="Automated sync from cdeust/Cortex.
 
           **Release:** ${{ steps.tag.outputs.tag }}
@@ -203,9 +203,9 @@ jobs:
           The plugin is a thin manifest; the actual code runs via \`uvx\` from the \`hypermnesia-mcp\` PyPI package, so there is nothing to vendor."
           if [ -n "$EXISTING" ]; then
             echo "Updating existing PR #$EXISTING"
-            gh pr edit "$EXISTING" --repo $UPSTREAM --body "$BODY"
+            gh pr edit "$EXISTING" --repo "$UPSTREAM" --body "$BODY"
           else
-            gh pr create --repo $UPSTREAM \
+            gh pr create --repo "$UPSTREAM" \
               --head "cdeust:$BRANCH" \
               --title "Sync hypermnesia-mcp plugin ${{ steps.tag.outputs.tag }}" \
               --body "$BODY"
@@ -214,8 +214,10 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          echo "## ccplugins sync" >> "$GITHUB_STEP_SUMMARY"
-          echo "- tag: **${{ steps.tag.outputs.tag }}**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- changed: **${{ steps.diff.outputs.changed }}**" >> "$GITHUB_STEP_SUMMARY"
-          echo "- branch: \`${{ steps.diff.outputs.branch || '(none)' }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- dry_run: **${{ inputs.dry_run || false }}**" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## ccplugins sync"
+            echo "- tag: **${{ steps.tag.outputs.tag }}**"
+            echo "- changed: **${{ steps.diff.outputs.changed }}**"
+            echo "- branch: \`${{ steps.diff.outputs.branch || '(none)' }}\`"
+            echo "- dry_run: **${{ inputs.dry_run || false }}**"
+          } >> "$GITHUB_STEP_SUMMARY"
