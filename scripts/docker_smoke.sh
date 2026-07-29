@@ -77,8 +77,14 @@ echo "docker_smoke: running ${IMAGE} with zero env vars, sending initialize + to
 # Unique per run: two smoke runs on one runner must not read each other's
 # diagnostics, and a stale file from a previous run must not be mistaken for
 # this run's output.
-STDERR_LOG="$(mktemp -t docker_smoke_stderr)"
-PROTOCOL_ERRORS="$(mktemp -t docker_smoke_protocol_errors)"
+#
+# Explicit XXXXXX template, not `mktemp -t <prefix>`: GNU coreutils mktemp
+# (the ubuntu-latest runner) requires the template to end in at least three
+# X's and errors "too few X's in template" otherwise, while BSD/macOS mktemp
+# treats -t's argument as a prefix and appends its own suffix. The bare -t
+# form therefore passes locally on macOS and fails only on CI.
+STDERR_LOG="$(mktemp "${TMPDIR:-/tmp}/docker_smoke_stderr.XXXXXX")"
+PROTOCOL_ERRORS="$(mktemp "${TMPDIR:-/tmp}/docker_smoke_protocol_errors.XXXXXX")"
 trap 'rm -f "$STDERR_LOG" "$PROTOCOL_ERRORS"' EXIT
 
 # Portable timeout: GNU coreutils `timeout` ships on ubuntu-latest (GitHub
