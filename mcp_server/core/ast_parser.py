@@ -15,7 +15,7 @@ Pure business logic — no I/O. Callers pass file content as bytes.
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeGuard
 
 from mcp_server.core.ast_extractor_registry import build_extra_extractors
 from mcp_server.core.codebase_parser import (
@@ -44,23 +44,9 @@ from mcp_server.core.ast_extractors_extra import (
 
 if TYPE_CHECKING:
     from tree_sitter import Node
+    from tree_sitter_language_pack import SupportedLanguage
 
-# Languages supported by our AST queries
-AST_SUPPORTED = {
-    "python",
-    "typescript",
-    "javascript",
-    "go",
-    "rust",
-    "swift",
-    "java",
-    "kotlin",
-    "c",
-    "cpp",
-    "csharp",
-    "ruby",
-    "php",
-}
+    from mcp_server.core.ast_extractor_registry import Extractor
 
 
 def is_available() -> bool:
@@ -73,12 +59,19 @@ def is_available() -> bool:
         return False
 
 
+def _is_ast_language(language: str) -> TypeGuard[SupportedLanguage]:
+    """Narrow a detected language name to the language pack's literal type.
+
+    Sound by construction: `AST_SUPPORTED` is declared
+    `frozenset[SupportedLanguage]`, so a name the pack does not ship fails
+    the type check at its definition rather than silently widening here.
+    """
+    return language in AST_SUPPORTED
+
+
 def _get_extractor_and_tree(language: str, content: bytes) -> tuple | None:
     """Get tree-sitter extractor and parsed tree, or None for fallback."""
-    if language not in AST_SUPPORTED:
-        return None
-    extractor = _EXTRACTORS.get(language)
-    if not extractor:
+    if not _is_ast_language(language):
         return None
     try:
         from tree_sitter_language_pack import get_parser  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
@@ -86,7 +79,7 @@ def _get_extractor_and_tree(language: str, content: bytes) -> tuple | None:
         return None
 
     tree = get_parser(language).parse(content)
-    return extractor, tree
+    return _EXTRACTORS[language], tree
 
 
 def parse_file_ast(path: str, content: bytes) -> FileAnalysis:
@@ -229,7 +222,15 @@ def _extract_rust(
     )
 
 
-_EXTRACTORS = {
+# Keyed by the language pack's own `SupportedLanguage` literal, not by `str`:
+# that makes the type checker verify every key below against the grammars the
+# pack actually ships, and it is what lets `_get_extractor_and_tree` hand
+# `get_parser` a value of the type its signature asks for. The pack types that
+# parameter `SupportedLanguage` up to 1.6.x and `str` from 1.9 on, so a plain
+# `str` type-checks under one resolution of the dependency pin and fails under
+# another — the divergence issue #253 was filed for. See the pin's own comment
+# in pyproject.toml for the measured per-release type surface.
+_EXTRACTORS: dict[SupportedLanguage, Extractor] = {
     "python": _extract_python,
     "javascript": _extract_js,
     "typescript": _extract_js,
@@ -238,3 +239,9 @@ _EXTRACTORS = {
     "rust": _extract_rust,
     **build_extra_extractors(),
 }
+
+# The extractor table IS the definition of "AST-supported": a language is
+# supported exactly when queries exist for it. Derived rather than restated,
+# so `_EXTRACTORS[language]` is total once `_is_ast_language` has narrowed —
+# there is no second list that can drift out of step with this one.
+AST_SUPPORTED: frozenset[SupportedLanguage] = frozenset(_EXTRACTORS)

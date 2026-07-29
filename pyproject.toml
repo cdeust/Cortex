@@ -81,10 +81,33 @@ sqlite = [
 ]
 codebase = [
     "tree-sitter>=0.24.0,<0.27",
-    # Pin <1.7 because tree-sitter-language-pack 1.7.0+ changed the Parser
-    # API; calls like `parser.parse(...)` raise AttributeError on instances
-    # of `builtins.Parser`. Migration to the new API is tracked separately.
-    "tree-sitter-language-pack>=0.24.0,<1.14",
+    # Floor 1.12.5: the first release where `ast_parser`'s whole call chain —
+    # `get_parser(<name>).parse(<bytes>)` — is both valid at runtime and
+    # type-checkable. The floor is what the API requires, not a preference:
+    # the range below it is four mutually incompatible shapes, and the old
+    # `>=0.24.0` floor admitted every one of them (issue #253).
+    # source: measured 2026-07-29, one probe per published wheel
+    # (macosx_11_0_arm64) + one pyright 1.1.410 run per probe —
+    #   <=1.6.2      `SupportedLanguage` = 179-name Literal WITHOUT "csharp"
+    #                and `get_parser(name: SupportedLanguage)` — our language
+    #                set is rejected. pyright: 1 error
+    #   1.6.3        the macOS wheel ships no `tree_sitter_language_pack`
+    #   1.7.x        never published — PyPI goes 1.6.3 -> 1.8.0
+    #   1.8.0        no `SupportedLanguage` symbol at all
+    #   1.9.0-1.12.2 306-name Literal WITH "csharp", but `get_parser` returns
+    #                a `builtins.Parser` whose `parse(source: str)` REJECTS
+    #                bytes: `get_parser("python").parse(b"...")` raises
+    #                `TypeError: 'bytes' object is not an instance of 'str'`,
+    #                uncaught, so `codebase_analyze` crashes. pyright: 1 error
+    #   >=1.12.5     `get_parser` returns `tree_sitter.Parser`, `parse(bytes)`
+    #                works, literal unchanged. pyright: 0 errors (1.12.5,
+    #                1.13.0, 1.13.5 = locked, 1.13.6 = newest)
+    # This is what the previous comment here was reaching for — it claimed
+    # `<1.7` was needed because "1.7.0+ ... raise AttributeError on instances
+    # of builtins.Parser" — except the pin it annotated said `<1.14`, so the
+    # broken window was admitted rather than excluded. The window is real and
+    # now excluded; the version numbers are measured rather than recalled.
+    "tree-sitter-language-pack>=1.12.5,<1.14",
     "networkx>=3.0",
     # Leiden community detection (Traag et al. 2019) — strict improvement
     # over Louvain. igraph supplies the graph backend leidenalg runs on.
