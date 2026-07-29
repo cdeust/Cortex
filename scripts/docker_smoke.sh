@@ -55,9 +55,31 @@ fi
 # Bare contract: no -e flags, no --link, no compose network. The container
 # must self-select the SQLite fallback (CORTEX_RUNTIME=cowork, set in the
 # Dockerfile itself) with zero external services.
-REQUESTS=$'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"docker-smoke","version":"0"}}}\n{"jsonrpc":"2.0","id":2,"method":"notifications/initialized"}\n{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}\n'
+# `notifications/initialized` carries NO "id". JSON-RPC 2.0 §4.1: "A
+# Notification is a Request object without an 'id' member" — the presence of
+# an id is the ONLY thing that distinguishes the two, so an id here made the
+# server route the message to `ClientRequest`, whose method union does not
+# contain any `notifications/*` member (verified against mcp.types:
+# ClientRequest = ping|initialize|completion/complete|logging/setLevel|
+# prompts/*|resources/*|tools/*|tasks/*; `notifications/initialized` lives
+# only in ClientNotification). The server answered id=2 with -32602 and
+# logged "28 validation errors for ClientRequest", one per union member.
+#
+# That is what made this gate FLAKY rather than simply broken: the malformed
+# frame put the server on an error path mid-handshake, and whether it still
+# answered id=3 before stdin EOF shut it down was a race. Same commit
+# 18d4505 failed at 21:52Z and passed at 22:12Z. A correct handshake has no
+# such error path.
+REQUESTS=$'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"docker-smoke","version":"0"}}}\n{"jsonrpc":"2.0","method":"notifications/initialized"}\n{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}\n'
 
 echo "docker_smoke: running ${IMAGE} with zero env vars, sending initialize + tools/list over stdio ..." >&2
+
+# Unique per run: two smoke runs on one runner must not read each other's
+# diagnostics, and a stale file from a previous run must not be mistaken for
+# this run's output.
+STDERR_LOG="$(mktemp -t docker_smoke_stderr)"
+PROTOCOL_ERRORS="$(mktemp -t docker_smoke_protocol_errors)"
+trap 'rm -f "$STDERR_LOG" "$PROTOCOL_ERRORS"' EXIT
 
 # Portable timeout: GNU coreutils `timeout` ships on ubuntu-latest (GitHub
 # Actions runner) but not on macOS by default (`gtimeout` from `brew install
@@ -72,11 +94,11 @@ elif command -v gtimeout >/dev/null 2>&1; then
   TIMEOUT_CMD="gtimeout 60"
 fi
 
-RAW_OUTPUT="$(printf '%s' "$REQUESTS" | $TIMEOUT_CMD docker run --rm -i "$IMAGE" 2>/tmp/docker_smoke_stderr.log || true)"
+RAW_OUTPUT="$(printf '%s' "$REQUESTS" | $TIMEOUT_CMD docker run --rm -i "$IMAGE" 2>"$STDERR_LOG" || true)"
 
 if [[ -z "$RAW_OUTPUT" ]]; then
   echo "docker_smoke: FAIL — empty stdout from container. stderr:" >&2
-  cat /tmp/docker_smoke_stderr.log >&2 || true
+  cat "$STDERR_LOG" >&2 || true
   exit 1
 fi
 
@@ -84,7 +106,12 @@ TOOL_COUNT="$(printf '%s' "$RAW_OUTPUT" | python3 -c '
 import json
 import sys
 
+# Any JSON-RPC error frame is reported, not just a missing id=3: a broken
+# handshake shows up as an error on id=1/id=2, and blaming "no tools/list
+# response" for it sent the last investigation to the wrong end of the
+# exchange. Errors go to a side file so the caller can quote them.
 count = None
+errors = []
 for line in sys.stdin:
     line = line.strip()
     if not line:
@@ -93,23 +120,40 @@ for line in sys.stdin:
         msg = json.loads(line)
     except json.JSONDecodeError:
         continue
+    if "error" in msg:
+        errors.append(
+            "  id={} code={} message={}".format(
+                msg.get("id"),
+                msg["error"].get("code"),
+                msg["error"].get("message"),
+            )
+        )
     if msg.get("id") == 3 and "result" in msg:
-        tools = msg["result"].get("tools", [])
-        count = len(tools)
-        break
+        count = len(msg["result"].get("tools", []))
 
-if count is None:
-    print("NONE")
-else:
-    print(count)
-')"
+with open(sys.argv[1], "w") as fh:
+    fh.write("\n".join(errors))
+
+print("NONE" if count is None else count)
+' "$PROTOCOL_ERRORS")"
+
+# A protocol error is a failure even when tools/list happens to answer: it
+# means the container rejected a frame this script sent, and the last time
+# that was tolerated it made the gate intermittent rather than red.
+if [[ -s "$PROTOCOL_ERRORS" ]]; then
+  echo "docker_smoke: FAIL — the container returned JSON-RPC error frames:" >&2
+  cat "$PROTOCOL_ERRORS" >&2
+  echo "--- container stderr ---" >&2
+  cat "$STDERR_LOG" >&2 || true
+  exit 1
+fi
 
 if [[ "$TOOL_COUNT" == "NONE" || -z "$TOOL_COUNT" ]]; then
   echo "docker_smoke: FAIL — no valid tools/list response (id=3) found in container stdout." >&2
   echo "--- raw stdout ---" >&2
   printf '%s\n' "$RAW_OUTPUT" >&2
   echo "--- stderr ---" >&2
-  cat /tmp/docker_smoke_stderr.log >&2 || true
+  cat "$STDERR_LOG" >&2 || true
   exit 1
 fi
 
