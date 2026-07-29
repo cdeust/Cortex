@@ -3,14 +3,14 @@
 
 Runs BEFORE the plugin's own dependencies exist on ``sys.path``, so this
 module (like launcher.py itself) may import only the Python standard
-library — no fastmcp, no pydantic, no numpy. The exceptions are its two
-stdlib-only siblings, split out for SRP and the 500-line file-size rule:
+library — no fastmcp, no pydantic, no numpy. The exceptions are its three
+stdlib-only siblings, split out for SRP and the file-size rule:
 ``launcher_deps_fs`` (pure filesystem primitives — dist-info parsing,
-backup sweeping, superseded-metadata pruning) and
-``launcher_deps_install`` (the two I/O-heavy steps of one install: pip
-invocation into a scratch dir, then committing its result). THIS module
-owns the policy layer — stamping, locking, and deciding WHEN to call
-either sibling.
+backup sweeping, superseded-metadata pruning), ``launcher_deps_install``
+(the two I/O-heavy steps of one install: pip invocation into a scratch
+dir, then committing its result), and ``launcher_pins`` (WHICH versions
+to install, reconciled against the lock export). THIS module owns the
+policy layer — stamping, locking, and deciding WHEN to call a sibling.
 
 Public entry points used by launcher.py: ``ensure_deps`` (base runtime,
 every entry point) and ``ensure_all_deps`` (base + ML stack, SessionStart
@@ -62,6 +62,7 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import launcher_deps_fs as _fs  # noqa: E402
+import launcher_pins as _pins  # noqa: E402
 import importlib  # noqa: E402
 
 # Re-exported at the original names: these were this module's own
@@ -76,31 +77,14 @@ _dist_info_satisfies = _fs.dist_info_satisfies
 _sweep_stale_backups = _fs.sweep_stale_backups
 _prune_superseded_dist_info = _fs.prune_superseded_dist_info
 
-# numpy resolves to two versions in uv.lock depending on Python:
-#   2.2.6 for Python < 3.11  (resolution-marker "python_full_version < '3.11'")
-#   2.4.4 for Python >= 3.11 (all remaining markers)
-# source: uv.lock (numpy blocks at lines ~1968 and ~2033).
-_NUMPY_VERSION = "2.2.6" if sys.version_info < (3, 11) else "2.4.4"
-
-# Base runtime (every entry point) + postgres trio (pg_store hard-imports
-# at module load): (import_name, pip_spec). All versions sourced from
-# uv.lock resolved set.
-_BASE_PACKAGES: list[tuple[str, str]] = [
-    ("fastmcp", "fastmcp==3.2.4"),  # source: uv.lock
-    ("pydantic", "pydantic==2.13.3"),  # source: uv.lock
-    ("pydantic_settings", "pydantic-settings==2.14.0"),  # source: uv.lock
-    ("numpy", f"numpy=={_NUMPY_VERSION}"),  # source: uv.lock
-    ("psycopg", "psycopg[binary]==3.3.3"),  # source: uv.lock
-    ("psycopg_pool", "psycopg_pool==3.3.0"),  # source: uv.lock
-    ("pgvector", "pgvector==0.4.2"),  # source: uv.lock
-]
-
-# ML stack — SessionStart-only. source: uv.lock (sentence-transformers
-# and flashrank blocks).
-_ML_PACKAGES: list[tuple[str, str]] = [
-    ("sentence_transformers", "sentence-transformers==5.4.1"),
-    ("flashrank", "flashrank==0.2.10"),
-]
+# Re-exported at the original names for the same reason as the _fs helpers
+# above: the pin table was this module's own data before the SRP split and
+# remains part of its tested surface. The versions themselves, their sourcing
+# to requirements/setup.txt, and the drift history now live in launcher_pins.
+_numpy_version = _pins.numpy_version
+_NUMPY_VERSION = _pins.numpy_version(sys.version_info[:2])
+_BASE_PACKAGES = _pins.BASE_PACKAGES
+_ML_PACKAGES = _pins.ML_PACKAGES
 
 _STALE_LOCK_SECONDS = 120  # abandon a lock older than this (crashed holder)
 _LOCK_WAIT_SECONDS = 30  # give up waiting and proceed unlocked past this
