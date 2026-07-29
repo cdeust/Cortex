@@ -15,7 +15,7 @@ Pure business logic — no I/O. Callers pass file content as bytes.
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from mcp_server.core.ast_extractor_registry import build_extra_extractors
 from mcp_server.core.codebase_parser import (
@@ -45,7 +45,14 @@ from mcp_server.core.ast_extractors_extra import (
 if TYPE_CHECKING:
     from tree_sitter import Node
 
-# Languages supported by our AST queries
+# Languages supported by our AST queries.
+#
+# Deliberately NOT typed as the language pack's SupportedLanguage: that union
+# is narrower than the runtime. tree-sitter-language-pack 1.6.2 omits "csharp"
+# from the Literal in its __init__.pyi, yet get_parser("csharp").parse() works
+# and returns a clean compilation_unit (verified against 1.6.2 on 2026-07-29).
+# Annotating with the union would therefore reject a language this repo really
+# does parse — .cs files have extractors, a mapping and tests here.
 AST_SUPPORTED = {
     "python",
     "typescript",
@@ -85,7 +92,11 @@ def _get_extractor_and_tree(language: str, content: bytes) -> tuple | None:
     except ImportError:
         return None
 
-    tree = get_parser(language).parse(content)
+    # cast, not a wider annotation: 1.6.2's stub types this parameter as a
+    # Literal union that is missing "csharp" (see AST_SUPPORTED above), so the
+    # membership guard at the top of this function — not the stub — is what
+    # establishes that `language` names a grammar the pack can load.
+    tree = get_parser(cast("SupportedLanguage", language)).parse(content)
     return extractor, tree
 
 

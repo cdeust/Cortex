@@ -59,6 +59,39 @@ class TestNormalizeSourcePathReachesAFixedPoint:
             assert once is not None
             assert normalize_source_path(once) == once, raw
 
+
+class TestWhitespaceIsInsideTheFixedPoint:
+    """Regression: whitespace re-exposed by stripping a prefix must also go.
+
+    Making the two PREFIX strips a fixed point left whitespace outside it.
+    strip() ran once, BEFORE the loop, so removing a leading '/' re-exposed
+    whitespace that nothing stripped again: '/\\n?' came back as '\\n?', which
+    normalises further to '?' — a result that is not its own normal form, so
+    it is unusable as the dedup key extract_document_paths treats it as.
+    Found by fuzz/fuzz_source_path.py's idempotence post-condition; each case
+    below fails on the pre-fix implementation.
+    """
+
+    def test_whitespace_exposed_by_stripping_a_slash(self):
+        assert normalize_source_path("/\n?") == "?"
+
+    def test_whitespace_exposed_by_backslash_conversion(self):
+        assert normalize_source_path("\\ a") == "a"
+
+    def test_whitespace_then_dot_slash(self):
+        assert normalize_source_path("/ ./x") == "x"
+
+    def test_whitespace_only_after_a_prefix_is_blank(self):
+        assert normalize_source_path("/ \t\n") is None
+
+    def test_result_is_idempotent_across_whitespace_forms(self):
+        for raw in ("/\n?", "\\ a", "/ ./x", "/\t.//./y", " /./z "):
+            once = normalize_source_path(raw)
+            assert once is not None
+            assert normalize_source_path(once) == once, raw
+
+
+class TestNormalizeSourcePathParentTraversal:
     def test_parent_traversal_is_left_intact(self):
         """Not in this function's contract — it canonicalises, it does not resolve.
 
