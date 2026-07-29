@@ -44,7 +44,7 @@ from mcp_server.infrastructure.pg_store_rules import PgRuleMixin
 from mcp_server.infrastructure.pg_store_stats import PgStatsMixin
 from mcp_server.observability import silent_failure
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.core.temporal import normalize_date_to_iso
+from mcp_server.core.temporal_normalize import normalize_date_to_iso
 
 if TYPE_CHECKING:
     from typing_extensions import LiteralString

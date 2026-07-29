@@ -354,7 +354,7 @@ class SqliteMemoryStore(
         raw_created = data.get("created_at")
         if raw_created and isinstance(raw_created, str) and "T" not in raw_created:
             try:
-                from mcp_server.core.temporal import normalize_date_to_iso  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+                from mcp_server.core.temporal_normalize import normalize_date_to_iso  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
                 raw_created = normalize_date_to_iso(raw_created) or raw_created
             except ImportError:

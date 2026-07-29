@@ -35,6 +35,16 @@ dependencies = [
     # gap for the MCPB build (`uv run`). uv.lock pins ST 5.4.1 / flashrank 0.2.10.
     "sentence-transformers>=3.0.0",
     "flashrank>=0.2.0",
+    # core/temporal_normalize.py parses every free-form `created_at` that
+    # states a time of day (the LoCoMo shape "1:56 pm on 8 May, 2023", any
+    # string carrying a timezone) through dateutil. It was never declared and
+    # arrived only by transitive luck: absent from requirements/ci-*.txt, so
+    # every CI test job ran with the parser missing and the fallback path
+    # dead — the store silently kept dates it could not read. A declared
+    # dependency is what makes the write path behave the same on every
+    # install and both backends. >=2.8.2 is the floor for the `tzinfos`
+    # callable contract the resolver relies on.
+    "python-dateutil>=2.8.2",
 ]
 
 [project.urls]

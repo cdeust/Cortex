@@ -14,7 +14,7 @@ zetetic source rule:
 # source: measured on 2026-07-29 via
 #   find mcp_server/<layer> -name "*.py" | grep -v __init__ | grep -v __pycache__ | wc -l
 shared/           26 files   (10 documented below — curated subset)
-core/            224 files   (~90 documented below — curated subset, incl. core/streaming, core/context_assembly)
+core/            225 files   (~90 documented below — curated subset, incl. core/streaming, core/context_assembly)
 infrastructure/   91 files   (20 documented below — curated subset)
 handlers/        135 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
 ```
@@ -156,7 +156,8 @@ Treat gaps as "undocumented," not "does not exist."
 - `reranker_scoring.py` — Pure score-blending math: confidence gate, adaptive alpha, WRRF/CE blend
 - `scoring.py` — BM25, n-gram, keyword scoring (reference; PG does this server-side)
 - `temporal.py` — Date parsing, distance decay, recency boost (reference; PG does this server-side)
-- `temporal_timezones.py` — Timezone policy for `temporal.normalize_date_to_iso`: a `tzinfos` resolver over the RFC 5322 §4.3 obs-zone table, refusing (never defaulting) an abbreviation it cannot resolve, so a stated zone is honoured or the date is rejected (issue #252)
+- `temporal_normalize.py` — Free-form date → ISO 8601 for storage: honours a stated timezone or refuses the value (issue #252); separate from `temporal.py`, whose scoring may drop precision that storage may not
+- `temporal_timezones.py` — Timezone policy for `temporal_normalize.normalize_date_to_iso`: a `tzinfos` resolver over the RFC 5322 §4.3 obs-zone table, refusing (never defaulting) an abbreviation it cannot resolve, so a stated zone is honoured or the date is rejected (issue #252)
 - `spreading_activation.py` — Collins & Loftus 1975 semantic priming over entity graph
 - `hdc_encoder.py` — 1024D bipolar HDC (bind/bundle/permute/similarity)
 - `cognitive_map.py` — Successor Representation co-access graph + 2D projection
