@@ -453,6 +453,39 @@ jobs:
         with:
           version: "0.11.3"
 
+      # Runs BEFORE the requirements-file check below on purpose: that check
+      # only compares the committed requirements/*.txt against whatever
+      # uv.lock CURRENTLY says, so a stale uv.lock and its stale export agree
+      # with each other and the check stays green. `uv lock --check` instead
+      # re-resolves pyproject.toml and fails if uv.lock would change — the
+      # half of "lockfile is current" the other check cannot see.
+      #
+      # This exact drift shipped (issue #251): Dependabot's `deps` PR #218
+      # widened tree-sitter-language-pack's upper bound in pyproject.toml
+      # (`<1.7` -> `<1.14`) but touched no other file — its "pip" ecosystem
+      # entry rewrites the version specifier only, it does not re-run `uv
+      # lock`. uv.lock kept resolving 1.6.2 (still valid under the wider
+      # range, and `uv lock`'s incremental resolution prefers the existing
+      # pin over the newest compatible one), so `.venv/bin/python -m pyright
+      # mcp_server/` reported a real diagnostic for a contributor who ran
+      # `uv sync --locked` while CI — which back then installed the package
+      # editable with its extras resolved straight from pyproject.toml's
+      # ranges, unconstrained by the lock (the exact pattern
+      # test_job_does_not_pip_install_an_extra_range now forbids below) —
+      # silently resolved 1.13.5 and stayed green on the same commit.
+      #
+      # Reproduced 2026-07-29 by checking out pyproject.toml + uv.lock as of
+      # 9e293baa (#218, the commit right after the widening) into a scratch
+      # directory and running `uv lock --check` there:
+      #   Resolved 196 packages in 186ms
+      #   The lockfile at `uv.lock` needs to be updated, but `--check` was
+      #   provided. To update the lockfile, run `uv lock`.
+      # — i.e. this step would have failed, at commit time, on the PR that
+      # introduced the drift. Static: reads pyproject.toml + uv.lock,
+      # resolves, installs nothing (~200ms locally).
+      - name: Check uv.lock matches pyproject.toml
+        run: uv lock --check
+
       - name: Check hash-pinned requirements match uv.lock
         run: python scripts/generate_pip_constraints.py --check
 
