@@ -24,6 +24,7 @@ from typing import Any
 
 import numpy as np
 
+from mcp_server.core.temporal_normalize import normalize_date_to_iso
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.infrastructure.sqlite_schema import (
     CURRENT_MEMORIES_VIEW_DDL,
@@ -351,14 +352,15 @@ class SqliteMemoryStore(
         supersession edge so a lost race never leaves a disconnected row.
         """
         now = _now_iso()
+        # Parity with PgMemoryStore._build_insert_params, including the absence
+        # of an "is it already ISO?" pre-test: normalize_date_to_iso owns that
+        # decision and returns a real ISO datetime unchanged. The pre-test this
+        # replaces was `"T" not in raw_created`, which skipped normalization
+        # for every string merely CONTAINING a T — including
+        # "8 May 2023 13:56 EST" (issue #252).
         raw_created = data.get("created_at")
-        if raw_created and isinstance(raw_created, str) and "T" not in raw_created:
-            try:
-                from mcp_server.core.temporal_normalize import normalize_date_to_iso  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-
-                raw_created = normalize_date_to_iso(raw_created) or raw_created
-            except ImportError:
-                pass
+        if raw_created and isinstance(raw_created, str):
+            raw_created = normalize_date_to_iso(raw_created) or raw_created
         content = data["content"]
         # A3 decay clock parity with PgMemoryStore: anchor heat_base_set_at to
         # the event date (created_at), not NOW(), so historical-dated inserts

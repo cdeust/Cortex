@@ -32,6 +32,7 @@ Contract assertions (each test must be able to fail on regression):
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 
 import pytest
 
@@ -558,3 +559,46 @@ class TestExplicitDatabaseUrlFallbackBoundary:
                 _construct_store()
         finally:
             get_memory_settings.cache_clear()
+
+
+class TestCreatedAtTimezoneIsPersisted:
+    """Issue #252, asserted where the issue states it: on the stored row.
+
+    `_insert_memory_rows` normalizes a free-form `created_at` through
+    `core.temporal_normalize`. The unit tests pin that function; these pin
+    what actually reaches `memories.created_at`, which is what the issue is
+    about — a zone dropped here is read back as UTC.
+    """
+
+    def test_abbreviation_is_stored_as_its_rfc5322_offset(self, store):
+        mem_id = store.insert_memory(
+            {"content": "zone-bearing date", "created_at": "8 May 2023 13:56 EST"}
+        )
+        row = store.get_memory(mem_id)
+        assert row is not None
+        assert row["created_at"] == "2023-05-08T13:56:00-05:00"
+
+    def test_stored_value_denotes_the_right_instant(self, store):
+        mem_id = store.insert_memory(
+            {"content": "instant check", "created_at": "8 May 2023 13:56 EST"}
+        )
+        stored = store.get_memory(mem_id)["created_at"]
+        instant = datetime.fromisoformat(stored).astimezone(timezone.utc)
+        assert instant == datetime(2023, 5, 8, 18, 56, tzinfo=timezone.utc)
+
+    def test_unresolvable_zone_is_never_stored_as_a_utc_instant(self, store):
+        """Refused upstream, so the raw text is kept — an unreadable value the
+        operator can still see, not a wrong instant nobody can detect."""
+        mem_id = store.insert_memory(
+            {"content": "unknown zone", "created_at": "8 May 2023 13:56 XYZ"}
+        )
+        stored = store.get_memory(mem_id)["created_at"]
+        assert stored == "8 May 2023 13:56 XYZ"
+        with pytest.raises(ValueError):
+            datetime.fromisoformat(stored)
+
+    def test_zoneless_date_is_still_normalized(self, store):
+        mem_id = store.insert_memory(
+            {"content": "locomo shape", "created_at": "1:56 pm on 8 May, 2023"}
+        )
+        assert store.get_memory(mem_id)["created_at"] == "2023-05-08T13:56:00"

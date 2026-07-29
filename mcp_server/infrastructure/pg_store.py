@@ -518,9 +518,14 @@ class PgMemoryStore(
         """
         now = _now_iso()
         embedding = self._bytes_to_vector(data.get("embedding"))
-        # Normalize free-form dates to ISO 8601 for proper recency ranking
+        # Normalize free-form dates to ISO 8601 for proper recency ranking.
+        # No "is it already ISO?" pre-test here: deciding that is
+        # normalize_date_to_iso's job, and it returns a real ISO datetime
+        # unchanged. The pre-test this replaces was `"T" not in raw_created`,
+        # which skipped normalization for every string merely CONTAINING a T —
+        # including "8 May 2023 13:56 EST" (issue #252).
         raw_created = data.get("created_at")
-        if raw_created and isinstance(raw_created, str) and "T" not in raw_created:
+        if raw_created and isinstance(raw_created, str):
             raw_created = normalize_date_to_iso(raw_created) or raw_created
         heat_base_anchor = data.get("heat_base_set_at") or raw_created or now
         return {
