@@ -489,7 +489,7 @@ class StructuralIntegrityTests(unittest.TestCase):
             **{
                 ".bestpractices.json": (
                     "{\n"
-                    '<<<<<<< HEAD\n'
+                    "<<<<<<< HEAD\n"
                     '  "test_justification": "6414 tests",\n'
                     "=======\n"
                     '  "test_justification": "6376 tests",\n'
