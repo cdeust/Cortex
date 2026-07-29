@@ -133,8 +133,16 @@ def _index_directive(registries: list[str]) -> str:
     return reason + urls + "\n\n"
 
 
-def render(constraint_set: ConstraintSet) -> str:
-    """Export from the lock; the result must be fully hashed and installable."""
+def export(constraint_set: ConstraintSet) -> str:
+    """Run uv and return its raw stdout. The ONLY part that touches the world.
+
+    Split from `compose` deliberately. When locating uv, running it, and
+    judging its output all lived in one function, the uv-presence guard ran
+    before everything else — so no test could reach the validation rules
+    without a real uv on PATH, and the unit suite acquired a hidden
+    dependency on an external binary. Every job that ran pytest then had to
+    install uv to keep tests that never needed it passing.
+    """
     if shutil.which("uv") is None:
         raise ExportError(
             "uv is not installed — it is the only reader of uv.lock."
@@ -152,10 +160,23 @@ def render(constraint_set: ConstraintSet) -> str:
             f"`{' '.join(command)}` failed with exit"
             f" {done.returncode}:\n{done.stderr.strip()}"
         )
-    body = done.stdout
+    return done.stdout
+
+
+def compose(constraint_set: ConstraintSet, body: str) -> str:
+    """Judge an export and assemble the file. Pure: no uv, no I/O, no network.
+
+    Every rule about what makes a requirements file usable lives here, which
+    is what makes those rules testable from a string literal.
+    """
     _reject_unusable(constraint_set, body)
     header = "\n".join(constraint_set.header_lines()) + "\n"
     return header + _index_directive(serving_registries(body)) + body
+
+
+def render(constraint_set: ConstraintSet) -> str:
+    """Export from the lock; the result must be fully hashed and installable."""
+    return compose(constraint_set, export(constraint_set))
 
 
 def _reject_unusable(constraint_set: ConstraintSet, body: str) -> None:

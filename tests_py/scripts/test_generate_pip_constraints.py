@@ -208,21 +208,47 @@ class TestExportCommand(unittest.TestCase):
 
 
 class TestDriftGate(unittest.TestCase):
-    """A gate never observed failing is not a gate."""
+    """A gate never observed failing is not a gate.
 
-    def test_check_passes_on_the_committed_tree(self) -> None:
-        self.assertEqual(gen.main(["--check"]), 0)
+    These exercise the gate's DECISION — compare committed text against what
+    the lock would produce, and map that to an exit code. They do not run uv.
+
+    Whether the committed files actually agree with uv.lock right now is a
+    fact about the working tree, not about this code, and it is already
+    asserted by the Lint job (`generate_pip_constraints.py --check`) on every
+    push and pull request. Asserting it here too did not make it truer: it
+    made the unit suite require uv on PATH in every job that ran pytest, and
+    when it was absent these tests failed with "uv is not installed" while
+    testing nothing about drift. One gate, in the place that owns it.
+    """
+
+    def test_check_returns_zero_when_nothing_is_stale(self) -> None:
+        with patch.object(gen, "stale", return_value=None):
+            self.assertEqual(gen.main(["--check"]), 0)
 
     def test_check_fails_on_a_mutated_file(self) -> None:
+        """The comparison itself: committed text != what the lock produces."""
         with TemporaryDirectory() as tmp:
             root = _mirror(tmp)
             target = root / gen.SETS[0].path()
-            target.write_text(
-                target.read_text(encoding="utf-8").replace("==", "==0.0.0+", 1),
-                encoding="utf-8",
-            )
+            committed = target.read_text(encoding="utf-8")
+            target.write_text(committed.replace("==", "==0.0.0+", 1), encoding="utf-8")
             with patch.object(gen, "REPO_ROOT", root):
-                self.assertEqual(gen.main(["--check"]), 1)
+                # The lock is unchanged, so a correct render still yields the
+                # original text; the mutated file must be reported.
+                with patch.object(gen, "render", return_value=committed):
+                    reason = gen.stale(gen.SETS[0])
+                    self.assertIsNotNone(reason)
+                    self.assertIn("uv.lock", reason)
+                    self.assertEqual(gen.main(["--check"]), 1)
+
+    def test_check_returns_zero_when_the_file_matches_the_render(self) -> None:
+        with TemporaryDirectory() as tmp:
+            root = _mirror(tmp)
+            committed = (root / gen.SETS[0].path()).read_text(encoding="utf-8")
+            with patch.object(gen, "REPO_ROOT", root):
+                with patch.object(gen, "render", return_value=committed):
+                    self.assertIsNone(gen.stale(gen.SETS[0]))
 
     def test_check_fails_when_a_file_is_missing(self) -> None:
         with TemporaryDirectory() as tmp:
@@ -261,20 +287,23 @@ class TestFailureSignals(unittest.TestCase):
         self.assertIn("no uv.lock registry", str(caught.exception))
 
     def test_unhashed_export_is_refused(self) -> None:
-        with patch.object(gen.subprocess, "run") as run:
-            run.return_value.returncode = 0
-            run.return_value.stdout = "idna==3.11\n"
-            with self.assertRaises(gen.ExportError) as caught:
-                gen.render(gen.SETS[0])
+        """Against `compose`, not `render`: the rule is about the TEXT.
+
+        These went through `render`, which reaches uv before it reaches any
+        rule — so on a machine without uv they failed with "uv is not
+        installed" and asserted nothing about hashing. Stubbing
+        subprocess.run did not help, because the `shutil.which` guard ran
+        first. The rule now has a pure entry point and the test needs no uv,
+        no stub, and no PATH.
+        """
+        with self.assertRaises(gen.ExportError) as caught:
+            gen.compose(gen.SETS[0], "idna==3.11\n")
         self.assertIn("no hash", str(caught.exception))
 
     def test_empty_export_is_refused(self) -> None:
         """An export of nothing installs nothing and passes every later check."""
-        with patch.object(gen.subprocess, "run") as run:
-            run.return_value.returncode = 0
-            run.return_value.stdout = "# only a comment\n"
-            with self.assertRaises(gen.ExportError) as caught:
-                gen.render(gen.SETS[0])
+        with self.assertRaises(gen.ExportError) as caught:
+            gen.compose(gen.SETS[0], "# only a comment\n")
         self.assertIn("zero requirements", str(caught.exception))
 
     def test_export_failure_exits_two_not_one(self) -> None:
