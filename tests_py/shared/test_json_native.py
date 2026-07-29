@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 from decimal import Decimal
 
 import numpy as np
@@ -110,3 +111,41 @@ class TestFallback:
         native = to_json_native({"k": Weird()})
         json.dumps(native)  # must not raise
         assert native["k"] == "<weird>"
+
+
+class TestTolistFailureLogging:
+    """Pins the debug-log emission on the tolist() except arm (issue #250).
+
+    A ``tolist``-bearing object whose ``tolist()`` raises must fall through
+    to the ``str(obj)`` last resort AND emit exactly one debug record naming
+    the failing type and the exception — the observable signal itself, not
+    just the downstream stringify side effect (coding-standards.md §13.A3).
+    """
+
+    class _BrokenTolist:
+        """Exposes ``tolist`` (so the branch is entered) but it always raises."""
+
+        def tolist(self):
+            raise ValueError("boom")
+
+        def __repr__(self):
+            return "<BrokenTolist>"
+
+    def test_logs_type_and_exception_then_falls_back_to_str(self, caplog):
+        obj = self._BrokenTolist()
+
+        with caplog.at_level(logging.DEBUG, logger="mcp_server.shared.json_native"):
+            native = to_json_native(obj)
+
+        # Fallback return value: str(obj), unaffected by what was logged.
+        assert native == "<BrokenTolist>"
+
+        # Exactly one record, with the exact format string and the exact
+        # (type, exception) args — pins both positions independently so a
+        # swap, drop, or literal-text change in either is caught.
+        assert len(caplog.records) == 1
+        record = caplog.records[0]
+        assert record.msg == "tolist() conversion failed for %r: %s"
+        assert record.args == (self._BrokenTolist, record.args[1])
+        assert isinstance(record.args[1], ValueError)
+        assert str(record.args[1]) == "boom"
