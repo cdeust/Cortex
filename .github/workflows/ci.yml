@@ -52,8 +52,17 @@ jobs:
             -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list
-          for i in 1 2 3; do sudo apt-get update && break || sleep 5; done
-          for i in 1 2 3; do sudo apt-get install -y "postgresql-${PG_VER}-pgvector" && break || sleep 5; done
+          # `if ...; then break; fi` and not `... && break || sleep`: in the
+          # && || form the fallback runs whenever the middle command fails,
+          # which reads as if-then-else and is not (shellcheck SC2015).
+          for _ in 1 2 3; do
+            if sudo apt-get update; then break; fi
+            sleep 5
+          done
+          for _ in 1 2 3; do
+            if sudo apt-get install -y "postgresql-${PG_VER}-pgvector"; then break; fi
+            sleep 5
+          done
           # Role + DB expected by DATABASE_URL.
           sudo -u postgres psql -v ON_ERROR_STOP=1 \
             -c "CREATE ROLE cortex LOGIN SUPERUSER PASSWORD 'cortex';"
@@ -61,8 +70,11 @@ jobs:
           sudo -u postgres psql -v ON_ERROR_STOP=1 -d cortex \
             -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
           # Wait until reachable over TCP with password auth.
-          for i in $(seq 1 30); do
-            PGPASSWORD=cortex pg_isready -h localhost -U cortex -d cortex && break || sleep 1
+          for _ in $(seq 1 30); do
+            if PGPASSWORD=cortex pg_isready -h localhost -U cortex -d cortex; then
+              break
+            fi
+            sleep 1
           done
           PGPASSWORD=cortex psql -h localhost -U cortex -d cortex -c "SELECT version();"
 
@@ -471,6 +483,21 @@ jobs:
           # Pin pyright — diagnostic output drifts between releases, so a
           # zero-diagnostic tree is only comparable against the pinned version.
           .venv/bin/pip install --require-hashes -r requirements/typecheck-tool.txt
+
+      # The gate's verdict is a property of THIS environment, so the log has to
+      # name it. Issue #253: a contributor and CI read two different
+      # `tree-sitter-language-pack` type surfaces on the same commit, and
+      # nothing in either log said which one had been analysed. One grep per
+      # package, not one alternation: a miss then exits non-zero on the
+      # package that is actually absent, so an install that silently dropped
+      # one fails here instead of degrading to Unknown inside pyright.
+      - name: Record the resolved type surface
+        run: |
+          set -euo pipefail
+          freeze="$(.venv/bin/pip list --format=freeze)"
+          for pkg in pyright tree-sitter tree-sitter-language-pack; do
+            printf '%s\n' "${freeze}" | grep -E "^${pkg}=="
+          done
 
       # pyright IS the gate: the backlog was burned to zero (issue #197,
       # 568 baselined diagnostics -> 0 measured 2026-07-28), so ANY

@@ -35,6 +35,7 @@ from mcp_server.core.ast_extractors_scripting import (
 
 if TYPE_CHECKING:
     from tree_sitter import Node
+    from tree_sitter_language_pack import SupportedLanguage
 
 Extractor = Callable[
     ["Node", bytes], tuple[list[ImportInfo], list[SymbolDef], list[str]]
@@ -61,8 +62,13 @@ def _make_extractor(
     return _extract
 
 
-def build_extra_extractors() -> dict[str, Extractor]:
-    """Build the JVM + C-family + scripting extractor dispatch table."""
+def build_extra_extractors() -> dict[SupportedLanguage, Extractor]:
+    """Build the JVM + C-family + scripting extractor dispatch table.
+
+    Keyed by the language pack's `SupportedLanguage` literal so the type
+    checker verifies each grammar name against the pack the environment
+    resolved — see the table in `ast_parser._EXTRACTORS` this merges into.
+    """
 
     return {
         "java": _make_extractor(extract_java_imports, extract_java_definitions),

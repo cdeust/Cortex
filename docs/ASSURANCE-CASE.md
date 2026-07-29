@@ -128,7 +128,7 @@ decoratively:
 
 Standing analysis: CodeQL default setup (Python, JavaScript/TypeScript,
 Actions) on every push and pull request plus weekly, currently 0 open alerts;
-OpenSSF Scorecard via `.github/workflows/scorecard.yml`; and 6527 tests run on
+OpenSSF Scorecard via `.github/workflows/scorecard.yml`; and 6548 tests run on
 four Python versions, two backends and Windows.
 
 ## 6. What this assurance case does NOT claim
@@ -142,7 +142,7 @@ four Python versions, two backends and Windows.
   source can be traced and purged.
 - **The test suite is not yet strong enough to carry this argument alone.**
   Statement coverage is 82.02% (measured in the CI coverage job, run
-  30316526703, 2026-07-28) and is held by a `--cov-fail-under=82` floor in
+  30316548703, 2026-07-28) and is held by a `--cov-fail-under=82` floor in
   that job, but coverage proves execution, not detection: mutation testing
   is wired for one module rather than the load-bearing set (the changed
   code of #196 was mutation-triaged to zero non-equivalent survivors;

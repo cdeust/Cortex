@@ -18,10 +18,18 @@ coding write gates, causal graphs, and intent-aware retrieval.
 
 ## Build & Test
 
-- Install (dev): `uv pip install -e ".[dev]"` — SQLite backend: `".[dev,sqlite]"`
+- Install (dev): `uv sync --no-default-groups --extra dev` — SQLite backend adds
+  `--extra sqlite`. Resolved from `uv.lock`, the same source CI installs from;
+  resolving from the `pyproject.toml` ranges instead gives you versions CI never
+  had (issue #253).
 - Environment preflight: `python -m mcp_server.doctor` (backend-aware check list, fix message per check)
-- Tests: `pytest` (full suite, 6527 tests) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`
+- Tests: `pytest` (full suite, 6548 tests) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`
 - Lint BEFORE every commit: `ruff check && ruff format --check` — the CI enforces **both**; passing only `ruff check` is not enough.
+- Type gate (pyright, zero-diagnostic): resolve its environment from `uv.lock`
+  (`uv sync --no-default-groups --extra … --group typecheck`), never from the
+  `pyproject.toml` ranges — a range-resolved env reads a different type surface
+  than CI and reports diagnostics CI never sees (issue #253). Exact command:
+  CONTRIBUTING.md § *Reproducing the pyright gate locally*.
 - Release gate benchmarks (isolated, ephemeral container — the only source
   of truth for pre-tag/floor decisions): `benchmarks/reproduce.sh`. Do NOT
   gate a release against the live production database — same-day
