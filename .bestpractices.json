@@ -99,7 +99,7 @@
   "build_floss_tools_justification": "pip, uv, hatchling, pytest, ruff and pyright are all FLOSS, and the build runs on ubuntu-latest and windows-latest GitHub runners.",
 
   "test_status": "Met",
-  "test_justification": "An automated test suite of 6426 tests lives under tests_py/ (measured 2026-07-29 with 'pytest --collect-only -q'), covering core, handlers, infrastructure, integration, invariants and architecture: https://github.com/cdeust/Cortex/tree/main/tests_py",
+  "test_justification": "An automated test suite of 6439 tests lives under tests_py/ (measured 2026-07-29 with 'pytest --collect-only -q'), covering core, handlers, infrastructure, integration, invariants and architecture: https://github.com/cdeust/Cortex/tree/main/tests_py",
 
   "test_invocation_status": "Met",
   "test_invocation_justification": "The whole suite runs with a single 'pytest' command, documented in CONTRIBUTING.md under Testing along with per-layer subsets: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md",
@@ -114,7 +114,7 @@
   "test_policy_justification": "CONTRIBUTING.md carries an explicit, mandatory testing policy: new functionality ships with tests in the automated suite, a bug fix carries a regression test that fails on the pre-fix code, and each failure path asserts its observable effect including the signal it emits \u2014 https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md#the-testing-policy-mandatory. The per-tool checklist ('Add a unit test', 'Add an integration test if the tool touches the database') and the five-element mechanism checklist restate it per change type.",
 
   "tests_are_added_status": "Met",
-  "tests_are_added_justification": "New functionality ships with its tests; the suite has grown to 6426 tests alongside the v4.x feature series, and CI runs it on every pull request.",
+  "tests_are_added_justification": "New functionality ships with its tests; the suite has grown to 6439 tests alongside the v4.x feature series, and CI runs it on every pull request.",
 
   "tests_documented_added_status": "Met",
   "tests_documented_added_justification": "The requirement is written into the documented instructions for change proposals: https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md#the-testing-policy-mandatory states that every change adding or altering observable behaviour must arrive with tests in the same PR, the per-tool and per-mechanism checklists repeat it as a concrete step, and .github/PULL_REQUEST_TEMPLATE.md requires a Test plan section in every pull request.",
@@ -189,7 +189,7 @@
   "static_analysis_often_justification": "CodeQL default setup analyses each push and pull request and additionally runs on a weekly schedule, so analysis happens per change rather than per release.",
 
   "dynamic_analysis_status": "Unmet",
-  "dynamic_analysis_justification": "No dynamic analysis tool in the badge's sense (fuzzer, sanitizer, or scanner) is applied. The project runs a 6426-test suite with coverage on every change, but a test suite is not a dynamic analysis tool and is not claimed as one here.",
+  "dynamic_analysis_justification": "No dynamic analysis tool in the badge's sense (fuzzer, sanitizer, or scanner) is applied. The project runs a 6439-test suite with coverage on every change, but a test suite is not a dynamic analysis tool and is not claimed as one here.",
 
   "dynamic_analysis_unsafe_status": "N/A",
   "dynamic_analysis_unsafe_justification": "Cortex is written in Python, a memory-safe language, so the memory-safety tooling this criterion asks about (ASan, Valgrind) does not apply.",
@@ -297,7 +297,7 @@
   "interfaces_current_justification": "The stack targets currently supported runtimes and APIs: Python 3.10 through 3.13, all four in the CI matrix, with pgvector 0.3+/PostgreSQL 17 and current major versions of FastMCP, Pydantic v2, numpy and sentence-transformers. Deprecated interfaces are removed rather than wrapped \u2014 the standing rule is one-shot migrations with no back-compat shims (CLAUDE.md), and CI runs on the newest released Python so a deprecation surfaces as a warning in the build rather than as a surprise at end of life.",
 
   "automated_integration_testing_status": "Met",
-  "automated_integration_testing_justification": "The full suite runs on every push and pull request to main via .github/workflows/ci.yml and reports success or failure per job: 6426 tests on Python 3.10-3.13 against PostgreSQL + pgvector, the same suite against the SQLite backend, the suite on Windows, and a Docker smoke job that boots the bare container and exercises the DB-less contract. tests_py/integration/ holds the database-backed integration tests specifically.",
+  "automated_integration_testing_justification": "The full suite runs on every push and pull request to main via .github/workflows/ci.yml and reports success or failure per job: 6439 tests on Python 3.10-3.13 against PostgreSQL + pgvector, the same suite against the SQLite backend, the suite on Windows, and a Docker smoke job that boots the bare container and exercises the DB-less contract. tests_py/integration/ holds the database-backed integration tests specifically.",
 
   "regression_tests_added50_status": "Met",
   "regression_tests_added50_justification": "Measured on 2026-07-27 over the merged pull requests titled as fixes in the preceding six months (2026-01-27 onward): 23 of 30 \u2014 76.7% \u2014 changed the test tree in the same PR, against the 50% this criterion asks for. (The measure counts a PR as carrying tests when it touches tests_py/ or tests_js/, which is a proxy for 'added a regression test'; the policy behind it is written down at https://github.com/cdeust/Cortex/blob/main/CONTRIBUTING.md#the-testing-policy-mandatory \u2014 a bug fix carries a regression test that fails on the pre-fix code.)",
