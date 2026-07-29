@@ -20,7 +20,7 @@ coding write gates, causal graphs, and intent-aware retrieval.
 
 - Install (dev): `uv pip install -e ".[dev]"` — SQLite backend: `".[dev,sqlite]"`
 - Environment preflight: `python -m mcp_server.doctor` (backend-aware check list, fix message per check)
-- Tests: `pytest` (full suite, 6414 tests) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`
+- Tests: `pytest` (full suite, 6426 tests) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`
 - Lint BEFORE every commit: `ruff check && ruff format --check` — the CI enforces **both**; passing only `ruff check` is not enough.
 - Release gate benchmarks (isolated, ephemeral container — the only source
   of truth for pre-tag/floor decisions): `benchmarks/reproduce.sh`. Do NOT
