@@ -1,7 +1,16 @@
 """Tests for mcp_server.core.temporal — date parsing, distance, recency."""
 
+import ast
+import inspect
+import logging
+import math
+import sys
+import warnings
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
+from mcp_server.core import temporal, temporal_timezones
 from mcp_server.core.temporal import (
     parse_date,
     compute_date_distance_score,
@@ -9,6 +18,7 @@ from mcp_server.core.temporal import (
     compute_recency_boost,
     extract_date_hints,
     is_temporal_query,
+    normalize_date_to_iso,
 )
 
 
@@ -36,6 +46,18 @@ class TestParseDate:
         dt = parse_date("Created on 2024-06-01 at noon")
         assert dt == datetime(2024, 6, 1)
 
+    def test_iso_datetime_is_truncated_to_its_date(self):
+        """The 'T' split is what makes this a DATE parser: the time is cut,
+        not carried, so hint distances compare days against days."""
+        assert parse_date("2024-03-15T10:30:00Z") == datetime(2024, 3, 15)
+
+    def test_space_separated_utc_designator(self):
+        """No 'T' to split on, so the 'Z' → '+00:00' rewrite is what makes
+        this parseable on Python 3.10, where fromisoformat rejects 'Z'."""
+        assert parse_date("2024-03-15 10:30:00Z") == datetime(
+            2024, 3, 15, 10, 30, tzinfo=timezone.utc
+        )
+
 
 class TestDateDistanceScore:
     def test_same_date(self):
@@ -56,6 +78,22 @@ class TestDateDistanceScore:
     def test_no_doc_date(self):
         assert compute_date_distance_score("", ["2024-03-15"]) == 0.0
 
+    def test_unparseable_doc_date(self):
+        assert compute_date_distance_score("whenever", ["2024-03-15"]) == 0.0
+
+    def test_decay_matches_the_documented_formula(self):
+        """exp(-delta_days / scale_days), delta in whole days, default scale."""
+        score = compute_date_distance_score("2024-03-20", ["2024-03-15"])
+        assert score == pytest.approx(math.exp(-5.0 / 14.0), rel=1e-9)
+
+    def test_scale_days_is_honoured(self):
+        score = compute_date_distance_score("2024-03-20", ["2024-03-15"], 7.0)
+        assert score == pytest.approx(math.exp(-5.0 / 7.0), rel=1e-9)
+
+    def test_best_hint_wins(self):
+        score = compute_date_distance_score("2024-03-20", ["2023-01-01", "2024-03-19"])
+        assert score == pytest.approx(math.exp(-1.0 / 14.0), rel=1e-9)
+
 
 class TestTemporalProximity:
     def test_exact_match(self):
@@ -68,6 +106,25 @@ class TestTemporalProximity:
 
     def test_no_match(self):
         score = compute_temporal_proximity("Hello world", ["2024-03-15"])
+        assert score == 0.0
+
+    def test_no_hints_scores_zero(self):
+        assert compute_temporal_proximity("Meeting on 2024-03-15", []) == 0.0
+
+    def test_partial_match_scores_exactly_half(self):
+        score = compute_temporal_proximity("Meeting in March 2024", ["15 March 2024"])
+        assert score == 0.5
+
+    def test_exact_match_beats_a_partial_one(self):
+        score = compute_temporal_proximity(
+            "Meeting in March 2024", ["15 March 2024", "March 2024"]
+        )
+        assert score == 1.0
+
+    def test_token_at_the_minimum_length_is_too_generic(self):
+        """The threshold is `> 3`: a 3-character token ('may') is a month
+        abbreviation-sized coincidence, not evidence of the same date."""
+        score = compute_temporal_proximity("we met in may that year", ["may 1999"])
         assert score == 0.0
 
 
@@ -85,6 +142,33 @@ class TestRecencyBoost:
     def test_invalid(self):
         assert compute_recency_boost("not-a-date") == 0.0
         assert compute_recency_boost(None) == 0.0
+
+    def test_unsupported_type_scores_zero(self):
+        assert compute_recency_boost(1712345678) == 0.0
+
+    def test_boost_halves_after_one_halflife(self):
+        """boost = boost_max * exp(-age * ln2 / halflife): at age = halflife
+        the default 0.15 must read exactly 0.075."""
+        aged = datetime.now(timezone.utc) - timedelta(days=30)
+        assert compute_recency_boost(aged.isoformat()) == pytest.approx(0.075, rel=1e-6)
+
+    def test_datetime_input_is_accepted(self):
+        aged = datetime.now(timezone.utc) - timedelta(days=30)
+        assert compute_recency_boost(aged) == pytest.approx(0.075, rel=1e-6)
+
+    def test_naive_timestamp_is_read_as_utc(self):
+        aged = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+        assert compute_recency_boost(aged.isoformat()) == pytest.approx(0.075, rel=1e-6)
+
+    def test_utc_designator_is_accepted(self):
+        """'Z' → '+00:00' before fromisoformat, which rejects 'Z' on 3.10."""
+        aged = datetime.now(timezone.utc) - timedelta(days=30)
+        stamped = aged.isoformat().replace("+00:00", "Z")
+        assert compute_recency_boost(stamped) == pytest.approx(0.075, rel=1e-6)
+
+    def test_default_cutoff_is_ninety_days(self):
+        aged = datetime.now(timezone.utc) - timedelta(days=90.5)
+        assert compute_recency_boost(aged.isoformat()) == 0.0
 
 
 class TestIsTemporalQuery:
@@ -104,3 +188,190 @@ class TestExtractDateHints:
     def test_month(self):
         hints = extract_date_hints("Started in January")
         assert any("january" in h.lower() for h in hints)
+
+    def test_named_date_hint_is_the_whole_match(self):
+        """The hint must be the full date, not the pattern's first group
+        (the day number), which no document would match on."""
+        assert "15 March 2024" in extract_date_hints("Met on 15 March 2024")
+
+
+class TestNormalizeDateToIso:
+    """Storage normalization — issue #252: a stated zone is honoured or
+    refused, never dropped (a dropped zone reads as UTC downstream)."""
+
+    def test_empty(self):
+        assert normalize_date_to_iso("") is None
+        assert normalize_date_to_iso("   ") is None
+
+    def test_iso_datetime_passes_through_verbatim(self):
+        raw = "2023-05-08T13:56:00+02:00"
+        assert normalize_date_to_iso(raw) == raw
+
+    def test_iso_datetime_without_seconds_keeps_its_time(self):
+        assert normalize_date_to_iso("2023-05-08T13:56") == "2023-05-08T13:56"
+
+    def test_date_only_fast_path(self):
+        assert normalize_date_to_iso("8 May 2023") == "2023-05-08T00:00:00"
+        assert normalize_date_to_iso("May 8, 2023") == "2023-05-08T00:00:00"
+
+    def test_date_only_string_the_fast_path_misses(self):
+        """No time of day, no fast-path match — dateutil still resolves it."""
+        assert normalize_date_to_iso("8th of May 2023") == "2023-05-08T00:00:00"
+
+    def test_locomo_format_keeps_its_time_and_stays_naive(self):
+        """No zone stated → no zone invented."""
+        assert normalize_date_to_iso("1:56 pm on 8 May, 2023") == (
+            "2023-05-08T13:56:00"
+        )
+
+    def test_numeric_offset_is_preserved(self):
+        assert normalize_date_to_iso("8 May 2023 13:56 +02:00") == (
+            "2023-05-08T13:56:00+02:00"
+        )
+
+    def test_utc_is_preserved(self):
+        assert normalize_date_to_iso("8 May 2023 13:56 UTC") == (
+            "2023-05-08T13:56:00+00:00"
+        )
+
+    def test_unparseable(self):
+        assert normalize_date_to_iso("not a date") is None
+        assert normalize_date_to_iso("2023/04/10 (Mon) 17:50") is None
+
+
+class TestNormalizeDateToIsoTimezoneAbbreviations:
+    """Issue #252 regression: these all returned a wrong instant before."""
+
+    def test_est_resolves_to_the_rfc5322_offset(self):
+        assert normalize_date_to_iso("8 May 2023 13:56 EST") == (
+            "2023-05-08T13:56:00-05:00"
+        )
+
+    def test_est_denotes_the_right_instant(self):
+        """The value stored must be 18:56Z, not 13:56Z (the silent UTC re-anchor)."""
+        stored = normalize_date_to_iso("8 May 2023 13:56 EST")
+        assert stored is not None
+        instant = datetime.fromisoformat(stored).astimezone(timezone.utc)
+        assert instant == datetime(2023, 5, 8, 18, 56, tzinfo=timezone.utc)
+
+    def test_rfc2822_style_with_abbreviation(self):
+        assert normalize_date_to_iso("Mon, 8 May 2023 13:56:00 EST") == (
+            "2023-05-08T13:56:00-05:00"
+        )
+
+    def test_abbreviation_containing_t_is_not_mistaken_for_iso(self):
+        """'PST'/'EST'/'CST'/'MST' all contain a 'T': the old substring guard
+        returned strings like this one unparsed."""
+        assert normalize_date_to_iso("8 May 2023 13:56 PST") == (
+            "2023-05-08T13:56:00-08:00"
+        )
+
+    def test_time_is_not_dropped_for_a_zone_bearing_string(self):
+        assert normalize_date_to_iso("May 8, 2023 13:56 CST") == (
+            "2023-05-08T13:56:00-06:00"
+        )
+
+    def test_unresolvable_abbreviation_is_refused(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="mcp_server.core.temporal"):
+            assert normalize_date_to_iso("8 May 2023 13:56 XYZ") is None
+        assert len(caplog.records) == 1
+        assert caplog.records[0].levelno == logging.WARNING
+
+    def test_refusal_signal_is_actionable_verbatim(self, caplog):
+        """The signal names the input, the abbreviation, the resolvable set,
+        the consequence avoided and the fix. Asserted whole: every fragment
+        of an operator-facing message is part of its contract."""
+        with caplog.at_level(logging.WARNING, logger="mcp_server.core.temporal"):
+            normalize_date_to_iso("8 May 2023 13:56 IST")
+        assert caplog.records[0].getMessage() == (
+            "Refusing date '8 May 2023 13:56 IST': timezone abbreviation 'IST' "
+            "is not resolvable (RFC 5322 §4.3 defines only CDT, CST, EDT, EST, "
+            "GMT, MDT, MST, PDT, PST, UT), and re-anchoring it to UTC would "
+            "store the wrong instant. Emit a numeric UTC offset (e.g. -05:00) "
+            "instead; this value was NOT normalized."
+        )
+
+    def test_resolvable_abbreviation_is_quiet(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="mcp_server.core.temporal"):
+            normalize_date_to_iso("8 May 2023 13:56 EST")
+        assert caplog.records == []
+
+    def test_parse_emits_no_python_warning(self):
+        """Criterion 3: the fix must not depend on warnings state. dateutil's
+        UnknownTimezoneWarning is never raised once a tzinfos policy is
+        supplied, so no filter has to be touched on the write path."""
+        with warnings.catch_warnings(record=True) as raised:
+            warnings.simplefilter("always")
+            normalize_date_to_iso("8 May 2023 13:56 XYZ")
+        assert raised == []
+
+    def test_no_warnings_filter_mutation_on_the_write_path(self):
+        """Criterion 3, pinned at the source: `warnings.catch_warnings()` is
+        process-global and not thread-safe; it must not appear on this path.
+
+        Asserted over the AST, not the text, so the modules stay free to
+        EXPLAIN in prose why they do not do this."""
+        banned_calls = {"catch_warnings", "simplefilter", "filterwarnings"}
+        for module in (temporal, temporal_timezones):
+            tree = ast.parse(inspect.getsource(module))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    assert all(a.name != "warnings" for a in node.names)
+                elif isinstance(node, ast.ImportFrom):
+                    assert node.module != "warnings"
+                elif isinstance(node, ast.Attribute):
+                    assert node.attr not in banned_calls
+                elif isinstance(node, ast.Name):
+                    assert node.id not in banned_calls
+
+
+class TestNormalizeDateToIsoDegradedModes:
+    def test_unparseable_time_of_day_salvages_the_date_and_says_so(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="mcp_server.core.temporal"):
+            assert normalize_date_to_iso("8 May 2023 25:99") == "2023-05-08T00:00:00"
+        assert caplog.records[0].getMessage() == (
+            "Date '8 May 2023 25:99' states a time of day that is not "
+            "parseable; storing the date alone (2023-05-08), so its time "
+            "is lost."
+        )
+
+    def test_fast_path_date_is_stored_without_a_degradation_signal(self, caplog):
+        """A date-only string the built-in parsers handle must not be routed
+        through the salvage path, which would report a loss that never
+        happened."""
+        with caplog.at_level(logging.WARNING, logger="mcp_server.core.temporal"):
+            assert normalize_date_to_iso("Created on 2024-06-01 at noon") == (
+                "2024-06-01T00:00:00"
+            )
+        assert caplog.records == []
+
+    def test_nothing_salvageable_returns_none_quietly(self, caplog):
+        with caplog.at_level(logging.WARNING, logger="mcp_server.core.temporal"):
+            assert normalize_date_to_iso("half past forever") is None
+        assert caplog.records == []
+
+    def test_parser_overflow_is_not_propagated(self, monkeypatch, caplog):
+        def _raise(*_args, **_kwargs):
+            raise OverflowError("date value out of range")
+
+        monkeypatch.setattr("dateutil.parser.parse", _raise)
+        with caplog.at_level(logging.WARNING, logger="mcp_server.core.temporal"):
+            assert normalize_date_to_iso("8 May 2023 13:56") == "2023-05-08T00:00:00"
+        assert "its time is lost" in caplog.text
+
+    def test_missing_dateutil_is_reported_not_swallowed(self, monkeypatch, caplog):
+        monkeypatch.setitem(sys.modules, "dateutil", None)
+        with caplog.at_level(logging.WARNING, logger="mcp_server.core.temporal"):
+            assert normalize_date_to_iso("1:56 pm on 8 May, 2023") is None
+        assert caplog.records[0].getMessage() == (
+            "Cannot normalize date '1:56 pm on 8 May, 2023': python-dateutil "
+            "is not installed, so only date-only formats are parseable. "
+            "Install python-dateutil to store the time of day and timezone of "
+            "free-form dates."
+        )
+
+    def test_missing_dateutil_still_salvages_a_date(self, monkeypatch, caplog):
+        monkeypatch.setitem(sys.modules, "dateutil", None)
+        with caplog.at_level(logging.WARNING, logger="mcp_server.core.temporal"):
+            assert normalize_date_to_iso("8 May 2023 13:56") == "2023-05-08T00:00:00"
+        assert "python-dateutil is not installed" in caplog.text

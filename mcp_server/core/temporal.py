@@ -8,9 +8,17 @@ Pure business logic -- no I/O.
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 from datetime import datetime, timezone
+
+from mcp_server.core.temporal_timezones import (
+    RFC5322_ZONE_NAMES,
+    RFC5322ZoneResolver,
+)
+
+logger = logging.getLogger(__name__)
 
 _MONTH_NAMES = {
     "january": 1,
@@ -148,9 +156,20 @@ def parse_date(date_str: str) -> datetime | None:
     return _try_parse_named_date(date_str)
 
 
-# source: structural — "YYYY-MM-DDTHH:MM:SS" is 19 characters, so an ISO
-# string at least this long already carries a time component.
-_ISO_DATETIME_MIN_LEN = 19
+# A complete ISO 8601 date-time of day, which is stored verbatim.
+# source: ISO 8601-1:2019 §5.4.2 (<date>T<time> combination) with the §4.3.13
+# UTC designator / §4.3.14 offset optional. Anchored at both ends: a substring
+# test ("T" in raw) matched any string merely CONTAINING a capital T — every
+# US zone abbreviation does ("EST", "PST", "CST", "MST") — and returned it
+# unparsed (issue #252).
+_ISO_DATETIME_RE = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$"
+)
+
+# A time of day anywhere in the string. `parse_date` reads the date and
+# discards whatever follows it, so on a string that states a time (and
+# possibly a zone) that fast path would silently move the instant to midnight.
+_TIME_OF_DAY_RE = re.compile(r"\d{1,2}:\d{2}")
 
 
 def normalize_date_to_iso(raw: str) -> str | None:
@@ -160,25 +179,70 @@ def normalize_date_to_iso(raw: str) -> str | None:
     '8 May 2023', 'May 8, 2023', ISO strings, and other common formats.
     Falls back to dateutil for complex formats with time components.
 
+    A stated timezone is honoured or the value is refused: an abbreviation
+    outside the RFC 5322 §4.3 table (see `temporal_timezones`) is never
+    dropped, because a dropped zone reads as UTC everywhere downstream.
+
     Returns ISO string or None if unparseable.
     """
-    if not raw or not raw.strip():
-        return None
     raw = raw.strip()
-    # Already ISO with time — pass through
-    if "T" in raw and len(raw) >= _ISO_DATETIME_MIN_LEN:
+    if not raw:
+        return None
+    if _ISO_DATETIME_RE.match(raw):
         return raw
-    # Try our fast built-in parsers first
-    dt = parse_date(raw)
-    if dt:
-        return dt.isoformat()
-    # Fall back to dateutil for complex formats (e.g. "1:56 pm on 8 May, 2023")
+    # Fast built-in parsers, only for strings that state no time of day.
+    if not _TIME_OF_DAY_RE.search(raw):
+        dt = parse_date(raw)
+        if dt:
+            return dt.isoformat()
+    return _normalize_under_zone_policy(raw)
+
+
+def _parse_with_resolver(raw: str, resolver: RFC5322ZoneResolver) -> datetime | None:
+    """Run dateutil under `resolver`, or None when it cannot produce a value."""
     try:
         from dateutil import parser as dateutil_parser  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-
-        return dateutil_parser.parse(raw).isoformat()
-    except (ValueError, OverflowError, ImportError):
+    except ImportError:
+        logger.warning(
+            "Cannot normalize date %r: python-dateutil is not installed, so "
+            "only date-only formats are parseable. Install python-dateutil to "
+            "store the time of day and timezone of free-form dates.",
+            raw,
+        )
         return None
+    try:
+        return dateutil_parser.parse(raw, tzinfos=resolver)
+    except (ValueError, OverflowError):
+        return None
+
+
+def _normalize_under_zone_policy(raw: str) -> str | None:
+    """Parse under an explicit timezone policy; refuse an unresolvable zone."""
+    resolver = RFC5322ZoneResolver()
+    parsed = _parse_with_resolver(raw, resolver)
+    if resolver.unresolved is not None:
+        logger.warning(
+            "Refusing date %r: timezone abbreviation %r is not resolvable "
+            "(RFC 5322 §4.3 defines only %s), and re-anchoring it to UTC would "
+            "store the wrong instant. Emit a numeric UTC offset (e.g. -05:00) "
+            "instead; this value was NOT normalized.",
+            raw,
+            resolver.unresolved,
+            ", ".join(RFC5322_ZONE_NAMES),
+        )
+        return None
+    if parsed is not None:
+        return parsed.isoformat()
+    salvaged = parse_date(raw)
+    if salvaged is None:
+        return None
+    logger.warning(
+        "Date %r states a time of day that is not parseable; storing the date "
+        "alone (%s), so its time is lost.",
+        raw,
+        salvaged.date().isoformat(),
+    )
+    return salvaged.isoformat()
 
 
 def compute_date_distance_score(
