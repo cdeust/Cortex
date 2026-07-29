@@ -110,6 +110,19 @@ TESTS_BADGE = re.compile(r"<title>(\d+) tests passing</title>")
 # silently detaches whichever claim it carries from the checks below.
 SHIELDS_HOTLINK = re.compile(r"img\.shields\.io")
 
+# An unresolved merge conflict inside a scanned file states BOTH sides of a
+# claim at once, so every check above reads a file that no longer says one
+# thing. This is not hypothetical: `.bestpractices.json` was committed with
+# four such blocks (branch sec/pin-dependencies-and-fuzzing, commit c090278,
+# found 2026-07-29) and shipped through the whole gate, because the claim
+# regexes matched the first side and never looked at the file's structure.
+#
+# Matched on the labelled markers only (`<<<<<<< HEAD`, `>>>>>>> origin/main`
+# — git always writes a ref after the seven characters). A bare `=======` is
+# deliberately NOT matched: it is a legal setext H1 underline in Markdown, and
+# half the scanned files are Markdown, so matching it would fail honest docs.
+CONFLICT_MARKER = re.compile(r"^(?:<{7}|>{7}) \S")
+
 # source: structural — str.split(marker, 1) yields exactly (before, after)
 # when the marker is present
 _MARKER_SPLIT_PARTS = 2
@@ -305,6 +318,58 @@ def check_no_hotlinked_badges() -> list[str]:
     return failures
 
 
+def check_no_conflict_markers() -> list[str]:
+    """No scanned file states both sides of a claim at once.
+
+    A file left with git's conflict markers is not a document that drifted —
+    it is a document that says two contradictory things and parses as neither.
+    The claim regexes above cannot see this: they match the first side and
+    report success, which is how four such blocks reached a green CI run.
+    A file the gate cannot read at all is a failure too, for the same reason
+    the badge check fails closed — a check that skips its subject is worse
+    than no check, because it still prints OK.
+    """
+    failures = []
+    for relative_path in SCANNED_FILES:
+        try:
+            body = read(relative_path)
+        except FileNotFoundError:
+            failures.append(f"{relative_path}: missing — the doc-claim gate reads it")
+            continue
+        for number, line in enumerate(body.splitlines(), start=1):
+            if CONFLICT_MARKER.match(line):
+                failures.append(
+                    f"{relative_path}:{number}: unresolved merge conflict marker"
+                    f" ({line.strip()!r}) — the file states both sides of its claims"
+                )
+    return failures
+
+
+def check_scanned_json_parses() -> list[str]:
+    """Every scanned .json file is still machine-readable.
+
+    `.bestpractices.json` is transcribed into the OpenSSF questionnaire and
+    `manifest.json` is read by the plugin loader, so a file that no longer
+    parses is a broken consumer, not just a stale number. Derived from
+    SCANNED_FILES rather than a second hand-kept list, so adding a JSON file
+    to the gate enrols it here with no edit to this function.
+    """
+    failures = []
+    for relative_path in SCANNED_FILES:
+        if not relative_path.endswith(".json"):
+            continue
+        try:
+            body = read(relative_path)
+        except FileNotFoundError:
+            failures.append(f"{relative_path}: missing — the doc-claim gate reads it")
+            continue
+        try:
+            json.loads(body)
+        except json.JSONDecodeError as error:
+            failures.append(f"{relative_path}: not valid JSON — {error}")
+    return failures
+
+
 def collect_failures(test_count: int | None) -> list[str]:
     standalone, total = canonical_tool_counts()
     failures = check_counts(TOOL_CLAIM, standalone, "tools")
@@ -313,6 +378,8 @@ def collect_failures(test_count: int | None) -> list[str]:
     failures += check_counts(MECHANISM_CLAIM, canonical_mechanism_count(), "mechanisms")
     failures += check_versions(canonical_version())
     failures += check_no_hotlinked_badges()
+    failures += check_no_conflict_markers()
+    failures += check_scanned_json_parses()
     if test_count is not None:
         failures += check_counts(TEST_CLAIM, test_count, "tests")
         failures += check_badge(

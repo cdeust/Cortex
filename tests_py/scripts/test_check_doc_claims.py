@@ -463,5 +463,106 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(len(counts), 1, f"advertised test counts disagree: {counts}")
 
 
+class StructuralIntegrityTests(unittest.TestCase):
+    """The scanned files must still say ONE thing, and JSON must still parse.
+
+    Regression cover for the 2026-07-29 finding: `.bestpractices.json` was
+    committed with four unresolved conflict blocks and passed the entire gate,
+    because every check was a claim regex that matched the first side. These
+    tests fail against that pre-fix gate, which had neither function.
+    """
+
+    def setUp(self):
+        self._real_read = gate.read
+        self._real_scanned = gate.SCANNED_FILES
+
+    def tearDown(self):
+        gate.read = self._real_read
+        gate.SCANNED_FILES = self._real_scanned
+
+    def _install(self, **files: str):
+        gate.SCANNED_FILES = tuple(files)
+        gate.read = _FakeRepo(**files).read
+
+    def test_conflict_markers_are_reported_with_path_and_line(self):
+        self._install(
+            **{
+                ".bestpractices.json": (
+                    "{\n"
+                    '<<<<<<< HEAD\n'
+                    '  "test_justification": "6414 tests",\n'
+                    "=======\n"
+                    '  "test_justification": "6376 tests",\n'
+                    ">>>>>>> origin/main\n"
+                    "}\n"
+                )
+            }
+        )
+        failures = gate.check_no_conflict_markers()
+        self.assertEqual(len(failures), 2, failures)
+        self.assertIn(".bestpractices.json:2:", failures[0])
+        self.assertIn("unresolved merge conflict marker", failures[0])
+        self.assertIn(".bestpractices.json:6:", failures[1])
+
+    def test_a_clean_file_reports_nothing(self):
+        self._install(**{"README.md": "# Cortex\n\nAll 6417 tests pass.\n"})
+        self.assertEqual(gate.check_no_conflict_markers(), [])
+
+    def test_a_markdown_setext_underline_is_not_a_conflict_marker(self):
+        """`=======` is a legal setext H1 rule, and most scanned files are
+        Markdown. Matching the bare separator would fail honest documents, so
+        only the labelled `<<<<<<< ref` / `>>>>>>> ref` lines are matched.
+        """
+        self._install(**{"docs/ROADMAP.md": "Roadmap\n=======\n\nNext up.\n"})
+        self.assertEqual(gate.check_no_conflict_markers(), [])
+
+    def test_a_missing_scanned_file_fails_closed(self):
+        """A check that silently skips its subject still prints OK — the
+        failure mode the badge check was rewritten to remove.
+        """
+        gate.SCANNED_FILES = ("GONE.md",)
+        gate.read = _FakeRepo().read
+        failures = gate.check_no_conflict_markers()
+        self.assertEqual(len(failures), 1)
+        self.assertIn("GONE.md: missing", failures[0])
+
+    def test_unparseable_json_is_reported(self):
+        self._install(**{".bestpractices.json": '{"a": 1,\n<<<<<<< HEAD\n}\n'})
+        failures = gate.check_scanned_json_parses()
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn(".bestpractices.json: not valid JSON", failures[0])
+
+    def test_valid_json_reports_nothing(self):
+        self._install(**{".bestpractices.json": '{"test_status": "Met"}\n'})
+        self.assertEqual(gate.check_scanned_json_parses(), [])
+
+    def test_markdown_is_not_json_checked(self):
+        """Only `.json` members of SCANNED_FILES are parsed; a Markdown file
+        that happens to start with a brace must not be reported.
+        """
+        self._install(**{"README.md": "{ this is prose, not JSON\n"})
+        self.assertEqual(gate.check_scanned_json_parses(), [])
+
+    def test_both_checks_run_inside_collect_failures(self):
+        """Wiring guard: a function that is never called proves nothing. The
+        conflicted file below is reported by BOTH new checks through the
+        public entry point.
+        """
+        gate.SCANNED_FILES = (".bestpractices.json",)
+        gate.read = _FakeRepo(
+            **{".bestpractices.json": '{\n<<<<<<< HEAD\n"a": 1\n>>>>>>> theirs\n}\n'}
+        ).read
+        reported = "\n".join(gate.check_no_conflict_markers())
+        self.assertIn("unresolved merge conflict marker", reported)
+        self.assertIn("not valid JSON", "\n".join(gate.check_scanned_json_parses()))
+
+    def test_the_real_repository_tree_is_structurally_clean(self):
+        """Runs against the actual files, not a double — this is the assertion
+        that would have caught the committed markers in the working tree.
+        """
+        self.assertEqual(gate.check_no_conflict_markers(), [])
+        self.assertEqual(gate.check_scanned_json_parses(), [])
+
+
 if __name__ == "__main__":
     unittest.main()
