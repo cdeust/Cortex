@@ -6,11 +6,11 @@
 
 <p align="center">
   <a href="https://github.com/cdeust/Cortex/actions/workflows/ci.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
-  <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/tests-6383_passing-brightgreen.svg" alt="6383 passing">
-  <img src="https://img.shields.io/badge/references-97_papers-orange.svg" alt="References">
-  <img src="https://img.shields.io/badge/version-4.16.0-brightgreen.svg" alt="Version 4.16.0">
+  <a href="LICENSE"><img src="assets/badge-license.svg" alt="License: MIT"></a>
+  <img src="assets/badge-python.svg" alt="Python 3.10+">
+  <img src="assets/badge-tests.svg" alt="6414 tests passing">
+  <img src="assets/badge-references.svg" alt="97 referenced papers">
+  <img src="assets/badge-version.svg" alt="Version 4.16.0">
   <a href="https://www.bestpractices.dev/projects/13836"><img src="https://www.bestpractices.dev/projects/13836/badge" alt="OpenSSF Best Practices"></a>
   <a href="https://mcptoplist.com/server/io.github.cdeust%2Fhypermnesia-mcp"><img src="assets/badge-mcp-toplist.svg" alt="MCP Toplist: Top 1.2% of 81,919 tracked MCP servers, July 2026"></a>
 </p>
@@ -526,7 +526,7 @@ Cortex is **local-first**: your memories, conversations, and profiles stay on yo
 ## Development
 
 ```bash
-pytest                    # 6383 tests
+pytest                    # 6414 tests
 ruff check .              # Lint
 ruff format --check .     # Format
 python scripts/check_doc_claims.py   # advertised counts must match the repo

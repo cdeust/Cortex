@@ -95,7 +95,20 @@ MECHANISM_CLAIM = re.compile(
 # Both the "N tests" and the "N-test suite" phrasings state the count; matching
 # only the first let a stale number sit unread in .bestpractices.json.
 TEST_CLAIM = re.compile(r"(\d+)(?:\s+tests|-test suite)\b")
-VERSION_BADGE = re.compile(r"badge/version-(\d+\.\d+\.\d+)")
+
+# The version and test badges are COMMITTED SVGs under assets/, not hotlinked
+# shields.io URLs, so their figures are read out of the files' own <title>.
+# These patterns replaced URL-shaped ones when the badges were self-hosted:
+# had they been left matching "badge/version-X.Y.Z", they would have found
+# nothing in the new README and both gates would have gone quiet while still
+# reporting success. A gate that cannot find its subject must fail, not pass.
+VERSION_BADGE = re.compile(r"<title>Version (\d+\.\d+\.\d+)</title>")
+TESTS_BADGE = re.compile(r"<title>(\d+) tests passing</title>")
+
+# Self-hosting the badges is only durable if reverting it is loud. Any
+# reintroduced shields.io hotlink in the README is a third-party beacon AND
+# silently detaches whichever claim it carries from the checks below.
+SHIELDS_HOTLINK = re.compile(r"img\.shields\.io")
 
 # source: structural — str.split(marker, 1) yields exactly (before, after)
 # when the marker is present
@@ -246,10 +259,48 @@ def check_versions(expected: str) -> list[str]:
             failures.append(
                 f"{relative_path}: version {actual!r}, pyproject says {expected!r}"
             )
-    for match in VERSION_BADGE.finditer(read("README.md")):
-        if match.group(1) != expected:
+    failures += check_badge(
+        "assets/badge-version.svg", VERSION_BADGE, expected, "version"
+    )
+    return failures
+
+
+def check_badge(
+    relative_path: str, pattern: re.Pattern[str], expected: str, label: str
+) -> list[str]:
+    """One committed badge SVG states one figure, and it must be the right one.
+
+    Fails closed on an unreadable or unmatched badge. The predecessor of this
+    check was `if badge and ...` against a regex over the README, which passed
+    silently the moment the badge stopped matching — the failure mode that
+    makes a gate worse than no gate, because it still reports success.
+    """
+    try:
+        body = read(relative_path)
+    except FileNotFoundError:
+        return [f"{relative_path}: missing — run scripts/generate_repo_badges.py"]
+    match = pattern.search(body)
+    if match is None:
+        return [
+            f"{relative_path}: no {label} figure in its <title>; the badge and"
+            " this gate have diverged"
+        ]
+    if match.group(1) != expected:
+        return [
+            f"{relative_path}: {label} badge says {match.group(1)},"
+            f" canonical is {expected}"
+        ]
+    return []
+
+
+def check_no_hotlinked_badges() -> list[str]:
+    """The README's repo-derived badges stay self-hosted."""
+    failures = []
+    for number, line in enumerate(read("README.md").splitlines(), start=1):
+        if SHIELDS_HOTLINK.search(line):
             failures.append(
-                f"README.md: version badge {match.group(1)}, pyproject says {expected}"
+                f"README.md:{number}: hotlinked shields.io badge — these are"
+                " committed under assets/ (scripts/generate_repo_badges.py)"
             )
     return failures
 
@@ -261,14 +312,12 @@ def collect_failures(test_count: int | None) -> list[str]:
     failures += check_counts(REFERENCE_CLAIM, canonical_reference_count(), "references")
     failures += check_counts(MECHANISM_CLAIM, canonical_mechanism_count(), "mechanisms")
     failures += check_versions(canonical_version())
+    failures += check_no_hotlinked_badges()
     if test_count is not None:
         failures += check_counts(TEST_CLAIM, test_count, "tests")
-        badge = re.search(r"badge/tests-(\d+)_passing", read("README.md"))
-        if badge and int(badge.group(1)) != test_count:
-            failures.append(
-                f"README.md: test badge says {badge.group(1)}, "
-                f"the suite collects {test_count}"
-            )
+        failures += check_badge(
+            "assets/badge-tests.svg", TESTS_BADGE, str(test_count), "tests"
+        )
     return failures
 
 

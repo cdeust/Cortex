@@ -135,7 +135,14 @@ def _scan_heat_writers() -> set[tuple[str, int]]:
 
     offenders: set[tuple[str, int]] = set()
     for py in _MCP_ROOT.rglob("*.py"):
-        if "worktree" in str(py):
+        # Relative to the scan root, never the absolute path. An agent
+        # worktree lives at <repo>/.claude/worktrees/<name>/, so when the
+        # suite runs FROM one, every absolute path contains "worktree" and
+        # this check skipped the entire package: the scan found zero writers,
+        # `unexpected` was empty, and the invariant passed vacuously — it
+        # could not have caught a new unauthorized writer at all. Only the
+        # stale-entry half of the assertion made the breakage visible.
+        if "worktree" in str(py.relative_to(_MCP_ROOT)):
             continue
         try:
             src = py.read_text(encoding="utf-8")
@@ -203,7 +210,14 @@ def test_I2_no_legacy_heat_column_writes() -> None:
     """
     offenders: set[tuple[str, int]] = set()
     for py in _MCP_ROOT.rglob("*.py"):
-        if "worktree" in str(py):
+        # Relative to the scan root, never the absolute path. An agent
+        # worktree lives at <repo>/.claude/worktrees/<name>/, so when the
+        # suite runs FROM one, every absolute path contains "worktree" and
+        # this check skipped the entire package: the scan found zero writers,
+        # `unexpected` was empty, and the invariant passed vacuously — it
+        # could not have caught a new unauthorized writer at all. Only the
+        # stale-entry half of the assertion made the breakage visible.
+        if "worktree" in str(py.relative_to(_MCP_ROOT)):
             continue
         try:
             src = py.read_text(encoding="utf-8")
