@@ -401,6 +401,16 @@ required_plugins = ["pytest-timeout", "pytest-asyncio"]
 #   reporting 0 warnings after deleting this entry.
 filterwarnings = [
     "ignore:builtin type (SwigPyObject|SwigPyPacked|swigvarlink) has no __module__ attribute:DeprecationWarning",
+    # Regression tripwire for issue #260: `sqlite_compat.py` now registers an
+    # explicit `sqlite3.register_adapter(datetime, ...)` (see its module
+    # docstring), so nothing in this codebase should ever again hit the
+    # stdlib's *implicit* default adapter for `datetime.datetime`. If this
+    # fires, a new bound-raw-datetime call site was added outside that
+    # adapter's coverage — turn it into a hard failure so it cannot silently
+    # return the way it did before (3 warnings across
+    # tests_py/handlers/test_consolidate.py and
+    # tests_py/integration/test_memory_lifecycle.py).
+    "error:The default datetime adapter is deprecated as of Python 3.12.*:DeprecationWarning",
 ]
 markers = [
     "invariants: Phase 0.3+ testable invariant predicates (I1/I2/I3/I4 and parity tests)",

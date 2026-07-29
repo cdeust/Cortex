@@ -269,10 +269,17 @@ def test_returning_is_stripped_when_the_runtime_lacks_native_support(monkeypatch
     Without this the whole `if not _SUPPORTS_RETURNING:` arm is unreachable
     here (SQLite 3.35 added RETURNING in 2021), so every mutant of it
     survived a scoped mutation run — the branch was shipping untested.
+
+    `_SUPPORTS_RETURNING` is patched on `sqlite_sql_translate` — the module
+    that DEFINES `_translate_sql`/`_returning_was_stripped` (issue #260
+    split) — not on `sqlite_compat`, which only re-exports the names via
+    import. Patching the re-exported copy would be a silent no-op: the
+    functions read the flag from their own module's globals.
     """
     import mcp_server.infrastructure.sqlite_compat as sc
+    import mcp_server.infrastructure.sqlite_sql_translate as sqltr
 
-    monkeypatch.setattr(sc, "_SUPPORTS_RETURNING", False)
+    monkeypatch.setattr(sqltr, "_SUPPORTS_RETURNING", False)
 
     assert sc._translate_sql(
         "INSERT INTO wiki.pages (slug) VALUES (%s) RETURNING id"
@@ -286,10 +293,13 @@ def test_stripped_returning_synthesises_the_insert_id(monkeypatch):
 
     pg_store_wiki_common._returning_id RAISES on None, so every bulk wiki
     insert depends on this synthesis when running below SQLite 3.35.
-    """
-    import mcp_server.infrastructure.sqlite_compat as sc
 
-    monkeypatch.setattr(sc, "_SUPPORTS_RETURNING", False)
+    See `test_returning_is_stripped_when_the_runtime_lacks_native_support`
+    for why the patch target is `sqlite_sql_translate`, not `sqlite_compat`.
+    """
+    import mcp_server.infrastructure.sqlite_sql_translate as sqltr
+
+    monkeypatch.setattr(sqltr, "_SUPPORTS_RETURNING", False)
 
     conn = _compat_conn()
     conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, a TEXT)")
@@ -316,7 +326,7 @@ def test_returning_was_stripped_tracks_native_support():
     synthesised `{"id": lastrowid}` — reporting a write that never happened,
     with an id that is not even the right row.
     """
-    from mcp_server.infrastructure.sqlite_compat import (
+    from mcp_server.infrastructure.sqlite_sql_translate import (
         _SUPPORTS_RETURNING,
         _returning_was_stripped,
     )
@@ -375,7 +385,7 @@ def test_fresh_cursor_has_psycopg_shaped_defaults():
 
 
 def test_returning_detection_is_case_insensitive():
-    from mcp_server.infrastructure.sqlite_compat import (
+    from mcp_server.infrastructure.sqlite_sql_translate import (
         _SUPPORTS_RETURNING,
         _returning_was_stripped,
     )
@@ -391,6 +401,134 @@ def test_connection_execute_returns_rows_as_dicts():
     conn.execute("INSERT INTO t (a) VALUES (%s)", ("x",))
     assert conn.execute("SELECT a FROM t").fetchall() == [{"a": "x"}]
     assert conn.execute("SELECT a FROM t").fetchone() == {"a": "x"}
+
+
+# ── _CompatCursor / PsycopgCompatConnection field wiring (issue #260 ─────
+# boy-scout: surfaced by a scoped mutation run against sqlite_compat.py
+# while fixing the datetime-adapter bug — these pins were missing entirely,
+# not merely weak, so mutants of `_CompatCursor.__init__`/`fetchone` and
+# `PsycopgCompatConnection.execute` survived).
+
+
+def test_compat_cursor_had_returning_defaults_to_false():
+    """`_CompatCursor` is instantiated directly here, not through
+    `PsycopgCompatConnection.execute` (which always passes every keyword
+    explicitly) — pinning the class's own declared default independent of
+    its one current caller."""
+    import sqlite3
+
+    from mcp_server.infrastructure.sqlite_compat import _CompatCursor
+
+    raw = sqlite3.connect(":memory:")
+    raw.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+    cur = raw.execute("SELECT id FROM t")  # no rows
+    wrapped = _CompatCursor(cur, lastrowid=5)  # had_returning NOT passed
+    assert wrapped.fetchone() is None
+
+
+def test_compat_cursor_rowcount_mirrors_the_wrapped_cursor():
+    import sqlite3
+
+    from mcp_server.infrastructure.sqlite_compat import _CompatCursor
+
+    raw = sqlite3.connect(":memory:")
+    raw.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+    raw.execute("INSERT INTO t (id) VALUES (1)")
+    cur = raw.execute("UPDATE t SET id = 2")
+    wrapped = _CompatCursor(cur, lastrowid=None)
+    assert wrapped.rowcount == cur.rowcount == 1
+
+
+def test_compat_cursor_synthesises_the_exact_id_key_when_flagged():
+    """Exact dict-equality (not `"id" in result`) pins the literal key
+    spelling and the stored `had_returning`/`lastrowid` values verbatim."""
+    import sqlite3
+
+    from mcp_server.infrastructure.sqlite_compat import _CompatCursor
+
+    raw = sqlite3.connect(":memory:")
+    raw.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+    cur = raw.execute("SELECT id FROM t")  # no rows
+    wrapped = _CompatCursor(cur, lastrowid=7, had_returning=True)
+    assert wrapped.fetchone() == {"id": 7}
+
+
+def test_compat_cursor_needs_both_flag_and_lastrowid_to_synthesise():
+    """`had_returning AND lastrowid`, not `OR`: a falsy lastrowid (0 here)
+    must not synthesise a row even when RETURNING was stripped."""
+    import sqlite3
+
+    from mcp_server.infrastructure.sqlite_compat import _CompatCursor
+
+    raw = sqlite3.connect(":memory:")
+    raw.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)")
+    cur = raw.execute("SELECT id FROM t")  # no rows
+    wrapped = _CompatCursor(cur, lastrowid=0, had_returning=True)
+    assert wrapped.fetchone() is None
+
+
+def test_executemany_clears_had_returning_and_reports_real_rowcount():
+    """Pins the post-executemany field wiring, not just the row output.
+
+    `lastrowid` is asserted `None` too, matching the documented sqlite3
+    contract (a cursor's `lastrowid` is only meaningful after a single-row
+    `execute()` INSERT, never after `executemany()`
+    https://docs.python.org/3/library/sqlite3.html#sqlite3.Cursor.lastrowid)
+    — which makes a mutant that hardcodes `self.lastrowid = None` in
+    `executemany()` a documented EQUIVALENT mutant here, not a gap: no
+    input can make the real `self._cursor.lastrowid` differ from `None`
+    after an `executemany()` call, so no test can distinguish them.
+    """
+    conn = _compat_conn()
+    conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, a TEXT)")
+    with conn.cursor() as cur:
+        cur.executemany("INSERT INTO t (a) VALUES (%s)", [("x",), ("y",)])
+        assert cur.lastrowid is None
+        assert cur.rowcount == 2
+        assert cur._had_returning is False
+
+
+def test_connection_execute_computes_had_returning_from_the_actual_sql(
+    monkeypatch,
+):
+    """`PsycopgCompatConnection.execute` must compute `had_returning` from
+    the SQL it was actually given, not silently default it away. Forces the
+    pre-3.35 strip path (this runtime natively supports RETURNING) and
+    asserts the returned cursor synthesises the id — the same contract
+    `test_stripped_returning_synthesises_the_insert_id` pins for the
+    `cursor()` path, exercised here through `execute()` directly."""
+    import mcp_server.infrastructure.sqlite_sql_translate as sqltr
+
+    monkeypatch.setattr(sqltr, "_SUPPORTS_RETURNING", False)
+
+    conn = _compat_conn()
+    conn.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, a TEXT)")
+    cur = conn.execute("INSERT INTO t (a) VALUES (%s) RETURNING id", ("x",))
+    assert cur.fetchone() == {"id": 1}
+
+
+def test_executescript_runs_every_statement_verbatim():
+    conn = _compat_conn()
+    conn.executescript(
+        "CREATE TABLE t (id INTEGER PRIMARY KEY); INSERT INTO t (id) VALUES (1);"
+    )
+    assert conn.execute("SELECT id FROM t").fetchone() == {"id": 1}
+
+
+def test_enable_load_extension_forwards_the_flag_verbatim():
+    """Spies on the wrapped connection: sqlite3 accepts `enable_load_extension
+    (None)` silently (it does not raise), so only a spy — not a raised
+    exception — can tell a forwarded `False` apart from a hardcoded one."""
+    calls = []
+
+    class _FakeRealConn:
+        def enable_load_extension(self, enabled):
+            calls.append(enabled)
+
+    conn = PsycopgCompatConnection(_FakeRealConn())
+    conn.enable_load_extension(True)
+    conn.enable_load_extension(False)
+    assert calls == [True, False]
 
 
 # ── The seven handler entry paths (issue #206 acceptance criterion 3) ────

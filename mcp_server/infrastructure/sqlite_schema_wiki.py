@@ -1,9 +1,9 @@
 """SQLite mirror of the PostgreSQL `wiki` schema (pg_schema.py::WIKI_SCHEMA_DDL).
 
 SQLite has no schema namespaces, so `wiki.<table>` is flattened to
-`wiki_<table>`; sqlite_compat._translate_sql rewrites the SQL on the way in,
-which is what lets the 52 modules that query these tables run unmodified on
-both backends.
+`wiki_<table>`; sqlite_sql_translate._translate_sql rewrites the SQL on the
+way in (imported by sqlite_compat.py, issue #260), which is what lets the
+52 modules that query these tables run unmodified on both backends.
 
 Type mapping applied here (issue #206):
 
