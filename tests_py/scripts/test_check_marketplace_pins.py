@@ -149,20 +149,52 @@ class TestGithubPin(unittest.TestCase):
         self.assertIn("UNPARSEABLE", failure)
 
 
-class TestServerJsonSplit(unittest.TestCase):
+class TestRootManifestSplit(unittest.TestCase):
     def test_three_way_split_third_leg_flagged(self):
         with TemporaryDirectory() as d:
             root = Path(d)
             (root / "server.json").write_text(json.dumps({"version": "0.8.2"}))
-            issue = gate.check_server_json(root, "0.8.0")
-            self.assertIn("SERVER_JSON_SPLIT", issue)
+            issues = gate.check_root_manifests(root, "0.8.0")
+            self.assertTrue(any("SERVER_JSON_SPLIT" in i for i in issues))
+
+    def test_ap_172_incident_replay_manifest_json_two_releases_stale(self):
+        """The exact tree that exited 0 before this check existed.
+
+        automatised-pipeline carried manifest.json 0.8.0 while server.json and
+        every marketplace pin read 0.8.2. The gate passed, and the wrong
+        version shipped inside every .mcpb bundle for two releases.
+        """
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "server.json").write_text(json.dumps({"version": "0.8.2"}))
+            (root / "manifest.json").write_text(json.dumps({"version": "0.8.0"}))
+            issues = gate.check_root_manifests(root, "0.8.2")
+            self.assertEqual(len(issues), 1, issues)
+            self.assertIn("MANIFEST_JSON_SPLIT", issues[0])
+            self.assertIn("0.8.0", issues[0])
+
+    def test_both_stale_are_reported_separately(self):
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "server.json").write_text(json.dumps({"version": "0.8.1"}))
+            (root / "manifest.json").write_text(json.dumps({"version": "0.8.0"}))
+            issues = gate.check_root_manifests(root, "0.8.2")
+            self.assertEqual(len(issues), 2, issues)
 
     def test_aligned_passes_and_absent_passes(self):
         with TemporaryDirectory() as d:
             root = Path(d)
-            self.assertIsNone(gate.check_server_json(root, "0.8.2"))
+            # Absent: the canonical repo has neither file — not a failure.
+            self.assertEqual(gate.check_root_manifests(root, "0.8.2"), [])
             (root / "server.json").write_text(json.dumps({"version": "0.8.2"}))
-            self.assertIsNone(gate.check_server_json(root, "0.8.2"))
+            (root / "manifest.json").write_text(json.dumps({"version": "0.8.2"}))
+            self.assertEqual(gate.check_root_manifests(root, "0.8.2"), [])
+
+    def test_missing_version_key_is_not_a_failure(self):
+        with TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "manifest.json").write_text(json.dumps({"name": "x"}))
+            self.assertEqual(gate.check_root_manifests(root, "0.8.2"), [])
 
 
 if __name__ == "__main__":
