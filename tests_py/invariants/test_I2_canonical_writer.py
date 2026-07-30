@@ -1,3 +1,6 @@
+# noqa: N999 -- filename encodes the project's own invariant ID (I2, see
+# docs/invariants/cortex-invariants.md and ADR-0053); renaming would break
+# the formal invariant-ID cross-reference table and the ADR's own citation.
 """Invariant I2 — canonical heat_base writer regression guard.
 
 Formal predicate (from docs/invariants/cortex-invariants.md):
@@ -175,7 +178,7 @@ def _scan_heat_writers() -> set[tuple[str, int]]:
 
 
 @pytest.mark.invariants
-def test_I2_no_unauthorized_heat_writes() -> None:
+def test_i2_no_unauthorized_heat_writes() -> None:
     """I2: every UPDATE memories SET heat_base site must be in ALLOWED_WRITERS.
 
     Fails if a new writer is introduced (regression risk: silent drift
@@ -207,7 +210,7 @@ def test_I2_no_unauthorized_heat_writes() -> None:
 
 
 @pytest.mark.invariants
-def test_I2_no_legacy_heat_column_writes() -> None:
+def test_i2_no_legacy_heat_column_writes() -> None:
     """Post-A3: no code should write the legacy ``heat`` column.
 
     The ``heat`` column was renamed to ``heat_base`` in the A3 migration.
@@ -249,7 +252,7 @@ def test_I2_no_legacy_heat_column_writes() -> None:
 
 
 @pytest.mark.invariants
-def test_I2_allow_list_not_empty() -> None:
+def test_i2_allow_list_not_empty() -> None:
     """Sanity: the allow-list must be populated — guards against scanner
     breaking silently."""
     assert len(_ALLOWED_WRITERS) > 0

@@ -15,7 +15,7 @@ from pathlib import Path
 from mcp_server.shared import platform as plat
 
 
-def test_home_dir_prefers_HOME_override(monkeypatch, tmp_path):
+def test_home_dir_prefers_home_override(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     assert plat.home_dir() == tmp_path
 

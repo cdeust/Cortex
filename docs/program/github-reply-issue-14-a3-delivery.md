@@ -38,7 +38,7 @@ not a stored state vector**:
   (`bump_heat_raw` + `update_memories_heat_batch`). I2 invariant
   allow-list shrunk from 11 to 7 sites, all on `heat_base`. Legacy
   `SET heat = ...` pattern fenced off by
-  `test_I2_no_legacy_heat_column_writes`.
+  `test_i2_no_legacy_heat_column_writes`.
 - Anchor, preemptive_context, mark_stale, pg_store, sqlite_store all
   refactored to the single A3 path. Zero flag-branching in Python —
   the kill switch is a DDL-level `effective_heat_frozen()` swap per

@@ -114,7 +114,7 @@ class TestEffectiveReleaseProbability:
             full
         ) > compute_effective_release_probability(depleted)
 
-    def test_u_eff_equals_U_plus_u_times_one_minus_U(self):
+    def test_effective_release_probability_matches_exact_formula(self):
         """Exact formula, not just its monotonicity (Tsodyks & Markram 1997).
 
         u_eff = U + u*(1 - U) = 0.2 + 0.5*0.8 = 0.6; x = 1.0, and 0.6 is
