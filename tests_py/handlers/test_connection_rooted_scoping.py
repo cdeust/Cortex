@@ -95,15 +95,15 @@ def test_rooted_remember_forces_root_topic(monkeypatch):
     monkeypatch.setenv(_ENV, _ROOT)
     captured: dict = {}
 
-    class _StopParse(Exception):
+    class _StopParseError(Exception):
         pass
 
     def _fake_parse_args(args):
         captured["agent_topic"] = args.get("agent_topic")
-        raise _StopParse
+        raise _StopParseError
 
     monkeypatch.setattr(remember, "_parse_args", _fake_parse_args)
-    with pytest.raises(_StopParse):
+    with pytest.raises(_StopParseError):
         asyncio.run(
             remember.handler(
                 {"content": "a durable fact", "agent_topic": "some-other-agent"}

@@ -40,7 +40,7 @@ _RECEIPT_SPECS: tuple[tuple[str, str], ...] = (
 )
 
 
-class MalformedArtifact(Exception):
+class MalformedArtifactError(Exception):
     """Raised when a required artifact file exists but does not parse."""
 
 
@@ -111,26 +111,29 @@ def _sha256_bytes(data: bytes) -> str:
 def _read_json(path: Path) -> tuple[dict[str, Any], str]:
     """Read + parse one JSON artifact; returns (parsed, sha256_of_raw_bytes).
 
-    Raises MalformedArtifact on I/O failure or invalid JSON.
+    Raises MalformedArtifactError on I/O failure or invalid JSON.
     """
     try:
         raw_bytes = path.read_bytes()
     except OSError as exc:
-        raise MalformedArtifact(f"cannot read {path}: {exc}") from exc
+        raise MalformedArtifactError(f"cannot read {path}: {exc}") from exc
     try:
         return json.loads(raw_bytes), _sha256_bytes(raw_bytes)
     except ValueError as exc:
-        raise MalformedArtifact(f"invalid JSON in {path}: {exc}") from exc
+        raise MalformedArtifactError(f"invalid JSON in {path}: {exc}") from exc
 
 
 def read_index(output_dir: Path, run_id: str) -> dict[str, Any]:
-    """Read ``runs/<run_id>/index.json``. Raises MalformedArtifact if absent/bad."""
+    """Read ``runs/<run_id>/index.json``.
+
+    Raises MalformedArtifactError if absent/bad.
+    """
     index_path = output_dir / "runs" / run_id / INDEX_FILE_NAME
     if not index_path.exists():
-        raise MalformedArtifact(f"no index.json at {index_path}")
+        raise MalformedArtifactError(f"no index.json at {index_path}")
     data, _ = _read_json(index_path)
     if "findings" not in data:
-        raise MalformedArtifact(f"index.json at {index_path} has no 'findings' key")
+        raise MalformedArtifactError(f"index.json at {index_path} has no 'findings'")
     return data
 
 
@@ -195,7 +198,7 @@ def _extract_file_paths(finding_dir: Path) -> list[str]:
         return []
     try:
         raw, _ = _read_json(path)
-    except MalformedArtifact:
+    except MalformedArtifactError:
         return []
     matched = (
         raw.get("report", {}).get("matched_symbols") or raw.get("matched_symbols") or []
@@ -222,7 +225,7 @@ def load_finding(output_dir: Path, run_id: str, finding_id: str) -> FindingRecor
     finding_dir = _finding_dir(output_dir, run_id, finding_id)
     refined_path = finding_dir / REFINED_FILE_NAME
     if not refined_path.exists():
-        raise MalformedArtifact(f"no {REFINED_FILE_NAME} at {finding_dir}")
+        raise MalformedArtifactError(f"no {REFINED_FILE_NAME} at {finding_dir}")
     refined, _ = _read_json(refined_path)
     extracted = refined.get("extracted", {})
     raw_source_path = extracted.get("source_path")

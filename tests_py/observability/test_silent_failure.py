@@ -63,11 +63,11 @@ class TestNote:
         # A non-string-coercible exception must not turn instrumentation
         # itself into a new failure mode (Move 3: instrumentation must
         # never break the caller).
-        class Explodes(Exception):
+        class ExplodesError(Exception):
             def __str__(self):
                 raise RuntimeError("cannot stringify")
 
-        silent_failure.note("demo.component", Explodes())  # must not raise
+        silent_failure.note("demo.component", ExplodesError())  # must not raise
 
 
 class TestStatus:

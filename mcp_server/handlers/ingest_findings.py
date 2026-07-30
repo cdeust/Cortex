@@ -32,7 +32,7 @@ from typing import Any
 
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers.ingest_findings_artifacts import (
-    MalformedArtifact,
+    MalformedArtifactError,
     load_finding,
     read_index,
 )
@@ -139,7 +139,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     try:
         index = read_index(output_dir, run_id)
-    except MalformedArtifact as exc:
+    except MalformedArtifactError as exc:
         return {"ingested": False, "reason": "index_unreadable", "error": str(exc)}
 
     conn = store._conn
@@ -148,7 +148,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     for finding_id in sorted(index.get("findings", {})):
         try:
             finding = load_finding(output_dir, run_id, finding_id)
-        except MalformedArtifact as exc:
+        except MalformedArtifactError as exc:
             errors.append(f"{finding_id}: {exc}")
             continue
         try:

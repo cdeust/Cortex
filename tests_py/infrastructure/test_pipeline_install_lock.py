@@ -15,7 +15,7 @@ import pytest
 
 from mcp_server.infrastructure import pipeline_install_lock as mod
 from mcp_server.infrastructure.pipeline_install_lock import (
-    InstallLockBusy,
+    InstallLockBusyError,
     install_lock,
 )
 
@@ -40,6 +40,6 @@ def test_acquire_and_release_creates_lock_file(lock_in_tmp):
 )
 def test_contended_acquire_raises_busy(lock_in_tmp):
     with install_lock():
-        with pytest.raises(InstallLockBusy):
+        with pytest.raises(InstallLockBusyError):
             with install_lock():
                 pass

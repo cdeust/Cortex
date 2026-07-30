@@ -389,7 +389,7 @@ class TestInstallPipeline:
 
             @contextmanager
             def busy():
-                raise pipeline_install_lock.InstallLockBusy("test-busy")
+                raise pipeline_install_lock.InstallLockBusyError("test-busy")
                 yield  # pragma: no cover
 
             return busy()

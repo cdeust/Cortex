@@ -56,11 +56,11 @@ class WriteResult:
     bytes_written: int
 
 
-class WikiExists(Exception):
+class WikiExistsError(Exception):
     """Raised when ``create`` mode finds an existing file."""
 
 
-class WikiMissing(Exception):
+class WikiMissingError(Exception):
     """Raised when ``append`` mode targets a missing file."""
 
 
@@ -109,9 +109,9 @@ def read_page(root: Path | str, rel_path: str) -> str | None:
 
     # CWE-22 sanitization. Structure matches CodeQL's py/path-injection
     # example VERBATIM so the sanitizer is unambiguously recognised:
-    #   base_path = os.path.realpath(root)
-    #   fullpath  = os.path.realpath(os.path.join(base_path, user_input))
-    #   if not fullpath.startswith(base_path): ...
+    #   base_path = os.path.realpath(root)  # noqa: ERA001
+    #   fullpath = os.path.realpath(os.path.join(base_path, user_input))  # noqa: ERA001
+    #   if not fullpath.startswith(base_path): ...  # noqa: ERA001
     # https://codeql.github.com/codeql-query-help/python/py-path-injection/
     if not rel_path or "\x00" in rel_path or os.path.isabs(rel_path):
         return None
@@ -149,10 +149,10 @@ def write_page(
 ) -> WriteResult:
     """Write a page atomically.
 
-    * ``create`` — raises WikiExists if the file already exists.
+    * ``create`` — raises WikiExistsError if the file already exists.
     * ``replace`` — overwrites regardless.
     * ``append`` — appends the content to the existing file (with a
-      separating blank line), raises WikiMissing if the file does not exist.
+      separating blank line), raises WikiMissingError if the file does not exist.
 
     precondition: for ``create``/``replace``, ``content`` is a FULL page
     (frontmatter + body, or plain body with no frontmatter) the caller
@@ -193,13 +193,13 @@ def write_page(
 
     if mode == "create":
         if existed:
-            raise WikiExists(rel_path)
+            raise WikiExistsError(rel_path)
         written = _atomic_write_bytes_str(fullpath, content)
     elif mode == "replace":
         written = _atomic_write_bytes_str(fullpath, content)
     elif mode == "append":
         if not existed:
-            raise WikiMissing(rel_path)
+            raise WikiMissingError(rel_path)
         with open(fullpath, encoding="utf-8") as f:
             current = f.read()
         if current and not current.endswith("\n"):
@@ -244,7 +244,7 @@ def append_section(
     """Append text under a ``## heading`` section, creating it if missing."""
     target = _abs(Path(root), rel_path)
     if not target.exists():
-        raise WikiMissing(rel_path)
+        raise WikiMissingError(rel_path)
     current = target.read_text(encoding="utf-8")
     heading_line = f"## {heading}"
     if heading_line in current:

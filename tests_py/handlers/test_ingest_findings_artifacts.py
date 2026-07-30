@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from mcp_server.handlers.ingest_findings_artifacts import (
-    MalformedArtifact,
+    MalformedArtifactError,
     load_finding,
     read_index,
 )
@@ -120,7 +120,7 @@ class TestReadIndex:
         assert "f1" in index["findings"]
 
     def test_missing_index_raises_malformed(self, tmp_path):
-        with pytest.raises(MalformedArtifact):
+        with pytest.raises(MalformedArtifactError):
             read_index(tmp_path / "nope", "run1")
 
     def test_bad_json_raises_malformed(self, tmp_path):
@@ -128,13 +128,13 @@ class TestReadIndex:
         path = output_dir / "runs" / "run1" / "index.json"
         path.parent.mkdir(parents=True)
         path.write_text("{not json", encoding="utf-8")
-        with pytest.raises(MalformedArtifact):
+        with pytest.raises(MalformedArtifactError):
             read_index(output_dir, "run1")
 
     def test_index_without_findings_key_raises_malformed(self, tmp_path):
         output_dir = tmp_path / "ap-output"
         _write_json(output_dir / "runs" / "run1" / "index.json", {"run_id": "run1"})
-        with pytest.raises(MalformedArtifact):
+        with pytest.raises(MalformedArtifactError):
             read_index(output_dir, "run1")
 
 
@@ -183,7 +183,7 @@ class TestLoadFindingHypothesis:
 class TestLoadFindingMalformed:
     def test_missing_refined_raises_malformed(self, tmp_path):
         output_dir = _make_run(tmp_path, "run1")
-        with pytest.raises(MalformedArtifact):
+        with pytest.raises(MalformedArtifactError):
             load_finding(output_dir, "run1", "f1")
 
     def test_corrupt_refined_raises_malformed(self, tmp_path):
@@ -191,7 +191,7 @@ class TestLoadFindingMalformed:
         path = output_dir / "runs" / "run1" / "findings" / "f1" / "stage-1.refined.json"
         path.parent.mkdir(parents=True)
         path.write_text("not json at all", encoding="utf-8")
-        with pytest.raises(MalformedArtifact):
+        with pytest.raises(MalformedArtifactError):
             load_finding(output_dir, "run1", "f1")
 
 

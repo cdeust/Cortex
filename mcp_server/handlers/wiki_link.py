@@ -11,7 +11,7 @@ from typing import Any
 from mcp_server.core.wiki_links import LinkEntry, RELATIONS, apply_link, inverse_of
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.wiki_store import (
-    WikiMissing,
+    WikiMissingError,
     read_page,
     write_page,
 )
@@ -75,7 +75,7 @@ schema = {
 def _update_page(rel_path: str, entry: LinkEntry) -> None:
     current = read_page(WIKI_ROOT, rel_path)
     if current is None:
-        raise WikiMissing(rel_path)
+        raise WikiMissingError(rel_path)
     updated = apply_link(current, entry)
     write_page(WIKI_ROOT, rel_path, updated, mode="replace")
 
@@ -95,7 +95,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         _update_page(
             to_path, LinkEntry(relation=inverse_of(relation), target=from_path)
         )
-    except WikiMissing as missing:
+    except WikiMissingError as missing:
         return {"error": f"page not found: {missing}"}
     except (ValueError, OSError) as exc:
         return {"error": f"link failed: {exc}"}

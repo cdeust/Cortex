@@ -25,7 +25,7 @@ from mcp_server.infrastructure.pipeline_discovery import (
     _INSTALL_SYMLINK,
 )
 from mcp_server.infrastructure.pipeline_install_lock import (
-    InstallLockBusy,
+    InstallLockBusyError,
     install_lock,
 )
 from mcp_server.infrastructure.pipeline_install_release import try_install_prebuilt
@@ -96,7 +96,7 @@ def install_pipeline(
     try:
         with install_lock():
             return _install_locked(force_rebuild, git_url)
-    except InstallLockBusy as exc:
+    except InstallLockBusyError as exc:
         return {"action": "install_in_progress", "detail": str(exc)}
 
 

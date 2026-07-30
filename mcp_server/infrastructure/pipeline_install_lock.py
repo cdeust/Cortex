@@ -29,7 +29,7 @@ from mcp_server.shared.platform import home_dir
 _LOCK_FILE = home_dir() / ".claude" / "methodology" / ".install.lock"
 
 
-class InstallLockBusy(RuntimeError):
+class InstallLockBusyError(RuntimeError):
     """Raised when another install_pipeline holder owns the lock."""
 
 
@@ -37,7 +37,7 @@ class InstallLockBusy(RuntimeError):
 def install_lock() -> Iterator[None]:
     """Acquire an exclusive non-blocking lock on the install file.
 
-    Raises ``InstallLockBusy`` immediately on contention so callers can
+    Raises ``InstallLockBusyError`` immediately on contention so callers can
     return a structured ``install_in_progress`` action instead of
     blocking for the duration of someone else's 6-minute build.
 
@@ -69,7 +69,7 @@ if sys.platform == "win32":  # == shared.platform.IS_WINDOWS; literal so the che
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
         except OSError as exc:
             os.close(fd)
-            raise InstallLockBusy(str(_LOCK_FILE)) from exc
+            raise InstallLockBusyError(str(_LOCK_FILE)) from exc
 
     def _release(fd: int) -> None:
         try:
@@ -86,7 +86,7 @@ else:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
             os.close(fd)
-            raise InstallLockBusy(str(_LOCK_FILE)) from exc
+            raise InstallLockBusyError(str(_LOCK_FILE)) from exc
 
     def _release(fd: int) -> None:
         try:

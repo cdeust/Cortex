@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from mcp_server.infrastructure.wiki_store import (
-    WikiExists,
-    WikiMissing,
+    WikiExistsError,
+    WikiMissingError,
     append_section,
     list_pages,
     next_adr_number,
@@ -25,7 +25,7 @@ def test_create_writes_new_file(tmp_path: Path) -> None:
 
 def test_create_rejects_existing(tmp_path: Path) -> None:
     write_page(tmp_path, "notes/x.md", "body")
-    with pytest.raises(WikiExists):
+    with pytest.raises(WikiExistsError):
         write_page(tmp_path, "notes/x.md", "other")
 
 
@@ -44,7 +44,7 @@ def test_append_adds_content(tmp_path: Path) -> None:
 
 
 def test_append_missing_raises(tmp_path: Path) -> None:
-    with pytest.raises(WikiMissing):
+    with pytest.raises(WikiMissingError):
         write_page(tmp_path, "notes/nope.md", "x", mode="append")
 
 
@@ -66,7 +66,7 @@ def test_append_section_creates_heading(tmp_path: Path) -> None:
 
 
 def test_append_section_missing_page(tmp_path: Path) -> None:
-    with pytest.raises(WikiMissing):
+    with pytest.raises(WikiMissingError):
         append_section(tmp_path, "notes/gone.md", "X", "y")
 
 

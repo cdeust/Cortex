@@ -13,7 +13,7 @@ from mcp_server.core.wiki_layout import adr_filename, page_path, slugify
 from mcp_server.core.wiki_pages import ADR_STATUSES, build_adr
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.wiki_store import (
-    WikiExists,
+    WikiExistsError,
     next_adr_number,
     write_page,
 )
@@ -162,7 +162,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     try:
         result = write_page(WIKI_ROOT, rel_path, content, mode="create")
-    except WikiExists:
+    except WikiExistsError:
         return {"error": f"ADR already exists: {rel_path}"}
     except (ValueError, OSError) as exc:
         return {"error": f"write failed: {exc}"}

@@ -35,7 +35,7 @@ from mcp_server.core.wiki_redirect import (
 )
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.infrastructure.config import WIKI_ROOT
-from mcp_server.infrastructure.wiki_store import WikiExists, read_page, write_page
+from mcp_server.infrastructure.wiki_store import WikiExistsError, read_page, write_page
 
 
 schema = {
@@ -132,7 +132,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     write_mode = "replace" if overwrite_dest else "create"
     try:
         write_page(WIKI_ROOT, to_path, source_content, mode=write_mode)
-    except WikiExists:
+    except WikiExistsError:
         return {
             "error": (
                 f"destination already exists: {to_path} — pass overwrite_dest "

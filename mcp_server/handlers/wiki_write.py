@@ -48,8 +48,8 @@ from mcp_server.infrastructure.memory_store import get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import insert_citation, upsert_page
 from mcp_server.infrastructure.session_registry import current_window_session
 from mcp_server.infrastructure.wiki_store import (
-    WikiExists,
-    WikiMissing,
+    WikiExistsError,
+    WikiMissingError,
     write_page,
 )
 
@@ -302,9 +302,9 @@ async def write_governed_page(
     """
     try:
         result = write_page(root, rel_path, content, mode=mode)
-    except WikiExists:
+    except WikiExistsError:
         return {"error": f"page already exists: {rel_path}"}
-    except WikiMissing:
+    except WikiMissingError:
         return {"error": f"page does not exist: {rel_path}"}
     except UnclosedFrontmatterError:
         # Propagate uncaught (see docstring) — narrower than the ValueError

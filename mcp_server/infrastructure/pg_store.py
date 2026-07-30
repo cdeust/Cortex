@@ -116,7 +116,7 @@ _SUPERSEDE_REBASE_ATTEMPTS = 5
 _CHAIN_HEAD_MAX_DEPTH = 100_000
 
 
-class _SupersedeCasConflict(Exception):
+class _SupersedeCasConflictError(Exception):
     """The chain head moved under our compare-and-set.
 
     Raised inside the supersede_atomic transaction to force a full rollback of
@@ -663,9 +663,9 @@ class PgMemoryStore(
                             (new_id, head_id),
                         ).rowcount
                         if rowcount != 1:
-                            raise _SupersedeCasConflict()
+                            raise _SupersedeCasConflictError()
                         self._transfer_anchor_on(conn, head_id, new_id)
-                except _SupersedeCasConflict:
+                except _SupersedeCasConflictError:
                     continue
                 return new_id, head_id
         return None, last_head
