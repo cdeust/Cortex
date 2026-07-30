@@ -66,7 +66,7 @@ _DOMAIN_PATH_PARTS = 3
 # 'evergreen', the column default) plus 'living' (emitted by
 # core/auto_curator.py:475,538 and handlers/consolidation/page_io.py:376)
 # plus every kind-specific ADR/specs status in STATUS_VALUES
-# (core/wiki_templates.py). Frontmatter is FS-authored and not itself
+# (core/wiki_templates.py). Frontmatter is FS-authored and not itself  # noqa: ERA001
 # constrained, so any value outside this union must be caught here — the
 # system boundary (coding-standards.md 3.2) — before it reaches the DB.
 _LEGACY_MATURITY_STATUSES = frozenset({"seedling", "budding", "evergreen", "living"})
@@ -424,9 +424,10 @@ def migrate_wiki(wiki_root: Path | str, conn, *, dry_run: bool = True) -> dict:
     purge_summary = purge_ghost_pages(conn, rel_paths, dry_run=dry_run)
 
     # dry_run must be transactionally neutral end-to-end: passes 1-3
-    # (upsert_page, delete_links_from/upsert_link, resolve_unresolved_links)
-    # write through the same `conn` as pass 4 and have no dry_run gate of
-    # their own — only pass 4 checks dry_run internally (see
+    # (upsert_page, delete_links_from/upsert_link,
+    # resolve_unresolved_links) write through the same `conn` as pass 4
+    # and have no dry_run gate of their own — only pass 4 checks dry_run
+    # internally (see
     # purge_ghost_pages). Committing unconditionally here previously made
     # `--dry-run` persist passes 1-3 despite the name (issue #105). Roll
     # back everything this call wrote when dry_run is requested; commit

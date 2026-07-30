@@ -265,7 +265,7 @@ def _merge_chunk_moments(
     delta_n = delta / n_ab
     delta_n2 = delta_n * delta_n
     na_nb = n * n_b
-    # M4_ab = M4_a + M4_b
+    # M4_ab = M4_a + M4_b  # noqa: ERA001 -- Pebay 2008 M4 formula doc, not code
     #   + δ^4 · n_a·n_b·(n_a² - n_a·n_b + n_b²) / n_ab^3
     #   + 6·δ²·(n_a²·M2_b + n_b²·M2_a) / n_ab²
     #   + 4·δ·(n_a·M3_b - n_b·M3_a) / n_ab

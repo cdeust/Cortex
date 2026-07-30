@@ -45,9 +45,10 @@ FORMAT_JSON = "json"
 FORMAT_TABULAR = "tabular"
 
 # Chars the self-describing ``format`` field adds to a payload in the worst
-# case (``,"format":"tabular"``). This transform runs AFTER ``bound_payload``
-# has already filled the payload up to the budget, so the field it appends
-# would overshoot the host cap unless that many chars were reserved first.
+# case (``,"format":"tabular"``). This transform runs AFTER  # noqa: ERA001
+# ``bound_payload`` has already filled the payload up to the budget, so the
+# field it appends would overshoot the host cap unless that many chars were
+# reserved first.
 # Callers bound against ``reserved_budget(cap)`` so the appended field lands
 # inside the cap. source: exact serialized length of the widest ``format``
 # key/value pair (the ``columns`` header is not reserved here — the tabular

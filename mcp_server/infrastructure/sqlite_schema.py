@@ -423,7 +423,7 @@ def get_all_ddl() -> list[str]:
 
 # ── Migrations ───────────────────────────────────────────────────────────
 # Each migration adds columns that may be missing from older databases.
-# Format: (table, column, type_and_default)
+# Format: (table, column, type_and_default)  # noqa: ERA001 -- format doc, not code
 
 MIGRATIONS: list[tuple[str, str, str]] = [
     ("memories", "is_benchmark", "INTEGER DEFAULT 0"),

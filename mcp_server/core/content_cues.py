@@ -60,7 +60,7 @@ _STRUCTURAL_ERROR_PATTERNS: tuple[str, ...] = (
     r"File \"[^\"]+\", line \d+",
     # JVM / Node stack frame: "at pkg.Cls.m(File.java:42)" /
     # "at fn (/app/x.js:10:5)".
-    # sources: java.lang.Throwable#printStackTrace javadoc;
+    # sources: java.lang.Throwable#printStackTrace javadoc;  # noqa: ERA001
     # https://v8.dev/docs/stack-trace-api
     r"\bat [^\s(]+ ?\([^()]*:\d+(?::\d+)?\)",
     # CamelCase exception class identifiers (ValueError,
@@ -80,7 +80,7 @@ _DECISION_PATTERNS: dict[str, str] = {
     "en": r"\b(?:decided|chose|switched|migrated|selected|picked|opted)\b",
     # es: decidí/decidimos/decidido, decisión, elegí/elegimos/elegido,
     #     eligió, escogimos/escogido, optamos/opté/optó/optado,
-    #     seleccionó/seleccionado, cambiamos/cambié/cambió (switched)
+    #     seleccionó/seleccionado, cambiamos/cambié/cambió (switched)  # noqa: ERA001
     "es": (
         r"\bdecid\w*|\bdecisi[oó]n\w*|\beleg[ií]\w*|\beligi\w*|\bescog\w*"
         r"|\bopt(?:amos|é|ó|ado|aron)\b|\bseleccion\w*"
@@ -88,20 +88,21 @@ _DECISION_PATTERNS: dict[str, str] = {
     ),
     # pt: decidimos/decidiu/decidido, decisão/decisões, escolhemos/escolhido/
     #     escolha, optamos/optou/optado, selecionou/selecionado,
-    #     migramos/migrou/migrado, mudamos (switched)
+    #     migramos/migrou/migrado, mudamos (switched)  # noqa: ERA001
     "pt": (
         r"\bdecid\w*|\bdecis[aã]o\b|\bdecis[oõ]es\b|\bescolh\w*"
         r"|\bopt(?:amos|ou|ado|aram)\b|\bselecion\w*"
         r"|\bmigr(?:amos|ou|ado|aram)\b|\bmudamos\b"
     ),
     # fr: décidé/décidons (accented or not), décision, choisi/choisie/
-    #     choisissons, opté, sélectionné, migré/migration, basculé (switched)
+    #     choisissons, opté, sélectionné, migré/migration,
+    #     basculé (switched)  # noqa: ERA001 -- multi-language prose gloss, not code
     "fr": (
         r"\bd[ée]cid\w*|\bd[ée]cisi\w*|\bchoisi\w*|\bopt[ée]\b"
         r"|\bs[ée]lectionn\w*|\bmigr[ée]\w*|\bbascul[ée]\w*"
     ),
     # de: entschied/entschieden, Entscheidung, gewählt, ausgewählt,
-    #     entschlossen, migriert, gewechselt/umgestiegen (switched)
+    #     entschlossen, migriert, gewechselt/umgestiegen (switched)  # noqa: ERA001
     "de": (
         r"\bentschied\w*|\bentscheidung\w*|\bgew[äa]hlt\b|\bausgew[äa]hlt\b"
         r"|\bentschlossen\b|\bmigriert\w*|\bgewechselt\b|\bumgestiegen\b"
@@ -143,7 +144,7 @@ _ERROR_PATTERNS: dict[str, str] = {
         r"|\brot[oa]s?\b|\brechazad\w*|\bca[ií]da\b"
     ),
     # pt: erro(s), exceção/exceções, falha/falhou/falhado, quebrado (broken),
-    #     rejeitado, travou (froze/crashed)
+    #     rejeitado, travou (froze/crashed)  # noqa: ERA001 -- language gloss, not code
     "pt": (
         r"\berros?\b|\bexce[çc][aã]o\w*|\bexce[çc][oõ]es\b|\bfalh\w*"
         r"|\bquebrad\w*|\brejeitad\w*|\btravou\b"
@@ -170,11 +171,13 @@ _ERROR_PATTERNS: dict[str, str] = {
         r"|\bтайм-?аут\w*"
     ),
     # ja: エラー (error), 例外 (exception), 失敗 (failure), バグ (bug),
-    #     クラッシュ (crash), タイムアウト (timeout), 拒否 (denied/rejected),
-    #     壊れ (broken), 不具合 (defect/glitch)
+    #     クラッシュ (crash), タイムアウト (timeout),  # noqa: ERA001
+    #     拒否 (denied/rejected),  # noqa: ERA001
+    #     壊れ (broken), 不具合 (defect/glitch)  # noqa: ERA001
     "ja": r"エラー|例外|失敗|バグ|クラッシュ|タイムアウト|拒否|壊れ|不具合",
     # ro: eroare/erori, excepție/excepția, eșuat/eșec (accented or not),
-    #     defect, stricat (broken), respins (rejected), căzut (crashed/down)
+    #     defect, stricat (broken), respins (rejected),  # noqa: ERA001 -- gloss
+    #     căzut (crashed/down)  # noqa: ERA001 -- language gloss, not code
     "ro": (
         r"\beroare\b|\berori\w*|\bexcep[țt]i\w*|\be[șs]uat\w*|\be[șs]ec\w*"
         r"|\bdefect\w*|\bstricat\w*|\brespins\w*|\bc[ăa]zut\w*"
@@ -186,7 +189,7 @@ _SUCCESS_PATTERNS: dict[str, str] = {
     # en: verbatim pre-#158 _SUCCESS_KW (write_gate.py) — regression anchor
     "en": r"\b(?:fixed|resolved|succeeded|passed|completed|done)\b",
     # es: arreglado/arreglamos/arreglé, resuelto/resolvimos, éxito/exitoso,
-    #     completado, corregido/corregimos, funcionó, aprobado (passed),
+    #     completado, corregido/corregimos, funcionó, aprobado (passed),  # noqa: ERA001
     #     terminado
     "es": (
         r"\barregl\w*|\bresuelt\w*|\bresolvi\w*|\b[ée]xito\w*|\bexitos\w*"
@@ -194,7 +197,7 @@ _SUCCESS_PATTERNS: dict[str, str] = {
         r"|\baprobad\w*|\bterminad\w*"
     ),
     # pt: consertado, corrigido, resolvido/resolvemos, sucesso(s),
-    #     concluído, aprovado (passed), funcionou
+    #     concluído, aprovado (passed), funcionou  # noqa: ERA001 -- gloss, not code
     "pt": (
         r"\bconsertad\w*|\bcorrigid\w*|\bresolvid\w*|\bresolvemos\b"
         r"|\bsucessos?\b|\bconclu[ií]d\w*|\baprovad\w*|\bfuncionou\b"
@@ -206,7 +209,7 @@ _SUCCESS_PATTERNS: dict[str, str] = {
         r"|\bachev[ée]\w*|\br[ée]par[ée]\w*"
     ),
     # de: behoben, gelöst, erfolgreich, abgeschlossen, repariert,
-    #     bestanden (passed), funktioniert
+    #     bestanden (passed), funktioniert  # noqa: ERA001 -- language gloss, not code
     "de": (
         r"\bbehoben\b|\bgel[öo]st\b|\berfolgreich\w*|\babgeschlossen\b"
         r"|\brepariert\w*|\bbestanden\b|\bfunktioniert\w*"
@@ -220,7 +223,7 @@ _SUCCESS_PATTERNS: dict[str, str] = {
         r"|\bзаверш\w*|\bпочин\w*|\bзаработал\w*|\bготово\b"
     ),
     # ja: 修正 (fix), 解決 (resolved), 成功 (success), 完了 (completed),
-    #     直した/直しました (fixed)
+    #     直した/直しました (fixed)  # noqa: ERA001
     "ja": r"修正|解決|成功|完了|直した|直しました",
     # ro: reparat, rezolvat/rezolvăm, reușit (accented or not), succes,
     #     finalizat, corectat, funcționează (it works)

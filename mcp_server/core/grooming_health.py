@@ -30,7 +30,7 @@ from typing import Any
 #     FROM consolidation_log
 #   ), gaps AS (
 #     SELECT d - lag(d) OVER (ORDER BY d) AS gap FROM days
-#   )
+#   )  # noqa: ERA001 -- sec8 SQL provenance for the constant below, not code
 #   SELECT percentile_cont(0.9) WITHIN GROUP (
 #            ORDER BY EXTRACT(EPOCH FROM gap) / 86400.0
 #          ) AS p90_gap_days

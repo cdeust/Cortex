@@ -672,7 +672,7 @@ def benchmark_microglial_pruning() -> dict[str, float]:
             "weight": 0.02,
             "last_reinforced": "2026-03-10T12:00:00+00:00",
         },
-        # Stale: old
+        # Stale: old  # noqa: ERA001 -- fixture row label, not code
         {
             "id": 4,
             "source_entity_id": 6,
@@ -809,7 +809,7 @@ def benchmark_decay_with_emotional_resistance() -> dict[str, dict[str, float]]:
             "is_protected": False,
             "store_type": "episodic",
         },
-        # Protected (anchor)
+        # Protected (anchor)  # noqa: ERA001 -- fixture row label, not code
         {
             "id": 5,
             "heat": 0.9,

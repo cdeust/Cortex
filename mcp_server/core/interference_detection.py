@@ -68,7 +68,7 @@ _NEAR_DUPLICATE_SIMILARITY = 0.9
 _COLD_HEAT = 0.2
 
 # source: hand-tuned threshold documented at the use site
-# ("below 0.2 risk is negligible")
+# ("below 0.2 risk is negligible")  # noqa: ERA001 -- docstring citation, not code
 _NEGLIGIBLE_RISK = 0.2
 
 

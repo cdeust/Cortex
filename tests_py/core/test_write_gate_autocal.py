@@ -126,7 +126,7 @@ class TestObserveGateDecision:
         # All-accept for enough samples to pass min_samples and overcome
         # the tolerance band (EMA starts at 0.5, needs to rise above 0.65).
         # With decay 0.95, EMA after k accepts from 0.5 is:
-        #   EMA_k = 1 - 0.5 * 0.95^k
+        #   EMA_k = 1 - 0.5 * 0.95^k  # noqa: ERA001 -- math formula doc, not code
         # 0.65 exceeded when 0.95^k < 0.70 -> k >= 8.
         # But min_samples is 20, so we need at least 20 observations.
         for _ in range(50):

@@ -106,7 +106,7 @@ def _resolve_domain(event: dict[str, Any], profiles: dict) -> str:
 
 
 # source: session-length gates documented in _run_consolidation docstring
-# ("engineering heuristics — thresholds not paper-prescribed")
+# ("engineering heuristics — thresholds not paper-prescribed")  # noqa: ERA001
 _SHORT_SESSION_TURNS = 5
 _LONG_SESSION_TURNS = 20
 

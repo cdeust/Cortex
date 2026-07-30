@@ -207,7 +207,7 @@ def _format_claims_as_prose(claims: list[dict]) -> str:
 # provenance not recorded at introduction
 _TITLE_SENTENCE_SCAN_CHARS = 120
 # source: title cap documented in _derive_title docstring
-# ("Cap at 80 chars on word boundary")
+# ("Cap at 80 chars on word boundary")  # noqa: ERA001 -- docstring citation, not code
 _TITLE_MAX_CHARS = 80
 
 

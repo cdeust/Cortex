@@ -42,7 +42,7 @@ class TestTagsArrayEnvelope:
         result = validate_tool_args("remember", _args_with_tags([]))
         assert result["tags"] == []
 
-    # maxItems = 20
+    # maxItems = 20  # noqa: ERA001 -- schema-constant doc, not code
 
     def test_20_tags_passes(self):
         tags = [f"tag{i}" for i in range(20)]

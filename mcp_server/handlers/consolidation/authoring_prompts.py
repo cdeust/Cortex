@@ -433,7 +433,7 @@ def _parse_sectioned_response(response: str, gaps: list[str]) -> dict[str, str]:
         return out
     # Split on the delimiter line, preserve the slug.
     parts = re.split(r"^<<<([\w-]+)>>>\s*$", response, flags=re.MULTILINE)
-    # parts = [preamble, slug1, body1, slug2, body2, ...]
+    # parts = [preamble, slug1, body1, slug2, body2, ...]  # noqa: ERA001
     for i in range(1, len(parts), 2):
         slug = parts[i].strip()
         body = parts[i + 1].strip() if i + 1 < len(parts) else ""

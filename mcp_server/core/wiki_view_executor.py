@@ -138,11 +138,11 @@ def compiled_view_ok(compiled: "CompiledView") -> bool:
 # ── YAML-ish parser ──────────────────────────────────────────────────
 #
 # Same minimal style as the rest of Cortex (no PyYAML dep). Supports:
-#   key: value               # scalar
-#   key: [a, b, c]           # inline list
+#   key: value               # scalar  # noqa: ERA001 -- YAML-ish syntax doc, not code
+#   key: [a, b, c]           # inline list  # noqa: ERA001 -- syntax doc, not code
 #   key:                     # nested dict (one level only)
-#     inner_key: value
-#     inner_key2: value
+#     inner_key: value  # noqa: ERA001 -- YAML-ish syntax doc, not code
+#     inner_key2: value  # noqa: ERA001 -- YAML-ish syntax doc, not code
 
 # Keys are matched with a tight anchored pattern that cannot backtrack
 # quadratically: `[A-Za-z_][A-Za-z0-9_]*` on bounded input. For the

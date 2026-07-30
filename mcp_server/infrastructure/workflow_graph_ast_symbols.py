@@ -60,8 +60,8 @@ _SYMBOL_LABELS = (
 # DOES carry) so they still flow into the graph.
 _NON_QUALIFIED_LABELS = {"Import"}
 
-# source: "Cap at 10 tails to keep the WHERE clause tractable"
-# (comment in _symbol_batches_async._where_for_tails)
+# source: "Cap at 10 tails to keep the WHERE clause tractable"  # noqa: ERA001
+# (comment in _symbol_batches_async._where_for_tails)  # noqa: ERA001
 _MAX_WHERE_TAILS = 10
 
 

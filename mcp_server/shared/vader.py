@@ -28,7 +28,7 @@ _N_SCALAR = -0.74  # negation scalar (H4)
 # engineering text. Valence magnitudes follow VADER's scale convention.
 
 _LEXICON: dict[str, float] = {
-    # Negative [-4, -1]
+    # Negative [-4, -1]  # noqa: ERA001 -- section-header comment, not code
     "error": -2.0,
     "exception": -2.0,
     "traceback": -2.5,
@@ -63,7 +63,7 @@ _LEXICON: dict[str, float] = {
     "blocking": -2.0,
     "outage": -3.0,
     "hotfix": -1.5,
-    # Positive [+1, +4]
+    # Positive [+1, +4]  # noqa: ERA001 -- section-header comment, not code
     "fixed": 2.0,
     "resolved": 2.0,
     "working": 1.5,

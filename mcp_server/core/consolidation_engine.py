@@ -362,7 +362,7 @@ def summarize_action_group(
 
 
 # source: graduation conditions documented in the should_reclassify
-# docstring ("Accessed >= 5 times", ">= 3 related semantic memories");
+# docstring ("Accessed >= 5 times", ">= 3 related semantic memories");  # noqa: ERA001
 # tuning provenance not recorded
 _MIN_ACCESSES_FOR_SEMANTIC = 5
 _MIN_RELATED_SEMANTICS = 3

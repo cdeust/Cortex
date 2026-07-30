@@ -84,7 +84,7 @@ def _compress_memory(
         if target_level >= 1 and current_level == 0:
             # Preconditions:
             #   - mem["content"] is the original full text.
-            #   - current_level == 0.
+            #   - current_level == 0.  # noqa: ERA001 -- precondition doc, not code
             # Postconditions (if target_level == 1): memory written at level 1;
             #   exactly 1 encode() call.
             # Postconditions (if target_level >= 2): memory written at level 2;

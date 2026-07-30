@@ -139,8 +139,8 @@ def placeholder_count(body: str) -> int:
 # template synthesizers) that produced one file-doc per source file
 # with body shape:
 #
-#     # File: foo.py
-#     Language: python
+#     # File: foo.py  # noqa: ERA001 -- stub-shape doc, not code
+#     Language: python  # noqa: ERA001 -- stub-shape doc, not code
 #     Purpose: foo.py — one-liner.
 #     ## Imports
 #     - bar

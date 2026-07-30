@@ -307,8 +307,9 @@ class SqliteSearchMixin:
         no downstream ranking can demote a superseded or stale hit.
         """
         # NOTE: ``query`` here is an already-built FTS5 expression — callers
-        # (auto_recall._fts_query_from_prompt, recall_helpers.build_expanded_query)
-        # construct their own OR/AND term lists — so it must be passed through
+        # (auto_recall._fts_query_from_prompt,
+        # recall_helpers.build_expanded_query) construct their own OR/AND
+        # term lists — so it must be passed through
         # verbatim, NOT re-expanded (re-wrapping their operators would turn an OR
         # into a literal AND, issue #169 regression). Code-aware matching on this
         # path is carried entirely by index-time augmentation (augment_content),

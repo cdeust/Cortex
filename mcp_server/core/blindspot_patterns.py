@@ -17,7 +17,7 @@ _GLOBAL_EXPLORATION_NORM = 0.4  # global share making zero exploration a gap
 _MIN_GLOBAL_EXPLORATION = 0.2  # global floor for the below-average check
 _GLOBAL_DURATION_NORM = 0.3  # global share making a missing bucket a gap
 # source: session-length buckets documented in the count_duration_buckets
-# docstring ("short (<10 min) and long (>30 min)")
+# docstring ("short (<10 min) and long (>30 min)")  # noqa: ERA001
 _SHORT_SESSION_MINUTES = 10
 _LONG_SESSION_MINUTES = 30
 

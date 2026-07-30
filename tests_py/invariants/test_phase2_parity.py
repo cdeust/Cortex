@@ -73,8 +73,8 @@ pytestmark = [
 # ── Fixture: synthetic 100 memories × 51 entities with known truth ─────
 
 _FIXTURE_ENTITIES = [
-    # (name, type)
-    # case (a,d,e): canonical 4+ char names, mixed case
+    # (name, type)  # noqa: ERA001 -- fixture shape/case-label comment, not code
+    # case (a,d,e): canonical 4+ char names, mixed case  # noqa: ERA001
     ("Python", "language"),
     ("Postgres", "database"),
     ("pgvector", "extension"),
@@ -106,7 +106,7 @@ _FIXTURE_ENTITIES = [
     ("BEAM", "benchmark"),
     ("MemoryAgentBench", "benchmark"),
     ("EverMemBench", "benchmark"),
-    # case (b): "retroactive orphans" — valid entity names introduced
+    # case (b): "retroactive orphans" — valid entity names introduced  # noqa: ERA001
     # later; appear in older memories but no link at test-setup time
     # until synth_fill_join is called.
     ("retroactive", "concept"),

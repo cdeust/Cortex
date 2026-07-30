@@ -112,7 +112,7 @@ def test_hook_receipt_records_channel_session_and_ranks() -> None:
     )
     assert rid == 57
     ((_, params),) = conn.calls
-    # (session_id, channel, memory_ids, ranks, scores)
+    # (session_id, channel, memory_ids, ranks, scores)  # noqa: ERA001
     assert params == ("7374abf5-9c12", "session_start", [11, 7], [0, 1], [None, None])
 
 

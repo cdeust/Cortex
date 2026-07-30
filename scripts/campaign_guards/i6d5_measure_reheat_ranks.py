@@ -17,7 +17,7 @@ import psycopg
 from sentence_transformers import SentenceTransformer
 
 # 5 echantillons deliberes, choisis dans le journal du dry-run baseline
-# (docs/campaigns/i6d5_memory_reheat_dry-run_20260710T151019Z.json),
+# (docs/campaigns/i6d5_memory_reheat_dry-run_20260710T151019Z.json),  # noqa: ERA001
 # repartis sur toute la distribution eh_avant (min, p25, median, p75, max
 # parmi les 544 lignes reheated de la mesure de reference).
 SAMPLES = [

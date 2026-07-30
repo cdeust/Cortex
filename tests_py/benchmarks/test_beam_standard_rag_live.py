@@ -86,7 +86,7 @@ def test_standard_rag_issues_cosine_topk_query(patch_embedding) -> None:
     assert len(out) == 3
     assert out[0].memory_id == 1
     assert out[0].content == "memory body 1"
-    # cosine_sim = 1 - cosine_dist
+    # cosine_sim = 1 - cosine_dist  # noqa: ERA001 -- math identity doc, not code
     assert abs(out[0].cosine - 0.90) < 1e-6
 
     sql, params = db.conn._cursor.executed[0]

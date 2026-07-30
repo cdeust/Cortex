@@ -32,8 +32,9 @@ class TestMain:
 
     def test_main_registers_signal_handlers_and_runs(self):
         # Not mcp.run(transport="stdio"): main() drives stdio via
-        # run_stdio_drained (mcp_server/infrastructure/stdio_transport.py)
-        # instead, so that a request dispatched from the last line of a
+        # run_stdio_drained
+        # (mcp_server/infrastructure/stdio_transport.py) instead, so that
+        # a request dispatched from the last line of a
         # batch is drained before shutdown rather than losing its response
         # to stdin-EOF (see that module's docstring). anyio.run is what
         # main() calls now; assert THAT call, with the drained driver.
