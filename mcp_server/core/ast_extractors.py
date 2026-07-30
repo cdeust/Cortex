@@ -277,41 +277,54 @@ def extract_calls_per_function(
     qname means we can't attach edges to them.
     """
     out: dict[str, list[str]] = {}
-
-    def walk(node: Node, class_scope: str) -> None:
-        for child in node.children:
-            ntype = child.type
-            if ntype in _CLASS_NODE_TYPES:
-                name_node = child.child_by_field_name("name")
-                cls = _text(name_node, source) if name_node else class_scope
-                body = child.child_by_field_name("body") or child
-                walk(body, cls or class_scope)
-            elif ntype == "decorated_definition":
-                walk(child, class_scope)
-            elif ntype in _FUNCTION_NODE_TYPES:
-                name_node = child.child_by_field_name("name")
-                fn_name = _text(name_node, source) if name_node else ""
-                body = child.child_by_field_name("body") or child
-                if fn_name:
-                    qname = f"{class_scope}.{fn_name}" if class_scope else fn_name
-                    calls: list[str] = []
-                    seen: set[str] = set()
-                    for call_type in _CALL_NODE_TYPES:
-                        for call in _walk_type(body, call_type):
-                            base = _callee_basename(call, source)
-                            if (
-                                base
-                                and base not in seen
-                                and len(base) < _MAX_CALL_NAME_LEN
-                            ):
-                                calls.append(base)
-                                seen.add(base)
-                    out[qname] = calls
-                # Recurse into body for nested definitions (inner
-                # functions, closures that define named functions).
-                walk(body, class_scope)
-            else:
-                walk(child, class_scope)
-
-    walk(root, "")
+    _walk_for_calls(root, "", source, out)
     return out
+
+
+def _walk_for_calls(
+    node: Node,
+    class_scope: str,
+    source: bytes,
+    out: dict[str, list[str]],
+) -> None:
+    """Recurse through ``node``'s children, tracking the enclosing class.
+
+    Precondition: `out` is the accumulator `extract_calls_per_function`
+    returns; this function only adds keys, it does not read existing ones.
+    Postcondition: every named function/method reachable from `node` has
+    its qualified name mapped to its deduped callee-basename list in `out`.
+    """
+    for child in node.children:
+        ntype = child.type
+        if ntype in _CLASS_NODE_TYPES:
+            name_node = child.child_by_field_name("name")
+            cls = _text(name_node, source) if name_node else class_scope
+            body = child.child_by_field_name("body") or child
+            _walk_for_calls(body, cls or class_scope, source, out)
+        elif ntype == "decorated_definition":
+            _walk_for_calls(child, class_scope, source, out)
+        elif ntype in _FUNCTION_NODE_TYPES:
+            name_node = child.child_by_field_name("name")
+            fn_name = _text(name_node, source) if name_node else ""
+            body = child.child_by_field_name("body") or child
+            if fn_name:
+                qname = f"{class_scope}.{fn_name}" if class_scope else fn_name
+                out[qname] = _collect_call_basenames(body, source)
+            # Recurse into body for nested definitions (inner
+            # functions, closures that define named functions).
+            _walk_for_calls(body, class_scope, source, out)
+        else:
+            _walk_for_calls(child, class_scope, source, out)
+
+
+def _collect_call_basenames(body: Node, source: bytes) -> list[str]:
+    """Deduped, order-preserving callee basenames for every call under `body`."""
+    calls: list[str] = []
+    seen: set[str] = set()
+    for call_type in _CALL_NODE_TYPES:
+        for call in _walk_type(body, call_type):
+            base = _callee_basename(call, source)
+            if base and base not in seen and len(base) < _MAX_CALL_NAME_LEN:
+                calls.append(base)
+                seen.add(base)
+    return calls
