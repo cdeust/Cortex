@@ -152,7 +152,9 @@ project-specific rules:
   the 568-diagnostic ratchet backlog was burned to zero in issue #197
   (2026-07-28) and the ratchet retired. History:
   [`docs/provenance/pyright-remediation-plan.md`](docs/provenance/pyright-remediation-plan.md).
-- **§4.1 File ≤500 lines, §4.2 function ≤50 lines.**
+- **File ≤300 lines, function ≤40 lines** — this repo's local tightening of
+  coding-standards.md §4.1/§4.2 (≤500/≤50); see CLAUDE.md § Code Style for
+  the authoritative numbers (issue #276).
 
 The full standard lives in
 [zetetic coding standards](https://github.com/cdeust/zetetic-team-subagents/blob/main/rules/coding-standards.md).

@@ -72,8 +72,12 @@ separate **cortex-viz** MCP (reads this same store read-only).
 
 ## Code Style
 
-- 300 lines max per file; 40 lines max per method. Enforced by the
-  craftsmanship-checker pre-commit hook.
+- 300 lines max per file; 40 lines max per method — a local tightening of
+  coding-standards.md §4.1/§4.2 (≤500/≤50; CONTRIBUTING.md § Code Style
+  cites the same 300/40 numbers). Enforced by code review today; no
+  automated pre-commit hook checks this yet (issue #276 corrected the
+  prior claim of a "craftsmanship-checker" hook — none exists in
+  `.git/hooks/` or a `.pre-commit-config.yaml`).
 - Import rule: `core/` imports only `shared/` + stdlib; `infrastructure/`
   never imports core/handlers. Verify: `grep -rn "from mcp_server.infrastructure" mcp_server/core/`
   should return nothing for new code — 3 pre-existing violations in
