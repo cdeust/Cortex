@@ -43,6 +43,7 @@ except Exception as _preload_exc:  # noqa: BLE001 — failure is reported to std
         file=sys.stderr,
     )
 
+import anyio
 from fastmcp import FastMCP
 
 from mcp_server import (
@@ -64,6 +65,7 @@ from mcp_server.handlers._tool_meta import apply_param_docs
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.mcp_client_pool import close_all
 from mcp_server.infrastructure.otel_exporter import build_otel_exporter
+from mcp_server.infrastructure.stdio_transport import run_stdio_drained
 from mcp_server.infrastructure.upstream_availability import (
     codebase_upstream_available,
     prd_upstream_available,
@@ -192,7 +194,14 @@ def _shutdown(sig=None, frame=None) -> None:
 def main() -> None:
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
-    mcp.run(transport="stdio")
+    # NOT mcp.run(transport="stdio"): that delegates to FastMCP's
+    # run_stdio_async, which closes the write stream on stdin-EOF before an
+    # in-flight request's handler has had a chance to respond (see
+    # mcp_server/infrastructure/stdio_transport.py's module docstring for
+    # the exact upstream race + citations). run_stdio_drained is a drop-in
+    # replacement with the same banner/lifespan/init-options behavior that
+    # additionally drains in-flight handlers before shutdown.
+    anyio.run(run_stdio_drained, mcp)
 
 
 if __name__ == "__main__":

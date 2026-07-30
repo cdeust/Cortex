@@ -22,6 +22,18 @@ classifiers = [
 ]
 dependencies = [
     "fastmcp>=2.0.0",
+    # mcp_server/infrastructure/stdio_transport.py imports directly from the
+    # `mcp` SDK (mcp.server.lowlevel.server, mcp.server.stdio,
+    # mcp.shared.message) and from `anyio` (its stream ABCs) to work around
+    # an upstream stdio-transport race (see that module's docstring) —
+    # reaching one layer below fastmcp's own abstraction, which fastmcp
+    # itself depends on (`mcp>=...`, `anyio>=4.5`) but Cortex never declared
+    # directly. Same "transitive luck" failure mode python-dateutil below
+    # already documents: undeclared-but-relied-upon versions can drift
+    # freely since nothing pins them for OUR use. mcp>=1.29.0/anyio>=4.5
+    # match the uv.lock-pinned versions this was written and tested against.
+    "mcp>=1.29.0",
+    "anyio>=4.5",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "numpy>=1.24.0",

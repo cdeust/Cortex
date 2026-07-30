@@ -1302,8 +1302,10 @@ name = "hypermnesia-mcp"
 version = "4.16.0"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "fastmcp" },
     { name = "flashrank" },
+    { name = "mcp" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
@@ -1386,6 +1388,7 @@ typecheck = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.5" },
     { name = "cachetools", marker = "extra == 'viz-tile'", specifier = ">=5.0" },
     { name = "datasets", marker = "extra == 'benchmarks'", specifier = ">=2.14.0" },
     { name = "datashader", marker = "extra == 'viz-tile'", specifier = ">=0.16.3" },
@@ -1395,6 +1398,7 @@ requires-dist = [
     { name = "igraph", marker = "extra == 'codebase'", specifier = ">=0.11" },
     { name = "igraph", marker = "extra == 'viz-tile'", specifier = ">=0.11" },
     { name = "leidenalg", marker = "extra == 'codebase'", specifier = ">=0.10" },
+    { name = "mcp", specifier = ">=1.29.0" },
     { name = "networkx", marker = "extra == 'codebase'", specifier = ">=3.0" },
     { name = "networkx", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "numpy", specifier = ">=1.24.0" },

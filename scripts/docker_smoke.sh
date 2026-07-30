@@ -26,13 +26,18 @@
 
 set -euo pipefail
 
-# source: tests_py/test_main.py::TestMain::test_standalone_baseline_is_49_tools
-# — the 49 standalone tools registered with zero upstream MCP servers
-# reachable (codebase=False, prd=False), re-derived 2026-07-12 via a live
+# source: tests_py/test_main.py::TestMain::test_standalone_baseline_is_52_tools
+# — the 52 standalone tools registered with zero upstream MCP servers
+# reachable (codebase=False, prd=False): 49 re-derived 2026-07-12 via a live
 # `docker run` + `uv run hypermnesia-mcp` round-trip (fix/bare-container-
-# contract root-cause report). `>=` guards against future regression without
+# contract root-cause report), + `wiki_migrate` (FS→PG wiki parity), +
+# `check_setup` (issue #115), + `ingest_document` (issue #192). Boy-scout
+# fix 2026-07-30: this was still 49, citing a test name
+# (test_standalone_baseline_is_49_tools) that no longer exists — the gate's
+# floor was silently weaker than the true baseline for three tools' worth
+# of regression headroom. `>=` guards against future regression without
 # requiring an edit here every time a tool is added.
-MIN_TOOL_COUNT="${CORTEX_SMOKE_MIN_TOOLS:-49}"
+MIN_TOOL_COUNT="${CORTEX_SMOKE_MIN_TOOLS:-52}"
 IMAGE="${CORTEX_SMOKE_IMAGE:-cortex-smoke:local}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKIP_BUILD=0
@@ -85,22 +90,64 @@ echo "docker_smoke: running ${IMAGE} with zero env vars, sending initialize + to
 # form therefore passes locally on macOS and fails only on CI.
 STDERR_LOG="$(mktemp "${TMPDIR:-/tmp}/docker_smoke_stderr.XXXXXX")"
 PROTOCOL_ERRORS="$(mktemp "${TMPDIR:-/tmp}/docker_smoke_protocol_errors.XXXXXX")"
-trap 'rm -f "$STDERR_LOG" "$PROTOCOL_ERRORS"' EXIT
+RAW_OUTPUT_FILE="$(mktemp "${TMPDIR:-/tmp}/docker_smoke_stdout.XXXXXX")"
+# -u: name only, no file created — `docker run --cidfile` refuses to start
+# if its target path already exists (mktemp's normal behavior creates an
+# empty file, which would trip that check).
+CID_FILE="$(mktemp -u "${TMPDIR:-/tmp}/docker_smoke_cid.XXXXXX")"
+trap 'rm -f "$STDERR_LOG" "$PROTOCOL_ERRORS" "$RAW_OUTPUT_FILE" "$CID_FILE"' EXIT
 
-# Portable timeout: GNU coreutils `timeout` ships on ubuntu-latest (GitHub
-# Actions runner) but not on macOS by default (`gtimeout` from `brew install
-# coreutils` is the local-dev equivalent). Fall back to no timeout wrapper
-# rather than failing the script on a missing binary — docker itself is
-# bounded below by `docker run --rm -i` returning once the container exits
-# on stdin EOF, so an unbounded wait only risks hanging, not a false PASS.
+# source: 60s is not new here — it is the SAME budget this script already
+# used for its `timeout 60` / `gtimeout 60` wrapper before this change;
+# named once so the watchdog below (which replaces that wrapper — see the
+# measurement note) does not carry a second copy of the same literal.
+DOCKER_RUN_TIMEOUT_SECONDS=60
+
+# Portable timeout for the CLIENT side (image pull, auth, daemon
+# connection): GNU coreutils `timeout` ships on ubuntu-latest (GitHub
+# Actions runner) but not on macOS by default (`gtimeout` from `brew
+# install coreutils` is the local-dev equivalent). Falls back to no
+# CLIENT-side wrapper when neither exists — the watchdog below still
+# bounds the CONTAINER side either way (see the next comment).
 TIMEOUT_CMD=""
 if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="timeout 60"
+  TIMEOUT_CMD="timeout ${DOCKER_RUN_TIMEOUT_SECONDS}"
 elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="gtimeout 60"
+  TIMEOUT_CMD="gtimeout ${DOCKER_RUN_TIMEOUT_SECONDS}"
 fi
 
-RAW_OUTPUT="$(printf '%s' "$REQUESTS" | $TIMEOUT_CMD docker run --rm -i "$IMAGE" 2>"$STDERR_LOG" || true)"
+# `timeout`/`gtimeout` alone is NOT a sufficient bound for a hung
+# CONTAINER: measured 2026-07-30 against a deliberately hanging test image
+# (`ENTRYPOINT sh -c "sleep infinity"`) that `gtimeout 5 docker run --rm -i
+# <image>` did NOT return even ~30s past its 5s deadline, and the container
+# was still `docker ps`-visible afterward — `timeout`'s SIGTERM reaches the
+# `docker run` CLIENT process, but that process does not reliably forward
+# it to a CONTAINER blocked on unrelated work (this repo's Docker Desktop
+# 29.1.4; not re-verified against every Docker version). `docker kill
+# <container-id>` (via --cidfile) IS the mechanism measured to stop the
+# container immediately — the watchdog below does that, uniformly on every
+# platform, IN ADDITION to $TIMEOUT_CMD (which still helps bound a
+# CLIENT-side hang, e.g. before any container exists to `docker kill`).
+# This is a deadline (a worst-case bound on a single run), not a retry loop
+# — it fires at most once, only as a last-resort kill switch, and never
+# re-attempts the request.
+printf '%s' "$REQUESTS" | $TIMEOUT_CMD docker run --rm -i --cidfile="$CID_FILE" "$IMAGE" >"$RAW_OUTPUT_FILE" 2>"$STDERR_LOG" &
+DOCKER_RUN_PID=$!
+(
+  sleep "$DOCKER_RUN_TIMEOUT_SECONDS"
+  if [[ -f "$CID_FILE" ]]; then
+    docker kill "$(cat "$CID_FILE")" >/dev/null 2>&1 || true
+  else
+    # No container ever started (client-side hang) — fall back to signaling
+    # the client process directly.
+    kill "$DOCKER_RUN_PID" 2>/dev/null || true
+  fi
+) &
+WATCHDOG_PID=$!
+wait "$DOCKER_RUN_PID" 2>/dev/null || true
+kill "$WATCHDOG_PID" 2>/dev/null || true
+wait "$WATCHDOG_PID" 2>/dev/null || true
+RAW_OUTPUT="$(cat "$RAW_OUTPUT_FILE")"
 
 if [[ -z "$RAW_OUTPUT" ]]; then
   echo "docker_smoke: FAIL — empty stdout from container. stderr:" >&2

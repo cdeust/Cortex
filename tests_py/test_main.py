@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 from fastmcp import FastMCP
 
-from mcp_server.__main__ import main, _shutdown, mcp, register_all
+from mcp_server.__main__ import main, _shutdown, mcp, register_all, run_stdio_drained
 
 
 # The 3 upstream-integration tools, conditionally registered by upstream
@@ -31,9 +31,15 @@ class TestMain:
         assert callable(main)
 
     def test_main_registers_signal_handlers_and_runs(self):
+        # Not mcp.run(transport="stdio"): main() drives stdio via
+        # run_stdio_drained (mcp_server/infrastructure/stdio_transport.py)
+        # instead, so that a request dispatched from the last line of a
+        # batch is drained before shutdown rather than losing its response
+        # to stdin-EOF (see that module's docstring). anyio.run is what
+        # main() calls now; assert THAT call, with the drained driver.
         with (
             patch("mcp_server.__main__.signal.signal") as mock_signal,
-            patch.object(mcp, "run", side_effect=None) as mock_run,
+            patch("mcp_server.__main__.anyio.run") as mock_anyio_run,
         ):
             main()
 
@@ -43,8 +49,9 @@ class TestMain:
             assert signal.SIGTERM in sig_nums
             assert signal.SIGINT in sig_nums
 
-            # Should call mcp.run with stdio transport
-            mock_run.assert_called_once_with(transport="stdio")
+            # Should drive stdio via the drain-safe wrapper, not
+            # mcp.run(transport="stdio") directly.
+            mock_anyio_run.assert_called_once_with(run_stdio_drained, mcp)
 
     def test_standalone_baseline_is_52_tools(self):
         """With no upstream available, exactly the 52 standalone tools register.
