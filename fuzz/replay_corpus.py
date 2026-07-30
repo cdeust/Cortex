@@ -68,6 +68,15 @@ def harness_consume(harness: "Harness") -> Callable[[bytes], None]:
     """Import the harness and hand back its single-iteration entry point."""
     module_path = harness_module_path(harness)
     spec = importlib.util.spec_from_file_location(harness.name, module_path)
+    # Defensive guard, structurally unreachable for this call site: module_path
+    # always ends in ".py", and spec_from_file_location always attaches a
+    # SourceFileLoader for that suffix (verified empirically: it only returns
+    # spec=None for an unrecognized extension, never spec-with-loader=None for
+    # a .py path, existing or not). mutmut's `or`->`and` mutant (mutmut_8) and
+    # its RuntimeError(None) mutant (mutmut_11) both survive because no
+    # reachable input can enter this branch -- documented equivalent per
+    # issue #282's mutation-testing sweep rather than chased with a contrived
+    # test that fakes an unsupported loader.
     if spec is None or spec.loader is None:
         raise RuntimeError(f"{module_path}: not importable")
     module = importlib.util.module_from_spec(spec)
