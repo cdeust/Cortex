@@ -44,6 +44,26 @@ _dcs_spec = importlib.util.spec_from_file_location(
 doc_claim_structural = importlib.util.module_from_spec(_dcs_spec)
 _dcs_spec.loader.exec_module(doc_claim_structural)
 
+# Same defect, same fix, for scripts/doc_claim_sources.py (issue #235): its
+# four canonical-source readers are the exact functions #235's originating
+# mutation run found 23 of its 25 survivors in (canonical_reference_count,
+# canonical_tool_counts, canonical_version, canonical_mechanism_count — `read`
+# itself stayed behind in check_doc_claims.py, correctly attributed already).
+# A scoped mutmut run after #294's split reported every one of these as "no
+# tests" rather than "survived" — that is this same bare-import __module__
+# mismatch (issue #292), not evidence the 25 gaps were closed: check_
+# doc_claims.py's own bare `import doc_claim_sources` gives every function in
+# it `__module__ == "doc_claim_sources"`, which mutmut's trampoline never
+# matches, so no test — however thorough — could have activated a single one
+# of its mutants through that copy. CanonicalSourceDirectTests below calls
+# through THIS dotted-loaded reference instead, so a mutant here is actually
+# exercised and can actually be killed.
+_dcso_spec = importlib.util.spec_from_file_location(
+    "scripts.doc_claim_sources", _SCRIPTS / "doc_claim_sources.py"
+)
+doc_claim_sources = importlib.util.module_from_spec(_dcso_spec)
+_dcso_spec.loader.exec_module(doc_claim_sources)
+
 
 CATALOGUE = (
     "52 standalone tools register unconditionally; 3 more register only when an\n"
@@ -152,6 +172,186 @@ class CanonicalSourceTests(unittest.TestCase):
             **{"pyproject.toml": '[project]\nname = "x"\nversion = "4.16.0"\n'}
         )
         self.assertEqual(gate.canonical_version(), "4.16.0")
+
+
+class CanonicalSourceDirectTests(unittest.TestCase):
+    """Direct tests of scripts/doc_claim_sources.py (issue #235).
+
+    CanonicalSourceTests above exercises these same functions, but only
+    through `gate.canonical_tool_counts()` et al. — real behavioural
+    coverage, zero mutation coverage. check_doc_claims.py reaches
+    doc_claim_sources.py through a bare `import doc_claim_sources`, which
+    gives every function in it `__module__ == "doc_claim_sources"` —
+    never the dotted `"scripts.doc_claim_sources"` mutmut's trampoline
+    expects (see the module-level dotted-load comment above) — so a
+    scoped mutmut run after #294's split reported every one of these
+    functions' mutants as "no tests" rather than "survived". That is the
+    same attribution defect #292 tracks for this file, not evidence that
+    #235's originating 25 survivors were closed: an uncalled trampoline
+    cannot report a kill either way. These tests call through the
+    dotted-loaded `doc_claim_sources` reference with an explicit
+    `read_fn` (the functions already take one — no `gate.read`
+    monkeypatch needed), so a mutant here is actually reachable.
+
+    Re-running the scoped mutation check after adding these surfaced the
+    same class of gap #235's original table named: several branches
+    (missing-sentence, arithmetic-mismatch, missing-pinned-test,
+    missing-section, no-entries, undeclared-mechanism-count,
+    missing-version) had no assertion on their exact error message, so a
+    mutant that corrupted the message while keeping `assertIn`'s matched
+    substring intact still passed. Each below now asserts the message
+    verbatim.
+    """
+
+    def test_tool_counts_come_from_the_catalogue(self):
+        read_fn = _FakeRepo(
+            **{"docs/mcp-tools.md": CATALOGUE, "tests_py/test_main.py": PINNED_TEST}
+        ).read
+        self.assertEqual(doc_claim_sources.canonical_tool_counts(read_fn), (52, 55))
+
+    def test_missing_standalone_total_sentence_is_an_error(self):
+        """No header sentence at all is a different failure than a wrong
+        number in it — the message must name the file and what was expected.
+        """
+        read_fn = _FakeRepo(
+            **{
+                "docs/mcp-tools.md": "No counts stated here.\n",
+                "tests_py/test_main.py": PINNED_TEST,
+            }
+        ).read
+        with self.assertRaises(doc_claim_sources.ClaimError) as caught:
+            doc_claim_sources.canonical_tool_counts(read_fn)
+        self.assertEqual(
+            str(caught.exception),
+            "docs/mcp-tools.md: standalone/total tool sentence not found",
+        )
+
+    def test_catalogue_drifting_from_the_pinned_registry_test_is_an_error(self):
+        drifted = CATALOGUE.replace("52 standalone", "50 standalone").replace(
+            "(55 total", "(53 total"
+        )
+        read_fn = _FakeRepo(
+            **{"docs/mcp-tools.md": drifted, "tests_py/test_main.py": PINNED_TEST}
+        ).read
+        with self.assertRaises(doc_claim_sources.ClaimError) as caught:
+            doc_claim_sources.canonical_tool_counts(read_fn)
+        self.assertIn("pinned registry test", str(caught.exception))
+
+    def test_inconsistent_arithmetic_in_the_catalogue_is_an_error(self):
+        broken = CATALOGUE.replace("(55 total", "(56 total")
+        read_fn = _FakeRepo(
+            **{"docs/mcp-tools.md": broken, "tests_py/test_main.py": PINNED_TEST}
+        ).read
+        with self.assertRaises(doc_claim_sources.ClaimError) as caught:
+            doc_claim_sources.canonical_tool_counts(read_fn)
+        self.assertEqual(str(caught.exception), "docs/mcp-tools.md: 52 + 3 != 56")
+
+    def test_missing_pinned_registry_test_is_an_error(self):
+        """Distinct from the drift case above: here the pinned test itself
+        is gone (renamed, deleted), not merely disagreeing with the catalogue.
+        """
+        read_fn = _FakeRepo(
+            **{
+                "docs/mcp-tools.md": CATALOGUE,
+                "tests_py/test_main.py": "def test_something_else(self):\n",
+            }
+        ).read
+        with self.assertRaises(doc_claim_sources.ClaimError) as caught:
+            doc_claim_sources.canonical_tool_counts(read_fn)
+        self.assertEqual(
+            str(caught.exception),
+            "tests_py/test_main.py: pinned tool-count test not found",
+        )
+
+    def test_reference_count_is_the_number_of_entries_not_the_advertised_number(self):
+        read_fn = _FakeRepo(**{"docs/papers/bibliography.md": BIBLIOGRAPHY}).read
+        self.assertEqual(doc_claim_sources.canonical_reference_count(read_fn), 2)
+
+    def test_reference_entries_exclude_headings_and_separators(self):
+        read_fn = _FakeRepo(
+            **{
+                "docs/papers/bibliography.md": (
+                    "36 mechanisms.\n\n## References\n\n"
+                    "### Neuroscience\n\n---\n\n"
+                    "Author, A. (2001). One.\n\nAuthor, B. (2002). Two.\n"
+                )
+            }
+        ).read
+        self.assertEqual(doc_claim_sources.canonical_reference_count(read_fn), 2)
+
+    def test_the_first_references_heading_is_the_split_point(self):
+        """`split(..., 1)` on the FIRST occurrence, not `rsplit` on the last.
+
+        A doubled "## References" heading (a copy-paste mistake, or a nested
+        subsection literally named that) must not silently move which text
+        counts as entries: everything after the first heading is the
+        section, including a second stray heading line (excluded by the `#`
+        filter, same as any other heading) and the entries that follow it.
+        """
+        read_fn = _FakeRepo(
+            **{
+                "docs/papers/bibliography.md": (
+                    "36 mechanisms.\n\n## References\n\n"
+                    "Author, A. (2001). One.\n\n## References\n\n"
+                    "Author, B. (2002). Two.\n"
+                )
+            }
+        ).read
+        self.assertEqual(doc_claim_sources.canonical_reference_count(read_fn), 2)
+
+    def test_bibliography_without_a_references_section_is_an_error(self):
+        read_fn = _FakeRepo(**{"docs/papers/bibliography.md": "# Bibliography\n"}).read
+        with self.assertRaises(doc_claim_sources.ClaimError) as caught:
+            doc_claim_sources.canonical_reference_count(read_fn)
+        self.assertEqual(
+            str(caught.exception),
+            "docs/papers/bibliography.md: '## References' section not found",
+        )
+
+    def test_a_references_section_with_no_entries_is_an_error(self):
+        """A heading with nothing under it — only furniture, no citations."""
+        read_fn = _FakeRepo(
+            **{
+                "docs/papers/bibliography.md": (
+                    "36 mechanisms.\n\n## References\n\n### Neuroscience\n\n---\n"
+                )
+            }
+        ).read
+        with self.assertRaises(doc_claim_sources.ClaimError) as caught:
+            doc_claim_sources.canonical_reference_count(read_fn)
+        self.assertEqual(
+            str(caught.exception),
+            "docs/papers/bibliography.md: no reference entries found",
+        )
+
+    def test_mechanism_count_is_read_from_the_bibliography_header(self):
+        read_fn = _FakeRepo(**{"docs/papers/bibliography.md": BIBLIOGRAPHY}).read
+        self.assertEqual(doc_claim_sources.canonical_mechanism_count(read_fn), 36)
+
+    def test_undeclared_mechanism_count_is_an_error(self):
+        read_fn = _FakeRepo(
+            **{"docs/papers/bibliography.md": "# B\n\n## References\n\nA. (1)\n"}
+        ).read
+        with self.assertRaises(doc_claim_sources.ClaimError) as caught:
+            doc_claim_sources.canonical_mechanism_count(read_fn)
+        self.assertEqual(
+            str(caught.exception),
+            "docs/papers/bibliography.md: no mechanism count declared",
+        )
+
+    def test_version_comes_from_pyproject(self):
+        read_fn = _FakeRepo(
+            **{"pyproject.toml": '[project]\nname = "x"\nversion = "4.16.0"\n'}
+        ).read
+        self.assertEqual(doc_claim_sources.canonical_version(read_fn), "4.16.0")
+
+    def test_missing_version_declaration_is_an_error(self):
+        read_fn = _FakeRepo(**{"pyproject.toml": '[project]\nname = "x"\n'}).read
+        with self.assertRaises(doc_claim_sources.ClaimError) as caught:
+            doc_claim_sources.canonical_version(read_fn)
+        self.assertEqual(
+            str(caught.exception), "pyproject.toml: [project].version not found"
+        )
 
 
 class ScanTests(unittest.TestCase):
