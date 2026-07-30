@@ -504,7 +504,12 @@ only_mutate = ["mcp_server/shared/json_native.py"]
 # uv.lock/requirements/pyproject.toml: scripts/generate_pip_constraints.py and
 # its test read these directly (uv.lock registries, requirements/*.txt,
 # pyproject.toml's [[tool.uv.index]] entries) — issue #262.
+# .github: tests_py/scripts/test_typecheck_env_parity.py reads
+# .github/workflows/ci.yml directly; without it, a scoped run that selects
+# that test fails collection under every mutant with FileNotFoundError
+# instead of scoring the suite — issue #262.
 also_copy = [
+    ".github",
     "tests_py",
     "deps",
     "docs",
