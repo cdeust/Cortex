@@ -1,6 +1,6 @@
 """Badge field specifications for scripts/generate_repo_badges.py.
 
-Extracted (issue #287, Extract Function/Move Function) to keep
+Extracted (issue #293, Extract Function/Move Function) to keep
 generate_repo_badges.py under the repo's 300-line file cap. Returns plain
 field dicts rather than `RepoBadge` instances: `RepoBadge` is a
 `@dataclass`-decorated class whose owning module matters to mutmut (see its

@@ -20,7 +20,7 @@ tool counts          ``docs/mcp-tools.md`` header, itself pinned to the live
 reference count      entries counted in ``docs/papers/bibliography.md``
 mechanism count      the count declared in that bibliography's header
 version              ``[project].version`` in ``pyproject.toml``
-test count           ``assets/badge-tests.svg`` alone (issue #287) — the
+test count           ``assets/badge-tests.svg`` alone (issue #293) — the
                      one artifact that still states an absolute figure. No
                      prose file (nor ``.bestpractices.json``) states this
                      count any more: a PR that adds tests would otherwise
@@ -54,7 +54,7 @@ Usage::
 Split across scripts/doc_claim_sources.py (canonical readers),
 scripts/doc_claim_scan.py (claim scanning/comparison) and
 scripts/doc_claim_structural.py (badge + structural-integrity checks) —
-issue #287, Extract Function/Move Function — to stay under the repo's
+issue #293, Extract Function/Move Function — to stay under the repo's
 300-line file cap (CLAUDE.md, Code Style); this module is the thin
 orchestrator each of those forwards through, and the only place ``read``/
 ``SCANNED_FILES`` are defined (tests patch them here; see each sibling
@@ -112,7 +112,7 @@ MECHANISM_CLAIM = re.compile(
     r"\s*mechanisms\b"
 )
 # Both the "N tests" and the "N-test suite" phrasings state the count. No
-# scanned file states this claim in prose any more (issue #287 — see the
+# scanned file states this claim in prose any more (issue #293 — see the
 # module docstring's "test count" row); the pattern stays defined because
 # it is still the generic worked example scan_claims/check_counts's own
 # tests exercise, and tests_py/scripts/test_check_doc_claims.py asserts its
@@ -123,6 +123,14 @@ TEST_CLAIM = re.compile(r"(\d+)(?:\s+tests|-test suite)\b")
 
 
 def read(relative_path: str) -> str:
+    # encoding="utf-8" is pinned explicitly, never the platform default:
+    # every scanned Markdown file uses non-ASCII prose (em dashes, arrows),
+    # and a locale-dependent default can mis-decode them on a non-UTF-8-
+    # default platform (Windows is in this project's own CI matrix) — see
+    # test_read_pins_utf8. "UTF-8" (verbatim uppercase) is a documented-
+    # equivalent spelling: codecs.lookup is case-insensitive (CPython
+    # Lib/encodings/aliases.py normalizes via .lower()), so it is the SAME
+    # codec, not a different one a wrong-encoding bug could reach.
     return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
 
@@ -206,7 +214,7 @@ def collect_failures(test_count: int | None) -> list[str]:
     failures += check_no_conflict_markers()
     failures += check_scanned_json_parses()
     if test_count is not None:
-        # The tests badge is the ONLY test-count claim left (issue #287);
+        # The tests badge is the ONLY test-count claim left (issue #293);
         # see check_badge_floor's docstring for why it is a floor, not an
         # exact match.
         failures += doc_claim_structural.check_badge_floor(

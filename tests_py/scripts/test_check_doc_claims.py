@@ -12,17 +12,37 @@ from __future__ import annotations
 import importlib.util
 import unittest
 from pathlib import Path
+from unittest import mock
 
 # The module name must be the dotted path mutmut derives from the file's
 # location: it keys its mutant trampolines on "scripts.check_doc_claims.*",
 # and a bare "check_doc_claims" makes every mutant look unreached, so the
 # scoped mutation run stops early instead of scoring the suite.
+_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 _spec = importlib.util.spec_from_file_location(
-    "scripts.check_doc_claims",
-    Path(__file__).resolve().parents[2] / "scripts" / "check_doc_claims.py",
+    "scripts.check_doc_claims", _SCRIPTS / "check_doc_claims.py"
 )
 gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gate)
+
+# Loaded again under its OWN dotted name ("scripts.doc_claim_structural"),
+# separately from check_doc_claims.py's internal bare `import
+# doc_claim_structural`: a function's `__module__` is set to whatever name
+# it was defined under, and mutmut's trampoline only activates a mutant
+# when that matches the dotted, path-derived name it generated the mutant
+# under (`mutmut/mutation/trampoline.py`, `module != decorated_func.
+# __module__`). Bare-imported (as check_doc_claims.py's own copy is),
+# every function in this file carries `__module__ == "doc_claim_structural"`
+# — never equal to "scripts.doc_claim_structural.<name>", so every one of
+# its mutants showed "no tests" under a scoped run (issue #293), the exact
+# defect class documented for `badge_render` in test_generate_repo_badges.py
+# and now reproduced (and fixed the same way) for this sibling module.
+# check_badge_floor's own direct tests below call through THIS reference.
+_dcs_spec = importlib.util.spec_from_file_location(
+    "scripts.doc_claim_structural", _SCRIPTS / "doc_claim_structural.py"
+)
+doc_claim_structural = importlib.util.module_from_spec(_dcs_spec)
+_dcs_spec.loader.exec_module(doc_claim_structural)
 
 
 CATALOGUE = (
@@ -340,7 +360,7 @@ class CollectFailuresTests(unittest.TestCase):
     repository that is deliberately stale, one family at a time.
     """
 
-    # No test-count sentence: issue #287 removed that claim from prose
+    # No test-count sentence: issue #293 removed that claim from prose
     # entirely (only assets/badge-tests.svg — a monotone floor, checked
     # below — still states one), so there is nothing left here for the
     # "tests" family among the other four to disagree on.
@@ -386,7 +406,7 @@ class CollectFailuresTests(unittest.TestCase):
     def test_each_family_reports_its_own_stale_claim(self):
         """One stale number per family, checked by the message it produces.
 
-        "tests" is not one of these families any more (issue #287): it has
+        "tests" is not one of these families any more (issue #293): it has
         no prose claim to go stale in DOC.md. Its own family is exercised
         below, against the badge, which is the one place left that states
         a number.
@@ -413,7 +433,7 @@ class CollectFailuresTests(unittest.TestCase):
         )
 
     def test_an_under_claiming_test_badge_is_not_reported(self):
-        """The floor invariant this whole family exists for (issue #287):
+        """The floor invariant this whole family exists for (issue #293):
         a badge that lags behind the live count is stale, not false, so a
         PR that only adds tests never has to touch it to stay green — this
         is what makes two such PRs stop conflicting on it.
@@ -468,6 +488,76 @@ class CollectFailuresTests(unittest.TestCase):
         self.assertEqual(gate.collect_failures(test_count=None), [])
 
 
+class CheckBadgeFloorDirectTests(unittest.TestCase):
+    """Direct tests of doc_claim_structural.check_badge_floor.
+
+    CollectFailuresTests exercises it only through gate.collect_failures's
+    bare-imported copy — real behavioural coverage, but NOT mutation
+    coverage: mutmut's trampoline only activates a mutant when the calling
+    module name matches (see the dotted-load comment above), so these call
+    through the dotted `doc_claim_structural` reference instead.
+    """
+
+    PATTERN = doc_claim_structural.TESTS_BADGE
+
+    def test_missing_file_fails_closed(self):
+        read_fn = _FakeRepo().read
+        failures = doc_claim_structural.check_badge_floor(
+            "assets/badge-tests.svg", self.PATTERN, 10, "tests", read_fn
+        )
+        self.assertEqual(len(failures), 1)
+        self.assertIn("missing", failures[0])
+
+    def test_no_title_match_fails_closed(self):
+        read_fn = _FakeRepo(**{"assets/badge-tests.svg": "<svg></svg>"}).read
+        failures = doc_claim_structural.check_badge_floor(
+            "assets/badge-tests.svg", self.PATTERN, 10, "tests", read_fn
+        )
+        # Exact match, not just assertIn on the prefix: mutation testing
+        # found a mutant that only altered the trailing "this gate have
+        # diverged" clause and survived a prefix-only assertion (issue #293).
+        self.assertEqual(
+            failures,
+            [
+                "assets/badge-tests.svg: no tests figure in its <title>;"
+                " the badge and this gate have diverged"
+            ],
+        )
+
+    def test_an_over_claim_is_reported(self):
+        read_fn = _FakeRepo(
+            **{"assets/badge-tests.svg": "<title>11 tests passing</title>"}
+        ).read
+        failures = doc_claim_structural.check_badge_floor(
+            "assets/badge-tests.svg", self.PATTERN, 10, "tests", read_fn
+        )
+        self.assertEqual(len(failures), 1)
+        self.assertIn("11", failures[0])
+        self.assertIn("exceeds", failures[0])
+
+    def test_an_under_claim_is_not_reported(self):
+        read_fn = _FakeRepo(
+            **{"assets/badge-tests.svg": "<title>9 tests passing</title>"}
+        ).read
+        self.assertEqual(
+            doc_claim_structural.check_badge_floor(
+                "assets/badge-tests.svg", self.PATTERN, 10, "tests", read_fn
+            ),
+            [],
+        )
+
+    def test_an_exact_match_is_not_reported(self):
+        read_fn = _FakeRepo(
+            **{"assets/badge-tests.svg": "<title>10 tests passing</title>"}
+        ).read
+        self.assertEqual(
+            doc_claim_structural.check_badge_floor(
+                "assets/badge-tests.svg", self.PATTERN, 10, "tests", read_fn
+            ),
+            [],
+        )
+
+
 class RepositoryTests(unittest.TestCase):
     """The gate must pass on the tree it ships with — this is the gate itself."""
 
@@ -494,7 +584,7 @@ class RepositoryTests(unittest.TestCase):
         )
 
     def test_no_prose_file_states_the_suite_size_any_more(self):
-        """The regression guard for issue #287's root-cause fix.
+        """The regression guard for issue #293's root-cause fix.
 
         Before: six files hand-carried the same exact test count, and any
         two PRs that each added tests conflicted on all of them by
@@ -512,6 +602,17 @@ class RepositoryTests(unittest.TestCase):
         [not-a-count-claim] handling, not by this assertion.
         """
         self.assertEqual(gate.scan_claims(gate.TEST_CLAIM, "tests"), [])
+
+    def test_read_pins_utf8(self):
+        """A locale-dependent default would misread the em dashes and
+        arrows every scanned Markdown file's prose carries (mutation-testing
+        found this — a mutant dropping encoding="utf-8" survived every
+        other assertion, issue #293)."""
+        with mock.patch.object(
+            Path, "read_text", autospec=True, side_effect=Path.read_text
+        ) as read_spy:
+            gate.read("README.md")
+        self.assertEqual(read_spy.call_args.kwargs.get("encoding"), "utf-8")
 
 
 class StructuralIntegrityTests(unittest.TestCase):

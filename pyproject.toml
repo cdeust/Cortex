@@ -523,7 +523,7 @@ only_mutate = ["mcp_server/shared/json_native.py"]
 # without this a scoped run that includes check_doc_claims.py/
 # generate_repo_badges.py fails EVERY mutant on "assets/badge-version.svg:
 # missing" before it can score a single one — reproduced empirically
-# (issue #287) attempting exactly that run.
+# (issue #293) attempting exactly that run.
 also_copy = [
     ".github",
     "tests_py",

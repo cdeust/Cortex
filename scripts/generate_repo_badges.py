@@ -60,7 +60,7 @@ import repo_badge_catalog  # noqa: E402
 # Only the label/message palette repo_badge_svg() itself renders with, plus
 # _HEALTHY (tests_py/scripts/test_generate_repo_badges.py reads
 # gen._HEALTHY), are re-exported here; _NEUTRAL/_CORPUS are used only by
-# repo_badge_catalog.fixed_badge_specs, which owns them (issue #287 split —
+# repo_badge_catalog.fixed_badge_specs, which owns them (issue #293 split —
 # see that module's docstring for why it returns field dicts, not
 # RepoBadge instances, and never imports this class).
 from repo_badge_catalog import _HEALTHY as _HEALTHY  # noqa: E402  (re-export)
@@ -153,7 +153,7 @@ def build_badges(test_count: int | None) -> list[RepoBadge]:
     The canonical readers are check_doc_claims's own, not reimplementations:
     a badge that disagreed with the gate would be the exact drift this file
     exists to prevent. The field data itself lives in repo_badge_catalog.py
-    (issue #287 split, §4: the 300-line file cap) — this function's own job
+    (issue #293 split, §4: the 300-line file cap) — this function's own job
     is only to resolve the canonical values and construct `RepoBadge`
     instances from the returned specs.
     """
@@ -203,19 +203,23 @@ def stale(badge: RepoBadge) -> str | None:
 
 
 def stale_tests_badge(test_count: int) -> str | None:
-    """A monotone floor, not an exact snapshot (issue #287, §6): two
-    branches adding tests compute two different, both-true live counts for
-    the same post-merge tree, so an exact match is how any two such PRs
+    """A monotone floor, not an exact snapshot (issue #293, §6): two
+    branches adding tests compute different, both-true live counts for the
+    same post-merge tree, so an exact match is how any two such PRs
     conflicted on this file, and how main's gate flapped red on a merge
-    that only grew the count. Lagging behind `test_count` is not reported;
-    only an OVER-claim is. `stale()` still checks everything else exactly.
-    See doc_claim_structural.check_badge_floor for the same invariant.
+    that only grew the count. Lagging is not reported; only an OVER-claim
+    is. `stale()` still checks everything else exactly — see
+    doc_claim_structural.check_badge_floor for the same invariant.
     """
-    badge = RepoBadge(**repo_badge_catalog.tests_badge_spec(test_count))
-    path = repo_badge_path(badge)
+    # Filename is constant regardless of test_count; resolved directly (not
+    # via a throwaway RepoBadge) to remove an inert mutant class outright.
+    path = ASSETS_DIR / repo_badge_catalog.TESTS_BADGE_FILENAME
     target = REPO_ROOT / path
     if not target.exists():
         return f"{path}: missing — run scripts/generate_repo_badges.py"
+    # utf-8 pinned explicitly (provenance comments contain an em dash; see
+    # test_stale_tests_badge_pins_utf8_on_read); "UTF-8" is an equivalent
+    # spelling (codecs.lookup is case-insensitive), not a distinct mutant.
     match = doc_claim_structural.TESTS_BADGE.search(target.read_text(encoding="utf-8"))
     if match is None:
         return f"{path}: no test-count figure in its <title>; diverged from this gate"
@@ -265,9 +269,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.check:
-        # The tests badge is checked by stale_tests_badge (a monotone floor,
-        # not an exact match — see its docstring); every other badge keeps
-        # the plain, exact-match stale() unchanged.
+        # stale_tests_badge (a floor, not exact — see its docstring) checks
+        # the tests badge; every other badge keeps the plain stale() below.
         failures = [
             reason
             for badge in badges

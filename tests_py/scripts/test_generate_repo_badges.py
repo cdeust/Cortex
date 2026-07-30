@@ -311,7 +311,7 @@ class CheckModeTests(_CanonicalSourceTestCase):
         self.assertEqual(gen.main(["--check", "--test-count", "42"]), 2)
 
     def test_an_under_claiming_tests_badge_passes_check(self):
-        """The floor invariant (issue #287): a badge committed for a lower,
+        """The floor invariant (issue #293): a badge committed for a lower,
         earlier count stays green once the live count only grows — the
         property that lets a PR add tests without touching this file."""
         gen.main(["--test-count", "42"])
@@ -326,7 +326,7 @@ class StaleTestsBadgeTests(_CanonicalSourceTestCase):
     """Direct tests of stale_tests_badge — the floor check itself.
 
     CheckModeTests exercises it only through main(); these pin every one of
-    its branches for mutation coverage (issue #287).
+    its branches for mutation coverage (issue #293).
     """
 
     def setUp(self):
@@ -371,6 +371,24 @@ class StaleTestsBadgeTests(_CanonicalSourceTestCase):
         target = self._root / "assets" / "badge-tests.svg"
         target.write_text(target.read_text().replace("tests", "TESTS", 1))
         self.assertIsNotNone(gen.stale_tests_badge(42))
+
+    def test_stale_tests_badge_pins_utf8_on_read(self):
+        """A locale-dependent default would misread the em dash every
+        committed badge's provenance comment carries (mutation-testing
+        found this — a mutant dropping encoding="utf-8" here survived
+        every other assertion, issue #293). Checks EVERY read_text call,
+        not just the last: an exact match falls through to stale()'s own
+        (separate, unmutated) read_text call, which would otherwise mask
+        a dropped encoding in stale_tests_badge's own call — mutation
+        testing caught that gap too."""
+        self._commit(42)
+        with mock.patch.object(
+            Path, "read_text", autospec=True, side_effect=Path.read_text
+        ) as read_spy:
+            gen.stale_tests_badge(42)
+        self.assertTrue(read_spy.call_args_list)
+        for call in read_spy.call_args_list:
+            self.assertEqual(call.kwargs.get("encoding"), "utf-8")
 
 
 class WriteAndStaleTests(unittest.TestCase):

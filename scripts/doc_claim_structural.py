@@ -1,6 +1,6 @@
 """Badge and structural-integrity checks for scripts/check_doc_claims.py.
 
-Extracted (issue #287, Extract Function/Move Function) to keep
+Extracted (issue #293, Extract Function/Move Function) to keep
 check_doc_claims.py under the repo's 300-line file cap. Two concerns live
 here because both fail CLOSED on a file the gate cannot read or parse: badge
 freshness (does a committed SVG's own figure agree with the canonical one)

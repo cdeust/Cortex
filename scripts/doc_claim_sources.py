@@ -1,6 +1,6 @@
 """Canonical truth-readers for scripts/check_doc_claims.py.
 
-Extracted (issue #287, Extract Function/Move Function) so check_doc_claims.py
+Extracted (issue #293, Extract Function/Move Function) so check_doc_claims.py
 stays under the repo's 300-line file cap (CLAUDE.md, Code Style) — it had
 already crossed it (420 lines) before this change added the floor-check
 machinery check_doc_claims.py needed.

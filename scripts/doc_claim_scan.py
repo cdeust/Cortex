@@ -1,6 +1,6 @@
 """Claim-scanning machinery for scripts/check_doc_claims.py.
 
-Extracted (issue #287, Extract Function/Move Function) to keep
+Extracted (issue #293, Extract Function/Move Function) to keep
 check_doc_claims.py under the repo's 300-line file cap. Answers "does a
 scanned file's prose claim (a count, phrased as 'N things') agree with a
 canonical number" and "which lines have declared they are not a claim."
