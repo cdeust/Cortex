@@ -1055,11 +1055,11 @@ For retrieval evaluation (BEAM benchmark), steps 7-8 are bypassed:
 the metric is the rank of the gold memory within the
 `selected_memories` list produced by step 6.
 
-### 3.4 Active Retrieval (Query Reformulation)
+### 3.4 Active Retrieval (Considered, Not Adopted)
 
-Following MIRIX (Wang & Chen, 2025), we provide an optional active
-retrieval layer that reformulates the query before it enters the
-WRRF pipeline.  Two implementations are available:
+Following MIRIX (Wang & Chen, 2025), we prototyped an optional active
+retrieval layer intended to reformulate the query before it enters the
+WRRF pipeline, with two candidate implementations:
 
 **KeywordExtractor** (rule-based).  Strips question words and filler,
 preserves quoted strings, dates, capitalized words (likely proper
@@ -1071,11 +1071,18 @@ local model with the prompt: "Rewrite the following question as a
 search query optimized for retrieving relevant passages from a
 conversation log."  Gated by model availability.
 
-In the experiments reported here, active retrieval is *not* enabled.
-Both WRRF and assembler conditions receive the raw query.  We include
-the component in the architecture description because the interface
-is defined and wired; ablation against query reformulation is planned
-for future work.
+Neither implementation was ever composed into the WRRF pipeline or
+the BEAM harness — no call site was added, in production code or in
+evaluation code. The experiments reported here therefore already
+reflect the only behaviour that ever existed: both WRRF and assembler
+conditions receive the raw query. Per the project's dead-code policy
+(`rules/coding-standards.md` §9, "if it's built, it must be called"),
+the unwired prototype module (`active_retrieval.py`) was removed from
+the codebase on 2026-07-30 (issue #201) rather than left present but
+uncalled. Ablation against query reformulation, if pursued, would
+require a fresh implementation wired at the pipeline's query-intake
+step — the design sketched above remains a reasonable starting point,
+but it is no longer code that exists in this repository.
 
 ---
 
@@ -2183,10 +2190,14 @@ The context assembly module resides in
 | `condensers.py` | 277 | Domain-aware content condensers | Novel |
 | `budget.py` | 123 | Token estimation and allocation | Ported from Swift |
 | `warning.py` | 62 | Truncation warning banner | Novel |
-| `active_retrieval.py` | 189 | Active query reformulation | Wang & Chen 2025 |
 | `__init__.py` | -- | Public API exports | -- |
 
-**Total**: ~1,667 lines of Python across 10 modules.
+**Total**: this table predates the issue #196 `stage_phases.py` addition
+and the issue #228 `condensers.py` split; `active_retrieval.py` (was 189
+lines, `Wang & Chen 2025` backing) is removed as of issue #201 — it was
+never composed into the WRRF pipeline or the BEAM harness (§3.4). See
+`docs/module-inventory.md` for the current, measured file count and
+layout of `core/context_assembly/`.
 
 ### C.2 Architectural Invariants
 

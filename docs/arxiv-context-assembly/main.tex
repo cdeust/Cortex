@@ -1202,12 +1202,12 @@ For retrieval evaluation (BEAM benchmark), steps 7--8 are bypassed:
 the metric is the rank of the gold memory within the
 \texttt{selected\_memories} list produced by step~6.
 
-\subsection{Active Retrieval (Query Reformulation)}
+\subsection{Active Retrieval (Considered, Not Adopted)}
 \label{sec:active-retrieval}
 
-Following MIRIX \citep{Wang2025}, we provide an optional active
-retrieval layer that reformulates the query before it enters the WRRF
-pipeline.  Two implementations are available:
+Following MIRIX \citep{Wang2025}, we prototyped an optional active
+retrieval layer intended to reformulate the query before it enters
+the WRRF pipeline, with two candidate implementations:
 
 \paragraph{KeywordExtractor} (rule-based).
 Strips question words and filler, preserves quoted strings, dates,
@@ -1218,11 +1218,19 @@ Zero latency, deterministic, no model required.
 Rewrites the query using a small local model.  Gated by model
 availability.
 
-In the experiments reported here, active retrieval is \emph{not}
-enabled.  Both WRRF and assembler conditions receive the raw query.
-We include the component in the architecture description because the
-interface is defined and wired; ablation against query reformulation
-is planned for future work.
+Neither implementation was ever composed into the WRRF pipeline or
+the BEAM harness --- no call site was added, in production code or in
+evaluation code. The experiments reported here therefore already
+reflect the only behaviour that ever existed: both WRRF and assembler
+conditions receive the raw query. Per the project's dead-code policy
+(\texttt{rules/coding-standards.md} \S9, ``if it's built, it must be
+called''), the unwired prototype module (\texttt{active\_retrieval.py})
+was removed from the codebase on 2026-07-30 (issue \#201) rather than
+left present but uncalled. Ablation against query reformulation, if
+pursued, would require a fresh implementation wired at the pipeline's
+query-intake step --- the design sketched above remains a reasonable
+starting point, but it is no longer code that exists in this
+repository.
 
 %----------------------------------------------------------------------
 \section{Experimental Setup}
@@ -2328,9 +2336,12 @@ Module & Lines & Purpose & Paper Backing \\
 \texttt{condensers.py} & 277 & Domain-aware condensers & Novel \\
 \texttt{budget.py} & 123 & Token estimation/allocation & Ported from Swift \\
 \texttt{warning.py} & 62 & Truncation warning banner & Novel \\
-\texttt{active\_retrieval.py} & 189 & Query reformulation & Wang \& Chen \\
 \bottomrule
-\multicolumn{4}{l}{\footnotesize Total: $\sim$1,667 lines of Python across 10 modules.} \\
+\multicolumn{4}{l}{\footnotesize This table predates the issue \#196 \texttt{stage\_phases.py}} \\
+\multicolumn{4}{l}{\footnotesize addition and the issue \#228 \texttt{condensers.py} split;} \\
+\multicolumn{4}{l}{\footnotesize \texttt{active\_retrieval.py} (was 189 lines, Wang \& Chen} \\
+\multicolumn{4}{l}{\footnotesize backing) is removed as of issue \#201 --- see} \\
+\multicolumn{4}{l}{\footnotesize \texttt{docs/module-inventory.md} for the current file count.} \\
 \end{tabular}
 \end{table}
 
