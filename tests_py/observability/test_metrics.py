@@ -85,21 +85,21 @@ class TestHistogram:
 
 class TestThreadSafety:
     def test_concurrent_increments(self):
-        N_THREADS = 16
-        N_INCREMENTS = 100
+        n_threads = 16
+        n_increments = 100
 
         def worker():
-            for _ in range(N_INCREMENTS):
+            for _ in range(n_increments):
                 metrics.inc_counter("concurrent")
 
-        threads = [threading.Thread(target=worker) for _ in range(N_THREADS)]
+        threads = [threading.Thread(target=worker) for _ in range(n_threads)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
 
         out = metrics.render()
-        expected = N_THREADS * N_INCREMENTS
+        expected = n_threads * n_increments
         assert f"concurrent {expected}" in out
 
 

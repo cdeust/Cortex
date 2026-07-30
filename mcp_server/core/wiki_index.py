@@ -44,7 +44,7 @@ def build_index(page_paths: list[str]) -> str:
     for kind, domain, filename, path in entries:
         tree.setdefault(domain, {}).setdefault(kind, []).append((filename, path))
 
-    _KIND_LABELS = {
+    _kind_labels = {
         "adr": "Architecture Decisions",
         "specs": "Specifications",
         "guides": "Guides & How-To",
@@ -75,7 +75,7 @@ def build_index(page_paths: list[str]) -> str:
             pages = kinds.get(kind, [])
             if not pages:
                 continue
-            kind_label = _KIND_LABELS.get(kind, kind.title())
+            kind_label = _kind_labels.get(kind, kind.title())
             lines.append(f"### {kind_label}")
             lines.append("")
             for filename, path in sorted(pages):

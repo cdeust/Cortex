@@ -143,13 +143,13 @@ class _SyncLoop:
         a truncated full list).
         """
         loop = self._ensure_loop()
-        _SENTINEL = object()
+        _sentinel = object()
 
         async def _step():
             try:
                 return await agen.__anext__()
             except StopAsyncIteration:
-                return _SENTINEL
+                return _sentinel
 
         while True:
             future = asyncio.run_coroutine_threadsafe(_step(), loop)
@@ -161,7 +161,7 @@ class _SyncLoop:
                     "AP reader-thread step exceeded "
                     f"{_ap_sync_timeout_s():.0f}s — subprocess presumed wedged"
                 ) from exc
-            if item is _SENTINEL:
+            if item is _sentinel:
                 return
             yield item
 

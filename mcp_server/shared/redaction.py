@@ -87,14 +87,14 @@ def redact_url(url: str) -> str:
 
     # ── (b) query-parameter password (libpq DSN style) ────────────────────
     # Keys matched case-insensitively; order of other params is preserved.
-    _PASSWORD_QUERY_KEYS = frozenset({"password", "pgpassword"})
+    _password_query_keys = frozenset({"password", "pgpassword"})
     query_changed = False
     new_query = parsed.query
     if parsed.query:
         pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
         masked_pairs = []
         for key, value in pairs:
-            if key.lower() in _PASSWORD_QUERY_KEYS and value:
+            if key.lower() in _password_query_keys and value:
                 masked_pairs.append((key, _PASSWORD_MASK))
                 query_changed = True
             else:
