@@ -436,9 +436,9 @@ from .candidate_scan import (  # noqa: E402
 )
 from .drain_operations import (  # noqa: E402
     drain_all_gaps_on_page,
-    drain_missing_anchors,
     drain_one,
 )
+from .anchor_authoring import drain_missing_anchors  # noqa: E402
 from .cycle_orchestration import run_headless_authoring_cycle  # noqa: E402
 
 __all__ = [

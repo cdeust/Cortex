@@ -377,12 +377,14 @@ class TestGroundableFilter:
         fake_repo.canonical = "test-proj"
         fake_registry = MagicMock()
         fake_registry.repos = [fake_repo]
+        # drain_missing_anchors lives in anchor_authoring (issue #276 —
+        # split out of drain_operations to stay under the size limit).
         monkeypatch.setattr(
-            "mcp_server.handlers.consolidation.drain_operations._build_registry",
+            "mcp_server.handlers.consolidation.anchor_authoring._build_registry",
             lambda: fake_registry,
         )
         monkeypatch.setattr(
-            "mcp_server.handlers.consolidation.drain_operations._project_source_root",
+            "mcp_server.handlers.consolidation.anchor_authoring._project_source_root",
             lambda d: str(tmp_path) if d == "test-proj" else None,
         )
 
@@ -393,7 +395,7 @@ class TestGroundableFilter:
         fake_cov = MagicMock()
         fake_cov.scopes = [groundable_sc, ungroundable_sc]
         monkeypatch.setattr(
-            "mcp_server.handlers.consolidation.drain_operations.audit_domain",
+            "mcp_server.handlers.consolidation.anchor_authoring.audit_domain",
             lambda wiki_root, domain: fake_cov,
         )
 
