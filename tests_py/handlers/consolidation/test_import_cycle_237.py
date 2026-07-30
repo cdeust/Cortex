@@ -173,37 +173,10 @@ async def test_drain_all_gaps_on_page_default_invoke_resolves_to_live_claude_inv
     assert results, "a page with a live gap must produce at least one result"
 
 
-@pytest.mark.asyncio
-async def test_run_headless_authoring_cycle_defaults_resolve_from_live_module(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Omitting ``invoke``/``max_drains``/``max_anchor_drains`` must resolve
-    them from the live ``headless_authoring`` attributes — this is the
-    production call shape (``wiki_maintenance.run_headless_authoring_cycle()``
-    with no arguments).
-
-    Pins the CAP itself, not just that a value got resolved: 3 file-doc
-    candidates and 3 anchor candidates are offered, ``CORTEX_HEADLESS_MAX_
-    FILE_DRAINS``/``..._MAX_ANCHOR_DRAINS`` are patched to 1 each, and only
-    1-of-3 must be processed on each side when the caller omits both caps
-    — a single spare candidate would let a broken sentinel (e.g. mutating
-    ``if max_drains is None`` to ``is not None``, which leaves the sentinel
-    unresolved at ``None`` and ``list[:None]`` silently means "no cap") slip
-    through undetected (mutation run, 2026-07-30: this exact mutant
-    survived a 1-candidate version of this test).
-    """
-    from mcp_server.handlers.consolidation import headless_authoring as ha
-
-    calls: list[str] = []
-
-    async def fake_invoke(prompt: str, **_kw: Any) -> Any:
-        calls.append(prompt)
-        return ha.InvokeResult(text="content", cost_usd=0.0)
-
-    monkeypatch.setattr(ha, "_claude_invoke", fake_invoke)
-    monkeypatch.setattr(ha, "CORTEX_HEADLESS_MAX_FILE_DRAINS", 1)
-    monkeypatch.setattr(ha, "CORTEX_HEADLESS_MAX_ANCHOR_DRAINS", 1)
-
+def _make_fake_collect_anchor_candidates(
+    tmp_path: Path, ha: Any
+) -> tuple[Any, list[int | None]]:
+    """Anchor-candidate stub; returns it plus the ``max_drains`` it saw."""
     anchor_max_drains_seen: list[int | None] = []
 
     def fake_collect(_wiki_root: Path, max_drains: int | None) -> list[Any]:
@@ -221,7 +194,11 @@ async def test_run_headless_authoring_cycle_defaults_resolve_from_live_module(
             for i in range(3)
         ][: max_drains if max_drains is not None else 3]
 
-    monkeypatch.setattr(ha, "_collect_anchor_candidates", fake_collect)
+    return fake_collect, anchor_max_drains_seen
+
+
+def _make_fake_scan_pages_with_gaps(tmp_path: Path) -> Any:
+    """Page-scan stub offering 3 gap-bearing pages for the same test."""
 
     def fake_scan(_wiki_root: Path) -> list[Any]:
         pages = []
@@ -242,14 +219,64 @@ async def test_run_headless_authoring_cycle_defaults_resolve_from_live_module(
             )
         return pages
 
-    monkeypatch.setattr(ha, "_scan_pages_with_gaps", fake_scan)
+    return fake_scan
 
-    from mcp_server.handlers.consolidation import page_io
+
+def _patch_cycle_defaults_fixtures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, ha: Any, page_io: Any
+) -> tuple[list[str], list[int | None]]:
+    """Apply every monkeypatch the defaults-resolution test needs; return
+    the ``calls``/``anchor_max_drains_seen`` trackers it asserts against.
+    """
+    calls: list[str] = []
+
+    async def fake_invoke(prompt: str, **_kw: Any) -> Any:
+        calls.append(prompt)
+        return ha.InvokeResult(text="content", cost_usd=0.0)
 
     async def fake_write(*_a: Any, **_kw: Any) -> dict[str, Any]:
         return {}
 
+    monkeypatch.setattr(ha, "_claude_invoke", fake_invoke)
+    monkeypatch.setattr(ha, "CORTEX_HEADLESS_MAX_FILE_DRAINS", 1)
+    monkeypatch.setattr(ha, "CORTEX_HEADLESS_MAX_ANCHOR_DRAINS", 1)
     monkeypatch.setattr(page_io, "write_governed_page", fake_write)
+
+    fake_collect, anchor_max_drains_seen = _make_fake_collect_anchor_candidates(
+        tmp_path, ha
+    )
+    monkeypatch.setattr(ha, "_collect_anchor_candidates", fake_collect)
+    monkeypatch.setattr(
+        ha, "_scan_pages_with_gaps", _make_fake_scan_pages_with_gaps(tmp_path)
+    )
+    return calls, anchor_max_drains_seen
+
+
+@pytest.mark.asyncio
+async def test_run_headless_authoring_cycle_defaults_resolve_from_live_module(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Omitting ``invoke``/``max_drains``/``max_anchor_drains`` must resolve
+    them from the live ``headless_authoring`` attributes — this is the
+    production call shape (``wiki_maintenance.run_headless_authoring_cycle()``
+    with no arguments).
+
+    Pins the CAP itself, not just that a value got resolved: 3 file-doc
+    candidates and 3 anchor candidates are offered, ``CORTEX_HEADLESS_MAX_
+    FILE_DRAINS``/``..._MAX_ANCHOR_DRAINS`` are patched to 1 each, and only
+    1-of-3 must be processed on each side when the caller omits both caps
+    — a single spare candidate would let a broken sentinel (e.g. mutating
+    ``if max_drains is None`` to ``is not None``, which leaves the sentinel
+    unresolved at ``None`` and ``list[:None]`` silently means "no cap") slip
+    through undetected (mutation run, 2026-07-30: this exact mutant
+    survived a 1-candidate version of this test).
+    """
+    from mcp_server.handlers.consolidation import headless_authoring as ha
+    from mcp_server.handlers.consolidation import page_io
+
+    calls, anchor_max_drains_seen = _patch_cycle_defaults_fixtures(
+        monkeypatch, tmp_path, ha, page_io
+    )
 
     # No `invoke=`, no `max_drains=`, no `max_anchor_drains=` — the exact
     # shape wiki_maintenance.py's production call uses.
