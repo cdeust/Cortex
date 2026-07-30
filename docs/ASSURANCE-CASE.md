@@ -128,7 +128,7 @@ decoratively:
 
 Standing analysis: CodeQL default setup (Python, JavaScript/TypeScript,
 Actions) on every push and pull request plus weekly, currently 0 open alerts;
-OpenSSF Scorecard via `.github/workflows/scorecard.yml`; and 6588 tests run on
+OpenSSF Scorecard via `.github/workflows/scorecard.yml`; and 6609 tests run on
 four Python versions, two backends and Windows.
 
 ## 6. What this assurance case does NOT claim
