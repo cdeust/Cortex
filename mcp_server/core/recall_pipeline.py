@@ -1141,7 +1141,11 @@ def attentional_focus_rerank(
     alloc = allocate_attention(query, items, capacity=n)
     baseline = 1.0 / n
     # strict=True: allocate_attention always returns one weight per input
-    # item (items has len(candidates) by construction above).
+    # item (items has len(candidates) by construction above). Documented
+    # equivalent mutant (coding-standards.md §12.1): allocate_attention's
+    # own internal precondition (see attentional_control.py) makes this
+    # length mismatch unreachable, so strict=True vs strict=False/None is
+    # not observable through this call.
     for c, attn in zip(candidates, alloc.weights, strict=True):
         base = c.get("score", 0.0) or 0.0
         c["score"] = base * (1.0 + weight * (attn - baseline))

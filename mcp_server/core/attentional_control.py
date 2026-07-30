@@ -185,7 +185,12 @@ def allocate_attention(
     # salient item compete for the spotlight (stimulus-driven capture).
     logits: list[float] = []
     # strict=True: top_down is built one score per item three lines above,
-    # so the lengths are always equal by construction.
+    # so the lengths are always equal by construction. Documented
+    # equivalent mutant (coding-standards.md §12.1): allocate_attention's
+    # earlier `if len(precomputed_scores) != n: raise` (see above) makes a
+    # top_down/items length mismatch unreachable through this function's
+    # public entry point, so no test can distinguish strict=True from
+    # strict=False/None here without bypassing that guard directly.
     for score, it in zip(top_down, items, strict=True):
         importance = float(it.get("importance", 0.0) or 0.0)
         valence = abs(float(it.get("valence", 0.0) or 0.0))

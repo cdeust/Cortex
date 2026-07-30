@@ -73,6 +73,10 @@ def compute_text_signals(
     docs = [m.get("content", "") for m in hot_mems]
     # strict=True: compute_bm25_scores returns exactly len(docs) scores,
     # and docs/ids are both derived from hot_mems one-to-one above.
+    # Documented equivalent mutant (coding-standards.md §12.1): the
+    # `if not q_terms or not documents: return [0.0] * len(documents)`
+    # branch in compute_bm25_scores guarantees this by construction, so
+    # strict=True vs strict=False/None is not observable here.
     bm25 = [
         (mid, s)
         for mid, s in zip(ids, compute_bm25_scores(query, docs), strict=True)
