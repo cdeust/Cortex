@@ -22,10 +22,19 @@ of importing the names): the throttle tests do
 ``monkeypatch.setattr(ha, "_scan_pages_with_gaps", ...)`` then call
 ``run_headless_authoring_cycle``. For those patches to be observed,
 this function MUST resolve those names at CALL TIME from the
-``headless_authoring`` module namespace. The ``from . import
-headless_authoring as _root`` below is a deliberate circular import
-that works ONLY because we touch ``_root.X`` at call time, never at
-import time. Do not change ``_root.X`` accesses to direct imports.
+``headless_authoring`` module namespace.
+
+Import-cycle note (issue #237): ``headless_authoring`` imports
+``run_headless_authoring_cycle`` back at load time, so a module-top-level
+``from . import headless_authoring as _root`` here would deadlock a fresh
+interpreter that imports ``cycle_orchestration`` before
+``headless_authoring`` finishes initializing. ``_root`` is therefore bound
+once, at the top of ``run_headless_authoring_cycle``'s body (never at
+module scope) — every ``_root.X`` access below, including inside the
+nested ``drain_anchor_bounded``/``drain_page_bounded`` coroutines (which
+close over the same local), still resolves at CALL time from the live
+``headless_authoring`` module object, so the patchability contract above
+is unchanged. Do not change ``_root.X`` accesses to direct imports.
 """
 
 from __future__ import annotations
@@ -36,7 +45,6 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from . import headless_authoring as _root
 from .drain_operations import drain_all_gaps_on_page
 from .page_io import _scope_anchor_prompt, _write_anchor_page
 from datetime import datetime, timezone
@@ -46,9 +54,9 @@ from mcp_server.infrastructure.config import WIKI_ROOT
 async def run_headless_authoring_cycle(
     wiki_root: Path | None = None,
     *,
-    max_drains: int = _root.CORTEX_HEADLESS_MAX_FILE_DRAINS,
-    max_anchor_drains: int = _root.CORTEX_HEADLESS_MAX_ANCHOR_DRAINS,
-    invoke: Callable[..., Awaitable[Any]] = _root._claude_invoke,
+    max_drains: int | None = None,
+    max_anchor_drains: int | None = None,
+    invoke: Callable[..., Awaitable[Any]] | None = None,
 ) -> Any:
     """One autonomous cycle: author missing anchor pages, then drain
     file-doc curation gaps.  Runs concurrently under a shared semaphore
@@ -66,6 +74,15 @@ async def run_headless_authoring_cycle(
     Invariant:      no more than CORTEX_HEADLESS_CONCURRENCY in-flight
                     subprocess calls at any point in the cycle.
     """
+    # Deferred import (issue #237): see module docstring's import-cycle note.
+    from . import headless_authoring as _root  # noqa: PLC0415 — import cycle (partner: headless_authoring, #237)
+
+    if max_drains is None:
+        max_drains = _root.CORTEX_HEADLESS_MAX_FILE_DRAINS
+    if max_anchor_drains is None:
+        max_anchor_drains = _root.CORTEX_HEADLESS_MAX_ANCHOR_DRAINS
+    if invoke is None:
+        invoke = _root._claude_invoke
 
     cycle_start = time.monotonic()
     if wiki_root is None:

@@ -52,6 +52,19 @@ The scanners and the cycle resolve the patchable names
 (``CORTEX_HEADLESS_*``, ``_collect_anchor_candidates``,
 ``_scan_pages_with_gaps``) as attributes of THIS module at call time,
 so ``monkeypatch.setattr(headless_authoring, ...)`` is observed.
+
+Import direction (fixed 2026-07-30, issue #237): the four siblings above
+used to import THIS module back at their own module top (``from . import
+headless_authoring as _root``), which deadlocked any fresh interpreter
+that imported one of them before this module finished initializing
+(partial-module ``ImportError`` — reproducible with e.g. ``python -c
+"import mcp_server.handlers.consolidation.candidate_scan"``). Each
+sibling now resolves ``_root`` with a deferred, function-scoped import
+instead (``# noqa: PLC0415 — import cycle``, per pyproject.toml's
+named exemption for this family) — the load-time back-reference is
+gone, so every sibling imports cleanly on its own, while the call-time
+attribute lookup that makes ``monkeypatch.setattr(headless_authoring,
+...)`` observable is unchanged.
 """
 
 from __future__ import annotations
@@ -409,10 +422,12 @@ def _delegation_hint_for(kind: str) -> str | None:
 
 # ── Re-exports — the public import surface (see module docstring) ─────────
 #
-# These siblings import THIS module as ``_root`` and read the patchable
-# names off it at call time, so the imports below MUST come after every
-# constant / type / ``_claude_invoke`` definition above. This is a
-# deliberate, load-order-sensitive circular import.
+# These siblings resolve THIS module as ``_root`` via a deferred,
+# function-scoped import (issue #237) and read the patchable names off it
+# at call time — no back-reference at module scope, so nothing below is
+# load-order-sensitive anymore. The imports stay after the constant/type/
+# ``_claude_invoke`` definitions purely for readability (this module
+# defines its own public surface before re-exporting the rest of it).
 
 from .claude_cli import _build_argv, _subprocess_env  # noqa: E402
 from .candidate_scan import (  # noqa: E402

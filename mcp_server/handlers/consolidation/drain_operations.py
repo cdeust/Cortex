@@ -9,8 +9,19 @@ re-exported there.
 Patchability contract: the default ``invoke`` and the dataclass types
 are read from the root module so that the re-exported references stay
 identical to the public ones. ``_claude_invoke`` is not monkeypatched
-in tests (callers pass ``invoke`` explicitly), so binding the default
-at import time preserves the original behaviour.
+in tests (callers pass ``invoke`` explicitly), so resolving the default
+at call time (instead of at import time — see issue #237) preserves the
+original behaviour: the same function object either way.
+
+Import-cycle note (issue #237): ``headless_authoring`` imports this
+module's functions back at load time, so a module-top-level
+``from . import headless_authoring as _root`` here would deadlock a
+fresh interpreter that imports ``drain_operations`` before
+``headless_authoring`` finishes initializing. Each function below
+resolves ``_root`` lazily, at call time, instead — this keeps every
+``monkeypatch.setattr(headless_authoring, ...)`` observed (the
+attribute is read off the live module object) while breaking the
+load-time cycle.
 """
 
 from __future__ import annotations
@@ -20,7 +31,6 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from . import headless_authoring as _root
 from .authoring_prompts import (
     _GAP_DESCRIPTIONS,
     _build_page_prompt,
@@ -66,7 +76,7 @@ async def drain_one(
     body: str,
     *,
     wiki_root: Path,
-    invoke: Callable[..., Awaitable[Any]] = _root._claude_invoke,
+    invoke: Callable[..., Awaitable[Any]] | None = None,
 ) -> Any:
     """Drain the first curation gap on one page (legacy single-section path).
 
@@ -76,6 +86,12 @@ async def drain_one(
     Post-condition: the gap marker is replaced in the file on disk and the
                     result reflects the outcome (filled/failed/skipped).
     """
+    # Deferred import (issue #237): see module docstring's import-cycle note.
+    from . import headless_authoring as _root  # noqa: PLC0415 — import cycle (partner: headless_authoring, #237)
+
+    if invoke is None:
+        invoke = _root._claude_invoke
+
     start = time.monotonic()
     gaps = meta.get("curation_gaps") or []
     if not gaps:
@@ -153,7 +169,7 @@ async def drain_all_gaps_on_page(
     body: str,
     *,
     wiki_root: Path,
-    invoke: Callable[..., Awaitable[Any]] = _root._claude_invoke,
+    invoke: Callable[..., Awaitable[Any]] | None = None,
 ) -> list[Any]:
     """Fill every curation gap on one page in a single ``claude -p`` call.
 
@@ -176,6 +192,12 @@ async def drain_all_gaps_on_page(
                     ``write_governed_page``); returned list has one
                     DrainResult per gap (filled/failed).
     """
+    # Deferred import (issue #237): see module docstring's import-cycle note.
+    from . import headless_authoring as _root  # noqa: PLC0415 — import cycle (partner: headless_authoring, #237)
+
+    if invoke is None:
+        invoke = _root._claude_invoke
+
     start = time.monotonic()
     frozen = [g for g in (meta.get("curation_gaps") or []) if isinstance(g, str)]
     gaps = _live_audit_gaps(body, frozen)
@@ -284,7 +306,7 @@ async def drain_missing_anchors(
     *,
     max_drains: int = 30,
     today: str | None = None,
-    invoke: Callable[..., Awaitable[Any]] = _root._claude_invoke,
+    invoke: Callable[..., Awaitable[Any]] | None = None,
 ) -> list[Any]:
     """Author missing canonical anchor pages for every project.
 
@@ -305,6 +327,11 @@ async def drain_missing_anchors(
     Post-condition: up to ``max_drains`` new anchor pages written to disk;
                     ungroundable scopes are omitted (not skipped-with-result).
     """
+    # Deferred import (issue #237): see module docstring's import-cycle note.
+    from . import headless_authoring as _root  # noqa: PLC0415 — import cycle (partner: headless_authoring, #237)
+
+    if invoke is None:
+        invoke = _root._claude_invoke
 
     today = today or datetime.now(timezone.utc).date().isoformat()
     domains = sorted({r.canonical for r in _build_registry().repos})

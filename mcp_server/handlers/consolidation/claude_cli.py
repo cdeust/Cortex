@@ -84,8 +84,6 @@ from __future__ import annotations
 
 import os
 
-from . import headless_authoring as _root
-
 # Anthropic credential keys stripped from the child env in subscription mode.
 _API_CREDENTIAL_KEYS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
 
@@ -133,6 +131,16 @@ def _build_argv(source_root: str | None) -> list[str]:
     Post-condition: returns the option-only argv; the tool surface is
                     read-only in both modes (no Write/Edit/Bash).
     """
+    # Deferred import (issue #237): headless_authoring re-exports this
+    # function and imports back from this module at load time, so a
+    # module-top-level `from . import headless_authoring` would deadlock
+    # any fresh interpreter that imports claude_cli before headless_authoring
+    # has finished initializing (partial-module ImportError). Resolving the
+    # back-reference here, at call time, breaks the load-time cycle while
+    # keeping `monkeypatch.setattr(headless_authoring, "CORTEX_HEADLESS_AGENTS", ...)`
+    # observed — the attribute is read off the live module object, not a copy.
+    from . import headless_authoring as _root  # noqa: PLC0415 — import cycle (partner: headless_authoring, #237)
+
     argv = [_root._CLAUDE_BIN, "--print", "--no-session-persistence"]
     if _root.CORTEX_HEADLESS_AGENTS:
         # Agents mode: roster + Task delegation under a hard write/exec ceiling.

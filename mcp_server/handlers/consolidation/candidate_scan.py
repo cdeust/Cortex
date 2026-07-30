@@ -17,7 +17,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from . import headless_authoring as _root
 from .page_io import _parse_frontmatter
 from mcp_server.observability import silent_failure
 from mcp_server.core.wiki_coverage import _project_source_root, audit_domain
@@ -89,6 +88,15 @@ def _collect_anchor_candidates(
                     representing a missing scope that passes the groundable
                     filter and has a resolvable source root.
     """
+    # Deferred import (issue #237): headless_authoring imports this function
+    # back at load time, so a module-top-level `from . import
+    # headless_authoring` here would deadlock a fresh interpreter that
+    # imports candidate_scan before headless_authoring finishes initializing.
+    # Resolved at call time instead — the constructed type still matches the
+    # re-exported ``headless_authoring._AnchorCandidate`` exactly (same
+    # module object, no copy).
+    from . import headless_authoring as _root  # noqa: PLC0415 — import cycle (partner: headless_authoring, #237)
+
     try:
         domains = sorted({r.canonical for r in _build_registry().repos})
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure

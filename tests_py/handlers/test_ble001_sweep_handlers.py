@@ -10,11 +10,6 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-
-# Imported before candidate_scan anywhere in this module: candidate_scan
-# and headless_authoring are mutually importing; headless_authoring must
-# initialize first (matching the package's own import order).
-import mcp_server.handlers.consolidation.headless_authoring  # noqa: F401, E402
 from unittest.mock import MagicMock
 
 import pytest

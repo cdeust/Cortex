@@ -206,9 +206,8 @@ class TestConsolidationSites:
         _assert_noted("consolidation.stage_timestamp", "pool closed")
 
     def test_source_root_failure_returns_none_and_is_logged(self, caplog, monkeypatch):
-        # headless_authoring first: drain_operations participates in a
-        # deliberate load-order-sensitive circular import (see its header).
-        from mcp_server.handlers.consolidation import headless_authoring  # noqa: F401
+        # drain_operations no longer back-imports headless_authoring at
+        # module scope (issue #237) — importing it standalone is safe now.
         from mcp_server.handlers.consolidation import drain_operations
         from mcp_server.handlers.consolidation.drain_operations import (
             _optional_source_root,
@@ -227,9 +226,8 @@ class TestConsolidationSites:
         _assert_noted("consolidation.project_source_root", "no source map")
 
     def test_source_root_missing_domain_is_silent(self, caplog):
-        # headless_authoring first: drain_operations participates in a
-        # deliberate load-order-sensitive circular import (see its header).
-        from mcp_server.handlers.consolidation import headless_authoring  # noqa: F401
+        # drain_operations no longer back-imports headless_authoring at
+        # module scope (issue #237) — importing it standalone is safe now.
         from mcp_server.handlers.consolidation.drain_operations import (
             _optional_source_root,
         )
