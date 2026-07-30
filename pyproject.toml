@@ -518,11 +518,17 @@ only_mutate = ["mcp_server/shared/json_native.py"]
 # .github/workflows/ci.yml directly; without it, a scoped run that selects
 # that test fails collection under every mutant with FileNotFoundError
 # instead of scoring the suite — issue #262.
+# assets: check_versions()/check_badge() read assets/badge-version.svg and
+# RepositoryTests reads assets/badge-tests.svg off the real tree; without it
+# here, RepositoryTests.test_committed_docs_agree_with_the_repository fails
+# collection under every mutant with "missing" instead of scoring the suite
+# (found reproducing issue #235's baseline, 2026-07-30).
 also_copy = [
     ".github",
     "tests_py",
     "deps",
     "docs",
+    "assets",
     "README.md",
     "CONTRIBUTING.md",
     "SECURITY.md",

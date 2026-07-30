@@ -9,8 +9,13 @@ being rewritten.
 
 from __future__ import annotations
 
+import codecs
+import contextlib
 import importlib.util
+import io
+import sys
 import unittest
+import unittest.mock
 from pathlib import Path
 
 # The module name must be the dotted path mutmut derives from the file's
@@ -54,6 +59,82 @@ class _FakeRepo:
             raise FileNotFoundError(relative_path) from None
 
 
+@contextlib.contextmanager
+def _spying_on_argparse_construction(captured: dict):
+    """Capture `main()`'s `ArgumentParser(description=...)` and its
+    `--test-count` `add_argument(help=...)` into `captured`, without
+    breaking argparse's own recursive `super()` call.
+
+    argparse's `ArgumentParser.__init__` does `super(ArgumentParser, self)`
+    (an explicit, not zero-arg, super — CPython 3.12 argparse.py:1788),
+    which re-resolves the name `ArgumentParser` as a fresh global lookup on
+    every call. Replacing the `argparse.ArgumentParser` module attribute
+    (e.g. with a subclass) makes that lookup hit the replacement and
+    recurse forever; patching only the class's own `__init__`/
+    `add_argument` methods leaves the attribute — and that lookup —
+    untouched.
+    """
+    real_init = gate.argparse.ArgumentParser.__init__
+    real_add_argument = gate.argparse.ArgumentParser.add_argument
+
+    def spy_init(self, *args, **kwargs):
+        captured["description"] = kwargs.get("description")
+        return real_init(self, *args, **kwargs)
+
+    def spy_add_argument(self, *args, **kwargs):
+        if args and args[0] == "--test-count":
+            captured["help"] = kwargs.get("help")
+        return real_add_argument(self, *args, **kwargs)
+
+    with (
+        unittest.mock.patch.object(gate.argparse.ArgumentParser, "__init__", spy_init),
+        unittest.mock.patch.object(
+            gate.argparse.ArgumentParser, "add_argument", spy_add_argument
+        ),
+    ):
+        yield
+
+
+class ReadTests(unittest.TestCase):
+    """`read()` is the one function every canonical-source helper funnels
+    through, so its own contract — decode as UTF-8, explicitly — needs its
+    own test rather than relying on every caller's fixture to expose it.
+
+    ``encoding=None`` falls back to `locale.getpreferredencoding`, which is
+    not guaranteed to be UTF-8 (a minimal POSIX locale reports "ascii"); the
+    canonical sources this reads (bibliography.md, README.md) carry non-ASCII
+    prose (em dashes, accented author names), so an implicit locale decode is
+    a latent corruption bug, not a style nit.
+    """
+
+    def test_read_decodes_explicitly_as_utf8(self):
+        seen_encodings = []
+        real_read_text = Path.read_text
+
+        def spy(self, *args, **kwargs):
+            seen_encodings.append(kwargs.get("encoding"))
+            return real_read_text(self, *args, **kwargs)
+
+        with unittest.mock.patch.object(Path, "read_text", spy):
+            gate.read("README.md")
+
+        self.assertEqual(len(seen_encodings), 1)
+        self.assertIsNotNone(
+            seen_encodings[0], "encoding must be explicit, not locale-default"
+        )
+        # Codec names are case/hyphen-insensitive in CPython (PEP 263), so
+        # "UTF-8" and "utf-8" are the same codec — comparing normalized names
+        # keeps this test from failing on that harmless casing. This is also
+        # the documented-equivalent rationale (coding-standards.md §12.1) for
+        # the one mutant this test does not and should not kill: mutmut's
+        # `x_read__mutmut_4` rewrites the literal to `encoding="UTF-8"`,
+        # which `codecs.lookup` resolves to the identical "utf-8" codec —
+        # verified: `codecs.lookup("utf-8").name == codecs.lookup("UTF-8").name`
+        # is `True` on CPython. No observable behaviour differs, so no test
+        # can or should distinguish it from the original.
+        self.assertEqual(codecs.lookup(seen_encodings[0]).name, "utf-8")
+
+
 class CanonicalSourceTests(unittest.TestCase):
     def setUp(self):
         self._real_read = gate.read
@@ -81,13 +162,52 @@ class CanonicalSourceTests(unittest.TestCase):
             gate.canonical_tool_counts()
         self.assertIn("pinned registry test", str(caught.exception))
 
+    def test_missing_standalone_total_sentence_is_an_error(self):
+        """The header sentence the whole function's regex hunts for.
+
+        No sentence at all is a different failure than a wrong number in it
+        — the message must name the file and what was expected there.
+        """
+        self._install(
+            **{
+                "docs/mcp-tools.md": "No counts stated here.\n",
+                "tests_py/test_main.py": PINNED_TEST,
+            }
+        )
+        with self.assertRaises(gate.ClaimError) as caught:
+            gate.canonical_tool_counts()
+        self.assertEqual(
+            str(caught.exception),
+            "docs/mcp-tools.md: standalone/total tool sentence not found",
+        )
+
     def test_inconsistent_arithmetic_in_the_catalogue_is_an_error(self):
         broken = CATALOGUE.replace("(55 total", "(56 total")
         self._install(
             **{"docs/mcp-tools.md": broken, "tests_py/test_main.py": PINNED_TEST}
         )
-        with self.assertRaises(gate.ClaimError):
+        with self.assertRaises(gate.ClaimError) as caught:
             gate.canonical_tool_counts()
+        self.assertEqual(str(caught.exception), "docs/mcp-tools.md: 52 + 3 != 56")
+
+    def test_missing_pinned_registry_test_is_an_error(self):
+        """The pinned-test regex against tests_py/test_main.py, unmatched.
+
+        Distinct from the drift case above: here the pinned test itself is
+        gone (renamed, deleted), not merely disagreeing with the catalogue.
+        """
+        self._install(
+            **{
+                "docs/mcp-tools.md": CATALOGUE,
+                "tests_py/test_main.py": "def test_something_else(self):\n",
+            }
+        )
+        with self.assertRaises(gate.ClaimError) as caught:
+            gate.canonical_tool_counts()
+        self.assertEqual(
+            str(caught.exception),
+            "tests_py/test_main.py: pinned tool-count test not found",
+        )
 
     def test_reference_count_is_the_number_of_entries_not_the_advertised_number(self):
         self._install(**{"docs/papers/bibliography.md": BIBLIOGRAPHY})
@@ -111,10 +231,50 @@ class CanonicalSourceTests(unittest.TestCase):
         )
         self.assertEqual(gate.canonical_reference_count(), 2)
 
+    def test_the_first_references_heading_is_the_split_point(self):
+        """`split(..., 1)` on the FIRST occurrence, not `rsplit` on the last.
+
+        A doubled "## References" heading (a copy-paste mistake, or a nested
+        subsection literally named that) must not silently move which text
+        counts as entries: everything after the first heading is the section,
+        including a second stray heading line (excluded by the `#` filter,
+        same as any other heading) and the entries that follow it.
+        """
+        self._install(
+            **{
+                "docs/papers/bibliography.md": (
+                    "36 mechanisms.\n\n## References\n\n"
+                    "Author, A. (2001). One.\n\n## References\n\n"
+                    "Author, B. (2002). Two.\n"
+                )
+            }
+        )
+        self.assertEqual(gate.canonical_reference_count(), 2)
+
     def test_bibliography_without_a_references_section_is_an_error(self):
         self._install(**{"docs/papers/bibliography.md": "# Bibliography\n"})
-        with self.assertRaises(gate.ClaimError):
+        with self.assertRaises(gate.ClaimError) as caught:
             gate.canonical_reference_count()
+        self.assertEqual(
+            str(caught.exception),
+            "docs/papers/bibliography.md: '## References' section not found",
+        )
+
+    def test_a_references_section_with_no_entries_is_an_error(self):
+        """A heading with nothing under it — only furniture, no citations."""
+        self._install(
+            **{
+                "docs/papers/bibliography.md": (
+                    "36 mechanisms.\n\n## References\n\n### Neuroscience\n\n---\n"
+                )
+            }
+        )
+        with self.assertRaises(gate.ClaimError) as caught:
+            gate.canonical_reference_count()
+        self.assertEqual(
+            str(caught.exception),
+            "docs/papers/bibliography.md: no reference entries found",
+        )
 
     def test_mechanism_count_is_read_from_the_bibliography_header(self):
         self._install(**{"docs/papers/bibliography.md": BIBLIOGRAPHY})
@@ -124,14 +284,26 @@ class CanonicalSourceTests(unittest.TestCase):
         self._install(
             **{"docs/papers/bibliography.md": "# B\n\n## References\n\nA. (1)\n"}
         )
-        with self.assertRaises(gate.ClaimError):
+        with self.assertRaises(gate.ClaimError) as caught:
             gate.canonical_mechanism_count()
+        self.assertEqual(
+            str(caught.exception),
+            "docs/papers/bibliography.md: no mechanism count declared",
+        )
 
     def test_version_comes_from_pyproject(self):
         self._install(
             **{"pyproject.toml": '[project]\nname = "x"\nversion = "4.16.0"\n'}
         )
         self.assertEqual(gate.canonical_version(), "4.16.0")
+
+    def test_missing_version_declaration_is_an_error(self):
+        self._install(**{"pyproject.toml": '[project]\nname = "x"\n'})
+        with self.assertRaises(gate.ClaimError) as caught:
+            gate.canonical_version()
+        self.assertEqual(
+            str(caught.exception), "pyproject.toml: [project].version not found"
+        )
 
 
 class ScanTests(unittest.TestCase):
@@ -329,7 +501,51 @@ class VersionTests(unittest.TestCase):
         ).read
         failures = gate.check_versions("4.16.0")
         self.assertEqual(len(failures), 1)
-        self.assertIn("diverged", failures[0])
+        # Exact text, not just `assertIn("diverged", ...)` — a mutant that
+        # corrupts the middle of the sentence while leaving "diverged" intact
+        # would pass a substring check but ship a broken message.
+        self.assertEqual(
+            failures[0],
+            "assets/badge-version.svg: no version figure in its <title>; the"
+            " badge and this gate have diverged",
+        )
+
+
+class HotlinkedBadgeTests(unittest.TestCase):
+    """`check_no_hotlinked_badges` line numbers and message, unit-level.
+
+    Only exercised before through `collect_failures` with the hotlink on
+    line 1, which cannot distinguish `start=1` from `start=0` — both report
+    line 1 for a match there. Placing the hotlink on line 2 makes the
+    reported number a real assertion instead of an accident of the fixture.
+    """
+
+    def setUp(self):
+        self._real_read = gate.read
+
+    def tearDown(self):
+        gate.read = self._real_read
+
+    def test_a_hotlink_on_a_later_line_is_reported_with_its_own_number(self):
+        gate.read = _FakeRepo(
+            **{
+                "README.md": (
+                    "# Cortex\n"
+                    '<img src="https://img.shields.io/badge/tests-1_passing.svg">\n'
+                )
+            }
+        ).read
+        failures = gate.check_no_hotlinked_badges()
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(
+            failures[0],
+            "README.md:2: hotlinked shields.io badge — these are"
+            " committed under assets/ (scripts/generate_repo_badges.py)",
+        )
+
+    def test_no_hotlink_reports_nothing(self):
+        gate.read = _FakeRepo(**{"README.md": "# Cortex\n\nAll clean.\n"}).read
+        self.assertEqual(gate.check_no_hotlinked_badges(), [])
 
 
 class CollectFailuresTests(unittest.TestCase):
@@ -526,6 +742,21 @@ class StructuralIntegrityTests(unittest.TestCase):
         self.assertEqual(len(failures), 1)
         self.assertIn("GONE.md: missing", failures[0])
 
+    def test_a_missing_file_does_not_abort_the_conflict_scan(self):
+        """The missing-file handler is a `continue`, not a `break`: a
+        missing file earlier in SCANNED_FILES must not stop a real conflict
+        marker in a later file from being reported.
+        """
+        gate.SCANNED_FILES = ("GONE.md", "README.md")
+        gate.read = _FakeRepo(
+            **{"README.md": "# Cortex\n<<<<<<< HEAD\nours\n>>>>>>> theirs\n"}
+        ).read
+        failures = gate.check_no_conflict_markers()
+        self.assertEqual(len(failures), 3, failures)
+        self.assertIn("GONE.md: missing", failures[0])
+        self.assertIn("README.md:2:", failures[1])
+        self.assertIn("README.md:4:", failures[2])
+
     def test_unparseable_json_is_reported(self):
         self._install(**{".bestpractices.json": '{"a": 1,\n<<<<<<< HEAD\n}\n'})
         failures = gate.check_scanned_json_parses()
@@ -542,6 +773,37 @@ class StructuralIntegrityTests(unittest.TestCase):
         """
         self._install(**{"README.md": "{ this is prose, not JSON\n"})
         self.assertEqual(gate.check_scanned_json_parses(), [])
+
+    def test_a_missing_json_file_fails_closed(self):
+        """`check_scanned_json_parses` has its own FileNotFoundError arm,
+        separate from `check_no_conflict_markers`'s — each must fail closed.
+        """
+        gate.SCANNED_FILES = ("GONE.json",)
+        gate.read = _FakeRepo().read
+        failures = gate.check_scanned_json_parses()
+        self.assertEqual(failures, ["GONE.json: missing — the doc-claim gate reads it"])
+
+    def test_a_non_json_file_does_not_abort_the_json_scan(self):
+        """The `.json`-suffix skip is a `continue`, not a `break`: a Markdown
+        file earlier in SCANNED_FILES must not stop later `.json` members
+        from being parsed.
+        """
+        self._install(**{"README.md": "prose\n", "bad.json": '{"a": 1,\n'})
+        failures = gate.check_scanned_json_parses()
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn("bad.json: not valid JSON", failures[0])
+
+    def test_a_missing_json_file_does_not_abort_the_json_scan(self):
+        """The missing-file handler is a `continue`, not a `break`: a
+        missing `.json` member earlier in SCANNED_FILES must not stop a
+        later `.json` member from being checked.
+        """
+        gate.SCANNED_FILES = ("gone.json", "bad.json")
+        gate.read = _FakeRepo(**{"bad.json": '{"a": 1,\n'}).read
+        failures = gate.check_scanned_json_parses()
+        self.assertEqual(len(failures), 2, failures)
+        self.assertIn("gone.json: missing", failures[0])
+        self.assertIn("bad.json: not valid JSON", failures[1])
 
     def test_both_checks_run_inside_collect_failures(self):
         """Wiring guard: a function that is never called proves nothing. The
@@ -562,6 +824,129 @@ class StructuralIntegrityTests(unittest.TestCase):
         """
         self.assertEqual(gate.check_no_conflict_markers(), [])
         self.assertEqual(gate.check_scanned_json_parses(), [])
+
+
+class MainTests(unittest.TestCase):
+    """`main()` — the CLI glue no other test reaches (the composition is
+    always exercised through `collect_failures` directly), so every arm
+    (abort, report, success) needs its own assertion on exit code and the
+    stream it writes to.
+
+    Documented-equivalent mutant (coding-standards.md §12.1): mutmut's
+    `x_main__mutmut_8` deletes the `--test-count` argument's explicit
+    ``default=None`` kwarg. `argparse` already defaults an unset optional
+    argument to `None` when no `default` kwarg is given at all — verified:
+    `ArgumentParser().add_argument("--test-count", type=int).parse_args([]).test_count`
+    is `None` with or without the explicit kwarg. No observable behaviour
+    differs, so no test can or should distinguish it from the original.
+    """
+
+    def setUp(self):
+        self._real_collect = gate.collect_failures
+        self._real_registry = gate.exemption_registry
+        self._real_argv = sys.argv
+
+    def tearDown(self):
+        gate.collect_failures = self._real_collect
+        gate.exemption_registry = self._real_registry
+        sys.argv = self._real_argv
+
+    def _run(self, argv):
+        sys.argv = ["check_doc_claims.py", *argv]
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = gate.main()
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_claim_error_aborts_to_stderr_with_exit_code_2(self):
+        def boom(test_count):
+            raise gate.ClaimError("bibliography.md unreadable")
+
+        gate.collect_failures = boom
+        code, out, err = self._run([])
+        self.assertEqual(code, 2)
+        self.assertEqual(out, "")
+        self.assertEqual(
+            err, "doc-claim gate could not run: bibliography.md unreadable\n"
+        )
+
+    def test_failures_are_reported_to_stderr_with_exit_code_1(self):
+        gate.collect_failures = lambda test_count: [
+            "DOC.md:1: advertises 50 tools, canonical is 52"
+        ]
+        code, out, err = self._run([])
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertEqual(
+            err,
+            "Documentation claims disagree with the repository:\n"
+            "  DOC.md:1: advertises 50 tools, canonical is 52\n",
+        )
+
+    def test_success_reports_exemption_count_and_exit_code_0(self):
+        gate.collect_failures = lambda test_count: []
+        gate.exemption_registry = lambda: [("CONTRIBUTING.md", 5, "tests")]
+        code, out, err = self._run([])
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self.assertEqual(
+            out,
+            "doc claims OK (1 declared not-a-claim exemption(s))\n"
+            "  CONTRIBUTING.md:5: exempt from the tests claim\n",
+        )
+
+    def test_success_with_no_exemptions_reports_a_zero_count(self):
+        gate.collect_failures = lambda test_count: []
+        gate.exemption_registry = lambda: []
+        code, out, _err = self._run([])
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "doc claims OK (0 declared not-a-claim exemption(s))\n")
+
+    def test_the_parser_declares_the_modules_docstring_and_flag_help(self):
+        """The description/help text argparse formats for `--help`.
+
+        Asserting on `--help`'s rendered output would depend on `textwrap`
+        reflowing at the terminal's COLUMNS (a CI-integrity axis, coding-
+        standards.md Move 7) rather than on the CLI's own contract, so this
+        spies the raw strings handed to argparse before its formatter ever
+        touches them — see `_spying_on_argparse_construction` for why that
+        spy patches methods, not the `ArgumentParser` class attribute.
+        """
+        captured = {}
+        with _spying_on_argparse_construction(captured):
+            gate.collect_failures = lambda test_count: []
+            gate.exemption_registry = lambda: []
+            self._run([])
+
+        self.assertEqual(captured["description"], gate.__doc__)
+        self.assertEqual(
+            captured["help"],
+            "live test count (from `pytest --collect-only -q`); skipped when absent",
+        )
+
+    def test_the_test_count_flag_is_parsed_and_forwarded(self):
+        seen = {}
+
+        def fake(test_count):
+            seen["test_count"] = test_count
+            return []
+
+        gate.collect_failures = fake
+        gate.exemption_registry = lambda: []
+        self._run(["--test-count", "1234"])
+        self.assertEqual(seen["test_count"], 1234)
+
+    def test_without_the_flag_test_count_is_none(self):
+        seen = {}
+
+        def fake(test_count):
+            seen["test_count"] = test_count
+            return []
+
+        gate.collect_failures = fake
+        gate.exemption_registry = lambda: []
+        self._run([])
+        self.assertIsNone(seen["test_count"])
 
 
 if __name__ == "__main__":
