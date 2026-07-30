@@ -20,10 +20,13 @@ selected, that branch never ran. Two things followed:
 Both roots derive from `config.CLAUDE_DIR`, which had no override seam at
 all. The fix adds `CORTEX_CLAUDE_DIR` and redirects it unconditionally.
 
-These tests pin that fix from three angles, so a regression cannot be
-silent: the RESOLVED roots are isolated (not merely the env vars), a live
-write-path handler leaves the real tree untouched, and the conftest guard
-that enforces this cannot be deleted or made conditional.
+These tests pin that fix from two angles: the RESOLVED roots are isolated
+(not merely the env vars), and a live write-path handler leaves the real
+tree untouched. The guard itself — `guard_against_real_data_roots`,
+whether it can be silently removed or its module-level call site
+weakened — has its own file, `test_real_data_root_guard.py` (issue
+#276/#287 boy-scout follow-up, splitting this file under
+coding-standards.md §4.1's 300-line cap).
 """
 
 from __future__ import annotations
@@ -35,10 +38,6 @@ from pathlib import Path
 import pytest
 
 _REAL_CLAUDE_DIR = Path(os.path.expanduser("~/.claude")).resolve()
-
-_CONFTEST_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "conftest.py")
-)
 
 
 def _real(path: str | Path) -> str:
@@ -204,147 +203,39 @@ class TestRealTreeIsNeverWritten:
         )
 
 
-# ── The guard itself cannot be removed or weakened ───────────────────────────
+# ── The exact set of roots the guard checks ──────────────────────────────────
 
 
-class TestIsolationGuard:
-    """`_guard_against_real_data_roots` must fire on a real root.
+class TestResolvedRealDataRoots:
+    """`_pg_safety_guards._resolved_real_data_roots` names the exact four
+    roots `guard_against_real_data_roots` checks. A wrong label here would
+    still let the guard fire correctly but tell an operator the wrong name
+    for which root escaped."""
 
-    The guard checks resolved values so it cannot be fooled by a
-    correct-looking environment. These tests drive it against a deliberately
-    un-isolated root and assert it aborts the session.
-    """
+    def test_returns_the_four_named_roots_in_order(self):
+        from mcp_server.infrastructure import config, memory_config
+        from tests_py import _pg_safety_guards
 
-    def test_guard_exits_when_a_root_escapes_isolation(self):
-        """A WIKI_ROOT pointing at the real tree must abort with returncode=2.
-
-        Postcondition: pytest.exit called once, returncode=2, message names
-        the offending root so an operator can see which one escaped.
-        """
-        import tests_py.conftest as conftest
-        from mcp_server.infrastructure import config
-
-        real_wiki = _REAL_CLAUDE_DIR / "methodology" / "wiki"
+        fake_settings = mock.Mock(
+            DB_PATH="/fake/db.sqlite",
+            SQLITE_FALLBACK_PATH="/fake/fallback.sqlite",
+        )
         with (
-            mock.patch.object(config, "WIKI_ROOT", real_wiki),
-            mock.patch.object(pytest, "exit") as mock_exit,
-        ):
-            conftest._guard_against_real_data_roots()
-
-        mock_exit.assert_called_once()
-        assert mock_exit.call_args[1].get("returncode") == 2
-        assert "WIKI_ROOT" in mock_exit.call_args[0][0], (
-            "Guard message does not name the offending root — an operator "
-            f"cannot tell what escaped: {mock_exit.call_args[0][0]!r}"
-        )
-
-    def test_guard_is_silent_when_isolation_holds(self):
-        """The live session is isolated, so the guard must NOT fire.
-
-        Without this, a guard that always exits would pass the test above
-        while making the suite unrunnable.
-        """
-        import tests_py.conftest as conftest
-
-        with mock.patch.object(pytest, "exit") as mock_exit:
-            conftest._guard_against_real_data_roots()
-        mock_exit.assert_not_called()
-
-    def test_guard_has_no_bypass_env_var(self):
-        """Unlike the PG guard, this one must offer no override.
-
-        A suite that DELETEs every table and regenerates wiki pages has no
-        safe way to run against a real tree, so an escape hatch would only
-        ever be used to re-enable the incident.
-        """
-        with open(_CONFTEST_PATH, encoding="utf-8") as fh:
-            lines = fh.readlines()
-
-        start = next(
-            i
-            for i, line in enumerate(lines)
-            if line.startswith("def _guard_against_real_data_roots(")
-        )
-        end = next(
-            (
-                i
-                for i in range(start + 1, len(lines))
-                if lines[i] and lines[i][0] not in (" ", "\t", "\n")
+            mock.patch.object(config, "CLAUDE_DIR", "/fake/claude"),
+            mock.patch.object(config, "WIKI_ROOT", "/fake/claude/wiki"),
+            mock.patch.object(
+                memory_config, "get_memory_settings", return_value=fake_settings
             ),
-            len(lines),
-        )
-        body = "".join(lines[start:end])
-        assert "CORTEX_TEST_ALLOW" not in body, (
-            "An override env-var was added to the isolation guard. There is "
-            "no safe way to run this suite against a real data tree."
-        )
+        ):
+            assert _pg_safety_guards._resolved_real_data_roots() == [
+                ("CLAUDE_DIR", "/fake/claude"),
+                ("WIKI_ROOT", "/fake/claude/wiki"),
+                ("MemorySettings.DB_PATH", "/fake/db.sqlite"),
+                ("MemorySettings.SQLITE_FALLBACK_PATH", "/fake/fallback.sqlite"),
+            ]
 
 
-class TestGuardStructuralIntegrity:
-    """The redirection and the guard must both stay unconditional."""
-
-    def test_redirect_runs_at_module_level(self):
-        """`_redirect_real_data_roots()` must be called at zero indentation.
-
-        Inside an `if`, it reintroduces exactly the conditional-isolation bug
-        of issue #219.
-        """
-        with open(_CONFTEST_PATH, encoding="utf-8") as fh:
-            lines = fh.readlines()
-
-        calls = [
-            line
-            for line in lines
-            if line.strip().endswith("_redirect_real_data_roots()")
-            and not line.startswith((" ", "\t"))
-        ]
-        assert calls, (
-            "conftest.py no longer calls _redirect_real_data_roots() at "
-            "module level — real-data roots are unisolated again (#219)."
-        )
-
-    def test_guard_call_present_at_module_level(self):
-        with open(_CONFTEST_PATH, encoding="utf-8") as fh:
-            lines = fh.readlines()
-
-        calls = [
-            line
-            for line in lines
-            if line.strip() == "_guard_against_real_data_roots()"
-            and not line.startswith((" ", "\t"))
-        ]
-        assert calls, (
-            "conftest.py no longer calls _guard_against_real_data_roots() at "
-            "module level — isolation failures become silent again (#219)."
-        )
-
-    def test_redirect_precedes_first_mcp_server_import(self):
-        """Ordering is load-bearing: constants bind at import time.
-
-        `from mcp_server.infrastructure.config import METHODOLOGY_DIR` copies
-        a value. If any mcp_server import runs before the env var is set, the
-        copied value is the real path and no later env change can fix it.
-        """
-        with open(_CONFTEST_PATH, encoding="utf-8") as fh:
-            lines = fh.readlines()
-
-        redirect_lines = [
-            i
-            for i, line in enumerate(lines)
-            if line.strip().endswith("_redirect_real_data_roots()")
-            and not line.startswith((" ", "\t"))
-        ]
-        assert redirect_lines, (
-            "conftest.py has no module-level _redirect_real_data_roots() "
-            "call, so nothing redirects the real-data roots at all (#219)."
-        )
-        redirect_line = redirect_lines[0]
-        early_imports = [
-            (i + 1, line.strip())
-            for i, line in enumerate(lines[:redirect_line])
-            if line.startswith(("import mcp_server", "from mcp_server"))
-        ]
-        assert not early_imports, (
-            "mcp_server is imported before the roots are redirected, so path "
-            f"constants bind to the real tree: {early_imports}"
-        )
+# The guard itself (TestIsolationGuard, TestGuardStructuralIntegrity) moved
+# to test_real_data_root_guard.py — issue #276/#287 boy-scout follow-up,
+# splitting this file under coding-standards.md §4.1's 300-line cap (see
+# that file's docstring for the size-cap rationale).

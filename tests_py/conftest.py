@@ -118,6 +118,13 @@ else:
 # database — CI already gets a fresh service-container DB per run, and an
 # explicit CORTEX_TEST_DATABASE_URL override is respected verbatim (the
 # caller has taken responsibility for isolation).
+#
+# The creation/cleanup mechanics live in tests_py/_pg_throwaway_db.py (moved
+# out to bring this file under coding-standards.md §4.1's 300-line cap;
+# issue #276/#287 boy-scout follow-up) — no behavior change, see that
+# module's docstring.
+from tests_py import _pg_safety_guards, _pg_throwaway_db  # noqa: E402
+
 _CORTEX_TEST_ISOLATE_DB = os.environ.get("CORTEX_TEST_ISOLATE_DB", "1") not in (
     "0",
     "false",
@@ -125,207 +132,19 @@ _CORTEX_TEST_ISOLATE_DB = os.environ.get("CORTEX_TEST_ISOLATE_DB", "1") not in (
 )
 _OWNED_ISOLATED_DB: tuple[str, str] | None = None  # (maintenance_url, db_name)
 
-
-def _maintenance_url(url: str) -> str:
-    """Same host/creds as `url`, database swapped to the `postgres` maintenance DB."""
-    base, _, _query = url.partition("?")
-    prefix, _, _dbname = base.rpartition("/")
-    return f"{prefix}/postgres"
-
-
-def _drop_dead_orphaned_databases(conn) -> None:
-    """Drop leftover `cortex_test_pw<pid>_<hex>` databases whose owning PID
-    is no longer alive.
-
-    A pytest process killed abnormally (SIGTERM/SIGKILL — e.g. a CI job
-    cancellation or a shell timeout) never reaches `pytest_sessionfinish`,
-    so its throwaway database is never dropped (measured: 1 orphan produced
-    by a bash-tool 2-minute timeout during this investigation, 2026-07-10).
-    Best-effort, non-fatal: an unreachable/ambiguous entry is left alone
-    rather than risking a false-positive drop of a database still in use.
-    """
-    try:
-        rows = conn.execute(
-            "SELECT datname FROM pg_database WHERE datname LIKE 'cortex_test_pw%';"
-        ).fetchall()
-    except Exception:
-        return
-    for row in rows:
-        name = row[0] if isinstance(row, tuple) else row.get("datname")
-        if not name:
-            continue
-        # Format: cortex_test_pw<pid>_<8-hex>
-        rest = name[len("cortex_test_pw") :]
-        pid_str = rest.split("_", 1)[0]
-        if not pid_str.isdigit():
-            continue
-        pid = int(pid_str)
-        try:
-            os.kill(pid, 0)
-            continue  # process still alive — not an orphan
-        except ProcessLookupError:
-            pass
-        except PermissionError:
-            continue  # alive but owned by another user — leave it
-        except Exception:
-            continue
-        try:
-            conn.execute(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                "WHERE datname = %s AND pid <> pg_backend_pid()",
-                (name,),
-            )
-            conn.execute(f'DROP DATABASE IF EXISTS "{name}"')
-        except Exception:
-            pass
-
-
-def _create_isolated_test_database(base_url: str) -> str | None:
-    """Create a throwaway PG database for this pytest process; return its URL.
-
-    Returns None on any failure (unreachable server, no CREATEDB privilege,
-    etc.) so the caller falls back to the shared `base_url` — degrading to
-    prior (contention-prone but functional) behavior rather than failing the
-    whole session.
-    """
-    try:
-        import psycopg
-
-        db_name = f"cortex_test_pw{os.getpid()}_{os.urandom(4).hex()}"
-        maint_url = _maintenance_url(base_url)
-        with psycopg.connect(maint_url, autocommit=True, connect_timeout=3) as conn:
-            _drop_dead_orphaned_databases(conn)
-            conn.execute(f'CREATE DATABASE "{db_name}"')
-    except Exception:
-        return None
-    global _OWNED_ISOLATED_DB
-    _OWNED_ISOLATED_DB = (maint_url, db_name)
-    prefix = base_url.rpartition("/")[0]
-    return f"{prefix}/{db_name}"
-
-
 if not _IS_CI and _CORTEX_TEST_ISOLATE_DB and not _EXPLICIT_TEST_DB_URL:
-    _isolated_url = _create_isolated_test_database(_TEST_DB_URL)
-    if _isolated_url is not None:
-        _TEST_DB_URL = _isolated_url
+    _created = _pg_throwaway_db.create_isolated_test_database(_TEST_DB_URL)
+    if _created is not None:
+        _TEST_DB_URL, _maint_url, _db_name = _created
+        _OWNED_ISOLATED_DB = (_maint_url, _db_name)
 
 os.environ["DATABASE_URL"] = _TEST_DB_URL
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001
     """Drop the throwaway per-process database created above, if any."""
-    if _OWNED_ISOLATED_DB is None:
-        return
-    maint_url, db_name = _OWNED_ISOLATED_DB
-    try:
-        import psycopg
-
-        with psycopg.connect(maint_url, autocommit=True, connect_timeout=3) as conn:
-            conn.execute(
-                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-                "WHERE datname = %s AND pid <> pg_backend_pid()",
-                (db_name,),
-            )
-            conn.execute(f'DROP DATABASE IF EXISTS "{db_name}"')
-    except Exception:
-        pass
-
-
-def _looks_like_test_db(url: str) -> bool:
-    """True when the database NAME declares itself a test/bench database."""
-    name = url.rsplit("/", 1)[-1].split("?", 1)[0]
-    return name.endswith("_test") or name.endswith("_bench") or "_test_" in name
-
-
-def _guard_against_populated_db() -> None:
-    """Refuse to run destructive test isolation against a populated DB.
-
-    INCIDENT 2026-06-10: an agent ran ``DATABASE_URL=<production> CI=true
-    pytest`` — the CI branch above trusted the URL verbatim and
-    ``_clean_all_tables`` deleted 537,396 production memories (plus all
-    entities, relationships, and prospective triggers) between tests.
-
-    Two-tier guard, fail-closed:
-      * a database whose NAME marks it as a test DB (``*_test`` /
-        ``*_bench``) is trusted — local cortex_test and bench DBs;
-      * any OTHER name (e.g. the fresh runner-local ``cortex`` that real
-        CI creates) must hold ZERO memories at session start. A genuine
-        test database is created empty; pre-existing rows mean this is
-        somebody's real store. No threshold constant — empty is empty.
-
-    Override (explicit, never default): CORTEX_TEST_ALLOW_POPULATED=1.
-    """
-    if os.environ.get("CORTEX_TEST_ALLOW_POPULATED") == "1":
-        return
-    if _looks_like_test_db(_TEST_DB_URL):
-        return
-    try:
-        import psycopg
-
-        with psycopg.connect(_TEST_DB_URL, autocommit=True, connect_timeout=3) as conn:
-            row = conn.execute("SELECT COUNT(*) FROM memories").fetchone()
-            count = row[0] if row else 0
-    except Exception:
-        return  # unreachable/uninitialized DB — the SQLite fallback handles it
-    if count > 0:
-        import pytest
-
-        pytest.exit(
-            f"REFUSING to run: test DB '{_TEST_DB_URL}' is not named like a "
-            f"test database and already holds {count} memories. The test "
-            "suite DELETEs every table between tests — pointing it at a real "
-            "store destroys it (incident 2026-06-10: 537k rows lost). Use a "
-            "*_test database, or set CORTEX_TEST_ALLOW_POPULATED=1 if you "
-            "really mean it.",
-            returncode=2,
-        )
-
-
-def _guard_against_real_data_roots() -> None:
-    """Refuse to run if any resolved root still points at real user data.
-
-    `_redirect_real_data_roots` sets the env vars, but the values that
-    actually matter are the ones `mcp_server` RESOLVED from them — an import
-    that happened too early, or a future edit that moves the redirection
-    below the first import, would leave the constants bound to the real
-    `~/.claude` while the env vars look correct. This checks the resolved
-    values, so it cannot be fooled by a correct-looking environment.
-
-    Fail-closed and unconditional: there is no override. A suite that DELETEs
-    every table between tests and rewrites the wiki has no safe way to run
-    against a real tree.
-
-    source: issue #219 — the previous isolation was conditional and its
-    failure was silent for as long as it took to notice a 0-row store.
-    """
-    from mcp_server.infrastructure.config import CLAUDE_DIR, WIKI_ROOT
-    from mcp_server.infrastructure.memory_config import get_memory_settings
-
-    settings = get_memory_settings()
-    real_root = os.path.realpath(os.path.expanduser("~/.claude"))
-    isolated = os.path.realpath(_TEST_CLAUDE_DIR)
-
-    offenders = [
-        (name, value)
-        for name, value in (
-            ("CLAUDE_DIR", str(CLAUDE_DIR)),
-            ("WIKI_ROOT", str(WIKI_ROOT)),
-            ("MemorySettings.DB_PATH", settings.DB_PATH),
-            ("MemorySettings.SQLITE_FALLBACK_PATH", settings.SQLITE_FALLBACK_PATH),
-        )
-        if not os.path.realpath(os.path.expanduser(value)).startswith(isolated)
-    ]
-    if offenders:
-        detail = "\n".join(f"    {name} -> {value}" for name, value in offenders)
-        pytest.exit(
-            "REFUSING to run: test isolation is not in effect. These roots "
-            f"still resolve outside the throwaway tree {isolated}:\n{detail}\n"
-            f"(real user root: {real_root}). The suite DELETEs every table "
-            "between tests and regenerates wiki dashboards — running it "
-            "against a real tree destroys data (issue #219). Ensure "
-            "_redirect_real_data_roots() runs before any mcp_server import.",
-            returncode=2,
-        )
+    if _OWNED_ISOLATED_DB is not None:
+        _pg_throwaway_db.drop_isolated_database(*_OWNED_ISOLATED_DB)
 
 
 def _guard_against_venv_lock_drift() -> None:
@@ -356,8 +175,8 @@ def _pg_available() -> bool:
         return False
 
 
-_guard_against_populated_db()
-_guard_against_real_data_roots()
+_pg_safety_guards.guard_against_populated_db(_TEST_DB_URL)
+_pg_safety_guards.guard_against_real_data_roots(_TEST_CLAUDE_DIR)
 _guard_against_venv_lock_drift()
 _USE_PG = _pg_available()
 
@@ -409,52 +228,13 @@ requires_psycopg = pytest.mark.skipif(
 
 # ── Isolate domain_mapping's dev-root scan from the real filesystem ──────
 #
-# ROOT CAUSE (reproduced deterministically while measuring coverage for
-# issue #196, 2026-07-27): shared/domain_mapping._build_registry() (used
-# transitively by handlers/consolidation/wiki_backlog_pass.py ->
-# core/wiki_drift.py's audit_wiki_drift -> _project_source_root ->
-# _file_exists_under's os.walk fallback) has NO test override by
-# default. _candidate_dev_roots() falls back to $HOME/Developments,
-# $HOME/Documents/Developments, $HOME/dev, $HOME/code — real developer
-# directories — and (this is the part that defeats a naive fix) is
-# ADDITIVE: even with $CORTEX_DEV_ROOT set, every one of those defaults
-# that exists on disk is STILL appended as an extra candidate (see
-# shared/domain_mapping.py::_candidate_dev_roots — the env var is one
-# more candidate, not a replacement). Setting the env var alone does
-# NOT isolate the scan. On a machine where one of the defaults exists
-# and holds real git repos (any contributor's normal dev machine), any
-# test that exercises the full consolidate handler (e.g.
-# test_consolidate_stage_exception_does_not_crash_siblings) transitively
-# walks those REAL, unrelated, potentially enormous repo trees via
-# os.walk — observed killing a `pytest --cov` run at the 300s per-test
-# timeout (pyproject.toml's `timeout = 300`). This is invisible in CI
-# because none of the candidate dev roots exist on a CI runner
-# ($HOME=/home/runner), so _candidate_dev_roots() returns [] there and
-# _project_source_root always returns None — CI's isolation is
-# accidental, not designed. This plausibly explains the previously
-# unexplained "CI stall on 148d5a1... hung >3h... no offender
-# identified" this same `timeout` setting was added to catch (see the
-# comment on `timeout_method` above): a local run with a populated dev
-# root would reproduce this hang with no per-test timeout to bound it.
-#
-# Fix: replace `_candidate_dev_roots` itself (not just the env var) so
-# it always returns an empty list for the whole test session, matching
-# the exact isolation pattern tests_py/shared/test_domain_mapping.py
-# already uses per-test (monkeypatch `_candidate_dev_roots` directly,
-# then `_build_registry.cache_clear()`). Those dedicated tests
-# monkeypatch this same attribute again inside their own test body —
-# monkeypatch always restores to whatever was in place when the test
-# started, so patching it here at collection time (not via the
-# `monkeypatch` fixture, which only exists inside a running test) is a
-# permanent module-level replacement for the whole session; the
-# per-test monkeypatch calls inside test_domain_mapping.py override it
-# for the duration of those specific tests and their own
-# `_build_registry.cache_clear()` calls put the real cache state back
-# in sync afterward.
-from mcp_server.shared import domain_mapping as _dm  # noqa: E402
+# Without this, a test exercising the full consolidate handler walks the
+# real, unrelated (potentially enormous) dev-root trees on a contributor's
+# machine via os.walk — see tests_py/_domain_mapping_isolation.py's
+# docstring for the full incident history (issue #196).
+from tests_py._domain_mapping_isolation import isolate_dev_root_scan  # noqa: E402
 
-_dm._candidate_dev_roots = lambda: []
-_dm._build_registry.cache_clear()
+isolate_dev_root_scan()
 
 
 def _get_raw_connection():
