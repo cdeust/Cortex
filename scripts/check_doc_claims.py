@@ -232,6 +232,11 @@ def main() -> int:
     parser.add_argument(
         "--test-count",
         type=int,
+        # Explicit, not load-bearing: argparse already defaults an unset
+        # optional argument with no `default` kwarg at all to None, so a
+        # mutant dropping this line is a documented equivalent (issue #235;
+        # rationale + verification in MainTests.test_the_parser_declares_
+        # the_modules_docstring_and_flag_help's docstring).
         default=None,
         help="live test count (from `pytest --collect-only -q`); skipped when absent",
     )

@@ -9,7 +9,11 @@ being rewritten.
 
 from __future__ import annotations
 
+import argparse
+import contextlib
 import importlib.util
+import io
+import sys
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -76,7 +80,6 @@ _scan_spec = importlib.util.spec_from_file_location(
 )
 doc_claim_scan = importlib.util.module_from_spec(_scan_spec)
 _scan_spec.loader.exec_module(doc_claim_scan)
-
 
 CATALOGUE = (
     "52 standalone tools register unconditionally; 3 more register only when an\n"
@@ -169,6 +172,19 @@ class CanonicalSourceTests(unittest.TestCase):
         with self.assertRaises(gate.ClaimError):
             gate.canonical_reference_count()
 
+    def test_a_references_section_with_no_entries_is_an_error(self):
+        """A heading is a section; a section with nothing under it is not
+
+        a bibliography — without this guard an all-furniture section (only
+        a sub-heading and a separator, no entry) would silently count as
+        zero references rather than failing closed.
+        """
+        self._install(
+            **{"docs/papers/bibliography.md": "# B\n\n## References\n\n### X\n\n---\n"}
+        )
+        with self.assertRaises(gate.ClaimError):
+            gate.canonical_reference_count()
+
     def test_mechanism_count_is_read_from_the_bibliography_header(self):
         self._install(**{"docs/papers/bibliography.md": BIBLIOGRAPHY})
         self.assertEqual(gate.canonical_mechanism_count(), 36)
@@ -185,6 +201,11 @@ class CanonicalSourceTests(unittest.TestCase):
             **{"pyproject.toml": '[project]\nname = "x"\nversion = "4.16.0"\n'}
         )
         self.assertEqual(gate.canonical_version(), "4.16.0")
+
+    def test_missing_version_declaration_is_an_error(self):
+        self._install(**{"pyproject.toml": '[project]\nname = "x"\n'})
+        with self.assertRaises(gate.ClaimError):
+            gate.canonical_version()
 
 
 class CanonicalSourceDirectTests(unittest.TestCase):
@@ -212,8 +233,10 @@ class CanonicalSourceDirectTests(unittest.TestCase):
     missing-section, no-entries, undeclared-mechanism-count,
     missing-version) had no assertion on their exact error message, so a
     mutant that corrupted the message while keeping `assertIn`'s matched
-    substring intact still passed. Each below now asserts the message
-    verbatim.
+    substring intact still passed. Every assertion below is exact-match
+    (assertEqual on the full message), not assertIn: a mutant that only
+    wraps a message in stray marker characters still contains any true
+    substring of itself, so only a full comparison catches it.
     """
 
     def test_tool_counts_come_from_the_catalogue(self):
@@ -248,7 +271,11 @@ class CanonicalSourceDirectTests(unittest.TestCase):
         ).read
         with self.assertRaises(doc_claim_sources.ClaimError) as caught:
             doc_claim_sources.canonical_tool_counts(read_fn)
-        self.assertIn("pinned registry test", str(caught.exception))
+        self.assertEqual(
+            str(caught.exception),
+            "docs/mcp-tools.md says 50 standalone tools, but the pinned "
+            "registry test says 52",
+        )
 
     def test_inconsistent_arithmetic_in_the_catalogue_is_an_error(self):
         broken = CATALOGUE.replace("(55 total", "(56 total")
@@ -293,20 +320,24 @@ class CanonicalSourceDirectTests(unittest.TestCase):
         self.assertEqual(doc_claim_sources.canonical_reference_count(read_fn), 2)
 
     def test_the_first_references_heading_is_the_split_point(self):
-        """`split(..., 1)` on the FIRST occurrence, not `rsplit` on the last.
+        """split(..., 1) on the FIRST heading — not rsplit, not unlimited.
 
-        A doubled "## References" heading (a copy-paste mistake, or a nested
-        subsection literally named that) must not silently move which text
-        counts as entries: everything after the first heading is the
-        section, including a second stray heading line (excluded by the `#`
-        filter, same as any other heading) and the entries that follow it.
+        Two REAL headings, not a quoted one: split(maxsplit=1) on the first
+        keeps everything after it, including the second heading's own
+        entries (the heading line itself is filtered as furniture, like
+        any "#"-prefixed line) — 2 entries. rsplit(maxsplit=1) on the LAST
+        heading would keep only the entry after it — 1. The two disagree,
+        which is what makes this fixture distinguish them; a fixture where
+        both give the same count (e.g. a heading merely quoted inside an
+        entry) proves nothing.
         """
         read_fn = _FakeRepo(
             **{
                 "docs/papers/bibliography.md": (
                     "36 mechanisms.\n\n## References\n\n"
-                    "Author, A. (2001). One.\n\n## References\n\n"
-                    "Author, B. (2002). Two.\n"
+                    "Author, A. (2001). Before the second heading.\n\n"
+                    "## References\n\n"
+                    "Author, B. (2002). After the second heading.\n"
                 )
             }
         ).read
@@ -1301,6 +1332,153 @@ class StructuralIntegrityTests(unittest.TestCase):
         """
         self.assertEqual(gate.check_no_conflict_markers(), [])
         self.assertEqual(gate.check_scanned_json_parses(), [])
+
+
+@contextlib.contextmanager
+def _spying_on_argparse_construction():
+    """Capture ArgumentParser(**kwargs) and add_argument("--test-count", **kwargs).
+
+    A plain `mock.patch.object(ArgumentParser, "__init__", spy)` recurses:
+    the spy's own delegation to the real `__init__` is looked up through
+    `type(self)`, which is the (already-patched) class again. Binding the
+    ORIGINAL unbound method once, before patching, and calling that fixed
+    reference — never `super()` or `ArgumentParser.__init__` again inside
+    the spy — is what avoids it.
+    """
+    captured: dict[str, object] = {}
+    help_kwargs: dict[str, object] = {}
+    real_init = argparse.ArgumentParser.__init__
+    real_add = argparse.ArgumentParser.add_argument
+
+    def spy_init(self, *args, **kwargs):
+        captured.update(kwargs)
+        return real_init(self, *args, **kwargs)
+
+    def spy_add(self, *args, **kwargs):
+        if args and args[0] == "--test-count":
+            help_kwargs.update(kwargs)
+        return real_add(self, *args, **kwargs)
+
+    with (
+        mock.patch.object(argparse.ArgumentParser, "__init__", spy_init),
+        mock.patch.object(argparse.ArgumentParser, "add_argument", spy_add),
+    ):
+        yield captured, help_kwargs
+
+
+class MainTests(unittest.TestCase):
+    """gate.main() end to end: argparse, exit codes, and the two failure arms.
+
+    Every test above proves collect_failures/exemption_registry themselves
+    are correct; none of them ever called main() — its own dispatch (which
+    exit code, which stream) had zero mutation coverage (issue #235).
+    """
+
+    def setUp(self):
+        self._argv = sys.argv[:]
+
+    def tearDown(self):
+        sys.argv = self._argv
+
+    def _run(self, argv_tail):
+        sys.argv = ["check_doc_claims.py", *argv_tail]
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = gate.main()
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_claim_error_aborts_to_stderr_with_exit_code_2(self):
+        with mock.patch.object(
+            gate, "collect_failures", side_effect=gate.ClaimError("boom")
+        ):
+            code, out, err = self._run([])
+        self.assertEqual(code, 2)
+        self.assertEqual(out, "")
+        self.assertIn("doc-claim gate could not run: boom", err)
+
+    def test_failures_are_reported_to_stderr_with_exit_code_1(self):
+        with mock.patch.object(gate, "collect_failures", return_value=["a: bad"]):
+            code, out, err = self._run([])
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        # Exact match, not assertIn: a mutant that reworded the header (e.g.
+        # wrapped it in stray marker characters) still contains any true
+        # substring of itself, so only a full-line comparison catches it.
+        self.assertEqual(
+            err, "Documentation claims disagree with the repository:\n  a: bad\n"
+        )
+
+    def test_success_reports_exemption_count_and_exit_code_0(self):
+        with (
+            mock.patch.object(gate, "collect_failures", return_value=[]),
+            mock.patch.object(
+                gate, "exemption_registry", return_value=[("DOC.md", 3, "tests")]
+            ),
+        ):
+            code, out, err = self._run([])
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self.assertIn("doc claims OK (1 declared not-a-claim exemption(s))", out)
+        self.assertIn("DOC.md:3: exempt from the tests claim", out)
+
+    def test_success_with_no_exemptions_reports_a_zero_count(self):
+        with (
+            mock.patch.object(gate, "collect_failures", return_value=[]),
+            mock.patch.object(gate, "exemption_registry", return_value=[]),
+        ):
+            code, out, _ = self._run([])
+        self.assertEqual(code, 0)
+        self.assertIn("doc claims OK (0 declared not-a-claim exemption(s))", out)
+
+    def test_the_test_count_flag_is_parsed_and_forwarded(self):
+        with (
+            mock.patch.object(gate, "collect_failures", return_value=[]) as collect,
+            mock.patch.object(gate, "exemption_registry", return_value=[]),
+        ):
+            self._run(["--test-count", "6628"])
+        collect.assert_called_once_with(6628)
+
+    def test_without_the_flag_test_count_is_none(self):
+        with (
+            mock.patch.object(gate, "collect_failures", return_value=[]) as collect,
+            mock.patch.object(gate, "exemption_registry", return_value=[]),
+        ):
+            self._run([])
+        collect.assert_called_once_with(None)
+
+    def test_the_parser_declares_the_modules_docstring_and_flag_help(self):
+        """Pins argparse's own construction, not just its parsed effect.
+
+        A mutant that dropped `description=__doc__` or reworded the
+        --test-count help string would leave every exit-code test above
+        unaffected — main() never surfaces either string to a caller
+        that doesn't ask argparse directly. Exact-match, not assertIn: a
+        mutant that only wraps the help string in stray marker characters
+        still contains the true substring, so a full comparison is what
+        catches it.
+
+        `default` is asserted too, but is a documented-equivalent mutant
+        target, not a killed one: dropping the explicit `default=None`
+        kwarg changes nothing observable, because argparse already
+        defaults an unset optional argument with no `default` kwarg at
+        all to `None` (verified: `ArgumentParser().add_argument("--x",
+        type=int).default is None`) — the mutant is caught here only in
+        the sense that the assertion still holds, not that removing the
+        kwarg would make it fail.
+        """
+        with (
+            _spying_on_argparse_construction() as (captured, help_kwargs),
+            mock.patch.object(gate, "collect_failures", return_value=[]),
+            mock.patch.object(gate, "exemption_registry", return_value=[]),
+        ):
+            self._run([])
+
+        self.assertEqual(captured.get("description"), gate.__doc__)
+        self.assertEqual(
+            help_kwargs.get("help"),
+            "live test count (from `pytest --collect-only -q`); skipped when absent",
+        )
+        self.assertIsNone(help_kwargs.get("default"))
 
 
 if __name__ == "__main__":
