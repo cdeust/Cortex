@@ -27,7 +27,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Callable
 
-from mcp_server.core.streaming.adaptive_controller import AdaptiveBatchController
+from mcp_server.core.streaming.adaptive_controller import (
+    AdaptiveBatchController,
+    adaptive_batch_controller_batch_size,
+    adaptive_batch_controller_observe,
+)
 from mcp_server.core.streaming.ports import BatchSink
 
 
@@ -63,8 +67,8 @@ class AdaptiveBatchWriter:
     def add_many(self, rows: list[Any]) -> None:
         """Append rows; flush as many controller-sized batches as are ready."""
         self._buf.extend(rows)
-        while len(self._buf) >= self._controller.batch_size:
-            n = self._controller.batch_size
+        while len(self._buf) >= adaptive_batch_controller_batch_size(self._controller):
+            n = adaptive_batch_controller_batch_size(self._controller)
             self._flush(self._buf[:n])
             del self._buf[:n]
 
@@ -77,7 +81,9 @@ class AdaptiveBatchWriter:
     def _flush(self, batch: list[Any]) -> None:
         t0 = time.perf_counter()
         written = self._sink.write_batch(batch)
-        self._controller.observe(time.perf_counter() - t0)  # AIMD step
+        adaptive_batch_controller_observe(
+            self._controller, time.perf_counter() - t0
+        )  # AIMD step
         self.rows_written += written
 
 

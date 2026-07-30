@@ -22,6 +22,7 @@ from mcp_server.core.habituation import (
     HabituationOutcome,
     effective_repeats,
     habituate_novelty,
+    habituation_outcome_as_dict,
     is_salient,
     response_gain,
     sensitization_factor,
@@ -175,7 +176,7 @@ def test_recovery_reduces_suppression_over_time():
 
 def test_outcome_as_dict_roundtrip():
     out = habituate_novelty(0.7, "abc def", repeat_count=2)
-    d = out.as_dict()
+    d = habituation_outcome_as_dict(out)
     assert set(d) == {
         "signature",
         "modulated_novelty",
@@ -193,3 +194,30 @@ def test_zero_novelty_stays_zero():
         0.0, "x", repeat_count=0, salience=1.0, hours_since_salient=0.0
     )
     assert out.modulated_novelty == 0.0
+
+
+def test_habituation_outcome_as_dict_full_shape_and_rounding():
+    # Every float carries a 5th decimal digit so round(x, 4) vs round(x, 5)
+    # and vs round(x, None) (int truncation) are all observably different
+    # (issue #282 mutation-testing gap: habituate_novelty's own output
+    # values above only had 1-2 significant decimals, which rounds
+    # identically at every precision this dict serializes to).
+    out = HabituationOutcome(
+        signature="sig",
+        modulated_novelty=0.512345,
+        response_gain=0.698765,
+        sensitization=1.287654,
+        combined_gain=0.712345,
+        effective_repeats=2.198765,
+        suppressed=True,
+    )
+    d = habituation_outcome_as_dict(out)
+    assert d == {
+        "signature": "sig",
+        "modulated_novelty": round(0.512345, 4),
+        "response_gain": round(0.698765, 4),
+        "sensitization": round(1.287654, 4),
+        "combined_gain": round(0.712345, 4),
+        "effective_repeats": round(2.198765, 4),
+        "suppressed": True,
+    }

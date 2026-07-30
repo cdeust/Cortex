@@ -213,7 +213,14 @@ def _delegation_hint_for(kind: str) -> str | None:
 # definitions purely for readability (this module defines its own public
 # surface before re-exporting the rest of it).
 
-from .cycle_types import CycleBudget, CycleSummary, DrainResult  # noqa: E402
+from .cycle_types import (  # noqa: E402
+    CycleBudget,
+    CycleSummary,
+    DrainResult,
+    cycle_budget_charge,
+    cycle_budget_exhausted,
+    cycle_budget_time_left,
+)
 from .claude_cli import _build_argv, _subprocess_env  # noqa: E402
 from .candidate_scan import (  # noqa: E402
     _collect_anchor_candidates,
@@ -230,6 +237,9 @@ from .claude_invoke import _claude_invoke  # noqa: E402
 __all__ = [
     "InvokeResult",
     "CycleBudget",
+    "cycle_budget_time_left",
+    "cycle_budget_exhausted",
+    "cycle_budget_charge",
     "DrainResult",
     "CycleSummary",
     "_AnchorCandidate",

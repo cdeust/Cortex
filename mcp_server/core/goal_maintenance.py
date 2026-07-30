@@ -122,19 +122,27 @@ class GoalVector:
     directories: tuple[str, ...] = ()
     label: str = ""
 
-    @property
-    def is_active(self) -> bool:
-        """True iff the goal carries any keyword, entity, or directory signal."""
-        return bool(self.keywords or self.entities or self.directories)
 
-    def as_dict(self) -> dict:
-        return {
-            "label": self.label,
-            "keywords": sorted(self.keywords),
-            "entities": sorted(self.entities),
-            "directories": list(self.directories),
-            "is_active": self.is_active,
-        }
+def goal_vector_is_active(goal: "GoalVector") -> bool:
+    """True iff the goal carries any keyword, entity, or directory signal.
+
+    A free function, not a method: mutmut categorically excludes the body of
+    any `@dataclass`-decorated class (`mutmut/mutation/file_mutation.py:236`),
+    so logic placed on ``GoalVector`` methods would carry zero mutation
+    coverage no matter how the test loader names the module (issue #262 3rd
+    pass; issue #282).
+    """
+    return bool(goal.keywords or goal.entities or goal.directories)
+
+
+def goal_vector_as_dict(goal: "GoalVector") -> dict:
+    return {
+        "label": goal.label,
+        "keywords": sorted(goal.keywords),
+        "entities": sorted(goal.entities),
+        "directories": list(goal.directories),
+        "is_active": goal_vector_is_active(goal),
+    }
 
 
 # The canonical inactive goal — a module-level singleton the caller can use when
@@ -287,7 +295,7 @@ def goal_relevance(
     similarity between the goal and the candidate may pass it through the
     re-weight helpers instead (see honesty note in the module docstring).
     """
-    if not goal.is_active:
+    if not goal_vector_is_active(goal):
         return 0.0
     kw = _keyword_overlap(goal.keywords, content)
     ent = _entity_overlap(goal.entities, entities)
@@ -312,7 +320,7 @@ def goal_write_gain(
     novelty score by this gain, so goal-relevant inputs clear the write
     threshold slightly more easily while the goal is active.
     """
-    if not goal.is_active:
+    if not goal_vector_is_active(goal):
         return 1.0
     rel = goal_relevance(goal, content, entities=entities, directory=directory)
     return 1.0 + weight * rel
@@ -334,7 +342,7 @@ def goal_recall_multiplier(
     goal is active. Inactive goal or zero relevance → 1.0 (identity), so recall
     ordering is unchanged by default.
     """
-    if not goal.is_active:
+    if not goal_vector_is_active(goal):
         return 1.0
     rel = goal_relevance(goal, content, entities=entities, directory=directory)
     return 1.0 + weight * rel

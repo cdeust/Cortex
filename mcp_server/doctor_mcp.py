@@ -71,27 +71,38 @@ class McpCheck:
 
 @dataclass
 class McpReport:
-    """Aggregated report from all MCP checks."""
+    """Aggregated report from all MCP checks.
+
+    Data only — deliberately no methods. mutmut's mutation generator
+    categorically excludes the body of any `@dataclass`-decorated class
+    (`mutmut/mutation/file_mutation.py:236`, confirmed empirically: issue
+    #262's 3rd pass, `RepoBadge` in scripts/generate_repo_badges.py), so
+    logic placed on methods here would carry zero mutation coverage no
+    matter how the test loader names the module. `mcp_report_required_fails`
+    / `mcp_report_warnings` / `mcp_report_to_dict` below carry the same
+    logic as free functions instead (issue #282).
+    """
 
     checks: list[McpCheck] = field(default_factory=list)
     skipped: list[dict] = field(default_factory=list)  # "I don't know" probes
 
-    @property
-    def required_fails(self) -> list[McpCheck]:
-        return [c for c in self.checks if not c.ok and c.severity == "fail"]
 
-    @property
-    def warnings(self) -> list[McpCheck]:
-        return [c for c in self.checks if not c.ok and c.severity == "warn"]
+def mcp_report_required_fails(report: McpReport) -> list[McpCheck]:
+    return [c for c in report.checks if not c.ok and c.severity == "fail"]
 
-    def to_dict(self) -> dict:
-        return {
-            "checks": [asdict(c) for c in self.checks],
-            "skipped": list(self.skipped),
-            "ok": not self.required_fails,
-            "fail_count": len(self.required_fails),
-            "warn_count": len(self.warnings),
-        }
+
+def mcp_report_warnings(report: McpReport) -> list[McpCheck]:
+    return [c for c in report.checks if not c.ok and c.severity == "warn"]
+
+
+def mcp_report_to_dict(report: McpReport) -> dict:
+    return {
+        "checks": [asdict(c) for c in report.checks],
+        "skipped": list(report.skipped),
+        "ok": not mcp_report_required_fails(report),
+        "fail_count": len(mcp_report_required_fails(report)),
+        "warn_count": len(mcp_report_warnings(report)),
+    }
 
 
 # --- individual checks --------------------------------------------------
@@ -718,8 +729,8 @@ def _print_human(report: McpReport, copy_header: bool = False) -> None:
         print(f"  {marker} {skip['name']}")
         print(f"         reason: {skip['reason']}")
     print("=" * 60)
-    fails = report.required_fails
-    warns = report.warnings
+    fails = mcp_report_required_fails(report)
+    warns = mcp_report_warnings(report)
     if not fails and not warns:
         print("All MCP checks passed. Cortex MCP should start cleanly.")
         return
@@ -753,7 +764,7 @@ def run_mcp(json_output: bool = False, copy_header: bool = False) -> int:
     """
     report = collect_mcp_report()
     if json_output:
-        print(json.dumps(report.to_dict(), indent=2))
+        print(json.dumps(mcp_report_to_dict(report), indent=2))
     else:
         _print_human(report, copy_header=copy_header)
-    return 0 if not report.required_fails else 1
+    return 0 if not mcp_report_required_fails(report) else 1

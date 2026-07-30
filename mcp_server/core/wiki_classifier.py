@@ -54,7 +54,11 @@ from mcp_server.core.wiki_title import derive_title, slugify as _slugify
 from mcp_server.observability import silent_failure
 from mcp_server.core.wiki_rule_engine import apply_rules
 from mcp_server.shared.wiki_classification import Classification, Generator
-from mcp_server.core.wiki_axis_registry import AXIS_PROVENANCE, get_registry
+from mcp_server.core.wiki_axis_registry import (
+    AXIS_PROVENANCE,
+    axis_registry_get,
+    get_registry,
+)
 
 __all__ = [
     "classify_memory",
@@ -322,7 +326,7 @@ def classify_memory(
     # source of truth — no hardcoded set of provenance names here.
     generator: Generator | None = None
 
-    prov_value = get_registry().get(AXIS_PROVENANCE, provenance)
+    prov_value = axis_registry_get(get_registry(), AXIS_PROVENANCE, provenance)
     if prov_value is not None and prov_value.requires_generator:
         generator = Generator(
             model="unknown",

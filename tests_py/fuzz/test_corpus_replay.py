@@ -42,7 +42,7 @@ def test_at_least_one_harness_exists():
 def test_harness_holds_on_its_whole_corpus(harness):
     module = _replayer()
     target = next(h for h in module.discover() if h.name == harness)
-    corpus = list(target.inputs())
+    corpus = list(module.harness_inputs(target))
     assert corpus, (
         f"{harness} has an empty corpus — a harness with no inputs asserts"
         " nothing, and every crash it once found would be unpinned"

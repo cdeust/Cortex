@@ -210,16 +210,23 @@ class HabituationOutcome:
     effective_repeats: float
     suppressed: bool
 
-    def as_dict(self) -> dict:
-        return {
-            "signature": self.signature,
-            "modulated_novelty": round(self.modulated_novelty, 4),
-            "response_gain": round(self.response_gain, 4),
-            "sensitization": round(self.sensitization, 4),
-            "combined_gain": round(self.combined_gain, 4),
-            "effective_repeats": round(self.effective_repeats, 4),
-            "suppressed": self.suppressed,
-        }
+
+def habituation_outcome_as_dict(outcome: "HabituationOutcome") -> dict:
+    """A free function, not a method: mutmut categorically excludes the
+    body of any `@dataclass`-decorated class (`mutmut/mutation/
+    file_mutation.py:236`), so logic placed on `HabituationOutcome` methods
+    would carry zero mutation coverage no matter how the test loader names
+    the module (issue #262 3rd pass; issue #282).
+    """
+    return {
+        "signature": outcome.signature,
+        "modulated_novelty": round(outcome.modulated_novelty, 4),
+        "response_gain": round(outcome.response_gain, 4),
+        "sensitization": round(outcome.sensitization, 4),
+        "combined_gain": round(outcome.combined_gain, 4),
+        "effective_repeats": round(outcome.effective_repeats, 4),
+        "suppressed": outcome.suppressed,
+    }
 
 
 def habituate_novelty(

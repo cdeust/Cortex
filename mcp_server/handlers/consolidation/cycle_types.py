@@ -32,29 +32,41 @@ class CycleBudget:
     of them has charged the budget.  The USD cap is therefore a SOFT
     ceiling with overshoot of at most ``concurrency - 1`` calls beyond
     the cap.  This is acceptable for an operational safety rail.
+
+    Data only — deliberately no methods. mutmut's mutation generator
+    categorically excludes the body of any `@dataclass`-decorated class
+    (`mutmut/mutation/file_mutation.py:236`), so logic placed on methods
+    here would carry zero mutation coverage no matter how the test loader
+    names the module (issue #262 3rd pass; issue #282).
+    `cycle_budget_time_left` / `cycle_budget_exhausted` /
+    `cycle_budget_charge` below carry the same logic as free functions
+    instead.
     """
 
     deadline: float  # time.monotonic() timestamp
     usd_cap: float  # <=0 means no USD cap
     usd_spent: float = field(default=0.0)
 
-    def time_left(self) -> float:
-        """Remaining seconds until deadline (negative when expired)."""
-        return self.deadline - time.monotonic()
 
-    def exhausted(self) -> bool:
-        """True when wall-clock time is up OR the USD cap is reached."""
-        if self.time_left() <= 0:
-            return True
-        return self.usd_cap > 0 and self.usd_spent >= self.usd_cap
+def cycle_budget_time_left(budget: "CycleBudget") -> float:
+    """Remaining seconds until deadline (negative when expired)."""
+    return budget.deadline - time.monotonic()
 
-    def charge(self, usd: float) -> None:
-        """Add ``usd`` to the running spend.
 
-        Pre-condition:  ``usd`` >= 0.
-        Post-condition: ``self.usd_spent`` incremented by ``usd``.
-        """
-        self.usd_spent += usd
+def cycle_budget_exhausted(budget: "CycleBudget") -> bool:
+    """True when wall-clock time is up OR the USD cap is reached."""
+    if cycle_budget_time_left(budget) <= 0:
+        return True
+    return budget.usd_cap > 0 and budget.usd_spent >= budget.usd_cap
+
+
+def cycle_budget_charge(budget: "CycleBudget", usd: float) -> None:
+    """Add ``usd`` to the running spend.
+
+    Pre-condition:  ``usd`` >= 0.
+    Post-condition: ``budget.usd_spent`` incremented by ``usd``.
+    """
+    budget.usd_spent += usd
 
 
 @dataclass

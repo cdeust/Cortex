@@ -15,6 +15,8 @@ from mcp_server.core.wiki_axis_registry import (
     AXIS_AUDIENCE,
     AXIS_LIFECYCLE,
     AXIS_PROVENANCE,
+    axis_registry_default_for,
+    axis_registry_values,
     get_registry,
     match_axis,
 )
@@ -73,7 +75,7 @@ def detect_provenance(tags: list[str] | None) -> str:
     matches = match_axis("", tags, AXIS_PROVENANCE, reg)
     if matches:
         return matches[0]
-    default = reg.default_for(AXIS_PROVENANCE)
+    default = axis_registry_default_for(reg, AXIS_PROVENANCE)
     return default.name if default is not None else "human"
 
 
@@ -89,7 +91,7 @@ def detect_audiences(
     reg = get_registry()
     matches = list(match_axis(content, tags, AXIS_AUDIENCE, reg))
     if not matches:
-        default = reg.default_for(AXIS_AUDIENCE)
+        default = axis_registry_default_for(reg, AXIS_AUDIENCE)
         if default is not None:
             matches.append(default.name)
         else:
@@ -107,7 +109,7 @@ def pick_lifecycle(kind: str) -> str:
     values are filtered separately so a non-ADR cannot inherit ``proposed``.
     """
     reg = get_registry()
-    for v in reg.values(AXIS_LIFECYCLE):
+    for v in axis_registry_values(reg, AXIS_LIFECYCLE):
         if v.default and (
             (kind == "adr" and "adr" in v.applies_to_kinds)
             or (kind != "adr" and not v.applies_to_kinds)

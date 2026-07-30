@@ -4,6 +4,10 @@ import pytest
 from mcp_server.core.ablation import (
     Mechanism,
     AblationConfig,
+    ablation_config_disable,
+    ablation_config_disable_all_except,
+    ablation_config_enable,
+    ablation_config_is_enabled,
     compute_ablation_deltas,
     compute_impact_score,
     generate_interpretation,
@@ -21,29 +25,30 @@ class TestAblationConfig:
     def test_all_enabled_by_default(self):
         config = AblationConfig()
         for m in Mechanism:
-            assert config.is_enabled(m)
+            assert ablation_config_is_enabled(config, m)
 
     def test_disable_one(self):
-        config = AblationConfig().disable(Mechanism.OSCILLATORY_CLOCK)
-        assert not config.is_enabled(Mechanism.OSCILLATORY_CLOCK)
-        assert config.is_enabled(Mechanism.SCHEMA_ENGINE)
+        config = ablation_config_disable(AblationConfig(), Mechanism.OSCILLATORY_CLOCK)
+        assert not ablation_config_is_enabled(config, Mechanism.OSCILLATORY_CLOCK)
+        assert ablation_config_is_enabled(config, Mechanism.SCHEMA_ENGINE)
 
     def test_enable_after_disable(self):
-        config = (
-            AblationConfig()
-            .disable(Mechanism.SCHEMA_ENGINE)
-            .enable(Mechanism.SCHEMA_ENGINE)
+        config = ablation_config_enable(
+            ablation_config_disable(AblationConfig(), Mechanism.SCHEMA_ENGINE),
+            Mechanism.SCHEMA_ENGINE,
         )
-        assert config.is_enabled(Mechanism.SCHEMA_ENGINE)
+        assert ablation_config_is_enabled(config, Mechanism.SCHEMA_ENGINE)
 
     def test_disable_all_except(self):
-        config = AblationConfig().disable_all_except(Mechanism.OSCILLATORY_CLOCK)
-        assert config.is_enabled(Mechanism.OSCILLATORY_CLOCK)
-        assert not config.is_enabled(Mechanism.SCHEMA_ENGINE)
+        config = ablation_config_disable_all_except(
+            AblationConfig(), Mechanism.OSCILLATORY_CLOCK
+        )
+        assert ablation_config_is_enabled(config, Mechanism.OSCILLATORY_CLOCK)
+        assert not ablation_config_is_enabled(config, Mechanism.SCHEMA_ENGINE)
 
     def test_string_key_works(self):
-        config = AblationConfig().disable("oscillatory_clock")
-        assert not config.is_enabled("oscillatory_clock")
+        config = ablation_config_disable(AblationConfig(), "oscillatory_clock")
+        assert not ablation_config_is_enabled(config, "oscillatory_clock")
 
 
 class TestDeltas:

@@ -945,25 +945,37 @@ class ScopeCoverage:
 
 @dataclass
 class DomainCoverage:
-    """Roll-up of all scopes for one domain."""
+    """Roll-up of all scopes for one domain.
+
+    Data only — deliberately no methods. mutmut's mutation generator
+    categorically excludes the body of any `@dataclass`-decorated class
+    (`mutmut/mutation/file_mutation.py:236`), so logic placed on methods
+    here would carry zero mutation coverage no matter how the test loader
+    names the module (issue #262 3rd pass; issue #282).
+    `domain_coverage_covered_count` / `domain_coverage_missing_count` /
+    `domain_coverage_coverage_ratio` / `domain_coverage_missing_scopes`
+    below carry the same logic as free functions instead.
+    """
 
     domain: str
     scopes: list[ScopeCoverage] = field(default_factory=list)
 
-    @property
-    def covered_count(self) -> int:
-        return sum(1 for s in self.scopes if s.covered)
 
-    @property
-    def missing_count(self) -> int:
-        return sum(1 for s in self.scopes if not s.covered)
+def domain_coverage_covered_count(coverage: "DomainCoverage") -> int:
+    return sum(1 for s in coverage.scopes if s.covered)
 
-    @property
-    def coverage_ratio(self) -> float:
-        return self.covered_count / len(self.scopes) if self.scopes else 0.0
 
-    def missing_scopes(self) -> list[ScopeCoverage]:
-        return [s for s in self.scopes if not s.covered]
+def domain_coverage_missing_count(coverage: "DomainCoverage") -> int:
+    return sum(1 for s in coverage.scopes if not s.covered)
+
+
+def domain_coverage_coverage_ratio(coverage: "DomainCoverage") -> float:
+    total = len(coverage.scopes)
+    return domain_coverage_covered_count(coverage) / total if total else 0.0
+
+
+def domain_coverage_missing_scopes(coverage: "DomainCoverage") -> list[ScopeCoverage]:
+    return [s for s in coverage.scopes if not s.covered]
 
 
 # ── Filesystem scan ─────────────────────────────────────────────────────
@@ -1198,7 +1210,7 @@ def audit_all_domains(
         audit_domain(wiki_root, d, max_age_days=max_age_days)
         for d in list_domains(wiki_root)
     ]
-    rolls.sort(key=lambda r: r.missing_count, reverse=True)
+    rolls.sort(key=domain_coverage_missing_count, reverse=True)
     return rolls
 
 
@@ -1372,7 +1384,12 @@ def _index_wiki_file_references(
 
 @dataclass
 class FileCoverage:
-    """File-level coverage roll-up for one domain."""
+    """File-level coverage roll-up for one domain.
+
+    Data only — see `DomainCoverage`'s docstring for why.
+    `file_coverage_coverage_ratio` below carries the same logic as a free
+    function instead.
+    """
 
     domain: str
     source_root: str | None
@@ -1380,11 +1397,11 @@ class FileCoverage:
     covered_file_count: int  # matched by path or basename
     uncovered_files: list[str] = field(default_factory=list)
 
-    @property
-    def coverage_ratio(self) -> float:
-        if not self.source_file_count:
-            return 1.0
-        return self.covered_file_count / self.source_file_count
+
+def file_coverage_coverage_ratio(coverage: "FileCoverage") -> float:
+    if not coverage.source_file_count:
+        return 1.0
+    return coverage.covered_file_count / coverage.source_file_count
 
 
 def audit_files(wiki_root: str, domain: str) -> FileCoverage:

@@ -41,7 +41,10 @@ from mcp_server.shared.text import extract_keywords
 from mcp_server.shared.similarity import jaccard_similarity
 from mcp_server.shared.vader import vader_compound
 from mcp_server.core.value_learning import retrieval_priority
-from mcp_server.core.goal_maintenance import goal_recall_multiplier
+from mcp_server.core.goal_maintenance import (
+    goal_recall_multiplier,
+    goal_vector_is_active,
+)
 from mcp_server.core.attentional_control import allocate_attention
 from mcp_server.core.reconsolidation import compute_reconsolidation_action
 
@@ -1047,7 +1050,7 @@ def goal_maintenance_rerank(
         return candidates
     if not candidates or len(candidates) < _MIN_RERANK_CANDIDATES:
         return candidates
-    if goal is None or not getattr(goal, "is_active", False):
+    if goal is None or not goal_vector_is_active(goal):
         return candidates
 
     for c in candidates:
@@ -1379,7 +1382,9 @@ def conflict_monitor_rerank(
             # Attach plans + the assessment to the current top candidate so a
             # downstream curation phase can act on them. Non-destructive.
             candidates[0].setdefault("conflict_plans", []).extend(plans)
-            candidates[0]["conflict_assessment"] = assessment.as_dict()
+            candidates[0]["conflict_assessment"] = (
+                conflict_monitor.conflict_assessment_as_dict(assessment)
+            )
     except Exception:  # noqa: BLE001 — non-load-bearing; never fail a recall
         return candidates
 

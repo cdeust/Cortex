@@ -76,10 +76,17 @@ class Redirect:
         if self.target_id is not None and not is_valid_page_id(self.target_id):
             raise ValueError(f"invalid redirect_id: {self.target_id!r}; expected UUID4")
 
-    @property
-    def is_id_based(self) -> bool:
-        """True if the redirect points at a stable ID (preferred form)."""
-        return self.target_id is not None
+
+def redirect_is_id_based(redirect: "Redirect") -> bool:
+    """True if the redirect points at a stable ID (preferred form).
+
+    A free function, not a method: mutmut categorically excludes the body
+    of any `@dataclass`-decorated class (`mutmut/mutation/file_mutation.py:
+    236`), so logic placed on `Redirect` methods would carry zero mutation
+    coverage no matter how the test loader names the module (issue #262
+    3rd pass; issue #282).
+    """
+    return redirect.target_id is not None
 
 
 def parse_redirect(frontmatter: dict[str, object]) -> Redirect | None:

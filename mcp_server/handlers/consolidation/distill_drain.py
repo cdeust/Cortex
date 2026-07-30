@@ -138,7 +138,7 @@ async def run_distill_drain_cycle(
 
     async def _drain_one(job: dict[str, Any]) -> DistillDrainResult:
         async with sem:
-            if budget.exhausted():
+            if _root.cycle_budget_exhausted(budget):
                 return DistillDrainResult(
                     marker=job.get("marker", ""),
                     dossier_kind=job.get("dossier_kind", ""),
@@ -150,10 +150,14 @@ async def run_distill_drain_cycle(
             t0 = time.monotonic()
             prompt = str(job.get("prompt", "")) + _NO_PROMOTION_REMINDER
             eff_timeout = max(
-                1.0, min(float(_root.CLAUDE_CALL_TIMEOUT_SEC), budget.time_left())
+                1.0,
+                min(
+                    float(_root.CLAUDE_CALL_TIMEOUT_SEC),
+                    _root.cycle_budget_time_left(budget),
+                ),
             )
             ir = await invoke_fn(prompt, timeout=eff_timeout)
-            budget.charge(ir.cost_usd)
+            _root.cycle_budget_charge(budget, ir.cost_usd)
             ms = int((time.monotonic() - t0) * 1000)
             status = "attempted" if ir.text else "failed"
             return DistillDrainResult(

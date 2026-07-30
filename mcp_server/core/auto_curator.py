@@ -33,6 +33,7 @@ References (the user-quoted directives this module exists to satisfy):
 from __future__ import annotations
 
 from mcp_server.core.prose_redaction import REDACTION_CONVENTIONS
+from mcp_server.core.wiki_coverage import domain_coverage_missing_scopes
 
 import re
 from collections import Counter, defaultdict
@@ -1004,7 +1005,7 @@ def build_coverage_jobs(
         mem_contents = [m.get("content") or "" for m in mems[:MAX_MEMORIES_PER_PROMPT]]
         mem_tags = [m.get("tags") or [] for m in mems[:MAX_MEMORIES_PER_PROMPT]]
         mem_ids = [m["id"] for m in mems if "id" in m]
-        for missing in cov.missing_scopes():
+        for missing in domain_coverage_missing_scopes(cov):
             scope = missing.scope
             related = _find_related_pages_for_scope(
                 domain, scope.name, existing_pages_by_topic

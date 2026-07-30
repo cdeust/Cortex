@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 
 from mcp_server.core.confluence_parser import parse_confluence_storage
-from mcp_server.core.document_model import DocumentParseError
+from mcp_server.core.document_model import (
+    DocumentParseError,
+    document_section_is_empty,
+    parsed_document_is_empty,
+)
 
 
 class TestHeadingsAndBody:
@@ -111,11 +115,11 @@ class TestTables:
 class TestEdgeCases:
     def test_empty_is_empty(self):
         doc = parse_confluence_storage("")
-        assert doc.is_empty()
+        assert parsed_document_is_empty(doc)
 
     def test_headings_only(self):
         doc = parse_confluence_storage("<h1>A</h1><h2>B</h2>")
-        assert all(s.is_empty() for s in doc.sections)
+        assert all(document_section_is_empty(s) for s in doc.sections)
 
     def test_malformed_xhtml_raises_with_message(self):
         with pytest.raises(DocumentParseError, match="malformed Confluence XHTML"):

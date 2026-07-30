@@ -102,6 +102,13 @@ class ValueUpdate:
     ``delta``          — the reward-prediction error δ = reward - V (signed).
     ``eligibility``    — the trace weight this memory received (top hit = 1.0).
     ``effective_alpha``— alpha·eligibility, the actual step size applied.
+
+    Data only — deliberately no methods. mutmut's mutation generator
+    categorically excludes the body of any `@dataclass`-decorated class
+    (`mutmut/mutation/file_mutation.py:236`), so logic placed on methods
+    here would carry zero mutation coverage no matter how the test loader
+    names the module (issue #262 3rd pass; issue #282). ``value_update_as_dict``
+    below carries the same logic as a free function instead.
     """
 
     memory_id: int
@@ -111,15 +118,16 @@ class ValueUpdate:
     eligibility: float
     effective_alpha: float
 
-    def as_dict(self) -> dict:
-        return {
-            "memory_id": self.memory_id,
-            "old_value": round(self.old_value, 4),
-            "new_value": round(self.new_value, 4),
-            "delta": round(self.delta, 4),
-            "eligibility": round(self.eligibility, 4),
-            "effective_alpha": round(self.effective_alpha, 4),
-        }
+
+def value_update_as_dict(update: ValueUpdate) -> dict:
+    return {
+        "memory_id": update.memory_id,
+        "old_value": round(update.old_value, 4),
+        "new_value": round(update.new_value, 4),
+        "delta": round(update.delta, 4),
+        "eligibility": round(update.eligibility, 4),
+        "effective_alpha": round(update.effective_alpha, 4),
+    }
 
 
 # ── TD value update (Schultz / Sutton & Barto) ──────────────────────────────

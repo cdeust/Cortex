@@ -42,43 +42,57 @@ CORPUS_DIR = FUZZ_DIR / "corpus"
 
 @dataclass(frozen=True)
 class Harness:
-    """One fuzz harness and the corpus directory that feeds it."""
+    """One fuzz harness and the corpus directory that feeds it.
+
+    Data only — deliberately no methods. mutmut's mutation generator
+    categorically excludes the body of any `@dataclass`-decorated class
+    (`mutmut/mutation/file_mutation.py:236`), so logic placed on methods
+    here would carry zero mutation coverage no matter how the test loader
+    names the module (issue #262 3rd pass; issue #282).
+    `harness_module_path` / `harness_corpus_path` / `harness_consume` /
+    `harness_inputs` below carry the same logic as free functions instead.
+    """
 
     name: str
 
-    def module_path(self) -> Path:
-        return FUZZ_DIR / f"{self.name}.py"
 
-    def corpus_path(self) -> Path:
-        return CORPUS_DIR / self.name
+def harness_module_path(harness: "Harness") -> Path:
+    return FUZZ_DIR / f"{harness.name}.py"
 
-    def consume(self) -> Callable[[bytes], None]:
-        """Import the harness and hand back its single-iteration entry point."""
-        spec = importlib.util.spec_from_file_location(self.name, self.module_path())
-        if spec is None or spec.loader is None:
-            raise RuntimeError(f"{self.module_path()}: not importable")
-        module = importlib.util.module_from_spec(spec)
-        # Registered before exec: @dataclass (and typing constructs
-        # generally) resolve annotations via sys.modules[cls.__module__],
-        # which is None for a module loaded from a path and never inserted.
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        consume = getattr(module, "consume", None)
-        if consume is None:
-            raise RuntimeError(
-                f"{self.module_path()}: no consume(data: bytes) —"
-                " every harness must expose one so its property is runnable"
-                " without atheris"
-            )
-        return consume
 
-    def inputs(self) -> Iterator[tuple[Path, bytes]]:
-        directory = self.corpus_path()
-        if not directory.is_dir():
-            return
-        for path in sorted(directory.iterdir()):
-            if path.is_file():
-                yield path, path.read_bytes()
+def harness_corpus_path(harness: "Harness") -> Path:
+    return CORPUS_DIR / harness.name
+
+
+def harness_consume(harness: "Harness") -> Callable[[bytes], None]:
+    """Import the harness and hand back its single-iteration entry point."""
+    module_path = harness_module_path(harness)
+    spec = importlib.util.spec_from_file_location(harness.name, module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"{module_path}: not importable")
+    module = importlib.util.module_from_spec(spec)
+    # Registered before exec: @dataclass (and typing constructs
+    # generally) resolve annotations via sys.modules[cls.__module__],
+    # which is None for a module loaded from a path and never inserted.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    consume = getattr(module, "consume", None)
+    if consume is None:
+        raise RuntimeError(
+            f"{module_path}: no consume(data: bytes) —"
+            " every harness must expose one so its property is runnable"
+            " without atheris"
+        )
+    return consume
+
+
+def harness_inputs(harness: "Harness") -> Iterator[tuple[Path, bytes]]:
+    directory = harness_corpus_path(harness)
+    if not directory.is_dir():
+        return
+    for path in sorted(directory.iterdir()):
+        if path.is_file():
+            yield path, path.read_bytes()
 
 
 def discover() -> list[Harness]:
@@ -97,9 +111,9 @@ def discover() -> list[Harness]:
 
 def replay(harness: Harness) -> int:
     """Run one harness over its corpus. Returns the number of inputs run."""
-    consume = harness.consume()
+    consume = harness_consume(harness)
     count = 0
-    for path, data in harness.inputs():
+    for path, data in harness_inputs(harness):
         try:
             consume(data)
         except Exception as error:
@@ -125,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.list:
         for harness in harnesses:
-            print(f"{harness.name}: {sum(1 for _ in harness.inputs())} input(s)")
+            print(f"{harness.name}: {sum(1 for _ in harness_inputs(harness))} input(s)")
         return 0
 
     total = 0

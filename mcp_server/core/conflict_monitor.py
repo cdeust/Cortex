@@ -364,17 +364,24 @@ class ConflictAssessment:
     loser_id: Any | None
     high: bool
 
-    def as_dict(self) -> dict:
-        return {
-            "conflict_score": round(self.conflict_score, 4),
-            "entropy": round(self.entropy, 4),
-            "max_contradiction": round(self.max_contradiction, 4),
-            "competing_pair": list(self.competing_pair)
-            if self.competing_pair is not None
-            else None,
-            "loser_id": self.loser_id,
-            "high": self.high,
-        }
+
+def conflict_assessment_as_dict(assessment: "ConflictAssessment") -> dict:
+    """A free function, not a method: mutmut categorically excludes the
+    body of any `@dataclass`-decorated class (`mutmut/mutation/
+    file_mutation.py:236`), so logic placed on `ConflictAssessment` methods
+    would carry zero mutation coverage no matter how the test loader names
+    the module (issue #262 3rd pass; issue #282).
+    """
+    return {
+        "conflict_score": round(assessment.conflict_score, 4),
+        "entropy": round(assessment.entropy, 4),
+        "max_contradiction": round(assessment.max_contradiction, 4),
+        "competing_pair": list(assessment.competing_pair)
+        if assessment.competing_pair is not None
+        else None,
+        "loser_id": assessment.loser_id,
+        "high": assessment.high,
+    }
 
 
 def _candidate_text(c: dict[str, Any]) -> str:

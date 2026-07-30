@@ -14,6 +14,7 @@ from mcp_server.core.forward_model import (
     ERROR_DEADBAND,
     ForwardModelState,
     correction,
+    forward_model_state_as_dict,
     predict,
     prediction_error,
     run_forward_model,
@@ -122,3 +123,26 @@ class TestScalarOf:
         traj = [scalar_of(f) for f in feats[:-1]]
         err = prediction_error(traj, scalar_of(feats[-1]))
         assert err > 0
+
+
+class TestForwardModelStateAsDict:
+    """issue #282: dataclass mutation blindspot — direct coverage of the
+    extracted free function (was ForwardModelState.as_dict)."""
+
+    def test_rounds_all_fields(self):
+        # error and corrected each carry a 7th-decimal digit so round(x, 6)
+        # vs round(x, 7) and vs round(x, None) (int truncation) are all
+        # observably different (issue #282 mutation-testing gap: the
+        # original -0.0000001 / 0.5 values rounded identically at every
+        # precision — -0.0000001 rounds to 0.0 whether ndigits is 6 or
+        # None, and 0.5 has no 7th digit to lose).
+        state = ForwardModelState(
+            estimate=0.123456789, error=-0.1234567, corrected=0.5123456, n_updates=3
+        )
+        d = forward_model_state_as_dict(state)
+        assert d == {
+            "estimate": round(0.123456789, 6),
+            "error": round(-0.1234567, 6),
+            "corrected": round(0.5123456, 6),
+            "n_updates": 3,
+        }

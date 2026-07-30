@@ -103,17 +103,28 @@ class AssemblyMetrics:
     total_variable_budget: int = 0
     total_final_tokens: int = 0
 
-    def reduction_fraction(self, key: str) -> float:
-        """Fraction of a placeholder's content that survived (0.0..1.0)."""
-        orig = self.original_tokens.get(key, 0)
-        if orig == 0:
-            return 1.0
-        fin = self.final_tokens.get(key, 0)
-        return fin / orig
 
-    def was_truncated(self, key: str, threshold: float = 0.9) -> bool:
-        """True if the placeholder's surviving fraction is below threshold."""
-        return self.reduction_fraction(key) < threshold
+def assembly_metrics_reduction_fraction(metrics: "AssemblyMetrics", key: str) -> float:
+    """Fraction of a placeholder's content that survived (0.0..1.0).
+
+    A free function, not a method: mutmut categorically excludes the body
+    of any `@dataclass`-decorated class (`mutmut/mutation/file_mutation.py:
+    236`), so logic placed on `AssemblyMetrics` methods would carry zero
+    mutation coverage no matter how the test loader names the module
+    (issue #262 3rd pass; issue #282).
+    """
+    orig = metrics.original_tokens.get(key, 0)
+    if orig == 0:
+        return 1.0
+    fin = metrics.final_tokens.get(key, 0)
+    return fin / orig
+
+
+def assembly_metrics_was_truncated(
+    metrics: "AssemblyMetrics", key: str, threshold: float = 0.9
+) -> bool:
+    """True if the placeholder's surviving fraction is below threshold."""
+    return assembly_metrics_reduction_fraction(metrics, key) < threshold
 
 
 # ── Generic truncation ──────────────────────────────────────────────────

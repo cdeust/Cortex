@@ -19,7 +19,16 @@ class TestBuildFromTriggers:
     def test_empty_or_none_triggers_yield_inactive_empty_goal(self):
         assert gm.build_goal_from_triggers(None) is gm.EMPTY_GOAL
         assert gm.build_goal_from_triggers([]) is gm.EMPTY_GOAL
-        assert not gm.EMPTY_GOAL.is_active
+        assert not gm.goal_vector_is_active(gm.EMPTY_GOAL)
+
+    def test_is_active_on_any_single_signal_alone(self):
+        # Each feature family alone must be sufficient (a plain `or` chain,
+        # not `keywords or (entities and directories)` — issue #282
+        # mutation-testing gap: an entities-only goal with no directories
+        # was previously indistinguishable from an `and`-combined mutant).
+        assert gm.goal_vector_is_active(gm.GoalVector(entities=frozenset({"e"})))
+        assert gm.goal_vector_is_active(gm.GoalVector(directories=("d",)))
+        assert gm.goal_vector_is_active(gm.GoalVector(keywords=frozenset({"k"})))
 
     def test_keyword_trigger_becomes_goal_keywords(self):
         triggers = [
@@ -29,7 +38,7 @@ class TestBuildFromTriggers:
             }
         ]
         goal = gm.build_goal_from_triggers(triggers)
-        assert goal.is_active
+        assert gm.goal_vector_is_active(goal)
         assert "refactor" in goal.keywords
         assert "recall" in goal.keywords
         assert "pipeline" in goal.keywords
@@ -97,7 +106,7 @@ class TestBuildFromTriggers:
 class TestBuildFromTask:
     def test_task_string_becomes_keywords(self):
         goal = gm.build_goal_from_task("investigate heat decay bug")
-        assert goal.is_active
+        assert gm.goal_vector_is_active(goal)
         assert "investigate" in goal.keywords
         assert "decay" in goal.keywords
         assert goal.label == "investigate heat decay bug"
@@ -205,12 +214,12 @@ class TestReweightNudges:
 class TestGoalVectorDict:
     def test_as_dict_shape(self):
         goal = gm.build_goal_from_task("a task word", entities=["E"], directory="/d")
-        d = goal.as_dict()
+        d = gm.goal_vector_as_dict(goal)
         assert set(d) == {"label", "keywords", "entities", "directories", "is_active"}
         assert d["is_active"] is True
         assert d["keywords"] == sorted(d["keywords"])  # sorted for determinism
 
     def test_empty_goal_dict_inactive(self):
-        d = gm.EMPTY_GOAL.as_dict()
+        d = gm.goal_vector_as_dict(gm.EMPTY_GOAL)
         assert d["is_active"] is False
         assert d["keywords"] == []

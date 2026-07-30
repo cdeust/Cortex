@@ -100,6 +100,15 @@ HYPOTHESES: dict[str, dict[str, Any]] = {
 
 @dataclass
 class ExpResult:
+    """Data only — deliberately no methods. mutmut's mutation generator
+    categorically excludes the body of any `@dataclass`-decorated class
+    (`mutmut/mutation/file_mutation.py:236`), so logic placed on methods
+    here would carry zero mutation coverage no matter how the test loader
+    names the module (issue #262 3rd pass; issue #282). `exp_result_name` /
+    `exp_result_threshold` / `exp_result_verdict` below carry the same
+    logic as free functions instead.
+    """
+
     exp_id: str
     found: bool = False
     observed: float | None = None
@@ -107,27 +116,34 @@ class ExpResult:
     detail_md: str = ""
     ci95: tuple[float, float] | None = None
 
-    @property
-    def name(self) -> str:
-        return HYPOTHESES[self.exp_id]["name"]
 
-    @property
-    def threshold(self) -> str:
-        return HYPOTHESES[self.exp_id]["threshold"]
+def exp_result_name(result: "ExpResult") -> str:
+    return HYPOTHESES[result.exp_id]["name"]
 
-    @property
-    def verdict(self) -> str:
-        if not self.found or self.observed is None:
-            return "INCONCLUSIVE"
-        h = HYPOTHESES[self.exp_id]
-        op, val = h["pass_op"], h["pass_value"]
-        cmp = {
-            ">=": self.observed >= val,
-            "<": self.observed < val,
-            ">": self.observed > val,
-            "<=": self.observed <= val,
-        }
-        return "PASS" if cmp.get(op, False) else "FAIL"
+
+def exp_result_threshold(result: "ExpResult") -> str:
+    return HYPOTHESES[result.exp_id]["threshold"]
+
+
+def exp_result_verdict(result: "ExpResult") -> str:
+    if not result.found or result.observed is None:
+        return "INCONCLUSIVE"
+    h = HYPOTHESES[result.exp_id]
+    op, val = h["pass_op"], h["pass_value"]
+    cmp = {
+        ">=": result.observed >= val,
+        "<": result.observed < val,
+        ">": result.observed > val,
+        "<=": result.observed <= val,
+    }
+    # §12 note: `cmp.get(op, False)`'s default is read only when `op` is not
+    # one of the four keys above (an unrecognized pass_op). A mutant that
+    # swaps the default to `None` (or omits it, same effect) is EQUIVALENT:
+    # both `False` and `None` are falsy, so `"PASS" if ... else "FAIL"`
+    # resolves identically either way — only a *truthy* default (e.g. `True`)
+    # changes the outcome, and that mutant is killed by
+    # test_verdict_unrecognized_operator_defaults_to_fail.
+    return "PASS" if cmp.get(op, False) else "FAIL"
 
 
 # source: contract stated in the _bootstrap_ci docstring ("None if <10
@@ -300,20 +316,20 @@ def _render_section(r: ExpResult) -> str:
     h = HYPOTHESES[r.exp_id]
     if not r.found:
         return (
-            f"## {r.exp_id} — {r.name}\n\n"
+            f"## {r.exp_id} — {exp_result_name(r)}\n\n"
             f"- **Hypothesis:** {h['claim']}\n"
-            f"- **Threshold:** {r.threshold}\n"
+            f"- **Threshold:** {exp_result_threshold(r)}\n"
             f"- **Result:** `// TODO: not yet run`\n"
         )
     obs_str = f"{r.observed:.4f}" if r.observed is not None else "N/A"
     ci_str = f"\n- **95% CI:** [{r.ci95[0]:.4f}, {r.ci95[1]:.4f}]" if r.ci95 else ""
     parts = [
-        f"## {r.exp_id} — {r.name}",
+        f"## {r.exp_id} — {exp_result_name(r)}",
         "",
         f"- **Hypothesis:** {h['claim']}",
-        f"- **Threshold:** {r.threshold}",
+        f"- **Threshold:** {exp_result_threshold(r)}",
         f"- **Observed:** {obs_str}{ci_str}",
-        f"- **Verdict:** **{r.verdict}**",
+        f"- **Verdict:** **{exp_result_verdict(r)}**",
         f"- **Source:** `{r.raw_path}`",
     ]
     if r.detail_md:
@@ -341,8 +357,10 @@ def _render_summary(results: list[ExpResult]) -> str:
             obs, verdict = "// TODO: not yet run", "—"
         else:
             obs = f"{r.observed:.4f}" if r.observed is not None else "N/A"
-            verdict = r.verdict
-        lines.append(f"| {r.exp_id} | {claim} | {r.threshold} | {obs} | {verdict} |")
+            verdict = exp_result_verdict(r)
+        lines.append(
+            f"| {r.exp_id} | {claim} | {exp_result_threshold(r)} | {obs} | {verdict} |"
+        )
     return "\n".join(lines) + "\n"
 
 

@@ -49,7 +49,14 @@ from mcp_server.core.auto_curator import (
     build_reauthor_jobs,
     sort_coverage_jobs,
 )
-from mcp_server.core.wiki_coverage import _project_source_root, audit_all_domains
+from mcp_server.core.wiki_coverage import (
+    _project_source_root,
+    audit_all_domains,
+    domain_coverage_covered_count,
+    domain_coverage_coverage_ratio,
+    domain_coverage_missing_count,
+    domain_coverage_missing_scopes,
+)
 from mcp_server.core.wiki_drift import audit_wiki_drift
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.handlers.curate_wiki_serialize import (
@@ -329,10 +336,12 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         domain_coverages_summary = [
             {
                 "domain": c.domain,
-                "covered": c.covered_count,
-                "missing": c.missing_count,
-                "coverage_ratio": round(c.coverage_ratio, 3),
-                "missing_scopes": [s.scope.name for s in c.missing_scopes()],
+                "covered": domain_coverage_covered_count(c),
+                "missing": domain_coverage_missing_count(c),
+                "coverage_ratio": round(domain_coverage_coverage_ratio(c), 3),
+                "missing_scopes": [
+                    s.scope.name for s in domain_coverage_missing_scopes(c)
+                ],
             }
             for c in coverages
         ]

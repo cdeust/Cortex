@@ -97,13 +97,20 @@ class ForwardModelState:
     corrected: float = 0.0
     n_updates: int = 0
 
-    def as_dict(self) -> dict:
-        return {
-            "estimate": round(self.estimate, 6),
-            "error": round(self.error, 6),
-            "corrected": round(self.corrected, 6),
-            "n_updates": self.n_updates,
-        }
+
+def forward_model_state_as_dict(state: "ForwardModelState") -> dict:
+    """A free function, not a method: mutmut categorically excludes the
+    body of any `@dataclass`-decorated class (`mutmut/mutation/
+    file_mutation.py:236`), so logic placed on `ForwardModelState` methods
+    would carry zero mutation coverage no matter how the test loader names
+    the module (issue #262 3rd pass; issue #282).
+    """
+    return {
+        "estimate": round(state.estimate, 6),
+        "error": round(state.error, 6),
+        "corrected": round(state.corrected, 6),
+        "n_updates": state.n_updates,
+    }
 
 
 # ── The two primitive operations ────────────────────────────────────────────

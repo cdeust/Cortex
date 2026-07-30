@@ -29,6 +29,9 @@ from mcp_server.doctor_mcp import (
     _check_python_interpreter,
     _print_human,
     collect_mcp_report,
+    mcp_report_required_fails,
+    mcp_report_to_dict,
+    mcp_report_warnings,
     run_mcp,
 )
 
@@ -389,9 +392,61 @@ def test_report_includes_skipped_handshake():
     assert any("stdio handshake" in s.get("name", "") for s in report.skipped), (
         "stdio handshake must be reported as skipped, not silently absent"
     )
-    serialized = report.to_dict()
+    serialized = mcp_report_to_dict(report)
     assert "skipped" in serialized
     assert serialized["skipped"], "skipped list must be non-empty"
+
+
+# --- mcp_report_* free functions (issue #282: dataclass mutation blindspot) --
+#
+# McpReport is a plain @dataclass; mutmut categorically skips the body of any
+# @dataclass-decorated class, so the logic that used to live on
+# required_fails/warnings/to_dict methods carries zero mutation coverage
+# unless exercised directly against the extracted free functions.
+
+
+def test_mcp_report_required_fails_filters_fail_severity_only():
+    report = McpReport(
+        checks=[
+            McpCheck(name="a", ok=False, detail="", severity="fail"),
+            McpCheck(name="b", ok=False, detail="", severity="warn"),
+            McpCheck(name="c", ok=True, detail="", severity="ok"),
+        ]
+    )
+    fails = mcp_report_required_fails(report)
+    assert [c.name for c in fails] == ["a"]
+
+
+def test_mcp_report_warnings_filters_warn_severity_only():
+    report = McpReport(
+        checks=[
+            McpCheck(name="a", ok=False, detail="", severity="fail"),
+            McpCheck(name="b", ok=False, detail="", severity="warn"),
+            McpCheck(name="c", ok=True, detail="", severity="ok"),
+        ]
+    )
+    warns = mcp_report_warnings(report)
+    assert [c.name for c in warns] == ["b"]
+
+
+def test_mcp_report_to_dict_ok_true_when_no_required_fails():
+    report = McpReport(
+        checks=[McpCheck(name="a", ok=False, detail="", severity="warn")]
+    )
+    serialized = mcp_report_to_dict(report)
+    assert serialized["ok"] is True
+    assert serialized["fail_count"] == 0
+    assert serialized["warn_count"] == 1
+
+
+def test_mcp_report_to_dict_ok_false_when_required_fail_present():
+    report = McpReport(
+        checks=[McpCheck(name="a", ok=False, detail="", severity="fail")]
+    )
+    serialized = mcp_report_to_dict(report)
+    assert serialized["ok"] is False
+    assert serialized["fail_count"] == 1
+    assert serialized["warn_count"] == 0
 
 
 # --- check name uniqueness ---------------------------------------------

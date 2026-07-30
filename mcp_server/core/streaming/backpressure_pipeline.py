@@ -69,6 +69,18 @@ class BackpressurePipeline:
     ``sink_factory`` builds ONE sink per worker — each worker owns its own
     connection (sharing a connection across threads is unsafe). The factory is
     injected by the handler (composition root) and binds the appropriate pool.
+
+    Data only — deliberately no methods. mutmut's mutation generator
+    categorically excludes the body of any `@dataclass`-decorated class
+    (`mutmut/mutation/file_mutation.py:236`) — including `@staticmethod`
+    members, since the exclusion fires on the decorated `ClassDef` itself,
+    before the per-method `@staticmethod` exception is ever consulted — so
+    logic placed on methods here would carry zero mutation coverage no
+    matter how the test loader names the module (issue #262 3rd pass;
+    issue #282). `backpressure_pipeline_run` (the public entry point) plus
+    the private `_bp_produce` / `_bp_consume` / `_bp_build_sink` /
+    `_bp_write_one` / `_bp_close` helpers below carry the same logic as
+    free functions instead.
     """
 
     source: StreamSource
@@ -77,96 +89,113 @@ class BackpressurePipeline:
     queue_cap: int
     concurrency: int = 2
 
-    def run(self) -> PipelineResult:
-        """Drain the source through the workers; block until fully flushed.
 
-        Postcondition: on return, every row the source yielded has been handed
-        to a sink and durably committed (the staged barrier later phases rely
-        on) OR surfaced in ``result.errors``.
-        """
-        q: queue.Queue[Any] = queue.Queue(maxsize=self.queue_cap)
-        result = PipelineResult()
-        lock = threading.Lock()
-        producer = threading.Thread(
-            target=self._produce, args=(q, result, lock), name="bp-producer"
+def backpressure_pipeline_run(pipeline: "BackpressurePipeline") -> PipelineResult:
+    """Drain the source through the workers; block until fully flushed.
+
+    Postcondition: on return, every row the source yielded has been handed
+    to a sink and durably committed (the staged barrier later phases rely
+    on) OR surfaced in ``result.errors``.
+    """
+    q: queue.Queue[Any] = queue.Queue(maxsize=pipeline.queue_cap)
+    result = PipelineResult()
+    lock = threading.Lock()
+    # §12 note: the `name=` kwargs below (both threads) are debug-only
+    # labels (visible via `threading.enumerate()` / crash dumps) — they do
+    # not affect the returned PipelineResult, the only contract this
+    # function's tests assert against, so a mutant that changes, drops, or
+    # nulls a thread's `name` is EQUIVALENT for that contract. Verified
+    # empirically: mutating `name=` never changed a test outcome across the
+    # full `_bp_*` mutation sweep (issue #282).
+    producer = threading.Thread(
+        target=_bp_produce, args=(pipeline, q, result, lock), name="bp-producer"
+    )
+    workers = [
+        threading.Thread(
+            target=_bp_consume, args=(pipeline, q, result, lock), name=f"bp-worker-{i}"
         )
-        workers = [
-            threading.Thread(
-                target=self._consume, args=(q, result, lock), name=f"bp-worker-{i}"
-            )
-            for i in range(self.concurrency)
-        ]
-        producer.start()
-        for w in workers:
-            w.start()
-        producer.join()
-        for w in workers:
-            w.join()
-        return result
+        for i in range(pipeline.concurrency)
+    ]
+    producer.start()
+    for w in workers:
+        w.start()
+    producer.join()
+    for w in workers:
+        w.join()
+    return result
 
-    def _produce(
-        self, q: "queue.Queue[Any]", result: PipelineResult, lock: threading.Lock
-    ) -> None:
-        try:
-            for batch in self.source.stream(self.max_batch):
-                q.put(batch)  # blocks when full — this is the backpressure
-                with lock:
-                    result.rows_in += len(batch)
-                    result.batches += 1
-        except Exception as exc:  # noqa: BLE001 — surfaced via result, not raised
-            with lock:
-                result.errors.append(f"producer: {exc!r}")
-        finally:
-            # Exactly one sentinel per worker — in finally so a producer crash
-            # still releases every worker (no hang on an empty-but-open queue).
-            for _ in range(self.concurrency):
-                q.put(_SENTINEL)
 
-    def _consume(
-        self, q: "queue.Queue[Any]", result: PipelineResult, lock: threading.Lock
-    ) -> None:
-        sink = self._build_sink(result, lock)
-        try:
-            while True:
-                item = q.get()
-                if item is _SENTINEL:
-                    return  # consumed our one sentinel — stop
-                if sink is None:
-                    continue  # setup failed; drain to our sentinel, don't hang
-                self._write_one(sink, item, result, lock)
-        finally:
-            if sink is not None:
-                self._close(sink, result, lock)
+def _bp_produce(
+    pipeline: "BackpressurePipeline",
+    q: "queue.Queue[Any]",
+    result: PipelineResult,
+    lock: threading.Lock,
+) -> None:
+    try:
+        for batch in pipeline.source.stream(pipeline.max_batch):
+            q.put(batch)  # blocks when full — this is the backpressure
+            with lock:
+                result.rows_in += len(batch)
+                result.batches += 1
+    except Exception as exc:  # noqa: BLE001 — surfaced via result, not raised
+        with lock:
+            result.errors.append(f"producer: {exc!r}")
+    finally:
+        # Exactly one sentinel per worker — in finally so a producer crash
+        # still releases every worker (no hang on an empty-but-open queue).
+        for _ in range(pipeline.concurrency):
+            q.put(_SENTINEL)
 
-    def _build_sink(
-        self, result: PipelineResult, lock: threading.Lock
-    ) -> BatchSink | None:
-        try:
-            return self.sink_factory()
-        except Exception as exc:  # noqa: BLE001
-            with lock:
-                result.errors.append(f"worker-setup: {exc!r}")
-            return None
 
-    @staticmethod
-    def _write_one(
-        sink: BatchSink,
-        item: list[Any],
-        result: PipelineResult,
-        lock: threading.Lock,
-    ) -> None:
-        try:
-            written = sink.write_batch(item)
-            with lock:
-                result.rows_written += written
-        except Exception as exc:  # noqa: BLE001
-            with lock:
-                result.errors.append(f"worker: {exc!r}")
+def _bp_consume(
+    pipeline: "BackpressurePipeline",
+    q: "queue.Queue[Any]",
+    result: PipelineResult,
+    lock: threading.Lock,
+) -> None:
+    sink = _bp_build_sink(pipeline, result, lock)
+    try:
+        while True:
+            item = q.get()
+            if item is _SENTINEL:
+                return  # consumed our one sentinel — stop
+            if sink is None:
+                continue  # setup failed; drain to our sentinel, don't hang
+            _bp_write_one(sink, item, result, lock)
+    finally:
+        if sink is not None:
+            _bp_close(sink, result, lock)
 
-    @staticmethod
-    def _close(sink: BatchSink, result: PipelineResult, lock: threading.Lock) -> None:
-        try:
-            sink.close()
-        except Exception as exc:  # noqa: BLE001
-            with lock:
-                result.errors.append(f"worker-close: {exc!r}")
+
+def _bp_build_sink(
+    pipeline: "BackpressurePipeline", result: PipelineResult, lock: threading.Lock
+) -> BatchSink | None:
+    try:
+        return pipeline.sink_factory()
+    except Exception as exc:  # noqa: BLE001
+        with lock:
+            result.errors.append(f"worker-setup: {exc!r}")
+        return None
+
+
+def _bp_write_one(
+    sink: BatchSink,
+    item: list[Any],
+    result: PipelineResult,
+    lock: threading.Lock,
+) -> None:
+    try:
+        written = sink.write_batch(item)
+        with lock:
+            result.rows_written += written
+    except Exception as exc:  # noqa: BLE001
+        with lock:
+            result.errors.append(f"worker: {exc!r}")
+
+
+def _bp_close(sink: BatchSink, result: PipelineResult, lock: threading.Lock) -> None:
+    try:
+        sink.close()
+    except Exception as exc:  # noqa: BLE001
+        with lock:
+            result.errors.append(f"worker-close: {exc!r}")

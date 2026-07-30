@@ -8,9 +8,16 @@ import pytest
 
 from mcp_server.core.wiki_coverage import (
     SCOPES,
+    DomainCoverage,
+    ScopeCoverage,
     audit_all_domains,
     audit_domain,
     audit_files,
+    domain_coverage_covered_count,
+    domain_coverage_coverage_ratio,
+    domain_coverage_missing_count,
+    domain_coverage_missing_scopes,
+    file_coverage_coverage_ratio,
     list_domains,
     list_source_files,
 )
@@ -65,9 +72,9 @@ class TestAuditDomain:
 
     def test_fresh_domain_has_zero_coverage(self, tmp_path):
         c = audit_domain(str(tmp_path), "fresh")
-        assert c.covered_count == 0
-        assert c.missing_count == len(SCOPES)
-        assert pytest.approx(c.coverage_ratio, abs=1e-9) == 0.0
+        assert domain_coverage_covered_count(c) == 0
+        assert domain_coverage_missing_count(c) == len(SCOPES)
+        assert pytest.approx(domain_coverage_coverage_ratio(c), abs=1e-9) == 0.0
 
     def test_substantive_architecture_anchor_counts(self, tmp_path):
         wiki = str(tmp_path)
@@ -225,6 +232,10 @@ class TestFileCoverage:
         assert c.source_file_count == 2
         assert c.covered_file_count == 1
         assert "lib.py" in c.uncovered_files
+        # 1/2 = 0.5: distinguishes division from multiplication (issue #282
+        # mutation-testing gap — the vacuous 0/1-only cases elsewhere in
+        # this file can't tell `/` from `*` apart).
+        assert file_coverage_coverage_ratio(c) == 0.5
 
     def test_unknown_domain_returns_zero(self, tmp_path, monkeypatch):
         """A domain not tied to a git repo gets a zero-file roll, not a crash."""
@@ -237,4 +248,49 @@ class TestFileCoverage:
         c = audit_files(str(wiki), "ghost")
         assert c.source_root is None
         assert c.source_file_count == 0
-        assert c.coverage_ratio == 1.0  # vacuous coverage
+        assert file_coverage_coverage_ratio(c) == 1.0  # vacuous coverage
+
+
+class TestDomainCoverageFreeFunctions:
+    """Direct unit tests for the domain_coverage_* free functions (issue
+    #282: dataclass mutation blindspot). Constructs DomainCoverage/
+    ScopeCoverage directly rather than through audit_domain so the case
+    with a NON-vacuous, partial ratio (needed to distinguish `/` from `*`,
+    and `sum(1 ...)` from `sum(2 ...)`) doesn't require writing real wiki
+    fixture pages."""
+
+    def _scope_coverage(self, *, covered: bool) -> ScopeCoverage:
+        return ScopeCoverage(
+            scope=SCOPES[0],
+            domain="d",
+            covered=covered,
+            page_count=1 if covered else 0,
+            anchor_page="reference/d/x.md" if covered else None,
+            suggested_path="reference/d/x.md",
+        )
+
+    def test_empty_scopes_is_vacuous_zero_not_one(self):
+        # Empty DomainCoverage: 0/0 must read as 0.0 (not covered), the
+        # opposite convention from FileCoverage's vacuous 1.0 — a real
+        # semantic difference this repo encodes, not an oversight.
+        empty = DomainCoverage(domain="d", scopes=[])
+        assert domain_coverage_covered_count(empty) == 0
+        assert domain_coverage_missing_count(empty) == 0
+        assert domain_coverage_coverage_ratio(empty) == 0.0
+
+    def test_partial_coverage_exact_counts_and_ratio(self):
+        # 1 covered of 4 scopes: exact counts (not a doubled `sum(2 ...)`
+        # mutant) and division, not multiplication (1/4=0.25 vs 1*4=4).
+        cov = DomainCoverage(
+            domain="d",
+            scopes=[
+                self._scope_coverage(covered=True),
+                self._scope_coverage(covered=False),
+                self._scope_coverage(covered=False),
+                self._scope_coverage(covered=False),
+            ],
+        )
+        assert domain_coverage_covered_count(cov) == 1
+        assert domain_coverage_missing_count(cov) == 3
+        assert domain_coverage_coverage_ratio(cov) == 0.25
+        assert len(domain_coverage_missing_scopes(cov)) == 3

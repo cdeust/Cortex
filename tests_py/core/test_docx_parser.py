@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 
 from mcp_server.core.docx_parser import parse_docx_xml
-from mcp_server.core.document_model import DocumentParseError
+from mcp_server.core.document_model import (
+    DocumentParseError,
+    document_section_is_empty,
+    parsed_document_is_empty,
+)
 
 _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
@@ -155,11 +159,11 @@ class TestImages:
 class TestEdgeCases:
     def test_empty_document_is_empty_not_error(self):
         doc = parse_docx_xml(_doc(""))
-        assert doc.is_empty()
+        assert parsed_document_is_empty(doc)
 
     def test_headings_only_document(self):
         doc = parse_docx_xml(_doc(_para("A", "Heading1") + _para("B", "Heading1")))
-        assert all(s.is_empty() for s in doc.sections)
+        assert all(document_section_is_empty(s) for s in doc.sections)
         assert [s.heading for s in doc.sections] == ["A", "B"]
 
     def test_malformed_xml_raises_with_message(self):

@@ -34,7 +34,11 @@ if TYPE_CHECKING:
 # // which also defers `import psycopg` to _try_pg_verbose).
 
 from mcp_server.infrastructure.wiki_schema_reader import load_registry
-from mcp_server.core.wiki_view_executor import CompiledView, compile_view
+from mcp_server.core.wiki_view_executor import (
+    CompiledView,
+    compile_view,
+    compiled_view_ok,
+)
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
@@ -225,7 +229,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         }
 
     compiled = compile_view(query_text)
-    if not compiled.ok:
+    if not compiled_view_ok(compiled):
         return {
             "view": view_meta,
             "error": "compile failed",

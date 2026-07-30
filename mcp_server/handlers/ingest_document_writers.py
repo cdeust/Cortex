@@ -14,7 +14,11 @@ import hashlib
 import logging
 from typing import Any
 
-from mcp_server.core.document_model import DocumentProvenance
+from mcp_server.core.document_model import (
+    DocumentProvenance,
+    document_provenance_dedup_tag,
+    document_provenance_source_tag,
+)
 from mcp_server.core.document_normalizer import NormalizedDocument
 from mcp_server.observability import silent_failure
 
@@ -49,7 +53,7 @@ def already_ingested(store: Any, prov: DocumentProvenance) -> int | None:
     (e.g. the SQLite fallback) degrades to None ("always re-ingest") rather
     than erroring — the same tag-query limitation ``ingest_docs_content``
     already documents, not one this handler introduces."""
-    tag = prov.dedup_tag()
+    tag = document_provenance_dedup_tag(prov)
     try:
         mems = store.get_memories_by_tag(tag, limit=5)
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
@@ -66,8 +70,8 @@ def _provenance_tags(prov: DocumentProvenance, extra: list[str]) -> list[str]:
         "document",
         "ingest",
         prov.source_kind,
-        prov.dedup_tag(),
-        prov.source_tag(),
+        document_provenance_dedup_tag(prov),
+        document_provenance_source_tag(prov),
         *extra,
     ]
 

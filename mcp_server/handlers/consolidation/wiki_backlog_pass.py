@@ -36,6 +36,8 @@ from mcp_server.core.wiki_coverage import (
     _project_source_root,
     audit_all_domains,
     audit_all_file_coverage,
+    domain_coverage_missing_count,
+    file_coverage_coverage_ratio,
 )
 from mcp_server.core.wiki_drift import audit_wiki_drift
 from mcp_server.infrastructure.config import WIKI_ROOT
@@ -90,7 +92,7 @@ async def run_backlog_pass(store: Any) -> dict[str, Any]:
     )
 
     coverages = audit_all_domains(str(WIKI_ROOT))
-    out["coverage_gaps"] = sum(c.missing_count for c in coverages)
+    out["coverage_gaps"] = sum(domain_coverage_missing_count(c) for c in coverages)
 
     # File-level coverage: count files that aren't referenced anywhere
     # in the wiki. Aggregated across every domain that has a resolvable
@@ -105,7 +107,7 @@ async def run_backlog_pass(store: Any) -> dict[str, Any]:
             "domain": r.domain,
             "covered": r.covered_file_count,
             "total": r.source_file_count,
-            "ratio": round(r.coverage_ratio, 3),
+            "ratio": round(file_coverage_coverage_ratio(r), 3),
         }
         for r in file_rolls
     ]

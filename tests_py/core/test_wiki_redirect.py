@@ -11,6 +11,7 @@ from mcp_server.core.wiki_redirect import (
     is_redirect,
     parse_frontmatter,
     parse_redirect,
+    redirect_is_id_based,
     resolve_chain,
 )
 
@@ -35,7 +36,7 @@ def test_parse_id_redirect() -> None:
     r = parse_redirect(fm)
     assert r is not None
     assert r.target_id == _GOOD_ID
-    assert r.is_id_based
+    assert redirect_is_id_based(r)
 
 
 def test_parse_both_path_and_id_preserves_both() -> None:

@@ -128,16 +128,23 @@ class SourceJudgement:
     inferred_score: int
     grounding_refs: list[str] = field(default_factory=list)
 
-    def as_dict(self) -> dict:
-        return {
-            "attribution": self.attribution,
-            "confidence": round(self.confidence, 4),
-            "evidence_tag": self.evidence_tag,
-            "perceptual_score": self.perceptual_score,
-            "told_score": self.told_score,
-            "inferred_score": self.inferred_score,
-            "grounding_refs": self.grounding_refs[:10],
-        }
+
+def source_judgement_as_dict(judgement: "SourceJudgement") -> dict:
+    """A free function, not a method: mutmut categorically excludes the
+    body of any `@dataclass`-decorated class (`mutmut/mutation/
+    file_mutation.py:236`), so logic placed on `SourceJudgement` methods
+    would carry zero mutation coverage no matter how the test loader names
+    the module (issue #262 3rd pass; issue #282).
+    """
+    return {
+        "attribution": judgement.attribution,
+        "confidence": round(judgement.confidence, 4),
+        "evidence_tag": judgement.evidence_tag,
+        "perceptual_score": judgement.perceptual_score,
+        "told_score": judgement.told_score,
+        "inferred_score": judgement.inferred_score,
+        "grounding_refs": judgement.grounding_refs[:10],
+    }
 
 
 # ── Feature extraction ──────────────────────────────────────────────────────

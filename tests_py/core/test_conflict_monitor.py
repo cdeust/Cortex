@@ -224,3 +224,39 @@ def test_route_typed_claims_detects_conflict():
     pair = plans[0]
     assert {pair.claim_a_id, pair.claim_b_id} == {10, 11}
     assert 42 in pair.overlap_entities
+
+
+# ── conflict_assessment_as_dict (issue #282: dataclass mutation blindspot) ────
+def test_conflict_assessment_as_dict_full_shape_and_rounding():
+    assessment = cm.ConflictAssessment(
+        conflict_score=0.512345,
+        entropy=0.698765,
+        max_contradiction=0.887654,
+        competing_pair=(10, 11),
+        loser_id=11,
+        high=True,
+    )
+    d = cm.conflict_assessment_as_dict(assessment)
+    assert d == {
+        "conflict_score": round(0.512345, 4),
+        "entropy": round(0.698765, 4),
+        "max_contradiction": round(0.887654, 4),
+        "competing_pair": [10, 11],
+        "loser_id": 11,
+        "high": True,
+    }
+
+
+def test_conflict_assessment_as_dict_none_competing_pair_stays_none():
+    assessment = cm.ConflictAssessment(
+        conflict_score=0.0,
+        entropy=0.0,
+        max_contradiction=0.0,
+        competing_pair=None,
+        loser_id=None,
+        high=False,
+    )
+    d = cm.conflict_assessment_as_dict(assessment)
+    assert d["competing_pair"] is None
+    assert d["loser_id"] is None
+    assert d["high"] is False

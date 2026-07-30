@@ -15,6 +15,7 @@ from mcp_server.shared.wiki_classification import (
     Classification,
     Generator,
     all_known_kinds,
+    classification_to_frontmatter,
     is_legacy_kind,
     normalize_legacy_kind,
 )
@@ -57,9 +58,20 @@ def test_runbook_with_multi_audience() -> None:
 
 
 def test_adr_rejects_universal_lifecycle() -> None:
-    """ADR cannot use seedling/draft/active — those don't apply to ``adr``."""
-    with pytest.raises(ValueError, match="kind=adr requires a lifecycle"):
+    """ADR cannot use seedling/draft/active — those don't apply to ``adr``.
+
+    Asserts the ADR-subset list is real registry content (e.g. 'proposed'),
+    not an empty list — a mutant that looks the subset up under the wrong
+    axis key returns `[]` and would still satisfy a weaker
+    "kind=adr requires a lifecycle" substring match (issue #282
+    mutation-testing gap).
+    """
+    with pytest.raises(ValueError) as exc:
         Classification(kind="adr", lifecycle="seedling")
+    msg = str(exc.value)
+    assert "kind=adr requires a lifecycle from [" in msg
+    assert "'proposed'" in msg
+    assert "got 'seedling'" in msg
 
 
 def test_non_adr_rejects_adr_lifecycle() -> None:
@@ -72,12 +84,21 @@ def test_non_adr_rejects_adr_lifecycle() -> None:
 
 
 def test_unknown_kind_rejected_with_suggestion() -> None:
-    """Per user direction 2026-05-12: reject + suggest, not warn-and-accept."""
+    """Per user direction 2026-05-12: reject + suggest, not warn-and-accept.
+
+    Asserts the exact "Did you mean" phrasing with the bracketed suggestion
+    list, not just substring presence of "adr" — the typo'd VALUE itself
+    ("adrs") already contains "adr" as a substring, so a weaker assertion
+    would pass even if the wrong axis were passed to did_you_mean (issue
+    #282 mutation-testing gap: this is a real behavior difference, since a
+    wrong axis makes the registry lookup empty and silently falls back to
+    the "No close matches" message instead).
+    """
     with pytest.raises(ValueError) as exc:
         Classification(kind="adrs", lifecycle="seedling")  # plural typo of 'adr'
     msg = str(exc.value)
-    assert "unknown kind" in msg
-    assert "adr" in msg  # suggestion present
+    assert "unknown kind: 'adrs'" in msg  # exact value echoed, not swapped for None
+    assert "Did you mean one of ['adr']" in msg
     assert "wiki/_schema/kinds" in msg  # extension path mentioned
 
 
@@ -89,8 +110,8 @@ def test_unknown_audience_rejected_with_extension_hint() -> None:
             audience=("developper",),  # typo
         )
     msg = str(exc.value)
-    assert "unknown audience" in msg
-    assert "developer" in msg  # suggestion via difflib
+    assert "unknown audience: 'developper'" in msg  # exact value, not None
+    assert "Did you mean one of ['developer']" in msg
 
 
 def test_unknown_provenance_rejected_with_extension_hint() -> None:
@@ -101,16 +122,17 @@ def test_unknown_provenance_rejected_with_extension_hint() -> None:
             provenance="hummman",  # typo
         )
     msg = str(exc.value)
-    assert "unknown provenance" in msg
-    assert "human" in msg  # suggestion present
+    assert "unknown provenance: 'hummman'" in msg  # exact value, not None
+    assert "Did you mean one of ['human']" in msg
 
 
 def test_unknown_lifecycle_rejected_with_extension_hint() -> None:
     with pytest.raises(ValueError) as exc:
         Classification(kind="explanation", lifecycle="seedlinggg")
     msg = str(exc.value)
-    assert "unknown lifecycle" in msg
-    assert "seedling" in msg
+    assert "unknown lifecycle: 'seedlinggg'" in msg  # exact value, not None
+    assert "Did you mean one of [" in msg
+    assert "'seedling'" in msg
 
 
 def test_completely_unrelated_value_rejected_without_suggestion() -> None:
@@ -162,8 +184,13 @@ def test_human_provenance_does_not_require_generator() -> None:
 
 
 def test_empty_audience_rejected() -> None:
-    with pytest.raises(ValueError, match="audience must not be empty"):
+    # Exact-string match (not `pytest.raises(match=...)`, a substring
+    # search): a mutant that pads the message with "XX...XX" markers would
+    # still satisfy a substring search, since the original text remains
+    # contained inside the padded one (issue #282 mutation-testing gap).
+    with pytest.raises(ValueError) as exc:
         Classification(kind="explanation", lifecycle="seedling", audience=())
+    assert str(exc.value) == "audience must not be empty"
 
 
 # ── Frontmatter serialization ──────────────────────────────────────────
@@ -171,7 +198,7 @@ def test_empty_audience_rejected() -> None:
 
 def test_frontmatter_includes_required_axes() -> None:
     c = Classification(kind="how-to", lifecycle="active", audience=("developer",))
-    fm = c.to_frontmatter()
+    fm = classification_to_frontmatter(c)
     assert fm["kind"] == "how-to"
     assert fm["lifecycle"] == "active"
     assert fm["audience"] == ["developer"]
@@ -180,8 +207,14 @@ def test_frontmatter_includes_required_axes() -> None:
 
 def test_frontmatter_omits_empty_tags() -> None:
     c = Classification(kind="explanation", lifecycle="seedling")
-    fm = c.to_frontmatter()
+    fm = classification_to_frontmatter(c)
     assert "tags" not in fm
+
+
+def test_frontmatter_includes_non_empty_tags_under_the_right_key() -> None:
+    c = Classification(kind="explanation", lifecycle="seedling", tags=("alpha", "beta"))
+    fm = classification_to_frontmatter(c)
+    assert fm["tags"] == ["alpha", "beta"]
 
 
 def test_frontmatter_serializes_generator_block() -> None:
@@ -197,7 +230,7 @@ def test_frontmatter_serializes_generator_block() -> None:
         provenance="auto-generated",
         generator=gen,
     )
-    fm = c.to_frontmatter()
+    fm = classification_to_frontmatter(c)
     assert "generator" in fm
     assert fm["generator"] == {
         "model": "claude-opus-4-7",

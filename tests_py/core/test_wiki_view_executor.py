@@ -17,6 +17,7 @@ from mcp_server.core.wiki_view_executor import (
     _parse_kv_line,
     _parse_yamlish,
     compile_view,
+    compiled_view_ok,
 )
 
 
@@ -196,7 +197,7 @@ class TestCompileView:
 
     def test_unknown_table_rejected(self):
         result = compile_view("table: users")
-        assert not result.ok
+        assert not compiled_view_ok(result)
         assert "unknown table" in result.errors[0]
         assert result.sql == ""
 
@@ -211,7 +212,7 @@ class TestCompileView:
             "limit: 20\n"
         )
         result = compile_view(text)
-        assert result.ok
+        assert compiled_view_ok(result)
         assert "SELECT * FROM wiki.pages" in result.sql
         assert "WHERE kind = %s AND heat >= %s" in result.sql
         assert "ORDER BY heat DESC NULLS LAST" in result.sql
@@ -225,17 +226,17 @@ class TestCompileView:
     def test_select_all_columns_invalid_falls_back_to_id(self):
         text = "table: pages\nselect: [not_a_col]"
         result = compile_view(text)
-        assert not result.ok
+        assert not compiled_view_ok(result)
         assert "SELECT id FROM" in result.sql
 
     def test_unknown_order_by_column_rejected(self):
         result = compile_view("table: pages\norder_by: evil_col")
-        assert not result.ok
+        assert not compiled_view_ok(result)
         assert "unknown order_by column" in result.errors[0]
 
     def test_invalid_direction_defaults_to_desc(self):
         result = compile_view("table: pages\norder_by: heat\ndirection: sideways")
-        assert not result.ok
+        assert not compiled_view_ok(result)
         assert "direction must be" in result.errors[0]
         assert "DESC" in result.sql
 
@@ -249,7 +250,7 @@ class TestCompileView:
 
     def test_non_integer_limit_rejected_and_defaults(self):
         result = compile_view("table: pages\nlimit: not_a_number")
-        assert not result.ok
+        assert not compiled_view_ok(result)
         assert "limit must be an integer" in result.errors[0]
         assert result.params[-1] == 50
 
@@ -259,11 +260,11 @@ class TestCompileView:
 
     def test_ok_property_true_without_errors(self):
         result = compile_view("table: pages")
-        assert result.ok is True
+        assert compiled_view_ok(result) is True
 
     def test_ok_property_false_with_errors(self):
         result = compile_view("table: users")
-        assert result.ok is False
+        assert compiled_view_ok(result) is False
 
 
 class TestCompileViewAdversarial:
@@ -279,7 +280,7 @@ class TestCompileViewAdversarial:
 
     def test_sql_injection_in_table_name_rejected(self):
         result = compile_view("table: pages; DROP TABLE pages;--")
-        assert not result.ok
+        assert not compiled_view_ok(result)
         assert "DROP TABLE" not in result.sql
 
     def test_sql_injection_in_column_name_rejected(self):
@@ -292,7 +293,7 @@ class TestCompileViewAdversarial:
 
     def test_sql_injection_in_order_by_rejected(self):
         result = compile_view("table: pages\norder_by: heat; DROP TABLE pages;--")
-        assert not result.ok
+        assert not compiled_view_ok(result)
         assert "DROP TABLE" not in result.sql
 
     def test_oversized_line_does_not_crash_parser(self):
@@ -307,5 +308,5 @@ class TestCompileViewAdversarial:
 
     def test_empty_input_produces_valid_default_query(self):
         result = compile_view("")
-        assert result.ok
+        assert compiled_view_ok(result)
         assert "wiki.pages" in result.sql

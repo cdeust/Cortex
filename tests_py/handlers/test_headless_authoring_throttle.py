@@ -217,10 +217,12 @@ class TestWallClockDeadline:
         """Once the budget reports exhausted, remaining candidates are skipped.
 
         Deterministic: instead of racing a near-zero wall-clock budget against
-        a sleeping invoke (timing-flaky on a loaded CI), we patch
-        ``CycleBudget.exhausted`` to report not-exhausted on its first consult
-        and exhausted thereafter. With CONCURRENCY=1 the drains serialize, so
-        exactly the first candidate runs and the rest are skipped.
+        a sleeping invoke (timing-flaky on a loaded CI), we patch the
+        ``cycle_budget_exhausted`` free function (issue #282: CycleBudget's
+        logic moved off the @dataclass body) to report not-exhausted on its
+        first consult and exhausted thereafter. With CONCURRENCY=1 the drains
+        serialize, so exactly the first candidate runs and the rest are
+        skipped.
         """
         import mcp_server.handlers.consolidation.headless_authoring as ha
 
@@ -235,11 +237,11 @@ class TestWallClockDeadline:
         # consults → exhausted (remaining drains skip). No wall-clock timing.
         consults = {"n": 0}
 
-        def fake_exhausted(_self: Any) -> bool:
+        def fake_exhausted(_budget: Any) -> bool:
             consults["n"] += 1
             return consults["n"] > 1
 
-        monkeypatch.setattr(ha.CycleBudget, "exhausted", fake_exhausted)
+        monkeypatch.setattr(ha, "cycle_budget_exhausted", fake_exhausted)
 
         pages = [_make_wiki_page(tmp_path, f"page_{i}.md") for i in range(4)]
 
@@ -514,42 +516,85 @@ class TestCycleBudget:
     """Unit tests for CycleBudget methods."""
 
     def test_exhausted_by_time(self) -> None:
-        from mcp_server.handlers.consolidation.headless_authoring import CycleBudget
+        from mcp_server.handlers.consolidation.headless_authoring import (
+            CycleBudget,
+            cycle_budget_exhausted,
+        )
 
         budget = CycleBudget(deadline=time.monotonic() - 1.0, usd_cap=100.0)
-        assert budget.exhausted()
+        assert cycle_budget_exhausted(budget)
 
     def test_not_exhausted_when_time_remains(self) -> None:
-        from mcp_server.handlers.consolidation.headless_authoring import CycleBudget
+        from mcp_server.handlers.consolidation.headless_authoring import (
+            CycleBudget,
+            cycle_budget_exhausted,
+        )
 
         budget = CycleBudget(deadline=time.monotonic() + 60.0, usd_cap=100.0)
-        assert not budget.exhausted()
+        assert not cycle_budget_exhausted(budget)
+
+    def test_exhausted_boundary_is_time_left_le_zero_not_lt_zero(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # A real wall-clock race can't hit "time_left exactly 0" or
+        # "exactly -1" deterministically, so the clock is monkeypatched
+        # to a fixed value — the real condition is `time_left() <= 0`, and
+        # a mutant weakening it to `< 0` (deadline reached but not yet
+        # negative) or to `<= 1` (a full second of slack added) would
+        # both be invisible to a test that only checks clearly-past or
+        # clearly-future deadlines (issue #282 mutation-testing gap).
+        import mcp_server.handlers.consolidation.headless_authoring as ha
+        import mcp_server.handlers.consolidation.cycle_types as cycle_types
+
+        # CycleBudget + the free functions live in cycle_types (issue #276
+        # split); `time.monotonic` is called from there, not from
+        # headless_authoring (which only re-exports the names).
+        monkeypatch.setattr(cycle_types.time, "monotonic", lambda: 100.0)
+        budget = ha.CycleBudget(deadline=100.0, usd_cap=100.0)  # time_left == 0 exactly
+        assert ha.cycle_budget_exhausted(budget) is True
+
+        budget_almost = ha.CycleBudget(
+            deadline=100.5, usd_cap=100.0
+        )  # time_left == 0.5
+        assert ha.cycle_budget_exhausted(budget_almost) is False
 
     def test_exhausted_by_usd(self) -> None:
-        from mcp_server.handlers.consolidation.headless_authoring import CycleBudget
+        from mcp_server.handlers.consolidation.headless_authoring import (
+            CycleBudget,
+            cycle_budget_charge,
+            cycle_budget_exhausted,
+        )
 
         budget = CycleBudget(deadline=time.monotonic() + 60.0, usd_cap=5.0)
-        budget.charge(5.0)
-        assert budget.exhausted()
+        cycle_budget_charge(budget, 5.0)
+        assert cycle_budget_exhausted(budget)
 
     def test_no_usd_cap_when_zero(self) -> None:
-        from mcp_server.handlers.consolidation.headless_authoring import CycleBudget
+        from mcp_server.handlers.consolidation.headless_authoring import (
+            CycleBudget,
+            cycle_budget_charge,
+            cycle_budget_exhausted,
+        )
 
         budget = CycleBudget(deadline=time.monotonic() + 60.0, usd_cap=0.0)
-        budget.charge(999.0)
+        cycle_budget_charge(budget, 999.0)
         # usd_cap <= 0 means unlimited — should NOT be exhausted by USD alone.
-        assert not budget.exhausted()
+        assert not cycle_budget_exhausted(budget)
 
     def test_charge_is_cumulative(self) -> None:
-        from mcp_server.handlers.consolidation.headless_authoring import CycleBudget
+        from mcp_server.handlers.consolidation.headless_authoring import (
+            CycleBudget,
+            cycle_budget_charge,
+            cycle_budget_exhausted,
+        )
 
         budget = CycleBudget(deadline=time.monotonic() + 60.0, usd_cap=10.0)
-        budget.charge(3.0)
-        budget.charge(4.0)
+        cycle_budget_charge(budget, 3.0)
+        cycle_budget_charge(budget, 4.0)
         assert abs(budget.usd_spent - 7.0) < 1e-9
-        assert not budget.exhausted()
-        budget.charge(3.0)
-        assert budget.exhausted()
+        assert not cycle_budget_exhausted(budget)
+        cycle_budget_charge(budget, 3.0)
+        assert cycle_budget_exhausted(budget)
 
 
 # ── Test (e): cancellation cleanup ────────────────────────────────────────

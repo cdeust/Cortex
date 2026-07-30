@@ -95,91 +95,133 @@ class Classification:
     tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        self.validate()
+        # __post_init__ is a dunder — mutmut skips the WHOLE decorated
+        # ClassDef body regardless (`mutmut/mutation/file_mutation.py:236`),
+        # so this call site carries no mutation coverage either way; kept
+        # as a method (constructors need one) and calls the free function
+        # below for the actual validation logic (issue #282).
+        validate_classification(self)
 
-    def validate(self) -> None:
-        """Raise ValueError (with did-you-mean) if any axis violates the schema."""
-        # Local import avoids importing the registry at module-load time
-        # (the registry reads the wiki on first call).
-        from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — documented deferral: the registry reads the wiki on first call; a module-load import would also invert the shared->core layer rule at import time
-            AXIS_AUDIENCE,
-            AXIS_KIND,
-            AXIS_LIFECYCLE,
-            AXIS_PROVENANCE,
-            did_you_mean,
-            get_registry,
+
+def validate_classification(classification: "Classification") -> None:
+    """Raise ValueError (with did-you-mean) if any axis violates the schema.
+
+    A free function, not a method: mutmut categorically excludes the body
+    of any `@dataclass`-decorated class (`mutmut/mutation/file_mutation.py:
+    236`), so logic placed on `Classification` methods would carry zero
+    mutation coverage no matter how the test loader names the module
+    (issue #262 3rd pass; issue #282). Split per-axis (§4.2, 40-line cap)
+    into `_validate_kind` / `_validate_lifecycle` / `_validate_audience` /
+    `_validate_provenance` below — the pre-extraction `validate()` method
+    was already 64 lines as a single block; this keeps the orchestrator
+    short instead of just relocating the same oversized function.
+    """
+    # Local import avoids importing the registry at module-load time
+    # (the registry reads the wiki on first call).
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — documented deferral: the registry reads the wiki on first call; a module-load import would also invert the shared->core layer rule at import time
+        get_registry,
+    )
+
+    reg = get_registry()
+    c = classification
+    _validate_kind(reg, c)
+    _validate_lifecycle(reg, c)
+    _validate_audience(reg, c)
+    _validate_provenance(reg, c)
+
+
+def _validate_kind(reg, c: "Classification") -> None:
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — see validate_classification
+        AXIS_KIND,
+        axis_registry_has,
+        did_you_mean,
+    )
+
+    if not axis_registry_has(reg, AXIS_KIND, c.kind):
+        suggestions = did_you_mean(AXIS_KIND, c.kind, reg)
+        raise ValueError(_format_unknown(AXIS_KIND, c.kind, suggestions))
+
+
+def _validate_lifecycle(reg, c: "Classification") -> None:
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — see validate_classification
+        AXIS_LIFECYCLE,
+        axis_registry_get,
+        axis_registry_values,
+        did_you_mean,
+    )
+
+    lc = axis_registry_get(reg, AXIS_LIFECYCLE, c.lifecycle)
+    if lc is None:
+        suggestions = did_you_mean(AXIS_LIFECYCLE, c.lifecycle, reg)
+        raise ValueError(_format_unknown(AXIS_LIFECYCLE, c.lifecycle, suggestions))
+    if lc.applies_to_kinds and c.kind not in lc.applies_to_kinds:
+        raise ValueError(
+            f"lifecycle {c.lifecycle!r} does not apply to kind "
+            f"{c.kind!r} (only to {sorted(lc.applies_to_kinds)})"
+        )
+    if not lc.applies_to_kinds and c.kind == "adr":
+        # ADRs must use the kind-specific subset.
+        adr_lc = [
+            v.name
+            for v in axis_registry_values(reg, AXIS_LIFECYCLE)
+            if "adr" in v.applies_to_kinds
+        ]
+        raise ValueError(
+            f"kind=adr requires a lifecycle from {sorted(adr_lc)}; got {c.lifecycle!r}"
         )
 
-        reg = get_registry()
 
-        # Kind ───────────────────────────────────────────────────────
-        if not reg.has(AXIS_KIND, self.kind):
-            suggestions = did_you_mean(AXIS_KIND, self.kind, reg)
-            raise ValueError(_format_unknown(AXIS_KIND, self.kind, suggestions))
+def _validate_audience(reg, c: "Classification") -> None:
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — see validate_classification
+        AXIS_AUDIENCE,
+        axis_registry_has,
+        did_you_mean,
+    )
 
-        # Lifecycle ──────────────────────────────────────────────────
-        # Lifecycle value must exist and must apply to this kind.
-        lc = reg.get(AXIS_LIFECYCLE, self.lifecycle)
-        if lc is None:
-            suggestions = did_you_mean(AXIS_LIFECYCLE, self.lifecycle, reg)
-            raise ValueError(
-                _format_unknown(AXIS_LIFECYCLE, self.lifecycle, suggestions)
-            )
-        if lc.applies_to_kinds and self.kind not in lc.applies_to_kinds:
-            raise ValueError(
-                f"lifecycle {self.lifecycle!r} does not apply to kind "
-                f"{self.kind!r} (only to {sorted(lc.applies_to_kinds)})"
-            )
-        if not lc.applies_to_kinds and self.kind == "adr":
-            # ADRs must use the kind-specific subset.
-            adr_lc = [
-                v.name
-                for v in reg.values(AXIS_LIFECYCLE)
-                if "adr" in v.applies_to_kinds
-            ]
-            raise ValueError(
-                f"kind=adr requires a lifecycle from {sorted(adr_lc)}; "
-                f"got {self.lifecycle!r}"
-            )
+    if not c.audience:
+        raise ValueError("audience must not be empty")
+    for a in c.audience:
+        if not axis_registry_has(reg, AXIS_AUDIENCE, a):
+            suggestions = did_you_mean(AXIS_AUDIENCE, a, reg)
+            raise ValueError(_format_unknown(AXIS_AUDIENCE, a, suggestions))
 
-        # Audience ───────────────────────────────────────────────────
-        if not self.audience:
-            raise ValueError("audience must not be empty")
-        for a in self.audience:
-            if not reg.has(AXIS_AUDIENCE, a):
-                suggestions = did_you_mean(AXIS_AUDIENCE, a, reg)
-                raise ValueError(_format_unknown(AXIS_AUDIENCE, a, suggestions))
 
-        # Provenance ─────────────────────────────────────────────────
-        prov = reg.get(AXIS_PROVENANCE, self.provenance)
-        if prov is None:
-            suggestions = did_you_mean(AXIS_PROVENANCE, self.provenance, reg)
-            raise ValueError(
-                _format_unknown(AXIS_PROVENANCE, self.provenance, suggestions)
-            )
-        if prov.requires_generator and self.generator is None:
-            raise ValueError(
-                f"provenance={self.provenance!r} requires a Generator block"
-            )
+def _validate_provenance(reg, c: "Classification") -> None:
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — see validate_classification
+        AXIS_PROVENANCE,
+        axis_registry_get,
+        did_you_mean,
+    )
 
-    def to_frontmatter(self) -> dict[str, object]:
-        """Render this classification as a YAML-compatible frontmatter dict."""
-        fm: dict[str, object] = {
-            "kind": self.kind,
-            "lifecycle": self.lifecycle,
-            "audience": list(self.audience),
-            "provenance": self.provenance,
+    prov = axis_registry_get(reg, AXIS_PROVENANCE, c.provenance)
+    if prov is None:
+        suggestions = did_you_mean(AXIS_PROVENANCE, c.provenance, reg)
+        raise ValueError(_format_unknown(AXIS_PROVENANCE, c.provenance, suggestions))
+    if prov.requires_generator and c.generator is None:
+        raise ValueError(f"provenance={c.provenance!r} requires a Generator block")
+
+
+def classification_to_frontmatter(
+    classification: "Classification",
+) -> dict[str, object]:
+    """Render a classification as a YAML-compatible frontmatter dict."""
+    c = classification
+    fm: dict[str, object] = {
+        "kind": c.kind,
+        "lifecycle": c.lifecycle,
+        "audience": list(c.audience),
+        "provenance": c.provenance,
+    }
+    if c.generator is not None:
+        fm["generator"] = {
+            "model": c.generator.model,
+            "version": c.generator.version,
+            "prompt_template": c.generator.prompt_template,
+            "generated_at": c.generator.generated_at,
         }
-        if self.generator is not None:
-            fm["generator"] = {
-                "model": self.generator.model,
-                "version": self.generator.version,
-                "prompt_template": self.generator.prompt_template,
-                "generated_at": self.generator.generated_at,
-            }
-        if self.tags:
-            fm["tags"] = list(self.tags)
-        return fm
+    if c.tags:
+        fm["tags"] = list(c.tags)
+    return fm
 
 
 def _format_unknown(axis: str, value: str, suggestions: tuple[str, ...]) -> str:
@@ -212,6 +254,10 @@ def is_legacy_kind(kind: str) -> bool:
 
 def all_known_kinds() -> frozenset[str]:
     """Modern (registered) + legacy kinds. For read paths that must accept either."""
-    from mcp_server.core.wiki_axis_registry import AXIS_KIND, get_registry  # noqa: PLC0415 — documented deferral: the registry reads the wiki on first call; a module-load import would also invert the shared->core layer rule at import time
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — documented deferral: the registry reads the wiki on first call; a module-load import would also invert the shared->core layer rule at import time
+        AXIS_KIND,
+        axis_registry_names,
+        get_registry,
+    )
 
-    return frozenset(get_registry().names(AXIS_KIND)) | LEGACY_KINDS
+    return frozenset(axis_registry_names(get_registry(), AXIS_KIND)) | LEGACY_KINDS

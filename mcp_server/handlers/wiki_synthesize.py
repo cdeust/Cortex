@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.core.draft_synthesizer import synthesize_draft
+from mcp_server.core.wiki_schema_loader import wiki_registry_known_kind_names
 from mcp_server.infrastructure.wiki_schema_reader import load_registry
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
@@ -242,7 +243,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     # Load kind registry once per call
     registry = load_registry(Path(WIKI_ROOT))
-    available_kinds = registry.known_kind_names
+    available_kinds = wiki_registry_known_kind_names(registry)
 
     memory_ids = _candidate_memories(conn, memory_id, force, limit)
     if not memory_ids:

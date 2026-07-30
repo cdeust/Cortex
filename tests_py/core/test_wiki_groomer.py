@@ -13,6 +13,7 @@ from mcp_server.core.wiki_groomer import (
     audit_page,
     audit_wiki,
     infer_kind_from_path,
+    page_audit_has_issues,
     parse_frontmatter,
 )
 
@@ -85,7 +86,7 @@ consequences: positive
         audit = audit_page("adr/0042-use-lazy-heat.md", self.CANONICAL_ADR)
         # All required fields present, status valid, slug matches
         # 0042-use-lazy-heat.
-        assert not audit.has_issues
+        assert not page_audit_has_issues(audit)
 
     def test_missing_status(self):
         broken = self.CANONICAL_ADR.replace("status: accepted\n", "")

@@ -27,6 +27,7 @@ from mcp_server.core.wiki_classifier import classify_memory, derive_title
 from mcp_server.core.wiki_identity import generate_page_id
 from mcp_server.core.wiki_layout import slugify
 from mcp_server.core.wiki_pages import build_note
+from mcp_server.shared.wiki_classification import classification_to_frontmatter
 import hashlib
 
 _DECISION_TAGS = frozenset({"decision", "adr", "architecture", "spec", "design"})
@@ -118,7 +119,7 @@ def build_from_memory(
     # Phase 3 of ADR-2244: every page carries a stable ``id`` (UUID4) in
     # its frontmatter so renames can leave redirect stubs that survive
     # bulk migration. See ``mcp_server.core.wiki_identity``.
-    fm = classification.to_frontmatter()
+    fm = classification_to_frontmatter(classification)
     fm["id"] = generate_page_id()
     fm["title"] = title
     fm["updated"] = _now_iso()

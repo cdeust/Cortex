@@ -20,6 +20,7 @@ from mcp_server.core.value_learning import (
     retention_bonus,
     retrieval_priority,
     td_update,
+    value_update_as_dict,
 )
 
 
@@ -157,14 +158,26 @@ def test_retrieval_priority_boost_and_penalty():
 
 
 def test_value_update_as_dict_roundtrip():
+    # Every float carries a 5th decimal digit and is not integer-valued —
+    # this is deliberate: round(x, 4) vs round(x, 5) and round(x, 4) vs
+    # round(x) (ndigits=None, which returns an int) must all be
+    # OBSERVABLY different for this test to be a real assertion rather
+    # than one that happens to pass regardless of the rounding precision
+    # (issue #282 mutation-testing gap: 0.5/0.55/1.0/0.1 round identically
+    # at 4 vs 5 digits and int-truncate to values that still compare equal
+    # via Python's int==float coercion).
     u = ValueUpdate(
         memory_id=7,
-        old_value=0.5,
-        new_value=0.55,
-        delta=0.5,
-        eligibility=1.0,
-        effective_alpha=0.1,
+        old_value=0.512345,
+        new_value=0.556789,
+        delta=0.512345,
+        eligibility=0.812345,
+        effective_alpha=0.198765,
     )
-    d = u.as_dict()
+    d = value_update_as_dict(u)
     assert d["memory_id"] == 7
-    assert d["new_value"] == 0.55
+    assert d["new_value"] == round(0.556789, 4)
+    assert d["old_value"] == round(0.512345, 4)
+    assert d["delta"] == round(0.512345, 4)
+    assert d["eligibility"] == round(0.812345, 4)
+    assert d["effective_alpha"] == round(0.198765, 4)

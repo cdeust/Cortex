@@ -77,13 +77,12 @@ async def _invoke_anchor_call(
     )
     # Effective per-call timeout = remaining budget time, capped at
     # CLAUDE_CALL_TIMEOUT_SEC and floored at 1 s.
-    eff_timeout = max(
-        1.0, min(float(_root.CLAUDE_CALL_TIMEOUT_SEC), budget.time_left())
-    )
+    time_left = _root.cycle_budget_time_left(budget)
+    eff_timeout = max(1.0, min(float(_root.CLAUDE_CALL_TIMEOUT_SEC), time_left))
     ir = await invoke(
         prompt, cwd=cand.source_root, source_root=cand.source_root, timeout=eff_timeout
     )
-    budget.charge(ir.cost_usd)
+    _root.cycle_budget_charge(budget, ir.cost_usd)
     return ir, _elapsed_ms(t0)
 
 
@@ -99,7 +98,7 @@ async def _drain_anchor_bounded(
     """Drain one anchor candidate under semaphore + budget control."""
     gap = f"anchor:{cand.scope_name}"
     async with sem:
-        if budget.exhausted():
+        if _root.cycle_budget_exhausted(budget):
             return _drain_result(
                 cand.suggested_path, gap, "skipped", 0, "budget exhausted", _root
             )
@@ -133,12 +132,12 @@ def _make_charging_invoke(
     """Wrap ``invoke`` to auto-charge the budget and inject the effective timeout."""
 
     async def charging_invoke(prompt: str, **kw: Any) -> Any:
+        time_left = _root.cycle_budget_time_left(budget)
         kw.setdefault(
-            "timeout",
-            max(1.0, min(float(_root.CLAUDE_CALL_TIMEOUT_SEC), budget.time_left())),
+            "timeout", max(1.0, min(float(_root.CLAUDE_CALL_TIMEOUT_SEC), time_left))
         )
         ir = await invoke(prompt, **kw)
-        budget.charge(ir.cost_usd)
+        _root.cycle_budget_charge(budget, ir.cost_usd)
         return ir
 
     return charging_invoke
@@ -156,7 +155,7 @@ async def _drain_page_bounded(
 ) -> list[Any]:
     """Drain all gaps on one file page under semaphore + budget control."""
     async with sem:
-        if budget.exhausted():
+        if _root.cycle_budget_exhausted(budget):
             return [
                 _drain_result(page_path, "all", "skipped", 0, "budget exhausted", _root)
             ]

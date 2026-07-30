@@ -120,27 +120,41 @@ class AxisRegistry:
 
     by_axis: dict[str, dict[str, AxisValue]] = field(default_factory=dict)
 
-    def values(self, axis: str) -> tuple[AxisValue, ...]:
-        """All registered values for an axis."""
-        return tuple(self.by_axis.get(axis, {}).values())
 
-    def names(self, axis: str) -> frozenset[str]:
-        """All registered value names for an axis."""
-        return frozenset(self.by_axis.get(axis, {}).keys())
+def axis_registry_values(registry: "AxisRegistry", axis: str) -> tuple[AxisValue, ...]:
+    """All registered values for an axis.
 
-    def get(self, axis: str, name: str) -> AxisValue | None:
-        """Look up a value by axis + name. Case-insensitive."""
-        return self.by_axis.get(axis, {}).get(name.lower())
+    A free function, not a method: mutmut categorically excludes the body
+    of any `@dataclass`-decorated class (`mutmut/mutation/file_mutation.py:
+    236`), so logic placed on `AxisRegistry` methods would carry zero
+    mutation coverage no matter how the test loader names the module
+    (issue #262 3rd pass; issue #282).
+    """
+    return tuple(registry.by_axis.get(axis, {}).values())
 
-    def has(self, axis: str, name: str) -> bool:
-        return self.get(axis, name) is not None
 
-    def default_for(self, axis: str) -> AxisValue | None:
-        """Return the value marked ``default: true`` for this axis, if any."""
-        for v in self.by_axis.get(axis, {}).values():
-            if v.default:
-                return v
-        return None
+def axis_registry_names(registry: "AxisRegistry", axis: str) -> frozenset[str]:
+    """All registered value names for an axis."""
+    return frozenset(registry.by_axis.get(axis, {}).keys())
+
+
+def axis_registry_get(
+    registry: "AxisRegistry", axis: str, name: str
+) -> AxisValue | None:
+    """Look up a value by axis + name. Case-insensitive."""
+    return registry.by_axis.get(axis, {}).get(name.lower())
+
+
+def axis_registry_has(registry: "AxisRegistry", axis: str, name: str) -> bool:
+    return axis_registry_get(registry, axis, name) is not None
+
+
+def axis_registry_default_for(registry: "AxisRegistry", axis: str) -> AxisValue | None:
+    """Return the value marked ``default: true`` for this axis, if any."""
+    for v in registry.by_axis.get(axis, {}).values():
+        if v.default:
+            return v
+    return None
 
 
 def _re(pattern: str) -> re.Pattern[str]:
@@ -309,7 +323,7 @@ def did_you_mean(
     Implements the "reject + suggest" policy: validators raise
     ``ValueError`` with these suggestions in the error message.
     """
-    candidates = list(registry.names(axis))
+    candidates = list(axis_registry_names(registry, axis))
     suggestions = difflib.get_close_matches(
         unknown.lower(), [c.lower() for c in candidates], n=n, cutoff=0.4
     )
@@ -337,7 +351,7 @@ def match_axis(
     """
     matches: list[str] = []
     tag_set = {t.lower() for t in (tags or [])}
-    for value in registry.values(axis):
+    for value in axis_registry_values(registry, axis):
         if (
             axis == AXIS_LIFECYCLE
             and value.applies_to_kinds

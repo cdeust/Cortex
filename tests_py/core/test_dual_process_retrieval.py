@@ -21,6 +21,7 @@ from mcp_server.core.dual_process_retrieval import (
     METHOD_VECTOR,
     assess_familiarity,
     familiarity_score,
+    familiarity_signal_as_dict,
     recollection_needed,
     triage,
 )
@@ -153,3 +154,18 @@ def test_triage_empty():
     assert res.candidates == []
     assert res.recollection_needed is True
     assert res.shortcut is False
+
+
+# ── familiarity_signal_as_dict (issue #282: dataclass mutation blindspot) ────
+def test_familiarity_signal_as_dict_rounds_and_shapes():
+    # 7th-decimal precision on every similarity so round(x, 6) vs round(x, 7)
+    # is observable for familiarity/mean/margin alike (issue #282 gap: a
+    # 1-2 significant-digit fixture rounds identically at 6 vs 7 places).
+    signal = assess_familiarity([0.9123456, 0.5198765, 0.2123456])
+    d = familiarity_signal_as_dict(signal)
+    assert set(d) == {"familiarity", "mean", "margin", "n", "method"}
+    assert d["familiarity"] == round(signal.familiarity, 6)
+    assert d["mean"] == round(signal.mean, 6)
+    assert d["margin"] == round(signal.margin, 6)
+    assert d["n"] == signal.n
+    assert d["method"] == signal.method

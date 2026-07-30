@@ -54,9 +54,15 @@ class PageAudit:
     page_kind: str | None
     issues: list[GroomIssue] = field(default_factory=list)
 
-    @property
-    def has_issues(self) -> bool:
-        return bool(self.issues)
+
+def page_audit_has_issues(audit: "PageAudit") -> bool:
+    """A free function, not a method: mutmut categorically excludes the
+    body of any `@dataclass`-decorated class (`mutmut/mutation/
+    file_mutation.py:236`), so logic placed on `PageAudit` methods would
+    carry zero mutation coverage no matter how the test loader names the
+    module (issue #262 3rd pass; issue #282).
+    """
+    return bool(audit.issues)
 
 
 # ── Front-matter parser ───────────────────────────────────────────────────
@@ -207,6 +213,6 @@ def audit_wiki(pages: list[tuple[str, str]]) -> list[PageAudit]:
     audits: list[PageAudit] = []
     for path, content in pages:
         a = audit_page(path, content)
-        if a.has_issues:
+        if page_audit_has_issues(a):
             audits.append(a)
     return audits

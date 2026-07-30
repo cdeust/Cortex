@@ -35,7 +35,15 @@ if TYPE_CHECKING:
 
 @dataclass
 class BufferItem:
-    """A single item in the sensory buffer."""
+    """A single item in the sensory buffer.
+
+    Data only — deliberately no methods. mutmut's mutation generator
+    categorically excludes the body of any `@dataclass`-decorated class
+    (`mutmut/mutation/file_mutation.py:236`), so logic placed on methods
+    here would carry zero mutation coverage no matter how the test loader
+    names the module (issue #262 3rd pass; issue #282). ``buffer_item_to_dict``
+    below carries the same logic as a free function instead.
+    """
 
     content: str
     tags: list[str]
@@ -48,17 +56,18 @@ class BufferItem:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "content": self.content,
-            "tags": self.tags,
-            "source": self.source,
-            "directory": self.directory,
-            "domain": self.domain,
-            "importance": self.importance,
-            "valence": self.valence,
-            "created_at": self.created_at,
-        }
+
+def buffer_item_to_dict(item: BufferItem) -> dict[str, Any]:
+    return {
+        "content": item.content,
+        "tags": item.tags,
+        "source": item.source,
+        "directory": item.directory,
+        "domain": item.domain,
+        "importance": item.importance,
+        "valence": item.valence,
+        "created_at": item.created_at,
+    }
 
 
 # ── Sensory buffer ────────────────────────────────────────────────────────
@@ -130,7 +139,7 @@ class SensoryBuffer:
             "importance": round(importance, 4),
             "valence": round(valence, 4),
             "buffer_size": len(self._buffer),
-            "item": item.to_dict() if is_urgent else None,
+            "item": buffer_item_to_dict(item) if is_urgent else None,
         }
 
     # ── Read ───────────────────────────────────────────────────────────
@@ -168,7 +177,7 @@ class SensoryBuffer:
         an empty allocation.
         """
 
-        items = [item.to_dict() for item in self._buffer]
+        items = [buffer_item_to_dict(item) for item in self._buffer]
         return allocate_attention(
             query,
             items,

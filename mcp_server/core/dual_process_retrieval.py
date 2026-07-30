@@ -113,14 +113,21 @@ class FamiliaritySignal:
     n: int
     method: str = METHOD_VECTOR
 
-    def as_dict(self) -> dict:
-        return {
-            "familiarity": round(self.familiarity, 6),
-            "mean": round(self.mean, 6),
-            "margin": round(self.margin, 6),
-            "n": self.n,
-            "method": self.method,
-        }
+
+def familiarity_signal_as_dict(signal: "FamiliaritySignal") -> dict:
+    """A free function, not a method: mutmut categorically excludes the
+    body of any `@dataclass`-decorated class (`mutmut/mutation/
+    file_mutation.py:236`), so logic placed on `FamiliaritySignal` methods
+    would carry zero mutation coverage no matter how the test loader names
+    the module (issue #262 3rd pass; issue #282).
+    """
+    return {
+        "familiarity": round(signal.familiarity, 6),
+        "mean": round(signal.mean, 6),
+        "margin": round(signal.margin, 6),
+        "n": signal.n,
+        "method": signal.method,
+    }
 
 
 @dataclass

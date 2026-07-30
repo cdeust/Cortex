@@ -12,11 +12,14 @@ from mcp_server.core.procedural_memory import (
     ProceduralSkill,
     HABITUAL_THRESHOLD,
     MIN_SKILL_SUPPORT,
+    action_step_key,
     context_signature,
     infer_target_kind,
     match_skills,
     mine_skills,
     normalize_actions,
+    procedural_skill_as_dict,
+    procedural_skill_is_habitual,
     reinforce,
     skill_id_for,
 )
@@ -42,7 +45,7 @@ def test_normalize_rich_form_infers_target_kind():
         ]
     )
     assert steps[0].target_kind == "test"
-    assert steps[0].key() == "edit_file:test"
+    assert action_step_key(steps[0]) == "edit_file:test"
 
 
 def test_infer_target_kind_classes():
@@ -89,7 +92,7 @@ def test_mine_extracts_recurring_routine():
     skills = mine_skills(sessions)
     assert skills, "expected at least one mined skill"
     # The full 3-step routine should be among the mined skills.
-    seqs = {tuple(s.as_dict()["sequence"]) for s in skills}
+    seqs = {tuple(procedural_skill_as_dict(s)["sequence"]) for s in skills}
     assert ("read_file", "edit_file", "bash") in seqs
     top = skills[0]
     assert top.occurrences >= MIN_SKILL_SUPPORT
@@ -103,7 +106,12 @@ def test_mine_counts_sequence_once_per_session():
     ]
     skills = mine_skills(sessions)
     ab = next(
-        (s for s in skills if tuple(s.as_dict()["sequence"])[:2] == ("a", "b")), None
+        (
+            s
+            for s in skills
+            if tuple(procedural_skill_as_dict(s)["sequence"])[:2] == ("a", "b")
+        ),
+        None,
     )
     assert ab is not None
     # occurrences == number of sessions, not number of in-session repeats
@@ -159,13 +167,13 @@ def test_habitual_graduation():
     s = ProceduralSkill(sequence=(ActionStep("a"), ActionStep("b")))
     for _ in range(HABITUAL_THRESHOLD):
         s = reinforce(s, "success")
-    assert s.is_habitual
+    assert procedural_skill_is_habitual(s)
     # one fewer success is not yet habitual
     s2 = ProceduralSkill(
         sequence=(ActionStep("a"), ActionStep("b")),
         success_count=HABITUAL_THRESHOLD - 1,
     )
-    assert not s2.is_habitual
+    assert not procedural_skill_is_habitual(s2)
 
 
 # ── Situational retrieval ───────────────────────────────────────────────────
@@ -234,3 +242,32 @@ def test_match_priming_bonus():
         {"domain": "cortex", "cwd": "/repo/cortex", "tools_used": ["grep"]}, [skill]
     )
     assert primed[0]["score"] > unprimed[0]["score"]
+
+
+# ── procedural_skill_as_dict shape (issue #282: dataclass mutation blindspot) —
+def test_procedural_skill_as_dict_full_shape():
+    skill = ProceduralSkill(
+        sequence=(ActionStep("read_file"), ActionStep("edit_file", "test")),
+        context_signature="cortex|repo",
+        occurrences=7,
+        success_count=6,
+        failure_count=1,
+        # A 5th-decimal digit so round(x, 4) vs round(x, 5) and vs
+        # round(x, None)/round(x) (int truncation) are all observably
+        # different — a value like 0.9 rounds identically at every
+        # precision and can't distinguish the mutants.
+        proficiency=0.912345,
+        last_seen="2026-01-01T00:00:00+00:00",
+    )
+    d = procedural_skill_as_dict(skill)
+    assert d == {
+        "skill_id": skill.skill_id,
+        "sequence": ["read_file", "edit_file:test"],
+        "context_signature": "cortex|repo",
+        "occurrences": 7,
+        "success_count": 6,
+        "failure_count": 1,
+        "proficiency": round(0.912345, 4),
+        "is_habitual": True,  # success_count 6 >= HABITUAL_THRESHOLD 5
+        "last_seen": "2026-01-01T00:00:00+00:00",
+    }

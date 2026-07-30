@@ -9,6 +9,8 @@ from __future__ import annotations
 from mcp_server.core.context_assembly.budget import (
     AssemblyMetrics,
     Placeholder,
+    assembly_metrics_reduction_fraction,
+    assembly_metrics_was_truncated,
     available_budget,
     estimate_tokens,
     truncate_to_budget,
@@ -19,25 +21,46 @@ from mcp_server.core.context_assembly.decomposer import assemble_prompt
 class TestAssemblyMetrics:
     def test_reduction_fraction_zero_original_is_full(self):
         metrics = AssemblyMetrics()
-        assert metrics.reduction_fraction("{{A}}") == 1.0
+        assert assembly_metrics_reduction_fraction(metrics, "{{A}}") == 1.0
 
     def test_reduction_fraction_computes_ratio(self):
         metrics = AssemblyMetrics(
             original_tokens={"{{A}}": 100}, final_tokens={"{{A}}": 50}
         )
-        assert metrics.reduction_fraction("{{A}}") == 0.5
+        assert assembly_metrics_reduction_fraction(metrics, "{{A}}") == 0.5
 
     def test_was_truncated_true_below_threshold(self):
         metrics = AssemblyMetrics(
             original_tokens={"{{A}}": 100}, final_tokens={"{{A}}": 50}
         )
-        assert metrics.was_truncated("{{A}}") is True
+        assert assembly_metrics_was_truncated(metrics, "{{A}}") is True
 
     def test_was_truncated_false_above_threshold(self):
         metrics = AssemblyMetrics(
             original_tokens={"{{A}}": 100}, final_tokens={"{{A}}": 95}
         )
-        assert metrics.was_truncated("{{A}}") is False
+        assert assembly_metrics_was_truncated(metrics, "{{A}}") is False
+
+    def test_reduction_fraction_key_absent_from_final_tokens_is_zero(self):
+        # original_tokens carries the key (non-zero, so the vacuous 1.0
+        # short-circuit doesn't fire) but final_tokens never got an entry
+        # for it — the real function's `.get(key, 0)` default reads this
+        # as "fully condensed away" (ratio 0.0); a mutant that defaults to
+        # `None` would raise TypeError on the division instead, and one
+        # that defaults to `1` would silently read 1/100 = 0.01 (issue
+        # #282 mutation-testing gap: every other fixture here has the key
+        # present in BOTH dicts, so the default value is never reached).
+        metrics = AssemblyMetrics(original_tokens={"{{A}}": 100}, final_tokens={})
+        assert assembly_metrics_reduction_fraction(metrics, "{{A}}") == 0.0
+
+    def test_was_truncated_boundary_is_strictly_below_not_at_threshold(self):
+        # ratio == threshold exactly (90/100 = 0.9, the default threshold):
+        # `<` is False (not truncated — meeting the bar counts as fine);
+        # `<=` would flip this to True (issue #282 mutation-testing gap).
+        metrics = AssemblyMetrics(
+            original_tokens={"{{A}}": 100}, final_tokens={"{{A}}": 90}
+        )
+        assert assembly_metrics_was_truncated(metrics, "{{A}}") is False
 
 
 class TestEstimateTokens:

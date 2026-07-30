@@ -405,7 +405,7 @@ def apply_goal_maintenance(
         return novelty_score, None
     try:
         goal = read_active_goal(store)
-        if not goal.is_active:
+        if not goal_maintenance.goal_vector_is_active(goal):
             return novelty_score, None
         relevance = goal_maintenance.goal_relevance(
             goal, content, entities=entity_names, directory=directory
@@ -419,7 +419,7 @@ def apply_goal_maintenance(
             return novelty_score, None
         modulated = max(0.0, min(1.0, novelty_score * gain))
         return modulated, {
-            "goal": goal.as_dict(),
+            "goal": goal_maintenance.goal_vector_as_dict(goal),
             "relevance": round(relevance, 4),
             "gain": round(gain, 4),
             "modulated_novelty": round(modulated, 4),
@@ -472,7 +472,9 @@ def apply_habituation(
             salience=salience,
             hours_since_salient=hours_since_salient,
         )
-        return outcome.modulated_novelty, outcome.as_dict()
+        return outcome.modulated_novelty, habituation.habituation_outcome_as_dict(
+            outcome
+        )
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_gate.habituation")
         silent_failure.note("write_gate.habituation", exc)
         return novelty_score, None

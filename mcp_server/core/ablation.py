@@ -111,30 +111,53 @@ class Mechanism(Enum):
 
 @dataclass
 class AblationConfig:
-    """Configuration specifying which mechanisms are enabled/disabled."""
+    """Configuration specifying which mechanisms are enabled/disabled.
+
+    Data only — mutmut skips the body of any `@dataclass`-decorated class
+    (`mutmut/mutation/file_mutation.py:236`; issue #262 3rd pass, #282).
+    `ablation_config_is_enabled/disable/enable/disable_all_except` below
+    carry the logic as free functions instead.
+    """
 
     disabled: set[str] = field(default_factory=set)
 
-    def is_enabled(self, mechanism: Mechanism | str) -> bool:
-        """Check if a mechanism is enabled."""
-        name = mechanism.value if isinstance(mechanism, Mechanism) else mechanism
-        return name not in self.disabled
 
-    def disable(self, mechanism: Mechanism | str) -> "AblationConfig":
-        """Return new config with mechanism disabled."""
-        name = mechanism.value if isinstance(mechanism, Mechanism) else mechanism
-        return AblationConfig(disabled=self.disabled | {name})
+def ablation_config_is_enabled(
+    config: "AblationConfig", mechanism: Mechanism | str
+) -> bool:
+    """Check if a mechanism is enabled."""
+    name = mechanism.value if isinstance(mechanism, Mechanism) else mechanism
+    return name not in config.disabled
 
-    def enable(self, mechanism: Mechanism | str) -> "AblationConfig":
-        """Return new config with mechanism enabled."""
-        name = mechanism.value if isinstance(mechanism, Mechanism) else mechanism
-        return AblationConfig(disabled=self.disabled - {name})
 
-    def disable_all_except(self, *mechanisms: Mechanism) -> "AblationConfig":
-        """Disable all mechanisms except the specified ones."""
-        keep = {m.value for m in mechanisms}
-        all_mechs = {m.value for m in Mechanism}
-        return AblationConfig(disabled=all_mechs - keep)
+def ablation_config_disable(
+    config: "AblationConfig", mechanism: Mechanism | str
+) -> "AblationConfig":
+    """Return new config with mechanism disabled."""
+    name = mechanism.value if isinstance(mechanism, Mechanism) else mechanism
+    return AblationConfig(disabled=config.disabled | {name})
+
+
+def ablation_config_enable(
+    config: "AblationConfig", mechanism: Mechanism | str
+) -> "AblationConfig":
+    """Return new config with mechanism enabled."""
+    name = mechanism.value if isinstance(mechanism, Mechanism) else mechanism
+    return AblationConfig(disabled=config.disabled - {name})
+
+
+def ablation_config_disable_all_except(
+    config: "AblationConfig", *mechanisms: Mechanism
+) -> "AblationConfig":
+    """Disable all mechanisms except the specified ones.
+
+    ``config`` is unread — kept for a uniform ``(config, ...)`` call shape;
+    the result always replaces ``disabled`` wholesale (matches the
+    pre-extraction method's own behavior of ignoring prior state).
+    """
+    keep = {m.value for m in mechanisms}
+    all_mechs = {m.value for m in Mechanism}
+    return AblationConfig(disabled=all_mechs - keep)
 
 
 # -- Ablation Results ---------------------------------------------------------

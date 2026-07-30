@@ -19,6 +19,8 @@ from mcp_server.core.document_model import (
     DocumentSection,
     DocumentTable,
     ParsedDocument,
+    document_section_is_empty,
+    parsed_document_is_empty,
 )
 
 _MAX_SLUG = 80
@@ -89,7 +91,7 @@ def _render_section(section: DocumentSection) -> str:
 
 
 def _section_memory(section: DocumentSection) -> SectionMemory | None:
-    if section.is_empty():
+    if document_section_is_empty(section):
         return None
     body_parts = [section.body.strip()] if section.body.strip() else []
     for table in section.tables:
@@ -148,7 +150,7 @@ def normalize_document(
         notices.append(notice)
         lines.append(f"> Note: {notice}")
         lines.append("")
-    if doc.is_empty():
+    if parsed_document_is_empty(doc):
         empty_notice = "Document contained no extractable text."
         notices.append(empty_notice)
         lines.append(f"> Note: {empty_notice}")

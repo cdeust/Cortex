@@ -92,14 +92,21 @@ class AttentionAllocation:
     capacity: int
     overflow: int = 0
 
-    def as_dict(self) -> dict:
-        return {
-            "focus": self.focus,
-            "weights": [round(w, 4) for w in self.weights],
-            "entropy": round(self.entropy, 4),
-            "capacity": self.capacity,
-            "overflow": self.overflow,
-        }
+
+def attention_allocation_as_dict(allocation: "AttentionAllocation") -> dict:
+    """A free function, not a method: mutmut categorically excludes the
+    body of any `@dataclass`-decorated class (`mutmut/mutation/
+    file_mutation.py:236`), so logic placed on `AttentionAllocation`
+    methods would carry zero mutation coverage no matter how the test
+    loader names the module (issue #262 3rd pass; issue #282).
+    """
+    return {
+        "focus": allocation.focus,
+        "weights": [round(w, 4) for w in allocation.weights],
+        "entropy": round(allocation.entropy, 4),
+        "capacity": allocation.capacity,
+        "overflow": allocation.overflow,
+    }
 
 
 # ── Relevance scoring (top-down) ────────────────────────────────────────────

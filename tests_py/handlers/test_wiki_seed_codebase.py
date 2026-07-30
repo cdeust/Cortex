@@ -75,13 +75,14 @@ def test_all_returned_kinds_are_registered() -> None:
     """
     from mcp_server.core.wiki_axis_registry import (
         AXIS_KIND,
+        axis_registry_values,
         build_default_registry,
     )
 
     reg = build_default_registry()
     # Gather every tag alias across all registered kinds.
     all_aliases: set[str] = set()
-    for value in reg.values(AXIS_KIND):
+    for value in axis_registry_values(reg, AXIS_KIND):
         all_aliases.update(value.tag_aliases)
         all_aliases.add(value.name)
 

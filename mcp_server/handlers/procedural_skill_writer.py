@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from mcp_server.core.procedural_memory import mine_skills
+from mcp_server.core.procedural_memory import mine_skills, procedural_skill_as_dict
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def maybe_mine_skills(
         skills = mine_skills(mining_input)
         written = 0
         for skill in skills:
-            d = skill.as_dict()
+            d = procedural_skill_as_dict(skill)
             store.upsert_procedural_skill(
                 {
                     "skill_id": d["skill_id"],

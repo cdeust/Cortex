@@ -56,21 +56,36 @@ class AdaptiveBatchController:
             self.ai_step = self.b_min
         self._b = self.b_min
 
-    @property
-    def batch_size(self) -> int:
-        """The current batch size ``B`` (b_min <= B <= b_max)."""
-        return self._b
 
-    def observe(self, latency_s: float) -> int:
-        """Update B from one observed batch-write latency; return the new B.
+def adaptive_batch_controller_batch_size(controller: "AdaptiveBatchController") -> int:
+    """The current batch size ``B`` (b_min <= B <= b_max).
 
-        Within target → additive increase ``B += ai_step``; over target →
-        multiplicative decrease ``B := max(b_min, floor(beta * B))``.
-        Postcondition: ``b_min <= B <= b_max``.
-        """
-        if latency_s <= self.w_target_s:
-            self._b = min(self.b_max, self._b + self.ai_step)
-        else:
-            self._b = max(self.b_min, int(self._b * _MD_FACTOR))
-        assert self.b_min <= self._b <= self.b_max  # invariant (precond 4)
-        return self._b
+    A free function, not a method: mutmut categorically excludes the body
+    of any `@dataclass`-decorated class (`mutmut/mutation/file_mutation.py:
+    236`), so logic placed on `AdaptiveBatchController` methods (other than
+    `__post_init__`, a dunder mutmut skips regardless) would carry zero
+    mutation coverage no matter how the test loader names the module
+    (issue #262 3rd pass; issue #282).
+    """
+    return controller._b
+
+
+def adaptive_batch_controller_observe(
+    controller: "AdaptiveBatchController", latency_s: float
+) -> int:
+    """Update B from one observed batch-write latency; return the new B.
+
+    Within target → additive increase ``B += ai_step``; over target →
+    multiplicative decrease ``B := max(b_min, floor(beta * B))``.
+    Postcondition: ``b_min <= B <= b_max``. Mutates ``controller`` in place
+    (it is the sole owner of the live batch size), matching the
+    pre-extraction method's own behavior.
+    """
+    if latency_s <= controller.w_target_s:
+        controller._b = min(controller.b_max, controller._b + controller.ai_step)
+    else:
+        controller._b = max(controller.b_min, int(controller._b * _MD_FACTOR))
+    assert (
+        controller.b_min <= controller._b <= controller.b_max
+    )  # invariant (precond 4)
+    return controller._b

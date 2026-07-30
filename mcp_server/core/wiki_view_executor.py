@@ -124,9 +124,15 @@ class CompiledView:
     errors: list[str]
     table: str
 
-    @property
-    def ok(self) -> bool:
-        return not self.errors
+
+def compiled_view_ok(compiled: "CompiledView") -> bool:
+    """A free function, not a method: mutmut categorically excludes the
+    body of any `@dataclass`-decorated class (`mutmut/mutation/
+    file_mutation.py:236`), so logic placed on `CompiledView` methods would
+    carry zero mutation coverage no matter how the test loader names the
+    module (issue #262 3rd pass; issue #282).
+    """
+    return not compiled.errors
 
 
 # ── YAML-ish parser ──────────────────────────────────────────────────
@@ -362,4 +368,4 @@ def compile_view(text: str) -> CompiledView:
     return CompiledView(sql=sql, params=params, errors=errors, table=table)
 
 
-__all__ = ["CompiledView", "compile_view"]
+__all__ = ["CompiledView", "compile_view", "compiled_view_ok"]

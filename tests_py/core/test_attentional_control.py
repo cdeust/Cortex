@@ -10,6 +10,7 @@ from mcp_server.core.attentional_control import (
     ATTENTION_TEMPERATURE,
     FOCUS_CAPACITY_DEFAULT,
     allocate_attention,
+    attention_allocation_as_dict,
     in_focus_contents,
     relevance_score,
 )
@@ -125,3 +126,16 @@ def test_in_focus_contents_order():
 def test_defaults_sane():
     assert FOCUS_CAPACITY_DEFAULT == 4
     assert 0.0 < ATTENTION_TEMPERATURE <= 1.0
+
+
+# ── attention_allocation_as_dict (issue #282: dataclass mutation blindspot) ──
+def test_attention_allocation_as_dict_shape_and_rounding():
+    items = _items("low", "decay high match", "mid decay")
+    a = allocate_attention("decay high match", items)
+    d = attention_allocation_as_dict(a)
+    assert set(d) == {"focus", "weights", "entropy", "capacity", "overflow"}
+    assert d["focus"] == a.focus
+    assert d["weights"] == [round(w, 4) for w in a.weights]
+    assert d["entropy"] == round(a.entropy, 4)
+    assert d["capacity"] == a.capacity
+    assert d["overflow"] == a.overflow

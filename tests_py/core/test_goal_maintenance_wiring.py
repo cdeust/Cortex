@@ -49,7 +49,7 @@ class TestReadActiveGoal:
 
     def test_triggers_promoted_to_active_goal(self):
         goal = write_gate.read_active_goal(_GoalStore(_GOAL_TRIGGERS))
-        assert goal.is_active
+        assert gm.goal_vector_is_active(goal)
         assert "recall" in goal.keywords and "pipeline" in goal.keywords
 
     def test_reader_exception_is_non_fatal(self):

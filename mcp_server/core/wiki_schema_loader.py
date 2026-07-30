@@ -100,9 +100,15 @@ class WikiRegistry:
     views: dict[str, ViewDefinition]
     triggers: dict[str, TriggerDefinition]
 
-    @property
-    def known_kind_names(self) -> set[str]:
-        return set(self.kinds.keys())
+
+def wiki_registry_known_kind_names(registry: "WikiRegistry") -> set[str]:
+    """A free function, not a method: mutmut categorically excludes the
+    body of any `@dataclass`-decorated class (`mutmut/mutation/
+    file_mutation.py:236`), so logic placed on `WikiRegistry` methods would
+    carry zero mutation coverage no matter how the test loader names the
+    module (issue #262 3rd pass; issue #282).
+    """
+    return set(registry.kinds.keys())
 
 
 # ── Parsers ───────────────────────────────────────────────────────────

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from mcp_server.core.document_model import DocumentProvenance
+from mcp_server.core.document_model import (
+    DocumentProvenance,
+    document_provenance_dedup_tag,
+)
 from mcp_server.core.document_normalizer import NormalizedDocument, SectionMemory
 from mcp_server.handlers.ingest_document_writers import (
     already_ingested,
@@ -59,14 +62,18 @@ class TestAlreadyIngested:
         assert already_ingested(_FakeStore(), _PROV) is None
 
     def test_returns_id_when_version_tag_present(self):
-        tag = _PROV.dedup_tag()
+        tag = document_provenance_dedup_tag(_PROV)
         store = _FakeStore(existing_by_tag={tag: [{"id": 7, "tags": [tag]}]})
         assert already_ingested(store, _PROV) == 7
 
     def test_new_version_is_not_a_hit(self):
         old = DocumentProvenance("/d.docx", "v0", "docx")
         store = _FakeStore(
-            existing_by_tag={old.dedup_tag(): [{"id": 7, "tags": [old.dedup_tag()]}]}
+            existing_by_tag={
+                document_provenance_dedup_tag(old): [
+                    {"id": 7, "tags": [document_provenance_dedup_tag(old)]}
+                ]
+            }
         )
         assert already_ingested(store, _PROV) is None
 
@@ -79,12 +86,12 @@ class TestAlreadyIngested:
     def test_queries_the_dedup_tag_with_bounded_limit(self):
         store = _FakeStore()
         already_ingested(store, _PROV)
-        assert store.last_tag_query == (_PROV.dedup_tag(), 5)
+        assert store.last_tag_query == (document_provenance_dedup_tag(_PROV), 5)
 
     def test_ignores_rows_that_lack_the_dedup_tag(self):
         # A tag-query hit whose row does not actually carry the dedup tag is
         # not a match (guards the in-row tag re-check).
-        tag = _PROV.dedup_tag()
+        tag = document_provenance_dedup_tag(_PROV)
         store = _FakeStore(existing_by_tag={tag: [{"id": 9, "tags": ["unrelated"]}]})
         assert already_ingested(store, _PROV) is None
 

@@ -13,6 +13,7 @@ import pytest
 
 from mcp_server.core.streaming.backpressure_pipeline import (
     BackpressurePipeline,
+    backpressure_pipeline_run,
     compute_queue_cap,
 )
 
@@ -84,7 +85,7 @@ class TestHappyPath:
         pipe = BackpressurePipeline(
             source=src, sink_factory=factory, max_batch=50, queue_cap=4, concurrency=3
         )
-        result = pipe.run()
+        result = backpressure_pipeline_run(pipe)
         assert result.errors == []
         assert result.rows_in == 500
         assert result.rows_written == 500
@@ -103,7 +104,7 @@ class TestHappyPath:
             queue_cap=2,
             concurrency=1,
         )
-        result = pipe.run()
+        result = backpressure_pipeline_run(pipe)
         assert result.rows_written == 100
         assert result.errors == []
 
@@ -120,7 +121,7 @@ class TestBackpressure:
             queue_cap=1,
             concurrency=2,
         )
-        result = pipe.run()
+        result = backpressure_pipeline_run(pipe)
         assert result.rows_written == 200
         assert result.errors == []
 
@@ -139,7 +140,7 @@ class TestShutdownAndFailures:
             queue_cap=2,
             concurrency=3,
         )
-        result = pipe.run()  # must return, not hang
+        result = backpressure_pipeline_run(pipe)  # must return, not hang
         assert any("producer" in e and "kuzu boom" in e for e in result.errors)
 
     def test_sink_setup_failure_no_hang(self):
@@ -153,7 +154,7 @@ class TestShutdownAndFailures:
             queue_cap=2,
             concurrency=2,
         )
-        result = pipe.run()  # must return despite no usable sinks
+        result = backpressure_pipeline_run(pipe)  # must return despite no usable sinks
         assert any("worker-setup" in e for e in result.errors)
         assert len([e for e in result.errors if "worker-setup" in e]) == 2
 
@@ -171,6 +172,27 @@ class TestShutdownAndFailures:
             queue_cap=8,
             concurrency=1,
         )
-        result = pipe.run()
+        result = backpressure_pipeline_run(pipe)
         assert any("worker:" in e for e in result.errors)
         assert result.rows_written == 30  # 3 of 4 batches survived
+
+    def test_close_failure_is_reported_not_swallowed(self):
+        # issue #282 mutation-testing gap: no prior test made `.close()`
+        # itself raise, so `_bp_close`'s error-reporting path (append to
+        # result.errors under the lock) never ran — a mutant that appends
+        # `None` instead of the formatted message, or drops the lock/result
+        # arg entirely, was invisible.
+        class CloseFailsSink(RecordingSink):
+            def close(self):
+                raise RuntimeError("disk full")
+
+        pipe = BackpressurePipeline(
+            source=FakeSource(2, 10),
+            sink_factory=CloseFailsSink,
+            max_batch=10,
+            queue_cap=4,
+            concurrency=1,
+        )
+        result = backpressure_pipeline_run(pipe)
+        assert result.rows_written == 20  # writes still succeeded
+        assert any("worker-close" in e and "disk full" in e for e in result.errors)

@@ -56,12 +56,20 @@ class DocumentSection:
     body: str = ""
     tables: list[DocumentTable] = field(default_factory=list)
 
-    def is_empty(self) -> bool:
-        """True when the section carries no body text and no tables — a
-        headings-only section (issue #192 edge case). The renderer still
-        emits the heading; the memory writer skips empty sections so a bare
-        heading does not become a contentless memory."""
-        return not self.body.strip() and not self.tables
+
+def document_section_is_empty(section: "DocumentSection") -> bool:
+    """True when the section carries no body text and no tables — a
+    headings-only section (issue #192 edge case). The renderer still
+    emits the heading; the memory writer skips empty sections so a bare
+    heading does not become a contentless memory.
+
+    A free function, not a method: mutmut categorically excludes the body
+    of any `@dataclass`-decorated class (`mutmut/mutation/file_mutation.py:
+    236`), so logic placed on `DocumentSection` methods would carry zero
+    mutation coverage no matter how the test loader names the module
+    (issue #262 3rd pass; issue #282).
+    """
+    return not section.body.strip() and not section.tables
 
 
 @dataclass
@@ -78,11 +86,15 @@ class ParsedDocument:
     sections: list[DocumentSection] = field(default_factory=list)
     image_count: int = 0
 
-    def is_empty(self) -> bool:
-        """True when the document yielded no text and no tables at all
-        (issue #192 edge case: empty doc). Distinct from a malformed doc,
-        which raises :class:`DocumentParseError` instead."""
-        return all(s.is_empty() for s in self.sections)
+
+def parsed_document_is_empty(doc: "ParsedDocument") -> bool:
+    """True when the document yielded no text and no tables at all
+    (issue #192 edge case: empty doc). Distinct from a malformed doc,
+    which raises :class:`DocumentParseError` instead.
+
+    A free function, not a method — see `document_section_is_empty`.
+    """
+    return all(document_section_is_empty(s) for s in doc.sections)
 
 
 @dataclass(frozen=True)
@@ -101,16 +113,21 @@ class DocumentProvenance:
     version: str
     source_kind: str
 
-    def dedup_tag(self) -> str:
-        """Canonical idempotency key: one document source at one version.
 
-        A prior ingestion of the same ``(source, version)`` carries this
-        exact tag; the handler checks for it and skips re-writing (§13.1-A6
-        idempotent re-ingest). A NEW version produces a different tag, so an
-        updated document is re-ingested rather than silently ignored."""
-        return f"doc-ingest:{self.source_kind}:{self.source}@{self.version}"
+def document_provenance_dedup_tag(prov: "DocumentProvenance") -> str:
+    """Canonical idempotency key: one document source at one version.
 
-    def source_tag(self) -> str:
-        """Version-independent tag anchoring every memory to this source, so
-        all ingested versions of one document are recall-linkable."""
-        return f"doc-src:{self.source_kind}:{self.source}"
+    A prior ingestion of the same ``(source, version)`` carries this
+    exact tag; the handler checks for it and skips re-writing (§13.1-A6
+    idempotent re-ingest). A NEW version produces a different tag, so an
+    updated document is re-ingested rather than silently ignored.
+
+    A free function, not a method — see `document_section_is_empty`.
+    """
+    return f"doc-ingest:{prov.source_kind}:{prov.source}@{prov.version}"
+
+
+def document_provenance_source_tag(prov: "DocumentProvenance") -> str:
+    """Version-independent tag anchoring every memory to this source, so
+    all ingested versions of one document are recall-linkable."""
+    return f"doc-src:{prov.source_kind}:{prov.source}"

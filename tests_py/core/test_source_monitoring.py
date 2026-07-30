@@ -11,8 +11,10 @@ from mcp_server.core.source_monitoring import (
     PERCEIVED,
     TOLD,
     UNKNOWN,
+    SourceJudgement,
     classify_source,
     extract_grounding,
+    source_judgement_as_dict,
     violates_source_claim,
 )
 
@@ -115,7 +117,35 @@ def test_gate_perceived_synonym():
 
 
 def test_judgement_as_dict():
-    d = classify_source("pg_schema.py line 43").as_dict()
+    d = source_judgement_as_dict(classify_source("pg_schema.py line 43"))
     assert d["attribution"] == PERCEIVED
     assert "grounding_refs" in d
     assert isinstance(d["grounding_refs"], list)
+
+
+def test_source_judgement_as_dict_full_shape_and_rounding():
+    # confidence carries a 5th-decimal digit so round(x, 4) vs round(x, 5)
+    # and vs round(x, None) (int truncation) are all observably different
+    # (issue #282 mutation-testing gap: classify_source's own confidence
+    # values in the fixture above didn't force this precision). 11
+    # grounding refs so the [:10] truncation slice is exercised too.
+    refs = [f"ref{i}.py" for i in range(11)]
+    judgement = SourceJudgement(
+        attribution=PERCEIVED,
+        confidence=0.612345,
+        evidence_tag="observed",
+        perceptual_score=3,
+        told_score=1,
+        inferred_score=0,
+        grounding_refs=refs,
+    )
+    d = source_judgement_as_dict(judgement)
+    assert d == {
+        "attribution": PERCEIVED,
+        "confidence": round(0.612345, 4),
+        "evidence_tag": "observed",
+        "perceptual_score": 3,
+        "told_score": 1,
+        "inferred_score": 0,
+        "grounding_refs": refs[:10],
+    }

@@ -102,10 +102,17 @@ class ActionStep:
     tool: str
     target_kind: str | None = None
 
-    def key(self) -> str:
-        return (
-            self.tool if self.target_kind is None else f"{self.tool}:{self.target_kind}"
-        )
+
+def action_step_key(step: "ActionStep") -> str:
+    """Stable identity key for one action step.
+
+    A free function, not a method: mutmut categorically excludes the body
+    of any `@dataclass`-decorated class (`mutmut/mutation/file_mutation.py:
+    236`), so logic placed on `ActionStep` methods would carry zero mutation
+    coverage no matter how the test loader names the module (issue #262 3rd
+    pass; issue #282).
+    """
+    return step.tool if step.target_kind is None else f"{step.tool}:{step.target_kind}"
 
 
 @dataclass
@@ -135,32 +142,37 @@ class ProceduralSkill:
         if not self.skill_id:
             self.skill_id = skill_id_for(self.sequence)
 
-    @property
-    def is_habitual(self) -> bool:
-        """A skill is habitual once it has enough *successful* repetitions."""
-        return self.success_count >= HABITUAL_THRESHOLD
 
-    @property
-    def length(self) -> int:
-        return len(self.sequence)
+def procedural_skill_is_habitual(skill: "ProceduralSkill") -> bool:
+    """A skill is habitual once it has enough *successful* repetitions.
 
-    def as_dict(self) -> dict:
-        return {
-            "skill_id": self.skill_id,
-            "sequence": [s.key() for s in self.sequence],
-            "context_signature": self.context_signature,
-            "occurrences": self.occurrences,
-            "success_count": self.success_count,
-            "failure_count": self.failure_count,
-            "proficiency": round(self.proficiency, 4),
-            "is_habitual": self.is_habitual,
-            "last_seen": self.last_seen,
-        }
+    A free function, not a method — see `action_step_key`'s docstring for
+    why (issue #282).
+    """
+    return skill.success_count >= HABITUAL_THRESHOLD
+
+
+def procedural_skill_length(skill: "ProceduralSkill") -> int:
+    return len(skill.sequence)
+
+
+def procedural_skill_as_dict(skill: "ProceduralSkill") -> dict:
+    return {
+        "skill_id": skill.skill_id,
+        "sequence": [action_step_key(s) for s in skill.sequence],
+        "context_signature": skill.context_signature,
+        "occurrences": skill.occurrences,
+        "success_count": skill.success_count,
+        "failure_count": skill.failure_count,
+        "proficiency": round(skill.proficiency, 4),
+        "is_habitual": procedural_skill_is_habitual(skill),
+        "last_seen": skill.last_seen,
+    }
 
 
 def skill_id_for(sequence: tuple[ActionStep, ...]) -> str:
     """Stable content hash of an action sequence (12 hex chars)."""
-    joined = ">".join(s.key() for s in sequence)
+    joined = ">".join(action_step_key(s) for s in sequence)
     return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:12]
 
 
@@ -212,7 +224,7 @@ def normalize_actions(
             )
         if not step.tool:
             continue
-        if steps and steps[-1].key() == step.key():
+        if steps and action_step_key(steps[-1]) == action_step_key(step):
             continue  # collapse consecutive duplicates
         steps.append(step)
     return steps
@@ -330,7 +342,7 @@ def _skill_priority(skill: ProceduralSkill) -> float:
     """
 
     support = math.log1p(skill.occurrences)
-    length_bonus = 1.0 + 0.1 * (skill.length - MIN_SKILL_LEN)
+    length_bonus = 1.0 + 0.1 * (procedural_skill_length(skill) - MIN_SKILL_LEN)
     return skill.proficiency * support * length_bonus
 
 
@@ -425,7 +437,7 @@ def match_skills(
     recent = normalize_actions(
         current_context.get("tool_calls") or current_context.get("tools_used") or []
     )
-    recent_keys = {s.key() for s in recent}
+    recent_keys = {action_step_key(s) for s in recent}
 
     scored: list[dict] = []
     for skill in skills:
@@ -447,13 +459,23 @@ def match_skills(
         # Small bonus if the procedure's opening action matches what the agent
         # just did (the habit is "primed" by the current action).
         prime = 0.0
-        if recent_keys and skill.sequence and skill.sequence[0].key() in recent_keys:
+        if (
+            recent_keys
+            and skill.sequence
+            and action_step_key(skill.sequence[0]) in recent_keys
+        ):
             prime = 0.15
         score = (ctx_score + prime) * _skill_priority(skill)
         if score <= 0.0:
             continue
         why = _explain_match(skill, ctx_score, prime)
-        scored.append({"skill": skill.as_dict(), "score": round(score, 4), "why": why})
+        scored.append(
+            {
+                "skill": procedural_skill_as_dict(skill),
+                "score": round(score, 4),
+                "why": why,
+            }
+        )
 
     scored.sort(key=lambda d: d["score"], reverse=True)
     return scored[:top_k]
@@ -461,10 +483,10 @@ def match_skills(
 
 def _explain_match(skill: ProceduralSkill, ctx_score: float, prime: float) -> str:
     bits = [
-        f"{skill.length}-step routine",
+        f"{procedural_skill_length(skill)}-step routine",
         f"{skill.proficiency:.0%} success over {skill.occurrences} uses",
     ]
-    if skill.is_habitual:
+    if procedural_skill_is_habitual(skill):
         bits.append("habitual")
     if ctx_score >= _CONTEXT_MATCH_THRESHOLD:
         bits.append(f"matches context '{skill.context_signature}'")

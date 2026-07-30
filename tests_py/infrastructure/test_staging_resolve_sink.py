@@ -26,7 +26,10 @@ pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra
 import psycopg  # noqa: E402
 from psycopg_pool import ConnectionPool  # noqa: E402
 
-from mcp_server.core.streaming.backpressure_pipeline import BackpressurePipeline  # noqa: E402
+from mcp_server.core.streaming.backpressure_pipeline import (  # noqa: E402
+    BackpressurePipeline,
+    backpressure_pipeline_run,
+)
 from mcp_server.infrastructure.staging_resolve_sink import (  # noqa: E402
     build_edge_sink,
     build_entity_sink,
@@ -117,8 +120,8 @@ def _run(pool):
 
 def test_resolves_and_conserves(pg_pool):
     ent, edge = _run(pg_pool)
-    er = ent.run()
-    rr = edge.run()
+    er = backpressure_pipeline_run(ent)
+    rr = backpressure_pipeline_run(edge)
     assert er.errors == [] and rr.errors == []
     n_ent, n_rel = _counts(pg_pool)
     assert n_ent == 200
@@ -143,20 +146,24 @@ def test_entity_dedup_is_domain_scoped(pg_pool):
         (f"dup_{i}", f"dup_{i + 1}", "calls", 1.0, "code:projB") for i in range(9)
     ]
     for rows, conc in ((ents_a, 1), (ents_b, 1)):
+        backpressure_pipeline_run(
+            BackpressurePipeline(
+                source=_ListSource(rows),
+                sink_factory=lambda: build_entity_sink(pg_pool.connection),
+                max_batch=64,
+                queue_cap=4,
+                concurrency=conc,
+            )
+        )
+    rr = backpressure_pipeline_run(
         BackpressurePipeline(
-            source=_ListSource(rows),
-            sink_factory=lambda: build_entity_sink(pg_pool.connection),
+            source=_ListSource(edges_b),
+            sink_factory=lambda: build_edge_sink(pg_pool.connection),
             max_batch=64,
             queue_cap=4,
-            concurrency=conc,
-        ).run()
-    rr = BackpressurePipeline(
-        source=_ListSource(edges_b),
-        sink_factory=lambda: build_edge_sink(pg_pool.connection),
-        max_batch=64,
-        queue_cap=4,
-        concurrency=2,
-    ).run()
+            concurrency=2,
+        )
+    )
     assert rr.errors == []
     with pg_pool.connection() as c:
         per_domain = c.execute(
@@ -186,11 +193,11 @@ def test_entity_dedup_is_domain_scoped(pg_pool):
 
 def test_replay_is_idempotent(pg_pool):
     ent, edge = _run(pg_pool)
-    ent.run()
-    edge.run()
+    backpressure_pipeline_run(ent)
+    backpressure_pipeline_run(edge)
     before = _counts(pg_pool)
     # Re-run both stages — a crashed-then-resumed ingest must add nothing.
-    ent.run()
-    edge.run()
+    backpressure_pipeline_run(ent)
+    backpressure_pipeline_run(edge)
     after = _counts(pg_pool)
     assert after == before == (200, 199)
