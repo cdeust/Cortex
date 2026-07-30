@@ -36,7 +36,24 @@ gen = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = gen
 _spec.loader.exec_module(gen)
 
-import badge_render  # noqa: E402
+# Loaded under its own dotted name, separately from generate_repo_badges.py's
+# internal bare `import badge_render` (which this exec_module call above just
+# triggered, caching a SECOND copy in sys.modules["badge_render"] bare): the
+# two direct-call tests below (test_markup_bearing_text_is_escaped,
+# test_a_double_hyphen_in_provenance_is_refused) are badge_render.py's only
+# exercise of its escaping/validation logic, and mutmut keys mutant
+# trampolines on the path-derived "scripts.badge_render.*" — calling through
+# the bare-cached copy would make every mutant there look unreached, so a
+# scoped mutation run on this file would stop early instead of scoring it
+# (issue #262). generate_repo_badges.py's own bare import is unaffected: it
+# keeps using its separately-cached bare copy, exactly like the
+# launcher.py/launcher_deps.py precedent.
+_badge_render_spec = importlib.util.spec_from_file_location(
+    "scripts.badge_render", _SCRIPTS / "badge_render.py"
+)
+badge_render = importlib.util.module_from_spec(_badge_render_spec)
+sys.modules[_badge_render_spec.name] = badge_render
+_badge_render_spec.loader.exec_module(badge_render)
 
 PYPROJECT = (
     '[project]\nversion = "4.16.0"\nlicense = "MIT"\nrequires-python = ">=3.10"\n'

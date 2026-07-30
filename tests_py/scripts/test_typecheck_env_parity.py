@@ -25,8 +25,15 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 
+# The module name must be the dotted path mutmut derives from the file's
+# location: it keys its mutant trampolines on "scripts.pip_constraint_sets.*",
+# and a bare "pip_constraint_sets" makes every mutant look unreached, so a
+# scoped mutation run stops early instead of scoring the suite (issue #262).
+# This does not change generate_pip_constraints.py's own runtime import: it
+# still resolves `pip_constraint_sets` bare via a sys.path insert (see that
+# module's docstring) — only this test's OWN module handle is renamed.
 _spec = importlib.util.spec_from_file_location(
-    "pip_constraint_sets", REPO / "scripts" / "pip_constraint_sets.py"
+    "scripts.pip_constraint_sets", REPO / "scripts" / "pip_constraint_sets.py"
 )
 sets_module = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = sets_module
@@ -77,7 +84,10 @@ class DocumentedTypecheckEnvTest(unittest.TestCase):
         """`uv export` passes --no-default-groups; a sync that does not would
         install packages the hash-pinned file never resolved."""
         self.assertIn("--no-default-groups", _typecheck_block())
-        self.assertIn("--no-default-groups", _set_named("ci-typecheck.txt").command())
+        self.assertIn(
+            "--no-default-groups",
+            sets_module.constraint_command(_set_named("ci-typecheck.txt")),
+        )
 
     def test_pyright_is_run_from_that_environment(self) -> None:
         self.assertIn(".venv/bin/python -m pyright mcp_server/", _typecheck_block())

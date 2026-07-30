@@ -37,7 +37,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pip_constraint_sets import SETS, ConstraintSet  # noqa: E402
+from pip_constraint_sets import (  # noqa: E402
+    SETS,
+    ConstraintSet,
+    constraint_command,
+    constraint_header_lines,
+    constraint_path,
+)
 
 # PyPI serves no local versions (`2.13.0+cpu`), by policy — PEP 440 local
 # identifiers are rejected on upload. So a local-version pin always comes
@@ -148,7 +154,7 @@ def export(constraint_set: ConstraintSet) -> str:
             "uv is not installed — it is the only reader of uv.lock."
             " See https://docs.astral.sh/uv/getting-started/installation/"
         )
-    command = constraint_set.command()
+    command = constraint_command(constraint_set)
     try:
         done = subprocess.run(  # noqa: S603 — fixed argv, no shell, no user input
             command, cwd=REPO_ROOT, capture_output=True, text=True, check=False
@@ -170,7 +176,7 @@ def compose(constraint_set: ConstraintSet, body: str) -> str:
     is what makes those rules testable from a string literal.
     """
     _reject_unusable(constraint_set, body)
-    header = "\n".join(constraint_set.header_lines()) + "\n"
+    header = "\n".join(constraint_header_lines(constraint_set)) + "\n"
     return header + _index_directive(serving_registries(body)) + body
 
 
@@ -193,19 +199,20 @@ def _reject_unusable(constraint_set: ConstraintSet, body: str) -> None:
     ]
     if not requirements:
         raise ExportError(
-            f"{constraint_set.path()}: export resolved to zero requirements"
+            f"{constraint_path(constraint_set)}: export resolved to zero requirements"
         )
     unhashed = [line for line in requirements if not line.rstrip().endswith("\\")]
     if unhashed:
+        path = constraint_path(constraint_set)
         raise ExportError(
-            f"{constraint_set.path()}: {len(unhashed)} requirement(s) carry no hash,"
+            f"{path}: {len(unhashed)} requirement(s) carry no hash,"
             f" first is {unhashed[0].strip()!r}"
         )
 
 
 def write(constraint_set: ConstraintSet) -> bool:
     """Write the file; True when it changed."""
-    target = REPO_ROOT / constraint_set.path()
+    target = REPO_ROOT / constraint_path(constraint_set)
     rendered = render(constraint_set)
     if target.exists() and target.read_text(encoding="utf-8") == rendered:
         return False
@@ -216,15 +223,15 @@ def write(constraint_set: ConstraintSet) -> bool:
 
 def stale(constraint_set: ConstraintSet) -> str | None:
     """Why this file is out of date, or None when it matches the lock."""
-    target = REPO_ROOT / constraint_set.path()
+    target = REPO_ROOT / constraint_path(constraint_set)
     if not target.exists():
         return (
-            f"{constraint_set.path()}: missing"
+            f"{constraint_path(constraint_set)}: missing"
             " — run scripts/generate_pip_constraints.py"
         )
     if target.read_text(encoding="utf-8") != render(constraint_set):
         return (
-            f"{constraint_set.path()}: disagrees with uv.lock"
+            f"{constraint_path(constraint_set)}: disagrees with uv.lock"
             " — run scripts/generate_pip_constraints.py"
         )
     return None
@@ -252,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"requirements OK ({len(SETS)} checked)")
             return 0
 
-        changed = [s.path() for s in SETS if write(s)]
+        changed = [constraint_path(s) for s in SETS if write(s)]
         for path in changed:
             print(f"wrote {path}")
         print(f"{len(changed)} of {len(SETS)} file(s) changed")

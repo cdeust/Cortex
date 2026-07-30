@@ -97,10 +97,10 @@ class TestSetTable(unittest.TestCase):
 
     def test_every_set_has_a_committed_file(self) -> None:
         for constraint_set in gen.SETS:
+            path = gen.constraint_path(constraint_set)
             with self.subTest(constraint_set.filename):
                 self.assertTrue(
-                    (REPO / constraint_set.path()).is_file(),
-                    f"{constraint_set.path()} is declared but not committed",
+                    (REPO / path).is_file(), f"{path} is declared but not committed"
                 )
 
     def test_no_committed_file_is_orphaned(self) -> None:
@@ -200,7 +200,7 @@ class TestExportCommand(unittest.TestCase):
         dependency set nobody declared.
         """
         for constraint_set in gen.SETS:
-            command = constraint_set.command()
+            command = gen.constraint_command(constraint_set)
             with self.subTest(constraint_set.filename):
                 self.assertIn("--locked", command)
                 self.assertNotIn("--frozen", command)
@@ -209,8 +209,10 @@ class TestExportCommand(unittest.TestCase):
         """`-o` makes uv write the invoking argv, including absolute paths."""
         for constraint_set in gen.SETS:
             with self.subTest(constraint_set.filename):
-                self.assertNotIn("-o", constraint_set.command())
-                self.assertNotIn("--output-file", constraint_set.command())
+                self.assertNotIn("-o", gen.constraint_command(constraint_set))
+                self.assertNotIn(
+                    "--output-file", gen.constraint_command(constraint_set)
+                )
 
 
 class TestDriftGate(unittest.TestCase):
@@ -236,7 +238,7 @@ class TestDriftGate(unittest.TestCase):
         """The comparison itself: committed text != what the lock produces."""
         with TemporaryDirectory() as tmp:
             root = _mirror(tmp)
-            target = root / gen.SETS[0].path()
+            target = root / gen.constraint_path(gen.SETS[0])
             committed = target.read_text(encoding="utf-8")
             target.write_text(committed.replace("==", "==0.0.0+", 1), encoding="utf-8")
             with patch.object(gen, "REPO_ROOT", root):
@@ -251,7 +253,9 @@ class TestDriftGate(unittest.TestCase):
     def test_check_returns_zero_when_the_file_matches_the_render(self) -> None:
         with TemporaryDirectory() as tmp:
             root = _mirror(tmp)
-            committed = (root / gen.SETS[0].path()).read_text(encoding="utf-8")
+            committed = (root / gen.constraint_path(gen.SETS[0])).read_text(
+                encoding="utf-8"
+            )
             with patch.object(gen, "REPO_ROOT", root):
                 with patch.object(gen, "render", return_value=committed):
                     self.assertIsNone(gen.stale(gen.SETS[0]))
@@ -259,7 +263,7 @@ class TestDriftGate(unittest.TestCase):
     def test_check_fails_when_a_file_is_missing(self) -> None:
         with TemporaryDirectory() as tmp:
             root = _mirror(tmp)
-            (root / gen.SETS[0].path()).unlink()
+            (root / gen.constraint_path(gen.SETS[0])).unlink()
             with patch.object(gen, "REPO_ROOT", root):
                 reason = gen.stale(gen.SETS[0])
             self.assertIsNotNone(reason)
@@ -269,7 +273,7 @@ class TestDriftGate(unittest.TestCase):
         """The reader of a red gate must not have to guess the fix."""
         with TemporaryDirectory() as tmp:
             root = _mirror(tmp)
-            (root / gen.SETS[0].path()).unlink()
+            (root / gen.constraint_path(gen.SETS[0])).unlink()
             with patch.object(gen, "REPO_ROOT", root):
                 reason = gen.stale(gen.SETS[0])
             self.assertIn("scripts/generate_pip_constraints.py", reason)
