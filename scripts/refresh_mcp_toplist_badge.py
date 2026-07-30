@@ -7,25 +7,13 @@ choice is that it cannot self-update: the date it carries is part of the
 claim, and goes stale by INACTION. Inaction never opens a PR, so this
 script exists to be run on a cron and propose the refresh.
 
-Two extraction paths, tried in order:
-
-  1. /data/leaderboard.json — the structured export the site links from its
-     homepage. PROVISIONAL: as of 2026-07-28 this endpoint returns HTTP 503
-     (measured: 3/3 attempts, 8-14s each, browser UA, so a server-side
-     generation timeout rather than UA gating or rate limiting). Its schema
-     has therefore never been observed. The parser below accepts a narrow
-     set of documented candidate shapes under strict validation; anything
-     else is refused rather than guessed at, and path 2 takes over.
-
-  2. The server page's prose sentence "It ranks #N of M servers tracked",
-     verified present 2026-07-28. This is the ONLY construct on that page
-     carrying both numbers — the <title>, og/twitter meta tags and JSON-LD
-     blocks all carry the rank without the total, so none of them can yield
-     a percentile on their own.
-
-Both paths feed the same validator. A figure that fails validation is never
-written: the script exits non-zero and leaves the badge untouched. A wrong
-badge is worse than a stale one, and far worse than a red run.
+The data acquisition (fetch, the two parser strategies, and shared
+validation) lives in the sibling module mcp_toplist_ranking.py — see its
+docstring for the two extraction paths and their fallback order. This
+file re-exports every one of its public names (`import X as X`, mirroring
+condensers.py's issue #228 facade), so every existing import path and
+test-patch target keeps resolving unchanged; the split is an internal
+reorganization; this file's own job is rendering the SVG and the CLI.
 
 Usage:
     python3 scripts/refresh_mcp_toplist_badge.py           # rewrite if changed
@@ -35,48 +23,34 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
-import re
 import sys
-import urllib.error
-import urllib.request
-from dataclasses import dataclass
-from datetime import date, timezone, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Callable, Iterable
 
-# badge_render.py is a stdlib-only sibling module (the shields-style SVG
-# geometry, shared with generate_repo_badges.py). Path-based import for the
-# same reason the launcher family path-imports its siblings: resolves
-# identically whether this file is run as a script (script dir already on
-# sys.path) or loaded directly via importlib.util.spec_from_file_location
-# from a test.
+# badge_render.py and mcp_toplist_ranking.py are stdlib-only sibling
+# modules. Path-based import for the same reason the launcher family
+# path-imports its siblings: resolves identically whether this file is run
+# as a script (script dir already on sys.path) or loaded directly via
+# importlib.util.spec_from_file_location from a test.
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import badge_render  # noqa: E402
+from mcp_toplist_ranking import LEADERBOARD_URL as LEADERBOARD_URL  # noqa: E402
+from mcp_toplist_ranking import SERVER_ID as SERVER_ID  # noqa: E402
+from mcp_toplist_ranking import SERVER_PAGE_URL as SERVER_PAGE_URL  # noqa: E402
+from mcp_toplist_ranking import TIMEOUT_S as TIMEOUT_S  # noqa: E402
+from mcp_toplist_ranking import Ranking as Ranking  # noqa: E402
+from mcp_toplist_ranking import UpstreamError as UpstreamError  # noqa: E402
+from mcp_toplist_ranking import fetch as fetch  # noqa: E402
+from mcp_toplist_ranking import parse_leaderboard as parse_leaderboard  # noqa: E402
+from mcp_toplist_ranking import parse_server_page as parse_server_page  # noqa: E402
+from mcp_toplist_ranking import ranking_percentile as ranking_percentile  # noqa: E402
+from mcp_toplist_ranking import ranking_tier_text as ranking_tier_text  # noqa: E402
+from mcp_toplist_ranking import resolve_ranking as resolve_ranking  # noqa: E402
+from mcp_toplist_ranking import validate as validate  # noqa: E402
 
-SERVER_ID = "io.github.cdeust/hypermnesia-mcp"
-LEADERBOARD_URL = "https://mcptoplist.com/data/leaderboard.json"
-SERVER_PAGE_URL = "https://mcptoplist.com/server/io.github.cdeust%2Fhypermnesia-mcp"
 BADGE_PATH = Path("assets/badge-mcp-toplist.svg")
-
-# source: measured 2026-07-28 — /data/leaderboard.json takes 8-14s to return
-# its 503, so a timeout below ~20s cannot distinguish "slow" from "broken".
-TIMEOUT_S = 45
-
-# The site renders this sentence in the server page body. Anchored on both
-# numbers so a reworded page fails the match instead of yielding a rank
-# paired with a stale or unrelated total.
-_PROSE_ANCHOR = re.compile(
-    r"ranks\s*#\s*([\d,]+)\s*of\s*([\d,]+)\s*servers\s*tracked",
-    re.IGNORECASE,
-)
-
-# Not a tuned threshold: it is the resolution of the "{:.1f}" format the
-# tier text itself uses. A percentile finer than this rounds to "Top 0.0%",
-# which reads as a bug rather than as a top-of-field result.
-_MIN_PRINTABLE_PCT = 0.1
 
 # The left panel carries the fixed string "MCP Toplist", so unlike the right
 # panel its geometry never varies with the data. Both measured 2026-07-28 by
@@ -100,128 +74,6 @@ _MONTHS = (
     "Nov",
     "Dec",
 )
-
-
-class UpstreamError(RuntimeError):
-    """Upstream data could not be fetched or trusted."""
-
-
-@dataclass(frozen=True)
-class Ranking:
-    """A validated rank-out-of-total, and where it came from.
-
-    Data only — deliberately no methods. mutmut's mutation generator
-    categorically excludes the body of any `@dataclass`-decorated class (it
-    must, since copying a decorated class for the trampoline setup can
-    re-run the decorator and its side effects), so logic placed on methods
-    here would carry zero mutation coverage no matter how the test loader
-    names the module — confirmed empirically: 298 mutants for this file, 0
-    attributed to `percentile`/`tier_text` while they were methods (same
-    defect class as `RepoBadge` in scripts/generate_repo_badges.py and
-    `ConstraintSet` in scripts/pip_constraint_sets.py, issue #262).
-    `ranking_percentile`/`ranking_tier_text` below carry the same logic as
-    free functions instead.
-    """
-
-    rank: int
-    total: int
-    source: str
-
-
-def ranking_percentile(ranking: Ranking) -> float:
-    """Share of the field this server sits within, to one decimal."""
-    return round(ranking.rank / ranking.total * 100, 1)
-
-
-def ranking_tier_text(ranking: Ranking) -> str:
-    pct = ranking_percentile(ranking)
-    # Ranks near the very top round to 0.0%, which reads as an error
-    # rather than as an achievement. Report the bound instead.
-    if pct < _MIN_PRINTABLE_PCT:
-        return f"Top <{_MIN_PRINTABLE_PCT}%"
-    return f"Top {pct:.1f}%"
-
-
-def validate(rank: object, total: object, source: str) -> Ranking:
-    """Coerce and bounds-check a candidate figure, or raise.
-
-    Guards the arithmetic in Ranking.percentile (total of zero) and the
-    semantics of the claim (a rank outside the field is not a rank).
-    """
-    try:
-        rank_i = int(str(rank).replace(",", "").strip())
-        total_i = int(str(total).replace(",", "").strip())
-    except (TypeError, ValueError) as exc:
-        raise UpstreamError(
-            f"{source}: non-numeric rank/total: {rank!r}/{total!r}"
-        ) from exc
-    if rank_i < 1:
-        raise UpstreamError(f"{source}: rank {rank_i} is not a positive position")
-    if total_i < 1:
-        raise UpstreamError(f"{source}: total {total_i} is not a positive field size")
-    if rank_i > total_i:
-        raise UpstreamError(f"{source}: rank {rank_i} exceeds field size {total_i}")
-    return Ranking(rank=rank_i, total=total_i, source=source)
-
-
-def parse_leaderboard(payload: bytes, server_id: str = SERVER_ID) -> Ranking:
-    """Extract our figure from the structured export.
-
-    PROVISIONAL — see module docstring. Accepts only shapes explicitly
-    listed here; an unrecognised document raises rather than guessing, so
-    the caller falls back to a path whose format has been observed.
-    """
-    try:
-        doc = json.loads(payload.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise UpstreamError(f"leaderboard.json: not valid JSON: {exc}") from exc
-
-    entries = doc.get("servers") if isinstance(doc, dict) else doc
-    if not isinstance(entries, list) or not entries:
-        raise UpstreamError("leaderboard.json: no server list in document")
-
-    total = None
-    if isinstance(doc, dict):
-        for key in ("total", "totalServers", "count"):
-            if isinstance(doc.get(key), int):
-                total = doc[key]
-                break
-    if total is None:
-        total = len(entries)
-
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        identity = next(
-            (entry[k] for k in ("id", "name", "serverId", "slug") if k in entry),
-            None,
-        )
-        if identity != server_id:
-            continue
-        rank = next(
-            (entry[k] for k in ("rank", "position", "place") if k in entry),
-            None,
-        )
-        if rank is None:
-            raise UpstreamError(
-                f"leaderboard.json: entry for {server_id} carries no rank"
-            )
-        return validate(rank, total, "leaderboard.json")
-
-    raise UpstreamError(
-        f"leaderboard.json: {server_id} not present in {len(entries)} entries"
-    )
-
-
-def parse_server_page(html: str) -> Ranking:
-    """Extract our figure from the rendered server page."""
-    match = _PROSE_ANCHOR.search(html)
-    if match is None:
-        raise UpstreamError(
-            "server page: the 'ranks #N of M servers tracked' sentence is absent "
-            "— the page was reworded and this parser needs updating"
-        )
-    return validate(match.group(1), match.group(2), "server page")
 
 
 def _provenance_comment(ranking: Ranking, as_of: date) -> list[str]:
@@ -285,57 +137,11 @@ def render_badge(ranking: Ranking, as_of: date) -> str:
     return badge_render.render(spec)
 
 
-def fetch(url: str, opener: Callable = urllib.request.urlopen) -> bytes:
-    """Retrieve a URL, or raise UpstreamError naming the failure."""
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "cortex-badge-refresh (+https://github.com/cdeust/Cortex)",
-            "Accept": "application/json, text/html;q=0.9",
-        },
-    )
-    try:
-        with opener(request, timeout=TIMEOUT_S) as response:
-            return response.read()
-    except urllib.error.HTTPError as exc:
-        raise UpstreamError(f"{url}: HTTP {exc.code}") from exc
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise UpstreamError(f"{url}: unreachable: {exc}") from exc
-
-
-def resolve_ranking(
-    fetch_fn: Callable[[str], bytes] = fetch,
-) -> tuple[Ranking, list[str]]:
-    """Try each extraction path in order; return the first trusted figure.
-
-    Returns the figure and the notices raised along the way, so a silent
-    fallback is impossible: the caller reports every path that failed even
-    when a later one succeeded.
-    """
-    notices: list[str] = []
-    attempts: Iterable[tuple[str, Callable[[bytes], Ranking]]] = (
-        (LEADERBOARD_URL, parse_leaderboard),
-        (
-            SERVER_PAGE_URL,
-            lambda raw: parse_server_page(raw.decode("utf-8", "replace")),
-        ),
-    )
-    for url, parser in attempts:
-        try:
-            return parser(fetch_fn(url)), notices
-        except UpstreamError as exc:
-            notices.append(str(exc))
-    raise UpstreamError(
-        "no trusted figure from any source; badge left untouched:\n  - "
-        + "\n  - ".join(notices)
-    )
-
-
 def _today() -> date:
     return datetime.now(timezone.utc).date()
 
 
-def main(argv: list[str] | None = None) -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--check",
@@ -343,7 +149,19 @@ def main(argv: list[str] | None = None) -> int:
         help="exit 1 if the badge is out of date; never write",
     )
     parser.add_argument("--badge", type=Path, default=BADGE_PATH)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def _ranking_summary(ranking: Ranking) -> str:
+    """The one-line summary shared by the current/updated messages."""
+    return (
+        f"{ranking_tier_text(ranking)} "
+        f"(#{ranking.rank:,} of {ranking.total:,}, via {ranking.source})"
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
 
     try:
         ranking, notices = resolve_ranking()
@@ -358,10 +176,7 @@ def main(argv: list[str] | None = None) -> int:
     current = args.badge.read_text() if args.badge.exists() else None
 
     if current == rendered:
-        print(
-            f"current: {ranking_tier_text(ranking)} "
-            f"(#{ranking.rank:,} of {ranking.total:,}, via {ranking.source})"
-        )
+        print(f"current: {_ranking_summary(ranking)}")
         return 0
 
     if args.check:
@@ -373,10 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     args.badge.write_text(rendered)
-    print(
-        f"updated: {ranking_tier_text(ranking)} "
-        f"(#{ranking.rank:,} of {ranking.total:,}, via {ranking.source})"
-    )
+    print(f"updated: {_ranking_summary(ranking)}")
     return 0
 
 
