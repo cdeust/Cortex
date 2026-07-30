@@ -85,6 +85,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
+import fastmcp
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from fastmcp.server.context import reset_transport, set_transport
 from fastmcp.utilities.cli import log_server_banner
@@ -205,23 +206,40 @@ async def _run_low_level_drained(
 async def run_stdio_drained(
     mcp: FastMCP,
     *,
-    show_banner: bool = True,
+    show_banner: bool | None = None,
     log_level: str | None = None,
     stateless: bool = False,
 ) -> None:
     """Run ``mcp`` over stdio; drop-in replacement for
-    ``fastmcp.server.mixins.transport.TransportMixin.run_stdio_async`` (same
-    banner / lifespan / transport-context-var / init-options behavior) that
+    ``mcp.run(transport="stdio")`` (i.e.
+    ``fastmcp.server.mixins.transport.TransportMixin.run_async`` dispatching
+    to ``run_stdio_async`` -- see ``mcp_server/__main__.py::main()`` for why
+    this replaces that call, not ``run_stdio_async`` directly) that
     additionally survives the read-EOF-vs-in-flight-handler race described
     in this module's docstring.
 
     Precondition: ``mcp`` is a constructed, not-yet-run FastMCP server.
-    Postcondition: identical observable behavior to ``run_stdio_async`` for
-    every case that function already handled correctly, PLUS: a request
-    dispatched from the last line of a single-write input batch is answered
-    on stdout before the process's stdio transport tears down, rather than
-    silently losing its response to the already-closed pipe.
+    Postcondition: identical observable behavior to ``mcp.run(transport=
+    "stdio")`` for every case that path already handled correctly --
+    including ``show_banner=None`` (the default) resolving to
+    ``fastmcp.settings.show_server_banner`` exactly as ``TransportMixin
+    .run_async`` resolves it (``fastmcp/server/mixins/transport.py`` L56-57,
+    fastmcp==3.4.5) before ever reaching ``run_stdio_async`` -- PLUS: a
+    request dispatched from the last line of a single-write input batch is
+    answered on stdout before the process's stdio transport tears down,
+    rather than silently losing its response to the already-closed pipe.
+
+    # source: fastmcp==3.4.5 fastmcp/server/mixins/transport.py L184-186 --
+    # `run_stdio_async(self, show_banner: bool = True, ...)` itself does NOT
+    # resolve the settings; L56-57's `run_async` does that resolution ONE
+    # LEVEL UP, before calling `run_stdio_async(show_banner=show_banner,
+    # ...)`. `mcp.run(transport="stdio")` (the call this function replaces,
+    # per __main__.py) goes through `run_async`, so its `show_banner=None`
+    # behavior IS the settings-resolved one; a wrapper mirroring only
+    # `run_stdio_async`'s own literal `True` default drops that resolution.
     """
+    if show_banner is None:
+        show_banner = fastmcp.settings.show_server_banner
     if show_banner:
         log_server_banner(server=mcp)
 

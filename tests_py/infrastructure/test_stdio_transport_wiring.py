@@ -179,10 +179,21 @@ class TestRunStdioDrainedWiring:
         )
 
     @pytest.mark.asyncio
-    async def test_omitted_show_banner_defaults_to_showing_it(self) -> None:
-        """Distinct from the explicit-True case above: omits `show_banner`
-        entirely, exercising `run_stdio_drained`'s own default rather than
-        a value the test supplies."""
+    async def test_omitted_show_banner_resolves_from_fastmcp_settings_true(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Omitting `show_banner` must resolve `fastmcp.settings
+        .show_server_banner` -- exactly what `TransportMixin.run_async`
+        does (fastmcp==3.4.5 L56-57) before ever reaching `run_stdio_async`,
+        since this function replaces `mcp.run(transport="stdio")` (which
+        goes through `run_async`), not `run_stdio_async` directly. Setting
+        is explicitly forced True here so this test cannot pass merely
+        because the setting's own default happens to be True (distinct from
+        the False-resolution test below, which is the one that actually
+        catches a hardcoded-default regression)."""
+        monkeypatch.setattr(
+            _stdio_transport_module.fastmcp.settings, "show_server_banner", True
+        )
         mcp = self._make_mcp()
 
         with (
@@ -205,6 +216,79 @@ class TestRunStdioDrainedWiring:
             await _stdio_transport_module.run_stdio_drained(mcp)
 
         mock_banner.assert_called_once_with(server=mcp)
+
+    @pytest.mark.asyncio
+    async def test_omitted_show_banner_resolves_from_fastmcp_settings_false(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The regression this PR fixes: a user who disabled the banner via
+        `FASTMCP_SHOW_SERVER_BANNER=false` (-> `fastmcp.settings
+        .show_server_banner = False`) and omits `show_banner` must NOT get
+        the banner -- `run_stdio_drained` is a drop-in replacement for
+        `mcp.run(transport="stdio")`, which resolves this same setting one
+        level up in `TransportMixin.run_async` before it ever reaches
+        `run_stdio_async`. A hardcoded `show_banner: bool = True` default
+        (the pre-fix state) would print the banner regardless of this
+        setting -- this is the test that catches exactly that."""
+        monkeypatch.setattr(
+            _stdio_transport_module.fastmcp.settings, "show_server_banner", False
+        )
+        mcp = self._make_mcp()
+
+        with (
+            patch.object(_stdio_transport_module, "log_server_banner") as mock_banner,
+            patch.object(
+                _stdio_transport_module, "set_transport", return_value="TOKEN"
+            ),
+            patch.object(_stdio_transport_module, "reset_transport"),
+            patch.object(
+                _stdio_transport_module,
+                "stdio_server",
+                fake_async_cm((object(), object())),
+            ),
+            patch.object(
+                _stdio_transport_module,
+                "_run_low_level_drained",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await _stdio_transport_module.run_stdio_drained(mcp)
+
+        mock_banner.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_explicit_show_banner_wins_over_the_setting(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An explicit argument must override the setting in both
+        directions -- pins that the resolution is `if show_banner is None`,
+        not e.g. `show_banner = show_banner or fastmcp.settings...` (which
+        would let a settings-True clobber an explicit `show_banner=False`)."""
+        monkeypatch.setattr(
+            _stdio_transport_module.fastmcp.settings, "show_server_banner", True
+        )
+        mcp = self._make_mcp()
+
+        with (
+            patch.object(_stdio_transport_module, "log_server_banner") as mock_banner,
+            patch.object(
+                _stdio_transport_module, "set_transport", return_value="TOKEN"
+            ),
+            patch.object(_stdio_transport_module, "reset_transport"),
+            patch.object(
+                _stdio_transport_module,
+                "stdio_server",
+                fake_async_cm((object(), object())),
+            ),
+            patch.object(
+                _stdio_transport_module,
+                "_run_low_level_drained",
+                new_callable=AsyncMock,
+            ),
+        ):
+            await _stdio_transport_module.run_stdio_drained(mcp, show_banner=False)
+
+        mock_banner.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_start_log_message_names_server_and_transport(
