@@ -1,3 +1,6 @@
+# noqa: N999 -- filename encodes the project's own invariant ID (I10, see
+# docs/invariants/cortex-invariants.md); renaming would break the formal
+# invariant-ID cross-reference table.
 """Invariant I10 — pool capacity respects registered cycle workers.
 
 Formal predicate (from docs/invariants/cortex-invariants.md):
