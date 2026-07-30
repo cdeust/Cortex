@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.llm_head_to_head import manifest as M
+from benchmarks.llm_head_to_head import manifest
 
 
 @pytest.fixture
@@ -36,16 +36,18 @@ def fake_lockfile(tmp_path: Path) -> Path:
 
 def test_required_fields_present(tmp_path, fake_prompts, fake_lockfile):
     a, b = fake_prompts
-    m = M.build_manifest(
+    m = manifest.build_manifest(
         run_id="testrun-001",
         repo_root=tmp_path,
         generator_models={
-            "haiku_4_5": M.ManifestModelEntry(
+            "haiku_4_5": manifest.ManifestModelEntry(
                 api="anthropic", model_id="claude-haiku-4-5-20251001"
             )
         },
         judge_models={
-            "gpt4o": M.ManifestModelEntry(api="openai", model_id="gpt-4o-2024-11-20")
+            "gpt4o": manifest.ManifestModelEntry(
+                api="openai", model_id="gpt-4o-2024-11-20"
+            )
         },
         judge_mode="cross_vendor",
         item_count=196,
@@ -56,10 +58,10 @@ def test_required_fields_present(tmp_path, fake_prompts, fake_lockfile):
         package_lockfile_path=fake_lockfile,
     )
     out_dir = tmp_path / "results" / "testrun-001"
-    out = M.write_manifest(m, out_dir)
+    out = manifest.write_manifest(m, out_dir)
     blob = json.loads(out.read_text())
 
-    for k in M.REQUIRED_TOP_LEVEL_KEYS:
+    for k in manifest.REQUIRED_TOP_LEVEL_KEYS:
         assert k in blob, f"required §10 field missing: {k}"
 
     # Specific structural checks.
@@ -74,18 +76,18 @@ def test_required_fields_present(tmp_path, fake_prompts, fake_lockfile):
 
 
 def test_audit_flags_anthropic_prefix():
-    findings = M.audit_no_secrets({"key": "sk-ant-1234567890"})
+    findings = manifest.audit_no_secrets({"key": "sk-ant-1234567890"})
     assert findings, "audit must flag sk- prefix"
     assert any("sk-" in f for f in findings)
 
 
 def test_audit_flags_google_prefix():
-    findings = M.audit_no_secrets({"creds": "AIzaSyDeadbeefDeadbeefDeadbeef"})
+    findings = manifest.audit_no_secrets({"creds": "AIzaSyDeadbeefDeadbeefDeadbeef"})
     assert findings
 
 
 def test_audit_clean_for_normal_strings():
-    findings = M.audit_no_secrets(
+    findings = manifest.audit_no_secrets(
         {
             "ok": "claude-haiku-4-5-20251001",
             "model": "gpt-4o-2024-11-20",
@@ -98,7 +100,7 @@ def test_audit_clean_for_normal_strings():
 def test_write_refuses_to_serialize_keys(tmp_path, fake_prompts, fake_lockfile):
     """Defence in depth: even if a key sneaks in, write_manifest aborts."""
     a, b = fake_prompts
-    m = M.build_manifest(
+    m = manifest.build_manifest(
         run_id="testrun-leak",
         repo_root=tmp_path,
         generator_models={},
@@ -115,12 +117,12 @@ def test_write_refuses_to_serialize_keys(tmp_path, fake_prompts, fake_lockfile):
     m.cost_tracking["accidentally_leaked"] = "sk-ant-LEAK_LEAK_LEAK"
     out_dir = tmp_path / "results"
     with pytest.raises(RuntimeError, match="suspected API key"):
-        M.write_manifest(m, out_dir)
+        manifest.write_manifest(m, out_dir)
 
 
 def test_cost_tracking_increment(tmp_path, fake_prompts, fake_lockfile):
     a, b = fake_prompts
-    m = M.build_manifest(
+    m = manifest.build_manifest(
         run_id="testrun-cost",
         repo_root=tmp_path,
         generator_models={},
@@ -134,12 +136,12 @@ def test_cost_tracking_increment(tmp_path, fake_prompts, fake_lockfile):
         package_lockfile_path=fake_lockfile,
     )
     out_dir = tmp_path / "results" / "testrun-cost"
-    path = M.write_manifest(m, out_dir)
+    path = manifest.write_manifest(m, out_dir)
 
-    M.update_cost_tracking(
+    manifest.update_cost_tracking(
         path, add_input_tokens=100, add_output_tokens=20, add_usd=0.01
     )
-    M.update_cost_tracking(
+    manifest.update_cost_tracking(
         path, add_input_tokens=50, add_output_tokens=10, add_usd=0.005
     )
 
@@ -152,7 +154,7 @@ def test_cost_tracking_increment(tmp_path, fake_prompts, fake_lockfile):
 def test_item_result_appends_jsonl(tmp_path):
     out_dir = tmp_path / "items-test"
     out_dir.mkdir()
-    line = M.ItemResultLine(
+    line = manifest.ItemResultLine(
         question_id="q-001",
         ability="information_extraction",
         condition="C",
@@ -165,8 +167,8 @@ def test_item_result_appends_jsonl(tmp_path):
         estimated_usd=0.0046,
         wall_time_s=2.3,
     )
-    M.append_item_result(out_dir, line)
-    M.append_item_result(out_dir, line)
+    manifest.append_item_result(out_dir, line)
+    manifest.append_item_result(out_dir, line)
     contents = (out_dir / "items.jsonl").read_text().strip().splitlines()
     assert len(contents) == 2
     parsed = json.loads(contents[0])
