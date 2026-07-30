@@ -108,23 +108,38 @@ class UpstreamError(RuntimeError):
 
 @dataclass(frozen=True)
 class Ranking:
-    """A validated rank-out-of-total, and where it came from."""
+    """A validated rank-out-of-total, and where it came from.
+
+    Data only — deliberately no methods. mutmut's mutation generator
+    categorically excludes the body of any `@dataclass`-decorated class (it
+    must, since copying a decorated class for the trampoline setup can
+    re-run the decorator and its side effects), so logic placed on methods
+    here would carry zero mutation coverage no matter how the test loader
+    names the module — confirmed empirically: 298 mutants for this file, 0
+    attributed to `percentile`/`tier_text` while they were methods (same
+    defect class as `RepoBadge` in scripts/generate_repo_badges.py and
+    `ConstraintSet` in scripts/pip_constraint_sets.py, issue #262).
+    `ranking_percentile`/`ranking_tier_text` below carry the same logic as
+    free functions instead.
+    """
 
     rank: int
     total: int
     source: str
 
-    def percentile(self) -> float:
-        """Share of the field this server sits within, to one decimal."""
-        return round(self.rank / self.total * 100, 1)
 
-    def tier_text(self) -> str:
-        pct = self.percentile()
-        # Ranks near the very top round to 0.0%, which reads as an error
-        # rather than as an achievement. Report the bound instead.
-        if pct < _MIN_PRINTABLE_PCT:
-            return f"Top <{_MIN_PRINTABLE_PCT}%"
-        return f"Top {pct:.1f}%"
+def ranking_percentile(ranking: Ranking) -> float:
+    """Share of the field this server sits within, to one decimal."""
+    return round(ranking.rank / ranking.total * 100, 1)
+
+
+def ranking_tier_text(ranking: Ranking) -> str:
+    pct = ranking_percentile(ranking)
+    # Ranks near the very top round to 0.0%, which reads as an error
+    # rather than as an achievement. Report the bound instead.
+    if pct < _MIN_PRINTABLE_PCT:
+        return f"Top <{_MIN_PRINTABLE_PCT}%"
+    return f"Top {pct:.1f}%"
 
 
 def validate(rank: object, total: object, source: str) -> Ranking:
@@ -223,7 +238,7 @@ def _provenance_comment(ranking: Ranking, as_of: date) -> list[str]:
         f" of {ranking.total:,}",
         f"       tracked MCP servers, read {as_of.isoformat()}",
         f"       ({ranking.rank}/{ranking.total} = {pct:.2f}%"
-        f' -> "{ranking.tier_text()}").',
+        f' -> "{ranking_tier_text(ranking)}").',
         f"       Verify: {SERVER_PAGE_URL}",
         "       Upstream's score is a popularity and activity signal, not a quality",
         "       assessment, and ~25% of its weighting is undisclosed — so this badge",
@@ -239,7 +254,7 @@ def render_badge(ranking: Ranking, as_of: date) -> str:
     in badge_render; what stays here is what makes this badge THIS badge —
     the bar icon, the banner palette, and the wording of the claim.
     """
-    tier = ranking.tier_text()
+    tier = ranking_tier_text(ranking)
     stamp = f"{_MONTHS[as_of.month - 1]} {as_of.year}"
     alt = f"MCP Toplist: {tier} of {ranking.total:,} tracked MCP servers, {stamp}"
     label = badge_render.Panel(
@@ -344,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if current == rendered:
         print(
-            f"current: {ranking.tier_text()} "
+            f"current: {ranking_tier_text(ranking)} "
             f"(#{ranking.rank:,} of {ranking.total:,}, via {ranking.source})"
         )
         return 0
@@ -352,14 +367,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         print(
             f"STALE: badge does not match upstream "
-            f"({ranking.tier_text()}, #{ranking.rank:,} of {ranking.total:,})",
+            f"({ranking_tier_text(ranking)}, #{ranking.rank:,} of {ranking.total:,})",
             file=sys.stderr,
         )
         return 1
 
     args.badge.write_text(rendered)
     print(
-        f"updated: {ranking.tier_text()} "
+        f"updated: {ranking_tier_text(ranking)} "
         f"(#{ranking.rank:,} of {ranking.total:,}, via {ranking.source})"
     )
     return 0

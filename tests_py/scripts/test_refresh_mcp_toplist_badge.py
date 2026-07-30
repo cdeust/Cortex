@@ -85,18 +85,21 @@ class TestValidate(unittest.TestCase):
 class TestPercentileAndTier(unittest.TestCase):
     def test_live_figure_rounds_to_one_decimal(self):
         r = badge.validate(LIVE_RANK, LIVE_TOTAL, "t")
-        self.assertAlmostEqual(r.percentile(), 1.2)
-        self.assertEqual(r.tier_text(), "Top 1.2%")
+        self.assertAlmostEqual(badge.ranking_percentile(r), 1.2)
+        self.assertEqual(badge.ranking_tier_text(r), "Top 1.2%")
 
     def test_very_high_rank_reports_a_bound_not_zero(self):
         # 1/81919 = 0.0012% would render "Top 0.0%", which reads as a bug.
-        self.assertEqual(badge.validate(1, LIVE_TOTAL, "t").tier_text(), "Top <0.1%")
+        r = badge.validate(1, LIVE_TOTAL, "t")
+        self.assertEqual(badge.ranking_tier_text(r), "Top <0.1%")
 
     def test_boundary_just_above_the_bound_uses_the_number(self):
-        self.assertEqual(badge.validate(1, 1000, "t").tier_text(), "Top 0.1%")
+        r = badge.validate(1, 1000, "t")
+        self.assertEqual(badge.ranking_tier_text(r), "Top 0.1%")
 
     def test_last_place_is_one_hundred_percent(self):
-        self.assertEqual(badge.validate(50, 50, "t").tier_text(), "Top 100.0%")
+        r = badge.validate(50, 50, "t")
+        self.assertEqual(badge.ranking_tier_text(r), "Top 100.0%")
 
 
 class TestParseLeaderboard(unittest.TestCase):
