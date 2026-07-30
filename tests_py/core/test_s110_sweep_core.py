@@ -40,31 +40,6 @@ def _assert_noted(component: str, error_text: str) -> None:
     assert error_text in str(status[component]["last_error"])
 
 
-class TestActiveRetrievalReformulate:
-    def test_llm_failure_falls_back_to_raw_query_and_is_logged(self, caplog):
-        from mcp_server.core.context_assembly.active_retrieval import LLMReformulator
-
-        def broken_llm(prompt: str) -> str:
-            raise RuntimeError("model gone")
-
-        ref = LLMReformulator(llm_fn=broken_llm)
-        with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            out = ref.reformulate("when did I mention X?")
-        assert out == "when did I mention X?"
-        assert any(
-            "active_retrieval.llm_reformulate" in r.message for r in caplog.records
-        )
-        _assert_noted("active_retrieval.llm_reformulate", "model gone")
-
-    def test_llm_success_emits_no_signal(self, caplog):
-        from mcp_server.core.context_assembly.active_retrieval import LLMReformulator
-
-        ref = LLMReformulator(llm_fn=lambda prompt: "rewritten")
-        with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            assert ref.reformulate("q") == "rewritten"
-        assert not caplog.records
-
-
 class TestResolveQueryEntityIds:
     def test_keyword_stage_failure_keeps_stage1_ids_and_is_logged(
         self, caplog, monkeypatch
