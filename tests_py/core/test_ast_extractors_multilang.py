@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from mcp_server.core import ast_extractor_registry
 from mcp_server.core.ast_parser import AST_SUPPORTED, is_available, parse_file_ast
 
 pytestmark = pytest.mark.skipif(not is_available(), reason="tree-sitter not installed")
@@ -86,3 +87,39 @@ def test_php() -> None:
     assert defs["Foo.m"] == "method"
     assert defs["top"] == "function"
     assert "App\\Bar" in _imports("foo.php", src)
+
+
+def test_make_extractor_threads_the_real_source_into_calls_extraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`_make_extractor`'s composed extractor must call the shared calls
+    extractor with the REAL `source` it was given, not a placeholder.
+
+    Regression guard for mutmut mutant
+    `ast_extractor_registry.x__make_extractor__mutmut_10`, which replaces
+    that argument with a literal `None`. None of `test_java`/`test_kotlin`/
+    etc. above catch it: `extract_calls_generic`'s hardcoded node-type
+    list ("call", "call_expression") never matches any of these 7
+    languages' own call-expression node type (Java's is
+    `method_invocation`, for instance — a separate, pre-existing
+    language-coverage gap, out of scope here), so the returned calls list
+    is `[]` regardless of which `source` was passed, real or `None`.
+    Monkeypatching `extract_calls_generic` isolates `_make_extractor`'s
+    own composition contract from that unrelated gap (issue #269).
+    """
+    captured: dict[str, object] = {}
+
+    def fake_extract_calls_generic(root: object, source: object) -> list[str]:
+        captured["source"] = source
+        return ["irrelevant"]
+
+    monkeypatch.setattr(
+        ast_extractor_registry, "extract_calls_generic", fake_extract_calls_generic
+    )
+    extractor = ast_extractor_registry._make_extractor(
+        lambda root, source: [], lambda root, source: []
+    )
+    _imports_out, _defs_out, calls = extractor(object(), b"real bytes")
+
+    assert captured["source"] == b"real bytes"
+    assert calls == ["irrelevant"]
