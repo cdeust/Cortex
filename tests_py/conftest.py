@@ -17,6 +17,8 @@ import tempfile
 
 import pytest
 
+from scripts.check_venv_lock_parity import postgresql_extra_drift
+
 # ── Redirect every real-data root — MUST run before importing mcp_server ──
 #
 # INCIDENT 2026-07-28 (issue #219): isolation used to be conditional on
@@ -326,6 +328,22 @@ def _guard_against_real_data_roots() -> None:
         )
 
 
+def _guard_against_venv_lock_drift() -> None:
+    """Refuse to run if the postgresql-extra install has drifted from
+    ``requirements/ci-postgresql.txt`` (issue #287).
+
+    Same shape as the two guards above: a pure check
+    (``postgresql_extra_drift``, unit-tested on its own in
+    ``tests_py/scripts/test_check_venv_lock_parity.py``) plus an eager call
+    here that turns a silent, version-drift-driven change in the collected
+    test count into an immediate, actionable session abort — never a
+    quietly-smaller number a contributor trusts over CI's.
+    """
+    message = postgresql_extra_drift()
+    if message is not None:
+        pytest.exit(f"REFUSING to run: {message}", returncode=2)
+
+
 def _pg_available() -> bool:
     """Check if PostgreSQL is reachable."""
     try:
@@ -340,6 +358,7 @@ def _pg_available() -> bool:
 
 _guard_against_populated_db()
 _guard_against_real_data_roots()
+_guard_against_venv_lock_drift()
 _USE_PG = _pg_available()
 
 # The SQLite PATHS are already isolated unconditionally by
