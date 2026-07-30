@@ -10,6 +10,8 @@ that exceeds the response-budget cap).
 
 from __future__ import annotations
 
+import pytest
+
 from mcp_server.core.response_budget import serialized_length
 from mcp_server.core.tabular_encoding import (
     FORMAT_JSON,
@@ -226,3 +228,32 @@ def test_tabular_declined_when_it_would_overflow_tiny_budget() -> None:
         out = encode_within_budget(obj_payload, "memories", FORMAT_TABULAR, budget)
         assert out["format"] == FORMAT_JSON
         assert serialized_length(out) <= budget
+
+
+def test_tabular_accepted_at_exact_budget_boundary() -> None:
+    """Boundary: budget_chars exactly equal to the tabular form's serialized
+    length must still ACCEPT tabular — the re-check is strictly '>', not
+    '>=' (a budget the candidate exactly fits is not an overflow). A scoped
+    mutation run (issue #239, B905 family) flipped '>' to '>=' and no
+    existing test failed, proving this boundary was unpinned."""
+    items = [_mem("1", "a")]
+    obj_payload = {"memories": list(items), "count": 1}
+    columns = derive_columns(items)
+    tab_candidate = {
+        **obj_payload,
+        "memories": encode_rows(items, columns),
+        "columns": columns,
+        "format": FORMAT_TABULAR,
+    }
+    exact_budget = serialized_length(tab_candidate)
+    out = encode_within_budget(obj_payload, "memories", FORMAT_TABULAR, exact_budget)
+    assert out["format"] == FORMAT_TABULAR
+
+
+def test_decode_tabular_raises_on_length_mismatch() -> None:
+    """decode_tabular's documented precondition (every row has len(columns))
+    is enforced via zip(columns, row, strict=True). A scoped mutation run
+    (issue #239, B905 family) surfaced strict=True/False/None as equally
+    untested; this pins the precondition-violation path to a real error."""
+    with pytest.raises(ValueError):
+        decode_tabular(["a", "b"], [[1]])
