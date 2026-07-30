@@ -35,7 +35,7 @@ import re
 import sys
 import time
 from contextlib import redirect_stdout
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -243,7 +243,10 @@ def _collect_provenance() -> dict:
 
 
 def run_sweep(lambdas: list[float], quick: bool) -> Path:
-    timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    # datetime.now(timezone.utc), not the deprecated utcnow(): strftime here
+    # uses no %z/%Z directive, so the formatted string is identical either
+    # way — this only resolves the deprecation, not the output.
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = RESULTS_ROOT / timestamp
     out_dir.mkdir(parents=True, exist_ok=True)
     provenance = _collect_provenance()

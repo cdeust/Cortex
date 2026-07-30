@@ -273,7 +273,10 @@ def run(n_memories: int, queries_per_bucket: int, seed: int, quick: bool) -> Pat
     # Import AFTER env override so PgMemoryStore picks up the test DB.
     from benchmarks.lib.bench_db import BenchmarkDB  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
 
-    timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    # datetime.now(timezone.utc), not the deprecated utcnow(): strftime here
+    # uses no %z/%Z directive, so the formatted string is identical either
+    # way — this only resolves the deprecation, not the output.
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = RESULTS_ROOT / timestamp
     out_dir.mkdir(parents=True, exist_ok=True)
 

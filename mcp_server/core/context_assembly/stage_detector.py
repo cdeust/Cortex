@@ -170,7 +170,15 @@ class TemporalStageDetector(StageDetector):
                     }
                     month_num = month_abbrs.get(month_name.lower())
                     if month_num:
-                        return datetime(year, month_num, day)
+                        # naive by design: matches the sibling ISO branch
+                        # above, which is naive too whenever `value` lacks
+                        # an explicit offset (date-only ISO strings).
+                        # Making only this fallback aware would introduce a
+                        # new naive/aware mismatch across the two parsing
+                        # paths — a behavior change out of scope for a lint
+                        # refactor; unifying tz-awareness belongs in a
+                        # dedicated fix.
+                        return datetime(year, month_num, day)  # noqa: DTZ001
             except (ValueError, IndexError):
                 pass
         return None

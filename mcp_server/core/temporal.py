@@ -110,11 +110,22 @@ _EMBEDDED_ISO_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 
 
 def _try_parse_named_date(date_str: str) -> datetime | None:
-    """Try DD Month YYYY and Month DD, YYYY formats."""
+    """Try DD Month YYYY and Month DD, YYYY formats.
+
+    Deliberately naive (noqa DTZ001 x3 below): every caller (parse_date,
+    compute_date_distance_score) only ever diffs two datetimes produced by
+    THIS module's own date-only parsing — no time-of-day, no tzinfo, on
+    either side of the subtraction. Making one of the three literal
+    ``datetime(...)`` constructions here aware while parse_date's ISO
+    branch (date-only, always naive after its ``.split("T")[0]``) stays
+    naive would raise on the very comparisons this function exists to
+    support. Unifying tz-awareness across the ISO and named-date paths is
+    a design change belonging in a dedicated fix, not this lint refactor.
+    """
     m = _DD_MONTH_YYYY_RE.match(date_str)
     if m:
         try:
-            return datetime(
+            return datetime(  # noqa: DTZ001
                 int(m.group(3)), _MONTH_NAMES[m.group(2).lower()], int(m.group(1))
             )
         except (ValueError, KeyError):
@@ -122,7 +133,7 @@ def _try_parse_named_date(date_str: str) -> datetime | None:
     m = _MONTH_DD_YYYY_RE.match(date_str)
     if m:
         try:
-            return datetime(
+            return datetime(  # noqa: DTZ001
                 int(m.group(3)), _MONTH_NAMES[m.group(1).lower()], int(m.group(2))
             )
         except (ValueError, KeyError):
@@ -130,7 +141,9 @@ def _try_parse_named_date(date_str: str) -> datetime | None:
     m = _EMBEDDED_ISO_RE.search(date_str)
     if m:
         try:
-            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            return datetime(  # noqa: DTZ001
+                int(m.group(1)), int(m.group(2)), int(m.group(3))
+            )
         except ValueError:
             pass
     return None

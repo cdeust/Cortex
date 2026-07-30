@@ -45,7 +45,7 @@ class TestAdaptDatetimeIso:
 
     def test_naive_datetime_round_trips_through_isoformat(self):
         """No tzinfo is still a valid `datetime`; the adapter must not raise."""
-        value = datetime(2026, 7, 29, 12, 34, 56)
+        value = datetime(2026, 7, 29, 12, 34, 56)  # noqa: DTZ001 — naive-input is the point of this test
         assert _adapt_datetime_iso(value) == "2026-07-29T12:34:56"
 
 

@@ -57,10 +57,15 @@ class TestExplicitStageDetector:
 
 
 class TestTemporalStageDetectorParsing:
+    """noqa DTZ001 throughout this class: `_parse_ts` is naive-by-design
+    (see its docstring in stage_detector.py) — these literal
+    ``datetime(...)`` values are expected outputs compared against it, or
+    inputs fed straight back through, so they stay naive too."""
+
     def test_parse_iso_date_string(self):
         det = TemporalStageDetector()
         ts = det._parse_ts("2024-03-15")
-        assert ts == datetime(2024, 3, 15)
+        assert ts == datetime(2024, 3, 15)  # noqa: DTZ001
 
     def test_parse_iso_datetime_with_z_suffix(self):
         det = TemporalStageDetector()
@@ -71,16 +76,16 @@ class TestTemporalStageDetectorParsing:
     def test_parse_beam_month_name_format(self):
         det = TemporalStageDetector()
         ts = det._parse_ts("March-15-2024")
-        assert ts == datetime(2024, 3, 15)
+        assert ts == datetime(2024, 3, 15)  # noqa: DTZ001
 
     def test_parse_beam_format_case_insensitive(self):
         det = TemporalStageDetector()
         ts = det._parse_ts("march-15-2024")
-        assert ts == datetime(2024, 3, 15)
+        assert ts == datetime(2024, 3, 15)  # noqa: DTZ001
 
     def test_parse_datetime_object_passthrough(self):
         det = TemporalStageDetector()
-        dt = datetime(2024, 1, 1)
+        dt = datetime(2024, 1, 1)  # noqa: DTZ001
         assert det._parse_ts(dt) is dt
 
     def test_parse_none_returns_none(self):

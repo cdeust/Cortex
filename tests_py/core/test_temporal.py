@@ -16,17 +16,22 @@ from mcp_server.core.temporal import (
 
 
 class TestParseDate:
+    """noqa DTZ001 throughout this class: parse_date is naive-by-design
+    (see core/temporal.py's _try_parse_named_date docstring) — these
+    literal ``datetime(...)`` values are expected outputs compared against
+    it, so they must stay naive too."""
+
     def test_iso(self):
         dt = parse_date("2024-03-15")
-        assert dt == datetime(2024, 3, 15)
+        assert dt == datetime(2024, 3, 15)  # noqa: DTZ001
 
     def test_dd_month_yyyy(self):
         dt = parse_date("15 March 2024")
-        assert dt == datetime(2024, 3, 15)
+        assert dt == datetime(2024, 3, 15)  # noqa: DTZ001
 
     def test_month_dd_yyyy(self):
         dt = parse_date("March 15, 2024")
-        assert dt == datetime(2024, 3, 15)
+        assert dt == datetime(2024, 3, 15)  # noqa: DTZ001
 
     def test_empty(self):
         assert parse_date("") is None
@@ -37,12 +42,12 @@ class TestParseDate:
 
     def test_embedded_iso(self):
         dt = parse_date("Created on 2024-06-01 at noon")
-        assert dt == datetime(2024, 6, 1)
+        assert dt == datetime(2024, 6, 1)  # noqa: DTZ001
 
     def test_iso_datetime_is_truncated_to_its_date(self):
         """The 'T' split is what makes this a DATE parser: the time is cut,
         not carried, so hint distances compare days against days."""
-        assert parse_date("2024-03-15T10:30:00Z") == datetime(2024, 3, 15)
+        assert parse_date("2024-03-15T10:30:00Z") == datetime(2024, 3, 15)  # noqa: DTZ001
 
     def test_space_separated_utc_designator(self):
         """No 'T' to split on, so the 'Z' → '+00:00' rewrite is what makes

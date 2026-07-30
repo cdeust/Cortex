@@ -351,6 +351,33 @@ select = [
     # zero out that count. Documented in place with `# noqa: RET504`
     # rather than fixed, since fixing it would be a behavior change.
     "RET",
+    # DTZ (naive datetime) (issue #239, family 3): 4 findings in
+    # mcp_server/ + 12 more repo-wide (16 total, 3 rule variants).
+    #   DTZ003 datetime.utcnow() (2 sites, benchmarks/): replaced with
+    #     datetime.now(timezone.utc) — the deprecated call fed only a
+    #     %-directive-free strftime(), so the formatted string is
+    #     byte-identical either way; this resolves the deprecation with
+    #     zero output change.
+    #   DTZ007 strptime without %z (1 site, benchmarks/): the parsed value
+    #     is stamped `tzinfo=timezone.utc` on the very next line, so the
+    #     function's actual return value is always aware — documented
+    #     in place with `# noqa: DTZ007`.
+    #   DTZ001 datetime() without tzinfo (13 sites, core/temporal.py +
+    #     core/context_assembly/stage_detector.py + their test files):
+    #     these two parsers are naive-by-design — every caller only ever
+    #     diffs two datetimes THIS module produced (date-only, no
+    #     time-of-day), and the sibling ISO-parse branch in each is
+    #     naive too whenever the input lacks an explicit offset. Making
+    #     one branch aware while its sibling stays naive would raise on
+    #     the very comparisons these functions exist to support;
+    #     unifying tz-awareness across both parsing paths is a design
+    #     change for a dedicated fix, not this lint refactor. Documented
+    #     in place with `# noqa: DTZ001` at each site (production) or a
+    #     class-level docstring note (tests, whose literals are expected
+    #     outputs/inputs for the same naive contract) — one exception,
+    #     `test_sqlite_datetime_adapter_260.py`, where the naive input IS
+    #     the test's stated point (round-tripping a tzinfo-less datetime).
+    "DTZ",
 ]
 # ── Families deliberately NOT selected (issue #197, criterion 1) ────────────
 # Counts measured against mcp_server/ 2026-07-28, ruff 0.15.20 — what
@@ -382,8 +409,8 @@ select = [
 #     dedicated-PR-sized diff under the fix-with-landing bar.
 #
 # (c) JUDGEMENT families not yet triaged — TRY (163), ARG (53), PTH (91),
-#     N (43), ERA (43), FBT (254), DTZ (4), S beyond S110/S608 (34):
-#     tracked as the program's continuation in issue #239 (B, RET landed
+#     N (43), ERA (43), FBT (254), S beyond S110/S608 (34): tracked as
+#     the program's continuation in issue #239 (B, RET, DTZ landed
 #     above). Enabling any of them without the per-finding triage the
 #     landed families received would mean blanket ignores — the exact
 #     anti-pattern this explicit select list exists to prevent.

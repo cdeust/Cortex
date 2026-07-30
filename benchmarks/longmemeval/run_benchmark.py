@@ -48,7 +48,10 @@ def parse_longmemeval_date(date_str: str) -> str:
     """Parse LongMemEval date format '2023/04/10 (Mon) 17:50' to ISO 8601."""
     try:
         cleaned = re.sub(r"\s*\(\w+\)\s*", " ", date_str).strip()
-        dt = datetime.strptime(cleaned, "%Y/%m/%d %H:%M")
+        # noqa DTZ007: the format string has no %z because the source data
+        # never carries one; the very next line stamps tzinfo=UTC, so the
+        # value this function returns is always aware.
+        dt = datetime.strptime(cleaned, "%Y/%m/%d %H:%M")  # noqa: DTZ007
         return dt.replace(tzinfo=timezone.utc).isoformat()
     except (ValueError, TypeError):
         return datetime.now(timezone.utc).isoformat()
