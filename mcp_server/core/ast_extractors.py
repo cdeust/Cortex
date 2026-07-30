@@ -1,7 +1,6 @@
 """Tree-sitter AST extractors for Python and JavaScript/TypeScript.
 
 Additional languages (Go, Swift, Rust) in ast_extractors_extra.py.
-Also provides the generic call-site extractor used by all languages.
 
 Pure functions — no I/O.
 """
@@ -215,25 +214,6 @@ def _extract_js_class(
     if body:
         for child in body.children:
             _extract_js_node(child, source, defs, cls_name)
-
-
-# ── Generic call extraction ──────────────────────────────────────────────
-
-
-def extract_calls_generic(root: Node, source: bytes) -> list[str]:
-    """Extract all function/method call names from AST."""
-    calls: list[str] = []
-    seen: set[str] = set()
-    for call_type in ("call", "call_expression"):
-        for node in _walk_type(root, call_type):
-            func = node.child_by_field_name("function")
-            if not func:
-                continue
-            name = _text(func, source).strip()
-            if name and name not in seen and len(name) < _MAX_CALL_NAME_LEN:
-                calls.append(name)
-                seen.add(name)
-    return calls
 
 
 # ── Per-function call extraction (caller-qualified) ─────────────────────

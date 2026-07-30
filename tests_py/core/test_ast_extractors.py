@@ -119,42 +119,6 @@ export type Options = { verbose: boolean; };
             assert r.language == "typescript"
 
 
-class TestCallExtraction:
-    def test_python_calls(self) -> None:
-        code = b"""
-result = process(data)
-x = helper(1, 2)
-obj.method()
-"""
-        if _HAS_TREE_SITTER:
-            from mcp_server.core.ast_extractors import extract_calls_generic
-            from tree_sitter_language_pack import get_parser
-
-            tree = get_parser("python").parse(code)
-            calls = extract_calls_generic(tree.root_node, code)
-            assert "process" in calls
-            assert "helper" in calls
-        else:
-            r = parse_file_ast("test.py", code)
-            assert r.language == "python"
-
-    def test_js_calls(self) -> None:
-        code = b"""
-const x = fetchData(url);
-console.log("hello");
-"""
-        if _HAS_TREE_SITTER:
-            from mcp_server.core.ast_extractors import extract_calls_generic
-            from tree_sitter_language_pack import get_parser
-
-            tree = get_parser("javascript").parse(code)
-            calls = extract_calls_generic(tree.root_node, code)
-            assert any("fetchData" in c for c in calls)
-        else:
-            r = parse_file_ast("app.js", code)
-            assert r.language == "javascript"
-
-
 class TestGoExtractors:
     def test_go_struct_and_method(self) -> None:
         code = b"""

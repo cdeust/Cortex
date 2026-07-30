@@ -48,11 +48,14 @@ def _make_extractor(
     Precondition: `imports_fn`/`defs_fn` are pure (no I/O), taking the same
     `(root, source)` pair.
     Postcondition: returns a callable producing `(imports, definitions)` —
-    the flat per-file call list this used to also return
-    (`extract_calls_generic(root, source)`) was computed and then discarded
-    by every caller (`parse_file_ast` only reads the `calls_per_function`
-    map, populated separately via `extract_calls_per_function`); removed as
-    dead code (issue #249 boy-scout pass) rather than given a test.
+    the flat per-file call list this used to also return was computed via
+    `extract_calls_generic(root, source)` and then discarded by every
+    caller (`parse_file_ast` only reads the `calls_per_function` map,
+    populated separately via `extract_calls_per_function`); the tuple
+    element was removed as dead code (issue #249 boy-scout pass). With
+    this the only production call site gone, `extract_calls_generic` had
+    no caller left but its own direct unit test — deleted from
+    `ast_extractors.py` rather than kept for a hypothetical future one.
     """
 
     def _extract(root: Node, source: bytes) -> tuple[list[ImportInfo], list[SymbolDef]]:
