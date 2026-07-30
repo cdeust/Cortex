@@ -310,8 +310,8 @@ def _select_mechanisms(args: argparse.Namespace) -> list[Mechanism]:
     for name in args.mechanism:
         try:
             out.append(Mechanism[name])
-        except KeyError:
-            raise SystemExit(f"unknown mechanism: {name}")
+        except KeyError as exc:
+            raise SystemExit(f"unknown mechanism: {name}") from exc
     return out
 
 

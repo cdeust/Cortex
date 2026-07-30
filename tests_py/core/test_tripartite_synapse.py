@@ -53,7 +53,8 @@ class TestCalciumWave:
     def test_wave_propagates(self):
         neighbors = [0.0, 0.1, 0.0]
         updated = propagate_calcium_wave(0.8, neighbors)
-        assert all(u >= n for u, n in zip(updated, neighbors))
+        # strict=True: propagate_calcium_wave returns one value per neighbor.
+        assert all(u >= n for u, n in zip(updated, neighbors, strict=True))
 
     def test_no_wave_below_threshold(self):
         neighbors = [0.0, 0.1, 0.0]

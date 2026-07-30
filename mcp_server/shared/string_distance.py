@@ -89,7 +89,9 @@ def jaro_winkler_similarity(s1: str, s2: str) -> float:
     """
     jaro = jaro_similarity(s1, s2)
     prefix = 0
-    for c1, c2 in zip(s1, s2):
+    # strict=False: Jaro-Winkler's common-prefix scan is defined for strings
+    # of differing length (it stops at the shorter one).
+    for c1, c2 in zip(s1, s2, strict=False):
         if c1 != c2:
             break
         prefix += 1

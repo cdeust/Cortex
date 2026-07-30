@@ -71,7 +71,13 @@ def compute_text_signals(
         return [], []
     ids = [m["id"] for m in hot_mems]
     docs = [m.get("content", "") for m in hot_mems]
-    bm25 = [(mid, s) for mid, s in zip(ids, compute_bm25_scores(query, docs)) if s > 0]
+    # strict=True: compute_bm25_scores returns exactly len(docs) scores,
+    # and docs/ids are both derived from hot_mems one-to-one above.
+    bm25 = [
+        (mid, s)
+        for mid, s in zip(ids, compute_bm25_scores(query, docs), strict=True)
+        if s > 0
+    ]
     ngram = [
         (m["id"], compute_ngram_score(query, m.get("content", ""))) for m in hot_mems
     ]

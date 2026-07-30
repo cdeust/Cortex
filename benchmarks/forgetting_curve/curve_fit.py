@@ -46,7 +46,9 @@ def _ols(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
     n = len(xs)
     sx = sum(xs)
     sy = sum(ys)
-    sxy = sum(x * y for x, y in zip(xs, ys))
+    # strict=True: xs/ys are paired observations for OLS; unequal lengths
+    # would mean mismatched (x, y) pairs, a data bug worth raising on.
+    sxy = sum(x * y for x, y in zip(xs, ys, strict=True))
     sx2 = sum(x * x for x in xs)
     denom = n * sx2 - sx * sx
     if abs(denom) < _NEAR_ZERO_TOL:
@@ -55,7 +57,10 @@ def _ols(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
     intercept = (sy - slope * sx) / n
     mean_y = sy / n
     ss_tot = sum((y - mean_y) ** 2 for y in ys)
-    ss_res = sum((y - (intercept + slope * x)) ** 2 for x, y in zip(xs, ys))
+    # strict=True: same paired-observations invariant as sxy above.
+    ss_res = sum(
+        (y - (intercept + slope * x)) ** 2 for x, y in zip(xs, ys, strict=True)
+    )
     r2 = 1.0 - ss_res / ss_tot if ss_tot > _NEAR_ZERO_TOL else 0.0
     return slope, intercept, r2
 

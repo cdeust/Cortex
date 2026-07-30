@@ -57,10 +57,13 @@ def load_longmemeval(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
     seen: dict[str, SubsampleItem] = {}
     probes: list[QueryProbe] = []
     for item in dataset:
+        # strict=True: all three lists come from the same haystack record
+        # and are documented to correspond 1:1 by index.
         for sess, sid, date_str in zip(
             item["haystack_sessions"],
             item["haystack_session_ids"],
             item["haystack_dates"],
+            strict=True,
         ):
             if sid in seen:
                 continue
@@ -155,7 +158,7 @@ def load_beam_100k(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
             items.append(SubsampleItem(memory=mem, source_key=key))
         raw_pq = conversation.get("probing_questions", "{}")
         questions = parse_probing_questions(raw_pq)
-        for ability, qs in questions.items():
+        for _ability, qs in questions.items():
             qs_list = qs if isinstance(qs, list) else [qs]
             for q in qs_list:
                 if not isinstance(q, dict):

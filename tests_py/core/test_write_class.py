@@ -198,7 +198,7 @@ class TestValidateWriteClass:
     ``classify_write_class`` fallback tested above."""
 
     def test_none_is_accepted_no_raise(self):
-        validate_write_class(None) is None  # no exception
+        validate_write_class(None)  # no exception
 
     def test_each_known_class_is_accepted(self):
         for cls in ALL_WRITE_CLASSES:

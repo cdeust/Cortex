@@ -314,12 +314,15 @@ def _setup_fixture() -> tuple[list[dict], list[dict]]:
     finally:
         conn.close()
 
+    # strict=True: mem_ids/ent_ids were each appended exactly once per
+    # fixture row in the insert loops above — always equal length.
     memories = [
         {"id": mid, "content": content, "heat": 0.5}
-        for mid, content in zip(mem_ids, _FIXTURE_MEMORIES)
+        for mid, content in zip(mem_ids, _FIXTURE_MEMORIES, strict=True)
     ]
     entities = [
-        {"id": eid, "name": name} for eid, (name, _) in zip(ent_ids, _FIXTURE_ENTITIES)
+        {"id": eid, "name": name}
+        for eid, (name, _) in zip(ent_ids, _FIXTURE_ENTITIES, strict=True)
     ]
     return memories, entities
 

@@ -157,7 +157,7 @@ def _drain_worker(
             item = q.get()
             if item is _SENTINEL:
                 break
-            _safe(lambda: writer.add_many(item), "worker", result, lock)
+            _safe(lambda item=item: writer.add_many(item), "worker", result, lock)
         _safe(writer.flush_remaining, "worker-flush", result, lock)
     finally:
         with lock:

@@ -1140,7 +1140,9 @@ def attentional_focus_rerank(
     # per-item weights as a soft re-weight, never truncating recall.
     alloc = allocate_attention(query, items, capacity=n)
     baseline = 1.0 / n
-    for c, attn in zip(candidates, alloc.weights):
+    # strict=True: allocate_attention always returns one weight per input
+    # item (items has len(candidates) by construction above).
+    for c, attn in zip(candidates, alloc.weights, strict=True):
         base = c.get("score", 0.0) or 0.0
         c["score"] = base * (1.0 + weight * (attn - baseline))
 

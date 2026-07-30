@@ -139,7 +139,9 @@ def is_structural_identifier(label: str) -> bool:
 
 def _common_prefix_len(a: str, b: str) -> int:
     p = 0
-    for ca, cb in zip(a, b):
+    # strict=False: a common-prefix scan is defined precisely for strings of
+    # differing length (it stops at the shorter one).
+    for ca, cb in zip(a, b, strict=False):
         if ca != cb:
             break
         p += 1

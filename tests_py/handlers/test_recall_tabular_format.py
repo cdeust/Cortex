@@ -114,7 +114,8 @@ def test_tabular_has_no_information_loss_vs_json(
     decoded = decode_tabular(tab_out["columns"], tab_out["memories"])
     json_mems = json_out["memories"]
     assert len(decoded) == len(json_mems)
-    for obj, back in zip(json_mems, decoded):
+    # strict=True: equal length already asserted immediately above.
+    for obj, back in zip(json_mems, decoded, strict=True):
         assert set(back.keys()) >= set(obj.keys())
         assert all(back[k] == obj[k] for k in obj)
 

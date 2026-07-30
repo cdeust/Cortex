@@ -174,7 +174,9 @@ def _shared_prefix(a: str, b: str) -> str:
     parts_a = a.split("-")
     parts_b = b.split("-")
     common: list[str] = []
-    for pa, pb in zip(parts_a, parts_b):
+    # strict=False: a common-prefix scan over two hyphen-split domain ids of
+    # potentially different segment counts is defined to stop at the shorter.
+    for pa, pb in zip(parts_a, parts_b, strict=False):
         if pa == pb:
             common.append(pa)
         else:

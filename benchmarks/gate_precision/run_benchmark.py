@@ -95,7 +95,11 @@ def extract_corpus(path: Path) -> list[str]:
     seen_keys: set[str] = set()
     corpus: list[str] = []
     for q in questions:
-        for sid, session in zip(q["haystack_session_ids"], q["haystack_sessions"]):
+        # strict=True: both lists come from the same haystack record and
+        # are documented to correspond 1:1 by index.
+        for sid, session in zip(
+            q["haystack_session_ids"], q["haystack_sessions"], strict=True
+        ):
             if sid in seen_sessions:
                 continue
             seen_sessions.add(sid)
@@ -222,7 +226,9 @@ def roc_auc(labels: list[int], scores: list[float]) -> float:
         for k in range(i, j + 1):
             ranks[order[k]] = avg_rank
         i = j + 1
-    rank_sum_pos = sum(r for r, lab in zip(ranks, labels) if lab == 1)
+    # strict=True: ranks has len(scores), and labels/scores are the
+    # function's paired input (one label per score) by contract.
+    rank_sum_pos = sum(r for r, lab in zip(ranks, labels, strict=True) if lab == 1)
     u_stat = rank_sum_pos - n_pos * (n_pos + 1) / 2
     return u_stat / (n_pos * n_neg)
 

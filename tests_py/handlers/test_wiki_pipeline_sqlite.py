@@ -22,6 +22,7 @@ the handlers' own `_get_store()` is what is under test.
 from __future__ import annotations
 
 import logging
+import sqlite3
 
 import pytest
 
@@ -359,7 +360,7 @@ def test_cursor_closes_on_context_exit():
     conn = _compat_conn()
     with conn.cursor() as cur:
         cur.execute("SELECT 1 AS n")
-    with pytest.raises(Exception):
+    with pytest.raises(sqlite3.ProgrammingError):
         cur.execute("SELECT 1")
 
 

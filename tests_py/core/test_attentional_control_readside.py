@@ -73,7 +73,8 @@ def test_no_signal_is_identity_scores_and_order():
     ]
     out = rp.attentional_focus_rerank(copy.deepcopy(before), "wholly unrelated words")
     assert [c["memory_id"] for c in out] == [1, 2, 3]
-    for o, b in zip(out, before):
+    # strict=True: out is a rerank (same-length reorder) of before.
+    for o, b in zip(out, before, strict=True):
         assert abs(o["score"] - b["score"]) < 1e-12
 
 
@@ -97,7 +98,8 @@ def test_uniform_salience_and_no_query_is_identity():
     ]
     out = rp.attentional_focus_rerank(copy.deepcopy(before), "")  # empty query
     assert [c["memory_id"] for c in out] == [1, 2]
-    for o, b in zip(out, before):
+    # strict=True: out is a rerank (same-length reorder) of before.
+    for o, b in zip(out, before, strict=True):
         assert abs(o["score"] - b["score"]) < 1e-12
 
 

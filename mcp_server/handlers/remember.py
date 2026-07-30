@@ -163,7 +163,9 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
         write_class_module.validate_write_class(write_class_arg)
     except ValueError as exc:
-        raise ValidationError(str(exc), {"tool": "remember", "field": "write_class"})
+        raise ValidationError(
+            str(exc), {"tool": "remember", "field": "write_class"}
+        ) from exc
     resolved_write_class = write_class_module.classify_write_class(
         {"write_class": write_class_arg, "source": source}
     )

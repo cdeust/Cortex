@@ -262,7 +262,10 @@ async def fetch_symbols_page(
             "visibility",
         ]
         for row in result.get("rows") or []:
-            record = dict(zip(columns, row))
+            # strict=False: columns/row cross an external MCP tool-call
+            # boundary (`_run_query`); a shape drift there should degrade
+            # to a partial record, not raise, matching prior behavior.
+            record = dict(zip(columns, row, strict=False))
             qn = record.get("qualified_name") or record.get("name")
             if not qn:
                 continue

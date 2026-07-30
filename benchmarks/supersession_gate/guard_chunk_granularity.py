@@ -81,7 +81,9 @@ def main() -> int:
         # Decompose every session into chunks; remember each chunk's origin sid.
         chunk_texts: list[str] = []
         chunk_sid: list[str] = []
-        for sess, sid in zip(sessions, sids):
+        # strict=True: sessions/sids are both read from the same
+        # haystack record's parallel fields.
+        for sess, sid in zip(sessions, sids, strict=True):
             stext = session_text(sess)
             chunks = decompose_memory(stext)
             for c in chunks:

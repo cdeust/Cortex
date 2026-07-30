@@ -183,5 +183,7 @@ def render(spec: BadgeSpec) -> str:
     try:
         ElementTree.fromstring(svg)
     except ElementTree.ParseError as error:
-        raise BadgeMarkupError(f"rendered badge is not well-formed XML: {error}")
+        raise BadgeMarkupError(
+            f"rendered badge is not well-formed XML: {error}"
+        ) from error
     return svg

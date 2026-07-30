@@ -231,7 +231,7 @@ class TestSpellAlteration:
             store = _get_store()
 
             # Each fake is stored
-            for i, target in enumerate(targets):
+            for i, _target in enumerate(targets):
                 fake = FAKE_SPELLS[i]
                 fake_rows = _query_store_for_spell(store, fake["name"])
                 assert len(fake_rows) == 1, f"Fake {fake['name']} not found"

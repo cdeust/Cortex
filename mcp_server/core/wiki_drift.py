@@ -241,7 +241,7 @@ def _file_exists_under(source_root: str, cited: str) -> bool:
     # turning one consolidate cycle into a multi-minute stall. The skip set is
     # the single source of truth for "not a source tree".
 
-    for dirpath, dirnames, filenames in os.walk(source_root):
+    for _dirpath, dirnames, filenames in os.walk(source_root):
         dirnames[:] = [
             d for d in dirnames if d not in _SKIP_DIRECTORIES and not d.startswith(".")
         ]

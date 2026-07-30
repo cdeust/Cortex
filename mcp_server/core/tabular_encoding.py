@@ -122,7 +122,9 @@ def decode_tabular(columns: list[str], rows: list[list[Any]]) -> list[dict]:
     explicit ``None`` the encoder wrote). Used by round-trip tests and any
     client that prefers objects.
     """
-    return [dict(zip(columns, row)) for row in rows]
+    # strict=True: the documented precondition above already requires every
+    # row to have length len(columns).
+    return [dict(zip(columns, row, strict=True)) for row in rows]
 
 
 def encode_within_budget(

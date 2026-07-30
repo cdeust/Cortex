@@ -6,6 +6,7 @@ import asyncio
 
 import pytest
 from fastmcp import Client, FastMCP
+from mcp.shared.exceptions import McpError
 
 from mcp_server import mcp_prompts, tool_profiles
 from mcp_server.__main__ import merged_schemas, register_all
@@ -115,7 +116,7 @@ def test_unknown_prompt_name_errors():
     async def call(c):
         return await c.get_prompt("no_such_prompt", {})
 
-    with pytest.raises(Exception):
+    with pytest.raises(McpError):
         _run(server, call)
 
 
@@ -125,7 +126,7 @@ def test_missing_required_argument_errors():
     async def call(c):
         return await c.get_prompt("session_recall", {})  # 'project' required
 
-    with pytest.raises(Exception):
+    with pytest.raises(McpError):
         _run(server, call)
 
 

@@ -111,7 +111,9 @@ def test_field_set_equality_union_columns(_none=None) -> None:
     assert set(columns) == union
 
     decoded = decode_tabular(columns, rows)
-    for original, back in zip(items, decoded):
+    # strict=True: decode_tabular returns one dict per row, and rows was
+    # built one-per-item by encode_rows above.
+    for original, back in zip(items, decoded, strict=True):
         # Every field present in the original is recovered with its value.
         assert all(back[k] == original[k] for k in original)
 

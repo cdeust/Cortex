@@ -266,7 +266,7 @@ def build_co_access_dossiers(
     uf = _UnionFind()
     weight_sum: dict[int, float] = {}
     weight_count: dict[int, float] = {}
-    for a, b, w in pairs:
+    for a, b, _w in pairs:
         uf.union(a, b)
     # Sort edges by proximity descending so the truncation below keeps the
     # strongest-linked members first within an oversized component.

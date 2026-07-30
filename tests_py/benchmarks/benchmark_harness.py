@@ -870,7 +870,7 @@ def benchmark_pattern_separation() -> dict[str, dict[str, float]]:
     base /= np.linalg.norm(base)
 
     similar_embeddings = []
-    for i in range(5):
+    for _i in range(5):
         noise = (
             np.random.randn(dim).astype(np.float32) * 0.05
         )  # Very small noise → high similarity
@@ -1079,7 +1079,12 @@ def _table(headers: list[str], rows: list[list]) -> str:
         max(len(str(h)), *(len(str(r[i])) for r in rows)) for i, h in enumerate(headers)
     ]
     sep = "|" + "|".join("-" * (w + 2) for w in widths) + "|"
-    header = "|" + "|".join(f" {h:<{w}} " for h, w in zip(headers, widths)) + "|"
+    # strict=True: widths is computed one entry per header just above.
+    header = (
+        "|"
+        + "|".join(f" {h:<{w}} " for h, w in zip(headers, widths, strict=True))
+        + "|"
+    )
     body = "\n".join(
         "|" + "|".join(f" {str(r[i]):<{w}} " for i, w in enumerate(widths)) + "|"
         for r in rows

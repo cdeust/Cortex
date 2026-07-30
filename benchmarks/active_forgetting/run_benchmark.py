@@ -601,7 +601,12 @@ def fixture_hippocampal_dependency_protects() -> dict:
     (the accumulator still grows, just more slowly)."""
     cortical = _trajectory(_S1, PRESSURE_LEAK_LAMBDA, hippocampal_dependency=0.0)
     hippocampal = _trajectory(_S1, PRESSURE_LEAK_LAMBDA, hippocampal_dependency=1.0)
-    less_pressure_every_cycle = all(h < c for h, c in zip(hippocampal, cortical))
+    # strict=True: both trajectories are produced by the same _trajectory
+    # call shape (only hippocampal_dependency differs), so they always
+    # have equal length.
+    less_pressure_every_cycle = all(
+        h < c for h, c in zip(hippocampal, cortical, strict=True)
+    )
     still_growing = hippocampal[-1] > 0.0
     fires_late_or_never = not any(
         a >= PERMANENT_ACCUM_THRESHOLD for a in hippocampal[: _S1["fire_by"]]

@@ -248,8 +248,10 @@ def run_benchmark(
                 db.clear()
 
                 memories = []
-                for si, (session, sid, date_str) in enumerate(
-                    zip(haystack_sessions, haystack_sids, haystack_dates)
+                # strict=True: the three haystack lists are parallel,
+                # loaded together from the same question record.
+                for _si, (session, sid, date_str) in enumerate(
+                    zip(haystack_sessions, haystack_sids, haystack_dates, strict=True)
                 ):
                     content, user_content = session_to_memory_content(session, sid)
                     date_iso = parse_longmemeval_date(date_str)

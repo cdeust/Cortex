@@ -158,7 +158,11 @@ def run_benchmark(splits: list[str] | None = None, limit: int | None = None):
 
             (row.get("metadata", {}).get("source", "") if row.get("metadata") else "")
 
-            for q_idx, (question, answer_list) in enumerate(zip(questions, answers)):
+            # strict=True: questions/answers are the dataset's paired
+            # per-item fields, always equal length.
+            for _q_idx, (question, answer_list) in enumerate(
+                zip(questions, answers, strict=True)
+            ):
                 if not question or not answer_list:
                     continue
 

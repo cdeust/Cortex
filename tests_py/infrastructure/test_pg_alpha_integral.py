@@ -208,7 +208,9 @@ def test_effective_heat_is_monotone_non_increasing(store: PgMemoryStore) -> None
     """
     for label, (imp, acc, sch) in _PROFILES.items():
         traj = _probe_heat_trajectory(store, imp, acc, sch)
-        for (t_prev, h_prev), (t_cur, h_cur) in zip(traj, traj[1:]):
+        # strict=False: this is a deliberate pairwise (offset-by-one) walk
+        # over traj — traj[1:] is always exactly one element shorter.
+        for (t_prev, h_prev), (t_cur, h_cur) in zip(traj, traj[1:], strict=False):
             # Allow float4 round-trip noise; a real bump (≥1e-6) must not occur.
             assert h_cur <= h_prev + 1e-6, (
                 f"{label}: heat rose with age {t_prev}h={h_prev:.8f} → "

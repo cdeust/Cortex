@@ -115,7 +115,9 @@ def _stamp_age(store, mem_ids: list[int], age_days: list[float]) -> None:
     issue one parameterised UPDATE per memory; for 100k rows this takes
     a few seconds but is bounded and deterministic.
     """
-    rows = list(zip(mem_ids, age_days))
+    # strict=True: documented precondition above — age_days[i] corresponds
+    # to mem_ids[i] by index.
+    rows = list(zip(mem_ids, age_days, strict=True))
     sql = """
         UPDATE memories SET
             created_at = NOW() - (%s || ' days')::INTERVAL,
@@ -180,7 +182,14 @@ def insert_memories(
     _stamp_age(bench_db._store, mem_ids, age_days)
     print(f"[long] backdate done ({time.time() - t0:.1f}s)")
 
-    return [(uid, mid, b) for uid, mid, b in zip(range(n), mem_ids, bucket_assignments)]
+    # strict=False: ingest_memories_batch's contract does not guarantee
+    # len(mem_ids) == n (the store's write path may merge/dedupe an
+    # insert); truncating to the shorter list here matches current
+    # behavior rather than crashing a long-running benchmark run.
+    return [
+        (uid, mid, b)
+        for uid, mid, b in zip(range(n), mem_ids, bucket_assignments, strict=False)
+    ]
 
 
 # ── Query path ───────────────────────────────────────────────────────────

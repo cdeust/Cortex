@@ -781,7 +781,7 @@ def test_ensure_deps_writes_stamp_directly_when_dist_info_already_satisfies(
     ever calling pip or the lock."""
     deps_dir = tmp_path / "deps"
     deps_dir.mkdir()
-    for name, spec in deps_mod._BASE_PACKAGES:
+    for _name, spec in deps_mod._BASE_PACKAGES:
         dist_name, version = deps_mod._parse_pip_spec(spec)
         _make_dist_info(deps_dir, dist_name, version)
 

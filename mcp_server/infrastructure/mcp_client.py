@@ -161,11 +161,11 @@ class MCPClient:
                 ),
                 timeout=self._connect_timeout_ms / 1000,
             )
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as exc:
             raise McpConnectionError(
                 f"Connect timeout after {self._connect_timeout_ms}ms",
                 {"command": command, "args": args},
-            )
+            ) from exc
         except Exception as e:
             raise McpConnectionError(
                 f"Failed to spawn: {e}",
@@ -366,7 +366,7 @@ class MCPClient:
         start = loop.time()
         try:
             return await asyncio.wait_for(future, timeout=effective_timeout)
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as exc:
             self._pending.pop(req_id, None)
             elapsed = loop.time() - start
             raise McpConnectionError(
@@ -377,7 +377,7 @@ class MCPClient:
                 f"than the OS pipe buffer, or the reader loop is no longer "
                 f"draining its stdout.",
                 {"method": method, "elapsed_s": round(elapsed, 1)},
-            )
+            ) from exc
 
     def _notify(self, method: str, params: dict | None = None) -> None:
         msg: dict[str, Any] = {"jsonrpc": "2.0", "method": method}

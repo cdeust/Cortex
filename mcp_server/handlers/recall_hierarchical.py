@@ -303,8 +303,15 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "results": results,
         "total": len(results),
         "query_word_count": len(query.split()),
+        # strict=True: compute_level_weights' return type is a fixed
+        # 3-tuple (L0, L1, L2 weights), always matching the 3-element
+        # literal on the left.
         "level_weights": dict(
-            zip(["L0", "L1", "L2"], fractal.compute_level_weights(query))
+            zip(
+                ["L0", "L1", "L2"],
+                fractal.compute_level_weights(query),
+                strict=True,
+            )
         ),
         "hierarchy": {"stats": hierarchy.get("stats", {})},
     }

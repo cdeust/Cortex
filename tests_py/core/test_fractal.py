@@ -35,7 +35,8 @@ def _cosine_sim(a, b):
         return 0.0
     va = struct.unpack(f"{DIM}f", a[: DIM * 4])
     vb = struct.unpack(f"{DIM}f", b[: DIM * 4])
-    dot = sum(x * y for x, y in zip(va, vb))
+    # strict=True: both vectors are unpacked with the same fixed DIM count.
+    dot = sum(x * y for x, y in zip(va, vb, strict=True))
     na = sum(x * x for x in va) ** 0.5
     nb = sum(x * x for x in vb) ** 0.5
     if na == 0 or nb == 0:

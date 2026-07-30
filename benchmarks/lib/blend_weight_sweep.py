@@ -140,7 +140,9 @@ def build_phase_a_cells() -> list[Cell]:
     cells.append(Cell(idx=0, label="A_center", weights={**DEFAULTS, **PHASE_A_CENTER}))
     for i, combo in enumerate(itertools.product([0, 1], repeat=4), start=1):
         weights = dict(DEFAULTS)
-        for k, hl in zip(keys, combo):
+        # strict=True: keys is a fixed 4-tuple and combo is a
+        # repeat=4 itertools.product entry — always 4 elements each.
+        for k, hl in zip(keys, combo, strict=True):
             weights[k] = PHASE_A_HIGH[k] if hl else PHASE_A_LOW[k]
         label = "A_" + "".join("H" if hl else "L" for hl in combo)
         cells.append(Cell(idx=i, label=label, weights=weights))

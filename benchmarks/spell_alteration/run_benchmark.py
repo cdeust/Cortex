@@ -115,7 +115,9 @@ def replace_spells(
 ) -> tuple[str, dict[str, str]]:
     """Replace target spell names with fakes. Returns (text, map)."""
     mapping: dict[str, str] = {}
-    for orig, fake in zip(targets, fakes):
+    # strict=True: the only caller passes targets=rng.sample(eligible, 2)
+    # and fakes=FAKE_NAMES (a fixed 2-element list) — always equal length.
+    for orig, fake in zip(targets, fakes, strict=True):
         mapping[orig] = fake
         text = re.sub(re.escape(orig), fake, text, flags=re.IGNORECASE)
     return text, mapping

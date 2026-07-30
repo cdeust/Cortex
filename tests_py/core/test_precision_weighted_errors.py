@@ -29,7 +29,8 @@ class TestNeuromodulatePrecisions:
         precs = [1.0, 1.0, 1.0]
         low = neuromodulate_precisions(precs, ne_level=0.5)
         high = neuromodulate_precisions(precs, ne_level=1.8)
-        assert all(hi > lo for hi, lo in zip(high, low))
+        # strict=True: neuromodulate_precisions returns one value per input.
+        assert all(hi > lo for hi, lo in zip(high, low, strict=True))
 
     def test_high_ach_boosts_bottom_up(self):
         precs = [1.0, 1.0, 1.0]
@@ -55,13 +56,21 @@ class TestUpdatePrecisionState:
     def test_small_errors_increase_precision(self):
         state = PrecisionState(level_precisions=[1.0, 1.0, 1.0])
         updated = update_precision_state(state, [0.01, 0.01, 0.01])
-        for old, new in zip(state.level_precisions, updated.level_precisions):
+        # strict=True: update_precision_state returns the same number of
+        # level_precisions it was given.
+        for old, new in zip(
+            state.level_precisions, updated.level_precisions, strict=True
+        ):
             assert new > old
 
     def test_large_errors_decrease_precision(self):
         state = PrecisionState(level_precisions=[3.0, 3.0, 3.0])
         updated = update_precision_state(state, [5.0, 5.0, 5.0])
-        for old, new in zip(state.level_precisions, updated.level_precisions):
+        # strict=True: update_precision_state returns the same number of
+        # level_precisions it was given.
+        for old, new in zip(
+            state.level_precisions, updated.level_precisions, strict=True
+        ):
             assert new < old
 
     def test_increments_prediction_history(self):

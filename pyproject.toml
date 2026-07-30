@@ -309,6 +309,37 @@ select = [
     # `# noqa: S608 — <mechanism>` naming which of those forms it uses, so
     # any NEW string-built SQL fails CI until it states its mechanism.
     "S608",
+    # B (bugbear) (issue #239, family 1 of the continuation program): 16
+    # findings in mcp_server/ (the issue's measurement scope) plus 25 more
+    # once the repo-wide select picked up benchmarks/, scripts/, and
+    # tests_py/ (41 total, source: `ruff check . --select B` after
+    # enabling) — every one triaged individually, no blanket ignores.
+    #   B905 zip-without-strict (26 sites across the repo): every site now
+    #     states strict=True or strict=False explicitly. True where the
+    #     surrounding code already guarantees equal-length iterables
+    #     (built from the same source one-to-one, an already-checked
+    #     length, or a documented index-correspondence precondition);
+    #     False where unequal length is the intended behavior
+    #     (common-prefix scans over independent strings, a pairwise
+    #     traj/traj[1:] walk) or the inputs cross an external MCP
+    #     tool-call / store-write boundary whose shape drift should
+    #     degrade gracefully rather than raise.
+    #   B904 raise-without-from (5 sites): every re-wrap in an `except`
+    #     now chains `from <exc>`, preserving the original traceback as
+    #     `__cause__` — an additive diagnostic, not an observable
+    #     behavior change for any caller catching the wrapping type.
+    #   B007 unused-loop-control-variable (9 sites) / B023
+    #     function-uses-loop-variable (1 site): renamed to `_`-prefixed,
+    #     or bound as a lambda default argument, at the exact sites
+    #     ruff flagged — no other lines touched.
+    #   B015 pointless-comparison (1 site, a test): a discarded `x is None`
+    #     expression asserted nothing; removed rather than promoted to a
+    #     new assertion (which would be new test coverage, not a refactor).
+    #   B017 assert-blind-exception (3 sites, tests): narrowed to the
+    #     concrete exception type each site's code path actually raises
+    #     (confirmed by reproduction — sqlite3.ProgrammingError,
+    #     mcp.shared.exceptions.McpError).
+    "B",
 ]
 # ── Families deliberately NOT selected (issue #197, criterion 1) ────────────
 # Counts measured against mcp_server/ 2026-07-28, ruff 0.15.20 — what
@@ -339,12 +370,12 @@ select = [
 #     contract-lie defect classes this program exists for; each is a
 #     dedicated-PR-sized diff under the fix-with-landing bar.
 #
-# (c) JUDGEMENT families not yet triaged — B (16), TRY (163), RET (20),
-#     ARG (53), PTH (91), N (43), ERA (43), FBT (254), DTZ (4), S beyond
-#     S110/S608 (34): tracked as the program's continuation in issue #239.
-#     Enabling any of them without the per-finding triage the first six
-#     families received would mean blanket ignores — the exact anti-pattern
-#     this explicit select list exists to prevent.
+# (c) JUDGEMENT families not yet triaged — TRY (163), RET (20), ARG (53),
+#     PTH (91), N (43), ERA (43), FBT (254), DTZ (4), S beyond S110/S608
+#     (34): tracked as the program's continuation in issue #239 (B landed
+#     above). Enabling any of them without the per-finding triage the
+#     landed families received would mean blanket ignores — the exact
+#     anti-pattern this explicit select list exists to prevent.
 
 [tool.ruff.lint.per-file-ignores]
 # Test code: try/except/pass and broad excepts in tests are deliberate

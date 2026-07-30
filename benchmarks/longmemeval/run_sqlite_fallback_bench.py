@@ -84,10 +84,13 @@ def _load_question(store: SqliteMemoryStore, item: dict, eng) -> dict[int, str]:
     """Load one question's haystack into ``store``; return memory_id → sid."""
     question_date = parse_longmemeval_date(item["question_date"])
     id_to_sid: dict[int, str] = {}
+    # strict=True: all three lists come from the same haystack record and
+    # are documented to correspond 1:1 by index.
     for session, sid, date_str in zip(
         item["haystack_sessions"],
         item["haystack_session_ids"],
         item["haystack_dates"],
+        strict=True,
     ):
         content, _ = session_to_memory_content(session, sid)
         date_iso = parse_longmemeval_date(date_str)

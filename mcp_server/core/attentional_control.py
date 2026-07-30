@@ -184,7 +184,9 @@ def allocate_attention(
     # Bottom-up salience: importance + |valence|, scaled. Lets an unbidden but
     # salient item compete for the spotlight (stimulus-driven capture).
     logits: list[float] = []
-    for score, it in zip(top_down, items):
+    # strict=True: top_down is built one score per item three lines above,
+    # so the lengths are always equal by construction.
+    for score, it in zip(top_down, items, strict=True):
         importance = float(it.get("importance", 0.0) or 0.0)
         valence = abs(float(it.get("valence", 0.0) or 0.0))
         salience = 0.5 * importance + 0.5 * valence

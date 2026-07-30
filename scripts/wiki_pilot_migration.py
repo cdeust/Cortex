@@ -255,7 +255,7 @@ def _stratified_sample(
     per_kind = max(sample_size // n_kinds, 1)
     sampled: list[Path] = []
     leftover_quota = sample_size
-    for kind, files in by_kind.items():
+    for _kind, files in by_kind.items():
         take = min(per_kind, len(files), leftover_quota)
         sampled.extend(rng.sample(files, take))
         leftover_quota -= take
