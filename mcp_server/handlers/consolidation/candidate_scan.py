@@ -23,58 +23,111 @@ from mcp_server.core.wiki_coverage import _project_source_root, audit_domain
 from mcp_server.shared.domain_mapping import _build_registry
 
 
-def _scan_pages_with_gaps(wiki_root: Path) -> list[tuple[Path, dict[str, Any], str]]:
-    """Walk the wiki and return ``(path, meta, body)`` for pages with gaps.
+def _load_missing_sections_probe() -> Any:
+    """Lazy-import the optional live-audit probe.
+
+    Returns None (a handled degraded mode) when the optional module is
+    unavailable, so callers skip the live-audit axis entirely.
+    """
+    try:
+        from mcp_server.core.wiki_curation_gaps import missing_sections  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+
+        return missing_sections
+    except ImportError:
+        return None
+
+
+def _gap_entry_for_page(
+    md: Path, wiki_root: Path, missing_sections: Any
+) -> tuple[Path, dict[str, Any], str] | None:
+    """Return ``(path, meta, body)`` for ``md`` if it has curation gaps, else None.
 
     A page is "with gaps" when EITHER the frontmatter declares
     ``curation_gaps`` non-empty OR a live audit of the body shows
-    missing canonical sections. The second axis catches pages that
-    were complete under the old section catalogue but are incomplete
-    after the catalogue gained new sections (e.g. sequence-diagram,
-    parameters, request-example, response-example added 2026-05-18).
+    missing canonical sections (only for kind=reference file-docs —
+    ADRs / specs / guides have their own section sets).
+    """
+    rel = md.relative_to(wiki_root)
+    if any(part.startswith((".", "_")) for part in rel.parts):
+        return None
+    try:
+        text = md.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    meta, body, _ = _parse_frontmatter(text)
+    gaps = meta.get("curation_gaps")
+    if isinstance(gaps, list) and gaps:
+        return (md, meta, body)
+    # No frozen gaps — but a file-doc might still be missing sections
+    # that were added to the catalogue after generation.
+    if (
+        missing_sections is not None
+        and meta.get("kind") == "reference"
+        and meta.get("source_file_path")
+    ):
+        try:
+            live = missing_sections(body)
+        except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+            silent_failure.note("candidate_scan.live_audit", exc)
+            live = []
+        if live:
+            return (md, meta, body)
+    return None
 
-    Only pages classified as kind=reference / explanation file-docs
-    are audited live; ADRs / specs / guides have their own section
-    sets and shouldn't be force-fed file-doc sections.
+
+def _scan_pages_with_gaps(wiki_root: Path) -> list[tuple[Path, dict[str, Any], str]]:
+    """Walk the wiki and return ``(path, meta, body)`` for pages with gaps.
+
+    See ``_gap_entry_for_page`` for the per-page criteria (frozen
+    frontmatter gaps OR a live section audit for file-docs).
     """
     if not wiki_root.is_dir():
         return []
-    # Lazy import to keep this module self-contained.
-    try:
-        from mcp_server.core.wiki_curation_gaps import missing_sections  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-    except ImportError:
-        missing_sections = None  # type: ignore[assignment]
-
+    missing_sections = _load_missing_sections_probe()
     out: list[tuple[Path, dict[str, Any], str]] = []
     for md in wiki_root.rglob("*.md"):
-        rel = md.relative_to(wiki_root)
-        if any(part.startswith((".", "_")) for part in rel.parts):
-            continue
-        try:
-            text = md.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-        meta, body, _ = _parse_frontmatter(text)
-        gaps = meta.get("curation_gaps")
-        if isinstance(gaps, list) and gaps:
-            out.append((md, meta, body))
-            continue
-        # No frozen gaps — but a file-doc might still be missing
-        # sections that were added to the catalogue after generation.
-        # Only force-audit file-docs (kind=reference + has source_file_path).
-        if (
-            missing_sections is not None
-            and meta.get("kind") == "reference"
-            and meta.get("source_file_path")
-        ):
-            try:
-                live = missing_sections(body)
-            except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
-                silent_failure.note("candidate_scan.live_audit", exc)
-                live = []
-            if live:
-                out.append((md, meta, body))
+        entry = _gap_entry_for_page(md, wiki_root, missing_sections)
+        if entry is not None:
+            out.append(entry)
     return out
+
+
+def _extend_anchor_candidates_for_domain(
+    domain: str,
+    wiki_root: Path,
+    max_drains: int,
+    candidates: list[Any],
+    _root: Any,
+) -> None:
+    """Append ``domain``'s missing groundable anchor candidates in place.
+
+    Stops appending once ``candidates`` reaches ``max_drains`` (checked
+    after every append, matching the original inline loop's early exit).
+    """
+    src_root = _project_source_root(domain)
+    if not src_root:
+        return
+    try:
+        cov = audit_domain(str(wiki_root), domain)
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("candidate_scan.audit_domain", exc)
+        return
+    for sc in cov.scopes:
+        if sc.covered or not sc.scope.groundable:
+            continue
+        candidates.append(
+            _root._AnchorCandidate(
+                domain=domain,
+                scope_name=sc.scope.name,
+                scope_title=sc.scope.title,
+                scope_description=sc.scope.description,
+                source_root=src_root,
+                suggested_path=sc.suggested_path,
+                suggested_kind=sc.scope.suggested_kind,
+            )
+        )
+        if len(candidates) >= max_drains:
+            return
 
 
 def _collect_anchor_candidates(
@@ -105,30 +158,9 @@ def _collect_anchor_candidates(
 
     candidates: list[Any] = []
     for domain in domains:
-        src_root = _project_source_root(domain)
-        if not src_root:
-            continue
-        try:
-            cov = audit_domain(str(wiki_root), domain)
-        except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
-            silent_failure.note("candidate_scan.audit_domain", exc)
-            continue
-        for sc in cov.scopes:
-            if sc.covered:
-                continue
-            if not sc.scope.groundable:
-                continue
-            candidates.append(
-                _root._AnchorCandidate(
-                    domain=domain,
-                    scope_name=sc.scope.name,
-                    scope_title=sc.scope.title,
-                    scope_description=sc.scope.description,
-                    source_root=src_root,
-                    suggested_path=sc.suggested_path,
-                    suggested_kind=sc.scope.suggested_kind,
-                )
-            )
-            if len(candidates) >= max_drains:
-                return candidates
+        if len(candidates) >= max_drains:
+            break
+        _extend_anchor_candidates_for_domain(
+            domain, wiki_root, max_drains, candidates, _root
+        )
     return candidates
