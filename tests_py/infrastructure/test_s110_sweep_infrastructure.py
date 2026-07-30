@@ -502,6 +502,7 @@ class TestWorkflowAstSourceClose:
         )
 
     def test_sync_loop_join_runtimeerror_is_swallowed(self):
+        from mcp_server.infrastructure import workflow_graph_source_ast as mod
         from mcp_server.infrastructure.workflow_graph_source_ast import _SyncLoop
 
         owner = _SyncLoop.__new__(_SyncLoop)
@@ -513,3 +514,7 @@ class TestWorkflowAstSourceClose:
         owner._thread = thread
         owner.close()  # must not raise
         assert owner._loop is None
+        # The shutdown-drain ceiling is a single named constant shared by
+        # the thread-join bound and _drain_pending_tasks's own wait —
+        # pins the actual value passed, not just "some timeout".
+        thread.join.assert_called_once_with(timeout=mod._SHUTDOWN_DRAIN_TIMEOUT_S)

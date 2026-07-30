@@ -23,7 +23,7 @@ coding write gates, causal graphs, and intent-aware retrieval.
   resolving from the `pyproject.toml` ranges instead gives you versions CI never
   had (issue #253).
 - Environment preflight: `python -m mcp_server.doctor` (backend-aware check list, fix message per check)
-- Tests: `pytest` (full suite, 6550 tests) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`
+- Tests: `pytest` (full suite, 6557 tests) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`
 - Lint BEFORE every commit: `ruff check && ruff format --check` — the CI enforces **both**; passing only `ruff check` is not enough.
 - Type gate (pyright, zero-diagnostic): resolve its environment from `uv.lock`
   (`uv sync --no-default-groups --extra … --group typecheck`), never from the
