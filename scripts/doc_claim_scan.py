@@ -96,36 +96,3 @@ def check_counts(
         for path, line, claimed in claims
         if claimed != expected
     ]
-
-
-def check_floor_counts(
-    pattern: re.Pattern[str],
-    actual: int,
-    label: str,
-    scanned_files: tuple[str, ...],
-    read_fn: ReadFn,
-) -> list[str]:
-    """Like check_counts, but `actual` is a floor, not an exact fact.
-
-    The test count is the one claim family no single PR branch can state
-    exactly: it is a property of the post-merge tree, and two branches that
-    each add tests compute two different, both-true, live counts (issue
-    #287 — the six-file conflict class, and the same race made main's own
-    gate flap red twice: PR #280 synced to its own total, #278 then added
-    more tests, and the committed figure was a true-when-written but now
-    stale UNDER-claim). A claim that understates the true count is not
-    false, so only an OVER-claim (someone hand-typed a number no measurement
-    backs, or tests were removed below what is claimed) is reported.
-    """
-    claims = scan_claims(pattern, label, scanned_files, read_fn)
-    if not claims:
-        return [
-            f"no {label} claim found in any scanned file — "
-            f"the gate would pass vacuously"
-        ]
-    return [
-        f"{path}:{line}: advertises {claimed} {label}, which exceeds the"
-        f" live count of {actual}"
-        for path, line, claimed in claims
-        if claimed > actual
-    ]

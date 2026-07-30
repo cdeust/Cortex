@@ -20,7 +20,18 @@ tool counts          ``docs/mcp-tools.md`` header, itself pinned to the live
 reference count      entries counted in ``docs/papers/bibliography.md``
 mechanism count      the count declared in that bibliography's header
 version              ``[project].version`` in ``pyproject.toml``
-test count           ``--test-count``, from a live ``pytest --collect-only``
+test count           ``assets/badge-tests.svg`` alone (issue #287) — the
+                     one artifact that still states an absolute figure. No
+                     prose file (nor ``.bestpractices.json``) states this
+                     count any more: a PR that adds tests would otherwise
+                     have to hand-edit six files to the same new number,
+                     and any two such PRs conflict on every one of them BY
+                     CONSTRUCTION. The badge is also not an exact fact —
+                     it is checked as a monotone FLOOR (``committed <=
+                     live``), because the true count is a property of the
+                     post-merge tree that no single branch can compute in
+                     advance; only an OVER-claim is reported. See
+                     ``doc_claim_structural.check_badge_floor``.
 ===================  =====================================================
 
 Release history is exempt: a line describing v4.13.0 may legitimately say
@@ -100,8 +111,14 @@ MECHANISM_CLAIM = re.compile(
     r"(\d+)\s+(?:neuroscience[- ]grounded|neuroscience|biological|brain)?"
     r"\s*mechanisms\b"
 )
-# Both the "N tests" and the "N-test suite" phrasings state the count; matching
-# only the first let a stale number sit unread in .bestpractices.json.
+# Both the "N tests" and the "N-test suite" phrasings state the count. No
+# scanned file states this claim in prose any more (issue #287 — see the
+# module docstring's "test count" row); the pattern stays defined because
+# it is still the generic worked example scan_claims/check_counts's own
+# tests exercise, and tests_py/scripts/test_check_doc_claims.py asserts its
+# absence from the real tree as a standing regression guard (a re-added
+# hardcoded prose count would fail
+# RepositoryTests.test_no_prose_file_states_the_suite_size).
 TEST_CLAIM = re.compile(r"(\d+)(?:\s+tests|-test suite)\b")
 
 
@@ -189,11 +206,13 @@ def collect_failures(test_count: int | None) -> list[str]:
     failures += check_no_conflict_markers()
     failures += check_scanned_json_parses()
     if test_count is not None:
-        failures += check_counts(TEST_CLAIM, test_count, "tests")
-        failures += doc_claim_structural.check_badge(
+        # The tests badge is the ONLY test-count claim left (issue #287);
+        # see check_badge_floor's docstring for why it is a floor, not an
+        # exact match.
+        failures += doc_claim_structural.check_badge_floor(
             "assets/badge-tests.svg",
             doc_claim_structural.TESTS_BADGE,
-            str(test_count),
+            test_count,
             "tests",
             read,
         )

@@ -54,6 +54,7 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import badge_render  # noqa: E402
 import check_doc_claims  # noqa: E402
+import doc_claim_structural  # noqa: E402
 import repo_badge_catalog  # noqa: E402
 
 # Only the label/message palette repo_badge_svg() itself renders with, plus
@@ -201,6 +202,32 @@ def stale(badge: RepoBadge) -> str | None:
     return None
 
 
+def stale_tests_badge(test_count: int) -> str | None:
+    """A monotone floor, not an exact snapshot (issue #287, §6): two
+    branches adding tests compute two different, both-true live counts for
+    the same post-merge tree, so an exact match is how any two such PRs
+    conflicted on this file, and how main's gate flapped red on a merge
+    that only grew the count. Lagging behind `test_count` is not reported;
+    only an OVER-claim is. `stale()` still checks everything else exactly.
+    See doc_claim_structural.check_badge_floor for the same invariant.
+    """
+    badge = RepoBadge(**repo_badge_catalog.tests_badge_spec(test_count))
+    path = repo_badge_path(badge)
+    target = REPO_ROOT / path
+    if not target.exists():
+        return f"{path}: missing — run scripts/generate_repo_badges.py"
+    match = doc_claim_structural.TESTS_BADGE.search(target.read_text(encoding="utf-8"))
+    if match is None:
+        return f"{path}: no test-count figure in its <title>; diverged from this gate"
+    committed_count = int(match.group(1))
+    if committed_count > test_count:
+        return (
+            f"{path}: badge claims {committed_count} tests,"
+            f" exceeding the live count of {test_count}"
+        )
+    return stale(RepoBadge(**repo_badge_catalog.tests_badge_spec(committed_count)))
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Extracted so a test can assert its exact contract (description,
     per-flag help text, `--test-count`'s type) without re-parsing rendered
@@ -238,7 +265,19 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.check:
-        failures = [reason for badge in badges if (reason := stale(badge))]
+        # The tests badge is checked by stale_tests_badge (a monotone floor,
+        # not an exact match — see its docstring); every other badge keeps
+        # the plain, exact-match stale() unchanged.
+        failures = [
+            reason
+            for badge in badges
+            if badge.filename != repo_badge_catalog.TESTS_BADGE_FILENAME
+            and (reason := stale(badge))
+        ]
+        if args.test_count is not None:
+            reason = stale_tests_badge(args.test_count)
+            if reason:
+                failures.append(reason)
         if failures:
             print("Committed badges disagree with the repository:", file=sys.stderr)
             for failure in failures:
