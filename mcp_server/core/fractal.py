@@ -101,10 +101,9 @@ def compute_level_weights(query: str) -> tuple[float, float, float]:
 
     if word_count < _SHORT_QUERY_WORDS:
         return 0.3, 0.5, 1.0
-    elif word_count > _LONG_QUERY_WORDS:
+    if word_count > _LONG_QUERY_WORDS:
         return 1.0, 0.5, 0.3
-    else:
-        return 0.7, 0.7, 0.7
+    return 0.7, 0.7, 0.7
 
 
 # ── Scoring ──────────────────────────────────────────────────────────────
@@ -235,7 +234,7 @@ def drill_down(
                 children.append(child)
         return children
 
-    elif cluster["level"] == 1:
+    if cluster["level"] == 1:
         return [{"memory_id": mid} for mid in cluster.get("memory_ids", [])]
 
     return []

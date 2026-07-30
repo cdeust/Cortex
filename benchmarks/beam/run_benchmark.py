@@ -84,8 +84,7 @@ def _get_stage_detector():
     mode = os.environ.get("CORTEX_STAGE_DETECTOR", "oracle")
     if mode == "temporal":
         return TemporalStageDetector(gap_hours=24.0, time_field="created_at")
-    else:
-        return ExplicitStageDetector(field="agent_context")
+    return ExplicitStageDetector(field="agent_context")
 
 
 def _current_stage_for_question(q: dict, conversation_turns: list[dict]) -> str:
@@ -124,8 +123,7 @@ def _current_stage_for_question(q: dict, conversation_turns: list[dict]) -> str:
                 if ts:
                     return f"day-{ts.date().isoformat()}"
                 return last_anchor
-            else:
-                return last_plan if last_plan else last_anchor
+            return last_plan if last_plan else last_anchor
     if mode == "temporal":
         ts = TemporalStageDetector._parse_ts(last_anchor)
         if ts:

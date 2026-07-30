@@ -122,7 +122,7 @@ def render_judge_prompt(
       is excluded from the run).
     """
     by_id = {sid: text for sid, _, text in shuffled}
-    filled = (
+    return (
         template.replace("{QUESTION}", question)
         .replace("{ABILITY}", ability)
         .replace("{GOLD}", gold or "[NO ANSWER]")
@@ -132,7 +132,6 @@ def render_judge_prompt(
         .replace("{CAND_3}", by_id.get(3, "[no candidate]"))
         .replace("{CAND_4}", by_id.get(4, "[no candidate]"))
     )
-    return filled
 
 
 def parse_judge_output(

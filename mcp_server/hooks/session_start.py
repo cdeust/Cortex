@@ -115,10 +115,9 @@ def _connect_pg():
         import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
         from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
-        conn = psycopg.Connection[DictRow].connect(
+        return psycopg.Connection[DictRow].connect(
             _DATABASE_URL, row_factory=dict_row, autocommit=True
         )
-        return conn
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"PostgreSQL connect failed: {exc}")
         return None

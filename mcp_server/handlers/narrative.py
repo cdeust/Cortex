@@ -95,8 +95,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "memory_count": len(memories),
         }
 
-    result = generate_narrative(
+    return generate_narrative(
         memories,
         directory=directory or domain,
     )
-    return result

@@ -48,10 +48,9 @@ def decide_curation_action(
     """
     if similarity >= merge_threshold and has_textual_overlap:
         return "merge"
-    elif similarity >= link_low:
+    if similarity >= link_low:
         return "link"
-    else:
-        return "create"
+    return "create"
 
 
 def compute_textual_overlap(content_a: str, content_b: str) -> float:

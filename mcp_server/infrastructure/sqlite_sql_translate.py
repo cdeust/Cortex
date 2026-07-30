@@ -160,11 +160,9 @@ def _translate_sql(sql: str) -> str:
     # BIGINT[] columns are stored as JSON TEXT under SQLite; PostgreSQL
     # returns NULL for an empty array here, json_array_length returns 0 —
     # both are falsy against the `> 0` predicate every call site uses.
-    out = re.sub(
+    return re.sub(
         r"\barray_length\s*\(\s*([a-z_.]+)\s*,\s*1\s*\)",
         r"json_array_length(\1)",
         out,
         flags=re.IGNORECASE,
     )
-
-    return out

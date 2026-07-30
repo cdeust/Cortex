@@ -153,10 +153,9 @@ def get_compression_schedule(
 
     if hours_elapsed < gist_age_hours * resistance:
         return 0
-    elif hours_elapsed < tag_age_hours * resistance:
+    if hours_elapsed < tag_age_hours * resistance:
         return 1
-    else:
-        return 2
+    return 2
 
 
 def _select_gist_sentences(

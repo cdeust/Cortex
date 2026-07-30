@@ -102,37 +102,35 @@ def _period_cutoff(period: str) -> datetime:
     now = datetime.now(timezone.utc)
     if period == "day":
         return now - timedelta(days=1)
-    elif period == "week":
+    if period == "week":
         return now - timedelta(weeks=1)
-    elif period == "month":
+    if period == "month":
         return now - timedelta(days=30)
-    else:  # "all"
-        return datetime(2000, 1, 1, tzinfo=timezone.utc)
+    # "all"
+    return datetime(2000, 1, 1, tzinfo=timezone.utc)
 
 
 def _bucket_label(dt: datetime, period: str) -> str:
     """Return a human-readable bucket label for a datetime."""
     if period == "day":
         return dt.strftime("%H:00")
-    elif period == "week":
+    if period == "week":
         return dt.strftime("%A %b %d")
-    elif period == "month":
+    if period == "month":
         return dt.strftime("Week of %b %d")
-    else:
-        return dt.strftime("%B %Y")
+    return dt.strftime("%B %Y")
 
 
 def _bucket_key(dt: datetime, period: str) -> str:
     """Sortable bucket key."""
     if period == "day":
         return dt.strftime("%Y%m%d%H")
-    elif period == "week":
+    if period == "week":
         return dt.strftime("%Y%m%d")
-    elif period == "month":
+    if period == "month":
         year, week, _ = dt.isocalendar()
         return f"{year}{week:02d}"
-    else:
-        return dt.strftime("%Y%m")
+    return dt.strftime("%Y%m")
 
 
 def _extract_headline(text: str) -> str:

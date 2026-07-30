@@ -105,7 +105,6 @@ def auto_weight(query: str) -> tuple[float, float]:
 
     if has_specific:
         return 2.0, 1.0
-    elif has_semantic:
+    if has_semantic:
         return 1.0, 2.0
-    else:
-        return 1.0, 1.0
+    return 1.0, 1.0

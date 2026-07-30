@@ -60,8 +60,7 @@ def harden_content(content: str, *, max_bytes: int = CONTENT_MAX_BYTES) -> str:
 
     hardened = _strip_control_chars(content)
     hardened = unicodedata.normalize("NFC", hardened)
-    hardened = _cap_bytes(hardened, max_bytes)
-    return hardened
+    return _cap_bytes(hardened, max_bytes)
 
 
 def _strip_control_chars(s: str) -> str:

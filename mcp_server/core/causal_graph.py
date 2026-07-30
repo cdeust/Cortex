@@ -76,7 +76,7 @@ def compute_temporal_precedence(
 
     if time_a < time_b:
         return "a_before_b"
-    elif time_b < time_a:
+    if time_b < time_a:
         return "b_before_a"
     return None
 

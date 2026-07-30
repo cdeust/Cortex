@@ -199,10 +199,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     if action == "save":
         return _save_checkpoint(args)
-    elif action == "restore":
+    if action == "restore":
         return _restore_context(args)
-    else:
-        return {"error": f"Unknown action: {action}"}
+    return {"error": f"Unknown action: {action}"}
 
 
 def _resolve_session_id(explicit: str | None) -> str:

@@ -89,8 +89,7 @@ def bundle(vectors: list[np.ndarray]) -> np.ndarray:
     tiebreak = np.where(tiebreak == 0, -1, 1).astype(np.float32)
 
     result = np.sign(summed)
-    result = np.where(result == 0, tiebreak, result).astype(np.float32)
-    return result
+    return np.where(result == 0, tiebreak, result).astype(np.float32)
 
 
 def permute(v: np.ndarray, n: int = 1) -> np.ndarray:

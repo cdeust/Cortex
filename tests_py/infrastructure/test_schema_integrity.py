@@ -120,8 +120,7 @@ def _prepare_for_explain(blob: str) -> str:
     # Replace f-string-style braces with NULL.
     sql = _PYFMT_BRACES.sub("NULL", sql)
     # Replace psycopg %s placeholders with safely-typed NULL.
-    sql = _PG_PARAM.sub("NULL", sql)
-    return sql
+    return _PG_PARAM.sub("NULL", sql)
 
 
 # Blob fingerprints we have manually reviewed and confirmed benign.

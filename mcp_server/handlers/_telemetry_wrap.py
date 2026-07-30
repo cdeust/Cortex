@@ -66,7 +66,11 @@ def instrument(
         result: dict[str, Any] = {}
         try:
             result = await fn(args)
-            return result
+            # The assignment above is not redundant: `result` also feeds
+            # `finally`'s `_result_count(result, ...)` telemetry sample.
+            # Inlining this into `return await fn(args)` would leave
+            # `result` at its pre-declared `{}` for that read.
+            return result  # noqa: RET504 — read by finally's telemetry sample
         except Exception:
             ok = False
             raise

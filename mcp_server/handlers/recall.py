@@ -687,8 +687,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     # objects to record ids), re-checking the SAME budget. On homogeneous
     # sets this declares field names once instead of per memory; json is the
     # default escape hatch. Truncated items keep their id in either encoding.
-    resp = encode_within_budget(resp, "memories", fmt, settings.MAX_RESPONSE_CHARS)
-    return resp
+    return encode_within_budget(resp, "memories", fmt, settings.MAX_RESPONSE_CHARS)
 
 
 # Telemetry-instrumented public entry. Wrapper records latency, byte

@@ -149,14 +149,13 @@ async def handler(args: dict) -> dict:
 
     if mode == "features":
         return _handle_features(profiles)
-    elif mode == "attribution":
+    if mode == "attribution":
         return _handle_attribution(profiles, domain)
-    elif mode == "persona":
+    if mode == "persona":
         return _handle_persona(profiles, domain)
-    elif mode == "crosscoder":
+    if mode == "crosscoder":
         return _handle_crosscoder(profiles, domain, compare_domain)
-    else:
-        return {"status": "error", "message": f"Unknown mode: {mode}"}
+    return {"status": "error", "message": f"Unknown mode: {mode}"}
 
 
 def _resolve_feature_dictionary(profiles: dict) -> FeatureDictionary:

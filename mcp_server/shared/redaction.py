@@ -105,7 +105,7 @@ def redact_url(url: str) -> str:
     if not userinfo_changed and not query_changed:
         return url  # postcondition: no password anywhere — unchanged
 
-    redacted = urllib.parse.urlunparse(
+    return urllib.parse.urlunparse(
         (
             parsed.scheme,
             netloc,
@@ -115,7 +115,6 @@ def redact_url(url: str) -> str:
             parsed.fragment,
         )
     )
-    return redacted
 
 
 # ── Self-check assertions (run once at import; caught by python3 -m py_compile
@@ -238,6 +237,4 @@ def scrub_secrets(text: str) -> str:
     def _redact_url_match(m: re.Match) -> str:
         return redact_url(m.group(0))
 
-    text = _RE_EMBEDDED_URL.sub(_redact_url_match, text)
-
-    return text
+    return _RE_EMBEDDED_URL.sub(_redact_url_match, text)

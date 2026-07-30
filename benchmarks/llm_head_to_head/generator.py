@@ -185,16 +185,15 @@ def call_generator(
                 return _call_anthropic(
                     model_id, prompt, max_output_tokens, temperature, retries
                 )
-            elif vendor == "google":
+            if vendor == "google":
                 return _call_google(
                     model_id, prompt, max_output_tokens, temperature, retries
                 )
-            elif vendor == "openai":
+            if vendor == "openai":
                 return _call_openai(
                     model_id, prompt, max_output_tokens, temperature, retries
                 )
-            else:
-                raise GeneratorError(f"Unsupported vendor: {vendor}")
+            raise GeneratorError(f"Unsupported vendor: {vendor}")
         except _RetryableError as e:
             last_error = e
             if attempt >= MAX_RETRIES:

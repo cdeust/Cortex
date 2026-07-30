@@ -80,8 +80,7 @@ class _RecordingBridge:
 
 
 def _make_source(bridge) -> WorkflowGraphASTSource:
-    src = WorkflowGraphASTSource(bridge=bridge)
-    return src
+    return WorkflowGraphASTSource(bridge=bridge)
 
 
 class TestIncrementalYield:
