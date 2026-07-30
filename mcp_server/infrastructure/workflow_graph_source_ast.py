@@ -13,433 +13,41 @@ Pure infrastructure — no core imports. When AP is disabled
 (``CORTEX_MEMORY_AP_ENABLED=0``) or unreachable, every loader returns
 ``[]`` so the workflow graph degrades to the native in-process AST
 source in ``workflow_graph_source_native_ast``.
+
+Composition point over three separated concerns (issue #275 — this file
+previously held all three and exceeded the 300-line cap): ``ap_sync_loop``
+(cross-loop sync/drain primitive, ``_SyncLoop`` re-exported here),
+``workflow_graph_ast_symbols`` (AST symbol loading), and
+``workflow_graph_ast_edges`` (AST edge loading). The three private
+``_*_batches_async``/``_verify_symbols_async`` methods below stay thin
+instance-method delegates into those modules (not free functions) because
+tests monkeypatch them per-instance.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
-from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Any, Iterable, Iterator
 
-from mcp_server.errors import McpConnectionError
 from mcp_server.infrastructure.ap_bridge import (
     APBridge,
     is_enabled,
     resolve_graph_path,
     resolve_graph_paths,
 )
-from mcp_server.infrastructure.memory_config import get_memory_settings
-import threading
-
-logger = logging.getLogger(__name__)
-
-
-def _ap_sync_timeout_s() -> float:
-    """Cross-loop wait ceiling for AP reader-thread calls.
-
-    source: memory_config.AP_SYNC_RESULT_TIMEOUT_S (see that field's
-    derivation comment — floored at the in-loop 3600 s AP-call ceiling
-    plus a drain margin). Read lazily so env overrides apply per-process.
-    """
-
-    return float(get_memory_settings().AP_SYNC_RESULT_TIMEOUT_S)
-
-
-def _run(coro):
-    """Legacy sync wrapper — each call creates a fresh loop. Retained
-    for callers that only need one roundtrip per process.
-
-    The AST source itself avoids this for multi-call flows: the subprocess
-    streams (``asyncio.subprocess``) are bound to whichever loop created
-    them, and a second ``asyncio.run`` invalidates them. The class uses
-    ``_SyncLoop`` to pin one loop across all its calls.
-    """
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Lamport H4: an untimed cross-loop .result() hangs this caller
-            # forever if the loop thread wedges. Bound every cross-loop wait.
-            try:
-                return asyncio.run_coroutine_threadsafe(coro, loop).result(
-                    timeout=_ap_sync_timeout_s()
-                )
-            except FutureTimeoutError as exc:
-                raise McpConnectionError(
-                    "AP cross-loop call exceeded "
-                    f"{_ap_sync_timeout_s():.0f}s — subprocess presumed wedged"
-                ) from exc
-    except RuntimeError:
-        pass
-    return asyncio.run(coro)
-
-
-class _SyncLoop:
-    """Owns a single event loop + runs coroutines on it synchronously.
-
-    The MCP client spawns the AP subprocess and binds its stdin/stdout
-    to the *current* event loop. If we close that loop between calls,
-    subsequent writes to those streams raise ``RuntimeError: Event loop
-    is closed``. This helper pins one loop for the lifetime of a caller
-    so every AP call shares the same loop/transport.
-
-    When called from *inside* a running event loop (e.g. a FastMCP
-    async handler), we run the coroutine on the private loop inside a
-    dedicated thread so we never compete with the outer loop. That is
-    the only reliable way to expose a sync façade to async callers
-    without leaking thread-local state.
-    """
-
-    def __init__(self) -> None:
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._thread = None
-
-    def _ensure_loop(self) -> asyncio.AbstractEventLoop:
-        if self._loop is None or self._loop.is_closed():
-            self._loop = asyncio.new_event_loop()
-            loop = self._loop  # non-Optional local captured by the loop thread
-
-            def _run_forever():
-                asyncio.set_event_loop(loop)
-                loop.run_forever()
-
-            self._thread = threading.Thread(
-                target=_run_forever,
-                name="ap-sync-loop",
-                daemon=True,
-            )
-            self._thread.start()
-        return self._loop
-
-    def run(self, coro):
-        """Run ``coro`` on the pinned loop and block until it completes.
-
-        Single-reader-thread ownership (verified): ``_ensure_loop`` spawns
-        exactly one ``ap-sync-loop`` thread that owns the loop for this
-        ``_SyncLoop``'s lifetime; every AP call funnels through here onto
-        that one loop. No other thread drives the loop, so the JSON-RPC
-        pipe has a single reader (Lamport H4 satisfied by construction).
-
-        The wait is bounded: if the loop thread wedges (e.g. the AP
-        subprocess stalls below the in-loop await), ``.result(timeout=…)``
-        raises rather than hanging this worker forever. On timeout we never
-        return partial data — we raise ``McpConnectionError``.
-        """
-        loop = self._ensure_loop()
-        future = asyncio.run_coroutine_threadsafe(coro, loop)
-        try:
-            return future.result(timeout=_ap_sync_timeout_s())
-        except FutureTimeoutError as exc:
-            future.cancel()
-            raise McpConnectionError(
-                "AP reader-thread call exceeded "
-                f"{_ap_sync_timeout_s():.0f}s — subprocess presumed wedged"
-            ) from exc
-
-    def run_iter(self, agen) -> Iterator[Any]:
-        """Drive an async generator one step per bounded cross-loop call,
-        yielding each item synchronously to the caller.
-
-        This is the streaming primitive: ``agen`` (an async generator that
-        yields one batch per AP query) is advanced one ``__anext__`` at a
-        time, each on the pinned loop with a bounded ``.result(timeout=…)``.
-        The caller therefore receives batch *N* (and may process/discard it)
-        BEFORE batch *N+1*'s query is ever issued — peak retained inside the
-        source is one batch, not the union across all queries.
-
-        On a wedged loop thread, each step raises ``McpConnectionError``
-        rather than hanging. Partial batches already yielded are real data;
-        the generator stops at the failed step (it does not silently return
-        a truncated full list).
-        """
-        loop = self._ensure_loop()
-        _SENTINEL = object()
-
-        async def _step():
-            try:
-                return await agen.__anext__()
-            except StopAsyncIteration:
-                return _SENTINEL
-
-        while True:
-            future = asyncio.run_coroutine_threadsafe(_step(), loop)
-            try:
-                item = future.result(timeout=_ap_sync_timeout_s())
-            except FutureTimeoutError as exc:
-                future.cancel()
-                raise McpConnectionError(
-                    "AP reader-thread step exceeded "
-                    f"{_ap_sync_timeout_s():.0f}s — subprocess presumed wedged"
-                ) from exc
-            if item is _SENTINEL:
-                return
-            yield item
-
-    def close(self) -> None:
-        if self._loop and not self._loop.is_closed():
-            self._drain_pending_tasks()
-            try:
-                self._loop.call_soon_threadsafe(self._loop.stop)
-            except RuntimeError:
-                # Loop already closed between the check and the call.
-                pass
-            try:
-                if self._thread is not None:
-                    self._thread.join(timeout=_SHUTDOWN_DRAIN_TIMEOUT_S)
-            except RuntimeError:
-                # Joining the current thread — nothing to wait for.
-                pass
-            try:
-                self._loop.close()
-            except RuntimeError:
-                # Loop still running (stop not yet processed); leaked loop
-                # is reclaimed at interpreter exit.
-                pass
-        self._loop = None
-        self._thread = None
-
-    def _drain_pending_tasks(self) -> None:
-        """Cancel + await every task still running on the pinned loop.
-
-        precondition: ``self._loop`` is not ``None`` and not yet closed.
-        postcondition: every task ``asyncio.all_tasks(loop)`` reported
-        (other than this method's own drain task) has reached a terminal
-        state (done or cancelled) when this call returns — UNLESS
-        ``_SHUTDOWN_DRAIN_TIMEOUT_S`` elapsed first, in which case the
-        residual task is logged and left for interpreter-exit GC rather
-        than blocking teardown indefinitely.
-
-        Without this step, ``close()`` would schedule ``loop.stop()``
-        immediately after a ``run``/``run_iter`` timeout's
-        ``future.cancel()``. ``loop.stop()`` only lets the CURRENT batch
-        of ready callbacks finish; it does not run callbacks THAT batch
-        goes on to schedule. ``future.cancel()`` merely *schedules* the
-        underlying task's ``Task.cancel()`` — actually delivering the
-        ``CancelledError`` into the coroutine takes one further loop
-        iteration. If ``run_forever()`` returns before that iteration
-        runs, the task is left ``PENDING`` and, once this object (or the
-        interpreter) later garbage-collects it, asyncio logs "Task was
-        destroyed but it is pending!" (issue #258 — reproduced and
-        confirmed via instrumented probe before this fix).
-
-        happens-before: the drain coroutine below runs ON the pinned loop
-        and directly ``await``s ``asyncio.gather`` over every pending
-        task, so it observes the loop run however many iterations a
-        cancellation needs to complete — not just the ones already
-        processed by the time this method is called. ``future.result()``
-        blocks the CALLING thread until that gather finishes (or the
-        timeout fires), so ``close()``'s subsequent ``loop.stop()`` is
-        strictly ordered after every drained task's terminal transition.
-
-        Guarded to a genuine, live pinned loop (real ``AbstractEventLoop``
-        + a thread confirmed alive): scheduling a coroutine via
-        ``run_coroutine_threadsafe`` onto anything else (a test double
-        standing in for the loop, or a loop whose ``run_forever()``
-        thread already exited without closing it) never actually drives
-        the coroutine — the scheduled callback that would consume it sits
-        queued forever, and ``loop.close()`` a few lines below drops that
-        queue (``self._ready.clear()``), which is Python's OWN trigger for
-        "coroutine was never awaited". Skipping the drain in that case
-        leaves ``close()`` exactly as safe as it was before this method
-        existed for those callers (``_SyncLoop.__new__`` + a mocked
-        ``_loop``/``_thread`` is an established test pattern for
-        exercising this method's error-swallowing branches in isolation —
-        see ``test_sync_loop_join_runtimeerror_is_swallowed``).
-        """
-        loop = self._loop
-        if loop is None or loop.is_closed():
-            return
-        if not isinstance(loop, asyncio.AbstractEventLoop):
-            return  # test double standing in for the loop — nothing to drain
-        if self._thread is None or not self._thread.is_alive():
-            return  # loop's thread already exited — no runner to drive the drain
-
-        async def _drain() -> None:
-            # Equivalent-mutant note (mutmut _drain_pending_tasks__mutmut_9,
-            # __mutmut_11): passing ``loop`` explicitly here vs. omitting it
-            # (defaulting to ``get_running_loop()``) is not observable —
-            # ``_drain`` is only ever scheduled via
-            # ``run_coroutine_threadsafe(_drain(), loop)`` a few lines below,
-            # so ``get_running_loop()`` inside this body IS ``loop`` on every
-            # call, always. Kept explicit for readability (this function
-            # reasons about a specific, named loop), not for behavior.
-            current = asyncio.current_task(loop)
-            pending = [
-                t for t in asyncio.all_tasks(loop) if t is not current and not t.done()
-            ]
-            for t in pending:
-                t.cancel()
-            if pending:
-                await asyncio.gather(*pending, return_exceptions=True)
-
-        try:
-            future = asyncio.run_coroutine_threadsafe(_drain(), loop)
-        except RuntimeError:
-            # Loop thread already exited on its own; nothing to drain.
-            return
-        try:
-            future.result(timeout=_SHUTDOWN_DRAIN_TIMEOUT_S)
-        except FutureTimeoutError:
-            logger.debug(
-                "AP sync-loop drain exceeded %.1fs — leaving residual "
-                "task(s) for interpreter-exit cleanup",
-                _SHUTDOWN_DRAIN_TIMEOUT_S,
-            )
-        except RuntimeError:
-            # Loop closed between the check above and this call.
-            pass
-
-
-def _as_list(payload: Any) -> list[dict]:
-    """Normalise AP's ``query_graph`` response into a list of dicts.
-
-    AP's Stage-3a query_graph returns the shape:
-        {
-          "columns": ["a", "b"],
-          "rows":    [["1", "2"], ["3", "4"]],
-          "status":  "ok",
-          ...
-        }
-
-    We zip ``columns`` with each row to produce ``[{"a": "1", "b": "2"}, ...]``.
-    Error responses (``status: "error"``) surface as an empty list — the
-    caller is already resilient to that case. Plain lists and dicts with a
-    ``rows`` key containing dicts are also accepted for forward-compat.
-    """
-    if payload is None:
-        return []
-    if isinstance(payload, list):
-        return [r for r in payload if isinstance(r, dict)]
-    if not isinstance(payload, dict):
-        return []
-    if payload.get("status") == "error":
-        return []
-    cols = payload.get("columns")
-    rows = payload.get("rows")
-    if isinstance(cols, list) and isinstance(rows, list):
-        out: list[dict] = []
-        for row in rows:
-            if isinstance(row, list) and len(row) == len(cols):
-                out.append({str(c): row[i] for i, c in enumerate(cols)})
-            elif isinstance(row, dict):
-                out.append(row)
-        return out
-    # Older ``{"content": [...]}`` / ``{"data": [...]}`` shapes.
-    inner = payload.get("content") or payload.get("data")
-    if isinstance(inner, list):
-        if inner and isinstance(inner[0], dict) and inner[0].get("type") == "text":
-            try:
-                parsed = json.loads(inner[0].get("text") or "")
-                if isinstance(parsed, list):
-                    return [r for r in parsed if isinstance(r, dict)]
-            except ValueError:
-                return []
-        return [r for r in inner if isinstance(r, dict)]
-    return []
-
-
-# AP's node labels carrying symbol semantics. Derived from
-# stage-3 tree-sitter extractors; see
-# ``automatised-pipeline/src/clustering.rs`` for the canonical list.
-_SYMBOL_LABELS = (
-    # Core — Rust + Python (original set)
-    "Function",
-    "Method",
-    "Struct",
-    "Enum",
-    "Trait",
-    "Constant",
-    "TypeAlias",
-    # JVM family — Java, Kotlin
-    "Class",
-    "Interface",
-    "Field",
-    "Property",
-    # Swift / ObjC family
-    "Protocol",
-    "Extension",
-    # C / C++
-    "Union",
-    "Typedef",
-    "Macro",
-    # Go / general
-    "Module",
-    "Package",
-    "Namespace",
-    "Variable",
-    # Import statements (one node per ``import`` site). AP wires every
-    # file to its imports via the ``Defines_File_Import`` rel table; the
-    # nodes themselves carry ``id`` (``<file>::<modpath>``), ``path``,
-    # ``alias``, ``is_glob``. Loaded via a custom property mapping in
-    # ``_load_symbols_async`` because imports lack ``qualified_name``.
-    "Import",
+from mcp_server.infrastructure.ap_sync_loop import (
+    _SHUTDOWN_DRAIN_TIMEOUT_S,
+    _SyncLoop,
+)
+from mcp_server.infrastructure.workflow_graph_ast_edges import edge_batches_async
+from mcp_server.infrastructure.workflow_graph_ast_response import as_list
+from mcp_server.infrastructure.workflow_graph_ast_symbols import (
+    _SYMBOL_LABELS,
+    symbol_batches_async,
+    verify_symbols_async,
 )
 
-# Labels whose nodes don't expose ``qualified_name`` / ``name``. The
-# load query falls back to ``id`` / ``path`` (or whatever the node
-# DOES carry) so they still flow into the graph.
-_NON_QUALIFIED_LABELS = {"Import"}
-
-# source: "Cap at 10 tails to keep the WHERE clause tractable"
-# (comment in _symbol_batches_async._where_for_tails)
-_MAX_WHERE_TAILS = 10
-
-# Shutdown-drain ceiling for ``_SyncLoop.close()``: bounds how long we wait
-# for tasks still running on the pinned loop to reach a terminal state
-# after being cancelled, before stopping the loop and joining its thread.
-# source: measured 2026-07-30 (macOS, CPython 3.12.12) — a cancelled
-#   ``asyncio.sleep(30)`` task (the wedge shape ``run``/``run_iter`` produce
-#   on a cross-loop timeout, issue #258) completes its cancellation in
-#   <1ms once ``asyncio.gather`` is awaited on the owning loop; three
-#   repeated trials all finished within 1ms. 2.0s reuses the grace period
-#   this method already applied to ``self._thread.join(...)`` below,
-#   giving headroom for a genuine (non-test) wedge where the abandoned
-#   coroutine's own cleanup does real I/O before honoring cancellation.
-_SHUTDOWN_DRAIN_TIMEOUT_S = 2.0
-
-
-def _symbol_type_from_label(label: str) -> str:
-    """Map AP's label → workflow-graph symbol_type.
-
-    Keeps the value set small so the palette (``SYMBOL_COLORS``) stays
-    compact. Every AP label from every supported language collapses
-    into one of: function · method · class · module · constant.
-    """
-    low = label.lower()
-    if low == "function":
-        return "function"
-    if low == "method":
-        return "method"
-    # All type-like constructs → class. Covers Rust (struct/enum/trait),
-    # Java/Kotlin (class/interface), Swift/ObjC (protocol/extension),
-    # C/C++ (union).
-    if low in (
-        "struct",
-        "enum",
-        "trait",
-        "class",
-        "interface",
-        "protocol",
-        "extension",
-        "union",
-    ):
-        return "class"
-    # Module-ish containers → module (amber).
-    if low in ("module", "package", "namespace"):
-        return "module"
-    # Value-ish / alias-ish → constant (slate).
-    if low in (
-        "constant",
-        "typealias",
-        "typedef",
-        "macro",
-        "field",
-        "property",
-        "variable",
-    ):
-        return "constant"
-    return low
+logger = logging.getLogger(__name__)
 
 
 class WorkflowGraphASTSource:
@@ -585,133 +193,14 @@ class WorkflowGraphASTSource:
             out.extend(batch)
         return out
 
-    async def _symbol_batches_async(
-        self,
-        graph_path: str,
-        paths: list[str],
-    ):
-        """Yield one batch of symbol rows per AP label query (async gen).
+    def _symbol_batches_async(self, graph_path: str, paths: list[str]):
+        """Delegates to ``workflow_graph_ast_symbols.symbol_batches_async``.
 
-        AP stores each symbol under its own label (Function, Method,
-        Struct, Enum, Trait, Constant, TypeAlias). The qualified_name
-        follows ``<relative_file>::<name>``. We query each label
-        separately (LadybugDB rejects multi-label ``MATCH``). Each label's
-        rows are yielded as soon as its query returns, so the consumer can
-        process/discard a label's rows before the next label is queried.
-
-        ``paths`` entries may be absolute (builder convention); AP's
-        ``File.id`` and the symbol ``qualified_name`` prefix are
-        repo-relative. We match by ``endswith`` so both forms work.
+        Kept as an instance method: ``test_ble001_sweep_infrastructure.py``
+        monkeypatches it per-instance to exercise ``_iter_symbols_async``'s
+        per-graph error handling in isolation.
         """
-        # Build a set of basenames and tail fragments for fast matching.
-        # These are also used to construct server-side WHERE predicates so
-        # Kuzu filters by file prefix rather than returning ALL symbols and
-        # discarding in Python. Previously the code used a blanket
-        # ``LIMIT 500`` without a WHERE clause — on a 50k-symbol codebase
-        # alphabetically-early files consume the entire limit and the
-        # desired file's symbols are never returned.
-        # source: measured 2026-06-04 — query for consolidate.py returned 0
-        #   because the first 500 Functions all start with benchmarks/* or
-        #   _pipeline/*; mcp_server/handlers/* never appeared.
-        path_tails: set[str] = set()
-        for p in paths:
-            if not p:
-                continue
-            path_tails.add(p)
-            # e.g. /abs/root/pkg/mod.py → pkg/mod.py, mod.py
-            parts = p.split("/")
-            for i in range(1, len(parts)):
-                path_tails.add("/".join(parts[i:]))
-
-        # Build a Cypher WHERE predicate that filters at the Kuzu level.
-        # Each tail produces one STARTS WITH predicate on qualified_name
-        # (or id for Import nodes). We emit the shortest unique tails only
-        # — if "pkg/mod.py" is present, "mod.py" is redundant because any
-        # match for "mod.py" also matches "pkg/mod.py". Cap at 10 tails
-        # to keep the WHERE clause tractable.
-        def _where_for_tails(prop: str, tails: set[str]) -> str:
-            if not tails:
-                return ""
-            # Sort longest-first so shorter redundant tails are skipped.
-            sorted_tails = sorted(tails, key=len, reverse=True)
-            kept: list[str] = []
-            for t in sorted_tails:
-                if any(t == k or k.endswith(t) for k in kept):
-                    continue  # already covered by a longer tail
-                kept.append(t)
-                if len(kept) >= _MAX_WHERE_TAILS:
-                    break
-            escaped = [t.replace("'", "\\'") for t in kept]
-            preds = " OR ".join(f"{prop} STARTS WITH '{t}::'" for t in escaped)
-            return f" WHERE {preds}"
-
-        for label in _SYMBOL_LABELS:
-            # Import nodes don't carry qualified_name / name — they use
-            # ``id`` (``<file>::<modpath>``) and ``path`` (the imported
-            # module). Use those as the qualified_name / name surrogate.
-            if label in _NON_QUALIFIED_LABELS:
-                prop = "s.id"
-                select = (
-                    f"MATCH (s:{label})"
-                    "{where}"
-                    " RETURN s.id   AS qualified_name,"
-                    "        s.path AS name"
-                )
-            else:
-                prop = "s.qualified_name"
-                select = (
-                    f"MATCH (s:{label})"
-                    "{where}"
-                    " RETURN s.qualified_name AS qualified_name,"
-                    "        s.name           AS name"
-                )
-            if paths:
-                where = _where_for_tails(prop, path_tails)
-                query = select.format(where=where)
-            else:
-                # Load-all mode: no filter, no limit — pull the full graph.
-                query = select.format(where="")
-            rows = await self._bridge.call(
-                "query_graph",
-                {"graph_path": graph_path, "query": query},
-            )
-            # Per-label batch: built, yielded, then dropped before the next
-            # label's query runs — peak retained inside the source is one
-            # label's rows, not the union across all _SYMBOL_LABELS queries.
-            batch: list[dict[str, Any]] = []
-            for r in _as_list(rows):
-                qn = r.get("qualified_name")
-                if not qn:
-                    continue
-                qn_s = str(qn)
-                file_part, sep, _ = qn_s.partition("::")
-                if not sep:
-                    continue
-                # Python-side match as a secondary safeguard (the WHERE
-                # clause is the primary filter; this handles edge cases
-                # where a shorter tail matched a different file).
-                if path_tails and not any(
-                    p == file_part or p.endswith(file_part) or file_part.endswith(p)
-                    for p in path_tails
-                ):
-                    continue
-                # Resolve file_path back to the absolute form if possible.
-                abs_match = next(
-                    (p for p in paths if p.endswith(file_part)),
-                    file_part,
-                )
-                batch.append(
-                    {
-                        "file_path": abs_match,
-                        "qualified_name": qn_s,
-                        "symbol_type": _symbol_type_from_label(label),
-                        "signature": None,
-                        "language": None,
-                        "line": None,
-                    }
-                )
-            if batch:
-                yield batch
+        return symbol_batches_async(self._bridge, graph_path, paths)
 
     def search_codebase(
         self,
@@ -735,7 +224,7 @@ class WorkflowGraphASTSource:
             self._bridge.search_codebase(gp, query, limit=int(limit))
         )
         out: list[dict[str, Any]] = []
-        for r in _as_list(resp):
+        for r in as_list(resp):
             qname = r.get("qualified_name") or r.get("name") or ""
             fpath = r.get("file_path") or r.get("abs_path") or ""
             if not qname:
@@ -777,45 +266,8 @@ class WorkflowGraphASTSource:
         graph_path: str,
         qualnames: list[str],
     ) -> dict[str, bool]:
-        """Batch verification across every AP symbol label.
-
-        AP has no unified ``Symbol`` label — we iterate the known set
-        (Function, Method, Struct, ...). Wiki references are usually
-        bare names (``WorkflowGraphBuilder``), so we widen the match:
-        a qualname counts as found if any AP symbol name equals it,
-        its name equals the tail, or the qualified_name endswith the
-        tail (``::tail`` or ``.tail``).
-        """
-        out: dict[str, bool] = {q: False for q in qualnames}
-        all_names: list[str] = []
-        all_short: list[str] = []
-        for label in _SYMBOL_LABELS:
-            query = (
-                f"MATCH (s:{label}) "
-                "RETURN DISTINCT s.qualified_name AS qualified_name, "
-                "                s.name           AS name"
-            )
-            rows = await self._bridge.call(
-                "query_graph",
-                {"graph_path": graph_path, "query": query},
-            )
-            for r in _as_list(rows):
-                qn = str(r.get("qualified_name") or "")
-                nm = str(r.get("name") or "")
-                if qn:
-                    all_names.append(qn)
-                if nm:
-                    all_short.append(nm)
-        for q in qualnames:
-            tail = q.rsplit(".", 1)[-1]
-            if tail in all_short:
-                out[q] = True
-                continue
-            for qn in all_names:
-                if qn == q or qn.endswith(f"::{tail}") or qn.endswith(f".{tail}"):
-                    out[q] = True
-                    break
-        return out
+        """Delegates to ``workflow_graph_ast_symbols.verify_symbols_async``."""
+        return await verify_symbols_async(self._bridge, graph_path, qualnames)
 
     async def _load_edges_async(
         self,
@@ -833,205 +285,15 @@ class WorkflowGraphASTSource:
             out.extend(batch)
         return out
 
-    async def _edge_batches_async(
-        self,
-        graph_path: str,
-        paths: list[str],
-    ):
-        """Yield one batch of edge rows per AP rel-table query (async gen).
-
-        AP uses per-label-pair typed rel tables (LadybugDB convention):
-          * Calls_<Src>_<Dst>   for Function↔Method call edges
-          * Imports_File_<Lbl>  for File → imported symbol
-          * HasMethod_<Parent>_Method for struct/enum/trait → method
-
-        We enumerate the known rel tables (~89 queries) and collapse them to
-        the semantic kinds the builder understands. Each rel-table's rows are
-        yielded as its own batch the moment its query returns, so peak rows
-        retained inside the source is one rel-table's result — not the union
-        across all 89 queries.
-        """
-        # Same path-matching strategy as ``_symbol_batches_async``.
-        path_tails: set[str] = set()
-        for p in paths:
-            if not p:
-                continue
-            path_tails.add(p)
-            parts = p.split("/")
-            for i in range(1, len(parts)):
-                path_tails.add("/".join(parts[i:]))
-        # Enumerate the full Cartesian product of label kinds AP could
-        # have produced rel tables for. AP rejects queries against rel
-        # tables that don't exist by returning empty rows, so the over-
-        # enumeration is safe — it just costs extra round-trips against
-        # missing tables. The narrower prior lists were the reason the
-        # cortex viz showed ~4k imports instead of the tens of thousands
-        # the codebase actually contains: every File→Class / File→
-        # Interface / File→TypeAlias / File→Macro etc. edge was being
-        # silently dropped because its rel table was never queried.
-        _CALL_LABELS = ("Function", "Method", "Macro")
-        _IMPORT_TARGETS = _SYMBOL_LABELS  # File can import any symbol kind
-        _CONTAINER_LBLS = (
-            "Struct",
-            "Enum",
-            "Trait",
-            "Class",
-            "Interface",
-            "Protocol",
-            "Extension",
-            "Union",
-        )
-        _MEMBER_LBLS = ("Method", "Field", "Property", "Constant", "TypeAlias")
-        calls_rels = [(s, d) for s in _CALL_LABELS for d in _CALL_LABELS]
-        imports_rels = [("File", t) for t in _IMPORT_TARGETS]
-        member_rels = [(s, d) for s in _CONTAINER_LBLS for d in _MEMBER_LBLS]
-
-        def _match(file_part: str) -> bool:
-            if not path_tails:
-                return True
-            return any(
-                p == file_part or p.endswith(file_part) or file_part.endswith(p)
-                for p in path_tails
-            )
-
-        async def _run_edge(
-            kind: str,
-            table: str,
-            src_lbl: str,
-            dst_lbl: str,
-            has_provenance: bool,
-        ) -> list[dict[str, Any]]:
-            """Query AP for edges of ``kind`` in ``table`` and RETURN this
-            rel-table's rows as one batch (the caller yields it, then drops
-            it before the next rel-table query — bounding peak to one batch).
-
-            ``has_provenance`` gates whether to fetch ``r.confidence`` +
-            ``r.resolution_method``: Kuzu raises a Binder exception on
-            missing-property access, so we only request those columns
-            for rel tables the AP resolver actually annotates (Calls_*
-            / Imports_* / Implements_* / Extends_* / Uses_*). Structural
-            tables (HasMethod_* / Defines_*) have no such columns —
-            callers default confidence to 1.0 for those kinds instead.
-            """
-            if src_lbl == "File":
-                select_src = "src.id AS src_name"
-            elif src_lbl in _NON_QUALIFIED_LABELS:
-                select_src = "src.id AS src_name"
-            else:
-                select_src = "src.qualified_name AS src_name"
-            # Import nodes (and any other ``_NON_QUALIFIED_LABELS`` kind)
-            # carry ``id`` instead of ``qualified_name``. Selecting the
-            # missing property would raise a Kuzu Binder exception.
-            dst_qn = (
-                "dst.id AS dst_name"
-                if dst_lbl in _NON_QUALIFIED_LABELS
-                else "dst.qualified_name AS dst_name"
-            )
-            if has_provenance:
-                return_tail = (
-                    f"       {dst_qn}, "
-                    "       r.confidence       AS confidence, "
-                    "       r.resolution_method AS reason"
-                )
-            else:
-                return_tail = f"       {dst_qn}"
-            query = (
-                f"MATCH (src:{src_lbl})-[r:{table}]->(dst:{dst_lbl}) "
-                f"RETURN {select_src}, {return_tail}"
-            )
-            rows = await self._bridge.call(
-                "query_graph",
-                {"graph_path": graph_path, "query": query},
-            )
-            batch: list[dict[str, Any]] = []
-            for r in _as_list(rows):
-                src = str(r.get("src_name") or "")
-                dst = str(r.get("dst_name") or "")
-                if not dst:
-                    continue
-                # src may be a File.id (relative path) or a symbol qn.
-                if src_lbl == "File":
-                    src_file = src
-                    src_qn = ""
-                else:
-                    src_file, _, _ = src.partition("::")
-                    src_qn = src
-                dst_file, _, _ = dst.partition("::")
-                if kind == "imports":
-                    if not _match(src_file):
-                        continue
-                else:
-                    if not (_match(src_file) and _match(dst_file)):
-                        continue
-                # AP stores ``resolution_method`` wrapped in literal
-                # single quotes (see ``automatised-pipeline``
-                # resolver.rs:183 — ``format!("'{method}'")``), so the
-                # value comes back INCLUDING quotes. Strip them here at
-                # the infrastructure boundary. Remove this strip once
-                # AP fixes the upstream quoting.
-                conf_raw = r.get("confidence") if has_provenance else None
-                try:
-                    confidence = float(conf_raw) if conf_raw is not None else None
-                except (TypeError, ValueError):
-                    confidence = None
-                reason_raw = r.get("reason") if has_provenance else None
-                reason_str = (
-                    str(reason_raw).strip("'\"") or None if reason_raw else None
-                )
-                batch.append(
-                    {
-                        "kind": kind,
-                        "src_file": src_file,
-                        "src_name": src_qn,
-                        "dst_file": dst_file,
-                        "dst_name": dst,
-                        "confidence": confidence,
-                        "reason": reason_str,
-                    }
-                )
-            return batch
-
-        for s, d in calls_rels:
-            yield await _run_edge("calls", f"Calls_{s}_{d}", s, d, has_provenance=True)
-        for s, d in imports_rels:
-            yield await _run_edge(
-                "imports", f"Imports_{s}_{d}", s, d, has_provenance=True
-            )
-        for s, d in member_rels:
-            yield await _run_edge(
-                "member_of", f"HasMethod_{s}_{d}", s, d, has_provenance=False
-            )
-        # File → Import node. AP wires every ``import`` statement to its
-        # file via this rel table; counts in the tens of thousands per
-        # project. Without this, the cortex viz captures only the small
-        # subset that AP managed to RESOLVE to in-graph symbols (the
-        # ``Imports_File_*`` tables, totalling ~5k vs ~36k actual).
-        yield await _run_edge(
-            "imports",
-            "Defines_File_Import",
-            "File",
-            "Import",
-            has_provenance=False,
-        )
-        # Type-usage edges (Method/Function uses Struct/Class/etc).
-        # Captured by AP's resolver and exposed as ``Uses_<src>_<dst>``.
-        _USES_SRC = ("Method", "Function")
-        _USES_DST = (
-            "Struct",
-            "Enum",
-            "Trait",
-            "Class",
-            "Interface",
-            "Protocol",
-            "Extension",
-            "Union",
-            "TypeAlias",
-        )
-        for s in _USES_SRC:
-            for d in _USES_DST:
-                yield await _run_edge(
-                    "uses", f"Uses_{s}_{d}", s, d, has_provenance=True
-                )
+    def _edge_batches_async(self, graph_path: str, paths: list[str]):
+        """Delegates to ``workflow_graph_ast_edges.edge_batches_async``
+        (same rationale as ``_symbol_batches_async`` above)."""
+        return edge_batches_async(self._bridge, graph_path, paths)
 
 
-__all__ = ["WorkflowGraphASTSource"]
+__all__ = [
+    "WorkflowGraphASTSource",
+    "_SyncLoop",
+    "_SHUTDOWN_DRAIN_TIMEOUT_S",
+    "_SYMBOL_LABELS",
+]

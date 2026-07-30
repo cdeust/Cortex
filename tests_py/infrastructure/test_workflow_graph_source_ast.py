@@ -19,6 +19,7 @@ from __future__ import annotations
 import pytest
 
 from mcp_server.errors import McpConnectionError
+from mcp_server.infrastructure import ap_sync_loop
 from mcp_server.infrastructure import workflow_graph_source_ast as mod
 from mcp_server.infrastructure.workflow_graph_source_ast import (
     WorkflowGraphASTSource,
@@ -44,10 +45,11 @@ class _RecordingBridge:
     returns a fixed row list per query. ``calls_at_yield`` lets a test assert
     how many queries had been issued at the moment the consumer pulled item k.
 
-    Each ``query_graph`` returns rows in AP's ``{columns, rows}`` shape so the
-    real ``_as_list`` path is exercised. Symbol queries get one synthetic
-    symbol per label; edge queries get rows only for the first rel-table so we
-    can keep the fixture small while still streaming many (mostly empty) ones.
+    Each ``query_graph`` returns rows in AP's ``{columns, rows}`` shape so
+    the real ``workflow_graph_ast_response.as_list`` path is exercised.
+    Symbol queries get one synthetic symbol per label; edge queries get
+    rows only for the first rel-table so we can keep the fixture small
+    while still streaming many (mostly empty) ones.
     """
 
     def __init__(self, rows_per_query: int = 1) -> None:
@@ -195,8 +197,14 @@ class TestBoundedWaitTimeout:
                 await asyncio.sleep(30)
                 return "unreachable"
 
-            with pytest.raises(McpConnectionError):
+            with pytest.raises(McpConnectionError) as exc_info:
                 loop_owner.run(_never())
+            # Exact match (not a substring/type-only check): pins the
+            # wording AND the interpolated ceiling, so a mutant that
+            # garbles or blanks the message is caught too.
+            assert str(exc_info.value) == (
+                "AP reader-thread call exceeded 0s — subprocess presumed wedged"
+            )
         finally:
             loop_owner.close()
 
@@ -225,9 +233,13 @@ class TestBoundedWaitTimeout:
                 yield [5, 6]
 
             got: list = []
-            with pytest.raises(McpConnectionError):
+            with pytest.raises(McpConnectionError) as exc_info:
                 for batch in loop_owner.run_iter(_agen()):
                     got.append(batch)
+            # Exact match — same rationale as the ``run()`` wedge test above.
+            assert str(exc_info.value) == (
+                "AP reader-thread step exceeded 0s — subprocess presumed wedged"
+            )
             # The two pre-wedge batches were really delivered.
             assert got == [[1, 2], [3, 4]]
         finally:
@@ -235,6 +247,24 @@ class TestBoundedWaitTimeout:
 
         gc.collect()
         assert "Task was destroyed but it is pending" not in capfd.readouterr().err
+
+    def test_run_iter_forwards_a_legitimately_yielded_none_item(self):
+        """``run_iter``'s internal stop-sentinel must be a private ``object()``
+        instance, never a value a real async generator could legitimately
+        yield (``None`` included) — otherwise a source that ever yields
+        ``None`` would have the stream silently truncated there instead of
+        forwarding it. Pins that ``None`` flows through like any other item."""
+        loop_owner = _SyncLoop()
+        try:
+
+            async def _agen():
+                yield 1
+                yield None
+                yield 3
+
+            assert list(loop_owner.run_iter(_agen())) == [1, None, 3]
+        finally:
+            loop_owner.close()
 
 
 class TestDrainPendingTasks:
@@ -339,7 +369,11 @@ class TestDrainPendingTasks:
         import time
 
         # Tiny ceiling for the test only — shrinks the real 2.0s constant.
-        monkeypatch.setattr(mod, "_SHUTDOWN_DRAIN_TIMEOUT_S", 0.05)
+        # Patched on ``ap_sync_loop`` (where ``_drain_pending_tasks`` actually
+        # resolves the bare name at call time), not on the ``mod`` re-export —
+        # a re-exported alias is a separate module attribute that the
+        # defining function's global lookup never reads.
+        monkeypatch.setattr(ap_sync_loop, "_SHUTDOWN_DRAIN_TIMEOUT_S", 0.05)
 
         loop_owner = _SyncLoop()
         try:
@@ -358,7 +392,7 @@ class TestDrainPendingTasks:
             time.sleep(0.05)  # let the task actually start
 
             with caplog.at_level(
-                "DEBUG", logger="mcp_server.infrastructure.workflow_graph_source_ast"
+                "DEBUG", logger="mcp_server.infrastructure.ap_sync_loop"
             ):
                 t0 = time.monotonic()
                 loop_owner._drain_pending_tasks()
@@ -375,7 +409,8 @@ class TestDrainPendingTasks:
             # "the %.1fs placeholder left un-interpolated" from the real
             # message.
             expected = (
-                f"AP sync-loop drain exceeded {mod._SHUTDOWN_DRAIN_TIMEOUT_S:.1f}s "
+                "AP sync-loop drain exceeded "
+                f"{ap_sync_loop._SHUTDOWN_DRAIN_TIMEOUT_S:.1f}s "
                 "— leaving residual task(s) for interpreter-exit cleanup"
             )
             assert any(r.getMessage() == expected for r in caplog.records)
@@ -386,6 +421,33 @@ class TestDrainPendingTasks:
             # still-running task, which is exactly the #258 shape this
             # test is not meant to also exercise.
             time.sleep(0.4)
+        finally:
+            loop_owner.close()
+
+
+class TestSyncLoopConstruction:
+    """Pins ``_SyncLoop``'s construction + lazy-init contract directly —
+    ``close()`` unconditionally resets ``_thread``/``_loop`` to ``None`` at
+    the end of its own body, which masks a mutated initial value if the
+    only assertion runs post-``close()`` (as the existing close() tests
+    do). These assert BEFORE any ``close()`` call."""
+
+    def test_fresh_instance_has_no_thread_yet(self):
+        """postcondition: ``__init__`` sets ``self._thread`` to ``None`` —
+        not any other falsy value — before ``_ensure_loop`` ever runs."""
+        owner = _SyncLoop()
+        assert owner._thread is None
+
+    def test_ensure_loop_names_and_daemonizes_the_worker_thread(self):
+        """postcondition: the spawned worker thread is named exactly
+        ``"ap-sync-loop"`` (the name every log/introspection site — and a
+        human debugging a thread dump — relies on to identify it) and is a
+        daemon (so a leaked ``_SyncLoop`` never blocks interpreter exit)."""
+        loop_owner = _SyncLoop()
+        try:
+            loop_owner._ensure_loop()
+            assert loop_owner._thread.name == "ap-sync-loop"
+            assert loop_owner._thread.daemon is True
         finally:
             loop_owner.close()
 

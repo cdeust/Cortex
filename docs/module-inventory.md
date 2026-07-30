@@ -13,9 +13,11 @@ zetetic source rule:
 ```
 # source: measured on 2026-07-29 via
 #   find mcp_server/<layer> -name "*.py" | grep -v __init__ | grep -v __pycache__ | wc -l
+# infrastructure/ re-measured 2026-07-30 (issue #275 split added 4 modules,
+#   net file count +4; no infrastructure/ files were deleted)
 shared/           26 files   (10 documented below — curated subset)
 core/            225 files   (~90 documented below — curated subset, incl. core/streaming, core/context_assembly)
-infrastructure/   91 files   (20 documented below — curated subset)
+infrastructure/   95 files   (25 documented below — curated subset)
 handlers/        135 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
 ```
 
@@ -224,6 +226,11 @@ Run the measurement command in the header to get a current file listing.
 - `agent_config.py` — Agent configuration and topic scoping
 - `wiki_schema_reader.py` — Filesystem adapter for `core/wiki_schema_loader.py`'s data model/parsers; walks `wiki/_kinds|_rules|_views|_triggers/` and builds a `WikiRegistry` (issue #126 port-and-adapter split)
 - `document_reader.py` — Reads a .docx (unzips `word/document.xml`) or a Confluence XHTML export off disk into the string its pure parser consumes; raises `DocumentReadError` on a bad container/decoding (issue #192)
+- `workflow_graph_source_ast.py` — `WorkflowGraphASTSource`, the AST-layer workflow-graph loader (ADR-0046); composition point over the three modules below (issue #275 split — was one 1029-line file)
+- `ap_sync_loop.py` — `_SyncLoop`, the cross-loop sync/drain primitive pinning one event loop across an `APBridge` caller's lifetime (issue #258: drains cancelled tasks before stopping the loop, closing the "Task was destroyed but it is pending!" GC-warning race)
+- `workflow_graph_ast_symbols.py` — AST *symbol* loading: the AP label set, the symbol-type mapping, and the per-label batched query + WHERE-clause construction
+- `workflow_graph_ast_edges.py` — AST *edge* loading: the ~89 AP rel-table (CALLS/IMPORTS/MEMBER_OF/USES) batched queries
+- `workflow_graph_ast_response.py` — `as_list`, normalizes AP's `query_graph` `{columns, rows}` response shape into plain dicts (shared by the symbols + edges modules)
 
 Note: `pg_store.py` persists to PostgreSQL when configured (the
 `install-plugin.sh --postgres` opt-in or an explicit `DATABASE_URL`);
