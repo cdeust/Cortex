@@ -130,7 +130,7 @@ class TitansMemory:
             v = torch.stack(vs).mean(dim=0)
 
             # Compute loss: l = ||M @ k - v||^2
-            M = self._M.clone().requires_grad_(True)
+            M = self._M.clone().requires_grad_(True)  # noqa: N806 -- Titans paper notation
             prediction = M @ k
             loss = torch.sum((prediction - v) ** 2)
 
@@ -190,7 +190,7 @@ class TitansMemory:
             v = torch.stack(vs).mean(dim=0)
 
             # Compute gradient
-            M = self._M.clone().requires_grad_(True)
+            M = self._M.clone().requires_grad_(True)  # noqa: N806 -- Titans paper notation
             prediction = M @ k
             loss = torch.sum((prediction - v) ** 2)
             loss.backward()

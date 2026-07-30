@@ -490,11 +490,11 @@ def recall(
     # preference memories from being drowned out by episodic memories.
     # Reserves 2 slots for tag-matched memories when intent matches.
     # Validated approach (BEAM 0.546 overall — see README ablation log).
-    _TYPE_INTENTS = {
+    _type_intents = {
         QueryIntent.INSTRUCTION: "instruction",
         QueryIntent.PREFERENCE: "preference",
     }
-    tag_for_intent = _TYPE_INTENTS.get(intent)
+    tag_for_intent = _type_intents.get(intent)
     if tag_for_intent and store and q_emb and hasattr(store, "search_by_tag_vector"):
         existing_ids = {c["memory_id"] for c in candidates}
         typed = store.search_by_tag_vector(

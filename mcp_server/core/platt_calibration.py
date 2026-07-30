@@ -90,7 +90,7 @@ def _sigmoid(x: float) -> float:
     return ex / (1.0 + ex)
 
 
-def _predict_platt(A: float, B: float, s: float) -> float:
+def _predict_platt(A: float, B: float, s: float) -> float:  # noqa: N803 -- Platt 1999 notation
     """Predicted P(useful | s) under parameters (A, B)."""
     return _sigmoid(-(A * s + B))
 
@@ -144,7 +144,7 @@ def fit_platt(
     n_pos = sum(labels)
     n_neg = n - n_pos
     prior1 = (n_pos + 1.0) / (n + 2.0)  # Laplace-smoothed base rate.
-    A, B = 0.0, math.log((n_neg + 1.0) / (n_pos + 1.0))
+    A, B = 0.0, math.log((n_neg + 1.0) / (n_pos + 1.0))  # noqa: N806 -- Platt 1999 notation
 
     for _ in range(max_iter):
         # Accumulate gradient and Hessian.
@@ -174,8 +174,8 @@ def fit_platt(
         inv = 1.0 / det
         d_a = inv * (h_bb * g_a - h_ab * g_b)
         d_b = inv * (-h_ab * g_a + h_aa * g_b)
-        A -= d_a
-        B -= d_b
+        A -= d_a  # noqa: N806 -- Platt 1999 notation
+        B -= d_b  # noqa: N806 -- Platt 1999 notation
 
     # Guard: reject non-finite parameters.
     if not (math.isfinite(A) and math.isfinite(B)):

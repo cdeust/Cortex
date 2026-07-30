@@ -148,8 +148,8 @@ def compute_actr_base_level(
     Returns raw activation (can be negative = below retrieval threshold).
     """
     n = max(1, access_count)
-    L = max(_MIN_LIFETIME_HOURS, lifetime_hours)
-    return math.log(n) - d * math.log(L)
+    clamped_lifetime_hours = max(_MIN_LIFETIME_HOURS, lifetime_hours)
+    return math.log(n) - d * math.log(clamped_lifetime_hours)
 
 
 def actr_activation_to_heat(

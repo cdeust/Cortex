@@ -34,24 +34,24 @@ _SINGULAR_DET_EPSILON = 1e-12
 
 
 def _solve_least_squares_1(
-    G: list[list[float]],
+    gram: list[list[float]],
     h: list[float],
 ) -> list[float]:
     """Solve 1x1 least-squares system."""
-    return [h[0] / G[0][0]] if G[0][0] != 0 else [0]
+    return [h[0] / gram[0][0]] if gram[0][0] != 0 else [0]
 
 
 def _solve_least_squares_2(
-    G: list[list[float]],
+    gram: list[list[float]],
     h: list[float],
 ) -> list[float]:
     """Solve 2x2 least-squares system via Cramer's rule."""
-    det = G[0][0] * G[1][1] - G[0][1] * G[1][0]
+    det = gram[0][0] * gram[1][1] - gram[0][1] * gram[1][0]
     if abs(det) < _SINGULAR_DET_EPSILON:
         return [0, 0]
     return [
-        (h[0] * G[1][1] - h[1] * G[0][1]) / det,
-        (G[0][0] * h[1] - G[1][0] * h[0]) / det,
+        (h[0] * gram[1][1] - h[1] * gram[0][1]) / det,
+        (gram[0][0] * h[1] - gram[1][0] * h[0]) / det,
     ]
 
 
@@ -65,19 +65,19 @@ def _det3(m: list[list[float]]) -> float:
 
 
 def _solve_least_squares_3(
-    G: list[list[float]],
+    gram: list[list[float]],
     h: list[float],
 ) -> list[float]:
     """Solve 3x3 least-squares system via Cramer's rule."""
-    det_g = _det3(G)
+    det_g = _det3(gram)
     if abs(det_g) < _SINGULAR_DET_EPSILON:
         return [0, 0, 0]
     result = []
     for col in range(3):
-        M = [row[:] for row in G]
+        trial_matrix = [row[:] for row in gram]
         for row in range(3):
-            M[row][col] = h[row]
-        result.append(_det3(M) / det_g)
+            trial_matrix[row][col] = h[row]
+        result.append(_det3(trial_matrix) / det_g)
     return result
 
 
@@ -100,7 +100,7 @@ def _solve_least_squares(
     if n == 0:
         return []
 
-    G = [
+    gram = [
         [dot(atoms[selected[i]], atoms[selected[j]]) for j in range(n)]
         for i in range(n)
     ]
@@ -108,7 +108,7 @@ def _solve_least_squares(
 
     solver = _LS_SOLVERS.get(n)
     if solver is not None:
-        return solver(G, h)
+        return solver(gram, h)
 
     return [0] * n
 
@@ -130,14 +130,14 @@ def omp(
     Returns:
         Dict with 'indices', 'coefficients', and 'residual'.
     """
-    K = len(atoms)
+    n_atoms = len(atoms)
     residual = list(signal)
     selected_indices: list[int] = []
 
     for _ in range(sparsity):
         best_corr = -1.0
         best_idx = -1
-        for k in range(K):
+        for k in range(n_atoms):
             if k in selected_indices:
                 continue
             corr = abs(dot(residual, atoms[k]))
@@ -169,12 +169,12 @@ def omp(
 
 def initialize_atoms(
     data: list[list[float]],
-    K: int,
+    k: int,
 ) -> list[list[float]]:
     """Select K diverse atoms from data using maximin distance."""
     if not data:
         return []
-    effective_k = min(K, len(data))
+    effective_k = min(k, len(data))
     selected = [0]
     min_dist = [float("inf")] * len(data)
 
@@ -209,14 +209,14 @@ def _compute_atom_contribution(
     encodings: list[dict[str, Any]],
     atoms: list[list[float]],
     atom_index: int,
-    D: int,
+    dim: int,
 ) -> list[float]:
     """Sum partial reconstructions for users of a given atom."""
     users = _find_atom_users(encodings, atom_index)
     if not users:
-        return zeros(D)
+        return zeros(dim)
 
-    contribution = zeros(D)
+    contribution = zeros(dim)
     for user in users:
         partial = list(data[user["dataIdx"]])
         enc = encodings[user["dataIdx"]]
@@ -224,7 +224,7 @@ def _compute_atom_contribution(
             if aidx == atom_index:
                 continue
             partial = subtract(partial, scale(atoms[aidx], enc["coefficients"][j]))
-        for d_idx in range(D):
+        for d_idx in range(dim):
             contribution[d_idx] += partial[d_idx]
 
     return contribution
@@ -248,7 +248,7 @@ def update_dictionary(
     atoms: list[list[float]],
     sparsity: int,
     iterations: int,
-    D: int,
+    dim: int,
 ) -> list[list[float]]:
     """Run K-SVD iterations to refine dictionary atoms.
 
@@ -267,7 +267,7 @@ def update_dictionary(
                 encodings,
                 atoms,
                 k,
-                D,
+                dim,
             )
             new_atom = normalize(contribution)
             if norm(new_atom) > 0:

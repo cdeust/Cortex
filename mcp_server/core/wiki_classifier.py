@@ -213,7 +213,7 @@ def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str
     # admitted by the gate and the provenance facet downstream marks it
     # as auto-generated.
     tag_set = tag_set_pre
-    _EXPLICIT_KNOWLEDGE_TAGS = {
+    _explicit_knowledge_tags = {
         # Legacy knowledge tags.
         "decision",
         "adr",
@@ -243,7 +243,7 @@ def _classify_to_legacy_kind(content: str, tags: list[str] | None = None) -> str
         # (architecture / services / api / data-flow per project), not
         # via per-file dumps.
     }
-    has_explicit_tag = bool(tag_set & _EXPLICIT_KNOWLEDGE_TAGS)
+    has_explicit_tag = bool(tag_set & _explicit_knowledge_tags)
 
     # Gate 3 — Positive scoring (only when no explicit knowledge tag)
     if not has_explicit_tag:

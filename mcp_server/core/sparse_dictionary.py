@@ -158,7 +158,7 @@ def learn_dictionary(
     Falls back to the seed dictionary if fewer than 10 conversations.
     """
     options = options or {}
-    K = options.get("K", 15)
+    k_atoms = options.get("K", 15)
     sparsity = options.get("sparsity", 3)
     iterations = options.get("iterations", 5)
 
@@ -166,7 +166,7 @@ def learn_dictionary(
         return build_seed_dictionary()
 
     data = [extract_session_activation(c) for c in conversations]
-    atoms = _initialize_atoms(data, K)
+    atoms = _initialize_atoms(data, k_atoms)
     atoms = _update_dictionary(data, atoms, sparsity, iterations, D)
 
     features = [label_feature(direction, idx) for idx, direction in enumerate(atoms)]
