@@ -310,6 +310,86 @@ class CheckModeTests(_CanonicalSourceTestCase):
         gen.check_doc_claims.read = _FakeRepo().read
         self.assertEqual(gen.main(["--check", "--test-count", "42"]), 2)
 
+    def test_an_under_claiming_tests_badge_passes_check(self):
+        """The floor invariant (issue #293): a badge committed for a lower,
+        earlier count stays green once the live count only grows — the
+        property that lets a PR add tests without touching this file."""
+        gen.main(["--test-count", "42"])
+        self.assertEqual(gen.main(["--check", "--test-count", "44"]), 0)
+
+    def test_an_over_claiming_tests_badge_fails_check(self):
+        gen.main(["--test-count", "44"])
+        self.assertEqual(gen.main(["--check", "--test-count", "42"]), 1)
+
+
+class StaleTestsBadgeTests(_CanonicalSourceTestCase):
+    """Direct tests of stale_tests_badge — the floor check itself.
+
+    CheckModeTests exercises it only through main(); these pin every one of
+    its branches for mutation coverage (issue #293).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self._tmp = TemporaryDirectory()
+        self._root = Path(self._tmp.name)
+        self._patch = mock.patch.object(gen, "REPO_ROOT", self._root)
+        self._patch.start()
+        self.addCleanup(self._patch.stop)
+        self.addCleanup(self._tmp.cleanup)
+
+    def _commit(self, test_count: int) -> None:
+        gen.write(gen.RepoBadge(**gen.repo_badge_catalog.tests_badge_spec(test_count)))
+
+    def test_missing_badge_is_reported(self):
+        self.assertIn("missing", gen.stale_tests_badge(42))
+
+    def test_a_title_without_a_count_is_reported(self):
+        target = self._root / "assets" / "badge-tests.svg"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("<svg><title>not a count</title></svg>")
+        self.assertIn("no test-count figure", gen.stale_tests_badge(42))
+
+    def test_an_exact_match_is_not_reported(self):
+        self._commit(42)
+        self.assertIsNone(gen.stale_tests_badge(42))
+
+    def test_an_under_claim_is_not_reported(self):
+        self._commit(41)
+        self.assertIsNone(gen.stale_tests_badge(42))
+
+    def test_an_over_claim_is_reported(self):
+        self._commit(43)
+        reason = gen.stale_tests_badge(42)
+        self.assertIn("43", reason)
+        self.assertIn("exceeding the live count of 42", reason)
+
+    def test_structural_drift_still_fails_even_at_a_valid_floor(self):
+        """A hand-edited label/colour must still fail — the floor loosens
+        only the number, never label/colour/provenance drift."""
+        self._commit(41)
+        target = self._root / "assets" / "badge-tests.svg"
+        target.write_text(target.read_text().replace("tests", "TESTS", 1))
+        self.assertIsNotNone(gen.stale_tests_badge(42))
+
+    def test_stale_tests_badge_pins_utf8_on_read(self):
+        """A locale-dependent default would misread the em dash every
+        committed badge's provenance comment carries (mutation-testing
+        found this — a mutant dropping encoding="utf-8" here survived
+        every other assertion, issue #293). Checks EVERY read_text call,
+        not just the last: an exact match falls through to stale()'s own
+        (separate, unmutated) read_text call, which would otherwise mask
+        a dropped encoding in stale_tests_badge's own call — mutation
+        testing caught that gap too."""
+        self._commit(42)
+        with mock.patch.object(
+            Path, "read_text", autospec=True, side_effect=Path.read_text
+        ) as read_spy:
+            gen.stale_tests_badge(42)
+        self.assertTrue(read_spy.call_args_list)
+        for call in read_spy.call_args_list:
+            self.assertEqual(call.kwargs.get("encoding"), "utf-8")
+
 
 class WriteAndStaleTests(unittest.TestCase):
     """Direct tests of write()/stale() — the file I/O this gate performs.

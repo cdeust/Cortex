@@ -54,22 +54,24 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import badge_render  # noqa: E402
 import check_doc_claims  # noqa: E402
+import doc_claim_structural  # noqa: E402
+import repo_badge_catalog  # noqa: E402
+
+# Only the label/message palette repo_badge_svg() itself renders with, plus
+# _HEALTHY (tests_py/scripts/test_generate_repo_badges.py reads
+# gen._HEALTHY), are re-exported here; _NEUTRAL/_CORPUS are used only by
+# repo_badge_catalog.fixed_badge_specs, which owns them (issue #293 split —
+# see that module's docstring for why it returns field dicts, not
+# RepoBadge instances, and never imports this class).
+from repo_badge_catalog import _HEALTHY as _HEALTHY  # noqa: E402  (re-export)
+from repo_badge_catalog import (  # noqa: E402
+    _LABEL_FILL,
+    _LABEL_TEXT,
+    _MESSAGE_TEXT,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = Path("assets")
-
-# The palette is assets/banner.svg's, shared with the MCP Toplist badge so
-# the README's badge row reads as one set rather than as a pile of styles.
-_LABEL_FILL = "#3b3129"
-_LABEL_TEXT = "#f8f7f2"
-_MESSAGE_TEXT = "#fff"
-
-# Message-panel fills. Distinct hues carry the same meaning the shields.io
-# originals did (blue = neutral fact, green = healthy, orange = corpus), so
-# the row's reading does not change with its hosting.
-_NEUTRAL = "#31708f"
-_HEALTHY = "#2f6f3e"
-_CORPUS = "#a53e00"
 
 
 @dataclass(frozen=True)
@@ -145,80 +147,32 @@ def canonical_python_floor() -> str:
     return tail.split('"', 1)[0]
 
 
-def _fixed_badges(
-    licence: str, floor: str, references: int, version: str
-) -> list[RepoBadge]:
-    """The four badges present on every run — none needs a live test count."""
-    return [
-        RepoBadge(
-            filename="badge-license.svg",
-            label="license",
-            message=licence,
-            fill=_NEUTRAL,
-            alt=f"License: {licence}",
-            derivation="Source: [project].license in pyproject.toml.",
-        ),
-        RepoBadge(
-            filename="badge-python.svg",
-            label="python",
-            message=f"{floor}+",
-            fill=_NEUTRAL,
-            alt=f"Python {floor}+",
-            derivation="Source: [project].requires-python in pyproject.toml.",
-        ),
-        RepoBadge(
-            filename="badge-references.svg",
-            label="references",
-            message=f"{references} papers",
-            fill=_CORPUS,
-            alt=f"{references} referenced papers",
-            derivation=(
-                "Source: entries under '## References' in docs/papers/bibliography.md."
-            ),
-        ),
-        RepoBadge(
-            filename="badge-version.svg",
-            label="version",
-            message=version,
-            fill=_HEALTHY,
-            alt=f"Version {version}",
-            derivation="Source: [project].version in pyproject.toml.",
-        ),
-    ]
-
-
-def _tests_badge(test_count: int) -> RepoBadge:
-    return RepoBadge(
-        filename="badge-tests.svg",
-        label="tests",
-        message=f"{test_count} passing",
-        fill=_HEALTHY,
-        alt=f"{test_count} tests passing",
-        derivation="Source: the count pytest collects on this tree.",
-    )
-
-
 def build_badges(test_count: int | None) -> list[RepoBadge]:
     """Every repo-derived badge, resolved against the working tree.
 
     The canonical readers are check_doc_claims's own, not reimplementations:
     a badge that disagreed with the gate would be the exact drift this file
-    exists to prevent. Split into `_fixed_badges`/`_tests_badge` (§4: a
-    50-line function cap) rather than one long literal-heavy body — a
-    boy-scout fix (§14), this function was 63 lines before this PR touched
-    the file for the unrelated `RepoBadge` mutation-attribution defect.
+    exists to prevent. The field data itself lives in repo_badge_catalog.py
+    (issue #293 split, §4: the 300-line file cap) — this function's own job
+    is only to resolve the canonical values and construct `RepoBadge`
+    instances from the returned specs.
     """
     version = check_doc_claims.canonical_version()
     references = check_doc_claims.canonical_reference_count()
     licence = canonical_licence()
     floor = canonical_python_floor()
-    badges = _fixed_badges(licence, floor, references, version)
+    badges = [
+        RepoBadge(**spec)
+        for spec in repo_badge_catalog.fixed_badge_specs(
+            licence, floor, references, version
+        )
+    ]
     # The test count is the one figure that cannot be read off a file: it is
     # whatever the suite collects right now. Omitted rather than guessed when
     # the caller has not measured it, so a stale badge is never written from
     # an assumption.
     if test_count is not None:
-        badges.append(_tests_badge(test_count))
+        badges.append(RepoBadge(**repo_badge_catalog.tests_badge_spec(test_count)))
     return badges
 
 
@@ -246,6 +200,36 @@ def stale(badge: RepoBadge) -> str | None:
             " — run scripts/generate_repo_badges.py"
         )
     return None
+
+
+def stale_tests_badge(test_count: int) -> str | None:
+    """A monotone floor, not an exact snapshot (issue #293, §6): two
+    branches adding tests compute different, both-true live counts for the
+    same post-merge tree, so an exact match is how any two such PRs
+    conflicted on this file, and how main's gate flapped red on a merge
+    that only grew the count. Lagging is not reported; only an OVER-claim
+    is. `stale()` still checks everything else exactly — see
+    doc_claim_structural.check_badge_floor for the same invariant.
+    """
+    # Filename is constant regardless of test_count; resolved directly (not
+    # via a throwaway RepoBadge) to remove an inert mutant class outright.
+    path = ASSETS_DIR / repo_badge_catalog.TESTS_BADGE_FILENAME
+    target = REPO_ROOT / path
+    if not target.exists():
+        return f"{path}: missing — run scripts/generate_repo_badges.py"
+    # utf-8 pinned explicitly (provenance comments contain an em dash; see
+    # test_stale_tests_badge_pins_utf8_on_read); "UTF-8" is an equivalent
+    # spelling (codecs.lookup is case-insensitive), not a distinct mutant.
+    match = doc_claim_structural.TESTS_BADGE.search(target.read_text(encoding="utf-8"))
+    if match is None:
+        return f"{path}: no test-count figure in its <title>; diverged from this gate"
+    committed_count = int(match.group(1))
+    if committed_count > test_count:
+        return (
+            f"{path}: badge claims {committed_count} tests,"
+            f" exceeding the live count of {test_count}"
+        )
+    return stale(RepoBadge(**repo_badge_catalog.tests_badge_spec(committed_count)))
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -285,7 +269,18 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.check:
-        failures = [reason for badge in badges if (reason := stale(badge))]
+        # stale_tests_badge (a floor, not exact — see its docstring) checks
+        # the tests badge; every other badge keeps the plain stale() below.
+        failures = [
+            reason
+            for badge in badges
+            if badge.filename != repo_badge_catalog.TESTS_BADGE_FILENAME
+            and (reason := stale(badge))
+        ]
+        if args.test_count is not None:
+            reason = stale_tests_badge(args.test_count)
+            if reason:
+                failures.append(reason)
         if failures:
             print("Committed badges disagree with the repository:", file=sys.stderr)
             for failure in failures:

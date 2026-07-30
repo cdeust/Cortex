@@ -20,7 +20,18 @@ tool counts          ``docs/mcp-tools.md`` header, itself pinned to the live
 reference count      entries counted in ``docs/papers/bibliography.md``
 mechanism count      the count declared in that bibliography's header
 version              ``[project].version`` in ``pyproject.toml``
-test count           ``--test-count``, from a live ``pytest --collect-only``
+test count           ``assets/badge-tests.svg`` alone (issue #293) — the
+                     one artifact that still states an absolute figure. No
+                     prose file (nor ``.bestpractices.json``) states this
+                     count any more: a PR that adds tests would otherwise
+                     have to hand-edit six files to the same new number,
+                     and any two such PRs conflict on every one of them BY
+                     CONSTRUCTION. The badge is also not an exact fact —
+                     it is checked as a monotone FLOOR (``committed <=
+                     live``), because the true count is a property of the
+                     post-merge tree that no single branch can compute in
+                     advance; only an OVER-claim is reported. See
+                     ``doc_claim_structural.check_badge_floor``.
 ===================  =====================================================
 
 Release history is exempt: a line describing v4.13.0 may legitimately say
@@ -39,6 +50,15 @@ Usage::
 
     python scripts/check_doc_claims.py                 # static claims
     python scripts/check_doc_claims.py --test-count 5571
+
+Split across scripts/doc_claim_sources.py (canonical readers),
+scripts/doc_claim_scan.py (claim scanning/comparison) and
+scripts/doc_claim_structural.py (badge + structural-integrity checks) —
+issue #293, Extract Function/Move Function — to stay under the repo's
+300-line file cap (CLAUDE.md, Code Style); this module is the thin
+orchestrator each of those forwards through, and the only place ``read``/
+``SCANNED_FILES`` are defined (tests patch them here; see each sibling
+module's docstring for why they take these as parameters instead).
 """
 
 from __future__ import annotations
@@ -47,10 +67,20 @@ import argparse
 import json
 import re
 import sys
-from collections.abc import Iterator
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Sibling modules, path-imported for the same reason generate_repo_badges.py
+# does it: resolves identically whether this runs as a script or is loaded
+# via importlib.util.spec_from_file_location from a test.
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+import doc_claim_scan  # noqa: E402
+import doc_claim_sources  # noqa: E402
+import doc_claim_structural  # noqa: E402
+from doc_claim_sources import ClaimError  # noqa: E402  (re-export)
 
 # Files whose numbers describe the present. Release history lives elsewhere
 # (CHANGELOG.md, docs/release-notes/) and is deliberately not scanned.
@@ -74,17 +104,6 @@ SCANNED_FILES = (
     ".bestpractices.json",
 )
 
-# A line introducing a past release states that release's numbers.
-HISTORY_MARKER = re.compile(r"\*\*v\d+\.\d+\.\d+")
-
-# A line whose number counts something else declares which family it is not a
-# claim for. Rewording the prose to dodge a pattern would hide a true, measured
-# number to keep the gate quiet; declaring it keeps the number and puts the
-# exemption on the record, at the one site that knows why it is not a claim.
-# The label must match a claim family exactly — an unrecognised or misspelled
-# label exempts nothing, so the marker fails closed.
-NOT_A_CLAIM = re.compile(r"\[not-a-count-claim: ([a-z][a-z ]*)\]")
-
 TOOL_CLAIM = re.compile(r"(\d+)\s+(?:memory|standalone|MCP)\s+tools\b")
 TOOL_TOTAL_CLAIM = re.compile(r"\((\d+)\s+(?:total\s+)?with\b[^)]*\)")
 REFERENCE_CLAIM = re.compile(r"(\d+)[-\s]reference\b")
@@ -92,171 +111,58 @@ MECHANISM_CLAIM = re.compile(
     r"(\d+)\s+(?:neuroscience[- ]grounded|neuroscience|biological|brain)?"
     r"\s*mechanisms\b"
 )
-# Both the "N tests" and the "N-test suite" phrasings state the count; matching
-# only the first let a stale number sit unread in .bestpractices.json.
+# Both the "N tests" and the "N-test suite" phrasings state the count. No
+# scanned file states this claim in prose any more (issue #293 — see the
+# module docstring's "test count" row); the pattern stays defined because
+# it is still the generic worked example scan_claims/check_counts's own
+# tests exercise, and tests_py/scripts/test_check_doc_claims.py asserts its
+# absence from the real tree as a standing regression guard (a re-added
+# hardcoded prose count would fail
+# RepositoryTests.test_no_prose_file_states_the_suite_size).
 TEST_CLAIM = re.compile(r"(\d+)(?:\s+tests|-test suite)\b")
-
-# The version and test badges are COMMITTED SVGs under assets/, not hotlinked
-# shields.io URLs, so their figures are read out of the files' own <title>.
-# These patterns replaced URL-shaped ones when the badges were self-hosted:
-# had they been left matching "badge/version-X.Y.Z", they would have found
-# nothing in the new README and both gates would have gone quiet while still
-# reporting success. A gate that cannot find its subject must fail, not pass.
-VERSION_BADGE = re.compile(r"<title>Version (\d+\.\d+\.\d+)</title>")
-TESTS_BADGE = re.compile(r"<title>(\d+) tests passing</title>")
-
-# Self-hosting the badges is only durable if reverting it is loud. Any
-# reintroduced shields.io hotlink in the README is a third-party beacon AND
-# silently detaches whichever claim it carries from the checks below.
-SHIELDS_HOTLINK = re.compile(r"img\.shields\.io")
-
-# An unresolved merge conflict inside a scanned file states BOTH sides of a
-# claim at once, so every check above reads a file that no longer says one
-# thing. This is not hypothetical: `.bestpractices.json` was committed with
-# four such blocks (branch sec/pin-dependencies-and-fuzzing, commit c090278,
-# found 2026-07-29) and shipped through the whole gate, because the claim
-# regexes matched the first side and never looked at the file's structure.
-#
-# Matched on the labelled markers only (`<<<<<<< HEAD`, `>>>>>>> origin/main`
-# — git always writes a ref after the seven characters). A bare `=======` is
-# deliberately NOT matched: it is a legal setext H1 underline in Markdown, and
-# half the scanned files are Markdown, so matching it would fail honest docs.
-CONFLICT_MARKER = re.compile(r"^(?:<{7}|>{7}) \S")
-
-# source: structural — str.split(marker, 1) yields exactly (before, after)
-# when the marker is present
-_MARKER_SPLIT_PARTS = 2
-
-
-class ClaimError(Exception):
-    """A canonical source could not be read — the gate cannot run blind."""
 
 
 def read(relative_path: str) -> str:
+    # encoding="utf-8" is pinned explicitly, never the platform default:
+    # every scanned Markdown file uses non-ASCII prose (em dashes, arrows),
+    # and a locale-dependent default can mis-decode them on a non-UTF-8-
+    # default platform (Windows is in this project's own CI matrix) — see
+    # test_read_pins_utf8. "UTF-8" (verbatim uppercase) is a documented-
+    # equivalent spelling: codecs.lookup is case-insensitive (CPython
+    # Lib/encodings/aliases.py normalizes via .lower()), so it is the SAME
+    # codec, not a different one a wrong-encoding bug could reach.
     return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
 
 def canonical_tool_counts() -> tuple[int, int]:
-    """(standalone, total) from the mcp-tools.md header, cross-checked.
-
-    The header sentence is the single place the catalogue states the counts;
-    the pinned test name in tests_py/test_main.py carries the registry-derived
-    standalone number, so the two disagreeing means the catalogue drifted from
-    the server itself.
-    """
-    header = read("docs/mcp-tools.md")
-    match = re.search(
-        r"(\d+)\s+standalone tools register unconditionally;"
-        r"\s*(\d+)\s+more[^(]*\((\d+)\s+total",
-        header,
-    )
-    if not match:
-        raise ClaimError("docs/mcp-tools.md: standalone/total tool sentence not found")
-    standalone, extra, total = (int(g) for g in match.groups())
-    if standalone + extra != total:
-        raise ClaimError(f"docs/mcp-tools.md: {standalone} + {extra} != {total}")
-
-    pinned = re.search(
-        r"test_standalone_baseline_is_(\d+)_tools", read("tests_py/test_main.py")
-    )
-    if not pinned:
-        raise ClaimError("tests_py/test_main.py: pinned tool-count test not found")
-    if int(pinned.group(1)) != standalone:
-        raise ClaimError(
-            f"docs/mcp-tools.md says {standalone} standalone tools, but the pinned "
-            f"registry test says {pinned.group(1)}"
-        )
-    return standalone, total
+    return doc_claim_sources.canonical_tool_counts(read)
 
 
 def canonical_reference_count() -> int:
-    """Entries counted in the bibliography, which declares itself canonical."""
-    body = read("docs/papers/bibliography.md").split("## References", 1)
-    if len(body) != _MARKER_SPLIT_PARTS:
-        raise ClaimError(
-            "docs/papers/bibliography.md: '## References' section not found"
-        )
-    entries = [
-        line
-        for line in body[1].splitlines()
-        if line.strip() and not line.startswith(("#", "---"))
-    ]
-    if not entries:
-        raise ClaimError("docs/papers/bibliography.md: no reference entries found")
-    return len(entries)
+    return doc_claim_sources.canonical_reference_count(read)
 
 
 def canonical_mechanism_count() -> int:
-    """The mechanism count declared in the bibliography header.
-
-    Mechanisms are not machine-countable (they are implementations spread over
-    core modules), so one file declares the number and every other file must
-    agree with it. Changing the count is a one-line edit here plus whatever the
-    gate then reports as stale.
-    """
-    match = MECHANISM_CLAIM.search(read("docs/papers/bibliography.md"))
-    if not match:
-        raise ClaimError("docs/papers/bibliography.md: no mechanism count declared")
-    return int(match.group(1))
+    return doc_claim_sources.canonical_mechanism_count(read)
 
 
 def canonical_version() -> str:
-    match = re.search(r'^version\s*=\s*"([^"]+)"', read("pyproject.toml"), re.MULTILINE)
-    if not match:
-        raise ClaimError("pyproject.toml: [project].version not found")
-    return match.group(1)
-
-
-def scannable_lines() -> Iterator[tuple[str, int, str]]:
-    """Every (file, line number, text) that describes the present."""
-    for relative_path in SCANNED_FILES:
-        for number, line in enumerate(read(relative_path).splitlines(), start=1):
-            if not HISTORY_MARKER.search(line):
-                yield relative_path, number, line
+    return doc_claim_sources.canonical_version(read)
 
 
 def exemption_registry() -> list[tuple[str, int, str]]:
     """Every declared not-a-claim marker: (file, line, the family it exempts)."""
-    return [
-        (path, number, match.group(1))
-        for path, number, line in scannable_lines()
-        for match in NOT_A_CLAIM.finditer(line)
-    ]
+    return doc_claim_scan.exemption_registry(SCANNED_FILES, read)
 
 
 def scan_claims(pattern: re.Pattern[str], label: str) -> list[tuple[str, int, int]]:
-    """Every (file, line number, claimed value) that claims `label`.
-
-    A line declaring ``[not-a-count-claim: <label>]`` states that its number
-    counts something else; it is skipped for that family only, so the same
-    line still has to answer to every other one.
-    """
-    return [
-        (path, number, int(match.group(1)))
-        for path, number, line in scannable_lines()
-        if label not in {m.group(1) for m in NOT_A_CLAIM.finditer(line)}
-        for match in pattern.finditer(line)
-    ]
+    """Every (file, line number, claimed value) that claims `label`."""
+    return doc_claim_scan.scan_claims(pattern, label, SCANNED_FILES, read)
 
 
 def check_counts(pattern: re.Pattern[str], expected: int, label: str) -> list[str]:
-    """Report claims that disagree — and the absence of any claim at all.
-
-    A pattern that matches nothing would pass silently forever, which is how a
-    gate becomes decorative: the vacuity guard makes a reworded (or deleted)
-    claim a build failure rather than an unnoticed loss of coverage.
-    """
-    claims = scan_claims(pattern, label)
-    if not claims:
-        return [
-            f"no {label} claim found in any scanned file — "
-            f"the gate would pass vacuously"
-        ]
-    return [
-        f"{path}:{line}: advertises {claimed} {label}, canonical is {expected}"
-        for path, line, claimed in claims
-        if claimed != expected
-    ]
+    """Report claims that disagree — and the absence of any claim at all."""
+    return doc_claim_scan.check_counts(pattern, expected, label, SCANNED_FILES, read)
 
 
 def check_versions(expected: str) -> list[str]:
@@ -272,102 +178,29 @@ def check_versions(expected: str) -> list[str]:
             failures.append(
                 f"{relative_path}: version {actual!r}, pyproject says {expected!r}"
             )
-    failures += check_badge(
-        "assets/badge-version.svg", VERSION_BADGE, expected, "version"
+    failures += doc_claim_structural.check_badge(
+        "assets/badge-version.svg",
+        doc_claim_structural.VERSION_BADGE,
+        expected,
+        "version",
+        read,
     )
     return failures
 
 
-def check_badge(
-    relative_path: str, pattern: re.Pattern[str], expected: str, label: str
-) -> list[str]:
-    """One committed badge SVG states one figure, and it must be the right one.
-
-    Fails closed on an unreadable or unmatched badge. The predecessor of this
-    check was `if badge and ...` against a regex over the README, which passed
-    silently the moment the badge stopped matching — the failure mode that
-    makes a gate worse than no gate, because it still reports success.
-    """
-    try:
-        body = read(relative_path)
-    except FileNotFoundError:
-        return [f"{relative_path}: missing — run scripts/generate_repo_badges.py"]
-    match = pattern.search(body)
-    if match is None:
-        return [
-            f"{relative_path}: no {label} figure in its <title>; the badge and"
-            " this gate have diverged"
-        ]
-    if match.group(1) != expected:
-        return [
-            f"{relative_path}: {label} badge says {match.group(1)},"
-            f" canonical is {expected}"
-        ]
-    return []
-
-
 def check_no_hotlinked_badges() -> list[str]:
     """The README's repo-derived badges stay self-hosted."""
-    failures = []
-    for number, line in enumerate(read("README.md").splitlines(), start=1):
-        if SHIELDS_HOTLINK.search(line):
-            failures.append(
-                f"README.md:{number}: hotlinked shields.io badge — these are"
-                " committed under assets/ (scripts/generate_repo_badges.py)"
-            )
-    return failures
+    return doc_claim_structural.check_no_hotlinked_badges(read)
 
 
 def check_no_conflict_markers() -> list[str]:
-    """No scanned file states both sides of a claim at once.
-
-    A file left with git's conflict markers is not a document that drifted —
-    it is a document that says two contradictory things and parses as neither.
-    The claim regexes above cannot see this: they match the first side and
-    report success, which is how four such blocks reached a green CI run.
-    A file the gate cannot read at all is a failure too, for the same reason
-    the badge check fails closed — a check that skips its subject is worse
-    than no check, because it still prints OK.
-    """
-    failures = []
-    for relative_path in SCANNED_FILES:
-        try:
-            body = read(relative_path)
-        except FileNotFoundError:
-            failures.append(f"{relative_path}: missing — the doc-claim gate reads it")
-            continue
-        for number, line in enumerate(body.splitlines(), start=1):
-            if CONFLICT_MARKER.match(line):
-                failures.append(
-                    f"{relative_path}:{number}: unresolved merge conflict marker"
-                    f" ({line.strip()!r}) — the file states both sides of its claims"
-                )
-    return failures
+    """No scanned file states both sides of a claim at once."""
+    return doc_claim_structural.check_no_conflict_markers(SCANNED_FILES, read)
 
 
 def check_scanned_json_parses() -> list[str]:
-    """Every scanned .json file is still machine-readable.
-
-    `.bestpractices.json` is transcribed into the OpenSSF questionnaire and
-    `manifest.json` is read by the plugin loader, so a file that no longer
-    parses is a broken consumer, not just a stale number. Derived from
-    SCANNED_FILES rather than a second hand-kept list, so adding a JSON file
-    to the gate enrols it here with no edit to this function.
-    """
-    failures = []
-    for relative_path in SCANNED_FILES:
-        if not relative_path.endswith(".json"):
-            continue
-        try:
-            body = read(relative_path)
-        except FileNotFoundError:
-            failures.append(f"{relative_path}: missing — the doc-claim gate reads it")
-            continue
-        try:
-            json.loads(body)
-        except json.JSONDecodeError as error:
-            failures.append(f"{relative_path}: not valid JSON — {error}")
-    return failures
+    """Every scanned .json file is still machine-readable."""
+    return doc_claim_structural.check_scanned_json_parses(SCANNED_FILES, read)
 
 
 def collect_failures(test_count: int | None) -> list[str]:
@@ -381,9 +214,15 @@ def collect_failures(test_count: int | None) -> list[str]:
     failures += check_no_conflict_markers()
     failures += check_scanned_json_parses()
     if test_count is not None:
-        failures += check_counts(TEST_CLAIM, test_count, "tests")
-        failures += check_badge(
-            "assets/badge-tests.svg", TESTS_BADGE, str(test_count), "tests"
+        # The tests badge is the ONLY test-count claim left (issue #293);
+        # see check_badge_floor's docstring for why it is a floor, not an
+        # exact match.
+        failures += doc_claim_structural.check_badge_floor(
+            "assets/badge-tests.svg",
+            doc_claim_structural.TESTS_BADGE,
+            test_count,
+            "tests",
+            read,
         )
     return failures
 
