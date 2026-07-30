@@ -57,6 +57,18 @@ badge_render = importlib.util.module_from_spec(_badge_render_spec)
 sys.modules[_badge_render_spec.name] = badge_render
 _badge_render_spec.loader.exec_module(badge_render)
 
+# Same defect, same fix, for generate_repo_badges.py's other bare-imported
+# sibling (`import repo_badge_catalog`): StaleTestsBadgeTests below already
+# calls `gen.repo_badge_catalog.tests_badge_spec` through the bare-cached
+# copy (real behavioural coverage only). RepoBadgeCatalogDirectTests calls
+# through this dotted reference instead, so its mutants attribute to a test
+# (issue #292).
+_catalog_spec = importlib.util.spec_from_file_location(
+    "scripts.repo_badge_catalog", _SCRIPTS / "repo_badge_catalog.py"
+)
+repo_badge_catalog = importlib.util.module_from_spec(_catalog_spec)
+_catalog_spec.loader.exec_module(repo_badge_catalog)
+
 PYPROJECT = (
     '[project]\nversion = "4.16.0"\nlicense = "MIT"\nrequires-python = ">=3.10"\n'
 )
@@ -583,6 +595,101 @@ class ArgparseContractTests(unittest.TestCase):
                 gen.main(["--test-count", "not-a-number"])
         self.assertNotEqual(ctx.exception.code, 0)
         self.assertIn("--test-count", err.getvalue())
+
+
+class RepoBadgeCatalogDirectTests(unittest.TestCase):
+    """Direct tests of repo_badge_catalog's field specs (issue #292).
+
+    BuildTests/StaleTestsBadgeTests above exercise `fixed_badge_specs`/
+    `tests_badge_spec` only through gen's bare-imported copy — real
+    behavioural coverage, not mutation coverage, for the same reason
+    badge_render's direct tests exist above.
+    """
+
+    def _fixed_specs_by_filename(self) -> dict[str, dict[str, str]]:
+        """Exact equality is asserted per-badge below (not one 40+-line
+        four-badge literal — coding-standards.md §4.2's method cap) — a
+        partial assertion (message only, or one field at a time) leaves
+        every other string literal and dict key unpinned, and each is its
+        own mutmut mutant (issue #292's own repro: 37 survivors on this
+        function alone before these tests existed)."""
+        return {
+            s["filename"]: s
+            for s in repo_badge_catalog.fixed_badge_specs(
+                licence="MIT", floor="3.10", references=2, version="4.16.0"
+            )
+        }
+
+    def test_exactly_four_fixed_specs_are_returned(self):
+        self.assertEqual(len(self._fixed_specs_by_filename()), 4)
+
+    def test_license_spec_is_exactly_this_dict(self):
+        self.assertEqual(
+            self._fixed_specs_by_filename()["badge-license.svg"],
+            {
+                "filename": "badge-license.svg",
+                "label": "license",
+                "message": "MIT",
+                "fill": repo_badge_catalog._NEUTRAL,
+                "alt": "License: MIT",
+                "derivation": "Source: [project].license in pyproject.toml.",
+            },
+        )
+
+    def test_python_spec_is_exactly_this_dict(self):
+        self.assertEqual(
+            self._fixed_specs_by_filename()["badge-python.svg"],
+            {
+                "filename": "badge-python.svg",
+                "label": "python",
+                "message": "3.10+",
+                "fill": repo_badge_catalog._NEUTRAL,
+                "alt": "Python 3.10+",
+                "derivation": "Source: [project].requires-python in pyproject.toml.",
+            },
+        )
+
+    def test_references_spec_is_exactly_this_dict(self):
+        self.assertEqual(
+            self._fixed_specs_by_filename()["badge-references.svg"],
+            {
+                "filename": "badge-references.svg",
+                "label": "references",
+                "message": "2 papers",
+                "fill": repo_badge_catalog._CORPUS,
+                "alt": "2 referenced papers",
+                "derivation": (
+                    "Source: entries under '## References' in"
+                    " docs/papers/bibliography.md."
+                ),
+            },
+        )
+
+    def test_version_spec_is_exactly_this_dict(self):
+        self.assertEqual(
+            self._fixed_specs_by_filename()["badge-version.svg"],
+            {
+                "filename": "badge-version.svg",
+                "label": "version",
+                "message": "4.16.0",
+                "fill": repo_badge_catalog._HEALTHY,
+                "alt": "Version 4.16.0",
+                "derivation": "Source: [project].version in pyproject.toml.",
+            },
+        )
+
+    def test_tests_badge_spec_is_exactly_this_dict(self):
+        self.assertEqual(
+            repo_badge_catalog.tests_badge_spec(42),
+            {
+                "filename": "badge-tests.svg",
+                "label": "tests",
+                "message": "42 passing",
+                "fill": repo_badge_catalog._HEALTHY,
+                "alt": "42 tests passing",
+                "derivation": "Source: the count pytest collects on this tree.",
+            },
+        )
 
 
 class RepositoryTests(unittest.TestCase):

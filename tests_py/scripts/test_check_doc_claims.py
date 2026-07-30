@@ -64,6 +64,19 @@ _dcso_spec = importlib.util.spec_from_file_location(
 doc_claim_sources = importlib.util.module_from_spec(_dcso_spec)
 _dcso_spec.loader.exec_module(doc_claim_sources)
 
+# Same defect, same fix, for the one remaining sibling check_doc_claims.py
+# bare-imports (`import doc_claim_scan`) — issue #292's remaining scope
+# (doc_claim_sources.py above is already dotted-loaded by #304/issue #235;
+# doc_claim_scan.py was not in that PR's acceptance criteria). Its functions
+# take `scanned_files`/`read_fn` as explicit parameters (not module globals),
+# so the direct-test class below needs no monkeypatching, only this dotted
+# reference to call through.
+_scan_spec = importlib.util.spec_from_file_location(
+    "scripts.doc_claim_scan", _SCRIPTS / "doc_claim_scan.py"
+)
+doc_claim_scan = importlib.util.module_from_spec(_scan_spec)
+_scan_spec.loader.exec_module(doc_claim_scan)
+
 
 CATALOGUE = (
     "52 standalone tools register unconditionally; 3 more register only when an\n"
@@ -756,6 +769,380 @@ class CheckBadgeFloorDirectTests(unittest.TestCase):
             ),
             [],
         )
+
+
+class DocClaimScanDirectTests(unittest.TestCase):
+    """Direct tests of doc_claim_scan's claim-scanning machinery.
+
+    ScanTests above exercises these only through gate's bare-imported copy —
+    see the dotted-load comment atop this file for why that carries zero
+    mutation coverage. `scanned_files`/`read_fn` are explicit parameters here
+    too, so each test builds its own tiny fixture and calls through the
+    dotted `doc_claim_scan` reference.
+    """
+
+    def _read(self, text: str) -> object:
+        return _FakeRepo(**{"DOC.md": text}).read
+
+    def test_wrong_count_is_reported_with_file_and_line(self):
+        read_fn = self._read("intro\nExposes 50 memory tools today.\n")
+        failures = doc_claim_scan.check_counts(
+            gate.TOOL_CLAIM, 52, "tools", ("DOC.md",), read_fn
+        )
+        self.assertEqual(len(failures), 1)
+        self.assertIn("DOC.md:2", failures[0])
+        self.assertIn("advertises 50 tools", failures[0])
+
+    def test_matching_count_produces_no_failure(self):
+        read_fn = self._read("Exposes 52 memory tools today.\n")
+        self.assertEqual(
+            doc_claim_scan.check_counts(
+                gate.TOOL_CLAIM, 52, "tools", ("DOC.md",), read_fn
+            ),
+            [],
+        )
+
+    def test_release_history_lines_are_exempt(self):
+        read_fn = self._read(
+            "Exposes 52 memory tools today.\n"
+            "**v4.13.0 — grooming.** **49 memory tools** (52 with upstream).\n"
+        )
+        self.assertEqual(
+            doc_claim_scan.check_counts(
+                gate.TOOL_CLAIM, 52, "tools", ("DOC.md",), read_fn
+            ),
+            [],
+        )
+
+    def test_a_pattern_that_matches_nothing_fails_instead_of_passing_vacuously(self):
+        read_fn = self._read("No numbers here.\n")
+        failures = doc_claim_scan.check_counts(
+            gate.TOOL_CLAIM, 52, "tools", ("DOC.md",), read_fn
+        )
+        self.assertEqual(len(failures), 1)
+        self.assertIn("vacuously", failures[0])
+
+    def test_both_test_count_phrasings_state_the_same_claim(self):
+        read_fn = self._read("The suite has 5594 tests.\nCI runs a 5594-test suite.\n")
+        self.assertEqual(
+            doc_claim_scan.check_counts(
+                gate.TEST_CLAIM, 5594, "tests", ("DOC.md",), read_fn
+            ),
+            [],
+        )
+
+    def test_stale_hyphenated_test_count_is_reported(self):
+        read_fn = self._read("The suite has 5594 tests.\nCI runs a 5571-test suite.\n")
+        failures = doc_claim_scan.check_counts(
+            gate.TEST_CLAIM, 5594, "tests", ("DOC.md",), read_fn
+        )
+        self.assertEqual(len(failures), 1)
+        self.assertIn("DOC.md:2", failures[0])
+        self.assertIn("advertises 5571 tests", failures[0])
+
+    def test_a_count_of_test_files_is_not_a_suite_size_claim(self):
+        read_fn = self._read("The suite has 5594 tests.\nThere are 3 test files.\n")
+        self.assertEqual(
+            doc_claim_scan.check_counts(
+                gate.TEST_CLAIM, 5594, "tests", ("DOC.md",), read_fn
+            ),
+            [],
+        )
+
+    def test_a_declared_exemption_is_not_a_claim_for_that_family(self):
+        read_fn = self._read(
+            "The suite has 5594 tests.\n"
+            "12 tests skipped [not-a-count-claim: tests] locally\n"
+        )
+        self.assertEqual(
+            doc_claim_scan.check_counts(
+                gate.TEST_CLAIM, 5594, "tests", ("DOC.md",), read_fn
+            ),
+            [],
+        )
+
+    def test_an_exemption_binds_only_the_family_it_names(self):
+        read_fn = self._read(
+            "The suite has 5594 tests.\n"
+            "Exposes 52 memory tools today.\n"
+            "Exposes 50 memory tools and 12 tests skipped [not-a-count-claim: tests]\n"
+        )
+        self.assertEqual(
+            doc_claim_scan.check_counts(
+                gate.TEST_CLAIM, 5594, "tests", ("DOC.md",), read_fn
+            ),
+            [],
+        )
+        failures = doc_claim_scan.check_counts(
+            gate.TOOL_CLAIM, 52, "tools", ("DOC.md",), read_fn
+        )
+        self.assertEqual(len(failures), 1)
+        self.assertIn("advertises 50 tools", failures[0])
+
+    def test_a_misspelled_exemption_does_not_exempt(self):
+        for marker in (
+            "[not-a-count-claim]",
+            "[not-a-count-claim: Tests]",
+            "[not a count claim: tests]",
+            "[not-a-count-claim: tools]",
+            "[not-a-count-claim:tests]",
+        ):
+            with self.subTest(marker=marker):
+                read_fn = self._read(
+                    f"The suite has 5594 tests.\n12 tests {marker} here\n"
+                )
+                failures = doc_claim_scan.check_counts(
+                    gate.TEST_CLAIM, 5594, "tests", ("DOC.md",), read_fn
+                )
+                self.assertEqual(len(failures), 1)
+                self.assertIn("advertises 12 tests", failures[0])
+
+    def test_the_test_count_guard_fires_when_only_an_exemption_remains(self):
+        read_fn = self._read("12 tests skipped [not-a-count-claim: tests] locally\n")
+        failures = doc_claim_scan.check_counts(
+            gate.TEST_CLAIM, 5594, "tests", ("DOC.md",), read_fn
+        )
+        self.assertEqual(len(failures), 1)
+        self.assertIn("vacuously", failures[0])
+
+    def test_the_with_integrations_claim_has_a_vacuity_guard(self):
+        read_fn = self._read("no parenthetical here\n")
+        failures = doc_claim_scan.check_counts(
+            gate.TOOL_TOTAL_CLAIM, 55, "tools with integrations", ("DOC.md",), read_fn
+        )
+        self.assertEqual(len(failures), 1)
+        self.assertIn("vacuously", failures[0])
+
+    def test_the_registry_records_file_line_and_family(self):
+        read_fn = self._read(
+            "The suite has 5594 tests.\n"
+            "12 tests skipped [not-a-count-claim: tests] locally\n"
+            "and 3 more [not-a-count-claim: tools with integrations]\n"
+        )
+        self.assertEqual(
+            doc_claim_scan.exemption_registry(("DOC.md",), read_fn),
+            [("DOC.md", 2, "tests"), ("DOC.md", 3, "tools with integrations")],
+        )
+
+    def test_release_history_lines_declare_no_exemptions(self):
+        read_fn = self._read("**v4.13.0 — old.** 12 tests [not-a-count-claim: tests]\n")
+        self.assertEqual(doc_claim_scan.exemption_registry(("DOC.md",), read_fn), [])
+
+
+class StructuralDirectTests(unittest.TestCase):
+    """Direct tests of doc_claim_structural's remaining functions.
+
+    check_badge_floor already has CheckBadgeFloorDirectTests above; these
+    cover the other four (check_badge, check_no_hotlinked_badges,
+    check_no_conflict_markers, check_scanned_json_parses), which
+    CollectFailuresTests/StructuralIntegrityTests exercise only through
+    gate's bare-imported copy — real behavioural coverage, not mutation
+    coverage (issue #292).
+    """
+
+    def test_check_badge_missing_file_fails_closed(self):
+        read_fn = _FakeRepo().read
+        self.assertEqual(
+            doc_claim_structural.check_badge(
+                "assets/badge-version.svg",
+                doc_claim_structural.VERSION_BADGE,
+                "4.16.0",
+                "version",
+                read_fn,
+            ),
+            ["assets/badge-version.svg: missing — run scripts/generate_repo_badges.py"],
+        )
+
+    def test_check_badge_no_title_match_fails_closed(self):
+        read_fn = _FakeRepo(**{"assets/badge-version.svg": "<svg></svg>"}).read
+        self.assertEqual(
+            doc_claim_structural.check_badge(
+                "assets/badge-version.svg",
+                doc_claim_structural.VERSION_BADGE,
+                "4.16.0",
+                "version",
+                read_fn,
+            ),
+            [
+                "assets/badge-version.svg: no version figure in its <title>;"
+                " the badge and this gate have diverged"
+            ],
+        )
+
+    def test_check_badge_mismatch_is_reported(self):
+        read_fn = _FakeRepo(
+            **{"assets/badge-version.svg": "<title>Version 4.15.0</title>"}
+        ).read
+        self.assertEqual(
+            doc_claim_structural.check_badge(
+                "assets/badge-version.svg",
+                doc_claim_structural.VERSION_BADGE,
+                "4.16.0",
+                "version",
+                read_fn,
+            ),
+            [
+                "assets/badge-version.svg: version badge says 4.15.0,"
+                " canonical is 4.16.0"
+            ],
+        )
+
+    def test_check_badge_match_is_not_reported(self):
+        read_fn = _FakeRepo(
+            **{"assets/badge-version.svg": "<title>Version 4.16.0</title>"}
+        ).read
+        self.assertEqual(
+            doc_claim_structural.check_badge(
+                "assets/badge-version.svg",
+                doc_claim_structural.VERSION_BADGE,
+                "4.16.0",
+                "version",
+                read_fn,
+            ),
+            [],
+        )
+
+    def test_hotlinked_badge_is_reported(self):
+        read_fn = _FakeRepo(
+            **{"README.md": '<img src="https://img.shields.io/badge/tests-1.svg">\n'}
+        ).read
+        self.assertEqual(
+            doc_claim_structural.check_no_hotlinked_badges(read_fn),
+            [
+                "README.md:1: hotlinked shields.io badge — these are"
+                " committed under assets/ (scripts/generate_repo_badges.py)"
+            ],
+        )
+
+    def test_no_hotlink_reports_nothing(self):
+        read_fn = _FakeRepo(
+            **{"README.md": '<img src="assets/badge-tests.svg">\n'}
+        ).read
+        self.assertEqual(doc_claim_structural.check_no_hotlinked_badges(read_fn), [])
+
+    def test_conflict_markers_are_reported_with_path_and_line(self):
+        read_fn = _FakeRepo(
+            **{
+                ".bestpractices.json": (
+                    '{\n<<<<<<< HEAD\n"a": 1\n=======\n"a": 2\n>>>>>>> theirs\n}\n'
+                )
+            }
+        ).read
+        failures = doc_claim_structural.check_no_conflict_markers(
+            (".bestpractices.json",), read_fn
+        )
+        self.assertEqual(
+            failures,
+            [
+                ".bestpractices.json:2: unresolved merge conflict marker"
+                " ('<<<<<<< HEAD') — the file states both sides of its claims",
+                ".bestpractices.json:6: unresolved merge conflict marker"
+                " ('>>>>>>> theirs') — the file states both sides of its claims",
+            ],
+        )
+
+    def test_a_clean_file_reports_no_conflict_markers(self):
+        read_fn = _FakeRepo(**{"README.md": "# Cortex\n\nAll good.\n"}).read
+        self.assertEqual(
+            doc_claim_structural.check_no_conflict_markers(("README.md",), read_fn), []
+        )
+
+    def test_a_markdown_setext_underline_is_not_a_conflict_marker(self):
+        read_fn = _FakeRepo(
+            **{"docs/ROADMAP.md": "Roadmap\n=======\n\nNext up.\n"}
+        ).read
+        self.assertEqual(
+            doc_claim_structural.check_no_conflict_markers(
+                ("docs/ROADMAP.md",), read_fn
+            ),
+            [],
+        )
+
+    def test_a_missing_scanned_file_fails_closed_for_conflict_markers(self):
+        read_fn = _FakeRepo().read
+        self.assertEqual(
+            doc_claim_structural.check_no_conflict_markers(("GONE.md",), read_fn),
+            ["GONE.md: missing — the doc-claim gate reads it"],
+        )
+
+    def test_a_missing_file_does_not_stop_the_scan_of_the_rest(self):
+        """Pins `continue` over `break` on the FileNotFoundError arm: a
+        missing file must not cut the loop short and hide a conflict
+        marker in a LATER scanned file."""
+        read_fn = _FakeRepo(**{"SECOND.md": "ok\n<<<<<<< HEAD\nmore\n"}).read
+        failures = doc_claim_structural.check_no_conflict_markers(
+            ("GONE.md", "SECOND.md"), read_fn
+        )
+        self.assertEqual(
+            failures,
+            [
+                "GONE.md: missing — the doc-claim gate reads it",
+                "SECOND.md:2: unresolved merge conflict marker"
+                " ('<<<<<<< HEAD') — the file states both sides of its claims",
+            ],
+        )
+
+    def test_unparseable_json_is_reported(self):
+        read_fn = _FakeRepo(
+            **{".bestpractices.json": '{"a": 1,\n<<<<<<< HEAD\n}\n'}
+        ).read
+        failures = doc_claim_structural.check_scanned_json_parses(
+            (".bestpractices.json",), read_fn
+        )
+        self.assertEqual(len(failures), 1, failures)
+        self.assertTrue(
+            failures[0].startswith(".bestpractices.json: not valid JSON — ")
+        )
+
+    def test_valid_json_reports_nothing(self):
+        read_fn = _FakeRepo(**{".bestpractices.json": '{"test_status": "Met"}\n'}).read
+        self.assertEqual(
+            doc_claim_structural.check_scanned_json_parses(
+                (".bestpractices.json",), read_fn
+            ),
+            [],
+        )
+
+    def test_markdown_is_not_json_checked(self):
+        read_fn = _FakeRepo(**{"README.md": "{ this is prose, not JSON\n"}).read
+        self.assertEqual(
+            doc_claim_structural.check_scanned_json_parses(("README.md",), read_fn), []
+        )
+
+    def test_a_non_json_file_does_not_stop_the_scan_of_the_rest(self):
+        """Pins `continue` over `break` on the non-`.json` skip: a
+        Markdown file earlier in `scanned_files` must not cut the loop
+        short and hide a LATER json file's parse error."""
+        read_fn = _FakeRepo(**{"README.md": "prose\n", "bad.json": '{"a": 1,\n'}).read
+        failures = doc_claim_structural.check_scanned_json_parses(
+            ("README.md", "bad.json"), read_fn
+        )
+        self.assertEqual(len(failures), 1, failures)
+        self.assertTrue(failures[0].startswith("bad.json: not valid JSON — "))
+
+    def test_a_missing_scanned_json_file_fails_closed(self):
+        """The FileNotFoundError branch: not exercised anywhere before this
+        direct test (a genuine gap, not a mutation-attribution artifact —
+        found while adding this class, fixed here rather than deferred)."""
+        read_fn = _FakeRepo().read
+        self.assertEqual(
+            doc_claim_structural.check_scanned_json_parses(("GONE.json",), read_fn),
+            ["GONE.json: missing — the doc-claim gate reads it"],
+        )
+
+    def test_a_missing_json_file_does_not_stop_the_scan_of_the_rest(self):
+        """Pins `continue` over `break` on the JSON FileNotFoundError arm:
+        a missing json file must not cut the loop short and hide a LATER
+        file's parse error."""
+        read_fn = _FakeRepo(**{"bad.json": '{"a": 1,\n'}).read
+        failures = doc_claim_structural.check_scanned_json_parses(
+            ("gone.json", "bad.json"), read_fn
+        )
+        self.assertEqual(len(failures), 2, failures)
+        self.assertEqual(
+            failures[0], "gone.json: missing — the doc-claim gate reads it"
+        )
+        self.assertTrue(failures[1].startswith("bad.json: not valid JSON — "))
 
 
 class RepositoryTests(unittest.TestCase):
