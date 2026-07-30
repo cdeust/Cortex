@@ -1,4 +1,4 @@
-"""Regression: the five consolidation submodules import standalone (#237).
+"""Regression: the six consolidation submodules import standalone (#237).
 
 Before the fix, ``candidate_scan``, ``claude_cli``, ``cycle_orchestration``,
 and ``drain_operations`` each did ``from . import headless_authoring as
@@ -10,9 +10,12 @@ any of the four directly in a fresh interpreter raised:
     ImportError: cannot import name '<name>' from partially initialized
     module '...' (most likely due to a circular import)
 
-``anchor_authoring`` (issue #276 — split out of ``drain_operations`` to stay
-under the file-size cap) carries the identical deferred-import pattern for
-the same reason, so it joins the list below.
+``anchor_authoring`` and ``claude_invoke`` (issue #276 — split out of
+``drain_operations`` / ``headless_authoring`` respectively to stay under the
+file-size cap) carry the identical deferred-import pattern for the same
+reason, so they join the list below. (``cycle_types``, also split out for
+#276, has no dependency on ``headless_authoring`` at all — plain dataclasses
+— so it carries no load-order risk and needs no entry here.)
 
 Each import below MUST run in its own subprocess — within a single
 interpreter, the first successful import populates ``sys.modules`` and
@@ -36,6 +39,7 @@ _AFFECTED_MODULES = (
     "mcp_server.handlers.consolidation.cycle_orchestration",
     "mcp_server.handlers.consolidation.drain_operations",
     "mcp_server.handlers.consolidation.anchor_authoring",
+    "mcp_server.handlers.consolidation.claude_invoke",
 )
 
 
