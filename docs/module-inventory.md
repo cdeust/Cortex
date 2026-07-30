@@ -15,8 +15,13 @@ zetetic source rule:
 #   find mcp_server/<layer> -name "*.py" | grep -v __init__ | grep -v __pycache__ | wc -l
 # infrastructure/ re-measured 2026-07-30 (issue #275 split added 4 modules,
 #   net file count +4; no infrastructure/ files were deleted)
+# core/ re-measured 2026-07-30 (issue #228 behaviour-preserving split of
+#   core/context_assembly/condensers.py, over the 300-line §4.1 cap, into
+#   condense_text/condense_code/condense_structured/condense_dispatch/
+#   condense_stage.py + a thin re-export facade; net file count +5, no
+#   core/ files were deleted)
 shared/           26 files   (10 documented below — curated subset)
-core/            225 files   (~90 documented below — curated subset, incl. core/streaming, core/context_assembly)
+core/            230 files   (~90 documented below — curated subset, incl. core/streaming, core/context_assembly)
 infrastructure/   95 files   (25 documented below — curated subset)
 handlers/        135 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
 ```
@@ -188,8 +193,10 @@ Treat gaps as "undocumented," not "does not exist."
 - `document_normalizer.py` — `ParsedDocument` + provenance → wiki page markdown + memory payloads (skipped-image/empty notices, provenance stamping)
 
 *Undocumented (measured, not yet catalogued individually):* `core/streaming/`
-(5 files) and `core/context_assembly/` (9 files) plus ~100 additional
-top-level `core/` modules added since the last curation pass — ast
+(5 files) and `core/context_assembly/` (15 files as of the issue #228 split —
+corrected from the prior "9", one file already stale since #196's
+`stage_phases.py`) plus ~100 additional top-level `core/` modules added
+since the last curation pass — ast
 extraction, capture normalization, redaction, abstention gating, adaptive
 control/writing, backpressure, and other mechanisms not yet described above.
 Run the measurement command in the header to get a current file listing.
