@@ -41,7 +41,7 @@ from pathlib import Path
 from mcp_server.infrastructure.groomer_coordinator_io import (
     atomic_write_json,
     atomic_write_text,
-    decision_lock,
+    DecisionLock,
     parse_iso,
     pid_alive,
 )
@@ -207,7 +207,7 @@ class GroomerCoordinator:
         """
         self.base_dir.mkdir(parents=True, exist_ok=True)
         now = now or datetime.now(timezone.utc)
-        with decision_lock(self.lock_path) as acquired:
+        with DecisionLock(self.lock_path) as acquired:
             if not acquired:
                 return SKIPPED_LOCKED
             if self.is_groomer_running():

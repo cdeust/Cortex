@@ -78,10 +78,10 @@ def atomic_write_json(path: Path, payload: dict) -> bool:
     return atomic_write_text(path, json.dumps(payload))
 
 
-class decision_lock:
+class DecisionLock:
     """Non-blocking per-store lock context manager.
 
-    ``with decision_lock(path) as acquired:`` yields True when this holder
+    ``with DecisionLock(path) as acquired:`` yields True when this holder
     won the lock and False when another holder already owns it (contended
     simultaneous decision). Advisory ``flock`` on POSIX, mandatory
     ``msvcrt.locking`` on Windows — same split as ``pipeline_install_lock``
