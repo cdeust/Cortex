@@ -13,7 +13,10 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.infrastructure.ap_bridge import APBridge
-from mcp_server.infrastructure.workflow_graph_ast_response import as_list
+from mcp_server.infrastructure.workflow_graph_ast_response import (
+    as_list,
+    build_path_tails,
+)
 
 # AP's node labels carrying symbol semantics. Derived from
 # stage-3 tree-sitter extractors; see
@@ -62,47 +65,137 @@ _NON_QUALIFIED_LABELS = {"Import"}
 _MAX_WHERE_TAILS = 10
 
 
-def _symbol_type_from_label(label: str) -> str:
-    """Map AP's label → workflow-graph symbol_type.
-
-    Keeps the value set small so the palette (``SYMBOL_COLORS``) stays
-    compact. Every AP label from every supported language collapses
-    into one of: function · method · class · module · constant.
-    """
-    low = label.lower()
-    if low == "function":
-        return "function"
-    if low == "method":
-        return "method"
+_LABEL_TO_SYMBOL_TYPE: dict[str, str] = {
+    "function": "function",
+    "method": "method",
     # All type-like constructs → class. Covers Rust (struct/enum/trait),
-    # Java/Kotlin (class/interface), Swift/ObjC (protocol/extension),
-    # C/C++ (union).
-    if low in (
-        "struct",
-        "enum",
-        "trait",
+    # Java/Kotlin (class/interface), Swift/ObjC (protocol/extension), C/C++
+    # (union).
+    **dict.fromkeys(
+        (
+            "struct",
+            "enum",
+            "trait",
+            "class",
+            "interface",
+            "protocol",
+            "extension",
+            "union",
+        ),
         "class",
-        "interface",
-        "protocol",
-        "extension",
-        "union",
-    ):
-        return "class"
+    ),
     # Module-ish containers → module (amber).
-    if low in ("module", "package", "namespace"):
-        return "module"
+    **dict.fromkeys(("module", "package", "namespace"), "module"),
     # Value-ish / alias-ish → constant (slate).
-    if low in (
+    **dict.fromkeys(
+        ("constant", "typealias", "typedef", "macro", "field", "property", "variable"),
         "constant",
-        "typealias",
-        "typedef",
-        "macro",
-        "field",
-        "property",
-        "variable",
-    ):
-        return "constant"
-    return low
+    ),
+}
+
+
+def _symbol_type_from_label(label: str) -> str:
+    """Map AP's label → workflow-graph symbol_type via
+    ``_LABEL_TO_SYMBOL_TYPE`` (keeps the palette — ``SYMBOL_COLORS`` —
+    compact). An unmapped label (e.g. ``Import``) passes through
+    lowercased, unchanged."""
+    low = label.lower()
+    return _LABEL_TO_SYMBOL_TYPE.get(low, low)
+
+
+def _where_for_tails(prop: str, tails: set[str]) -> str:
+    """Build a Cypher WHERE predicate that filters at the Kuzu level.
+
+    Each tail produces one STARTS WITH predicate on qualified_name (or
+    id for Import nodes). We emit the shortest unique tails only — if
+    "pkg/mod.py" is present, "mod.py" is redundant because any match for
+    "mod.py" also matches "pkg/mod.py". Cap at ``_MAX_WHERE_TAILS`` to
+    keep the WHERE clause tractable.
+    """
+    if not tails:
+        return ""
+    sorted_tails = sorted(tails, key=len, reverse=True)
+    kept: list[str] = []
+    for t in sorted_tails:
+        if any(t == k or k.endswith(t) for k in kept):
+            continue  # already covered by a longer tail
+        kept.append(t)
+        if len(kept) >= _MAX_WHERE_TAILS:
+            break
+    escaped = [t.replace("'", "\\'") for t in kept]
+    preds = " OR ".join(f"{prop} STARTS WITH '{t}::'" for t in escaped)
+    return f" WHERE {preds}"
+
+
+def _build_symbol_query(label: str, paths: list[str], path_tails: set[str]) -> str:
+    """Construct the per-label Cypher query.
+
+    Import nodes don't carry qualified_name/name — they use ``id``
+    (``<file>::<modpath>``) and ``path`` (the imported module) as the
+    qualified_name/name surrogate. Empty ``paths`` means load-all mode:
+    no WHERE filter, pull the full graph.
+    """
+    if label in _NON_QUALIFIED_LABELS:
+        prop = "s.id"
+        select = (
+            f"MATCH (s:{label})"
+            "{where}"
+            " RETURN s.id   AS qualified_name,"
+            "        s.path AS name"
+        )
+    else:
+        prop = "s.qualified_name"
+        select = (
+            f"MATCH (s:{label})"
+            "{where}"
+            " RETURN s.qualified_name AS qualified_name,"
+            "        s.name           AS name"
+        )
+    if not paths:
+        return select.format(where="")
+    return select.format(where=_where_for_tails(prop, path_tails))
+
+
+def _parse_symbol_batch(
+    rows: Any,
+    label: str,
+    path_tails: set[str],
+    paths: list[str],
+) -> list[dict[str, Any]]:
+    """Normalise one label query's rows into workflow-graph symbol dicts.
+
+    The ``path_tails`` re-check here is a Python-side secondary safeguard
+    (the WHERE clause built by ``_build_symbol_query`` is the primary
+    filter; this handles edge cases where a shorter tail matched a
+    different file).
+    """
+    batch: list[dict[str, Any]] = []
+    for r in as_list(rows):
+        qn = r.get("qualified_name")
+        if not qn:
+            continue
+        qn_s = str(qn)
+        file_part, sep, _ = qn_s.partition("::")
+        if not sep:
+            continue
+        if path_tails and not any(
+            p == file_part or p.endswith(file_part) or file_part.endswith(p)
+            for p in path_tails
+        ):
+            continue
+        # Resolve file_path back to the absolute form if possible.
+        abs_match = next((p for p in paths if p.endswith(file_part)), file_part)
+        batch.append(
+            {
+                "file_path": abs_match,
+                "qualified_name": qn_s,
+                "symbol_type": _symbol_type_from_label(label),
+                "signature": None,
+                "language": None,
+                "line": None,
+            }
+        )
+    return batch
 
 
 async def symbol_batches_async(
@@ -112,143 +205,38 @@ async def symbol_batches_async(
 ):
     """Yield one batch of symbol rows per AP label query (async gen).
 
-    AP stores each symbol under its own label (Function, Method,
-    Struct, Enum, Trait, Constant, TypeAlias). The qualified_name
-    follows ``<relative_file>::<name>``. We query each label
-    separately (LadybugDB rejects multi-label ``MATCH``). Each label's
-    rows are yielded as soon as its query returns, so the consumer can
-    process/discard a label's rows before the next label is queried.
+    AP stores each symbol under its own label (Function, Method, Struct,
+    Enum, Trait, Constant, TypeAlias, ...). The qualified_name follows
+    ``<relative_file>::<name>``. We query each label separately (LadybugDB
+    rejects multi-label ``MATCH``). Each label's rows are yielded as soon
+    as its query returns, so the consumer can process/discard a label's
+    rows before the next label is queried — peak retained here is one
+    label's rows, not the union across all ``_SYMBOL_LABELS`` queries.
 
     ``paths`` entries may be absolute (builder convention); AP's
     ``File.id`` and the symbol ``qualified_name`` prefix are
-    repo-relative. We match by ``endswith`` so both forms work.
+    repo-relative — ``build_path_tails``/``_where_for_tails`` match by
+    tail so both forms work, both server-side (WHERE) and as a Python
+    safeguard (``_parse_symbol_batch``).
     """
-    # Build a set of basenames and tail fragments for fast matching.
-    # These are also used to construct server-side WHERE predicates so
-    # Kuzu filters by file prefix rather than returning ALL symbols and
-    # discarding in Python. Previously the code used a blanket
-    # ``LIMIT 500`` without a WHERE clause — on a 50k-symbol codebase
-    # alphabetically-early files consume the entire limit and the
-    # desired file's symbols are never returned.
-    # source: measured 2026-06-04 — query for consolidate.py returned 0
-    #   because the first 500 Functions all start with benchmarks/* or
-    #   _pipeline/*; mcp_server/handlers/* never appeared.
-    path_tails: set[str] = set()
-    for p in paths:
-        if not p:
-            continue
-        path_tails.add(p)
-        # e.g. /abs/root/pkg/mod.py → pkg/mod.py, mod.py
-        parts = p.split("/")
-        for i in range(1, len(parts)):
-            path_tails.add("/".join(parts[i:]))
-
-    # Build a Cypher WHERE predicate that filters at the Kuzu level.
-    # Each tail produces one STARTS WITH predicate on qualified_name
-    # (or id for Import nodes). We emit the shortest unique tails only
-    # — if "pkg/mod.py" is present, "mod.py" is redundant because any
-    # match for "mod.py" also matches "pkg/mod.py". Cap at 10 tails
-    # to keep the WHERE clause tractable.
-    def _where_for_tails(prop: str, tails: set[str]) -> str:
-        if not tails:
-            return ""
-        # Sort longest-first so shorter redundant tails are skipped.
-        sorted_tails = sorted(tails, key=len, reverse=True)
-        kept: list[str] = []
-        for t in sorted_tails:
-            if any(t == k or k.endswith(t) for k in kept):
-                continue  # already covered by a longer tail
-            kept.append(t)
-            if len(kept) >= _MAX_WHERE_TAILS:
-                break
-        escaped = [t.replace("'", "\\'") for t in kept]
-        preds = " OR ".join(f"{prop} STARTS WITH '{t}::'" for t in escaped)
-        return f" WHERE {preds}"
-
+    path_tails = build_path_tails(paths)
     for label in _SYMBOL_LABELS:
-        # Import nodes don't carry qualified_name / name — they use
-        # ``id`` (``<file>::<modpath>``) and ``path`` (the imported
-        # module). Use those as the qualified_name / name surrogate.
-        if label in _NON_QUALIFIED_LABELS:
-            prop = "s.id"
-            select = (
-                f"MATCH (s:{label})"
-                "{where}"
-                " RETURN s.id   AS qualified_name,"
-                "        s.path AS name"
-            )
-        else:
-            prop = "s.qualified_name"
-            select = (
-                f"MATCH (s:{label})"
-                "{where}"
-                " RETURN s.qualified_name AS qualified_name,"
-                "        s.name           AS name"
-            )
-        if paths:
-            where = _where_for_tails(prop, path_tails)
-            query = select.format(where=where)
-        else:
-            # Load-all mode: no filter, no limit — pull the full graph.
-            query = select.format(where="")
+        query = _build_symbol_query(label, paths, path_tails)
         rows = await bridge.call(
             "query_graph",
             {"graph_path": graph_path, "query": query},
         )
-        # Per-label batch: built, yielded, then dropped before the next
-        # label's query runs — peak retained inside the source is one
-        # label's rows, not the union across all _SYMBOL_LABELS queries.
-        batch: list[dict[str, Any]] = []
-        for r in as_list(rows):
-            qn = r.get("qualified_name")
-            if not qn:
-                continue
-            qn_s = str(qn)
-            file_part, sep, _ = qn_s.partition("::")
-            if not sep:
-                continue
-            # Python-side match as a secondary safeguard (the WHERE
-            # clause is the primary filter; this handles edge cases
-            # where a shorter tail matched a different file).
-            if path_tails and not any(
-                p == file_part or p.endswith(file_part) or file_part.endswith(p)
-                for p in path_tails
-            ):
-                continue
-            # Resolve file_path back to the absolute form if possible.
-            abs_match = next(
-                (p for p in paths if p.endswith(file_part)),
-                file_part,
-            )
-            batch.append(
-                {
-                    "file_path": abs_match,
-                    "qualified_name": qn_s,
-                    "symbol_type": _symbol_type_from_label(label),
-                    "signature": None,
-                    "language": None,
-                    "line": None,
-                }
-            )
+        batch = _parse_symbol_batch(rows, label, path_tails, paths)
         if batch:
             yield batch
 
 
-async def verify_symbols_async(
-    bridge: APBridge,
-    graph_path: str,
-    qualnames: list[str],
-) -> dict[str, bool]:
-    """Batch verification across every AP symbol label.
-
-    AP has no unified ``Symbol`` label — we iterate the known set
-    (Function, Method, Struct, ...). Wiki references are usually
-    bare names (``WorkflowGraphBuilder``), so we widen the match:
-    a qualname counts as found if any AP symbol name equals it,
-    its name equals the tail, or the qualified_name endswith the
-    tail (``::tail`` or ``.tail``).
-    """
-    out: dict[str, bool] = {q: False for q in qualnames}
+async def _collect_all_symbol_names(
+    bridge: APBridge, graph_path: str
+) -> tuple[list[str], list[str]]:
+    """Query every AP symbol label once; return ``(qualified_names,
+    short_names)`` across all of them — the corpus ``verify_symbols_async``
+    matches candidate qualnames against."""
     all_names: list[str] = []
     all_short: list[str] = []
     for label in _SYMBOL_LABELS:
@@ -268,16 +256,36 @@ async def verify_symbols_async(
                 all_names.append(qn)
             if nm:
                 all_short.append(nm)
-    for q in qualnames:
-        tail = q.rsplit(".", 1)[-1]
-        if tail in all_short:
-            out[q] = True
-            continue
-        for qn in all_names:
-            if qn == q or qn.endswith(f"::{tail}") or qn.endswith(f".{tail}"):
-                out[q] = True
-                break
-    return out
+    return all_names, all_short
+
+
+def _qualname_matches(q: str, all_names: list[str], all_short: list[str]) -> bool:
+    """Widened match: a qualname counts as found if any AP symbol name
+    equals it, its short name equals the tail, or the qualified_name
+    endswith the tail (``::tail`` or ``.tail``) — wiki references are
+    usually bare names (``WorkflowGraphBuilder``)."""
+    tail = q.rsplit(".", 1)[-1]
+    if tail in all_short:
+        return True
+    return any(
+        qn == q or qn.endswith(f"::{tail}") or qn.endswith(f".{tail}")
+        for qn in all_names
+    )
+
+
+async def verify_symbols_async(
+    bridge: APBridge,
+    graph_path: str,
+    qualnames: list[str],
+) -> dict[str, bool]:
+    """Batch verification across every AP symbol label.
+
+    AP has no unified ``Symbol`` label — ``_collect_all_symbol_names``
+    iterates the known set once and ``_qualname_matches`` checks each
+    candidate against that corpus (see its docstring for the match rule).
+    """
+    all_names, all_short = await _collect_all_symbol_names(bridge, graph_path)
+    return {q: _qualname_matches(q, all_names, all_short) for q in qualnames}
 
 
 __all__ = [

@@ -191,93 +191,102 @@ class _SyncLoop:
     def _drain_pending_tasks(self) -> None:
         """Cancel + await every task still running on the pinned loop.
 
-        precondition: ``self._loop`` is not ``None`` and not yet closed.
+        precondition: none — safe to call on any ``_SyncLoop`` state.
         postcondition: every task ``asyncio.all_tasks(loop)`` reported
-        (other than this method's own drain task) has reached a terminal
-        state (done or cancelled) when this call returns — UNLESS
-        ``_SHUTDOWN_DRAIN_TIMEOUT_S`` elapsed first, in which case the
-        residual task is logged and left for interpreter-exit GC rather
-        than blocking teardown indefinitely.
+        (other than the drain task itself) has reached a terminal state
+        when this returns, UNLESS ``_SHUTDOWN_DRAIN_TIMEOUT_S`` elapsed
+        first (residual task logged, left for interpreter-exit GC).
 
-        Without this step, ``close()`` would schedule ``loop.stop()``
+        Without this step, ``close()`` would call ``loop.stop()``
         immediately after a ``run``/``run_iter`` timeout's
-        ``future.cancel()``. ``loop.stop()`` only lets the CURRENT batch
-        of ready callbacks finish; it does not run callbacks THAT batch
-        goes on to schedule. ``future.cancel()`` merely *schedules* the
-        underlying task's ``Task.cancel()`` — actually delivering the
-        ``CancelledError`` into the coroutine takes one further loop
-        iteration. If ``run_forever()`` returns before that iteration
-        runs, the task is left ``PENDING`` and, once this object (or the
-        interpreter) later garbage-collects it, asyncio logs "Task was
-        destroyed but it is pending!" (issue #258 — reproduced and
-        confirmed via instrumented probe before this fix).
-
-        happens-before: the drain coroutine below runs ON the pinned loop
-        and directly ``await``s ``asyncio.gather`` over every pending
-        task, so it observes the loop run however many iterations a
-        cancellation needs to complete — not just the ones already
-        processed by the time this method is called. ``future.result()``
-        blocks the CALLING thread until that gather finishes (or the
-        timeout fires), so ``close()``'s subsequent ``loop.stop()`` is
-        strictly ordered after every drained task's terminal transition.
-
-        Guarded to a genuine, live pinned loop (real ``AbstractEventLoop``
-        + a thread confirmed alive): scheduling a coroutine via
-        ``run_coroutine_threadsafe`` onto anything else (a test double
-        standing in for the loop, or a loop whose ``run_forever()``
-        thread already exited without closing it) never actually drives
-        the coroutine — the scheduled callback that would consume it sits
-        queued forever, and ``loop.close()`` a few lines below drops that
-        queue (``self._ready.clear()``), which is Python's OWN trigger for
-        "coroutine was never awaited". Skipping the drain in that case
-        leaves ``close()`` exactly as safe as it was before this method
-        existed for those callers (``_SyncLoop.__new__`` + a mocked
-        ``_loop``/``_thread`` is an established test pattern for
-        exercising this method's error-swallowing branches in isolation —
-        see ``test_sync_loop_join_runtimeerror_is_swallowed``).
+        ``future.cancel()`` — which only *schedules* cancellation;
+        delivering it takes one more loop iteration ``run_forever()``
+        may never reach, leaving the task ``PENDING`` and, once GC'd,
+        logging "Task was destroyed but it is pending!" (issue #258,
+        reproduced via instrumented probe before this fix). See
+        ``_loop_is_drainable`` for the live-loop guard and
+        ``_run_task_drain`` for the schedule/await/timeout contract
+        (including the happens-before argument for why ``close()``'s
+        subsequent ``loop.stop()`` is safe).
         """
         loop = self._loop
-        if loop is None or loop.is_closed():
+        if loop is None or not _loop_is_drainable(loop, self._thread):
             return
-        if not isinstance(loop, asyncio.AbstractEventLoop):
-            return  # test double standing in for the loop — nothing to drain
-        if self._thread is None or not self._thread.is_alive():
-            return  # loop's thread already exited — no runner to drive the drain
+        _run_task_drain(loop)
 
-        async def _drain() -> None:
-            # Equivalent-mutant note (mutmut _drain_pending_tasks__mutmut_9,
-            # __mutmut_11): passing ``loop`` explicitly here vs. omitting it
-            # (defaulting to ``get_running_loop()``) is not observable —
-            # ``_drain`` is only ever scheduled via
-            # ``run_coroutine_threadsafe(_drain(), loop)`` a few lines below,
-            # so ``get_running_loop()`` inside this body IS ``loop`` on every
-            # call, always. Kept explicit for readability (this function
-            # reasons about a specific, named loop), not for behavior.
-            current = asyncio.current_task(loop)
-            pending = [
-                t for t in asyncio.all_tasks(loop) if t is not current and not t.done()
-            ]
-            for t in pending:
-                t.cancel()
-            if pending:
-                await asyncio.gather(*pending, return_exceptions=True)
 
-        try:
-            future = asyncio.run_coroutine_threadsafe(_drain(), loop)
-        except RuntimeError:
-            # Loop thread already exited on its own; nothing to drain.
-            return
-        try:
-            future.result(timeout=_SHUTDOWN_DRAIN_TIMEOUT_S)
-        except FutureTimeoutError:
-            logger.debug(
-                "AP sync-loop drain exceeded %.1fs — leaving residual "
-                "task(s) for interpreter-exit cleanup",
-                _SHUTDOWN_DRAIN_TIMEOUT_S,
-            )
-        except RuntimeError:
-            # Loop closed between the check above and this call.
-            pass
+def _loop_is_drainable(
+    loop: "asyncio.AbstractEventLoop | None", thread: "threading.Thread | None"
+) -> bool:
+    """Guard: only a genuine, live, running loop can host a scheduled drain.
+
+    Refuses a ``None``/closed loop (nothing to drain); a test double
+    standing in for the loop (not a real ``AbstractEventLoop`` — scheduling
+    against it would leave the drain coroutine queued forever, since
+    nothing ever runs it, which is Python's own trigger for "coroutine
+    was never awaited"); and a loop whose ``run_forever()`` thread already
+    exited (no runner left to drive the scheduled callback). Guarding this
+    way leaves the caller exactly as safe as it was before this drain step
+    existed for those cases (``_SyncLoop.__new__`` + a mocked
+    ``_loop``/``_thread`` is an established test pattern for exercising
+    the surrounding error-swallowing branches in isolation — see
+    ``test_sync_loop_join_runtimeerror_is_swallowed``).
+    """
+    if loop is None or loop.is_closed():
+        return False
+    if not isinstance(loop, asyncio.AbstractEventLoop):
+        return False
+    if thread is None or not thread.is_alive():
+        return False
+    return True
+
+
+async def _cancel_and_await_pending(loop: "asyncio.AbstractEventLoop") -> None:
+    """Cancel + await every non-current task on ``loop``. Runs ON ``loop``
+    (scheduled via ``run_coroutine_threadsafe`` — never called directly).
+
+    Equivalent-mutant note (mutmut _drain_pending_tasks__mutmut_9,
+    __mutmut_11): passing ``loop`` explicitly vs. omitting it (defaulting
+    to ``get_running_loop()``) is unobservable — this coroutine is only
+    ever scheduled via ``run_coroutine_threadsafe(this(loop), loop)``, so
+    ``get_running_loop()`` IS ``loop`` on every call. Kept explicit for
+    readability, not behavior.
+    """
+    current = asyncio.current_task(loop)
+    pending = [t for t in asyncio.all_tasks(loop) if t is not current and not t.done()]
+    for t in pending:
+        t.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+
+def _run_task_drain(loop: "asyncio.AbstractEventLoop") -> None:
+    """Schedule ``_cancel_and_await_pending`` on ``loop`` and block the
+    calling thread until it finishes or times out.
+
+    happens-before: the scheduled coroutine runs ON ``loop`` and directly
+    ``await``s ``asyncio.gather`` over every pending task, so it observes
+    the loop run however many iterations a cancellation needs — not just
+    the ones already processed by the time this is called.
+    ``future.result()`` blocks the calling thread until that gather
+    finishes (or the timeout fires), so the caller's subsequent
+    ``loop.stop()`` is strictly ordered after every drained task's
+    terminal transition.
+    """
+    try:
+        future = asyncio.run_coroutine_threadsafe(_cancel_and_await_pending(loop), loop)
+    except RuntimeError:
+        return  # loop thread already exited on its own; nothing to drain
+    try:
+        future.result(timeout=_SHUTDOWN_DRAIN_TIMEOUT_S)
+    except FutureTimeoutError:
+        logger.debug(
+            "AP sync-loop drain exceeded %.1fs — leaving residual "
+            "task(s) for interpreter-exit cleanup",
+            _SHUTDOWN_DRAIN_TIMEOUT_S,
+        )
+    except RuntimeError:
+        pass  # loop closed between the check above and this call
 
 
 __all__ = ["_SyncLoop", "_ap_sync_timeout_s", "_SHUTDOWN_DRAIN_TIMEOUT_S"]
