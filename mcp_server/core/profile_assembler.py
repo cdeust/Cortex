@@ -163,17 +163,17 @@ def _build_feature_dictionary(
         "K": fd.K,
         "D": fd.D,
         "sparsity": fd.sparsity,
-        "signalNames": fd.signalNames,
+        "signalNames": fd.signal_names,
         "features": [
             {
                 "index": f.index,
                 "label": f.label,
                 "description": f.description,
-                "topSignals": [ts.model_dump() for ts in f.topSignals],
+                "topSignals": [ts.model_dump() for ts in f.top_signals],
             }
             for f in fd.features
         ],
-        "learnedFromSessions": fd.learnedFromSessions,
+        "learnedFromSessions": fd.learned_from_sessions,
         "_raw": fd,
     }
 

@@ -81,7 +81,7 @@ class TestBuildSeedDictionary:
         assert d.K == 8
         assert d.D == 27
         assert d.sparsity == 3
-        assert d.learnedFromSessions == 0
+        assert d.learned_from_sessions == 0
         assert len(d.features) == 8
 
     def test_all_atoms_unit_vectors(self):
@@ -95,7 +95,7 @@ class TestBuildSeedDictionary:
         for f in d.features:
             assert len(f.label) > 0
             assert len(f.description) > 0
-            assert len(f.topSignals) > 0
+            assert len(f.top_signals) > 0
 
 
 class TestOmp:
@@ -132,12 +132,12 @@ class TestLearnDictionary:
     def test_returns_seed_for_few_sessions(self):
         convs = _make_conversations(5)
         d = learn_dictionary(convs)
-        assert d.learnedFromSessions == 0
+        assert d.learned_from_sessions == 0
         assert d.K == 8
 
     def test_returns_seed_for_null(self):
         d = learn_dictionary(None)
-        assert d.learnedFromSessions == 0
+        assert d.learned_from_sessions == 0
 
     def test_learns_for_10_plus_sessions(self):
         convs = _make_conversations(
@@ -149,7 +149,7 @@ class TestLearnDictionary:
             turnCount=15,
         )
         d = learn_dictionary(convs, {"K": 5, "sparsity": 2, "iterations": 2})
-        assert d.learnedFromSessions == 15
+        assert d.learned_from_sessions == 15
         assert d.K <= 5
         assert d.D == 27
         assert d.sparsity == 2
@@ -174,8 +174,8 @@ class TestEncodeSession:
         d = build_seed_dictionary()
         result = encode_session(_make_conv(), d)
         assert isinstance(result.weights, dict)
-        assert isinstance(result.reconstructionError, (int, float))
-        assert result.reconstructionError >= 0
+        assert isinstance(result.reconstruction_error, (int, float))
+        assert result.reconstruction_error >= 0
 
     def test_respects_sparsity(self):
         d = build_seed_dictionary()
@@ -203,7 +203,7 @@ class TestLabelFeature:
         direction[13] = 0.5  # tmp:burst
         result = label_feature(normalize(direction), 0)
         assert len(result.label) > 0
-        assert len(result.topSignals) > 0
+        assert len(result.top_signals) > 0
 
     def test_handles_zero_direction(self):
         result = label_feature([0.0] * 27, 5)

@@ -181,13 +181,13 @@ def _handle_features(profiles: dict) -> dict:
             "K": d.K,
             "D": d.D,
             "sparsity": d.sparsity,
-            "learnedFromSessions": d.learnedFromSessions,
+            "learnedFromSessions": d.learned_from_sessions,
             "features": [
                 {
                     "index": f.index,
                     "label": f.label,
                     "description": f.description,
-                    "topSignals": [ts.model_dump() for ts in f.topSignals],
+                    "topSignals": [ts.model_dump() for ts in f.top_signals],
                 }
                 for f in d.features
             ],
@@ -233,7 +233,7 @@ def _handle_attribution(profiles: dict, domain: str | None) -> dict:
     return {
         "status": "ok",
         "domain": domain_id,
-        "graph": graph.model_dump(),
+        "graph": graph.model_dump(by_alias=True),
     }
 
 

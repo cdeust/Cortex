@@ -240,7 +240,7 @@ def _compute_feature_edges(
 
     edges: list[AttributionEdge] = []
     for feature in dictionary.features:
-        for ts in feature.topSignals or []:
+        for ts in feature.top_signals or []:
             classifier_for = _get_classifier_for_signal(ts.signal)
             if classifier_for:
                 edges.append(
@@ -265,13 +265,13 @@ def compute_edge_weights(
     profile: dict,
     dictionary: FeatureDictionary | None,
 ) -> list[AttributionEdge]:
-    EPSILON = 0.1
-    MAX_SAMPLES = 20
+    epsilon = 0.1
+    max_samples = 20
 
-    mean_baseline = _compute_mean_baseline(conversations, MAX_SAMPLES)
+    mean_baseline = _compute_mean_baseline(conversations, max_samples)
 
     edges: list[AttributionEdge] = []
-    edges.extend(_compute_input_to_extractor_edges(mean_baseline, EPSILON))
+    edges.extend(_compute_input_to_extractor_edges(mean_baseline, epsilon))
 
     # Extractor -> Classifier edges
     for extractor, classifiers in _EXTRACTOR_CLASSIFIER_MAP.items():

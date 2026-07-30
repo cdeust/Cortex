@@ -29,7 +29,7 @@ This models the real observed union of shapes, not an approximation.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TopSignal(BaseModel):
@@ -44,35 +44,35 @@ class TopSignal(BaseModel):
 class Feature(BaseModel):
     """A single behavioral-feature atom (seed or learned)."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     index: int
     label: str
     description: str
-    topSignals: list[TopSignal]
+    top_signals: list[TopSignal] = Field(alias="topSignals")
     direction: list[float] | None = None
 
 
 class FeatureDictionary(BaseModel):
     """Sparse-dictionary of behavioral feature atoms (K atoms, D=27 dims)."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     K: int
     D: int
     sparsity: int
-    signalNames: list[str]
+    signal_names: list[str] = Field(alias="signalNames")
     features: list[Feature]
-    learnedFromSessions: int
+    learned_from_sessions: int = Field(alias="learnedFromSessions")
 
 
 class EncodedSession(BaseModel):
     """A single conversation's sparse encoding against a FeatureDictionary."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     weights: dict[str, float]
-    reconstructionError: float
+    reconstruction_error: float = Field(alias="reconstructionError")
 
 
 class PersonaDrift(BaseModel):
@@ -99,13 +99,13 @@ class AttributionNode(BaseModel):
     unset and carry a real float in activation.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     id: str
     label: str
     layer: str
     activation: float
-    categoricalValue: str | None = None
+    categorical_value: str | None = Field(default=None, alias="categoricalValue")
 
 
 class AttributionEdge(BaseModel):
