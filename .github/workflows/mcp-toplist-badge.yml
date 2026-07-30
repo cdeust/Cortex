@@ -48,10 +48,26 @@ jobs:
       # one, which is the expected result most months.
       #
       # BADGE_REFRESH_TOKEN is optional. Without it the PR is authored by
-      # GITHUB_TOKEN, and GitHub deliberately does not trigger workflows on
-      # such PRs — so main's required checks never start and the PR cannot
-      # be merged until a maintainer pushes to the branch. Set a PAT with
-      # `repo` scope as BADGE_REFRESH_TOKEN to make these PRs self-checking.
+      # GITHUB_TOKEN. That has two distinct consequences, not one:
+      #
+      #   1. GitHub deliberately does not trigger `pull_request`/`push`
+      #      workflows on PRs opened by GITHUB_TOKEN — so main's required
+      #      checks never start and the PR cannot be merged until a
+      #      maintainer pushes to the branch (a re-run, an empty commit, or
+      #      closing/reopening the PR).
+      #   2. Independently of (1), the repo/org policy at Settings → Actions
+      #      → General → "Allow GitHub Actions to create and approve pull
+      #      requests" gates PR *creation* itself. With that box unchecked,
+      #      this step fails outright with "GitHub Actions is not permitted
+      #      to create or approve pull requests" — no PR, no branch left
+      #      pushed (peter-evans/create-pull-request pushes the branch
+      #      first, then fails the PR-creation call; the branch must be
+      #      deleted by hand). See issue #273. That box was checked
+      #      2026-07-30 to fix this; if it is ever unchecked again (a repo
+      #      transfer, an org policy reset), set BADGE_REFRESH_TOKEN to a
+      #      PAT with `repo` scope instead — the workflow already prefers
+      #      it — which sidesteps both (1) and (2) since a PAT-authored PR
+      #      is not GITHUB_TOKEN-authored.
       - name: Open refresh PR
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
