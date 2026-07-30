@@ -378,6 +378,66 @@ select = [
     #     `test_sqlite_datetime_adapter_260.py`, where the naive input IS
     #     the test's stated point (round-tripping a tzinfo-less datetime).
     "DTZ",
+    # N (PEP 8 naming) (issue #239, family 4): 26 findings repo-wide across
+    # 7 rule variants, every one fixed or documented, zero per-file-ignore
+    # needed (no tests_py/**-wide carve-out — see below).
+    #   N806/N803 (mostly local-variable/parameter case): renamed to
+    #     lowercase at every mechanical site (_KIND_LABELS, _SENTINEL,
+    #     _PASSWORD_QUERY_KEYS, _TYPE_INTENTS, _EXPLICIT_KNOWLEDGE_TAGS,
+    #     the sparse_dictionary_learning.py Gram-matrix K/D/G/M locals,
+    #     N_THREADS/N_INCREMENTS in a test). Two sites keep the
+    #     capitalization via `# noqa: N803`/`# noqa: N806` instead,
+    #     because the case IS the cited source's notation: Platt (1999)
+    #     logistic-calibration parameters A/B in platt_calibration.py, and
+    #     the Titans paper's memory-matrix symbol M in titans_memory.py —
+    #     renaming would make the code harder to verify against its
+    #     source, the exact case this rule's override exists for.
+    #   N818 (exception name missing Error suffix, 7 sites): every custom
+    #     exception renamed (MalformedArtifactError, InstallLockBusyError,
+    #     WikiExistsError, WikiMissingError, _SupersedeCasConflictError,
+    #     plus two test-local ones) with every raise/except/import site
+    #     updated atomically (blast radius checked via grep before
+    #     renaming, per this program's standing practice).
+    #   N815 (mixed-case attribute in class scope, 5 sites, all in
+    #     shared/types_features.py): NOT a bare rename — these 5 Pydantic
+    #     fields are an external JSON wire contract (the module's own
+    #     docstring: "mirrors the JS-era MCP/profiles.json contract").
+    #     Fixed with `Field(alias="camelCase")` + `populate_by_name=True`,
+    #     mirroring the exact precedent in the sibling module
+    #     shared/types_profiles.py, so the Python attribute is snake_case
+    #     while the wire format is untouched.
+    #   N801 (class name not CapWords, 1 site): decision_lock ->
+    #     DecisionLock.
+    #   N812 (non-lowercase import alias, 1 site): dropped a single-letter
+    #     module alias (`as M`) entirely — the module's own name was
+    #     already short.
+    #   N802 (function name not lowercase, 5 sites): 3 lowercase the
+    #     invariant-ID prefix only (test_I2_* -> test_i2_*, preserving
+    #     traceability to docs/invariants/cortex-invariants.md's I2 row);
+    #     1 moves Tsodyks-Markram (1997) U/u notation out of the test name
+    #     into its docstring rather than collapsing the two letters to the
+    #     same lowercase; 1 is a plain lowercase (HOME env-var reference).
+    #   N999 (invalid module name, 2 sites): test_I2_canonical_writer.py
+    #     and test_I10_pool_capacity.py filenames encode this project's
+    #     OWN invariant-ID scheme, formally cross-referenced by
+    #     docs/invariants/cortex-invariants.md's table (and, for I2,
+    #     ADR-0053 plus two production-code comments citing the filename
+    #     literally) — renaming the file would break that cross-reference
+    #     for zero benefit. Documented with `# noqa: N999` instead.
+    "N",
+    # ERA (commented-out code) (issue #239, family 5): 51 findings
+    # repo-wide, 50 false positives from the eradicate heuristic
+    # misreading documentation as code (quoted-string §8 source
+    # citations, math-formula/SQL/format-by-example documentation, and 3
+    # lines in infrastructure/wiki_store.py that deliberately mirror
+    # CodeQL's py/path-injection sanitizer example verbatim, self-
+    # documented at the site) — each suppressed with a per-site
+    # `# noqa: ERA001 — <reason>`, never a blanket ignore. The one
+    # genuine site (core/pg_recall.py: a literal disabled import + call
+    # for the abandoned v0.1 abstention-gate model) was actually fixed —
+    # the commented invocation deleted, replaced with prose on why the
+    # module stays in the tree unwired.
+    "ERA",
 ]
 # ── Families deliberately NOT selected (issue #197, criterion 1) ────────────
 # Counts measured against mcp_server/ 2026-07-28, ruff 0.15.20 — what
@@ -408,11 +468,12 @@ select = [
 #     contract-lie defect classes this program exists for; each is a
 #     dedicated-PR-sized diff under the fix-with-landing bar.
 #
-# (c) JUDGEMENT families not yet triaged — TRY (163), ARG (53), PTH (91),
-#     N (43), ERA (43), FBT (254), S beyond S110/S608 (34): tracked as
-#     the program's continuation in issue #239 (B, RET, DTZ landed
-#     above). Enabling any of them without the per-finding triage the
-#     landed families received would mean blanket ignores — the exact
+# (c) JUDGEMENT families not yet triaged — TRY (163), ARG (54->667
+#     repo-wide), PTH (91), FBT (258->461 repo-wide), S beyond S110/S608
+#     (34 production + 11078 S101-in-tests): tracked as the program's
+#     continuation in issue #239 (B, RET, DTZ, N, ERA landed above).
+#     Enabling any of them without the per-finding triage the landed
+#     families received would mean blanket ignores — the exact
 #     anti-pattern this explicit select list exists to prevent.
 
 [tool.ruff.lint.per-file-ignores]
