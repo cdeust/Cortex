@@ -30,6 +30,8 @@ from __future__ import annotations
 import subprocess
 import sys
 
+import pytest
+
 _POISON = (
     "import sys; "
     "sys.modules['psycopg'] = None; "
@@ -76,7 +78,15 @@ def test_benchmark_db_still_reachable_lazily_and_fails_loudly_without_psycopg():
 def test_benchmark_db_resolves_with_psycopg_present():
     """Sanity check the lazy path is not just erroring on everything:
     without poisoning sys.modules (real psycopg present in this venv),
-    `benchmarks.lib.BenchmarkDB` resolves to the real class."""
+    `benchmarks.lib.BenchmarkDB` resolves to the real class.
+
+    Skipped (not failed) on an install genuinely without the Postgres
+    extras (e.g. CI's SQLite-backend job, which explicitly installs "no
+    postgresql extra") -- there psycopg's absence is the environment, not
+    a regression, and `test_benchmark_db_still_reachable_lazily_and_fails_
+    loudly_without_psycopg` above already pins that exact behavior.
+    """
+    pytest.importorskip("psycopg")
     result = subprocess.run(
         [
             sys.executable,
