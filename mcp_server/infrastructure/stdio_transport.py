@@ -91,6 +91,7 @@ from fastmcp.server.context import reset_transport, set_transport
 from fastmcp.utilities.cli import log_server_banner
 from fastmcp.utilities.logging import get_logger, temporary_log_level
 from mcp.server.lowlevel.server import NotificationOptions
+from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 from mcp.shared.message import SessionMessage
 
@@ -144,6 +145,45 @@ class _UnclosableWriteStream:
         await self._real.aclose()
 
 
+async def _run_mcp_with_guarded_stream(
+    mcp: FastMCP,
+    read_stream: MemoryObjectReceiveStream[SessionMessage | Exception],
+    guarded: _UnclosableWriteStream,
+    init_options: InitializationOptions,
+    *,
+    stateless: bool,
+) -> None:
+    """Call ``mcp._mcp_server.run`` with ``guarded`` standing in for the
+    real write stream.
+
+    Extracted from ``_run_low_level_drained`` (Fowler 2018 Ch. 6, Extract
+    Function) to keep that function under this repo's 40-line/method
+    convention (CLAUDE.md) without dropping the sourced citation below --
+    only relocating it (coding-standards.md §8).
+    """
+    await mcp._mcp_server.run(
+        read_stream,
+        # `guarded` is not a MemoryObjectSendStream instance -- it is a
+        # duck-typed substitute implementing exactly the protocol
+        # BaseSession/Server.run() use on a write stream (`send`,
+        # `__aenter__`, `__aexit__`). See _UnclosableWriteStream's
+        # docstring for why a real subclass sharing anyio's internal
+        # state was rejected instead.
+        # source: mutation-tested equivalent (scripts/mutation_check.sh,
+        # 2026-07-30) -- mutating this cast()'s type argument (e.g. to
+        # `cast(None, guarded)`) survives every test, because
+        # `typing.cast(typ, val)` is a pure static-typing annotation:
+        # `inspect.getsource(typing.cast)` shows its body is `return
+        # val`, so `typ` is never read at runtime and no test can ever
+        # observe a change to it (same equivalence argument as
+        # json_native.py's `cast("SupportsFloat", obj)`, CHANGELOG
+        # 2026-07-29).
+        cast(MemoryObjectSendStream[SessionMessage], guarded),
+        init_options,
+        stateless=stateless,
+    )
+
+
 async def _run_low_level_drained(
     mcp: FastMCP,
     read_stream: MemoryObjectReceiveStream[SessionMessage | Exception],
@@ -173,26 +213,8 @@ async def _run_low_level_drained(
         notification_options=NotificationOptions(tools_changed=True),
     )
     try:
-        await mcp._mcp_server.run(
-            read_stream,
-            # `guarded` is not a MemoryObjectSendStream instance -- it is a
-            # duck-typed substitute implementing exactly the protocol
-            # BaseSession/Server.run() use on a write stream (`send`,
-            # `__aenter__`, `__aexit__`). See _UnclosableWriteStream's
-            # docstring for why a real subclass sharing anyio's internal
-            # state was rejected instead.
-            # source: mutation-tested equivalent (scripts/mutation_check.sh,
-            # 2026-07-30) -- mutating this cast()'s type argument (e.g. to
-            # `cast(None, guarded)`) survives every test, because
-            # `typing.cast(typ, val)` is a pure static-typing annotation:
-            # `inspect.getsource(typing.cast)` shows its body is `return
-            # val`, so `typ` is never read at runtime and no test can ever
-            # observe a change to it (same equivalence argument as
-            # json_native.py's `cast("SupportsFloat", obj)`, CHANGELOG
-            # 2026-07-29).
-            cast(MemoryObjectSendStream[SessionMessage], guarded),
-            init_options,
-            stateless=stateless,
+        await _run_mcp_with_guarded_stream(
+            mcp, read_stream, guarded, init_options, stateless=stateless
         )
     finally:
         # Real close, only now: mcp._mcp_server.run() has returned, which --
