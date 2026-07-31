@@ -267,8 +267,8 @@ def _check_url_reachable(url: str, *, timeout: float) -> bool:
     """HEAD request; True iff status is 2xx/3xx. False on any error,
     timeout, or 4xx/5xx. Never raises. Stdlib only — no new dependency."""
     try:
-        req = urllib.request.Request(url, method="HEAD")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        req = urllib.request.Request(url, method="HEAD")  # noqa: S310 — url always came through core.provenance._URL_RE (r"https?://\S+"), so only http(s) ever reaches Request; no file:/custom scheme is reachable
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — url always came through core.provenance._URL_RE (r"https?://\S+"), so only http(s) ever reaches urlopen; no file:/custom scheme is reachable
             return _HTTP_REACHABLE_MIN <= resp.status < _HTTP_REACHABLE_END
     except urllib.error.HTTPError as exc:
         return _HTTP_REACHABLE_MIN <= exc.code < _HTTP_REACHABLE_END

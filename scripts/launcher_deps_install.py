@@ -218,7 +218,7 @@ def pip_install(
         tmp_dir,
         *packages,
     ]
-    proc = subprocess.run(base, capture_output=True, text=True, env=clean_env)
+    proc = subprocess.run(base, capture_output=True, text=True, env=clean_env)  # noqa: S603 — base is [sys.executable, "-m", "pip", "install", ...hardcoded flags..., *packages]; packages are this repo's own pinned dependency specs, never external input
     err = (proc.stderr or "") + (proc.stdout or "")
     if proc.returncode != 0 and "externally-managed-environment" in err:
         print(
@@ -230,7 +230,7 @@ def pip_install(
             f"retry, pre-install the packages yourself: {', '.join(packages)}",
             file=sys.stderr,
         )
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 — same base argv as above (sys.executable -m pip install ...) plus a hardcoded literal flag
             base + ["--break-system-packages"],
             capture_output=True,
             text=True,

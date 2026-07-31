@@ -38,7 +38,7 @@ def _spawn_detached(cmd: list[str], what: str) -> None:
     """Start ``cmd`` as a detached, output-suppressed subprocess; swallow errors."""
 
     try:
-        subprocess.Popen(
+        subprocess.Popen(  # noqa: S603 — both callers build cmd from sys.executable + hardcoded literal flags/module names; no shell=True, no untrusted argv[0]
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

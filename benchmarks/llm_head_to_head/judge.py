@@ -96,7 +96,7 @@ def shuffle_candidates(
         (the order callers want their results reported in). Used to
         reverse the shuffle.
     """
-    rng = random.Random(_shuffle_seed_for(question_id))
+    rng = random.Random(_shuffle_seed_for(question_id))  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     original_order = sorted(candidates_by_condition.keys())
     shuffled = list(original_order)
     rng.shuffle(shuffled)

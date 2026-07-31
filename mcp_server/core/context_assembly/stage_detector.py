@@ -139,7 +139,12 @@ class TemporalStageDetector(StageDetector):
                 counter += 1
                 current_stage = f"stage-{counter}"
                 stages.append(current_stage)
-            assert current_stage is not None
+            if current_stage is None:
+                # Unreachable by construction (the first loop iteration
+                # always takes the branch above, since last_ts starts as
+                # None) — an explicit raise, not `assert` (S101), so this
+                # invariant is never silently stripped by `python -O`.
+                raise AssertionError("current_stage unset on first loop iteration")
             mid = m.get("memory_id") or m.get("id") or id(m)
             self._cache[mid] = current_stage
             last_ts = ts

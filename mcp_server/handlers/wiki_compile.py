@@ -230,6 +230,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-# Add WIKI_ROOT import path validation at module load — not required
-# but catches misconfiguration early in dev.
-assert isinstance(WIKI_ROOT, (str, Path)), "WIKI_ROOT must be a path-like"
+# WIKI_ROOT import path validation at module load — not required but
+# catches misconfiguration early in dev. Explicit raise, not `assert`
+# (S101), so this check is never silently stripped by `python -O`.
+if not isinstance(WIKI_ROOT, (str, Path)):
+    raise AssertionError("WIKI_ROOT must be a path-like")

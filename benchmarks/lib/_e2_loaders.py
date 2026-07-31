@@ -82,7 +82,7 @@ def load_longmemeval(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
             )
         )
     items = list(seen.values())
-    random.Random(seed).shuffle(items)
+    random.Random(seed).shuffle(items)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     return items, probes
 
 
@@ -118,7 +118,7 @@ def load_locomo(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
             probes.append(
                 QueryProbe(query=qa["question"], target_source_keys=target_keys)
             )
-    random.Random(seed).shuffle(items)
+    random.Random(seed).shuffle(items)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     return items, probes
 
 
@@ -167,7 +167,7 @@ def load_beam_100k(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
                 if not target_keys:
                     continue
                 probes.append(QueryProbe(query=query, target_source_keys=target_keys))
-    random.Random(seed).shuffle(items)
+    random.Random(seed).shuffle(items)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     return items, probes
 
 

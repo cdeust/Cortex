@@ -450,7 +450,7 @@ def main() -> int:
     if args.all:
         sampled = pages
     else:
-        rng = random.Random(args.seed)
+        rng = random.Random(args.seed)  # noqa: S311 — seeded reproducible sampling, never security-sensitive
         sampled = _stratified_sample(pages, wiki_root, args.sample_size, rng)
     print(f"evaluating {len(sampled)} pages", file=sys.stderr)
 

@@ -194,8 +194,9 @@ def _sha256(path: Path) -> str:
 
 def _git_commit() -> str:
     try:
-        return subprocess.check_output(
-            ["git", "-C", str(REPO), "rev-parse", "HEAD"], text=True
+        return subprocess.check_output(  # noqa: S603 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
+            ["git", "-C", str(REPO), "rev-parse", "HEAD"],  # noqa: S607
+            text=True,
         ).strip()
     except (subprocess.CalledProcessError, OSError):
         return "unknown"

@@ -1234,7 +1234,8 @@ def reconsolidation_apply(
                 context_tokens=q_tokens,
                 query_valence=q_valence,
             )
-        except Exception:  # noqa: BLE001 — non-load-bearing per-candidate
+        except Exception as exc:  # noqa: BLE001 — non-load-bearing per-candidate
+            silent_failure.note("recall_pipeline.reconsolidation_action", exc)
             continue
 
         if outcome.action == "none" and outcome.heat_delta == 0.0:

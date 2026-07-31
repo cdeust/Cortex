@@ -93,7 +93,7 @@ def synth_corpus(n: int, seed: int, n_topics: int = N_TOPICS) -> list[ZipfItem]:
     in [0, n_topics); same-topic items share a phrase fragment so embeddings
     cluster.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     now = datetime.now(timezone.utc).isoformat()
     items: list[ZipfItem] = []
     for i in range(n):

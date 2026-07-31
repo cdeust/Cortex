@@ -86,7 +86,7 @@ def _run_cell(
 ) -> dict[str, Any]:
     """Run one grid cell in a clean subprocess. Returns metrics dict."""
     t0 = time.time()
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603 — [sys.executable, "-m", <hardcoded DRIVER_MODULE>, ...]; never external input
         [sys.executable, "-m", DRIVER_MODULE, benchmark, data_path, str(limit)],
         env=_env_for_cell(cell, seed),
         capture_output=True,

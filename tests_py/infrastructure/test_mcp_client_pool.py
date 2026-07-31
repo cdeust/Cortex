@@ -68,7 +68,7 @@ class TestLoadServerConfig:
         ):
             with patch.dict(os.environ, {"MY_TOKEN": "secret123"}):
                 result = _load_server_config("srv")
-                assert result["env"]["TOKEN"] == "secret123"
+                assert result["env"]["TOKEN"] == "secret123"  # noqa: S105 — test fixture value asserting env-var interpolation, not a real credential
                 assert result["env"]["PLAIN"] == "hello"
 
     def test_env_var_interpolation_missing_var_resolves_empty(self):

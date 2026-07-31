@@ -21,7 +21,7 @@ import urllib.parse
 
 # ── Constants ─────────────────────────────────────────────────────────────
 
-_PASSWORD_MASK = "***"
+_PASSWORD_MASK = "***"  # noqa: S105 — a redaction placeholder this module writes OVER a real password, not a credential itself
 _REDACTED = "[REDACTED]"
 
 # ── redact_url ─────────────────────────────────────────────────────────────
@@ -122,22 +122,32 @@ def redact_url(url: str) -> str:
 
 
 def _selfcheck() -> None:
-    """Regression assertions for the two confirmed leak vectors."""
+    """Regression assertions for the two confirmed leak vectors.
+
+    Uses explicit ``if ...: raise AssertionError(...)`` rather than the
+    ``assert`` statement (S101): this is a real, always-on regression
+    guard for a documented leak vector, run at import time — not a
+    debug-only invariant — so it must not be strippable by ``python -O``,
+    which silently deletes every ``assert`` statement.
+    """
     # Repro: query-parameter password must be masked.
     _qp = redact_url(
         "postgresql://cortex@localhost:5432/cortex?password=SuperSecret123&sslmode=require"
     )
-    assert "SuperSecret123" not in _qp, f"query-param password leak: {_qp!r}"
+    if "SuperSecret123" in _qp:
+        raise AssertionError(f"query-param password leak: {_qp!r}")
     # urlencode percent-encodes '*', so accept both the literal and encoded form.
-    assert "password=***" in _qp or "password=%2A%2A%2A" in _qp, (
-        f"expected masked password in: {_qp!r}"
-    )
-    assert "sslmode=require" in _qp, f"sslmode param lost: {_qp!r}"
+    if not ("password=***" in _qp or "password=%2A%2A%2A" in _qp):
+        raise AssertionError(f"expected masked password in: {_qp!r}")
+    if "sslmode=require" not in _qp:
+        raise AssertionError(f"sslmode param lost: {_qp!r}")
 
     # Repro: IPv6 host must keep brackets.
     _ipv6 = redact_url("postgres://u:secret@[::1]:5432/db")
-    assert "secret" not in _ipv6, f"IPv6 userinfo password leak: {_ipv6!r}"
-    assert "[::1]" in _ipv6, f"IPv6 brackets dropped: {_ipv6!r}"
+    if "secret" in _ipv6:
+        raise AssertionError(f"IPv6 userinfo password leak: {_ipv6!r}")
+    if "[::1]" not in _ipv6:
+        raise AssertionError(f"IPv6 brackets dropped: {_ipv6!r}")
 
 
 _selfcheck()

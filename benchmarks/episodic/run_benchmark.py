@@ -332,10 +332,10 @@ def run_benchmark(
             events.append(
                 [
                     date,
-                    random.choice(locations),
-                    random.choice(names),
-                    random.choice(contents),
-                    random.choice(details),
+                    random.choice(locations),  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
+                    random.choice(names),  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
+                    random.choice(contents),  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
+                    random.choice(details),  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
                 ]
             )
         print(f"  Generated {len(events)} synthetic events")

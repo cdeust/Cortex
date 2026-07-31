@@ -118,7 +118,7 @@ class TestAgentBriefing(unittest.TestCase):
             "agent_type": "genius",
             "prompt": "Explain the zetetic scientific standard and verify "
             "the implementation",
-            "cwd": "/tmp",
+            "cwd": "/tmp",  # noqa: S108 — fixture event payload for a stubbed hook call, never touched as a real filesystem path
         }
         stdout, stderr, code = _run_process_event(event, stub_rows)
         self.assertEqual(code, 0, f"Expected exit 0, got {code}. stderr: {stderr}")
@@ -140,7 +140,7 @@ class TestAgentBriefing(unittest.TestCase):
             "agent_name": "nonexistent-agent",
             "agent_type": "custom",
             "prompt": "Do something with a nonexistent agent context here",
-            "cwd": "/tmp",
+            "cwd": "/tmp",  # noqa: S108 — fixture event payload for a stubbed hook call, never touched as a real filesystem path
         }
         stdout, stderr, code = _run_process_event(event, [])
         self.assertEqual(code, 0, f"Expected exit 0, got {code}. stderr: {stderr}")

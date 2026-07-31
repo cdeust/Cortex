@@ -130,7 +130,10 @@ def step(msg: str) -> None:
 
 
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    # Both call sites pass either ["pg_isready", "-h", host, "-p", port]
+    # (host/port from local DATABASE_URL config) or [sys.executable,
+    # <hardcoded setup_db.py path>] — never external/untrusted input.
+    return subprocess.run(cmd, capture_output=True, text=True, **kwargs)  # noqa: S603
 
 
 # ── Step 1: Python version check ──────────────────────────────────────

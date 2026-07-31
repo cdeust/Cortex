@@ -60,7 +60,7 @@ def run_with_hard_timeout(
     is long-lived and the OS reclaims the slot when the parent exits.
     """
     try:
-        proc = subprocess.Popen(
+        proc = subprocess.Popen(  # noqa: S603 — documented contract above: "Caller owns argument sanitization — this function does not interpret cmd"; shell=False always, per the same precondition
             cmd,
             cwd=str(cwd) if cwd is not None else None,
             stdout=subprocess.PIPE,

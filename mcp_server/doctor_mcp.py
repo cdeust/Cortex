@@ -130,7 +130,7 @@ def _check_python_interpreter() -> McpCheck:
                 # Capture the version reported by `python3 --version`.
                 # If it crashes (corrupt install), surface the error.
                 try:
-                    proc = subprocess.run(
+                    proc = subprocess.run(  # noqa: S603 — path is shutil.which()'s own resolved result for a hardcoded name ("python3"/"python"/"py"), never user input; no shell=True
                         [path, "--version"],
                         capture_output=True,
                         text=True,
@@ -382,7 +382,7 @@ def _check_launcher_smoke(install_path: str | None) -> McpCheck:
     cmd = [py, str(launcher)]
     attempted = " ".join(cmd)
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 — cmd is [sys.executable, <verified-existing local launcher.py path>], never user input; no shell=True
             cmd,
             capture_output=True,
             text=True,

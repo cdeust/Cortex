@@ -45,7 +45,7 @@ def _git_sha() -> str:
     """Return the HEAD commit SHA, or 'unknown' if git is unavailable."""
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
             capture_output=True,
             text=True,
             timeout=5,
@@ -73,7 +73,7 @@ def _git_dirty() -> bool | None:
     """
     try:
         result = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "status", "--porcelain"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
             capture_output=True,
             text=True,
             timeout=5,

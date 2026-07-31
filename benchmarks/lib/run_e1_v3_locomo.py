@@ -156,14 +156,17 @@ ROWS: list[Row] = [
 
 def _git_sha() -> str:
     out = subprocess.run(
-        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=_ROOT
+        ["git", "rev-parse", "HEAD"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
+        capture_output=True,
+        text=True,
+        cwd=_ROOT,
     )
     return out.stdout.strip()
 
 
 def _git_dirty() -> bool:
     out = subprocess.run(
-        ["git", "diff", "--stat", "--ignore-submodules=all", "HEAD"],
+        ["git", "diff", "--stat", "--ignore-submodules=all", "HEAD"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
         capture_output=True,
         text=True,
         cwd=_ROOT,
@@ -195,7 +198,7 @@ def _run_row(row: Row) -> dict:
     print(f"{'=' * 70}", flush=True)
 
     t0 = time.time()
-    proc = subprocess.run(cmd, cwd=_ROOT)
+    proc = subprocess.run(cmd, cwd=_ROOT)  # noqa: S603 — cmd is ["uv", "run", "python", <hardcoded _HARNESS path>, ...flags]; "ablate" is an internal sweep-config value, never external/untrusted input
     wall = time.time() - t0
 
     rc = proc.returncode

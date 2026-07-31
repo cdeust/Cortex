@@ -31,6 +31,7 @@ from mcp_server.core.document_model import (
     DocumentSection,
     DocumentTable,
     ParsedDocument,
+    reject_doctype,
 )
 
 _W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -120,8 +121,9 @@ def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
     Raises:        :class:`DocumentParseError` on malformed XML — loud, so
                    the caller writes nothing (no partial silent ingest).
     """
+    reject_doctype(document_xml, kind="docx")
     try:
-        root = ET.fromstring(document_xml)
+        root = ET.fromstring(document_xml)  # noqa: S314 — entity-expansion/XXE closed by reject_doctype above (see document_model.py)
     except ET.ParseError as exc:
         raise DocumentParseError(f"malformed docx XML: {exc}") from exc
 

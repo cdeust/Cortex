@@ -159,7 +159,7 @@ def _bootstrap_ci(
     if not values or len(values) < _MIN_VALUES_FOR_CI:
         return None
 
-    rng = random.Random(42)
+    rng = random.Random(42)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     n = len(values)
     means = [
         sum(values[rng.randrange(n)] for _ in range(n)) / n for _ in range(n_resamples)

@@ -81,7 +81,7 @@ Runner = Callable[[list[str], dict[str, str], Path], "subprocess.CompletedProces
 def default_runner(
     cmd: list[str], env: dict[str, str], cwd: Path
 ) -> "subprocess.CompletedProcess[str]":
-    return subprocess.run(cmd, env=env, cwd=cwd, capture_output=True, text=True)  # noqa: PLW1510 — exit code is read by the caller, not raised
+    return subprocess.run(cmd, env=env, cwd=cwd, capture_output=True, text=True)  # noqa: PLW1510, S603 — exit code is read by the caller, not raised; cmd is [sys.executable, "-m", "pytest", "-q", *full_test_selection], test paths from this repo's own suite, never external input
 
 
 def recheck_survivor(

@@ -197,9 +197,14 @@ def _process_start_signature(pid: int) -> str | None:
             return fields[19]  # field 22 overall = index 19 after comm+state
         except (OSError, IndexError, ValueError):
             return None
+    # noqa comment covers both S603 (subprocess call) and S607 ("ps"
+    # resolved via PATH is standard practice for local process
+    # introspection); pid is always an int (str(pid) is numeric), no
+    # shell=True, no user-controlled argv.
+    ps_cmd = ["ps", "-o", "lstart=", "-p", str(pid)]  # noqa: S603, S607
     try:
-        out = subprocess.run(
-            ["ps", "-o", "lstart=", "-p", str(pid)],
+        out = subprocess.run(  # noqa: S603
+            ps_cmd,
             capture_output=True,
             text=True,
             timeout=_PS_TIMEOUT_S,
@@ -214,9 +219,13 @@ def _process_start_signature(pid: int) -> str | None:
 def _ppid_and_comm(pid: int) -> tuple[int, str] | None:
     """One ancestor-walk step: ``(parent pid, comm)`` of ``pid``, or
     None on any probe failure (dead pid, unsupported platform)."""
+    # "ps" resolved via PATH is standard practice for local process
+    # introspection; pid is always an int (str(pid) is numeric), no
+    # shell=True, no user-controlled argv.
+    ps_cmd = ["ps", "-o", "ppid=,comm=", "-p", str(pid)]  # noqa: S603, S607
     try:
-        out = subprocess.run(
-            ["ps", "-o", "ppid=,comm=", "-p", str(pid)],
+        out = subprocess.run(  # noqa: S603
+            ps_cmd,
             capture_output=True,
             text=True,
             timeout=_PS_TIMEOUT_S,

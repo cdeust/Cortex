@@ -85,7 +85,9 @@ def adaptive_batch_controller_observe(
         controller._b = min(controller.b_max, controller._b + controller.ai_step)
     else:
         controller._b = max(controller.b_min, int(controller._b * _MD_FACTOR))
-    assert (
-        controller.b_min <= controller._b <= controller.b_max
-    )  # invariant (precond 4)
+    if not (controller.b_min <= controller._b <= controller.b_max):
+        # invariant (precond 4) — explicit raise, not `assert` (S101), so
+        # this postcondition is never silently stripped by `python -O`.
+        b, lo, hi = controller._b, controller.b_min, controller.b_max
+        raise AssertionError(f"batch size {b} out of [{lo}, {hi}]")
     return controller._b

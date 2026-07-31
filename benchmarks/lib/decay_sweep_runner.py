@@ -216,7 +216,7 @@ def _collect_provenance() -> dict:
 
     try:
         sha = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
@@ -224,7 +224,7 @@ def _collect_provenance() -> dict:
         ).stdout.strip()
         dirty = bool(
             subprocess.run(
-                ["git", "status", "--porcelain"],
+                ["git", "status", "--porcelain"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
                 cwd=REPO_ROOT,
                 capture_output=True,
                 text=True,

@@ -146,7 +146,8 @@ def _eval_mode(mode: str, dataset: list[dict]) -> dict[str, float] | None:
 def _git_sha() -> str:
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], text=True
+            ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
+            text=True,
         ).strip()
     except (OSError, subprocess.SubprocessError):
         return "unknown"

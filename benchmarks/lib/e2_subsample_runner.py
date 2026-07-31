@@ -104,7 +104,7 @@ def subsample(
     valid_probes = [
         p for p in probes if any(k in keep_keys for k in p.target_source_keys)
     ]
-    rng = random.Random(seed * 31 + 7)
+    rng = random.Random(seed * 31 + 7)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     if len(valid_probes) > n_queries:
         valid_probes = rng.sample(valid_probes, n_queries)
     return sub_items, valid_probes

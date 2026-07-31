@@ -174,7 +174,7 @@ def synth_corpus(n: int, seed: int) -> list[CorpusItem]:
     an earlier item; each item's query has itself as ground truth.
     Invariant: 0 <= ground_truth_idx < n.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     templates = _load_templates()
     items: list[CorpusItem] = []
     for i in range(n):
@@ -219,7 +219,7 @@ class TrialResult:
 
 
 def _select_query_indices(n_corpus: int, n_queries: int, seed: int) -> list[int]:
-    rng = random.Random(seed * 31 + 7)
+    rng = random.Random(seed * 31 + 7)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     if n_corpus <= n_queries:
         return list(range(n_corpus))
     return rng.sample(range(n_corpus), n_queries)

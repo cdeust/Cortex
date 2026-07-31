@@ -173,7 +173,9 @@ def _resolve_benchmark(bench_id: str, quick: bool) -> tuple[Callable[[], None], 
 def _git_sha() -> str:
     try:
         out = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=_ROOT, stderr=subprocess.DEVNULL
+            ["git", "rev-parse", "HEAD"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
+            cwd=_ROOT,
+            stderr=subprocess.DEVNULL,
         )
         return out.decode().strip()
     except (OSError, subprocess.SubprocessError):

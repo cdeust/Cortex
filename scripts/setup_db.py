@@ -80,7 +80,7 @@ def _pg_is_running(host: str, port: str) -> bool:
     if not pg_isready:
         return False
     try:
-        r = subprocess.run(
+        r = subprocess.run(  # noqa: S603 — pg_isready is shutil.which()'s own resolved result; host/port come from the local DATABASE_URL config, never external input
             [pg_isready, "-h", host, "-p", port],
             capture_output=True,
             timeout=5,
@@ -120,7 +120,7 @@ def _probe_database(host: str, port: str, dbname: str) -> tuple[str, str]:
     if not psql:
         return "error", "psql not found on PATH"
     try:
-        r = subprocess.run(
+        r = subprocess.run(  # noqa: S603 — psql is shutil.which()'s own resolved result; host/port come from the local DATABASE_URL config, never external input
             [
                 psql,
                 "-h",
@@ -150,7 +150,7 @@ def _create_db(host: str, port: str, dbname: str) -> tuple[bool, str]:
     if not createdb:
         return False, "createdb not found on PATH"
     try:
-        r = subprocess.run(
+        r = subprocess.run(  # noqa: S603 — createdb is shutil.which()'s own resolved result; host/port/dbname come from the local DATABASE_URL config, never external input
             [createdb, "-h", host, "-p", port, dbname],
             capture_output=True,
             timeout=10,
@@ -167,7 +167,7 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
     if not psql:
         return False, "psql not found"
     try:
-        r = subprocess.run(
+        r = subprocess.run(  # noqa: S603 — psql is shutil.which()'s own resolved result; host/port/dbname come from the local DATABASE_URL config, never external input
             [
                 psql,
                 "-h",

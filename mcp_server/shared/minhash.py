@@ -58,7 +58,12 @@ class MinHash:
 
     def update(self, value: bytes) -> None:
         """Fold one shingle into the sketch (keeps the per-permutation minimum)."""
-        hv = np.uint64(struct.unpack("<I", hashlib.sha1(value).digest()[:4])[0])
+        # usedforsecurity=False: sha1 here is only a fast, uniformly-
+        # distributed hash function for MinHash shingle bucketing, never
+        # a security/integrity check — also lets this run under FIPS
+        # mode, which blocks sha1 unless explicitly marked non-security.
+        digest = hashlib.sha1(value, usedforsecurity=False).digest()
+        hv = np.uint64(struct.unpack("<I", digest[:4])[0])
         permuted = np.bitwise_and(
             (self._a * hv + self._b) % _MERSENNE_PRIME, _HASH_MASK
         )

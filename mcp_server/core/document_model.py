@@ -19,6 +19,7 @@ that lives in infrastructure/handlers, never here.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 
@@ -30,6 +31,40 @@ class DocumentParseError(Exception):
     this to an ``{"ingested": false, ...}`` response BEFORE any wiki page or
     memory is written, so a malformed document leaves the store untouched.
     """
+
+
+# Both docx_parser.py and confluence_parser.py feed untrusted, externally
+# authored bytes (an uploaded .docx / a Confluence export) to
+# xml.etree.ElementTree.fromstring (S314/CWE-611). Stdlib ElementTree's
+# expat backend has disabled EXTERNAL entity/DTD resolution by default
+# since CPython 2.7.9/3.4.3 (the classic SSRF-flavoured XXE), but it does
+# NOT bound INTERNAL entity expansion ("billion laughs" — a few hundred
+# bytes of nested <!ENTITY> definitions can expand to gigabytes in
+# memory), so a byte-size cap on the input file alone (see
+# infrastructure/document_reader.py's MAX_DOCUMENT_BYTES) does not close
+# this. Both modules are documented "stdlib only" by design (issue #192
+# §8 — no new heavyweight dependency such as defusedxml), so the fix is a
+# stdlib-only guard: neither a well-formed WordprocessingML
+# ``word/document.xml`` nor a Confluence storage-format export ever
+# legitimately declares a DOCTYPE/internal DTD subset — rejecting one
+# outright removes the only mechanism (custom <!ENTITY> declarations)
+# entity-expansion and external-entity attacks both depend on, with zero
+# effect on any legitimate input.
+_DOCTYPE_RE = re.compile(r"<!DOCTYPE", re.IGNORECASE)
+
+
+def reject_doctype(xml_text: str, *, kind: str) -> None:
+    """Raise :class:`DocumentParseError` if ``xml_text`` declares a DOCTYPE.
+
+    Precondition: none. Postcondition: no side effect when no DOCTYPE
+    declaration is present; raises otherwise. ``kind`` names the calling
+    parser (``"docx"`` / ``"confluence"``) for the error message only.
+    """
+    if _DOCTYPE_RE.search(xml_text):
+        raise DocumentParseError(
+            f"{kind} document declares a DOCTYPE — refused (entity-expansion"
+            " / XXE guard, S314)"
+        )
 
 
 @dataclass(frozen=True)

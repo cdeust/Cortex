@@ -32,6 +32,7 @@ from mcp_server.core.document_model import (
     DocumentSection,
     DocumentTable,
     ParsedDocument,
+    reject_doctype,
 )
 
 _XML_BUILTIN_ENTITIES = {"amp", "lt", "gt", "quot", "apos"}
@@ -103,9 +104,10 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
     Raises:        :class:`DocumentParseError` on malformed XHTML — loud, so
                    the caller writes nothing.
     """
+    reject_doctype(xhtml, kind="confluence")
     resolved = _resolve_entities(xhtml)
     try:
-        root = ET.fromstring(f"{_WRAP_OPEN}{resolved}{_WRAP_CLOSE}")
+        root = ET.fromstring(f"{_WRAP_OPEN}{resolved}{_WRAP_CLOSE}")  # noqa: S314 — entity-expansion/XXE closed by reject_doctype above (see document_model.py)
     except ET.ParseError as exc:
         raise DocumentParseError(f"malformed Confluence XHTML: {exc}") from exc
 

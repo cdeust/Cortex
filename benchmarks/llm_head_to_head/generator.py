@@ -135,7 +135,7 @@ def _backoff_seconds(attempt: int) -> float:
     post: returns float ≥ 0; deterministic upper bound for budget reasoning.
     """
     base = INITIAL_BACKOFF_S * (BACKOFF_MULTIPLIER**attempt)
-    jitter = random.uniform(0.0, MAX_JITTER_S)
+    jitter = random.uniform(0.0, MAX_JITTER_S)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     return base + jitter
 
 

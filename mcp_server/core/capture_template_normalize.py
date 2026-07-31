@@ -139,7 +139,13 @@ def _normalize_auto_capture(content: str) -> str:
 
 def _normalize_derived_fact(content: str) -> str:
     m = _DERIVED_FACT_RE.match(content.strip())
-    assert m is not None  # caller already checked is_derived_fact_template
+    if m is None:
+        # Caller already checked is_derived_fact_template; an explicit
+        # raise (not `assert`, S101) so this internal-contract check is
+        # never silently stripped by `python -O`.
+        raise AssertionError(
+            "_normalize_derived_fact called on a non-matching template"
+        )
     return (
         f"{m.group('src')} {m.group('tgt')} {m.group('rel_type')} {m.group('weight')}"
     )

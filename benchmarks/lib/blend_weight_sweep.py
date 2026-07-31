@@ -209,7 +209,7 @@ def run_cell(cell: Cell, n_queries: int, out_dir: Path) -> dict[str, Any]:
     env["PYTHONHASHSEED"] = "0"
     env["CUDA_VISIBLE_DEVICES"] = ""
     t0 = time.monotonic()
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603 — cmd is [sys.executable, <hardcoded script path>, ...flags]; never external input
         cmd,
         env=env,
         cwd=str(REPO_ROOT),
@@ -343,7 +343,9 @@ def write_manifest(
 ) -> None:
     """Emit the reproducibility manifest sidecar (Move 3)."""
     code_hash = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=str(REPO_ROOT), text=True
+        ["git", "rev-parse", "HEAD"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
+        cwd=str(REPO_ROOT),
+        text=True,
     ).strip()
     # Dirtiness measured against TRACKED source files only (matches the
     # pre-registration definition in docs/provenance/blend-weight-calibration.md
@@ -353,7 +355,7 @@ def write_manifest(
     #   infrastructure, not benchmark source) via --ignore-submodules=all.
     dirty = bool(
         subprocess.check_output(
-            ["git", "diff", "--stat", "--ignore-submodules=all", "HEAD"],
+            ["git", "diff", "--stat", "--ignore-submodules=all", "HEAD"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
             cwd=str(REPO_ROOT),
             text=True,
         ).strip()

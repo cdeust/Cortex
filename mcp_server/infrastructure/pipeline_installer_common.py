@@ -27,7 +27,7 @@ def _run_quiet(
     override the inherited environment.
     """
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # noqa: S603 — every caller passes a fixed-shape argv (git/cargo/sh with resolved-binary or verified-path args, never shell=True); the one `sh -c <str>` caller (pipeline_install_rust.py's curl|sh fallback) builds that string from a hardcoded https:// literal + shutil.which("curl"), both shlex.quote()'d
             cmd,
             cwd=cwd,
             env=env,

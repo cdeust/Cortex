@@ -129,7 +129,7 @@ def git_head_sha(repo_root: Path) -> str:
     """Capture the current code SHA. Falls back to empty string off-git."""
     try:
         out = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
             cwd=str(repo_root),
             capture_output=True,
             check=True,
@@ -149,7 +149,7 @@ def git_tree_dirty(repo_root: Path) -> tuple[bool, list[str]]:
     """
     try:
         out = subprocess.run(
-            [
+            [  # noqa: S607 — "git" resolved via PATH, standard practice; argv is a hardcoded literal list
                 "git",
                 "diff",
                 "--stat",

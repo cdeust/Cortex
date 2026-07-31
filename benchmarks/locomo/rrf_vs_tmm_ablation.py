@@ -36,6 +36,7 @@ from mcp_server.core.scoring import (
     compute_ngram_score,
 )
 from mcp_server.core.query_intent import classify_query_intent, QueryIntent
+from mcp_server.shared.platform import cache_dir
 
 # Import wrrf_fuse directly from the module file to avoid benchmarks.lib.__init__,
 # which pulls in bench_db -> pg_store -> psycopg (Postgres, not needed here).
@@ -204,7 +205,11 @@ def main():
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     from sentence_transformers import SentenceTransformer  # noqa: PLC0415 — optional dependency (sentence-transformers (multi-second model load)); imported where used so environments without it keep working
 
-    model_path = os.environ.get("MINILM_PATH", "/tmp/minilm")
+    # Not /tmp (S108 + the FlashRank incident this repo already
+    # documents: CLAUDE.md "Do NOT write model caches under /tmp" —
+    # world-writable and non-persistent). Mirrors reranker_model.py's
+    # own durable-cache convention (~/.cache, $XDG_CACHE_HOME-aware).
+    model_path = os.environ.get("MINILM_PATH", str(cache_dir() / "minilm"))
     model = SentenceTransformer(model_path)
 
     raw = load_locomo(DATA_PATH)

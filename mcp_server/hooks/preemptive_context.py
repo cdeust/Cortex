@@ -64,11 +64,17 @@ import time
 from pathlib import Path
 from typing import Any
 
+from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
 _LOG_PREFIX = "[cortex-preemptive]"
 _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
 _HEAT_BOOST = 0.1  # Small boost — primes without dominating
 _COOLDOWN_SECONDS = 60
-_COOLDOWN_FILE = Path("/tmp/cortex_preemptive_cooldown.json")
+# Not /tmp (S108): world-writable on multi-user systems, so a hardcoded
+# shared filename is symlink/race-attackable. METHODOLOGY_DIR is the
+# same per-user (~/.claude/methodology, CORTEX_CLAUDE_DIR-overridable)
+# directory the rest of this codebase already persists local state to.
+_COOLDOWN_FILE = METHODOLOGY_DIR / "cortex_preemptive_cooldown.json"
 
 # Tools that indicate file interaction worth priming for
 _FILE_TOOLS = {"Edit", "Write", "Read"}

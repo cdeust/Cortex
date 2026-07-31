@@ -136,7 +136,8 @@ class BenchmarkDB:
 
     def _purge_stale_benchmark_data(self) -> None:
         """Remove orphaned benchmark memories from crashed/killed runs."""
-        assert self._store is not None
+        if self._store is None:
+            raise AssertionError("Call open() first")
         self._store._execute("DELETE FROM memories WHERE is_benchmark = TRUE")
         self._store._conn.commit()
 
@@ -166,7 +167,8 @@ class BenchmarkDB:
 
         Returns (ids, source_map) where source_map maps memory_id → source string.
         """
-        assert self._store is not None, "Call open() first"
+        if self._store is None:
+            raise AssertionError("Call open() first")
         ids, source_map = ingest_memories_batch(
             memories,
             self._store,
@@ -191,7 +193,8 @@ class BenchmarkDB:
         rerank_alpha: float = 0.70,
     ) -> list[dict[str, Any]]:
         """Delegate to mcp_server.core.pg_recall.recall()."""
-        assert self._store is not None, "Call open() first"
+        if self._store is None:
+            raise AssertionError("Call open() first")
         return pg_recall(
             query=query,
             store=self._store,
@@ -224,7 +227,8 @@ class BenchmarkDB:
         for the schema). The benchmark uses ``selected_memories`` to
         compute retrieval hit ranks.
         """
-        assert self._store is not None, "Call open() first"
+        if self._store is None:
+            raise AssertionError("Call open() first")
         return pg_assemble_context(
             query=query,
             store=self._store,

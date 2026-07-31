@@ -181,7 +181,7 @@ def render(spec: BadgeSpec) -> str:
     # here in practice, so the guard is on the finished artifact rather than
     # on any one of the ways to break it.
     try:
-        ElementTree.fromstring(svg)
+        ElementTree.fromstring(svg)  # noqa: S314 — parses the string this function JUST built from its own templating (well-formedness self-check), never external/untrusted input
     except ElementTree.ParseError as error:
         raise BadgeMarkupError(
             f"rendered badge is not well-formed XML: {error}"

@@ -68,11 +68,11 @@ def _http_get(url: str, accept: Optional[str] = None) -> bytes:
     fast path is unavailable (the source-build fallback handles its own
     git/cargo network).
     """
-    req = urllib.request.Request(url)
+    req = urllib.request.Request(url)  # noqa: S310 — url is always _RELEASES_URL (a hardcoded https:// literal) or a "browser_download_url" GitHub itself returned from that same pinned API call; GitHub never emits file:/custom schemes for this field
     if accept:
         req.add_header("Accept", accept)
     req.add_header("User-Agent", "cortex-installer")
-    with urllib.request.urlopen(req, timeout=_REQUEST_TIMEOUT) as resp:
+    with urllib.request.urlopen(req, timeout=_REQUEST_TIMEOUT) as resp:  # noqa: S310 — url is always _RELEASES_URL (a hardcoded https:// literal) or a "browser_download_url" GitHub itself returned from that same pinned API call; GitHub never emits file:/custom schemes for this field
         return resp.read()
 
 

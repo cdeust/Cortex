@@ -187,13 +187,15 @@ def parse_server_page(html: str) -> Ranking:
     return validate(match.group(1), match.group(2), "server page")
 
 
-def fetch(url: str, opener: Callable = urllib.request.urlopen) -> bytes:
+def fetch(  # noqa: S310 — every production caller (resolve_ranking) passes one of the two hardcoded module https:// constants (LEADERBOARD_URL/SERVER_PAGE_URL); tests pass fixed https:// literals
+    url: str, opener: Callable = urllib.request.urlopen
+) -> bytes:
     """Retrieve a URL, or raise UpstreamError naming the failure."""
     # Header KEY casing is equivalent here: Request normalises every header
     # key via str.capitalize() before storing it, so "User-Agent"/
     # "user-agent"/"USER-AGENT" (and "Accept"'s equivalent) are
     # indistinguishable at the wire — issue #281.
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310 — see fetch()'s own noqa above: url is always one of the two hardcoded https:// module constants in production, a fixed https:// literal in tests
         url,
         headers={
             "User-Agent": "cortex-badge-refresh (+https://github.com/cdeust/Cortex)",

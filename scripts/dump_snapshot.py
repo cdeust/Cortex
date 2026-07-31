@@ -15,7 +15,7 @@ SERVER = "http://127.0.0.1:3458"
 
 print("[dump] Fetching full graph from server…", flush=True)
 try:
-    with urllib.request.urlopen(f"{SERVER}/api/graph", timeout=120) as r:
+    with urllib.request.urlopen(f"{SERVER}/api/graph", timeout=120) as r:  # noqa: S310 — SERVER and the path suffix are both hardcoded literals (http://127.0.0.1:3458/api/graph), never external input
         data = json.load(r)
 except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
     print(f"[dump] Failed to fetch graph: {e}", file=sys.stderr)

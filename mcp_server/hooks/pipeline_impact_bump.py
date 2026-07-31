@@ -46,9 +46,15 @@ import time
 from pathlib import Path
 from typing import Any, cast
 
+from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
 _LOG_PREFIX = "[pipeline-impact-bump]"
 _COOLDOWN_SECONDS = 30
-_COOLDOWN_FILE = Path("/tmp/cortex_pipeline_impact_cooldown.json")
+# Not /tmp (S108): world-writable on multi-user systems, so a hardcoded
+# shared filename is symlink/race-attackable. METHODOLOGY_DIR is the
+# same per-user (~/.claude/methodology, CORTEX_CLAUDE_DIR-overridable)
+# directory the rest of this codebase already persists local state to.
+_COOLDOWN_FILE = METHODOLOGY_DIR / "cortex_pipeline_impact_cooldown.json"
 _FILE_TOOLS = {"Edit", "Write", "MultiEdit"}
 _IMPACT_BOOST = 0.15  # Slightly higher than preemptive — graph precision earns it.
 _MAX_BUMPS = 20  # Don't over-boost on massive impact sets.

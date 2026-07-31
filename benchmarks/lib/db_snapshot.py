@@ -279,7 +279,7 @@ def create_snapshot(
     if not state["hnsw_indexes"]:
         print("WARN: snapshot pre-HNSW-build; hnsw_indexes will be empty.")
     cmd = ["pg_dump", "--format=custom", "--file", str(snapshot_path), db_url]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603, S607 — "pg_dump" resolved via PATH, standard practice; db_url is the local benchmark DB config, never external input
     if res.returncode != 0:
         raise RuntimeError(f"pg_dump failed: {res.stderr.strip()}")
     meta = SnapshotMeta(
@@ -402,7 +402,7 @@ def restore_snapshot(
     t0 = time.monotonic()
     _drop_and_create(db_url)
     cmd = ["pg_restore", "--no-owner", "--dbname", db_url, str(snapshot_path)]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603, S607 — "pg_restore" resolved via PATH, standard practice; db_url is the local benchmark DB config, never external input
     wall = time.monotonic() - t0
     if res.returncode != 0:
         return RestoreReport(

@@ -487,6 +487,106 @@ select = [
     #   `seed_project.py` — a no-op type-wise, both branches already
     #   yielded `Path` before and after).
     "PTH",
+    # S (flake8-bandit), the rest beyond S110/S608 (issue #239, family 7 —
+    # final family, closes the program): 32 findings in mcp_server/ (the
+    # issue's measurement scope), 11350 repo-wide (11078 are S101 asserts
+    # in tests_py/**). Every production finding fixed or per-site
+    # `# noqa: RULE — <reason>` justified; every tests_py/**-only rule
+    # below was extended into the SAME blanket per-file-ignore mechanism
+    # as S608 above, but ONLY after empirically sampling representative
+    # sites across the largest buckets in each rule and confirming the
+    # rule structurally does not apply to test code in THIS repo (never
+    # assumed from the rule's name alone):
+    #   S101 (11064 in tests, ~9 in mcp_server/): assert IS the test — see
+    #     per-file-ignores below. The 9 production sites were converted to
+    #     explicit `if not X: raise AssertionError(...)` (not suppressed):
+    #     `-O` is never invoked anywhere in this repo (grep confirmed), so
+    #     an `assert` guarding a real invariant is a silent no-op waiting
+    #     to happen; `shared/redaction.py::_selfcheck`'s two documented
+    #     leak-vector regressions run at import time and must never be
+    #     strippable.
+    #   S108 hardcoded-temp-file (86 in tests, 3 in mcp_server/, 6 in
+    #     benchmarks/scripts): sampled the 3 largest tests_py/ buckets
+    #     (handlers, scripts, infrastructure) and confirmed every /tmp
+    #     literal is either a pure fixture VALUE never touched as a real
+    #     path (dict/dataclass field under test) or reaches a fully mocked
+    #     dependency/fake — never real filesystem I/O at that path.
+    #     Extended into the tests_py/** ignore on that verified basis. The
+    #     3 mcp_server/ sites (hooks/post_commit_reindex.py,
+    #     preemptive_context.py, pipeline_impact_bump.py — three identical
+    #     cooldown-cache constants) were ACTUALLY FIXED: moved off
+    #     world-writable `/tmp` onto `infrastructure.config.METHODOLOGY_DIR`
+    #     (the same per-user, CORTEX_CLAUDE_DIR-overridable directory the
+    #     rest of this codebase already persists local state to).
+    #     benchmarks/scripts sites got individual per-site noqas or, where
+    #     genuinely fixable (benchmarks/locomo/rrf_vs_tmm_ablation.py's
+    #     MINILM_PATH default), the same durable-cache fix
+    #     shared/platform.py::cache_dir() already established after the
+    #     FlashRank /tmp incident (CLAUDE.md "Do NOT write model caches
+    #     under /tmp").
+    #   S311 non-cryptographic-random (32 in tests, 0 in mcp_server/, 55 in
+    #     benchmarks/scripts/video): every site sampled is either a seeded
+    #     `random.Random(seed)` for reproducible test-fixture/benchmark
+    #     data generation, or (video/generate.py) particle-effect visual
+    #     jitter — never security-sensitive. tests_py/** extended into the
+    #     blanket ignore on that verified basis. video/generate.py's 37
+    #     call sites were consolidated (Extract Function) behind 3 tiny
+    #     `_rand_*` helpers carrying ONE noqa each, rather than 37 repeated
+    #     justifications. benchmarks/scripts sites (18) got individual
+    #     per-site noqas.
+    #   S314 xml-untrusted-data (10 in tests, 2 in mcp_server/, 1 in
+    #     scripts/): the 2 mcp_server/ sites (core/docx_parser.py,
+    #     core/confluence_parser.py) parse GENUINELY untrusted external
+    #     documents (issue #192 ingestion) — ACTUALLY FIXED with a
+    #     stdlib-only `reject_doctype` guard in core/document_model.py
+    #     (both modules are documented "stdlib only", so `defusedxml`
+    #     would violate their own design constraint): no well-formed
+    #     WordprocessingML/Confluence export ever declares a DOCTYPE, so
+    #     refusing one closes both XXE and entity-expansion ("billion
+    #     laughs") without affecting any legitimate input — the byte-size
+    #     cap on ingested files alone does NOT close entity-expansion. The
+    #     10 tests_py/ sites and 1 scripts/ site (badge_render.py) all
+    #     parse a string the SAME function/test just built from its own
+    #     templating (a well-formedness self-check) — never
+    #     external/untrusted input.
+    #   S112 try-except-continue (1 in tests, 1 in mcp_server/): the
+    #     mcp_server/core/recall_pipeline.py site got a real fix (added
+    #     the missing `silent_failure.note` signal, matching this file's
+    #     own established pattern next to it) rather than a noqa. The 1
+    #     tests_py/_store_cleanup.py site is teardown/optional-path
+    #     handling (best-effort per-module cache reset across this
+    #     repo's own handlers package) — same category the S110/BLE001
+    #     rationale above already covers, extended here.
+    #   S603/S607 subprocess (12+11 in tests, 9+3 in mcp_server/, 21+18 in
+    #     benchmarks/scripts/video): sampled every distinct call shape in
+    #     tests_py/ (git-fixture-repo setup, `sys.executable -c/-m
+    #     <hardcoded literal>` child-process isolation checks) and
+    #     confirmed every one is fixture setup against test-owned
+    #     throwaway state or a hardcoded internal script — never
+    #     untrusted input. Extended into the blanket ignore on that
+    #     verified basis. mcp_server/benchmarks/scripts sites got
+    #     individual per-site noqas naming the resolved-binary
+    #     (`shutil.which`/`sys.executable`) or hardcoded-argv mechanism —
+    #     e.g. `git`/`ps`/`pg_dump`/`pg_restore`/`psql`/`createdb`/`ffmpeg`
+    #     resolved via PATH (standard practice for these tools), never
+    #     shell=True, never user-controlled argv[0].
+    #   S310 url-open (4 in scripts/, 3 in mcp_server/, 0 in tests):
+    #     every site's URL is either a hardcoded https:// literal/module
+    #     constant, or (validate_memory.py) constrained upstream by
+    #     core.provenance's own `_URL_RE = r"https?://\S+"` extraction
+    #     regex — no file:/custom scheme is reachable in any case.
+    #   S105 hardcoded-password-string (1 in mcp_server/, 1 in tests):
+    #     `shared/redaction.py::_PASSWORD_MASK = "***"` is the redaction
+    #     PLACEHOLDER this module writes OVER a real password, not a
+    #     credential; the 1 tests_py/infrastructure/test_mcp_client_pool.py
+    #     site is a fixture value asserting env-var interpolation.
+    #   S324 insecure-hash (1 in mcp_server/): shared/minhash.py's sha1
+    #     use is non-cryptographic (MinHash shingle bucketing) — ACTUALLY
+    #     FIXED with `usedforsecurity=False` (Python 3.9+, recognized by
+    #     ruff) rather than a noqa: also lets this run under FIPS mode,
+    #     which blocks sha1 unless explicitly marked non-security.
+    #   S103/S107 (0 findings repo-wide, measured): nothing to fix.
+    "S",
 ]
 # ── Families deliberately NOT selected (issue #197, criterion 1) ────────────
 # Counts measured against mcp_server/ 2026-07-28, ruff 0.15.20 — what
@@ -518,11 +618,10 @@ select = [
 #     dedicated-PR-sized diff under the fix-with-landing bar.
 #
 # (c) JUDGEMENT families not yet triaged — TRY (163), ARG (54->667
-#     repo-wide), PTH (91), FBT (258->461 repo-wide), S beyond S110/S608
-#     (34 production + 11078 S101-in-tests): tracked as the program's
-#     continuation in issue #239 (B, RET, DTZ, N, ERA landed above).
-#     Enabling any of them without the per-finding triage the landed
-#     families received would mean blanket ignores — the exact
+#     repo-wide), FBT (258->461 repo-wide): tracked as the program's
+#     continuation in issue #239 (B, RET, DTZ, N, ERA, PTH, S landed
+#     above). Enabling any of them without the per-finding triage the
+#     landed families received would mean blanket ignores — the exact
 #     anti-pattern this explicit select list exists to prevent.
 
 [tool.ruff.lint.per-file-ignores]
@@ -544,7 +643,40 @@ select = [
 # throwaway database — the assertion is the boundary, and no untrusted input
 # exists (6 sites measured 2026-07-28). The production-code bans
 # (mcp_server/) stay fully enforced.
-"tests_py/**" = ["S110", "BLE001", "PLR2004", "PLC0415", "S608"]
+#
+# The 7 entries below (issue #239, S family, final family) were each
+# added ONLY after sampling representative sites across the largest
+# tests_py/ buckets and confirming the rule structurally does not apply
+# to test code in this repo — see the long comment above the "S" entry
+# in [tool.ruff.lint] select for the full per-rule verification:
+#   S101 — assert IS the test (11064 sites measured 2026-07-31).
+#   S108 — /tmp-shaped string literals are fixture VALUES never touched
+#     as real paths, or reach a fully mocked dependency (86 sites).
+#   S311 — seeded `random.Random(seed)` for reproducible test-fixture
+#     data, never security-sensitive (32 sites).
+#   S314 — every site parses a string the SAME test just built from its
+#     own templating (self-generated SVG well-formedness checks), never
+#     external/untrusted input (10 sites).
+#   S112 — teardown/optional-path handling (best-effort per-module cache
+#     reset), same category S110/BLE001 above already cover (1 site).
+#   S603/S607 — fixture setup against test-owned throwaway state
+#     (git-repo fixtures) or a hardcoded internal script/module via
+#     `sys.executable -c/-m <literal>`, never untrusted input (12+11
+#     sites).
+"tests_py/**" = [
+    "S110",
+    "BLE001",
+    "PLR2004",
+    "PLC0415",
+    "S608",
+    "S101",
+    "S108",
+    "S311",
+    "S314",
+    "S112",
+    "S603",
+    "S607",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests_py"]

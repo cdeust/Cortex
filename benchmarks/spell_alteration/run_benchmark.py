@@ -336,7 +336,7 @@ def run_benchmark(pdf_path: str, seed: int = 42) -> dict:
     print(f"  {len(full_text):,} chars ({len(full_text) // 4:,} est. tokens)")
 
     # Pick 2 spells to replace
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     eligible = [
         s
         for s in KNOWN_REAL_SPELLS
@@ -413,7 +413,10 @@ def run_benchmark(pdf_path: str, seed: int = 42) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pdf", default="/tmp/harrypotter.pdf")
+    parser.add_argument(
+        "--pdf",
+        default="/tmp/harrypotter.pdf",  # noqa: S108 — read-only CLI convenience default for a local test-corpus file the operator places themselves (overridable via --pdf); never written to
+    )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 

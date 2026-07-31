@@ -106,7 +106,7 @@ def latest_release_tag(repo: str) -> str | None:
         f"https://api.github.com/repos/{repo}/releases/latest", headers=_headers()
     )
     try:
-        with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:
+        with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:  # noqa: S310 — scheme is always the hardcoded "https://api.github.com/..." literal; repo only fills the path, never the scheme
             return json.load(resp).get("tag_name")
     except urllib.error.HTTPError as e:
         if e.code == _HTTP_NOT_FOUND:
@@ -120,7 +120,7 @@ def releases_between(repo: str, pin: tuple, latest: tuple) -> int | None:
         f"https://api.github.com/repos/{repo}/releases?per_page=100", headers=_headers()
     )
     try:
-        with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:
+        with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:  # noqa: S310 — scheme is always the hardcoded "https://api.github.com/..." literal; repo only fills the path, never the scheme
             releases = json.load(resp)
     except (urllib.error.URLError, TimeoutError, OSError, ValueError):
         return None

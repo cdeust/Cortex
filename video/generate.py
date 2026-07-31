@@ -29,6 +29,27 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 OUTPUT_FILE = OUTPUT_DIR / "cortex_memory.mp4"
 
 
+# The three helpers below are the ONLY places `random` is called in this
+# file (S311: every call site funnels through here instead of a bare
+# `random.X()`). Purely visual particle-effect jitter/color-selection for
+# a generated video — never security-sensitive, so `random` (not
+# `secrets`) is the right module; consolidating the justification here
+# once, rather than repeating it at 37 call sites, is the DRY choice.
+def _rand_uniform(a: float, b: float) -> float:
+    """Non-cryptographic random float in [a, b] for particle-effect jitter."""
+    return random.uniform(a, b)  # noqa: S311
+
+
+def _rand_choice(seq):
+    """Non-cryptographic random choice for particle-color selection."""
+    return random.choice(seq)  # noqa: S311
+
+
+def _rand_bool_split(threshold: float) -> bool:
+    """Non-cryptographic random branch for particle-color splitting."""
+    return random.random() > threshold  # noqa: S311
+
+
 def get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     candidates = [
         "/System/Library/Fonts/SFPro-Regular.otf",
@@ -180,13 +201,13 @@ def render_beat1(f, parts):
     if f % 15 == 0:
         parts.add(
             Particle(
-                random.uniform(0, WIDTH),
-                random.uniform(0, HEIGHT),
-                random.uniform(-0.2, 0.2),
-                random.uniform(-0.3, 0.0),
-                random.uniform(3, 6),
+                _rand_uniform(0, WIDTH),
+                _rand_uniform(0, HEIGHT),
+                _rand_uniform(-0.2, 0.2),
+                _rand_uniform(-0.3, 0.0),
+                _rand_uniform(3, 6),
                 COLD,
-                random.uniform(1, 2.5),
+                _rand_uniform(1, 2.5),
             )
         )
     parts.update()
@@ -242,13 +263,13 @@ def render_beat2(f, parts):
     if local % 8 == 0:
         parts.add(
             Particle(
-                WIDTH / 2 + random.uniform(-200, 200),
-                HEIGHT / 2 + random.uniform(-100, 100),
-                random.uniform(-0.3, 0.3),
-                random.uniform(-0.6, -0.1),
-                random.uniform(3, 7),
-                EMBER if random.random() > _WARM_EMBER_SPLIT else WARM,
-                random.uniform(1.5, 4),
+                WIDTH / 2 + _rand_uniform(-200, 200),
+                HEIGHT / 2 + _rand_uniform(-100, 100),
+                _rand_uniform(-0.3, 0.3),
+                _rand_uniform(-0.6, -0.1),
+                _rand_uniform(3, 7),
+                EMBER if _rand_bool_split(_WARM_EMBER_SPLIT) else WARM,
+                _rand_uniform(1.5, 4),
             )
         )
     parts.update()
@@ -305,13 +326,13 @@ def render_beat3(f, parts):
     if local % 4 == 0:
         parts.add(
             Particle(
-                random.uniform(100, WIDTH - 100),
-                random.uniform(100, HEIGHT - 100),
-                random.uniform(-0.3, 0.3),
-                random.uniform(-0.4, 0.2),
-                random.uniform(4, 9),
-                random.choice([EMBER, WARM, GOLD, SOFT_GREEN]),
-                random.uniform(1, 4),
+                _rand_uniform(100, WIDTH - 100),
+                _rand_uniform(100, HEIGHT - 100),
+                _rand_uniform(-0.3, 0.3),
+                _rand_uniform(-0.4, 0.2),
+                _rand_uniform(4, 9),
+                _rand_choice([EMBER, WARM, GOLD, SOFT_GREEN]),
+                _rand_uniform(1, 4),
             )
         )
     parts.update()
@@ -407,13 +428,13 @@ def render_beat4(f, parts):
     if local % 6 == 0:
         parts.add(
             Particle(
-                random.uniform(0, WIDTH),
-                random.uniform(0, HEIGHT),
-                random.uniform(-0.15, 0.15),
-                random.uniform(-0.2, 0.1),
-                random.uniform(5, 12),
-                random.choice([COLD, EMBER, SOFT_GREEN, (100, 80, 160)]),
-                random.uniform(1.5, 5),
+                _rand_uniform(0, WIDTH),
+                _rand_uniform(0, HEIGHT),
+                _rand_uniform(-0.15, 0.15),
+                _rand_uniform(-0.2, 0.1),
+                _rand_uniform(5, 12),
+                _rand_choice([COLD, EMBER, SOFT_GREEN, (100, 80, 160)]),
+                _rand_uniform(1.5, 5),
             )
         )
     parts.update()
@@ -426,11 +447,11 @@ def render_beat4(f, parts):
         cx, cy = WIDTH // 2, HEIGHT // 2
         nodes = []
         for i in range(node_count):
-            angle = (i / 15) * 2 * math.pi + random.uniform(-0.2, 0.2)
-            r = 120 + random.uniform(30, 200)
+            angle = (i / 15) * 2 * math.pi + _rand_uniform(-0.2, 0.2)
+            r = 120 + _rand_uniform(30, 200)
             nx = cx + math.cos(angle) * r
             ny = cy + math.sin(angle) * r
-            heat = random.uniform(0.3, 1.0)
+            heat = _rand_uniform(0.3, 1.0)
             nodes.append((nx, ny, heat))
 
         na = fade_in(local, 100, 120)
@@ -535,13 +556,13 @@ def render_beat5(f, parts):
     if local % 5 == 0:
         parts.add(
             Particle(
-                random.uniform(0, WIDTH),
-                random.uniform(0, HEIGHT),
-                random.uniform(-0.1, 0.1),
-                random.uniform(-0.3, 0.0),
-                random.uniform(5, 10),
-                random.choice([WARM, GOLD, (200, 180, 140)]),
-                random.uniform(1, 3),
+                _rand_uniform(0, WIDTH),
+                _rand_uniform(0, HEIGHT),
+                _rand_uniform(-0.1, 0.1),
+                _rand_uniform(-0.3, 0.0),
+                _rand_uniform(5, 10),
+                _rand_choice([WARM, GOLD, (200, 180, 140)]),
+                _rand_uniform(1, 3),
             )
         )
     parts.update()
@@ -646,26 +667,28 @@ def main():
             print(f"  [{f / TOTAL * 100:5.1f}%] Frame {f} (Beat {beat})")
 
     print("Assembling with ffmpeg...")
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-framerate",
-            str(FPS),
-            "-i",
-            str(FRAME_DIR / "frame_%05d.png"),
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "-crf",
-            "18",
-            "-preset",
-            "slow",
-            str(OUTPUT_FILE),
-        ],
-        check=True,
-    )
+    # "ffmpeg" resolved via PATH is standard practice for this kind of
+    # local asset-build script; every other argv element is a hardcoded
+    # literal flag or a path this same script just wrote to, never
+    # external/untrusted input; no shell=True.
+    ffmpeg_cmd = [  # noqa: S603, S607
+        "ffmpeg",
+        "-y",
+        "-framerate",
+        str(FPS),
+        "-i",
+        str(FRAME_DIR / "frame_%05d.png"),
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-crf",
+        "18",
+        "-preset",
+        "slow",
+        str(OUTPUT_FILE),
+    ]
+    subprocess.run(ffmpeg_cmd, check=True)  # noqa: S603
 
     print(f"\nDone: {OUTPUT_FILE} ({TOTAL / FPS:.0f}s)")
     shutil.rmtree(FRAME_DIR)

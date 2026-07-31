@@ -94,7 +94,7 @@ def _try_setup_db() -> dict | None:
         if not setup_script.exists():
             return None
     try:
-        r = subprocess.run(
+        r = subprocess.run(  # noqa: S603 — [sys.executable, <verified-existing local setup_db.py path>], never user input; no shell=True
             [sys.executable, str(setup_script)],
             capture_output=True,
             timeout=15,

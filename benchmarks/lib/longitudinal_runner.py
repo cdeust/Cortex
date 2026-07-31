@@ -262,7 +262,7 @@ def run(n_memories: int, queries_per_bucket: int, seed: int, quick: bool) -> Pat
         f"seed={seed}  quick={quick}"
     )
 
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     np.random.seed(seed)
 
     prod_url = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")

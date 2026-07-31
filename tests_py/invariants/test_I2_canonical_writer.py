@@ -107,10 +107,10 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Anchor pin: heat_base=1.0 + no_decay=TRUE preserves resist-decay.
     ("handlers/anchor.py", 149),
     # Preemptive boost: heat_base += 0.1 on Read/Edit/Write hook.
-    ("hooks/preemptive_context.py", 145),
+    ("hooks/preemptive_context.py", 151),
     # Pipeline-impact boost: heat_base += 0.15 for symbols touched by an
     # edit, resolved via pipeline detect_changes (PostToolUse hook).
-    ("hooks/pipeline_impact_bump.py", 182),
+    ("hooks/pipeline_impact_bump.py", 188),
     # I6-D5 deliberate re-heat campaign (INC6.6): CAS-guarded single-row
     # writer. Cannot route through bump_heat_raw — that would (1) turn a
     # concurrent-write race into a silent overwrite instead of a detected

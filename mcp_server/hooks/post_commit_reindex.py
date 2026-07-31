@@ -44,8 +44,10 @@ import time
 from pathlib import Path
 from typing import Any
 
+from mcp_server.infrastructure.config import METHODOLOGY_DIR
+
 _LOG_PREFIX = "[post-commit-reindex]"
-_COOLDOWN_FILE = Path("/tmp/cortex_reindex_cooldown.json")
+_COOLDOWN_FILE = METHODOLOGY_DIR / "cortex_reindex_cooldown.json"  # not /tmp: S108
 
 
 def _cooldown_seconds() -> int:
@@ -106,12 +108,10 @@ def _is_indexable(rel_path: str) -> bool:
 
 def _git(root: str, args: list[str]) -> str | None:
     """Run ``git -C root <args>``; return stdout, or None on any error."""
+    git_cmd = ["git", "-C", root, *args]  # noqa: S603, S607 — PATH + literal args
     try:
-        result = subprocess.run(
-            ["git", "-C", root, *args],
-            capture_output=True,
-            text=True,
-            timeout=5,
+        result = subprocess.run(  # noqa: S603
+            git_cmd, capture_output=True, text=True, timeout=5
         )
     except (OSError, subprocess.SubprocessError):
         return None
