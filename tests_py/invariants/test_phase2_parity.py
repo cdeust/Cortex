@@ -29,8 +29,13 @@ Cases covered:
       by the Option A policy; the substring baseline filters them
       identically so the test is fair.
 
-Uses `cortex_test` PostgreSQL — see `tests_py/conftest.py`. Skipped
-when PG is not available (CI without PG → test becomes xfail-on-env).
+Uses `cortex_test` PostgreSQL — see `tests_py/conftest.py`. Skipped when
+PG is not available (CI without PG → test becomes xfail-on-env), AND
+skipped (never hard-failed) when PG is reachable but missing the schema
+these tests need — see `tests_py/invariants/_pg_schema_probe.py` (issue
+#312: a reachable-but-unmigrated database used to pass the bare-
+connectivity check and then die with `psycopg.errors.UndefinedTable`
+instead of skipping).
 """
 
 from __future__ import annotations
@@ -44,28 +49,24 @@ import pytest
 # because the parity test's job is exactly to validate that code.
 from mcp_server.handlers.consolidation.plasticity import _find_co_accessed_pairs
 from mcp_server.core.entity_reconciliation import build_reconciliation_sql
-
+from tests_py.invariants._pg_schema_probe import pg_gate
 
 # ── Skip conditions ──────────────────────────────────────────────────────
 
+# Every table the fixture/backfill/scan helpers below touch (_setup_fixture
+# DELETEs from all four; _co_accessed_via_join SELECTs from memory_entities
+# + entities). Reachable-but-missing any one of these is the #312 defect
+# mode, not a passing environment.
+_REQUIRED_TABLES = ("memories", "entities", "memory_entities", "relationships")
+
 _PG_URL = os.environ.get("DATABASE_URL", "")
-_PG_AVAILABLE = False
-
-try:
-    import psycopg  # noqa: F401
-
-    conn = psycopg.connect(_PG_URL, autocommit=True, connect_timeout=3)
-    conn.close()
-    _PG_AVAILABLE = True
-except Exception:
-    _PG_AVAILABLE = False
+_PG_AVAILABLE, _PG_SKIP_REASON = pg_gate(
+    _PG_URL, _REQUIRED_TABLES, label="test_phase2_parity"
+)
 
 
 pytestmark = [
-    pytest.mark.skipif(
-        not _PG_AVAILABLE,
-        reason="cortex_test PostgreSQL is not reachable",
-    ),
+    pytest.mark.skipif(not _PG_AVAILABLE, reason=_PG_SKIP_REASON),
     pytest.mark.invariants,
 ]
 
