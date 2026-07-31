@@ -68,6 +68,7 @@ from mcp_server.handlers.curate_wiki_serialize import (
 from mcp_server.handlers.curate_wiki_uncited import report_uncited_deliberate
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_store import get_shared_store
+from mcp_server.infrastructure.wiki_page_fs import build_wiki_page_port
 
 
 schema = {
@@ -307,6 +308,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     existing_pages = _scan_existing_pages(Path(WIKI_ROOT))
     today = _today()
+    # Composition-root wiring (§5.2): core declares WikiPagePort, this
+    # handler builds the concrete os/pathlib-backed adapter (issue #314).
+    wiki_page_port = build_wiki_page_port(str(WIKI_ROOT))
 
     # 1. Coverage jobs — top-down structural scopes.
     coverage_payload: list[dict[str, Any]] = []
@@ -357,7 +361,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         )
         reauthor_jobs = build_reauthor_jobs(
             drifts,
-            wiki_root=str(WIKI_ROOT),
+            wiki_page_port=wiki_page_port,
             source_root_resolver=_project_source_root,
             today=today,
         )
@@ -372,7 +376,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             domain=domain,
             min_memories=min_memories,
             min_avg_heat=min_avg_heat,
-            wiki_root=str(WIKI_ROOT),
+            wiki_page_port=wiki_page_port,
             skip_recently_authored=True,
         )
         total_clusters_eligible = len(clusters)

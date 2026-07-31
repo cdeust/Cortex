@@ -323,14 +323,19 @@ def _count_pending_curations(conn) -> int:
         if not memories:
             return 0
         # WIKI_ROOT lookup so the curator can skip already-authored
-        # clusters by filesystem mtime.
+        # clusters by filesystem mtime. The port is built here
+        # (composition root, §5.2) — core only declares the WikiPagePort
+        # shape it needs (issue #314).
         try:
             from mcp_server.infrastructure.config import WIKI_ROOT  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+            from mcp_server.infrastructure.wiki_page_fs import (  # noqa: PLC0415 — same optional-feature probe boundary
+                build_wiki_page_port,
+            )
 
-            wiki_root = str(WIKI_ROOT)
+            wiki_page_port = build_wiki_page_port(str(WIKI_ROOT))
         except ImportError:
-            wiki_root = None
-        return count_pending_clusters(memories, wiki_root=wiki_root)
+            wiki_page_port = None
+        return count_pending_clusters(memories, wiki_root=wiki_page_port)
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"pending-cluster count failed (non-fatal): {exc}")
         return 0

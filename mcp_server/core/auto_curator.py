@@ -18,7 +18,13 @@ auto-curator sits in between:
      authors the page and writes it via ``wiki_write``.
 
 Pure business logic — no I/O. The handler composes this with the memory
-store and the wiki writer.
+store and the wiki writer. Wiki-page freshness/content checks needed by
+``is_path_recently_authored`` and ``build_reauthor_jobs`` are declared
+here as the ``WikiPagePort`` protocol (reverse DI, Martin 2017 Ch.11 —
+core declares what it needs, infrastructure implements it, the handler
+composition root wires it); the concrete os/pathlib-backed adapter lives
+in ``infrastructure/wiki_page_fs.py``. This module imports no ``os`` or
+``pathlib`` (issue #314).
 
 References (the user-quoted directives this module exists to satisfy):
   * "ALL ACTIONS SHOULD DOCUMENTED BY OPUS 4.7, IT'S NOT POSSIBLE THE
@@ -38,9 +44,7 @@ from mcp_server.core.wiki_coverage import domain_coverage_missing_scopes
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-import os
-import time
-import os as _os
+from typing import Protocol
 
 # 2026-05-17: thresholds tuned to mirror the cluster-quality bar of the
 # hand-authored pages from this session. Below these, a cluster doesn't
@@ -93,25 +97,46 @@ class CurationJob:
 SKIP_IF_AUTHORED_WITHIN_DAYS = 30
 
 
+class WikiPagePort(Protocol):
+    """Wiki-page filesystem access this module needs but must not perform.
+
+    Reverse DI (coding-standards.md §5.1): core declares the shape of the
+    dependency; the concrete os/pathlib-backed adapter lives in
+    ``infrastructure.wiki_page_fs.FsWikiPagePort`` and is constructed by
+    the handler-level composition root (``build_wiki_page_port``). This
+    module never imports that adapter (or ``os``/``pathlib`` itself) —
+    Python Protocols are structurally typed (PEP 544), so the adapter
+    doesn't need to import this Protocol either; that also keeps
+    ``infrastructure/wiki_page_fs.py`` compliant with
+    docs/module-inventory.md's rule that infrastructure/ must not import
+    core/.
+    """
+
+    def is_recently_modified(self, rel_path: str, within_days: int) -> bool:
+        """True if the page at ``rel_path`` (relative to the bound wiki
+        root) exists and was modified within the last ``within_days``."""
+        ...
+
+    def read_text(self, rel_path: str) -> str | None:
+        """Return the page's raw text, or ``None`` if missing/unreadable."""
+        ...
+
+
 def is_path_recently_authored(
     suggested_path: str,
-    wiki_root: str,
+    wiki_page_port: WikiPagePort,
     within_days: int = SKIP_IF_AUTHORED_WITHIN_DAYS,
 ) -> bool:
-    """True if ``<wiki_root>/<suggested_path>`` exists and was modified
+    """True if ``wiki_page_port`` reports ``suggested_path`` was modified
     within the last ``within_days``. Used to skip clusters whose page
     already exists and is fresh.
 
-    The check is filesystem-mtime based — no PG lookup needed. If a
-    user edits a page by hand, the mtime updates and the cluster stays
-    skipped (their edits aren't clobbered).
+    Delegates the filesystem-mtime check to the injected port (issue
+    #314) — this module performs zero I/O itself. If a user edits a page
+    by hand, the mtime updates and the cluster stays skipped (their edits
+    aren't clobbered); the adapter preserves this exact semantics.
     """
-
-    full = os.path.join(wiki_root, suggested_path)
-    if not os.path.isfile(full):
-        return False
-    age_seconds = time.time() - os.path.getmtime(full)
-    return age_seconds < (within_days * 86400)
+    return wiki_page_port.is_recently_modified(suggested_path, within_days)
 
 
 # ── Topic identification ────────────────────────────────────────────────
@@ -239,7 +264,7 @@ def build_clusters(
     domain: str | None = None,
     min_memories: int = MIN_MEMORIES_PER_CLUSTER,
     min_avg_heat: float = MIN_AVG_HEAT_FOR_PAGE,
-    wiki_root: str | None = None,
+    wiki_page_port: WikiPagePort | None = None,
     skip_recently_authored: bool = True,
 ) -> list[CurationCluster]:
     """Group memories into topic clusters via dominant-entity bucketing.
@@ -317,14 +342,14 @@ def build_clusters(
     # 2026-05-17: skip clusters whose suggested page already exists and
     # was authored within ``SKIP_IF_AUTHORED_WITHIN_DAYS``. Without this
     # filter the curator keeps re-suggesting the same topics on every
-    # call, even after a page was just authored. Caller passes the wiki
-    # root path (``WIKI_ROOT``); when omitted we don't filter (useful
+    # call, even after a page was just authored. Caller passes the
+    # injected ``WikiPagePort``; when omitted we don't filter (useful
     # for tests).
-    if skip_recently_authored and wiki_root:
+    if skip_recently_authored and wiki_page_port is not None:
         clusters = [
             c
             for c in clusters
-            if not is_path_recently_authored(c.suggested_path, wiki_root)
+            if not is_path_recently_authored(c.suggested_path, wiki_page_port)
         ]
 
     # Rank by size × avg_heat
@@ -336,15 +361,20 @@ def count_pending_clusters(
     memories: list[dict],
     *,
     domain: str | None = None,
-    wiki_root: str | None = None,
+    wiki_root: WikiPagePort | None = None,
 ) -> int:
     """Count how many clusters would yield a fresh authoring job.
 
     Thin wrapper over the streaming counter (one chunk) so the list and
-    streaming paths can't diverge.
+    streaming paths can't diverge. ``wiki_root`` carries the injected
+    ``WikiPagePort`` (issue #314), not a path string — the parameter name
+    is kept as-is to preserve the existing call-site/test contract
+    (``tests_py/hooks/test_session_start.py`` monkeypatches this function
+    and asserts against a `wiki_root=` keyword call); it is forwarded to
+    ``count_pending_clusters_streamed`` as ``wiki_page_port``.
     """
     return count_pending_clusters_streamed(
-        [memories], domain=domain, wiki_root=wiki_root
+        [memories], domain=domain, wiki_page_port=wiki_root
     )
 
 
@@ -354,7 +384,7 @@ def count_pending_clusters_streamed(
     domain: str | None = None,
     min_memories: int = MIN_MEMORIES_PER_CLUSTER,
     min_avg_heat: float = MIN_AVG_HEAT_FOR_PAGE,
-    wiki_root: str | None = None,
+    wiki_page_port: WikiPagePort | None = None,
     skip_recently_authored: bool = True,
 ) -> int:
     """Count pending cluster jobs in ONE streaming pass — no resident corpus.
@@ -397,10 +427,10 @@ def count_pending_clusters_streamed(
             continue
         if b["heat_sum"] / b["count"] < min_avg_heat:
             continue
-        if skip_recently_authored and wiki_root:
+        if skip_recently_authored and wiki_page_port is not None:
             kind = _infer_kind_from_tags(b["tags"])
             path = f"{_kind_dir(kind)}/{b['domain']}/{_slugify(entity)}.md"
-            if is_path_recently_authored(path, wiki_root):
+            if is_path_recently_authored(path, wiki_page_port):
                 continue
         count += 1
     return count
@@ -913,7 +943,7 @@ def build_reauthor_prompt(
 
 def build_reauthor_jobs(
     drifts: list,
-    wiki_root: str,
+    wiki_page_port: WikiPagePort,
     source_root_resolver,
     today: str = "",
 ) -> list[ReauthorJob]:
@@ -922,15 +952,17 @@ def build_reauthor_jobs(
     ``source_root_resolver`` is a callable ``domain -> str | None``
     (matches ``wiki_coverage._project_source_root``). Returns jobs in
     input order — callers can sort by reason severity if desired.
+
+    Reads each drifted page's current text via the injected
+    ``wiki_page_port`` (issue #314) — this module performs zero I/O
+    itself. A page that can't be read (missing file, permission error)
+    is silently skipped, matching the pre-refactor behaviour.
     """
 
     jobs: list[ReauthorJob] = []
     for d in drifts:
-        full = _os.path.join(wiki_root, d.wiki_path)
-        try:
-            with open(full, encoding="utf-8", errors="ignore") as fp:
-                text = fp.read()
-        except OSError:
+        text = wiki_page_port.read_text(d.wiki_path)
+        if text is None:
             continue
         src_root = source_root_resolver(d.domain) if d.domain else None
         prompt = build_reauthor_prompt(d, text, src_root, today=today)

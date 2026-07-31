@@ -41,6 +41,7 @@ from mcp_server.core.wiki_coverage import (
 )
 from mcp_server.core.wiki_drift import audit_wiki_drift
 from mcp_server.infrastructure.config import WIKI_ROOT
+from mcp_server.infrastructure.wiki_page_fs import build_wiki_page_port
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ async def run_backlog_pass(store: Any) -> dict[str, Any]:
         else [store.get_all_memories_for_decay()]
     )
     out["cluster_jobs"] = count_pending_clusters_streamed(
-        chunks, wiki_root=str(WIKI_ROOT)
+        chunks, wiki_page_port=build_wiki_page_port(str(WIKI_ROOT))
     )
 
     coverages = audit_all_domains(str(WIKI_ROOT))
