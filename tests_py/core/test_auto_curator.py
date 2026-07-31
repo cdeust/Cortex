@@ -7,8 +7,12 @@ from mcp_server.core.auto_curator import (
     _ADR_TASK_RECORD_SECTIONS,
     _GENERIC_STRUCTURE_SECTIONS,
     build_authoring_prompt,
+    build_clusters,
     build_coverage_jobs,
     build_coverage_prompt,
+    build_reauthor_jobs,
+    count_pending_clusters_streamed,
+    is_path_recently_authored,
     sort_coverage_jobs,
 )
 from mcp_server.core.wiki_coverage import DomainCoverage, ScopeCoverage, SCOPES
@@ -140,3 +144,135 @@ class TestCoverageJobBuilder:
         jobs = sort_coverage_jobs(build_coverage_jobs(covs))
         names = [j.scope_name for j in jobs]
         assert names == ["architecture", "api", "data-flow"]
+
+
+class _FakeWikiPagePort:
+    """Records every call — proves core delegates through the injected
+    ``WikiPagePort`` and never performs filesystem I/O itself (issue
+    #314). No ``tmp_path``/real file appears anywhere in this class or
+    its callers below; a real ``FsWikiPagePort`` is exercised separately
+    in ``tests_py/infrastructure/test_wiki_page_fs.py``.
+    """
+
+    def __init__(
+        self,
+        *,
+        fresh: frozenset[str] = frozenset(),
+        texts: dict[str, str] | None = None,
+    ) -> None:
+        self._fresh = fresh
+        self._texts = texts or {}
+        self.is_recently_modified_calls: list[tuple[str, int]] = []
+        self.read_text_calls: list[str] = []
+
+    def is_recently_modified(self, rel_path: str, within_days: int) -> bool:
+        self.is_recently_modified_calls.append((rel_path, within_days))
+        return rel_path in self._fresh
+
+    def read_text(self, rel_path: str) -> str | None:
+        self.read_text_calls.append(rel_path)
+        return self._texts.get(rel_path)
+
+
+class _Drift:
+    """Minimal stand-in for ``wiki_drift.PageDrift`` — only the fields
+    ``build_reauthor_jobs``/``build_reauthor_prompt`` read."""
+
+    def __init__(
+        self, wiki_path: str, domain: str = "cortex", kind: str = "reference"
+    ) -> None:
+        self.wiki_path = wiki_path
+        self.domain = domain
+        self.kind = kind
+        self.reasons: list[str] = ["stale_content"]
+        self.missing_source_files: list[str] = []
+        self.cited_source_files: list[str] = []
+        self.last_updated = ""
+        self.age_days = 40.0
+
+
+def _memory(mid: int, content: str, heat: float = 0.5) -> dict:
+    return {
+        "id": mid,
+        "content": content,
+        "tags": [],
+        "effective_heat": heat,
+        "domain": "cortex",
+        "created_at": "2026-05-01",
+    }
+
+
+_ENTITY_MEMORIES = [
+    _memory(i, f"predictive_coding_gate detail {i} predictive_coding_gate")
+    for i in range(5)
+]
+_ENTITY_SUGGESTED_PATH = "reference/cortex/predictive-coding-gate.md"
+
+
+class TestWikiPagePortDIP:
+    """core/auto_curator.py declares ``WikiPagePort`` and delegates every
+    filesystem-shaped decision to the injected instance (issue #314) —
+    it performs zero I/O itself."""
+
+    def test_is_path_recently_authored_delegates_to_port(self):
+        port = _FakeWikiPagePort(fresh=frozenset({"reference/cortex/x.md"}))
+        assert is_path_recently_authored("reference/cortex/x.md", port) is True
+        assert is_path_recently_authored("reference/cortex/y.md", port) is False
+        assert port.is_recently_modified_calls == [
+            ("reference/cortex/x.md", 30),
+            ("reference/cortex/y.md", 30),
+        ]
+
+    def test_build_clusters_skips_fresh_pages_via_port(self):
+        fresh_port = _FakeWikiPagePort(fresh=frozenset({_ENTITY_SUGGESTED_PATH}))
+        clusters = build_clusters(_ENTITY_MEMORIES, wiki_page_port=fresh_port)
+        assert clusters == []
+        assert fresh_port.is_recently_modified_calls  # the port was consulted
+
+    def test_build_clusters_keeps_stale_pages_via_port(self):
+        stale_port = _FakeWikiPagePort()
+        clusters = build_clusters(_ENTITY_MEMORIES, wiki_page_port=stale_port)
+        assert len(clusters) == 1
+        assert stale_port.is_recently_modified_calls == [(_ENTITY_SUGGESTED_PATH, 30)]
+
+    def test_build_clusters_skips_no_filtering_without_a_port(self):
+        # No port injected → freshness filter is skipped entirely, same
+        # as the pre-refactor `if skip_recently_authored and wiki_root:`
+        # guard when wiki_root was falsy.
+        clusters = build_clusters(_ENTITY_MEMORIES)
+        assert len(clusters) == 1
+
+    def test_count_pending_clusters_streamed_uses_injected_port(self):
+        port = _FakeWikiPagePort(fresh=frozenset({_ENTITY_SUGGESTED_PATH}))
+        assert (
+            count_pending_clusters_streamed([_ENTITY_MEMORIES], wiki_page_port=port)
+            == 0
+        )
+        assert port.is_recently_modified_calls
+
+    def test_build_reauthor_jobs_reads_via_port_not_filesystem(self):
+        port = _FakeWikiPagePort(texts={"reference/cortex/a.md": "# A\n\nold body"})
+        drifts = [
+            _Drift("reference/cortex/a.md"),
+            _Drift("reference/cortex/missing.md"),
+        ]
+        jobs = build_reauthor_jobs(
+            drifts, wiki_page_port=port, source_root_resolver=lambda _d: None
+        )
+        # Only the drift whose text the port returns becomes a job — the
+        # missing one is silently skipped, matching pre-refactor semantics
+        # (the old code caught OSError from `open()` and did `continue`).
+        assert [j.wiki_path for j in jobs] == ["reference/cortex/a.md"]
+        assert port.read_text_calls == [
+            "reference/cortex/a.md",
+            "reference/cortex/missing.md",
+        ]
+
+    def test_count_pending_clusters_streamed_skips_filter_without_a_port(self):
+        # Mutation-driven (§12): `skip_recently_authored and wiki_page_port
+        # is not None` mutated to `or` would call
+        # `is_path_recently_authored(path, None)` here — an
+        # AttributeError on `None.is_recently_modified(...)`, not a
+        # silent skip. No port injected → the guard must short-circuit
+        # before ever touching the port.
+        assert count_pending_clusters_streamed([_ENTITY_MEMORIES]) == 1
