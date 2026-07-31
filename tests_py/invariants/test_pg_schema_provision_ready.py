@@ -15,6 +15,26 @@ reachable directly / reachable only via maintenance / not reachable at
 all) leads to which of (schema provisioned silently, database created
 then provisioned, `PostgresUnavailableWarning` + False) — the exact
 issue #312 decision table.
+
+`TestProvisionSchema` alone needs the real `psycopg`/`pgvector` driver
+importable (`@requires_psycopg`, the same marker `tests_py/conftest.py`
+already exports and 3 other test files already use): its
+`mock.patch("mcp_server.infrastructure.pg_store.PgMemoryStore", ...)`
+calls are STRING-targeted, so `mock.patch` must import
+`mcp_server.infrastructure.pg_store` to resolve the attribute —
+and that module hard-imports `psycopg`/`pgvector`/`psycopg_pool` at its
+own top level (`pg_store.py`'s module docstring: "Requires:
+psycopg[binary]>=3.1..."), unconditionally, regardless of which backend
+a given test session selects. On a SQLite-only install (no
+`[postgresql]` extra) that import raises `ModuleNotFoundError`, which
+`mock.patch`'s string-target resolution surfaces as `AttributeError:
+module 'mcp_server.infrastructure' has no attribute 'pg_store'` instead
+of a clean skip (reproduced against a disposable venv built from
+`requirements/ci-sqlite.txt`, CI run 30626458304's "Test (SQLite
+backend)" job). `TestEnsurePgReady` and the standalone warning test
+below need no such guard: they mock `_can_connect`/`_create_database`/
+`_provision_schema` at the `provision` MODULE level, never triggering a
+real import of `pg_store`.
 """
 
 from __future__ import annotations
@@ -23,8 +43,10 @@ import unittest.mock as mock
 import warnings
 
 from tests_py import _pg_schema_provision as provision
+from tests_py.conftest import requires_psycopg  # type: ignore
 
 
+@requires_psycopg
 class TestProvisionSchema:
     def test_constructs_store_with_the_given_url_and_closes_it(self) -> None:
         store = mock.MagicMock()
