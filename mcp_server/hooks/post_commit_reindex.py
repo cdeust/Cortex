@@ -232,7 +232,7 @@ def _spawn_reanalyze(root: str) -> bool:
     log_path = Path.home() / ".claude" / "methodology" / "pipeline_reanalyze.log"
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(log_path, "a") as log:
+        with Path(log_path).open("a") as log:
             subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
                 cmd,
                 stdin=subprocess.DEVNULL,
@@ -255,7 +255,7 @@ def process_event(event: dict[str, Any]) -> None:
     if _commit_failed(event):
         return
 
-    root = os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd()
+    root = os.environ.get("CLAUDE_PROJECT_ROOT") or str(Path.cwd())
     if not _pipeline_available():
         return  # No analyzer installed — re-analyse impossible, skip.
 

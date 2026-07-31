@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 
 import pytest
 
@@ -21,6 +20,7 @@ from mcp_server.core.wiki_coverage import (
     list_domains,
     list_source_files,
 )
+import pathlib
 
 
 _SUBSTANTIVE = "x" * 900  # ≥ _MIN_PAGE_BYTES (800)
@@ -28,8 +28,8 @@ _STUB = "x" * 100
 
 
 def _write(path: str, content: str) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    pathlib.Path(path).parent.mkdir(exist_ok=True, parents=True)
+    with pathlib.Path(path).open("w", encoding="utf-8") as f:
         f.write(content)
 
 
@@ -40,26 +40,26 @@ class TestListDomains:
 
     def test_discovers_domain_present_in_two_kinds(self, tmp_path):
         wiki = str(tmp_path)
-        _write(os.path.join(wiki, "reference", "myproj", "x.md"), "a")
-        _write(os.path.join(wiki, "notes", "myproj", "y.md"), "a")
+        _write(str(pathlib.Path(wiki) / "reference" / "myproj" / "x.md"), "a")
+        _write(str(pathlib.Path(wiki) / "notes" / "myproj" / "y.md"), "a")
         assert "myproj" in list_domains(wiki)
 
     def test_skips_single_kind_domain(self, tmp_path):
         wiki = str(tmp_path)
-        _write(os.path.join(wiki, "reference", "lonely", "x.md"), "a")
+        _write(str(pathlib.Path(wiki) / "reference" / "lonely" / "x.md"), "a")
         assert "lonely" not in list_domains(wiki)
 
     def test_filters_underscore_buckets(self, tmp_path):
         wiki = str(tmp_path)
-        _write(os.path.join(wiki, "reference", "_general", "x.md"), "a")
-        _write(os.path.join(wiki, "notes", "_general", "y.md"), "a")
+        _write(str(pathlib.Path(wiki) / "reference" / "_general" / "x.md"), "a")
+        _write(str(pathlib.Path(wiki) / "notes" / "_general" / "y.md"), "a")
         assert "_general" not in list_domains(wiki)
 
     def test_filters_bare_year_buckets(self, tmp_path):
         """A bare 4-digit year is a time bucket, not a project."""
         wiki = str(tmp_path)
-        _write(os.path.join(wiki, "reference", "2026", "x.md"), "a")
-        _write(os.path.join(wiki, "notes", "2026", "y.md"), "a")
+        _write(str(pathlib.Path(wiki) / "reference" / "2026" / "x.md"), "a")
+        _write(str(pathlib.Path(wiki) / "notes" / "2026" / "y.md"), "a")
         assert "2026" not in list_domains(wiki)
 
 
@@ -79,7 +79,7 @@ class TestAuditDomain:
     def test_substantive_architecture_anchor_counts(self, tmp_path):
         wiki = str(tmp_path)
         _write(
-            os.path.join(wiki, "reference", "p", "architecture-overview.md"),
+            str(pathlib.Path(wiki) / "reference" / "p" / "architecture-overview.md"),
             _SUBSTANTIVE,
         )
         c = audit_domain(wiki, "p")
@@ -90,7 +90,7 @@ class TestAuditDomain:
     def test_stub_does_not_count_as_coverage(self, tmp_path):
         wiki = str(tmp_path)
         _write(
-            os.path.join(wiki, "reference", "p", "architecture-overview.md"),
+            str(pathlib.Path(wiki) / "reference" / "p" / "architecture-overview.md"),
             _STUB,
         )
         c = audit_domain(wiki, "p")
@@ -100,7 +100,7 @@ class TestAuditDomain:
     def test_decisions_scope_counted_by_any_substantive_adr(self, tmp_path):
         wiki = str(tmp_path)
         # Decisions has no anchor filename — any substantive ADR counts.
-        _write(os.path.join(wiki, "adr", "p", "0001-foo.md"), _SUBSTANTIVE)
+        _write(str(pathlib.Path(wiki) / "adr" / "p" / "0001-foo.md"), _SUBSTANTIVE)
         c = audit_domain(wiki, "p")
         dec = next(s for s in c.scopes if s.scope.name == "decisions")
         assert dec.covered is True
@@ -124,7 +124,7 @@ class TestAnchorFreshness:
     def test_fresh_anchor_counts_as_covered(self, tmp_path):
         wiki = str(tmp_path)
         _write(
-            os.path.join(wiki, "reference", "p", "architecture-overview.md"),
+            str(pathlib.Path(wiki) / "reference" / "p" / "architecture-overview.md"),
             _SUBSTANTIVE,
         )
         c = audit_domain(wiki, "p", max_age_days=90)
@@ -137,7 +137,9 @@ class TestAnchorFreshness:
         import time
 
         wiki = str(tmp_path)
-        anchor = os.path.join(wiki, "reference", "p", "architecture-overview.md")
+        anchor = str(
+            pathlib.Path(wiki) / "reference" / "p" / "architecture-overview.md"
+        )
         _write(anchor, _SUBSTANTIVE)
         # Backdate the file by 120 days.
         old = time.time() - 120 * 86400
@@ -153,7 +155,9 @@ class TestAnchorFreshness:
         import time
 
         wiki = str(tmp_path)
-        anchor = os.path.join(wiki, "reference", "p", "architecture-overview.md")
+        anchor = str(
+            pathlib.Path(wiki) / "reference" / "p" / "architecture-overview.md"
+        )
         _write(anchor, _SUBSTANTIVE)
         old = time.time() - 500 * 86400
         _os.utime(anchor, (old, old))
@@ -166,8 +170,8 @@ class TestAuditAllDomains:
     def test_audits_each_discovered_domain(self, tmp_path):
         wiki = str(tmp_path)
         for d in ("alpha", "beta"):
-            _write(os.path.join(wiki, "reference", d, "x.md"), _SUBSTANTIVE)
-            _write(os.path.join(wiki, "notes", d, "y.md"), _SUBSTANTIVE)
+            _write(str(pathlib.Path(wiki) / "reference" / d / "x.md"), _SUBSTANTIVE)
+            _write(str(pathlib.Path(wiki) / "notes" / d / "y.md"), _SUBSTANTIVE)
         rolls = audit_all_domains(wiki)
         names = {r.domain for r in rolls}
         assert names == {"alpha", "beta"}
@@ -176,13 +180,15 @@ class TestAuditAllDomains:
         wiki = str(tmp_path)
         # alpha: 1 anchor → 5 missing
         _write(
-            os.path.join(wiki, "reference", "alpha", "architecture-overview.md"),
+            str(
+                pathlib.Path(wiki) / "reference" / "alpha" / "architecture-overview.md"
+            ),
             _SUBSTANTIVE,
         )
-        _write(os.path.join(wiki, "notes", "alpha", "y.md"), _SUBSTANTIVE)
+        _write(str(pathlib.Path(wiki) / "notes" / "alpha" / "y.md"), _SUBSTANTIVE)
         # beta: 0 anchors → 6 missing
-        _write(os.path.join(wiki, "reference", "beta", "x.md"), _SUBSTANTIVE)
-        _write(os.path.join(wiki, "notes", "beta", "y.md"), _SUBSTANTIVE)
+        _write(str(pathlib.Path(wiki) / "reference" / "beta" / "x.md"), _SUBSTANTIVE)
+        _write(str(pathlib.Path(wiki) / "notes" / "beta" / "y.md"), _SUBSTANTIVE)
         rolls = audit_all_domains(wiki)
         assert rolls[0].domain == "beta"  # more missing first
         assert rolls[1].domain == "alpha"
@@ -190,18 +196,18 @@ class TestAuditAllDomains:
 
 class TestListSourceFiles:
     def test_includes_source_extensions(self, tmp_path):
-        _write(os.path.join(str(tmp_path), "src", "main.py"), "print(1)")
-        _write(os.path.join(str(tmp_path), "src", "lib.ts"), "export {}")
-        _write(os.path.join(str(tmp_path), "README.md"), "# doc")
+        _write(str(pathlib.Path(tmp_path) / "src" / "main.py"), "print(1)")
+        _write(str(pathlib.Path(tmp_path) / "src" / "lib.ts"), "export {}")
+        _write(str(pathlib.Path(tmp_path) / "README.md"), "# doc")
         files = set(list_source_files(str(tmp_path)))
         assert "src/main.py" in files
         assert "src/lib.ts" in files
         assert "README.md" not in files  # .md is documentation, not source
 
     def test_skips_vendored_dirs(self, tmp_path):
-        _write(os.path.join(str(tmp_path), "src", "main.py"), "x")
-        _write(os.path.join(str(tmp_path), "node_modules", "lib.js"), "x")
-        _write(os.path.join(str(tmp_path), ".git", "x.py"), "x")
+        _write(str(pathlib.Path(tmp_path) / "src" / "main.py"), "x")
+        _write(str(pathlib.Path(tmp_path) / "node_modules" / "lib.js"), "x")
+        _write(str(pathlib.Path(tmp_path) / ".git" / "x.py"), "x")
         files = set(list_source_files(str(tmp_path)))
         assert "src/main.py" in files
         assert all("node_modules" not in f for f in files)

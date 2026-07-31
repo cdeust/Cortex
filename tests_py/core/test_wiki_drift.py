@@ -13,11 +13,12 @@ from mcp_server.core.wiki_drift import (
     audit_page_drift,
     audit_wiki_drift,
 )
+import pathlib
 
 
 def _write(path: str, content: str) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    pathlib.Path(path).parent.mkdir(exist_ok=True, parents=True)
+    with pathlib.Path(path).open("w", encoding="utf-8") as f:
         f.write(content)
 
 

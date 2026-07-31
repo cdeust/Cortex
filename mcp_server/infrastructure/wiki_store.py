@@ -82,11 +82,11 @@ def _safe_join(root: Path, rel_path: str) -> Path:
 
     if not rel_path or "\x00" in rel_path:
         raise ValueError("invalid wiki path: empty or contains null byte")
-    if os.path.isabs(rel_path):
+    if Path(rel_path).is_absolute():
         raise ValueError(f"absolute paths are not allowed: {rel_path!r}")
 
     root_resolved = os.path.realpath(str(root))
-    candidate = os.path.realpath(os.path.join(root_resolved, rel_path))
+    candidate = os.path.realpath(os.path.join(root_resolved, rel_path))  # noqa: PTH118 — os.path.join+os.path.realpath shape must match read_page/write_page's CodeQL py/path-injection sanitizer construction verbatim
 
     # os.path.commonpath on the pair — if they differ from the root, the
     # candidate has escaped. This is the pattern CodeQL matches as a
@@ -113,10 +113,10 @@ def read_page(root: Path | str, rel_path: str) -> str | None:
     #   fullpath = os.path.realpath(os.path.join(base_path, user_input))  # noqa: ERA001
     #   if not fullpath.startswith(base_path): ...  # noqa: ERA001
     # https://codeql.github.com/codeql-query-help/python/py-path-injection/
-    if not rel_path or "\x00" in rel_path or os.path.isabs(rel_path):
+    if not rel_path or "\x00" in rel_path or Path(rel_path).is_absolute():
         return None
     base_path = os.path.realpath(str(root))
-    fullpath = os.path.realpath(os.path.join(base_path, rel_path))
+    fullpath = os.path.realpath(os.path.join(base_path, rel_path))  # noqa: PTH118 — os.path.join+os.path.realpath must match CodeQL's py/path-injection example verbatim (see comment above)
     if not fullpath.startswith(base_path):
         return None
     # Defence-in-depth against prefix-aliasing (base_path='/foo' matches
@@ -125,9 +125,9 @@ def read_page(root: Path | str, rel_path: str) -> str | None:
     if fullpath != base_path and not fullpath[len(base_path) :].startswith(os.sep):
         return None
     # fullpath is sanitized — sink uses the sanitized variable directly.
-    if not os.path.exists(fullpath):
+    if not os.path.exists(fullpath):  # noqa: PTH110 — fullpath is the CodeQL-recognised sanitized str; wrapping in Path(...) here would rebind the taint-tracked variable and risks breaking the sanitizer-to-sink match
         return None
-    with open(fullpath, encoding="utf-8") as f:
+    with open(fullpath, encoding="utf-8") as f:  # noqa: PTH123 — same: fullpath must reach the sink unwrapped, per this file's CodeQL py/path-injection verbatim-match design (see docstring/comments above)
         return f.read()
 
 
@@ -175,10 +175,10 @@ def write_page(
     # VERBATIM (see read_page for references).
     if not rel_path or "\x00" in rel_path:
         raise ValueError("invalid wiki path: empty or contains null byte")
-    if os.path.isabs(rel_path):
+    if Path(rel_path).is_absolute():
         raise ValueError(f"absolute paths are not allowed: {rel_path!r}")
     base_path = os.path.realpath(str(Path(root)))
-    fullpath = os.path.realpath(os.path.join(base_path, rel_path))
+    fullpath = os.path.realpath(os.path.join(base_path, rel_path))  # noqa: PTH118 — os.path.join+os.path.realpath must match CodeQL's py/path-injection example verbatim (see read_page)
     if not fullpath.startswith(base_path):
         raise ValueError(f"path escapes wiki root: {rel_path!r}")
     # Defence-in-depth against prefix-aliasing.
@@ -189,7 +189,7 @@ def write_page(
         content = normalize_frontmatter(content)
 
     # fullpath is sanitized — use it directly at every sink.
-    existed = os.path.exists(fullpath)
+    existed = os.path.exists(fullpath)  # noqa: PTH110 — fullpath must reach the sink unwrapped; see read_page's identical rationale
 
     if mode == "create":
         if existed:
@@ -200,7 +200,7 @@ def write_page(
     elif mode == "append":
         if not existed:
             raise WikiMissingError(rel_path)
-        with open(fullpath, encoding="utf-8") as f:
+        with open(fullpath, encoding="utf-8") as f:  # noqa: PTH123 — fullpath must reach the sink unwrapped; see read_page's identical rationale
             current = f.read()
         if current and not current.endswith("\n"):
             current += "\n"
@@ -224,14 +224,14 @@ def _atomic_write_bytes_str(safe_path: str, content: str) -> int:
     sanitizer→sink chain on the same variable for static analysis.
     """
 
-    parent = os.path.dirname(safe_path)
-    if parent and not os.path.isdir(parent):
-        os.makedirs(parent, exist_ok=True)
+    parent = os.path.dirname(safe_path)  # noqa: PTH120 — string-only flow by design, see docstring above
+    if parent and not os.path.isdir(parent):  # noqa: PTH112 — string-only flow by design, see docstring above
+        os.makedirs(parent, exist_ok=True)  # noqa: PTH103 — string-only flow by design, see docstring above
     tmp = safe_path + ".tmp"
     data = content.encode("utf-8")
-    with open(tmp, "wb") as f:
+    with open(tmp, "wb") as f:  # noqa: PTH123 — string-only flow by design, see docstring above
         f.write(data)
-    os.replace(tmp, safe_path)
+    os.replace(tmp, safe_path)  # noqa: PTH105 — string-only flow by design, see docstring above
     return len(data)
 
 

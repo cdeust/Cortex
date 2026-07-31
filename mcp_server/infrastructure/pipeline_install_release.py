@@ -105,7 +105,7 @@ def _verify_and_extract(
     Refuses tar entries that escape dest_dir (path-traversal guard).
     """
     h = hashlib.sha256()
-    with open(tar_path, "rb") as f:
+    with Path(tar_path).open("rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     if h.hexdigest() != expected_sha.lower():
@@ -125,7 +125,7 @@ def _verify_and_extract(
                 # PEP 706 / CVE-2007-4559.
                 tar.extract(member, dest_dir, filter="data")
                 extracted = dest / member.name
-                os.chmod(extracted, 0o755)
+                Path(extracted).chmod(0o755)
                 return str(extracted)
     return None
 
@@ -186,14 +186,14 @@ def try_install_prebuilt(symlink_dest: Path) -> dict:
         symlink_dest.parent.mkdir(parents=True, exist_ok=True)
         final = symlink_dest.parent / "automatised-pipeline.prebuilt"
         shutil.move(binary, str(final))
-        os.chmod(final, 0o755)
+        Path(final).chmod(0o755)
 
         # Atomic symlink swap: link-to-temp + os.replace.
         tmp_link = symlink_dest.with_name(symlink_dest.name + ".new")
         if tmp_link.is_symlink() or tmp_link.exists():
             tmp_link.unlink()
         tmp_link.symlink_to(final)
-        os.replace(str(tmp_link), str(symlink_dest))
+        Path(str(tmp_link)).replace(str(symlink_dest))
 
         return {
             "action": "installed_prebuilt",

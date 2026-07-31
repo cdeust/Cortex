@@ -171,7 +171,7 @@ def run_benchmark(
     """
 
     print(f"Loading dataset from {data_path}...")
-    with open(data_path) as f:
+    with Path(data_path).open() as f:
         dataset = json.load(f)
 
     if limit > 0:
@@ -536,6 +536,6 @@ if __name__ == "__main__":
     if args.results_out:
         out_path = Path(args.results_out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w") as f:
+        with Path(out_path).open("w") as f:
             json.dump(results, f, indent=2, default=str)
         print(f"Results written to {out_path}")

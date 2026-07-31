@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import pathlib
 
 
 CATEGORY_NAMES = {
@@ -16,7 +17,7 @@ CATEGORY_NAMES = {
 
 
 def load_locomo(data_path: str) -> list[dict]:
-    with open(data_path) as f:
+    with pathlib.Path(data_path).open() as f:
         return json.load(f)
 
 

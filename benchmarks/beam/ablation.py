@@ -321,7 +321,7 @@ if __name__ == "__main__":
         # Load existing results
         out_path = Path(__file__).parent / "ablation_results.json"
         if out_path.exists():
-            with open(out_path) as f:
+            with Path(out_path).open() as f:
                 all_results = json.load(f)
 
         if args.test in ("alpha", "all"):
@@ -336,7 +336,7 @@ if __name__ == "__main__":
             }
 
         # Save
-        with open(out_path, "w") as f:
+        with Path(out_path).open("w") as f:
             json.dump(all_results, f, indent=2)
         print(f"\nResults saved to {out_path}")
 

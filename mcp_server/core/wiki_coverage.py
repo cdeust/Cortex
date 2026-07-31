@@ -58,6 +58,7 @@ from typing import Final
 
 from mcp_server.shared.platform import to_posix
 import time
+import pathlib
 
 
 # Minimum useful page size in bytes. Below this, a page is a stub —
@@ -1005,9 +1006,9 @@ def _has_substantive_anchor(
     for directory in directories:
         for filename in anchor_filenames:
             rel = f"{directory}/{domain}/{filename}"
-            full = os.path.join(wiki_root, rel)
+            full = pathlib.Path(wiki_root) / rel
             try:
-                st = os.stat(full)
+                st = full.stat()
             except OSError:
                 continue
             if st.st_size < _MIN_PAGE_BYTES:
@@ -1033,15 +1034,14 @@ def _count_substantive_pages(
     """
     count = 0
     for directory in directories:
-        dom_path = os.path.join(wiki_root, directory, domain)
-        if not os.path.isdir(dom_path):
+        dom_path = pathlib.Path(wiki_root) / directory / domain
+        if not dom_path.is_dir():
             continue
-        for entry in os.listdir(dom_path):
-            if not entry.endswith(".md"):
+        for full in dom_path.iterdir():
+            if not full.name.endswith(".md"):
                 continue
-            full = os.path.join(dom_path, entry)
             try:
-                if os.path.getsize(full) >= _MIN_PAGE_BYTES:
+                if full.stat().st_size >= _MIN_PAGE_BYTES:
                     count += 1
             except OSError:
                 continue
@@ -1176,21 +1176,22 @@ def list_domains(wiki_root: str) -> list[str]:
     kinds contain it as a subdirectory. Reserved buckets (``_general``,
     bare years) are filtered.
     """
-    if not os.path.isdir(wiki_root):
+    if not pathlib.Path(wiki_root).is_dir():
         return []
     counts: dict[str, int] = {}
     for kind in _KNOWN_KINDS:
-        kind_dir = os.path.join(wiki_root, kind)
-        if not os.path.isdir(kind_dir):
+        kind_dir = pathlib.Path(wiki_root) / kind
+        if not kind_dir.is_dir():
             continue
         try:
-            entries = os.listdir(kind_dir)
+            entries = list(kind_dir.iterdir())
         except OSError:
             continue
-        for entry in entries:
+        for entry_path in entries:
+            entry = entry_path.name
             if not _is_plausible_domain(entry):
                 continue
-            if os.path.isdir(os.path.join(kind_dir, entry)):
+            if entry_path.is_dir():
                 counts[entry] = counts.get(entry, 0) + 1
     return sorted(d for d, c in counts.items() if c >= _MIN_KIND_DIRS_FOR_DOMAIN)
 
@@ -1311,7 +1312,7 @@ def list_source_files(root: str) -> list[str]:
     Filters out vendored deps, build artefacts, and non-source
     extensions. Returns an empty list when ``root`` doesn't exist.
     """
-    if not os.path.isdir(root):
+    if not pathlib.Path(root).is_dir():
         return []
     out: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
@@ -1320,10 +1321,10 @@ def list_source_files(root: str) -> list[str]:
             d for d in dirnames if d not in _SKIP_DIRECTORIES and not d.startswith(".")
         ]
         for f in filenames:
-            ext = os.path.splitext(f)[1].lower()
+            ext = pathlib.Path(f).suffix.lower()
             if ext not in _SOURCE_EXTENSIONS:
                 continue
-            full = os.path.join(dirpath, f)
+            full = pathlib.Path(dirpath) / f
             # relpath emits backslashes on Windows; downstream indexing and
             # comparisons assume '/'. source: REPORT_..._CORTEX_WINDOWS §5.3
             rel = to_posix(os.path.relpath(full, root))
@@ -1351,7 +1352,7 @@ def _index_wiki_file_references(
     """
     paths: set[str] = set()
     basenames: set[str] = set()
-    if not os.path.isdir(wiki_root):
+    if not pathlib.Path(wiki_root).is_dir():
         return paths, basenames
 
     # File-path-shaped tokens: at least one slash, has a source extension,
@@ -1368,9 +1369,9 @@ def _index_wiki_file_references(
         for f in filenames:
             if not f.endswith(".md"):
                 continue
-            full = os.path.join(dirpath, f)
+            full = pathlib.Path(dirpath) / f
             try:
-                with open(full, encoding="utf-8", errors="ignore") as fp:
+                with full.open(encoding="utf-8", errors="ignore") as fp:
                     text = fp.read()
             except OSError:
                 continue
@@ -1378,7 +1379,7 @@ def _index_wiki_file_references(
                 token = m.group(0).lstrip("./").strip()
                 if "/" in token:
                     paths.add(token)
-                basenames.add(os.path.basename(token))
+                basenames.add(pathlib.Path(token).name)
     return paths, basenames
 
 
@@ -1433,7 +1434,7 @@ def audit_files(wiki_root: str, domain: str) -> FileCoverage:
     uncovered: list[str] = []
     covered = 0
     for rel in files:
-        bn = os.path.basename(rel)
+        bn = pathlib.Path(rel).name
         if rel in paths_ref or bn in basenames_ref:
             covered += 1
         else:

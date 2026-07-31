@@ -20,7 +20,6 @@ Failure is non-fatal — record_session_end must continue regardless.
 from __future__ import annotations
 
 import logging
-import os
 import re
 from pathlib import Path
 from typing import Any
@@ -81,7 +80,7 @@ def _git_commits_in_window(cwd: str, since_minutes: float) -> list[dict]:
     exit) degrades to the same empty-list result as a git failure always
     produced here — no caller-visible behavior change.
     """
-    if not cwd or not os.path.isdir(cwd):
+    if not cwd or not Path(cwd).is_dir():
         return []
     since = f"{int(max(since_minutes, 1))} minutes ago"
     out = run_with_hard_timeout(

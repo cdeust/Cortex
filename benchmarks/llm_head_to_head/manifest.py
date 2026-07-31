@@ -25,7 +25,6 @@ import datetime as dt
 import getpass
 import hashlib
 import json
-import os
 import platform
 import socket
 import subprocess
@@ -377,4 +376,4 @@ def update_cost_tracking(
     tmp = manifest_path.with_suffix(".tmp")
     with tmp.open("w") as fp:
         json.dump(blob, fp, indent=2, sort_keys=True)
-    os.replace(tmp, manifest_path)
+    Path(tmp).replace(manifest_path)

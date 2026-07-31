@@ -11,7 +11,6 @@ drain/orchestration siblings.
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 from typing import Any
@@ -62,7 +61,7 @@ def _project_source_for_page(
     src_root = _project_source_root(domain)
     if not src_root:
         return None, None
-    full = os.path.join(src_root, rel)
+    full = str(Path(src_root) / rel)
     try:
         text = Path(full).read_text(encoding="utf-8", errors="ignore")
     except OSError:

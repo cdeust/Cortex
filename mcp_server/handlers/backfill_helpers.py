@@ -76,7 +76,7 @@ def ensure_backfill_log(store: MemoryStore) -> None:
 def file_hash(path: Path) -> str:
     """Compute a fast hash of the first 64 KB of a file."""
     h = hashlib.sha256()
-    with open(path, "rb") as f:
+    with Path(path).open("rb") as f:
         h.update(f.read(65536))
     return h.hexdigest()[:16]
 

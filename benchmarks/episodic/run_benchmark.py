@@ -64,7 +64,7 @@ def load_events(data_dir: Path) -> list[list[str]]:
     """Load events.json — list of [date, location, entity, content, content_detail]."""
     path = data_dir / "events.json"
     if path.exists():
-        with open(path) as f:
+        with Path(path).open() as f:
             return json.load(f)
     return []
 
@@ -78,7 +78,7 @@ def load_book(data_dir: Path, nb_events: int) -> str:
         data_dir / "book.json",
     ]:
         if candidate.exists():
-            with open(candidate) as f:
+            with Path(candidate).open() as f:
                 data = json.load(f)
                 if isinstance(data, str):
                     return data

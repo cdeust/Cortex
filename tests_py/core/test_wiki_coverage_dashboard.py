@@ -16,7 +16,6 @@ arm is exercised by patching ``audit_files`` with a typed
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from mcp_server.core import wiki_coverage_dashboard as dash
@@ -26,8 +25,8 @@ _SUBSTANTIVE = "x" * 900  # ≥ wiki_coverage._MIN_PAGE_BYTES (800)
 
 
 def _write(path: str, content: str) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    Path(path).parent.mkdir(exist_ok=True, parents=True)
+    with Path(path).open("w", encoding="utf-8") as f:
         f.write(content)
 
 

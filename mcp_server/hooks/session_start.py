@@ -815,7 +815,7 @@ def _spawn_consolidate_cycle() -> int | None:
     proc = subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
         cmd,
         stdin=subprocess.DEVNULL,
-        stdout=open(log_path, "a"),
+        stdout=Path(log_path).open("a"),
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
@@ -919,7 +919,7 @@ def _maybe_background_reanalyze() -> None:
         if discover_pipeline_command() is None:
             return  # Pipeline not installed — nothing to do.
 
-        project_root = os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd()
+        project_root = os.environ.get("CLAUDE_PROJECT_ROOT") or str(Path.cwd())
         cached_path = _lookup_cached_graph_path(project_root)
         if not graph_is_stale(cached_path):
             return  # Fresh enough; skip.
@@ -951,7 +951,7 @@ def _maybe_background_reanalyze() -> None:
         subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
             cmd,
             stdin=subprocess.DEVNULL,
-            stdout=open(log_path, "a"),
+            stdout=Path(log_path).open("a"),
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )

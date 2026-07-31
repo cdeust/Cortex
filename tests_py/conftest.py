@@ -18,6 +18,7 @@ import tempfile
 import pytest
 
 from scripts.check_venv_lock_parity import postgresql_extra_drift
+import pathlib
 
 # ── Redirect every real-data root — MUST run before importing mcp_server ──
 #
@@ -52,9 +53,9 @@ def _redirect_real_data_roots() -> str:
     choice, the physical location the suite writes to is not.
     """
     os.environ["CORTEX_CLAUDE_DIR"] = _TEST_CLAUDE_DIR
-    methodology = os.path.join(_TEST_CLAUDE_DIR, "methodology")
-    os.makedirs(methodology, exist_ok=True)
-    sqlite_path = os.path.join(methodology, "memory.db")
+    methodology = pathlib.Path(_TEST_CLAUDE_DIR) / "methodology"
+    methodology.mkdir(exist_ok=True, parents=True)
+    sqlite_path = str(methodology / "memory.db")
     # Handlers read the deprecated DB_PATH; the store reads
     # SQLITE_FALLBACK_PATH. Both must point at the throwaway file or the
     # unset one falls back to the (now redirected, but explicit is better)

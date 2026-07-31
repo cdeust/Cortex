@@ -341,7 +341,7 @@ def test_pip_install_rollback_on_mid_commit_failure(deps_mod, tmp_path, monkeypa
         # as it would on a real Windows box once the process holding
         # the lock releases it — this test isolates "the forward commit
         # failed", not "the filesystem is permanently unwritable".
-        if str(src).endswith(os.path.join("numpy")) and ".tmp-" in str(src):
+        if str(src).endswith("numpy") and ".tmp-" in str(src):
             raise PermissionError(
                 "[WinError 5] Access is denied (simulated locked .pyd)"
             )
@@ -403,7 +403,7 @@ def test_pip_install_rollback_preserves_dist_info_regardless_of_commit_order(
     real_replace = os.replace
 
     def flaky_replace(src, dst):
-        if str(src).endswith(os.path.join("numpy")) and ".tmp-" in str(src):
+        if str(src).endswith("numpy") and ".tmp-" in str(src):
             raise PermissionError(
                 "[WinError 5] Access is denied (simulated locked .pyd)"
             )
@@ -883,21 +883,21 @@ def test_ensure_deps_does_not_stamp_when_a_package_stays_unimportable(
 
 def test_deps_lock_mutual_exclusion(deps_mod, tmp_path):
     deps_dir = str(tmp_path / "deps")
-    os.makedirs(deps_dir, exist_ok=True)
+    Path(deps_dir).mkdir(exist_ok=True, parents=True)
     with deps_mod._deps_lock(deps_dir) as acquired_outer:
         assert acquired_outer is True
-        assert os.path.isdir(f"{deps_dir}.lock")
+        assert Path(f"{deps_dir}.lock").is_dir()
     # Released after the context exits.
-    assert not os.path.isdir(f"{deps_dir}.lock")
+    assert not Path(f"{deps_dir}.lock").is_dir()
 
 
 def test_deps_lock_steals_stale_lock(deps_mod, tmp_path, monkeypatch):
     deps_dir = str(tmp_path / "deps")
-    os.makedirs(deps_dir, exist_ok=True)
+    Path(deps_dir).mkdir(exist_ok=True, parents=True)
     lock_dir = f"{deps_dir}.lock"
-    os.makedirs(lock_dir)
-    holder = os.path.join(lock_dir, "holder")
-    with open(holder, "w", encoding="utf-8") as fh:
+    Path(lock_dir).mkdir(parents=True)
+    holder = Path(lock_dir) / "holder"
+    with holder.open("w", encoding="utf-8") as fh:
         fh.write("99999 0")
     # Force the age computation to look ancient without a real sleep.
     monkeypatch.setattr(deps_mod.os.path, "getmtime", lambda _p: 0.0)

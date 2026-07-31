@@ -18,7 +18,6 @@ are hand-picked, not sourced from a paper or benchmark — coding-standards
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -26,6 +25,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.observability import silent_failure
+import pathlib
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -265,7 +265,7 @@ def _fetch_memories(
     domain: str,
 ) -> list[dict[str, Any]]:
     """Fetch memories scoped by directory, domain, or global."""
-    if directory and directory != os.getcwd():
+    if directory and directory != str(pathlib.Path.cwd()):
         return store.get_memories_for_directory(directory, min_heat=0.0)
     if domain:
         return store.get_memories_for_domain(domain, min_heat=0.0, limit=1000)
@@ -316,7 +316,7 @@ def _score_and_recommend(
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Assess knowledge coverage completeness."""
     args = args or {}
-    directory = args.get("directory", "") or os.getcwd()
+    directory = args.get("directory", "") or str(pathlib.Path.cwd())
     domain = args.get("domain", "")
     stale_days = int(args.get("stale_days", 14))
 

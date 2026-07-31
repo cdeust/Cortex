@@ -12,14 +12,10 @@ conditional will fail one of these tests.
 
 from __future__ import annotations
 
-import os
+import pathlib
 
-_CONFTEST_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "conftest.py")
-)
-_GUARDS_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "_pg_safety_guards.py")
-)
+_CONFTEST_PATH = (pathlib.Path(__file__).parent / ".." / "conftest.py").resolve()
+_GUARDS_PATH = (pathlib.Path(__file__).parent / ".." / "_pg_safety_guards.py").resolve()
 
 
 class TestGuardStructuralIntegrity:
@@ -29,7 +25,7 @@ class TestGuardStructuralIntegrity:
 
         Postcondition: the function definition line appears in the source.
         """
-        with open(_GUARDS_PATH, encoding="utf-8") as fh:
+        with pathlib.Path(_GUARDS_PATH).open(encoding="utf-8") as fh:
             source = fh.read()
 
         assert "def guard_against_populated_db(" in source, (
@@ -48,7 +44,7 @@ class TestGuardStructuralIntegrity:
         Postcondition: at least one line at zero indentation calls
         `_pg_safety_guards.guard_against_populated_db(...)`.
         """
-        with open(_CONFTEST_PATH, encoding="utf-8") as fh:
+        with pathlib.Path(_CONFTEST_PATH).open(encoding="utf-8") as fh:
             lines = fh.readlines()
 
         module_level_calls = [
@@ -70,7 +66,7 @@ class TestGuardStructuralIntegrity:
 
         Postcondition: 'returncode=2' appears in _pg_safety_guards.py.
         """
-        with open(_GUARDS_PATH, encoding="utf-8") as fh:
+        with pathlib.Path(_GUARDS_PATH).open(encoding="utf-8") as fh:
             source = fh.read()
 
         assert "returncode=2" in source, (
@@ -85,7 +81,7 @@ class TestGuardStructuralIntegrity:
 
         Postcondition: '2026-06-10' appears in _pg_safety_guards.py.
         """
-        with open(_GUARDS_PATH, encoding="utf-8") as fh:
+        with pathlib.Path(_GUARDS_PATH).open(encoding="utf-8") as fh:
             source = fh.read()
 
         assert "2026-06-10" in source, (

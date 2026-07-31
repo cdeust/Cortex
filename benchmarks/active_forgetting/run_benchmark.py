@@ -783,7 +783,7 @@ def _write(report: dict) -> None:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     out = RESULTS_DIR / f"{stamp}.json"
-    with open(out, "w") as f:
+    with Path(out).open("w") as f:
         json.dump(report, f, indent=2)
     print(f"\nresults written to {out}")
 

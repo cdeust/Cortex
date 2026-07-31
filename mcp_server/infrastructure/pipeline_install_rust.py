@@ -188,7 +188,7 @@ def _install_with_hash_pin(curl: str, pinned_hash: str) -> dict:
         return _finalize_rust_install(rc, tail, "verified")
     finally:
         try:
-            os.unlink(tmp_path)
+            Path(tmp_path).unlink()
         except OSError:
             pass
 
@@ -218,7 +218,7 @@ def _finalize_rust_install(rc: int, tail: str, pin_status: str) -> dict:
 def _sha256_file(path: str) -> str:
     """Stream-hash a file with SHA256. Constant-memory."""
     h = hashlib.sha256()
-    with open(path, "rb") as f:
+    with Path(path).open("rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()

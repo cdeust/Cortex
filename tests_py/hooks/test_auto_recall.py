@@ -32,6 +32,7 @@ import sys
 import pytest
 
 from tests_py.conftest import _USE_PG_STORE, _TEST_DB_URL  # type: ignore
+import pathlib
 
 
 pytestmark = pytest.mark.skipif(
@@ -105,9 +106,7 @@ def _run_hook(prompt: str, db_url: str) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env["DATABASE_URL"] = db_url
     payload = json.dumps({"prompt": prompt})
-    repo_root = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
+    repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
     return subprocess.run(
         [sys.executable, "-m", "mcp_server.hooks.auto_recall"],
         input=payload,

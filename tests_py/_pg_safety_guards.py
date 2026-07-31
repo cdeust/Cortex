@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 
 import pytest
+import pathlib
 
 
 def looks_like_test_db(url: str) -> bool:
@@ -108,12 +109,12 @@ def guard_against_real_data_roots(isolated_claude_dir: str) -> None:
     offenders = [
         (name, value)
         for name, value in _resolved_real_data_roots()
-        if not os.path.realpath(os.path.expanduser(value)).startswith(isolated)
+        if not os.path.realpath(pathlib.Path(value).expanduser()).startswith(isolated)
     ]
     if not offenders:
         return
     detail = "\n".join(f"    {name} -> {value}" for name, value in offenders)
-    real_root = os.path.realpath(os.path.expanduser("~/.claude"))
+    real_root = os.path.realpath(pathlib.Path("~/.claude").expanduser())
     pytest.exit(
         "REFUSING to run: test isolation is not in effect. These roots "
         f"still resolve outside the throwaway tree {isolated}:\n{detail}\n"

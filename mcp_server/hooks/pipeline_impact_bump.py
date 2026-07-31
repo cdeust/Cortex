@@ -210,7 +210,7 @@ def process_event(event: dict[str, Any]) -> None:
     if _check_cooldown(file_path):
         return
 
-    project_root = os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd()
+    project_root = os.environ.get("CLAUDE_PROJECT_ROOT") or str(Path.cwd())
     try:
         symbols = asyncio.run(_pipeline_detect_changes(project_root, file_path))
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal

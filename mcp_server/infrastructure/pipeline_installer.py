@@ -193,7 +193,7 @@ def _ensure_source(
         if rc != 0 or not (partial / "Cargo.toml").is_file():
             _rmtree_quiet(partial)
             return {"action": "clone_failed", "detail": tail}
-        os.rename(str(partial), str(src))
+        Path(str(partial)).rename(str(src))
     elif force_rebuild:
         _run_quiet([git, "-C", str(src), "fetch", "--depth=1", "origin", "HEAD"])
         _run_quiet([git, "-C", str(src), "reset", "--hard", "FETCH_HEAD"])
@@ -208,7 +208,7 @@ def _swap_symlink(binary: Path) -> dict:
         if tmp_link.is_symlink() or tmp_link.exists():
             tmp_link.unlink()
         tmp_link.symlink_to(binary)
-        os.replace(str(tmp_link), str(_INSTALL_SYMLINK))
+        Path(str(tmp_link)).replace(str(_INSTALL_SYMLINK))
     except Exception as exc:  # noqa: BLE001 — install-step boundary — failure is returned as {action: symlink_failed, detail}
         return {"action": "symlink_failed", "detail": str(exc)}
     return {"action": "installed", "binary": str(_INSTALL_SYMLINK)}

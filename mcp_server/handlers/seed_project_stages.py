@@ -41,7 +41,7 @@ def heat_for_tags(tags: list[str]) -> float:
 def _safe_read(path: Path, max_bytes: int = 65536) -> str:
     """Read a file up to max_bytes. Returns empty string on error."""
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
+        with Path(path).open("r", encoding="utf-8", errors="replace") as f:
             return f.read(max_bytes)
     except OSError:
         return ""

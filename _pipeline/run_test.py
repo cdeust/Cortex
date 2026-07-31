@@ -5,8 +5,9 @@ import asyncio
 import json
 import sys
 import os
+import pathlib
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mcp_server.handlers.run_pipeline import handler
 

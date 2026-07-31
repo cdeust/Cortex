@@ -38,16 +38,16 @@ def _remove_path(path: str, *, best_effort: bool = False) -> None:
     the caller's own in-flight exception).
     """
     if best_effort:
-        if os.path.isdir(path):
+        if Path(path).is_dir():
             shutil.rmtree(path, ignore_errors=True)
         else:
             with contextlib.suppress(OSError):
-                os.remove(path)
+                Path(path).unlink()
         return
-    if os.path.isdir(path):
+    if Path(path).is_dir():
         shutil.rmtree(path, ignore_errors=True)
     else:
-        os.remove(path)
+        Path(path).unlink()
 
 
 def commit_entry(tmp_dir: str, deps_dir: str, entry: str) -> str | None:
@@ -68,23 +68,23 @@ def commit_entry(tmp_dir: str, deps_dir: str, entry: str) -> str | None:
     restore. Renaming dest aside first means the ORIGINAL bytes are
     still on disk until the replace has actually succeeded.
     """
-    dest = os.path.join(deps_dir, entry)
-    src = os.path.join(tmp_dir, entry)
+    dest = Path(deps_dir) / entry
+    src = Path(tmp_dir) / entry
     backup = f"{dest}.bak-{os.getpid()}"
-    had_dest = os.path.exists(dest)
+    had_dest = dest.exists()
     if had_dest:
-        if os.path.exists(backup):
+        if Path(backup).exists():
             _remove_path(backup, best_effort=True)
-        os.replace(dest, backup)
+        dest.replace(backup)
     try:
-        os.replace(src, dest)
+        src.replace(dest)
     except OSError:
         if had_dest:
             # Restore the pre-call state; leave `backup` for the caller's
             # rollback bookkeeping (removed once restore is confirmed).
-            if os.path.exists(dest):
+            if dest.exists():
                 _remove_path(dest, best_effort=True)
-            os.replace(backup, dest)
+            Path(backup).replace(dest)
         raise
     if had_dest:
         _remove_path(backup, best_effort=True)
@@ -126,7 +126,8 @@ def _commit_resolved_entries(tmp_dir: str, deps_dir: str) -> tuple[bool, str | N
     tmp_versions = _fs.dist_info_versions(tmp_dir)
     dest_versions = _fs.dist_info_versions(deps_dir)
     committed_dist_infos: list[str] = []
-    for entry in os.listdir(tmp_dir):
+    for entry_path in Path(tmp_dir).iterdir():
+        entry = entry_path.name
         if _entry_already_satisfied(entry, tmp_versions, dest_versions):
             continue
         try:
@@ -202,7 +203,7 @@ def pip_install(
     constraints_file = None
     if constraints:
         constraints_file = f"{deps_dir}.constraints-{os.getpid()}.txt"
-        with open(constraints_file, "w", encoding="utf-8") as fh:
+        with Path(constraints_file).open("w", encoding="utf-8") as fh:
             fh.write("\n".join(constraints) + "\n")
     base = [
         sys.executable,
@@ -240,7 +241,7 @@ def pip_install(
         # Only a resolution hint for THIS pip invocation — not needed
         # past this point regardless of outcome.
         with contextlib.suppress(OSError):
-            os.remove(constraints_file)
+            Path(constraints_file).unlink()
     if proc.returncode != 0:
         print(
             "[cortex-launcher] dependency install failed for "

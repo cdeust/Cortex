@@ -16,7 +16,6 @@ Returns a summary of what was seeded.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -113,7 +112,7 @@ schema = {
 def _parse_args(args: dict[str, Any] | None) -> tuple[Path, str, int, bool]:
     """Extract and validate handler arguments."""
     args = args or {}
-    directory = args.get("directory", "") or os.getcwd()
+    directory = args.get("directory", "") or Path.cwd()
     root = Path(directory).expanduser().resolve()
     # Domain auto-detection: schema documents this behavior; the previous
     # implementation passed an empty string through, which broke the

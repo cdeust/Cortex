@@ -46,7 +46,6 @@ Pure business logic — no I/O. Decisions are returned to the caller.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Literal
@@ -56,6 +55,7 @@ from mcp_server.core.extinction import (
     spontaneous_recovery as _recover,
     reinstate as _reinstate,
 )
+import pathlib
 
 
 def _temporal_distance(memory_last_accessed: str | None) -> float:
@@ -104,7 +104,9 @@ def compute_mismatch(
 
     if memory_directory == current_directory:
         dir_distance = 0.0
-    elif os.path.dirname(memory_directory) == os.path.dirname(current_directory):
+    elif (
+        pathlib.Path(memory_directory).parent == pathlib.Path(current_directory).parent
+    ):
         dir_distance = 0.5
     else:
         dir_distance = 1.0

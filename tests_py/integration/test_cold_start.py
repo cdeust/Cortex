@@ -13,6 +13,7 @@ import subprocess
 import sys
 
 import pytest
+import pathlib
 
 
 def _pg_reachable() -> bool:
@@ -302,21 +303,15 @@ class TestSetupScript:
 
     def test_setup_script_exists(self):
         """Setup script must exist at expected path."""
-        script = os.path.join(
-            os.path.dirname(__file__), "..", "..", "scripts", "setup_db.py"
-        )
-        assert os.path.exists(os.path.abspath(script))
+        script = pathlib.Path(__file__).parent / ".." / ".." / "scripts" / "setup_db.py"
+        assert script.resolve().exists()
 
     def test_setup_reports_ready_or_needs_install(self):
         """Setup script reports 'ready' when PG is available, 'needs_install'
         when not."""
-        script = os.path.join(
-            os.path.dirname(__file__), "..", "..", "scripts", "setup_db.py"
-        )
-        script = os.path.abspath(script)
-        plugin_root = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..")
-        )
+        script = pathlib.Path(__file__).parent / ".." / ".." / "scripts" / "setup_db.py"
+        script = script.resolve()
+        plugin_root = (pathlib.Path(__file__).parent / ".." / "..").resolve()
 
         # Use the same DATABASE_URL that tests are configured with
         db_url = os.environ.get(

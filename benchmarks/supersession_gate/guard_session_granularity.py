@@ -55,7 +55,7 @@ def session_text(session: list[dict]) -> str:
 
 
 def main() -> int:
-    data = json.load(open(DATA))
+    data = json.load(Path(DATA).open())
     ku = [x for x in data if x["question_type"] == "knowledge-update"]
     eng = EmbeddingEngine()
 

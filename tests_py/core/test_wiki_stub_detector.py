@@ -7,6 +7,7 @@ from mcp_server.core.wiki_stub_detector import (
     placeholder_count,
     stub_score,
 )
+import pathlib
 
 
 SUBSTANTIVE_BODY = """\
@@ -126,13 +127,11 @@ class TestPurgeCap:
     """
 
     def _make_stub_pages(self, root, n):
-        import os
-
         body = "_(to be filled)_\n_To be written._\n"
         for i in range(n):
-            path = os.path.join(root, "lessons", "p", f"stub-{i:03d}.md")
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as f:
+            path = pathlib.Path(root) / "lessons" / "p" / f"stub-{i:03d}.md"
+            path.parent.mkdir(exist_ok=True, parents=True)
+            with path.open("w") as f:
                 f.write(f"---\ntitle: stub {i}\nkind: lesson\n---\n\n{body}")
 
     def test_cap_limits_per_cycle_purges(self, tmp_path, monkeypatch):

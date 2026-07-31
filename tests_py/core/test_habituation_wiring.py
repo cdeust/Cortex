@@ -17,6 +17,7 @@ import tempfile
 import pytest
 
 from mcp_server.core import habituation, write_gate
+import pathlib
 
 
 @pytest.fixture()
@@ -29,7 +30,7 @@ def store():
     s = SqliteMemoryStore(path)
     yield s
     try:
-        os.remove(path)
+        pathlib.Path(path).unlink()
     except OSError:
         pass
 

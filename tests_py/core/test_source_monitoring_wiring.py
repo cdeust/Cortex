@@ -13,6 +13,7 @@ import tempfile
 import pytest
 
 from mcp_server.core import source_monitoring as sm
+import pathlib
 
 
 @pytest.fixture()
@@ -25,7 +26,7 @@ def store():
     s = SqliteMemoryStore(path)
     yield s
     try:
-        os.remove(path)
+        pathlib.Path(path).unlink()
     except OSError:
         pass
 

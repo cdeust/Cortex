@@ -15,7 +15,6 @@ No human editing. No marketing. Just the experience.
 from __future__ import annotations
 
 import math
-import os
 import random
 import shutil
 import subprocess
@@ -42,7 +41,7 @@ def get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
             "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
         ] + candidates
     for path in candidates:
-        if os.path.exists(path):
+        if Path(path).exists():
             try:
                 return ImageFont.truetype(path, size)
             except (OSError, ValueError):

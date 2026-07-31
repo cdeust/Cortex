@@ -10,7 +10,6 @@ Code instruction file that is loaded at the start of every session.
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 from typing import Any
@@ -219,7 +218,7 @@ def _find_claude_md(directory: str) -> Path:
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Sync memory insights into CLAUDE.md."""
     args = args or {}
-    directory = args.get("directory", "") or os.getcwd()
+    directory = args.get("directory", "") or str(Path.cwd())
     max_insights = int(args.get("max_insights", 10))
     min_heat = float(args.get("min_heat", 0.3))
     dry_run = bool(args.get("dry_run", False))

@@ -5,7 +5,6 @@ Extracted to keep remember.py under 300 lines with all methods under 40 lines.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from mcp_server.core import (
@@ -42,6 +41,7 @@ from mcp_server.core.hierarchical_predictive_coding import compute_hierarchical_
 from mcp_server.core.predictive_coding_signals import extract_sensory_features
 import json as _json
 import numpy as _np
+import pathlib
 
 
 # Textual-overlap fraction above which a near-duplicate candidate counts
@@ -704,7 +704,7 @@ def _grade_content_best_effort(
     observable tag instead of a silently absorbed enrichment.
     """
     try:
-        base_dir = directory or os.getcwd()
+        base_dir = directory or str(pathlib.Path.cwd())
     except OSError as exc:
         return (
             provenance.ProvenanceReport(

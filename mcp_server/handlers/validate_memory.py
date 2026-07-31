@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import hashlib
 import http.client
-import os
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -359,7 +358,7 @@ def grade_from_content(
         callers persist the grade, if at all, through a different
         mechanism (e.g. an additive tag).
     """
-    base = base_dir or os.getcwd()
+    base = base_dir or str(Path.cwd())
     file_refs = collect_all_refs([{"content": content}])
     existing_paths = _resolve_existing_paths(file_refs, base)
     commit_refs = provenance.extract_commit_refs(content)
@@ -499,7 +498,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Validate memory or memories: staleness (file paths) + provenance
     grade (file/commit/url/artifact/citation refs), I6-D6."""
     args = args or {}
-    base_dir = args.get("base_dir", "") or os.getcwd()
+    base_dir = args.get("base_dir", "") or str(Path.cwd())
     threshold = float(args.get("staleness_threshold", 0.5))
     url_check_limit = int(args.get("url_check_limit", _DEFAULT_URL_CHECK_LIMIT))
     dry_run = args.get("dry_run", False)

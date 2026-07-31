@@ -10,6 +10,7 @@ from mcp_server.handlers.import_sessions import (
     _discover_jsonl_files,
     _detect_domain_from_path,
 )
+import pathlib
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
@@ -58,7 +59,7 @@ def tmp_claude_dir(tmp_path):
     ]
 
     jsonl_path = proj / "session-001.jsonl"
-    with open(jsonl_path, "w") as f:
+    with pathlib.Path(jsonl_path).open("w") as f:
         for rec in records:
             f.write(json.dumps(rec) + "\n")
 
@@ -73,7 +74,7 @@ def tmp_claude_dir(tmp_path):
             "sessionId": "session-002",
         },
     ]
-    with open(proj2 / "session-002.jsonl", "w") as f:
+    with pathlib.Path(proj2 / "session-002.jsonl").open("w") as f:
         for rec in records2:
             f.write(json.dumps(rec) + "\n")
 

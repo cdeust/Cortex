@@ -27,6 +27,7 @@ import sys
 import pytest
 
 from tests_py.conftest import _USE_PG_STORE, _TEST_DB_URL  # type: ignore
+import pathlib
 
 pytestmark = pytest.mark.skipif(
     # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
@@ -116,9 +117,7 @@ def _receipt(conn, receipt_id: int) -> tuple[dict, list[dict]]:
 def _run_hook(module: str, event: dict) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env["DATABASE_URL"] = _TEST_DB_URL
-    repo_root = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
+    repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
     return subprocess.run(
         [sys.executable, "-m", module],
         input=json.dumps(event),

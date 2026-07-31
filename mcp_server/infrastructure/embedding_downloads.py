@@ -19,6 +19,7 @@ import logging
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ def trigger_background_install() -> None:
 
     target = os.environ.get("CLAUDE_PLUGIN_DATA", "")
     if target:
-        target = os.path.join(target, "deps")
+        target = str(Path(target) / "deps")
     cmd = [
         sys.executable,
         "-m",

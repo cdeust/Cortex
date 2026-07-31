@@ -56,6 +56,7 @@ from benchmarks.locomo.data import (  # noqa: E402
     CATEGORY_NAMES,
 )
 import os  # noqa: E402
+import pathlib  # noqa: E402
 
 DATA_PATH = "/Users/cdeust/Documents/Developments/personal/Cortex/benchmarks/locomo/locomo10.json"  # noqa: E501 — absolute dataset path, one token with no whitespace to split on
 
@@ -243,7 +244,7 @@ def main():
     print(f"  MRR: {delta_mrr:+.4f}   R@10: {delta_r10:+.4f}")
 
     out = "/Users/cdeust/Documents/Developments/personal/Cortex/benchmarks/results/rrf_vs_tmm_locomo.json"  # noqa: E501 — absolute output path, one token with no whitespace to split on
-    with open(out, "w") as f:
+    with pathlib.Path(out).open("w") as f:
         json.dump(results, f, indent=2)
     print(f"\nWrote {out}")
 

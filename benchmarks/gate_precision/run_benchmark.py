@@ -89,7 +89,7 @@ def extract_corpus(path: Path) -> list[str]:
     session ids in file order; dedupe contents on a whitespace/case
     normalised key. Deterministic given the file.
     """
-    with open(path) as f:
+    with Path(path).open() as f:
         questions = json.load(f)
     seen_sessions: set[str] = set()
     seen_keys: set[str] = set()
@@ -312,7 +312,7 @@ def main() -> None:
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     out = RESULTS_DIR / f"{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.json"
-    with open(out, "w") as f:
+    with Path(out).open("w") as f:
         json.dump(report, f, indent=2)
     print(f"results written to {out}")
 

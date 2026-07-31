@@ -37,11 +37,11 @@ from pathlib import Path
 
 import pytest
 
-_REAL_CLAUDE_DIR = Path(os.path.expanduser("~/.claude")).resolve()
+_REAL_CLAUDE_DIR = Path("~/.claude").expanduser().resolve()
 
 
 def _real(path: str | Path) -> str:
-    return os.path.realpath(os.path.expanduser(str(path)))
+    return os.path.realpath(Path(str(path)).expanduser())
 
 
 def _is_under(path: str | Path, root: Path) -> bool:

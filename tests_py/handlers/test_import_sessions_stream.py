@@ -40,7 +40,7 @@ def _write_large_jsonl(path: Path) -> int:
     """Generate a synthetic JSONL with _TARGET_LINES lines. Returns byte size."""
     path.parent.mkdir(parents=True, exist_ok=True)
     total_bytes = 0
-    with open(path, "w", encoding="utf-8") as f:
+    with Path(path).open("w", encoding="utf-8") as f:
         for i in range(_TARGET_LINES):
             rec = {
                 "type": "user" if i % 2 == 0 else "assistant",

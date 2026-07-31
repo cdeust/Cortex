@@ -36,6 +36,7 @@ from typing import Final
 from mcp_server.shared.platform import to_posix
 from mcp_server.shared.wiki_source_paths import extract_document_paths
 from mcp_server.core.wiki_coverage import _SKIP_DIRECTORIES
+import pathlib
 
 
 @dataclass
@@ -231,10 +232,10 @@ def _file_exists_under(source_root: str, cited: str) -> bool:
     under the tree (rename-tolerant — a moved file still counts as
     present so we don't fire spurious drift jobs on every refactor).
     """
-    full = os.path.join(source_root, cited)
-    if os.path.isfile(full):
+    full = pathlib.Path(source_root) / cited
+    if full.is_file():
         return True
-    bn = os.path.basename(cited)
+    bn = pathlib.Path(cited).name
     # Prune the same vendored / build dirs as list_source_files. Without this,
     # a repo carrying a venv/, node_modules/, deps/, or site-packages/ at its
     # root makes this per-cited-path fallback walk tens of thousands of files,
@@ -269,9 +270,9 @@ def audit_page_drift(
     (missing source AND off-template), and the re-authoring prompt
     surfaces all of them so the LLM can fix everything in one pass.
     """
-    full = os.path.join(wiki_root, page_rel_path)
+    full = pathlib.Path(wiki_root) / page_rel_path
     try:
-        with open(full, encoding="utf-8", errors="ignore") as fp:
+        with full.open(encoding="utf-8", errors="ignore") as fp:
             text = fp.read()
     except OSError:
         return None
@@ -302,7 +303,7 @@ def audit_page_drift(
     # signal because frontmatter can lie / be groomed without prose
     # changes.
     try:
-        page_mtime = os.path.getmtime(full)
+        page_mtime = pathlib.Path(full).stat().st_mtime
     except OSError:
         page_mtime = 0.0
     now_ts = now if now is not None else time.time()
@@ -364,7 +365,7 @@ def audit_wiki_drift(
     in other projects).
     """
     drifts: list[PageDrift] = []
-    if not os.path.isdir(wiki_root):
+    if not pathlib.Path(wiki_root).is_dir():
         return drifts
     for dirpath, dirnames, filenames in os.walk(wiki_root):
         dirnames[:] = [
@@ -373,7 +374,7 @@ def audit_wiki_drift(
         for f in filenames:
             if not f.endswith(".md"):
                 continue
-            full = os.path.join(dirpath, f)
+            full = pathlib.Path(dirpath) / f
             # Normalize to '/' so _kind_and_domain_from_path's path parsing
             # works on Windows. source: REPORT_..._CORTEX_WINDOWS §5.3
             rel = to_posix(os.path.relpath(full, wiki_root))

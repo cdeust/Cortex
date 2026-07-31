@@ -253,7 +253,7 @@ def find_claude_ancestor(max_depth: int = _MAX_ANCESTOR_DEPTH) -> int | None:
         if info is None:
             return None
         ppid, comm = info
-        if os.path.basename(comm) == "claude":
+        if Path(comm).name == "claude":
             return pid
         if ppid <= 1:
             return None
@@ -273,9 +273,9 @@ def _atomic_write(path: Path, payload: dict) -> bool:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(payload, f)
         except Exception:
-            os.unlink(tmp)
+            Path(tmp).unlink()
             raise
-        os.replace(tmp, path)
+        Path(tmp).replace(path)
     except OSError:
         return False
     return True

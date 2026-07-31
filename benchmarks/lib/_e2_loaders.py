@@ -52,7 +52,7 @@ def load_longmemeval(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
     )
 
     data_path = _ROOT / "benchmarks" / "longmemeval" / "longmemeval_s.json"
-    with open(data_path) as f:
+    with Path(data_path).open() as f:
         dataset = json.load(f)
     seen: dict[str, SubsampleItem] = {}
     probes: list[QueryProbe] = []

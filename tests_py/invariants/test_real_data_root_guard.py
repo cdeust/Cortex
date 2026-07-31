@@ -24,14 +24,10 @@ from pathlib import Path
 
 import pytest
 
-_REAL_CLAUDE_DIR = Path(os.path.expanduser("~/.claude")).resolve()
+_REAL_CLAUDE_DIR = Path("~/.claude").expanduser().resolve()
 
-_CONFTEST_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "conftest.py")
-)
-_GUARDS_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "_pg_safety_guards.py")
-)
+_CONFTEST_PATH = (Path(__file__).parent / ".." / "conftest.py").resolve()
+_GUARDS_PATH = (Path(__file__).parent / ".." / "_pg_safety_guards.py").resolve()
 
 
 class TestIsolationGuard:
@@ -86,7 +82,7 @@ class TestIsolationGuard:
             ("CLAUDE_DIR", "/real/claude"),
             ("WIKI_ROOT", "/real/claude/wiki"),
         ]
-        expected_real_root = os.path.realpath(os.path.expanduser("~/.claude"))
+        expected_real_root = os.path.realpath(Path("~/.claude").expanduser())
         with (
             mock.patch.object(
                 _pg_safety_guards,
@@ -117,7 +113,7 @@ class TestIsolationGuard:
         safe way to run against a real tree, so an escape hatch would only
         ever be used to re-enable the incident.
         """
-        with open(_GUARDS_PATH, encoding="utf-8") as fh:
+        with Path(_GUARDS_PATH).open(encoding="utf-8") as fh:
             lines = fh.readlines()
 
         start = next(
@@ -149,7 +145,7 @@ class TestGuardStructuralIntegrity:
         Inside an `if`, it reintroduces exactly the conditional-isolation bug
         of issue #219.
         """
-        with open(_CONFTEST_PATH, encoding="utf-8") as fh:
+        with Path(_CONFTEST_PATH).open(encoding="utf-8") as fh:
             lines = fh.readlines()
 
         calls = [
@@ -164,7 +160,7 @@ class TestGuardStructuralIntegrity:
         )
 
     def test_guard_call_present_at_module_level(self):
-        with open(_CONFTEST_PATH, encoding="utf-8") as fh:
+        with Path(_CONFTEST_PATH).open(encoding="utf-8") as fh:
             lines = fh.readlines()
 
         calls = [
@@ -188,7 +184,7 @@ class TestGuardStructuralIntegrity:
         a value. If any mcp_server import runs before the env var is set, the
         copied value is the real path and no later env change can fix it.
         """
-        with open(_CONFTEST_PATH, encoding="utf-8") as fh:
+        with Path(_CONFTEST_PATH).open(encoding="utf-8") as fh:
             lines = fh.readlines()
 
         redirect_lines = [

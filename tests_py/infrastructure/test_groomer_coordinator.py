@@ -27,6 +27,7 @@ from mcp_server.infrastructure.groomer_coordinator import (
     GroomerCoordinator,
     resolve_store_key,
 )
+import pathlib
 
 
 def test_resolve_store_key_resolves_real_identity_not_default():
@@ -264,7 +265,7 @@ def test_two_processes_one_cycle(tmp_path):
     """Two real OS processes race ``ensure_cycle`` against one store. The
     per-store lock + stamp barrier admit exactly one spawn."""
     root = tmp_path / "coord"
-    env = {**os.environ, "PYTHONPATH": os.getcwd()}
+    env = {**os.environ, "PYTHONPATH": str(pathlib.Path.cwd())}
     procs = [
         subprocess.Popen(
             [sys.executable, "-c", _CHILD, str(root)],

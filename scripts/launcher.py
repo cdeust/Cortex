@@ -46,9 +46,9 @@ def _resolve_paths() -> tuple[str, str]:
     # CLAUDE_PLUGIN_DATA is set by Claude Code — persistent across updates
     plugin_data = os.environ.get("CLAUDE_PLUGIN_DATA", "")
     if plugin_data:
-        deps_dir = os.path.join(plugin_data, "deps")
+        deps_dir = str(Path(plugin_data) / "deps")
     else:
-        deps_dir = os.path.join(plugin_root, "deps")
+        deps_dir = str(Path(plugin_root) / "deps")
 
     return plugin_root, deps_dir
 

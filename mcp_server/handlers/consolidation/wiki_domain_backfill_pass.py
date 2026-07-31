@@ -18,7 +18,6 @@ the same source-path evidence.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Callable
 from mcp_server.shared.domain_mapping import _build_registry
 from mcp_server.core.wiki_domain_backfill import derive_page_domain
@@ -26,6 +25,7 @@ from mcp_server.infrastructure.pg_store_wiki_domain import (
     update_page_domain,
     list_catchall_pages_with_sources,
 )
+import pathlib
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def _domains_containing(domain_roots: dict[str, list[str]], rel_path: str) -> se
     """
     hits: set[str] = set()
     for domain, roots in domain_roots.items():
-        if any(os.path.exists(os.path.join(root, rel_path)) for root in roots):
+        if any((pathlib.Path(root) / rel_path).exists() for root in roots):
             hits.add(domain)
     return hits
 

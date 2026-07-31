@@ -38,9 +38,8 @@ from mcp_server.core.wiki_coverage import domain_coverage_missing_scopes
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-import os
 import time
-import os as _os
+import pathlib
 
 # 2026-05-17: thresholds tuned to mirror the cluster-quality bar of the
 # hand-authored pages from this session. Below these, a cluster doesn't
@@ -107,10 +106,10 @@ def is_path_recently_authored(
     skipped (their edits aren't clobbered).
     """
 
-    full = os.path.join(wiki_root, suggested_path)
-    if not os.path.isfile(full):
+    full = pathlib.Path(wiki_root) / suggested_path
+    if not full.is_file():
         return False
-    age_seconds = time.time() - os.path.getmtime(full)
+    age_seconds = time.time() - full.stat().st_mtime
     return age_seconds < (within_days * 86400)
 
 
@@ -926,9 +925,9 @@ def build_reauthor_jobs(
 
     jobs: list[ReauthorJob] = []
     for d in drifts:
-        full = _os.path.join(wiki_root, d.wiki_path)
+        full = pathlib.Path(wiki_root) / d.wiki_path
         try:
-            with open(full, encoding="utf-8", errors="ignore") as fp:
+            with full.open(encoding="utf-8", errors="ignore") as fp:
                 text = fp.read()
         except OSError:
             continue

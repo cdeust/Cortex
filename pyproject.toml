@@ -438,6 +438,55 @@ select = [
     # the commented invocation deleted, replaced with prose on why the
     # module stays in the tree unwired.
     "ERA",
+    # PTH (flake8-use-pathlib) (issue #239, family 6): 91 findings in
+    # mcp_server/ (the issue's measurement scope), 250 repo-wide — every
+    # one fixed, none suppressed. `ruff --fix --unsafe-fixes --preview`
+    # (0.15.20 needs `--preview` for the fix to actually apply; detection
+    # counts are identical with or without it) mechanically converted 173
+    # of the 250; the remaining 77 (mostly PTH118 os.path.join, plus
+    # PTH208 os.listdir, PTH116 os.stat, PTH122 os.path.splitext) needed
+    # hand conversion since ruff itself doesn't consider them safely
+    # auto-fixable.
+    #   `infrastructure/wiki_store.py` was EXCLUDED from the mechanical
+    #   fix and hand-triaged instead: its own docstrings state the
+    #   CWE-22/py-path-injection sanitizer chain must match CodeQL's
+    #   py/path-injection example verbatim, and `_atomic_write_bytes_str`
+    #   explicitly keeps its flow string-based (not `Path`-rebound) to
+    #   preserve the sanitizer-to-sink chain for static analysis. The 3
+    #   `os.path.isabs(rel_path)` guards there (pre-sanitizer input, not
+    #   the tracked sanitized variable) were rewritten to
+    #   `Path(rel_path).is_absolute()`; every other PTH finding in that
+    #   file (the `os.path.join` sanitizer construction, the
+    #   `os.path.exists`/`open` sinks, and all of
+    #   `_atomic_write_bytes_str`) carries a per-site
+    #   `# noqa: PTH1xx — <CodeQL sanitizer-chain reason>` instead.
+    #   Two real regressions surfaced by the full test suite before this
+    #   landed, both fixed at the source rather than accepted:
+    #   (1) `scripts/launcher_deps.py::_deps_lock`'s stale-lock-age check
+    #   used `os.path.getmtime(stamp_file)`; the mechanical rewrite to
+    #   `Path(stamp_file).stat().st_mtime` bypassed
+    #   `test_launcher_deps.py::test_deps_lock_steals_stale_lock`'s
+    #   `os.path.getmtime` monkeypatch seam — reverted to
+    #   `os.path.getmtime` there with `# noqa: PTH204` naming the test.
+    #   (2) every repo-wide `X or os.getcwd()` → `X or Path.cwd()`
+    #   (PTH109) silently flipped a `str`-typed variable to `Path`
+    #   whenever the fallback fired: `hooks/post_commit_reindex.py`'s
+    #   cooldown cache used the result as a JSON-dict key (`Path` keys
+    #   raise `TypeError` in `json.dumps`, silently swallowed by the
+    #   function's own broad except — the cooldown file was never
+    #   written and every commit re-spawned reindex), and
+    #   `handlers/assess_coverage.py::_fetch_memories` compared
+    #   `directory != pathlib.Path.cwd()` — a `str`/`Path` comparison
+    #   that is ALWAYS True in Python regardless of actual path
+    #   equality, silently flipping which branch ran on every call. Both
+    #   fixed by wrapping the fallback as `str(Path.cwd())` at every
+    #   site where the result crosses a `str`-typed boundary (9
+    #   production sites, 1 test site); left as bare `Path.cwd()` only
+    #   where the result is immediately re-wrapped by an outer `Path(...)`
+    #   call (`codebase_analyze.py`, `wiki_seed_codebase.py`,
+    #   `seed_project.py` — a no-op type-wise, both branches already
+    #   yielded `Path` before and after).
+    "PTH",
 ]
 # ── Families deliberately NOT selected (issue #197, criterion 1) ────────────
 # Counts measured against mcp_server/ 2026-07-28, ruff 0.15.20 — what

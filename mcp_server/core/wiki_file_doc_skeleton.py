@@ -17,7 +17,7 @@ Pure logic — produces a string. Callers write to disk.
 
 from __future__ import annotations
 
-import os
+import pathlib
 import re
 from typing import Iterable
 
@@ -36,7 +36,7 @@ _DEFAULT_TAGS: tuple[str, ...] = (
 
 
 def _detect_language(path: str) -> str:
-    ext = os.path.splitext(path)[1].lower()
+    ext = pathlib.Path(path).suffix.lower()
     return {
         ".py": "python",
         ".ts": "typescript",

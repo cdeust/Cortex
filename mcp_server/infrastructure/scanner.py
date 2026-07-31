@@ -48,7 +48,7 @@ def read_head_tail(file_path: str | Path) -> list[dict]:
             return []
 
         file_size = fp.stat().st_size
-        with open(fp, "rb") as f:
+        with Path(fp).open("rb") as f:
             head_size = min(HEAD_BYTES, file_size)
             head_str = f.read(head_size).decode("utf-8", errors="replace")
             head_lines = head_str.split("\n")
@@ -83,7 +83,7 @@ def iter_tool_uses(file_path: str | Path):
     if not fp.exists():
         return
     try:
-        with open(fp, "r", encoding="utf-8", errors="replace") as f:
+        with Path(fp).open("r", encoding="utf-8", errors="replace") as f:
             for line_no, raw in enumerate(f, start=1):
                 s = raw.strip()
                 if not s:

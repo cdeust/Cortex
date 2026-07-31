@@ -43,7 +43,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
 PLUGIN_DATA = os.environ.get("CLAUDE_PLUGIN_DATA", str(PROJECT_DIR))
-DEPS_DIR = os.path.join(PLUGIN_DATA, "deps")
+DEPS_DIR = str(Path(PLUGIN_DATA) / "deps")
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
 
 # SQLite mode: see module docstring. Any other CORTEX_MEMORY_STORE_BACKEND
@@ -214,7 +214,7 @@ def check_postgresql() -> None:
 def install_deps() -> None:
     step("Python dependencies")
 
-    os.makedirs(DEPS_DIR, exist_ok=True)
+    Path(DEPS_DIR).mkdir(exist_ok=True, parents=True)
 
     packages = [
         "fastmcp>=2.0.0",

@@ -119,8 +119,8 @@ def _importable(import_name: str, deps_dir: str) -> bool:
     if getattr(mod, "__file__", None) is not None:
         return True
     sys.modules.pop(import_name, None)
-    husk = os.path.join(deps_dir, import_name)
-    if os.path.isdir(husk):
+    husk = Path(deps_dir) / import_name
+    if husk.is_dir():
         shutil.rmtree(husk, ignore_errors=True)
         print(
             f"[cortex-launcher] removed corrupt partial install: {husk}",
@@ -152,17 +152,17 @@ def _deps_lock(deps_dir: str):
     serialization so only one of them performs the commit.
     """
     lock_dir = f"{deps_dir}.lock"
-    stamp_file = os.path.join(lock_dir, "holder")
+    stamp_file = Path(lock_dir) / "holder"
     deadline = time.monotonic() + _LOCK_WAIT_SECONDS
     acquired = False
     while time.monotonic() < deadline:
         try:
-            os.mkdir(lock_dir)
+            Path(lock_dir).mkdir()
             acquired = True
             break
         except FileExistsError:
             try:
-                age = time.time() - os.path.getmtime(stamp_file)
+                age = time.time() - os.path.getmtime(stamp_file)  # noqa: PTH204 — tests_py/scripts/test_launcher_deps.py::test_deps_lock_steals_stale_lock monkeypatches os.path.getmtime as its stale-lock seam; Path.stat().st_mtime bypasses that seam and silently disables the test
             except OSError:
                 age = 0.0
             if age > _STALE_LOCK_SECONDS:
@@ -171,7 +171,7 @@ def _deps_lock(deps_dir: str):
             time.sleep(0.2)
     if acquired:
         try:
-            with open(stamp_file, "w", encoding="utf-8") as fh:
+            with stamp_file.open("w", encoding="utf-8") as fh:
                 fh.write(f"{os.getpid()} {time.time()}")
         except OSError:
             pass
@@ -183,7 +183,7 @@ def _deps_lock(deps_dir: str):
 
 
 def _stamp_path(deps_dir: str, kind: str) -> str:
-    return os.path.join(deps_dir, f".cortex-deps-stamp-{kind}.json")
+    return str(Path(deps_dir) / f".cortex-deps-stamp-{kind}.json")
 
 
 def _pins_satisfied(deps_dir: str, kind: str, pins: list[str]) -> bool:
@@ -202,7 +202,7 @@ def _pins_satisfied(deps_dir: str, kind: str, pins: list[str]) -> bool:
     invalidates it and the full check runs again, self-healing.
     """
     try:
-        with open(_stamp_path(deps_dir, kind), encoding="utf-8") as fh:
+        with Path(_stamp_path(deps_dir, kind)).open(encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, ValueError):
         return False
@@ -216,7 +216,7 @@ def _write_stamp(deps_dir: str, kind: str, pins: list[str]) -> None:
         "pins": sorted(pins),
     }
     try:
-        with open(_stamp_path(deps_dir, kind), "w", encoding="utf-8") as fh:
+        with Path(_stamp_path(deps_dir, kind)).open("w", encoding="utf-8") as fh:
             json.dump(payload, fh)
     except OSError:
         pass  # best-effort — worst case the next call re-verifies
@@ -250,7 +250,7 @@ def ensure_deps(deps_dir: str) -> None:
     ``pip`` has actually run, unlike on the cold/common-case path this
     fix removes it from.
     """
-    os.makedirs(deps_dir, exist_ok=True)
+    Path(deps_dir).mkdir(exist_ok=True, parents=True)
     _sweep_stale_backups(deps_dir)
     pins = [spec for _name, spec in _BASE_PACKAGES]
     if _pins_satisfied(deps_dir, "base", pins):

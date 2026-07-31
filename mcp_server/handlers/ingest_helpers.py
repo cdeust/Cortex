@@ -210,7 +210,7 @@ def graph_is_fresh(project_path: str, graph_path: str) -> bool:
         ]
         for fn in filenames:
             try:
-                if os.stat(os.path.join(dirpath, fn)).st_mtime > built_at:
+                if (Path(dirpath) / fn).stat().st_mtime > built_at:
                     return False
             except OSError:
                 continue

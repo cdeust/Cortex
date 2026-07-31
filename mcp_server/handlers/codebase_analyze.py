@@ -10,7 +10,6 @@ Incremental by default: only processes files whose content hash changed.
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -191,7 +190,7 @@ def _get_store() -> MemoryStore:
 def _parse_args(args: dict[str, Any] | None) -> tuple:
     """Extract and default handler arguments."""
     args = args or {}
-    directory = Path(args.get("directory", "") or os.getcwd()).expanduser().resolve()
+    directory = Path(args.get("directory", "") or Path.cwd()).expanduser().resolve()
     languages = args.get("languages")
     max_files = int(args.get("max_files", DEFAULT_MAX_FILES))
     max_kb = int(args.get("max_file_size_kb", DEFAULT_MAX_FILE_SIZE_KB))

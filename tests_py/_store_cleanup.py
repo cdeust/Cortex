@@ -17,6 +17,7 @@ from __future__ import annotations
 import importlib
 import os
 import pkgutil
+import pathlib
 
 # ── Tables to clean between tests (order matters for FK constraints) ─────
 
@@ -124,7 +125,7 @@ def _clean_sqlite_store() -> None:
     if _clean_sqlite_via_singleton():
         return
 
-    if not _SQLITE_DB_PATH or not os.path.exists(_SQLITE_DB_PATH):
+    if not _SQLITE_DB_PATH or not pathlib.Path(_SQLITE_DB_PATH).exists():
         return
     import sqlite3
 

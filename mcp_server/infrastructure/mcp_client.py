@@ -523,7 +523,7 @@ class MCPClient:
             stem = raw.split("/")[-1] or "unknown"
             safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in stem)
             pid = os.getpid()
-            return open(base / f"{safe}.{pid}.log", "a", encoding="utf-8")
+            return pathlib.Path(base / f"{safe}.{pid}.log").open("a", encoding="utf-8")
         except OSError:
             return None
 

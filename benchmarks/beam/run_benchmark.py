@@ -582,6 +582,6 @@ if __name__ == "__main__":
 
         out_path = Path(args.results_out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w") as f:
+        with Path(out_path).open("w") as f:
             json.dump(results, f, indent=2, default=str)
         print(f"Results written to {out_path}")

@@ -23,6 +23,7 @@ import pytest
 from mcp_server.core import active_forgetting
 from mcp_server.core.reconsolidation import compute_extinction_action
 from mcp_server.core import extinction as ext
+import pathlib
 
 
 @pytest.fixture()
@@ -35,7 +36,7 @@ def store():
     s = SqliteMemoryStore(path)
     yield s
     try:
-        os.remove(path)
+        pathlib.Path(path).unlink()
     except OSError:
         pass
 

@@ -20,6 +20,7 @@ import contextlib
 import os
 import re
 import shutil
+import pathlib
 
 # Matches the backup basename `_commit_entry` (launcher_deps.py) creates:
 # `<entry>.bak-<pid>`, e.g. `numpy.bak-4242` or
@@ -80,7 +81,7 @@ def dist_info_versions(dir_path: str) -> dict[str, str]:
     """
     versions: dict[str, str] = {}
     try:
-        children = os.listdir(dir_path)
+        children = [p.name for p in pathlib.Path(dir_path).iterdir()]
     except OSError:
         return versions
     for name in children:
@@ -154,21 +155,20 @@ def sweep_stale_backups(deps_dir: str) -> None:
     typically still held by another live process at that exact moment.
     """
     try:
-        children = os.listdir(deps_dir)
+        children = list(pathlib.Path(deps_dir).iterdir())
     except OSError:
         return
-    for name in children:
-        match = _BACKUP_NAME_RE.match(name)
+    for target in children:
+        match = _BACKUP_NAME_RE.match(target.name)
         if match is None:
             continue
         if pid_alive(int(match.group("pid"))):
             continue
-        target = os.path.join(deps_dir, name)
-        if os.path.isdir(target):
+        if target.is_dir():
             shutil.rmtree(target, ignore_errors=True)
         else:
             with contextlib.suppress(OSError):
-                os.remove(target)
+                target.unlink()
 
 
 def prune_superseded_dist_info(deps_dir: str, committed_entry: str) -> None:
@@ -194,7 +194,7 @@ def prune_superseded_dist_info(deps_dir: str, committed_entry: str) -> None:
         return
     key = entry_dist_key(committed_entry)
     try:
-        children = os.listdir(deps_dir)
+        children = [p.name for p in pathlib.Path(deps_dir).iterdir()]
     except OSError:
         return
     for name in children:
@@ -202,4 +202,4 @@ def prune_superseded_dist_info(deps_dir: str, committed_entry: str) -> None:
             continue
         if entry_dist_key(name) != key:
             continue
-        shutil.rmtree(os.path.join(deps_dir, name), ignore_errors=True)
+        shutil.rmtree(pathlib.Path(deps_dir) / name, ignore_errors=True)

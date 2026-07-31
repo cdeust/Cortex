@@ -65,9 +65,9 @@ def atomic_write_text(path: Path, text: str) -> bool:
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 fh.write(text)
         except Exception:
-            os.unlink(tmp)
+            Path(tmp).unlink()
             raise
-        os.replace(tmp, path)
+        Path(tmp).replace(path)
     except OSError:
         return False
     return True
