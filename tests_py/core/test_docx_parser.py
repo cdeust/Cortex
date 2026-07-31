@@ -170,6 +170,18 @@ class TestEdgeCases:
         with pytest.raises(DocumentParseError, match="malformed docx XML"):
             parse_docx_xml("<w:document><w:body><unclosed>")
 
+    def test_doctype_declaration_is_refused(self):
+        """S314 entity-expansion/XXE guard (document_model.reject_doctype):
+        a DOCTYPE with a custom internal-subset entity must never reach
+        ET.fromstring, regardless of well-formedness."""
+        bomb = '<!DOCTYPE w:document [<!ENTITY lol "lol">]>' + _doc(_para("&lol;"))
+        with pytest.raises(DocumentParseError, match="DOCTYPE"):
+            parse_docx_xml(bomb)
+
+    def test_doctype_case_insensitive_is_refused(self):
+        with pytest.raises(DocumentParseError, match="DOCTYPE"):
+            parse_docx_xml("<!doctype w:document>" + _doc(_para("x")))
+
     def test_missing_body_message_exact(self):
         with pytest.raises(DocumentParseError) as exc:
             parse_docx_xml(f'<w:document xmlns:w="{_W}"></w:document>')

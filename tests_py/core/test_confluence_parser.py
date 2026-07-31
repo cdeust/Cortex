@@ -124,3 +124,15 @@ class TestEdgeCases:
     def test_malformed_xhtml_raises_with_message(self):
         with pytest.raises(DocumentParseError, match="malformed Confluence XHTML"):
             parse_confluence_storage("<h1>Unclosed<p>text")
+
+    def test_doctype_declaration_is_refused(self):
+        """S314 entity-expansion/XXE guard (document_model.reject_doctype):
+        a DOCTYPE with a custom internal-subset entity must never reach
+        ET.fromstring, regardless of well-formedness."""
+        bomb = '<!DOCTYPE html [<!ENTITY lol "lol">]><h1>&lol;</h1>'
+        with pytest.raises(DocumentParseError, match="DOCTYPE"):
+            parse_confluence_storage(bomb)
+
+    def test_doctype_case_insensitive_is_refused(self):
+        with pytest.raises(DocumentParseError, match="DOCTYPE"):
+            parse_confluence_storage("<!doctype html><h1>x</h1>")
