@@ -196,7 +196,7 @@ def _construct_store(
                 err,
             )
             return _make_sqlite(db_path or settings.SQLITE_FALLBACK_PATH, embedding_dim)
-        raise RuntimeError(
+        raise RuntimeError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"PostgreSQL connection failed (url={url or '<unset>'}): {err}\n"
             "Cortex requires PostgreSQL in CLI mode.\n"
             "Run: bash setup.sh to configure PostgreSQL.\n"
@@ -220,7 +220,7 @@ def _construct_store(
                 "CORTEX_ALLOW_SQLITE_FALLBACK", ""
             ).lower() in ("1", "true", "yes")
             if not allow_fallback:
-                raise RuntimeError(
+                raise RuntimeError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                     f"explicit DATABASE_URL unreachable (url={url}): {err}; "
                     "refusing silent SQLite fallback; unset DATABASE_URL for "
                     "sandbox mode or set CORTEX_ALLOW_SQLITE_FALLBACK=1 to opt in"

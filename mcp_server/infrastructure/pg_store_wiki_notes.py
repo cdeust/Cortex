@@ -173,5 +173,5 @@ def wiki_stats(conn: StoreConnection) -> dict[str, Any]:
         if row is None:
             # An aggregate SELECT always yields one row; None means the
             # backend broke its contract — surface it, never return a fake.
-            raise RuntimeError("wiki_stats aggregate SELECT produced no row")
+            raise RuntimeError("wiki_stats aggregate SELECT produced no row")  # noqa: TRY003 — one-off message, not reused (§3.3)
         return dict(row)

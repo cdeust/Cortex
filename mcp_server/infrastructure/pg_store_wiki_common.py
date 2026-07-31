@@ -28,5 +28,8 @@ def _returning_id(row: dict[str, Any] | tuple[Any, ...] | None) -> int:
     rolled-back transaction), not a normal path — surface it loudly.
     """
     if row is None:
-        raise RuntimeError("INSERT ... RETURNING id produced no row")
+        # This IS the canonical, multi-call-site-shared construction point
+        # (pages/claims/concepts/drafts/citations modules) this helper
+        # exists to be — not a one-off (§3.3).
+        raise RuntimeError("INSERT ... RETURNING id produced no row")  # noqa: TRY003
     return row["id"] if isinstance(row, dict) else row[0]

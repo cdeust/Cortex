@@ -164,7 +164,7 @@ def _resolve_benchmark(bench_id: str, quick: bool) -> tuple[Callable[[], None], 
 
         limit = max(1, QUICK_LIMIT // 10) if quick else None
         return (lambda: r(split="100K", limit=limit, verbose=False), limit or 0)
-    raise ValueError(f"unknown benchmark: {bench_id}")
+    raise ValueError(f"unknown benchmark: {bench_id}")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
 
 # ── Run one trial ───────────────────────────────────────────────────────
@@ -313,7 +313,7 @@ def _select_mechanisms(args: argparse.Namespace) -> list[Mechanism]:
         try:
             out.append(Mechanism[name])
         except KeyError as exc:
-            raise SystemExit(f"unknown mechanism: {name}") from exc
+            raise SystemExit(f"unknown mechanism: {name}") from exc  # noqa: TRY003 — one-off message, not reused (§3.3)
     return out
 
 
@@ -335,7 +335,7 @@ def _maybe_restore(
     report = restore_snapshot(target_db_url, snapshot_path)
     if not report.success:
         msg = "; ".join(report.mismatch + report.version_drift)
-        raise RuntimeError(f"snapshot restore failed: {msg}")
+        raise RuntimeError(f"snapshot restore failed: {msg}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     os.environ["DATABASE_URL"] = target_db_url
     # Post-restore deterministic setup (playbook §8 SRP split).
     db_applied = db_setup.apply_deterministic_database(target_db_url, run_id=run_id)
@@ -410,7 +410,7 @@ def main() -> int:
     target_db = None
     if snapshot is not None:
         if not args.target_db:
-            raise SystemExit("--from-snapshot requires --target-db")
+            raise SystemExit("--from-snapshot requires --target-db")  # noqa: TRY003 — one-off message, not reused (§3.3)
         target_db = (
             args.target_db
             if "://" in args.target_db

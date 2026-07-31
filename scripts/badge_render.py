@@ -183,7 +183,7 @@ def render(spec: BadgeSpec) -> str:
     try:
         ElementTree.fromstring(svg)  # noqa: S314 — parses the string this function JUST built from its own templating (well-formedness self-check), never external/untrusted input
     except ElementTree.ParseError as error:
-        raise BadgeMarkupError(
+        raise BadgeMarkupError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"rendered badge is not well-formed XML: {error}"
         ) from error
     return svg

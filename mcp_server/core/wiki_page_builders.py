@@ -24,7 +24,7 @@ def build_adr(
 ) -> str:
     """Render an ADR page body + frontmatter."""
     if status not in ADR_STATUSES:
-        raise ValueError(f"unknown ADR status: {status}")
+        raise ValueError(f"unknown ADR status: {status}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     fm = {
         "kind": "adr",
         "number": f"{number:04d}",

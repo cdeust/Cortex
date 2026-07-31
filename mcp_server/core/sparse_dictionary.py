@@ -270,7 +270,7 @@ def encode_session(conversation: dict, dictionary: FeatureDictionary) -> Encoded
         if f.direction is None:
             # Positional alignment between atoms and result["indices"] forbids
             # skipping; a dictionary missing directions is unencodable input.
-            raise ValueError(
+            raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 f"feature {f.index} ({f.label!r}) has no direction; "
                 "dictionary cannot encode sessions"
             )

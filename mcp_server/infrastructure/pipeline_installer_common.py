@@ -37,11 +37,12 @@ def _run_quiet(
             check=False,
         )
         tail = (proc.stderr or b"").decode("utf-8", errors="replace")[-4096:]
-        return proc.returncode, tail
     except subprocess.TimeoutExpired:
         return -1, f"timeout after {timeout}s"
     except Exception as exc:  # noqa: BLE001 — subprocess wrapper contract — any spawn failure is returned as (-2, message)
         return -2, str(exc)
+    else:
+        return proc.returncode, tail
 
 
 def _rmtree_quiet(path: Path) -> None:

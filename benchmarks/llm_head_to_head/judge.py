@@ -207,7 +207,7 @@ def judge_item(
         judge_model = SINGLE_JUDGE_MODEL
     else:
         if generator_model_id not in JUDGE_FOR_GENERATOR:
-            raise ValueError(
+            raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 f"No cross-vendor judge configured for {generator_model_id!r}. "
                 "Add an entry to JUDGE_FOR_GENERATOR or use single_judge_opus."
             )

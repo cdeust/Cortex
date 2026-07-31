@@ -223,7 +223,7 @@ def validate_write_class(value: str | None) -> None:
     if value is None:
         return
     if value not in ALL_WRITE_CLASSES:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"Invalid write_class {value!r}: must be one of "
             f"{', '.join(ALL_WRITE_CLASSES)} (or omitted, which defaults "
             "to 'deliberate' via source-based fallback classification)."

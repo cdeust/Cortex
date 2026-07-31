@@ -75,7 +75,7 @@ def bundle(vectors: list[np.ndarray]) -> np.ndarray:
     Ties (sum == 0) broken by a fixed tiebreak vector seeded from dim.
     """
     if not vectors:
-        raise ValueError("bundle requires at least one vector")
+        raise ValueError("bundle requires at least one vector")  # noqa: TRY003 — one-off message, not reused (§3.3)
     if len(vectors) == 1:
         return vectors[0].copy()
 

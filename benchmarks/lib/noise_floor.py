@@ -80,7 +80,7 @@ def _restore_target(snapshot_path: Path, target_db_url: str, *, run_id: str) -> 
     report = restore_snapshot(target_db_url, snapshot_path)
     if not report.success:
         msg = "; ".join(report.mismatch + report.version_drift)
-        raise RuntimeError(f"snapshot restore failed: {msg}")
+        raise RuntimeError(f"snapshot restore failed: {msg}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     db_setup.apply_deterministic_database(target_db_url, run_id=run_id)
     db_setup.analyze_after_restore(target_db_url)
 
@@ -122,9 +122,9 @@ def measure_noise_floor(
     smallest_detectable_effect = 2*std for each metric.
     """
     if benchmark not in BENCHMARK_IDS:
-        raise ValueError(f"unknown benchmark: {benchmark}")
+        raise ValueError(f"unknown benchmark: {benchmark}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     if n_reruns < _MIN_SAMPLES_FOR_STD:
-        raise ValueError("n_reruns must be >= 2 for std to be defined")
+        raise ValueError("n_reruns must be >= 2 for std to be defined")  # noqa: TRY003 — one-off message, not reused (§3.3)
     sha = fingerprint(snapshot_path)
     samples: list[RunSample] = []
     for i in range(n_reruns):

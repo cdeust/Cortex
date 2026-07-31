@@ -109,7 +109,7 @@ async def ensure_graph(
     # would skip analyze_codebase entirely and silently project an
     # empty graph (Liskov audit Apr-2026, Dijkstra audit #6).
     if isinstance(result, dict) and result.get("status") == "error":
-        raise McpConnectionError(
+        raise McpConnectionError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"upstream analyze_codebase failed: {result.get('message', '<no message>')}"
         )
     graph_path = result.get("graph_path") or str(

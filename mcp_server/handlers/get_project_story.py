@@ -91,11 +91,12 @@ def _parse_dt(iso_str: str) -> datetime | None:
         return None
     try:
         dt = datetime.fromisoformat(iso_str)
+    except (ValueError, TypeError):
+        return None
+    else:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt
-    except (ValueError, TypeError):
-        return None
 
 
 def _period_cutoff(period: str) -> datetime:

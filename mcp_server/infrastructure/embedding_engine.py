@@ -173,10 +173,10 @@ class EmbeddingEngine(_EmbeddingLifecycleMixin, _EmbeddingMathMixin):
             return False
         try:
             import sentence_transformers  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
-
-            return True
         except ImportError:
             return False
+        else:
+            return True
 
     # ── Encoding ──────────────────────────────────────────────────────
 
@@ -193,7 +193,7 @@ class EmbeddingEngine(_EmbeddingLifecycleMixin, _EmbeddingMathMixin):
             try:
                 vec = self._model.encode(text)
             except RuntimeError:
-                logger.error("CPU encode also failed, using hash fallback")
+                logger.exception("CPU encode also failed, using hash fallback")
                 return self._fallback_encode(text)
         arr = np.asarray(vec, dtype=np.float32)
         arr = self._normalize(arr)
@@ -245,7 +245,7 @@ class EmbeddingEngine(_EmbeddingLifecycleMixin, _EmbeddingMathMixin):
             try:
                 vecs = self._model.encode(texts)
             except RuntimeError:
-                logger.error("CPU batch encode also failed, using hash fallback")
+                logger.exception("CPU batch encode also failed, using hash fallback")
                 return [self._fallback_encode(t) if t else None for t in texts]
 
         results = []

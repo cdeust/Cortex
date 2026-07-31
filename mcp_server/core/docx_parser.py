@@ -125,11 +125,11 @@ def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
     try:
         root = ET.fromstring(document_xml)  # noqa: S314 — entity-expansion/XXE closed by reject_doctype above (see document_model.py)
     except ET.ParseError as exc:
-        raise DocumentParseError(f"malformed docx XML: {exc}") from exc
+        raise DocumentParseError(f"malformed docx XML: {exc}") from exc  # noqa: TRY003 — one-off message, not reused (§3.3)
 
     body = root.find(f"{{{_W_NS}}}body")
     if body is None:
-        raise DocumentParseError("docx document.xml has no <w:body>")
+        raise DocumentParseError("docx document.xml has no <w:body>")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
     preamble = DocumentSection(heading="", level=0)
     sections: list[DocumentSection] = [preamble]

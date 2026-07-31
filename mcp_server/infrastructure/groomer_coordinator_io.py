@@ -128,9 +128,10 @@ if sys.platform == "win32":
     def _try_lock(fd: int) -> bool:
         try:
             msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-            return True
         except OSError:
             return False
+        else:
+            return True
 
     def _unlock(fd: int) -> None:
         try:
@@ -144,9 +145,10 @@ else:
     def _try_lock(fd: int) -> bool:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return True
         except (BlockingIOError, OSError):
             return False
+        else:
+            return True
 
     def _unlock(fd: int) -> None:
         try:

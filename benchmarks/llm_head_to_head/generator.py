@@ -99,7 +99,7 @@ def estimate_cost_usd(model_id: str, input_tokens: int, output_tokens: int) -> f
     post: returns float ≥ 0.
     """
     if model_id not in PRICING_USD_PER_M_TOKEN:
-        raise KeyError(
+        raise KeyError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"Unknown model {model_id!r} for cost estimation. Update "
             "PRICING_USD_PER_M_TOKEN with a verified source citation per §7."
         )
@@ -116,12 +116,12 @@ def _require_env_var(model_id: str) -> str:
     post: returns a non-empty key string (never logged anywhere).
     """
     if model_id not in VENDOR_BY_MODEL:
-        raise GeneratorError(f"Unknown model pin: {model_id!r}")
+        raise GeneratorError(f"Unknown model pin: {model_id!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     vendor = VENDOR_BY_MODEL[model_id]
     var_name = REQUIRED_ENV_VAR[vendor]
     key = os.environ.get(var_name, "")
     if not key:
-        raise GeneratorError(
+        raise GeneratorError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"Missing API key: env var {var_name} is required for model "
             f"{model_id!r} (vendor: {vendor})."
         )
@@ -193,7 +193,7 @@ def call_generator(
                 return _call_openai(
                     model_id, prompt, max_output_tokens, temperature, retries
                 )
-            raise GeneratorError(f"Unsupported vendor: {vendor}")
+            raise GeneratorError(f"Unsupported vendor: {vendor}")  # noqa: TRY003 — one-off message, not reused (§3.3)
         except _RetryableError as e:
             last_error = e
             if attempt >= MAX_RETRIES:
@@ -211,7 +211,7 @@ def call_generator(
         # Non-retryable errors propagate — unknown failure modes must NOT
         # be silently retried (protocol §11.7 — every retry logged).
 
-    raise GeneratorError(
+    raise GeneratorError(  # noqa: TRY003 — one-off message, not reused (§3.3)
         f"Exhausted {MAX_RETRIES} retries for {model_id}: "
         f"last error {type(last_error).__name__}: {last_error!r}"
     )
@@ -237,6 +237,19 @@ def _heuristic_word_tokens(text: str) -> int:
     return int(len(text.split()) * 1.33) + 1
 
 
+def _missing_sdk_message(vendor: str, pip_package: str) -> str:
+    """Shared message for an optional LLM vendor SDK's ImportError.
+
+    Extract Function (TRY003, issue #239): the 3 vendor call sites below
+    shared this exact "<vendor> SDK not installed..." template, differing
+    only in the vendor name and the pip package to install.
+    """
+    return (
+        f"{vendor} SDK not installed. `uv pip install {pip_package}` before "
+        "running the harness with API spend."
+    )
+
+
 def _call_anthropic(
     model_id: str,
     prompt: str,
@@ -247,10 +260,7 @@ def _call_anthropic(
     try:
         import anthropic  # type: ignore[import-not-found]  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError as e:
-        raise GeneratorError(
-            "anthropic SDK not installed. `uv pip install anthropic` before "
-            "running the harness with API spend."
-        ) from e
+        raise GeneratorError(_missing_sdk_message("anthropic", "anthropic")) from e
 
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
     try:
@@ -286,8 +296,7 @@ def _call_google(
         from google import genai  # type: ignore[import-not-found]  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError as e:
         raise GeneratorError(
-            "google-genai SDK not installed. `uv pip install google-genai` "
-            "before running the harness with API spend."
+            _missing_sdk_message("google-genai", "google-genai")
         ) from e
 
     client = genai.Client()  # reads GOOGLE_API_KEY / GEMINI_API_KEY
@@ -335,10 +344,7 @@ def _call_openai(
     try:
         from openai import OpenAI  # type: ignore[import-not-found]  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError as e:
-        raise GeneratorError(
-            "openai SDK not installed. `uv pip install openai` before running "
-            "the harness with API spend."
-        ) from e
+        raise GeneratorError(_missing_sdk_message("openai", "openai")) from e
 
     client = OpenAI()  # reads OPENAI_API_KEY
     try:

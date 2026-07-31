@@ -78,7 +78,7 @@ def harness_consume(harness: "Harness") -> Callable[[bytes], None]:
     # issue #282's mutation-testing sweep rather than chased with a contrived
     # test that fakes an unsupported loader.
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"{module_path}: not importable")
+        raise RuntimeError(f"{module_path}: not importable")  # noqa: TRY003 — one-off message, not reused (§3.3)
     module = importlib.util.module_from_spec(spec)
     # Registered before exec: @dataclass (and typing constructs
     # generally) resolve annotations via sys.modules[cls.__module__],
@@ -87,7 +87,7 @@ def harness_consume(harness: "Harness") -> Callable[[bytes], None]:
     spec.loader.exec_module(module)
     consume = getattr(module, "consume", None)
     if consume is None:
-        raise RuntimeError(
+        raise RuntimeError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"{module_path}: no consume(data: bytes) —"
             " every harness must expose one so its property is runnable"
             " without atheris"
@@ -126,7 +126,7 @@ def replay(harness: Harness) -> int:
         try:
             consume(data)
         except Exception as error:
-            raise AssertionError(
+            raise AssertionError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 f"{harness.name} failed on committed corpus input {path.name}:"
                 f" {type(error).__name__}: {error}"
             ) from error

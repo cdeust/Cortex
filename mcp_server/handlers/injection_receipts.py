@@ -79,7 +79,7 @@ def _build_items(memories: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _check_channel(channel: str) -> None:
     """Reject unknown channels loudly — a wrong channel is a coding bug."""
     if channel not in INJECTION_CHANNELS:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"unknown injection channel {channel!r}; "
             f"expected one of {sorted(INJECTION_CHANNELS)}"
         )

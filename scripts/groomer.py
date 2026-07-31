@@ -182,7 +182,7 @@ async def _run(
         return result
 
     if os.environ.get("CORTEX_HEADLESS_AUTHORING") != "1":
-        raise SystemExit(
+        raise SystemExit(  # noqa: TRY003 — one-off message, not reused (§3.3)
             "--apply requires CORTEX_HEADLESS_AUTHORING=1 explicitly set "
             "in the environment (matches wiki_maintenance's existing "
             "opt-in gate). Refusing to write without it."

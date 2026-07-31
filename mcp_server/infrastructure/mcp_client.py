@@ -2,6 +2,16 @@
 JSON-RPC 2.0 handshake, calls tools.
 
 Implements MCP 2025-11-25 handshake with version negotiation.
+
+TRY003 (issue #239): every ``raise McpConnectionError(...)`` below names a
+distinct, one-off connection failure (handshake timeout, disallowed
+command, connect timeout, spawn failure, not-connected, call timeout) —
+never reused, so a dedicated subclass per site would be premature
+abstraction (§3.3). ``McpConnectionError`` already carries a structured
+``details`` dict alongside the message (see ``mcp_server.errors``); the
+message is the human-readable summary, the dict is the machine-readable
+payload — there is no further consolidation available. Marked with a bare
+`# noqa: TRY003` at each site rather than repeating this paragraph.
 """
 
 from __future__ import annotations
@@ -93,7 +103,7 @@ class MCPClient:
             )
         except asyncio.TimeoutError as exc:
             self.close()
-            raise McpConnectionError(
+            raise McpConnectionError(  # noqa: TRY003
                 f"Handshake timed out after {self._connect_timeout_ms}ms",
                 {"command": self._config.get("command")},
             ) from exc
@@ -141,7 +151,7 @@ class MCPClient:
         allowed = self._ALLOWED_COMMANDS | self._extra_allowed_commands
         base_cmd = raw_command.split("/")[-1] if "/" in raw_command else raw_command
         if base_cmd not in allowed:
-            raise McpConnectionError(
+            raise McpConnectionError(  # noqa: TRY003
                 f"Command '{raw_command}' not in allowed list: {sorted(allowed)}"
             )
         # Resolve to full path via shutil.which to avoid PATH manipulation
@@ -162,12 +172,12 @@ class MCPClient:
                 timeout=self._connect_timeout_ms / 1000,
             )
         except asyncio.TimeoutError as exc:
-            raise McpConnectionError(
+            raise McpConnectionError(  # noqa: TRY003
                 f"Connect timeout after {self._connect_timeout_ms}ms",
                 {"command": command, "args": args},
             ) from exc
         except Exception as e:
-            raise McpConnectionError(
+            raise McpConnectionError(  # noqa: TRY003
                 f"Failed to spawn: {e}",
                 {"command": command, "args": args},
             ) from e
@@ -202,7 +212,7 @@ class MCPClient:
 
         except Exception as e:
             self.close()
-            raise McpConnectionError(
+            raise McpConnectionError(  # noqa: TRY003
                 f"Handshake failed: {e}",
                 {"command": command},
             ) from e
@@ -210,7 +220,7 @@ class MCPClient:
     async def call(self, name: str, args: dict | None = None) -> Any:
         """Call a tool on the remote MCP server."""
         if not self._connected:
-            raise McpConnectionError("Not connected — call connect() first")
+            raise McpConnectionError("Not connected — call connect() first")  # noqa: TRY003
 
         self.tool_calls += 1
         self._touch_activity()
@@ -369,7 +379,7 @@ class MCPClient:
         except asyncio.TimeoutError as exc:
             self._pending.pop(req_id, None)
             elapsed = loop.time() - start
-            raise McpConnectionError(
+            raise McpConnectionError(  # noqa: TRY003
                 f"MCP call '{method}' to '{self._config.get('command')}' "
                 f"timed out after {elapsed:.1f}s "
                 f"(limit {effective_timeout:.0f}s). The upstream child did "

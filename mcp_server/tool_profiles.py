@@ -91,7 +91,7 @@ def parse(value: str) -> ToolProfile:
     try:
         return ToolProfile(value)
     except ValueError:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"invalid profile {value!r}: expected 'full' or 'lean'"
         ) from None
 
@@ -132,7 +132,7 @@ def _flag_value(argv: list[str]) -> str | None:
         arg = argv[i]
         if arg == PROFILE_FLAG:
             if i + 1 >= len(argv):
-                raise ValueError(f"{PROFILE_FLAG} requires a value: 'full' or 'lean'")
+                raise ValueError(f"{PROFILE_FLAG} requires a value: 'full' or 'lean'")  # noqa: TRY003 — one-off message, not reused (§3.3)
             found = argv[i + 1]
             next(it, None)  # consume the value
         elif arg.startswith(PROFILE_FLAG + "="):

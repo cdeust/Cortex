@@ -47,12 +47,26 @@ def _ensure_torch():
         return _torch
     try:
         import torch  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-
-        _torch = torch
-        return torch
     except ImportError:
         logger.warning("PyTorch not available — Titans memory disabled")
         return None
+    else:
+        _torch = torch
+        return torch
+
+
+def _require_grad(grad_tensor):
+    """Raise if ``backward()`` left no gradient on the leaf tensor.
+
+    Extracted (TRY301, issue #239) from ``TitansMemory.update``'s ``try``
+    block, where the raise was caught by that same block's
+    ``except Exception`` — abstracting it here removes the redundant
+    same-try raise/catch without changing which exception propagates or
+    what its message says.
+    """
+    if grad_tensor is None:
+        raise RuntimeError("titans surprise: gradient missing after backward()")  # noqa: TRY003 — one-off message, not reused (§3.3)
+    return grad_tensor
 
 
 class TitansMemory:
@@ -196,10 +210,7 @@ class TitansMemory:
             loss.backward()
             # backward() populates .grad on a leaf requiring grad; a None here
             # means the autograd graph was broken — surface it, don't deref None.
-            grad_tensor = M.grad
-            if grad_tensor is None:
-                raise RuntimeError("titans surprise: gradient missing after backward()")
-            grad = grad_tensor.detach()
+            grad = _require_grad(M.grad).detach()
 
             # Surprise momentum update: S_t = eta * S_{t-1} - theta * grad
             self._S = self.eta * self._S - self.theta * grad

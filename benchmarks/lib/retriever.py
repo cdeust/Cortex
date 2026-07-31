@@ -190,12 +190,13 @@ class BenchmarkRetriever:
                 ce = score_map.get(i, 0.0)
                 reranked.append((doc_id, (1 - alpha) * wrrf_score + alpha * ce))
             reranked.sort(key=lambda x: x[1], reverse=True)
-            return reranked
         except Exception:  # noqa: BLE001 — bench retriever is fail-soft; failure is logged, first-stage order kept
             logger.debug(
                 "FlashRank rerank failed; keeping first-stage order", exc_info=True
             )
             return candidates
+        else:
+            return reranked
 
     # ── Main retrieve ────────────────────────────────────────────────
 

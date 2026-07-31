@@ -238,10 +238,11 @@ def apply_neuromodulation(
         composite = coupled_nm.compute_composite_modulation(nm_state)
         heat = min(1.0, max(0.0, heat * composite["heat_modulation"]))
         importance = min(1.0, max(0.0, importance * composite["importance_modulation"]))
-        return heat, importance, composite
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_gate.neuromodulation")
         silent_failure.note("write_gate.neuromodulation", exc)
         return heat, importance, None
+    else:
+        return heat, importance, composite
 
 
 def apply_emotional_tagging(
@@ -257,10 +258,11 @@ def apply_emotional_tagging(
             importance = min(1.0, importance * tag["importance_boost"])
             heat = min(1.0, heat * tag.get("decay_resistance", 1.0))
             valence = tag["valence"]
-        return importance, heat, valence, tag
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_gate.emotional_tagging")
         silent_failure.note("write_gate.emotional_tagging", exc)
         return importance, heat, valence, None
+    else:
+        return importance, heat, valence, tag
 
 
 def _collect_existing_embeddings(

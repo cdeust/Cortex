@@ -68,10 +68,10 @@ def _has_sentence_transformers() -> bool:
     """Check if sentence-transformers is importable."""
     try:
         import sentence_transformers  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
-
-        return True
     except ImportError:
         return False
+    else:
+        return True
 
 
 def _short(text: str, max_len: int = 120) -> str:
@@ -103,9 +103,10 @@ def _try_setup_db() -> dict | None:
         )
         if r.stdout.strip():
             return json.loads(r.stdout.strip())
-        return None
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"setup_db failed: {exc}")
+        return None
+    else:
         return None
 
 
@@ -385,10 +386,11 @@ def _fetch_grooming_staleness(conn) -> list[str]:
             last_iso = ts.isoformat() if ts else None
             if is_stale(last_iso):
                 stale.append(kind)
-        return stale
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"grooming-staleness fetch failed (non-fatal): {exc}")
         return []
+    else:
+        return stale
 
 
 def _parse_json_list(val) -> list:
@@ -527,10 +529,11 @@ def _auto_backfill() -> int:
         imported = result.get("backfilled", 0)
         cascade_advanced = result.get("cascade_advanced", 0)
         _log(f"Auto-backfill: {imported} imported, {cascade_advanced} cascaded")
-        return imported
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"Auto-backfill failed (non-fatal): {exc}")
         return 0
+    else:
+        return imported
 
 
 # ── Context building ─────────────────────────────────────────────────────

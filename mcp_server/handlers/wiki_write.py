@@ -229,7 +229,6 @@ def _sync_page_and_cite(rel_path: str, content: str, memory_ids: list[int]) -> i
             if new_id is not None:
                 written += 1
         conn.commit()
-        return written
     except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug(
             "wiki_write page-sync/citation side-effect failed for %s",
@@ -237,6 +236,8 @@ def _sync_page_and_cite(rel_path: str, content: str, memory_ids: list[int]) -> i
             exc_info=True,
         )
         return 0
+    else:
+        return written
 
 
 async def write_governed_page(

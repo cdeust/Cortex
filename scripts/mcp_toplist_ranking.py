@@ -24,6 +24,15 @@ Two extraction paths, tried in order by `resolve_ranking`:
 Both paths feed `validate`. A figure that fails validation is never
 trusted: the caller (main, in the sibling module) leaves the badge
 untouched rather than publish a wrong claim.
+
+TRY003 (issue #239): every `raise UpstreamError`/`raise ValueError` below
+names a distinct, one-off way the EXTERNAL source (leaderboard.json, the
+server page's HTML, or the network fetch itself) can be malformed or
+unreachable — never reused across sites, so promoting each into its own
+exception subclass would be premature abstraction (coding-standards.md
+§3.3) for zero benefit: `UpstreamError` already IS the shared exception
+type; only the one-off diagnostic text differs per site. Marked with a
+bare `# noqa: TRY003` at each site rather than repeating this paragraph.
 """
 
 from __future__ import annotations
@@ -107,15 +116,15 @@ def validate(rank: object, total: object, source: str) -> Ranking:
         rank_i = int(str(rank).replace(",", "").strip())
         total_i = int(str(total).replace(",", "").strip())
     except (TypeError, ValueError) as exc:
-        raise UpstreamError(
+        raise UpstreamError(  # noqa: TRY003
             f"{source}: non-numeric rank/total: {rank!r}/{total!r}"
         ) from exc
     if rank_i < 1:
-        raise UpstreamError(f"{source}: rank {rank_i} is not a positive position")
+        raise UpstreamError(f"{source}: rank {rank_i} is not a positive position")  # noqa: TRY003
     if total_i < 1:
-        raise UpstreamError(f"{source}: total {total_i} is not a positive field size")
+        raise UpstreamError(f"{source}: total {total_i} is not a positive field size")  # noqa: TRY003
     if rank_i > total_i:
-        raise UpstreamError(f"{source}: rank {rank_i} exceeds field size {total_i}")
+        raise UpstreamError(f"{source}: rank {rank_i} exceeds field size {total_i}")  # noqa: TRY003
     return Ranking(rank=rank_i, total=total_i, source=source)
 
 
@@ -155,16 +164,16 @@ def parse_leaderboard(payload: bytes, server_id: str = SERVER_ID) -> Ranking:
         # generate_repo_badges.py's own utf-8 read.
         doc = json.loads(payload.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise UpstreamError(f"leaderboard.json: not valid JSON: {exc}") from exc
+        raise UpstreamError(f"leaderboard.json: not valid JSON: {exc}") from exc  # noqa: TRY003
 
     entries = doc.get("servers") if isinstance(doc, dict) else doc
     if not isinstance(entries, list) or not entries:
-        raise UpstreamError("leaderboard.json: no server list in document")
+        raise UpstreamError("leaderboard.json: no server list in document")  # noqa: TRY003
     total = _leaderboard_total(doc, entries)
 
     entry = _find_leaderboard_entry(entries, server_id)
     if entry is None:
-        raise UpstreamError(
+        raise UpstreamError(  # noqa: TRY003
             f"leaderboard.json: {server_id} not present in {len(entries)} entries"
         )
     rank = next(
@@ -172,7 +181,7 @@ def parse_leaderboard(payload: bytes, server_id: str = SERVER_ID) -> Ranking:
         None,
     )
     if rank is None:
-        raise UpstreamError(f"leaderboard.json: entry for {server_id} carries no rank")
+        raise UpstreamError(f"leaderboard.json: entry for {server_id} carries no rank")  # noqa: TRY003
     return validate(rank, total, "leaderboard.json")
 
 
@@ -180,7 +189,7 @@ def parse_server_page(html: str) -> Ranking:
     """Extract our figure from the rendered server page."""
     match = _PROSE_ANCHOR.search(html)
     if match is None:
-        raise UpstreamError(
+        raise UpstreamError(  # noqa: TRY003
             "server page: the 'ranks #N of M servers tracked' sentence is absent "
             "— the page was reworded and this parser needs updating"
         )
@@ -206,9 +215,9 @@ def fetch(  # noqa: S310 — every production caller (resolve_ranking) passes on
         with opener(request, timeout=TIMEOUT_S) as response:
             return response.read()
     except urllib.error.HTTPError as exc:
-        raise UpstreamError(f"{url}: HTTP {exc.code}") from exc
+        raise UpstreamError(f"{url}: HTTP {exc.code}") from exc  # noqa: TRY003
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise UpstreamError(f"{url}: unreachable: {exc}") from exc
+        raise UpstreamError(f"{url}: unreachable: {exc}") from exc  # noqa: TRY003
 
 
 def resolve_ranking(

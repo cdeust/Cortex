@@ -64,6 +64,11 @@ class WikiMissingError(Exception):
     """Raised when ``append`` mode targets a missing file."""
 
 
+# TRY003 (issue #239): every raise in _safe_join below names a distinct,
+# one-off sanitizer-rejection reason (§3.3 — no reuse to consolidate);
+# this function is ALREADY the single canonical implementation (see its
+# own docstring below: "no cross-function taint gap"), so there is no
+# further Extract-Function step available. Per-site noqa on each.
 def _safe_join(root: Path, rel_path: str) -> Path:
     """Resolve ``rel_path`` against ``root`` with inline CWE-22 sanitization.
 
@@ -81,9 +86,9 @@ def _safe_join(root: Path, rel_path: str) -> Path:
     """
 
     if not rel_path or "\x00" in rel_path:
-        raise ValueError("invalid wiki path: empty or contains null byte")
+        raise ValueError("invalid wiki path: empty or contains null byte")  # noqa: TRY003
     if Path(rel_path).is_absolute():
-        raise ValueError(f"absolute paths are not allowed: {rel_path!r}")
+        raise ValueError(f"absolute paths are not allowed: {rel_path!r}")  # noqa: TRY003
 
     root_resolved = os.path.realpath(str(root))
     candidate = os.path.realpath(os.path.join(root_resolved, rel_path))  # noqa: PTH118 — os.path.join+os.path.realpath shape must match read_page/write_page's CodeQL py/path-injection sanitizer construction verbatim
@@ -95,9 +100,9 @@ def _safe_join(root: Path, rel_path: str) -> Path:
         common = os.path.commonpath([root_resolved, candidate])
     except ValueError as exc:
         # Different drives on Windows, etc.
-        raise ValueError(f"path escapes wiki root: {rel_path!r}") from exc
+        raise ValueError(f"path escapes wiki root: {rel_path!r}") from exc  # noqa: TRY003
     if common != root_resolved:
-        raise ValueError(f"path escapes wiki root: {rel_path!r}")
+        raise ValueError(f"path escapes wiki root: {rel_path!r}")  # noqa: TRY003
     return Path(candidate)
 
 
@@ -172,18 +177,24 @@ def write_page(
     """
 
     # CWE-22 sanitization matching CodeQL's py/path-injection example
-    # VERBATIM (see read_page for references).
+    # VERBATIM (see read_page for references). TRY003 (issue #239): this
+    # block is deliberately NOT extracted into a shared helper (unlike
+    # _safe_join above) — it must stay inline, matching CodeQL's example
+    # structure at THIS call site, per this file's own module docstring
+    # and read_page's identical comment. Each raise names a distinct
+    # sanitizer-rejection reason (§3.3 — no reuse to consolidate even if
+    # extraction were safe here).
     if not rel_path or "\x00" in rel_path:
-        raise ValueError("invalid wiki path: empty or contains null byte")
+        raise ValueError("invalid wiki path: empty or contains null byte")  # noqa: TRY003
     if Path(rel_path).is_absolute():
-        raise ValueError(f"absolute paths are not allowed: {rel_path!r}")
+        raise ValueError(f"absolute paths are not allowed: {rel_path!r}")  # noqa: TRY003
     base_path = os.path.realpath(str(Path(root)))
     fullpath = os.path.realpath(os.path.join(base_path, rel_path))  # noqa: PTH118 — os.path.join+os.path.realpath must match CodeQL's py/path-injection example verbatim (see read_page)
     if not fullpath.startswith(base_path):
-        raise ValueError(f"path escapes wiki root: {rel_path!r}")
+        raise ValueError(f"path escapes wiki root: {rel_path!r}")  # noqa: TRY003
     # Defence-in-depth against prefix-aliasing.
     if fullpath != base_path and not fullpath[len(base_path) :].startswith(os.sep):
-        raise ValueError(f"path escapes wiki root: {rel_path!r}")
+        raise ValueError(f"path escapes wiki root: {rel_path!r}")  # noqa: TRY003
 
     if mode != "append":
         content = normalize_frontmatter(content)
@@ -209,7 +220,7 @@ def write_page(
             merged += "\n"
         written = _atomic_write_bytes_str(fullpath, merged)
     else:
-        raise ValueError(f"unknown write mode: {mode}")
+        raise ValueError(f"unknown write mode: {mode}")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
     return WriteResult(
         path=rel_path, mode=mode, created=not existed, bytes_written=written

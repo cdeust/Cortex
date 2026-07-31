@@ -31,10 +31,11 @@ def run_two_stage_transfer(store: MemoryStore) -> dict:
         transferred = _transfer_eligible(store, eligible)
         metrics = two_stage_model.compute_transfer_metrics(eligible)
         metrics["transferred_this_cycle"] = transferred
-        return metrics
     except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Two-stage transfer failed (non-fatal)")
         return {"transferred_this_cycle": 0}
+    else:
+        return metrics
 
 
 def _collect_eligible(store: MemoryStore) -> list[dict]:

@@ -153,7 +153,7 @@ def load_items(split: str = "10M", strict: bool = True) -> list[BeamItem]:
     """
     items = list(iter_items(split))
     if strict and split == "10M" and len(items) != EXPECTED_ITEM_COUNT:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"BEAM-10M item count mismatch: expected {EXPECTED_ITEM_COUNT} "
             f"per protocol §5 (Tavakoli et al. 2026), got {len(items)}. "
             "Universe drift requires a protocol addendum, not a silent run."

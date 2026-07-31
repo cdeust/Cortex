@@ -107,7 +107,7 @@ def build_context(
         )
     if condition == "B":
         if db_for_rag is None:
-            raise ValueError(
+            raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 "Condition B (standard RAG) requires a BenchmarkDB instance "
                 "for the per-conversation ephemeral PG store."
             )
@@ -146,7 +146,7 @@ def build_context(
                 "n_requested": len(item.source_chat_ids),
             },
         )
-    raise ValueError(f"Unknown condition: {condition!r}")
+    raise ValueError(f"Unknown condition: {condition!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
 
 def render_answer_prompt(template: str, context_text: str, question: str) -> str:

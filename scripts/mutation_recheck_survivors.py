@@ -131,7 +131,7 @@ def recheck_all_survivors(
     tests).
     """
     if survivors and not full_test_selection:
-        raise ValueError("full_test_selection must be non-empty to recheck survivors")
+        raise ValueError("full_test_selection must be non-empty to recheck survivors")  # noqa: TRY003 — one-off message, not reused (§3.3)
     return [
         recheck_survivor(
             name,

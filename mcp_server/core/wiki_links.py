@@ -112,7 +112,7 @@ def apply_link(body: str, entry: LinkEntry) -> str:
     the Related block, which is regenerated sorted.
     """
     if entry.relation not in RELATIONS:
-        raise ValueError(f"unknown relation: {entry.relation}")
+        raise ValueError(f"unknown relation: {entry.relation}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     base, existing = _split_body_and_related(body)
     merged: list[LinkEntry] = list(existing)
     if entry not in merged:

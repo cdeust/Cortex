@@ -3,6 +3,17 @@
 Lightweight schema validation: define expected types and required fields per
 tool, validate before handler execution, throw ValidationError on failure.
 Unknown tool names pass through (no schema = no validation).
+
+TRY003 (issue #239): every ``raise ValidationError(...)`` below names a
+distinct, one-off validation failure (maxItems exceeded, item type
+mismatch, missing required field, ...) — never reused (§3.3), and each
+already carries a structured details dict (``{"tool": ..., "field": ...}``)
+alongside the message: the string is the human-readable summary, the dict
+is the machine-readable payload a caller can act on programmatically.
+Consolidating these into ``ValidationError`` factory methods would not
+remove duplication (each message is genuinely different) — it would only
+separate the message from the one check it describes. Marked with a bare
+`# noqa: TRY003` at each site rather than repeating this paragraph.
 """
 
 from __future__ import annotations
@@ -213,7 +224,7 @@ def _check_array_envelope(
     """
     max_items = spec.get("maxItems")
     if max_items is not None and len(value) > max_items:
-        raise ValidationError(
+        raise ValidationError(  # noqa: TRY003
             f'Field "{field}" exceeds maxItems ({len(value)} > {max_items})',
             {"tool": tool_name, "field": field, "maxItems": max_items},
         )
@@ -229,7 +240,7 @@ def _check_array_envelope(
     for i, item in enumerate(value):
         if expected_item_type is not None and not isinstance(item, expected_item_type):
             got = type(item).__name__
-            raise ValidationError(
+            raise ValidationError(  # noqa: TRY003
                 f'Field "{field}[{i}]" must be a {item_type_name}, got {got}',
                 {
                     "tool": tool_name,
@@ -244,7 +255,7 @@ def _check_array_envelope(
             and isinstance(item, str)
             and len(item) > item_max_len
         ):
-            raise ValidationError(
+            raise ValidationError(  # noqa: TRY003
                 f'Field "{field}[{i}]" exceeds maximum length '
                 f"({len(item)} > {item_max_len})",
                 {
@@ -266,19 +277,19 @@ def _check_field_type(
 
     # In Python, bool is a subclass of int — reject bools for number type
     if spec["type"] == "number" and isinstance(value, bool):
-        raise ValidationError(
+        raise ValidationError(  # noqa: TRY003
             f'Field "{field}" must be a number, got bool',
             {"tool": tool_name, "field": field, "expected": "number", "got": "bool"},
         )
     if not isinstance(value, expected_type):
         got = type(value).__name__
-        raise ValidationError(
+        raise ValidationError(  # noqa: TRY003
             f'Field "{field}" must be a {spec["type"]}, got {got}',
             {"tool": tool_name, "field": field, "expected": spec["type"], "got": got},
         )
     max_len = spec.get("maxLength")
     if max_len is not None and isinstance(value, str) and len(value) > max_len:
-        raise ValidationError(
+        raise ValidationError(  # noqa: TRY003
             f'Field "{field}" exceeds maximum length ({len(value)} > {max_len})',
             {"tool": tool_name, "field": field, "maxLength": max_len},
         )
@@ -302,7 +313,7 @@ def validate_tool_args(tool_name: str, args: dict[str, Any] | None) -> dict[str,
 
     for field in schema["required"]:
         if safe_args.get(field) is None:
-            raise ValidationError(
+            raise ValidationError(  # noqa: TRY003
                 f"Missing required field: {field}",
                 {"tool": tool_name, "field": field},
             )

@@ -327,10 +327,10 @@ def _sqlite_checks() -> list[tuple[str, bool]]:
     """
     try:
         import sqlite3  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
-
-        return [("sqlite3 stdlib", True)]
     except ImportError:
         return [("sqlite3 stdlib", False)]
+    else:
+        return [("sqlite3 stdlib", True)]
 
 
 def _postgres_checks() -> list[tuple[str, bool]]:

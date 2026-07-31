@@ -70,11 +70,11 @@ class Redirect:
 
     def __post_init__(self) -> None:
         if not self.target_path and not self.target_id:
-            raise ValueError(
+            raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 "Redirect requires at least one of target_path or target_id"
             )
         if self.target_id is not None and not is_valid_page_id(self.target_id):
-            raise ValueError(f"invalid redirect_id: {self.target_id!r}; expected UUID4")
+            raise ValueError(f"invalid redirect_id: {self.target_id!r}; expected UUID4")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
 
 def redirect_is_id_based(redirect: "Redirect") -> bool:
@@ -219,14 +219,14 @@ def build_redirect_stub(
     for writing it to disk.
     """
     if not target_path and not target_id:
-        raise ValueError("build_redirect_stub requires target_path or target_id")
+        raise ValueError("build_redirect_stub requires target_path or target_id")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
     lines: list[str] = ["---"]
     if target_path:
         lines.append(f"redirect_to: {target_path}")
     if target_id is not None:
         if not is_valid_page_id(target_id):
-            raise ValueError(f"invalid target_id: {target_id!r}")
+            raise ValueError(f"invalid target_id: {target_id!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
         lines.append(f"redirect_id: {target_id}")
     if reason:
         lines.append(f"redirect_reason: {reason}")

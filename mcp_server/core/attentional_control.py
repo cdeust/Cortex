@@ -183,7 +183,7 @@ def allocate_attention(
 
     if precomputed_scores is not None:
         if len(precomputed_scores) != n:
-            raise ValueError("precomputed_scores length must match items")
+            raise ValueError("precomputed_scores length must match items")  # noqa: TRY003 — one-off message, not reused (§3.3)
         top_down = list(precomputed_scores)
     else:
         top_down = [relevance_score(query, it.get("content", "")) for it in items]

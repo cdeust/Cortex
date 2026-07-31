@@ -84,7 +84,7 @@ def elect_survivor(members: list[DuplicateMember]) -> ElectionResult:
                     recoverable runtime condition.
     """
     if len(members) < _MIN_GROUP_SIZE:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"elect_survivor requires a group of >= 2 duplicate rows, "
             f"got {len(members)}"
         )

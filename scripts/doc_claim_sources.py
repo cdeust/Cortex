@@ -12,6 +12,11 @@ than importing a module-level `read` — check_doc_claims.py keeps a thin
 wrapper of the same name that passes ITS OWN (test-patchable) `read`
 through, so `gate.read = fake` in tests_py/scripts/test_check_doc_claims.py
 still reaches these bodies exactly as it did before the split.
+
+TRY003 (issue #239): every ``raise ClaimError(...)`` below names a
+distinct, one-off doc-claim mismatch (a specific pattern absent, or two
+specific counts disagreeing) — never reused (§3.3). Marked with a bare
+`# noqa: TRY003` at each site rather than repeating this paragraph.
 """
 
 from __future__ import annotations
@@ -45,18 +50,18 @@ def canonical_tool_counts(read_fn: ReadFn) -> tuple[int, int]:
         header,
     )
     if not match:
-        raise ClaimError("docs/mcp-tools.md: standalone/total tool sentence not found")
+        raise ClaimError("docs/mcp-tools.md: standalone/total tool sentence not found")  # noqa: TRY003
     standalone, extra, total = (int(g) for g in match.groups())
     if standalone + extra != total:
-        raise ClaimError(f"docs/mcp-tools.md: {standalone} + {extra} != {total}")
+        raise ClaimError(f"docs/mcp-tools.md: {standalone} + {extra} != {total}")  # noqa: TRY003
 
     pinned = re.search(
         r"test_standalone_baseline_is_(\d+)_tools", read_fn("tests_py/test_main.py")
     )
     if not pinned:
-        raise ClaimError("tests_py/test_main.py: pinned tool-count test not found")
+        raise ClaimError("tests_py/test_main.py: pinned tool-count test not found")  # noqa: TRY003
     if int(pinned.group(1)) != standalone:
-        raise ClaimError(
+        raise ClaimError(  # noqa: TRY003
             f"docs/mcp-tools.md says {standalone} standalone tools, but the pinned "
             f"registry test says {pinned.group(1)}"
         )
@@ -67,7 +72,7 @@ def canonical_reference_count(read_fn: ReadFn) -> int:
     """Entries counted in the bibliography, which declares itself canonical."""
     body = read_fn("docs/papers/bibliography.md").split("## References", 1)
     if len(body) != _MARKER_SPLIT_PARTS:
-        raise ClaimError(
+        raise ClaimError(  # noqa: TRY003
             "docs/papers/bibliography.md: '## References' section not found"
         )
     entries = [
@@ -76,7 +81,7 @@ def canonical_reference_count(read_fn: ReadFn) -> int:
         if line.strip() and not line.startswith(("#", "---"))
     ]
     if not entries:
-        raise ClaimError("docs/papers/bibliography.md: no reference entries found")
+        raise ClaimError("docs/papers/bibliography.md: no reference entries found")  # noqa: TRY003
     return len(entries)
 
 
@@ -94,7 +99,7 @@ def canonical_mechanism_count(read_fn: ReadFn) -> int:
     )
     match = pattern.search(read_fn("docs/papers/bibliography.md"))
     if not match:
-        raise ClaimError("docs/papers/bibliography.md: no mechanism count declared")
+        raise ClaimError("docs/papers/bibliography.md: no mechanism count declared")  # noqa: TRY003
     return int(match.group(1))
 
 
@@ -103,5 +108,5 @@ def canonical_version(read_fn: ReadFn) -> str:
         r'^version\s*=\s*"([^"]+)"', read_fn("pyproject.toml"), re.MULTILINE
     )
     if not match:
-        raise ClaimError("pyproject.toml: [project].version not found")
+        raise ClaimError("pyproject.toml: [project].version not found")  # noqa: TRY003
     return match.group(1)

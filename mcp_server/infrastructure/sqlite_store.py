@@ -422,7 +422,7 @@ class SqliteMemoryStore(
         if memory_id is None:
             # An INSERT always assigns a rowid; None means the statement did
             # not execute as an INSERT — a broken contract, not a data state.
-            raise sqlite3.ProgrammingError("memory INSERT produced no lastrowid")
+            raise sqlite3.ProgrammingError("memory INSERT produced no lastrowid")  # noqa: TRY003 — one-off message, not reused (§3.3)
         self._conn.execute(
             "INSERT INTO memories_fts(rowid, content) VALUES (?, ?)",
             (memory_id, _fts_augment(content)),

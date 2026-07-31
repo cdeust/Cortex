@@ -239,7 +239,12 @@ class TestToolErrorHandler:
         from mcp_server.tool_error_handler import safe_handler
 
         async def failing_handler(args):
-            raise Exception('type "vector" does not exist')
+            # Deliberately generic (TRY002): tool_error_handler.safe_handler's
+            # classifier (_classify_error) pattern-matches by exception MESSAGE
+            # content only, through a last-resort `except Exception` boundary —
+            # a specific exception type here would misleadingly imply
+            # type-based dispatch that the code under test does not do.
+            raise Exception('type "vector" does not exist')  # noqa: TRY002
 
         with pytest.raises(ToolError) as exc_info:
             await safe_handler(failing_handler, {})

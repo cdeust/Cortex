@@ -63,7 +63,7 @@ def _domain_path(domain_id: str) -> Path:
     defensively.
     """
     if "/" in domain_id or ".." in domain_id or "\x00" in domain_id:
-        raise ValueError(f"unsafe domain_id: {domain_id!r}")
+        raise ValueError(f"unsafe domain_id: {domain_id!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     return DOMAINS_DIR / f"{domain_id}.json"
 
 

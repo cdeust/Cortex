@@ -113,7 +113,7 @@ def build_naive_long_context(
         the candidate prefix index by 1 each step; bounded.
     """
     if input_token_budget <= 0:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"input_token_budget must be positive, got {input_token_budget}"
         )
 
@@ -165,7 +165,7 @@ def input_budget_for(model_id: str) -> int:
       requires explicit pins in the manifest).
     """
     if model_id not in MODEL_INPUT_BUDGETS:
-        raise KeyError(
+        raise KeyError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"Unknown model pin {model_id!r}; protocol §10 manifest requires "
             "all model pins to be enumerated. Add to MODEL_INPUT_BUDGETS with "
             "a citation source."

@@ -155,7 +155,7 @@ def _validate_lifecycle(reg, c: "Classification") -> None:
         suggestions = did_you_mean(AXIS_LIFECYCLE, c.lifecycle, reg)
         raise ValueError(_format_unknown(AXIS_LIFECYCLE, c.lifecycle, suggestions))
     if lc.applies_to_kinds and c.kind not in lc.applies_to_kinds:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"lifecycle {c.lifecycle!r} does not apply to kind "
             f"{c.kind!r} (only to {sorted(lc.applies_to_kinds)})"
         )
@@ -166,7 +166,7 @@ def _validate_lifecycle(reg, c: "Classification") -> None:
             for v in axis_registry_values(reg, AXIS_LIFECYCLE)
             if "adr" in v.applies_to_kinds
         ]
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"kind=adr requires a lifecycle from {sorted(adr_lc)}; got {c.lifecycle!r}"
         )
 
@@ -179,7 +179,7 @@ def _validate_audience(reg, c: "Classification") -> None:
     )
 
     if not c.audience:
-        raise ValueError("audience must not be empty")
+        raise ValueError("audience must not be empty")  # noqa: TRY003 — one-off message, not reused (§3.3)
     for a in c.audience:
         if not axis_registry_has(reg, AXIS_AUDIENCE, a):
             suggestions = did_you_mean(AXIS_AUDIENCE, a, reg)
@@ -198,7 +198,7 @@ def _validate_provenance(reg, c: "Classification") -> None:
         suggestions = did_you_mean(AXIS_PROVENANCE, c.provenance, reg)
         raise ValueError(_format_unknown(AXIS_PROVENANCE, c.provenance, suggestions))
     if prov.requires_generator and c.generator is None:
-        raise ValueError(f"provenance={c.provenance!r} requires a Generator block")
+        raise ValueError(f"provenance={c.provenance!r} requires a Generator block")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
 
 def classification_to_frontmatter(

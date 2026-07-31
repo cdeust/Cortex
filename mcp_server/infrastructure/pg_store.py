@@ -125,6 +125,38 @@ class _SupersedeCasConflictError(Exception):
     """
 
 
+def _require_cas_won(rowcount: int) -> None:
+    """Raise the conflict signal when the compare-and-set UPDATE missed.
+
+    Extracted (TRY301, issue #239) from ``supersede_atomic``'s ``try``
+    block, where the raise was caught by that same block's
+    ``except _SupersedeCasConflictError`` — abstracting it here removes
+    the redundant same-try raise/catch. The raise still propagates out of
+    the enclosing ``with conn.transaction():`` (forcing the same
+    rollback) before the outer ``except`` catches it and retries.
+    """
+    if rowcount != 1:
+        raise _SupersedeCasConflictError()
+
+
+def _returning_memory_id(row: DictRow | None) -> int:
+    """Extract ``id`` from an ``INSERT ... RETURNING id`` fetchone() result.
+
+    Extract Function (TRY003, issue #239): ``_insert_memory_on`` and
+    ``insert_memory`` each duplicated this exact guard + message inline.
+    An INSERT ... RETURNING always produces exactly one row, so a None
+    here is a broken query (or a silently rolled-back transaction), not
+    a normal path — surface it loudly. (Same shape as
+    ``pg_store_wiki_common._returning_id``, kept separate rather than
+    imported: that helper is documented as shared specifically across
+    the wiki pages/claims/concepts/drafts/citations modules, a different
+    conceptual grouping than this memory store.)
+    """
+    if row is None:
+        raise RuntimeError("INSERT ... RETURNING id produced no row")  # noqa: TRY003 — canonical, 2-call-site-shared construction point (§3.3)
+    return int(row["id"])
+
+
 class PgMemoryStore(
     PgEntityMixin,
     PgEntityMergeMixin,
@@ -584,9 +616,7 @@ class PgMemoryStore(
         row = conn.execute(
             self._INSERT_MEMORY_SQL, self._build_insert_params(data)
         ).fetchone()
-        if row is None:
-            raise RuntimeError("INSERT ... RETURNING id produced no row")
-        return int(row["id"])
+        return _returning_memory_id(row)
 
     def insert_memory(self, data: dict[str, Any]) -> int:
         """Insert a memory and return its ID."""
@@ -594,9 +624,7 @@ class PgMemoryStore(
             self._INSERT_MEMORY_SQL, self._build_insert_params(data)
         ).fetchone()
         self._conn.commit()
-        if row is None:
-            raise RuntimeError("INSERT ... RETURNING id produced no row")
-        return int(row["id"])
+        return _returning_memory_id(row)
 
     def _current_chain_head(
         self, conn: psycopg.Connection[DictRow], target_id: int
@@ -662,8 +690,7 @@ class PgMemoryStore(
                             "WHERE id = %s AND superseded_by_id IS NULL",
                             (new_id, head_id),
                         ).rowcount
-                        if rowcount != 1:
-                            raise _SupersedeCasConflictError()
+                        _require_cas_won(rowcount)
                         self._transfer_anchor_on(conn, head_id, new_id)
                 except _SupersedeCasConflictError:
                     continue

@@ -81,11 +81,12 @@ def _parse_datetime(value) -> datetime | None:
     if isinstance(value, str) and value:
         try:
             dt = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        else:
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt
-        except ValueError:
-            return None
     return None
 
 

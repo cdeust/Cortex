@@ -62,11 +62,12 @@ def _pid_is_definitely_dead(pid: int) -> bool:
     still in use."""
     try:
         os.kill(pid, 0)
-        return False  # still alive
     except ProcessLookupError:
         return True
     except Exception:
         return False  # permission-denied or any other ambiguity — leave it
+    else:
+        return False  # still alive
 
 
 def drop_dead_orphaned_databases(conn) -> None:

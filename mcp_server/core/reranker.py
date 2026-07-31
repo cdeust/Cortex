@@ -70,6 +70,24 @@ _flashrank_failed: bool = False
 _flashrank_load_error: str | None = None
 
 
+def _refuse_offline_download_of_absent_model() -> None:
+    """Raise if offline mode is requested and the cache holds no model.
+
+    Extracted (TRY301, issue #239) from ``_ensure_reranker``'s ``try``
+    block, where the raise was caught by that same block's
+    ``except Exception`` — abstracting it here removes the redundant
+    same-try raise/catch without changing which exception propagates or
+    what its message says.
+    """
+    if _offline_requested() and not _model_path().is_file():
+        raise FileNotFoundError(  # noqa: TRY003 — one-off message, not reused (§3.3)
+            f"{_OFFLINE_ENV} is set and the cached model file is absent "
+            f"({_model_path()}); refusing to download it, because "
+            "FlashRank's fetch has no timeout and would block this "
+            "thread indefinitely on a stalled connection"
+        )
+
+
 def _ensure_reranker() -> Any:
     """Lazy-load FlashRank ONNX reranker (singleton).
 
@@ -97,17 +115,10 @@ def _ensure_reranker() -> Any:
         return None
     cache = reranker_cache_dir()
     try:
-        if _offline_requested() and not _model_path().is_file():
-            raise FileNotFoundError(
-                f"{_OFFLINE_ENV} is set and the cached model file is absent "
-                f"({_model_path()}); refusing to download it, because "
-                "FlashRank's fetch has no timeout and would block this "
-                "thread indefinitely on a stalled connection"
-            )
+        _refuse_offline_download_of_absent_model()
         from flashrank import Ranker  # noqa: PLC0415 — optional dependency (flashrank (multi-second reranker model load)); imported where used so environments without it keep working
 
         _flashrank_instance = Ranker(model_name=_MODEL_NAME, cache_dir=str(cache))
-        return _flashrank_instance
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         _flashrank_failed = True
         _flashrank_load_error = str(exc)
@@ -120,6 +131,8 @@ def _ensure_reranker() -> Any:
             exc,
         )
         return None
+    else:
+        return _flashrank_instance
 
 
 def ensure_reranker_loaded() -> RerankerStatus:

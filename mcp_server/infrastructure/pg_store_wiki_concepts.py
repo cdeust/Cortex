@@ -123,7 +123,7 @@ def update_concept(
         return False
     unknown = set(fields) - _UPDATABLE_COLUMNS
     if unknown:
-        raise ValueError(f"update_concept: unknown column(s) {sorted(unknown)!r}")
+        raise ValueError(f"update_concept: unknown column(s) {sorted(unknown)!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     sets: list[str] = []
     params: list = []
     for k, v in fields.items():

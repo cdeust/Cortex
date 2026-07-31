@@ -66,7 +66,7 @@ class PageIdentity:
 
     def __post_init__(self) -> None:
         if not is_valid_page_id(self.page_id):
-            raise ValueError(
+            raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 f"invalid page_id: {self.page_id!r}; expected canonical "
                 f"UUID4 hex form (8-4-4-4-12)"
             )

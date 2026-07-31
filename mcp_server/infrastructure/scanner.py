@@ -64,9 +64,10 @@ def read_head_tail(file_path: str | Path) -> list[dict]:
                 tail_lines.pop(0)
                 records.extend(_parse_jsonl_lines(tail_lines))
 
-        return records
     except OSError:
         return []
+    else:
+        return records
 
 
 def iter_tool_uses(file_path: str | Path):

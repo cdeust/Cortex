@@ -52,10 +52,10 @@ def is_available() -> bool:
     """Check if tree-sitter is installed."""
     try:
         from tree_sitter_language_pack import get_parser  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
-
-        return True
     except ImportError:
         return False
+    else:
+        return True
 
 
 def _is_ast_language(language: str) -> TypeGuard[SupportedLanguage]:

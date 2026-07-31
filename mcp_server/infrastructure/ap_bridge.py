@@ -268,7 +268,6 @@ class APBridge:
                 await self._client.connect()
                 self._connected = True
                 self._unavailable_reason = None  # clear any stale poison
-                return True
             except (McpConnectionError, Exception) as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
                 # Leave _connected False so the NEXT call retries (cold-start
                 # / transient failures self-heal instead of poisoning the
@@ -281,11 +280,13 @@ class APBridge:
                     file=sys.stderr,
                 )
                 return False
+            else:
+                return True
 
     async def call(self, tool: str, args: dict | None = None) -> Any:
         """Call an AP tool. Returns ``None`` if AP is unavailable."""
         if tool not in _AP_TOOLS:
-            raise ValueError(f"AP tool not in allowlist: {tool!r}")
+            raise ValueError(f"AP tool not in allowlist: {tool!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
         if not await self.connect():
             return None
         if self._client is None:  # connect() success guarantees a client; defensive

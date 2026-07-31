@@ -75,7 +75,7 @@ class ToolProfileMiddleware(Middleware):
             # IS the registry. This is the security gate: a destructive tool
             # excluded from the profile is rejected here even though it is a
             # registered handler.
-            raise NotFoundError(
+            raise NotFoundError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 f"Unknown tool: {name} (not registered under the "
                 f"'{self.profile.value}' profile; restart with --profile full "
                 f"to expose every tool)"
@@ -100,7 +100,7 @@ class ToolProfileMiddleware(Middleware):
     ):
         name = context.message.name
         if not mcp_prompts.is_available(name, self.profile):
-            raise PromptError(
+            raise PromptError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 f"Unknown prompt: {name} (not available under the "
                 f"'{self.profile.value}' profile; restart with --profile full "
                 f"to expose every prompt)"

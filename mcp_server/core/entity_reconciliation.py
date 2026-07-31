@@ -81,6 +81,23 @@ WHERE  length(e.name) >= %s
 """
 
 
+def _require_ge(name: str, value: int, minimum: int) -> None:
+    """Raise if ``value`` is below ``minimum`` — shared by every bound
+    check in this module (TRY003, issue #239 — Extract Function: this
+    single site replaces 8 duplicate ``if value < minimum: raise
+    ValueError(...)`` blocks across build_reconciliation_sql,
+    build_count_eligible_sql, and reconcile_leak_ratio, which all shared
+    this exact "name must be >= N, got value" message shape).
+    """
+    if value < minimum:
+        # This IS the canonical, 8-call-site-shared construction point
+        # this helper was extracted to create — the opposite case from a
+        # one-off message; further promoting it into a dedicated
+        # exception subclass would gain nothing beyond what parametrizing
+        # `name`/`minimum` here already gives every caller.
+        raise ValueError(f"{name} must be >= {minimum}, got {value}")  # noqa: TRY003
+
+
 def build_reconciliation_sql(
     memory_age_days: int = DEFAULT_MEMORY_AGE_DAYS,
     entity_age_hours: int = DEFAULT_ENTITY_AGE_HOURS,
@@ -118,12 +135,9 @@ def build_reconciliation_sql(
         psycopg's parameter binding (`cursor.execute(sql, params)`),
         NOT string formatting (`cursor.execute(sql % params)`).
     """
-    if memory_age_days < 1:
-        raise ValueError(f"memory_age_days must be >= 1, got {memory_age_days}")
-    if entity_age_hours < 1:
-        raise ValueError(f"entity_age_hours must be >= 1, got {entity_age_hours}")
-    if min_name_length < 1:
-        raise ValueError(f"min_name_length must be >= 1, got {min_name_length}")
+    _require_ge("memory_age_days", memory_age_days, 1)
+    _require_ge("entity_age_hours", entity_age_hours, 1)
+    _require_ge("min_name_length", min_name_length, 1)
 
     params = (min_name_length, memory_age_days, entity_age_hours)
     return _RECONCILE_SQL, params
@@ -146,12 +160,9 @@ def build_count_eligible_sql(
     This is a read-only query; callers use it before running the
     reconciliation to compute the window's expected cardinality.
     """
-    if memory_age_days < 1:
-        raise ValueError(f"memory_age_days must be >= 1, got {memory_age_days}")
-    if entity_age_hours < 1:
-        raise ValueError(f"entity_age_hours must be >= 1, got {entity_age_hours}")
-    if min_name_length < 1:
-        raise ValueError(f"min_name_length must be >= 1, got {min_name_length}")
+    _require_ge("memory_age_days", memory_age_days, 1)
+    _require_ge("entity_age_hours", entity_age_hours, 1)
+    _require_ge("min_name_length", min_name_length, 1)
 
     params = (min_name_length, memory_age_days, entity_age_hours)
     return _COUNT_ELIGIBLE_SQL, params
@@ -186,12 +197,10 @@ def reconcile_leak_ratio(
     pairs is an empirical upper bound for that case. Exceeding it is a
     signal, not a proof — a confirmation test needs RCA per Move 4.
     """
-    if reconciled_pairs < 0:
-        raise ValueError(f"reconciled_pairs must be >= 0, got {reconciled_pairs}")
-    if eligible_pairs < 0:
-        raise ValueError(f"eligible_pairs must be >= 0, got {eligible_pairs}")
+    _require_ge("reconciled_pairs", reconciled_pairs, 0)
+    _require_ge("eligible_pairs", eligible_pairs, 0)
     if reconciled_pairs > eligible_pairs:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off counting-bug message, not reused (§3.3)
             f"reconciled_pairs ({reconciled_pairs}) > eligible_pairs "
             f"({eligible_pairs}) — counting bug"
         )
@@ -219,5 +228,5 @@ def exceeds_leak_threshold(ratio: float) -> bool:
     Postconditions: returns (ratio > LEAK_WARNING_THRESHOLD).
     """
     if ratio < 0.0 or ratio > 1.0:
-        raise ValueError(f"ratio must be in [0.0, 1.0], got {ratio}")
+        raise ValueError(f"ratio must be in [0.0, 1.0], got {ratio}")  # noqa: TRY003 — one-off range-check message, not reused (§3.3)
     return ratio > LEAK_WARNING_THRESHOLD

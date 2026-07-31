@@ -61,7 +61,7 @@ def reject_doctype(xml_text: str, *, kind: str) -> None:
     parser (``"docx"`` / ``"confluence"``) for the error message only.
     """
     if _DOCTYPE_RE.search(xml_text):
-        raise DocumentParseError(
+        raise DocumentParseError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"{kind} document declares a DOCTYPE — refused (entity-expansion"
             " / XXE guard, S314)"
         )

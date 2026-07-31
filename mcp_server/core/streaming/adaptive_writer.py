@@ -35,22 +35,6 @@ from mcp_server.core.streaming.adaptive_controller import (
 from mcp_server.core.streaming.ports import BatchSink
 
 
-def compute_queue_cap(
-    ram_budget_bytes: int, b_max: int, row_bytes: int, reserve: int = 1
-) -> int:
-    """``Q_cap = floor(RAM_budget / (b_max * row_bytes)) - reserve``.
-
-    Pinned to ``b_max`` (NOT the live B): the controller ramps B up to b_max,
-    so sizing from a smaller live B would let peak RAM overshoot once it ramps.
-    source: Little (1961), occupancy bound applied to memory. Floors at 1.
-    """
-    if b_max <= 0 or row_bytes <= 0:
-        raise ValueError("b_max and row_bytes must be positive")
-    if ram_budget_bytes <= 0:
-        raise ValueError("ram_budget_bytes must be positive")
-    return max(1, ram_budget_bytes // (b_max * row_bytes) - reserve)
-
-
 class AdaptiveBatchWriter:
     """Buffers rows; flushes controller-sized batches; feeds latency back.
 

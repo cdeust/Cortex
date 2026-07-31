@@ -109,7 +109,7 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
     try:
         root = ET.fromstring(f"{_WRAP_OPEN}{resolved}{_WRAP_CLOSE}")  # noqa: S314 — entity-expansion/XXE closed by reject_doctype above (see document_model.py)
     except ET.ParseError as exc:
-        raise DocumentParseError(f"malformed Confluence XHTML: {exc}") from exc
+        raise DocumentParseError(f"malformed Confluence XHTML: {exc}") from exc  # noqa: TRY003 — one-off message, not reused (§3.3)
 
     preamble = DocumentSection(heading="", level=0)
     sections: list[DocumentSection] = [preamble]

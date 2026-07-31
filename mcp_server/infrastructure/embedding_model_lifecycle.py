@@ -173,10 +173,10 @@ class _EmbeddingLifecycleMixin:
         """
         try:
             from huggingface_hub.errors import LocalEntryNotFoundError  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-
-            return (OSError, LocalEntryNotFoundError)
         except ImportError:
             return (OSError,)
+        else:
+            return (OSError, LocalEntryNotFoundError)
 
     def _construct_model(self, device: str, cache_folder: str | None, local: bool):
         """Build one ``SentenceTransformer``. Import is at call time so the

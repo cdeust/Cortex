@@ -26,7 +26,7 @@ from pathlib import Path
 def _safe_ident(name: str) -> str:
     """Validate a database identifier contains only safe characters."""
     if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
-        raise ValueError(f"Unsafe database name: {name!r}")
+        raise ValueError(f"Unsafe database name: {name!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     return name
 
 
@@ -85,9 +85,10 @@ def _pg_is_running(host: str, port: str) -> bool:
             capture_output=True,
             timeout=5,
         )
-        return r.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
+    else:
+        return r.returncode == 0
 
 
 # Substrings that mark a PostgreSQL connection failure as authentication/
@@ -186,9 +187,10 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
         )
         if r.returncode != 0:
             return False, r.stderr.strip()
-        return True, ""
     except Exception as e:  # noqa: BLE001 — setup step contract — failure is returned as (False, message)
         return False, str(e)
+    else:
+        return True, ""
 
 
 def _init_schema(database_url: str) -> tuple[bool, str]:
@@ -216,11 +218,12 @@ def _init_schema(database_url: str) -> tuple[bool, str]:
             _log(f"Schema warnings ({len(errors)} statements had issues):")
             for e in errors[:5]:
                 _log(f"  {e}")
-        return True, ""
     except ImportError:
         return False, "psycopg not installed (run: pip install psycopg[binary])"
     except Exception as e:  # noqa: BLE001 — setup step contract — failure is returned as (False, message)
         return False, str(e)
+    else:
+        return True, ""
 
 
 def _count_memories(database_url: str) -> int:

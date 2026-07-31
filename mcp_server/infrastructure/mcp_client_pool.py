@@ -2,6 +2,12 @@
 
 Reads server config from mcp-connections.json, creates MCPClient instances on
 demand, caches by server name.
+
+TRY003 (issue #239): every ``raise McpConnectionError(...)`` below names a
+distinct, one-off pool/config failure — never reused (§3.3), and each
+already carries a structured ``details`` dict alongside the message (see
+``mcp_client.py``'s identical rationale). Marked with a bare
+`# noqa: TRY003` at each site.
 """
 
 from __future__ import annotations
@@ -27,7 +33,7 @@ def _load_server_config(server_name: str) -> dict[str, Any]:
     """Load server configuration from mcp-connections.json."""
     config = read_json(MCP_CONNECTIONS_PATH)
     if not config or not config.get("servers"):
-        raise McpConnectionError(
+        raise McpConnectionError(  # noqa: TRY003
             f"MCP connections config not found at {MCP_CONNECTIONS_PATH}. "
             f"Create it with server definitions.",
             {"path": str(MCP_CONNECTIONS_PATH)},
@@ -36,7 +42,7 @@ def _load_server_config(server_name: str) -> dict[str, Any]:
     server_config = config["servers"].get(server_name)
     if not server_config:
         available = ", ".join(config["servers"].keys())
-        raise McpConnectionError(
+        raise McpConnectionError(  # noqa: TRY003
             f'Server "{server_name}" not found in MCP connections config. '
             f"Available: {available}",
             {"serverName": server_name, "available": list(config["servers"].keys())},
@@ -91,7 +97,7 @@ def _admit_new_connection(server_name: str) -> None:
         return
     if _evict_lru_idle():
         return
-    raise McpConnectionError(
+    raise McpConnectionError(  # noqa: TRY003
         f"MCP connection pool exhausted: {len(_pool)}/{max_conns} live "
         f"connections are all busy; cannot open one for "
         f'"{server_name}". Retry after an in-flight call completes.',

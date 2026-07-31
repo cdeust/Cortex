@@ -49,4 +49,4 @@ def __getattr__(name: str):
         )
 
         return BenchmarkDB
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")  # noqa: TRY003 — mirrors Python's own standard module-attribute-not-found message (PEP 562); not reused (§3.3)

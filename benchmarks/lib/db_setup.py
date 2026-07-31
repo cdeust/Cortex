@@ -404,7 +404,7 @@ def _dbname(db_url: str) -> str:
 
     name = (urlparse(db_url).path or "/").lstrip("/")
     if not name:
-        raise ValueError(f"db_url missing database name: {db_url}")
+        raise ValueError(f"db_url missing database name: {db_url}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     if '"' in name:
-        raise ValueError(f"refusing dbname containing quote: {name!r}")
+        raise ValueError(f"refusing dbname containing quote: {name!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     return name

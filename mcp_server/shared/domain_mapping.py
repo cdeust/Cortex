@@ -110,8 +110,9 @@ def _get_remote_url(repo_path: Path) -> str:
                 _, _, value = line.partition("=")
                 if value.strip():
                     return value.strip()
-        return ""
     except OSError:
+        return ""
+    else:
         return ""
 
 

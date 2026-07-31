@@ -144,7 +144,7 @@ class TemporalStageDetector(StageDetector):
                 # always takes the branch above, since last_ts starts as
                 # None) — an explicit raise, not `assert` (S101), so this
                 # invariant is never silently stripped by `python -O`.
-                raise AssertionError("current_stage unset on first loop iteration")
+                raise AssertionError("current_stage unset on first loop iteration")  # noqa: TRY003 — one-off internal-invariant message, not reused (§3.3)
             mid = m.get("memory_id") or m.get("id") or id(m)
             self._cache[mid] = current_stage
             last_ts = ts
@@ -205,7 +205,7 @@ class CompositeStageDetector(StageDetector):
         fallback: str = "default",
     ) -> None:
         if not detectors:
-            raise ValueError("CompositeStageDetector requires at least one detector")
+            raise ValueError("CompositeStageDetector requires at least one detector")  # noqa: TRY003 — one-off message, not reused (§3.3)
         self._detectors = detectors
         self._fallback = fallback
 

@@ -37,6 +37,19 @@ from mcp_server.shared.yaml_parser import (  # noqa: E402
 )
 
 
+# TRY003/TRY004 (issue #239): every `raise AssertionError` in `consume`
+# below is a postcondition self-check on the function UNDER TEST
+# (`parse_yaml_frontmatter`), not a caller-input validation boundary —
+# matching this codebase's established idiom of an explicit
+# `raise AssertionError` for an internal-invariant check that must
+# survive `python -O` (see the S101 explicit-raise conversion, issue
+# #239 S-family). TRY004 (prefer TypeError) does not apply: TypeError
+# would misdescribe "the callee broke its own contract" as "the caller
+# passed a bad argument". TRY003 (long message outside the exception
+# class) does not apply either: each message names a specific, one-off
+# contract violation from this harness's own docstring — never reused,
+# so a dedicated subclass per check would be premature abstraction
+# (coding-standards.md §3.3).
 def consume(data: bytes) -> None:
     """One fuzz iteration. Shared by atheris and by replay_corpus.py."""
     # The function is typed `str | None`; the fuzzer speaks bytes. Decoding
@@ -48,21 +61,23 @@ def consume(data: bytes) -> None:
     result = parse_yaml_frontmatter(text)
 
     if not isinstance(result, FrontmatterResult):
-        raise AssertionError(f"returned {type(result).__name__}, not FrontmatterResult")
+        raise AssertionError(  # noqa: TRY003, TRY004
+            f"returned {type(result).__name__}, not FrontmatterResult"
+        )
     if not isinstance(result.meta, dict):
-        raise AssertionError(f"meta is {type(result.meta).__name__}, not dict")
+        raise AssertionError(f"meta is {type(result.meta).__name__}, not dict")  # noqa: TRY003, TRY004
     if not isinstance(result.body, str):
-        raise AssertionError(f"body is {type(result.body).__name__}, not str")
+        raise AssertionError(f"body is {type(result.body).__name__}, not str")  # noqa: TRY003, TRY004
     for key, value in result.meta.items():
         if key != key.lower():
-            raise AssertionError(f"meta key {key!r} is not lowercased")
+            raise AssertionError(f"meta key {key!r} is not lowercased")  # noqa: TRY003
         if not isinstance(value, str):
-            raise AssertionError(f"meta[{key!r}] is {type(value).__name__}, not str")
+            raise AssertionError(f"meta[{key!r}] is {type(value).__name__}, not str")  # noqa: TRY003, TRY004
     # The parser only ever slices and strips, so the body it returns must be
     # text that was already present. A violation would mean it fabricated or
     # duplicated document content — which a type check alone cannot see.
     if result.body and result.body not in text:
-        raise AssertionError("body is not a substring of the input")
+        raise AssertionError("body is not a substring of the input")  # noqa: TRY003
 
 
 def main() -> None:

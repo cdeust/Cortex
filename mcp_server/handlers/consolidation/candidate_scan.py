@@ -31,10 +31,10 @@ def _load_missing_sections_probe() -> Any:
     """
     try:
         from mcp_server.core.wiki_curation_gaps import missing_sections  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-
-        return missing_sections
     except ImportError:
         return None
+    else:
+        return missing_sections
 
 
 def _gap_entry_for_page(

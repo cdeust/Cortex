@@ -39,7 +39,7 @@ _INSERT_RECEIPT_SQL = (
 def _receipt_params(channel: str, items: list[dict], session_id: str | None) -> tuple:
     """Coerce items into the (session_id, channel, ids, ranks, scores) tuple."""
     if not items:
-        raise ValueError("injection receipt requires at least one item")
+        raise ValueError("injection receipt requires at least one item")  # noqa: TRY003 — one-off message; shared shape (2 occurrences, PG+SQLite backend pair) below the three-uses extraction bar (§3.3)
     memory_ids = [int(i["memory_id"]) for i in items]
     ranks = [int(i["rank"]) for i in items]
     scores = [None if i.get("score") is None else float(i["score"]) for i in items]

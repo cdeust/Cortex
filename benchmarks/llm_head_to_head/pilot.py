@@ -146,7 +146,7 @@ def _build_dryrun_context(condition: str, item: BeamItem) -> tuple[str, dict[str
             "n_supporting_turns": len(passages),
             "n_requested": len(item.source_chat_ids),
         }
-    raise ValueError(f"Unknown condition: {condition!r}")
+    raise ValueError(f"Unknown condition: {condition!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
 
 def dry_run(n: int, split: str = "10M") -> int:

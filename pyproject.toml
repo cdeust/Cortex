@@ -587,6 +587,113 @@ select = [
     #     which blocks sha1 unless explicitly marked non-security.
     #   S103/S107 (0 findings repo-wide, measured): nothing to fix.
     "S",
+    # TRY (tryceratops) (issue #239, TRY family — the largest judgment-heavy
+    # family in the continuation program): 173 in mcp_server/ (re-measured
+    # fresh at the 2026-07-31 branch tip — grown from the issue's original
+    # 162/163 count as PTH+S landed more code since that measurement, per
+    # this program's own "measure, never assert" rule), 409 repo-wide.
+    # Every finding fixed or per-site-justified; zero blanket ignores.
+    #   TRY002 raise-vanilla-class (1, tests_py): the ONE bare
+    #     `raise Exception(...)` is deliberate, not an oversight —
+    #     tool_error_handler.safe_handler's classifier
+    #     (_classify_error) dispatches by exception MESSAGE content
+    #     through a last-resort `except Exception` boundary, so a
+    #     specific type here would misleadingly imply type-based
+    #     dispatch the code under test does not do. Documented in place,
+    #     `# noqa: TRY002`.
+    #   TRY004 type-check-without-type-error (7: 2 mcp_server/, 5 fuzz):
+    #     ALL documented, ZERO "fixed" as prefer-TypeError — a critical
+    #     finding caught before shipping: mcp_server/handlers/why.py's
+    #     ValueError (an isinstance check) looked like the textbook
+    #     TRY004 fix, but tests_py/handlers/test_why.py::
+    #     test_malformed_receipt_ids_raise_loudly is parametrized across
+    #     BOTH type-wrong ([True], [1.5]) and value-wrong ([0], [-2])
+    #     inputs and asserts `pytest.raises(ValueError)` uniformly —
+    #     _parse_receipt_ids deliberately raises ONE exception category
+    #     for "malformed", by design; TypeError would fracture that
+    #     tested contract to satisfy a lint preference. The other 6
+    #     (5 fuzz harness postcondition self-checks + wiki_compile.py's
+    #     own-module-constant check) are AssertionError-as-internal-
+    #     invariant, matching this codebase's established S101 explicit-
+    #     raise idiom — TypeError would misdescribe a callee's broken
+    #     contract as a caller's bad argument.
+    #   TRY400 error-instead-of-exception (2, mcp_server/infrastructure/
+    #     embedding_engine.py): ACTUALLY FIXED — `logger.error` inside an
+    #     `except RuntimeError:` block loses the stack trace in
+    #     production; changed to `logger.exception` at both CPU-fallback
+    #     sites (same message, same log level, additive traceback only).
+    #   TRY301 raise-within-try (3, mcp_server/): ALL FIXED via Fowler
+    #     Extract Function — each raise moved into a small named helper
+    #     (`_refuse_offline_download_of_absent_model` in core/reranker.py,
+    #     `_require_grad` in core/titans_memory.py, `_require_cas_won` in
+    #     infrastructure/pg_store.py), so the same-try raise/catch this
+    #     rule flags becomes a call to a function whose OWN raise is
+    #     caught by the identical enclosing except — zero behavior
+    #     change, verified per site (pg_store.py's site specifically
+    #     exits a `with conn.transaction():` to trigger rollback; the
+    #     extraction preserves that since the helper's raise still
+    #     escapes the same context manager).
+    #   TRY300 try-consider-else (44: 35 mcp_server/, 5 scripts/,
+    #     2 benchmarks/, 2 tests_py/): ALL FIXED by moving the tail
+    #     statement immediately before `except` into an `else:` clause —
+    #     narrows what the except actually catches to the risky
+    #     computation, not incidental code after it. Verified per site
+    #     that ruff flags ONLY the literal last statement before `except`
+    #     (never an earlier conditional/early return in the same try),
+    #     and that nothing moved into `else:` could raise the SAME
+    #     exception type the preceding except catches (every site here
+    #     moved a bare return of an already-computed name/tuple/dict
+    #     literal). One subtle interaction
+    #     (handlers/_telemetry_wrap.py's try/except/else/finally, where
+    #     `result` is also read by `finally`'s telemetry sample) was
+    #     verified by directly exercising both the success and exception
+    #     paths in a standalone script, not just by reading the code.
+    #   TRY003 raise-vanilla-args (352 — the dominant volume): three
+    #     dispositions, applied in order of preference:
+    #     (1) GENUINE Extract-Function consolidations where 3+ identical
+    #     messages shared one file/class (§3.3's bar) — turned into real
+    #     fixes, not suppressions: core/entity_reconciliation.py's
+    #     `_require_ge(name, value, minimum)` replaces 8 duplicate
+    #     "X must be >= N, got value" raises across 2 functions;
+    #     benchmarks/lib/bench_db.py's `_require_opened()` replaces 4
+    #     identical "Call open() first" raises; benchmarks/llm_head_to_head/
+    #     generator.py's `_missing_sdk_message(vendor, pip_package)`
+    #     replaces 3 "<vendor> SDK not installed" raises and eliminates
+    #     the finding entirely (a function-call argument to `raise`
+    #     doesn't match TRY003's literal-string AST pattern);
+    #     infrastructure/pg_store.py's `_returning_memory_id(row)`
+    #     replaces its own 2 duplicated "INSERT ... RETURNING id
+    #     produced no row" raises. Two of these consolidations surfaced
+    #     genuine PRE-EXISTING duplicate code unrelated to this lint
+    #     pass, found only by reading the flagged lines' actual context:
+    #     core/streaming/{adaptive_writer,backpressure_pipeline}.py each
+    #     defined a byte-for-byte identical `compute_queue_cap` function,
+    #     reached through two DIFFERENT import paths (a real silent-
+    #     drift risk) — extracted to a new core/streaming/queue_sizing.py
+    #     module so neither sibling gains a new dependency on the other;
+    #     verified all three prior import paths now resolve to the
+    #     literal same function object. (2) tests_py/** (129 sites):
+    #     blanket per-file-ignore below, added only after sampling both
+    #     the largest buckets (test_ble001_sweep_*.py, test_s110_sweep_
+    #     *.py, test_launcher_deps.py) AND a diverse cross-file sample,
+    #     confirming every site is either a monkeypatched/fake-class
+    #     method raising a one-off scenario-specific message, or a
+    #     "must not be called" sentinel — never reused by design.
+    #     (3) everything else (mcp_server/, benchmarks/, scripts/, fuzz/):
+    #     per-site `# noqa: TRY003`, each a genuinely one-off message
+    #     (validated individually — no forced merges of superficially-
+    #     similar-but-actually-distinct messages, e.g. document_reader.py's
+    #     2 near-duplicate "byte cap" messages for docx vs. Confluence
+    #     stayed separate at exactly 2 occurrences, below the 3-use bar).
+    #     One security-critical file, infrastructure/wiki_store.py,
+    #     was deliberately NOT consolidated despite 3 raise blocks
+    #     sharing shape: its own docstrings state the CWE-22/py-path-
+    #     injection sanitizer chain must stay inline and match CodeQL's
+    #     py/path-injection example VERBATIM at each of `_safe_join`
+    #     (a dedicated, already-canonical helper) and `write_page`'s own
+    #     inline copy — confirmed by reading both implementations before
+    #     concluding the duplication is intentional, not accidental.
+    "TRY",
 ]
 # ── Families deliberately NOT selected (issue #197, criterion 1) ────────────
 # Counts measured against mcp_server/ 2026-07-28, ruff 0.15.20 — what
@@ -617,12 +724,12 @@ select = [
 #     contract-lie defect classes this program exists for; each is a
 #     dedicated-PR-sized diff under the fix-with-landing bar.
 #
-# (c) JUDGEMENT families not yet triaged — TRY (163), ARG (54->667
-#     repo-wide), FBT (258->461 repo-wide): tracked as the program's
-#     continuation in issue #239 (B, RET, DTZ, N, ERA, PTH, S landed
-#     above). Enabling any of them without the per-finding triage the
-#     landed families received would mean blanket ignores — the exact
-#     anti-pattern this explicit select list exists to prevent.
+# (c) JUDGEMENT families not yet triaged — ARG (54->667 repo-wide), FBT
+#     (258->461 repo-wide): tracked as the program's continuation in issue
+#     #239 (B, RET, DTZ, N, ERA, PTH, S, TRY landed above). Enabling either
+#     without the per-finding triage the landed families received would
+#     mean blanket ignores — the exact anti-pattern this explicit select
+#     list exists to prevent.
 
 [tool.ruff.lint.per-file-ignores]
 # Test code: try/except/pass and broad excepts in tests are deliberate
@@ -663,6 +770,25 @@ select = [
 #     (git-repo fixtures) or a hardcoded internal script/module via
 #     `sys.executable -c/-m <literal>`, never untrusted input (12+11
 #     sites).
+#
+# TRY003 (issue #239, TRY family) was added after sampling a diverse cross-
+# section of tests_py/ — the largest buckets (test_ble001_sweep_*.py,
+# test_s110_sweep_*.py, test_launcher_deps.py) AND a random cross-file
+# sample (test_pg_recall_pipeline.py, test_remember.py, test_recall_rules.py,
+# test_domain_mapping.py, test_wiki_write_frontmatter_validation.py,
+# test_migrate.py) — confirming every site is one of two test-only shapes,
+# never a reusable message: (1) a monkeypatched/fake-class method that
+# raises a one-off, scenario-specific message simulating a SPECIFIC failure
+# mode ("db unavailable", "simulated: husk contains a locked file") so the
+# code under test's handling of THAT failure can be asserted; (2) a "must
+# not be called"/postcondition sentinel (`raise AssertionError("...")`)
+# whose message names the exact invariant this test's scenario is proving,
+# matching the same explicit-raise-not-assert idiom S101 already covers.
+# Neither shape is reused across sites BY DESIGN — reuse would make
+# failures harder to attribute to the specific scenario a test simulates —
+# so subclassing per message would be premature abstraction (§3.3) with a
+# negative return: it would separate a test's failure message from the one
+# test that uses it (129 sites measured 2026-07-31).
 "tests_py/**" = [
     "S110",
     "BLE001",
@@ -676,6 +802,7 @@ select = [
     "S112",
     "S603",
     "S607",
+    "TRY003",
 ]
 
 [tool.pytest.ini_options]

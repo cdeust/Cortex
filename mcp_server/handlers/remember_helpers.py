@@ -1012,6 +1012,7 @@ def update_user_mood_ema(
         # returned value to match what was persisted.
         new_valence = max(-1.0, min(1.0, new_valence))
         store.set_user_mood(new_valence)
-        return new_valence
     except Exception:  # noqa: BLE001 — non-load-bearing; mood is a soft signal
         return None
+    else:
+        return new_valence

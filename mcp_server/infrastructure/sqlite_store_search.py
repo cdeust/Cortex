@@ -364,9 +364,10 @@ class SqliteSearchMixin:
                     ).fetchall()
                 }
                 results = [(rid, d) for rid, d in results if rid in current]
-            return results
         except (sqlite3.Error, ValueError):
             return []
+        else:
+            return results
 
     def spread_activation_memories(
         self,

@@ -104,7 +104,7 @@ def measure() -> dict:
     fixture = json.loads(FIXTURE.read_text())
     pool = _iter_turn_contents(fixture)
     if len(pool) < MAX_RESULTS:
-        raise SystemExit(f"corpus too small: {len(pool)} turns")
+        raise SystemExit(f"corpus too small: {len(pool)} turns")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
     per_query: list[dict] = []
     total_json = 0

@@ -146,7 +146,7 @@ def supersede_to_existing(
                     via ``WHERE superseded_by_id = survivor_id``).
     """
     if duplicate_id == survivor_id:
-        raise ValueError("supersede_to_existing: duplicate_id == survivor_id")
+        raise ValueError("supersede_to_existing: duplicate_id == survivor_id")  # noqa: TRY003 — one-off message, not reused (§3.3)
     with conn.cursor() as cur:
         cur.execute(
             """UPDATE memories

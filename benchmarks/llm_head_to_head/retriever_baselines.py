@@ -138,7 +138,7 @@ def _resolve_conn(db: Any) -> Any:
     store = getattr(db, "_store", None)
     if store is not None and hasattr(store, "_conn"):
         return store._conn
-    raise AttributeError(
+    raise AttributeError(  # noqa: TRY003 — one-off message, not reused (§3.3)
         "standard_rag: db argument must expose a psycopg connection via "
         "`.conn` or `._store._conn` (BenchmarkDB shape)."
     )

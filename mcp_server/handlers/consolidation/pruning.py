@@ -44,13 +44,14 @@ def run_pruning_cycle(store: MemoryStore) -> dict:
             prunable,
         )
 
+    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+        logger.debug("Pruning cycle failed (non-fatal)")
+        return {"edges_pruned": 0, "entities_archived": 0}
+    else:
         return {
             "edges_pruned": edges_pruned,
             "entities_archived": entities_archived,
         }
-    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.debug("Pruning cycle failed (non-fatal)")
-        return {"edges_pruned": 0, "entities_archived": 0}
 
 
 def _format_edges(relationships: list[dict]) -> list[dict]:

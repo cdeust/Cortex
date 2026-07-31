@@ -47,11 +47,11 @@ class AdaptiveBatchController:
 
     def __post_init__(self) -> None:
         if not 0 < self.b_min <= self.b_max:
-            raise ValueError(
+            raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 f"require 0 < b_min <= b_max, got {self.b_min}, {self.b_max}"
             )
         if self.w_target_s <= 0:
-            raise ValueError(f"w_target_s must be positive, got {self.w_target_s}")
+            raise ValueError(f"w_target_s must be positive, got {self.w_target_s}")  # noqa: TRY003 — one-off message, not reused (§3.3)
         if self.ai_step <= 0:
             self.ai_step = self.b_min
         self._b = self.b_min
@@ -89,5 +89,5 @@ def adaptive_batch_controller_observe(
         # invariant (precond 4) — explicit raise, not `assert` (S101), so
         # this postcondition is never silently stripped by `python -O`.
         b, lo, hi = controller._b, controller.b_min, controller.b_max
-        raise AssertionError(f"batch size {b} out of [{lo}, {hi}]")
+        raise AssertionError(f"batch size {b} out of [{lo}, {hi}]")  # noqa: TRY003 — one-off internal-invariant message, not reused (§3.3)
     return controller._b

@@ -397,7 +397,7 @@ def main() -> int:
     p.add_argument("--db-url", default=DEFAULT_DB_URL)
     args = p.parse_args()
     if args.queries < MIN_QUERIES:
-        raise SystemExit(f"--queries must be >= {MIN_QUERIES}")
+        raise SystemExit(f"--queries must be >= {MIN_QUERIES}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out_dir = RESULTS_DIR / timestamp
     n_values = [min(args.n)] if args.quick else list(args.n)

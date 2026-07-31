@@ -131,7 +131,7 @@ def _grid_run(
         results.append(r)
     valid = [r for r in results if r.get("mrr") is not None]
     if not valid:
-        raise RuntimeError(f"[{label}] all cells failed")
+        raise RuntimeError(f"[{label}] all cells failed")  # noqa: TRY003 — one-off message, not reused (§3.3)
     best = max(valid, key=lambda r: r["mrr"])
     print(f"[{label}] best: {best['cell_id']} MRR={best['mrr']:.3f}")
     return results, best

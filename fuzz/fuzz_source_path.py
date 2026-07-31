@@ -31,7 +31,21 @@ from mcp_server.shared.wiki_source_paths import normalize_source_path  # noqa: E
 
 
 def consume(data: bytes) -> None:
-    """One fuzz iteration. Shared by atheris and by replay_corpus.py."""
+    """One fuzz iteration. Shared by atheris and by replay_corpus.py.
+
+    Every ``raise AssertionError`` below is a postcondition self-check on
+    the function UNDER TEST (``normalize_source_path``), not a caller-
+    input validation boundary — matching this codebase's established
+    idiom of an explicit ``raise AssertionError`` for an internal-
+    invariant check that must survive ``python -O`` (see the S101
+    explicit-raise conversion, issue #239 S-family). TRY004 (prefer
+    TypeError) does not apply: TypeError would misdescribe "the callee
+    broke its own contract" as "the caller passed a bad argument". TRY003
+    (long message outside the exception class) does not apply either:
+    each message names a specific, one-off contract violation from this
+    harness's own docstring — never reused, so a dedicated subclass per
+    check would be premature abstraction (coding-standards.md §3.3).
+    """
     raw = data.decode("utf-8", errors="surrogateescape")
 
     result = normalize_source_path(raw)
@@ -39,19 +53,19 @@ def consume(data: bytes) -> None:
     if result is None:
         return
     if not isinstance(result, str):
-        raise AssertionError(f"returned {type(result).__name__}, not str | None")
+        raise AssertionError(f"returned {type(result).__name__}, not str | None")  # noqa: TRY003, TRY004
     if result.startswith("/"):
-        raise AssertionError(f"leading slash survived: {result!r} (from {raw!r})")
+        raise AssertionError(f"leading slash survived: {result!r} (from {raw!r})")  # noqa: TRY003
     if result.startswith("./"):
-        raise AssertionError(f"leading './' survived: {result!r} (from {raw!r})")
+        raise AssertionError(f"leading './' survived: {result!r} (from {raw!r})")  # noqa: TRY003
     if not result:
-        raise AssertionError("returned empty string; the contract says None")
+        raise AssertionError("returned empty string; the contract says None")  # noqa: TRY003
     # Idempotence is the property that makes the result usable as a dedup and
     # comparison key at all: normalising an already-normalised path must be a
     # no-op. The original defect was precisely a non-idempotent result.
     again = normalize_source_path(result)
     if again != result:
-        raise AssertionError(f"not idempotent: {result!r} -> {again!r}")
+        raise AssertionError(f"not idempotent: {result!r} -> {again!r}")  # noqa: TRY003
 
 
 def main() -> None:

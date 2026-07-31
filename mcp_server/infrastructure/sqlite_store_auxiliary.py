@@ -245,9 +245,10 @@ class SqliteAuxiliaryMixin:
                 ),
             )
             self._conn.commit()
-            return cur.lastrowid  # type: ignore[return-value]
         except sqlite3.IntegrityError:
             return self._update_existing_schema(data)
+        else:
+            return cur.lastrowid  # type: ignore[return-value]
 
     def _update_existing_schema(self, data: dict[str, Any]) -> int:
         self._conn.execute(

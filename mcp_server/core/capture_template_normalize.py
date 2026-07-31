@@ -143,7 +143,7 @@ def _normalize_derived_fact(content: str) -> str:
         # Caller already checked is_derived_fact_template; an explicit
         # raise (not `assert`, S101) so this internal-contract check is
         # never silently stripped by `python -O`.
-        raise AssertionError(
+        raise AssertionError(  # noqa: TRY003 — one-off internal-invariant message, not reused (§3.3)
             "_normalize_derived_fact called on a non-matching template"
         )
     return (

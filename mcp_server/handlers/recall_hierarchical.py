@@ -249,7 +249,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     cluster_threshold = float(args.get("cluster_threshold", 0.6))
 
     if not domain and not memory_ids:
-        raise ValidationError(
+        raise ValidationError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             "recall_hierarchical requires domain or memory_ids; the uncapped "
             "fallback was removed in v3.13.0 because it is O(N^2) and "
             "infeasible at production scale."

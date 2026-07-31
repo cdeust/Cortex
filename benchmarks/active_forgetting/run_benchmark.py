@@ -326,7 +326,7 @@ def derive_thresholds() -> dict:
                     "margin": margin,
                 }
     if best is None:
-        raise AssertionError(
+        raise AssertionError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             "no (λ, Θ) reproduces the S1–S5 labels — fixtures inconsistent"
         )
 

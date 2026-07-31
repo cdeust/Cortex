@@ -121,7 +121,7 @@ class _SyncLoop:
             return future.result(timeout=_ap_sync_timeout_s())
         except FutureTimeoutError as exc:
             future.cancel()
-            raise McpConnectionError(
+            raise McpConnectionError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 "AP reader-thread call exceeded "
                 f"{_ap_sync_timeout_s():.0f}s — subprocess presumed wedged"
             ) from exc
@@ -157,7 +157,7 @@ class _SyncLoop:
                 item = future.result(timeout=_ap_sync_timeout_s())
             except FutureTimeoutError as exc:
                 future.cancel()
-                raise McpConnectionError(
+                raise McpConnectionError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                     "AP reader-thread step exceeded "
                     f"{_ap_sync_timeout_s():.0f}s — subprocess presumed wedged"
                 ) from exc

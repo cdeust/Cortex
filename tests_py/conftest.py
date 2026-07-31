@@ -171,9 +171,10 @@ def _pg_available() -> bool:
 
         conn = psycopg.connect(_TEST_DB_URL, autocommit=True, connect_timeout=3)
         conn.close()
-        return True
     except Exception:
         return False
+    else:
+        return True
 
 
 _pg_safety_guards.guard_against_populated_db(_TEST_DB_URL)

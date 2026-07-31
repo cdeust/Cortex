@@ -177,7 +177,8 @@ def _store_narration(
                 "write_class": "derived",
             }
         )
-        return True
     except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Auto-narration storage failed (non-fatal)")
         return False
+    else:
+        return True

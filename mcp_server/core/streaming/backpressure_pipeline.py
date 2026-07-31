@@ -24,6 +24,16 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from mcp_server.core.streaming.ports import BatchSink, StreamSource
+from mcp_server.core.streaming.queue_sizing import compute_queue_cap
+
+__all__ = [
+    "BatchSink",
+    "StreamSource",
+    "compute_queue_cap",
+    "PipelineResult",
+    "BackpressurePipeline",
+    "backpressure_pipeline_run",
+]
 
 
 @dataclass
@@ -41,25 +51,6 @@ class _Sentinel:
 
 
 _SENTINEL = _Sentinel()
-
-
-def compute_queue_cap(
-    ram_budget_bytes: int, b_max: int, row_bytes: int, reserve: int = 1
-) -> int:
-    """``Q_cap = floor(RAM_budget / (b_max * row_bytes)) - reserve``.
-
-    Pinned to ``b_max`` (NOT the live B): the controller ramps B up to b_max,
-    so sizing from a smaller live B would let peak RAM overshoot the budget by
-    ``b_max / B`` once it ramps. source: Little (1961), occupancy bound applied
-    to memory rather than time. Floors at 1 so the pipeline always makes
-    progress.
-    """
-    if b_max <= 0 or row_bytes <= 0:
-        raise ValueError("b_max and row_bytes must be positive")
-    if ram_budget_bytes <= 0:
-        raise ValueError("ram_budget_bytes must be positive")
-    cap = ram_budget_bytes // (b_max * row_bytes) - reserve
-    return max(1, cap)
 
 
 @dataclass

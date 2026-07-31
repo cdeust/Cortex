@@ -93,7 +93,7 @@ class MaterializedCursor:
         """
         row = self.fetchone()
         if row is None:
-            raise _ProgrammingError(
+            raise _ProgrammingError(  # noqa: TRY003 — one-off message, not reused (§3.3)
                 "statement guaranteed a row (RETURNING/aggregate) but produced none"
             )
         return row

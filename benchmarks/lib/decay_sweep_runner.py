@@ -67,7 +67,7 @@ def _build_effective_heat_ddl(p_factor: float) -> str:
         f"p_factor    REAL DEFAULT {p_factor!r}", EFFECTIVE_HEAT_FN, count=1
     )
     if replaced == EFFECTIVE_HEAT_FN:
-        raise RuntimeError("Could not locate p_factor DEFAULT in EFFECTIVE_HEAT_FN")
+        raise RuntimeError("Could not locate p_factor DEFAULT in EFFECTIVE_HEAT_FN")  # noqa: TRY003 — one-off message, not reused (§3.3)
     return replaced
 
 

@@ -94,7 +94,7 @@ def parse_condition(condition: str) -> tuple[str, str, str]:
             parts = condition.split(f" {op} ", 1)
             return parts[0].strip(), op, parts[1].strip()
 
-    raise ValueError(f"Cannot parse condition: {condition!r}")
+    raise ValueError(f"Cannot parse condition: {condition!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
 
 def parse_action(action: str) -> tuple[str, float | str]:
@@ -116,9 +116,9 @@ def parse_action(action: str) -> tuple[str, float | str]:
     if action.startswith("tag:"):
         tag_name = action.split(":", 1)[1].strip()
         if not tag_name:
-            raise ValueError(f"tag action requires a non-empty name: {action!r}")
+            raise ValueError(f"tag action requires a non-empty name: {action!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
         return "tag", tag_name
-    raise ValueError(f"Invalid action: {action!r}")
+    raise ValueError(f"Invalid action: {action!r}")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
 
 def get_field_value(memory: dict, field: str) -> Any:
@@ -172,9 +172,10 @@ def _evaluate_equality(field: str, field_value: Any, operator: str, value: str) 
     if field in NUMERIC_FIELDS:
         try:
             result = float(field_value) == float(value)
-            return result if is_equal else not result
         except (ValueError, TypeError):
             pass
+        else:
+            return result if is_equal else not result
     str_match = str(field_value).lower() == str(value).lower()
     return str_match if is_equal else not str_match
 

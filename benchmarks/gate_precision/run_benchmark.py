@@ -139,7 +139,7 @@ def build_dataset(
     """Split corpus into (seeds, shuffled labelled candidates)."""
     needed = SEED_N + POS_N
     if len(corpus) < needed:
-        raise SystemExit(f"corpus too small: {len(corpus)} < {needed}")
+        raise SystemExit(f"corpus too small: {len(corpus)} < {needed}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     rng = random.Random(RNG_SEED)  # noqa: S311 — seeded reproducible benchmark sampling/shuffling, never security-sensitive
     rng.shuffle(corpus)
     seeds = corpus[:SEED_N]
@@ -174,7 +174,7 @@ def run_mode(mode: str, seeds: list[str], candidates: list[dict]) -> list[dict]:
     # would silently vanish, letting the benchmark run (and report
     # results) under the WRONG mode with no warning.
     if get_memory_settings().WRITE_GATE_HIERARCHICAL != (mode == "hierarchical"):
-        raise AssertionError(f"_set_mode({mode!r}) did not take effect")
+        raise AssertionError(f"_set_mode({mode!r}) did not take effect")  # noqa: TRY003 — one-off message, not reused (§3.3)
     results: list[dict] = []
     with BenchmarkDB() as db:
         db.load_memories(
@@ -218,7 +218,7 @@ def roc_auc(labels: list[int], scores: list[float]) -> float:
     n_pos = sum(labels)
     n_neg = len(labels) - n_pos
     if n_pos == 0 or n_neg == 0:
-        raise ValueError("need both classes")
+        raise ValueError("need both classes")  # noqa: TRY003 — one-off message, not reused (§3.3)
     order = sorted(range(len(scores)), key=lambda i: scores[i])
     ranks = [0.0] * len(scores)
     i = 0

@@ -88,7 +88,7 @@ def _parse_db_url(db_url: str) -> tuple[str, str]:
     parsed = urlparse(db_url)
     dbname = (parsed.path or "/").lstrip("/")
     if not dbname:
-        raise ValueError(f"db_url missing database name: {db_url}")
+        raise ValueError(f"db_url missing database name: {db_url}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     return dbname, urlunparse(parsed._replace(path="/postgres"))
 
 
@@ -106,7 +106,7 @@ def safety_guard(db_url: str, *, allow_prod: bool = False) -> None:
     """Refuse production-DB targets unless allow_prod is set."""
     dbname, _ = _parse_db_url(db_url)
     if _PROD_DBNAME_RE.match(dbname) and not allow_prod:
-        raise SystemExit(f"refusing prod DB '{dbname}'. Pass --allow-prod.")
+        raise SystemExit(f"refusing prod DB '{dbname}'. Pass --allow-prod.")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
 
 def fingerprint(path: Path) -> str:
@@ -281,7 +281,7 @@ def create_snapshot(
     cmd = ["pg_dump", "--format=custom", "--file", str(snapshot_path), db_url]
     res = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603, S607 — "pg_dump" resolved via PATH, standard practice; db_url is the local benchmark DB config, never external input
     if res.returncode != 0:
-        raise RuntimeError(f"pg_dump failed: {res.stderr.strip()}")
+        raise RuntimeError(f"pg_dump failed: {res.stderr.strip()}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     meta = SnapshotMeta(
         path=str(snapshot_path),
         created_at_iso=datetime.now(timezone.utc).isoformat(),
@@ -391,7 +391,7 @@ def restore_snapshot(
     safety_guard(db_url, allow_prod=allow_prod)
     meta_path = _meta_path(snapshot_path)
     if not meta_path.exists():
-        raise FileNotFoundError(f"missing sidecar meta: {meta_path}")
+        raise FileNotFoundError(f"missing sidecar meta: {meta_path}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     meta = json.loads(meta_path.read_text())
     # Check target via 'postgres' DB before drop — fail without destruction.
     drift = _check_version_drift(meta, _capture_db_state(_parse_db_url(db_url)[1]))

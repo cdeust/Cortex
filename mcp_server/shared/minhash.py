@@ -72,7 +72,7 @@ class MinHash:
     def jaccard(self, other: "MinHash") -> float:
         """Estimate Jaccard similarity as the fraction of agreeing permutations."""
         if self.num_perm != other.num_perm:
-            raise ValueError("MinHash.jaccard: sketches have different num_perm")
+            raise ValueError("MinHash.jaccard: sketches have different num_perm")  # noqa: TRY003 — one-off message, not reused (§3.3)
         return (
             float(np.count_nonzero(self.hashvalues == other.hashvalues)) / self.num_perm
         )
@@ -133,7 +133,7 @@ class MinHashLSH:
 
     def insert(self, key: str, minhash: MinHash) -> None:
         if key in self._keys:
-            raise ValueError(f"MinHashLSH: key {key!r} already inserted")
+            raise ValueError(f"MinHashLSH: key {key!r} already inserted")  # noqa: TRY003 — one-off message, not reused (§3.3)
         self._keys.add(key)
         hv = minhash.hashvalues
         for i, table in enumerate(self._tables):

@@ -22,6 +22,11 @@ The table of files and their consumers is scripts/pip_constraint_sets.py.
 Usage:
     python3 scripts/generate_pip_constraints.py           # rewrite if changed
     python3 scripts/generate_pip_constraints.py --check   # exit 1 if stale
+
+TRY003 (issue #239): every ``raise ExportError(...)`` below names a
+distinct, one-off export/resolution failure — never reused (§3.3).
+Marked with a bare `# noqa: TRY003` at each site rather than repeating
+this paragraph.
 """
 
 from __future__ import annotations
@@ -111,11 +116,11 @@ def serving_registries(body: str) -> list[str]:
         pin = (match.group(1), match.group(2))
         registry = registries.get(pin)
         if registry is None:
-            raise ExportError(f"{pin[0]}=={pin[1]} is in no uv.lock registry")
+            raise ExportError(f"{pin[0]}=={pin[1]} is in no uv.lock registry")  # noqa: TRY003
         if registry == PYPI or registry in needed:
             continue
         if registry not in declared:
-            raise ExportError(
+            raise ExportError(  # noqa: TRY003
                 f"{pin[0]}=={pin[1]} resolves from {registry}, which"
                 " pyproject.toml declares no [[tool.uv.index]] for"
             )
@@ -150,7 +155,7 @@ def export(constraint_set: ConstraintSet) -> str:
     install uv to keep tests that never needed it passing.
     """
     if shutil.which("uv") is None:
-        raise ExportError(
+        raise ExportError(  # noqa: TRY003
             "uv is not installed — it is the only reader of uv.lock."
             " See https://docs.astral.sh/uv/getting-started/installation/"
         )
@@ -160,9 +165,9 @@ def export(constraint_set: ConstraintSet) -> str:
             command, cwd=REPO_ROOT, capture_output=True, text=True, check=False
         )
     except OSError as error:
-        raise ExportError(f"could not run uv: {error}") from error
+        raise ExportError(f"could not run uv: {error}") from error  # noqa: TRY003
     if done.returncode != 0:
-        raise ExportError(
+        raise ExportError(  # noqa: TRY003
             f"`{' '.join(command)}` failed with exit"
             f" {done.returncode}:\n{done.stderr.strip()}"
         )
@@ -198,13 +203,13 @@ def _reject_unusable(constraint_set: ConstraintSet, body: str) -> None:
         if line and not line.startswith((" ", "#", "-"))
     ]
     if not requirements:
-        raise ExportError(
+        raise ExportError(  # noqa: TRY003
             f"{constraint_path(constraint_set)}: export resolved to zero requirements"
         )
     unhashed = [line for line in requirements if not line.rstrip().endswith("\\")]
     if unhashed:
         path = constraint_path(constraint_set)
-        raise ExportError(
+        raise ExportError(  # noqa: TRY003
             f"{path}: {len(unhashed)} requirement(s) carry no hash,"
             f" first is {unhashed[0].strip()!r}"
         )
@@ -263,10 +268,11 @@ def main(argv: list[str] | None = None) -> int:
         for path in changed:
             print(f"wrote {path}")
         print(f"{len(changed)} of {len(SETS)} file(s) changed")
-        return 0
     except ExportError as error:
         print(f"constraint generation could not run: {error}", file=sys.stderr)
         return 2
+    else:
+        return 0
 
 
 if __name__ == "__main__":

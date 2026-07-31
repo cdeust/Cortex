@@ -292,8 +292,6 @@ def _load_remember():
     try:
         import asyncio  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
         from mcp_server.handlers.remember import handler  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-
-        return asyncio, handler
     except ImportError as exc:
         missing = str(exc).replace("No module named ", "").strip("'")
         print(
@@ -302,6 +300,8 @@ def _load_remember():
             file=sys.stderr,
         )
         sys.exit(1)
+    else:
+        return asyncio, handler
 
 
 def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> None:

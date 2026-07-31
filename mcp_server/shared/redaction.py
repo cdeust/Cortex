@@ -129,25 +129,29 @@ def _selfcheck() -> None:
     guard for a documented leak vector, run at import time — not a
     debug-only invariant — so it must not be strippable by ``python -O``,
     which silently deletes every ``assert`` statement.
+
+    TRY003 (issue #239): each raise below names a distinct leak-vector
+    regression this function reproduces — never reused (§3.3). Marked
+    with a bare `# noqa: TRY003` at each site.
     """
     # Repro: query-parameter password must be masked.
     _qp = redact_url(
         "postgresql://cortex@localhost:5432/cortex?password=SuperSecret123&sslmode=require"
     )
     if "SuperSecret123" in _qp:
-        raise AssertionError(f"query-param password leak: {_qp!r}")
+        raise AssertionError(f"query-param password leak: {_qp!r}")  # noqa: TRY003
     # urlencode percent-encodes '*', so accept both the literal and encoded form.
     if not ("password=***" in _qp or "password=%2A%2A%2A" in _qp):
-        raise AssertionError(f"expected masked password in: {_qp!r}")
+        raise AssertionError(f"expected masked password in: {_qp!r}")  # noqa: TRY003
     if "sslmode=require" not in _qp:
-        raise AssertionError(f"sslmode param lost: {_qp!r}")
+        raise AssertionError(f"sslmode param lost: {_qp!r}")  # noqa: TRY003
 
     # Repro: IPv6 host must keep brackets.
     _ipv6 = redact_url("postgres://u:secret@[::1]:5432/db")
     if "secret" in _ipv6:
-        raise AssertionError(f"IPv6 userinfo password leak: {_ipv6!r}")
+        raise AssertionError(f"IPv6 userinfo password leak: {_ipv6!r}")  # noqa: TRY003
     if "[::1]" not in _ipv6:
-        raise AssertionError(f"IPv6 brackets dropped: {_ipv6!r}")
+        raise AssertionError(f"IPv6 brackets dropped: {_ipv6!r}")  # noqa: TRY003
 
 
 _selfcheck()

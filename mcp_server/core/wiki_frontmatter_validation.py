@@ -95,7 +95,7 @@ def normalize_frontmatter(content: str) -> str:
     if not _opens_frontmatter_fence(content):
         return content
     if not _has_closing_fence(content):
-        raise UnclosedFrontmatterError(
+        raise UnclosedFrontmatterError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             "frontmatter fence ('---') opened but never closed — refusing "
             "to write: parse_page would silently consume the entire body "
             "as malformed frontmatter keys, destroying it"

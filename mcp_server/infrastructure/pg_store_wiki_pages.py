@@ -42,7 +42,7 @@ def upsert_page(conn: StoreConnection, page: dict[str, Any]) -> tuple[int, bool]
     required = ("rel_path", "slug", "kind", "title")
     for k in required:
         if k not in page:
-            raise ValueError(f"upsert_page missing required field: {k}")
+            raise ValueError(f"upsert_page missing required field: {k}")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
     body = page.get("body", "")
     bh = page.get("body_hash") or body_hash(body)

@@ -70,14 +70,28 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # "8 May 2023 13:56 EST") and gained the comment explaining why; the
     # sqlite site also hoisted its function-level import. Same writers, no
     # new ones — this test was the oracle, as on every prior re-pin.
-    ("infrastructure/pg_store.py", 699),
+    # Shifted 699->712 by issue #239 (TRY301): a `_require_cas_won` helper
+    # (13 lines incl. docstring) was extracted above `supersede_atomic`,
+    # abstracting a redundant same-try raise/catch. Same writer
+    # (_transfer_anchor_on), no new one — this test was the oracle again.
+    # Shifted 712->726 by issue #239 (TRY003): a `_returning_memory_id`
+    # helper (14 lines incl. docstring) was extracted right after
+    # `_require_cas_won`, consolidating `_insert_memory_on`'s and
+    # `insert_memory`'s identical duplicate "INSERT ... RETURNING id
+    # produced no row" raise. Same writer (_transfer_anchor_on), no new
+    # one.
+    ("infrastructure/pg_store.py", 726),
     # Canonical single-row writer (all callers route through this).
     # bump_heat_raw — the one canonical single-row site (re-pinned after
     # rebasing the read-path PR onto blame-path injection-receipts).
     # Shifted 727->728 by the same import-line addition above.
     # Shifted 737->766 by the module-level hash helpers extraction (same
     # net +29 cause as the entry above).
-    ("infrastructure/pg_store.py", 741),
+    # Shifted 741->754 by the same #239 TRY301 extraction above. Same
+    # writer (bump_heat_raw), no new one.
+    # Shifted 754->768 by the same #239 TRY003 extraction above. Same
+    # writer (bump_heat_raw), no new one.
+    ("infrastructure/pg_store.py", 768),
     # A3 batched writer (homeostatic cohort branch + any other batch consumer).
     # update_memories_heat_batch. Shifted 787->825 when M-D3 (7.1) added
     # get_homeostatic_factor/set_homeostatic_factor's write_class parameter
@@ -85,7 +99,11 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # silent-except-sweep import-line addition.
     # Shifted 835->864 by the module-level hash helpers extraction (same
     # net +29 cause as the two entries above).
-    ("infrastructure/pg_store.py", 839),
+    # Shifted 839->852 by the same #239 TRY301 extraction above. Same
+    # writer (update_memories_heat_batch), no new one.
+    # Shifted 852->866 by the same #239 TRY003 extraction above. Same
+    # writer (update_memories_heat_batch), no new one.
+    ("infrastructure/pg_store.py", 866),
     # SQLite parity of the anchor transfer (same transactional rationale).
     # Shifted 389->440->447->493->529->530 (M-D3, then #169 added _fts_augment /
     # _migrate_fts_code_tokenize / unconditional embedding_model stamp above it;

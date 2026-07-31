@@ -325,10 +325,11 @@ def allocate_engram_slot(
             best_slot,
             exclude_id=mem_id,
         )
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_post_store.engram_allocation")
+        silent_failure.note("write_post_store.engram_allocation", exc)
+        return None
+    else:
         return {
             "slot_index": best_slot,
             "temporally_linked": linked_count,
         }
-    except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("write_post_store.engram_allocation")
-        silent_failure.note("write_post_store.engram_allocation", exc)
-        return None

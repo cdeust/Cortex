@@ -92,11 +92,12 @@ def _try_get_memory_store():
         settings = get_memory_settings()
         _memory_store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
         _memory_available = True
-        return _memory_store
     except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Memory system not available: %s", e)
         _memory_available = False
         return None
+    else:
+        return _memory_store
 
 
 def _normalize_tags(tags: Any) -> list:
@@ -178,10 +179,11 @@ def _get_fired_triggers(directory: str, first_message: str) -> list[dict[str, An
                         "triggered_count": trigger.get("triggered_count", 0) + 1,
                     }
                 )
-        return fired
     except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Failed to check prospective triggers: %s", e)
         return []
+    else:
+        return fired
 
 
 # ── Handler ──────────────────────────────────────────────────────────────

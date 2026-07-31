@@ -29,14 +29,14 @@ class SqliteReceiptsMixin:
     ) -> int:
         """Insert one receipt header + its items; return receipt_id."""
         if not items:
-            raise ValueError("injection receipt requires at least one item")
+            raise ValueError("injection receipt requires at least one item")  # noqa: TRY003 — one-off message; shared shape (2 occurrences, PG+SQLite backend pair) below the three-uses extraction bar (§3.3)
         cur = self._raw_conn.execute(
             "INSERT INTO injection_receipts (session_id, channel) VALUES (?, ?)",
             (session_id, channel),
         )
         receipt_id = cur.lastrowid
         if receipt_id is None:
-            raise sqlite3.ProgrammingError("receipt INSERT produced no lastrowid")
+            raise sqlite3.ProgrammingError("receipt INSERT produced no lastrowid")  # noqa: TRY003 — one-off message, not reused (§3.3)
         self._raw_conn.executemany(
             "INSERT INTO injection_receipt_items"
             " (receipt_id, memory_id, rank, score) VALUES (?, ?, ?, ?)",

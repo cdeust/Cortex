@@ -219,6 +219,19 @@ _MAX_RECEIPT_IDS = 999
 _INT4_MAX = 2_147_483_647
 
 
+# TRY003/TRY004 (issue #239): every raise in _parse_receipt_ids below is
+# ValueError, uniformly, for every malformation shape (wrong container
+# type, wrong entry type incl. bool, non-numeric entry, out-of-range
+# value) — callers catch ONE exception category for "this receipt_ids
+# argument was bad", not one per cause. test_malformed_receipt_ids_
+# raise_loudly pins this (parametrized across type- and value-malformed
+# inputs, asserting pytest.raises(ValueError) uniformly), so TRY004's
+# "prefer TypeError" (which would fire only on the pure-type-check
+# branch) does not apply — it would fracture a deliberately uniform
+# contract to satisfy a lint preference. TRY003 does not apply either:
+# each message is a one-off description of a specific malformation,
+# never reused, so a subclass per check would be premature abstraction
+# (§3.3).
 def _parse_receipt_ids(raw: Any) -> list[int]:
     """Coerce the argument into a deduplicated, ordered id list — loudly.
 
@@ -228,9 +241,9 @@ def _parse_receipt_ids(raw: Any) -> list[int]:
     silently resolve receipt 1).
     """
     if not isinstance(raw, list) or not raw:
-        raise ValueError("receipt_ids requires a non-empty list of receipt ids")
+        raise ValueError("receipt_ids requires a non-empty list of receipt ids")  # noqa: TRY003
     if len(raw) > _MAX_RECEIPT_IDS:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003
             f"receipt_ids accepts at most {_MAX_RECEIPT_IDS} ids per call, "
             f"got {len(raw)}"
         )
@@ -238,17 +251,17 @@ def _parse_receipt_ids(raw: Any) -> list[int]:
     seen: set[int] = set()
     for value in raw:
         if isinstance(value, bool) or not isinstance(value, (int, str)):
-            raise ValueError(f"receipt_ids entries must be integers, got {value!r}")
+            raise ValueError(f"receipt_ids entries must be integers, got {value!r}")  # noqa: TRY003, TRY004
         try:
             rid = int(value)
         except ValueError as exc:
-            raise ValueError(
+            raise ValueError(  # noqa: TRY003
                 f"receipt_ids entries must be integers, got {value!r}"
             ) from exc
         if rid < 1:
-            raise ValueError(f"receipt ids are positive (SERIAL), got {rid}")
+            raise ValueError(f"receipt ids are positive (SERIAL), got {rid}")  # noqa: TRY003
         if rid > _INT4_MAX:
-            raise ValueError(f"receipt ids fit int4 (SERIAL), got {rid}")
+            raise ValueError(f"receipt ids fit int4 (SERIAL), got {rid}")  # noqa: TRY003
         if rid not in seen:
             seen.add(rid)
             ids.append(rid)

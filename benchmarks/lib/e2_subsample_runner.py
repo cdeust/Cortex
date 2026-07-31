@@ -188,7 +188,7 @@ def run_trial(
     """Run one (benchmark, N, condition) trial. Loads subsample → evaluates."""
     sub_items, sub_probes = subsample(items, probes, n, n_queries, seed)
     if not sub_probes:
-        raise RuntimeError(
+        raise RuntimeError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"no valid queries after subsample n={n} for benchmark {benchmark}"
         )
     print(

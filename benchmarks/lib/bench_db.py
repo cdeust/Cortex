@@ -134,10 +134,23 @@ class BenchmarkDB:
             self._embeddings = EmbeddingEngine()
         return self
 
+    def _require_opened(self) -> None:
+        """Raise if ``open()`` hasn't run yet.
+
+        Extracted (TRY003, issue #239 — Extract Function): the 4 call
+        sites below each repeated this exact guard+message; this is now
+        the one place that constructs it. ``self._store`` itself is
+        still read at each call site (not returned here) since this
+        directory is excluded from the pyright gate (pyrightconfig.json)
+        and every call site already narrows via its own `is None` check
+        pattern used elsewhere in this class.
+        """
+        if self._store is None:
+            raise AssertionError("Call open() first")  # noqa: TRY003 — canonical, 4-call-site-shared construction point (§3.3); see docstring above
+
     def _purge_stale_benchmark_data(self) -> None:
         """Remove orphaned benchmark memories from crashed/killed runs."""
-        if self._store is None:
-            raise AssertionError("Call open() first")
+        self._require_opened()
         self._store._execute("DELETE FROM memories WHERE is_benchmark = TRUE")
         self._store._conn.commit()
 
@@ -167,8 +180,7 @@ class BenchmarkDB:
 
         Returns (ids, source_map) where source_map maps memory_id → source string.
         """
-        if self._store is None:
-            raise AssertionError("Call open() first")
+        self._require_opened()
         ids, source_map = ingest_memories_batch(
             memories,
             self._store,
@@ -193,8 +205,7 @@ class BenchmarkDB:
         rerank_alpha: float = 0.70,
     ) -> list[dict[str, Any]]:
         """Delegate to mcp_server.core.pg_recall.recall()."""
-        if self._store is None:
-            raise AssertionError("Call open() first")
+        self._require_opened()
         return pg_recall(
             query=query,
             store=self._store,
@@ -227,8 +238,7 @@ class BenchmarkDB:
         for the schema). The benchmark uses ``selected_memories`` to
         compute retrieval hit ranks.
         """
-        if self._store is None:
-            raise AssertionError("Call open() first")
+        self._require_opened()
         return pg_assemble_context(
             query=query,
             store=self._store,

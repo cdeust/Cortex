@@ -16,7 +16,7 @@ Sweep (p99 write latency / throughput vs batch size):
 from __future__ import annotations
 
 from mcp_server.core.streaming.adaptive_controller import AdaptiveBatchController
-from mcp_server.core.streaming.adaptive_writer import compute_queue_cap
+from mcp_server.core.streaming.queue_sizing import compute_queue_cap
 
 # RAM budget for in-flight write buffers per ingest phase. Conservative — the
 # bounded queue + per-worker buffers stay far under this (a few MB in practice).

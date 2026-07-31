@@ -132,7 +132,7 @@ def canonical_licence() -> str:
             # testing equivalence — 0, 1, 2, and -1/unbounded all agree here),
             # so this is the plain, un-tunable "up to the next quote" read.
             return tail.split('"', 1)[0]
-    raise check_doc_claims.ClaimError("pyproject.toml: [project].license not found")
+    raise check_doc_claims.ClaimError("pyproject.toml: [project].license not found")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
 
 def canonical_python_floor() -> str:
@@ -140,7 +140,7 @@ def canonical_python_floor() -> str:
     text = check_doc_claims.read("pyproject.toml")
     head, sep, tail = text.partition('requires-python = ">=')
     if not sep:
-        raise check_doc_claims.ClaimError(
+        raise check_doc_claims.ClaimError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             'pyproject.toml: requires-python ">=X.Y" not found'
         )
     # See canonical_licence's identical comment: maxsplit=1 is not load-bearing.

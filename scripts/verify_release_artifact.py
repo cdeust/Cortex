@@ -83,7 +83,7 @@ def _normalize_expected(expected: str) -> str:
     token = expected.strip().split()[0] if expected.strip() else ""
     token = token.lower()
     if len(token) != _SHA256_HEX_LEN or any(c not in "0123456789abcdef" for c in token):
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"expected a {_SHA256_HEX_LEN}-char hex SHA-256, got: {expected!r}"
         )
     return token
@@ -116,7 +116,7 @@ def verify_from_checksum_file(artifact: Path, checksum_file: Path) -> None:
     """
     contents = checksum_file.read_text(encoding="utf-8").strip()
     if not contents:
-        raise ValueError(f"checksum file is empty: {checksum_file}")
+        raise ValueError(f"checksum file is empty: {checksum_file}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     verify_artifact(artifact, contents)
 
 

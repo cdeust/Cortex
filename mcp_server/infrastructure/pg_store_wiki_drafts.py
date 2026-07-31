@@ -152,7 +152,7 @@ def update_draft_status(
 ) -> bool:
     """Transition a draft's status. Stamps reviewed_at automatically."""
     if status not in ("pending", "approved", "rejected", "published"):
-        raise ValueError(f"invalid status: {status}")
+        raise ValueError(f"invalid status: {status}")  # noqa: TRY003 — one-off message, not reused (§3.3)
     with conn.cursor() as cur:
         cur.execute(
             """

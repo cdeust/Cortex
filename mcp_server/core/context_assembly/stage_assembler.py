@@ -88,7 +88,7 @@ class BudgetSplit:
     def __post_init__(self) -> None:
         total = self.own_stage + self.adjacent + self.summaries
         if abs(total - 1.0) > _SPLIT_SUM_TOLERANCE:
-            raise ValueError(f"BudgetSplit must sum to 1.0, got {total}")
+            raise ValueError(f"BudgetSplit must sum to 1.0, got {total}")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
 
 DEFAULT_SPLIT = BudgetSplit()

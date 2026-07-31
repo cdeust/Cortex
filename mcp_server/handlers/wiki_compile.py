@@ -232,6 +232,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
 # WIKI_ROOT import path validation at module load — not required but
 # catches misconfiguration early in dev. Explicit raise, not `assert`
-# (S101), so this check is never silently stripped by `python -O`.
+# (S101), so this check is never silently stripped by `python -O`. This is
+# a self-check on this MODULE's own constant (not a caller-input boundary),
+# so AssertionError — not TypeError (TRY004) — is the right idiom; the
+# message is a one-off, never-reused invariant description, so a dedicated
+# exception subclass would be premature abstraction (TRY003, §3.3).
 if not isinstance(WIKI_ROOT, (str, Path)):
-    raise AssertionError("WIKI_ROOT must be a path-like")
+    raise AssertionError("WIKI_ROOT must be a path-like")  # noqa: TRY003, TRY004

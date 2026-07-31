@@ -14,6 +14,10 @@ Artifact layout confirmed by reading AP's own source (not guessed):
   - ``findings/<id>/stage-4.prd_input.json``     prd_input.rs:38 (optional)
   - ``findings/<id>/stage-6.validation.json``    prd_validator.rs:27 (optional)
   - ``findings/<id>/stage-8.security.json``      security_gates.rs:35 (optional)
+
+TRY003 (issue #239): every ``raise MalformedArtifactError(...)`` below
+names a distinct, one-off artifact-read failure — never reused (§3.3).
+Marked with a bare `# noqa: TRY003` at each site.
 """
 
 from __future__ import annotations
@@ -116,11 +120,11 @@ def _read_json(path: Path) -> tuple[dict[str, Any], str]:
     try:
         raw_bytes = path.read_bytes()
     except OSError as exc:
-        raise MalformedArtifactError(f"cannot read {path}: {exc}") from exc
+        raise MalformedArtifactError(f"cannot read {path}: {exc}") from exc  # noqa: TRY003
     try:
         return json.loads(raw_bytes), _sha256_bytes(raw_bytes)
     except ValueError as exc:
-        raise MalformedArtifactError(f"invalid JSON in {path}: {exc}") from exc
+        raise MalformedArtifactError(f"invalid JSON in {path}: {exc}") from exc  # noqa: TRY003
 
 
 def read_index(output_dir: Path, run_id: str) -> dict[str, Any]:
@@ -130,10 +134,10 @@ def read_index(output_dir: Path, run_id: str) -> dict[str, Any]:
     """
     index_path = output_dir / "runs" / run_id / INDEX_FILE_NAME
     if not index_path.exists():
-        raise MalformedArtifactError(f"no index.json at {index_path}")
+        raise MalformedArtifactError(f"no index.json at {index_path}")  # noqa: TRY003
     data, _ = _read_json(index_path)
     if "findings" not in data:
-        raise MalformedArtifactError(f"index.json at {index_path} has no 'findings'")
+        raise MalformedArtifactError(f"index.json at {index_path} has no 'findings'")  # noqa: TRY003
     return data
 
 
@@ -225,7 +229,7 @@ def load_finding(output_dir: Path, run_id: str, finding_id: str) -> FindingRecor
     finding_dir = _finding_dir(output_dir, run_id, finding_id)
     refined_path = finding_dir / REFINED_FILE_NAME
     if not refined_path.exists():
-        raise MalformedArtifactError(f"no {REFINED_FILE_NAME} at {finding_dir}")
+        raise MalformedArtifactError(f"no {REFINED_FILE_NAME} at {finding_dir}")  # noqa: TRY003
     refined, _ = _read_json(refined_path)
     extracted = refined.get("extracted", {})
     raw_source_path = extracted.get("source_path")

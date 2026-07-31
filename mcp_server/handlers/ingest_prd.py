@@ -133,7 +133,7 @@ async def _fetch_prd(args: dict[str, Any]) -> tuple[str, str]:
 
     provided = [bool(path), bool(content), bool(pipeline_id)]
     if sum(provided) != 1:
-        raise ValueError("exactly one of path / content / pipeline_id must be supplied")
+        raise ValueError("exactly one of path / content / pipeline_id must be supplied")  # noqa: TRY003 — one-off message, not reused (§3.3)
 
     if path:
         return Path(path).expanduser().read_text(encoding="utf-8"), "path"
@@ -152,7 +152,7 @@ async def _fetch_prd(args: dict[str, Any]) -> tuple[str, str]:
     result = normalise_mcp_payload(payload)
     prd_text = result.get("rendered_prd") or result.get("prd") or result.get("text")
     if not prd_text:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"prd-gen returned no rendered PRD for pipeline_id={pipeline_id}"
         )
     return prd_text, "pipeline_id"

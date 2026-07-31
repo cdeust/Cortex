@@ -33,7 +33,7 @@ def apply_condition(condition: str) -> dict[str, str | None]:
         if absent). For cortex_full, returns an empty dict (no-op).
     """
     if condition not in CONDITIONS:
-        raise ValueError(
+        raise ValueError(  # noqa: TRY003 — one-off message, not reused (§3.3)
             f"unknown condition: {condition!r}; expected one of {CONDITIONS}"
         )
     saved: dict[str, str | None] = {}
