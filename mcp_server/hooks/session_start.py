@@ -30,6 +30,7 @@ from mcp_server.handlers.injection_receipts import (
     receipt_marker,
     session_id_from_transcript,
 )
+from mcp_server.shared.platform import python_executable
 import sqlite3
 import asyncio
 from datetime import datetime as _dt, timezone as _tz
@@ -799,11 +800,12 @@ def _spawn_consolidate_cycle() -> int | None:
         Path(__file__).resolve().parents[2]
     )
     launcher = Path(plugin_root) / "scripts" / "launcher.py"
-    py = (
-        __import__("shutil").which("python3")
-        or __import__("shutil").which("python")
-        or sys.executable
-    )
+    # Never resolve "python3"/"python" by PATH name: on Windows those hit
+    # the Microsoft Store stub (exits without running anything), which
+    # silently disables this spawn. python_executable() is the interpreter
+    # actually running this code (issue #315).
+    # source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.2
+    py = python_executable()
     if launcher.exists():
         cmd = [py, str(launcher), "mcp_server.hooks.consolidate_background"]
     else:
@@ -933,11 +935,11 @@ def _maybe_background_reanalyze() -> None:
         if not launcher.exists():
             return
 
-        py = (
-            __import__("shutil").which("python3")
-            or __import__("shutil").which("python")
-            or sys.executable
-        )
+        # Never resolve "python3"/"python" by PATH name: on Windows those
+        # hit the Microsoft Store stub (exits without running anything),
+        # which silently disables this background reanalyze (issue #315).
+        # source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.2
+        py = python_executable()
         cmd = [
             py,
             str(launcher),

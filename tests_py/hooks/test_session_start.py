@@ -671,6 +671,286 @@ def test_auto_backfill_failure_is_logged_and_returns_zero(capsys, monkeypatch):
     assert "Auto-backfill failed (non-fatal)" in capsys.readouterr().err
 
 
+# ── Background spawn: interpreter resolution (issue #315) ─────────────
+#
+# Both spawn helpers must resolve the interpreter via python_executable()
+# (== sys.executable), never by resolving "python3"/"python" on PATH
+# first — on Windows that hits the Microsoft Store stub, which exits
+# without running anything and silently disables the spawn.
+
+
+def _tracking_open(monkeypatch, target):
+    """Patch ``target.open`` (a hook module) to record every path opened,
+    while still delegating to the real ``open`` — string equality on the
+    recorded path is case-sensitive on every host OS, unlike
+    ``Path.exists()`` (macOS APFS is case-insensitive by default, so it
+    cannot distinguish ``.claude`` from ``.CLAUDE``).
+    """
+    opened: list[str] = []
+    real_open = open
+
+    def _open(path, *args, **kwargs):
+        opened.append(str(path))
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(target, "open", _open, raising=False)
+    return opened
+
+
+class TestSpawnConsolidateCycleInterpreterResolution:
+    def _write_launcher(self, tmp_path, monkeypatch):
+        plugin_root = tmp_path / "plugin"
+        (plugin_root / "scripts").mkdir(parents=True)
+        (plugin_root / "scripts" / "launcher.py").write_text("# stub\n")
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_root))
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        return plugin_root
+
+    def test_never_consults_shutil_which_and_builds_expected_command(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """A PATH entry that would resolve to a stub interpreter must lose:
+        the spawned command uses sys.executable regardless of what
+        shutil.which("python3")/("python") would have returned.
+        """
+        plugin_root = self._write_launcher(tmp_path, monkeypatch)
+        monkeypatch.setattr("shutil.which", lambda name: f"/fake/store-stub/{name}")
+        opened = _tracking_open(monkeypatch, hook)
+        captured = {}
+
+        def _fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            return MagicMock(pid=4242)
+
+        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+
+        assert hook._spawn_consolidate_cycle() == 4242
+        launcher = plugin_root / "scripts" / "launcher.py"
+        assert captured["cmd"] == [
+            sys.executable,
+            str(launcher),
+            "mcp_server.hooks.consolidate_background",
+        ]
+        assert "store-stub" not in captured["cmd"][0]
+        assert captured["kwargs"]["stdin"] == hook.subprocess.DEVNULL
+        assert captured["kwargs"]["stderr"] == hook.subprocess.STDOUT
+        assert captured["kwargs"]["start_new_session"] is True
+        log_path = tmp_path / ".claude" / "methodology" / "consolidate.log"
+        assert opened == [str(log_path)]
+        assert captured["kwargs"]["stdout"].name == str(log_path)
+
+        # A second cycle's spawn must also succeed (mkdir exist_ok=True).
+        assert hook._spawn_consolidate_cycle() == 4242
+        err = capsys.readouterr().err
+        assert f"background consolidate spawned → {log_path}" in err
+
+    def test_falls_back_to_module_invocation_without_launcher(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path / "no-scripts-here"))
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+        captured = {}
+
+        def _fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return MagicMock(pid=99)
+
+        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+
+        hook._spawn_consolidate_cycle()
+
+        assert captured["cmd"] == [
+            sys.executable,
+            "-m",
+            "mcp_server.hooks.consolidate_background",
+        ]
+
+    def test_falls_back_to_repo_root_without_plugin_root_env(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        captured = {}
+
+        def _fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return MagicMock(pid=1)
+
+        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+
+        hook._spawn_consolidate_cycle()
+        expected_launcher = (
+            Path(hook.__file__).resolve().parents[2] / "scripts" / "launcher.py"
+        )
+        assert captured["cmd"][1] == str(expected_launcher)
+
+
+class TestMaybeBackgroundReanalyzeInterpreterResolution:
+    """Issue #315: same defect, same fix, as ``_spawn_reanalyze`` in
+    ``post_commit_reindex.py`` — a PATH-resolved interpreter must never
+    reach the spawned command.
+    """
+
+    def _mock_pipeline(self, monkeypatch, *, stale=True, cached="the-cached-path"):
+        """Wire discover/lookup/staleness with MagicMocks (not plain
+        lambdas) so a test can assert what argument each received — a
+        lambda that ignores its argument cannot distinguish the real
+        ``cached_path`` from a mutant that passes ``None`` through.
+        """
+        from mcp_server.infrastructure import pipeline_discovery, pipeline_graph_ttl
+
+        monkeypatch.setattr(
+            pipeline_discovery, "discover_pipeline_command", lambda: ["ap"]
+        )
+        stale_mock = MagicMock(return_value=stale)
+        monkeypatch.setattr(pipeline_graph_ttl, "graph_is_stale", stale_mock)
+        lookup_mock = MagicMock(return_value=cached)
+        monkeypatch.setattr(hook, "_lookup_cached_graph_path", lookup_mock)
+        return stale_mock, lookup_mock
+
+    def _write_launcher(self, tmp_path, monkeypatch):
+        plugin_root = tmp_path / "plugin"
+        (plugin_root / "scripts").mkdir(parents=True)
+        (plugin_root / "scripts" / "launcher.py").write_text("# stub\n")
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_root))
+        monkeypatch.setenv("CLAUDE_PROJECT_ROOT", "/the/project")
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        return plugin_root
+
+    def test_never_consults_shutil_which_and_builds_expected_command(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        plugin_root = self._write_launcher(tmp_path, monkeypatch)
+        stale_mock, lookup_mock = self._mock_pipeline(monkeypatch)
+        monkeypatch.setattr("shutil.which", lambda name: f"/fake/store-stub/{name}")
+        opened = _tracking_open(monkeypatch, hook)
+        captured = {}
+
+        def _fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            return MagicMock()
+
+        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+
+        hook._maybe_background_reanalyze()
+
+        launcher = plugin_root / "scripts" / "launcher.py"
+        assert captured["cmd"] == [
+            sys.executable,
+            str(launcher),
+            "mcp_server.hooks.ingest_codebase_background",
+            "/the/project",
+        ]
+        assert "store-stub" not in captured["cmd"][0]
+        assert captured["kwargs"]["stdin"] == hook.subprocess.DEVNULL
+        assert captured["kwargs"]["stderr"] == hook.subprocess.STDOUT
+        assert captured["kwargs"]["start_new_session"] is True
+        log_path = tmp_path / ".claude" / "methodology" / "pipeline_reanalyze.log"
+        assert opened == [str(log_path)]
+        assert captured["kwargs"]["stdout"].name == str(log_path)
+        # The cached-graph lookup result must actually flow into the
+        # staleness check — not a look-alike constant.
+        lookup_mock.assert_called_once_with("/the/project")
+        stale_mock.assert_called_once_with("the-cached-path")
+        assert "background pipeline reanalysis spawned" in capsys.readouterr().err
+
+        # A second reanalyze must also succeed: the log directory already
+        # exists on this call, exercising mkdir's exist_ok=True — a mutant
+        # that drops/flips exist_ok raises FileExistsError, which the
+        # broad except swallows into a "skipped" log instead of "spawned".
+        hook._maybe_background_reanalyze()
+        err = capsys.readouterr().err
+        assert "background pipeline reanalysis spawned" in err
+        assert "skipped" not in err
+
+    def test_falls_back_to_repo_root_without_plugin_root_env(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+        monkeypatch.setenv("CLAUDE_PROJECT_ROOT", "/the/project")
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        self._mock_pipeline(monkeypatch)
+        captured = {}
+
+        def _fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return MagicMock()
+
+        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+
+        hook._maybe_background_reanalyze()
+
+        expected_launcher = (
+            Path(hook.__file__).resolve().parents[2] / "scripts" / "launcher.py"
+        )
+        assert captured["cmd"][1] == str(expected_launcher)
+
+    def test_uses_cwd_without_project_root_env(self, tmp_path, monkeypatch):
+        self._write_launcher(tmp_path, monkeypatch)
+        monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
+        monkeypatch.setattr(hook.os, "getcwd", lambda: "/cwd/fallback")
+        self._mock_pipeline(monkeypatch)
+        captured = {}
+
+        def _fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return MagicMock()
+
+        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+
+        hook._maybe_background_reanalyze()
+
+        assert captured["cmd"][-1] == "/cwd/fallback"
+
+    def test_skips_when_graph_fresh(self, tmp_path, monkeypatch):
+        self._mock_pipeline(monkeypatch, stale=False)
+
+        with patch.object(hook.subprocess, "Popen") as popen:
+            hook._maybe_background_reanalyze()
+
+        popen.assert_not_called()
+
+    def test_skips_without_launcher(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path / "no-scripts-dir"))
+        self._mock_pipeline(monkeypatch)
+
+        with patch.object(hook.subprocess, "Popen") as popen:
+            hook._maybe_background_reanalyze()
+
+        popen.assert_not_called()
+
+    def test_popen_failure_logs_and_is_swallowed(self, tmp_path, monkeypatch, capsys):
+        self._write_launcher(tmp_path, monkeypatch)
+        self._mock_pipeline(monkeypatch)
+
+        def _boom(cmd, **kwargs):
+            raise OSError("no such interpreter")
+
+        monkeypatch.setattr(hook.subprocess, "Popen", _boom)
+
+        hook._maybe_background_reanalyze()  # must not raise
+
+        err = capsys.readouterr().err
+        assert "background pipeline reanalysis skipped" in err
+        assert "no such interpreter" in err
+
+    def test_success_logs_the_log_path(self, tmp_path, monkeypatch, capsys):
+        self._write_launcher(tmp_path, monkeypatch)
+        self._mock_pipeline(monkeypatch)
+        monkeypatch.setattr(hook.subprocess, "Popen", lambda *a, **k: MagicMock())
+
+        hook._maybe_background_reanalyze()
+
+        err = capsys.readouterr().err
+        assert "background pipeline reanalysis spawned" in err
+        assert (
+            str(tmp_path / ".claude" / "methodology" / "pipeline_reanalyze.log") in err
+        )
+
+
 # ── External source reporting ─────────────────────────────────────────
 
 

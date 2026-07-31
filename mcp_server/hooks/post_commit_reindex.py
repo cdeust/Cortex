@@ -37,12 +37,13 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any
+
+from mcp_server.shared.platform import python_executable
 
 _LOG_PREFIX = "[post-commit-reindex]"
 _COOLDOWN_FILE = Path("/tmp/cortex_reindex_cooldown.json")
@@ -221,7 +222,9 @@ def _spawn_reanalyze(root: str) -> bool:
     if not launcher.exists():
         return False
 
-    py = shutil.which("python3") or shutil.which("python") or sys.executable
+    # Never resolve "python3"/"python" by PATH name — hits the Windows
+    # Store stub. source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.2
+    py = python_executable()
     cmd = [
         py,
         str(launcher),
