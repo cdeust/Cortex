@@ -15,6 +15,7 @@ Pure business logic — no I/O. Callers pass file content as bytes.
 from __future__ import annotations
 
 import hashlib
+import logging
 from typing import TYPE_CHECKING, TypeGuard
 
 from mcp_server.core.ast_extractor_registry import build_extra_extractors
@@ -47,6 +48,8 @@ if TYPE_CHECKING:
 
     from mcp_server.core.ast_extractor_registry import Extractor
 
+logger = logging.getLogger(__name__)
+
 
 def is_available() -> bool:
     """Check if tree-sitter is installed."""
@@ -69,15 +72,44 @@ def _is_ast_language(language: str) -> TypeGuard[SupportedLanguage]:
 
 
 def _get_extractor_and_tree(language: str, content: bytes) -> tuple | None:
-    """Get tree-sitter extractor and parsed tree, or None for fallback."""
+    """Get tree-sitter extractor and parsed tree, or None for fallback.
+
+    Precondition: `language` is a detected file language name; `content`
+    is that file's raw bytes.
+    Postcondition: returns `(extractor, tree)` once a parser was obtained
+    and used to parse `content`. Returns `None` — the degraded-mode signal
+    `parse_file_ast` reads to pick the regex fallback — when `language`
+    is unsupported, the pack is not installed (`ImportError`), or the
+    pack IS installed but could not fetch `language`'s grammar right now
+    (`DownloadError`: offline, air-gapped, proxied, or an upstream outage
+    — grammars resolve lazily over the network at `get_parser()` call
+    time). Never propagates a third-party exception.
+    """
     if not _is_ast_language(language):
         return None
     try:
-        from tree_sitter_language_pack import get_parser  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from tree_sitter_language_pack import (  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+            DownloadError,
+            get_parser,
+        )
     except ImportError:
         return None
 
-    tree = get_parser(language).parse(content)
+    try:
+        tree = get_parser(language).parse(content)
+    except DownloadError as exc:
+        # Same degraded mode as ImportError above, reached differently: the
+        # pack imported fine but could not fetch/verify this grammar right
+        # now. Logged every call, not just the first — this runs once per
+        # file, not once per process like a singleton model load, so
+        # suppressing repeats would hide a mid-run outage.
+        logger.warning(
+            "tree-sitter grammar for %r could not be obtained (%s); "
+            "falling back to the regex parser for this file.",
+            language,
+            exc,
+        )
+        return None
     return _EXTRACTORS[language], tree
 
 

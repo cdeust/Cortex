@@ -666,12 +666,21 @@ only_mutate = ["mcp_server/shared/json_native.py"]
 # generate_repo_badges.py fails EVERY mutant on "assets/badge-version.svg:
 # missing" before it can score a single one — reproduced empirically
 # (issue #293) attempting exactly that run.
+# scripts: tests_py/conftest.py — the ROOT conftest every test in the suite
+# collects through — does `from scripts.check_venv_lock_parity import
+# postgresql_extra_drift` at module level. Without this entry, ANY scoped
+# run (any `only_mutate`/test selection) fails collection at the conftest
+# itself with `ModuleNotFoundError: No module named 'scripts'` before a
+# single mutant can be scored — reproduced empirically (2026-07-31) while
+# scoping a run at mcp_server/core/ast_parser.py; not specific to that
+# file, since every run shares this same conftest.
 also_copy = [
     ".github",
     "tests_py",
     "deps",
     "docs",
     "assets",
+    "scripts",
     "README.md",
     "CONTRIBUTING.md",
     "SECURITY.md",

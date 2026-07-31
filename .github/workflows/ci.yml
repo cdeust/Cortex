@@ -154,6 +154,37 @@ jobs:
           echo "FlashRank pre-download failed after 5 attempts" >&2
           exit 1
 
+      # tree-sitter-language-pack fetches each grammar's shared library lazily
+      # over the network at `get_parser()` call time, not at install time — a
+      # cold cache mid-suite is a real, previously-uncaught `DownloadError`
+      # (main-red, CI run 30592244731, 2026-07-31:
+      # tests_py/core/test_ast_extractors.py + benchmarks/test_codebase_
+      # alteration.py). Needs the package importable, so — unlike the HF/
+      # FlashRank cache steps above — this must come after "Install
+      # dependencies"; same cache-then-prefetch-with-retries shape otherwise,
+      # for the same reason: fetch once here so `pytest` itself never touches
+      # the network for a grammar.
+      - name: Resolve tree-sitter cache directory
+        run: echo "TREE_SITTER_CACHE_DIR=$(python -c 'from tree_sitter_language_pack import cache_dir; print(cache_dir())')" >> "$GITHUB_ENV"
+
+      - name: Cache tree-sitter grammars
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TREE_SITTER_CACHE_DIR }}
+          key: ${{ runner.os }}-tree-sitter-grammars-${{ hashFiles('pyproject.toml') }}
+
+      # The language set is read from AST_SUPPORTED (not hand-copied here) so
+      # this step cannot drift from the languages ast_parser.py actually uses.
+      - name: Prefetch tree-sitter grammars
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from mcp_server.core.ast_parser import AST_SUPPORTED; from tree_sitter_language_pack import prefetch; prefetch(sorted(AST_SUPPORTED))" && exit 0
+            echo "tree-sitter grammar prefetch attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "tree-sitter grammar prefetch failed after 5 attempts" >&2
+          exit 1
+
       # Offline: both models are already cached by the steps above, so tests must
       # never reach out to huggingface.co mid-suite — deterministic and flake-free.
       - name: Run tests
@@ -268,6 +299,29 @@ jobs:
             sleep $((attempt * 10))
           done
           echo "HF pre-download failed after 5 attempts" >&2
+          exit 1
+
+      # Same rationale as the `test` job's identically-named steps (CI run
+      # 30592244731, 2026-07-31): this job also installs the `codebase` extra
+      # (comment above), so it is equally exposed to a cold-cache mid-suite
+      # `DownloadError` without this.
+      - name: Resolve tree-sitter cache directory
+        run: echo "TREE_SITTER_CACHE_DIR=$(python -c 'from tree_sitter_language_pack import cache_dir; print(cache_dir())')" >> "$GITHUB_ENV"
+
+      - name: Cache tree-sitter grammars
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TREE_SITTER_CACHE_DIR }}
+          key: ${{ runner.os }}-tree-sitter-grammars-${{ hashFiles('pyproject.toml') }}
+
+      - name: Prefetch tree-sitter grammars
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from mcp_server.core.ast_parser import AST_SUPPORTED; from tree_sitter_language_pack import prefetch; prefetch(sorted(AST_SUPPORTED))" && exit 0
+            echo "tree-sitter grammar prefetch attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "tree-sitter grammar prefetch failed after 5 attempts" >&2
           exit 1
 
       - name: Run SQLite backend tests

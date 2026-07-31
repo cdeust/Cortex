@@ -28,6 +28,7 @@ from mcp_server.core.ast_parser import (
     _get_extractor_and_tree,
     _is_ast_language,
     is_available,
+    parse_file_ast,
 )
 
 pytestmark = pytest.mark.skipif(not is_available(), reason="tree-sitter not installed")
@@ -98,6 +99,87 @@ def test_missing_pack_falls_back_instead_of_raising(
 ) -> None:
     monkeypatch.setitem(sys.modules, "tree_sitter_language_pack", None)
     assert _get_extractor_and_tree("python", b"def f():\n    pass\n") is None
+
+
+# ── DownloadError: the pack imports fine but can't fetch the grammar ──────
+#
+# Reached a different way than the two tests above: `tree-sitter-language-
+# pack` resolves a grammar lazily over the network at `get_parser()` call
+# time (not at import time), so an offline install, an air-gapped network,
+# a proxy, or an upstream outage raises `DownloadError` from an installed
+# pack instead of `ImportError` from a missing one. Forced deterministically
+# here (`monkeypatch.setattr` on the pack's own `get_parser`) rather than by
+# disabling real network, per CI run 30592244731 (2026-07-31, main) where
+# this exact exception escaped `_get_extractor_and_tree` uncaught.
+
+
+def _make_download_error_parser(message: str):
+    """A `get_parser` replacement that always raises `DownloadError`."""
+    from tree_sitter_language_pack import DownloadError
+
+    def _raise(_name: str) -> None:
+        raise DownloadError(message)
+
+    return _raise
+
+
+def test_download_error_falls_back_instead_of_raising(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tree_sitter_language_pack as tslp
+
+    monkeypatch.setattr(
+        tslp, "get_parser", _make_download_error_parser("Failed to fetch manifest")
+    )
+    assert _get_extractor_and_tree("python", b"def f():\n    pass\n") is None
+
+
+def test_download_error_logs_language_and_reason(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The signal itself is asserted, not just the absence of a crash
+    (coding-standards.md §13.1 F1): an operator must be able to tell which
+    language failed and why from the log alone."""
+    import tree_sitter_language_pack as tslp
+
+    monkeypatch.setattr(
+        tslp,
+        "get_parser",
+        _make_download_error_parser(
+            "Failed to fetch manifest from https://example.invalid"
+        ),
+    )
+    with caplog.at_level("WARNING", logger="mcp_server.core.ast_parser"):
+        result = _get_extractor_and_tree("python", b"def f():\n    pass\n")
+    assert result is None
+    # Pins the message's static wording (both halves), not just the
+    # dynamic language/reason substitutions — a wording change that drops
+    # either half would otherwise still pass on the substrings alone.
+    assert any(
+        rec.message == "tree-sitter grammar for 'python' could not be obtained "
+        "(Failed to fetch manifest from https://example.invalid); "
+        "falling back to the regex parser for this file."
+        for rec in caplog.records
+    )
+
+
+def test_download_error_degrades_through_parse_file_ast(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The public entry point `codebase_analyze` calls: never propagates
+    the third-party exception, and still returns the same valid
+    `FileAnalysis` shape the regex fallback produces for a missing
+    install."""
+    import tree_sitter_language_pack as tslp
+
+    monkeypatch.setattr(
+        tslp, "get_parser", _make_download_error_parser("Failed to fetch manifest")
+    )
+    result = parse_file_ast("demo.py", b"def f():\n    pass\n")
+    assert result.path == "demo.py"
+    assert result.language == "python"
+    assert isinstance(result.definitions, list)
 
 
 def test_supported_language_with_an_extractor_parses() -> None:
