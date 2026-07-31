@@ -136,8 +136,14 @@ def _fill(template: str, rng: random.Random) -> tuple[str, dict[str, str]]:
     return text, slots
 
 
-def _query_for(text: str, slots: dict[str, str], rng: random.Random) -> str:
-    """Build a query from the most-distinguishing slots (entity/error/file)."""
+def _query_for(slots: dict[str, str], rng: random.Random) -> str:
+    """Build a query from the most-distinguishing slots (entity/error/file).
+
+    issue #239 ARG cleanup: a ``text`` parameter was accepted but never
+    read — the query is built purely from ``slots``; the one caller
+    already holds ``text`` separately for its own use. Removed the unused
+    pass-through.
+    """
     parts = [slots.get("entity", ""), slots.get("error", ""), slots.get("file", "")]
     parts = [p for p in parts if p]
     if not parts:
@@ -180,7 +186,7 @@ def synth_corpus(n: int, seed: int) -> list[CorpusItem]:
     for i in range(n):
         kind, tmpl = rng.choice(templates)
         text, slots = _fill(tmpl, rng)
-        query = _query_for(text, slots, rng)
+        query = _query_for(slots, rng)
         items.append(
             CorpusItem(
                 text=text,

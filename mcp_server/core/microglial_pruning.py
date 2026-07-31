@@ -142,7 +142,7 @@ def identify_prunable_edges(
         if significant:
             continue
 
-        reasons = _classify_prune_reasons(edge, entity_heat, alpha_src, alpha_tgt)
+        reasons = _classify_prune_reasons(edge, entity_heat)
         prunable.append({**edge, "prune_reason": reasons})
 
     return prunable
@@ -151,10 +151,16 @@ def identify_prunable_edges(
 def _classify_prune_reasons(
     edge: dict,
     entity_heat: dict[int, float],
-    alpha_src: float,
-    alpha_tgt: float,
 ) -> list[str]:
-    """Classify why an edge was pruned for diagnostic reporting."""
+    """Classify why an edge was pruned for diagnostic reporting.
+
+    issue #239 ARG cleanup: ``alpha_src``/``alpha_tgt`` were accepted but
+    never read — the caller only reaches this function after already
+    confirming both alphas are below threshold (the "disparity_insignificant"
+    tag is therefore unconditional here, not alpha-derived), and the other
+    two reasons key off ``edge``/``entity_heat`` alone; removed the unused
+    pair rather than kept for a hypothetical finer-grained reason.
+    """
     reasons = ["disparity_insignificant"]
     if edge.get("hours_since_co_access", 0) > _TEMPORAL_HALF_LIFE_HOURS:
         reasons.append("stale")

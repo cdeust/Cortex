@@ -64,7 +64,7 @@ def _get_store() -> MemoryStore:
     return _store
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:  # noqa: ARG001 — MCP tool_registry dispatch requires the uniform handler(args) signature across all 55 tools; this tool takes no arguments
     """Return memory system statistics."""
     store = _get_store()
 

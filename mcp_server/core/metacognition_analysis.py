@@ -122,14 +122,18 @@ def _jaccard(a: set, b: set) -> float:
 
 
 def _should_join_chunk(
-    mem_i: dict,
     mem_j: dict,
     ents_i: set[str],
     time_i: datetime | None,
     entity_overlap_threshold: float,
     window: timedelta,
 ) -> bool:
-    """Decide whether mem_j should join mem_i's chunk."""
+    """Decide whether mem_j should join mem_i's chunk.
+
+    issue #239 ARG cleanup: a ``mem_i`` parameter was accepted but never
+    read — the caller already extracts ``ents_i``/``time_i`` from it
+    before calling; removed the redundant raw dict.
+    """
     ents_j = _get_entities(mem_j)
     if _jaccard(ents_i, ents_j) >= entity_overlap_threshold:
         return True
@@ -157,7 +161,7 @@ def _collect_chunk(
         if j in assigned:
             continue
         if _should_join_chunk(
-            mem, memories[j], ents_i, time_i, entity_overlap_threshold, window
+            memories[j], ents_i, time_i, entity_overlap_threshold, window
         ):
             members.append(memories[j])
             assigned.add(j)

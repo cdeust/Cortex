@@ -241,7 +241,7 @@ def scrub_secrets(text: str) -> str:
     text = _RE_AWS_ACCESS_KEY.sub(_REDACTED, text)
 
     # 3. Bearer / Authorization tokens — keep the "bearer" word, mask value.
-    text = _RE_BEARER_TOKEN.sub(lambda m: f"bearer {_REDACTED}", text)
+    text = _RE_BEARER_TOKEN.sub(lambda m: f"bearer {_REDACTED}", text)  # noqa: ARG005 — re.sub's replacement-callable protocol always passes the Match positionally; this replacement is a constant, so it is unused
 
     # 4. key=value secret assignments — keep key name, mask value.
     #    Group 1: key name; group 2: optional quote char; group 3: value.

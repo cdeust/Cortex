@@ -82,12 +82,17 @@ def _log(msg: str) -> None:
     print(f"{_LOG_PREFIX} {msg}", file=sys.stderr)
 
 
-def _should_capture(tool_name: str, tool_input: dict, output: str) -> tuple[bool, str]:
+def _should_capture(tool_name: str, output: str) -> tuple[bool, str]:
     """Decide whether to capture this tool interaction.
 
     Returns (should_capture, reason). Light-value tools bypass the
     output-length check — we capture their input reference even when
     the tool returned nothing.
+
+    issue #239 ARG cleanup: a ``tool_input`` parameter was accepted but
+    never read — the capture decision above is complete on
+    ``tool_name``/``output`` alone; removed rather than kept unused
+    (unlike its sibling ``_reference_line``, which does need ``tool_input``).
     """
     if tool_name in _HIGH_VALUE_TOOLS:
         if len(output) < _MIN_OUTPUT_LENGTH:
@@ -372,7 +377,7 @@ def process_event(event: dict[str, Any]) -> None:
     # Periodic cascade check
     _maybe_run_cascade()
 
-    should, reason = _should_capture(tool_name, tool_input, output)
+    should, reason = _should_capture(tool_name, output)
     if not should:
         _log(f"skip {tool_name}: {reason}")
         return

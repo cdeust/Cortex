@@ -71,7 +71,7 @@ def _run_checks() -> list[Check]:
     return [check_fn() for check_fn in active_checks()]
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:  # noqa: ARG001 — MCP tool_registry dispatch requires the uniform handler(args) signature across all 55 tools; this tool takes no arguments (see docstring)
     """precondition: none -- takes no arguments.
     postcondition: `checks` has exactly `len(active_checks())` entries in
     doctor's dependency order; `ready` is True iff no non-optional

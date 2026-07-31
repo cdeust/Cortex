@@ -190,7 +190,7 @@ class PsycopgCompatConnection:
             had_returning=had_returning,
         )
 
-    def cursor(self, row_factory: Any = None) -> _CompatExecutingCursor:
+    def cursor(self, row_factory: Any = None) -> _CompatExecutingCursor:  # noqa: ARG002 — psycopg signature parity, see docstring
         """Return a psycopg-style cursor (context manager, translating).
 
         Its absence is the root cause of issue #206: the wiki pipeline's

@@ -53,11 +53,17 @@ _MIN_ACCESSES_FOR_SPACING = 3
 _MIN_MEAN_INTERVAL_HOURS = 0.01
 
 
+# This is the per-memory regularity signal; correlating it against heat
+# across a population (the "do spaced accesses correlate with higher heat"
+# question) is an aggregate-report concern, not computed here — no caller
+# currently performs that correlation (issue #239 ARG cleanup: a
+# `current_heat` parameter was accepted but never read since this
+# function's introduction; removed rather than silently multiplied in,
+# which would have changed the returned score for every existing test).
 def compute_spacing_benefit(
     access_times: list[float],
-    current_heat: float,
 ) -> float:
-    """Measure spacing effect: do spaced accesses correlate with higher heat?
+    """Measure spacing regularity: are accesses evenly spaced or massed?
 
     Returns spacing regularity score [0, 1] where:
     - 1.0 = perfectly spaced (equal intervals)
@@ -65,7 +71,6 @@ def compute_spacing_benefit(
 
     Args:
         access_times: Timestamps (hours) of memory accesses.
-        current_heat: Current heat of the memory.
 
     Returns:
         Spacing regularity score.

@@ -347,8 +347,6 @@ async def _ingest_edges(
     files: list[dict[str, Any]],
     diagnostics: list[str],
     page_size: int,
-    *,
-    progress: ProgressReporter | None = None,
 ) -> tuple[int, int]:
     """Stream call + containment edges into LOAD-BALANCED adaptive writers.
 
@@ -361,6 +359,15 @@ async def _ingest_edges(
     Endpoints resolve by SQL JOIN against the entities committed in Phase 2
     (the staged barrier). Returns (edges_written, edges_seen); the difference is
     the dangling-endpoint count.
+
+    issue #239 ARG cleanup: a ``progress: ProgressReporter | None = None``
+    keyword was accepted but never called (no ``.stage()``/``.advance()``/
+    ``.close()`` here) — the handler's own docstring commits only to
+    ``stage()`` once per ``_STAGES`` entry (done by the caller) and
+    ``advance()`` after each *entity* page (done by ``_ingest_entities``);
+    this edges phase was never part of that contract. Removed rather than
+    kept as unwired future fine-grained progress (coding-standards.md
+    §9 — no future-proofing without a current caller).
     """
     seen = [0]  # producer-side count (mutable box, updated on the loop thread)
 
@@ -394,8 +401,6 @@ async def _ingest_edges(
 async def _pull_processes(
     graph_path: str,
     top_processes: int | None,
-    *,
-    progress: ProgressReporter | None = None,
 ) -> list[dict[str, Any]]:
     """Pull ALL processes via upstream get_processes; respect optional cap.
 
@@ -404,6 +409,10 @@ async def _pull_processes(
     call returns only the first page. Follow the cursor until exhausted —
     the previous single-shot read silently dropped every process past the
     first byte-budget page (2026-06-11 RCA).
+
+    issue #239 ARG cleanup: a ``progress`` keyword was accepted but never
+    called — same rationale as ``_ingest_edges`` above (this phase is not
+    part of the handler's documented per-entity-page progress contract).
     """
     procs: list[dict[str, Any]] = []
     offset = 0
@@ -440,8 +449,6 @@ async def _enrich_process_symbols(
     graph_path: str,
     processes: list[dict[str, Any]],
     diagnostics: list[str],
-    *,
-    progress: ProgressReporter | None = None,
 ) -> None:
     """Attach participating symbol qns to each process (in place).
 
@@ -449,6 +456,9 @@ async def _enrich_process_symbols(
     membership lives in the graph as ParticipatesIn edges. Pages without
     symbols carry no documentation value (2026-05-17 user feedback), so
     this fetch is what makes the wiki pages worth writing.
+
+    issue #239 ARG cleanup: a ``progress`` keyword was accepted but never
+    called — same rationale as ``_ingest_edges`` above.
     """
     for proc in processes:
         entry = proc.get("entry_point")
@@ -585,21 +595,18 @@ async def handler(
                 files=files,
                 diagnostics=diagnostics,
                 page_size=_EDGE_PAGE_SIZE,
-                progress=_progress,
             )
 
         # ── Phase 4: processes ───────────────────────────────────────────────
         _progress.stage(_STAGES[4], 4, len(_STAGES))
         processes = (
-            await _pull_processes(graph_path, top_processes, progress=_progress)
+            await _pull_processes(graph_path, top_processes)
             if (top_processes is None or top_processes > 0)
             else []
         )
         if processes:
             _progress.stage(_STAGES[5], 5, len(_STAGES))
-            await _enrich_process_symbols(
-                graph_path, processes, diagnostics, progress=_progress
-            )
+            await _enrich_process_symbols(graph_path, processes, diagnostics)
         wiki_paths = pages.write_process_pages(processes)
 
         # ── Phase 5: docs content (INC5.3, D6) — optional, cheap relative to

@@ -771,7 +771,7 @@ def assemble_context(
     # For BEAM we don't have pre-computed summaries yet. Return the
     # first ~300 chars of the first memory in the stage as a proxy.
     # Production Cortex will wire this to dual_store_cls.py / schema_engine.
-    def _stage_summary_fn(stage_id: str) -> str:
+    def _stage_summary_fn(stage_id: str) -> str:  # noqa: ARG001 — StageAwareContextAssembler's stage_summary_fn callback protocol requires this signature; body is a documented stub (see comment above)
         # Minimal implementation: walk memories and return truncated
         # content of the first non-current-stage hit. Good enough for
         # the benchmark until we add real summarization.

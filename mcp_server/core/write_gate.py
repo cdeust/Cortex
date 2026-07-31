@@ -46,10 +46,16 @@ import json as _json
 
 
 def compute_embedding_novelty(
-    embedding: Any,
     similarities: list[float],
 ) -> float:
-    """Signal 1: embedding-space novelty."""
+    """Signal 1: embedding-space novelty.
+
+    issue #239 ARG cleanup: an ``embedding`` parameter was accepted here
+    but never forwarded to ``_compute_embedding_novelty`` (which takes only
+    ``similarities``) and had zero production callers of this wrapper
+    (every real call site imports the underlying ``predictive_coding_flat``
+    function directly); removed rather than kept unused.
+    """
     return _compute_embedding_novelty(similarities)
 
 

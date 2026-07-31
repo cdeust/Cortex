@@ -80,7 +80,6 @@ def _line_is_title_candidate(cleaned: str) -> bool:
 def derive_title(
     content: str,
     kind: str,
-    tags: list[str] | None = None,
     entities: list[str] | None = None,
 ) -> str:
     """Derive a meaningful title for a wiki page.
@@ -93,6 +92,11 @@ def derive_title(
        fallback (e.g. ``memory-<hash>``). Returning a raw 80-char content
        prefix here used to leak filesystem paths, timestamps, and sentence
        fragments into slugs.
+
+    issue #239 ARG cleanup: a ``tags`` parameter was accepted (and supplied
+    by the one production caller, ``wiki_sync.py``) but never read — the
+    4-step strategy above is complete without it. Removed rather than kept
+    as unused scaffolding for a hypothetical tag-driven title rule.
     """
     lines = content.strip().split("\n")
     first_meaningful = ""

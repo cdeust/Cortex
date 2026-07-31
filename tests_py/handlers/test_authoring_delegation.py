@@ -46,9 +46,7 @@ def test_section_prompt_includes_hint_only_when_given() -> None:
 
 def test_page_prompt_includes_hint_only_when_given() -> None:
     meta = {"domain": "d", "source_file_path": "x.py", "language": "python"}
-    kw = dict(
-        page_path="reference/d/x.md", page_meta=meta, gaps=["purpose"], source_text=None
-    )
+    kw = dict(page_meta=meta, gaps=["purpose"], source_text=None)
     with_hint = _build_page_prompt(**kw, delegate_hint=_delegation_hint("file-doc"))
     without = _build_page_prompt(**kw, delegate_hint=None)
 
@@ -79,7 +77,6 @@ def test_hint_preserves_untrusted_guard() -> None:
     """The delegation hint must not displace the security guard header."""
     meta = {"domain": "d", "source_file_path": "x.py", "language": "python"}
     prompt = _build_page_prompt(
-        page_path="reference/d/x.md",
         page_meta=meta,
         gaps=["purpose"],
         source_text="print('hi')",

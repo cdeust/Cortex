@@ -86,12 +86,16 @@ def classify_query_topic(question: str) -> str | None:
 
 def evaluate_conversation(
     db: BenchmarkDB,
-    mem_ids: list[int],
     source_map: dict[int, str],
-    topic_map: dict[int, str],
     qa_pairs: list[dict],
 ) -> dict[str, dict]:
-    """Evaluate scoped vs unscoped retrieval."""
+    """Evaluate scoped vs unscoped retrieval.
+
+    issue #239 ARG cleanup: ``mem_ids``/``topic_map`` were accepted but
+    never read — ``source_map``/``qa_pairs`` drive the whole evaluation;
+    removed both, and the caller's now-pointless ``topic_map`` build
+    (labeled "for debugging" but never read anywhere) along with them.
+    """
     mid_to_sidx: dict[int, int] = {}
     for mid, src in source_map.items():
         if src.startswith("session_"):
@@ -180,18 +184,9 @@ def run_benchmark(data_path: str, limit: int | None = None):
                     }
                 )
 
-            mem_ids, source_map = db.load_memories(memories, domain="locomo-agents")
+            _mem_ids, source_map = db.load_memories(memories, domain="locomo-agents")
 
-            # Build topic map for debugging
-            topic_map = {
-                mid: memories[i].get("agent_context", "")
-                for i, mid in enumerate(mem_ids)
-                if i < len(memories)
-            }
-
-            conv_results = evaluate_conversation(
-                db, mem_ids, source_map, topic_map, conv["qa"]
-            )
+            conv_results = evaluate_conversation(db, source_map, conv["qa"])
 
             for mode in ["scoped", "unscoped"]:
                 for cat, hits in conv_results[mode].items():

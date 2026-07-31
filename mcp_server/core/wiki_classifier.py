@@ -319,7 +319,7 @@ def classify_memory(
     modern_kind = detect_modern_kind(content, tags, legacy_kind)
     provenance = detect_provenance(tags)
     lifecycle = pick_lifecycle(modern_kind)
-    audiences = detect_audiences(content, tags, modern_kind)
+    audiences = detect_audiences(content, tags)
 
     # Provenance with full generator block when the registered provenance
     # requires it. The registry entry's ``requires_generator`` flag is the

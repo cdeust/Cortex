@@ -49,12 +49,15 @@ _RECALL_AT_10_K = 10
 
 def evaluate_conversation(
     db: BenchmarkDB,
-    sessions: list[dict],
-    mem_ids: list[int],
     source_map: dict[int, str],
     qa_pairs: list[dict],
 ) -> dict[str, list[dict]]:
-    """Evaluate retrieval for all QA pairs in one conversation."""
+    """Evaluate retrieval for all QA pairs in one conversation.
+
+    issue #239 ARG cleanup: ``sessions``/``mem_ids`` were accepted but
+    never read — the memory_id -> session_idx mapping below is built
+    entirely from ``source_map``; removed both unused pass-throughs.
+    """
     # Map memory_id → session_idx via source provenance from ingestion
     mid_to_sidx: dict[int, int] = {}
     for mid, src in source_map.items():
@@ -242,7 +245,7 @@ def run_benchmark(
                     }
                     for s in sessions
                 ]
-                mem_ids, source_map = db.load_memories(memories, domain="locomo")
+                _mem_ids, source_map = db.load_memories(memories, domain="locomo")
 
                 # Consolidation pass between session-load and QA. Off by default
                 # to preserve historical reproducibility. ON exercises the
@@ -255,9 +258,7 @@ def run_benchmark(
                     consolidation_total_wall_s += _run_consolidation_pass()
                     consolidation_call_count += 1
 
-                conv_results = evaluate_conversation(
-                    db, sessions, mem_ids, source_map, conv["qa"]
-                )
+                conv_results = evaluate_conversation(db, source_map, conv["qa"])
                 for cat, rs in conv_results.items():
                     all_results[cat].extend(rs)
 

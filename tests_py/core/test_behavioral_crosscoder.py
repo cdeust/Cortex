@@ -99,27 +99,23 @@ class TestDetectPersistentFeatures:
 
 class TestCompareFeatureProfiles:
     def test_partitions_features(self):
-        d = _make_dictionary(["reading", "editing", "testing"])
         a = {"reading": 0.5, "editing": 0.3}
         b = {"editing": 0.4, "testing": 0.6}
-        result = compare_feature_profiles(a, b, d)
+        result = compare_feature_profiles(a, b)
         assert result["shared"] == ["editing"]
         assert result["uniqueToA"] == ["reading"]
         assert result["uniqueToB"] == ["testing"]
 
     def test_empty_for_no_active_features(self):
-        d = _make_dictionary()
-        result = compare_feature_profiles({}, {}, d)
+        result = compare_feature_profiles({}, {})
         assert result["shared"] == []
         assert result["uniqueToA"] == []
         assert result["uniqueToB"] == []
 
     def test_ignores_below_threshold(self):
-        d = _make_dictionary(["reading"])
-        result = compare_feature_profiles({"reading": 0.05}, {"reading": 0.05}, d)
+        result = compare_feature_profiles({"reading": 0.05}, {"reading": 0.05})
         assert result["shared"] == []
 
     def test_handles_null(self):
-        d = _make_dictionary()
-        result = compare_feature_profiles(None, None, d)
+        result = compare_feature_profiles(None, None)
         assert result["shared"] == []

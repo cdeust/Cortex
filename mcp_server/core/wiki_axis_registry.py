@@ -196,12 +196,15 @@ def build_default_registry() -> AxisRegistry:
 _SCHEMA_FRONTMATTER_PATTERN = re.compile(r"\A---\s*\n(?P<fm>.*?)\n---\s*\n?", re.DOTALL)
 
 
-def _parse_axis_value_file(rel_path: str, content: str) -> AxisValue | None:
+def _parse_axis_value_file(content: str) -> AxisValue | None:
     """Parse a single ``wiki/_schema/<axis>/<name>.md`` file.
 
     Returns the AxisValue or None on a malformed file. Never raises;
-    schema files that fail to parse are skipped with a soft log line
-    upstream.
+    schema files that fail to parse are skipped silently by the caller
+    (issue #239 ARG cleanup: a ``rel_path`` parameter was accepted for a
+    caller-side log line that was never implemented — the one call site
+    has no ``else`` branch on a ``None`` return — so it carried no
+    information; removed rather than adding new logging behavior here).
     """
     m = _SCHEMA_FRONTMATTER_PATTERN.match(content)
     if not m:
@@ -303,7 +306,7 @@ def load_axis_registry(wiki_root: Path | str | None = None) -> AxisRegistry:
                 text = md.read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 continue
-            parsed = _parse_axis_value_file(str(md), text)
+            parsed = _parse_axis_value_file(text)
             if parsed is not None:
                 _ingest(registry, parsed)
     return registry

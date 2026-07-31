@@ -305,7 +305,6 @@ def _handle_crosscoder(
         comparison = compare_feature_profiles(
             dp_a.get("featureActivations", {}),
             dp_b.get("featureActivations", {}),
-            d,
         )
 
         return {

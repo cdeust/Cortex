@@ -1228,7 +1228,6 @@ def reconsolidation_apply(
         try:
             outcome = compute_reconsolidation_action(
                 c,
-                query,
                 embedding_similarity=None,
                 current_directory="",
                 context_tokens=q_tokens,
@@ -1342,7 +1341,7 @@ def mood_congruent_rerank(
 
 def conflict_monitor_rerank(
     candidates: list[dict[str, Any]],
-    store: Any = None,
+    store: Any = None,  # noqa: ARG001 — matches the (candidates, store=None) shape shared by sibling rerank stages in this pipeline; this stage is documented pure-planning with no store I/O (see docstring below)
 ) -> list[dict[str, Any]]:
     """Detect conflict in the retrieved set and demote the losing memory (A2).
 

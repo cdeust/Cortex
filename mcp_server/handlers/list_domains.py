@@ -31,7 +31,7 @@ schema = {
 }
 
 
-async def handler(args: dict | None = None) -> dict:
+async def handler(args: dict | None = None) -> dict:  # noqa: ARG001 — MCP tool_registry dispatch requires the uniform handler(args) signature across all 55 tools; this tool takes no arguments (see schema)
     profiles = load_profiles()
     domains = []
 

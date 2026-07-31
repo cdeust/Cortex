@@ -91,9 +91,11 @@ def _tool_usage_suggestions(
     return suggestions
 
 
+# issue #239 ARG cleanup: a ``session_type`` parameter was accepted but
+# never read, and no caller (production or test) ever passed a non-default
+# value; removed rather than kept unused.
 def analyze_tool_usage(
     tools_used: list[str],
-    session_type: str = "general",
 ) -> dict[str, Any]:
     """Analyze tool usage diversity and balance.
 

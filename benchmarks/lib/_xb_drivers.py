@@ -71,8 +71,8 @@ def _drive_locomo(data_path: str, limit: int) -> dict:
                 }
                 for s in sessions
             ]
-            mids, smap = db.load_memories(memories, domain="locomo")
-            cr = evaluate_conversation(db, sessions, mids, smap, conv["qa"])
+            _mids, smap = db.load_memories(memories, domain="locomo")
+            cr = evaluate_conversation(db, smap, conv["qa"])
             for c, rs in cr.items():
                 agg[c].extend(rs)
     elapsed = time.time() - t0

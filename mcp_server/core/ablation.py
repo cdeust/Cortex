@@ -147,7 +147,8 @@ def ablation_config_enable(
 
 
 def ablation_config_disable_all_except(
-    config: "AblationConfig", *mechanisms: Mechanism
+    config: "AblationConfig",  # noqa: ARG001 — config: uniform call shape, see docstring
+    *mechanisms: Mechanism,
 ) -> "AblationConfig":
     """Disable all mechanisms except the specified ones.
 

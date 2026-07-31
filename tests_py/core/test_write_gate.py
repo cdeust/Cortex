@@ -181,25 +181,23 @@ class TestComputeEmbeddingNovelty:
     """
 
     def test_empty_similarities_returns_half(self):
-        result = wg.compute_embedding_novelty(embedding=None, similarities=[])
+        result = wg.compute_embedding_novelty(similarities=[])
         assert result == 0.5
 
     def test_identical_embedding_zero_novelty(self):
-        result = wg.compute_embedding_novelty(embedding=None, similarities=[1.0])
+        result = wg.compute_embedding_novelty(similarities=[1.0])
         assert result == 0.0
 
     def test_no_overlap_full_novelty(self):
-        result = wg.compute_embedding_novelty(embedding=None, similarities=[0.0])
+        result = wg.compute_embedding_novelty(similarities=[0.0])
         assert result == 1.0
 
     def test_uses_max_when_multiple_similarities(self):
-        result = wg.compute_embedding_novelty(
-            embedding=None, similarities=[0.2, 0.9, 0.4]
-        )
+        result = wg.compute_embedding_novelty(similarities=[0.2, 0.9, 0.4])
         assert result == pytest.approx(0.1, abs=1e-9)
 
     def test_clamped_to_unit_interval_on_oversize_similarity(self):
-        result = wg.compute_embedding_novelty(embedding=None, similarities=[1.5])
+        result = wg.compute_embedding_novelty(similarities=[1.5])
         assert 0.0 <= result <= 1.0
 
 

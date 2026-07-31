@@ -121,13 +121,18 @@ _FILE_PATH_RE = re.compile(r"(?:\.{0,2}/)?(?:[\w@.-]+/)+[\w@.-]+\.\w+")
 _WORD_RE = re.compile(r"[a-z]+(?:'[a-z]+)?", re.IGNORECASE)
 
 
-def compute_surprise(content: str, existing_similarities: list[float]) -> float:
+def compute_surprise(existing_similarities: list[float]) -> float:
     """Compute how novel content is relative to existing memories.
 
     surprise = 1.0 - max_similarity. Returns 0.5 if no existing memories.
 
+    issue #239 ARG cleanup: a ``content`` parameter was accepted but never
+    read — the formula above is the complete, documented algorithm and
+    needs only the pre-computed similarity list; removed rather than kept
+    unused (this function has no production caller today, only its own
+    unit tests, so the removal's blast radius is limited to this module).
+
     Args:
-        content: The content to evaluate.
         existing_similarities: Cosine similarities to existing memories (0.0-1.0).
     """
     if not existing_similarities:

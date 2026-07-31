@@ -173,7 +173,7 @@ def soma_output(
 
 def compute_dendritic_integration(
     active_count: int,
-    total_count: int,
+    total_count: int,  # noqa: ARG001 — unused in Poirazi model, retained for API compatibility (see docstring)
     individual_scores: list[float],
 ) -> tuple[float, bool]:
     """Two-layer dendritic integration after Poirazi, Brannon & Mel (2003).

@@ -16,16 +16,16 @@ from mcp_server.core.emergence_metrics import (
 class TestSpacingEffect:
     def test_regular_spacing_high_score(self):
         times = [0, 10, 20, 30, 40, 50]  # Equal intervals
-        score = compute_spacing_benefit(times, 0.8)
+        score = compute_spacing_benefit(times)
         assert score > 0.8
 
     def test_massed_practice_low_score(self):
         times = [0, 0.1, 0.2, 0.3, 0.4]  # All clustered
-        score = compute_spacing_benefit(times, 0.3)
+        score = compute_spacing_benefit(times)
         assert score > 0.5  # Still some regularity
 
     def test_insufficient_data(self):
-        assert compute_spacing_benefit([0, 1], 0.5) == 0.5
+        assert compute_spacing_benefit([0, 1]) == 0.5
 
 
 class TestTestingEffect:

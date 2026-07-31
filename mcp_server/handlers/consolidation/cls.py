@@ -86,7 +86,7 @@ _EMPTY_CLS_STATS = {
 
 def run_cls_cycle(
     store: MemoryStore,
-    settings,
+    settings,  # noqa: ARG001 — accepted for parity with the run_*_cycle family (all invoked uniformly via _timed(fn, store, settings, ...) in handlers/consolidate.py; run_decay_cycle reads settings.COLD_THRESHOLD). This cycle's sample caps below are still hardcoded module constants rather than settings-driven — a real gap, not vestigial — but wiring it would change behavior for the 10 existing settings=None test call sites and is out of a lint-refactor's scope (issue #239 ARG cleanup).
     embeddings: EmbeddingEngine,
 ) -> dict:
     """Run CLS consolidation: episodic -> semantic pattern extraction.

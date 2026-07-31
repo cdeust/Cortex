@@ -126,7 +126,9 @@ def reset_shared_store() -> None:
 
 
 def _resolve_backend_url(
-    db_path: str, embedding_dim: int, database_url: str | None
+    db_path: str,  # noqa: ARG001 — signature mirrors _construct_store(db_path, embedding_dim, database_url) below so the cache-key computation and the real construction never drift out of sync; only database_url/settings decide (backend, url) here
+    embedding_dim: int,  # noqa: ARG001 — same signature-parity reason as db_path above; embedding_dim only matters to _resolve_key's own return tuple, not to backend/url resolution
+    database_url: str | None,
 ) -> tuple[str, str]:
     """Resolve the (backend, url) a construction would target — the cache key
     discriminators. Mirrors the branch selection in _construct_store."""

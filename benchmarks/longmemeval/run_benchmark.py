@@ -60,10 +60,14 @@ def parse_longmemeval_date(date_str: str) -> str:
 # ── Session to Memory Conversion ────────────────────────────────────────────
 
 
-def session_to_memory_content(session: list[dict], session_id: str) -> tuple[str, str]:
+def session_to_memory_content(session: list[dict]) -> tuple[str, str]:
     """Convert a conversation session to memory strings.
 
     Returns (full_content, user_only_content).
+
+    issue #239 ARG cleanup: a ``session_id`` was accepted but never read —
+    the content strings are built purely from ``session``'s turns; removed
+    the unused pass-through.
     """
     parts = []
     user_parts = []
@@ -256,7 +260,7 @@ def run_benchmark(
                 for _si, (session, sid, date_str) in enumerate(
                     zip(haystack_sessions, haystack_sids, haystack_dates, strict=True)
                 ):
-                    content, user_content = session_to_memory_content(session, sid)
+                    content, user_content = session_to_memory_content(session)
                     date_iso = parse_longmemeval_date(date_str)
                     heat = compute_heat_with_decay(date_iso, question_date)
 

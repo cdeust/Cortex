@@ -135,9 +135,13 @@ def evaluate_retrieval(
     db: BenchmarkDB,
     questions: dict,
     conversation_turns: list[dict],
-    mem_ids: list[int],
 ) -> dict[str, dict]:
-    """Evaluate retrieval quality per ability."""
+    """Evaluate retrieval quality per ability.
+
+    issue #239 ARG cleanup: a ``mem_ids`` list was accepted but never
+    read — retrieval is driven by ``db.recall`` + the questions' own
+    ``source_chat_ids``; removed the unused pass-through.
+    """
     results: dict[str, list[dict]] = defaultdict(list)
 
     for ability, qs in questions.items():
@@ -291,7 +295,7 @@ def evaluate_retrieval(
 def run_benchmark(
     split: str = "100K",
     limit: int | None = None,
-    verbose: bool = False,
+    verbose: bool = False,  # noqa: ARG001 — genuine gap, not vestigial: wired end-to-end from a real `--verbose` CLI flag ("Show detailed results") but never branched on here; adding detail output is a behavior change, out of a lint-refactor's scope (issue #239 ARG cleanup)
     n_runs: int = 1,
 ) -> dict:
     """Run BEAM retrieval benchmark using production PG retrieval.
@@ -374,9 +378,9 @@ def run_benchmark(
 
                 # Clean up previous, load new
                 db.clear()
-                mem_ids, _source_map = db.load_memories(memories, domain="beam")
+                _mem_ids, _source_map = db.load_memories(memories, domain="beam")
 
-                metrics = evaluate_retrieval(db, questions, turns, mem_ids)
+                metrics = evaluate_retrieval(db, questions, turns)
 
                 for ability, m in metrics.items():
                     all_metrics[ability].append(m)

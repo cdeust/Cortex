@@ -203,7 +203,6 @@ class TestRecommendations:
     def _base(self, **overrides):
         params = {
             "total": 30,
-            "fresh": 20,
             "stale": 5,
             "entity_density": 1.0,
             "compressed": 0,

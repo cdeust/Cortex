@@ -117,7 +117,6 @@ def _check_single_contradiction(
 def detect_contradictions(
     new_content: str,
     similar_memories: list[dict[str, Any]],
-    similarity_threshold: float = 0.7,
 ) -> list[dict[str, Any]]:
     """Detect potential contradictions between new content and existing memories.
 

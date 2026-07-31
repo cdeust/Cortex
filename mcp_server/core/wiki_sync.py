@@ -104,7 +104,7 @@ def build_from_memory(
     if classification is None:
         return None
 
-    title = derive_title(content, classification.kind, tags)
+    title = derive_title(content, classification.kind)
     if not title:
         title = f"memory-{hashlib.sha256(content.encode()).hexdigest()[:8]}"
 

@@ -92,7 +92,7 @@ def _load_question(store: SqliteMemoryStore, item: dict, eng) -> dict[int, str]:
         item["haystack_dates"],
         strict=True,
     ):
-        content, _ = session_to_memory_content(session, sid)
+        content, _ = session_to_memory_content(session)
         date_iso = parse_longmemeval_date(date_str)
         heat = compute_heat_with_decay(date_iso, question_date)
         embedding = eng.encode(content) if eng is not None else None

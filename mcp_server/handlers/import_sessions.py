@@ -169,10 +169,14 @@ def _detect_domain_from_path(cwd: str) -> str:
 
 async def _store_memory(
     item: dict[str, Any],
-    project: str,
     domain: str,
 ) -> bool:
-    """Store a single extracted item via the remember handler."""
+    """Store a single extracted item via the remember handler.
+
+    issue #239 ARG cleanup: a ``project`` name was accepted but never
+    read — ``remember_args`` scopes by ``domain`` alone; removed the
+    unused pass-through.
+    """
 
     remember_args = {
         "content": gist_oversized_content(item["content"]),
@@ -240,7 +244,7 @@ async def _process_session_items(
             )
             imported += 1
         else:
-            stored = await _store_memory(item, project_name, session_domain)
+            stored = await _store_memory(item, session_domain)
             if stored:
                 imported += 1
             else:

@@ -200,7 +200,7 @@ def classify_query_intent(query: str) -> dict[str, Any]:
     else:
         primary = max(scores, key=lambda k: scores[k])
 
-    weights = compute_retrieval_weights(primary, scores)
+    weights = compute_retrieval_weights(primary)
 
     return {
         "intent": primary,
@@ -309,11 +309,16 @@ _INTENT_WEIGHT_OVERRIDES: dict[str, dict[str, float]] = {
 
 def compute_retrieval_weights(
     primary_intent: str,
-    scores: dict[str, float],
 ) -> dict[str, float]:
     """Compute retrieval signal weights based on intent.
 
     Returns weights for: vector, fts, heat, temporal, causal, entity, spreading.
+
+    issue #239 ARG cleanup: a ``scores`` (full per-intent score distribution)
+    parameter was accepted but never read — weighting is a hard lookup on
+    ``primary_intent`` alone (every test call site already passed ``{}``).
+    Blending weights by score-distribution confidence would be a real
+    algorithm change, not a refactor; removed rather than left unused.
     """
     weights = dict(_BASE_WEIGHTS)
     overrides = _INTENT_WEIGHT_OVERRIDES.get(primary_intent)

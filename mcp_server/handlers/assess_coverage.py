@@ -229,12 +229,19 @@ _MIN_BALANCE_SCORE = 0.4
 
 def _recommendations(
     total: int,
-    fresh: int,
     stale: int,
     entity_density: float,
     compressed: int,
     balance_score: float,
 ) -> list[str]:
+    """Build actionable recommendations from coverage signals.
+
+    issue #239 ARG cleanup: a ``fresh`` count was accepted but never read —
+    every existing recommendation is driven by ``stale``/``entity_density``/
+    ``compressed``/``balance_score`` against ``total``; removed rather than
+    kept unused (a fresh-count-based recommendation would be a new rule,
+    not a refactor).
+    """
     recs = []
     if total < _MIN_SEEDED_TOTAL:
         recs.append("Run `seed_project` to bootstrap memory from the codebase.")
@@ -304,7 +311,6 @@ def _score_and_recommend(
     )
     recs = _recommendations(
         total=len(memories),
-        fresh=signals["age"]["fresh"],
         stale=signals["age"]["stale"],
         entity_density=signals["density"]["avg_entities_per_memory"],
         compressed=signals["compress"]["compressed"],

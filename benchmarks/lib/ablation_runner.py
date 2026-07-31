@@ -74,7 +74,9 @@ def _patches_for(mech: Mechanism) -> list[PatchSpec]:
     no_decay: PatchSpec = (
         "mcp_server.core.thermodynamics",
         "compute_decay",
-        lambda: lambda current_heat, *a, **k: current_heat,
+        # *a/**k swallow compute_decay's real hours_elapsed/importance/
+        # valence/confidence params so this is a drop-in no-op replacement.
+        lambda: lambda current_heat, *a, **k: current_heat,  # noqa: ARG005 — monkey-patch matches compute_decay's real signature (issue #239 ARG cleanup)
     )
     table: dict[Mechanism, list[PatchSpec]] = {
         Mechanism.OSCILLATORY_CLOCK: [no_decay],

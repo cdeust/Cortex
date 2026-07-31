@@ -233,10 +233,10 @@ def _detect_pattern_blind_spots(
 
 
 def detect_blind_spots(
-    domain_id: str,
+    domain_id: str,  # noqa: ARG001 — both callers supply a real domain id per the documented "detect blind spots for a single domain" contract, but the category/tool/pattern sub-detectors below operate on the passed conversation lists alone and never key off it. Whether blind-spot severity should read cross-domain profile context is a scope decision, not a lint-driven refactor; kept and documented rather than removed across its 2 production + 12 test call sites (issue #239 ARG cleanup).
     domain_conversations: list[dict],
     all_conversations: list[dict],
-    profiles: dict | None = None,
+    profiles: dict | None = None,  # noqa: ARG001 — same gap as domain_id above: accepted per the caller-side contract, not yet consumed by the sub-detectors.
 ) -> list[dict[str, Any]]:
     """Detect blind spots for a single domain."""
     top_categories = _get_top_domain_categories(domain_conversations)

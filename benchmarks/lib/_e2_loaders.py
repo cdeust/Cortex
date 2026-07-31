@@ -66,7 +66,7 @@ def load_longmemeval(seed: int) -> tuple[list[SubsampleItem], list[QueryProbe]]:
         ):
             if sid in seen:
                 continue
-            content, user_content = session_to_memory_content(sess, sid)
+            content, user_content = session_to_memory_content(sess)
             iso = parse_longmemeval_date(date_str)
             mem = {
                 "content": content,

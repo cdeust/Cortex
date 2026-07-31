@@ -79,7 +79,10 @@ async def _fetch_current_distribution(store) -> dict[str, int]:
 
 
 async def _run(
-    apply: bool, url_check_limit: int, page_limit: int, max_pages: int
+    apply: bool,
+    url_check_limit: int,
+    page_limit: int,  # noqa: ARG001 — genuine gap, not vestigial: the --page-limit CLI flag promises "rows per validate_memory call" but validate_memory.handler hardcodes limit=1000 internally (verified) and accepts no override key, so this is currently inert. Wiring it through would mean extending that handler's schema — a feature, out of a lint-refactor's scope (issue #239 ARG cleanup).
+    max_pages: int,
 ) -> dict:
 
     settings = get_memory_settings()

@@ -108,7 +108,7 @@ def _count_promotion_candidates(store: Any) -> int:
     return count_lesson_promotion_candidates(store._conn)
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:  # noqa: ARG001 — MCP tool_registry dispatch requires the uniform handler(args) signature across all 55 tools; this tool takes no arguments (see docstring)
     """Aggregate backlog counts + staleness ages for the three grooming kinds.
 
     Precondition: none.

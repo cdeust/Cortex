@@ -53,13 +53,13 @@ class TestTransfer:
 
 class TestStoreClassification:
     def test_hippocampal(self):
-        assert classify_memory_store(0.9, "labile") == "hippocampal"
+        assert classify_memory_store(0.9) == "hippocampal"
 
     def test_transitional(self):
-        assert classify_memory_store(0.4, "late_ltp") == "transitional"
+        assert classify_memory_store(0.4) == "transitional"
 
     def test_cortical(self):
-        assert classify_memory_store(0.05, "consolidated") == "cortical"
+        assert classify_memory_store(0.05) == "cortical"
 
 
 class TestRelease:

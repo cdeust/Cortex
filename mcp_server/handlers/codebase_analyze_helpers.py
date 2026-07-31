@@ -287,10 +287,15 @@ def _persist_import_entities(
 def persist_entities(
     store: MemoryStore,
     analysis: FileAnalysis,
-    memory_id: int,
     domain: str,
 ) -> tuple[int, int]:
-    """Persist file entity, symbols, and imports. Returns (entities, rels)."""
+    """Persist file entity, symbols, and imports. Returns (entities, rels).
+
+    issue #239 ARG cleanup: a ``memory_id`` parameter was accepted but
+    never read — file/symbol/import entities are domain-scoped, not
+    memory-scoped, and none of the three persistence helpers this
+    function calls take a memory id either; removed the unused pass-through.
+    """
     entities, relationships = 0, 0
     try:
         file_eid = _get_or_create_entity(store, analysis.path, "file", domain)

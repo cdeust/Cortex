@@ -79,9 +79,7 @@ def detect_provenance(tags: list[str] | None) -> str:
     return default.name if default is not None else "human"
 
 
-def detect_audiences(
-    content: str, tags: list[str] | None, kind: str
-) -> tuple[str, ...]:
+def detect_audiences(content: str, tags: list[str] | None) -> tuple[str, ...]:
     """Pick one or more audience values via the registry.
 
     Audience is multi-valued: a runbook may target ops + security. Any

@@ -18,21 +18,21 @@ from mcp_server.core.thermodynamics import (
 
 class TestComputeSurprise:
     def test_no_existing_memories_returns_half(self):
-        assert compute_surprise("new content", []) == 0.5
+        assert compute_surprise([]) == 0.5
 
     def test_identical_memory_zero_surprise(self):
-        assert compute_surprise("same", [1.0]) == 0.0
+        assert compute_surprise([1.0]) == 0.0
 
     def test_novel_content_high_surprise(self):
-        result = compute_surprise("totally new", [0.1, 0.2])
+        result = compute_surprise([0.1, 0.2])
         assert result == 0.8  # 1.0 - 0.2
 
     def test_multiple_similarities_uses_max(self):
-        result = compute_surprise("x", [0.3, 0.9, 0.5])
+        result = compute_surprise([0.3, 0.9, 0.5])
         assert abs(result - 0.1) < 1e-9
 
     def test_clamps_to_zero(self):
-        result = compute_surprise("x", [1.5])  # edge: sim > 1.0
+        result = compute_surprise([1.5])  # edge: sim > 1.0
         assert result == 0.0
 
 

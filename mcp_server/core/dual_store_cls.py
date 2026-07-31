@@ -62,7 +62,6 @@ _SPECIFIC_RE = re.compile(
 def classify_memory(
     content: str,
     tags: list[str] | None = None,
-    directory: str = "",
 ) -> str:
     """Classify content as 'episodic' or 'semantic' via regex heuristics.
 
@@ -71,6 +70,11 @@ def classify_memory(
       2. Specificity override: line numbers, paths, tracebacks -> "episodic"
       3. Content keywords: decision/architecture words -> "semantic"
       4. Default: "episodic"
+
+    issue #239 ARG cleanup: a ``directory`` parameter was accepted (and
+    supplied by one of five production callers) but never read — the
+    4-step resolution order above is complete without it; removed rather
+    than kept as unused scaffolding for a hypothetical directory-based rule.
     """
     tag_set = {t.lower() for t in (tags or [])}
 

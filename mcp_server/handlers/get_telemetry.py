@@ -86,7 +86,7 @@ schema = {
 }
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:  # noqa: ARG001 — MCP tool_registry dispatch requires the uniform handler(args) signature across all 55 tools; this tool takes no arguments
     """Return current telemetry summary.
 
     precondition: none (read-only over in-memory dict).

@@ -694,6 +694,107 @@ select = [
     #     inline copy — confirmed by reading both implementations before
     #     concluding the duplication is intentional, not accidental.
     "TRY",
+    # ARG (issue #239, family 8 — a "JUDGEMENT family" per criterion (c)
+    # below, now triaged): 54 findings in mcp_server/ (49 ARG001 unused-
+    # function-argument, 4 ARG002 unused-method-argument, 1 ARG005 unused-
+    # lambda-argument), 667 repo-wide (326/156/185 by the same three codes;
+    # the 602 tests_py/ sites are per-file-ignored below). Every production
+    # finding was individually verified against its callers and git history
+    # (never guessed from the parameter name alone) and resolved one of
+    # three ways:
+    #   (1) DEAD — removed, with every caller (production AND test)
+    #     mechanically updated to match the new signature, zero assertion
+    #     changes. ~30 sites. The recurring shape: a caller had already
+    #     extracted what it needed into OTHER parameters (e.g.
+    #     `reconsolidation.compute_reconsolidation_action`'s raw `query`
+    #     string — the one caller already derives `query_valence`/
+    #     `context_tokens` from it and passes those; `metacognition_
+    #     analysis._should_join_chunk`'s `mem_i` — the caller already
+    #     extracts `ents_i`/`time_i` from it), OR a sibling function in the
+    #     same file shares the parameter name/type but only ONE of the
+    #     pair actually uses it (e.g. `cascade_advancement.py`'s
+    #     `hours_in_stage`, threaded into 3 leaf advancement checks that
+    #     never read it because the caller,
+    #     `compute_advancement_readiness`, already gates on
+    #     `hours_in_stage < min_dwell` before dispatch; `two_stage_model.
+    #     classify_memory_store`'s `consolidation_stage`, unlike its
+    #     sibling `should_release_hippocampal_trace` which uses the exact
+    #     same parameter meaningfully; `behavioral_crosscoder.
+    #     compare_feature_profiles`'s `dictionary`, unlike its sibling
+    #     `detect_persistent_features`), OR the value was zero-effect since
+    #     introduction with EVERY call site (production, benchmark, and
+    #     test) confirmed never passing a non-default (e.g. `curation.
+    #     detect_contradictions`'s `similarity_threshold` — 7 call sites,
+    #     none pass it, and the function receives no per-item similarity
+    #     score to gate on anyway; `session_critique.analyze_tool_usage`'s
+    #     `session_type` — 10 call sites, none pass it;
+    #     `query_intent.compute_retrieval_weights`'s `scores` — all 11 test
+    #     call sites pass `{}`). One case (`emergence_tracker.
+    #     compute_spacing_benefit`'s `current_heat`) had zero production
+    #     callers at all AND its "obvious" completion — multiplying the
+    #     returned regularity by heat — would have changed 2 of 3 existing
+    #     test assertions (a real behavior change, disqualified for a lint
+    #     refactor); removed instead. A few sites cascaded: fixing
+    #     `authoring_prompts._build_page_prompt`'s unused `page_path` left
+    #     its ONLY caller, `_invoke_page_fill`, with an unused `page_path`
+    #     of its OWN (the sole reason it held one) — cascaded through
+    #     rather than leaving a new, self-inflicted ARG001 behind.
+    #   (2) INTERFACE-REQUIRED — kept, with a per-site `# noqa: ARGxxx`
+    #     naming the interface. Concrete cases: `__main__._shutdown`'s
+    #     `sig`/`frame` (Python's `signal.signal()` handler calling
+    #     convention is always `(signum, frame)`); the `args: dict` on 6
+    #     tool `handler()` functions with no input schema (check_setup,
+    #     get_grooming_health, get_telemetry, list_domains, memory_stats,
+    #     wiki_reindex — the MCP tool_registry dispatches all 55 tools
+    #     through the same `handler(args)` shape); `sqlite_store_search.
+    #     SqliteSearchMixin.recall_memories`'s `intent`/`include_globals`
+    #     and `.search_vectors`'s `min_heat` (LSP parity — verified
+    #     `PgMemoryStore`'s versions of both methods are IDENTICAL in
+    #     signature, and `search_vectors`'s `min_heat` is genuinely a SQL
+    #     predicate on the PG side); `sqlite_compat.py::cursor`'s
+    #     `row_factory` (psycopg signature parity, already documented in
+    #     its own docstring — 29 shared call sites need both backends to
+    #     accept the same keyword); `redaction.py`'s bearer-token lambda
+    #     (`re.sub`'s replacement-callable protocol always passes the
+    #     `Match` positionally); `memory_store._resolve_backend_url`'s
+    #     `db_path`/`embedding_dim` (mirrors `_construct_store`'s
+    #     signature so the cache-key computation and the real construction
+    #     never drift apart); `recall_pipeline.conflict_monitor_rerank`'s
+    #     `store` (matches the `(candidates, store=None)` shape shared by
+    #     sibling rerank stages in the same pipeline; already documented as
+    #     pure-planning with no store I/O); `ablation.py`'s
+    #     `ablation_config_disable_all_except`'s `config` and
+    #     `dendritic_computation.compute_dendritic_integration`'s
+    #     `total_count` (both ALREADY had a written unused-by-design
+    #     rationale in their own docstrings before this family — only the
+    #     noqa marker was added); `pg_recall.py`'s `_stage_summary_fn`
+    #     closure's `stage_id` (a `StageAwareContextAssembler` callback
+    #     Protocol parameter; the body is a documented placeholder stub).
+    #   (3) GENUINE GAP, documented rather than built or silently dropped —
+    #     3 sites where completing the parameter would be a real behavior
+    #     change (out of a lint-driven refactor's scope, per coding-
+    #     standards.md's refactor/feature boundary) but removing it would
+    #     erase real evidence of an unwired capability: `consolidation.cls.
+    #     run_cls_cycle`'s `settings` (a REAL Settings object is passed by
+    #     the one production caller, and the sibling `run_decay_cycle`
+    #     reads `settings.COLD_THRESHOLD` from the identical call shape —
+    #     but this cycle's sample caps are still hardcoded constants, and
+    #     wiring `settings.X` in would raise `AttributeError` against the
+    #     10 existing `settings=None` test call sites); `remember_helpers.
+    #     _do_merge`'s `tags` (`curation.merge_tags` exists, is unit-
+    #     tested, and does exactly the union this merge needs — but is
+    #     uncalled in ALL of production, and wiring it would both change
+    #     merge behavior and require `update_memory_compression` to grow a
+    #     tags parameter); `blindspot_detector.detect_blind_spots`'s
+    #     `domain_id`/`profiles` (both callers supply real values per the
+    #     documented "detect blind spots for a single domain" contract, but
+    #     the category/tool/pattern sub-detectors never key off either —
+    #     whether severity should read cross-domain profile context is a
+    #     scope decision, and the 14-call-site blast radius made removal
+    #     the wrong default absent that decision). Each is a per-site
+    #     `# noqa: ARG001` naming the gap honestly, not a fix and not a
+    #     silent drop.
+    "ARG",
 ]
 # ── Families deliberately NOT selected (issue #197, criterion 1) ────────────
 # Counts measured against mcp_server/ 2026-07-28, ruff 0.15.20 — what
@@ -724,12 +825,12 @@ select = [
 #     contract-lie defect classes this program exists for; each is a
 #     dedicated-PR-sized diff under the fix-with-landing bar.
 #
-# (c) JUDGEMENT families not yet triaged — ARG (54->667 repo-wide), FBT
-#     (258->461 repo-wide): tracked as the program's continuation in issue
-#     #239 (B, RET, DTZ, N, ERA, PTH, S, TRY landed above). Enabling either
-#     without the per-finding triage the landed families received would
-#     mean blanket ignores — the exact anti-pattern this explicit select
-#     list exists to prevent.
+# (c) JUDGEMENT families — FBT (258->461 repo-wide) remains not yet
+#     triaged, tracked as the program's continuation in issue #239 (B,
+#     RET, DTZ, N, ERA, PTH, S, TRY, ARG landed above). Enabling it without
+#     the per-finding triage the landed families received would mean a
+#     blanket ignore — the exact anti-pattern this explicit select list
+#     exists to prevent.
 
 [tool.ruff.lint.per-file-ignores]
 # Test code: try/except/pass and broad excepts in tests are deliberate
@@ -789,6 +890,27 @@ select = [
 # so subclassing per message would be premature abstraction (§3.3) with a
 # negative return: it would separate a test's failure message from the one
 # test that uses it (129 sites measured 2026-07-31).
+#
+# ARG001/ARG002/ARG005 (issue #239, ARG family, final family) — 602 sites
+# measured 2026-07-31 in tests_py/, sampled across the largest buckets
+# (test_launcher_deps.py 51, test_ingest_progress.py 31, test_ingest_
+# codebase.py 26, test_ble001_sweep_handlers.py 24, test_session_lifecycle.
+# py 21, test_headless_authoring_throttle.py 21) plus a structural check of
+# every monkeypatch/lambda-fake call site: every sample is a test DOUBLE or
+# FIXTURE whose signature is dictated by the production interface it
+# replaces or matches, not by this test's own logic — e.g.
+# `monkeypatch.setattr(deps_mod.importlib, "import_module", lambda name:
+# _NamespaceHusk())` (the fake must accept `name` because `import_module`'s
+# real callers pass it positionally, even though the fake ignores it, same
+# as `raising_rmtree(path, ignore_errors=False)` replacing `shutil.rmtree`);
+# `async def __call__(self, prompt, *, cost_per_call=..., sleep=...,
+# **_)` (a fake async invoker matching a real invoker Protocol); `def
+# broken(content): raise RuntimeError(...)` (a fake replacing
+# `gist_oversized_content(content)` to simulate a specific failure mode —
+# the argument is part of the signature it fakes, not something the raise
+# needs). This is the identical "test double must match a production
+# calling convention" shape TRY003's tests_py entry documents above, just
+# for the argument-count/arity axis instead of the exception-message axis.
 "tests_py/**" = [
     "S110",
     "BLE001",
@@ -803,6 +925,9 @@ select = [
     "S603",
     "S607",
     "TRY003",
+    "ARG001",
+    "ARG002",
+    "ARG005",
 ]
 
 [tool.pytest.ini_options]

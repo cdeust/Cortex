@@ -243,14 +243,13 @@ def _bins_to_means(bins: dict[int, list]) -> list[tuple[float, float]]:
 
 def generate_emergence_report(
     memories: list[dict],
-    events: list | None = None,
 ) -> dict:
     """Generate a full emergence report from an in-memory list.
 
     Thin wrapper over ``generate_emergence_report_streamed`` (one chunk) so the
     list path and the streaming path can never diverge.
     """
-    return generate_emergence_report_streamed([memories], events=events)
+    return generate_emergence_report_streamed([memories])
 
 
 def _schema_acceleration_from_agg(cons: dict, incons: dict) -> dict:
@@ -320,13 +319,19 @@ def _phase_locking_from_agg(enc: dict, ret: dict) -> dict:
 
 def generate_emergence_report_streamed(
     memory_chunks,
-    events: list | None = None,
 ) -> dict:
     """Constant-memory emergence report: one streaming pass of bounded reducers.
 
     Every metric in the legacy report is an aggregate (binned forgetting curve,
     schema/phase cohort sums, stage counts, interference mean), so the whole
     report needs only O(num_bins + num_stages) RAM regardless of corpus size.
+
+    issue #239 ARG cleanup: an ``events: list | None = None`` parameter was
+    accepted (and threaded through the ``generate_emergence_report`` wrapper)
+    but never read here, and the one production caller
+    (``handlers/consolidate.py``) never passed it. Removed rather than kept
+    as unused scaffolding for a future per-event metric (coding-standards.md
+    §9 — no future-proofing without a current caller).
     """
     bins: dict[int, list] = {}  # bin_idx -> [heat_sum, count]
     n_age = 0

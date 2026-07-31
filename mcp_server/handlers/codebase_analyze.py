@@ -267,7 +267,7 @@ async def _store_file(
         return None, 0, 0
 
     _set_memory_metadata(store, memory_id)
-    ents, rels = persist_entities(store, analysis, memory_id, domain or "code")
+    ents, rels = persist_entities(store, analysis, domain or "code")
     return memory_id, ents, rels
 
 

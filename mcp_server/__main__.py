@@ -186,7 +186,11 @@ mcp.add_middleware(ToolProfileMiddleware(ACTIVE_PROFILE))
 # ── Lifecycle ──────────────────────────────────────────────────────────────
 
 
-def _shutdown(sig=None, frame=None) -> None:
+# sig/frame: Python's signal.signal() handler protocol always invokes the
+# registered callback with (signum, frame) positionally — required by the
+# calling convention (docs.python.org/3/library/signal.html#signal.signal),
+# not read by this handler.
+def _shutdown(sig=None, frame=None) -> None:  # noqa: ARG001 — signal protocol
     close_all()
     sys.exit(0)
 

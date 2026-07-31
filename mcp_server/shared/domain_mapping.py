@@ -271,12 +271,16 @@ def _match_slug(slug: str, slug_index: dict[str, RepoInfo]) -> RepoInfo | None:
 
 def _build_fragment_index(
     repos: list[RepoInfo],
-    name_to_canonical: dict[str, str],
 ) -> dict[str, str]:
     """Map meaningful fragments to canonical names.
 
     For each repo, generate all contiguous sub-sequences of hyphen-delimited
     parts (length >= 4 chars). Longer fragments win ties.
+
+    issue #239 ARG cleanup: a ``name_to_canonical`` dict was accepted but
+    never read — this function builds its own ``fragments`` map from
+    ``repo.canonical`` directly rather than a lookup; removed the unused
+    pass-through.
     """
     fragments: dict[str, tuple[str, int]] = {}  # fragment → (canonical, length)
 
@@ -477,7 +481,7 @@ def _build_registry() -> DomainRegistry:
             repos.append(r)
     name_to_canonical = _group_repos(repos)
     slug_index = _build_slug_index(repos)
-    fragment_index = _build_fragment_index(repos, name_to_canonical)
+    fragment_index = _build_fragment_index(repos)
     return DomainRegistry(repos, name_to_canonical, slug_index, fragment_index)
 
 

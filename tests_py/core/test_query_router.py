@@ -91,47 +91,47 @@ class TestClassifyQueryIntent:
 
 class TestComputeRetrievalWeights:
     def test_temporal_weights(self):
-        w = compute_retrieval_weights(QueryIntent.TEMPORAL, {})
+        w = compute_retrieval_weights(QueryIntent.TEMPORAL)
         assert w["temporal"] == 1.0
         assert w["vector"] < 1.0
 
     def test_causal_weights(self):
-        w = compute_retrieval_weights(QueryIntent.CAUSAL, {})
+        w = compute_retrieval_weights(QueryIntent.CAUSAL)
         assert w["causal"] == 1.0
         assert w["entity"] > 0.5
 
     def test_semantic_weights(self):
-        w = compute_retrieval_weights(QueryIntent.SEMANTIC, {})
+        w = compute_retrieval_weights(QueryIntent.SEMANTIC)
         assert w["vector"] == 1.0
         assert w["fts"] > 0.5
 
     def test_entity_weights(self):
-        w = compute_retrieval_weights(QueryIntent.ENTITY, {})
+        w = compute_retrieval_weights(QueryIntent.ENTITY)
         assert w["entity"] == 1.0
         assert w["fts"] > 0.5
 
     def test_instruction_weights_boost_fts(self):
-        w = compute_retrieval_weights(QueryIntent.INSTRUCTION, {})
-        general_w = compute_retrieval_weights(QueryIntent.GENERAL, {})
+        w = compute_retrieval_weights(QueryIntent.INSTRUCTION)
+        general_w = compute_retrieval_weights(QueryIntent.GENERAL)
         assert w["fts"] > general_w["fts"]
 
     def test_instruction_weights_reduce_vector(self):
-        w = compute_retrieval_weights(QueryIntent.INSTRUCTION, {})
-        general_w = compute_retrieval_weights(QueryIntent.GENERAL, {})
+        w = compute_retrieval_weights(QueryIntent.INSTRUCTION)
+        general_w = compute_retrieval_weights(QueryIntent.GENERAL)
         assert w["vector"] < general_w["vector"]
 
     def test_general_uses_base_weights(self):
-        w = compute_retrieval_weights(QueryIntent.GENERAL, {})
+        w = compute_retrieval_weights(QueryIntent.GENERAL)
         assert w["vector"] == 1.0
         assert w["fts"] == 0.5
 
     def test_all_weight_keys_present(self):
-        w = compute_retrieval_weights(QueryIntent.GENERAL, {})
+        w = compute_retrieval_weights(QueryIntent.GENERAL)
         for key in ["vector", "fts", "heat", "temporal", "causal", "entity"]:
             assert key in w
 
     def test_weights_are_rounded(self):
-        w = compute_retrieval_weights(QueryIntent.TEMPORAL, {})
+        w = compute_retrieval_weights(QueryIntent.TEMPORAL)
         for v in w.values():
             assert v == round(v, 3)
 

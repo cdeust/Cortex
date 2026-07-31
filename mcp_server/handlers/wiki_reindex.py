@@ -126,7 +126,7 @@ def _classify_page(rel_path: str) -> tuple[bool, bool]:
     return redirect_flag, auto_gen_flag
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:  # noqa: ARG001 — MCP tool_registry dispatch requires the uniform handler(args) signature across all 55 tools; args is unused on this tool's path
     """Phases 3.2 + 5 of ADR-2244: split human / auto-gen / redirects.
 
     Redirects: excluded entirely from INDEX.md (they're navigational aids

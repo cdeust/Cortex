@@ -95,15 +95,18 @@ def _delegation_hint(kind: str) -> str:
     )
 
 
-def _find_gap_marker(
-    body: str, gap_name: str, gap_description: str
-) -> tuple[int, int] | None:
+def _find_gap_marker(body: str, gap_description: str) -> tuple[int, int] | None:
     """Locate the ``_(missing — needs: <gap_description>)_`` marker in body.
 
     Returns the ``(start, end)`` char range when found, or ``None``
     when the gap is no longer present (already filled by a prior
     run, or the page was hand-edited). Match is on the description
     text so we replace exactly one section without globbing.
+
+    issue #239 ARG cleanup: a ``gap_name`` parameter was accepted but never
+    read — the match is purely on ``gap_description`` text, and the one
+    call site already passed a literal ``""`` for it, itself evidence the
+    argument carried no information; removed rather than kept unused.
     """
     needle = f"_(missing — needs: {gap_description})_"
     idx = body.find(needle)
@@ -189,7 +192,7 @@ def _replace_gap_marker(
     Returns ``(new_body, did_replace)``. The replacement preserves the
     surrounding whitespace/newlines.
     """
-    span = _find_gap_marker(body, "", gap_description)
+    span = _find_gap_marker(body, gap_description)
     if span is None:
         return body, False
     start, end = span
@@ -311,7 +314,6 @@ def _gap_heading(name: str) -> str:
 
 def _build_page_prompt(
     *,
-    page_path: str,
     page_meta: dict[str, Any],
     gaps: list[str],
     source_text: str | None,
@@ -331,6 +333,13 @@ def _build_page_prompt(
                     Bash grep/find instructions are replaced with
                     Grep/Glob tool equivalents that work under the
                     read-only --tools "Read,Glob,Grep" restriction.
+
+    issue #239 ARG cleanup: a ``page_path`` parameter was accepted (the one
+    caller had it in scope and passed it) but never read — this function
+    extracts ``source_path``/``domain`` from ``page_meta`` directly, unlike
+    its sibling ``_build_section_prompt`` which uses ``page_path`` as a
+    ``page_meta.get("title", page_path)`` fallback; removed rather than
+    kept for a fallback this function never needed.
     """
     domain = page_meta.get("domain", "")
     source_path = page_meta.get("source_file_path", "")

@@ -366,7 +366,6 @@ _RECONS_QUERY_VALENCE_FLOOR: float = 0.10  # below this, query is treated as neu
 
 def compute_reconsolidation_action(
     memory: dict,
-    query: str,
     *,
     embedding_similarity: float | None = None,
     current_directory: str = "",
@@ -380,8 +379,15 @@ def compute_reconsolidation_action(
     Composes `compute_mismatch` + `decide_action` and translates the
     abstract action into concrete heat / valence / timestamp deltas.
 
+    issue #239 ARG cleanup: a raw ``query`` string parameter was accepted
+    but never read — the one caller (``recall_pipeline.reconsolidation_apply``)
+    already derives everything this function needs from the query
+    (``query_valence`` via vader_compound, ``context_tokens`` via
+    tokenization) and passes those directly; removed the redundant raw
+    string rather than leaving it unused alongside its own derived values.
+
     Preconditions: memory is a non-None dict containing at least
-    ``memory_id``; query is a string (may be empty).
+    ``memory_id``.
     Postconditions: returns a ReconsolidationOutcome whose action is one of
     {"none", "update", "archive"}; heat_delta is bounded to
     [-0.10, +0.05]; valence_delta is bounded to [-0.10, +0.10].

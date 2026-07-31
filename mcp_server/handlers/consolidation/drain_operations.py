@@ -227,18 +227,24 @@ async def _persist_filled_gaps(
 
 
 async def _invoke_page_fill(
-    page_path: Path,
     meta: dict[str, Any],
     gaps: list[str],
     invoke: Callable[..., Awaitable[Any]],
     _root: Any,
 ) -> tuple[Any, int]:
-    """Build the whole-page fill prompt, invoke claude, return (ir, elapsed_ms)."""
+    """Build the whole-page fill prompt, invoke claude, return (ir, elapsed_ms).
+
+    issue #239 ARG cleanup: a ``page_path`` parameter was accepted and
+    forwarded to ``_build_page_prompt(page_path=...)``, but that callee
+    never read it either (see its own docstring) — removed here too so no
+    unused parameter was left behind by fixing the callee alone. The one
+    caller (``drain_page``) still holds and uses ``page_path`` itself for
+    its other calls; only this pass-through was dead.
+    """
     start = time.monotonic()
     src_root = _optional_source_root(meta)
     _, source_text = _project_source_for_page(meta)
     prompt = _build_page_prompt(
-        page_path=str(page_path),
         page_meta=meta,
         gaps=gaps,
         source_text=source_text,
@@ -285,7 +291,7 @@ async def drain_all_gaps_on_page(
     if not gaps:
         return []
 
-    ir, base_ms = await _invoke_page_fill(page_path, meta, gaps, invoke, _root)
+    ir, base_ms = await _invoke_page_fill(meta, gaps, invoke, _root)
     response = ir.text
     if not response:
         return _no_response_results(page_path, gaps, base_ms, _root)

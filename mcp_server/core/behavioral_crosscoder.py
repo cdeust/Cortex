@@ -142,7 +142,6 @@ def detect_persistent_features(
 def compare_feature_profiles(
     activations_a: dict | None,
     activations_b: dict | None,
-    dictionary: FeatureDictionary | None = None,
 ) -> dict[str, list[str]]:
     threshold = 0.1
     active_a = {

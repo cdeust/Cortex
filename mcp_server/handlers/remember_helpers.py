@@ -518,7 +518,7 @@ def _do_merge(
     cand: dict,
     cand_id: int,
     content: str,
-    tags: list[str],
+    tags: list[str],  # noqa: ARG001 — curation.merge_tags exists and is tested for exactly this union, but is not called here (or anywhere in production): a merge currently leaves the surviving memory's tags untouched. Wiring it is a behavior change (and curation.merge_tags's result would need a store write path — update_memory_compression takes no tags param today), so it is a genuine gap, not vestigial, and out of a lint-refactor's scope (issue #239 ARG cleanup).
     heat: float,
     store: MemoryStore,
     emb_engine: EmbeddingEngine,
@@ -759,7 +759,7 @@ def insert_and_post_process(
     straight into the insert record.
     """
     is_dec = thermodynamics.is_decision_content(content)
-    stype = classify_memory(content, tags, directory)
+    stype = classify_memory(content, tags)
     embedding, sep, interf = write_gate.apply_pattern_separation(
         embedding,
         sims,

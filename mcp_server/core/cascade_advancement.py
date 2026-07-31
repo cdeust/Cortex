@@ -53,7 +53,6 @@ _SCHEMA_FAST_CONSOLIDATION_MATCH = 0.5  # "1 with schema > 0.5"
 def _check_labile_advancement(
     dopamine_level: float,
     importance: float,
-    hours_in_stage: float = 0.0,
 ) -> tuple[bool, str, float]:
     """Check LABILE -> EARLY_LTP advancement conditions.
 
@@ -76,7 +75,6 @@ def _check_labile_advancement(
 def _check_early_ltp_advancement(
     replay_count: int,
     importance: float,
-    hours_in_stage: float = 0.0,
 ) -> tuple[bool, str, float]:
     """Check EARLY_LTP -> LATE_LTP advancement conditions.
 
@@ -99,7 +97,6 @@ def _check_early_ltp_advancement(
 def _check_late_ltp_advancement(
     replay_count: int,
     schema_match: float,
-    hours_in_stage: float = 0.0,
 ) -> tuple[bool, str, float]:
     """Check LATE_LTP -> CONSOLIDATED advancement conditions.
 
@@ -194,11 +191,11 @@ def compute_advancement_readiness(
         return False, current_stage, min(readiness, 0.99)
 
     if stage == ConsolidationStage.LABILE:
-        return _check_labile_advancement(dopamine_level, importance, hours_in_stage)
+        return _check_labile_advancement(dopamine_level, importance)
     if stage == ConsolidationStage.EARLY_LTP:
-        return _check_early_ltp_advancement(replay_count, importance, hours_in_stage)
+        return _check_early_ltp_advancement(replay_count, importance)
     if stage == ConsolidationStage.LATE_LTP:
-        return _check_late_ltp_advancement(replay_count, schema_match, hours_in_stage)
+        return _check_late_ltp_advancement(replay_count, schema_match)
     if stage == ConsolidationStage.RECONSOLIDATING:
         return _check_reconsolidating_advancement(hours_in_stage, min_dwell)
     return False, current_stage, 1.0

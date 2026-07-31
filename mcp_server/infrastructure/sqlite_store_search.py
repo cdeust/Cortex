@@ -48,7 +48,7 @@ class SqliteSearchMixin:
         self,
         query_text: str,
         query_embedding: bytes | None,
-        intent: str = "general",
+        intent: str = "general",  # noqa: ARG002 — LSP parity with PgMemoryStore.recall_memories (identical signature; callers are backend-agnostic)
         domain: str | None = None,
         directory: str | None = None,
         agent_topic: str | None = None,
@@ -56,7 +56,7 @@ class SqliteSearchMixin:
         max_results: int = 10,
         wrrf_k: int = 60,
         weights: dict[str, float] | None = None,
-        include_globals: bool = True,
+        include_globals: bool = True,  # noqa: ARG002 — same LSP-parity reason as `intent` above
     ) -> list[dict[str, Any]]:
         """Client-side WRRF fusion: vector + FTS5 + heat + recency."""
         w = weights or {}
@@ -331,7 +331,7 @@ class SqliteSearchMixin:
         self,
         query_embedding: bytes,
         top_k: int = 10,
-        min_heat: float = 0.0,
+        min_heat: float = 0.0,  # noqa: ARG002 — signature mirrors PgMemoryStore.search_vectors (see docstring); the vec virtual table has no heat-floor predicate to apply it against
         heads_only: bool = False,
     ) -> list[tuple[int, float]]:
         """Vector KNN search via sqlite-vec. Returns (memory_id, distance).

@@ -151,13 +151,17 @@ _MIN_CONTENT_CHARS = 20
 
 
 async def _import_single_item(
-    store: MemoryStore,
     item: dict,
     cwd: str,
     domain: str,
     project_slug: str,
 ) -> int | None:
-    """Store one extracted item. Returns memory_id if stored, else None."""
+    """Store one extracted item. Returns memory_id if stored, else None.
+
+    issue #239 ARG cleanup: a ``store`` parameter was accepted but never
+    read — this function delegates entirely to the ``remember`` tool's own
+    handler, which resolves its own store; removed the unused pass-through.
+    """
 
     content = item.get("content", "")
     if not content or len(content) < _MIN_CONTENT_CHARS:
@@ -219,7 +223,7 @@ async def _import_file(
 
     imported = 0
     for item in items:
-        mid = await _import_single_item(store, item, cwd, domain, project_slug)
+        mid = await _import_single_item(item, cwd, domain, project_slug)
         if mid is not None:
             imported += 1
             concepts = find_concepts(item.get("content", ""))
