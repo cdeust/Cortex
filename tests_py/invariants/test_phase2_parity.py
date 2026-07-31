@@ -29,13 +29,19 @@ Cases covered:
       by the Option A policy; the substring baseline filters them
       identically so the test is fair.
 
-Uses `cortex_test` PostgreSQL — see `tests_py/conftest.py`. Skipped
-when PG is not available (CI without PG → test becomes xfail-on-env).
+Uses `cortex_test` PostgreSQL — see `tests_py/conftest.py`. Skipped only
+when PostgreSQL is genuinely unreachable this session (shared `_USE_PG`
+flag, same gate ~14 other PG-only test modules use). A reachable database
+missing this test's tables no longer skips: `tests_py/conftest.py` now
+provisions the schema for the whole session before any test module is
+collected (issue #312 — before that fix, a reachable-but-unmigrated
+database, e.g. a fresh per-process throwaway DB, passed the bare
+connectivity check this file used to run on its own and then died
+mid-test with `psycopg.errors.UndefinedTable` instead of skipping; see
+`tests_py/_pg_schema_provision.py` for the full incident history).
 """
 
 from __future__ import annotations
-
-import os
 
 import pytest
 
@@ -44,27 +50,12 @@ import pytest
 # because the parity test's job is exactly to validate that code.
 from mcp_server.handlers.consolidation.plasticity import _find_co_accessed_pairs
 from mcp_server.core.entity_reconciliation import build_reconciliation_sql
-
-
-# ── Skip conditions ──────────────────────────────────────────────────────
-
-_PG_URL = os.environ.get("DATABASE_URL", "")
-_PG_AVAILABLE = False
-
-try:
-    import psycopg  # noqa: F401
-
-    conn = psycopg.connect(_PG_URL, autocommit=True, connect_timeout=3)
-    conn.close()
-    _PG_AVAILABLE = True
-except Exception:
-    _PG_AVAILABLE = False
-
+from tests_py.conftest import _TEST_DB_URL, _USE_PG  # type: ignore
 
 pytestmark = [
     pytest.mark.skipif(
-        not _PG_AVAILABLE,
-        reason="cortex_test PostgreSQL is not reachable",
+        not _USE_PG,
+        reason="PostgreSQL is not available for this test session",
     ),
     pytest.mark.invariants,
 ]
@@ -267,7 +258,7 @@ assert len(_FIXTURE_MEMORIES) == 100
 def _pg_conn():
     import psycopg
 
-    return psycopg.connect(_PG_URL, autocommit=False)
+    return psycopg.connect(_TEST_DB_URL, autocommit=False)
 
 
 def _setup_fixture() -> tuple[list[dict], list[dict]]:

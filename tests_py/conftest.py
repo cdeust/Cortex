@@ -123,7 +123,7 @@ else:
 # out to bring this file under coding-standards.md §4.1's 300-line cap;
 # issue #276/#287 boy-scout follow-up) — no behavior change, see that
 # module's docstring.
-from tests_py import _pg_safety_guards, _pg_throwaway_db  # noqa: E402
+from tests_py import _pg_safety_guards, _pg_schema_provision, _pg_throwaway_db  # noqa: E402
 
 _CORTEX_TEST_ISOLATE_DB = os.environ.get("CORTEX_TEST_ISOLATE_DB", "1") not in (
     "0",
@@ -164,15 +164,12 @@ def _guard_against_venv_lock_drift() -> None:
 
 
 def _pg_available() -> bool:
-    """Check if PostgreSQL is reachable."""
-    try:
-        import psycopg
-
-        conn = psycopg.connect(_TEST_DB_URL, autocommit=True, connect_timeout=3)
-        conn.close()
-        return True
-    except Exception:
-        return False
+    """Whether PostgreSQL is ready this session: reachable AND schema-
+    provisioned, not just reachable (issue #312) — see
+    ``_pg_schema_provision.ensure_pg_ready``'s docstring for the full
+    incident history and the reachable-but-unprovisioned fix.
+    """
+    return _pg_schema_provision.ensure_pg_ready(_TEST_DB_URL)
 
 
 _pg_safety_guards.guard_against_populated_db(_TEST_DB_URL)
