@@ -588,7 +588,7 @@ lint = [
     "ruff==0.15.20",
 ]
 typecheck = [
-    "pyright==1.1.410",
+    "pyright==1.1.411",
 ]
 packaging = [
     "build>=1.2.0",
