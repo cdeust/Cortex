@@ -48,6 +48,20 @@ updates:
       prefix: "build"
 
   # Python dependencies are declared in pyproject.toml and locked in uv.lock.
+  #
+  # Note on what these PRs still require by hand: Dependabot rewrites a version
+  # specifier — in pyproject.toml, or directly in one of the generated
+  # requirements/*.txt exports it reads as a manifest — and never runs `uv lock`
+  # or scripts/generate_pip_constraints.py. Every `deps` PR therefore arrives
+  # failing the two Lint steps that guard exactly that chain (`uv lock --check`,
+  # `generate_pip_constraints.py --check`). Resync before merging:
+  #
+  #   uv lock --upgrade-package <name>      # uv 0.11.3, the version ci.yml pins
+  #   python scripts/generate_pip_constraints.py
+  #
+  # Pushing that commit to the dependabot/** branch disables Dependabot's
+  # auto-rebase for the PR — do not comment `@dependabot rebase` afterwards, it
+  # would drop the resync.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -55,3 +69,17 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps"
+    ignore:
+      # caio is transitive, not declared: hypermnesia-mcp -> fastmcp ->
+      # fastmcp-slim -> py-key-value-aio -> aiofile -> caio. Every published
+      # aiofile pins caio below 0.10 — 3.9.0 `caio<0.10.0,>=0.9.0`, and 3.10.0
+      # through 3.11.1 (latest, 2026-05-16) `caio~=0.9.0` — while caio 0.10.2
+      # shipped 2026-07-05, after it. No version set satisfies both, so the bump
+      # is unresolvable rather than merely unresynced: PR #322 failed every job,
+      # not just Lint, and was closed for this reason.
+      # No advisory affects caio (`gh api "/advisories?ecosystem=pip&affects=caio"`
+      # returned none on 2026-08-01), so 0.9.25 is not a security hold.
+      # Remove this entry as soon as aiofile widens its bound.
+      # source: PyPI JSON API, verified 2026-08-01.
+      - dependency-name: "caio"
+        versions: [">=0.10.0"]
