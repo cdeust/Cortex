@@ -1227,10 +1227,13 @@ BEAM paper.  See commit `5348f74`.
 the harness verifies FlashRank by reranking a synthetic pair:
 
 ```python
-result = flashrank.rerank([
-    {"content": "The cat sat on the mat", "score": 0.0},
-    {"content": "Dogs are loyal pets", "score": 0.0},
-], query="What did the cat do?")
+result = flashrank.rerank(
+    [
+        {"content": "The cat sat on the mat", "score": 0.0},
+        {"content": "Dogs are loyal pets", "score": 0.0},
+    ],
+    query="What did the cat do?",
+)
 assert result[0]["score"] > 0, "FlashRank model loading failed"
 ```
 

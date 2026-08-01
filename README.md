@@ -194,7 +194,10 @@ from agents.mcp import MCPServerStdio
 
 async with MCPServerStdio(
     name="cortex",
-    params={"command": "uvx", "args": ["--from", "hypermnesia-mcp[sqlite]", "hypermnesia-mcp"]},
+    params={
+        "command": "uvx",
+        "args": ["--from", "hypermnesia-mcp[sqlite]", "hypermnesia-mcp"],
+    },
 ) as server:
     agent = Agent(name="Assistant", mcp_servers=[server])
 ```

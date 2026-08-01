@@ -326,7 +326,9 @@ authors.
    Fails if any rule in --blocking has a current count > baseline count.
    Reports all rules showing count deltas.
    """
+
    import json, sys, argparse
+
 
    def main():
        p = argparse.ArgumentParser()
@@ -367,6 +369,7 @@ authors.
            print(f"\nFAIL: regressions in blocking rules: {failed}")
            sys.exit(1)
        print("\nPASS: no regressions in blocking rules")
+
 
    if __name__ == "__main__":
        main()

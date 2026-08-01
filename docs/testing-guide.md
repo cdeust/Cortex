@@ -234,10 +234,13 @@ Async functions are tested via `asyncio.get_event_loop().run_until_complete()`:
 def _run(coro):
     return asyncio.get_event_loop().run_until_complete(coro)
 
+
 class TestMcpRouter:
     def test_returns_server_info(self):
         router = create_router(mock_registry)
-        response = _run(router({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}))
+        response = _run(
+            router({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
+        )
         parsed = json.loads(response)
         assert parsed["result"]["serverInfo"]["name"] == "methodology-agent"
 ```

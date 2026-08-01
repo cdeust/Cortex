@@ -295,8 +295,7 @@ def bump_heat_raw(self, memory_id: int, new_heat_base: float) -> None:
     compute decay from the bump time, not the row's previous anchor.
     """
     self._execute(
-        "UPDATE memories SET heat_base = %s, heat_base_set_at = NOW() "
-        "WHERE id = %s",
+        "UPDATE memories SET heat_base = %s, heat_base_set_at = NOW() WHERE id = %s",
         (max(0.0, min(1.0, new_heat_base)), memory_id),
     )
     self._conn.commit()
@@ -314,7 +313,8 @@ calls `bump_heat_raw` per-row (rare — only memify / replay / rating).
 
 **Current**:
 ```python
-"UPDATE memories SET heat = 1.0, is_protected = TRUE, importance = 1.0, "
+"UPDATE memories SET heat = 1.0, is_protected = TRUE, importance = 1.0,"
+
 "tags = %s::jsonb, content = %s, is_global = %s WHERE id = %s"
 ```
 
@@ -324,7 +324,8 @@ rows ignore decay in `effective_heat()` and always return
 `LEAST(1.0, heat_base * factor) = 1.0` at `factor = 1.0`.
 
 ```python
-"UPDATE memories SET heat_base = 1.0, heat_base_set_at = NOW(), "
+"UPDATE memories SET heat_base = 1.0, heat_base_set_at = NOW(),"
+
 "is_protected = TRUE, no_decay = TRUE, importance = 1.0, "
 "tags = %s::jsonb, content = %s, is_global = %s WHERE id = %s"
 ```
@@ -392,7 +393,8 @@ SQLite path keeps the column but recomputes `effective_heat` in Python
 (shared `mcp_server/core/effective_heat.py`, a pure function).
 
 ```python
-"UPDATE memories SET heat_base = ?, heat_base_set_at = CURRENT_TIMESTAMP "
+"UPDATE memories SET heat_base = ?, heat_base_set_at = CURRENT_TIMESTAMP"
+
 "WHERE id = ?"
 ```
 

@@ -256,9 +256,12 @@ Intended shape for `mcp_server/handlers/consolidation/reconcile.py`:
 ```python
 def run_reconcile_cycle(store) -> dict:
     from mcp_server.core.entity_reconciliation import (
-        build_reconciliation_sql, build_count_eligible_sql,
-        reconcile_leak_ratio, exceeds_leak_threshold,
+        build_reconciliation_sql,
+        build_count_eligible_sql,
+        reconcile_leak_ratio,
+        exceeds_leak_threshold,
     )
+
     count_sql, params = build_count_eligible_sql()
     eligible = store.execute_scalar(count_sql, params)
     insert_sql, params = build_reconciliation_sql()
@@ -268,7 +271,8 @@ def run_reconcile_cycle(store) -> dict:
         logger.warning(
             "reconcile leak ratio %.3f exceeds threshold %.3f; "
             "investigate write path (persist_entities)",
-            ratio, LEAK_WARNING_THRESHOLD,
+            ratio,
+            LEAK_WARNING_THRESHOLD,
         )
     return {
         "reconciled_pairs": reconciled,

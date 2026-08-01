@@ -81,7 +81,7 @@ Today:
 ```python
 async def handler(args: dict) -> dict:
     store = _get_store()
-    return store.do_sync_work(args)   # blocks event loop
+    return store.do_sync_work(args)  # blocks event loop
 ```
 
 Post-Phase 5:
@@ -102,13 +102,14 @@ Each tool declares a concurrency budget. The MCP server registers a
 
 ```python
 _ADMISSION: dict[str, asyncio.Semaphore] = {
-    "recall":              asyncio.Semaphore(8),
-    "remember":            asyncio.Semaphore(4),
-    "consolidate":         asyncio.Semaphore(1),   # one at a time
-    "seed_project":        asyncio.Semaphore(1),
-    "wiki_pipeline":       asyncio.Semaphore(1),
+    "recall": asyncio.Semaphore(8),
+    "remember": asyncio.Semaphore(4),
+    "consolidate": asyncio.Semaphore(1),  # one at a time
+    "seed_project": asyncio.Semaphore(1),
+    "wiki_pipeline": asyncio.Semaphore(1),
     # default: Semaphore(4) for interactive, Semaphore(1) for batch
 }
+
 
 async def admit(tool_name: str, coro):
     sem = _ADMISSION.get(tool_name, _default_for_class(tool_name))
