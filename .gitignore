@@ -71,3 +71,8 @@ app-tauri/src-tauri/target/
 # Benchmark run logs (raw stdout/stderr) — transient artifacts, not release content
 benchmarks/results/**/*.log
 benchmarks/.reproduce.lock/
+
+# npm install trees. The lockfiles that produce them ARE committed
+# (.github/mcpb/, docker/claude-code/) so `npm ci` reinstalls the exact
+# integrity-hashed bytes; the installed tree itself is a build artifact.
+node_modules/

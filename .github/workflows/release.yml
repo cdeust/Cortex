@@ -315,6 +315,125 @@ jobs:
             hypermnesia-mcp.cdx.json.sha256
           fail_on_unmatched_files: true
 
+  # MCPB connector bundle (Claude Desktop / Cowork drag-and-drop install).
+  # manifest.json + .mcpbignore already described a valid MCPB 0.4 bundle, but
+  # nothing built it: v4.14.3 through v4.16.0 shipped zero release assets, so
+  # the only way to get this bundle was to clone the repo and pack it by hand.
+  #
+  # The bundle carries source + manifest only — `uv run` resolves dependencies
+  # from the bundled pyproject.toml/uv.lock at launch — which is why it is
+  # 2.1MB and not the ~700MB an installed tree would be.
+  # source: measured 2026-08-01 on the v4.17.0 tree — 2.1MB package /
+  #   5.8MB unpacked / 561 files / 222 ignored by .mcpbignore.
+  mcpb-bundle:
+    name: MCPB bundle + attest (Claude Desktop connector)
+    needs: test
+    # Only the real tag-triggered event ships a bundle; a workflow_dispatch
+    # verification run (issue #247 criterion 5) stops after `test`.
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # upload bundle + checksum + server.json to release
+      id-token: write       # OIDC token Sigstore exchanges for a signing cert
+      attestations: write   # record the build-provenance statement on the repo
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      # `npm ci` against the committed lockfile, not `npx @anthropic-ai/mcpb@x`:
+      # an exact version is not a pin (§ hash-pinned installs, issue #203) —
+      # only the lockfile's sha512 integrity entries pin the bytes. The
+      # lockfile also carries a `tmp` override, because the CLI's transitive
+      # @inquirer/prompts -> external-editor -> tmp chain resolves to a version
+      # inside the GHSA-52f5-9888-hmc6 / GHSA-ph9p-34f9-6g65 range by default.
+      - name: Install the pinned MCPB CLI
+        run: npm ci --prefix .github/mcpb --ignore-scripts
+
+      - name: Build the MCPB bundle
+        id: pack
+        run: |
+          set -euxo pipefail
+          VERSION="$(python3 -c "import json;print(json.load(open('manifest.json'))['version'])")"
+          # The tag must describe the tree it is built from, or a user installing
+          # the asset gets a version the release notes do not describe.
+          if [ "v${VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "manifest.json version ${VERSION} does not match tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          BUNDLE="hypermnesia-mcp-${VERSION}.mcpb"
+          node .github/mcpb/node_modules/.bin/mcpb pack . "${BUNDLE}"
+          sha256sum "${BUNDLE}" | tee "${BUNDLE}.sha256"
+          echo "bundle=${BUNDLE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          ls -la "${BUNDLE}"*
+
+      # The MCP registry's `mcpb` registryType requires the artifact's URL and
+      # its sha256 — neither of which exists until the bundle is built and its
+      # download URL is known. The committed server.json therefore keeps the
+      # pypi package (its identifier is version-addressable, not URL-addressed)
+      # and this step emits the resolved variant carrying BOTH packages, as a
+      # release asset to submit to the registry.
+      - name: Emit the resolved server.json (pypi + mcpb packages)
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib
+
+          bundle = pathlib.Path(os.environ["BUNDLE"])
+          version = os.environ["VERSION"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          tag = os.environ["GITHUB_REF_NAME"]
+
+          doc = json.loads(pathlib.Path("server.json").read_text())
+          if doc["version"] != version:
+              raise SystemExit(f"server.json {doc['version']} != manifest {version}")
+
+          doc["packages"].append(
+              {
+                  "registryType": "mcpb",
+                  "identifier": (
+                      f"https://github.com/{repo}/releases/download/{tag}/{bundle.name}"
+                  ),
+                  "version": version,
+                  "fileSha256": hashlib.sha256(bundle.read_bytes()).hexdigest(),
+                  "transport": {"type": "stdio"},
+              }
+          )
+          out = pathlib.Path("server.resolved.json")
+          # ensure_ascii=False so the description's em-dash stays a literal
+          # character instead of a — escape, matching committed server.json.
+          out.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+          print(out.read_text())
+          PY
+        env:
+          BUNDLE: ${{ steps.pack.outputs.bundle }}
+          VERSION: ${{ steps.pack.outputs.version }}
+
+      # Provenance BEFORE upload, same ordering and rationale as the wheel/sdist
+      # and SBOM jobs: the attestation binds the digest a user verifies with
+      #   gh attestation verify <bundle> --repo cdeust/Cortex
+      - name: Attest build provenance (MCPB bundle)
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: ${{ steps.pack.outputs.bundle }}
+
+      - name: Attach bundle + checksum + resolved server.json to the release
+        # Real releases only (issue #246) — same forged-release hazard as the
+        # build and sbom jobs' attach steps.
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            ${{ steps.pack.outputs.bundle }}
+            ${{ steps.pack.outputs.bundle }}.sha256
+            server.resolved.json
+          fail_on_unmatched_files: true
+
   publish-pypi:
     name: Publish to PyPI (deprecated channel)
     needs: build

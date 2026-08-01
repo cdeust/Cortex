@@ -9,7 +9,7 @@ deliberately absent; the ordering is the promise.
 
 ## Where the project is today
 
-v4.16.0, released 2026-07-24. 52 standalone MCP tools (55 with the optional
+v4.17.0, released 2026-08-01. 52 standalone MCP tools (55 with the optional
 upstream integrations), 9 lifecycle hooks, 36 neuroscience-grounded mechanisms
 against a 97-reference bibliography, running on a local SQLite store by
 default or PostgreSQL + pgvector when configured. The OpenSSF Best Practices

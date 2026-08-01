@@ -30,6 +30,22 @@ tests_py/
 tests_js/
 _pipeline/
 .claude/
+fuzz/
+.clusterfuzzlite/
+
+# Locally-materialised dependency tree. Git-ignored (.gitignore:69), so a CI
+# checkout never has it and the bundle is unaffected there — but a `pack` run
+# in a working tree that has bootstrapped the plugin launcher picks up ~1.1GB
+# and produces a 190MB bundle instead of 2.8MB. Excluded so a local pack and a
+# CI pack yield the same archive.
+# source: measured 2026-08-01 — same tree, pack with deps/ present: 190.1MB /
+#   26951 files; pack from `git archive HEAD`: 2.8MB / 600 files.
+deps/
+
+# Hashed pip exports consumed by CI and the Docker images. The MCPB runtime
+# resolves from pyproject.toml + uv.lock via `uv run`, and every consumer of
+# these files (scripts/, docker/) is already excluded above.
+requirements/
 
 # Claude Code plugin assets (not used by the MCPB / uv server runtime)
 .claude-plugin/

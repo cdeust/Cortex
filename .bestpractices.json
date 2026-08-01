@@ -36,7 +36,7 @@
   "english_justification": "README, CONTRIBUTING, SECURITY, PRIVACY, CHANGELOG, the docs/ tree and all issue discussion are written in English.",
 
   "maintained_status": "Met",
-  "maintained_justification": "Actively maintained: v4.16.0 was released 2026-07-24, and releases have shipped continuously through the v4.x series: https://github.com/cdeust/Cortex/releases",
+  "maintained_justification": "Actively maintained: v4.17.0 was released 2026-08-01, and releases have shipped continuously through the v4.x series: https://github.com/cdeust/Cortex/releases",
 
   "repo_public_status": "Met",
   "repo_public_justification": "The repository is public and readable without an account: https://github.com/cdeust/Cortex",
@@ -51,10 +51,10 @@
   "repo_distributed_justification": "git is a distributed version control system.",
 
   "version_unique_status": "Met",
-  "version_unique_justification": "Every release carries a unique semantic version tag (latest v4.16.0): https://github.com/cdeust/Cortex/releases",
+  "version_unique_justification": "Every release carries a unique semantic version tag (latest v4.17.0): https://github.com/cdeust/Cortex/releases",
 
   "version_semver_status": "Met",
-  "version_semver_justification": "Versions follow Semantic Versioning, tagged vMAJOR.MINOR.PATCH (v4.14.3, v4.15.0, v4.16.0): https://github.com/cdeust/Cortex/releases",
+  "version_semver_justification": "Versions follow Semantic Versioning, tagged vMAJOR.MINOR.PATCH (v4.15.0, v4.16.0, v4.17.0): https://github.com/cdeust/Cortex/releases",
 
   "version_tags_status": "Met",
   "version_tags_justification": "Each release has a corresponding git tag: https://github.com/cdeust/Cortex/tags",

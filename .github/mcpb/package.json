@@ -1,0 +1,13 @@
+{
+  "name": "cortex-mcpb-tool",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pinned MCPB packaging CLI used by .github/workflows/release.yml to build the .mcpb connector bundle. Isolated from the repo-root package.json (pure metadata) and installed with `npm ci` against the committed lockfile, so every byte of the toolchain is integrity-hashed rather than merely version-matched.",
+  "license": "MIT",
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2"
+  },
+  "overrides": {
+    "tmp": "0.2.7"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "hypermnesia-mcp",
-  "version": "4.16.0",
+  "version": "4.17.0",
   "description": "Persistent memory and cognitive profiling for Claude Code",
   "repository": {
     "type": "git",
