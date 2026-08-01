@@ -345,7 +345,7 @@ jobs:
         # actual publish — which would push a real package version — is
         # gated to a real tag push.
         if: github.event_name == 'push'
-        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         # Deprecated channel: a rejected upload (already-exists, or the
         # Trusted Publisher entry was removed) must NOT red-X the release.
         continue-on-error: true
