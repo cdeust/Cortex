@@ -102,13 +102,25 @@ SCANNED_FILES = (
     # published to the badge. Three of its test counts had drifted two
     # corrections behind the repository before it was scanned (2026-07-27).
     ".bestpractices.json",
+    # The MCP registry serves server.json's description verbatim, so a stale
+    # number here is published to every registry client. Only its `version`
+    # was asserted (check_versions) until its description was found still
+    # advertising "72 references" — two corrections behind the 97-reference
+    # bibliography — and shipped that way to the registry (2026-08-02).
+    "server.json",
 )
 
 TOOL_CLAIM = re.compile(r"(\d+)\s+(?:memory|standalone|MCP)\s+tools\b")
 TOOL_TOTAL_CLAIM = re.compile(r"\((\d+)\s+(?:total\s+)?with\b[^)]*\)")
 REFERENCE_CLAIM = re.compile(r"(\d+)[-\s]reference\b")
+# `cited` is optional because the claim is written both ways ("36
+# neuroscience-grounded mechanisms" in CONTRIBUTING, "36 cited brain
+# mechanisms" in the README lede and "36 cited neuroscience mechanisms" in
+# server.json). Without it the qualified phrasings parsed as no claim at
+# all, so the README lede and the registry description were never asserted
+# against the canonical count (found 2026-08-02).
 MECHANISM_CLAIM = re.compile(
-    r"(\d+)\s+(?:neuroscience[- ]grounded|neuroscience|biological|brain)?"
+    r"(\d+)\s+(?:cited\s+)?(?:neuroscience[- ]grounded|neuroscience|biological|brain)?"
     r"\s*mechanisms\b"
 )
 # Both the "N tests" and the "N-test suite" phrasings state the count. No
