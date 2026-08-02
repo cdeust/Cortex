@@ -9,7 +9,7 @@
   <a href="LICENSE"><img src="assets/badge-license.svg" alt="License: MIT"></a>
   <img src="assets/badge-python.svg" alt="Python 3.10+">
   <img src="assets/badge-tests.svg" alt="tests passing">
-  <img src="assets/badge-references.svg" alt="97 referenced papers">  <img src="assets/badge-version.svg" alt="Version 4.17.0">
+  <img src="assets/badge-references.svg" alt="97 referenced papers">  <img src="assets/badge-version.svg" alt="Version 4.17.1">
   <a href="https://www.bestpractices.dev/projects/13836"><img src="https://www.bestpractices.dev/projects/13836/badge" alt="OpenSSF Best Practices"></a>
   <a href="https://mcptoplist.com/server/io.github.cdeust%2Fhypermnesia-mcp"><img src="assets/badge-mcp-toplist.svg" alt="MCP Toplist: Top 1.2% of 81,919 tracked MCP servers, July 2026"></a>
 </p>
