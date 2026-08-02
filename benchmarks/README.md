@@ -84,7 +84,9 @@ session(s) appear in the top 10.
 
 - The comparable published baseline is the best retrieval configuration
   in the LongMemEval paper itself (Wu et al., ICLR 2025): **Recall@10
-  78.4%**. Cortex: **98.4%** (n=500).
+  78.4%**. Cortex: **98.2%**, MRR **0.9167** (n=500; clean-DB run
+  `results/repro/20260714-v4.14.1-pretag/longmemeval-s.json`, code SHA
+  `28145f0b7a113fc06e22568de6feea7f8444eaf5`, dirty=false).
 - This is **not** the end-to-end QA accuracy that LLM-answering
   leaderboards report (an LLM answers from the retrieved context and a
   judge scores the answer). Retrieval recall and QA accuracy are

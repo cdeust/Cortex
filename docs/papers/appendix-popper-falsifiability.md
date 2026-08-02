@@ -55,19 +55,19 @@ A claim with no falsification condition is unscientific in Popper's sense and mu
 
 ---
 
-## C5 — 97.8% LongMemEval R@10 generalizes beyond the benchmark (SEVERITY: high)
+## C5 — 98.2% LongMemEval R@10 generalizes beyond the benchmark (SEVERITY: high)
 
-**The claim.** "97.8% LongMemEval R@10 generalizes beyond the benchmark — the system is not overfit."
+**The claim.** "98.2% LongMemEval R@10 generalizes beyond the benchmark — the system is not overfit."
 
 **Riskiest prediction.** Calibration parameters tuned on LongMemEval (WRRF weights, intent classifier thresholds, FlashRank reranker depth) transfer to LoCoMo without retuning, retaining ≥ 90% of LongMemEval's R@10 (i.e., LoCoMo R@10 ≥ 0.88).
 
 **Falsification protocol.**
 - Freeze all hyperparameters at their LongMemEval-tuned values.
-- Evaluate on LoCoMo (1986 Qs) and BEAM (200 Qs at 100k) without modification.
-- Metric: R@10 on each held-out benchmark.
-- Threshold: if frozen LongMemEval calibration yields LoCoMo R@10 < 0.83 or BEAM Overall < 0.45, the cross-benchmark generalization claim is refuted.
+- Evaluate on LoCoMo (1,986 Qs) and the named BEAM-100K five-conversation subset (100 Qs) without modification.
+- Metrics: R@10 on LoCoMo and retrieval-proxy MRR on BEAM-100K.
+- Threshold: if frozen LongMemEval calibration yields LoCoMo R@10 < 0.83 or BEAM-100K retrieval-proxy MRR < 0.45, the cross-benchmark generalization claim is refuted.
 
-**Current evidence.** **PARTIALLY TESTED.** Each benchmark is currently scored independently with whatever defaults exist at the time, but the calibration history is not version-pinned to a single benchmark. Current scores (LongMemEval 97.8%, LoCoMo 92.6%, BEAM 0.543) are *consistent with* generalization but do not prove it: per-benchmark drift in defaults could be hiding overfitting. A frozen-config cross-eval has not been run.
+**Current evidence.** **PARTIALLY TESTED.** Each benchmark is currently scored independently, so the numbers are protocol-specific rather than a frozen-config cross-evaluation: LongMemEval R@10 98.2% / MRR 0.9167 (n=500, clean run `benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json`, code SHA `28145f0`, dirty=false); LoCoMo R@10 94.35% / MRR 0.8279 (n=1,986, clean post-fix run, code SHA `2f45bcb`); and BEAM-100K retrieval-proxy MRR 0.591 (n=100, five-conversation run, code SHA `a071d89`). These results are *consistent with* generalization but do not prove it: per-benchmark drift in defaults could be hiding overfitting. A frozen-config cross-eval has not been run.
 
 ---
 
@@ -113,7 +113,7 @@ A claim with no falsification condition is unscientific in Popper's sense and mu
 | C4 WRRF decorrelates | medium | PARTIALLY TESTED | Correlation matrix + 6 ablations |
 | C6 read/write 100:1 | low | UNTESTED | One week of production counters |
 
-No claim in the paper is currently CONFIRMED in the strict Popperian sense (survived a severe test designed to refute it). The 97.8% / 92.6% / 0.543 numbers are corroborations of the system as configured, not corroborations of the causal claims (C1–C6) about *why* it performs.
+No claim in the paper is currently CONFIRMED in the strict Popperian sense (survived a severe test designed to refute it). The protocol-specific 98.2% / 94.35% / 0.591 numbers are corroborations of the system as configured, not corroborations of the causal claims (C1–C6) about *why* it performs.
 
 ---
 

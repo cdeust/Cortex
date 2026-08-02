@@ -380,18 +380,18 @@ LongMemEval (Wu et al., ICLR 2025): 500 human-curated questions embedded in ~40 
 | | Cortex | What it means |
 |---|---|---|
 | Recall@10 | **98.2%** | The right memory shows up in the top 10 for nearly every question |
-| MRR | **0.915** | The correct *memory* is usually ranked first or second — retrieval rank only, no LLM reader |
+| MRR | **0.9167** | The correct *memory* is usually ranked first or second — retrieval rank only, no LLM reader |
 
-<sub>n=500, E1 v3 verification campaign — per-row JSONs with code SHAs in `benchmarks/results/ablation/longmemeval-s_v3/`. Re-verified on a clean DB 2026-06-10.</sub>
+<sub>n=500, clean-DB run `benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json`, code SHA `28145f0b7a113fc06e22568de6feea7f8444eaf5`, dirty=false.</sub>
 
 | Category | MRR | R@10 |
 |---|---|---|
 | Single-session (assistant) | 1.000 | 100.0% |
-| Multi-session reasoning | 0.962 | 100.0% |
-| Knowledge updates | 0.925 | 100.0% |
-| Temporal reasoning | 0.926 | 98.5% |
-| Single-session (user) | 0.814 | 94.3% |
-| Single-session (preference) | 0.668 | 93.3% |
+| Multi-session reasoning | 0.964 | 100.0% |
+| Knowledge updates | 0.932 | 100.0% |
+| Temporal reasoning | 0.917 | 97.7% |
+| Single-session (user) | 0.841 | 95.7% |
+| Single-session (preference) | 0.685 | 90.0% |
 
 Knowledge updates score near-perfect because the retrieval stack's recency signal and update-intent routing push the newest version of a fact above older ones.
 

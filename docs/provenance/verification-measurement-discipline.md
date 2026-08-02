@@ -102,8 +102,8 @@ Forbidden: filling a cell with an estimate, an interpolation, or a "should be ro
 
 ## Measurement-Debt List (ordered by impact-if-wrong)
 
-1. **LongMemEval R@10 = 97.8% / MRR = 0.882 (CLAUDE.md April 2026).** Provenance unknown — single run? Aggregated? 95% CI? **Status: I don't know.** Required: rerun ×5 on locked embedding model + commit `bench/results/longmemeval_<sha>_<date>.json` with per-run scores.
-2. **BEAM Overall = 0.543.** Same questions. Higher impact-if-wrong because the headline beats best-in-paper (0.329) by a large margin — a single-run inflation here is the most damaging citation in the campaign.
+1. **Historical LongMemEval R@10 = 97.8% / MRR = 0.882 (CLAUDE.md April 2026).** Provenance of that original pair remains unknown. It is superseded for current reporting by the clean run at SHA `28145f0` (R@10 98.2%, MRR 0.9167, n=500); the multi-run noise-floor experiment remains open.
+2. **Historical BEAM Overall = 0.543.** Provenance of that old headline remains unresolved. It is superseded for current reporting by the named five-conversation / 100-question retrieval-proxy run at SHA `a071d89` (MRR 0.591); do not conflate it with the later 395-question full split.
 3. **Historical LoCoMo R@10 = 92.6% / MRR = 0.794 (superseded; April 2026, n=1982).** The publication commit is `b4057a`, but the original per-query artefact is not committed. Same fix.
 4. **All ablation Δs in `bench/beam/ablation_results.json`.** No σ. Cannot distinguish 1pp signal from 1pp noise.
 5. **All latency claims (`<50ms`, `<100ms`, `<200ms` in CLAUDE.md tool table).** Targets, not measurements. No published p99. Required: emit p50/p99/p999 from a real workload trace.
