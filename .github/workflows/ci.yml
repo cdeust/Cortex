@@ -362,10 +362,10 @@ jobs:
       # Protocol-level, hook-free proof for representative local client
       # identities. This starts the installed production console entry point,
       # under a SOCKS-proxy environment with no socks extra, then requires a
-      # full initialize/discovery round-trip and a real SQLite memory_stats
-      # call. It is intentionally on the SQLite job: that is the zero-config
-      # backend used by Gemini/Codex installs, and all Python dependencies are
-      # already present here.
+      # full initialize/discovery round-trip for both full and lean profiles,
+      # plus a real SQLite memory_stats call. It is intentionally on the
+      # SQLite job: that is the zero-config backend used by Gemini/Codex
+      # installs, and all Python dependencies are already present here.
       - name: Verify hook-free MCP host contract
         env:
           HF_HUB_OFFLINE: "1"
@@ -375,6 +375,11 @@ jobs:
 
   mcp-host-config:
     name: Validate MCP host configurations
+    # The pinned Claude package requires its postinstall to select the native
+    # validator. Never execute install scripts from a lockfile modified by an
+    # untrusted fork; same-repository PRs and main/workflow_dispatch remain
+    # covered by this vendor-parser contract.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     permissions:
       contents: read

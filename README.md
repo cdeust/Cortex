@@ -180,11 +180,12 @@ CORTEX_MEMORY_STORE_BACKEND = "sqlite"
 
 Verify discovery with `codex mcp list` and then `/mcp` inside a Codex session. ChatGPT **web** is a different surface: it does not read local Codex configuration and accepts MCP tools through hosted plugins backed by remote Streamable HTTP servers. Cortex deliberately does not claim that deployment model today; exposing a local personal-memory database through a remote endpoint would require an explicit authentication, tenancy, and privacy design.
 
-The server deliberately disables FastMCP's startup banner and its network update
-probe: an MCP stdio handshake must succeed offline and must not fail because of
-proxy-specific HTTP extras. This does **not** freeze FastMCP indefinitely. Upgrade
-the installed tool explicitly; the new Cortex release and its declared dependency
-set are then resolved together:
+The server preserves FastMCP's diagnostic startup banner (including the
+`FASTMCP_SHOW_SERVER_BANNER` setting) but disables its network update probe: an
+MCP stdio handshake must succeed offline and must not fail because of
+proxy-specific HTTP extras. This does **not** freeze FastMCP indefinitely.
+Upgrade the installed tool explicitly; the new Cortex release and its declared
+dependency set are then resolved together:
 
 ```bash
 uv tool upgrade hypermnesia-mcp
@@ -195,10 +196,11 @@ updates are reviewed through normal pull requests.
 
 **Validation scope:** CI runs the installed production console entry point
 through the MCP lifecycle under representative Claude, Gemini, and Codex client
-identities, then separately invokes pinned vendor CLIs to parse the Claude
-plugin, Gemini extension, and recommended Codex configuration. This proves the
-protocol and configuration contracts; it does not simulate an authenticated
-model turn inside each vendor UI.
+identities for both the full and exact 10-tool lean profiles, then separately
+invokes pinned vendor CLIs to parse the Claude plugin, Gemini extension, and
+recommended Codex configuration. This proves the protocol and configuration
+contracts; it does not simulate an authenticated model turn inside each vendor
+UI.
 
 **Cursor** — `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) — and **Windsurf** — `~/.codeium/windsurf/mcp_config.json` — take the same `mcpServers` block as Gemini above.
 
