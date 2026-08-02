@@ -23,11 +23,11 @@
 </p>
 
 <p align="center">
-  <strong>Companion projects:</strong><br>
-  <a href="https://github.com/cdeust/cortex-know-when-to-stop-training-model">cortex-beam-abstain</a> (repo <code>cortex-know-when-to-stop-training-model</code>) — community-trained retrieval abstention model for RAG systems<br>
-  <a href="https://github.com/cdeust/zetetic-team-subagents">zetetic-team-subagents</a> — specialist Claude Code agents Cortex orchestrates with<br>
-  <a href="https://github.com/cdeust/automatised-pipeline">automatised-pipeline</a> — automated 11-stage pipeline (findings → PRs); Cortex ingests its codebase analysis via the optional <code>ingest_codebase</code> / <code>change_impact</code> tools<br>
-  <a href="https://github.com/cdeust/cortex-viz">cortex-viz</a> — read-only visualization MCP (galaxy graph, execution trace, wiki browser) over the same store
+  <strong>Part of a four-piece stack</strong> — each runs standalone; together they cover what an agent forgets, can't see, and can't verify. <a href="#the-rest-of-the-stack">Full comparison ↓</a><br>
+  <a href="https://github.com/cdeust/automatised-pipeline">automatised-pipeline</a> — the repo as a queryable code graph (callers, blast radius, execution paths), so agents stop re-reading files; Cortex ingests it via <code>ingest_codebase</code> / <code>change_impact</code><br>
+  <a href="https://github.com/cdeust/prd-spec-generator">prd-spec-generator</a> — <em>verifies</em> a spec rather than only generating one; standalone, or a CI gate over spec-kit / Kiro / BMAD output<br>
+  <a href="https://github.com/cdeust/zetetic-team-subagents">zetetic-team-subagents</a> — 97 sourced reasoning patterns as specialist agents, each with its own scoped Cortex memory<br>
+  <a href="https://github.com/cdeust/cortex-viz">cortex-viz</a> — read-only visualization MCP (galaxy graph, execution trace, wiki browser) over this same store · <a href="https://github.com/cdeust/cortex-know-when-to-stop-training-model">cortex-beam-abstain</a> — retrieval abstention model for RAG
 </p>
 
 <p align="center">
@@ -470,6 +470,19 @@ Cortex works with teams of specialized agents — and it **uses one itself**: th
 </p>
 
 Works with any custom agents. See [zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents) for a ready-made team of specialists, each with scoped memory.
+
+---
+
+## The rest of the stack
+
+Cortex fixes what an agent **forgets**. Three sibling MCP servers fix what it **can't see**, what it **can't verify**, and how it **reasons**. Each installs on its own — none requires the others — and Cortex registers extra tools automatically when it finds them.
+
+| | The problem it solves | Install it when | Related work |
+|---|---|---|---|
+| **[automatised-pipeline](https://github.com/cdeust/automatised-pipeline)** | Your agent answers structural questions ("who calls this?", "what breaks if I change it?") by re-reading files, burning context and missing cross-file callers. Indexes the repo into a property graph: call/import resolution, Leiden communities, hybrid BM25+TF-IDF search, impact analysis. | Refactoring, root-cause work, or any repo big enough that `grep` stops being an answer. | [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) covers far more languages (158). automatised-pipeline is narrower but **qualifies every impact answer as `exact` or `lower-bound`** instead of presenting a possibly-incomplete list as complete. |
+| **[prd-spec-generator](https://github.com/cdeust/prd-spec-generator)** | Specs pass review, then the implementation quietly contradicts them. Turns a feature description into a 9-file PRD and *verifies* it — deterministic Hard Output Rules plus multi-judge consensus calibrated against external oracles (schema / math / code). | You already write specs and want a gate that fails, not a template that hopes. | [spec-kit](https://github.com/github/spec-kit), [BMAD](https://github.com/bmad-code-org/BMAD-METHOD) and Kiro **generate** specs. This **verifies** them — it runs as a CI gate over their output rather than replacing them. |
+| **[zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents)** | Subagents that assert confidently instead of citing. 11 problem-shaped skills over 97 sourced reasoning patterns (Curie to Toulmin), plus a pre-commit gate that blocks unsourced constants. | You want "I don't know" to be an available answer, and every constant in your code to trace to a paper or a benchmark. | Collections like [wshobson/agents](https://github.com/wshobson/agents) organise agents **by role**. These are organised **by problem shape**, and each carries its epistemic method and sources. |
+| **[cortex-viz](https://github.com/cdeust/cortex-viz)** | Memory you can't inspect is memory you can't trust. Read-only galaxy graph, execution trace, and wiki browser over this same store. | You want to see what Cortex actually kept, and why. | — |
 
 ---
 
