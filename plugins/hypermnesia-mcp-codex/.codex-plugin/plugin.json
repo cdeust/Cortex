@@ -1,0 +1,40 @@
+{
+  "name": "hypermnesia-mcp-codex",
+  "version": "4.17.2",
+  "description": "Cortex persistent local-first memory for Codex, with Claude Code remaining the primary automatic integration.",
+  "author": {
+    "name": "Clement Deust",
+    "email": "admin@ai-architect.tools",
+    "url": "https://github.com/cdeust"
+  },
+  "homepage": "https://github.com/cdeust/Cortex/blob/main/docs/codex-plugin.md",
+  "repository": "https://github.com/cdeust/Cortex",
+  "license": "MIT",
+  "keywords": [
+    "memory",
+    "mcp",
+    "codex",
+    "claude-code",
+    "local-first"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Cortex Memory",
+    "shortDescription": "Persistent local memory for Codex",
+    "longDescription": "Use Cortex's focused local-memory tools from Codex. Claude Code remains the primary integration, with automatic lifecycle hooks, custom agents, and the complete tool profile.",
+    "developerName": "Clement Deust",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Persistent project memory",
+      "Decision and correction recall",
+      "Local-first storage",
+      "Memory inspection"
+    ],
+    "websiteURL": "https://github.com/cdeust/Cortex",
+    "defaultPrompt": [
+      "Recall the decisions relevant to this repository.",
+      "Show what Cortex remembers about this project.",
+      "Store the durable lesson from this task."
+    ]
+  }
+}

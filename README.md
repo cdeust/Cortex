@@ -159,7 +159,23 @@ Or add it to `~/.gemini/settings.json` directly:
 }
 ```
 
-**OpenAI Codex CLI** — install the executable first so the first MCP handshake is not spent downloading the Python environment, then register it:
+**OpenAI Codex and ChatGPT desktop — native local plugin (recommended).** The
+repository now carries an isolated Codex marketplace and an exact 10-tool
+lean MCP surface. Claude Code remains the primary integration and retains its
+automatic hooks, custom agent, full tool profile, and unchanged marketplace.
+
+```bash
+codex plugin marketplace add cdeust/Cortex
+codex plugin add hypermnesia-mcp-codex@cortex-codex-plugins
+```
+
+Restart the ChatGPT desktop app and start a new task after installation. See
+[the Codex plugin guide](docs/codex-plugin.md) for the host boundary and the
+public-directory requirements Cortex deliberately does not claim.
+
+**Direct Codex MCP configuration (fallback).** Install the executable first so
+the first MCP handshake is not spent downloading the Python environment, then
+register it:
 
 ```bash
 uv tool install "hypermnesia-mcp[sqlite]"

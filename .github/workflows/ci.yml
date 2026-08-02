@@ -418,6 +418,12 @@ jobs:
           "$cli_bin/codex" mcp list --json \
             -c 'mcp_servers={cortex={command="hypermnesia-mcp",startup_timeout_sec=30,tool_timeout_sec=600,env={CORTEX_MEMORY_STORE_BACKEND="sqlite"}}}' \
             | python -c 'import json,sys; servers={s["name"]:s for s in json.load(sys.stdin)}; c=servers["cortex"]; assert c["transport"]["type"]=="stdio"; assert c["transport"]["command"]=="hypermnesia-mcp"; assert c["transport"]["env"]["CORTEX_MEMORY_STORE_BACKEND"]=="sqlite"; assert c["startup_timeout_sec"]==30.0; assert c["tool_timeout_sec"]==600.0'
+          "$cli_bin/codex" plugin marketplace add "$GITHUB_WORKSPACE" --json
+          "$cli_bin/codex" plugin list --available --json \
+            | python -c 'import json,sys; d=json.load(sys.stdin); expected=json.load(open("package.json"))["version"]; ps=d.get("available",[])+d.get("installed",[]); p=[x for x in ps if x.get("pluginId")=="hypermnesia-mcp-codex@cortex-codex-plugins"]; assert len(p)==1, p; assert p[0]["version"]==expected'
+          "$cli_bin/codex" plugin add hypermnesia-mcp-codex@cortex-codex-plugins --json
+          "$cli_bin/codex" plugin list --json \
+            | python -c 'import json,sys; d=json.load(sys.stdin); p=[x for x in d.get("installed",[]) if x.get("pluginId")=="hypermnesia-mcp-codex@cortex-codex-plugins"]; assert len(p)==1, p; assert p[0]["installed"] and p[0]["enabled"]'
 
   test-windows:
     name: Test (Windows, SQLite backend)

@@ -47,11 +47,13 @@ deps/
 # these files (scripts/, docker/) is already excluded above.
 requirements/
 
-# Claude Code plugin assets (not used by the MCPB / uv server runtime)
+# Host plugin assets (not used by the MCPB / uv server runtime)
 .claude-plugin/
+.agents/
 agents/
 commands/
 skills/
+plugins/hypermnesia-mcp-codex/
 scripts/
 docker/
 Dockerfile

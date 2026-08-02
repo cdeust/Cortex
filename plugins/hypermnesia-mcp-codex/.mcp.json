@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "cortex": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "hypermnesia-mcp[sqlite]",
+        "hypermnesia-mcp",
+        "--profile",
+        "lean"
+      ]
+    }
+  }
+}
