@@ -441,6 +441,7 @@ jobs:
           )"
           UV_CACHE_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-cache" \
           UV_TOOL_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-tools" \
+          PYTHONPATH="$GITHUB_WORKSPACE" \
             python scripts/verify_mcp_hosts.py \
               --timeout "$plugin_timeout" --clients codex-cli --profiles lean \
               --command-includes-profile \
