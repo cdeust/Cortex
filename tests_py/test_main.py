@@ -1,6 +1,7 @@
 """Tests for mcp_server.__main__ entry point."""
 
 import asyncio
+from functools import partial
 import signal
 from unittest.mock import patch
 
@@ -52,7 +53,12 @@ class TestMain:
 
             # Should drive stdio via the drain-safe wrapper, not
             # mcp.run(transport="stdio") directly.
-            mock_anyio_run.assert_called_once_with(run_stdio_drained, mcp)
+            mock_anyio_run.assert_called_once()
+            runner = mock_anyio_run.call_args.args[0]
+            assert isinstance(runner, partial)
+            assert runner.func is run_stdio_drained
+            assert runner.args == (mcp,)
+            assert runner.keywords == {"show_banner": False}
 
     def test_standalone_baseline_is_52_tools(self):
         """With no upstream available, exactly the 52 standalone tools register.

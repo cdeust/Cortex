@@ -9,6 +9,7 @@ Usage:
 
 from __future__ import annotations
 
+from functools import partial
 import signal
 import sys
 
@@ -201,7 +202,13 @@ def main() -> None:
     # the exact upstream race + citations). run_stdio_drained is a drop-in
     # replacement with the same banner/lifespan/init-options behavior that
     # additionally drains in-flight handlers before shutdown.
-    anyio.run(run_stdio_drained, mcp)
+    # A stdio MCP process must initialize without network access. FastMCP's
+    # optional banner checks PyPI for updates before reading the first frame;
+    # that non-essential request can delay startup in an offline sandbox and
+    # can raise before ``initialize`` when the host exports a SOCKS proxy but
+    # ``httpx[socks]`` is not installed. Version discovery belongs in an
+    # explicit maintenance/doctor path, never in the protocol handshake.
+    anyio.run(partial(run_stdio_drained, mcp, show_banner=False))
 
 
 if __name__ == "__main__":

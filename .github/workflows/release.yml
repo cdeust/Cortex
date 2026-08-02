@@ -1,21 +1,20 @@
 name: Release
 
-# Cortex's SUPPORTED install path is Anthropic's plugin marketplace
+# Cortex's PRIMARY install path is Anthropic's plugin marketplace
 # (`/plugin install hypermnesia-mcp@cortex-plugins`). The marketplace consumes the
 # git tree directly via ``${CLAUDE_PLUGIN_ROOT}``. See ADR-0050.
 #
-# PyPI is a DEPRECATED secondary channel, kept best-effort for legacy
-# `pip install` / `uvx` users. It is NOT the supported path and may lag
-# or be removed. The publish-pypi job below is intentionally
-# non-blocking: if PyPI rejects the upload (e.g. the Trusted Publisher
-# entry was removed), the GitHub Release + marketplace propagation still
-# succeed. Publishing uses PEP 740 Trusted Publishing (OIDC) against the
-# trusted-publisher entry configured for this workflow + environment
+# PyPI is the best-effort secondary, hook-free compatibility channel for stdio
+# hosts such as Gemini CLI and Codex CLI. Claude's marketplace remains primary.
+# The publish-pypi job below is intentionally non-blocking with respect to the
+# GitHub Release and marketplace propagation: a PyPI rejection (for example,
+# a removed Trusted Publisher entry) must be repaired, but must not suppress
+# those primary artifacts. Publishing uses PEP 740 Trusted Publishing (OIDC)
+# against the trusted-publisher entry configured for this workflow + environment
 # `pypi` — the same one that published versions up to 3.14.7.
 #
 # This workflow runs the tests on tag push, creates a GitHub Release with
-# auto-generated notes, and (best-effort) publishes to the deprecated
-# PyPI channel.
+# auto-generated notes, and attempts the secondary PyPI compatibility channel.
 #
 # Supply-chain hardening (issue #178). Cortex reads and persists every
 # session transcript and installs session hooks with the user's full
@@ -230,13 +229,13 @@ jobs:
           body_path: changelog.txt
           generate_release_notes: true
 
-  # ── DEPRECATED PyPI channel (best-effort) ──────────────────────────────
+  # ── Best-effort hook-free PyPI compatibility channel ──────────────────
   # Restored after being dropped in a2dc7e3. Marketplace (ADR-0050) is the
-  # supported path; these jobs keep the legacy `pip install` / `uvx` users
-  # on a non-vulnerable version. Decoupled from github-release so a PyPI
-  # failure never blocks the supported channel.
+  # primary path; these jobs provide the hook-free `pip install` / `uvx`
+  # compatibility path. Decoupled from github-release so a PyPI failure never
+  # blocks the primary channel; docs therefore label this path best-effort.
   build:
-    name: Build sdist + wheel + attest (deprecated PyPI channel)
+    name: Build sdist + wheel + attest (PyPI compatibility)
     needs: test
     # Only the real tag-triggered event ships a release artifact; a
     # workflow_dispatch verification run (issue #247 criterion 5) stops after `test`.
@@ -494,7 +493,7 @@ jobs:
           fail_on_unmatched_files: true
 
   publish-pypi:
-    name: Publish to PyPI (deprecated channel)
+    name: Publish to PyPI (best-effort compatibility)
     needs: build
     # `build` already skips on a non-tag run (which also skips this job by
     # GitHub's default needs-skip propagation); stated explicitly so the
@@ -516,7 +515,7 @@ jobs:
           name: dist
           path: dist/
 
-      - name: Publish to PyPI (best-effort — must not fail the release)
+      - name: Publish to PyPI (best-effort — must not fail primary release)
         # Real releases only (issue #246). The download-artifact step above
         # stays unconditional: it is the half of the upload/download round
         # trip a workflow_dispatch run exists to verify (AC3); only the
@@ -524,8 +523,9 @@ jobs:
         # gated to a real tag push.
         if: github.event_name == 'push'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
-        # Deprecated channel: a rejected upload (already-exists, or the
-        # Trusted Publisher entry was removed) must NOT red-X the release.
+        # Best-effort channel: a rejected upload (already-exists, or the
+        # Trusted Publisher entry was removed) must NOT red-X the primary
+        # marketplace/GitHub release.
         continue-on-error: true
         with:
           verbose: true

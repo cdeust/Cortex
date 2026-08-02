@@ -51,6 +51,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
+CLAUDE_AGENT_DIR = REPO_ROOT / "claude-agents"
 
 
 @pytest.fixture(scope="module")
@@ -146,3 +147,18 @@ def test_command_is_python3(mcp_config: dict) -> None:
     """
     cmd = mcp_config["cortex"]["command"]
     assert cmd in ("python3", "python"), f"Expected python3 (or python), got: {cmd!r}"
+
+
+def test_claude_only_agent_uses_custom_component_path() -> None:
+    """Keep Claude's agent metadata out of Gemini's automatic agents/ scan.
+
+    Claude accepts comma-delimited tool names and the ``haiku`` model alias;
+    Gemini requires a YAML array and Gemini model identifier. The agent is a
+    Claude plugin enhancement, not part of the host-neutral MCP contract, so
+    the Claude manifest points to a custom directory instead of weakening or
+    duplicating its configuration for other hosts.
+    """
+    manifest = json.loads(PLUGIN_JSON.read_text())
+    assert manifest["agents"] == ["./claude-agents/cortex-wiki-groomer.md"]
+    assert (CLAUDE_AGENT_DIR / "cortex-wiki-groomer.md").is_file()
+    assert not any((REPO_ROOT / "agents").glob("*.md"))

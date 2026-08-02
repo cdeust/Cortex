@@ -359,6 +359,61 @@ jobs:
         #       more, an extra is missing and the gate has silently narrowed.
         run: pytest --tb=short -q -p no:randomly
 
+      # Protocol-level, hook-free proof for representative local client
+      # identities. This starts the installed production console entry point,
+      # under a SOCKS-proxy environment with no socks extra, then requires a
+      # full initialize/discovery round-trip and a real SQLite memory_stats
+      # call. It is intentionally on the SQLite job: that is the zero-config
+      # backend used by Gemini/Codex installs, and all Python dependencies are
+      # already present here.
+      - name: Verify hook-free MCP host contract
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          CORTEX_RERANKER_OFFLINE: "1"
+        run: python scripts/verify_mcp_hosts.py -- hypermnesia-mcp
+
+  mcp-host-config:
+    name: Validate MCP host configurations
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # @anthropic-ai/claude-code 2.1.220 declares Node >=22; Node 24 is
+          # the repository's existing release-toolchain pin.
+          node-version: "24"
+
+      # Vendor parsers catch configuration drift that a generic MCP client
+      # cannot: Claude's custom plugin component path, Gemini's extension
+      # schema, and Codex's config.toml transport/timeouts. Versions and bytes
+      # are pinned in package-lock.json. This isolated, contents-read-only job
+      # intentionally permits install scripts: Claude Code's package uses its
+      # postinstall to replace a non-executable error stub with the pinned
+      # platform-native validator binary. `--ignore-scripts` was verified to
+      # leave `claude plugin validate` unusable.
+      - name: Install pinned MCP host CLIs
+        run: npm ci --prefix tests_js/mcp-host-clis
+
+      - name: Validate Claude, Gemini, and Codex configuration parsing
+        run: |
+          set -euo pipefail
+          cli_bin="tests_js/mcp-host-clis/node_modules/.bin"
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+            "$cli_bin/claude" plugin validate .
+          GEMINI_CLI_HOME="$RUNNER_TEMP/cortex-gemini-home" \
+            "$cli_bin/gemini" extensions validate .
+          "$cli_bin/codex" mcp list --json \
+            -c 'mcp_servers={cortex={command="hypermnesia-mcp",startup_timeout_sec=30,tool_timeout_sec=600,env={CORTEX_MEMORY_STORE_BACKEND="sqlite"}}}' \
+            | python -c 'import json,sys; servers={s["name"]:s for s in json.load(sys.stdin)}; c=servers["cortex"]; assert c["transport"]["type"]=="stdio"; assert c["transport"]["command"]=="hypermnesia-mcp"; assert c["transport"]["env"]["CORTEX_MEMORY_STORE_BACKEND"]=="sqlite"; assert c["startup_timeout_sec"]==30.0; assert c["tool_timeout_sec"]==600.0'
+
   test-windows:
     name: Test (Windows, SQLite backend)
     runs-on: windows-latest

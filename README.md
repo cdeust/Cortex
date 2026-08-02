@@ -102,12 +102,12 @@ docker run -it \
   cortex-runtime
 ```
 
-**PyPI (`uvx` / `pip`) — deprecated secondary channel:**
+**PyPI (`uvx` / `pip`) — best-effort hook-free compatibility:**
 ```bash
 uvx hypermnesia-mcp          # run the MCP server directly
 pip install hypermnesia-mcp  # or install into your environment
 ```
-The server is published on PyPI as **`hypermnesia-mcp`** (registry name `io.github.cdeust/hypermnesia-mcp`). The supported install paths are the `.mcpb` bundle and the Claude Code marketplace above; PyPI is kept best-effort for legacy `pip` / `uvx` users.
+The server is published on PyPI as **`hypermnesia-mcp`** (registry name `io.github.cdeust/hypermnesia-mcp`). Claude Code remains the primary integration because it adds the lifecycle hooks; PyPI is the best-effort hook-free stdio compatibility channel for Gemini CLI, Codex CLI, and other MCP hosts.
 
 **WSL / TLS client-cert / remote PostgreSQL:** See [deployment scenarios](docs/deployment-scenarios.md).
 
@@ -117,20 +117,20 @@ The server is published on PyPI as **`hypermnesia-mcp`** (registry name `io.gith
 
 ## Use with other MCP hosts
 
-The MCP server is host-agnostic: any host that can launch a stdio process gets the full tool surface — `remember`, `recall`, the wiki, navigation, consolidation, all 52 tools — on the default local SQLite store. What is **not** portable are the 9 lifecycle hooks, which are Claude Code plugin machinery.
+The MCP server is host-agnostic: any host that can launch a stdio process gets the full tool surface — `remember`, `recall`, the wiki, navigation, consolidation, all 52 tools — on the default local SQLite store. What is **not** portable are the 9 lifecycle hooks, which are Claude Code plugin machinery. The server itself does not import or require those hooks at startup.
 
 **What works where (honest matrix):**
 
-| Capability | Claude Code (plugin) | Other MCP hosts (Gemini CLI, Codex, Cursor, Windsurf, VS Code, Agents SDK) |
-|---|---|---|
-| All 52 memory tools (`remember`, `recall`, wiki, navigation, consolidation, triggers, rules) | ✅ | ✅ |
-| SQLite default store / PostgreSQL opt-in | ✅ | ✅ |
-| Auto-capture of significant tool output | ✅ (PostToolUse hook) | ❌ — store explicitly with `remember` |
-| Session-start context injection | ✅ (SessionStart hook) | ❌ — call `recall` / `query_methodology` yourself |
-| Per-prompt auto-recall | ✅ | ❌ |
-| Compaction checkpoints | ✅ | ❌ |
-| Autonomous wiki cycle (headless worker) | ✅ | ❌ — run `consolidate` / `curate_wiki` manually |
-| Cognitive profiling (`query_methodology`) | ✅ | ⚠️ profiles are mined from Claude Code session logs under `~/.claude/`; without them the profile is empty |
+| Capability | Claude Code plugin | Local stdio hosts (Gemini CLI, Codex CLI, ChatGPT desktop, Cursor, Windsurf, VS Code, Agents SDK) | ChatGPT web |
+|---|---|---|---|
+| All 52 memory tools (`remember`, `recall`, wiki, navigation, consolidation, triggers, rules) | ✅ | ✅ | ❌ — Cortex does not ship a remote HTTPS endpoint |
+| SQLite default store / PostgreSQL opt-in | ✅ | ✅ | ❌ — a remote deployment and per-user storage/auth model would be required |
+| Auto-capture of significant tool output | ✅ (PostToolUse hook) | ❌ — store explicitly with `remember` | ❌ |
+| Session-start context injection | ✅ (SessionStart hook) | ❌ — call `recall` yourself | ❌ |
+| Per-prompt auto-recall | ✅ | ❌ | ❌ |
+| Compaction checkpoints | ✅ | ❌ | ❌ |
+| Autonomous wiki cycle (headless worker) | ✅ | ❌ — run `consolidate` / `curate_wiki` manually | ❌ |
+| Cognitive profiling (`query_methodology`) | ✅ | ⚠️ profiles are mined from Claude Code session logs under `~/.claude/`; without them the profile is empty | ❌ |
 
 In one sentence: on Claude Code memory is **ambient** (hooks capture and inject automatically); on every other host memory is **manual-tool-driven** — the agent stores and retrieves when instructed, and nothing happens between prompts.
 
@@ -159,17 +159,46 @@ Or add it to `~/.gemini/settings.json` directly:
 }
 ```
 
-**OpenAI Codex CLI** (shared with the ChatGPT desktop app and Codex IDE extension via `~/.codex/config.toml`):
+**OpenAI Codex CLI** — install the executable first so the first MCP handshake is not spent downloading the Python environment, then register it:
 
 ```bash
-codex mcp add cortex -- uvx --from "hypermnesia-mcp[sqlite]" hypermnesia-mcp
+uv tool install "hypermnesia-mcp[sqlite]"
+codex mcp add cortex --env CORTEX_MEMORY_STORE_BACKEND=sqlite -- hypermnesia-mcp
 ```
+
+`codex mcp add` registers the executable and SQLite backend. For production use, extend that generated entry with explicit startup and tool timeouts. Codex CLI, the Codex IDE extension, and the ChatGPT desktop app's local Codex host share `~/.codex/config.toml`; the recommended complete entry is:
 
 ```toml
 [mcp_servers.cortex]
-command = "uvx"
-args = ["--from", "hypermnesia-mcp[sqlite]", "hypermnesia-mcp"]
+command = "hypermnesia-mcp"
+startup_timeout_sec = 30
+tool_timeout_sec = 600
+
+[mcp_servers.cortex.env]
+CORTEX_MEMORY_STORE_BACKEND = "sqlite"
 ```
+
+Verify discovery with `codex mcp list` and then `/mcp` inside a Codex session. ChatGPT **web** is a different surface: it does not read local Codex configuration and accepts MCP tools through hosted plugins backed by remote Streamable HTTP servers. Cortex deliberately does not claim that deployment model today; exposing a local personal-memory database through a remote endpoint would require an explicit authentication, tenancy, and privacy design.
+
+The server deliberately disables FastMCP's startup banner and its network update
+probe: an MCP stdio handshake must succeed offline and must not fail because of
+proxy-specific HTTP extras. This does **not** freeze FastMCP indefinitely. Upgrade
+the installed tool explicitly; the new Cortex release and its declared dependency
+set are then resolved together:
+
+```bash
+uv tool upgrade hypermnesia-mcp
+```
+
+Repository installs remain reproducible through `uv.lock`, whose dependency
+updates are reviewed through normal pull requests.
+
+**Validation scope:** CI runs the installed production console entry point
+through the MCP lifecycle under representative Claude, Gemini, and Codex client
+identities, then separately invokes pinned vendor CLIs to parse the Claude
+plugin, Gemini extension, and recommended Codex configuration. This proves the
+protocol and configuration contracts; it does not simulate an authenticated
+model turn inside each vendor UI.
 
 **Cursor** — `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) — and **Windsurf** — `~/.codeium/windsurf/mcp_config.json` — take the same `mcpServers` block as Gemini above.
 

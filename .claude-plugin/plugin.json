@@ -17,6 +17,9 @@
     "neuroscience",
     "agents"
   ],
+  "agents": [
+    "./claude-agents/cortex-wiki-groomer.md"
+  ],
   "userConfig": {
     "database_url": {
       "type": "string",

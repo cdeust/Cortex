@@ -152,16 +152,17 @@ def allows(profile: ToolProfile, tool_name: str) -> bool:
 
 # ── Per-profile initialize instructions (issue #177 criterion 3) ────────────
 #
-# The server describes itself in the shape it was started in. The FULL text
-# preserves the historical onboarding line ("Call query_methodology…") so
-# existing clients and the `test_mcp_server_has_instructions` contract are
-# unchanged.
+# The server describes itself in the shape it was started in. Instructions are
+# host-neutral: lifecycle automation belongs to the Claude plugin, while the
+# stdio server remains useful through explicit tool calls on every MCP host.
 
 FULL_INSTRUCTIONS = (
-    "Cortex cognitive profiling and persistent-memory system for Claude Code "
+    "Cortex cognitive profiling and persistent-memory MCP server "
     "('full' profile — every tool; the default). "
-    "Extracts reasoning signatures from session history and pre-loads them at "
-    "session start. Call query_methodology at the beginning of every session. "
+    "Use remember/recall explicitly on hosts without lifecycle hooks. The "
+    "Claude Code plugin can additionally auto-capture and inject context; "
+    "those hooks are not required by this server. Call query_methodology when "
+    "a Claude Code session-history profile is available. "
     "Use remember/recall for persistent thermodynamic memory across sessions; "
     "unified_search for retrieval across memories, wiki, and code; consolidate "
     "for maintenance (decay, compression, episodic→semantic CLS); the wiki_* "
@@ -173,10 +174,11 @@ FULL_INSTRUCTIONS = (
 )
 
 LEAN_INSTRUCTIONS = (
-    "Cortex persistent-memory system for Claude Code ('lean' profile — the "
-    "recall/onboarding surface). Call query_methodology at the beginning of "
-    "every session to load the cognitive profile, then remember/recall and "
-    "unified_search for persistent memory across sessions, recall_hierarchical "
+    "Cortex persistent-memory MCP server ('lean' profile — the "
+    "recall/onboarding surface). Use remember/recall explicitly on hosts "
+    "without lifecycle hooks. Call query_methodology when a Claude Code "
+    "session-history profile is available, then use unified_search and "
+    "recall_hierarchical "
     "for fractal recall, consolidate for maintenance, memory_stats/check_setup "
     "for health, and wiki_read/wiki_list to read the wiki. The full "
     "profiling, curation, ingestion, and destructive-maintenance surface "

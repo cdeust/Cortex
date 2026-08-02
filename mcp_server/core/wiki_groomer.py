@@ -8,7 +8,7 @@ The grooming system has two parts:
      front-matter, wrong status value, non-canonical slug, missing
      required section).
 
-  2. **Rewriter** (agents/cortex-wiki-groomer.md, LLM): handed the
+  2. **Rewriter** (claude-agents/cortex-wiki-groomer.md, LLM): handed the
      audit output + the raw page, rewrites to the template while
      preserving content semantics. Runs on-demand when the auditor
      reports issues, or when the user invokes /cortex:groom-wiki.
