@@ -93,9 +93,24 @@ RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt
 COPY . /opt/cortex
 RUN pip install --no-cache-dir --no-deps -e /opt/cortex
 
-# Pre-cache embedding model
-RUN python3 -c "from sentence_transformers import SentenceTransformer; \
-    SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+# Pre-cache embedding model. Retry-with-backoff, fail-loudly: same shape and
+# same attempt/backoff constants as ci.yml's "Pre-download embedding model"
+# step, for the same reason — a transient huggingface.co blip must not decide
+# whether the image builds. The bare single-shot form failed this build on PR
+# #337 (CI run 30749502167, 2026-08-02) with "We couldn't connect to
+# 'https://huggingface.co'" after 73s, on a commit touching neither this file
+# nor anything it depends on; the same job had passed on its parent commit.
+# No BuildKit cache mount here on purpose: the runtime stage COPYs this cache
+# out of the builder layer, and a cache mount is not part of the layer.
+# source: .github/workflows/ci.yml:131-139 (5 attempts, attempt*10s backoff)
+RUN for attempt in 1 2 3 4 5; do \
+        python3 -c "from sentence_transformers import SentenceTransformer; \
+            SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')" && exit 0; \
+        echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2; \
+        sleep $((attempt * 10)); \
+    done; \
+    echo "HF pre-download failed after 5 attempts" >&2; \
+    exit 1
 
 # ── Runtime ───────────────────────────────────────────────────────────────
 
