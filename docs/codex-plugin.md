@@ -22,12 +22,23 @@ the active working directory.
 Add the Cortex repository marketplace and install the plugin:
 
 ```bash
+uv tool install "hypermnesia-mcp[sqlite]"
 codex plugin marketplace add cdeust/Cortex
 codex plugin add hypermnesia-mcp-codex@cortex-codex-plugins
 ```
 
 Restart the ChatGPT desktop app and start a new task so Codex loads the new
 plugin components. The plugin uses `uvx`, so `uv` must be available on `PATH`.
+The preliminary `uv tool install` is deliberate: it downloads the published
+package before Codex's startup window, allowing the first plugin handshake to
+reuse uv's local artifact cache.
+
+The bundled server declares `startup_timeout_sec: 180`. This is a bounded
+startup ceiling, not a delay: a clean local `UV_CACHE_DIR` and `UV_TOOL_DIR`
+run on 2026-08-02 completed `initialize`, `tools/list`, and `memory_stats` in
+110.46 seconds with exactly ten lean tools. A follow-up run after the tool
+installation completed the same contract in 28.19 seconds. CI repeats the cold
+run and uses the timeout value read from the manifest itself.
 
 The bundled MCP command is equivalent to:
 
@@ -38,6 +49,13 @@ uvx --from "hypermnesia-mcp[sqlite]" \
 
 This is a local plugin. It does not make Cortex available to ChatGPT web and
 does not expose the local memory database over the internet.
+
+The repository-marketplace schema requires both `policy.installation` and
+`policy.authentication`. Cortex uses the documented `ON_INSTALL` value. This
+is marketplace timing metadata, not an added authentication mechanism: the
+local stdio server declares no credentials or remote endpoint, and the
+non-interactive install is exercised in CI. See OpenAI's
+[marketplace metadata contract](https://developers.openai.com/plugins/build/plugins#marketplace-metadata).
 
 ## Public directory boundary
 

@@ -27,6 +27,7 @@ def test_codex_plugin_is_confined_to_a_dedicated_subdirectory() -> None:
     ignored = (REPO_ROOT / ".mcpbignore").read_text().splitlines()
     assert ".agents/" in ignored
     assert "plugins/hypermnesia-mcp-codex/" in ignored
+    assert "plugins/cortex-deprecated/" in ignored
 
 
 def test_codex_marketplace_resolves_only_the_dedicated_plugin() -> None:
@@ -70,20 +71,10 @@ def test_codex_plugin_is_mcp_only_and_uses_the_exact_lean_profile() -> None:
             "--profile",
             "lean",
         ],
+        # Measured clean-cache startup on 2026-08-02: 110.46s. This bounded
+        # ceiling leaves startup headroom without inventing a sleep or retry.
+        "startup_timeout_sec": 180,
     }
-
-
-def test_codex_version_matches_all_release_manifests() -> None:
-    expected = _json(REPO_ROOT / "package.json")["version"]
-    manifests = (
-        REPO_ROOT / ".claude-plugin/plugin.json",
-        REPO_ROOT / "gemini-extension.json",
-        REPO_ROOT / "manifest.json",
-        REPO_ROOT / "server.json",
-        PLUGIN_PATH,
-    )
-    for manifest in manifests:
-        assert _json(manifest)["version"] == expected, manifest
 
 
 def test_codex_package_does_not_weaken_the_primary_claude_plugin() -> None:

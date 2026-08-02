@@ -54,6 +54,7 @@ agents/
 commands/
 skills/
 plugins/hypermnesia-mcp-codex/
+plugins/cortex-deprecated/
 scripts/
 docker/
 Dockerfile

@@ -27,3 +27,7 @@ def test_cross_host_manifest_versions_match_the_release() -> None:
     assert _json("server.json")["version"] == expected
     assert _json("manifest.json")["version"] == expected
     assert _json(".claude-plugin/plugin.json")["version"] == expected
+    assert (
+        _json("plugins/hypermnesia-mcp-codex/.codex-plugin/plugin.json")["version"]
+        == expected
+    )

@@ -18,6 +18,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Literal
 
 from mcp_server.tool_profiles import LEAN_TOOL_NAMES
@@ -46,6 +47,7 @@ class ContractCase:
     command: tuple[str, ...]
     data_root: Path
     timeout: int
+    socks_proxy_regression: bool
 
     @property
     def label(self) -> str:
@@ -80,20 +82,22 @@ def _frames(client_name: str) -> str:
     )
 
 
-def _environment(data_root: Path) -> dict[str, str]:
+def _environment(data_root: Path, *, socks_proxy_regression: bool) -> dict[str, str]:
     env = os.environ.copy()
     env.update(
         {
             "CORTEX_CLAUDE_DIR": str(data_root),
             "CORTEX_MEMORY_STORE_BACKEND": "sqlite",
             "CORTEX_MEMORY_AP_ENABLED": "0",
-            # Regression environment: FastMCP's banner-time update check used
-            # to import SOCKS support and abort before initialize. The MCP
-            # runtime must not make that non-essential network request.
-            "ALL_PROXY": "socks5://127.0.0.1:9",
-            "all_proxy": "socks5://127.0.0.1:9",
         }
     )
+    if socks_proxy_regression:
+        # Regression environment: FastMCP's banner-time update check used to
+        # import SOCKS support and abort before initialize. The MCP runtime
+        # must not make that non-essential network request. Cold uvx bootstrap
+        # explicitly disables this fixture because it must reach PyPI.
+        env["ALL_PROXY"] = "socks5://127.0.0.1:9"
+        env["all_proxy"] = "socks5://127.0.0.1:9"
     env.pop("FASTMCP_SHOW_SERVER_BANNER", None)
     env.pop("FASTMCP_CHECK_FOR_UPDATES", None)
     env.pop("CORTEX_MCP_PROFILE", None)
@@ -137,7 +141,10 @@ def _run_client(case: ContractCase) -> dict[int, dict[str, object]]:
         input=_frames(case.client_name),
         text=True,
         capture_output=True,
-        env=_environment(case.data_root / case.client_name / case.profile),
+        env=_environment(
+            case.data_root / case.client_name / case.profile,
+            socks_proxy_regression=case.socks_proxy_regression,
+        ),
         timeout=case.timeout,
         check=False,
     )
@@ -223,18 +230,45 @@ def _verify_memory_call(
         raise ContractError(f"{case.label}: memory_stats failed: {call_result!r}")
 
 
-def _verify(case: ContractCase) -> int:
+def _verify(case: ContractCase) -> tuple[int, float]:
+    started_at = time.monotonic()
     responses = _run_client(case)
     _verify_initialize(case, responses)
     count = _verify_tool_surface(case, responses)
     _verify_auxiliary_discovery(case, responses)
     _verify_memory_call(case, responses)
-    return count
+    return count, time.monotonic() - started_at
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=int, default=2 * 60)
+    parser.add_argument(
+        "--clients",
+        nargs="+",
+        choices=CLIENTS,
+        default=CLIENTS,
+        help="client identities to exercise (default: all)",
+    )
+    parser.add_argument(
+        "--profiles",
+        nargs="+",
+        choices=PROFILES,
+        default=PROFILES,
+        help="tool profiles to exercise (default: full lean)",
+    )
+    parser.add_argument(
+        "--command-includes-profile",
+        action="store_true",
+        help=(
+            "run the supplied command unchanged; requires exactly one --profiles value"
+        ),
+    )
+    parser.add_argument(
+        "--allow-bootstrap-network",
+        action="store_true",
+        help="do not inject the SOCKS regression fixture; intended for cold uvx",
+    )
     parser.add_argument(
         "command",
         nargs=argparse.REMAINDER,
@@ -246,21 +280,29 @@ def main() -> int:
         command = command[1:]
     if not command:
         parser.error("server command after -- cannot be empty")
+    if args.command_includes_profile and len(args.profiles) != 1:
+        parser.error("--command-includes-profile requires exactly one --profiles value")
 
     with tempfile.TemporaryDirectory(prefix="cortex_mcp_hosts_") as temp_dir:
-        for client_name in CLIENTS:
-            for profile in PROFILES:
+        for client_name in args.clients:
+            for profile in args.profiles:
+                server_command = (
+                    tuple(command)
+                    if args.command_includes_profile
+                    else (*command, "--profile", profile)
+                )
                 case = ContractCase(
                     client_name=client_name,
                     profile=profile,
-                    command=(*command, "--profile", profile),
+                    command=server_command,
                     data_root=Path(temp_dir),
                     timeout=args.timeout,
+                    socks_proxy_regression=not args.allow_bootstrap_network,
                 )
-                count = _verify(case)
+                count, elapsed_seconds = _verify(case)
                 print(
                     f"PASS {case.label}: initialize + discovery + "
-                    f"memory_stats ({count} tools)"
+                    f"memory_stats ({count} tools, {elapsed_seconds:.2f}s)"
                 )
     return 0
 

@@ -11,9 +11,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 - **Native Codex local plugin packaging.** A dedicated
   `cortex-codex-plugins` repository marketplace now exposes an isolated,
   MCP-only Codex package backed by the published PyPI stdio server on the
-  exact 10-tool `lean` profile. This is additive: Claude Code remains the
-  primary integration and keeps its complete profile, lifecycle hooks,
-  custom agent, marketplace, and installation path unchanged.
+  exact 10-tool `lean` profile. Its 180-second startup ceiling is backed by a
+  measured 110.46-second clean-cache `uvx` lifecycle. This is additive: Claude
+  Code remains the primary integration and keeps its complete profile,
+  lifecycle hooks, custom agent, marketplace, and installation path unchanged.
 - **Hook-free MCP protocol and host-configuration gates.** CI now starts the
   installed production stdio entry point under representative Claude, Gemini,
   and Codex client identities, completes the MCP lifecycle for both the full

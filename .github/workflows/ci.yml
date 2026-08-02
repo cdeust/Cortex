@@ -396,6 +396,11 @@ jobs:
           # the repository's existing release-toolchain pin.
           node-version: "24"
 
+      - name: Install uv (pinned)
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.3"
+
       # Vendor parsers catch configuration drift that a generic MCP client
       # cannot: Claude's custom plugin component path, Gemini's extension
       # schema, and Codex's config.toml transport/timeouts. Versions and bytes
@@ -418,12 +423,29 @@ jobs:
           "$cli_bin/codex" mcp list --json \
             -c 'mcp_servers={cortex={command="hypermnesia-mcp",startup_timeout_sec=30,tool_timeout_sec=600,env={CORTEX_MEMORY_STORE_BACKEND="sqlite"}}}' \
             | python -c 'import json,sys; servers={s["name"]:s for s in json.load(sys.stdin)}; c=servers["cortex"]; assert c["transport"]["type"]=="stdio"; assert c["transport"]["command"]=="hypermnesia-mcp"; assert c["transport"]["env"]["CORTEX_MEMORY_STORE_BACKEND"]=="sqlite"; assert c["startup_timeout_sec"]==30.0; assert c["tool_timeout_sec"]==600.0'
-          "$cli_bin/codex" plugin marketplace add "$GITHUB_WORKSPACE" --json
+          marketplace_ref="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          "$cli_bin/codex" plugin marketplace add cdeust/Cortex \
+            --ref "$marketplace_ref" --json
           "$cli_bin/codex" plugin list --available --json \
             | python -c 'import json,sys; d=json.load(sys.stdin); expected=json.load(open("package.json"))["version"]; ps=d.get("available",[])+d.get("installed",[]); p=[x for x in ps if x.get("pluginId")=="hypermnesia-mcp-codex@cortex-codex-plugins"]; assert len(p)==1, p; assert p[0]["version"]==expected'
           "$cli_bin/codex" plugin add hypermnesia-mcp-codex@cortex-codex-plugins --json
           "$cli_bin/codex" plugin list --json \
             | python -c 'import json,sys; d=json.load(sys.stdin); p=[x for x in d.get("installed",[]) if x.get("pluginId")=="hypermnesia-mcp-codex@cortex-codex-plugins"]; assert len(p)==1, p; assert p[0]["installed"] and p[0]["enabled"]'
+          "$cli_bin/codex" mcp list --json \
+            | python -c 'import json,sys; ss=[s for s in json.load(sys.stdin) if s.get("name")=="cortex"]; assert len(ss)==1, ss; s=ss[0]; assert s["startup_timeout_sec"]==180.0, s; assert s["transport"]["command"]=="uvx", s'
+          mapfile -t plugin_command < <(
+            python -c 'import json; s=json.load(open("plugins/hypermnesia-mcp-codex/.mcp.json"))["mcpServers"]["cortex"]; print(s["command"]); print(*s["args"], sep="\n")'
+          )
+          plugin_timeout="$(
+            python -c 'import json; print(json.load(open("plugins/hypermnesia-mcp-codex/.mcp.json"))["mcpServers"]["cortex"]["startup_timeout_sec"])'
+          )"
+          UV_CACHE_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-cache" \
+          UV_TOOL_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-tools" \
+            python scripts/verify_mcp_hosts.py \
+              --timeout "$plugin_timeout" --clients codex-cli --profiles lean \
+              --command-includes-profile \
+              --allow-bootstrap-network \
+              -- "${plugin_command[@]}"
 
   test-windows:
     name: Test (Windows, SQLite backend)
