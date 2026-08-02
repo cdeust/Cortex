@@ -134,5 +134,5 @@ New `core/gist_extraction.py` (pure logic) + `infrastructure/artifact_store.py`
    containing a partial-word match ⇒ no injection after F1.
 2. Full suite: `.venv/bin/pytest tests_py -q` (3,173+ passing baseline).
 3. Benchmarks: LongMemEval s, LoCoMo, BEAM on clean DB vs recorded baselines
-   (R@10 98.4 / 94.2, BEAM 0.591). No regression accepted.
+   (R@10 98.4 / 94.35 post-fix, BEAM 0.591). No regression accepted.
 4. open_visualization + commit per repo; PUSH NOTHING.

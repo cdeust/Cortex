@@ -308,18 +308,21 @@ SHA-256 of generated corpus.
 
 **Hypothesis (confirmatory).** With ALL hyperparameters frozen at their LongMemEval-tuned
 values (committed at protocol freeze, hashed), LoCoMo MRR is within 0.08 of its
-standalone-tuned MRR (currently 0.794). I.e., MRR(LoCoMo, frozen-config) ≥ 0.714.
+protocol-frozen historical standalone-tuned MRR (0.794, superseded for current
+reporting). I.e., MRR(LoCoMo, frozen-config) ≥ 0.714.
 
 **Falsification.** MRR(LoCoMo, frozen) < 0.714 → C5 refuted. The 97.8% LongMemEval is
 a calibration artefact, not a generalizable result.
 
 **Design.**
 - Factor: configuration source ∈ {LongMemEval-tuned (frozen)}. No tuning loop on LoCoMo.
-- Single arm; the comparator is the historical LoCoMo standalone-tuned score from
-  CLAUDE.md (MRR=0.794). This is a one-arm pre-registered claim.
+- Single arm; the comparator is the historical April 2026 clean-DB LoCoMo
+  standalone-tuned score (MRR=0.794, n=1982), first published in commit
+  `b4057a`. This superseded value remains frozen here because changing a
+  pre-registered comparator after the fact would invalidate the protocol.
 - Replications: 3 seeds (DB load order). LoCoMo is 1986 Q — high statistical power.
-- Zero-cell: prior published MRR=0.794 (read from `docs/benchmarks/` snapshot
-  at protocol freeze).
+- Zero-cell: superseded historical MRR=0.794 (read from the repository snapshot
+  at protocol freeze; original per-query artefact was not committed).
 - Blocking: same hardware, embedding cache, Postgres binary as E1's LoCoMo block.
 
 **Sample size / power.** 1986 Q × 3 seeds = 5958 evaluations. Paired bootstrap on MRR.

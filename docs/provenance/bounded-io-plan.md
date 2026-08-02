@@ -67,7 +67,7 @@ most of this plan ALREADY LANDED in prior sessions; the checkboxes below were st
 - Gate results: full suite 3207 passed (baseline 3173 + exactly 34 new tests);
   repro tests fail pre-fix / pass post-fix (verified via git stash); ruff clean.
 - Benchmarks (clean DB): LongMemEval R@10 98.4% (=), MRR 0.916 (≥0.9124);
-  LoCoMo MRR 0.828 (=0.8278), R@10 94.1% (94.2 baseline, 1982 vs 1986 Qs);
+  LoCoMo MRR 0.828 (=0.8279), R@10 94.1% (94.35% post-fix reference, 1982 vs 1986 Qs);
   BEAM 100K re-based to 395 Qs — A/B old 0.502 vs new 0.501, regression-free.
 - Production data ops: 319 keyword triggers deactivated (reversible);
   created_by column arrives at server restart (DDL); 6,799 existing raw blobs

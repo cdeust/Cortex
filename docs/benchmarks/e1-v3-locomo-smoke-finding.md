@@ -13,7 +13,7 @@ files do NOT touch the benchmark code path; benchmark uses
 ## Pre-registered validation gate
 
 From task #55 spec:
-> BASELINE LoCoMo MRR: established baseline from CLAUDE.md is 0.794 R@10=0.926.
+> BASELINE LoCoMo MRR: historical April 2026 clean-DB Cortex comparator is 0.794, R@10=0.926 (n=1982; first published in commit `b4057a`; original per-query artefact not committed; superseded by the [post-fix re-run](e1-v3-locomo-results-post-fix.md)).
 > With `--with-consolidation` enabled, this should be APPROXIMATELY similar
 > (consolidation may shift it slightly, but should be within ±0.05 MRR). If
 > WAY off — STOP and diagnose.
@@ -26,7 +26,7 @@ From task #55 spec:
 | `--limit 1 --with-consolidation` | **0.222** | **54.8%** | 176.3 (incl. 127.7s consol) |
 
 Δ MRR = **−0.644** vs the no-consolidation anchor.
-Δ MRR = **−0.572** vs the published 0.794 (CLAUDE.md headline).
+Δ MRR = **−0.572** vs the superseded historical 0.794 comparator.
 
 This is **WAY off** the ±0.05 tolerance. Stop-and-diagnose triggered.
 
