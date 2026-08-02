@@ -117,11 +117,32 @@ jobs:
           [ -n "$pg_ready" ] || { echo "postgres failed to become ready after 30 attempts" >&2; exit 1; }
           PGPASSWORD=cortex psql -h localhost -U cortex -d cortex -c "SELECT version();"
 
+      # The network-hardening steps below mirror ci.yml's `test` job
+      # one-for-one (cache + retried prefetch + offline test run, per model).
+      # They are NOT optional here: this job runs the same suite on a tag
+      # push, but `ci.yml` triggers on `push: branches` + `pull_request`, so
+      # a tag never reaches it and every hardening pass CI received since
+      # 2026-07-27 skipped this file. Release run 30741657854 (v4.17.0) is
+      # what that divergence costs: the reranker fetch hung in `sock.connect`
+      # until pytest-timeout killed the suite, blocking all five downstream
+      # publish jobs on a tag whose tree had just passed 20 green checks on
+      # PR #334. Keep the two jobs in step — see ci.yml for the full
+      # per-incident rationale behind each step.
       - name: Cache HuggingFace models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/huggingface
           key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
+
+      # FlashRank bypasses HF_HUB_OFFLINE entirely: it fetches its ONNX model
+      # with a bare `requests.get(..., stream=True)` carrying no timeout, so a
+      # stalled connect blocks the thread instead of raising, and reranker.py's
+      # `except Exception` cannot engage against a hang.
+      - name: Cache FlashRank reranker model
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/flashrank
+          key: ${{ runner.os }}-flashrank-ms-marco-MiniLM-L-12-v2
 
       - name: Install dependencies
         # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
@@ -129,11 +150,49 @@ jobs:
           pip install --require-hashes -r requirements/release.txt
           pip install --no-deps -e .
 
+      # Retry with backoff and fail loudly (no continue-on-error): a transient
+      # blip must not leave the cache empty and cascade into a misleading test
+      # failure — or, worse here, into a silently degraded release gate.
       - name: Pre-download embedding model
-        run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"
-        continue-on-error: true
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+            echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "HF pre-download failed after 5 attempts" >&2
+          exit 1
 
+      # Deliberately runs WITHOUT CORTEX_RERANKER_OFFLINE: this is the one
+      # place allowed to download the model, so the test step below never can.
+      # `ensure_reranker_loaded` reports the load state instead of degrading
+      # silently, so a failed fetch fails this step rather than surfacing later
+      # as first-stage-only recall scores (the 2026-07-10 FlashRank incident).
+      - name: Pre-download reranker model
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from mcp_server.core.reranker import ensure_reranker_loaded as e; s = e(); assert s.state == 'loaded', s" && exit 0
+            echo "FlashRank pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "FlashRank pre-download failed after 5 attempts" >&2
+          exit 1
+
+      # No tree-sitter cache/prefetch pair here, unlike ci.yml: requirements/
+      # release.txt deliberately omits tree-sitter + tree-sitter-language-pack
+      # (as it omits igraph/leidenalg/texttable), so the AST tests skip in this
+      # job and there is no grammar to fetch. Should release.txt ever gain that
+      # dependency, port ci.yml's three tree-sitter steps across with it — the
+      # lazy `get_parser()` download is a real mid-suite DownloadError
+      # (main-red, CI run 30592244731, 2026-07-31).
+      #
+      # Offline: every model is already cached by the steps above, so tests
+      # must never reach out mid-suite — deterministic and flake-free.
       - name: Run tests
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          CORTEX_RERANKER_OFFLINE: "1"
         run: pytest --tb=short -q
 
   github-release:
