@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The ML stack never installed on current pip, silently degrading recall to
+  first-stage scores** — `scripts/launcher_deps_install.py`. `ensure_all_deps`
+  passes `BASE_PACKAGES` verbatim as the `-c` constraints file
+  (`launcher_deps.py:318`), and one entry carries an extra —
+  `psycopg[binary]==3.3.4` (`launcher_pins.py:89`). pip has always documented
+  constraints files as version-only and now rejects extras outright, so the
+  whole ML resolve aborted with `ERROR: Constraints cannot have extras`:
+  `sentence-transformers` and `flashrank` never landed. Nothing surfaced the
+  failure — only the ML install passes constraints, so the base stack
+  installed clean and the FlashRank re-ranker was simply absent, the same
+  observable shape as the 2026-07-10 FlashRank incident. `pip_install` now
+  normalizes every constraint through the new `constraint_without_extras`
+  before writing the file, which restores the parameter's own documented
+  contract (its docstring already promised `name==ver`) rather than changing
+  it: a constraint pins the VERSION a shared transitive resolves to, and pip
+  applies it to the distribution however its extras were requested — the
+  install target still carries `[binary]`. Measured 2026-08-02 on pip
+  26.0.1 / Python 3.14.4 and reproduced on pip 25.2 / Python 3.13, so the
+  affected range is not pip-26-only; both accept the stripped file
+  (`pip install --dry-run --no-index -c <BASE_PACKAGES>`).
+
 ## [4.17.1] - 2026-08-02
 
 ### Fixed

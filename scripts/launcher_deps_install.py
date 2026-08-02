@@ -29,6 +29,38 @@ if _SCRIPTS_DIR not in sys.path:
 import launcher_deps_fs as _fs  # noqa: E402
 
 
+def constraint_without_extras(spec: str) -> str:
+    """Drop the ``[extra]`` clause from a pip spec, keeping the version.
+
+    Precondition: ``spec`` is a pip requirement string. Postcondition: the
+    return value carries no extras clause; everything else is unchanged.
+
+    pip documents constraints files as version-only and now rejects extras
+    outright, so ``psycopg[binary]==3.3.4`` (BASE_PACKAGES) failed the whole
+    ML install — silently, since only that install passes constraints:
+    FlashRank never landed and recall degraded to first-stage scores.
+
+    Stripping preserves the intent rather than changing it — a constraint
+    pins the VERSION a shared transitive resolves to, and pip applies it to
+    the distribution however its extras were requested; extras belong on the
+    install target (which still carries them), not on the constraint.
+
+    # source: https://pip.pypa.io/en/stable/user_guide/#constraints-files
+    #   ("only control which version of a requirement is installed")
+    # source: measured 2026-08-02 — pip 26.0.1/py3.14 aborted the plugin's
+    #   ML install with "ERROR: Constraints cannot have extras"; reproduced
+    #   on pip 25.2/py3.13 (`--dry-run --no-index -c <BASE_PACKAGES>`), so
+    #   the range is not pip-26-only. Both accept the stripped file.
+    """
+    head, bracket, rest = spec.partition("[")
+    if not bracket:
+        return spec
+    _dropped, closing, tail = rest.partition("]")
+    if not closing:
+        return spec  # unbalanced — not ours to rewrite; hand it to pip as-is
+    return head + tail
+
+
 def _remove_path(path: str, *, best_effort: bool = False) -> None:
     """Remove a file or directory at ``path``, whichever it is.
 
@@ -169,8 +201,10 @@ def pip_install(
     PIP_EXTRA_INDEX_URL / PIP_CONFIG_FILE so a caller can't reopen the
     dependency-confusion vector this closes.
 
-    ``constraints``, when given, is a list of pip specs (``name==ver``)
-    written to a ``-c`` constraints file for this install only (issue
+    ``constraints``, when given, is a list of pip specs written to a ``-c``
+    constraints file for this install only — each one normalized through
+    ``constraint_without_extras`` first, because a constraints file may not
+    carry an ``[extra]`` clause (issue
     #97 residue 3, reporter mbe14, "the substantial one"): without it, a
     package pip pulls in as a TRANSITIVE (e.g. numpy via
     sentence-transformers for the ML install) resolves freely and can
@@ -203,7 +237,7 @@ def pip_install(
     if constraints:
         constraints_file = f"{deps_dir}.constraints-{os.getpid()}.txt"
         with open(constraints_file, "w", encoding="utf-8") as fh:
-            fh.write("\n".join(constraints) + "\n")
+            fh.write("\n".join(map(constraint_without_extras, constraints)) + "\n")
     base = [
         sys.executable,
         "-m",
