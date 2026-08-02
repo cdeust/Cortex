@@ -166,8 +166,9 @@ automatic hooks, custom agent, full tool profile, and unchanged marketplace.
 Pre-install the same published package once so the plugin's first `uvx`
 handshake can reuse the local uv cache instead of spending its startup budget
 downloading the Python environment. The bundled server also declares a
-180-second startup ceiling, backed by a measured 110.46-second clean-cache
-launch:
+180-second startup ceiling, backed by a 110.46-second clean-cache launch
+measured on 2026-08-02 on local macOS 26.5.1 arm64 with uv 0.8.19 (the clean
+`ubuntu-latest` CI run completed in 23.87 seconds):
 
 ```bash
 uv tool install "hypermnesia-mcp[sqlite]"

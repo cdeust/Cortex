@@ -85,8 +85,8 @@ separate **cortex-viz** MCP (reads this same store read-only).
   are tracked as a follow-up (found 2026-07-14 during #114), not a
   standard to add to.
 - No invented constants: every hardcoded number carries a `# source:`
-  comment (paper, committed benchmark, or dated measurement). A number
-  without one blocks the diff in review.
+  comment (paper, committed benchmark, or dated measurement naming the
+  environment and conditions). A number without one blocks the diff in review.
 
 ## What NOT to do
 
@@ -103,13 +103,16 @@ separate **cortex-viz** MCP (reads this same store read-only).
 Every change to the retrieval or memory system:
 
 1. **No source, no implementation.** Every algorithm/constant/threshold
-   traces to a published paper, a committed benchmark, or a dated
-   measurement. No source → say "I don't know" and stop.
+   traces to a published paper, a committed benchmark, or a dated measurement
+   that names the environment and experimental conditions. No source → say
+   "I don't know" and stop.
 2. **Verify sources, don't guess.** Read the actual paper; confirm its
    experimental conditions match ours (small corpus, conversational
    content, 384-dim embeddings) before reusing an equation or constant.
-3. **Benchmark before commit.** Re-run the affected benchmarks; no
-   regression accepted. Results must be reproducible on a clean DB.
+3. **Benchmark before commit.** Re-run the affected benchmarks; no regression
+   accepted. Record the before/after values, exact command, code revision,
+   environment, and experimental conditions. Results must be reproducible on
+   a clean DB.
 4. **Audit trail.** Every module docstring cites its paper and equations;
    `docs/provenance/paper-implementation-audit.md` stays current.
 

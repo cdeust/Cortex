@@ -71,8 +71,9 @@ def test_codex_plugin_is_mcp_only_and_uses_the_exact_lean_profile() -> None:
             "--profile",
             "lean",
         ],
-        # Measured clean-cache startup on 2026-08-02: 110.46s. This bounded
-        # ceiling leaves startup headroom without inventing a sleep or retry.
+        # Measured clean-cache startup on 2026-08-02: 110.46s on macOS 26.5.1
+        # arm64 with uv 0.8.19. This bounded ceiling leaves startup headroom
+        # without inventing a sleep or retry.
         "startup_timeout_sec": 180,
     }
 

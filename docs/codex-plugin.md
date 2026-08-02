@@ -34,11 +34,13 @@ package before Codex's startup window, allowing the first plugin handshake to
 reuse uv's local artifact cache.
 
 The bundled server declares `startup_timeout_sec: 180`. This is a bounded
-startup ceiling, not a delay: a clean local `UV_CACHE_DIR` and `UV_TOOL_DIR`
-run on 2026-08-02 completed `initialize`, `tools/list`, and `memory_stats` in
-110.46 seconds with exactly ten lean tools. A follow-up run after the tool
-installation completed the same contract in 28.19 seconds. CI repeats the cold
-run and uses the timeout value read from the manifest itself.
+startup ceiling, not a delay. On 2026-08-02, a local macOS 26.5.1 arm64 run
+with uv 0.8.19 and clean `UV_CACHE_DIR` and `UV_TOOL_DIR` completed
+`initialize`, `tools/list`, and `memory_stats` in 110.46 seconds with exactly
+ten lean tools. A follow-up on the same machine after the tool installation
+completed the same contract in 28.19 seconds. The clean `ubuntu-latest` CI
+runner completed it in 23.87 seconds; CI reads the command and timeout from the
+manifest itself.
 
 The bundled MCP command is equivalent to:
 
