@@ -22,32 +22,46 @@ the active working directory.
 Add the Cortex repository marketplace and install the plugin:
 
 ```bash
-uv tool install "hypermnesia-mcp[sqlite]"
 codex plugin marketplace add cdeust/Cortex
 codex plugin add hypermnesia-mcp-codex@cortex-codex-plugins
 ```
 
 Restart the ChatGPT desktop app and start a new task so Codex loads the new
 plugin components. The plugin uses `uvx`, so `uv` must be available on `PATH`.
-The preliminary `uv tool install` is deliberate: it downloads the published
-package before Codex's startup window, allowing the first plugin handshake to
-reuse uv's local artifact cache.
+The first launch installs both storage drivers. Cortex tries PostgreSQL first
+at the configured `DATABASE_URL` (or its local `cortex` default), then falls
+back to SQLite only when no explicit PostgreSQL target was supplied and the
+default server is unavailable. An explicitly configured but unreachable
+`DATABASE_URL` remains an error rather than silently redirecting writes.
+
+An optional prewarm can download the package before restarting Codex; it is a
+startup optimization, not an installation prerequisite:
+
+```bash
+uv tool install "hypermnesia-mcp[postgresql,sqlite]"
+```
 
 The bundled server declares `startup_timeout_sec: 180`. This is a bounded
-startup ceiling, not a delay. On 2026-08-02, a local macOS 26.5.1 arm64 run
-with uv 0.8.19 and clean `UV_CACHE_DIR` and `UV_TOOL_DIR` completed
-`initialize`, `tools/list`, and `memory_stats` in 110.46 seconds with exactly
-ten lean tools. A follow-up on the same machine after the tool installation
-completed the same contract in 28.19 seconds. The clean `ubuntu-latest` CI
-runner completed it in 23.87 seconds; CI reads the command and timeout from the
-manifest itself.
+startup ceiling, not a delay. On 2026-08-03, the exact two-driver command below
+completed `initialize`, `tools/list`, and a real PostgreSQL-backed
+`memory_stats` call in 103.84 seconds from clean `UV_CACHE_DIR` and
+`UV_TOOL_DIR` directories on macOS 26.5.1 arm64 with uv 0.8.19. It exposed
+exactly ten lean tools. The next offline run from that cache completed the same
+contract in 2.75 seconds. CI reads the command, runtime policy, and timeout from
+the manifest itself and repeats the clean-cache contract.
 
 The bundled MCP command is equivalent to:
 
 ```bash
-uvx --from "hypermnesia-mcp[sqlite]" \
+env CORTEX_RUNTIME=cowork \
+  uvx --from "hypermnesia-mcp[postgresql,sqlite]" \
   hypermnesia-mcp --profile lean
 ```
+
+`CORTEX_RUNTIME=cowork` selects Cortex's existing DB-optional local-runtime
+policy; it does not install or invoke the Cowork plugin. Claude Code remains
+the primary integration and its manifest, hooks, agents, and full tool profile
+are unchanged.
 
 This is a local plugin. It does not make Cortex available to ChatGPT web and
 does not expose the local memory database over the internet.

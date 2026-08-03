@@ -66,14 +66,18 @@ def test_codex_plugin_is_mcp_only_and_uses_the_exact_lean_profile() -> None:
         "command": "uvx",
         "args": [
             "--from",
-            "hypermnesia-mcp[sqlite]",
+            "hypermnesia-mcp[postgresql,sqlite]",
             "hypermnesia-mcp",
             "--profile",
             "lean",
         ],
-        # Measured clean-cache startup on 2026-08-02: 110.46s on macOS 26.5.1
-        # arm64 with uv 0.8.19. This bounded ceiling leaves startup headroom
-        # without inventing a sleep or retry.
+        # Codex is additive, but its local storage selection has the same
+        # auto contract as the DB-optional sandbox surface: try PostgreSQL
+        # first and fall back only when no explicit DATABASE_URL was supplied.
+        "env": {"CORTEX_RUNTIME": "cowork"},
+        # Measured clean-cache startup with both extras on 2026-08-03: 103.84s
+        # on macOS 26.5.1 arm64 with uv 0.8.19. This bounded ceiling leaves
+        # startup headroom without inventing a sleep or retry.
         "startup_timeout_sec": 180,
     }
 
@@ -91,3 +95,11 @@ def test_codex_package_does_not_weaken_the_primary_claude_plugin() -> None:
         "mcp_server",
     ]
     assert "--profile" not in claude_server["args"]
+
+
+def test_claude_marketplace_uses_the_canonical_viz_publication_identity() -> None:
+    marketplace = _json(REPO_ROOT / ".claude-plugin/marketplace.json")
+    names = {entry["name"] for entry in marketplace["plugins"]}
+
+    assert "hypermnesia-mcp-viz" in names
+    assert "cortex-viz" not in names

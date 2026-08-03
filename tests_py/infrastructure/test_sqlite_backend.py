@@ -540,6 +540,38 @@ class TestExplicitDatabaseUrlFallbackBoundary:
                 store.close()
             get_memory_settings.cache_clear()
 
+    def test_reachable_postgresql_is_preferred_over_sqlite(self, monkeypatch, tmp_path):
+        """A reachable default PostgreSQL target wins before SQLite fallback."""
+        import mcp_server.infrastructure.memory_store as memory_store_module
+        from mcp_server.infrastructure.memory_config import get_memory_settings
+
+        pg_store = object()
+        monkeypatch.setenv("CORTEX_RUNTIME", "cowork")
+        monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "auto")
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.delenv("CORTEX_ALLOW_SQLITE_FALLBACK", raising=False)
+        monkeypatch.setattr(
+            memory_store_module,
+            "_try_pg_verbose",
+            lambda url: (pg_store, None),
+        )
+        monkeypatch.setattr(
+            memory_store_module,
+            "_make_sqlite",
+            lambda *args, **kwargs: pytest.fail("SQLite fallback was selected"),
+        )
+        get_memory_settings.cache_clear()
+
+        try:
+            assert (
+                memory_store_module._construct_store(
+                    db_path=str(tmp_path / "unused.db")
+                )
+                is pg_store
+            )
+        finally:
+            get_memory_settings.cache_clear()
+
     def test_postgresql_mode_unreachable_still_raises_unchanged(self, monkeypatch):
         """(d) STORE_BACKEND=postgresql (the CLI/explicit-postgresql path) with
         PG unreachable must keep raising exactly as before this fix — this

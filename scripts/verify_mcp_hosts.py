@@ -26,6 +26,7 @@ from mcp_server.tool_profiles import LEAN_TOOL_NAMES
 
 CLIENTS = ("claude-code", "gemini-cli", "codex-cli")
 PROFILES: tuple[Literal["full", "lean"], ...] = ("full", "lean")
+STORAGE_SELECTIONS: tuple[Literal["sqlite", "auto"], ...] = ("sqlite", "auto")
 # source: MCP protocol revision implemented by fastmcp==3.4.5.
 PROTOCOL_VERSION = "2025-06-18"
 # source: tests_py/test_main.py standalone baseline plus its three documented
@@ -48,6 +49,7 @@ class ContractCase:
     data_root: Path
     timeout: int
     socks_proxy_regression: bool
+    storage_selection: Literal["sqlite", "auto"]
 
     @property
     def label(self) -> str:
@@ -82,15 +84,27 @@ def _frames(client_name: str) -> str:
     )
 
 
-def _environment(data_root: Path, *, socks_proxy_regression: bool) -> dict[str, str]:
+def _environment(
+    data_root: Path,
+    *,
+    socks_proxy_regression: bool,
+    storage_selection: Literal["sqlite", "auto"] = "sqlite",
+) -> dict[str, str]:
     env = os.environ.copy()
     env.update(
         {
             "CORTEX_CLAUDE_DIR": str(data_root),
-            "CORTEX_MEMORY_STORE_BACKEND": "sqlite",
             "CORTEX_MEMORY_AP_ENABLED": "0",
         }
     )
+    if storage_selection == "sqlite":
+        env["CORTEX_MEMORY_STORE_BACKEND"] = "sqlite"
+    else:
+        # Exercise production auto-selection. In particular, do not inherit a
+        # repository- or runner-level SQLite override that would make a
+        # PostgreSQL-first smoke pass without ever attempting PostgreSQL.
+        env.pop("CORTEX_MEMORY_STORE_BACKEND", None)
+        env.pop("CORTEX_ALLOW_SQLITE_FALLBACK", None)
     if socks_proxy_regression:
         # Regression environment: FastMCP's banner-time update check used to
         # import SOCKS support and abort before initialize. The MCP runtime
@@ -144,6 +158,7 @@ def _run_client(case: ContractCase) -> dict[int, dict[str, object]]:
         env=_environment(
             case.data_root / case.client_name / case.profile,
             socks_proxy_regression=case.socks_proxy_regression,
+            storage_selection=case.storage_selection,
         ),
         timeout=case.timeout,
         check=False,
@@ -270,6 +285,15 @@ def main() -> int:
         help="do not inject the SOCKS regression fixture; intended for cold uvx",
     )
     parser.add_argument(
+        "--storage-selection",
+        choices=STORAGE_SELECTIONS,
+        default="sqlite",
+        help=(
+            "storage policy to exercise: explicit sqlite (default), or auto "
+            "for PostgreSQL-first selection with SQLite fallback"
+        ),
+    )
+    parser.add_argument(
         "command",
         nargs=argparse.REMAINDER,
         help="base server command after --; profile flags are added by the test",
@@ -298,6 +322,7 @@ def main() -> int:
                     data_root=Path(temp_dir),
                     timeout=args.timeout,
                     socks_proxy_regression=not args.allow_bootstrap_network,
+                    storage_selection=args.storage_selection,
                 )
                 count, elapsed_seconds = _verify(case)
                 print(

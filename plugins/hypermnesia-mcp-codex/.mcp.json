@@ -4,11 +4,14 @@
       "command": "uvx",
       "args": [
         "--from",
-        "hypermnesia-mcp[sqlite]",
+        "hypermnesia-mcp[postgresql,sqlite]",
         "hypermnesia-mcp",
         "--profile",
         "lean"
       ],
+      "env": {
+        "CORTEX_RUNTIME": "cowork"
+      },
       "startup_timeout_sec": 180
     }
   }

@@ -207,6 +207,22 @@ jobs:
         # silently fall back. Raise the floor when coverage rises.
         run: pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing --cov-fail-under=82
 
+      # Match the Codex manifest's auto policy against a real, explicitly
+      # configured PostgreSQL instance. Explicit targets cannot fall back, so
+      # a successful memory_stats call proves PostgreSQL was selected.
+      - name: Verify Codex PostgreSQL-first MCP contract
+        if: matrix.python-version == '3.12'
+        env:
+          CORTEX_RUNTIME: cowork
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          CORTEX_RERANKER_OFFLINE: "1"
+        run: >-
+          python scripts/verify_mcp_hosts.py
+          --clients codex-cli --profiles lean
+          --storage-selection auto
+          -- hypermnesia-mcp
+
       # The advertised test count is the one claim the static gate cannot check
       # without collecting the suite, so it is checked in the job that already
       # has the suite installed. `--collect-only` re-collects (~seconds) rather
@@ -432,13 +448,17 @@ jobs:
           "$cli_bin/codex" plugin list --json \
             | python -c 'import json,sys; d=json.load(sys.stdin); p=[x for x in d.get("installed",[]) if x.get("pluginId")=="hypermnesia-mcp-codex@cortex-codex-plugins"]; assert len(p)==1, p; assert p[0]["installed"] and p[0]["enabled"]'
           "$cli_bin/codex" mcp list --json \
-            | python -c 'import json,sys; ss=[s for s in json.load(sys.stdin) if s.get("name")=="cortex"]; assert len(ss)==1, ss; s=ss[0]; assert s["startup_timeout_sec"]==180.0, s; assert s["transport"]["command"]=="uvx", s'
+            | python -c 'import json,sys; ss=[s for s in json.load(sys.stdin) if s.get("name")=="cortex"]; assert len(ss)==1, ss; s=ss[0]; assert s["startup_timeout_sec"]==180.0, s; assert s["transport"]["command"]=="uvx", s; assert s["transport"]["env"]["CORTEX_RUNTIME"]=="cowork", s'
           mapfile -t plugin_command < <(
             python -c 'import json; s=json.load(open("plugins/hypermnesia-mcp-codex/.mcp.json"))["mcpServers"]["cortex"]; print(s["command"]); print(*s["args"], sep="\n")'
           )
           plugin_timeout="$(
             python -c 'import json; print(json.load(open("plugins/hypermnesia-mcp-codex/.mcp.json"))["mcpServers"]["cortex"]["startup_timeout_sec"])'
           )"
+          plugin_runtime="$(
+            python -c 'import json; print(json.load(open("plugins/hypermnesia-mcp-codex/.mcp.json"))["mcpServers"]["cortex"]["env"]["CORTEX_RUNTIME"])'
+          )"
+          CORTEX_RUNTIME="$plugin_runtime" \
           UV_CACHE_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-cache" \
           UV_TOOL_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-tools" \
           PYTHONPATH="$GITHUB_WORKSPACE" \
@@ -446,6 +466,7 @@ jobs:
               --timeout "$plugin_timeout" --clients codex-cli --profiles lean \
               --command-includes-profile \
               --allow-bootstrap-network \
+              --storage-selection auto \
               -- "${plugin_command[@]}"
 
   test-windows:
