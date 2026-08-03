@@ -111,7 +111,7 @@ def test_claude_marketplace_publishes_pinned_canonical_viz_identity() -> None:
     assert canonical["source"] == {
         "source": "github",
         "repo": "cdeust/cortex-viz",
-        "sha": "7e297ebc31af3f4be0a5d06974c7f11a72070b99",
+        "sha": "1c1940e278979f35cdecea6146d7fb5f749907e9",
     }
     assert "standalone Hypermnesia MCP Viz server" in canonical["description"]
 

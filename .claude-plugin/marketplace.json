@@ -62,7 +62,7 @@
       "source": {
         "source": "github",
         "repo": "cdeust/cortex-viz",
-        "sha": "7e297ebc31af3f4be0a5d06974c7f11a72070b99"
+        "sha": "1c1940e278979f35cdecea6146d7fb5f749907e9"
       },
       "description": "Canonical Claude Code publication for the standalone Hypermnesia MCP Viz server — a live neural-graph galaxy of every project, file, symbol, memory, discussion and wiki page, plus a per-session execution trace, a consolidation kanban, and a curated knowledge/wiki browser. Read-only bridge over Cortex's shared PostgreSQL store and the ~/.claude artifacts; it renders, it never remembers. Restores the open_visualization and get_methodology_graph tools removed from Cortex; launch with /cortex-visualize.",
       "version": "3.0.0",

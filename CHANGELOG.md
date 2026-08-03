@@ -22,7 +22,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   The canonical Claude Code publication is
   `hypermnesia-mcp-viz@cortex-plugins` 3.0.0, sourced from the unchanged
   `cdeust/cortex-viz` repository at exact commit
-  `7e297ebc31af3f4be0a5d06974c7f11a72070b99`. Existing installs must uninstall
+  `1c1940e278979f35cdecea6146d7fb5f749907e9`. Existing installs must uninstall
   `cortex-viz@cortex-plugins`, refresh `cortex-plugins`, and install
   `hypermnesia-mcp-viz@cortex-plugins`. The former identity remains as a
   frozen 2.8.0 migration shim that only prints those instructions; it
