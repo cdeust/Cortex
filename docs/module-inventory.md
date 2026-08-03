@@ -78,7 +78,7 @@ Treat gaps as "undocumented," not "does not exist."
 - `profile_assembler.py` — Profile assembly from extracted components
 - `blindspot_patterns.py` — Blind spot pattern definitions
 - `session_shape.py` — Session shape analysis
-- *(graph construction — `graph_builder*.py`, `graph_quality_scorer.py` — was extracted to the standalone **cortex-viz** MCP along with the HTTP/3D visualization stack)*
+- *(graph construction — `graph_builder*.py`, `graph_quality_scorer.py` — was extracted to the standalone **hypermnesia-mcp-viz** MCP along with the HTTP/3D visualization stack)*
 
 *Behavioral Interpretability:*
 - `sparse_dictionary.py` — Behavioral feature dictionary learning (OMP sparse coding, K-SVD)
@@ -269,7 +269,7 @@ latency.
 
 MCP tool registration + composition roots. The HTTP visualization stack
 (galaxy/trace/wiki/knowledge/board UI) was extracted to the standalone
-**cortex-viz** MCP, which reads this same store read-only.
+**hypermnesia-mcp-viz** MCP, which reads this same store read-only.
 
 ## hooks/ — Session lifecycle automation
 

@@ -88,7 +88,7 @@ upstream MCP server is configured (55 total with both present).
 
 These register only when their upstream MCP server is configured, bringing
 the total to 55: `ingest_codebase` + `change_impact` (automatised-pipeline)
-and `ingest_prd` (prd-spec-generator). With no upstream present, exactly the
+and `ingest_prd` (ai-architect-mcp-spec). With no upstream present, exactly the
 **52 standalone tools** above register. Driving the ai-architect pipeline
 end-to-end (formerly `run_pipeline`) is **not** part of this server — it
 lives in the automatised-pipeline MCP.
@@ -103,7 +103,7 @@ read-only.
 
 | Command | What it does | Roles |
 |---|---|---|
-| `/methodology` | Retrieves the cognitive methodology profile (via `query_methodology`) for the current working directory and offers `rebuild_profiles` / `list_domains` follow-ups, plus cortex-viz's `get_methodology_graph` when that companion MCP is installed | Any user, any session — the general entry point into a domain's profile |
+| `/methodology` | Retrieves the cognitive methodology profile (via `query_methodology`) for the current working directory and offers `rebuild_profiles` / `list_domains` follow-ups, plus hypermnesia-mcp-viz's `get_methodology_graph` when that companion MCP is installed | Any user, any session — the general entry point into a domain's profile |
 | `/why` | Deterministic blame-path: resolves `⟦rcpt:id⟧` presence-in-context markers via the `why` tool, reports which memories were in context (never that they *caused* an answer — Pearl-rung-1 evidence only) | Anyone auditing why an answer looked the way it did |
 | `/preflight [symptôme]` | Runs `python -m mcp_server.doctor` (backend-aware check list) and turns the output into a dependency-ordered, copy-paste repair plan; takes an optional symptom argument to prioritize the relevant check first. Read-only — modifies no files | New users whose install doesn't work yet; support; first-deploy DevOps (issue #119) |
 

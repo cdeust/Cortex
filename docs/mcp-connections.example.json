@@ -8,10 +8,10 @@
       "env": {}
     },
     "prd-gen": {
-      "_comment": "prd-spec-generator — PRD authoring + validation. Consumed by ingest_prd.",
+      "_comment": "ai-architect-mcp-spec — PRD authoring + validation. Consumed by ingest_prd.",
       "command": "node",
       "args": [
-        "/absolute/path/to/prd-spec-generator/mcp-server/index.mjs"
+        "/absolute/path/to/ai-architect-mcp-spec/mcp-server/index.js"
       ],
       "env": {}
     }

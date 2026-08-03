@@ -152,3 +152,23 @@ def test_readme_carries_the_complete_viz_and_spec_identity_migrations() -> None:
 
     assert "ai-architect-mcp-spec" in readme
     assert "prd-spec-generator" not in readme
+
+
+def test_current_companion_docs_use_canonical_publication_identities() -> None:
+    readme = (REPO_ROOT / "README.md").read_text()
+    assert (
+        '<a href="https://github.com/cdeust/cortex-viz">hypermnesia-mcp-viz</a>'
+        in readme
+    )
+
+    current_docs = [
+        REPO_ROOT / "docs/api-reference.md",
+        REPO_ROOT / "docs/mcp-connections.example.json",
+        REPO_ROOT / "docs/mcp-tools.md",
+        REPO_ROOT / "docs/module-inventory.md",
+    ]
+    for path in current_docs:
+        content = path.read_text()
+        assert "prd-spec-generator" not in content
+        assert "**cortex-viz** MCP" not in content
+        assert "Install cortex-viz" not in content

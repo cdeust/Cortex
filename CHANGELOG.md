@@ -31,6 +31,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   `mcp__plugin_hypermnesia-mcp-viz_hypermnesia-mcp-viz__open_visualization`,
   and `mcp__plugin_cortex-viz_cortex-viz__get_methodology_graph` becomes
   `mcp__plugin_hypermnesia-mcp-viz_hypermnesia-mcp-viz__get_methodology_graph`.
+  Current companion tables, MCP examples, and API/module documentation now use
+  `hypermnesia-mcp-viz` and `ai-architect-mcp-spec`; retired names remain only
+  in explicit migration or historical material.
 - **Hook-free MCP protocol and host-configuration gates.** CI now starts the
   installed production stdio entry point under representative Claude, Gemini,
   and Codex client identities, completes the MCP lifecycle for both the full

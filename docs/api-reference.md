@@ -92,8 +92,8 @@ Incremental profile update after a session ends. Appends to the rolling session 
 ---
 
 > **Moved out of Cortex.** `get_methodology_graph` and `open_visualization`
-> were extracted to the companion [cortex-viz](https://github.com/cdeust/cortex-viz)
-> MCP in v3.21.0 and are no longer registered here. Install cortex-viz to get
+> were extracted to the companion [hypermnesia-mcp-viz](https://github.com/cdeust/cortex-viz)
+> MCP in v3.21.0 and are no longer registered here. Install hypermnesia-mcp-viz to get
 > them back; their schemas are documented in that repository.
 
 ### `explore_features`

@@ -85,7 +85,7 @@ in; the door is the issue tracker.
   a hard constraint; a gigabyte-scale model breaks the runs-on-your-machine
   promise regardless of what it would buy in accuracy.
 - **No re-absorption of the visualization stack.** It lives in
-  [cortex-viz](https://github.com/cdeust/cortex-viz) and reads this store
+  [hypermnesia-mcp-viz](https://github.com/cdeust/cortex-viz) and reads this store
   read-only; Cortex stays a memory engine.
 - **No backward-compatibility shims.** Format changes ship as one-shot
   migrations, per the standing rule in [CLAUDE.md](../CLAUDE.md).
