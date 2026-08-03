@@ -1,0 +1,18 @@
+{
+  "//": "Frozen deprecation shim only. It announces the marketplace rename and must never register the legacy MCP server or tools.",
+  "description": "Migration notice for the retired cortex-viz Claude Code plugin identity",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[cortex-viz@cortex-plugins] DEPRECATED: the Claude Code plugin was renamed in v3.0.0. Run: claude plugin uninstall cortex-viz@cortex-plugins; claude plugin marketplace update cortex-plugins; claude plugin install hypermnesia-mcp-viz@cortex-plugins. The repository remains cdeust/cortex-viz; only the marketplace plugin identity changed.'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

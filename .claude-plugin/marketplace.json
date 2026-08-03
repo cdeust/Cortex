@@ -12,7 +12,7 @@
     {
       "name": "hypermnesia-mcp",
       "source": "./",
-      "description": "Cortex — persistent memory and cognitive profiling for Claude Code (renamed from the 'cortex' plugin in v4.15.0 to match the PyPI/MCP-registry identity hypermnesia-mcp) — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence, and cognitive profiling. 50 MCP tools (53 with the optional automatised-pipeline + prd-spec-generator integrations) with enriched schemas (visualization extracted to the standalone cortex-viz MCP). PostgreSQL + pgvector in CLI mode; automatic SQLite fallback in Cowork/sandboxed mode. v3.17.0 — autonomous per-project wiki: SessionStart auto-spawns a 6-hour consolidate cycle; a headless `claude -p` worker drains the curation-gap queue, calls codebase-intelligence MCP tools to ground each section in the real call graph, and authors missing anchor pages (architecture / services / api / data-flow / operations / decisions / PRD) per project from the source tree. 15 canonical scopes × 13 file sections; per-project dashboards under `wiki/_dashboards/`. Mermaid diagrams have a 🔍 lens with zoom + pan. Workflow graph with caller-qualified CALLS chains rendering full method-to-method dependencies (native tree-sitter, no AP required). Side panel humanized for non-technical users. Ingests codebase analysis (ai-automatised-pipeline) and PRDs (prd-spec-generator) into wiki + memory + knowledge graph. Docker image available.",
+      "description": "Cortex — persistent memory and cognitive profiling for Claude Code (renamed from the 'cortex' plugin in v4.15.0 to match the PyPI/MCP-registry identity hypermnesia-mcp) — thermodynamic memory with heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence, and cognitive profiling. 50 MCP tools (53 with the optional automatised-pipeline + ai-architect-mcp-spec integrations) with enriched schemas (visualization extracted to the standalone Hypermnesia MCP Viz server). PostgreSQL + pgvector in CLI mode; automatic SQLite fallback in Cowork/sandboxed mode. v3.17.0 — autonomous per-project wiki: SessionStart auto-spawns a 6-hour consolidate cycle; a headless `claude -p` worker drains the curation-gap queue, calls codebase-intelligence MCP tools to ground each section in the real call graph, and authors missing anchor pages (architecture / services / api / data-flow / operations / decisions / PRD) per project from the source tree. 15 canonical scopes × 13 file sections; per-project dashboards under `wiki/_dashboards/`. Mermaid diagrams have a 🔍 lens with zoom + pan. Workflow graph with caller-qualified CALLS chains rendering full method-to-method dependencies (native tree-sitter, no AP required). Side panel humanized for non-technical users. Ingests codebase analysis (ai-automatised-pipeline) and PRDs (ai-architect-mcp-spec) into wiki + memory + knowledge graph. Docker image available.",
       "version": "4.17.2",
       "author": {
         "name": "Clement Deust",
@@ -61,10 +61,11 @@
       "name": "hypermnesia-mcp-viz",
       "source": {
         "source": "github",
-        "repo": "cdeust/cortex-viz"
+        "repo": "cdeust/cortex-viz",
+        "sha": "a49f3b83b14f3c98a6b561b3311db118239bf0d5"
       },
-      "description": "Standalone visualization MCP for Cortex — a live neural-graph galaxy of every project, file, symbol, memory, discussion and wiki page, plus a per-session execution trace, a consolidation kanban, and a curated knowledge/wiki browser. Read-only bridge over Cortex's shared PostgreSQL store and the ~/.claude artifacts; it renders, it never remembers. Restores the open_visualization / get_methodology_graph / query_workflow_graph tools removed from Cortex 3.21.0; launch with /cortex-visualize.",
-      "version": "2.8.0",
+      "description": "Canonical Claude Code publication for the standalone Hypermnesia MCP Viz server — a live neural-graph galaxy of every project, file, symbol, memory, discussion and wiki page, plus a per-session execution trace, a consolidation kanban, and a curated knowledge/wiki browser. Read-only bridge over Cortex's shared PostgreSQL store and the ~/.claude artifacts; it renders, it never remembers. Restores the open_visualization and get_methodology_graph tools removed from Cortex; launch with /cortex-visualize.",
+      "version": "3.0.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
@@ -79,6 +80,24 @@
         "claude-code",
         "cortex",
         "knowledge-graph"
+      ],
+      "category": "productivity"
+    },
+    {
+      "name": "cortex-viz",
+      "source": "./plugins/cortex-viz-deprecated",
+      "description": "DEPRECATED — renamed to hypermnesia-mcp-viz in v3.0.0. This frozen, nonfunctional migration shim has no MCP server or tools; it only announces the replacement at session start. Uninstall cortex-viz@cortex-plugins, refresh this marketplace, then install hypermnesia-mcp-viz@cortex-plugins. The repository remains cdeust/cortex-viz; only the marketplace plugin identity changed.",
+      "version": "2.8.0",
+      "author": {
+        "name": "Clement Deust",
+        "email": "admin@ai-architect.tools"
+      },
+      "homepage": "https://github.com/cdeust/cortex-viz",
+      "repository": "https://github.com/cdeust/cortex-viz",
+      "license": "MIT",
+      "keywords": [
+        "deprecated",
+        "visualization"
       ],
       "category": "productivity"
     },

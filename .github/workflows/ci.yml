@@ -207,10 +207,11 @@ jobs:
         # silently fall back. Raise the floor when coverage rises.
         run: pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing --cov-fail-under=82
 
-      # Match the Codex manifest's auto policy against a real, explicitly
-      # configured PostgreSQL instance. Explicit targets cannot fall back, so
-      # a successful memory_stats call proves PostgreSQL was selected.
-      - name: Verify Codex PostgreSQL-first MCP contract
+      # Match the primary Claude and additive Codex client identities against
+      # a real, explicitly configured PostgreSQL instance. Explicit targets
+      # cannot fall back, so successful memory_stats calls prove PostgreSQL
+      # was selected for both host contracts.
+      - name: Verify Claude and Codex PostgreSQL-first MCP contracts
         if: matrix.python-version == '3.12'
         env:
           CORTEX_RUNTIME: cowork
@@ -219,7 +220,7 @@ jobs:
           CORTEX_RERANKER_OFFLINE: "1"
         run: >-
           python scripts/verify_mcp_hosts.py
-          --clients codex-cli --profiles lean
+          --clients claude-code codex-cli --profiles lean
           --storage-selection auto
           -- hypermnesia-mcp
 

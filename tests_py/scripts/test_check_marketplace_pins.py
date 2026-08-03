@@ -61,6 +61,17 @@ class TestParseSemver(unittest.TestCase):
 class TestPinBehindTag(unittest.TestCase):
     """The review's replay: both manifests agree AND both are stale (#67)."""
 
+    def test_legacy_publication_identities_are_explicitly_frozen(self):
+        self.assertEqual(
+            gate.FROZEN_PINS,
+            {
+                "cortex": "deprecation shim, frozen at the 4.15.0 rename release",
+                "cortex-viz": (
+                    "deprecation shim, frozen at the 2.8.0 pre-rename release"
+                ),
+            },
+        )
+
     def test_incident_replay_both_manifests_stale_tag_ahead(self):
         with TemporaryDirectory() as d:
             root = _git_repo_with_tags(d, ["v0.7.0", "v0.8.0", "v0.8.1", "v0.8.2"])

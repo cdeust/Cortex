@@ -1,0 +1,16 @@
+{
+  "name": "cortex-viz",
+  "description": "DEPRECATED — renamed to hypermnesia-mcp-viz. This frozen migration shim has no MCP server or tools; it only announces the replacement at session start.",
+  "version": "2.8.0",
+  "author": {
+    "name": "Clement Deust",
+    "email": "admin@ai-architect.tools"
+  },
+  "homepage": "https://github.com/cdeust/cortex-viz",
+  "repository": "https://github.com/cdeust/cortex-viz",
+  "license": "MIT",
+  "keywords": [
+    "deprecated",
+    "visualization"
+  ]
+}

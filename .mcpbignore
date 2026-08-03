@@ -55,6 +55,7 @@ commands/
 skills/
 plugins/hypermnesia-mcp-codex/
 plugins/cortex-deprecated/
+plugins/cortex-viz-deprecated/
 scripts/
 docker/
 Dockerfile

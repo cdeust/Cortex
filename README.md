@@ -25,7 +25,7 @@
 <p align="center">
   <strong>Part of a four-piece stack</strong> — each runs standalone; together they cover what an agent forgets, can't see, and can't verify. <a href="#the-rest-of-the-stack">Full comparison ↓</a><br>
   <a href="https://github.com/cdeust/automatised-pipeline">automatised-pipeline</a> — the repo as a queryable code graph (callers, blast radius, execution paths), so agents stop re-reading files; Cortex ingests it via <code>ingest_codebase</code> / <code>change_impact</code><br>
-  <a href="https://github.com/cdeust/prd-spec-generator">prd-spec-generator</a> — <em>verifies</em> a spec rather than only generating one; standalone, or a CI gate over spec-kit / Kiro / BMAD output<br>
+  <a href="https://github.com/cdeust/ai-architect-mcp-spec">ai-architect-mcp-spec</a> — <em>verifies</em> a spec rather than only generating one; standalone, or a CI gate over spec-kit / Kiro / BMAD output<br>
   <a href="https://github.com/cdeust/zetetic-team-subagents">zetetic-team-subagents</a> — 97 sourced reasoning patterns as specialist agents, each with its own scoped Cortex memory<br>
   <a href="https://github.com/cdeust/cortex-viz">cortex-viz</a> — read-only visualization MCP (galaxy graph, execution trace, wiki browser) over this same store · <a href="https://github.com/cdeust/cortex-know-when-to-stop-training-model">cortex-beam-abstain</a> — retrieval abstention model for RAG
 </p>
@@ -62,6 +62,10 @@ claude plugin marketplace add cdeust/Cortex
 claude plugin install hypermnesia-mcp
 ```
 > **Upgrading from the `cortex` plugin?** The plugin was renamed `hypermnesia-mcp` in v4.15.0 (a community-directory name collision with an unrelated `cortex` plugin): `claude plugin uninstall cortex && claude plugin install hypermnesia-mcp` — your memories and configuration are untouched, storage paths do not change.
+>
+> **Upgrading from `cortex-viz@cortex-plugins`?** Its Claude Code marketplace identity was renamed in v3.0.0. Run `claude plugin uninstall cortex-viz@cortex-plugins`, then `claude plugin marketplace update cortex-plugins`, then `claude plugin install hypermnesia-mcp-viz@cortex-plugins`. The retained `cortex-viz@cortex-plugins` item is a frozen, nonfunctional migration shim: it only prints this notice and exposes no MCP server or tools. The repository remains `cdeust/cortex-viz`; only its marketplace plugin identity changed.
+>
+> Claude tool allowlists, hooks, skills, and agents must migrate both composed names: `mcp__plugin_cortex-viz_cortex-viz__open_visualization` becomes `mcp__plugin_hypermnesia-mcp-viz_hypermnesia-mcp-viz__open_visualization`, and `mcp__plugin_cortex-viz_cortex-viz__get_methodology_graph` becomes `mcp__plugin_hypermnesia-mcp-viz_hypermnesia-mcp-viz__get_methodology_graph`.
 
 That is the whole install — zero configuration, no PostgreSQL, no system packages. The postInstall provisions Python dependencies and selects the local **SQLite** store (`~/.claude/methodology/memory.db`); the store schema auto-creates on first use. The embedding model is *not* downloaded at install time — it fetches lazily on first use (~100 MB, one-time; see [PRIVACY.md](PRIVACY.md)) and runs fully offline afterwards. The plugin path registers all lifecycle hooks (session-start context injection, per-prompt auto-recall, auto-capture, compaction checkpointing, the autonomous wiki cycle) and the `/cortex-setup-project` command.
 
@@ -162,7 +166,9 @@ Or add it to `~/.gemini/settings.json` directly:
 **OpenAI Codex and ChatGPT desktop — native local plugin (recommended).** The
 repository now carries an isolated Codex marketplace and an exact 10-tool
 lean MCP surface. Claude Code remains the primary integration and retains its
-automatic hooks, custom agent, full tool profile, and unchanged marketplace.
+automatic hooks, custom agent, and full tool profile. Its shared marketplace
+catalog changes only for the pinned `hypermnesia-mcp-viz` 3.0.0 publication
+and the frozen `cortex-viz` migration shim.
 Pre-install the same published package once so the plugin's first `uvx`
 handshake can reuse the local uv cache instead of spending its startup budget
 downloading the Python environment. The bundled server also declares a
@@ -270,7 +276,7 @@ Cortex needs **no configuration** to run — the SQLite backend is the default a
 
 \* The single-click bundle pins the backend to `sqlite` through the manifest. If you run the server directly (clone / Docker) without setting the variable, the underlying code default is `auto` — it tries PostgreSQL and falls back to SQLite.
 
-That's the entire surface most users touch. Both backends expose the **same 52 memory tools** (55 with the optional automatised-pipeline + prd-spec-generator integrations) and the same retrieval contract; PostgreSQL adds server-side PL/pgSQL fusion and HNSW indexing that pays off at very large scale. Every other knob uses the `CORTEX_MEMORY_` prefix — see `mcp_server/infrastructure/memory_config.py`.
+That's the entire surface most users touch. Both backends expose the **same 52 memory tools** (55 with the optional automatised-pipeline + ai-architect-mcp-spec integrations) and the same retrieval contract; PostgreSQL adds server-side PL/pgSQL fusion and HNSW indexing that pays off at very large scale. Every other knob uses the `CORTEX_MEMORY_` prefix — see `mcp_server/infrastructure/memory_config.py`.
 
 ---
 
@@ -329,7 +335,7 @@ You rarely call these by hand: the lifecycle hooks (plugin install) inject the r
 
 **v3.23.0 — single-click bundle + registry-indexer build fix.** Cortex now ships as an MCP bundle (`.mcpb`) with a `uv` runtime and a selectable storage backend — **SQLite by default, PostgreSQL optional** — so it installs in one click with zero setup. Also: a `neuro-cortex-memory` console script so `uv run neuro-cortex-memory` resolves from a checkout; registry indexers that build with `uv sync` and launch via that script now start the server and register all standalone tools **without** a PostgreSQL connection (so `tools/list` answers inside a DB-less container).
 
-**v3.21.0 — visualization extracted to cortex-viz.** The entire visualization stack — the galaxy graph, execution trace, the Knowledge / Board / Wiki / Pipeline views, and their HTTP server — moves to a standalone companion MCP, **[cortex-viz](https://github.com/cdeust/cortex-viz)**, which reads this same store read-only. Cortex is a focused memory engine again (−50k lines). **Breaking:** the `open_visualization`, `get_methodology_graph`, and `query_workflow_graph` MCP tools are removed from Cortex — install cortex-viz to get them back (its `/cortex-visualize` skill replaces the old one). 46 MCP tools remain; no memory, retrieval, or wiki behaviour changed; full suite green (3214 tests).
+**v3.21.0 — visualization extracted to cortex-viz.** The entire visualization stack — the galaxy graph, execution trace, the Knowledge / Board / Wiki / Pipeline views, and their HTTP server — moves to a standalone companion MCP, **[cortex-viz](https://github.com/cdeust/cortex-viz)**, which reads this same store read-only. Cortex is a focused memory engine again (−50k lines). **Breaking:** the `open_visualization`, `get_methodology_graph`, and `query_workflow_graph` MCP tools are removed from Cortex — install the canonical `hypermnesia-mcp-viz` Claude Code plugin to get them back (its `/cortex-visualize` skill replaces the old one). 46 MCP tools remain; no memory, retrieval, or wiki behaviour changed; full suite green (3214 tests).
 
 → **[Full changelog and release notes](https://github.com/cdeust/Cortex/releases)**
 
@@ -475,7 +481,7 @@ cortex:anchor({ content: "We're using event-sourcing. All state changes go throu
 
 Anchored memories get maximum protection — they always survive compaction, no matter what.
 
-> The compaction checkpoint, session-start injection, and the autonomous wiki cycle are **lifecycle hooks** registered by the Claude Code plugin install. The single-click `.mcpb` bundle is a Directory connector — it delivers the 52 memory tools but **no hooks** (the MCPB format carries none). For the automatic session-lifecycle memory (session-start injection, auto-capture, compaction checkpointing, the autonomous wiki cycle), install the Claude Code plugin (see [More options](#getting-started)); the plugin also auto-registers the 3 upstream-integration tools when automatised-pipeline / prd-spec-generator are present (55 total).
+> The compaction checkpoint, session-start injection, and the autonomous wiki cycle are **lifecycle hooks** registered by the Claude Code plugin install. The single-click `.mcpb` bundle is a Directory connector — it delivers the 52 memory tools but **no hooks** (the MCPB format carries none). For the automatic session-lifecycle memory (session-start injection, auto-capture, compaction checkpointing, the autonomous wiki cycle), install the Claude Code plugin (see [More options](#getting-started)); the plugin also auto-registers the 3 upstream-integration tools when automatised-pipeline / ai-architect-mcp-spec are present (55 total).
 
 ---
 
@@ -533,7 +539,7 @@ Cortex fixes what an agent **forgets**. Three sibling MCP servers fix what it **
 | | The problem it solves | Install it when | Related work |
 |---|---|---|---|
 | **[automatised-pipeline](https://github.com/cdeust/automatised-pipeline)** | Your agent answers structural questions ("who calls this?", "what breaks if I change it?") by re-reading files, burning context and missing cross-file callers. Indexes the repo into a property graph: call/import resolution, Leiden communities, hybrid BM25+TF-IDF search, impact analysis. | Refactoring, root-cause work, or any repo big enough that `grep` stops being an answer. | [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) covers far more languages (158). automatised-pipeline is narrower but **qualifies every impact answer as `exact` or `lower-bound`** instead of presenting a possibly-incomplete list as complete. |
-| **[prd-spec-generator](https://github.com/cdeust/prd-spec-generator)** | Specs pass review, then the implementation quietly contradicts them. Turns a feature description into a 9-file PRD and *verifies* it — deterministic Hard Output Rules plus multi-judge consensus calibrated against external oracles (schema / math / code). | You already write specs and want a gate that fails, not a template that hopes. | [spec-kit](https://github.com/github/spec-kit), [BMAD](https://github.com/bmad-code-org/BMAD-METHOD) and Kiro **generate** specs. This **verifies** them — it runs as a CI gate over their output rather than replacing them. |
+| **[ai-architect-mcp-spec](https://github.com/cdeust/ai-architect-mcp-spec)** | Specs pass review, then the implementation quietly contradicts them. Turns a feature description into a 9-file PRD and *verifies* it — deterministic Hard Output Rules plus multi-judge consensus calibrated against external oracles (schema / math / code). | You already write specs and want a gate that fails, not a template that hopes. | [spec-kit](https://github.com/github/spec-kit), [BMAD](https://github.com/bmad-code-org/BMAD-METHOD) and Kiro **generate** specs. This **verifies** them — it runs as a CI gate over their output rather than replacing them. |
 | **[zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents)** | Subagents that assert confidently instead of citing. 11 problem-shaped skills over 97 sourced reasoning patterns (Curie to Toulmin), plus a pre-commit gate that blocks unsourced constants. | You want "I don't know" to be an available answer, and every constant in your code to trace to a paper or a benchmark. | Collections like [wshobson/agents](https://github.com/wshobson/agents) organise agents **by role**. These are organised **by problem shape**, and each carries its epistemic method and sources. |
 | **[cortex-viz](https://github.com/cdeust/cortex-viz)** | Memory you can't inspect is memory you can't trust. Read-only galaxy graph, execution trace, and wiki browser over this same store. | You want to see what Cortex actually kept, and why. | — |
 
@@ -613,7 +619,7 @@ outside any employment relationship and is not affiliated with, endorsed by,
 or owned by any past or present employer. It is part of the ai-architect
 ecosystem ([zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents),
 [automatised-pipeline](https://github.com/cdeust/automatised-pipeline),
-[prd-spec-generator](https://github.com/cdeust/prd-spec-generator)).
+[ai-architect-mcp-spec](https://github.com/cdeust/ai-architect-mcp-spec)).
 
 The neuroscience and information-retrieval algorithms encoded in this
 software are derived from published academic work cited in

@@ -49,10 +49,13 @@ MARKETPLACE = (
     Path(__file__).resolve().parent.parent / ".claude-plugin" / "marketplace.json"
 )
 API_TIMEOUT_S = 15  # source: GitHub API p99 well below; matches prior gate rev
-# source: audited 2026-07-25 (Cortex PR #182 review clause 5) — the `cortex`
-# deprecation shim announces the hypermnesia-mcp rename and is frozen at the
-# rename release by design; advancing it would defeat its purpose.
-FROZEN_PINS = {"cortex": "deprecation shim, frozen at the 4.15.0 rename release"}
+# source: audited 2026-07-25 (Cortex PR #182 review clause 5) and 2026-08-04
+# (Cortex PR #351 Opus review) — each legacy identity is a notice-only shim
+# frozen at its rename release; advancing one would hide the migration boundary.
+FROZEN_PINS = {
+    "cortex": "deprecation shim, frozen at the 4.15.0 rename release",
+    "cortex-viz": "deprecation shim, frozen at the 2.8.0 pre-rename release",
+}
 
 
 def parse_semver(tag: str) -> tuple[int, ...] | None:
