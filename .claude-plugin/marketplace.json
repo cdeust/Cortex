@@ -64,7 +64,7 @@
         "repo": "cdeust/cortex-viz"
       },
       "description": "Standalone visualization MCP for Cortex — a live neural-graph galaxy of every project, file, symbol, memory, discussion and wiki page, plus a per-session execution trace, a consolidation kanban, and a curated knowledge/wiki browser. Read-only bridge over Cortex's shared PostgreSQL store and the ~/.claude artifacts; it renders, it never remembers. Restores the open_visualization / get_methodology_graph / query_workflow_graph tools removed from Cortex 3.21.0; launch with /cortex-visualize.",
-      "version": "2.7.1",
+      "version": "2.8.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
