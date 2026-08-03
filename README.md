@@ -1,7 +1,7 @@
 <!-- mcp-name: io.github.cdeust/hypermnesia-mcp -->
 
 <p align="center">
-  <img src="assets/banner.svg" alt="Cortex — persistent memory for Claude Code" width="820">
+  <img src="assets/banner.svg" alt="Cortex — cross-platform persistent memory for AI coding agents" width="820">
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <strong>Persistent memory for Claude Code built on computational neuroscience — not just retrieval.</strong> 36 cited brain mechanisms consolidate what matters, keep it current as your project evolves, and reconstruct the right context at the right time — a living memory, not a flat RAG. Says "I don't know" when unsure, flags its own contradictions. Local-first, single-click MCP install.
+  <strong>Cross-platform persistent memory for Codex, Gemini CLI, Claude Code, and other local MCP hosts — built on computational neuroscience, not just retrieval.</strong> 36 cited brain mechanisms consolidate what matters, keep it current as your project evolves, and reconstruct the right context at the right time. The MCP server is host-agnostic; Claude Code adds optional automatic lifecycle hooks.
 </p>
 
 <p align="center">
@@ -36,9 +36,9 @@
 
 ---
 
-Claude forgets you every time you close the tab. Every architecture decision you explained. Every debugging session where you traced a bug through four layers of abstraction. Every "remember, we decided to use event sourcing, not CRUD" correction. Gone. Next session, you're a stranger to your own tools.
+Your coding agent forgets you every time you close the session. Every architecture decision you explained. Every debugging session where you traced a bug through four layers of abstraction. Every "remember, we decided to use event sourcing, not CRUD" correction. Gone. Next session, your agent is a stranger to its own tools.
 
-Cortex is a persistent memory engine for Claude built on computational neuroscience. It remembers what you worked on, how you think, what you decided and why — not as a text dump shoved into context, but as a living memory system that consolidates, forgets intelligently, and reconstructs the right context at the right time.
+Cortex is a cross-platform persistent memory engine for AI coding agents, built on computational neuroscience. Codex, Gemini CLI, Claude Code, and any local stdio MCP host can use the same remember/recall, knowledge-graph, consolidation, and wiki tools. Claude Code's plugin adds automatic capture and injection hooks; other hosts use the same memory through explicit tool calls.
 
 It runs **entirely on your machine** — a local SQLite database by default (zero setup, no services to install), or PostgreSQL + pgvector when you want it. A 22 MB embedding model, no LLM in the retrieval loop, no data leaving localhost.
 

@@ -1,7 +1,7 @@
 {
   "name": "hypermnesia-mcp",
   "version": "4.17.2",
-  "description": "Persistent memory and cognitive profiling for Claude Code",
+  "description": "Cross-platform persistent memory and cognitive profiling for AI coding agents",
   "repository": {
     "type": "git",
     "url": "https://github.com/cdeust/Cortex"

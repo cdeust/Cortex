@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [
     { name = "Clement Deust", email = "admin@ai-architect.tools" },
 ]
-keywords = ["mcp", "claude-code", "memory", "cognitive-profiling"]
+keywords = ["mcp", "codex", "gemini-cli", "claude-code", "memory", "cognitive-profiling"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

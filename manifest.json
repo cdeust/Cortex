@@ -14,7 +14,7 @@
       "python": ">=3.10"
     }
   },
-  "description": "Persistent memory and cognitive profiling for Claude \u2014 remembers across sessions automatically. Scientific retrieval backed by 72 published references.",
+  "description": "Cross-platform persistent memory and cognitive profiling for AI agents. Scientific retrieval backed by 97 published references; optional automatic lifecycle hooks on Claude Code.",
   "display_name": "Cortex \u2014 Persistent Memory",
   "documentation": "https://github.com/cdeust/Cortex#readme",
   "homepage": "https://github.com/cdeust/Cortex",
@@ -22,20 +22,22 @@
   "keywords": [
     "persistent memory",
     "long-term memory",
-    "memory for claude",
+    "memory for ai agents",
     "agent recall",
     "agent memory",
     "hypermnesia",
     "memory",
     "persistent",
     "mcp",
-    "claude",
+    "codex",
+    "gemini-cli",
+    "claude-code",
     "neuroscience",
     "cognitive-profiling",
     "agents"
   ],
   "license": "MIT",
-  "long_description": "Cortex gives Claude a durable, scientifically-grounded memory. It stores decisions, lessons, and context across sessions and retrieves them with a hybrid WRRF fusion (vector + full-text + trigram + heat + recency) reranked by a cross-encoder. Its 36 neuroscience-grounded mechanisms are drawn from a 97-reference bibliography (spreading activation, synaptic tagging, neuromodulation, LTP/LTD, predictive-coding write gates). This connector exposes 52 memory tools standalone (55 with upstream integrations available) and runs fully local with zero external services using the built-in SQLite backend; advanced users can point it at PostgreSQL + pgvector. For the automatic session-lifecycle memory (injection at session start, auto-capture, compaction checkpointing), install the companion Claude Code plugin \u2014 its hooks drive that automation, which the MCP bundle format does not carry.",
+  "long_description": "Cortex gives Codex, Gemini CLI, Claude Code, and other local MCP hosts a durable, scientifically-grounded memory. It stores decisions, lessons, and context across sessions and retrieves them with a hybrid WRRF fusion (vector + full-text + trigram + heat + recency) reranked by a cross-encoder. Its 36 neuroscience-grounded mechanisms are drawn from a 97-reference bibliography (spreading activation, synaptic tagging, neuromodulation, LTP/LTD, predictive-coding write gates). This connector exposes 52 memory tools standalone (55 with upstream integrations available) and runs fully local with zero external services using the built-in SQLite backend; advanced users can point it at PostgreSQL + pgvector. For automatic session-lifecycle memory (injection at session start, auto-capture, compaction checkpointing), install the companion Claude Code plugin; other hosts use the same memory through explicit MCP tool calls.",
   "manifest_version": "0.4",
   "name": "hypermnesia-mcp",
   "privacy_policies": [
