@@ -2,7 +2,7 @@ name: OpenSSF Scorecard
 
 # Issue #178 criterion 6. Cortex adopts the ecosystem's single Scorecard
 # definition as a CALL SITE, not a copy: the reusable workflow lives in
-# cdeust/automatised-pipeline (AP #66/#77) so the pinned action SHAs and the
+# cdeust/ai-architect-mcp-codebase (AP #66/#77) so the pinned action SHAs and the
 # report-only policy are maintained in one place. Scorecard grades repo-level
 # posture (branch protection, signing, review counts) and is language-
 # agnostic, which is exactly the part of the supply-chain story that
@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
 
 # REVERSAL NOTE (post-merge fix, issue #178): the call-site pattern
-# (uses: cdeust/automatised-pipeline/.../scorecard.yml@main) produced
+# (uses: cdeust/ai-architect-mcp-codebase/.../scorecard.yml@main) produced
 # startup_failure on main — zero jobs spawned — and scorecard-action's
 # publish_results requires the OIDC subject to be THIS repo's own
 # default-branch workflow, so a cross-repo reusable call cannot publish

@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 schema = {
     "annotations": IDEMPOTENT_WRITE,
     "description": (
-        "Ingest an automatised-pipeline (AP) findings run into Cortex's "
+        "Ingest an ai-architect-mcp-codebase (AP) findings run into Cortex's "
         "store. Reads runs/<run_id>/ artifacts directly off disk (no "
         "network call to AP — AP never pushes, ADR-0052 D1). Verified "
         "findings (stage-2 verified:true) get a wiki page under "

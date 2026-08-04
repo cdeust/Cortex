@@ -38,7 +38,7 @@ schema = {
     "annotations": READ_ONLY,
     "description": (
         "Verify that code symbols cited by wiki pages still resolve in "
-        "the AST (via the automatised-pipeline MCP server, ADR-0046 "
+        "the AST (via the ai-architect-mcp-codebase MCP server, ADR-0046 "
         "Phase 2). Takes an optional path (verify one page) or no args "
         "(verify every authored page) and returns per-page verdicts: "
         "{page, symbol_refs, missing_refs, is_symbol_stale, rationale}. "
@@ -125,7 +125,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "reason": "ap_disabled",
             "detail": (
                 "AP is disabled. Set CORTEX_MEMORY_AP_ENABLED=1 in your "
-                "MCP config (default) and install automatised-pipeline "
+                "MCP config (default) and install ai-architect-mcp-codebase "
                 "to run symbol verification."
             ),
         }

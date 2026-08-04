@@ -350,13 +350,13 @@ echo ""
 
 # ── Pipeline auto-install (silent, best-effort) ────────────────────────
 # Cortex's ingest_codebase tool depends on the upstream
-# automatised-pipeline MCP binary. Install it now so users don't see
+# ai-architect-mcp-codebase MCP binary. Install it now so users don't see
 # their first ingest_codebase call fail. Bootstraps the Rust toolchain
 # via rustup if cargo is missing. Skip via:
 #   CORTEX_AUTO_INSTALL_PIPELINE=0   (skip everything)
 #   CORTEX_AUTO_INSTALL_RUST=0       (skip rust install only)
 
-step "Installing automatised-pipeline (silent)"
+step "Installing ai-architect-mcp-codebase (silent)"
 
 # Detect first-install state so we can show a realistic ETA.
 PIPELINE_FRESH=0
@@ -372,10 +372,10 @@ fi
 if [ "$PIPELINE_FRESH" = "1" ]; then
     if [ "$RUST_FRESH" = "1" ]; then
         warn "First install: bootstrapping Rust toolchain via rustup (~2 min)"
-        warn "Then building automatised-pipeline (~3-6 min). Total: ~5-8 min, silent."
+        warn "Then building ai-architect-mcp-codebase (~3-6 min). Total: ~5-8 min, silent."
         warn "Set CORTEX_AUTO_INSTALL_RUST=0 or CORTEX_AUTO_INSTALL_PIPELINE=0 to opt out."
     else
-        warn "First install: building automatised-pipeline (~3-6 min, silent)."
+        warn "First install: building ai-architect-mcp-codebase (~3-6 min, silent)."
         warn "Set CORTEX_AUTO_INSTALL_PIPELINE=0 to skip."
     fi
 fi
@@ -428,7 +428,7 @@ cfg = ensure_pipeline_connection()
 cfg_action = cfg.get('action', 'unknown')
 if cfg_action == 'no_pipeline_found':
     print('[!!] mcp-connections.json not written — ingest_codebase will fail until you')
-    print('     install the pipeline manually (see https://github.com/cdeust/automatised-pipeline)')
+    print('     install the pipeline manually (see https://github.com/cdeust/ai-architect-mcp-codebase)')
     print('     or rerun setup.sh after installing rust + git')
 elif cfg_action == 'invalid_binary_purged':
     print(f'[ok] removed stale codebase entry (binary missing) and rewrote config')

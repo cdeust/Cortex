@@ -1,4 +1,4 @@
-"""Silent installer for the upstream ai-automatised-pipeline binary.
+"""Silent installer for the upstream ai-architect-mcp-codebase binary.
 
 Bootstraps a fresh user machine. Strategy: prebuilt binary fast-path
 (GitHub Releases, hash-verified, ~10 s) → falls back to source build
@@ -41,11 +41,11 @@ from mcp_server.infrastructure.pipeline_installer_common import (
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_GIT_URL = "https://github.com/cdeust/automatised-pipeline.git"
+_DEFAULT_GIT_URL = "https://github.com/cdeust/ai-architect-mcp-codebase.git"
 _BUILT_BINARY_REL = "target/release/automatised-pipeline"
 _DISABLE_ENV = "CORTEX_AUTO_INSTALL_PIPELINE"
 
-# Minimum acceptable size for a successfully-built automatised-pipeline
+# Minimum acceptable size for a successfully-built ai-architect-mcp-codebase
 # binary. The release build is multi-MB; anything below this threshold
 # is a corrupted or 0-byte file (disk full, killed compiler, etc.).
 _MIN_BINARY_BYTES = 1_024 * 1_024
@@ -154,7 +154,7 @@ def _install_locked(force_rebuild: bool, git_url: Optional[str]) -> dict:
     if force_rebuild or not _binary_is_usable(binary):
         env = {**os.environ, "PATH": f"{_CARGO_HOME_BIN}:{os.environ.get('PATH', '')}"}
         rc, tail = _run_quiet(
-            [cargo, "build", "--release", "--bin", "automatised-pipeline"],
+            [cargo, "build", "--release", "--bin", "ai-architect-mcp-codebase"],
             cwd=str(src),
             env=env,
             timeout=1800,

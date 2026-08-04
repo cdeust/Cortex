@@ -1,5 +1,5 @@
 """Handler: ingest_codebase — pull codebase analysis from the upstream
-ai-automatised-pipeline MCP server into Cortex's store.
+ai-architect-mcp-codebase MCP server into Cortex's store.
 
 Flow
 ----
@@ -400,7 +400,7 @@ async def _pull_processes(
     """Pull ALL processes via upstream get_processes; respect optional cap.
 
     Upstream pages its process list by serialized size (``truncated`` +
-    ``next_offset``, automatised-pipeline ``do_get_processes``); a single
+    ``next_offset``, ai-architect-mcp-codebase ``do_get_processes``); a single
     call returns only the first page. Follow the cursor until exhausted —
     the previous single-shot read silently dropped every process past the
     first byte-budget page (2026-06-11 RCA).

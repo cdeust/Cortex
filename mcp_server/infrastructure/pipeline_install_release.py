@@ -4,7 +4,7 @@ When upstream publishes a GitHub Release with a per-platform tarball,
 fetching + extracting it is ~10 s vs ~6 min for git+cargo. This module
 implements the fast path with strict integrity gates:
 
-  1. Query GitHub Releases API for ``cdeust/automatised-pipeline``.
+  1. Query GitHub Releases API for ``cdeust/ai-architect-mcp-codebase``.
   2. Match an asset for the host platform (os/arch).
   3. Download tarball + companion ``.sha256`` file.
   4. Verify SHA256 before extracting.
@@ -16,9 +16,11 @@ path. Failure here is NEVER fatal — it's a fast path, not a substitute.
 
 Asset naming convention (upstream contract)
 -------------------------------------------
-- ``automatised-pipeline-{os}-{arch}.tar.gz`` containing the binary at
-  the archive root as ``automatised-pipeline``.
-- ``automatised-pipeline-{os}-{arch}.tar.gz.sha256`` carrying the hex digest.
+- ``<name>-{os}-{arch}.tar.gz`` containing the binary at the archive root.
+  Assets are matched by the ``-{os}-{arch}`` suffix, so the producer may
+  rename or version-prefix them; the member name is what must be recognised,
+  and it is read from upstream_identity.BINARY_NAMES.
+- ``<name>-{os}-{arch}.tar.gz.sha256`` carrying the hex digest.
 - ``{os}`` ∈ {macos, linux}; ``{arch}`` ∈ {x86_64, aarch64}.
 """
 
@@ -28,6 +30,12 @@ import hashlib
 import json
 import os
 import platform
+
+from mcp_server.infrastructure.upstream_identity import (
+    BINARY_NAMES,
+    CANONICAL_BINARY,
+    RELEASES_LATEST_URL,
+)
 import shutil
 import tarfile
 import tempfile
@@ -36,9 +44,7 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
-_RELEASES_URL = (
-    "https://api.github.com/repos/cdeust/automatised-pipeline/releases/latest"
-)
+_RELEASES_URL = RELEASES_LATEST_URL
 _REQUEST_TIMEOUT = 30  # seconds
 _DISABLE_ENV = "CORTEX_DISABLE_PREBUILT"
 # source: FIPS 180-4 — a SHA-256 digest is 32 bytes = 64 hex characters
@@ -100,7 +106,7 @@ def _find_assets(release: dict, tag: str) -> Optional[tuple[str, str]]:
 def _verify_and_extract(
     tar_path: str, expected_sha: str, dest_dir: str
 ) -> Optional[str]:
-    """Verify SHA256, extract ``automatised-pipeline`` to dest_dir, return path.
+    """Verify SHA256, extract the upstream binary to dest_dir, return path.
 
     Refuses tar entries that escape dest_dir (path-traversal guard).
     """
@@ -118,7 +124,7 @@ def _verify_and_extract(
             target = (dest / member.name).resolve()
             if not str(target).startswith(str(dest) + os.sep) and target != dest:
                 return None
-            if member.isfile() and Path(member.name).name == "automatised-pipeline":
+            if member.isfile() and Path(member.name).name in BINARY_NAMES:
                 # filter="data" enforces safe extraction (no symlinks
                 # outside dest, no special files, no setuid bits) —
                 # required default in Python 3.14, opt-in earlier.
@@ -184,7 +190,7 @@ def try_install_prebuilt(symlink_dest: Path) -> dict:
         # Move the verified binary into the methodology bin dir under a
         # versioned name so subsequent fast-path installs don't clash.
         symlink_dest.parent.mkdir(parents=True, exist_ok=True)
-        final = symlink_dest.parent / "automatised-pipeline.prebuilt"
+        final = symlink_dest.parent / f"{CANONICAL_BINARY}.prebuilt"
         shutil.move(binary, str(final))
         os.chmod(final, 0o755)
 

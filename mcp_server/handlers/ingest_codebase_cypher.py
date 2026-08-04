@@ -4,7 +4,7 @@ Pure data extraction from the upstream Kuzu graph via the
 ``query_graph`` MCP tool. No I/O against Cortex's own stores —
 that's the writers' job.
 
-Schema (probed 2026-04-25 against ai-automatised-pipeline graph):
+Schema (probed 2026-04-25 against ai-architect-mcp-codebase graph):
   - Function/Method/Struct nodes: id, name, qualified_name,
     start_line, end_line, visibility, is_async (Method also has
     receiver_type).
@@ -123,7 +123,7 @@ def file_path_from_qn(qn: str) -> list[str]:
 async def _run_query(graph_path: str, cypher: str) -> tuple[dict[str, Any], str | None]:
     """Run a single cypher query, draining upstream byte-budget pages.
 
-    Upstream ``query_graph`` (automatised-pipeline ≥0.4.0,
+    Upstream ``query_graph`` (ai-architect-mcp-codebase ≥0.4.0,
     ``do_query_graph`` in src/main.rs) bounds every response two ways:
       1. ``LIMIT 500`` is injected into any Cypher lacking a LIMIT clause
          (``limit_injected: true``) — pagination CANNOT recover rows past
@@ -374,7 +374,7 @@ async def iter_containment_edges(
 
 
 # File-fetch page size. A LIMIT-less Cypher gets `LIMIT 500` injected
-# upstream (QUERY_GRAPH_ROW_LIMIT, automatised-pipeline src/main.rs), which
+# upstream (QUERY_GRAPH_ROW_LIMIT, ai-architect-mcp-codebase src/main.rs), which
 # silently capped fetch_files at 500/1233 files (2026-06-11 RCA). Paging with
 # an explicit SKIP/LIMIT below that injection threshold keeps each JSON-RPC
 # payload bounded AND visits every File node.
@@ -440,7 +440,7 @@ async def fetch_process_symbols(
     """Fetch qualified names of symbols participating in one process.
 
     Membership edges are ``(:Function|Method)-[:ParticipatesIn_<Label>_Process]->
-    (:Process)`` (automatised-pipeline src/clustering/process.rs,
+    (:Process)`` (ai-architect-mcp-codebase src/clustering/process.rs,
     ``persist_participates_in``); the process is keyed by its unique
     ``entry_point_id`` (one traced process per entry point). Returns
     (qualified_names, diagnostics).

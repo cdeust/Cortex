@@ -97,7 +97,7 @@ telemetry.set_exporter(build_otel_exporter())
 # FULL. The default stays FULL because shrinking the advertised surface is a
 # breaking change (a client that called a now-hidden tool breaks) — this
 # diverges from #177 criterion 2 and is recorded in CHANGELOG.md, mirroring
-# automatised-pipeline's ToolProfile reasoning.
+# ai-architect-mcp-codebase's ToolProfile reasoning.
 ACTIVE_PROFILE = tool_profiles.resolve()
 
 # ── Server Instance ────────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ def register_all(mcp: FastMCP, *, codebase: bool, prd: bool) -> None:
     see CLAUDE.md handlers/ section for the per-tier breakdown). The 3
     upstream-integration tools
     register only when their upstream MCP server is available — ``codebase``
-    gates ingest_codebase + change_impact (automatised-pipeline), ``prd`` gates
+    gates ingest_codebase + change_impact (ai-architect-mcp-codebase), ``prd`` gates
     ingest_prd (prd-spec-generator). source: MCP Directory decision 2026-06-19.
     """
     tool_registry_core.register(mcp)

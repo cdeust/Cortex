@@ -2,7 +2,7 @@
 """Claude Code PostToolUse hook — pipeline-driven heat bump on file edits.
 
 When an agent edits or writes a file, this hook asks the upstream
-ai-automatised-pipeline's ``detect_changes`` tool which symbols are
+ai-architect-mcp-codebase's ``detect_changes`` tool which symbols are
 impacted by the edit, then boosts heat on memories tagged with those
 symbol names. This is a targeted version of ``preemptive_context`` —
 instead of substring-matching file path in ALL memories, we query the

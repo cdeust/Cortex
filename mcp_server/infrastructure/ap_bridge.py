@@ -1,4 +1,4 @@
-"""Bridge to the ``automatised-pipeline`` sibling MCP server (ADR-0046).
+"""Bridge to the ``ai-architect-mcp-codebase`` sibling MCP server (ADR-0046).
 
 AP is a Rust MCP server that indexes codebases into a property graph
 (tree-sitter → LadybugDB → Louvain → BM25 + TF-IDF + RRF) and exposes
@@ -22,6 +22,11 @@ import asyncio
 import logging
 import os
 import sys
+
+from mcp_server.infrastructure.upstream_identity import (
+    ALLOWED_UPSTREAM_COMMANDS,
+    PLUGIN_KEY_BINARIES,
+)
 from typing import Any
 
 from mcp_server.errors import McpConnectionError
@@ -142,7 +147,7 @@ def _resolve_command() -> dict | None:
          set up by Cortex's silent installer (pipeline_installer.py).
          Basename ``mcp-server`` matches the MCPClient allowlist.
       3. Installed-plugin resolution — read ``installed_plugins.json`` for
-         the ACTIVE ``automatised-pipeline`` install and invoke its compiled
+         the ACTIVE ``ai-architect-mcp-codebase`` install and invoke its compiled
          Rust binary at ``<installPath>/target/release/automatised-pipeline``.
          This is the SAME source of truth the plugin's own ``.mcp.json``
          launcher uses, so it picks the active version (e.g. 0.2.0 over a
@@ -182,15 +187,16 @@ def _resolve_command() -> dict | None:
     try:
         data = json.loads(installed.read_text(encoding="utf-8"))
         plugins = data.get("plugins", {}) if isinstance(data, dict) else {}
-        for key, entries in plugins.items():
-            if not key.startswith("automatised-pipeline@"):
-                continue
+        # Canonical key first: a host may still carry a pre-v0.9.0 install,
+        # but a current one must never lose to it.
+        for plugin_key, binary_name in PLUGIN_KEY_BINARIES:
+            entries = plugins.get(plugin_key)
             if not isinstance(entries, list) or not entries:
                 continue
             install_path = entries[0].get("installPath")
             if not install_path:
                 continue
-            binary = Path(install_path) / "target" / "release" / "automatised-pipeline"
+            binary = Path(install_path) / "target" / "release" / binary_name
             if binary.is_file() and os.access(binary, os.X_OK):
                 return {"command": str(binary), "args": []}
     except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError):
@@ -257,13 +263,13 @@ class APBridge:
                 # See mcp_client.py: callTimeoutMs=0 -> no asyncio.wait_for.
                 cfg = {**cfg, "callTimeoutMs": 0}
                 self._client = MCPClient(cfg)
-                # AP's binary is not in the default allowlist.
-                # ``automatised-pipeline`` is the bin name shipped by
-                # cdeust/automatised-pipeline ≥ v0.0.7; ``node`` is for
-                # the plugin-cache resolution path.
+                # The upstream binary is not in the default allowlist.
+                # ``node`` is for the plugin-cache resolution path; the
+                # upstream names come from upstream_identity so this set
+                # cannot drift from the resolver above.
                 self._client._extra_allowed_commands = {
                     "node",
-                    "automatised-pipeline",
+                    *ALLOWED_UPSTREAM_COMMANDS,
                 }
                 await self._client.connect()
                 self._connected = True

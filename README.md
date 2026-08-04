@@ -24,7 +24,7 @@
 
 <p align="center">
   <strong>Part of a four-piece stack</strong> — each runs standalone; together they cover what an agent forgets, can't see, and can't verify. <a href="#the-rest-of-the-stack">Full comparison ↓</a><br>
-  <a href="https://github.com/cdeust/automatised-pipeline">automatised-pipeline</a> — the repo as a queryable code graph (callers, blast radius, execution paths), so agents stop re-reading files; Cortex ingests it via <code>ingest_codebase</code> / <code>change_impact</code><br>
+  <a href="https://github.com/cdeust/ai-architect-mcp-codebase">ai-architect-mcp-codebase</a> — the repo as a queryable code graph (callers, blast radius, execution paths), so agents stop re-reading files; Cortex ingests it via <code>ingest_codebase</code> / <code>change_impact</code><br>
   <a href="https://github.com/cdeust/ai-architect-mcp-spec">ai-architect-mcp-spec</a> — <em>verifies</em> a spec rather than only generating one; standalone, or a CI gate over spec-kit / Kiro / BMAD output<br>
   <a href="https://github.com/cdeust/zetetic-team-subagents">zetetic-team-subagents</a> — 97 sourced reasoning patterns as specialist agents, each with its own scoped Cortex memory<br>
   <a href="https://github.com/cdeust/cortex-viz">hypermnesia-mcp-viz</a> — read-only visualization MCP (galaxy graph, execution trace, wiki browser) over this same store · <a href="https://github.com/cdeust/cortex-know-when-to-stop-training-model">cortex-beam-abstain</a> — retrieval abstention model for RAG
@@ -276,7 +276,7 @@ Cortex needs **no configuration** to run — the SQLite backend is the default a
 
 \* The single-click bundle pins the backend to `sqlite` through the manifest. If you run the server directly (clone / Docker) without setting the variable, the underlying code default is `auto` — it tries PostgreSQL and falls back to SQLite.
 
-That's the entire surface most users touch. Both backends expose the **same 52 memory tools** (55 with the optional automatised-pipeline + ai-architect-mcp-spec integrations) and the same retrieval contract; PostgreSQL adds server-side PL/pgSQL fusion and HNSW indexing that pays off at very large scale. Every other knob uses the `CORTEX_MEMORY_` prefix — see `mcp_server/infrastructure/memory_config.py`.
+That's the entire surface most users touch. Both backends expose the **same 52 memory tools** (55 with the optional ai-architect-mcp-codebase + ai-architect-mcp-spec integrations) and the same retrieval contract; PostgreSQL adds server-side PL/pgSQL fusion and HNSW indexing that pays off at very large scale. Every other knob uses the `CORTEX_MEMORY_` prefix — see `mcp_server/infrastructure/memory_config.py`.
 
 ---
 
@@ -481,7 +481,7 @@ cortex:anchor({ content: "We're using event-sourcing. All state changes go throu
 
 Anchored memories get maximum protection — they always survive compaction, no matter what.
 
-> The compaction checkpoint, session-start injection, and the autonomous wiki cycle are **lifecycle hooks** registered by the Claude Code plugin install. The single-click `.mcpb` bundle is a Directory connector — it delivers the 52 memory tools but **no hooks** (the MCPB format carries none). For the automatic session-lifecycle memory (session-start injection, auto-capture, compaction checkpointing, the autonomous wiki cycle), install the Claude Code plugin (see [More options](#getting-started)); the plugin also auto-registers the 3 upstream-integration tools when automatised-pipeline / ai-architect-mcp-spec are present (55 total).
+> The compaction checkpoint, session-start injection, and the autonomous wiki cycle are **lifecycle hooks** registered by the Claude Code plugin install. The single-click `.mcpb` bundle is a Directory connector — it delivers the 52 memory tools but **no hooks** (the MCPB format carries none). For the automatic session-lifecycle memory (session-start injection, auto-capture, compaction checkpointing, the autonomous wiki cycle), install the Claude Code plugin (see [More options](#getting-started)); the plugin also auto-registers the 3 upstream-integration tools when ai-architect-mcp-codebase / ai-architect-mcp-spec are present (55 total).
 
 ---
 
@@ -538,7 +538,7 @@ Cortex fixes what an agent **forgets**. Three sibling MCP servers fix what it **
 
 | | The problem it solves | Install it when | Related work |
 |---|---|---|---|
-| **[automatised-pipeline](https://github.com/cdeust/automatised-pipeline)** | Your agent answers structural questions ("who calls this?", "what breaks if I change it?") by re-reading files, burning context and missing cross-file callers. Indexes the repo into a property graph: call/import resolution, Leiden communities, hybrid BM25+TF-IDF search, impact analysis. | Refactoring, root-cause work, or any repo big enough that `grep` stops being an answer. | [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) covers far more languages (158). automatised-pipeline is narrower but **qualifies every impact answer as `exact` or `lower-bound`** instead of presenting a possibly-incomplete list as complete. |
+| **[ai-architect-mcp-codebase](https://github.com/cdeust/ai-architect-mcp-codebase)** | Your agent answers structural questions ("who calls this?", "what breaks if I change it?") by re-reading files, burning context and missing cross-file callers. Indexes the repo into a property graph: call/import resolution, Leiden communities, hybrid BM25+TF-IDF search, impact analysis. | Refactoring, root-cause work, or any repo big enough that `grep` stops being an answer. | [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) covers far more languages (158). ai-architect-mcp-codebase is narrower but **qualifies every impact answer as `exact` or `lower-bound`** instead of presenting a possibly-incomplete list as complete. |
 | **[ai-architect-mcp-spec](https://github.com/cdeust/ai-architect-mcp-spec)** | Specs pass review, then the implementation quietly contradicts them. Turns a feature description into a 9-file PRD and *verifies* it — deterministic Hard Output Rules plus multi-judge consensus calibrated against external oracles (schema / math / code). | You already write specs and want a gate that fails, not a template that hopes. | [spec-kit](https://github.com/github/spec-kit), [BMAD](https://github.com/bmad-code-org/BMAD-METHOD) and Kiro **generate** specs. This **verifies** them — it runs as a CI gate over their output rather than replacing them. |
 | **[zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents)** | Subagents that assert confidently instead of citing. 11 problem-shaped skills over 97 sourced reasoning patterns (Curie to Toulmin), plus a pre-commit gate that blocks unsourced constants. | You want "I don't know" to be an available answer, and every constant in your code to trace to a paper or a benchmark. | Collections like [wshobson/agents](https://github.com/wshobson/agents) organise agents **by role**. These are organised **by problem shape**, and each carries its epistemic method and sources. |
 | **[hypermnesia-mcp-viz](https://github.com/cdeust/cortex-viz)** | Memory you can't inspect is memory you can't trust. Read-only galaxy graph, execution trace, and wiki browser over this same store. | You want to see what Cortex actually kept, and why. | — |
@@ -618,7 +618,7 @@ This software is the independent work of Clément Deust. It was developed
 outside any employment relationship and is not affiliated with, endorsed by,
 or owned by any past or present employer. It is part of the ai-architect
 ecosystem ([zetetic-team-subagents](https://github.com/cdeust/zetetic-team-subagents),
-[automatised-pipeline](https://github.com/cdeust/automatised-pipeline),
+[ai-architect-mcp-codebase](https://github.com/cdeust/ai-architect-mcp-codebase),
 [ai-architect-mcp-spec](https://github.com/cdeust/ai-architect-mcp-spec)).
 
 The neuroscience and information-retrieval algorithms encoded in this

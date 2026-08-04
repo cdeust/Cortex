@@ -10,6 +10,8 @@ import asyncio
 import json
 import logging
 import sys
+
+from mcp_server.infrastructure.upstream_identity import ALLOWED_UPSTREAM_COMMANDS
 from typing import Any
 
 from mcp_server.errors import McpConnectionError
@@ -109,10 +111,11 @@ class MCPClient:
             "python3",
             "cortex",
             "mcp-server",
-            # automatised-pipeline ships a compiled Rust MCP binary; the
-            # bridge resolves it from installed_plugins.json and invokes it
-            # directly (not via node). source: ap_bridge._resolve_command.
-            "automatised-pipeline",
+            # The codebase-intelligence server ships a compiled Rust MCP
+            # binary; the bridge resolves it from installed_plugins.json and
+            # invokes it directly (not via node).
+            # source: ap_bridge._resolve_command, upstream_identity.
+            *ALLOWED_UPSTREAM_COMMANDS,
         }
     )
 

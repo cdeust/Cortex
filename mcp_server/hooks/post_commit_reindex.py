@@ -15,7 +15,7 @@ Freshness model (two-speed, honest about the limits)
   * **Trigger:** only on commits that change source the analyzer parses —
     a docs/config-only commit leaves the graph untouched (cheap no-op).
   * **Action:** ``analyze_codebase`` re-parses the *whole* tree. The
-    upstream analyzer (ai-automatised-pipeline ``index_codebase``,
+    upstream analyzer (ai-architect-mcp-codebase ``index_codebase``,
     src/indexer/mod.rs) has **no per-file incremental skip** — it walks
     every source file each run. So "incremental" here means *trigger only
     when relevant*, not *re-parse only the changed file*. For
@@ -57,7 +57,7 @@ def _cooldown_seconds() -> int:
         return 120
 
 
-# source: ai-automatised-pipeline src/parser/mod.rs Language::from_extension
+# source: ai-architect-mcp-codebase src/parser/mod.rs Language::from_extension
 # (AST-parsed languages) + the indexer's .js-family light-link post-pass
 # (File nodes + import edges, no AST symbols).
 _INDEXABLE_EXT = {

@@ -1,7 +1,7 @@
 """Tool registration: ingestion tools.
 
-ingest_codebase — pulls from ai-automatised-pipeline MCP
-change_impact   — pulls from ai-automatised-pipeline MCP (ADR-0046)
+ingest_codebase — pulls from ai-architect-mcp-codebase MCP
+change_impact   — pulls from ai-architect-mcp-codebase MCP (ADR-0046)
 ingest_prd      — pulls from prd-spec-generator MCP
 ingest_findings — reads AP findings artifacts directly off disk (INC5.1)
 ingest_document — reads .docx / Confluence export files off disk (issue #192)
@@ -56,7 +56,7 @@ def register(mcp: FastMCP, *, codebase: bool = True, prd: bool = True) -> None:
     """Register the upstream-integration tools, gated by upstream availability.
 
     ``codebase`` registers ingest_codebase + change_impact (both consume the
-    automatised-pipeline ``codebase`` MCP). ``prd`` registers ingest_prd (it
+    ai-architect-mcp-codebase ``codebase`` MCP). ``prd`` registers ingest_prd (it
     consumes the prd-spec-generator ``prd-gen`` MCP). The composition root
     (__main__) passes the real availability; both default True so any other
     caller keeps the full set. When a flag is False the corresponding tools are

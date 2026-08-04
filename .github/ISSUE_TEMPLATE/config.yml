@@ -5,4 +5,4 @@ contact_links:
     about: Do NOT use public issues for security reports. Open a private advisory.
   - name: Companion projects
     url: https://github.com/cdeust
-    about: Cortex (memory) · zetetic-team-subagents (agents) · automatised-pipeline (codebase intel)
+    about: Cortex (memory) · zetetic-team-subagents (agents) · ai-architect-mcp-codebase (codebase intel)

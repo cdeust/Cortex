@@ -15,7 +15,7 @@ happening.
 ### Find the process IDs
 
 ```bash
-ps aux | grep -iE "cortex|launcher\.py|automatised-pipeline|mcp_server" | grep -v grep
+ps aux | grep -iE "cortex|launcher\.py|ai-architect-mcp-codebase|mcp_server" | grep -v grep
 ```
 
 Note the PIDs in the second column.
@@ -328,5 +328,5 @@ phase transitions and row counts as they are written.
 | CPU near 0%, `socket.recv` in stack | Blocked — check network, model download, DB |
 | `pg_stat_user_tables.n_tup_ins` climbing | Progress is happening |
 | No active Postgres queries, CPU near 0% for >2 min | Stalled — diagnose with profiler |
-| `McpConnectionError` in MCP logs | Upstream `automatised-pipeline` server unreachable |
+| `McpConnectionError` in MCP logs | Upstream `ai-architect-mcp-codebase` server unreachable |
 | `analyze_failed` in tool response | Graph analysis subprocess failed — check MCP logs |

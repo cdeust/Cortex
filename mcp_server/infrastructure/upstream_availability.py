@@ -1,7 +1,7 @@
 """Detect whether upstream MCP integrations are reachable.
 
 Gates the registration of the three upstream-dependent tools
-(``ingest_codebase`` + ``change_impact`` → automatised-pipeline; ``ingest_prd``
+(``ingest_codebase`` + ``change_impact`` → ai-architect-mcp-codebase; ``ingest_prd``
 → prd-spec-generator). On a standalone install with no upstream configured,
 these tools do not register — so every advertised tool works out of the box.
 
@@ -42,7 +42,7 @@ def _server_command_runnable(server_name: str) -> bool:
 
 
 def codebase_upstream_available() -> bool:
-    """True when the automatised-pipeline (``codebase``) MCP server is reachable.
+    """True when the ai-architect-mcp-codebase (``codebase``) MCP server is reachable.
 
     Either explicitly wired in mcp-connections.json, or discoverable via the
     marketplace plugin / PATH binary / sibling source checkout.

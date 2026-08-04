@@ -1,7 +1,7 @@
 """Tests for ingest_findings_artifacts — pure filesystem parsing of AP runs.
 
 Fixture shapes mirror AP's actual Rust structs (verified by reading
-automatised-pipeline/src/main.rs, prd_input.rs, prd_validator.rs,
+ai-architect-mcp-codebase/src/main.rs, prd_input.rs, prd_validator.rs,
 security_gates.rs — see module docstrings for line references), not
 guessed JSON.
 """

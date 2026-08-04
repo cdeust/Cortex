@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 _DOCX_MAIN_PART = "word/document.xml"
 
 # Cap mirrors ingest_docs_content_writers.MAX_DOC_BYTES (the AP per-file parse
-# cap, automatised-pipeline/src/indexer/mod.rs:48 `MAX_PARSE_BYTES =
+# cap, ai-architect-mcp-codebase/src/indexer/mod.rs:48 `MAX_PARSE_BYTES =
 # 1_048_576`) applied to the UNCOMPRESSED main part / export text: a document
 # body larger than 1 MB of XML is a pathological dump, not a realistic doc —
 # reusing the same bound rather than inventing a second one (§8).

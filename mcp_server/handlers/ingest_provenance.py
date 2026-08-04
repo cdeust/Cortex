@@ -1,7 +1,7 @@
 """Ingestion provenance (ADR-0052 sec 2, INC5.2).
 
 Two Cortex handlers write the same PostgreSQL rows from two different
-engines: ``ingest_codebase`` (primary — pulls the automatised-pipeline (AP)
+engines: ``ingest_codebase`` (primary — pulls the ai-architect-mcp-codebase (AP)
 graph via APBridge/mcp_client_pool) and ``codebase_analyze`` (explicit
 fallback — native in-process tree-sitter AST, used only when AP is
 unreachable). ADR-0052 sec 2 requires that:
@@ -113,7 +113,7 @@ def native_fallback_status() -> tuple[str, str | None]:
     if codebase_upstream_available():
         return (
             FALLBACK_PRECEDENCE_VIOLATION_TAG,
-            "codebase_analyze (native) ran while the automatised-pipeline "
+            "codebase_analyze (native) ran while the ai-architect-mcp-codebase "
             "upstream is reachable. ingest_codebase is the primary "
             "ingestion path and codebase_analyze is its explicit fallback "
             "for when AP is unreachable only (ADR-0052 sec 2) — this run "

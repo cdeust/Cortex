@@ -12,7 +12,7 @@ backend-aware `active_checks()` list is imported and invoked as-is, in
 doctor's own dependency order (PostgreSQL backend: Python version -> PG
 driver -> DATABASE_URL -> live PG connection -> pgvector/pg_trgm
 extensions -> ~/.claude/methodology writability -> I10 pool config ->
-optional automatised-pipeline probe; SQLite backend: Python version ->
+optional ai-architect-mcp-codebase probe; SQLite backend: Python version ->
 SQLite store open -> writability -> I10 -> pipeline probe). A failure
 early in the list explains later ones (e.g. no DATABASE_URL implies no
 PG connection), so callers should fix in list order.
@@ -38,7 +38,7 @@ schema = {
         "psycopg/psycopg_pool/pgvector driver imports, DATABASE_URL set, "
         "live PostgreSQL connection, pgvector + pg_trgm extensions, "
         "~/.claude/methodology writability, I10 pool-capacity invariant, "
-        "and an optional automatised-pipeline codebase-tool probe. "
+        "and an optional ai-architect-mcp-codebase codebase-tool probe. "
         "SQLite backend (zero-config default): the PG checks are replaced "
         "by a single SQLite store-open check. "
         "Checks run in doctor's own dependency order, so an early "

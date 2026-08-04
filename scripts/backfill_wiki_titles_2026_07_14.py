@@ -5,7 +5,7 @@ Root cause: parse_page's scalar branch (1) never stripped surrounding
 quote characters from a YAML-quoted value, and (2) never stripped a
 duplicated "<key>: " label an LLM-authored page's own frontmatter echoed
 into its value (e.g. on-disk file content literally
-``title: title: "Public API surface: automatised-pipeline"``). Both
+``title: title: "Public API surface: ai-architect-mcp-codebase"``). Both
 defects are fixed and covered by tests_py/core/test_wiki_pages.py
 (test_parse_page_strips_quoted_scalar_value,
 test_parse_page_strips_duplicated_key_label).

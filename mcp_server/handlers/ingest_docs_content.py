@@ -47,7 +47,7 @@ async def run_docs_pass(
                    ``project_path`` is the codebase root the handler was
                    given (``File.path`` values in the graph are relative
                    to it — verified against
-                   automatised-pipeline/src/indexer/walk.rs:237).
+                   ai-architect-mcp-codebase/src/indexer/walk.rs:237).
     Postcondition: returns counts (``docs_seen``, ``docs_written``,
                    ``docs_skipped``, ``references_written``) plus any
                    diagnostics; re-running against an unchanged graph

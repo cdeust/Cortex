@@ -1,4 +1,4 @@
-"""Discover the ai-automatised-pipeline MCP server and wire it into
+"""Discover the ai-architect-mcp-codebase MCP server and wire it into
 Cortex's mcp-connections.json automatically.
 
 Runs on SessionStart so users who have the pipeline installed get the
@@ -9,9 +9,9 @@ discovery mirrors ``cortex-doctor``'s optional-capability probe:
      ``claude plugin install`` — resolved from ``installed_plugins.json``
      the same way AP's own ``.mcp.json`` does. Always preferred so Cortex
      spawns the exact plugin the user installed (no symlink, no drift).
-  2. Binaries on PATH: ``cortex-pipeline``, ``automatised-pipeline``,
-     ``ai-automatised-pipeline``.
-  3. Sibling git checkout at ``../anthropic/ai-automatised-pipeline``
+  2. Binaries on PATH: ``cortex-pipeline``, ``ai-architect-mcp-codebase``,
+     ``ai-architect-mcp-codebase``.
+  3. Sibling git checkout at ``../anthropic/ai-architect-mcp-codebase``
      with a built Cargo release binary at
      ``target/release/automatised-pipeline``.
   4. Otherwise: no change to mcp-connections.json.
@@ -31,6 +31,13 @@ import logging
 import os
 import shutil
 import sys
+
+from mcp_server.infrastructure.upstream_identity import (
+    BINARY_NAMES,
+    CANONICAL_PLUGIN,
+    PLUGIN_KEY_BINARIES,
+    built_binary_relatives,
+)
 from pathlib import Path
 from typing import Optional
 
@@ -41,28 +48,24 @@ from mcp_server.shared.platform import home_dir
 logger = logging.getLogger(__name__)
 
 # Binary name candidates on PATH, cheapest check first.
-_BINARY_CANDIDATES = (
-    "cortex-pipeline",
-    "automatised-pipeline",
-    "ai-automatised-pipeline",
-)
+_BINARY_CANDIDATES = ("cortex-pipeline", *BINARY_NAMES)
 
 # Common source-checkout locations. Relative to each user's working dir
 # (the MCP server runs in the user's project root, so `..` is their
 # parent directory — a common monorepo sibling layout).
 _SOURCE_DIRS = (
-    "../anthropic/ai-automatised-pipeline",
-    "../../anthropic/ai-automatised-pipeline",
-    "../ai-automatised-pipeline",
+    f"../anthropic/{CANONICAL_PLUGIN}",
+    f"../../anthropic/{CANONICAL_PLUGIN}",
+    f"../{CANONICAL_PLUGIN}",
+    "../anthropic/ai-architect-mcp-codebase",
+    "../../anthropic/ai-architect-mcp-codebase",
+    "../ai-architect-mcp-codebase",
 )
 
 # Windows builds emit an .exe; list it first so it wins on NT. The
 # extension-less name is the Linux/macOS artifact.
 # source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.5
-_BUILT_RELATIVE = (
-    "target/release/automatised-pipeline.exe",
-    "target/release/automatised-pipeline",
-)
+_BUILT_RELATIVE = built_binary_relatives()
 
 # ── Marketplace install (canonical) ─────────────────────────────────────
 
@@ -71,28 +74,29 @@ _BUILT_RELATIVE = (
 # target/release/automatised-pipeline. Preferring it means Cortex spawns the
 # exact plugin the user installed — no self-built symlink, no version drift.
 _INSTALLED_PLUGINS_PATH = home_dir() / ".claude" / "plugins" / "installed_plugins.json"
-_AP_PLUGIN_KEY = "automatised-pipeline@automatised-pipeline-marketplace"
-_AP_BINARY_RELATIVE = Path("target") / "release" / "automatised-pipeline"
+# Canonical first; a pre-v0.9.0 install is still resolvable behind it.
+_AP_PLUGIN_KEYS = PLUGIN_KEY_BINARIES
 
 
 def _marketplace_pipeline_binary() -> Optional[str]:
     """Resolve the AP binary from the marketplace install, or None.
 
     Mirrors AP's own ``.mcp.json``: read ``installed_plugins.json``, take the
-    plugin's ``installPath``, and point at ``target/release/automatised-pipeline``.
+    plugin's ``installPath``, and point at ``target/release/<binary>``.
     Returns None when AP isn't installed or its binary hasn't been
     materialised yet (``bin/ensure-binary.sh`` runs on AP's first launch).
     """
     try:
         data = read_json(_INSTALLED_PLUGINS_PATH) or {}
-        entries = (data.get("plugins") or {}).get(_AP_PLUGIN_KEY) or []
-        for entry in entries:
-            install_path = entry.get("installPath")
-            if not install_path:
-                continue
-            binary = Path(install_path) / _AP_BINARY_RELATIVE
-            if binary.is_file() and os.access(binary, os.X_OK):
-                return str(binary)
+        plugins = data.get("plugins") or {}
+        for plugin_key, binary_name in _AP_PLUGIN_KEYS:
+            for entry in plugins.get(plugin_key) or []:
+                install_path = entry.get("installPath")
+                if not install_path:
+                    continue
+                binary = Path(install_path) / "target" / "release" / binary_name
+                if binary.is_file() and os.access(binary, os.X_OK):
+                    return str(binary)
     except Exception as exc:  # noqa: BLE001 — plugin-registry probe; failure is logged, discovery reports not-installed
         logger.debug("AP plugin discovery failed (non-fatal): %s", exc)
         return None
@@ -104,7 +108,7 @@ def _marketplace_pipeline_binary() -> Optional[str]:
 # Where the silent installer clones and builds the upstream source.
 # Living next to other methodology artefacts means cleanup is one rm -rf.
 _INSTALL_SRC_DIR = (
-    home_dir() / ".claude" / "methodology" / "src" / "automatised-pipeline"
+    home_dir() / ".claude" / "methodology" / "src" / "ai-architect-mcp-codebase"
 )
 _INSTALL_BIN_DIR = home_dir() / ".claude" / "methodology" / "bin"
 _INSTALL_SYMLINK = _INSTALL_BIN_DIR / "mcp-server"

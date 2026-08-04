@@ -1,7 +1,7 @@
 """Cypher fetchers for the ingest_codebase docs-content pass (INC5.3 / D6).
 
 Reads Markdown-family ``File`` nodes and their ``References_File_File``
-edges out of the upstream automatised-pipeline (AP) graph. Deliberately
+edges out of the upstream ai-architect-mcp-codebase (AP) graph. Deliberately
 independent of ``ingest_codebase_cypher.py`` — its own pagination helper,
 own module — so this optional pass (design decision D6: "passe
 optionnelle") can be edited, tested, or removed without touching the
@@ -26,15 +26,15 @@ _TRANSPORT_ERRORS: tuple[type[Exception], ...] = (
     TypeError,
 )
 
-# automatised-pipeline's own Markdown-family extension set.
-# source: automatised-pipeline/src/indexer/light_link.rs:25,
+# ai-architect-mcp-codebase's own Markdown-family extension set.
+# source: ai-architect-mcp-codebase/src/indexer/light_link.rs:25,
 #   `const MD_EXTS: &[&str] = &["md", "markdown", "mdx"];`
 # The docs pass indexes exactly the files AP's light-link post-pass already
 # cross-references via References_File_File — no wider, no narrower.
 DOC_EXTENSIONS: tuple[str, ...] = ("md", "markdown", "mdx")
 
 # Page size for both File-node and References_File_File queries.
-# source: automatised-pipeline injects `LIMIT 500` into any un-LIMITed
+# source: ai-architect-mcp-codebase injects `LIMIT 500` into any un-LIMITed
 # Cypher (QUERY_GRAPH_ROW_LIMIT, src/main.rs — see also
 # ingest_codebase_cypher._FILE_PAGE_SIZE, same upstream contract) — every
 # query here declares its own SKIP/LIMIT below that injection threshold.

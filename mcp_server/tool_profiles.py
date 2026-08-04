@@ -10,7 +10,7 @@ Two profiles:
 
 - ``full`` — every registered tool. **The default.** Shrinking the default
   surface is a breaking change (a client that called a now-hidden tool would
-  break), so — mirroring ``automatised-pipeline``'s ``ToolProfile`` reasoning
+  break), so — mirroring ``ai-architect-mcp-codebase``'s ``ToolProfile`` reasoning
   and this wave's explicit decision — ``full`` stays the default. This
   diverges from #177 criterion 2's "default to the common-session profile";
   the divergence and its rationale are recorded in the CHANGELOG and PR.

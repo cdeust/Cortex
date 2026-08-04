@@ -7,7 +7,7 @@ killing the child (CPython ``subprocess.py``, ``Popen.__exit__`` /
 ``run()``'s except-block, as of 3.13 — see cdeust/Cortex#91 for the full
 mechanism and a live Windows reproduction). That second call can block
 forever if a concurrently-spawned sibling process (e.g. the
-automatised-pipeline upstream bridge, ``CORTEX_MEMORY_AP_ENABLED=1`` by
+ai-architect-mcp-codebase upstream bridge, ``CORTEX_MEMORY_AP_ENABLED=1`` by
 default) inherited the pipe's write handle — the trap fires *inside*
 ``subprocess.run`` itself, before any ``except TimeoutExpired:`` in the
 caller ever runs.

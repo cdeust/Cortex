@@ -3,7 +3,7 @@ calls to a single upstream MCP child process.
 
 Why
 ---
-Upstream MCP servers (e.g. the ``automatised-pipeline`` Rust binary behind
+Upstream MCP servers (e.g. the ``ai-architect-mcp-codebase`` Rust binary behind
 the ``codebase`` server) are **single OS processes**. Two Cortex handlers
 that each pass admission under *different* per-tool semaphores
 (``ingest_codebase`` and ``codebase_analyze`` are distinct names, each

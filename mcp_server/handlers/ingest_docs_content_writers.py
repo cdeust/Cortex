@@ -31,15 +31,15 @@ from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
-# automatised-pipeline's own per-file parse cap.
-# source: automatised-pipeline/src/indexer/mod.rs:48,
+# ai-architect-mcp-codebase's own per-file parse cap.
+# source: ai-architect-mcp-codebase/src/indexer/mod.rs:48,
 #   `pub const MAX_PARSE_BYTES: u64 = 1_048_576;` — "1 MB is sufficient
 #   for any realistic source file" (mod.rs:46).
 # Reused verbatim as the docs-pass skip threshold: a file AP itself
 # would refuse to parse content-wise is not a realistic document either
 # — no second, independently-invented bound. Measured headroom on this
 # disk (2026-07-10): the largest .md in the Cortex repo is 154_622 bytes
-# and in automatised-pipeline's own repo well under 1 MB — real corpora
+# and in ai-architect-mcp-codebase's own repo well under 1 MB — real corpora
 # sit far below this cap; it exists to bound the pathological case
 # (a vendored dump or generated changelog checked in as .md).
 MAX_DOC_BYTES: int = 1_048_576
@@ -85,7 +85,7 @@ def read_doc_content(
 
     Precondition:  ``rel_path`` is relative to ``root`` — AP's ``File.path``
                     is repo-relative (verified against
-                    automatised-pipeline/src/indexer/walk.rs:237,
+                    ai-architect-mcp-codebase/src/indexer/walk.rs:237,
                     ``file_path.strip_prefix(root)``).
     Postcondition: returns decoded UTF-8 text, or None (missing file,
                     file larger than ``max_bytes``, or undecodable bytes)

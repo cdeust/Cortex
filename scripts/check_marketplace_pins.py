@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Marketplace pin-staleness gate. CANONICAL COPY: cdeust/Cortex.
 
-A byte-identical copy lives in cdeust/automatised-pipeline (its CI diffs
+A byte-identical copy lives in cdeust/ai-architect-mcp-codebase (its CI diffs
 against this file weekly and fails on drift), so the gate is ONE artifact
 guarding both repos — never two copies that diverge into a no-op.
 
@@ -290,7 +290,7 @@ def check_root_manifests(root: Path, primary_pin: str) -> list[str]:
     """Flag every root manifest whose version disagrees with the primary pin.
 
     An absent file is not a failure and neither is a missing version key: the
-    canonical repo has no manifest.json, automatised-pipeline has both, and a
+    canonical repo has no manifest.json, ai-architect-mcp-codebase has both, and a
     gate that demanded every row exist everywhere would be a false positive in
     one repo or the other rather than a guard in both.
     """

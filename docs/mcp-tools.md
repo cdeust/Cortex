@@ -87,11 +87,11 @@ upstream MCP server is configured (55 total with both present).
 ## Upstream-integration tools (3, conditionally registered)
 
 These register only when their upstream MCP server is configured, bringing
-the total to 55: `ingest_codebase` + `change_impact` (automatised-pipeline)
+the total to 55: `ingest_codebase` + `change_impact` (ai-architect-mcp-codebase)
 and `ingest_prd` (ai-architect-mcp-spec). With no upstream present, exactly the
 **52 standalone tools** above register. Driving the ai-architect pipeline
 end-to-end (formerly `run_pipeline`) is **not** part of this server — it
-lives in the automatised-pipeline MCP.
+lives in the ai-architect-mcp-codebase MCP.
 
 ## Slash Commands
 

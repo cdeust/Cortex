@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 import re
 import sys
+
+from mcp_server.infrastructure.upstream_identity import ALLOWED_UPSTREAM_COMMANDS
 from typing import Any
 
 from mcp_server.errors import McpConnectionError
@@ -128,7 +130,7 @@ async def get_client(server_name: str) -> MCPClient:
     # this, ingest_codebase fails with "Command not in allowed list"
     # even when mcp-connections.json correctly points at the binary.
     # source: ap_bridge.py L226-L233 — same set, same reason.
-    client._extra_allowed_commands = {"node", "automatised-pipeline"}
+    client._extra_allowed_commands = {"node", *ALLOWED_UPSTREAM_COMMANDS}
 
     await client.connect()
     _pool[server_name] = client

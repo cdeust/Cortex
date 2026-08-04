@@ -1,4 +1,4 @@
-"""Tests for pipeline_discovery — detecting the ai-automatised-pipeline
+"""Tests for pipeline_discovery — detecting the ai-architect-mcp-codebase
 MCP server and auto-writing mcp-connections.json.
 
 Source: docs/program/phase-5-pool-admission-design.md (marketplace
@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 from mcp_server.infrastructure import pipeline_discovery
+from mcp_server.infrastructure import upstream_identity
 
 
 def _isolate_real_installs(monkeypatch, tmp_path):
@@ -36,6 +37,100 @@ def _isolate_real_installs(monkeypatch, tmp_path):
     )
 
 
+def _write_marketplace_install(tmp_path, monkeypatch, plugin_key, binary_name):
+    """Materialise a marketplace install and point discovery at it.
+
+    Returns the executable's path.
+    """
+    import json
+
+    install = tmp_path / plugin_key.replace("@", "_")
+    binary = install / "target" / "release" / binary_name
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    binary.write_text("#!/bin/sh\n", encoding="utf-8")
+    binary.chmod(0o755)
+    registry = tmp_path / "installed_plugins.json"
+    existing = {}
+    if registry.exists():
+        existing = json.loads(registry.read_text(encoding="utf-8"))["plugins"]
+    existing[plugin_key] = [{"installPath": str(install)}]
+    registry.write_text(json.dumps({"plugins": existing}), encoding="utf-8")
+    monkeypatch.setattr(pipeline_discovery, "_INSTALLED_PLUGINS_PATH", registry)
+    monkeypatch.setattr(
+        pipeline_discovery, "_INSTALL_SYMLINK", tmp_path / "nonexistent" / "mcp-server"
+    )
+    monkeypatch.setattr(pipeline_discovery.shutil, "which", lambda n: None)
+    return binary
+
+
+class TestMarketplaceResolution:
+    """The marketplace install is the FIRST resolution route and was the one
+    that silently died when upstream renamed itself: the key filter still read
+    ``ai-architect-mcp-codebase@…``, so no current install ever matched and the
+    layer disappeared without an error. Nothing covered this path — the other
+    tests in this file deliberately point it at a nonexistent registry — which
+    is precisely why the breakage was invisible. These three cases pin the
+    contract: canonical resolves, legacy still resolves, canonical wins.
+    """
+
+    def test_canonical_plugin_key_resolves(self, tmp_path, monkeypatch):
+        binary = _write_marketplace_install(
+            tmp_path,
+            monkeypatch,
+            upstream_identity.CANONICAL_PLUGIN_KEY,
+            upstream_identity.CANONICAL_BINARY,
+        )
+        assert pipeline_discovery.discover_pipeline_command() == [str(binary)]
+
+    def test_legacy_plugin_key_still_resolves(self, tmp_path, monkeypatch):
+        """A host installed before v0.9.0 keeps working; the rename is not a
+        forced reinstall."""
+        binary = _write_marketplace_install(
+            tmp_path,
+            monkeypatch,
+            upstream_identity.LEGACY_PLUGIN_KEYS[0],
+            upstream_identity.LEGACY_BINARIES[0],
+        )
+        assert pipeline_discovery.discover_pipeline_command() == [str(binary)]
+
+    def test_canonical_wins_over_legacy(self, tmp_path, monkeypatch):
+        """Both present: the current install must not lose to a stale one."""
+        _write_marketplace_install(
+            tmp_path,
+            monkeypatch,
+            upstream_identity.LEGACY_PLUGIN_KEYS[0],
+            upstream_identity.LEGACY_BINARIES[0],
+        )
+        canonical = _write_marketplace_install(
+            tmp_path,
+            monkeypatch,
+            upstream_identity.CANONICAL_PLUGIN_KEY,
+            upstream_identity.CANONICAL_BINARY,
+        )
+        assert pipeline_discovery.discover_pipeline_command() == [str(canonical)]
+
+
+class TestUpstreamAllowlist:
+    """The security allowlist validates a resolved command by basename. When
+    upstream renamed its binary once before, the resolver was updated and the
+    pool allowlist was not: every ingest failed with "Command not in allowed
+    list" (CHANGELOG 3.14.11). Both now read the same module, and this asserts
+    they agree rather than trusting that they were edited together."""
+
+    def test_canonical_binary_is_allowed(self):
+        assert (
+            upstream_identity.CANONICAL_BINARY
+            in upstream_identity.ALLOWED_UPSTREAM_COMMANDS
+        )
+
+    def test_default_client_allowlist_covers_upstream(self):
+        from mcp_server.infrastructure.mcp_client import MCPClient
+
+        allowed = MCPClient._ALLOWED_COMMANDS  # noqa: SLF001 — asserting the contract
+        missing = upstream_identity.ALLOWED_UPSTREAM_COMMANDS - set(allowed)
+        assert not missing, f"client allowlist misses upstream binaries: {missing}"
+
+
 class TestDiscoverCommand:
     def test_binary_on_path_found(self, tmp_path, monkeypatch):
         """shutil.which returning a hit wins over source-checkout lookup."""
@@ -58,7 +153,7 @@ class TestDiscoverCommand:
         monkeypatch.setattr(
             pipeline_discovery,
             "_SOURCE_DIRS",
-            ("/nonexistent/ai-automatised-pipeline",),
+            ("/nonexistent/ai-architect-mcp-codebase",),
         )
         assert pipeline_discovery.discover_pipeline_command() is None
 
@@ -66,7 +161,7 @@ class TestDiscoverCommand:
         """Sibling git checkout wins when PATH has nothing."""
         _isolate_real_installs(monkeypatch, tmp_path)
         monkeypatch.setattr(pipeline_discovery.shutil, "which", lambda n: None)
-        source = tmp_path / "ai-automatised-pipeline"
+        source = tmp_path / "ai-architect-mcp-codebase"
         built = source / "target/release/automatised-pipeline"
         built.parent.mkdir(parents=True)
         built.write_text("#!/bin/sh\n")
@@ -87,7 +182,7 @@ class TestDiscoverCommand:
             tmp_path / "nonexistent" / "installed_plugins.json",
         )
         symlink = tmp_path / "mcp-server"
-        target = tmp_path / "automatised-pipeline"
+        target = tmp_path / "ai-architect-mcp-codebase"
         target.write_text("#!/bin/sh\n")
         target.chmod(0o755)
         symlink.symlink_to(target)

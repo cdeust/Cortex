@@ -1,7 +1,7 @@
 """AST-backed loader for the workflow graph (ADR-0046).
 
 Peer of ``workflow_graph_source_pg`` / ``workflow_graph_source_jsonl``.
-Calls the ``automatised-pipeline`` MCP server via ``ap_bridge`` and
+Calls the ``ai-architect-mcp-codebase`` MCP server via ``ap_bridge`` and
 returns builder-shaped dicts for symbol nodes and the AST edges
 (``defined_in``, ``calls``, ``imports``, ``member_of``).
 

@@ -146,7 +146,7 @@ def _discover_repos(dev_root: Path) -> list[RepoInfo]:
                     remote_name=_extract_repo_name(remote) or item.name.lower(),
                 )
             )
-        # One level deeper for org dirs (e.g., anthropic/ai-automatised-pipeline)
+        # One level deeper for org dirs (e.g., anthropic/ai-architect-mcp-codebase)
         else:
             for sub in item.iterdir():
                 if sub.is_dir() and (sub / ".git").is_dir():

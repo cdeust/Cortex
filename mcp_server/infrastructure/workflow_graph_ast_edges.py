@@ -159,7 +159,7 @@ def _parse_provenance(
     """Parse ``r.confidence``/``r.resolution_method`` when present.
 
     ``resolution_method`` comes back wrapped in literal single quotes
-    (see ``automatised-pipeline`` resolver.rs:183 —
+    (see ``ai-architect-mcp-codebase`` resolver.rs:183 —
     ``format!("'{method}'")``); stripped here at the infrastructure
     boundary. Remove this strip once AP fixes the upstream quoting.
     """

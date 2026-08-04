@@ -44,7 +44,7 @@ schema = {
     "annotations": READ_ONLY,
     "description": (
         "Report which Cortex memories reference code that changed in a "
-        "commit (ADR-0046 Phase 4). Uses automatised-pipeline's "
+        "commit (ADR-0046 Phase 4). Uses ai-architect-mcp-codebase's "
         "detect_changes and optionally get_impact to compute the "
         "symbol/file impact set, then matches against recent memories. "
         "Read-only by default; pass apply_heat_bump=true to nudge heat "
@@ -174,7 +174,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "reason": "ap_disabled",
             "detail": (
                 "AP is disabled. Set CORTEX_MEMORY_AP_ENABLED=1 in your "
-                "MCP config (default) and install automatised-pipeline "
+                "MCP config (default) and install ai-architect-mcp-codebase "
                 "to compute change impact."
             ),
         }

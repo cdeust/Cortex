@@ -211,13 +211,13 @@ class MemorySettings(BaseSettings):
     # two distinct upstream servers. This is an ENGINEERING DEFAULT pending
     # measurement: the value that would truly calibrate it is the measured
     # steady-state RSS of the spawned children (today only `codebase` /
-    # automatised-pipeline is heavy) against available host memory. Override
+    # ai-architect-mcp-codebase is heavy) against available host memory. Override
     # via CORTEX_MEMORY_MCP_POOL_MAX_CONNECTIONS once that data exists.
     # source: os.cpu_count() machine bound; floor mirrors a two-server
     # working set; RSS calibration is the open measurement.
     MCP_POOL_MAX_CONNECTIONS: int = 0
 
-    # automatised-pipeline (ADR-0046) — on by default so the L6 symbol
+    # ai-architect-mcp-codebase (ADR-0046) — on by default so the L6 symbol
     # ring has depth out of the box. Users who want to cut token /
     # subprocess cost override via CORTEX_MEMORY_AP_ENABLED=0 in their
     # MCP config.

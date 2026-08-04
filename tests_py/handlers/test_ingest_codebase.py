@@ -313,7 +313,7 @@ class TestIngestCodebaseHappyPath:
                 {"columns": [], "rows": []},
             ),
         ]
-        # Real upstream shape (automatised-pipeline do_get_processes):
+        # Real upstream shape (ai-architect-mcp-codebase do_get_processes):
         # processes carry node_count/depth, never symbols/symbol_count.
         replies["get_processes"] = {
             "processes": [

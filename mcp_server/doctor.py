@@ -206,7 +206,7 @@ def _methodology_dir() -> Check:
 
 
 def _codebase_pipeline() -> Check:
-    """Optional: detect the ai-automatised-pipeline MCP server.
+    """Optional: detect the ai-architect-mcp-codebase MCP server.
 
     Cortex integrates with it to turn codebase analysis into wiki pages +
     memories + KG entities via the ``ingest_codebase`` tool. Not required
@@ -215,14 +215,14 @@ def _codebase_pipeline() -> Check:
     exits 0 on its absence.
 
     Detection strategy (cheapest first):
-      1. ``cortex-pipeline`` or ``automatised-pipeline`` on PATH
+      1. ``cortex-pipeline`` or ``ai-architect-mcp-codebase`` on PATH
       2. A ``cargo`` install cache under ~/.cargo/bin
-      3. A sibling git clone at ../anthropic/ai-automatised-pipeline
+      3. A sibling git clone at ../anthropic/ai-architect-mcp-codebase
     """
     candidates = [
         "cortex-pipeline",
-        "automatised-pipeline",
-        "ai-automatised-pipeline",
+        "ai-architect-mcp-codebase",
+        "ai-architect-mcp-codebase",
     ]
     for cmd in candidates:
         path = shutil.which(cmd)
@@ -235,7 +235,7 @@ def _codebase_pipeline() -> Check:
             )
 
     # Sibling git checkout is a common dev layout.
-    sibling = Path.cwd().parent / "anthropic" / "ai-automatised-pipeline"
+    sibling = Path.cwd().parent / "anthropic" / "ai-architect-mcp-codebase"
     cargo_toml = sibling / "Cargo.toml"
     if cargo_toml.exists():
         return Check(
@@ -251,8 +251,8 @@ def _codebase_pipeline() -> Check:
         "not installed (ingest_codebase tool will be disabled)",
         "Optional — install only if you want codebase → wiki/memory/KG "
         "ingestion. Clone + build:\n"
-        "       git clone https://github.com/cdeust/ai-automatised-pipeline\n"
-        "       cd ai-automatised-pipeline && cargo install --path .\n"
+        "       git clone https://github.com/cdeust/ai-architect-mcp-codebase\n"
+        "       cd ai-architect-mcp-codebase && cargo install --path .\n"
         "     Cortex memory / recall works fine without this component.",
         optional=True,
     )

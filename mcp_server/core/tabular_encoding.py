@@ -8,7 +8,7 @@ column names ONCE and streams each item as an array of cells in column order,
 so the field names are paid for once instead of N times. The saving grows with
 N and with the number of fields; it is exactly the field-name overhead removed.
 
-Reference: cdeust/automatised-pipeline ``src/token_surface.rs`` (issue AP-#56),
+Reference: cdeust/ai-architect-mcp-codebase ``src/token_surface.rs`` (issue AP-#56),
 itself an AP-idiomatic reimplementation of the TOON tabular encoding in
 DeusData/codebase-memory-mcp ``src/mcp/compact_out.h`` (columns-once,
 rows-as-arrays). This is the Cortex-Python reimplementation: it stays

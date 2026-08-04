@@ -1,7 +1,7 @@
 """Dev driver: run the ingest_codebase handler from the working tree.
 
 Exercises the exact repo code (not the installed plugin) against the
-production DB + the real upstream automatised-pipeline binary, so the
+production DB + the real upstream ai-architect-mcp-codebase binary, so the
 2026-06-11 pagination/wiki/dedup fixes can be verified live before a
 release. Not wired into the MCP server — invoke manually:
 

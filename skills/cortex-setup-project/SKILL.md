@@ -28,11 +28,11 @@ Execute all four phases sequentially without asking the user any questions. If a
 
 ### Phase 3b: Pipeline Codebase Analysis (Optional)
 
-The ai-automatised-pipeline MCP server provides structured codebase analysis (symbol graph, processes, communities, cross-file impact). It is optional — Cortex core memory/recall works without it. Enable only if the user asks for "deeper code understanding", "symbol-level memory", or the codebase is large (>5k files) where substring-based hooks underperform.
+The ai-architect-mcp-codebase MCP server provides structured codebase analysis (symbol graph, processes, communities, cross-file impact). It is optional — Cortex core memory/recall works without it. Enable only if the user asks for "deeper code understanding", "symbol-level memory", or the codebase is large (>5k files) where substring-based hooks underperform.
 
 1. Detection: attempt `cortex:ingest_codebase({"project_path": "<cwd>"})`. If it succeeds, record the counts (wiki pages, memory entities, KG edges) for the summary and skip to Phase 4.
 2. If `ingest_codebase` fails with `McpConnectionError` (pipeline not installed/configured):
-   - Check if the sibling checkout exists at `../anthropic/ai-automatised-pipeline/Cargo.toml` (or equivalent). If so, run `bash -c 'cd ../anthropic/ai-automatised-pipeline && cargo install --path . 2>&1 | tail -20'` (accepts ~1-2 min compile) and re-run the ingest.
+   - Check if the sibling checkout exists at `../anthropic/ai-architect-mcp-codebase/Cargo.toml` (or equivalent). If so, run `bash -c 'cd ../anthropic/ai-architect-mcp-codebase && cargo install --path . 2>&1 | tail -20'` (accepts ~1-2 min compile) and re-run the ingest.
    - If the source checkout is missing or cargo is unavailable, **skip Phase 3b silently** and proceed to Phase 4. Do NOT block setup on this.
 3. The pipeline's auto-wire happens on every SessionStart via `pipeline_discovery`, so once the binary exists on PATH (or sibling source is built), future sessions pick it up automatically. No manual mcp-connections.json editing needed.
 

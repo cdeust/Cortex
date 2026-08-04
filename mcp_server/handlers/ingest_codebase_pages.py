@@ -21,7 +21,7 @@ def _slug(text: str) -> str:
 def _process_symbol_count(process: dict[str, Any]) -> int:
     """Symbols-in-flow count for a process dict.
 
-    Upstream ``get_processes`` (automatised-pipeline src/main.rs,
+    Upstream ``get_processes`` (ai-architect-mcp-codebase src/main.rs,
     ``do_get_processes``) emits exactly ``{name, entry_point, entry_kind,
     depth, node_count}`` — the count key is ``node_count``. The previous
     reader looked for ``symbol_count``/``symbols`` (keys that never

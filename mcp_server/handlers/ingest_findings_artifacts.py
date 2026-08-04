@@ -1,4 +1,4 @@
-"""Pure parsing of automatised-pipeline (AP) findings artifacts (INC5.1).
+"""Pure parsing of ai-architect-mcp-codebase (AP) findings artifacts (INC5.1).
 
 AP writes ONLY files under ``<output_dir>/runs/<run_id>/`` (ADR-0052 D1:
 Cortex pulls, AP never pushes; no network/PG client exists in AP). This

@@ -70,7 +70,7 @@ schema = {
         "`backfill_memories` (Claude Code conversations, not source "
         "files), `wiki_seed_codebase` (seeds wiki pages from .md docs), "
         "and `ingest_codebase` (downstream PRD-generator consumer, and the "
-        "PRIMARY ingestion path when the automatised-pipeline upstream is "
+        "PRIMARY ingestion path when the ai-architect-mcp-codebase upstream is "
         "reachable — this tool is its explicit fallback, per ADR-0052 "
         "sec 2; every written memory carries a src:native provenance tag, "
         "and the response states fallback_status so a run made while AP "

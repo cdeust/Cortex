@@ -763,7 +763,7 @@ def _build_cold_start_message(setup_result: dict | None) -> str:
 
 
 def _auto_wire_pipeline() -> None:
-    """Best-effort: auto-add the ai-automatised-pipeline MCP server to
+    """Best-effort: auto-add the ai-architect-mcp-codebase MCP server to
     mcp-connections.json when detected. Non-blocking; failures go to
     stderr only.
 

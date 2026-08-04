@@ -239,7 +239,7 @@ class TestRootManifestSplit(unittest.TestCase):
     def test_ap_172_incident_replay_manifest_json_two_releases_stale(self):
         """The exact tree that exited 0 before this check existed.
 
-        automatised-pipeline carried manifest.json 0.8.0 while server.json and
+        ai-architect-mcp-codebase carried manifest.json 0.8.0 while server.json and
         every marketplace pin read 0.8.2. The gate passed, and the wrong
         version shipped inside every .mcpb bundle for two releases.
         """

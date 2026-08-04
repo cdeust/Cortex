@@ -25,7 +25,7 @@ _UPSTREAM_TOOLS = {"ingest_codebase", "change_impact", "ingest_prd"}
 def _tool_names(*, codebase: bool, prd: bool) -> set[str]:
     """Build a fresh server with explicit availability flags; return tool names.
 
-    Deterministic — independent of whether automatised-pipeline / prd-spec-gen
+    Deterministic — independent of whether ai-architect-mcp-codebase / prd-spec-gen
     happen to be installed on the machine running the test.
     """
     server = FastMCP(name="test", version="0.0.0")

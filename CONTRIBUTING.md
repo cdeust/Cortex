@@ -10,7 +10,7 @@ the canonical list) backing the algorithms. Every change is held to that bar.
 ## What this project is
 
 A Python 3.10+ MCP server with **52 standalone tools** (55 with the optional
-automatised-pipeline + prd-spec-generator integrations) and **9 automatic
+ai-architect-mcp-codebase + prd-spec-generator integrations) and **9 automatic
 hooks**, persisting to a local SQLite store by default or to PostgreSQL +
 pgvector when configured. Implements rate-distortion forgetting,
 predictive-coding write gating, retrieval-induced reconsolidation, pattern
