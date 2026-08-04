@@ -17,6 +17,13 @@ manifests sat a three-way split with its tag (AP #67). Failure classes:
   SELF_PIN_MISMATCH    local-source pin != the plugin's own plugin.json.
   SERVER_JSON_SPLIT    root server.json version != the primary local pin
                        (the unguarded third leg of AP's three-way split).
+  PIN_SHA_UNREACHABLE  github-source pin names a `sha` that is not reachable
+                       from that repo's default branch. Cortex #351 pinned
+                       cortex-viz twice at an unmerged PR head (ee0d41db, then
+                       7e297ebc); both were `ahead` of main, so a squash-merge
+                       would have left the marketplace serving an orphaned
+                       commit. Version checks cannot see this: the pin read
+                       3.0.0 and was current on every run.
   MANIFEST_JSON_SPLIT  root manifest.json version != the primary local pin.
                        AP shipped manifest.json stuck at 0.8.0 for TWO releases
                        while every other pin read 0.8.2 and this gate exited 0,
@@ -134,6 +141,84 @@ def releases_between(repo: str, pin: tuple, latest: tuple) -> int | None:
     )
 
 
+# source: GitHub REST "Compare two commits" — `status` is exactly one of
+# ahead / behind / identical / diverged.
+# https://docs.github.com/rest/commits/commits#compare-two-commits
+#
+# compare/BASE...HEAD describes HEAD relative to BASE. With BASE = the default
+# branch, `identical` means the pin IS the branch tip and `behind` means it is
+# an ancestor of it — both reachable. `ahead` and `diverged` mean the pin
+# carries commits the branch does not: an unmerged PR head, which stops being
+# reachable the moment that PR is squash-merged.
+REACHABLE_FROM_DEFAULT = frozenset({"identical", "behind"})
+SHA_DISPLAY_LEN = 12  # source: git's default core.abbrev floor for readable logs
+
+
+def default_branch(repo: str) -> str | None:
+    """Repo's default branch; None when the repo does not resolve (404)."""
+    req = urllib.request.Request(
+        f"https://api.github.com/repos/{repo}", headers=_headers()
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:
+            return json.load(resp).get("default_branch")
+    except urllib.error.HTTPError as e:
+        if e.code == _HTTP_NOT_FOUND:
+            return None
+        raise
+
+
+def compare_status(repo: str, base: str, head: str) -> str | None:
+    """Comparison status of head vs base; None when head does not resolve."""
+    req = urllib.request.Request(
+        f"https://api.github.com/repos/{repo}/compare/{base}...{head}",
+        headers=_headers(),
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:
+            return json.load(resp).get("status")
+    except urllib.error.HTTPError as e:
+        if e.code == _HTTP_NOT_FOUND:
+            return None
+        raise
+
+
+def check_pin_sha(
+    name: str, repo: str, sha: str, branch=default_branch, compare=compare_status
+):
+    """Returns (failure, notice) — exactly one is non-None, or both are None."""
+    try:
+        base = branch(repo)
+        if base is None:
+            return (
+                None,
+                f"NOTICE: {name}: {repo} does not resolve; "
+                f"pinned sha not verified this run",
+            )
+        status = compare(repo, base, sha)
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+        return (
+            None,
+            f"NOTICE: {name}: network degraded ({e.__class__.__name__}); "
+            f"pinned sha not verified this run",
+        )
+    short = sha[:SHA_DISPLAY_LEN]
+    if status is None:
+        return (
+            f"PIN_SHA_UNREACHABLE: {name}: {repo} does not resolve commit {short} "
+            f"(absent from the repository)",
+            None,
+        )
+    if status not in REACHABLE_FROM_DEFAULT:
+        return (
+            f"PIN_SHA_UNREACHABLE: {name}: {repo}@{short} is '{status}' of "
+            f"{base} — the pin targets a commit outside the default branch "
+            f"(an unmerged PR head stops resolving once that PR is squashed)",
+            None,
+        )
+    return None, None
+
+
 def check_github_pin(
     name: str, repo: str, pin: str, fetch=latest_release_tag, count=releases_between
 ):
@@ -246,6 +331,15 @@ def main() -> int:
                 failures.append(failure)
             if notice:
                 notices.append(notice)
+            # A pin may name an exact commit as well as a version. Both are
+            # delivery-gating and they fail independently: #351's sha was
+            # unreachable while its version was perfectly current.
+            if sha := source.get("sha"):
+                failure, notice = check_pin_sha(name, source["repo"], sha)
+                if failure:
+                    failures.append(failure)
+                if notice:
+                    notices.append(notice)
         elif isinstance(source, str):
             failures.extend(check_self_pin(name, source, pin, root))
             if source.strip("/") in ("", "."):
