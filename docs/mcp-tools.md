@@ -32,7 +32,7 @@ upstream MCP server is configured (55 total with both present).
 | `narrative` | Generate project narrative from stored memories | <500ms |
 | `memory_stats` | Memory system diagnostics | <50ms |
 | `import_sessions` | Import conversation history into memory store | varies |
-| `forget` | Hard/soft delete with is_protected guard | <50ms |
+| `forget` | Hard/soft delete with is_protected guard; hard delete is cross-substrate (row + derived wiki claims + unreferenced raw artifact) | <50ms |
 | `validate_memory` | Validate memories against filesystem state | <500ms |
 | `rate_memory` | Useful/not-useful feedback → metamemory confidence | <50ms |
 | `seed_project` | 5-stage codebase bootstrap | varies |

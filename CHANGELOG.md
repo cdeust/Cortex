@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`forget` now deletes across every substrate that holds the content
+  (issue #366).** PRIVACY.md told users "The `forget` tool deletes individual
+  memories", but a hard delete issued a single `DELETE FROM memories`: the raw
+  full text of an oversized auto-capture stayed on disk in its content-addressed
+  artifact (`artifact_store` had no removal path at all), and wiki claim events
+  derived from the memory survived with `memory_id` nulled by
+  `ON DELETE SET NULL`. A hard delete now removes the row, the derived claims,
+  and the artifact, reporting `artifact_deleted` / `claims_deleted` in its
+  result. Two behaviours are deliberate and asserted: an artifact shared by a
+  still-live memory is kept (content addressing dedups identical output to one
+  file, so unconditional removal would strip the survivor's content), and a
+  `soft=true` delete retains the artifact because it is recoverable by design.
+  Deletion ordering is load-bearing in both directions — claims must go before
+  the row (the FK nulls the link) and the artifact reference count must be taken
+  after it (or the memory counts itself) — and each ordering has its own test.
+  PRIVACY.md now states the exact scope, including both exceptions.
+- **The artifact pointer format has one definition (issue #366).** It was
+  duplicated as an f-string in `hooks/post_tool_capture` and
+  `handlers/backfill_helpers`, so no reader could parse it safely. Both writers
+  now call `core.gist_extraction.format_artifact_pointer`, with
+  `parse_artifact_pointer` as its inverse; the round trip is tested for paths
+  containing spaces and for malformed pointers, which resolve to "no artifact"
+  rather than a guessed path.
+
 ### Added
 
 - **Native Codex local plugin packaging.** A dedicated

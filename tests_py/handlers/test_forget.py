@@ -274,3 +274,128 @@ class TestForgetProtectedGuard:
         result = await forget_handler({"memory_id": mid, "soft": True})
         assert result["deleted"] is False
         assert "protected" in result["reason"].lower()
+
+
+# ── Cross-substrate deletion (issue #366) ─────────────────────────────────
+#
+# PRIVACY.md tells users "The `forget` tool deletes individual memories."
+# A gist+pointer memory keeps its FULL raw text in a content-addressed
+# filesystem artifact (core/gist_extraction.py -> infrastructure/
+# artifact_store.py). Deleting only the row leaves that content readable on
+# disk, so the published control does not do what it says. These tests pin the
+# contract the policy already claims.
+#
+# Two orderings are load-bearing and asserted separately below:
+#   - wiki claims must go BEFORE the row (the FK is ON DELETE SET NULL, so
+#     after the row is gone the claim no longer matches memory_id)
+#   - the artifact reference check must run AFTER the row is gone (otherwise
+#     the memory being forgotten counts itself as a live reference)
+
+
+def _seed_artifact_backed_memory(raw: str) -> tuple[int, "object"]:
+    """Store ``raw`` as an artifact and seed a memory whose body points at it.
+
+    Returns (memory_id, artifact_path). Mirrors the production shape built by
+    hooks/post_tool_capture._gist_or_full and handlers/backfill_helpers.
+    """
+    from mcp_server.core.gist_extraction import extract_gist, format_artifact_pointer
+    from mcp_server.infrastructure.artifact_store import store_artifact
+
+    path = store_artifact(raw)
+    body = f"{extract_gist(raw)}\n\n{format_artifact_pointer(str(path), len(raw))}"
+    return _seed_memory(body), path
+
+
+class TestForgetDeletesArtifact:
+    def test_hard_delete_removes_the_artifact_file(self):
+        raw = "SECRET-CANARY-A " + ("x" * 60_000)
+        mid, path = _seed_artifact_backed_memory(raw)
+        assert path.exists(), "precondition: artifact must exist before forget"
+
+        result = pytest.importorskip("asyncio").run(forget_handler({"memory_id": mid}))
+
+        assert result["deleted"] is True
+        assert not path.exists(), (
+            "artifact still on disk after hard delete — PRIVACY.md claims the "
+            "memory is deleted, but the full raw content survives"
+        )
+
+    def test_hard_delete_reports_artifact_removal(self):
+        """The signal itself is asserted, not just the side effect (§13 F1)."""
+        raw = "SECRET-CANARY-B " + ("y" * 60_000)
+        mid, _path = _seed_artifact_backed_memory(raw)
+
+        result = pytest.importorskip("asyncio").run(forget_handler({"memory_id": mid}))
+
+        assert result.get("artifact_deleted") is True, (
+            f"forget must report artifact removal in its result; got {result!r}"
+        )
+
+    def test_soft_delete_keeps_the_artifact(self):
+        """Soft delete is recoverable, so its content must survive."""
+        raw = "SECRET-CANARY-C " + ("z" * 60_000)
+        mid, path = _seed_artifact_backed_memory(raw)
+
+        result = pytest.importorskip("asyncio").run(
+            forget_handler({"memory_id": mid, "soft": True})
+        )
+
+        assert result["method"] == "soft"
+        assert path.exists(), "soft delete must NOT remove the artifact"
+        assert result.get("artifact_deleted") is False
+
+    def test_refused_delete_keeps_the_artifact(self):
+        """A protected memory is not deleted, so nothing may be removed."""
+        from mcp_server.core.gist_extraction import (
+            extract_gist,
+            format_artifact_pointer,
+        )
+        from mcp_server.infrastructure.artifact_store import store_artifact
+
+        raw = "SECRET-CANARY-D " + ("w" * 60_000)
+        path = store_artifact(raw)
+        store = _get_forget_store()
+        body = f"{extract_gist(raw)}\n\n{format_artifact_pointer(str(path), len(raw))}"
+        mid = store.insert_memory({"content": body, "is_protected": True})
+
+        result = pytest.importorskip("asyncio").run(forget_handler({"memory_id": mid}))
+
+        assert result["deleted"] is False
+        assert path.exists(), "refused delete must not touch the artifact"
+
+    def test_shared_artifact_survives_while_another_memory_references_it(self):
+        """Content addressing dedups: two identical outputs share ONE file.
+
+        Deleting the artifact for one memory would corrupt the other, so the
+        file must survive until the last referrer is gone.
+        """
+        raw = "SECRET-CANARY-E " + ("q" * 60_000)
+        mid_a, path_a = _seed_artifact_backed_memory(raw)
+        mid_b, path_b = _seed_artifact_backed_memory(raw)
+        assert path_a == path_b, (
+            "precondition: identical content must dedup to one path"
+        )
+
+        first = pytest.importorskip("asyncio").run(forget_handler({"memory_id": mid_a}))
+        assert first["deleted"] is True
+        assert path_a.exists(), (
+            "artifact removed while a second memory still references it — "
+            "the surviving memory's pointer now dangles"
+        )
+        assert first.get("artifact_deleted") is False
+
+        second = pytest.importorskip("asyncio").run(
+            forget_handler({"memory_id": mid_b})
+        )
+        assert second["deleted"] is True
+        assert not path_a.exists(), "last referrer gone — artifact must be removed"
+        assert second.get("artifact_deleted") is True
+
+    def test_memory_without_artifact_reports_false_not_none(self):
+        """Negative case: a plain memory has no artifact to remove."""
+        mid = _seed_memory("plain memory, no artifact pointer")
+
+        result = pytest.importorskip("asyncio").run(forget_handler({"memory_id": mid}))
+
+        assert result["deleted"] is True
+        assert result.get("artifact_deleted") is False

@@ -22,6 +22,8 @@ core → hooks is not). post_tool_capture re-exports it for backward use.
 
 from __future__ import annotations
 
+import re
+
 # source: measured p90 curated memory length, production DB 2026-06-10
 # (3,041 chars, n=68) — see docs/provenance/bounded-io-phase2-design.md. Makes
 # auto-captures size-comparable to curated content, removing the
@@ -65,6 +67,54 @@ HIGH_VALUE_PATTERNS = [
     "warning",
     "deprecated",
 ]
+
+
+# ── Artifact pointer: ONE definition, used by every writer and the reader ──
+#
+# The pointer line is the only link from a memory body to its full raw content
+# on disk. It was previously built by two duplicated f-strings: one in
+# hooks/post_tool_capture._gist_or_full, one in handlers/backfill_helpers. That
+# meant no reader could parse it safely — a drift in either writer would break
+# the parse silently. The forget handler must find and remove that artifact,
+# see issue #366, so the format is defined once here, in the layer both
+# writers already import.
+_ARTIFACT_LABEL = "**Artifact:**"
+
+# Matches the line format emitted by format_artifact_pointer. The path group is
+# non-greedy and backtick-delimited, so a path containing spaces is preserved
+# and a trailing "(N chars ...)" suffix is never swallowed into it.
+_ARTIFACT_POINTER_RE = re.compile(
+    r"\*\*Artifact:\*\*\s+`(?P<path>[^`]+)`",
+)
+
+
+def format_artifact_pointer(path: str, char_count: int) -> str:
+    """Render the pointer line linking a memory body to its raw artifact.
+
+    Pre: ``path`` is the artifact path as a string; ``char_count`` is the length
+    of the full raw output the artifact holds.
+    Post: returns a single line that ``parse_artifact_pointer`` recovers
+    ``path`` from. This is the ONLY place the format is defined.
+    """
+    return f"{_ARTIFACT_LABEL} `{path}` ({char_count} chars full output)"
+
+
+def parse_artifact_pointer(content: str) -> str | None:
+    """Recover the artifact path from a memory body, or None when absent.
+
+    Pre: ``content`` is a memory body (may be empty, may contain no pointer).
+    Post: returns the path string from the FIRST pointer line produced by
+    ``format_artifact_pointer``, else None. Never raises — a body with no
+    pointer, or a malformed one, yields None so callers treat "no artifact" and
+    "unparseable" identically (both mean: nothing safe to delete).
+    """
+    if not content:
+        return None
+    match = _ARTIFACT_POINTER_RE.search(content)
+    if match is None:
+        return None
+    path = match.group("path").strip()
+    return path or None
 
 
 def needs_gist(output: str) -> bool:

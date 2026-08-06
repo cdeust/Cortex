@@ -40,7 +40,10 @@ like any other memory (locally) — avoid doing so.
   connects to any database you did not configure.
 
 You own this data. Deleting the database file (or the relevant rows) permanently
-removes it. The `forget` tool deletes individual memories.
+removes it. The `forget` tool deletes individual memories: a hard delete
+(the default) removes the memory row, any wiki claims derived from it, and the
+raw-output artifact file its body pointed at — see *Your controls* below for the
+exact scope, including the one case where an artifact is deliberately kept.
 
 ## What leaves your machine
 
@@ -87,8 +90,28 @@ memories over time; this is a local maintenance operation, not a transfer.
 
 ## Your controls
 
-- `forget` — delete a specific memory.
+- `forget` — delete a specific memory. A **hard** delete (the default) removes,
+  across every substrate that holds the content:
+  1. the memory row itself;
+  2. the wiki claim events derived from that memory;
+  3. the raw-output **artifact** file the memory body pointed at, under
+     `~/.claude/methodology/artifacts/` — an oversized auto-capture keeps only a
+     short gist in the row and the full raw text in that file, so deleting the
+     row alone would leave your content on disk.
+
+  Two deliberate exceptions, both reported in the tool's result so you can see
+  which applied:
+  - **Artifacts are content-addressed and shared.** If a second memory still
+    points at the same artifact (identical captured output dedups to one file),
+    the file is kept until the last memory referring to it is forgotten —
+    otherwise the surviving memory would lose its content. `artifact_deleted`
+    is `false` in that case.
+  - **`soft=true` keeps everything but the row's visibility.** A soft delete is
+    recoverable by design (it sets `is_stale` and `heat=0`), so the artifact is
+    deliberately retained. Use a hard delete when you want the content gone.
 - Delete `~/.claude/methodology/memory.db` — remove all SQLite-stored data.
+- Delete `~/.claude/methodology/artifacts/` — remove all raw-output artifacts,
+  including any left by soft deletes or still shared between memories.
 - For PostgreSQL, manage retention directly in your database.
 
 ## Contact

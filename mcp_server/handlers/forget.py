@@ -6,12 +6,18 @@ Protected memories require explicit force=True to remove.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from mcp_server.core.gist_extraction import parse_artifact_pointer
+from mcp_server.infrastructure.artifact_gc import delete_artifact_if_unreferenced
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from mcp_server.infrastructure.pg_store_wiki import delete_claims_for_memory
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
 from mcp_server.handlers._telemetry_wrap import instrument
+
+logger = logging.getLogger(__name__)
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -109,16 +115,60 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "method": "soft",
             "memory_id": memory_id,
             "content_preview": mem["content"][:80],
+            # Soft delete is recoverable, so the raw content must survive with
+            # it. Reported explicitly rather than omitted so a caller can tell
+            # "kept on purpose" from "we forgot to look" (issue #366).
+            "artifact_deleted": False,
         }
 
-    # Hard delete
+    # ── Hard delete: cross-substrate, and the two orderings below are
+    # load-bearing (issue #366).
+    #
+    # The artifact path must be read BEFORE the row goes — it lives in the
+    # memory body, which is about to be unreachable.
+    artifact_path = parse_artifact_pointer(mem.get("content") or "")
+
+    # Wiki claims must go BEFORE the row: wiki.claim_events.memory_id is
+    # ON DELETE SET NULL (infrastructure/pg_schema.py), so once the memory row
+    # is deleted the claim survives with a NULL link and can no longer be
+    # found by memory_id at all.
+    claims_deleted = _delete_derived_claims(store, memory_id)
+
     deleted = store.delete_memory(memory_id)
+
+    # The reference check must run AFTER the row is gone, or the memory being
+    # forgotten counts itself as a live referrer and nothing is ever collected.
+    artifact_deleted = (
+        delete_artifact_if_unreferenced(store._conn, artifact_path)
+        if deleted
+        else False
+    )
+
     return {
         "deleted": deleted,
         "method": "hard",
         "memory_id": memory_id,
         "content_preview": mem["content"][:80],
+        "artifact_deleted": artifact_deleted,
+        "claims_deleted": claims_deleted,
     }
+
+
+def _delete_derived_claims(store: MemoryStore, memory_id: int) -> int:
+    """Remove wiki claim_events derived from ``memory_id``; return the count.
+
+    Never raises: a wiki table that is absent or unreachable (SQLite installs
+    without the wiki schema, a degraded connection) must not block the deletion
+    the user asked for. Returns 0 when nothing was removed, and logs the reason
+    so a silent miss is still observable.
+    """
+    try:
+        return int(delete_claims_for_memory(store._conn, memory_id))
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary, see docstring
+        logger.warning(
+            "wiki claims for memory %s could not be removed: %s", memory_id, exc
+        )
+        return 0
 
 
 # Telemetry-instrumented public entry. Records latency / byte volume

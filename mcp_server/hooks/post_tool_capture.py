@@ -22,6 +22,7 @@ from typing import Any
 from mcp_server.core.gist_extraction import (
     HIGH_VALUE_PATTERNS,
     extract_gist,
+    format_artifact_pointer,
     needs_gist,
 )
 from mcp_server.shared.redaction import scrub_secrets
@@ -195,7 +196,7 @@ def _gist_or_full(output: str) -> tuple[str, str | None]:
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"artifact write failed (non-fatal, full output kept): {exc}")
         return output, None
-    pointer = f"**Artifact:** `{path}` ({len(output)} chars full output)"
+    pointer = format_artifact_pointer(str(path), len(output))
     return extract_gist(output), pointer
 
 

@@ -12,7 +12,11 @@ from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
 from mcp_server.shared.domain_mapping import resolve_domain
-from mcp_server.core.gist_extraction import extract_gist, needs_gist
+from mcp_server.core.gist_extraction import (
+    extract_gist,
+    format_artifact_pointer,
+    needs_gist,
+)
 from mcp_server.infrastructure.artifact_store import store_artifact
 
 # Core concept keywords for entity linking
@@ -195,7 +199,7 @@ def gist_oversized_content(content: str) -> str:
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
         silent_failure.note("backfill.artifact_store", exc)
         return content
-    pointer = f"**Artifact:** `{path}` ({len(content)} chars full output)"
+    pointer = format_artifact_pointer(str(path), len(content))
     return f"{extract_gist(content)}\n\n{pointer}"
 
 
