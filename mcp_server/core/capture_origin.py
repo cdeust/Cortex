@@ -108,9 +108,15 @@ def classify_capture_origin(tool_name: str) -> str:
 
     Never inspects content: the argument is a tool name by construction.
     """
+    # `or ""` is None-safety for .strip(); the empty string then simply matches
+    # neither set and falls through to ORIGIN_UNKNOWN, so no separate
+    # empty-input guard is needed. Documented equivalent mutant (§12.4): the
+    # scoped mutation run replaces this literal with a non-empty one
+    # ("XXXX"), which is unobservable — an unrecognised name and an empty name
+    # both return ORIGIN_UNKNOWN, by construction of the two membership tests
+    # below. No test can distinguish them, so this is equivalent rather than a
+    # coverage gap.
     key = (tool_name or "").strip().lower()
-    if not key:
-        return ORIGIN_UNKNOWN
     if key in _NETWORK_TOOLS:
         return ORIGIN_NETWORK
     if key in _LOCAL_ACTION_TOOLS:

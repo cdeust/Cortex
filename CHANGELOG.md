@@ -6,6 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- **Capture and write-gate bypass are decided by the channel, not the content
+  (issue #365).** Fetched web content could install itself in durable,
+  cross-session memory by shaping itself. Two decisions read attacker-supplied
+  text: `hooks/post_tool_capture` keyed WebFetch/WebSearch capture on a keyword
+  match over the fetched output, so a page decided whether it was persisted; and
+  `core/write_gate.determine_bypass` grants `bypass_error`/`bypass_decision`
+  from the content itself, so text merely shaped like an error or a decision
+  skipped the novelty REJECT. `hooks/session_start` then replays stored memories
+  verbatim into later sessions. Capture for those tools is now a fixed length
+  floor identical for any payload, and the new `core/capture_origin` resolves
+  the origin from the producing tool name — known out-of-band, unforgeable by
+  the payload — so network-origin content is refused the two content-derived
+  bypasses. `force` and a `deliberate` write class are out-of-band human
+  signals and remain valid at any origin; the `important`/`critical` tag bypass
+  also remains, because `_build_tags` never derives those from output.
+  Unrecognised tools classify as `unknown` rather than trusted, so a newly
+  added tool is visibly unclassified. `origin_tool` is a declared input on
+  `remember` and exposed on both registered MCP wrappers.
+
+  Note the two neighbouring modules deliberately not reused: `core/provenance`
+  grades reference verifiability and `core/source_monitoring` attributes
+  epistemic origin, both by reading the content. A hostile page dense with file
+  paths and URLs grades `verified` and classifies `perceived` — the most
+  credible value in each — so neither can carry a security property.
+
+
 ### Fixed
 
 - **`forget` now deletes across every substrate that holds the content
