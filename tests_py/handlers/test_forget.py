@@ -399,3 +399,85 @@ class TestForgetDeletesArtifact:
 
         assert result["deleted"] is True
         assert result.get("artifact_deleted") is False
+
+
+class TestForgetDeletesDerivedClaims:
+    """The wiki half of issue #366.
+
+    wiki.claim_events.memory_id is ON DELETE SET NULL, so deleting the row
+    leaves the claim behind with its link nulled — the claim text, which can
+    carry the same content, stays searchable and unattributable. forget must
+    remove the claims BEFORE the row, while they can still be found by id.
+    """
+
+    @staticmethod
+    def _seed_claim(memory_id: int, text: str) -> int:
+        from mcp_server.infrastructure.pg_store_wiki import insert_claim_events
+
+        store = _get_forget_store()
+        ids = insert_claim_events(
+            store._conn,
+            [{"text": text, "claim_type": "observation", "memory_id": memory_id}],
+        )
+        assert ids, "precondition: the claim must be inserted"
+        return ids[0]
+
+    @staticmethod
+    def _claims_for(memory_id: int) -> list:
+        from mcp_server.infrastructure.pg_store_wiki import get_claims_for_memory
+
+        return get_claims_for_memory(_get_forget_store()._conn, memory_id)
+
+    def test_hard_delete_removes_derived_claims_and_reports_the_count(self):
+        mid = _seed_memory("memory with a derived wiki claim")
+        self._seed_claim(mid, "CLAIM-CANARY derived from the memory")
+        assert len(self._claims_for(mid)) == 1, "precondition: claim must exist"
+
+        result = pytest.importorskip("asyncio").run(forget_handler({"memory_id": mid}))
+
+        assert result["deleted"] is True
+        assert result.get("claims_deleted") == 1, (
+            "forget must report how many derived claims it removed; got "
+            f"{result.get('claims_deleted')!r}"
+        )
+        assert self._claims_for(mid) == [], (
+            "derived claims survived the delete — ON DELETE SET NULL only nulls "
+            "the link, it does not remove the claim"
+        )
+
+    def test_memory_with_no_claims_reports_zero(self):
+        mid = _seed_memory("memory with no derived claims")
+
+        result = pytest.importorskip("asyncio").run(forget_handler({"memory_id": mid}))
+
+        assert result["deleted"] is True
+        assert result.get("claims_deleted") == 0
+
+
+class TestForgetArtifactSignals:
+    def test_already_absent_artifact_logs_the_path_it_expected(self, caplog):
+        """§13 F1: the degraded path must emit an actionable signal.
+
+        A pointer whose file is already gone must say WHICH path was missing —
+        a message without the path cannot be acted on.
+        """
+        import logging
+
+        raw = "SECRET-CANARY-F " + ("v" * 60_000)
+        mid, path = _seed_artifact_backed_memory(raw)
+        path.unlink()
+        assert not path.exists(), "precondition: artifact removed out of band"
+
+        with caplog.at_level(
+            logging.INFO, logger="mcp_server.infrastructure.artifact_gc"
+        ):
+            result = pytest.importorskip("asyncio").run(
+                forget_handler({"memory_id": mid})
+            )
+
+        assert result["deleted"] is True
+        assert result.get("artifact_deleted") is False
+        assert str(path) in caplog.text, (
+            "the already-absent signal must name the path it expected; got: "
+            + caplog.text
+        )
