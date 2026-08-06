@@ -319,13 +319,34 @@ def _walk_for_calls(
         if ntype in _CLASS_NODE_TYPES:
             name_node = child.child_by_field_name("name")
             cls = _text(name_node, source) if name_node else scope
+            # Equivalent-mutant note (#369): mutating "body" here, or the `or`
+            # to `and`, is undetectable. The body node is itself a child, so
+            # descending `child.children` reaches it via the catch-all and
+            # finds the same definitions in the same order. The fallback stays
+            # because grammars without a `body` field rely on it.
             body = child.child_by_field_name("body") or child
             inner = cls or scope
             stack.extend((c, inner) for c in reversed(body.children))
         elif ntype == "decorated_definition":
+            # Mirrors `_extract_python_children`'s dispatch, where the same
+            # branch is load-bearing: that function has no catch-all, so
+            # without it a decorated definition is invisible. Here the `else`
+            # below already reaches the wrapped node, which makes this arm
+            # behaviourally identical today — and its mutants unkillable.
+            #
+            # It is kept, not deleted, because it is the seam for behaviour
+            # that was never filled in: calls made *in the decorator*
+            # (`@app.route("/api")`, `@retry(times=3)`) currently produce no
+            # edge anywhere. Issue #372 carries the design decision and the
+            # implementation; deleting the arm would foreclose the question
+            # rather than answer it.
             stack.extend((c, scope) for c in reversed(child.children))
         elif ntype in _FUNCTION_NODE_TYPES:
             name_node = child.child_by_field_name("name")
+            # Equivalent-mutant note (#369): the `else ""` arm is unreachable —
+            # every node type in _FUNCTION_NODE_TYPES carries a name in all
+            # grammars in use (verified by sweep). It stays as a guard against
+            # a grammar that stops doing so, which would otherwise crash here.
             fn_name = _text(name_node, source) if name_node else ""
             body = child.child_by_field_name("body") or child
             if fn_name:

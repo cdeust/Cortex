@@ -41,7 +41,11 @@ read -r -a TEST_ARR <<< "$TESTS"
 PY="$ROOT/pyproject.toml"
 BAK="$(mktemp)"
 cp "$PY" "$BAK"
-cleanup() { cp "$BAK" "$PY"; rm -f "$BAK"; rm -rf "$ROOT/mutants" "$ROOT/.mutmut-cache"; }
+RUN_LOG="$(mktemp)"
+cleanup() {
+  cp "$BAK" "$PY"; rm -f "$BAK" "$RUN_LOG"
+  rm -rf "$ROOT/mutants" "$ROOT/.mutmut-cache"
+}
 trap cleanup EXIT
 
 # Repoint only_mutate, source_paths and the test selection at the change under
@@ -70,13 +74,43 @@ open(path, "w").write(src)
 PYEOF
 
 echo ">>> mutating: $* | tests: $TESTS"
-uv run mutmut run
+uv run mutmut run 2>&1 | tee "$RUN_LOG"
+
+# Two independent counts of the same quantity, cross-checked before any verdict.
+#
+# `mutmut run`'s progress line ends with a 🙁 tally; `mutmut results` lists the
+# survivors by name. Trusting the listing alone once produced a FALSE GREEN: on
+# a five-file run this script printed "none — 0 surviving mutants 🎉" while the
+# progress line ended at `🙁 423` and `mutmut results` in fact returned a
+# 915-line non-empty listing (issue #369). A mutation gate that can report clean
+# when it is not is worse than no gate, because the ledger row it produces is
+# believed. The cleanup trap wipes mutants/ and .mutmut-cache on exit, so a
+# disagreement is uninvestigable after the fact — it has to be caught here.
+#
+# Fail closed: if the two sources disagree, this script refuses to render a
+# verdict at all rather than picking the friendlier number.
+TALLY="$(tr '\r' '\n' < "$RUN_LOG" | grep -oE '🙁 [0-9]+' | tail -1 | grep -oE '[0-9]+' || true)"
+TALLY="${TALLY:-0}"
+
 echo ">>> mutmut-reported survivors (must be empty, or documented equivalents):"
 RESULTS="$(uv run mutmut results)"
-if echo "$RESULTS" | grep -qiE 'survived'; then
-  echo "$RESULTS" | grep -iE 'survived'
+LISTED="$(printf '%s\n' "$RESULTS" | grep -cE ': *survived[[:space:]]*$' || true)"
+
+if [ "$TALLY" != "$LISTED" ]; then
+  {
+    echo "!!! survivor-count disagreement — refusing to report a verdict."
+    echo "!!!   mutmut run progress line : $TALLY survived"
+    echo "!!!   mutmut results listing   : $LISTED survived"
+    echo "!!! One of the two is wrong. Re-run mutmut by hand WITHOUT this script"
+    echo "!!! (it deletes mutants/ and .mutmut-cache on exit) and inspect the cache."
+  } >&2
+  exit 2
+fi
+
+if [ "$LISTED" -gt 0 ]; then
+  printf '%s\n' "$RESULTS" | grep -E ': *survived[[:space:]]*$'
   echo ">>> re-verifying against the FULL test selection before trusting the verdict (issue #269):"
-  echo "$RESULTS" | uv run python3 "$ROOT/scripts/mutation_recheck_survivors.py" "$ROOT/mutants" "${TEST_ARR[@]}"
+  printf '%s\n' "$RESULTS" | uv run python3 "$ROOT/scripts/mutation_recheck_survivors.py" "$ROOT/mutants" "${TEST_ARR[@]}"
 else
   echo "  none — 0 surviving mutants 🎉"
 fi
