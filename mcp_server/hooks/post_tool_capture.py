@@ -99,13 +99,18 @@ def _should_capture(tool_name: str, tool_input: dict, output: str) -> tuple[bool
         return True, f"light_value_tool:{tool_name}"
 
     if tool_name in _CONDITIONAL_TOOLS:
-        output_lower = output.lower()
-        for kw in _HIGH_VALUE_PATTERNS:
-            if kw in output_lower:
-                return True, f"keyword:{kw}"
-        if tool_name == "Bash":
-            return True, "bash_output"
-        return False, "no_signal_keywords"
+        # issue #365: these are the NETWORK tools, so their output is
+        # off-machine content. The predicate deliberately does NOT read that
+        # output: keying capture on `kw in output_lower` let a fetched page
+        # decide whether it got written to long-term memory by including one
+        # of _HIGH_VALUE_PATTERNS, and session_start replays stored memories
+        # verbatim into later sessions. The rule is now the same fixed,
+        # content-independent one the high-value tools use — a length floor —
+        # and the resulting memory carries ORIGIN_NETWORK so the write gate
+        # refuses it the content-derived bypasses (core/write_gate).
+        if len(output) < _MIN_OUTPUT_LENGTH:
+            return False, "output_too_short"
+        return True, f"network_tool:{tool_name}"
 
     return False, f"low_value_tool:{tool_name}"
 
@@ -315,6 +320,12 @@ def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> No
                 "tags": tags,
                 "directory": cwd,
                 "source": "post_tool_capture",
+                # issue #365: the producing tool, so the handler can resolve
+                # the capture ORIGIN out-of-band. Network-origin content is
+                # refused the content-derived write-gate bypasses, which is
+                # what stopped a fetched page from installing itself by
+                # looking like a decision.
+                "origin_tool": tool_name,
                 # M-D2 (7.4): this hook IS the auto-capture pathway — no
                 # need to let `remember` re-derive the class from source.
                 "write_class": "auto",

@@ -71,6 +71,7 @@ def _register_remember(mcp: FastMCP) -> None:
             force: bool = False,
             supersedes_id: int | None = None,
             write_class: str | None = None,
+            origin_tool: str | None = None,
         ) -> dict:
             """Store a memory through the predictive coding write gate."""
             return await safe_handler(
@@ -84,6 +85,7 @@ def _register_remember(mcp: FastMCP) -> None:
                     "force": force,
                     "supersedes_id": supersedes_id,
                     "write_class": write_class,
+                    "origin_tool": origin_tool,
                 },
                 tool_name="remember",
             )
@@ -104,6 +106,7 @@ def _register_remember(mcp: FastMCP) -> None:
         agent_topic: str | None = None,
         supersedes_id: int | None = None,
         write_class: str | None = None,
+        origin_tool: str | None = None,
     ) -> dict:
         """Store a memory through the predictive coding write gate."""
         return await safe_handler(
@@ -118,6 +121,7 @@ def _register_remember(mcp: FastMCP) -> None:
                 "agent_topic": agent_topic or "",
                 "supersedes_id": supersedes_id,
                 "write_class": write_class,
+                "origin_tool": origin_tool,
             },
             tool_name="remember",
         )

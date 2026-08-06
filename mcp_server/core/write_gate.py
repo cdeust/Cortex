@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from mcp_server.core import capture_origin
 from mcp_server.core import coupled_neuromodulation as coupled_nm
 from mcp_server.core import (
     content_cues,
@@ -114,8 +115,20 @@ def determine_bypass(
     content: str,
     tags: list[str],
     write_class: str = "",
+    origin: str = capture_origin.ORIGIN_UNKNOWN,
 ) -> tuple[bool, str | None]:
     """Determine if write gate should be bypassed and why.
+
+    ``origin`` (issue #365) is the CHANNEL the content arrived through, from
+    ``core/capture_origin.classify_capture_origin`` — never inferred from the
+    content. Content-derived bypasses (``bypass_error`` / ``bypass_decision``)
+    are refused when the origin may not claim them, because those two are read
+    out of the content itself and are therefore exactly what off-machine text
+    would forge to install itself in durable, cross-session memory. ``force``
+    and a ``deliberate`` write class are out-of-band human signals and stay
+    valid at any origin. Defaults to ``ORIGIN_UNKNOWN``, which is permissive,
+    so existing callers are unaffected; the untrusted path passes its real
+    origin explicitly.
 
     ``write_class`` (M-D2, issue #147): a resolved ``deliberate`` write is
     NEVER rejected by the novelty gate — this is the tool's documented
@@ -140,8 +153,9 @@ def determine_bypass(
     (falling through to the deliberate check when none of the more
     specific conditions matched).
     """
-    is_error = thermodynamics.is_error_content(content)
-    is_decision = thermodynamics.is_decision_content(content)
+    content_bypass_allowed = capture_origin.may_bypass_write_gate_on_content(origin)
+    is_error = content_bypass_allowed and thermodynamics.is_error_content(content)
+    is_decision = content_bypass_allowed and thermodynamics.is_decision_content(content)
     has_important = bool({"important", "critical"} & {t.lower() for t in tags})
 
     if force:

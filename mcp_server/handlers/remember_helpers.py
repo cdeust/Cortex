@@ -37,6 +37,7 @@ from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
+from mcp_server.core import capture_origin
 from mcp_server.core import knowledge_graph, source_monitoring, habituation
 from mcp_server.core.hierarchical_predictive_coding import compute_hierarchical_novelty
 from mcp_server.core.predictive_coding_signals import extract_sensory_features
@@ -183,6 +184,7 @@ def _compute_gate_decision(
     tags: list[str],
     domain: str = "",
     write_class: str = "",
+    origin: str = capture_origin.ORIGIN_UNKNOWN,
 ) -> tuple[bool, str, float]:
     """Determine whether to store based on novelty score and bypass rules.
 
@@ -197,7 +199,7 @@ def _compute_gate_decision(
     the tool's documented contract.
     """
     bypass, bypass_reason = write_gate.determine_bypass(
-        force, content, tags, write_class=write_class
+        force, content, tags, write_class=write_class, origin=origin
     )
     settings = get_memory_settings()
     base_threshold = settings.WRITE_GATE_THRESHOLD
@@ -221,6 +223,7 @@ def evaluate_gate(
     emb_engine: EmbeddingEngine,
     domain: str = "",
     write_class: str = "",
+    origin: str = capture_origin.ORIGIN_UNKNOWN,
 ) -> dict[str, Any]:
     """Compute all novelty signals and gate decision.
 
@@ -287,7 +290,13 @@ def evaluate_gate(
         score, content, ent_names, store
     )
     should_store, gate_reason, threshold = _compute_gate_decision(
-        score, force, content, tags, domain=domain, write_class=write_class
+        score,
+        force,
+        content,
+        tags,
+        domain=domain,
+        write_class=write_class,
+        origin=origin,
     )
     # AF-5 feedback: record non-bypass decisions to drive the EMA. Bypasses
     # (force, error, decision, important_tag, deliberate write_class) carry

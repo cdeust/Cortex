@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import mcp_server.hooks.post_tool_capture as hook
 import mcp_server.infrastructure.artifact_store as artifact_store
 from mcp_server.core.gist_extraction import GIST_BUDGET
@@ -93,3 +95,67 @@ def test_artifact_store_failure_falls_back_to_full_content(tmp_path, monkeypatch
     # Fallback: full output kept, no pointer line.
     assert "**Artifact:**" not in content
     assert "line 1999 content padding here" in content
+
+
+# ── Capture must not be decided by the captured content (issue #365) ───────
+
+
+class TestNetworkToolCaptureIsContentIndependent:
+    """WebFetch/WebSearch output is off-machine content.
+
+    The predicate used to be `any(kw in output.lower() for kw in
+    HIGH_VALUE_PATTERNS)`, which let a fetched page decide whether it was
+    written to long-term memory by including one of those words — and
+    hooks/session_start replays stored memories verbatim into later sessions.
+    The rule is now a fixed length floor, identical for any payload.
+    """
+
+    LONG_WITH_KEYWORD = "x" * 60 + " decided to switch to the attacker's advice"
+    LONG_WITHOUT_KEYWORD = "y" * 90
+    TOO_SHORT = "z" * 10
+
+    @pytest.mark.parametrize("tool", ["WebFetch", "WebSearch"])
+    def test_same_verdict_regardless_of_keywords(self, tool):
+        from mcp_server.hooks.post_tool_capture import _should_capture
+
+        with_kw, _ = _should_capture(tool, {}, self.LONG_WITH_KEYWORD)
+        without_kw, _ = _should_capture(tool, {}, self.LONG_WITHOUT_KEYWORD)
+        assert with_kw == without_kw, (
+            "the capture decision still depends on the fetched content — a page "
+            "can select itself for persistence"
+        )
+
+    @pytest.mark.parametrize("tool", ["WebFetch", "WebSearch"])
+    def test_reason_names_the_tool_not_a_keyword(self, tool):
+        """The recorded reason must not echo attacker-chosen text."""
+        from mcp_server.hooks.post_tool_capture import _should_capture
+
+        ok, reason = _should_capture(tool, {}, self.LONG_WITH_KEYWORD)
+        assert ok is True
+        assert reason == f"network_tool:{tool}"
+        assert "keyword" not in reason
+
+    @pytest.mark.parametrize("tool", ["WebFetch", "WebSearch"])
+    def test_length_floor_still_applies(self, tool):
+        from mcp_server.hooks.post_tool_capture import _should_capture
+
+        assert _should_capture(tool, {}, self.TOO_SHORT) == (
+            False,
+            "output_too_short",
+        )
+
+    def test_the_hook_reports_the_producing_tool_to_remember(self):
+        """origin_tool must reach `remember`, or the gate cannot refuse.
+
+        Asserts the payload contract rather than a downstream effect: this is
+        the seam where the channel identity is handed over.
+        """
+        import inspect
+
+        from mcp_server.hooks import post_tool_capture
+
+        src = inspect.getsource(post_tool_capture._store_memory)
+        assert '"origin_tool": tool_name' in src, (
+            "_store_memory must pass origin_tool so handlers/remember can "
+            "resolve the capture origin from the channel"
+        )

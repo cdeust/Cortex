@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from mcp_server.core import capture_origin
 from mcp_server.core import (
     thermodynamics,
     write_gate,
@@ -192,6 +193,14 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     embedding = emb_engine.encode(content)
     valence = thermodynamics.compute_valence(content)
 
+    # issue #365: the CHANNEL the content arrived through, resolved from the
+    # producing tool name the caller reports out-of-band — never inferred from
+    # the content, which an off-machine payload controls. Governs only whether
+    # the content-derived write-gate bypasses may be claimed.
+    resolved_origin = capture_origin.classify_capture_origin(
+        str(args.get("origin_tool") or "")
+    )
+
     gate = evaluate_gate(
         content,
         tags,
@@ -201,6 +210,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         emb_engine,
         domain=domain,
         write_class=resolved_write_class,
+        origin=resolved_origin,
     )
     if not gate["should_store"]:
         return write_gate.build_rejection_response(

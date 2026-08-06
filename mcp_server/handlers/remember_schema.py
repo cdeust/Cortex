@@ -227,6 +227,23 @@ schema = {
                 "default": "user",
                 "examples": ["session", "tool"],
             },
+            "origin_tool": {
+                "type": "string",
+                "description": (
+                    "Name of the tool whose output produced this content, for "
+                    "automatic capture paths (issue #365). Resolves the "
+                    "capture ORIGIN out-of-band, from the channel rather than "
+                    "the text: content produced by a network tool "
+                    "(WebFetch/WebSearch) may NOT claim the content-derived "
+                    "write-gate bypasses, so a fetched page cannot install "
+                    "itself in long-term memory by looking like a decision or "
+                    "an error. Distinct from 'source' (which pipeline wrote "
+                    "this) and from the provenance grade (whether the "
+                    "content's references check out). Omit for deliberate "
+                    "user writes."
+                ),
+                "examples": ["WebFetch", "WebSearch", "Bash", "Edit"],
+            },
             "write_class": {
                 "type": "string",
                 "description": (
