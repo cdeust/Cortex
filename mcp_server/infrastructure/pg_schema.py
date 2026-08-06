@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS memories (
     useful_count    INTEGER DEFAULT 0,
     value           REAL DEFAULT 0.5,
     source_attribution TEXT DEFAULT 'unknown',
+    capture_origin  TEXT NOT NULL DEFAULT 'unknown',
     stimulus_signature TEXT DEFAULT '',
     extinction_strength REAL DEFAULT 0.0
                     CHECK (extinction_strength >= 0.0 AND extinction_strength <= 1.0),
@@ -1898,6 +1899,27 @@ BEGIN
         WHERE table_name = 'memories' AND column_name = 'source_attribution'
     ) THEN
         ALTER TABLE memories ADD COLUMN source_attribution TEXT DEFAULT 'unknown';
+    END IF;
+END $$;
+
+-- Migration: add capture origin (issue #365) — which CHANNEL produced the
+-- content: deliberate (a user asked for it) / local_action (this machine's own
+-- tools) / network (fetched off-machine, e.g. WebFetch/WebSearch) / unknown.
+-- Resolved from the producing TOOL NAME at capture time, never inferred from
+-- the content, so an off-machine payload cannot forge it. Distinct from BOTH
+-- neighbours: `source` is the ingestion pathway, and `source_attribution` is
+-- the epistemic origin that core/source_monitoring derives BY READING the
+-- content — which is why neither can gate on trust. Governs whether the
+-- content-derived write-gate bypasses may be claimed
+-- (core/write_gate.determine_bypass).
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'memories' AND column_name = 'capture_origin'
+    ) THEN
+        ALTER TABLE memories
+            ADD COLUMN capture_origin TEXT NOT NULL DEFAULT 'unknown';
     END IF;
 END $$;
 

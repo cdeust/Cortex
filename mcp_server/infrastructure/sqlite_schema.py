@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS memories (
     useful_count            INTEGER DEFAULT 0,
     value                   REAL DEFAULT 0.5,
     source_attribution      TEXT DEFAULT 'unknown',
+    capture_origin          TEXT NOT NULL DEFAULT 'unknown',
     stimulus_signature      TEXT DEFAULT '',
     extinction_strength     REAL DEFAULT 0.0
                             CHECK (extinction_strength >= 0.0
@@ -445,6 +446,12 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     # Source-monitoring attribution (C1 reality monitoring) — PG parity.
     # perceived / told / inferred / unknown.
     ("memories", "source_attribution", "TEXT DEFAULT 'unknown'"),
+    # Capture origin (issue #365) — PG parity with the memories.capture_origin
+    # migration in pg_schema.py. Which CHANNEL produced the content
+    # (deliberate / local_action / network / unknown), resolved from the
+    # producing tool name and never from the content, so a fetched payload
+    # cannot forge it. Gates the content-derived write-gate bypasses.
+    ("memories", "capture_origin", "TEXT NOT NULL DEFAULT 'unknown'"),
     # Habituation stimulus identity (E1 habituation & sensitization) — PG
     # parity. Normalised content key; repeated presentations of the same
     # signature drive the write gate's response decrement (Rankin 2009).

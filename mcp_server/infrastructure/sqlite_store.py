@@ -379,10 +379,11 @@ class SqliteMemoryStore(
                 schema_match_score, schema_id,
                 hippocampal_dependency, is_benchmark, agent_context,
                 is_global, supersedes_id, source_attribution,
-                stimulus_signature, extinction_strength, write_class
+                stimulus_signature, extinction_strength, write_class,
+                capture_origin
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )""",
             (
                 content,
@@ -416,6 +417,9 @@ class SqliteMemoryStore(
                 data.get("stimulus_signature", ""),
                 data.get("extinction_strength", 0.0),
                 data.get("write_class", "deliberate"),
+                # issue #365: channel-derived capture origin; "unknown" keeps
+                # every existing writer's behaviour unchanged.
+                data.get("capture_origin", "unknown"),
             ),
         )
         memory_id = cur.lastrowid

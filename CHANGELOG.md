@@ -27,6 +27,25 @@ adheres to [Semantic Versioning](https://semver.org/).
   added tool is visibly unclassified. `origin_tool` is a declared input on
   `remember` and exposed on both registered MCP wrappers.
 
+  The origin is persisted to a new `memories.capture_origin` column (both
+  backends, with a one-shot migration) so the value that governed the gate is
+  queryable afterwards — an in-flight-only check cannot be audited, and the
+  injection-time critique (#363) and `/why` both need to read it. The upgrade
+  path was verified old-code-to-new-code against PostgreSQL: table and the
+  `current_memories` view both gain the column, pre-existing rows survive and
+  backfill to `unknown`. That view is `SELECT * FROM memories`, whose column
+  list PostgreSQL freezes at creation, so `get_all_ddl` ordering
+  (migrations before the view) is load-bearing and now has a test.
+
+  The value is queryable by SQL on both backends but is deliberately NOT added
+  to recall results yet: `_WRRF_CONTRACT_FIELDS` pins the injected-candidate key
+  set to the exact `RETURNS TABLE` column set of the `recall_memories()`
+  PL/pgSQL function, so surfacing it on the spreading-activation path alone
+  would create the divergence that contract exists to prevent. Carrying it onto
+  recall results means changing that stored function's signature, which belongs
+  with #363 — the consumer that needs it — so the change and its consumer are
+  tested together.
+
   Note the two neighbouring modules deliberately not reused: `core/provenance`
   grades reference verifiability and `core/source_monitoring` attributes
   epistemic origin, both by reading the content. A hostile page dense with file

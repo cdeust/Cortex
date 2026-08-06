@@ -758,6 +758,7 @@ def insert_and_post_process(
     is_global: bool = False,
     created_at: str | None = None,
     write_class: str = "deliberate",
+    origin: str = capture_origin.ORIGIN_UNKNOWN,
 ) -> dict[str, Any]:
     """Separate, store, and run post-storage operations.
 
@@ -828,6 +829,11 @@ def insert_and_post_process(
     record["agent_context"] = agent_context
     record["is_global"] = is_global
     record["write_class"] = write_class
+    # issue #365: persist the CHANNEL the content arrived through, so the
+    # value that governed the gate decision is queryable afterwards — the
+    # injection-time critique (#363) and `/why` both need it, and an
+    # in-flight-only check cannot be audited.
+    record["capture_origin"] = origin
     superseded_head: int | None = None
     if action == "supersede" and merged_id is not None:
         # Atomic insert + supersession edge (biomimetic reconsolidation): the

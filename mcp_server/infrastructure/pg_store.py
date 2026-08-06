@@ -486,7 +486,7 @@ class PgMemoryStore(
                 is_global, stage_entered_at,
                 arousal, dominant_emotion, supersedes_id,
                 source_attribution, stimulus_signature, extinction_strength,
-                write_class
+                write_class, capture_origin
             ) VALUES (
                 %(content)s, %(embedding)s, %(tags)s::jsonb, %(source)s, %(domain)s,
                 %(directory_context)s, %(created_at)s, %(last_accessed)s,
@@ -501,7 +501,7 @@ class PgMemoryStore(
                 %(is_global)s, %(stage_entered_at)s,
                 %(arousal)s, %(dominant_emotion)s, %(supersedes_id)s,
                 %(source_attribution)s, %(stimulus_signature)s, %(extinction_strength)s,
-                %(write_class)s
+                %(write_class)s, %(capture_origin)s
             ) RETURNING id"""
 
     def _build_insert_params(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -561,6 +561,10 @@ class PgMemoryStore(
             "dominant_emotion": data.get("dominant_emotion", "neutral"),
             "supersedes_id": data.get("supersedes_id"),
             "source_attribution": data.get("source_attribution", "unknown"),
+            # issue #365: channel-derived capture origin. Defaults to
+            # "unknown" (permissive at the gate) so every existing writer
+            # is unaffected; the auto-capture path passes its real origin.
+            "capture_origin": data.get("capture_origin", "unknown"),
             "stimulus_signature": data.get("stimulus_signature", ""),
             "extinction_strength": data.get("extinction_strength", 0.0),
             # M-D2 (7.4): every writer resolves this explicitly BEFORE

@@ -308,6 +308,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         is_global=is_global,
         created_at=created_at,
         write_class=resolved_write_class,
+        origin=resolved_origin,
     )
     if is_global and result.get("stored"):
         result["is_global"] = True
