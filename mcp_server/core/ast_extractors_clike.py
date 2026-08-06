@@ -114,22 +114,35 @@ def extract_csharp_definitions(root: Node, source: bytes) -> list[SymbolDef]:
 
 
 def _walk_csharp(node: Node, source: bytes, defs: list[SymbolDef], parent: str) -> None:
-    """Recursively extract C# definitions, qualifying methods by type."""
-    if node.type in _CSHARP_TYPE_KINDS:
-        name = node.child_by_field_name("name")
-        if name:
-            n = _text(name, source)
-            defs.append(SymbolDef(name=n, kind=_CSHARP_TYPE_KINDS[node.type]))
-            for child in _find_children(node, "declaration_list"):
-                for member in child.children:
-                    _walk_csharp(member, source, defs, n)
-            return
-    if node.type == "method_declaration":
-        name = node.child_by_field_name("name")
-        if name:
-            n = _text(name, source)
-            full = f"{parent}.{n}" if parent else n
-            defs.append(SymbolDef(name=full, kind="method" if parent else "function"))
-        return
-    for child in node.children:
-        _walk_csharp(child, source, defs, parent)
+    """Extract C# definitions, qualifying methods by type.
+
+    Iterative (see `ast_extractors._walk_type`): one Python frame per AST level
+    raised an uncaught RecursionError on deeply nested sources. Descendants are
+    pushed reversed, so `defs` keeps its depth-first pre-order.
+    """
+    stack: list[tuple[Node, str]] = [(node, parent)]
+    while stack:
+        current, scope = stack.pop()
+        if current.type in _CSHARP_TYPE_KINDS:
+            name = current.child_by_field_name("name")
+            if name:
+                n = _text(name, source)
+                defs.append(SymbolDef(name=n, kind=_CSHARP_TYPE_KINDS[current.type]))
+                members = [
+                    (member, n)
+                    for child in _find_children(current, "declaration_list")
+                    for member in child.children
+                ]
+                stack.extend(reversed(members))
+                continue
+            # Unnamed: fall through, as the recursive form did.
+        if current.type == "method_declaration":
+            name = current.child_by_field_name("name")
+            if name:
+                n = _text(name, source)
+                full = f"{scope}.{n}" if scope else n
+                defs.append(
+                    SymbolDef(name=full, kind="method" if scope else "function")
+                )
+            continue
+        stack.extend((c, scope) for c in reversed(current.children))

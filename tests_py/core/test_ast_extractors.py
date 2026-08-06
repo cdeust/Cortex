@@ -149,3 +149,55 @@ func NewServer(port int) *Server {
         else:
             r = parse_file_ast("main.go", code)
             assert r.language == "go"
+
+
+class TestWalkType:
+    """`_walk_type` is the shared descendant search behind every extractor
+    module (clike, extra, jvm, scripting), so its depth ceiling and its
+    ordering are contracts, not implementation details.
+    """
+
+    def _js_root(self, code: bytes):
+        from tree_sitter_language_pack import get_parser
+
+        return get_parser("javascript").parse(code).root_node
+
+    def test_deep_nesting_does_not_exhaust_the_interpreter_stack(self) -> None:
+        """Regression: the recursive form raised RecursionError at AST depth
+        ~1003 (default limit 1000). 1500 is comfortably past that, and no
+        caller anywhere in mcp_server/ catches RecursionError.
+        """
+        if not _HAS_TREE_SITTER:
+            return
+        from mcp_server.core.ast_extractors import _walk_type
+
+        depth = 1500
+        code = (b"(" * depth) + b"1" + (b")" * depth) + b";"
+        assert _walk_type(self._js_root(code), "import_statement") == []
+
+    def test_returns_matches_in_document_order(self) -> None:
+        if not _HAS_TREE_SITTER:
+            return
+        from mcp_server.core.ast_extractors import _walk_type
+
+        code = b"import a from 'a';\nimport b from 'b';\nimport c from 'c';\n"
+        found = _walk_type(self._js_root(code), "import_statement")
+        starts = [n.start_byte for n in found]
+        assert len(found) == 3
+        assert starts == sorted(starts)
+
+    def test_includes_the_start_node_itself(self) -> None:
+        if not _HAS_TREE_SITTER:
+            return
+        from mcp_server.core.ast_extractors import _walk_type
+
+        root = self._js_root(b"const x = 1;\n")
+        assert _walk_type(root, root.type) == [root]
+
+    def test_returns_empty_when_nothing_matches(self) -> None:
+        if not _HAS_TREE_SITTER:
+            return
+        from mcp_server.core.ast_extractors import _walk_type
+
+        root = self._js_root(b"const x = 1;\n")
+        assert _walk_type(root, "no_such_node_type") == []

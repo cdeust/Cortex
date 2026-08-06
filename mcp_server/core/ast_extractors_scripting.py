@@ -49,24 +49,33 @@ def extract_ruby_definitions(root: Node, source: bytes) -> list[SymbolDef]:
 
 
 def _walk_ruby(node: Node, source: bytes, defs: list[SymbolDef], parent: str) -> None:
-    """Recursively extract Ruby definitions, qualifying methods by class."""
-    if node.type in _RUBY_KINDS:
-        name = node.child_by_field_name("name")
-        if name:
-            n = _text(name, source)
-            defs.append(SymbolDef(name=n, kind=_RUBY_KINDS[node.type]))
-            for child in node.children:
-                _walk_ruby(child, source, defs, n)
-            return
-    if node.type == "method":
-        name = node.child_by_field_name("name")
-        if name:
-            n = _text(name, source)
-            full = f"{parent}.{n}" if parent else n
-            defs.append(SymbolDef(name=full, kind="method" if parent else "function"))
-        return
-    for child in node.children:
-        _walk_ruby(child, source, defs, parent)
+    """Extract Ruby definitions, qualifying methods by class.
+
+    Iterative (see `ast_extractors._walk_type`): one Python frame per AST level
+    raised an uncaught RecursionError on deeply nested sources. Descendants are
+    pushed reversed, so `defs` keeps its depth-first pre-order.
+    """
+    stack: list[tuple[Node, str]] = [(node, parent)]
+    while stack:
+        current, scope = stack.pop()
+        if current.type in _RUBY_KINDS:
+            name = current.child_by_field_name("name")
+            if name:
+                n = _text(name, source)
+                defs.append(SymbolDef(name=n, kind=_RUBY_KINDS[current.type]))
+                stack.extend((c, n) for c in reversed(current.children))
+                continue
+            # Unnamed: fall through, as the recursive form did.
+        if current.type == "method":
+            name = current.child_by_field_name("name")
+            if name:
+                n = _text(name, source)
+                full = f"{scope}.{n}" if scope else n
+                defs.append(
+                    SymbolDef(name=full, kind="method" if scope else "function")
+                )
+            continue
+        stack.extend((c, scope) for c in reversed(current.children))
 
 
 # ── PHP ───────────────────────────────────────────────────────────────────────
@@ -98,22 +107,33 @@ def extract_php_definitions(root: Node, source: bytes) -> list[SymbolDef]:
 
 
 def _walk_php(node: Node, source: bytes, defs: list[SymbolDef], parent: str) -> None:
-    """Recursively extract PHP definitions, qualifying methods by type."""
-    if node.type in _PHP_KINDS:
-        name = node.child_by_field_name("name")
-        if name:
-            n = _text(name, source)
-            defs.append(SymbolDef(name=n, kind=_PHP_KINDS[node.type]))
-            for child in _find_children(node, "declaration_list"):
-                for member in child.children:
-                    _walk_php(member, source, defs, n)
-            return
-    if node.type in ("function_definition", "method_declaration"):
-        name = node.child_by_field_name("name")
-        if name:
-            n = _text(name, source)
-            full = f"{parent}.{n}" if parent else n
-            defs.append(SymbolDef(name=full, kind="method" if parent else "function"))
-        return
-    for child in node.children:
-        _walk_php(child, source, defs, parent)
+    """Extract PHP definitions, qualifying methods by type.
+
+    Iterative for the same reason as `_walk_ruby`; traversal order preserved.
+    """
+    stack: list[tuple[Node, str]] = [(node, parent)]
+    while stack:
+        current, scope = stack.pop()
+        if current.type in _PHP_KINDS:
+            name = current.child_by_field_name("name")
+            if name:
+                n = _text(name, source)
+                defs.append(SymbolDef(name=n, kind=_PHP_KINDS[current.type]))
+                members = [
+                    (member, n)
+                    for child in _find_children(current, "declaration_list")
+                    for member in child.children
+                ]
+                stack.extend(reversed(members))
+                continue
+            # Unnamed: fall through, as the recursive form did.
+        if current.type in ("function_definition", "method_declaration"):
+            name = current.child_by_field_name("name")
+            if name:
+                n = _text(name, source)
+                full = f"{scope}.{n}" if scope else n
+                defs.append(
+                    SymbolDef(name=full, kind="method" if scope else "function")
+                )
+            continue
+        stack.extend((c, scope) for c in reversed(current.children))

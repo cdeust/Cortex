@@ -111,25 +111,35 @@ def _extract_swift_node(
     defs: list[SymbolDef],
     parent: str,
 ) -> None:
-    """Recursively extract Swift definitions."""
-    if node.type == "function_declaration":
-        name = node.child_by_field_name("name")
-        if name:
-            n = _text(name, source)
-            full = f"{parent}.{n}" if parent else n
-            defs.append(SymbolDef(name=full, kind="method" if parent else "function"))
-    elif node.type in _SWIFT_KIND_MAP:
-        name = node.child_by_field_name("name")
-        if name:
-            n = _text(name, source)
-            defs.append(SymbolDef(name=n, kind=_SWIFT_KIND_MAP[node.type]))
-            body = node.child_by_field_name("body")
-            if body:
-                for child in body.children:
-                    _extract_swift_node(child, source, defs, n)
-    else:
-        for child in node.children:
-            _extract_swift_node(child, source, defs, parent)
+    """Extract Swift definitions.
+
+    Iterative (see `ast_extractors._walk_type`): one Python frame per AST level
+    raised an uncaught RecursionError on deeply nested sources. Descendants are
+    pushed reversed, so `defs` keeps its depth-first pre-order. The branch
+    structure is the original if/elif/else: a `_SWIFT_KIND_MAP` node never
+    reaches the catch-all descent, and an unnamed one descends nowhere.
+    """
+    stack: list[tuple[Node, str]] = [(node, parent)]
+    while stack:
+        current, scope = stack.pop()
+        if current.type == "function_declaration":
+            name = current.child_by_field_name("name")
+            if name:
+                n = _text(name, source)
+                full = f"{scope}.{n}" if scope else n
+                defs.append(
+                    SymbolDef(name=full, kind="method" if scope else "function")
+                )
+        elif current.type in _SWIFT_KIND_MAP:
+            name = current.child_by_field_name("name")
+            if name:
+                n = _text(name, source)
+                defs.append(SymbolDef(name=n, kind=_SWIFT_KIND_MAP[current.type]))
+                body = current.child_by_field_name("body")
+                if body:
+                    stack.extend((c, n) for c in reversed(body.children))
+        else:
+            stack.extend((c, scope) for c in reversed(current.children))
 
 
 # ── Rust ──────────────────────────────────────────────────────────────────

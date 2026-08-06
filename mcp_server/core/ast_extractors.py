@@ -30,12 +30,23 @@ def _find_children(node: Node, *types: str) -> list[Node]:
 
 
 def _walk_type(node: Node, node_type: str) -> list[Node]:
-    """Recursively find all descendants of a given type."""
+    """Find `node` and all its descendants of a given type, in document order.
+
+    Iterative on purpose. The recursive form consumed one Python frame per AST
+    level and raised RecursionError at an AST depth of ~1003 under the default
+    limit of 1000 — reachable on minified or generated sources in third-party
+    repositories, and unhandled (no caller catches RecursionError). Heap depth
+    replaces stack depth; the traversal order is unchanged.
+    """
     results: list[Node] = []
-    if node.type == node_type:
-        results.append(node)
-    for child in node.children:
-        results.extend(_walk_type(child, node_type))
+    stack: list[Node] = [node]
+    while stack:
+        current = stack.pop()
+        if current.type == node_type:
+            results.append(current)
+        # Reversed, so siblings pop left-to-right and the result stays
+        # pre-order document order — identical to the recursive form.
+        stack.extend(reversed(current.children))
     return results
 
 
@@ -287,34 +298,44 @@ def _walk_for_calls(
     source: bytes,
     out: dict[str, list[str]],
 ) -> None:
-    """Recurse through ``node``'s children, tracking the enclosing class.
+    """Walk ``node``'s descendants, tracking the enclosing class.
 
     Precondition: `out` is the accumulator `extract_calls_per_function`
     returns; this function only adds keys, it does not read existing ones.
     Postcondition: every named function/method reachable from `node` has
     its qualified name mapped to its deduped callee-basename list in `out`.
+
+    Iterative for the same reason as `_walk_type`: one Python frame per AST
+    level raised RecursionError on deeply nested sources, and no caller
+    catches it. The explicit stack carries the enclosing class scope with
+    each node, and descendants are pushed reversed so they pop before the
+    remaining siblings — preserving the depth-first pre-order the recursive
+    form had, and with it the insertion order of `out`.
     """
-    for child in node.children:
+    stack: list[tuple[Node, str]] = [(c, class_scope) for c in reversed(node.children)]
+    while stack:
+        child, scope = stack.pop()
         ntype = child.type
         if ntype in _CLASS_NODE_TYPES:
             name_node = child.child_by_field_name("name")
-            cls = _text(name_node, source) if name_node else class_scope
+            cls = _text(name_node, source) if name_node else scope
             body = child.child_by_field_name("body") or child
-            _walk_for_calls(body, cls or class_scope, source, out)
+            inner = cls or scope
+            stack.extend((c, inner) for c in reversed(body.children))
         elif ntype == "decorated_definition":
-            _walk_for_calls(child, class_scope, source, out)
+            stack.extend((c, scope) for c in reversed(child.children))
         elif ntype in _FUNCTION_NODE_TYPES:
             name_node = child.child_by_field_name("name")
             fn_name = _text(name_node, source) if name_node else ""
             body = child.child_by_field_name("body") or child
             if fn_name:
-                qname = f"{class_scope}.{fn_name}" if class_scope else fn_name
+                qname = f"{scope}.{fn_name}" if scope else fn_name
                 out[qname] = _collect_call_basenames(body, source)
-            # Recurse into body for nested definitions (inner
+            # Descend into the body for nested definitions (inner
             # functions, closures that define named functions).
-            _walk_for_calls(body, class_scope, source, out)
+            stack.extend((c, scope) for c in reversed(body.children))
         else:
-            _walk_for_calls(child, class_scope, source, out)
+            stack.extend((c, scope) for c in reversed(child.children))
 
 
 def _collect_call_basenames(body: Node, source: bytes) -> list[str]:

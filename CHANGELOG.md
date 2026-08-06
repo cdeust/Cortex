@@ -58,6 +58,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **A deeply nested source file no longer fails the whole indexing run.** Every
+  full-tree AST walker in the extractor layer recursed once per AST level and
+  raised an uncaught `RecursionError` past a depth of ~1003 (default recursion
+  limit 1000) — reachable on the minified and generated sources found in
+  third-party repositories, and fatal for the entire repository rather than the
+  one file, since nothing in `mcp_server/` catches it. Seven walkers now use an
+  explicit stack: `_walk_type` and `_walk_for_calls` (Python/JS/shared),
+  `_walk_java`, `_walk_kotlin`, `_walk_csharp`, `_walk_ruby`, `_walk_php` and
+  `_extract_swift_node`. Traversal order is unchanged, verified differentially
+  against the previous implementation over 2229 real and synthetic sources with
+  zero output differences, including dictionary key order.
 - FastMCP's banner-time network update probe can no longer abort stdio startup
   before MCP `initialize` when a SOCKS proxy is configured without optional
   HTTP SOCKS support. The diagnostic banner and its existing user setting are
