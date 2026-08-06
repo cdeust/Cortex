@@ -33,7 +33,19 @@ def extract_c_imports(root: Node, source: bytes) -> list[ImportInfo]:
 
 
 def _declarator_name(declarator: Node | None, source: bytes) -> str:
-    """Unwrap nested C/C++ declarators down to the identifier."""
+    """Unwrap nested C/C++ declarators down to the identifier.
+
+    Equivalent-mutant note (#369): the two checks below have identical bodies,
+    so which tuple a node type sits in is not observable, and mutating a type
+    string only changes behaviour if that type is the *terminal* declarator of
+    a `function_definition`. In practice the chain terminates at `identifier`
+    (free functions) or `qualified_identifier` (out-of-line members, including
+    `C::~C`), so the remaining four names are carried for grammars and forms
+    that do not currently reach here. They are kept rather than pruned because
+    the split reads as a deliberate plain-vs-qualified distinction that a
+    future caller may need to act on differently — the same judgement as the
+    `decorated_definition` arm in `ast_extractors._walk_for_calls`.
+    """
     node = declarator
     while node is not None:
         if node.type in ("identifier", "field_identifier", "type_identifier"):

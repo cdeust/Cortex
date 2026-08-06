@@ -29,7 +29,17 @@ def extract_go_imports(root: Node, source: bytes) -> list[ImportInfo]:
 
 
 def extract_go_definitions(root: Node, source: bytes) -> list[SymbolDef]:
-    """Extract Go func, type, and method definitions."""
+    """Extract Go func, type, and method definitions.
+
+    Equivalent-mutant notes (#369): a Go `function_declaration` always carries
+    a `parameters` node — `func F()` still has an empty one — so the `else ""`
+    signature fallback is unreachable. Likewise a `method_declaration` always
+    carries a receiver, and a receiver always contains a `type_identifier`, so
+    `_extract_go_receiver` never returns `""` from this call site and the
+    unqualified `else` branch below is unreachable. Both fallbacks are kept as
+    guards; the reachable behaviour is pinned in
+    `test_ast_extractor_definitions.py::TestGoDefinitions`.
+    """
     defs: list[SymbolDef] = []
     for node in root.children:
         if node.type == "function_declaration":

@@ -105,7 +105,13 @@ def _extract_python_func(
     defs: list[SymbolDef],
     parent: str,
 ) -> None:
-    """Extract a single Python function definition."""
+    """Extract a single Python function definition.
+
+    Equivalent-mutant note (#369): a `function_definition` node always carries
+    both a `name` and a `parameters` child, so the two `else ""` fallbacks here
+    are unreachable. They are guards against a grammar that stops guaranteeing
+    it, not live branches.
+    """
     name_node = node.child_by_field_name("name")
     params_node = node.child_by_field_name("parameters")
     name = _text(name_node, source) if name_node else ""
@@ -132,7 +138,13 @@ def _extract_python_class(
     source: bytes,
     defs: list[SymbolDef],
 ) -> None:
-    """Extract a class and recurse into its body for methods."""
+    """Extract a class and recurse into its body for methods.
+
+    Equivalent-mutant note (#369): a `class_definition` always carries a
+    `name`, so that `else ""` is unreachable. The `superclasses` fallback is
+    NOT — `class C: pass` has no base list — and is pinned in
+    `test_ast_extractor_edges.py::TestSignatureTruncation`.
+    """
     name_node = node.child_by_field_name("name")
     superclass_node = node.child_by_field_name("superclasses")
     cls_name = _text(name_node, source) if name_node else ""
@@ -171,7 +183,22 @@ def _extract_js_node(
     defs: list[SymbolDef],
     parent: str,
 ) -> None:
-    """Recursively extract JS definitions with scope tracking."""
+    """Recursively extract JS definitions with scope tracking.
+
+    Equivalent-mutant notes (#369), all turning on which callers supply a
+    non-empty `parent`:
+
+    * `parent` is `""` at both entry points here (`extract_js_definitions` and
+      the `export_statement` recursion) and is only non-empty when
+      `_extract_js_class` recurses into a class body. Passing `None` instead of
+      `""` is therefore unobservable — every use is a truthiness test.
+    * `method_definition` is only reached from that class-body recursion, so
+      `parent` is always set when the arm below runs and its `else` branch is
+      unreachable. Mutating the arguments inside it cannot be detected.
+    * `"function"` is a legacy tree-sitter node type. The current grammar emits
+      `function_expression` for anonymous function expressions, so nothing
+      reaches the second entry of the tuple. Kept for grammar compatibility.
+    """
     if node.type in ("function_declaration", "function"):
         _extract_js_func(node, source, defs, parent)
     elif node.type == "class_declaration":
@@ -264,7 +291,14 @@ def _callee_basename(call_node: Node, source: bytes) -> str:
 
     Strategy: take the dotted/attribute chain's last segment and strip
     anything after the first ``(``, ``[``, or ``<`` (generics, subscripts,
-    argument lists that slip into tree-sitter's surface text)."""
+    argument lists that slip into tree-sitter's surface text).
+
+    Equivalent-mutant note (#369): the `1` in both splits is unobservable.
+    `rsplit(sep, n)[-1]` is the text after the last separator for every n, and
+    `split(sep, n)[0]` is the text before the first separator for every n. Only
+    the *direction* matters, and that is pinned — see
+    `test_ast_extractor_edges.py::TestCalleeBasenameEdges`.
+    """
     fn_ref = call_node.child_by_field_name("function")
     if fn_ref is None:
         return ""
