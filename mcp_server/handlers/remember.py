@@ -197,9 +197,28 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     # producing tool name the caller reports out-of-band — never inferred from
     # the content, which an off-machine payload controls. Governs only whether
     # the content-derived write-gate bypasses may be claimed.
-    resolved_origin = capture_origin.classify_capture_origin(
-        str(args.get("origin_tool") or "")
-    )
+    origin_tool = str(args.get("origin_tool") or "").strip()
+    resolved_origin = capture_origin.classify_capture_origin(origin_tool)
+    # A `remember` carrying NO producing tool at all is the user or agent
+    # asking for this in so many words: ORIGIN_DELIBERATE, the highest-trust
+    # value and — until this — the only one nothing ever produced.
+    #
+    # It matters because the bypass rule is an allowlist: without this a direct
+    # `remember` resolves UNKNOWN and loses the content-derived bypass it has
+    # always had.
+    #
+    # The condition is the ABSENCE of a tool name, not an UNKNOWN
+    # classification. Those differ exactly where it counts: a tool that was
+    # named but is not in the table (a future off-machine tool, a rename) also
+    # classifies UNKNOWN, and promoting that to DELIBERATE would reinstate the
+    # fail-open the allowlist just removed. Named-but-unrecognised stays
+    # UNKNOWN and stays refused.
+    #
+    # Gated additionally on the write class, which the auto-capture hook pins
+    # to "auto" out-of-band, so hook-captured content cannot reach DELIBERATE
+    # even if it somehow omitted its tool name.
+    if not origin_tool and resolved_write_class == write_class_module.DELIBERATE:
+        resolved_origin = capture_origin.ORIGIN_DELIBERATE
 
     gate = evaluate_gate(
         content,

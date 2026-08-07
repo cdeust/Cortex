@@ -50,10 +50,12 @@ from __future__ import annotations
 #              about whether its claims are correct.
 # NETWORK      content that came from off-machine (WebFetch, WebSearch).
 #              Third-party and attacker-influenceable.
-# UNKNOWN      no tool attribution available. Treated as trusted-for-bypass so
-#              that adding this parameter changes no existing caller's
-#              behaviour; every untrusted channel reaches the gate through the
-#              classification table below, never through this default.
+# UNKNOWN      no tool attribution available, or a tool nobody has classified.
+#              REFUSED the content-derived bypass. This is the fail-closed
+#              choice: an unclassified channel might be off-machine, and the
+#              cost of being wrong is a rejected write rather than a hostile
+#              page installing itself into durable memory. A caller that
+#              legitimately needs the bypass says which channel it is.
 ORIGIN_DELIBERATE = "deliberate"
 ORIGIN_LOCAL_ACTION = "local_action"
 ORIGIN_NETWORK = "network"
@@ -90,10 +92,20 @@ _LOCAL_ACTION_TOOLS: frozenset[str] = frozenset(
     }
 )
 
-# Content-derived write-gate bypasses are refused for these origins. Only
-# NETWORK today; the set exists so the refusal is a data decision rather than
-# an `if origin == "network"` scattered across call sites (§1.2).
-_ORIGINS_REFUSED_CONTENT_BYPASS: frozenset[str] = frozenset({ORIGIN_NETWORK})
+# Origins ALLOWED to claim a content-derived write-gate bypass. An allowlist,
+# not a denylist of untrusted origins, so the control fails closed.
+#
+# A denylist here would be fail-open in exactly the case this module exists to
+# defend. `_NETWORK_TOOLS` hardcodes two names against a host whose tool
+# surface changes: add a third off-machine tool, or rename one, and its content
+# classifies UNKNOWN. Under a denylist of {NETWORK} that silently regains the
+# bypass — the control stops applying with no failing test and no signal, which
+# is the same shape as the issue this module closes. Under an allowlist an
+# unclassified origin is simply refused, and the cost of a missing
+# classification is a rejected write rather than a trusted one.
+_ORIGINS_ALLOWED_CONTENT_BYPASS: frozenset[str] = frozenset(
+    {ORIGIN_DELIBERATE, ORIGIN_LOCAL_ACTION}
+)
 
 
 def classify_capture_origin(tool_name: str) -> str:
@@ -127,17 +139,17 @@ def classify_capture_origin(tool_name: str) -> str:
 def may_bypass_write_gate_on_content(origin: str) -> bool:
     """Whether content from ``origin`` may claim a content-derived bypass.
 
-    Pre: ``origin`` is any string (an unrecognised value is treated as
-    unknown).
-    Post: False exactly for the origins in
-    ``_ORIGINS_REFUSED_CONTENT_BYPASS``; True otherwise.
+    Pre: ``origin`` is any string.
+    Post: True exactly for the origins in
+    ``_ORIGINS_ALLOWED_CONTENT_BYPASS``; False otherwise, including for
+    ``ORIGIN_UNKNOWN`` and for any value this module does not recognise.
 
     The asymmetry is deliberate. ``force`` and a ``deliberate`` write class are
     out-of-band signals a human supplied, so they remain valid regardless of
     origin; ``bypass_error`` / ``bypass_decision`` are read out of the content
     itself, so they are exactly what an attacker would forge.
     """
-    return origin not in _ORIGINS_REFUSED_CONTENT_BYPASS
+    return origin in _ORIGINS_ALLOWED_CONTENT_BYPASS
 
 
 def is_network_origin(origin: str) -> bool:

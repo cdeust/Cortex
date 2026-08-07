@@ -5,7 +5,7 @@ Contract under test:
     insensitively, and never guesses: unknown/empty -> ORIGIN_UNKNOWN.
   - WebFetch/WebSearch -> ORIGIN_NETWORK. Local-acting tools ->
     ORIGIN_LOCAL_ACTION.
-  - may_bypass_write_gate_on_content is False exactly for network origin.
+  - may_bypass_write_gate_on_content is True only for the allowlisted origins.
   - The classification is a pure function of the tool name: no content is
     consulted, so no content can change the answer. That invariant is what
     makes the value usable as a security input, so it is asserted directly.
@@ -17,6 +17,7 @@ import pytest
 
 from mcp_server.core.capture_origin import (
     ALL_ORIGINS,
+    ORIGIN_DELIBERATE,
     ORIGIN_LOCAL_ACTION,
     ORIGIN_NETWORK,
     ORIGIN_UNKNOWN,
@@ -74,21 +75,25 @@ class TestBypassPolicy:
     def test_network_origin_may_not_claim_a_content_bypass(self):
         assert may_bypass_write_gate_on_content(ORIGIN_NETWORK) is False
 
-    @pytest.mark.parametrize(
-        "origin", [ORIGIN_LOCAL_ACTION, ORIGIN_UNKNOWN, "deliberate"]
-    )
-    def test_non_network_origins_may(self, origin):
+    @pytest.mark.parametrize("origin", [ORIGIN_LOCAL_ACTION, ORIGIN_DELIBERATE])
+    def test_allowlisted_origins_may(self, origin):
         assert may_bypass_write_gate_on_content(origin) is True
 
-    def test_unrecognised_origin_is_permissive_by_design(self):
-        """Documented default: adding the parameter changes no caller.
+    def test_unknown_origin_is_refused_because_the_rule_is_an_allowlist(self):
+        """The fail-closed property, and the reason for the allowlist.
 
-        Every untrusted channel reaches the gate through
-        classify_capture_origin, never through this default, so permissiveness
-        here does not open the network path. Pinned so the choice is a decision
-        on record rather than an accident.
+        `_NETWORK_TOOLS` hardcodes two names against a host whose tool surface
+        changes. A third off-machine tool, or a renamed one, classifies
+        UNKNOWN. Under a denylist of {NETWORK} it would silently regain the
+        content bypass — the control stopping with no failing test, which is
+        the failure this module exists to prevent. Under the allowlist an
+        unclassified origin is refused.
         """
-        assert may_bypass_write_gate_on_content("something-new") is True
+        assert may_bypass_write_gate_on_content(ORIGIN_UNKNOWN) is False
+
+    def test_an_origin_this_module_does_not_know_is_refused(self):
+        """Stands in for a future off-machine tool nobody has classified yet."""
+        assert may_bypass_write_gate_on_content("something-new") is False
 
     def test_is_network_origin(self):
         assert is_network_origin(ORIGIN_NETWORK) is True
@@ -189,15 +194,28 @@ class TestWriteGateRefusesContentBypassForNetworkOrigin:
         )
         assert (bypass, reason) == (True, "bypass_important_tag")
 
-    def test_default_origin_preserves_pre_change_behaviour(self):
-        """Callers that do not pass origin must be unaffected."""
+    def test_a_caller_that_names_no_origin_is_refused_the_content_bypass(self):
+        """The cost of the allowlist, stated as a test rather than discovered.
+
+        A caller that passes no origin gets ORIGIN_UNKNOWN and no longer buys a
+        content-derived bypass. That is the intended trade: an unclassified
+        channel might be off-machine, and a rejected write is cheaper than a
+        fetched page installing itself into durable cross-session memory.
+
+        Nothing legitimate loses out. An explicit `remember` resolves to
+        ORIGIN_DELIBERATE (see handlers/remember.py), the auto-capture hook
+        always reports its producing tool, and the out-of-band escapes —
+        `force` and an important/critical tag — remain valid at any origin.
+        """
         from mcp_server.core.write_gate import determine_bypass
 
-        assert determine_bypass(False, self.ERROR_SHAPED, []) == (
-            True,
-            "bypass_error",
-        )
-        assert determine_bypass(False, self.DECISION_SHAPED, []) == (
-            True,
-            "bypass_decision",
-        )
+        assert determine_bypass(False, self.ERROR_SHAPED, []) == (False, None)
+        assert determine_bypass(False, self.DECISION_SHAPED, []) == (False, None)
+
+    def test_a_deliberate_origin_keeps_the_content_bypass(self):
+        """The companion: what an explicit `remember` resolves to still works."""
+        from mcp_server.core.write_gate import determine_bypass
+
+        assert determine_bypass(
+            False, self.ERROR_SHAPED, [], origin=ORIGIN_DELIBERATE
+        ) == (True, "bypass_error")

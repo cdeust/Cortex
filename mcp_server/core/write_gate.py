@@ -153,7 +153,18 @@ def determine_bypass(
     (falling through to the deliberate check when none of the more
     specific conditions matched).
     """
-    content_bypass_allowed = capture_origin.may_bypass_write_gate_on_content(origin)
+    # A deliberate write class is an out-of-band signal a human supplied, and
+    # such a write bypasses regardless (the `write_class == "deliberate"` arm
+    # below). Refusing it the SPECIFIC content reason would therefore change no
+    # outcome — only the diagnostic, masking bypass_error behind the generic
+    # bypass_write_class_deliberate and undoing the ordering issue #147
+    # deliberately chose. So the origin allowlist governs whether content may
+    # BUY a bypass it would not otherwise get, not how an already-granted one
+    # is labelled.
+    content_bypass_allowed = (
+        capture_origin.may_bypass_write_gate_on_content(origin)
+        or write_class == "deliberate"
+    )
     is_error = content_bypass_allowed and thermodynamics.is_error_content(content)
     is_decision = content_bypass_allowed and thermodynamics.is_decision_content(content)
     has_important = bool({"important", "critical"} & {t.lower() for t in tags})

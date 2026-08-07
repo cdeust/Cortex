@@ -117,14 +117,21 @@ class TestCaptureOriginRoundTrip:
         assert result.get("memory_id"), f"write did not store: {result!r}"
         assert self._origin_of(self._store(), result["memory_id"]) == expected
 
-    def test_absent_origin_tool_persists_unknown(self):
-        """A deliberate user write carries no tool; it must not be guessed."""
+    def test_absent_origin_tool_persists_deliberate(self):
+        """No producing tool at all means the user asked for this directly.
+
+        Distinct from an unrecognised tool (the next test), which stays
+        unknown. Absence is information: nothing produced this content, so a
+        human did. That is ORIGIN_DELIBERATE, and it is what lets a direct
+        `remember` keep the content-derived write-gate bypass now that the
+        bypass rule is an allowlist.
+        """
         result = self._remember(
             content="capture-origin round trip with no origin_tool " + "w" * 120,
             force=True,
         )
         assert result.get("memory_id"), f"write did not store: {result!r}"
-        assert self._origin_of(self._store(), result["memory_id"]) == "unknown"
+        assert self._origin_of(self._store(), result["memory_id"]) == "deliberate"
 
     def test_unrecognised_tool_persists_unknown_not_a_guess(self):
         result = self._remember(

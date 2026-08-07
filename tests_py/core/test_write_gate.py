@@ -28,6 +28,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from mcp_server.core.capture_origin import ORIGIN_LOCAL_ACTION as LOCAL
+
 import mcp_server.core.write_gate as wg
 from mcp_server.observability import silent_failure
 
@@ -73,28 +75,40 @@ class TestDetermineBypass:
 
     def test_error_content_bypasses(self):
         bypassed, reason = wg.determine_bypass(
-            force=False, content="An exception occurred during startup", tags=[]
+            force=False,
+            content="An exception occurred during startup",
+            tags=[],
+            origin=LOCAL,
         )
         assert bypassed is True
         assert reason == "bypass_error"
 
     def test_crash_keyword_also_bypasses(self):
         bypassed, reason = wg.determine_bypass(
-            force=False, content="Service crash detected at 03:00", tags=[]
+            force=False,
+            content="Service crash detected at 03:00",
+            tags=[],
+            origin=LOCAL,
         )
         assert bypassed is True
         assert reason == "bypass_error"
 
     def test_decision_content_bypasses(self):
         bypassed, reason = wg.determine_bypass(
-            force=False, content="We decided to use PostgreSQL for storage", tags=[]
+            force=False,
+            content="We decided to use PostgreSQL for storage",
+            tags=[],
+            origin=LOCAL,
         )
         assert bypassed is True
         assert reason == "bypass_decision"
 
     def test_switched_keyword_is_decision(self):
         bypassed, reason = wg.determine_bypass(
-            force=False, content="Team switched from Redis to Kafka", tags=[]
+            force=False,
+            content="Team switched from Redis to Kafka",
+            tags=[],
+            origin=LOCAL,
         )
         assert bypassed is True
         assert reason == "bypass_decision"
@@ -102,14 +116,14 @@ class TestDetermineBypass:
     def test_non_english_decision_bypasses(self):
         # Issue #158 exact repro: Romanian decision was rejected as duplicate.
         bypassed, reason = wg.determine_bypass(
-            force=False, content="Am decis sa alegem optiunea A", tags=[]
+            force=False, content="Am decis sa alegem optiunea A", tags=[], origin=LOCAL
         )
         assert bypassed is True
         assert reason == "bypass_decision"
 
     def test_non_english_error_bypasses(self):
         bypassed, reason = wg.determine_bypass(
-            force=False, content="Произошла ошибка при сборке", tags=[]
+            force=False, content="Произошла ошибка при сборке", tags=[], origin=LOCAL
         )
         assert bypassed is True
         assert reason == "bypass_error"
@@ -120,6 +134,7 @@ class TestDetermineBypass:
             force=False,
             content="Sovellus kaatui: at com.acme.Main.run(Main.java:42)",
             tags=[],
+            origin=LOCAL,
         )
         assert bypassed is True
         assert reason == "bypass_error"
