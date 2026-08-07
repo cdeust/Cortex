@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "equivalents": [
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__callee_basename__mutmut_16",
+      "removed": "base = text.rsplit(\".\", 1)[-1]",
+      "added": "base = text.rsplit(\".\", )[-1]",
+      "kind": "equivalent-by-construction",
+      "rationale": "`rsplit(sep, n)[-1]` is the text after the LAST separator for every value of n, so maxsplit cannot change the selected element. Only the split direction matters, and that is pinned by TestCalleeBasenameEdges.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__callee_basename__mutmut_19",
+      "removed": "base = text.rsplit(\".\", 1)[-1]",
+      "added": "base = text.rsplit(\".\", 2)[-1]",
+      "kind": "equivalent-by-construction",
+      "rationale": "`rsplit(sep, n)[-1]` is the text after the LAST separator for every value of n, so maxsplit cannot change the selected element. Only the split direction matters, and that is pinned by TestCalleeBasenameEdges.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__callee_basename__mutmut_27",
+      "removed": "base = base.split(c, 1)[0]",
+      "added": "base = base.split(c, )[0]",
+      "kind": "equivalent-by-construction",
+      "rationale": "`split(sep, n)[0]` is the text before the FIRST separator for every value of n, so maxsplit cannot change the selected element. The direction is pinned by test_a_nested_subscript_callee_keeps_only_the_root_name.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__callee_basename__mutmut_29",
+      "removed": "base = base.split(c, 1)[0]",
+      "added": "base = base.split(c, 2)[0]",
+      "kind": "equivalent-by-construction",
+      "rationale": "`split(sep, n)[0]` is the text before the FIRST separator for every value of n, so maxsplit cannot change the selected element. The direction is pinned by test_a_nested_subscript_callee_keeps_only_the_root_name.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__callee_basename__mutmut_6",
+      "removed": "return \"\"",
+      "added": "return \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "A call node always exposes a `function` field in every grammar in use, so the early return for a missing callee cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_js_func__mutmut_21",
+      "removed": "sig = _text(params, source)[:120] if params else \"\"",
+      "added": "sig = _text(params, source)[:120] if params else \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "A JS/TS function node always carries a parameters node, so the empty-signature fallback cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_js_node__mutmut_4",
+      "removed": "if node.type in (\"function_declaration\", \"function\"):",
+      "added": "if node.type in (\"function_declaration\", \"XXfunctionXX\"):",
+      "kind": "unreachable-branch",
+      "rationale": "\"function\" is a legacy tree-sitter node type. The current grammar emits function_expression for anonymous function expressions, so nothing reaches the second entry of this tuple; kept for grammar compatibility.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_js_node__mutmut_5",
+      "removed": "if node.type in (\"function_declaration\", \"function\"):",
+      "added": "if node.type in (\"function_declaration\", \"FUNCTION\"):",
+      "kind": "unreachable-branch",
+      "rationale": "\"function\" is a legacy tree-sitter node type. The current grammar emits function_expression for anonymous function expressions, so nothing reaches the second entry of this tuple; kept for grammar compatibility.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_js_node__mutmut_65",
+      "removed": "_extract_js_node(child, source, defs, parent)",
+      "added": "_extract_js_node(child, source, defs, None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_js_node__mutmut_82",
+      "removed": "full = f\"{parent}.{_text(name, source)}\" if parent else _text(name, source)",
+      "added": "full = f\"{parent}.{_text(name, source)}\" if parent else _text(None, source)",
+      "kind": "unreachable-branch",
+      "rationale": "The method_definition arm is only reached from _extract_js_class, which always supplies a class name, so `parent` is never falsy here and this else branch cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_js_node__mutmut_83",
+      "removed": "full = f\"{parent}.{_text(name, source)}\" if parent else _text(name, source)",
+      "added": "full = f\"{parent}.{_text(name, source)}\" if parent else _text(name, None)",
+      "kind": "unreachable-branch",
+      "rationale": "The method_definition arm is only reached from _extract_js_class, which always supplies a class name, so `parent` is never falsy here and this else branch cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_js_node__mutmut_84",
+      "removed": "full = f\"{parent}.{_text(name, source)}\" if parent else _text(name, source)",
+      "added": "full = f\"{parent}.{_text(name, source)}\" if parent else _text(source)",
+      "kind": "unreachable-branch",
+      "rationale": "The method_definition arm is only reached from _extract_js_class, which always supplies a class name, so `parent` is never falsy here and this else branch cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_js_node__mutmut_85",
+      "removed": "full = f\"{parent}.{_text(name, source)}\" if parent else _text(name, source)",
+      "added": "full = f\"{parent}.{_text(name, source)}\" if parent else _text(name, )",
+      "kind": "unreachable-branch",
+      "rationale": "The method_definition arm is only reached from _extract_js_class, which always supplies a class name, so `parent` is never falsy here and this else branch cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_js_node__mutmut_9",
+      "removed": "_extract_js_func(node, source, defs, parent)",
+      "added": "_extract_js_func(node, source, defs, None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_python_class__mutmut_14",
+      "removed": "cls_name = _text(name_node, source) if name_node else \"\"",
+      "added": "cls_name = _text(name_node, source) if name_node else \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "A Python class_definition always carries a name child, so this fallback cannot execute. The superclasses fallback on the next line IS reachable and is pinned by test_a_class_with_no_base_list_has_an_empty_signature.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_python_func__mutmut_14",
+      "removed": "name = _text(name_node, source) if name_node else \"\"",
+      "added": "name = _text(name_node, source) if name_node else \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "A Python function_definition always carries a name child, so this fallback cannot execute. Kept as a guard against a grammar that stops guaranteeing it.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__extract_python_func__mutmut_21",
+      "removed": "sig = _text(params_node, source)[:120] if params_node else \"\"",
+      "added": "sig = _text(params_node, source)[:120] if params_node else \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "A Python function_definition always carries a parameters child, so the empty-signature fallback cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_16",
+      "removed": "body = child.child_by_field_name(\"body\") or child",
+      "added": "body = child.child_by_field_name(\"body\") and child",
+      "kind": "equivalent-by-construction",
+      "rationale": "The body node is itself a child of the class node, so descending child.children reaches it via the catch-all arm and finds the same definitions in the same order. The `or child` fallback stays for grammars whose class node exposes no body field.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_18",
+      "removed": "body = child.child_by_field_name(\"body\") or child",
+      "added": "body = child.child_by_field_name(\"XXbodyXX\") or child",
+      "kind": "equivalent-by-construction",
+      "rationale": "The body node is itself a child of the class node, so descending child.children reaches it via the catch-all arm and finds the same definitions in the same order. The `or child` fallback stays for grammars whose class node exposes no body field.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_19",
+      "removed": "body = child.child_by_field_name(\"body\") or child",
+      "added": "body = child.child_by_field_name(\"BODY\") or child",
+      "kind": "equivalent-by-construction",
+      "rationale": "The body node is itself a child of the class node, so descending child.children reaches it via the catch-all arm and finds the same definitions in the same order. The `or child` fallback stays for grammars whose class node exposes no body field.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_25",
+      "removed": "elif ntype == \"decorated_definition\":",
+      "added": "elif ntype == \"XXdecorated_definitionXX\":",
+      "kind": "seam-pending-implementation",
+      "rationale": "The decorated_definition arm is byte-identical to the else that follows it, so mutating its node-type string is undetectable. Kept, not deleted: it mirrors _extract_python_children's dispatch (where the same branch IS load-bearing) and is the seam for decorator-call attribution, which produces no graph edge today. See #372.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_26",
+      "removed": "elif ntype == \"decorated_definition\":",
+      "added": "elif ntype == \"DECORATED_DEFINITION\":",
+      "kind": "seam-pending-implementation",
+      "rationale": "The decorated_definition arm is byte-identical to the else that follows it, so mutating its node-type string is undetectable. Kept, not deleted: it mirrors _extract_python_children's dispatch (where the same branch IS load-bearing) and is the seam for decorator-call attribution, which produces no graph edge today. See #372.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_39",
+      "removed": "fn_name = _text(name_node, source) if name_node else \"\"",
+      "added": "fn_name = _text(name_node, source) if name_node else \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "Every node type in _FUNCTION_NODE_TYPES carries a name in all grammars in use (verified by sweep), so the empty-name fallback cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x_extract_calls_per_function__mutmut_3",
+      "removed": "_walk_for_calls(root, \"\", source, out)",
+      "added": "_walk_for_calls(root, None, source, out)",
+      "kind": "equivalent-by-construction",
+      "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x_extract_js_definitions__mutmut_5",
+      "removed": "_extract_js_node(node, source, defs, \"\")",
+      "added": "_extract_js_node(node, source, defs, None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors.x_extract_python_imports__mutmut_29",
+      "removed": "module = _text(mod_node, source) if mod_node else \"\"",
+      "added": "module = _text(mod_node, source) if mod_node else \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "An import_from_statement always carries a module_name field, including the bare relative form `from . import x`, so this fallback cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_clike.x__declarator_name__mutmut_17",
+      "removed": "if node.type in (\"qualified_identifier\", \"destructor_name\", \"operator_name\"):",
+      "added": "if node.type in (\"qualified_identifier\", \"XXdestructor_nameXX\", \"operator_name\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "_declarator_name's two `if` branches have identical bodies (`return _text(node, source)`), so which tuple a node type sits in is not observable. Removing a type only matters if it is the terminal declarator, which in practice is identifier or qualified_identifier.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_clike.x__declarator_name__mutmut_18",
+      "removed": "if node.type in (\"qualified_identifier\", \"destructor_name\", \"operator_name\"):",
+      "added": "if node.type in (\"qualified_identifier\", \"DESTRUCTOR_NAME\", \"operator_name\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "_declarator_name's two `if` branches have identical bodies (`return _text(node, source)`), so which tuple a node type sits in is not observable. Removing a type only matters if it is the terminal declarator, which in practice is identifier or qualified_identifier.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_clike.x__declarator_name__mutmut_19",
+      "removed": "if node.type in (\"qualified_identifier\", \"destructor_name\", \"operator_name\"):",
+      "added": "if node.type in (\"qualified_identifier\", \"destructor_name\", \"XXoperator_nameXX\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "_declarator_name's two `if` branches have identical bodies (`return _text(node, source)`), so which tuple a node type sits in is not observable. Removing a type only matters if it is the terminal declarator, which in practice is identifier or qualified_identifier.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_clike.x__declarator_name__mutmut_20",
+      "removed": "if node.type in (\"qualified_identifier\", \"destructor_name\", \"operator_name\"):",
+      "added": "if node.type in (\"qualified_identifier\", \"destructor_name\", \"OPERATOR_NAME\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "_declarator_name's two `if` branches have identical bodies (`return _text(node, source)`), so which tuple a node type sits in is not observable. Removing a type only matters if it is the terminal declarator, which in practice is identifier or qualified_identifier.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_clike.x__declarator_name__mutmut_29",
+      "removed": "return \"\"",
+      "added": "return \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "The declarator chain of any function_definition reached here terminates at a matched node type, so the loop never exhausts and this final return cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_clike.x__declarator_name__mutmut_6",
+      "removed": "if node.type in (\"identifier\", \"field_identifier\", \"type_identifier\"):",
+      "added": "if node.type in (\"identifier\", \"XXfield_identifierXX\", \"type_identifier\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "_declarator_name's two `if` branches have identical bodies (`return _text(node, source)`), so which tuple a node type sits in is not observable. Removing a type only matters if it is the terminal declarator, which in practice is identifier or qualified_identifier.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_clike.x__declarator_name__mutmut_7",
+      "removed": "if node.type in (\"identifier\", \"field_identifier\", \"type_identifier\"):",
+      "added": "if node.type in (\"identifier\", \"FIELD_IDENTIFIER\", \"type_identifier\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "_declarator_name's two `if` branches have identical bodies (`return _text(node, source)`), so which tuple a node type sits in is not observable. Removing a type only matters if it is the terminal declarator, which in practice is identifier or qualified_identifier.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_clike.x__declarator_name__mutmut_8",
+      "removed": "if node.type in (\"identifier\", \"field_identifier\", \"type_identifier\"):",
+      "added": "if node.type in (\"identifier\", \"field_identifier\", \"XXtype_identifierXX\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "_declarator_name's two `if` branches have identical bodies (`return _text(node, source)`), so which tuple a node type sits in is not observable. Removing a type only matters if it is the terminal declarator, which in practice is identifier or qualified_identifier.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_clike.x__declarator_name__mutmut_9",
+      "removed": "if node.type in (\"identifier\", \"field_identifier\", \"type_identifier\"):",
+      "added": "if node.type in (\"identifier\", \"field_identifier\", \"TYPE_IDENTIFIER\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "_declarator_name's two `if` branches have identical bodies (`return _text(node, source)`), so which tuple a node type sits in is not observable. Removing a type only matters if it is the terminal declarator, which in practice is identifier or qualified_identifier.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_clike.x_extract_csharp_definitions__mutmut_5",
+      "removed": "_walk_csharp(root, source, defs, \"\")",
+      "added": "_walk_csharp(root, source, defs, None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_extra.x__extract_go_receiver__mutmut_13",
+      "removed": "return \"\"",
+      "added": "return \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "_extract_go_receiver is only called from the method_declaration arm, where a receiver is always present and always contains a type_identifier, so neither empty return can execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_extra.x__extract_go_receiver__mutmut_2",
+      "removed": "return \"\"",
+      "added": "return \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "_extract_go_receiver is only called from the method_declaration arm, where a receiver is always present and always contains a type_identifier, so neither empty return can execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_extra.x_extract_go_definitions__mutmut_19",
+      "removed": "sig = _text(params, source)[:120] if params else \"\"",
+      "added": "sig = _text(params, source)[:120] if params else \"XXXX\"",
+      "kind": "unreachable-branch",
+      "rationale": "A Go function_declaration always carries a parameters node \u2014 `func F()` still has an empty one \u2014 so the empty-signature fallback cannot execute.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_extra.x_extract_go_definitions__mutmut_54",
+      "removed": "full = f\"{recv}.{_text(name, source)}\" if recv else _text(name, source)",
+      "added": "full = f\"{recv}.{_text(name, source)}\" if recv else _text(None, source)",
+      "kind": "unreachable-branch",
+      "rationale": "A Go method_declaration always carries a receiver, and a receiver always contains a type_identifier, so _extract_go_receiver never returns empty here and this else cannot run.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_extra.x_extract_go_definitions__mutmut_55",
+      "removed": "full = f\"{recv}.{_text(name, source)}\" if recv else _text(name, source)",
+      "added": "full = f\"{recv}.{_text(name, source)}\" if recv else _text(name, None)",
+      "kind": "unreachable-branch",
+      "rationale": "A Go method_declaration always carries a receiver, and a receiver always contains a type_identifier, so _extract_go_receiver never returns empty here and this else cannot run.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_extra.x_extract_go_definitions__mutmut_56",
+      "removed": "full = f\"{recv}.{_text(name, source)}\" if recv else _text(name, source)",
+      "added": "full = f\"{recv}.{_text(name, source)}\" if recv else _text(source)",
+      "kind": "unreachable-branch",
+      "rationale": "A Go method_declaration always carries a receiver, and a receiver always contains a type_identifier, so _extract_go_receiver never returns empty here and this else cannot run.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_extra.x_extract_go_definitions__mutmut_57",
+      "removed": "full = f\"{recv}.{_text(name, source)}\" if recv else _text(name, source)",
+      "added": "full = f\"{recv}.{_text(name, source)}\" if recv else _text(name, )",
+      "kind": "unreachable-branch",
+      "rationale": "A Go method_declaration always carries a receiver, and a receiver always contains a type_identifier, so _extract_go_receiver never returns empty here and this else cannot run.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_extra.x_extract_swift_definitions__mutmut_5",
+      "removed": "_extract_swift_node(root, source, defs, \"\")",
+      "added": "_extract_swift_node(root, source, defs, None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_jvm.x_extract_java_definitions__mutmut_5",
+      "removed": "_walk_java(root, source, defs, \"\")",
+      "added": "_walk_java(root, source, defs, None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_jvm.x_extract_kotlin_definitions__mutmut_5",
+      "removed": "_walk_kotlin(root, source, defs, \"\")",
+      "added": "_walk_kotlin(root, source, defs, None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_scripting.x_extract_php_definitions__mutmut_5",
+      "removed": "_walk_php(root, source, defs, \"\")",
+      "added": "_walk_php(root, source, defs, None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_scripting.x_extract_php_imports__mutmut_10",
+      "removed": "mod = _text(clause, source).strip().rstrip(\";\").strip()",
+      "added": "mod = _text(clause, source).strip().lstrip(\";\").strip()",
+      "kind": "equivalent-by-construction",
+      "rationale": "The PHP clause node text excludes the statement terminator, so `rstrip(\";\")` is already a no-op; swapping it for lstrip or whitespace-strip changes nothing, and the leading `.strip()` has already removed surrounding whitespace.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_scripting.x_extract_php_imports__mutmut_9",
+      "removed": "mod = _text(clause, source).strip().rstrip(\";\").strip()",
+      "added": "mod = _text(clause, source).strip().rstrip(None).strip()",
+      "kind": "equivalent-by-construction",
+      "rationale": "The PHP clause node text excludes the statement terminator, so `rstrip(\";\")` is already a no-op; swapping it for lstrip or whitespace-strip changes nothing, and the leading `.strip()` has already removed surrounding whitespace.",
+      "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.ast_extractors_scripting.x_extract_ruby_definitions__mutmut_5",
+      "removed": "_walk_ruby(root, source, defs, \"\")",
+      "added": "_walk_ruby(root, source, defs, None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
+      "issue": "#369"
+    }
+  ]
+}
