@@ -19,13 +19,20 @@ adheres to [Semantic Versioning](https://semver.org/).
   verbatim into later sessions. Capture for those tools is now a fixed length
   floor identical for any payload, and the new `core/capture_origin` resolves
   the origin from the producing tool name — known out-of-band, unforgeable by
-  the payload — so network-origin content is refused the two content-derived
-  bypasses. `force` and a `deliberate` write class are out-of-band human
-  signals and remain valid at any origin; the `important`/`critical` tag bypass
-  also remains, because `_build_tags` never derives those from output.
-  Unrecognised tools classify as `unknown` rather than trusted, so a newly
-  added tool is visibly unclassified. `origin_tool` is a declared input on
-  `remember` and exposed on both registered MCP wrappers.
+  the payload. The two content-derived bypasses are then granted by an
+  **allowlist**: only a `deliberate` or `local_action` origin may claim them.
+  Network content is refused, and so is anything unclassified — a denylist of
+  just the two known network tools would have failed open the moment the host
+  added or renamed one, silently restoring the bypass with no failing test.
+  `force` and a `deliberate` write class are out-of-band human signals and
+  remain valid at any origin; the `important`/`critical` tag bypass also
+  remains, because `_build_tags` never derives those from output. Unrecognised
+  tools classify as `unknown`, which is refused rather than trusted. A
+  `remember` carrying no producing tool *at all* resolves to `deliberate` — the
+  user asked directly — which is deliberately distinct from a tool that was
+  named but is not recognised, since promoting the latter would reinstate the
+  fail-open. `origin_tool` is a declared input on `remember` and exposed on
+  both registered MCP wrappers.
 
   The origin is persisted to a new `memories.capture_origin` column (both
   backends, with a one-shot migration) so the value that governed the gate is
