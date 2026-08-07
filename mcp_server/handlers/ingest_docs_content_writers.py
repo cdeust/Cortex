@@ -24,6 +24,7 @@ content-less file entities by the generic files phase, matching D6's
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -46,10 +47,47 @@ MAX_DOC_BYTES: int = 1_048_576
 
 _DOC_TAG_PREFIX = "ap-doc"
 
+# Provenance tags (issue #381 — doc snapshots need a decidable revision
+# stamp so a re-ingest can tell a stale snapshot from a current one).
+#
+# doc-sha256: the source file's content hash AT CAPTURE TIME — the
+#   "revision" half of the {source_path, revision, captured_at} triple the
+#   issue asks for. `captured_at` is not a separate tag: `created_at` is
+#   already a first-class memories column, already surfaced by `recall`
+#   (recall.py:297/361), and the DB default (now()) applies to every fresh
+#   insert/supersession this pass performs — duplicating it as a tag would
+#   be a second, driftable source of the same fact.
+# doc-path: the source-relative path, structured (machine-parseable)
+#   alongside the human-readable `[{rel_path}]` content header this pass
+#   already writes.
+#
+# Hash length mirrors mcp_server/infrastructure/artifact_store.py's
+# _ADDRESS_LEN (sha256 hex truncated to 16 chars / 64 bits — negligible
+# birthday-collision risk for a per-repo document corpus, short enough to
+# stay a readable tag); not a second, independently invented bound.
+_DOC_HASH_TAG_LEN = 16
+_DOC_HASH_TAG_PREFIX = "doc-sha256"
+_DOC_PATH_TAG_PREFIX = "doc-path"
+
 
 def doc_tag(domain: str, rel_path: str) -> str:
     """Canonical dedup tag anchoring a memory to one (domain, doc path)."""
     return f"{_DOC_TAG_PREFIX}:{domain}:{rel_path}"
+
+
+def doc_content_hash(content: str) -> str:
+    """Content-hash 'revision' stamp for a document snapshot (issue #381)."""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:_DOC_HASH_TAG_LEN]
+
+
+def doc_hash_tag(content_hash: str) -> str:
+    """Tag encoding the source file's content hash at capture time."""
+    return f"{_DOC_HASH_TAG_PREFIX}:{content_hash}"
+
+
+def doc_path_tag(rel_path: str) -> str:
+    """Tag encoding the source-relative path this memory was captured from."""
+    return f"{_DOC_PATH_TAG_PREFIX}:{rel_path}"
 
 
 def _memory_tags(mem: dict) -> list:
@@ -57,14 +95,38 @@ def _memory_tags(mem: dict) -> list:
     return raw if isinstance(raw, list) else []
 
 
-def find_existing_doc_memory(store: Any, domain: str, rel_path: str) -> int | None:
-    """Return the memory id already written for this document, or None.
+def existing_content_hash(mem: dict) -> str | None:
+    """Extract the ``doc-sha256`` provenance tag from a stored doc memory.
+
+    Postcondition: returns the hash string, or None when the memory
+    predates this tag (pre-#381 doc snapshot, or a store that dropped
+    tags) — a caller comparing against None never equals a real hash, so
+    an untagged legacy snapshot is always treated as changed and gets
+    re-verified (re-written) exactly once on the next ingest.
+    """
+    prefix = f"{_DOC_HASH_TAG_PREFIX}:"
+    for tag in _memory_tags(mem):
+        if tag.startswith(prefix):
+            return tag[len(prefix) :]
+    return None
+
+
+def find_existing_doc_memory(store: Any, domain: str, rel_path: str) -> dict | None:
+    """Return the current chain-head memory already written for this
+    document, or None.
 
     Mirrors ``ingest_findings_writers.find_existing_memory``: stores
     without ``get_memories_by_tag`` (e.g. the SQLite fallback backend)
     degrade to "always create" rather than erroring — re-ingestion is
     then non-idempotent on that backend only, a pre-existing limitation
     of the tag-query API, not something this pass introduces.
+
+    Postcondition: returns the full memory record (not just its id) so
+    the caller can read its content-hash tag and decide whether the
+    source has changed since capture (issue #381) — filtered to
+    ``superseded_by_id is None`` so a supersession chain (this pass
+    revises a memory in place by superseding it, never leaves two
+    "current" rows) resolves to its open head, not an older link.
     """
     tag = doc_tag(domain, rel_path)
     try:
@@ -73,8 +135,8 @@ def find_existing_doc_memory(store: Any, domain: str, rel_path: str) -> int | No
         silent_failure.note("ingest_docs_content.find_existing_doc", exc)
         return None
     for mem in mems:
-        if tag in _memory_tags(mem):
-            return mem.get("id")
+        if tag in _memory_tags(mem) and mem.get("superseded_by_id") is None:
+            return mem
     return None
 
 
@@ -120,25 +182,49 @@ def write_doc_memory(
     directory_context: str,
     rel_path: str,
     content: str,
-) -> tuple[int, bool]:
-    """Write (or reuse) the one memory representing this document's content.
+) -> tuple[int, bool, bool]:
+    """Write, supersede, or reuse the memory representing this document.
 
-    Postcondition: returns ``(memory_id, created)``. ``created`` is False
-    when an earlier ingestion of the same ``(domain, rel_path)`` already
-    wrote this memory — re-ingesting an unchanged graph inserts no
-    duplicate row (idempotence, D6 acceptance criterion). Tags carry
-    ``doc`` (D6's own wording) and ``src:ap`` (D5 provenance: this pass
-    only ever runs over a graph AP produced) plus the per-document dedup
-    tag.
+    Postcondition: returns ``(memory_id, written, superseded)``.
+
+    - No prior memory for this ``(domain, rel_path)``: inserts one, tagged
+      with a content-hash "revision" stamp (issue #381) alongside the
+      existing ``doc``/``src:ap``/dedup tags. Returns ``(new_id, True, False)``.
+    - A prior memory exists and its stored content-hash tag still matches
+      this read (source file unchanged since capture, OR a store that
+      cannot tag-query and degrades to "no prior found" — see
+      ``find_existing_doc_memory``): no-op, ``(existing_id, False, False)``
+      — idempotence, D6's original acceptance criterion, now decided by
+      content identity rather than by tag presence alone.
+    - A prior memory exists and its content-hash tag differs (source file
+      edited since capture, OR the prior memory predates this tag and so
+      has none — see ``existing_content_hash``): the STALE snapshot is
+      SUPERSEDED (Nader/Schafe/LeDoux 2000 reconsolidation — same
+      ``store.supersede_atomic`` primitive ``remember`` uses for
+      ``supersedes_id``, not a second, parallel versioning mechanism) —
+      ``recall`` demotes a superseded row (pg_schema.py `current_memories`
+      view / final ORDER BY) so a consumer is served the current snapshot,
+      never the retracted one. Returns ``(new_id, True, True)``. On the
+      bounded rebase exhausting (pathological concurrent-supersede
+      contention — see ``supersede_atomic``'s own docstring), degrades to
+      a no-write rather than raising: the next ingest run re-tries the
+      comparison from a fresh read.
+
+    Tags on every written row carry ``doc`` (D6's own wording), ``src:ap``
+    (D5 provenance: this pass only ever runs over a graph AP produced),
+    the per-document dedup tag, plus the two provenance tags above.
     """
-    existing = find_existing_doc_memory(store, domain, rel_path)
-    if existing is not None:
-        return existing, False
-
     tag = doc_tag(domain, rel_path)
+    content_hash = doc_content_hash(content)
     record = {
         "content": f"[{rel_path}]\n\n{content}",
-        "tags": ["doc", "src:ap", tag],
+        "tags": [
+            "doc",
+            "src:ap",
+            tag,
+            doc_hash_tag(content_hash),
+            doc_path_tag(rel_path),
+        ],
         "source": "ingest_codebase:docs",
         "domain": domain,
         "directory_context": directory_context,
@@ -149,7 +235,18 @@ def write_doc_memory(
         # M-D2 (7.4): bulk docs-content ingestion from an AP graph.
         "write_class": "mechanical",
     }
-    return store.insert_memory(record), True
+
+    existing = find_existing_doc_memory(store, domain, rel_path)
+    if existing is None:
+        return store.insert_memory(record), True, False
+
+    if existing_content_hash(existing) == content_hash:
+        return existing["id"], False, False
+
+    new_id, _head_id = store.supersede_atomic(record, existing["id"])
+    if new_id is None:
+        return existing["id"], False, False
+    return new_id, True, True
 
 
 _REFERENCES_RELATIONSHIP_TYPE = "references"

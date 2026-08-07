@@ -49,12 +49,17 @@ async def run_docs_pass(
                    to it — verified against
                    ai-architect-mcp-codebase/src/indexer/walk.rs:237).
     Postcondition: returns counts (``docs_seen``, ``docs_written``,
-                   ``docs_skipped``, ``references_written``) plus any
-                   diagnostics; re-running against an unchanged graph
-                   writes zero new memories and zero new relationship
-                   rows (idempotent — see
-                   ``writers.find_existing_doc_memory`` and
+                   ``docs_superseded``, ``docs_skipped``,
+                   ``references_written``) plus any diagnostics;
+                   re-running against an unchanged graph writes zero new
+                   memories and zero new relationship rows (idempotent —
+                   see ``writers.find_existing_doc_memory`` and
                    ``insert_relationship``'s ``ON CONFLICT``).
+                   ``docs_superseded`` (issue #381) counts the subset of
+                   ``docs_written`` where a source file changed since its
+                   last capture and the stale snapshot memory was
+                   version-chained forward rather than left to be served
+                   as current — see ``writers.write_doc_memory``.
     Invariant:     no entity is inserted by this pass — every File node
                    (docs and binaries alike) already became an entity in
                    the caller's main entity phase; this function only
@@ -68,6 +73,7 @@ async def run_docs_pass(
     diagnostics.extend(diag)
 
     docs_written = 0
+    docs_superseded = 0
     docs_skipped = 0
     for f in doc_files:
         rel_path = f.get("path")
@@ -77,11 +83,13 @@ async def run_docs_pass(
         if content is None:
             docs_skipped += 1
             continue
-        _, created = writers.write_doc_memory(
+        _, written, superseded = writers.write_doc_memory(
             store, domain, directory_context, rel_path, content
         )
-        if created:
+        if written:
             docs_written += 1
+        if superseded:
+            docs_superseded += 1
 
     known_doc_paths = {f["path"] for f in doc_files if f.get("path")}
     refs, ref_diag = await cypher.fetch_doc_references(graph_path, known_doc_paths)
@@ -93,6 +101,7 @@ async def run_docs_pass(
     result: dict[str, Any] = {
         "docs_seen": len(doc_files),
         "docs_written": docs_written,
+        "docs_superseded": docs_superseded,
         "docs_skipped": docs_skipped,
         "references_written": references_written,
     }

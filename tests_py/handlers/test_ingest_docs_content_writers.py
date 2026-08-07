@@ -8,7 +8,10 @@ from pathlib import Path
 
 from mcp_server.handlers.ingest_docs_content_writers import (
     MAX_DOC_BYTES,
+    doc_content_hash,
+    doc_hash_tag,
     doc_tag,
+    existing_content_hash,
     find_existing_doc_memory,
     read_doc_content,
     write_doc_memory,
@@ -24,6 +27,7 @@ class _FakeStore:
     ):
         self.memories: list[dict] = []
         self.relationships: list[dict] = []
+        self.supersede_calls: list[tuple[dict, int]] = []
         self._next = 9000
         self._existing_by_tag = existing_by_tag or {}
         self._entities_by_name = entities_by_name or {}
@@ -44,6 +48,20 @@ class _FakeStore:
         self.relationships.append(data)
         return len(self.relationships)
 
+    def supersede_atomic(self, data: dict, target_id: int) -> tuple[int, int]:
+        self.supersede_calls.append((data, target_id))
+        new_id = self.insert_memory(data)
+        return new_id, target_id
+
+
+class _NoSupersedeStore(_FakeStore):
+    """A store whose supersede_atomic bounded-rebase exhausted — mirrors
+    supersede_atomic's own documented (None, last_head_id) contention
+    return, exercised without needing real concurrency."""
+
+    def supersede_atomic(self, data: dict, target_id: int) -> tuple[None, int]:
+        return None, target_id
+
 
 class TestDocTag:
     def test_deterministic_and_scoped_to_domain_and_path(self):
@@ -56,16 +74,35 @@ class TestFindExistingDocMemory:
         store = _FakeStore()
         assert find_existing_doc_memory(store, "code:proj", "README.md") is None
 
-    def test_returns_id_when_tag_present(self):
+    def test_returns_record_when_tag_present(self):
         tag = doc_tag("code:proj", "README.md")
         store = _FakeStore(existing_by_tag={tag: [{"id": 42, "tags": ["doc", tag]}]})
-        assert find_existing_doc_memory(store, "code:proj", "README.md") == 42
+        found = find_existing_doc_memory(store, "code:proj", "README.md")
+        assert found is not None
+        assert found["id"] == 42
 
     def test_degrades_to_none_when_store_lacks_tag_query(self):
         class _NoTagStore:
             pass
 
         assert find_existing_doc_memory(_NoTagStore(), "code:proj", "README.md") is None
+
+    def test_superseded_row_is_skipped_head_is_returned(self):
+        """A tag lands on every row in a supersession chain (issue #381) —
+        the OLD, superseded row must never be picked over its live head,
+        or a re-ingest would keep comparing against a retracted snapshot."""
+        tag = doc_tag("code:proj", "README.md")
+        store = _FakeStore(
+            existing_by_tag={
+                tag: [
+                    {"id": 99, "tags": ["doc", tag], "superseded_by_id": None},
+                    {"id": 42, "tags": ["doc", tag], "superseded_by_id": 99},
+                ]
+            }
+        )
+        found = find_existing_doc_memory(store, "code:proj", "README.md")
+        assert found is not None
+        assert found["id"] == 99
 
 
 class TestReadDocContent:
@@ -96,10 +133,11 @@ class TestReadDocContent:
 class TestWriteDocMemory:
     def test_writes_content_tagged_doc_and_src_ap(self):
         store = _FakeStore()
-        mem_id, created = write_doc_memory(
+        mem_id, written, superseded = write_doc_memory(
             store, "code:proj", "/repo", "docs/a.md", "distinctive phrase here"
         )
-        assert created is True
+        assert written is True
+        assert superseded is False
         record = store.memories[0]
         assert "doc" in record["tags"]
         assert "src:ap" in record["tags"]
@@ -109,15 +147,102 @@ class TestWriteDocMemory:
         assert record["directory_context"] == "/repo"
         assert record["is_protected"] is False
 
-    def test_reingesting_same_doc_does_not_duplicate(self):
+    def test_first_capture_stamps_provenance_hash_and_path_tags(self):
+        """Issue #381: a fresh doc memory carries a decidable revision stamp
+        (content hash) and a structured source-path tag, not just the
+        free-text `[{rel_path}]` header."""
+        store = _FakeStore()
+        content = "distinctive phrase here"
+        write_doc_memory(store, "code:proj", "/repo", "docs/a.md", content)
+        record = store.memories[0]
+        assert doc_hash_tag(doc_content_hash(content)) in record["tags"]
+        assert "doc-path:docs/a.md" in record["tags"]
+
+    def test_reingesting_unchanged_doc_is_a_no_op(self):
+        content = "content"
         tag = doc_tag("code:proj", "docs/a.md")
-        store = _FakeStore(existing_by_tag={tag: [{"id": 555, "tags": ["doc", tag]}]})
-        mem_id, created = write_doc_memory(
-            store, "code:proj", "/repo", "docs/a.md", "content"
+        existing = {
+            "id": 555,
+            "tags": ["doc", tag, doc_hash_tag(doc_content_hash(content))],
+            "superseded_by_id": None,
+        }
+        store = _FakeStore(existing_by_tag={tag: [existing]})
+        mem_id, written, superseded = write_doc_memory(
+            store, "code:proj", "/repo", "docs/a.md", content
         )
-        assert created is False
+        assert written is False
+        assert superseded is False
         assert mem_id == 555
         assert store.memories == []
+        assert store.supersede_calls == []
+
+    def test_reingesting_changed_doc_supersedes_the_stale_snapshot(self):
+        """Root-cause fix (issue #381): the source file changed since
+        capture -> the old snapshot's chain head is superseded, not left
+        to be served indistinguishably from current content."""
+        tag = doc_tag("code:proj", "docs/a.md")
+        existing = {
+            "id": 555,
+            "tags": ["doc", tag, doc_hash_tag(doc_content_hash("old content"))],
+            "superseded_by_id": None,
+        }
+        store = _FakeStore(existing_by_tag={tag: [existing]})
+        mem_id, written, superseded = write_doc_memory(
+            store, "code:proj", "/repo", "docs/a.md", "new content"
+        )
+        assert written is True
+        assert superseded is True
+        assert mem_id != 555
+        assert len(store.supersede_calls) == 1
+        assert store.supersede_calls[0][1] == 555
+        new_record = store.memories[0]
+        assert "new content" in new_record["content"]
+        assert doc_hash_tag(doc_content_hash("new content")) in new_record["tags"]
+
+    def test_legacy_untagged_doc_memory_is_treated_as_changed_once(self):
+        """A doc memory written before #381 carries no doc-sha256 tag —
+        it must be re-verified (superseded) exactly once, converting it
+        into a provenance-stamped snapshot, rather than being trusted
+        forever just because a row with the dedup tag exists."""
+        tag = doc_tag("code:proj", "docs/a.md")
+        legacy = {"id": 555, "tags": ["doc", tag], "superseded_by_id": None}
+        store = _FakeStore(existing_by_tag={tag: [legacy]})
+        mem_id, written, superseded = write_doc_memory(
+            store, "code:proj", "/repo", "docs/a.md", "content"
+        )
+        assert written is True
+        assert superseded is True
+        assert mem_id != 555
+
+    def test_supersede_rebase_exhaustion_degrades_to_no_op(self):
+        """supersede_atomic's own contract: (None, head_id) on bounded-rebase
+        exhaustion under pathological contention. write_doc_memory must not
+        raise or fabricate a memory id — it reports no write and lets the
+        next ingest run retry from a fresh read."""
+        tag = doc_tag("code:proj", "docs/a.md")
+        existing = {
+            "id": 555,
+            "tags": ["doc", tag, doc_hash_tag(doc_content_hash("old"))],
+            "superseded_by_id": None,
+        }
+        store = _NoSupersedeStore(existing_by_tag={tag: [existing]})
+        mem_id, written, superseded = write_doc_memory(
+            store, "code:proj", "/repo", "docs/a.md", "new"
+        )
+        assert written is False
+        assert superseded is False
+        assert mem_id == 555
+
+
+class TestExistingContentHash:
+    def test_extracts_hash_from_tag(self):
+        h = doc_content_hash("some content")
+        mem = {"tags": ["doc", doc_hash_tag(h)]}
+        assert existing_content_hash(mem) == h
+
+    def test_returns_none_when_tag_absent(self):
+        assert existing_content_hash({"tags": ["doc"]}) is None
+        assert existing_content_hash({}) is None
 
 
 class TestWriteDocReferenceEdge:
