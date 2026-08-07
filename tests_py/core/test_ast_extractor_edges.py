@@ -309,6 +309,17 @@ class TestRubyRequireScanning:
             ("json", [], False)
         ]
 
+    def test_an_unquoted_parenthesised_argument_keeps_its_own_characters(self) -> None:
+        """`require(Xfoo)` trims the parentheses and nothing else. Without the
+        quotes there is no second trim to hide a widened set, so this is the
+        case that separates `strip("()")` from any superset of it.
+        """
+        from mcp_server.core.ast_extractors_scripting import extract_ruby_imports
+
+        assert _full_imports("ruby", b"require(Xfoo)\n", extract_ruby_imports) == [
+            ("Xfoo", [], False)
+        ]
+
     def test_only_quotes_and_parentheses_are_trimmed_from_the_path(self) -> None:
         """Both call forms are trimmed of their own punctuation and nothing
         else. A path whose first and last characters are ordinary letters must

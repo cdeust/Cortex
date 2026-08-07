@@ -109,8 +109,34 @@ fi
 
 if [ "$LISTED" -gt 0 ]; then
   printf '%s\n' "$RESULTS" | grep -E ': *survived[[:space:]]*$'
-  echo ">>> re-verifying against the FULL test selection before trusting the verdict (issue #269):"
-  printf '%s\n' "$RESULTS" | uv run python3 "$ROOT/scripts/mutation_recheck_survivors.py" "$ROOT/mutants" "${TEST_ARR[@]}"
+
+  # Registered equivalents first, re-verification second. The order is load-
+  # bearing: a mutant the #269 recheck would reclassify as RECOVERED is not in
+  # the registry, so running the registry check on what the recheck already
+  # cleared would be fine, but running the recheck on registered equivalents
+  # wastes a full test selection per mutant and reports them as genuine.
+  # Filter what is justified, then re-verify only what is left.
+  #
+  # §12.4 is "0 surviving NON-EQUIVALENT mutants, or each survivor documented".
+  # Before this, the second half was inexpressible: any survivor failed, so a
+  # module whose every survivor carried a rationale looked identical to one
+  # nobody had read, and the blocking tier became something to bypass.
+  echo ">>> checking survivors against the registered-equivalents registry:"
+  set +e
+  UNREGISTERED="$(printf '%s\n' "$RESULTS" \
+    | uv run python3 "$ROOT/scripts/mutation_equivalents.py" "$@")"
+  REG_RC=$?
+  set -e
+  [ "$REG_RC" -eq 2 ] && exit 2          # malformed registry: never tolerated
+  [ "$REG_RC" -eq 1 ] && exit 1          # drifted or stale entry: needs a human
+
+  if [ -z "$UNREGISTERED" ]; then
+    echo "  every survivor is a registered, justified equivalent 🎉"
+    exit 0
+  fi
+
+  echo ">>> re-verifying the UNREGISTERED ones against the FULL test selection (issue #269):"
+  printf '%s\n' "$UNREGISTERED" | uv run python3 "$ROOT/scripts/mutation_recheck_survivors.py" "$ROOT/mutants" "${TEST_ARR[@]}"
 else
   echo "  none — 0 surviving mutants 🎉"
 fi
