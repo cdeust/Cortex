@@ -1,19 +1,28 @@
 name: "Run the PostgreSQL-backed pytest suite"
 description: >-
-  Shared step list for ci.yml's `test` matrix and release.yml's pre-release
-  test gate: provision PostgreSQL + pgvector on the runner, warm every model
-  and grammar cache, then run pytest offline.
+  Shared step list for ci.yml's `test` matrix: provision PostgreSQL +
+  pgvector on the runner, warm every model and grammar cache, then run
+  pytest offline.
 
-# Shared pytest suite for ci.yml (push to main + pull_request) and
-# release.yml (tag push). Extracted per issue #336: the two jobs ran the
-# exact same suite against the same Postgres service as two separate copies
-# with non-overlapping triggers — a tag push never reaches ci.yml — so every
+# Extracted per issue #336, originally shared between ci.yml's `test` matrix
+# and release.yml's own pre-release test job: the two jobs ran the exact
+# same suite against the same Postgres service as two separate copies with
+# non-overlapping triggers — a tag push never reaches ci.yml — so every
 # hardening pass applied to one copy silently drifted from the other, with
 # nothing to report it. Release run 30741657854 (v4.17.0) is what that cost:
 # the FlashRank fetch hung until pytest-timeout killed the suite, blocking
 # every downstream publish job on a tag whose tree had just passed 20 green
-# checks on PR #334; #335 restored parity by hand, this action makes the
+# checks on PR #334; #335 restored parity by hand, this action made the
 # next divergence structurally impossible instead of merely visible.
+#
+# Issue #392 removed the second caller: release.yml no longer runs a test
+# job at all (the tag is now an output of `ci.yml`'s own `release-gate`, run
+# only after `ci-green` succeeds — see that job's comment). This action is
+# ci.yml's `test` matrix's sole caller now; its two former per-caller inputs
+# (`requirements-file`, `include-tree-sitter`) were retired as speculative
+# generality once a single value was all either of them could ever carry
+# (coding-standards.md §9) — see `run-extended-checks` below for the one
+# input that still varies, across the matrix's four legs.
 #
 # WHY A COMPOSITE ACTION AND NOT A REUSABLE WORKFLOW. The first attempt at
 # #336 shared this as `.github/workflows/test-suite.yml` behind a
@@ -25,13 +34,9 @@ description: >-
 # The PR sat BLOCKED with zero red checks, because the four required
 # contexts were reported by nobody. source: run 31250898534 on PR #387.
 # Sharing at the STEP level instead leaves the caller's job name — and
-# therefore every required status-check context — untouched.
-#
-# The one legitimate asymmetry between callers survives as an explicit
-# input, not a duplicated step list: requirements/release.txt omits
-# tree-sitter, tree-sitter-language-pack, igraph, leidenalg and texttable, so
-# the release gate needs none of ci.yml's three tree-sitter steps and would
-# ImportError if they ran — `include-tree-sitter` gates them off instead.
+# therefore every required status-check context — untouched. That rationale
+# survives the second caller's removal: a reusable workflow would still
+# rename this action's one remaining caller's four matrix-leg contexts.
 #
 # Callers must check the repository out before invoking this action: a local
 # `uses: ./...` reference is resolved from the checked-out tree.
@@ -40,15 +45,8 @@ inputs:
   python-version:
     description: "Python version to run the suite under."
     required: true
-  requirements-file:
-    description: "Hash-pinned requirements file to install (e.g. requirements/ci-postgresql.txt or requirements/release.txt)."
-    required: true
-  include-tree-sitter:
-    description: "Cache + prefetch tree-sitter grammars. Only meaningful when requirements-file installs tree-sitter-language-pack. Composite-action inputs are strings, so this is compared against the literal 'true'."
-    required: false
-    default: "true"
   run-extended-checks:
-    description: "Run coverage, the Claude/Codex MCP host contract check, the advertised-test-count/badge check, and upload the coverage artifact. CI-only (a single matrix leg); release.yml never sets this. Compared against the literal 'true'."
+    description: "Run coverage, the Claude/Codex MCP host contract check, the advertised-test-count/badge check, and upload the coverage artifact. Scoped to a single matrix leg (Python 3.12) — the other three legs skip it. Compared against the literal 'true'."
     required: false
     default: "false"
 
@@ -161,8 +159,11 @@ runs:
       # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
       # --no-deps on the project install because the file above IS the
       # complete dependency graph; re-resolving here would be unpinned.
+      # requirements/ci-postgresql.txt inline: this action's sole caller
+      # (ci.yml's `test` matrix) always installs it — issue #392 removed the
+      # only other caller, which installed requirements/release.txt instead.
       run: |
-        pip install --require-hashes -r ${{ inputs.requirements-file }}
+        pip install --require-hashes -r requirements/ci-postgresql.txt
         pip install --no-deps -e .
 
     # Populate the HuggingFace cache before the (offline) test run. A transient
@@ -210,18 +211,17 @@ runs:
     # for the same reason: fetch once here so `pytest` itself never touches
     # the network for a grammar.
     #
-    # Gated on include-tree-sitter: requirements/release.txt deliberately
-    # omits tree-sitter + tree-sitter-language-pack (as it omits igraph/
-    # leidenalg/texttable), so the release caller passes
-    # include-tree-sitter: false and these three steps do not run — there
-    # is no grammar to fetch and the import below would ImportError.
+    # requirements/ci-postgresql.txt (installed above) always includes
+    # tree-sitter-language-pack, so this action's sole caller always needs
+    # these three steps — unlike the removed requirements/release.txt
+    # caller, which omitted tree-sitter + tree-sitter-language-pack (as it
+    # omits igraph/leidenalg/texttable) and would ImportError on the import
+    # below. No `if:` gate remains now that only one caller exists.
     - name: Resolve tree-sitter cache directory
-      if: inputs.include-tree-sitter == 'true'
       shell: bash
       run: echo "TREE_SITTER_CACHE_DIR=$(python -c 'from tree_sitter_language_pack import cache_dir; print(cache_dir())')" >> "$GITHUB_ENV"
 
     - name: Cache tree-sitter grammars
-      if: inputs.include-tree-sitter == 'true'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ env.TREE_SITTER_CACHE_DIR }}
@@ -230,7 +230,6 @@ runs:
     # The language set is read from AST_SUPPORTED (not hand-copied here) so
     # this step cannot drift from the languages ast_parser.py actually uses.
     - name: Prefetch tree-sitter grammars
-      if: inputs.include-tree-sitter == 'true'
       shell: bash
       run: |
         for attempt in 1 2 3 4 5; do

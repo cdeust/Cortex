@@ -15,13 +15,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Shared with release.yml's `test` job via the composite action (issue
-  # #336) — see .github/actions/test-suite/action.yml for the step-level
-  # rationale, including why the shared unit is a composite action and not a
-  # reusable workflow: a job delegating via `uses:` reports its check as
-  # "<caller job name> / <called job name>", which would rename all four
-  # required contexts on `main`. Sharing at the step level leaves this job's
-  # name — and therefore its status-check context — untouched.
+  # Uses the composite action at .github/actions/test-suite/action.yml for
+  # the step-level rationale, including why the shared unit is a composite
+  # action and not a reusable workflow: a job delegating via `uses:` reports
+  # its check as "<caller job name> / <called job name>", which would rename
+  # all four required contexts on `main`. Sharing at the step level leaves
+  # this job's name — and therefore its status-check context — untouched.
+  # Originally shared with release.yml's own `test` job (issue #336); issue
+  # #392 removed that second caller (see the action's header comment) —
+  # `requirements/ci-postgresql.txt` and tree-sitter grammars are now
+  # installed unconditionally inside the action rather than passed in.
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -38,8 +41,6 @@ jobs:
       - uses: ./.github/actions/test-suite
         with:
           python-version: ${{ matrix.python-version }}
-          requirements-file: requirements/ci-postgresql.txt
-          include-tree-sitter: "true"
           # Coverage, the MCP host contract check, and the advertised-test-count
           # check are expensive and gain nothing from running on all four legs —
           # ci.yml has always scoped them to Python 3.12 only; the shared action
