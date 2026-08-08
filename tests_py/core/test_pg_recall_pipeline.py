@@ -83,6 +83,11 @@ def _make_candidates(n: int) -> list[dict]:
             "tags": ["a", "b"] if i % 2 == 0 else ["c"],
             "domain": "test",
             "created_at": "2026-04-30T00:00:00Z",
+            # issue #368: a real WRRF candidate always carries its capture
+            # origin, and only a trusted one earns heat on retrieval. Omitting
+            # it here would silently exercise the fail-closed branch and make
+            # this test assert the opposite of what it says it asserts.
+            "capture_origin": "deliberate",
         }
         for n_ in [n]
         for i in range(n_)

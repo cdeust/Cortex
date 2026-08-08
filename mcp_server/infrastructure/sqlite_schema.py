@@ -451,6 +451,7 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     # (deliberate / local_action / network / unknown), resolved from the
     # producing tool name and never from the content, so a fetched payload
     # cannot forge it. Gates the content-derived write-gate bypasses.
+    # Backfilled to 'legacy' on creation — see COLUMN_BACKFILLS.
     ("memories", "capture_origin", "TEXT NOT NULL DEFAULT 'unknown'"),
     # Habituation stimulus identity (E1 habituation & sensitization) — PG
     # parity. Normalised content key; repeated presentations of the same
@@ -487,3 +488,19 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     # honest default for a store that only ever had the neural encoder.
     ("memories", "embedding_model", "TEXT DEFAULT ''"),
 ]
+
+# Statements run ONCE, at the instant the corresponding MIGRATIONS column is
+# created — the SQLite counterpart of putting an UPDATE inside pg_schema.py's
+# `IF NOT EXISTS` block. Keyed by (table, column): the migration loop applies
+# the entry only when its ADD COLUMN actually succeeded, so an existing column
+# is never re-backfilled and rows written later keep the column DEFAULT.
+#
+# Deliberately a plain lookup table rather than a general migration framework:
+# there is one entry, and a coarse table is auditable at a glance.
+COLUMN_BACKFILLS: dict[tuple[str, str], str] = {
+    # issue #368 — rows present when capture_origin is created predate the
+    # attribute entirely. 'legacy' keeps them at full ranking weight; the
+    # DEFAULT 'unknown' would demote the whole historical corpus once the
+    # read-side trust factor ships.
+    ("memories", "capture_origin"): "UPDATE memories SET capture_origin = 'legacy'",
+}

@@ -1256,7 +1256,14 @@ CREATE OR REPLACE FUNCTION recall_memories(
     p_w_heat        REAL DEFAULT 0.3,
     p_w_ngram       REAL DEFAULT 0.3,
     p_w_recency     REAL DEFAULT 0.0,
-    p_include_globals BOOLEAN DEFAULT TRUE
+    p_include_globals BOOLEAN DEFAULT TRUE,
+    -- issue #368. Both default to the identity transform: an empty trusted
+    -- set with factor 1.0 multiplies every row by 1.0, so a caller that
+    -- passes neither reproduces the pre-#368 ranking bit for bit. The set is
+    -- supplied by the caller rather than defaulted to a literal vocabulary
+    -- here, so this function never holds a copy of the trust policy.
+    p_trusted_origins TEXT[] DEFAULT ARRAY[]::TEXT[],
+    p_untrusted_factor REAL DEFAULT 1.0
 ) RETURNS TABLE (
     memory_id       INT,
     content         TEXT,
@@ -1271,7 +1278,11 @@ CREATE OR REPLACE FUNCTION recall_memories(
     emotional_valence REAL,
     source          TEXT,
     value           REAL,
-    source_attribution TEXT
+    source_attribution TEXT,
+    -- issue #368: returned so the read path can break the heat feedback loop
+    -- without a second query. Distinct from source_attribution, which is
+    -- derived BY READING the content and therefore cannot carry trust.
+    capture_origin  TEXT
 ) AS $$
 DECLARE
     v_pool   INT := p_max_results * 10;
@@ -1469,10 +1480,38 @@ BEGIN
                tb.final_score * COALESCE(c.confidence, 1.0) AS final_score
         FROM tag_boosted tb
         JOIN candidates c ON c.id = tb.id
+    ),
+    -- Trust/provenance demotion (issue #368). Source: arXiv 2604.16548 —
+    -- retrieve-phase corruption ("malicious entries ranked highest by
+    -- embedding similarity"), whose required defence is a trust-aware
+    -- retrieval POLICY, the survey being explicit that "Retrieval-time
+    -- filtering alone is insufficient". Hence a factor inside the ranking
+    -- expression, evaluated before ORDER BY and before the LIMIT, rather
+    -- than a filter over an already-ranked list.
+    --
+    -- Multiplicative like its three predecessors, and necessarily so: an
+    -- additive term cannot demote — it contributes at best zero and leaves
+    -- a hostile passage's similarity intact.
+    --
+    -- This function holds NO trust policy of its own. The trusted set
+    -- arrives as a parameter so mcp_server/core/capture_origin.py stays the
+    -- single source of truth; hardcoding the vocabulary here would let the
+    -- two drift apart silently, which is the failure mode the module was
+    -- written against. Defaults are the identity transform (empty set,
+    -- factor 1.0), so a caller that passes neither gets the pre-#368
+    -- ranking exactly.
+    trust_weighted AS (
+        SELECT cw.id,
+               cw.final_score * CASE
+                   WHEN c.capture_origin = ANY(p_trusted_origins) THEN 1.0
+                   ELSE p_untrusted_factor
+               END AS final_score
+        FROM confidence_weighted cw
+        JOIN candidates c ON c.id = cw.id
     )
-    SELECT cw.id,
+    SELECT tw.id,
            c.content,
-           cw.final_score::REAL,
+           tw.final_score::REAL,
            effective_heat(c, NOW(), v_factor)::REAL AS heat,
            c.domain,
            c.created_at,
@@ -1483,9 +1522,10 @@ BEGIN
            c.emotional_valence,
            c.source,
            COALESCE(c.value, 0.5)::REAL,
-           COALESCE(c.source_attribution, 'unknown')::TEXT
-    FROM confidence_weighted cw
-    JOIN candidates c ON c.id = cw.id
+           COALESCE(c.source_attribution, 'unknown')::TEXT,
+           COALESCE(c.capture_origin, 'unknown')::TEXT
+    FROM trust_weighted tw
+    JOIN candidates c ON c.id = tw.id
     -- Supersession head-of-chain demotion (borrow-from-supermemory item 1):
     -- a memory that has been superseded (superseded_by_id IS NOT NULL) ranks
     -- below every current version, then by fused score within each tier.
@@ -1493,7 +1533,7 @@ BEGIN
     -- tier sort, not a tuned penalty -- no invented constant. Benchmark-neutral:
     -- fixtures never set the edge, so the first key is constant FALSE and the
     -- order collapses to the prior ORDER BY cw.final_score DESC.
-    ORDER BY (c.superseded_by_id IS NOT NULL), cw.final_score DESC
+    ORDER BY (c.superseded_by_id IS NOT NULL), tw.final_score DESC
     LIMIT p_max_results * 3;
 END;
 $$ LANGUAGE plpgsql STABLE;
@@ -1920,6 +1960,16 @@ BEGIN
     ) THEN
         ALTER TABLE memories
             ADD COLUMN capture_origin TEXT NOT NULL DEFAULT 'unknown';
+        -- Backfill (issue #368). Every row present at this instant predates
+        -- the attribute: its channel is not unknown, it was never recorded.
+        -- Marking it 'legacy' keeps it at full ranking weight, where the
+        -- DEFAULT 'unknown' would demote the entire historical corpus the
+        -- moment the read-side trust factor ships. Inside the IF NOT EXISTS
+        -- so it runs exactly once, on the upgrade that creates the column;
+        -- rows written afterwards get 'unknown' from the DEFAULT and are
+        -- demoted, which is the intended fail-closed behaviour for a channel
+        -- nobody classified.
+        UPDATE memories SET capture_origin = 'legacy';
     END IF;
 END $$;
 

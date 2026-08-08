@@ -32,6 +32,7 @@ import os as _os
 from typing import Any
 
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.core.capture_origin import ORIGIN_UNKNOWN, is_trusted_at_read
 from mcp_server.observability import silent_failure
 from mcp_server.core import dual_process_retrieval as dpr, hopfield, conflict_monitor
 from mcp_server.core.hopfield import cosine_similarity
@@ -570,6 +571,12 @@ def _sa_candidate_from_memory(mid: int, mem: dict[str, Any]) -> dict[str, Any]:
         "source": mem.get("source", ""),
         "value": mem.get("value", 0.5),
         "source_attribution": mem.get("source_attribution"),
+        # issue #368. Defaults to UNKNOWN, not to a trusted value: an
+        # injected candidate whose origin could not be read must not earn
+        # heat, per the same fail-closed rule the read path applies. This is
+        # the third field to join this whitelist after being forgotten
+        # elsewhere would have been silent — hence the contract test.
+        "capture_origin": mem.get("capture_origin", ORIGIN_UNKNOWN),
         "_sa_injected": True,
     }
 
@@ -1242,7 +1249,24 @@ def reconsolidation_apply(
 
         # Heat: read current heat_base (best-effort from candidate dict),
         # apply delta, clamp to [0, 1], write through bump_heat_raw.
-        if has_bump and outcome.heat_delta != 0.0:
+        #
+        # issue #368 — break the feedback loop for untrusted origins. Heat is
+        # a ranking signal that rises with retrieval, so without this a
+        # successful poisoning compounds: each time the hostile memory is
+        # retrieved it ranks higher next time, eventually outrunning any
+        # fixed demotion factor.
+        #
+        # Scoped to the POSITIVE delta only, and to the heat write only:
+        #   - a negative delta still applies, otherwise untrusted memories
+        #     would be exempt from cooling — frozen near their current heat
+        #     instead of decaying, the opposite of the intent;
+        #   - last_accessed / access_count below still update, because they
+        #     are not an amplifier: confidence is useful_count/access_count,
+        #     so unrated retrievals lower it rather than raise it.
+        rewards_retrieval = outcome.heat_delta > 0.0 and not is_trusted_at_read(
+            str(c.get("capture_origin", ""))
+        )
+        if has_bump and outcome.heat_delta != 0.0 and not rewards_retrieval:
             try:
                 cur_heat = float(c.get("heat", 0.5) or 0.5)
                 new_heat = max(0.0, min(1.0, cur_heat + outcome.heat_delta))

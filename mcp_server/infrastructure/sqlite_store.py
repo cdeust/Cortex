@@ -27,6 +27,7 @@ import numpy as np
 from mcp_server.core.temporal_normalize import normalize_date_to_iso
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.infrastructure.sqlite_schema import (
+    COLUMN_BACKFILLS,
     CURRENT_MEMORIES_VIEW_DDL,
     MEMORIES_FTS_DDL,
     MEMORIES_VEC_DDL,
@@ -165,7 +166,14 @@ class SqliteMemoryStore(
             try:
                 self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
             except sqlite3.OperationalError:
-                pass
+                # Column already present (or its table is absent): either way
+                # this is not the migration that creates it, so the backfill
+                # below must NOT run — it would overwrite values the write
+                # path has since recorded.
+                continue
+            backfill = COLUMN_BACKFILLS.get((table, column))
+            if backfill is not None:
+                self._conn.execute(backfill)
         self._migrate_fts_code_tokenize()
 
     def _migrate_fts_code_tokenize(self) -> None:

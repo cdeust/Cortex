@@ -56,16 +56,25 @@ from __future__ import annotations
 #              cost of being wrong is a rejected write rather than a hostile
 #              page installing itself into durable memory. A caller that
 #              legitimately needs the bypass says which channel it is.
+# LEGACY       written before this attribute existed. NOT the same claim as
+#              UNKNOWN: unknown means a channel produced this and nobody
+#              classified it, legacy means no channel was ever recorded
+#              because the column did not exist yet. Set once, by the
+#              migration that adds the column, to every row present at that
+#              instant (issue #368) — never by the write path, which always
+#              knows one of the four values above.
 ORIGIN_DELIBERATE = "deliberate"
 ORIGIN_LOCAL_ACTION = "local_action"
 ORIGIN_NETWORK = "network"
 ORIGIN_UNKNOWN = "unknown"
+ORIGIN_LEGACY = "legacy"
 
 ALL_ORIGINS: tuple[str, ...] = (
     ORIGIN_DELIBERATE,
     ORIGIN_LOCAL_ACTION,
     ORIGIN_NETWORK,
     ORIGIN_UNKNOWN,
+    ORIGIN_LEGACY,
 )
 
 # Tools whose output originates off this machine. Lower-cased for comparison
@@ -105,6 +114,22 @@ _LOCAL_ACTION_TOOLS: frozenset[str] = frozenset(
 # classification is a rejected write rather than a trusted one.
 _ORIGINS_ALLOWED_CONTENT_BYPASS: frozenset[str] = frozenset(
     {ORIGIN_DELIBERATE, ORIGIN_LOCAL_ACTION}
+)
+
+# Origins that keep FULL RANKING WEIGHT at read time (issue #368). An
+# allowlist for the same reason as the one above: the read side must fail
+# closed too. A newly added off-machine tool classifies UNKNOWN, and under a
+# denylist of {NETWORK} it would silently keep full weight — the control
+# would stop applying with no failing test, which is the shape of the bug
+# #365 closed on the write side.
+#
+# LEGACY is trusted here and nowhere else. Those rows predate the attribute,
+# so they cannot be attributed; demoting them would re-rank the entire
+# historical corpus at migration time on no evidence. They are also, by
+# construction, unreachable by an attacker acting after the migration — the
+# value is written once, by the migration, and never by the write path.
+_ORIGINS_TRUSTED_AT_READ: frozenset[str] = frozenset(
+    {ORIGIN_DELIBERATE, ORIGIN_LOCAL_ACTION, ORIGIN_LEGACY}
 )
 
 
@@ -155,3 +180,55 @@ def may_bypass_write_gate_on_content(origin: str) -> bool:
 def is_network_origin(origin: str) -> bool:
     """True when ``origin`` denotes content fetched from off this machine."""
     return origin == ORIGIN_NETWORK
+
+
+def is_trusted_at_read(origin: str) -> bool:
+    """Whether ``origin`` keeps full ranking weight and may earn heat.
+
+    Pre: ``origin`` is any string.
+    Post: True exactly for ``_ORIGINS_TRUSTED_AT_READ``; False otherwise,
+    including for ``ORIGIN_UNKNOWN`` and unrecognised values.
+
+    The boolean the read path needs, stated once. Callers previously would
+    have had to spell it ``trust_factor(origin, 0.0) == 0.0``, which reads as
+    arithmetic and hides a policy question behind a sentinel value.
+    """
+    return origin in _ORIGINS_TRUSTED_AT_READ
+
+
+def trust_factor(origin: str, untrusted_factor: float) -> float:
+    """Ranking multiplier for content captured through ``origin``.
+
+    Pre: ``origin`` is any string; ``untrusted_factor`` is the measured
+    demotion weight (0 < w <= 1), supplied by the caller rather than fixed
+    here — its value comes from a committed ablation sweep, not from this
+    module.
+    Post: returns 1.0 for origins in ``_ORIGINS_TRUSTED_AT_READ``, and
+    ``untrusted_factor`` for every other value, including ``ORIGIN_UNKNOWN``
+    and any string this module does not recognise.
+
+    Multiplicative, not additive, and this is the load-bearing choice: an
+    additive term cannot demote. At best it contributes zero, which leaves a
+    hostile passage's similarity score untouched and still winning. A factor
+    below 1 scales the whole fused score down, so a more-similar untrusted
+    memory can be ordered below a less-similar trusted one — which is the
+    property arXiv 2604.16548 requires and that retrieval-time filtering
+    alone does not provide.
+    """
+    return 1.0 if origin in _ORIGINS_TRUSTED_AT_READ else untrusted_factor
+
+
+def trusted_origins_at_read() -> tuple[str, ...]:
+    """The origins that keep full ranking weight, for backends that filter
+    server-side.
+
+    Post: a sorted tuple, so the value is stable across processes — a
+    frozenset's iteration order is not, and this tuple is embedded in a SQL
+    parameter that shows up in query plans and logs.
+
+    Exists so a store can be HANDED the policy instead of restating it.
+    ``infrastructure`` may not import ``core``, so the alternative would be a
+    second copy of the vocabulary living in SQL, free to drift from this one
+    — the exact failure this module was written to prevent on the write side.
+    """
+    return tuple(sorted(_ORIGINS_TRUSTED_AT_READ))

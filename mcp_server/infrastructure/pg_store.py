@@ -1053,11 +1053,21 @@ class PgMemoryStore(
         wrrf_k: int = 60,
         weights: dict[str, float] | None = None,
         include_globals: bool = True,
+        trusted_origins: tuple[str, ...] = (),
+        untrusted_factor: float = 1.0,
     ) -> list[dict[str, Any]]:
         """Call the PL/pgSQL recall_memories function.
 
         Returns over-fetched candidates (3x max_results) for client-side
         FlashRank reranking.
+
+        ``trusted_origins`` / ``untrusted_factor`` carry the capture-origin
+        trust policy (issue #368). They are parameters rather than imports
+        because this layer may not depend on ``core`` — the caller reads them
+        from ``core/capture_origin.py``. Their defaults are the identity
+        transform (no origin trusted, factor 1.0 ⇒ every row multiplied by
+        1.0), so an unaware caller gets the pre-#368 ranking unchanged rather
+        than an accidental demotion of everything.
         """
         w = weights or {}
         emb = self._bytes_to_vector(query_embedding)
@@ -1066,7 +1076,7 @@ class PgMemoryStore(
             "  %s::TEXT, %s::vector, %s::TEXT, %s::TEXT, %s::TEXT, %s::TEXT,"
             "  %s::REAL, %s::INT, %s::INT,"
             "  %s::REAL, %s::REAL, %s::REAL, %s::REAL, %s::REAL,"
-            "  %s::BOOLEAN"
+            "  %s::BOOLEAN, %s::TEXT[], %s::REAL"
             ")",
             (
                 query_text,
@@ -1084,6 +1094,13 @@ class PgMemoryStore(
                 w.get("ngram", 0.3),
                 w.get("recency", 0.0),
                 include_globals,
+                # issue #368 — the trust policy is passed IN, never imported:
+                # infrastructure must not depend on core (module-inventory.md
+                # dependency rules). It travels from the caller to the stored
+                # procedure on every call, so neither this layer nor the SQL
+                # holds a second copy of the vocabulary that could drift.
+                list(trusted_origins),
+                untrusted_factor,
             ),
         ).fetchall()
         # created_at must be ISO text, not a raw psycopg datetime -- see

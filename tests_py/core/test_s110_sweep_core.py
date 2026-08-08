@@ -83,7 +83,18 @@ class TestReconsolidationApplyWritebacks:
 
     @staticmethod
     def _candidates():
-        return [{"memory_id": 1, "heat": 0.5, "emotional_valence": 0.0}]
+        # capture_origin is part of the WRRF candidate contract (issue #368)
+        # and gates the heat writeback: an untrusted or missing origin earns
+        # no heat, so a candidate without it would never reach the writeback
+        # these tests exercise.
+        return [
+            {
+                "memory_id": 1,
+                "heat": 0.5,
+                "emotional_valence": 0.0,
+                "capture_origin": "deliberate",
+            }
+        ]
 
     def _run(self, monkeypatch, outcome, store):
         from mcp_server.core import recall_pipeline

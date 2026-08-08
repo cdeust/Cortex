@@ -57,8 +57,16 @@ class SqliteSearchMixin:
         wrrf_k: int = 60,
         weights: dict[str, float] | None = None,
         include_globals: bool = True,
+        trusted_origins: tuple[str, ...] = (),
+        untrusted_factor: float = 1.0,
     ) -> list[dict[str, Any]]:
-        """Client-side WRRF fusion: vector + FTS5 + heat + recency."""
+        """Client-side WRRF fusion: vector + FTS5 + heat + recency.
+
+        ``trusted_origins`` / ``untrusted_factor`` carry the capture-origin
+        trust policy (issue #368), passed in rather than imported because
+        infrastructure may not depend on core. Defaults are the identity
+        transform, so an unaware caller gets the pre-#368 ranking.
+        """
         w = weights or {}
         w_vector = w.get("vector", 1.0)
         w_fts = w.get("fts", 0.5)
@@ -74,6 +82,7 @@ class SqliteSearchMixin:
             scores, w_recency, wrrf_k, pool, min_heat, domain, directory
         )
         self._apply_agent_boost(scores, agent_topic, w_vector, wrrf_k)
+        self._apply_trust_factor(scores, trusted_origins, untrusted_factor)
 
         if not scores:
             return []
@@ -247,6 +256,43 @@ class SqliteSearchMixin:
         for r in rows:
             scores[r["id"]] += boost
 
+    def _apply_trust_factor(
+        self,
+        scores: dict[int, float],
+        trusted_origins: tuple[str, ...],
+        untrusted_factor: float,
+    ) -> None:
+        """Scale down scores whose capture_origin is not trusted (issue #368).
+
+        PG parity: the counterpart is the `trust_weighted` CTE in
+        pg_schema.py. Applied here for the same reason it sits there — after
+        the signals are fused but BEFORE `_fetch_ranked_results` sorts and
+        truncates, so it reorders candidates instead of filtering an already
+        ranked list (arXiv 2604.16548: "Retrieval-time filtering alone is
+        insufficient").
+
+        Multiplicative, not additive: an additive penalty cannot demote a
+        passage that wins on similarity.
+
+        The policy arrives as arguments — this layer must not import core.
+        An empty `trusted_origins` with factor 1.0 is the identity transform.
+        """
+        if not scores or untrusted_factor == 1.0:
+            return
+        ids = list(scores.keys())
+        placeholders = ",".join("?" * len(ids))
+        rows = self._conn.execute(
+            f"SELECT id, capture_origin FROM memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ? placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
+            ids,
+        ).fetchall()
+        trusted = set(trusted_origins)
+        for r in rows:
+            # A row missing from this result set keeps its score: it cannot
+            # be judged, and silently demoting what we failed to read would
+            # be a different bug from the one under fix.
+            if r["capture_origin"] not in trusted:
+                scores[r["id"]] *= untrusted_factor
+
     def _fetch_ranked_results(
         self,
         scores: dict[int, float],
@@ -294,6 +340,9 @@ class SqliteSearchMixin:
                     "tags": _decode_tags(row["tags"]),
                     "importance": row["importance"],
                     "surprise_score": row["surprise_score"],
+                    # issue #368 — PG parity: the read path needs the origin
+                    # to break the heat feedback loop without a second query.
+                    "capture_origin": row["capture_origin"],
                 }
             )
         return results

@@ -90,6 +90,9 @@ _WRRF_CONTRACT_FIELDS = {
     "source",
     "value",
     "source_attribution",
+    # issue #368 — returned by recall_memories() so the read path can break
+    # the heat feedback loop without a second query.
+    "capture_origin",
 }
 
 

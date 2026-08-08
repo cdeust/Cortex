@@ -11,6 +11,8 @@ The legacy ``RECALL_MEMORIES_FN`` has been deleted.
 
 from __future__ import annotations
 
+import re
+
 from mcp_server.infrastructure.pg_schema import (
     MEMORIES_DDL,
     MIGRATIONS_DDL,
@@ -98,8 +100,16 @@ def test_migration_adds_supersession_columns_idempotently() -> None:
 
 def test_recall_demotes_superseded_versions() -> None:
     """Head-of-chain demotion is a constant-free tier sort: superseded
-    versions (superseded_by_id IS NOT NULL) rank below current ones."""
-    assert (
-        "ORDER BY (c.superseded_by_id IS NOT NULL), cw.final_score DESC"
-        in RECALL_MEMORIES_LAZY_FN
+    versions (superseded_by_id IS NOT NULL) rank below current ones.
+
+    The score alias is whichever CTE currently ends the post-fusion chain
+    (`tw` since issue #368 appended trust_weighted after confidence_weighted).
+    Asserted as a regex on the tier key rather than on that alias: the
+    property under test is that the supersession tier is the FIRST sort key,
+    which must survive appending another multiplicative link — and pinning
+    the alias made this test fail for a rename that changed no behaviour.
+    """
+    assert re.search(
+        r"ORDER BY \(c\.superseded_by_id IS NOT NULL\), \w+\.final_score DESC",
+        RECALL_MEMORIES_LAZY_FN,
     ), "final SELECT must tier-sort current versions above superseded ones"
