@@ -820,10 +820,11 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # `contents: read`, NOT write, and that is deliberate. The tag is pushed
-    # with RELEASE_TAG_TOKEN (persisted by the checkout step below), never
+    # with the RELEASE_TAG_SSH_KEY deploy key (persisted by the checkout step
+    # below), never
     # with GITHUB_TOKEN — granting GITHUB_TOKEN `contents: write` here would
     # be an unused permission (issue #178 least-privilege), and worse, it
-    # would let a future edit that drops `token:` from the checkout push the
+    # would let a future edit that drops `ssh-key:` from the checkout push the
     # tag with GITHUB_TOKEN and SUCCEED — producing a tag that silently never
     # starts release.yml. Read-only makes that mistake fail loudly instead.
     permissions:
@@ -840,42 +841,49 @@ jobs:
       group: release-tag
       cancel-in-progress: false
     steps:
-      # secrets.RELEASE_TAG_TOKEN does not exist yet in this repository. Per
+      # secrets.RELEASE_TAG_SSH_KEY is the PRIVATE half of a repository deploy
+      # key (ed25519, read_only=false, created 2026-08-08). A deploy key, and
+      # not a PAT or a GitHub App token, because neither of those can be
+      # minted through the API — both require a browser — and the deploy key
+      # is the tighter credential anyway: scoped to this ONE repository,
+      # carrying no account access, and with no expiry to silently break
+      # releases. Per
       # GitHub's docs, a ref pushed with the default GITHUB_TOKEN (unlike
       # workflow_dispatch/repository_dispatch) does NOT start a new workflow
       # run — a GITHUB_TOKEN-pushed tag would therefore never reach
       # release.yml's `push: tags` trigger. Same guarded-optional-secret
       # shape as sync-ccplugins-fork.yml's `has_pat` step: absence is a
       # clean, loud skip, not a red job.
-      - name: Guard — skip cleanly when RELEASE_TAG_TOKEN is missing
+      - name: Guard — skip cleanly when RELEASE_TAG_SSH_KEY is missing
         id: guard
         env:
-          TOKEN: ${{ secrets.RELEASE_TAG_TOKEN }}
+          SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}
         run: |
-          if [ -z "$TOKEN" ]; then
-            echo "RELEASE_TAG_TOKEN secret not configured — skipping."
-            echo "Add a PAT with 'contents: write' at Settings -> Secrets and"
-            echo "variables -> Actions. Releases stay manual until it exists."
-            echo "has_token=false" >> "$GITHUB_OUTPUT"
+          if [ -z "$SSH_KEY" ]; then
+            echo "RELEASE_TAG_SSH_KEY secret not configured — skipping."
+            echo "Add the private half of a write-enabled repository deploy"
+            echo "key at Settings -> Secrets and variables -> Actions."
+            echo "Releases stay manual until it exists."
+            echo "has_deploy_key=false" >> "$GITHUB_OUTPUT"
           else
-            echo "has_token=true" >> "$GITHUB_OUTPUT"
+            echo "has_deploy_key=true" >> "$GITHUB_OUTPUT"
           fi
 
       # fetch-depth: 0 so `git rev-parse --verify refs/tags/vX` below can see
-      # every existing tag, not just the tip commit. `token:` supplies
-      # RELEASE_TAG_TOKEN as the credential `git push` uses later in this
+      # every existing tag, not just the tip commit. `ssh-key:` installs the
+      # deploy key as the credential `git push` uses later in this
       # job (actions/checkout persists it by default) — the non-GITHUB_TOKEN
       # credential the tag push requires (see the guard step's comment).
       - name: Checkout the SHA that just went green
-        if: steps.guard.outputs.has_token == 'true'
+        if: steps.guard.outputs.has_deploy_key == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_TAG_TOKEN }}
+          ssh-key: ${{ secrets.RELEASE_TAG_SSH_KEY }}
 
       - name: Set up Python
-        if: steps.guard.outputs.has_token == 'true'
+        if: steps.guard.outputs.has_deploy_key == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
@@ -889,7 +897,7 @@ jobs:
       # rather than fail or re-tag.
       - name: Resolve the version and check for an existing tag
         id: tag_check
-        if: steps.guard.outputs.has_token == 'true'
+        if: steps.guard.outputs.has_deploy_key == 'true'
         run: |
           set -euo pipefail
           VERSION="$(python3 -c "
@@ -915,11 +923,11 @@ jobs:
       # silently tagging a mismatched tree is exactly the v4.17.0 failure
       # mode this workflow exists to make structurally impossible.
       - name: Check version surfaces
-        if: steps.guard.outputs.has_token == 'true' && steps.tag_check.outputs.exists == 'false'
+        if: steps.guard.outputs.has_deploy_key == 'true' && steps.tag_check.outputs.exists == 'false'
         run: python scripts/check_version_surfaces.py
 
       - name: Configure git identity
-        if: steps.guard.outputs.has_token == 'true' && steps.tag_check.outputs.exists == 'false'
+        if: steps.guard.outputs.has_deploy_key == 'true' && steps.tag_check.outputs.exists == 'false'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -931,7 +939,7 @@ jobs:
       # working-tree HEAD) so the released commit is provably the one that
       # went green, even if a future edit changes what this job checks out.
       - name: Create and push the release tag
-        if: steps.guard.outputs.has_token == 'true' && steps.tag_check.outputs.exists == 'false'
+        if: steps.guard.outputs.has_deploy_key == 'true' && steps.tag_check.outputs.exists == 'false'
         run: |
           set -euo pipefail
           VERSION="${{ steps.tag_check.outputs.version }}"
@@ -945,8 +953,8 @@ jobs:
       - name: Summarize the release-gate decision
         if: always()
         run: |
-          if [ "${{ steps.guard.outputs.has_token }}" != "true" ]; then
-            echo "## Release gate: skipped — RELEASE_TAG_TOKEN not configured" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.guard.outputs.has_deploy_key }}" != "true" ]; then
+            echo "## Release gate: skipped — RELEASE_TAG_SSH_KEY not configured" >> "$GITHUB_STEP_SUMMARY"
           elif [ "${{ steps.tag_check.outputs.exists }}" == "true" ]; then
             echo "## Release gate: skipped — v${{ steps.tag_check.outputs.version }} already tagged (no version bump on this push)" >> "$GITHUB_STEP_SUMMARY"
           else
