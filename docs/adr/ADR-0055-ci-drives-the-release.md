@@ -97,18 +97,37 @@ payload — a larger change with no compensating benefit.
 "events triggered by the `GITHUB_TOKEN`, with the exception of
 `workflow_dispatch` and `repository_dispatch`, will not create a new
 workflow run." A tag pushed with the default token would therefore never
-start `release.yml`. `release-gate` uses `secrets.RELEASE_TAG_TOKEN` and
-**skips cleanly while that secret is absent** — the same guarded-optional
-shape as `sync-ccplugins-fork.yml`'s `CCPLUGINS_PAT`. A GitHub App
-installation token is preferred over a fine-grained PAT: no expiry date to
-silently break releases.
+start `release.yml`. `release-gate` pushes over SSH with
+`secrets.RELEASE_TAG_SSH_KEY` and **skips cleanly while that secret is
+absent** — the same guarded-optional shape as `sync-ccplugins-fork.yml`'s
+`CCPLUGINS_PAT`.
 
-The job declares `contents: read`, not `write`. The push uses
-`RELEASE_TAG_TOKEN`, so `write` on `GITHUB_TOKEN` would be an unused
-permission (issue #178) — and worse, it would let a future edit that drops
-`token:` from the checkout push the tag with `GITHUB_TOKEN` and *succeed*,
-producing a tag that silently never starts `release.yml`. Read-only makes
-that mistake fail loudly.
+The credential is a **repository deploy key** — ed25519, `read_only=false`,
+`verified: true`, created 2026-08-08 (`gh api repos/cdeust/Cortex/keys`) —
+and not a fine-grained PAT or a GitHub App installation token. The deciding
+constraint is operational, not aesthetic: neither a PAT nor a GitHub App can
+be minted through the API, both require an interactive browser session,
+while a deploy key is one `gh api` call. It is also the tightest of the
+three by scope — one repository, no account access, no expiry date to
+silently break releases later.
+
+**What is not established.** That a deploy-key push *starts* `release.yml`
+is a hypothesis, not a verified fact. GitHub documents the anti-recursion
+rule for `GITHUB_TOKEN` only and says nothing about deploy keys; the claim
+that they are exempt appears only in blog-level sources, and this repo holds
+contradictory evidence on workflow chaining. The first real release is the
+test. Failure mode if the hypothesis is wrong: the tag lands and no release
+appears — visible immediately, recoverable by deleting the tag and pushing
+it by hand. The complementary "no version bump → skip at the tag check" path
+is likewise untested. Do not describe either as verified until a release has
+exercised it.
+
+The job declares `contents: read`, not `write`. The push authenticates with
+the deploy key, so `write` on `GITHUB_TOKEN` would be an unused permission
+(issue #178) — and worse, it would let a future edit that drops `ssh-key:`
+from the checkout push the tag with `GITHUB_TOKEN` and *succeed*, producing
+a tag that silently never starts `release.yml`. Read-only makes that mistake
+fail loudly.
 
 **`requirements/release.txt` needed a new home for its coverage.**
 `release.yml`'s test job was the only thing that ever installed it. `ci.yml`

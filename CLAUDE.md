@@ -69,10 +69,16 @@ it (marketplace-pins workflow: PR/push on the manifest + weekly cron),
 source: the 2026-07-25 incident where six zetetic-team-subagents releases and
 two cortex-viz releases shipped to zero installs (#179).
 
-Requires the `RELEASE_TAG_TOKEN` repo secret (`contents: write` on this repo
-only) — a `GITHUB_TOKEN`-pushed tag does not start another workflow, so
-without it `release-gate` skips with an explicit message and releases stay
-manual.
+Requires the `RELEASE_TAG_SSH_KEY` repo secret — the private half of an
+ed25519 deploy key with write access to this repo only — because a
+`GITHUB_TOKEN`-pushed tag does not start another workflow. Without it
+`release-gate` skips with an explicit message and releases stay manual. A
+deploy key rather than a PAT or a GitHub App because neither of those can be
+minted through the API; both need a browser. Whether a deploy-key push
+*does* start `release.yml` is untested — GitHub documents the anti-recursion
+rule for `GITHUB_TOKEN` only — so watch the first release: if the tag lands
+and no release appears, delete the tag and push it by hand. See
+@docs/adr/ADR-0055-ci-drives-the-release.md.
 
 ## Architecture
 

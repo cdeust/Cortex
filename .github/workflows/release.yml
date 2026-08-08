@@ -26,9 +26,11 @@ name: Release
 # The test guarantee now comes from `ci.yml`'s `release-gate` job: it runs
 # ONLY after `ci-green` succeeds on a push to `main`, and tags the EXACT SHA
 # that just went green with an annotated `git tag` pushed via
-# `RELEASE_TAG_TOKEN` (a `GITHUB_TOKEN`-pushed tag does not start a new
-# workflow run, per GitHub's docs — this workflow would never fire from
-# one). The released tree is therefore bit-identical to the validated one;
+# the `RELEASE_TAG_SSH_KEY` deploy key (a `GITHUB_TOKEN`-pushed tag does not
+# start a new workflow run, per GitHub's docs — this workflow would never
+# fire from one; that a deploy-key push DOES fire it is untested, see
+# docs/adr/ADR-0055-ci-drives-the-release.md).
+# The released tree is therefore bit-identical to the validated one;
 # this workflow's only job is to propagate what `ci.yml` already validated
 # and tagged — creating a GitHub Release with auto-generated notes, and
 # attempting the secondary PyPI compatibility channel.
