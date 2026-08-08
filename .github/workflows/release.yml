@@ -56,33 +56,40 @@ permissions:
   contents: read
 
 jobs:
-  # Shared with ci.yml's `test` job via the reusable workflow (issue #336) —
-  # see .github/workflows/test-suite.yml for the step-level rationale. Before
-  # this extraction, this job was a hand-maintained mirror of ci.yml's `test`
-  # job that silently drifted from it: ci.yml triggers on `push: branches` +
-  # `pull_request`, this workflow triggers on `push: tags`, so a tag push
-  # never reached ci.yml and every hardening pass CI received skipped this
-  # file. Release run 30741657854 (v4.17.0) is what that cost: the reranker
-  # fetch hung in `sock.connect` until pytest-timeout killed the suite,
-  # blocking all five downstream publish jobs on a tag whose tree had just
-  # passed 20 green checks on PR #334; #335 restored parity by hand. This
-  # reusable-workflow call makes the next divergence structurally
-  # impossible instead of merely visible.
+  # Shared with ci.yml's `test` job via the composite action (issue #336) —
+  # see .github/actions/test-suite/action.yml for the step-level rationale.
+  # Before this extraction, this job was a hand-maintained mirror of ci.yml's
+  # `test` job that silently drifted from it: ci.yml triggers on
+  # `push: branches` + `pull_request`, this workflow triggers on `push: tags`,
+  # so a tag push never reached ci.yml and every hardening pass CI received
+  # skipped this file. Release run 30741657854 (v4.17.0) is what that cost:
+  # the reranker fetch hung in `sock.connect` until pytest-timeout killed the
+  # suite, blocking all five downstream publish jobs on a tag whose tree had
+  # just passed 20 green checks on PR #334; #335 restored parity by hand. The
+  # shared action makes the next divergence structurally impossible instead
+  # of merely visible.
   #
   # release.txt deliberately omits tree-sitter + tree-sitter-language-pack
   # (as it omits igraph/leidenalg/texttable), so AST tests skip here and
-  # include-tree-sitter: false — the test-suite.yml `test` job never runs
-  # the tree-sitter cache/prefetch steps, avoiding an ImportError. Coverage,
+  # include-tree-sitter: "false" — the shared action never runs the
+  # tree-sitter cache/prefetch steps, avoiding an ImportError. Coverage,
   # the MCP host contract check, and the advertised-test-count check
   # (run-extended-checks, defaulted false) stay CI-only, unchanged from
   # this job's prior behaviour — it never ran them.
   test:
     name: Test before release
-    uses: ./.github/workflows/test-suite.yml
-    with:
-      python-version: "3.12"
-      requirements-file: requirements/release.txt
-      include-tree-sitter: false
+    runs-on: ubuntu-latest
+
+    steps:
+      # A local `uses: ./...` is resolved from the checked-out tree, so the
+      # checkout cannot itself live inside the shared action.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/test-suite
+        with:
+          python-version: "3.12"
+          requirements-file: requirements/release.txt
+          include-tree-sitter: "false"
 
   github-release:
     name: GitHub Release

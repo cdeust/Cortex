@@ -15,38 +15,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Shared with release.yml's `test` job via the reusable workflow (issue
-  # #336) — see .github/workflows/test-suite.yml for the step-level
-  # rationale.
-  #
-  # CHECK NAME CHANGES HERE. A job that delegates via `uses:` reports as
-  # "<caller job name> / <called job name>", so each matrix leg now
-  # publishes "Test (Python X.Y) / Test (Python X.Y)" instead of the bare
-  # "Test (Python X.Y)". There is no way to keep the bare name while
-  # delegating — GitHub always composes the two. The four required status
-  # checks on `main` must therefore be renamed to match, or the branch
-  # protection waits forever on contexts nobody reports.
-  # source: this PR's own check list (run 31250898534) — all legs green,
-  # PR still BLOCKED on the four bare contexts.
-  # The other legs below (SQLite, Windows) keep their steps inline and
-  # keep their bare names.
+  # Shared with release.yml's `test` job via the composite action (issue
+  # #336) — see .github/actions/test-suite/action.yml for the step-level
+  # rationale, including why the shared unit is a composite action and not a
+  # reusable workflow: a job delegating via `uses:` reports its check as
+  # "<caller job name> / <called job name>", which would rename all four
+  # required contexts on `main`. Sharing at the step level leaves this job's
+  # name — and therefore its status-check context — untouched.
   test:
     name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
-    uses: ./.github/workflows/test-suite.yml
-    with:
-      python-version: ${{ matrix.python-version }}
-      requirements-file: requirements/ci-postgresql.txt
-      include-tree-sitter: true
-      # Coverage, the MCP host contract check, and the advertised-test-count
-      # check are expensive and gain nothing from running on all four legs —
-      # ci.yml has always scoped them to Python 3.12 only (matrix.python-version
-      # == '3.12'); the reusable workflow makes that scoping an explicit input
-      # instead of an inline `if:` per step.
-      run-extended-checks: ${{ matrix.python-version == '3.12' }}
+
+    steps:
+      # A local `uses: ./...` is resolved from the checked-out tree, so the
+      # checkout cannot itself live inside the shared action.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/test-suite
+        with:
+          python-version: ${{ matrix.python-version }}
+          requirements-file: requirements/ci-postgresql.txt
+          include-tree-sitter: "true"
+          # Coverage, the MCP host contract check, and the advertised-test-count
+          # check are expensive and gain nothing from running on all four legs —
+          # ci.yml has always scoped them to Python 3.12 only; the shared action
+          # makes that scoping an explicit input instead of an inline `if:` per
+          # step.
+          run-extended-checks: ${{ matrix.python-version == '3.12' }}
 
   test-sqlite:
     name: Test (SQLite backend)

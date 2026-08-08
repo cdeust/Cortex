@@ -1,0 +1,324 @@
+name: "Run the PostgreSQL-backed pytest suite"
+description: >-
+  Shared step list for ci.yml's `test` matrix and release.yml's pre-release
+  test gate: provision PostgreSQL + pgvector on the runner, warm every model
+  and grammar cache, then run pytest offline.
+
+# Shared pytest suite for ci.yml (push to main + pull_request) and
+# release.yml (tag push). Extracted per issue #336: the two jobs ran the
+# exact same suite against the same Postgres service as two separate copies
+# with non-overlapping triggers — a tag push never reaches ci.yml — so every
+# hardening pass applied to one copy silently drifted from the other, with
+# nothing to report it. Release run 30741657854 (v4.17.0) is what that cost:
+# the FlashRank fetch hung until pytest-timeout killed the suite, blocking
+# every downstream publish job on a tag whose tree had just passed 20 green
+# checks on PR #334; #335 restored parity by hand, this action makes the
+# next divergence structurally impossible instead of merely visible.
+#
+# WHY A COMPOSITE ACTION AND NOT A REUSABLE WORKFLOW. The first attempt at
+# #336 shared this as `.github/workflows/test-suite.yml` behind a
+# `workflow_call`. A job that delegates via `uses:` reports its check as
+# "<caller job name> / <called job name>", so the four matrix legs published
+# "Test (Python X.Y) / Test (Python X.Y)" instead of the bare
+# "Test (Python X.Y)" that branch protection on `main` requires — GitHub
+# always composes the two names and offers no way to suppress the prefix.
+# The PR sat BLOCKED with zero red checks, because the four required
+# contexts were reported by nobody. source: run 31250898534 on PR #387.
+# Sharing at the STEP level instead leaves the caller's job name — and
+# therefore every required status-check context — untouched.
+#
+# The one legitimate asymmetry between callers survives as an explicit
+# input, not a duplicated step list: requirements/release.txt omits
+# tree-sitter, tree-sitter-language-pack, igraph, leidenalg and texttable, so
+# the release gate needs none of ci.yml's three tree-sitter steps and would
+# ImportError if they ran — `include-tree-sitter` gates them off instead.
+#
+# Callers must check the repository out before invoking this action: a local
+# `uses: ./...` reference is resolved from the checked-out tree.
+
+inputs:
+  python-version:
+    description: "Python version to run the suite under."
+    required: true
+  requirements-file:
+    description: "Hash-pinned requirements file to install (e.g. requirements/ci-postgresql.txt or requirements/release.txt)."
+    required: true
+  include-tree-sitter:
+    description: "Cache + prefetch tree-sitter grammars. Only meaningful when requirements-file installs tree-sitter-language-pack. Composite-action inputs are strings, so this is compared against the literal 'true'."
+    required: false
+    default: "true"
+  run-extended-checks:
+    description: "Run coverage, the Claude/Codex MCP host contract check, the advertised-test-count/badge check, and upload the coverage artifact. CI-only (a single matrix leg); release.yml never sets this. Compared against the literal 'true'."
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+
+  steps:
+    # A reusable workflow could carry this as a job-level `env:`; a composite
+    # action has no job scope, so the value is published once here and read by
+    # every step below (and by pytest itself) instead of being repeated.
+    - name: Export DATABASE_URL for the suite
+      shell: bash
+      run: echo "DATABASE_URL=postgresql://cortex:cortex@localhost:5432/cortex" >> "$GITHUB_ENV"
+
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    # Provision PostgreSQL + pgvector on the runner itself, instead of a
+    # Docker-Hub service container. Anonymous `pgvector/pgvector:pg17` pulls
+    # from registry-1.docker.io are rate-limited and outage-prone (observed:
+    # "context deadline exceeded" failing container init before any test ran,
+    # CI run 27190427877). The runner ships PostgreSQL preinstalled; pgvector
+    # comes from the PGDG apt repo (apt.postgresql.org) — no registry, no pull
+    # rate limit. source: runner image (actions/runner-images) + PGDG.
+    - name: Set up PostgreSQL + pgvector (runner-local, no registry pull)
+      shell: bash
+      run: |
+        set -euxo pipefail
+        sudo systemctl start postgresql
+        PG_VER="$(pg_lsclusters -h | awk 'NR==1 {print $1}')"
+        # Ensure the PGDG apt repo (canonical pgvector source); idempotent.
+        sudo install -d /usr/share/postgresql-common/pgdg
+        sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+          -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+        echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+          | sudo tee /etc/apt/sources.list.d/pgdg.list
+        # Structured retry (not `A && break || sleep`, shellcheck SC2015: that
+        # form silently swallows exhaustion — see issue #247): each loop fails
+        # the step loudly if every attempt is exhausted, and reports the
+        # attempt number it is on (shellcheck SC2034: the counter must be read).
+        apt_update_ok=""
+        for attempt in 1 2 3; do
+          if sudo apt-get update; then apt_update_ok=1; break; fi
+          echo "apt-get update attempt ${attempt}/3 failed; retrying in 5s" >&2
+          sleep 5
+        done
+        [ -n "$apt_update_ok" ] || { echo "apt-get update failed after 3 attempts" >&2; exit 1; }
+        apt_install_ok=""
+        for attempt in 1 2 3; do
+          if sudo apt-get install -y "postgresql-${PG_VER}-pgvector"; then apt_install_ok=1; break; fi
+          echo "apt-get install attempt ${attempt}/3 failed; retrying in 5s" >&2
+          sleep 5
+        done
+        [ -n "$apt_install_ok" ] || { echo "apt-get install postgresql-${PG_VER}-pgvector failed after 3 attempts" >&2; exit 1; }
+        # Role + DB expected by DATABASE_URL.
+        sudo -u postgres psql -v ON_ERROR_STOP=1 \
+          -c "CREATE ROLE cortex LOGIN SUPERUSER PASSWORD 'cortex';"
+        sudo -u postgres createdb -O cortex cortex
+        sudo -u postgres psql -v ON_ERROR_STOP=1 -d cortex \
+          -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+        # Wait until reachable over TCP with password auth.
+        pg_ready=""
+        for attempt in $(seq 1 30); do
+          if PGPASSWORD=cortex pg_isready -h localhost -U cortex -d cortex; then pg_ready=1; break; fi
+          echo "postgres not ready yet (attempt ${attempt}/30); retrying in 1s" >&2
+          sleep 1
+        done
+        [ -n "$pg_ready" ] || { echo "postgres failed to become ready after 30 attempts" >&2; exit 1; }
+        PGPASSWORD=cortex psql -h localhost -U cortex -d cortex -c "SELECT version();"
+
+    # Both callers install a hash-pinned requirements file into the same
+    # OS/Python combination; sharing one pip cache keyspace is safe (pip's
+    # own cache is keyed by wheel hash internally, regardless of which
+    # requirements file requested a given wheel). Previously this step
+    # existed only in ci.yml — release.yml's test job had no pip cache at
+    # all, an unremarked asymmetry (not documented as intentional anywhere)
+    # closed here as part of the issue #336 extraction.
+    - name: Cache pip
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ inputs.python-version }}-${{ hashFiles('pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ inputs.python-version }}-
+
+    - name: Cache HuggingFace models
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/huggingface
+        key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
+
+    # FlashRank is NOT huggingface_hub. It fetches its ONNX model with a bare
+    # `requests.get(..., stream=True)` carrying no timeout, so HF_HUB_OFFLINE
+    # never reaches it and a stalled connect blocks the thread indefinitely
+    # instead of raising — reranker.py's `except Exception` cannot engage
+    # against a hang. CI run 30263190266 (main, Python 3.13, 2026-07-27) hung
+    # in `sock.connect` inside a recall test until pytest-timeout killed the
+    # whole suite at 300s, while every other leg happened to download fine.
+    # Cache the model so the fetch happens once, not once per leg.
+    - name: Cache FlashRank reranker model
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/flashrank
+        key: ${{ runner.os }}-flashrank-ms-marco-MiniLM-L-12-v2
+
+    - name: Install dependencies
+      shell: bash
+      # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
+      # --no-deps on the project install because the file above IS the
+      # complete dependency graph; re-resolving here would be unpinned.
+      run: |
+        pip install --require-hashes -r ${{ inputs.requirements-file }}
+        pip install --no-deps -e .
+
+    # Populate the HuggingFace cache before the (offline) test run. A transient
+    # huggingface.co blip must not leave the cache empty — that surfaced as 58
+    # spurious "couldn't connect to huggingface.co" test failures on a single
+    # matrix leg (CI run 28495801728, Python 3.10, 2026-07-01) while every other
+    # leg was fine. Retry with backoff so a blip self-heals; fail loudly here (no
+    # continue-on-error) instead of cascading into a misleading test failure.
+    - name: Pre-download embedding model
+      shell: bash
+      run: |
+        for attempt in 1 2 3 4 5; do
+          python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+          echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+          sleep $((attempt * 10))
+        done
+        echo "HF pre-download failed after 5 attempts" >&2
+        exit 1
+
+    # Same retry-and-fail-loudly shape as the step above, for the reranker.
+    # Deliberately runs WITHOUT CORTEX_RERANKER_OFFLINE: this is the one place
+    # allowed to download the model, so that the test steps below never can.
+    # `ensure_reranker_loaded` reports the load state instead of degrading
+    # silently, so a failed fetch fails this step rather than surfacing later
+    # as first-stage-only recall scores (the 2026-07-10 FlashRank incident).
+    - name: Pre-download reranker model
+      shell: bash
+      run: |
+        for attempt in 1 2 3 4 5; do
+          python -c "from mcp_server.core.reranker import ensure_reranker_loaded as e; s = e(); assert s.state == 'loaded', s" && exit 0
+          echo "FlashRank pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+          sleep $((attempt * 10))
+        done
+        echo "FlashRank pre-download failed after 5 attempts" >&2
+        exit 1
+
+    # tree-sitter-language-pack fetches each grammar's shared library lazily
+    # over the network at `get_parser()` call time, not at install time — a
+    # cold cache mid-suite is a real, previously-uncaught `DownloadError`
+    # (main-red, CI run 30592244731, 2026-07-31:
+    # tests_py/core/test_ast_extractors.py + benchmarks/test_codebase_
+    # alteration.py). Needs the package importable, so — unlike the HF/
+    # FlashRank cache steps above — this must come after "Install
+    # dependencies"; same cache-then-prefetch-with-retries shape otherwise,
+    # for the same reason: fetch once here so `pytest` itself never touches
+    # the network for a grammar.
+    #
+    # Gated on include-tree-sitter: requirements/release.txt deliberately
+    # omits tree-sitter + tree-sitter-language-pack (as it omits igraph/
+    # leidenalg/texttable), so the release caller passes
+    # include-tree-sitter: false and these three steps do not run — there
+    # is no grammar to fetch and the import below would ImportError.
+    - name: Resolve tree-sitter cache directory
+      if: inputs.include-tree-sitter == 'true'
+      shell: bash
+      run: echo "TREE_SITTER_CACHE_DIR=$(python -c 'from tree_sitter_language_pack import cache_dir; print(cache_dir())')" >> "$GITHUB_ENV"
+
+    - name: Cache tree-sitter grammars
+      if: inputs.include-tree-sitter == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ env.TREE_SITTER_CACHE_DIR }}
+        key: ${{ runner.os }}-tree-sitter-grammars-${{ hashFiles('pyproject.toml') }}
+
+    # The language set is read from AST_SUPPORTED (not hand-copied here) so
+    # this step cannot drift from the languages ast_parser.py actually uses.
+    - name: Prefetch tree-sitter grammars
+      if: inputs.include-tree-sitter == 'true'
+      shell: bash
+      run: |
+        for attempt in 1 2 3 4 5; do
+          python -c "from mcp_server.core.ast_parser import AST_SUPPORTED; from tree_sitter_language_pack import prefetch; prefetch(sorted(AST_SUPPORTED))" && exit 0
+          echo "tree-sitter grammar prefetch attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+          sleep $((attempt * 10))
+        done
+        echo "tree-sitter grammar prefetch failed after 5 attempts" >&2
+        exit 1
+
+    # Offline: both models are already cached by the steps above, so tests must
+    # never reach out to huggingface.co mid-suite — deterministic and flake-free.
+    - name: Run tests
+      shell: bash
+      env:
+        HF_HUB_OFFLINE: "1"
+        TRANSFORMERS_OFFLINE: "1"
+        CORTEX_RERANKER_OFFLINE: "1"
+      run: pytest --tb=short -q
+
+    # The four steps below are CI-only: they run on the single matrix leg
+    # the ci.yml caller marks run-extended-checks: true (Python 3.12).
+    # release.yml never sets run-extended-checks — its test job is a
+    # pass/fail gate before publishing, not the leg that owns coverage, the
+    # MCP host contract check, or the advertised-test-count/badge check.
+    - name: Run tests with coverage
+      if: inputs.run-extended-checks == 'true'
+      shell: bash
+      env:
+        HF_HUB_OFFLINE: "1"
+        TRANSFORMERS_OFFLINE: "1"
+        CORTEX_RERANKER_OFFLINE: "1"
+      # --cov-fail-under is the statement-coverage floor (issue #196
+      # criterion 4): seeded at the number this job itself achieved
+      # (82.02% — 30,229 of 36,854 statements, run 30316539703,
+      # coverage.py 7.15.2) so the figure can only ratchet up, never
+      # silently fall back. Raise the floor when coverage rises.
+      run: pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing --cov-fail-under=82
+
+    # Match the primary Claude and additive Codex client identities against
+    # a real, explicitly configured PostgreSQL instance. Explicit targets
+    # cannot fall back, so successful memory_stats calls prove PostgreSQL
+    # was selected for both host contracts.
+    - name: Verify Claude and Codex PostgreSQL-first MCP contracts
+      if: inputs.run-extended-checks == 'true'
+      shell: bash
+      env:
+        CORTEX_RUNTIME: cowork
+        HF_HUB_OFFLINE: "1"
+        TRANSFORMERS_OFFLINE: "1"
+        CORTEX_RERANKER_OFFLINE: "1"
+      run: >-
+        python scripts/verify_mcp_hosts.py
+        --clients claude-code codex-cli --profiles lean
+        --storage-selection auto
+        -- hypermnesia-mcp
+
+    # The advertised test count is the one claim the static gate cannot check
+    # without collecting the suite, so it is checked in the job that already
+    # has the suite installed. `--collect-only` re-collects (~seconds) rather
+    # than parsing the run above, so the number is the collector's own.
+    - name: Check advertised test count
+      if: inputs.run-extended-checks == 'true'
+      shell: bash
+      env:
+        HF_HUB_OFFLINE: "1"
+        TRANSFORMERS_OFFLINE: "1"
+        CORTEX_RERANKER_OFFLINE: "1"
+      run: |
+        set -euo pipefail
+        # Parse the collector's own summary line ("N tests collected in Xs")
+        # by its label rather than by position, and fail loudly if the line
+        # is not there — an unparsed count must never silently skip the check.
+        collected="$(pytest --collect-only -q | sed -n 's/^\([0-9][0-9]*\) tests collected.*/\1/p' | tail -1)"
+        if [ -z "${collected}" ]; then
+          echo "could not parse the collected test count from pytest" >&2
+          exit 1
+        fi
+        echo "collected ${collected} tests"
+        python scripts/check_doc_claims.py --test-count "${collected}"
+        # The tests badge is a committed SVG carrying this same number, so
+        # it is checked where the number is known. The other repo-derived
+        # badges are checked in the static job, which needs no suite.
+        python scripts/generate_repo_badges.py --check --test-count "${collected}"
+
+    - name: Upload coverage
+      if: inputs.run-extended-checks == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: coverage-report
+        path: coverage.xml
