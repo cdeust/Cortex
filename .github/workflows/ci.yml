@@ -15,6 +15,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Uses the composite action at .github/actions/test-suite/action.yml for
+  # the step-level rationale, including why the shared unit is a composite
+  # action and not a reusable workflow: a job delegating via `uses:` reports
+  # its check as "<caller job name> / <called job name>", which would rename
+  # all four required contexts on `main`. Sharing at the step level leaves
+  # this job's name — and therefore its status-check context — untouched.
+  # Originally shared with release.yml's own `test` job (issue #336); issue
+  # #392 removed that second caller (see the action's header comment) —
+  # `requirements/ci-postgresql.txt` and tree-sitter grammars are now
+  # installed unconditionally inside the action rather than passed in.
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -23,240 +33,20 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
-    env:
-      DATABASE_URL: postgresql://cortex:cortex@localhost:5432/cortex
-
     steps:
+      # A local `uses: ./...` is resolved from the checked-out tree, so the
+      # checkout cannot itself live inside the shared action.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: ./.github/actions/test-suite
         with:
           python-version: ${{ matrix.python-version }}
-
-      # Provision PostgreSQL + pgvector on the runner itself, instead of a
-      # Docker-Hub service container. Anonymous `pgvector/pgvector:pg17` pulls
-      # from registry-1.docker.io are rate-limited and outage-prone (observed:
-      # "context deadline exceeded" failing container init before any test ran,
-      # CI run 27190427877). The runner ships PostgreSQL preinstalled; pgvector
-      # comes from the PGDG apt repo (apt.postgresql.org) — no registry, no pull
-      # rate limit. source: runner image (actions/runner-images) + PGDG.
-      - name: Set up PostgreSQL + pgvector (runner-local, no registry pull)
-        run: |
-          set -euxo pipefail
-          sudo systemctl start postgresql
-          PG_VER="$(pg_lsclusters -h | awk 'NR==1 {print $1}')"
-          # Ensure the PGDG apt repo (canonical pgvector source); idempotent.
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
-            | sudo tee /etc/apt/sources.list.d/pgdg.list
-          # Structured retry (not `A && break || sleep`, shellcheck SC2015: that
-          # form silently swallows exhaustion — see issue #247): each loop fails
-          # the step loudly if every attempt is exhausted, and reports the
-          # attempt number it is on (shellcheck SC2034: the counter must be read).
-          apt_update_ok=""
-          for attempt in 1 2 3; do
-            if sudo apt-get update; then apt_update_ok=1; break; fi
-            echo "apt-get update attempt ${attempt}/3 failed; retrying in 5s" >&2
-            sleep 5
-          done
-          [ -n "$apt_update_ok" ] || { echo "apt-get update failed after 3 attempts" >&2; exit 1; }
-          apt_install_ok=""
-          for attempt in 1 2 3; do
-            if sudo apt-get install -y "postgresql-${PG_VER}-pgvector"; then apt_install_ok=1; break; fi
-            echo "apt-get install attempt ${attempt}/3 failed; retrying in 5s" >&2
-            sleep 5
-          done
-          [ -n "$apt_install_ok" ] || { echo "apt-get install postgresql-${PG_VER}-pgvector failed after 3 attempts" >&2; exit 1; }
-          # Role + DB expected by DATABASE_URL.
-          sudo -u postgres psql -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE cortex LOGIN SUPERUSER PASSWORD 'cortex';"
-          sudo -u postgres createdb -O cortex cortex
-          sudo -u postgres psql -v ON_ERROR_STOP=1 -d cortex \
-            -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
-          # Wait until reachable over TCP with password auth.
-          pg_ready=""
-          for attempt in $(seq 1 30); do
-            if PGPASSWORD=cortex pg_isready -h localhost -U cortex -d cortex; then pg_ready=1; break; fi
-            echo "postgres not ready yet (attempt ${attempt}/30); retrying in 1s" >&2
-            sleep 1
-          done
-          [ -n "$pg_ready" ] || { echo "postgres failed to become ready after 30 attempts" >&2; exit 1; }
-          PGPASSWORD=cortex psql -h localhost -U cortex -d cortex -c "SELECT version();"
-
-      - name: Cache pip
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-${{ matrix.python-version }}-
-
-      - name: Cache HuggingFace models
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/huggingface
-          key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
-
-      # FlashRank is NOT huggingface_hub. It fetches its ONNX model with a bare
-      # `requests.get(..., stream=True)` carrying no timeout, so HF_HUB_OFFLINE
-      # never reaches it and a stalled connect blocks the thread indefinitely
-      # instead of raising — reranker.py's `except Exception` cannot engage
-      # against a hang. CI run 30263190266 (main, Python 3.13, 2026-07-27) hung
-      # in `sock.connect` inside a recall test until pytest-timeout killed the
-      # whole suite at 300s, while every other leg happened to download fine.
-      # Cache the model so the fetch happens once, not once per leg.
-      - name: Cache FlashRank reranker model
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/flashrank
-          key: ${{ runner.os }}-flashrank-ms-marco-MiniLM-L-12-v2
-
-      - name: Install dependencies
-        # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
-        # --no-deps on the project install because the file above IS the
-        # complete dependency graph; re-resolving here would be unpinned.
-        run: |
-          pip install --require-hashes -r requirements/ci-postgresql.txt
-          pip install --no-deps -e .
-
-      # Populate the HuggingFace cache before the (offline) test run. A transient
-      # huggingface.co blip must not leave the cache empty — that surfaced as 58
-      # spurious "couldn't connect to huggingface.co" test failures on a single
-      # matrix leg (CI run 28495801728, Python 3.10, 2026-07-01) while every other
-      # leg was fine. Retry with backoff so a blip self-heals; fail loudly here (no
-      # continue-on-error) instead of cascading into a misleading test failure.
-      - name: Pre-download embedding model
-        run: |
-          for attempt in 1 2 3 4 5; do
-            python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
-            echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
-            sleep $((attempt * 10))
-          done
-          echo "HF pre-download failed after 5 attempts" >&2
-          exit 1
-
-      # Same retry-and-fail-loudly shape as the step above, for the reranker.
-      # Deliberately runs WITHOUT CORTEX_RERANKER_OFFLINE: this is the one place
-      # allowed to download the model, so that the test steps below never can.
-      # `ensure_reranker_loaded` reports the load state instead of degrading
-      # silently, so a failed fetch fails this step rather than surfacing later
-      # as first-stage-only recall scores (the 2026-07-10 FlashRank incident).
-      - name: Pre-download reranker model
-        run: |
-          for attempt in 1 2 3 4 5; do
-            python -c "from mcp_server.core.reranker import ensure_reranker_loaded as e; s = e(); assert s.state == 'loaded', s" && exit 0
-            echo "FlashRank pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
-            sleep $((attempt * 10))
-          done
-          echo "FlashRank pre-download failed after 5 attempts" >&2
-          exit 1
-
-      # tree-sitter-language-pack fetches each grammar's shared library lazily
-      # over the network at `get_parser()` call time, not at install time — a
-      # cold cache mid-suite is a real, previously-uncaught `DownloadError`
-      # (main-red, CI run 30592244731, 2026-07-31:
-      # tests_py/core/test_ast_extractors.py + benchmarks/test_codebase_
-      # alteration.py). Needs the package importable, so — unlike the HF/
-      # FlashRank cache steps above — this must come after "Install
-      # dependencies"; same cache-then-prefetch-with-retries shape otherwise,
-      # for the same reason: fetch once here so `pytest` itself never touches
-      # the network for a grammar.
-      - name: Resolve tree-sitter cache directory
-        run: echo "TREE_SITTER_CACHE_DIR=$(python -c 'from tree_sitter_language_pack import cache_dir; print(cache_dir())')" >> "$GITHUB_ENV"
-
-      - name: Cache tree-sitter grammars
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.TREE_SITTER_CACHE_DIR }}
-          key: ${{ runner.os }}-tree-sitter-grammars-${{ hashFiles('pyproject.toml') }}
-
-      # The language set is read from AST_SUPPORTED (not hand-copied here) so
-      # this step cannot drift from the languages ast_parser.py actually uses.
-      - name: Prefetch tree-sitter grammars
-        run: |
-          for attempt in 1 2 3 4 5; do
-            python -c "from mcp_server.core.ast_parser import AST_SUPPORTED; from tree_sitter_language_pack import prefetch; prefetch(sorted(AST_SUPPORTED))" && exit 0
-            echo "tree-sitter grammar prefetch attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
-            sleep $((attempt * 10))
-          done
-          echo "tree-sitter grammar prefetch failed after 5 attempts" >&2
-          exit 1
-
-      # Offline: both models are already cached by the steps above, so tests must
-      # never reach out to huggingface.co mid-suite — deterministic and flake-free.
-      - name: Run tests
-        env:
-          HF_HUB_OFFLINE: "1"
-          TRANSFORMERS_OFFLINE: "1"
-          CORTEX_RERANKER_OFFLINE: "1"
-        run: pytest --tb=short -q
-
-      - name: Run tests with coverage
-        if: matrix.python-version == '3.12'
-        env:
-          HF_HUB_OFFLINE: "1"
-          TRANSFORMERS_OFFLINE: "1"
-          CORTEX_RERANKER_OFFLINE: "1"
-        # --cov-fail-under is the statement-coverage floor (issue #196
-        # criterion 4): seeded at the number this job itself achieved
-        # (82.02% — 30,229 of 36,854 statements, run 30316539703,
-        # coverage.py 7.15.2) so the figure can only ratchet up, never
-        # silently fall back. Raise the floor when coverage rises.
-        run: pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing --cov-fail-under=82
-
-      # Match the primary Claude and additive Codex client identities against
-      # a real, explicitly configured PostgreSQL instance. Explicit targets
-      # cannot fall back, so successful memory_stats calls prove PostgreSQL
-      # was selected for both host contracts.
-      - name: Verify Claude and Codex PostgreSQL-first MCP contracts
-        if: matrix.python-version == '3.12'
-        env:
-          CORTEX_RUNTIME: cowork
-          HF_HUB_OFFLINE: "1"
-          TRANSFORMERS_OFFLINE: "1"
-          CORTEX_RERANKER_OFFLINE: "1"
-        run: >-
-          python scripts/verify_mcp_hosts.py
-          --clients claude-code codex-cli --profiles lean
-          --storage-selection auto
-          -- hypermnesia-mcp
-
-      # The advertised test count is the one claim the static gate cannot check
-      # without collecting the suite, so it is checked in the job that already
-      # has the suite installed. `--collect-only` re-collects (~seconds) rather
-      # than parsing the run above, so the number is the collector's own.
-      - name: Check advertised test count
-        if: matrix.python-version == '3.12'
-        env:
-          HF_HUB_OFFLINE: "1"
-          TRANSFORMERS_OFFLINE: "1"
-          CORTEX_RERANKER_OFFLINE: "1"
-        run: |
-          set -euo pipefail
-          # Parse the collector's own summary line ("N tests collected in Xs")
-          # by its label rather than by position, and fail loudly if the line
-          # is not there — an unparsed count must never silently skip the check.
-          collected="$(pytest --collect-only -q | sed -n 's/^\([0-9][0-9]*\) tests collected.*/\1/p' | tail -1)"
-          if [ -z "${collected}" ]; then
-            echo "could not parse the collected test count from pytest" >&2
-            exit 1
-          fi
-          echo "collected ${collected} tests"
-          python scripts/check_doc_claims.py --test-count "${collected}"
-          # The tests badge is a committed SVG carrying this same number, so
-          # it is checked where the number is known. The other repo-derived
-          # badges are checked in the static job, which needs no suite.
-          python scripts/generate_repo_badges.py --check --test-count "${collected}"
-
-      - name: Upload coverage
-        if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage-report
-          path: coverage.xml
+          # Coverage, the MCP host contract check, and the advertised-test-count
+          # check are expensive and gain nothing from running on all four legs —
+          # ci.yml has always scoped them to Python 3.12 only; the shared action
+          # makes that scoping an explicit input instead of an inline `if:` per
+          # step.
+          run-extended-checks: ${{ matrix.python-version == '3.12' }}
 
   test-sqlite:
     name: Test (SQLite backend)
@@ -568,6 +358,70 @@ jobs:
           tests_py/infrastructure/test_sqlite_backend.py
           tests_py/scripts/test_setup_py_backend_skip.py
 
+  # Validates `requirements/release.txt` — the dependency set release.yml
+  # installs before publishing (issue #392). Removing release.yml's own test
+  # job (see release-gate below) would otherwise leave that narrower
+  # dependency set validated NOWHERE until a PyPI/uvx install broke on it.
+  #
+  # Deliberately NOT the full pytest suite: this job's subject is the
+  # DEPENDENCY SET, not the suite — ci.yml's `test` matrix already covers the
+  # suite itself, against a wider dependency set. Re-running pytest here
+  # would duplicate that coverage at the release-narrowed dependency set's
+  # cost without adding a new claim.
+  #
+  # release.txt deliberately omits tree-sitter, tree-sitter-language-pack,
+  # igraph, leidenalg and texttable (`.github/actions/test-suite/action.yml`
+  # header comment) — so nothing this job runs may import from those
+  # packages, and it must not exercise codebase_analyze/AST paths.
+  #
+  # The check itself reuses the cheapest existing mechanism instead of
+  # inventing a new one: `scripts/verify_mcp_hosts.py`'s stdio initialize +
+  # tools/list + memory_stats round-trip (the same invocation the
+  # `test-sqlite` job's "Verify hook-free MCP host contract" step already
+  # runs) proves the server imports and its full tool surface registers
+  # under this narrower dependency set, with no PostgreSQL service needed
+  # (`--storage-selection sqlite` is the default).
+  release-deps:
+    name: Release dependency set (requirements/release.txt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
+
+      - name: Install the release dependency set (hash-pinned)
+        run: |
+          pip install --require-hashes -r requirements/release.txt
+          pip install --no-deps -e .
+
+      # Retry-with-backoff, fail-loudly: see the `test` job's pre-download
+      # step for the root-cause rationale (CI run 28495801728, 2026-07-01).
+      - name: Pre-download embedding model
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+            echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "HF pre-download failed after 5 attempts" >&2
+          exit 1
+
+      - name: Verify hook-free MCP host contract under the release dependency set
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          CORTEX_RERANKER_OFFLINE: "1"
+        run: python scripts/verify_mcp_hosts.py -- hypermnesia-mcp
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -591,13 +445,34 @@ jobs:
       - name: Check linting
         run: ruff check .
 
-      # Advertised counts (tools, references, mechanisms, version) must match
-      # the repository. Runs here — on every push and PR — because doc drift is
+      # Advertised counts (tools, references, mechanisms) must match the
+      # repository. Runs here — on every push and PR — because doc drift is
       # introduced at commit time, not at release time: on 2026-07-27 README,
       # CONTRIBUTING, CLAUDE.md and the MCPB manifest each advertised a
       # different tool count, and nothing failed. Static only (no imports).
       - name: Check documentation claims
         run: python scripts/check_doc_claims.py
+
+      # [project].version in pyproject.toml against every one of the 14
+      # version sites across 11 files (manifests, plugin.jsons, the
+      # marketplace's metadata AND primary-entry version, the MCP registry
+      # package entry, the four textual occurrences in the version badge,
+      # and uv.lock's own root-package version). Two of these sites
+      # (server.json packages[0].version, marketplace.json metadata.version)
+      # were covered by nothing before this gate existed, and the one gate
+      # that came closest — marketplace-pins.yml — is path-filtered, so it
+      # sits outside ci-green and only fires on its weekly cron (issue #392).
+      # Static only (no imports), same reason as the doc-claim gate above.
+      - name: Check version surfaces
+        run: python scripts/check_version_surfaces.py
+
+      # The `ci-green` job below is the single status check branch protection
+      # names; the list of jobs it covers lives in its `needs:`. A job added
+      # to ci.yml but not to that list would run outside the gate and could
+      # fail without blocking a merge. Static only (no imports), same reason
+      # as the doc-claim gate above.
+      - name: Check the aggregate CI gate covers every job
+        run: python scripts/check_ci_gate_complete.py
 
       # The README's repo-derived badges are committed SVGs, not hotlinked
       # images, so nothing regenerates them on view: a figure that moves
@@ -866,3 +741,222 @@ jobs:
         run: scripts/docker_smoke.sh --skip-build
         env:
           CORTEX_SMOKE_IMAGE: cortex-smoke:local
+
+  # The one status check branch protection on `main` names. Everything else
+  # in this workflow is reached through its `needs:` list, so renaming a job,
+  # resizing the matrix, or delegating steps to a reusable workflow (which
+  # rewrites check names to "<caller> / <callee>", issue #336) no longer
+  # touches the protection settings — the contract is this file, in git,
+  # visible in review, instead of eleven job-name strings in GitHub settings
+  # that no diff ever shows.
+  #
+  # `if: always()` is load-bearing: without it this job is itself skipped the
+  # moment any need fails, the required context is never reported, and the PR
+  # blocks with no explanation instead of a red X naming the culprit.
+  #
+  # scripts/check_ci_gate_complete.py (run by `lint`) refuses a merge if any
+  # job here is missing from `needs`, or if a job carrying a job-level `if:`
+  # is absent from ALLOWED_SKIPS below.
+  ci-green:
+    name: CI Green
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      - test
+      - test-sqlite
+      - mcp-host-config
+      - test-windows
+      - release-deps
+      - lint
+      - typecheck
+      - build
+      - docker-runtime-build
+      - devcontainer-build
+      - docker-smoke
+    steps:
+      - name: Require every job above to have succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          # Jobs permitted to report `skipped`, with the reason. ONLY jobs
+          # carrying a job-level `if:` belong here; anything else that skips
+          # is a gap, not an exemption.
+          #   mcp-host-config — `if: github.event_name != 'pull_request' ||
+          #   github.event.pull_request.head.repo.fork == false`: a fork PR
+          #   has no access to the secrets it needs, so it cannot run there.
+          ALLOWED_SKIPS: mcp-host-config
+        run: |
+          set -euo pipefail
+          echo "$NEEDS"
+          failed=$(printf '%s' "$NEEDS" | jq -r --arg allowed "$ALLOWED_SKIPS" '
+            ($allowed | split(",") | map(ltrimstr(" ") | rtrimstr(" "))) as $ok
+            | to_entries[]
+            | select(.value.result != "success")
+            | select(.value.result != "skipped" or ([.key] | inside($ok) | not))
+            | "\(.key)=\(.value.result)"')
+          if [ -n "$failed" ]; then
+            echo "::error::CI Green refuses the merge — $(echo "$failed" | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "every required job succeeded"
+
+  # The tag-as-output half of issue #392: a green push to `main` tags the
+  # exact SHA that just passed CI Green, instead of a human hand-picking
+  # which (possibly-unvalidated) tree to tag — the v4.17.0 root cause
+  # (release run 30741657854 tagged a tree release.yml's own test job had
+  # never actually validated against ci.yml's hardening).
+  #
+  # ci-gate-exempt: this job runs ONLY on a push to `main`, i.e. AFTER the PR
+  # it belongs to has already merged. There is nothing left for it to gate —
+  # it cannot block a PR that is already closed — so it does not appear in
+  # ci-green.needs (see scripts/check_ci_gate_complete.py's ci-gate-exempt
+  # marker convention). Putting it there would make the branch-protection
+  # context depend on a job that never runs on a PR in the first place,
+  # permanently blocking every PR.
+  release-gate:
+    name: Tag a release
+    needs: [ci-green]
+    # ci-gate-exempt: runs only on push to main, after the PR it belongs to
+    # has already merged — see the job comment above.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # `contents: read`, NOT write, and that is deliberate. The tag is pushed
+    # with the RELEASE_TAG_SSH_KEY deploy key (persisted by the checkout step
+    # below), never
+    # with GITHUB_TOKEN — granting GITHUB_TOKEN `contents: write` here would
+    # be an unused permission (issue #178 least-privilege), and worse, it
+    # would let a future edit that drops `ssh-key:` from the checkout push the
+    # tag with GITHUB_TOKEN and SUCCEED — producing a tag that silently never
+    # starts release.yml. Read-only makes that mistake fail loudly instead.
+    permissions:
+      contents: read
+    # A DEDICATED group — not this workflow's `${{ github.workflow }}-${{
+    # github.ref }}` group above, which sets `cancel-in-progress: true`. A
+    # push to main that lands mid-tag-push would be cancelled by the very
+    # next push to main under that group, leaving a partially-created tag on
+    # the remote (a tag object pushed but no corresponding release started,
+    # or the reverse) — exactly the half-state a release process must never
+    # produce. This group instead serializes tag operations one at a time
+    # without ever cancelling one already in flight.
+    concurrency:
+      group: release-tag
+      cancel-in-progress: false
+    steps:
+      # secrets.RELEASE_TAG_SSH_KEY is the PRIVATE half of a repository deploy
+      # key (ed25519, read_only=false, created 2026-08-08). A deploy key, and
+      # not a PAT or a GitHub App token, because neither of those can be
+      # minted through the API — both require a browser — and the deploy key
+      # is the tighter credential anyway: scoped to this ONE repository,
+      # carrying no account access, and with no expiry to silently break
+      # releases. Per
+      # GitHub's docs, a ref pushed with the default GITHUB_TOKEN (unlike
+      # workflow_dispatch/repository_dispatch) does NOT start a new workflow
+      # run — a GITHUB_TOKEN-pushed tag would therefore never reach
+      # release.yml's `push: tags` trigger. Same guarded-optional-secret
+      # shape as sync-ccplugins-fork.yml's `has_pat` step: absence is a
+      # clean, loud skip, not a red job.
+      - name: Guard — skip cleanly when RELEASE_TAG_SSH_KEY is missing
+        id: guard
+        env:
+          SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}
+        run: |
+          if [ -z "$SSH_KEY" ]; then
+            echo "RELEASE_TAG_SSH_KEY secret not configured — skipping."
+            echo "Add the private half of a write-enabled repository deploy"
+            echo "key at Settings -> Secrets and variables -> Actions."
+            echo "Releases stay manual until it exists."
+            echo "has_deploy_key=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_deploy_key=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # fetch-depth: 0 so `git rev-parse --verify refs/tags/vX` below can see
+      # every existing tag, not just the tip commit. `ssh-key:` installs the
+      # deploy key as the credential `git push` uses later in this
+      # job (actions/checkout persists it by default) — the non-GITHUB_TOKEN
+      # credential the tag push requires (see the guard step's comment).
+      - name: Checkout the SHA that just went green
+        if: steps.guard.outputs.has_deploy_key == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_TAG_SSH_KEY }}
+
+      - name: Set up Python
+        if: steps.guard.outputs.has_deploy_key == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # Reuses doc_claim_sources.canonical_version — the same reader
+      # check_version_surfaces.py and check_doc_claims.py already trust —
+      # instead of re-deriving a second pyproject.toml version regex here.
+      # A push to `main` for a commit that does not bump the version is the
+      # NOMINAL case (most commits are not releases): tag v$VERSION already
+      # exists, and this step's job is to detect that and skip silently
+      # rather than fail or re-tag.
+      - name: Resolve the version and check for an existing tag
+        id: tag_check
+        if: steps.guard.outputs.has_deploy_key == 'true'
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 -c "
+          import sys
+          sys.path.insert(0, 'scripts')
+          import doc_claim_sources
+          print(doc_claim_sources.canonical_version(lambda p: open(p, encoding='utf-8').read()))
+          ")"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "tag v${VERSION} already exists — this push carries no version bump"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no existing tag v${VERSION} — this push is a version bump"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The last line of defence before a tag: `main` should never carry a
+      # partial bump anyway (the identical gate already runs in `lint` on
+      # every push and PR — commit 4781c134), so reaching this step with a
+      # mismatch means something bypassed the PR gate (a direct push, an
+      # admin-merge override). A failure here is a RED job, not a skip —
+      # silently tagging a mismatched tree is exactly the v4.17.0 failure
+      # mode this workflow exists to make structurally impossible.
+      - name: Check version surfaces
+        if: steps.guard.outputs.has_deploy_key == 'true' && steps.tag_check.outputs.exists == 'false'
+        run: python scripts/check_version_surfaces.py
+
+      - name: Configure git identity
+        if: steps.guard.outputs.has_deploy_key == 'true' && steps.tag_check.outputs.exists == 'false'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # Annotated (not lightweight): carries its own object, author, and
+      # message, which `git tag -a` computes but `git tag` alone does not —
+      # the shape release.yml's changelog step and GitHub's own release UI
+      # expect. Tagged at `github.sha` explicitly (not the checkout's
+      # working-tree HEAD) so the released commit is provably the one that
+      # went green, even if a future edit changes what this job checks out.
+      - name: Create and push the release tag
+        if: steps.guard.outputs.has_deploy_key == 'true' && steps.tag_check.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.tag_check.outputs.version }}"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}" "${{ github.sha }}"
+          git push origin "refs/tags/v${VERSION}"
+
+      # Visible without opening logs: the decision (tagged / no-bump /
+      # no-token) is exactly the property issue #392's acceptance criteria
+      # ask to verify ("a green push to main with no version change tags
+      # nothing" — verifiable in the release-gate logs).
+      - name: Summarize the release-gate decision
+        if: always()
+        run: |
+          if [ "${{ steps.guard.outputs.has_deploy_key }}" != "true" ]; then
+            echo "## Release gate: skipped — RELEASE_TAG_SSH_KEY not configured" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.tag_check.outputs.exists }}" == "true" ]; then
+            echo "## Release gate: skipped — v${{ steps.tag_check.outputs.version }} already tagged (no version bump on this push)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Release gate: tagged v${{ steps.tag_check.outputs.version }} at \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi

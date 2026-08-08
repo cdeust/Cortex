@@ -13,8 +13,28 @@ name: Release
 # against the trusted-publisher entry configured for this workflow + environment
 # `pypi` — the same one that published versions up to 3.14.7.
 #
-# This workflow runs the tests on tag push, creates a GitHub Release with
-# auto-generated notes, and attempts the secondary PyPI compatibility channel.
+# THIS WORKFLOW DOES NOT TEST ANYTHING (issue #392). Before this change it
+# ran its own `test` job on tag push — a duplicate, differently-triggered
+# copy of ci.yml's gate that every CI hardening pass silently skipped
+# (ci.yml triggers on `push: branches` + `pull_request`, this workflow on
+# `push: tags`, so a tag never reached it). Release run 30741657854
+# (v4.17.0) is what that cost: a reranker-fetch hang that ci.yml's own
+# hardening had already fixed hung this file's copy anyway, blocking every
+# downstream publish job on a tag whose tree had just passed 20 green
+# checks on PR #334.
+#
+# The test guarantee now comes from `ci.yml`'s `release-gate` job: it runs
+# ONLY after `ci-green` succeeds on a push to `main`, and tags the EXACT SHA
+# that just went green with an annotated `git tag` pushed via
+# `RELEASE_TAG_TOKEN` (a `GITHUB_TOKEN`-pushed tag does not start a new
+# workflow run, per GitHub's docs — this workflow would never fire from
+# one). The released tree is therefore bit-identical to the validated one;
+# this workflow's only job is to propagate what `ci.yml` already validated
+# and tagged — creating a GitHub Release with auto-generated notes, and
+# attempting the secondary PyPI compatibility channel.
+# `requirements/release.txt` — the dependency set the deprecated PyPI
+# channel installs into — is still validated: `ci.yml`'s `release-deps` job
+# smoke-imports the server under it on every push and PR.
 #
 # Supply-chain hardening (issue #178). Cortex reads and persists every
 # session transcript and installs session hooks with the user's full
@@ -43,6 +63,12 @@ name: Release
 # step that would create a GitHub Release, attach assets to one, or publish
 # to PyPI is gated `if: github.event_name == 'push'` so a manual dispatch
 # exercises the Node24 action bump only — it never mutates a release.
+#
+# This workflow deliberately stays TAG-TRIGGERED and NON-REUSABLE: PyPI
+# Trusted Publishing does not support reusable workflows, and this repo's
+# publisher entry is keyed on (release.yml, environment=pypi) specifically
+# — a `workflow_call` conversion would silently break `publish-pypi`,
+# silently because it carries `continue-on-error: true`.
 
 on:
   push:
@@ -56,152 +82,18 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test before release
-    runs-on: ubuntu-latest
-
-    env:
-      DATABASE_URL: postgresql://cortex:cortex@localhost:5432/cortex
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-
-      # Runner-local PostgreSQL + pgvector (no Docker Hub pull). See ci.yml for
-      # the rationale: anonymous registry-1.docker.io pulls are rate-limited and
-      # outage-prone; PGDG apt is the canonical, unmetered pgvector source.
-      - name: Set up PostgreSQL + pgvector (runner-local, no registry pull)
-        run: |
-          set -euxo pipefail
-          sudo systemctl start postgresql
-          PG_VER="$(pg_lsclusters -h | awk 'NR==1 {print $1}')"
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
-            | sudo tee /etc/apt/sources.list.d/pgdg.list
-          # Structured retry (not `A && break || sleep`, shellcheck SC2015: that
-          # form silently swallows exhaustion — see issue #247): each loop fails
-          # the step loudly if every attempt is exhausted, and reports the
-          # attempt number it is on (shellcheck SC2034: the counter must be read).
-          apt_update_ok=""
-          for attempt in 1 2 3; do
-            if sudo apt-get update; then apt_update_ok=1; break; fi
-            echo "apt-get update attempt ${attempt}/3 failed; retrying in 5s" >&2
-            sleep 5
-          done
-          [ -n "$apt_update_ok" ] || { echo "apt-get update failed after 3 attempts" >&2; exit 1; }
-          apt_install_ok=""
-          for attempt in 1 2 3; do
-            if sudo apt-get install -y "postgresql-${PG_VER}-pgvector"; then apt_install_ok=1; break; fi
-            echo "apt-get install attempt ${attempt}/3 failed; retrying in 5s" >&2
-            sleep 5
-          done
-          [ -n "$apt_install_ok" ] || { echo "apt-get install postgresql-${PG_VER}-pgvector failed after 3 attempts" >&2; exit 1; }
-          sudo -u postgres psql -v ON_ERROR_STOP=1 \
-            -c "CREATE ROLE cortex LOGIN SUPERUSER PASSWORD 'cortex';"
-          sudo -u postgres createdb -O cortex cortex
-          sudo -u postgres psql -v ON_ERROR_STOP=1 -d cortex \
-            -c "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;"
-          pg_ready=""
-          for attempt in $(seq 1 30); do
-            if PGPASSWORD=cortex pg_isready -h localhost -U cortex -d cortex; then pg_ready=1; break; fi
-            echo "postgres not ready yet (attempt ${attempt}/30); retrying in 1s" >&2
-            sleep 1
-          done
-          [ -n "$pg_ready" ] || { echo "postgres failed to become ready after 30 attempts" >&2; exit 1; }
-          PGPASSWORD=cortex psql -h localhost -U cortex -d cortex -c "SELECT version();"
-
-      # The network-hardening steps below mirror ci.yml's `test` job
-      # one-for-one (cache + retried prefetch + offline test run, per model).
-      # They are NOT optional here: this job runs the same suite on a tag
-      # push, but `ci.yml` triggers on `push: branches` + `pull_request`, so
-      # a tag never reaches it and every hardening pass CI received since
-      # 2026-07-27 skipped this file. Release run 30741657854 (v4.17.0) is
-      # what that divergence costs: the reranker fetch hung in `sock.connect`
-      # until pytest-timeout killed the suite, blocking all five downstream
-      # publish jobs on a tag whose tree had just passed 20 green checks on
-      # PR #334. Keep the two jobs in step — see ci.yml for the full
-      # per-incident rationale behind each step.
-      - name: Cache HuggingFace models
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/huggingface
-          key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
-
-      # FlashRank bypasses HF_HUB_OFFLINE entirely: it fetches its ONNX model
-      # with a bare `requests.get(..., stream=True)` carrying no timeout, so a
-      # stalled connect blocks the thread instead of raising, and reranker.py's
-      # `except Exception` cannot engage against a hang.
-      - name: Cache FlashRank reranker model
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/flashrank
-          key: ${{ runner.os }}-flashrank-ms-marco-MiniLM-L-12-v2
-
-      - name: Install dependencies
-        # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
-        run: |
-          pip install --require-hashes -r requirements/release.txt
-          pip install --no-deps -e .
-
-      # Retry with backoff and fail loudly (no continue-on-error): a transient
-      # blip must not leave the cache empty and cascade into a misleading test
-      # failure — or, worse here, into a silently degraded release gate.
-      - name: Pre-download embedding model
-        run: |
-          for attempt in 1 2 3 4 5; do
-            python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
-            echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
-            sleep $((attempt * 10))
-          done
-          echo "HF pre-download failed after 5 attempts" >&2
-          exit 1
-
-      # Deliberately runs WITHOUT CORTEX_RERANKER_OFFLINE: this is the one
-      # place allowed to download the model, so the test step below never can.
-      # `ensure_reranker_loaded` reports the load state instead of degrading
-      # silently, so a failed fetch fails this step rather than surfacing later
-      # as first-stage-only recall scores (the 2026-07-10 FlashRank incident).
-      - name: Pre-download reranker model
-        run: |
-          for attempt in 1 2 3 4 5; do
-            python -c "from mcp_server.core.reranker import ensure_reranker_loaded as e; s = e(); assert s.state == 'loaded', s" && exit 0
-            echo "FlashRank pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
-            sleep $((attempt * 10))
-          done
-          echo "FlashRank pre-download failed after 5 attempts" >&2
-          exit 1
-
-      # No tree-sitter cache/prefetch pair here, unlike ci.yml: requirements/
-      # release.txt deliberately omits tree-sitter + tree-sitter-language-pack
-      # (as it omits igraph/leidenalg/texttable), so the AST tests skip in this
-      # job and there is no grammar to fetch. Should release.txt ever gain that
-      # dependency, port ci.yml's three tree-sitter steps across with it — the
-      # lazy `get_parser()` download is a real mid-suite DownloadError
-      # (main-red, CI run 30592244731, 2026-07-31).
-      #
-      # Offline: every model is already cached by the steps above, so tests
-      # must never reach out mid-suite — deterministic and flake-free.
-      - name: Run tests
-        env:
-          HF_HUB_OFFLINE: "1"
-          TRANSFORMERS_OFFLINE: "1"
-          CORTEX_RERANKER_OFFLINE: "1"
-        run: pytest --tb=short -q
-
   github-release:
     name: GitHub Release
-    needs: test
-    # Real releases only (issues #246 + #247 criterion 5) — a workflow_dispatch
-    # verification run must never create a GitHub Release; matches the
-    # `github.event_name == 'push'` gate documented in the header and used by
-    # every other release-producing step below.
-    if: github.event_name == 'push'
+    # Real releases only (issues #246 + #247 criterion 5) — a
+    # workflow_dispatch verification run must never create a GitHub Release.
+    # `startsWith(github.ref, 'refs/tags/')` alongside `event_name == 'push'`
+    # (boy-scout fix, issue #392): this job previously gated on event_name
+    # alone while its softprops/action-gh-release step below carries no
+    # `tag_name:` and falls back to `GITHUB_REF` — a push to a BRANCH would
+    # therefore have created (or updated) a "release" named after that
+    # branch. Every other job in this file already required the tag-ref
+    # form; this one was the exception.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write  # create the release + attach auto-generated notes
@@ -236,9 +128,10 @@ jobs:
   # blocks the primary channel; docs therefore label this path best-effort.
   build:
     name: Build sdist + wheel + attest (PyPI compatibility)
-    needs: test
     # Only the real tag-triggered event ships a release artifact; a
-    # workflow_dispatch verification run (issue #247 criterion 5) stops after `test`.
+    # workflow_dispatch verification run (issue #247 criterion 5) builds
+    # nothing — every job in this file is independent now that `test` (the
+    # thing they all used to wait on) is gone (issue #392).
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -315,9 +208,9 @@ jobs:
   # hundred-MB torch download is not on the critical path.
   sbom:
     name: SBOM (CycloneDX, from uv.lock)
-    needs: test
     # Only the real tag-triggered event ships an SBOM to a release; a
-    # workflow_dispatch verification run (issue #247 criterion 5) stops after `test`.
+    # workflow_dispatch verification run (issue #247 criterion 5) builds
+    # nothing (see `build`'s identical comment for why there is no `needs:`).
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -385,9 +278,9 @@ jobs:
   #   5.8MB unpacked / 561 files / 222 ignored by .mcpbignore.
   mcpb-bundle:
     name: MCPB bundle + attest (Claude Desktop connector)
-    needs: test
     # Only the real tag-triggered event ships a bundle; a workflow_dispatch
-    # verification run (issue #247 criterion 5) stops after `test`.
+    # verification run (issue #247 criterion 5) builds nothing (see `build`'s
+    # identical comment for why there is no `needs:`).
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:

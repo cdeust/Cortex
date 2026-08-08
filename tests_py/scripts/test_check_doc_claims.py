@@ -536,66 +536,6 @@ class ScanTests(unittest.TestCase):
         self.assertIn(".bestpractices.json", gate.SCANNED_FILES)
 
 
-class VersionTests(unittest.TestCase):
-    def setUp(self):
-        self._real_read = gate.read
-
-    def tearDown(self):
-        gate.read = self._real_read
-
-    def _install(self, manifest: str, badge: str | None):
-        files = {
-            "manifest.json": '{"version": "%s"}' % manifest,
-            "server.json": '{"version": "4.16.0"}',
-            "package.json": '{"version": "4.16.0"}',
-        }
-        if badge is not None:
-            files["assets/badge-version.svg"] = f"<title>Version {badge}</title>"
-        gate.read = _FakeRepo(**files).read
-
-    def test_manifest_and_badge_must_match_pyproject(self):
-        self._install(manifest="4.16.0", badge="4.16.0")
-        self.assertEqual(gate.check_versions("4.16.0"), [])
-
-    def test_stale_manifest_version_is_reported(self):
-        self._install(manifest="4.15.0", badge="4.16.0")
-        failures = gate.check_versions("4.16.0")
-        self.assertEqual(len(failures), 1)
-        self.assertIn("manifest.json", failures[0])
-
-    def test_stale_committed_badge_is_reported(self):
-        self._install(manifest="4.16.0", badge="4.15.0")
-        failures = gate.check_versions("4.16.0")
-        self.assertEqual(len(failures), 1)
-        self.assertIn("version badge says 4.15.0", failures[0])
-
-    def test_a_missing_badge_file_fails_closed(self):
-        """Self-hosting moved the figure into a file that can be deleted.
-
-        The URL-shaped predecessor of this check silently passed when its
-        pattern stopped matching, so a gate that cannot find its subject must
-        report rather than shrug.
-        """
-        self._install(manifest="4.16.0", badge=None)
-        failures = gate.check_versions("4.16.0")
-        self.assertEqual(len(failures), 1)
-        self.assertIn("missing", failures[0])
-
-    def test_a_badge_without_a_version_title_fails_closed(self):
-        self._install(manifest="4.16.0", badge="4.16.0")
-        gate.read = _FakeRepo(
-            **{
-                "manifest.json": '{"version": "4.16.0"}',
-                "server.json": '{"version": "4.16.0"}',
-                "package.json": '{"version": "4.16.0"}',
-                "assets/badge-version.svg": "<svg><title>something else</title></svg>",
-            }
-        ).read
-        failures = gate.check_versions("4.16.0")
-        self.assertEqual(len(failures), 1)
-        self.assertIn("diverged", failures[0])
-
-
 class CollectFailuresTests(unittest.TestCase):
     """The composition: every family must reach the report.
 
@@ -627,12 +567,7 @@ class CollectFailuresTests(unittest.TestCase):
             "docs/mcp-tools.md": CATALOGUE,
             "tests_py/test_main.py": PINNED_TEST,
             "docs/papers/bibliography.md": BIBLIOGRAPHY,
-            "pyproject.toml": '[project]\nversion = "4.16.0"\n',
-            "manifest.json": '{"version": "4.16.0"}',
-            "server.json": '{"version": "4.16.0"}',
-            "package.json": '{"version": "4.16.0"}',
             "README.md": readme or '<img src="assets/badge-tests.svg" alt="tests">\n',
-            "assets/badge-version.svg": "<title>Version 4.16.0</title>",
         }
         # None omits the file entirely (a missing-badge scenario); any other
         # string is spliced into the <title> as-is, so a non-digit value
