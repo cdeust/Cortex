@@ -90,6 +90,27 @@ CI's install ever drift apart.
 - One mechanism per PR when adding new biological mechanisms.
 - Conventional commit messages preferred.
 
+### The one required status check
+
+Branch protection on `main` names a single `ci.yml` context, **`CI Green`**
+(plus `CodeQL`, which GitHub reports from its own default setup). `CI Green`
+is the `ci-green` job at the bottom of `.github/workflows/ci.yml`: it needs
+every other job in that workflow and fails on any result other than
+`success`, except for the jobs listed in its `ALLOWED_SKIPS` — which may
+contain only jobs carrying a job-level `if:`, each with its reason.
+
+Naming individual jobs in the protection settings instead put the contract
+outside git, where no diff shows it and every rename breaks it: extracting
+the test steps into a reusable workflow (issue #336) renamed the four matrix
+legs to `Test (Python X.Y) / Test (Python X.Y)`, the four bare contexts
+`main` required were never reported again, and a fully green PR sat BLOCKED
+(#387). With one aggregate context, renaming a job, resizing the matrix, or
+delegating steps costs nothing.
+
+**Adding a job to `ci.yml` means adding it to `ci-green.needs`.**
+`scripts/check_ci_gate_complete.py` (run by `lint`) fails the build
+otherwise — an ungated job could fail without blocking a merge.
+
 ---
 
 ## Adding a biological mechanism

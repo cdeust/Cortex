@@ -599,6 +599,14 @@ jobs:
       - name: Check documentation claims
         run: python scripts/check_doc_claims.py
 
+      # The `ci-green` job below is the single status check branch protection
+      # names; the list of jobs it covers lives in its `needs:`. A job added
+      # to ci.yml but not to that list would run outside the gate and could
+      # fail without blocking a merge. Static only (no imports), same reason
+      # as the doc-claim gate above.
+      - name: Check the aggregate CI gate covers every job
+        run: python scripts/check_ci_gate_complete.py
+
       # The README's repo-derived badges are committed SVGs, not hotlinked
       # images, so nothing regenerates them on view: a figure that moves
       # leaves the badge asserting the old one. Checked here, on every push
@@ -866,3 +874,59 @@ jobs:
         run: scripts/docker_smoke.sh --skip-build
         env:
           CORTEX_SMOKE_IMAGE: cortex-smoke:local
+
+  # The one status check branch protection on `main` names. Everything else
+  # in this workflow is reached through its `needs:` list, so renaming a job,
+  # resizing the matrix, or delegating steps to a reusable workflow (which
+  # rewrites check names to "<caller> / <callee>", issue #336) no longer
+  # touches the protection settings — the contract is this file, in git,
+  # visible in review, instead of eleven job-name strings in GitHub settings
+  # that no diff ever shows.
+  #
+  # `if: always()` is load-bearing: without it this job is itself skipped the
+  # moment any need fails, the required context is never reported, and the PR
+  # blocks with no explanation instead of a red X naming the culprit.
+  #
+  # scripts/check_ci_gate_complete.py (run by `lint`) refuses a merge if any
+  # job here is missing from `needs`, or if a job carrying a job-level `if:`
+  # is absent from ALLOWED_SKIPS below.
+  ci-green:
+    name: CI Green
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      - test
+      - test-sqlite
+      - mcp-host-config
+      - test-windows
+      - lint
+      - typecheck
+      - build
+      - docker-runtime-build
+      - devcontainer-build
+      - docker-smoke
+    steps:
+      - name: Require every job above to have succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          # Jobs permitted to report `skipped`, with the reason. ONLY jobs
+          # carrying a job-level `if:` belong here; anything else that skips
+          # is a gap, not an exemption.
+          #   mcp-host-config — `if: github.event_name != 'pull_request' ||
+          #   github.event.pull_request.head.repo.fork == false`: a fork PR
+          #   has no access to the secrets it needs, so it cannot run there.
+          ALLOWED_SKIPS: mcp-host-config
+        run: |
+          set -euo pipefail
+          echo "$NEEDS"
+          failed=$(printf '%s' "$NEEDS" | jq -r --arg allowed "$ALLOWED_SKIPS" '
+            ($allowed | split(",") | map(ltrimstr(" ") | rtrimstr(" "))) as $ok
+            | to_entries[]
+            | select(.value.result != "success")
+            | select(.value.result != "skipped" or ([.key] | inside($ok) | not))
+            | "\(.key)=\(.value.result)"')
+          if [ -n "$failed" ]; then
+            echo "::error::CI Green refuses the merge — $(echo "$failed" | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "every required job succeeded"
