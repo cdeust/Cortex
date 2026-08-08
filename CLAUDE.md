@@ -43,14 +43,36 @@ coding write gates, causal graphs, and intent-aware retrieval.
 
 ## Releasing
 
-A release is not shipped until its pins move. The tag/GitHub-release/PyPI
+**Do not push a tag by hand.** The tag is an output of a green `main`, not an
+input you choose: `ci.yml`'s `release-gate` job tags the exact SHA that just
+passed `ci-green`, and `release.yml` only propagates what it tagged
+(ADR-0055, issue #392). Cutting a release is therefore one PR:
+
+1. Bump the version everywhere. There are **14 sites across 11 files** and
+   no bump script — `python3 scripts/check_version_surfaces.py` enumerates
+   every one of them and exits non-zero naming any that disagrees with
+   `pyproject.toml`. Run it until it exits 0. It also runs in CI's `lint`
+   job, so a partial bump turns the PR red rather than reaching `main`.
+2. Add the CHANGELOG entry, open the PR, get it green, merge it.
+3. `release-gate` sees a version with no matching tag, re-checks the
+   surfaces, and pushes `vX.Y.Z`. That tag starts `release.yml` — GitHub
+   Release, attested wheel/sdist, CycloneDX SBOM, `.mcpb` bundle, and the
+   best-effort PyPI channel.
+
+A release is not shipped until its pins move: the tag/GitHub-release/PyPI
 steps deliver nothing to plugin installs by themselves — installs subscribe
-via `.claude-plugin/marketplace.json` pins. The release checklist therefore
-ENDS with: bump the marketplace pin(s) and `server.json`, and confirm
-`python3 scripts/check_marketplace_pins.py` exits 0. CI enforces this
-(marketplace-pins workflow: PR/push on the manifest + weekly cron), source:
-the 2026-07-25 incident where six zetetic-team-subagents releases and two
-cortex-viz releases shipped to zero installs (#179).
+via `.claude-plugin/marketplace.json` pins, which is why the pin is one of
+the 14 sites step 1 covers. Confirm `python3 scripts/check_marketplace_pins.py`
+exits 0 as well; it additionally checks pin staleness against the latest tag
+and the third-party plugin pins, which the version gate does not. CI enforces
+it (marketplace-pins workflow: PR/push on the manifest + weekly cron),
+source: the 2026-07-25 incident where six zetetic-team-subagents releases and
+two cortex-viz releases shipped to zero installs (#179).
+
+Requires the `RELEASE_TAG_TOKEN` repo secret (`contents: write` on this repo
+only) — a `GITHUB_TOKEN`-pushed tag does not start another workflow, so
+without it `release-gate` skips with an explicit message and releases stay
+manual.
 
 ## Architecture
 
