@@ -22,13 +22,29 @@ past the gate, so every job with an ``if:`` must be declared, and every
 declared exemption must correspond to a job that actually has one (a stale
 exemption is a hole nobody is watching).
 
+A third case exists that ``needs:``/``ALLOWED_SKIPS`` cannot express:
+``release-gate`` (issue #392) runs ONLY on a push to ``main`` — after the PR
+it belongs to has already merged. There is nothing for it to gate: it cannot
+block a PR that is already closed, and putting it in ``ci-green.needs`` would
+make the branch-protection context depend on a job that never runs on a PR
+in the first place, permanently blocking every PR. Such a job declares itself
+with a ``# ci-gate-exempt: <reason>`` marker line in its body instead of
+appearing in ``needs:``. The marker is not a blank check: it is refused
+unless the job ALSO carries a job-level ``if:`` — an exempt job with no
+condition would run ungated on every push and PR, which is exactly the hole
+this script exists to close.
+
 Checks, all of them fatal:
 
 1. the gate job exists;
-2. every other ci.yml job appears in the gate's ``needs:``;
+2. every other ci.yml job appears in the gate's ``needs:`` OR carries a
+   ``# ci-gate-exempt:`` marker;
 3. every name in ``needs:`` is a real job;
-4. every job carrying a job-level ``if:`` is listed in ``ALLOWED_SKIPS``;
-5. every name in ``ALLOWED_SKIPS`` is a job that carries an ``if:``.
+4. every job carrying a job-level ``if:`` and not exempt is listed in
+   ``ALLOWED_SKIPS``;
+5. every name in ``ALLOWED_SKIPS`` is a job that carries an ``if:``;
+6. every ``# ci-gate-exempt:`` job carries a job-level ``if:`` — an exemption
+   with no condition is not a narrower gate, it is no gate.
 
 Static only — regex over the workflow text, no PyYAML. The Lint job installs
 ruff and nothing else, and this script runs there alongside
@@ -53,6 +69,7 @@ _JOB_IF_RE = re.compile(r"^    if:\s*(\S.*)$")
 _NEEDS_BLOCK_RE = re.compile(r"^    needs:\s*$")
 _NEEDS_ITEM_RE = re.compile(r"^      - ([A-Za-z0-9_-]+)\s*$")
 _ALLOWED_SKIPS_RE = re.compile(r"^\s*ALLOWED_SKIPS:\s*(\S.*?)\s*$")
+_GATE_EXEMPT_RE = re.compile(r"^    # ci-gate-exempt:\s*(\S.*)$")
 
 
 # Shortest string that can carry a matched quote pair: the two quotes.
@@ -125,12 +142,29 @@ def _parse_allowed_skips(body: list[str]) -> list[str]:
     return []
 
 
-def parse_workflow(text: str) -> tuple[dict[str, bool], list[str], list[str]]:
-    """Return (job_id -> has job-level ``if:``, gate needs, allowed skips).
+def _parse_gate_exempt(bodies: dict[str, list[str]]) -> set[str]:
+    """Return the job ids that declare a ``# ci-gate-exempt:`` marker.
+
+    Unlike ``needs:``/``ALLOWED_SKIPS`` (read from the gate job's own body),
+    this marker lives in the EXEMPT job's own body — the job declares its own
+    exemption, since by definition it is absent from the gate's ``needs:``.
+    """
+    return {
+        job
+        for job, body in bodies.items()
+        if any(_GATE_EXEMPT_RE.match(line) for line in body)
+    }
+
+
+def parse_workflow(
+    text: str,
+) -> tuple[dict[str, bool], list[str], list[str], set[str]]:
+    """Return (job_id -> has job-level ``if:``, gate needs, allowed skips, exempt).
 
     Pre:  ``text`` is the ci.yml source.
     Post: jobs are the top-level keys under ``jobs:`` (indent 2); needs and
-          allowed-skips are read from the gate job's block only.
+          allowed-skips are read from the gate job's block only; exempt is
+          read from every job's own body (see ``_parse_gate_exempt``).
     """
     bodies = _job_bodies(text)
     jobs = {
@@ -138,14 +172,83 @@ def parse_workflow(text: str) -> tuple[dict[str, bool], list[str], list[str]]:
         for job, body in bodies.items()
     }
     gate_body = bodies.get(GATE_JOB, [])
-    return jobs, _parse_needs(gate_body), _parse_allowed_skips(gate_body)
+    return (
+        jobs,
+        _parse_needs(gate_body),
+        _parse_allowed_skips(gate_body),
+        _parse_gate_exempt(bodies),
+    )
+
+
+def _check_every_job_is_gated(jobs: dict[str, bool], gated: set[str]) -> list[str]:
+    """Check 2: every job is either in the gate's needs or self-declared exempt."""
+    return [
+        f"job '{job}' is not in {GATE_JOB}.needs and carries no "
+        f"'# ci-gate-exempt:' marker — it would run outside the gate "
+        f"and could fail without blocking a merge"
+        for job in sorted(jobs)
+        if job != GATE_JOB and job not in gated
+    ]
+
+
+def _check_needs_are_real_jobs(jobs: dict[str, bool], needs: list[str]) -> list[str]:
+    """Check 3: the gate does not wait on a job id that no longer exists."""
+    return [
+        f"{GATE_JOB}.needs lists '{name}', which is not a job in ci.yml"
+        for name in needs
+        if name not in jobs
+    ]
+
+
+def _check_allowed_skips(
+    jobs: dict[str, bool], allowed_skips: list[str], exempt: set[str]
+) -> list[str]:
+    """Checks 4 and 5: ALLOWED_SKIPS and the set of conditional jobs agree.
+
+    Exempt jobs never appear in ``needs:``, so ci-green's jq never evaluates
+    their result — ALLOWED_SKIPS governs skip results INSIDE the gate only,
+    and does not apply to a job structurally outside it.
+    """
+    conditional = {
+        job
+        for job, has_if in jobs.items()
+        if has_if and job != GATE_JOB and job not in exempt
+    }
+    undeclared = [
+        f"job '{job}' carries a job-level 'if:' but is not in "
+        f"ALLOWED_SKIPS — it can report 'skipped' and slip past the gate. "
+        f"Declare it (with the reason) or drop the condition"
+        for job in sorted(conditional - set(allowed_skips))
+    ]
+    stale = [
+        f"ALLOWED_SKIPS lists '{name}', which has no job-level 'if:' in "
+        f"ci.yml — a stale exemption lets a real skip go unnoticed"
+        for name in sorted(set(allowed_skips) - conditional)
+    ]
+    return undeclared + stale
+
+
+def _check_exempt_jobs_are_conditional(
+    jobs: dict[str, bool], exempt: set[str]
+) -> list[str]:
+    """Check 6: an exemption without a condition is not a narrower gate."""
+    return [
+        f"job '{job}' carries a '# ci-gate-exempt:' marker but no "
+        f"job-level 'if:' — an exemption with no condition would run "
+        f"ungated on every push and PR, which is not a narrower gate, "
+        f"it is no gate"
+        for job in sorted(exempt)
+        if not jobs.get(job, False)
+    ]
 
 
 def check(text: str) -> list[str]:
     """Return the list of failures; empty means the gate is complete."""
-    jobs, needs, allowed_skips = parse_workflow(text)
-    failures: list[str] = []
+    jobs, needs, allowed_skips, exempt = parse_workflow(text)
 
+    # Check 1 is fatal on its own: without the gate job there is no needs
+    # list and no ALLOWED_SKIPS to read, so every later check would report
+    # noise derived from an absent block.
     if GATE_JOB not in jobs:
         return [
             f"job '{GATE_JOB}' is missing from ci.yml — branch protection "
@@ -153,36 +256,12 @@ def check(text: str) -> list[str]:
             f"nothing reports"
         ]
 
-    gated = set(needs)
-    for job, _ in sorted(jobs.items()):
-        if job == GATE_JOB:
-            continue
-        if job not in gated:
-            failures.append(
-                f"job '{job}' is not in {GATE_JOB}.needs — it would run "
-                f"outside the gate and could fail without blocking a merge"
-            )
-
-    for name in needs:
-        if name not in jobs:
-            failures.append(
-                f"{GATE_JOB}.needs lists '{name}', which is not a job in ci.yml"
-            )
-
-    conditional = {job for job, has_if in jobs.items() if has_if and job != GATE_JOB}
-    for job in sorted(conditional - set(allowed_skips)):
-        failures.append(
-            f"job '{job}' carries a job-level 'if:' but is not in "
-            f"ALLOWED_SKIPS — it can report 'skipped' and slip past the gate. "
-            f"Declare it (with the reason) or drop the condition"
-        )
-    for name in sorted(set(allowed_skips) - conditional):
-        failures.append(
-            f"ALLOWED_SKIPS lists '{name}', which has no job-level 'if:' in "
-            f"ci.yml — a stale exemption lets a real skip go unnoticed"
-        )
-
-    return failures
+    return (
+        _check_every_job_is_gated(jobs, set(needs) | exempt)
+        + _check_needs_are_real_jobs(jobs, needs)
+        + _check_allowed_skips(jobs, allowed_skips, exempt)
+        + _check_exempt_jobs_are_conditional(jobs, exempt)
+    )
 
 
 def main() -> int:

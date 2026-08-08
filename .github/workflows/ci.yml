@@ -797,3 +797,157 @@ jobs:
             exit 1
           fi
           echo "every required job succeeded"
+
+  # The tag-as-output half of issue #392: a green push to `main` tags the
+  # exact SHA that just passed CI Green, instead of a human hand-picking
+  # which (possibly-unvalidated) tree to tag — the v4.17.0 root cause
+  # (release run 30741657854 tagged a tree release.yml's own test job had
+  # never actually validated against ci.yml's hardening).
+  #
+  # ci-gate-exempt: this job runs ONLY on a push to `main`, i.e. AFTER the PR
+  # it belongs to has already merged. There is nothing left for it to gate —
+  # it cannot block a PR that is already closed — so it does not appear in
+  # ci-green.needs (see scripts/check_ci_gate_complete.py's ci-gate-exempt
+  # marker convention). Putting it there would make the branch-protection
+  # context depend on a job that never runs on a PR in the first place,
+  # permanently blocking every PR.
+  release-gate:
+    name: Tag a release
+    needs: [ci-green]
+    # ci-gate-exempt: runs only on push to main, after the PR it belongs to
+    # has already merged — see the job comment above.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # `contents: read`, NOT write, and that is deliberate. The tag is pushed
+    # with RELEASE_TAG_TOKEN (persisted by the checkout step below), never
+    # with GITHUB_TOKEN — granting GITHUB_TOKEN `contents: write` here would
+    # be an unused permission (issue #178 least-privilege), and worse, it
+    # would let a future edit that drops `token:` from the checkout push the
+    # tag with GITHUB_TOKEN and SUCCEED — producing a tag that silently never
+    # starts release.yml. Read-only makes that mistake fail loudly instead.
+    permissions:
+      contents: read
+    # A DEDICATED group — not this workflow's `${{ github.workflow }}-${{
+    # github.ref }}` group above, which sets `cancel-in-progress: true`. A
+    # push to main that lands mid-tag-push would be cancelled by the very
+    # next push to main under that group, leaving a partially-created tag on
+    # the remote (a tag object pushed but no corresponding release started,
+    # or the reverse) — exactly the half-state a release process must never
+    # produce. This group instead serializes tag operations one at a time
+    # without ever cancelling one already in flight.
+    concurrency:
+      group: release-tag
+      cancel-in-progress: false
+    steps:
+      # secrets.RELEASE_TAG_TOKEN does not exist yet in this repository. Per
+      # GitHub's docs, a ref pushed with the default GITHUB_TOKEN (unlike
+      # workflow_dispatch/repository_dispatch) does NOT start a new workflow
+      # run — a GITHUB_TOKEN-pushed tag would therefore never reach
+      # release.yml's `push: tags` trigger. Same guarded-optional-secret
+      # shape as sync-ccplugins-fork.yml's `has_pat` step: absence is a
+      # clean, loud skip, not a red job.
+      - name: Guard — skip cleanly when RELEASE_TAG_TOKEN is missing
+        id: guard
+        env:
+          TOKEN: ${{ secrets.RELEASE_TAG_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "RELEASE_TAG_TOKEN secret not configured — skipping."
+            echo "Add a PAT with 'contents: write' at Settings -> Secrets and"
+            echo "variables -> Actions. Releases stay manual until it exists."
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # fetch-depth: 0 so `git rev-parse --verify refs/tags/vX` below can see
+      # every existing tag, not just the tip commit. `token:` supplies
+      # RELEASE_TAG_TOKEN as the credential `git push` uses later in this
+      # job (actions/checkout persists it by default) — the non-GITHUB_TOKEN
+      # credential the tag push requires (see the guard step's comment).
+      - name: Checkout the SHA that just went green
+        if: steps.guard.outputs.has_token == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TAG_TOKEN }}
+
+      - name: Set up Python
+        if: steps.guard.outputs.has_token == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # Reuses doc_claim_sources.canonical_version — the same reader
+      # check_version_surfaces.py and check_doc_claims.py already trust —
+      # instead of re-deriving a second pyproject.toml version regex here.
+      # A push to `main` for a commit that does not bump the version is the
+      # NOMINAL case (most commits are not releases): tag v$VERSION already
+      # exists, and this step's job is to detect that and skip silently
+      # rather than fail or re-tag.
+      - name: Resolve the version and check for an existing tag
+        id: tag_check
+        if: steps.guard.outputs.has_token == 'true'
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 -c "
+          import sys
+          sys.path.insert(0, 'scripts')
+          import doc_claim_sources
+          print(doc_claim_sources.canonical_version(lambda p: open(p, encoding='utf-8').read()))
+          ")"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v${VERSION}" >/dev/null; then
+            echo "tag v${VERSION} already exists — this push carries no version bump"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no existing tag v${VERSION} — this push is a version bump"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The last line of defence before a tag: `main` should never carry a
+      # partial bump anyway (the identical gate already runs in `lint` on
+      # every push and PR — commit 4781c134), so reaching this step with a
+      # mismatch means something bypassed the PR gate (a direct push, an
+      # admin-merge override). A failure here is a RED job, not a skip —
+      # silently tagging a mismatched tree is exactly the v4.17.0 failure
+      # mode this workflow exists to make structurally impossible.
+      - name: Check version surfaces
+        if: steps.guard.outputs.has_token == 'true' && steps.tag_check.outputs.exists == 'false'
+        run: python scripts/check_version_surfaces.py
+
+      - name: Configure git identity
+        if: steps.guard.outputs.has_token == 'true' && steps.tag_check.outputs.exists == 'false'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # Annotated (not lightweight): carries its own object, author, and
+      # message, which `git tag -a` computes but `git tag` alone does not —
+      # the shape release.yml's changelog step and GitHub's own release UI
+      # expect. Tagged at `github.sha` explicitly (not the checkout's
+      # working-tree HEAD) so the released commit is provably the one that
+      # went green, even if a future edit changes what this job checks out.
+      - name: Create and push the release tag
+        if: steps.guard.outputs.has_token == 'true' && steps.tag_check.outputs.exists == 'false'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.tag_check.outputs.version }}"
+          git tag -a "v${VERSION}" -m "Release v${VERSION}" "${{ github.sha }}"
+          git push origin "refs/tags/v${VERSION}"
+
+      # Visible without opening logs: the decision (tagged / no-bump /
+      # no-token) is exactly the property issue #392's acceptance criteria
+      # ask to verify ("a green push to main with no version change tags
+      # nothing" — verifiable in the release-gate logs).
+      - name: Summarize the release-gate decision
+        if: always()
+        run: |
+          if [ "${{ steps.guard.outputs.has_token }}" != "true" ]; then
+            echo "## Release gate: skipped — RELEASE_TAG_TOKEN not configured" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.tag_check.outputs.exists }}" == "true" ]; then
+            echo "## Release gate: skipped — v${{ steps.tag_check.outputs.version }} already tagged (no version bump on this push)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Release gate: tagged v${{ steps.tag_check.outputs.version }} at \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi

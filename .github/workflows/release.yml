@@ -13,8 +13,28 @@ name: Release
 # against the trusted-publisher entry configured for this workflow + environment
 # `pypi` — the same one that published versions up to 3.14.7.
 #
-# This workflow runs the tests on tag push, creates a GitHub Release with
-# auto-generated notes, and attempts the secondary PyPI compatibility channel.
+# THIS WORKFLOW DOES NOT TEST ANYTHING (issue #392). Before this change it
+# ran its own `test` job on tag push — a duplicate, differently-triggered
+# copy of ci.yml's gate that every CI hardening pass silently skipped
+# (ci.yml triggers on `push: branches` + `pull_request`, this workflow on
+# `push: tags`, so a tag never reached it). Release run 30741657854
+# (v4.17.0) is what that cost: a reranker-fetch hang that ci.yml's own
+# hardening had already fixed hung this file's copy anyway, blocking every
+# downstream publish job on a tag whose tree had just passed 20 green
+# checks on PR #334.
+#
+# The test guarantee now comes from `ci.yml`'s `release-gate` job: it runs
+# ONLY after `ci-green` succeeds on a push to `main`, and tags the EXACT SHA
+# that just went green with an annotated `git tag` pushed via
+# `RELEASE_TAG_TOKEN` (a `GITHUB_TOKEN`-pushed tag does not start a new
+# workflow run, per GitHub's docs — this workflow would never fire from
+# one). The released tree is therefore bit-identical to the validated one;
+# this workflow's only job is to propagate what `ci.yml` already validated
+# and tagged — creating a GitHub Release with auto-generated notes, and
+# attempting the secondary PyPI compatibility channel.
+# `requirements/release.txt` — the dependency set the deprecated PyPI
+# channel installs into — is still validated: `ci.yml`'s `release-deps` job
+# smoke-imports the server under it on every push and PR.
 #
 # Supply-chain hardening (issue #178). Cortex reads and persists every
 # session transcript and installs session hooks with the user's full
@@ -43,6 +63,12 @@ name: Release
 # step that would create a GitHub Release, attach assets to one, or publish
 # to PyPI is gated `if: github.event_name == 'push'` so a manual dispatch
 # exercises the Node24 action bump only — it never mutates a release.
+#
+# This workflow deliberately stays TAG-TRIGGERED and NON-REUSABLE: PyPI
+# Trusted Publishing does not support reusable workflows, and this repo's
+# publisher entry is keyed on (release.yml, environment=pypi) specifically
+# — a `workflow_call` conversion would silently break `publish-pypi`,
+# silently because it carries `continue-on-error: true`.
 
 on:
   push:
@@ -56,49 +82,18 @@ permissions:
   contents: read
 
 jobs:
-  # Shared with ci.yml's `test` job via the composite action (issue #336) —
-  # see .github/actions/test-suite/action.yml for the step-level rationale.
-  # Before this extraction, this job was a hand-maintained mirror of ci.yml's
-  # `test` job that silently drifted from it: ci.yml triggers on
-  # `push: branches` + `pull_request`, this workflow triggers on `push: tags`,
-  # so a tag push never reached ci.yml and every hardening pass CI received
-  # skipped this file. Release run 30741657854 (v4.17.0) is what that cost:
-  # the reranker fetch hung in `sock.connect` until pytest-timeout killed the
-  # suite, blocking all five downstream publish jobs on a tag whose tree had
-  # just passed 20 green checks on PR #334; #335 restored parity by hand. The
-  # shared action makes the next divergence structurally impossible instead
-  # of merely visible.
-  #
-  # release.txt deliberately omits tree-sitter + tree-sitter-language-pack
-  # (as it omits igraph/leidenalg/texttable), so AST tests skip here and
-  # include-tree-sitter: "false" — the shared action never runs the
-  # tree-sitter cache/prefetch steps, avoiding an ImportError. Coverage,
-  # the MCP host contract check, and the advertised-test-count check
-  # (run-extended-checks, defaulted false) stay CI-only, unchanged from
-  # this job's prior behaviour — it never ran them.
-  test:
-    name: Test before release
-    runs-on: ubuntu-latest
-
-    steps:
-      # A local `uses: ./...` is resolved from the checked-out tree, so the
-      # checkout cannot itself live inside the shared action.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: ./.github/actions/test-suite
-        with:
-          python-version: "3.12"
-          requirements-file: requirements/release.txt
-          include-tree-sitter: "false"
-
   github-release:
     name: GitHub Release
-    needs: test
-    # Real releases only (issues #246 + #247 criterion 5) — a workflow_dispatch
-    # verification run must never create a GitHub Release; matches the
-    # `github.event_name == 'push'` gate documented in the header and used by
-    # every other release-producing step below.
-    if: github.event_name == 'push'
+    # Real releases only (issues #246 + #247 criterion 5) — a
+    # workflow_dispatch verification run must never create a GitHub Release.
+    # `startsWith(github.ref, 'refs/tags/')` alongside `event_name == 'push'`
+    # (boy-scout fix, issue #392): this job previously gated on event_name
+    # alone while its softprops/action-gh-release step below carries no
+    # `tag_name:` and falls back to `GITHUB_REF` — a push to a BRANCH would
+    # therefore have created (or updated) a "release" named after that
+    # branch. Every other job in this file already required the tag-ref
+    # form; this one was the exception.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write  # create the release + attach auto-generated notes
@@ -133,9 +128,10 @@ jobs:
   # blocks the primary channel; docs therefore label this path best-effort.
   build:
     name: Build sdist + wheel + attest (PyPI compatibility)
-    needs: test
     # Only the real tag-triggered event ships a release artifact; a
-    # workflow_dispatch verification run (issue #247 criterion 5) stops after `test`.
+    # workflow_dispatch verification run (issue #247 criterion 5) builds
+    # nothing — every job in this file is independent now that `test` (the
+    # thing they all used to wait on) is gone (issue #392).
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -212,9 +208,9 @@ jobs:
   # hundred-MB torch download is not on the critical path.
   sbom:
     name: SBOM (CycloneDX, from uv.lock)
-    needs: test
     # Only the real tag-triggered event ships an SBOM to a release; a
-    # workflow_dispatch verification run (issue #247 criterion 5) stops after `test`.
+    # workflow_dispatch verification run (issue #247 criterion 5) builds
+    # nothing (see `build`'s identical comment for why there is no `needs:`).
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -282,9 +278,9 @@ jobs:
   #   5.8MB unpacked / 561 files / 222 ignored by .mcpbignore.
   mcpb-bundle:
     name: MCPB bundle + attest (Claude Desktop connector)
-    needs: test
     # Only the real tag-triggered event ships a bundle; a workflow_dispatch
-    # verification run (issue #247 criterion 5) stops after `test`.
+    # verification run (issue #247 criterion 5) builds nothing (see `build`'s
+    # identical comment for why there is no `needs:`).
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:

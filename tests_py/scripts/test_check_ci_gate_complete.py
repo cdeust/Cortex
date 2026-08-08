@@ -70,12 +70,13 @@ class CheckCompleteGate(unittest.TestCase):
         self.assertEqual(gate.check(_COMPLETE), [])
 
     def test_parses_jobs_needs_and_allowed_skips(self) -> None:
-        jobs, needs, allowed = gate.parse_workflow(_COMPLETE)
+        jobs, needs, allowed, exempt = gate.parse_workflow(_COMPLETE)
         self.assertEqual(set(jobs), {"lint", "mcp-host-config", "ci-green"})
         self.assertFalse(jobs["lint"])
         self.assertTrue(jobs["mcp-host-config"])
         self.assertEqual(needs, ["lint", "mcp-host-config"])
         self.assertEqual(allowed, ["mcp-host-config"])
+        self.assertEqual(exempt, set())
 
 
 class RefusesIncompleteGate(unittest.TestCase):
@@ -112,6 +113,82 @@ class RefusesIncompleteGate(unittest.TestCase):
             "ALLOWED_SKIPS: mcp-host-config", "ALLOWED_SKIPS: mcp-host-config, lint"
         )
         self.assertIn("'lint'", self._only_failure(workflow))
+
+
+_WITH_EXEMPT_JOB = _workflow(
+    """  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - run: ruff check .
+
+  mcp-host-config:
+    name: Validate MCP host configurations
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.fork == false
+    steps:
+      - run: true
+
+  release-gate:
+    name: Tag a release
+    needs: [ci-green]
+    # ci-gate-exempt: runs only on push to main, after the PR merged —
+    # there is nothing left for it to gate.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - run: true
+
+  ci-green:
+    name: CI Green
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - mcp-host-config
+    steps:
+      - name: Require every job above to have succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          ALLOWED_SKIPS: mcp-host-config
+        run: true
+"""
+)
+
+
+class GateExemptJobs(unittest.TestCase):
+    def test_exempt_job_outside_needs_has_no_failures(self) -> None:
+        self.assertEqual(gate.check(_WITH_EXEMPT_JOB), [])
+
+    def test_parses_exempt_set(self) -> None:
+        jobs, needs, allowed, exempt = gate.parse_workflow(_WITH_EXEMPT_JOB)
+        self.assertEqual(exempt, {"release-gate"})
+        self.assertNotIn("release-gate", needs)
+        self.assertTrue(jobs["release-gate"])
+
+    def test_exempt_job_without_if_fails(self) -> None:
+        workflow = _WITH_EXEMPT_JOB.replace(
+            "    if: github.event_name == 'push' && github.ref == 'refs/heads/main'\n",
+            "",
+        )
+        failures = gate.check(workflow)
+        self.assertTrue(
+            any("release-gate" in f and "no job-level" in f for f in failures),
+            failures,
+        )
+
+    def test_unexempt_unneeded_job_still_fails(self) -> None:
+        # Sanity: removing the marker (with no needs entry either) reverts to
+        # the original "runs outside the gate" failure — the marker is a
+        # deliberate escape hatch, not a parser blind spot.
+        workflow = _WITH_EXEMPT_JOB.replace(
+            "    # ci-gate-exempt: runs only on push to main, after the PR merged —\n"
+            "    # there is nothing left for it to gate.\n",
+            "",
+        )
+        failures = gate.check(workflow)
+        unmarked = [f for f in failures if "release-gate" in f and "carries no" in f]
+        self.assertTrue(unmarked, failures)
 
 
 class RepositoryWorkflowIsGated(unittest.TestCase):
