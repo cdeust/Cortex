@@ -1,6 +1,6 @@
 """Doc-claim gate: the numbers the docs advertise must match the repository.
 
-Cortex advertises counts in prose — tools, references, mechanisms, version,
+Cortex advertises counts in prose — tools, references, mechanisms,
 tests. Each one is a claim a reader can check, and each one drifts silently:
 between 2026-07-12 and 2026-07-27 the tool count moved from 49 to 52 while
 README, CONTRIBUTING and the MCPB manifest still said 50, 43 and 49, and
@@ -19,7 +19,6 @@ tool counts          ``docs/mcp-tools.md`` header, itself pinned to the live
                      test_standalone_baseline_is_52_tools``
 reference count      entries counted in ``docs/papers/bibliography.md``
 mechanism count      the count declared in that bibliography's header
-version              ``[project].version`` in ``pyproject.toml``
 test count           ``assets/badge-tests.svg`` alone (issue #293) — the
                      one artifact that still states an absolute figure. No
                      prose file (nor ``.bestpractices.json``) states this
@@ -33,6 +32,12 @@ test count           ``assets/badge-tests.svg`` alone (issue #293) — the
                      advance; only an OVER-claim is reported. See
                      ``doc_claim_structural.check_badge_floor``.
 ===================  =====================================================
+
+Version-site coherence (``[project].version`` in ``pyproject.toml`` against
+every manifest, plugin, and badge occurrence that restates it) is NOT this
+gate's job any more — it moved to ``scripts/check_version_surfaces.py``,
+which is a strict superset of what this gate's own ``check_versions`` used
+to compare (issue #392).
 
 Release history is exempt: a line describing v4.13.0 may legitimately say
 "49 memory tools". Lines carrying a ``**vX.Y.Z`` marker, and files that are
@@ -64,7 +69,6 @@ module's docstring for why they take these as parameters instead).
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
@@ -177,29 +181,6 @@ def check_counts(pattern: re.Pattern[str], expected: int, label: str) -> list[st
     return doc_claim_scan.check_counts(pattern, expected, label, SCANNED_FILES, read)
 
 
-def check_versions(expected: str) -> list[str]:
-    """The version in the packaging metadata, the badge and every manifest."""
-    failures: list[str] = []
-    for relative_path, key in (
-        ("manifest.json", "version"),
-        ("server.json", "version"),
-        ("package.json", "version"),
-    ):
-        actual = json.loads(read(relative_path)).get(key)
-        if actual != expected:
-            failures.append(
-                f"{relative_path}: version {actual!r}, pyproject says {expected!r}"
-            )
-    failures += doc_claim_structural.check_badge(
-        "assets/badge-version.svg",
-        doc_claim_structural.VERSION_BADGE,
-        expected,
-        "version",
-        read,
-    )
-    return failures
-
-
 def check_no_hotlinked_badges() -> list[str]:
     """The README's repo-derived badges stay self-hosted."""
     return doc_claim_structural.check_no_hotlinked_badges(read)
@@ -221,7 +202,6 @@ def collect_failures(test_count: int | None) -> list[str]:
     failures += check_counts(TOOL_TOTAL_CLAIM, total, "tools with integrations")
     failures += check_counts(REFERENCE_CLAIM, canonical_reference_count(), "references")
     failures += check_counts(MECHANISM_CLAIM, canonical_mechanism_count(), "mechanisms")
-    failures += check_versions(canonical_version())
     failures += check_no_hotlinked_badges()
     failures += check_no_conflict_markers()
     failures += check_scanned_json_parses()
