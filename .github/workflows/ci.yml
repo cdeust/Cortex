@@ -357,6 +357,70 @@ jobs:
           tests_py/infrastructure/test_sqlite_backend.py
           tests_py/scripts/test_setup_py_backend_skip.py
 
+  # Validates `requirements/release.txt` — the dependency set release.yml
+  # installs before publishing (issue #392). Removing release.yml's own test
+  # job (see release-gate below) would otherwise leave that narrower
+  # dependency set validated NOWHERE until a PyPI/uvx install broke on it.
+  #
+  # Deliberately NOT the full pytest suite: this job's subject is the
+  # DEPENDENCY SET, not the suite — ci.yml's `test` matrix already covers the
+  # suite itself, against a wider dependency set. Re-running pytest here
+  # would duplicate that coverage at the release-narrowed dependency set's
+  # cost without adding a new claim.
+  #
+  # release.txt deliberately omits tree-sitter, tree-sitter-language-pack,
+  # igraph, leidenalg and texttable (`.github/actions/test-suite/action.yml`
+  # header comment) — so nothing this job runs may import from those
+  # packages, and it must not exercise codebase_analyze/AST paths.
+  #
+  # The check itself reuses the cheapest existing mechanism instead of
+  # inventing a new one: `scripts/verify_mcp_hosts.py`'s stdio initialize +
+  # tools/list + memory_stats round-trip (the same invocation the
+  # `test-sqlite` job's "Verify hook-free MCP host contract" step already
+  # runs) proves the server imports and its full tool surface registers
+  # under this narrower dependency set, with no PostgreSQL service needed
+  # (`--storage-selection sqlite` is the default).
+  release-deps:
+    name: Release dependency set (requirements/release.txt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
+
+      - name: Install the release dependency set (hash-pinned)
+        run: |
+          pip install --require-hashes -r requirements/release.txt
+          pip install --no-deps -e .
+
+      # Retry-with-backoff, fail-loudly: see the `test` job's pre-download
+      # step for the root-cause rationale (CI run 28495801728, 2026-07-01).
+      - name: Pre-download embedding model
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+            echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "HF pre-download failed after 5 attempts" >&2
+          exit 1
+
+      - name: Verify hook-free MCP host contract under the release dependency set
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          CORTEX_RERANKER_OFFLINE: "1"
+        run: python scripts/verify_mcp_hosts.py -- hypermnesia-mcp
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -701,6 +765,7 @@ jobs:
       - test-sqlite
       - mcp-host-config
       - test-windows
+      - release-deps
       - lint
       - typecheck
       - build

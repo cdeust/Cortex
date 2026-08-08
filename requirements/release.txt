@@ -6,7 +6,7 @@
 # and commit the result; CI re-runs it with --check and fails on drift.
 #
 # Read by:
-#   .github/workflows/release.yml — verification job
+#   .github/workflows/ci.yml — release-deps
 ##########################################################################
 # An extra index widens where pip may look, which is normally how
 # dependency-confusion attacks land. It is safe HERE and only here
