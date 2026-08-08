@@ -753,100 +753,6 @@ def benchmark_microglial_pruning() -> dict[str, float]:
     }
 
 
-def benchmark_decay_with_emotional_resistance() -> dict[str, dict[str, float]]:
-    """Benchmark heat decay: do emotional/important memories resist decay better?
-
-    Tests: Emotional memories should survive longer (amygdala-hippocampal coupling).
-    """
-    from mcp_server.core.decay_cycle import compute_decay_updates
-    from datetime import datetime, timezone
-
-    now = datetime(2026, 3, 23, 12, 0, 0, tzinfo=timezone.utc)
-
-    # Create memories with different properties
-    memories = [
-        # High importance + emotional
-        {
-            "id": 1,
-            "heat": 0.9,
-            "importance": 0.9,
-            "emotional_valence": 0.8,
-            "confidence": 0.9,
-            "last_accessed": "2026-03-22T00:00:00+00:00",
-            "is_protected": False,
-            "store_type": "episodic",
-        },
-        # Low importance + neutral
-        {
-            "id": 2,
-            "heat": 0.9,
-            "importance": 0.3,
-            "emotional_valence": 0.0,
-            "confidence": 0.5,
-            "last_accessed": "2026-03-22T00:00:00+00:00",
-            "is_protected": False,
-            "store_type": "episodic",
-        },
-        # High importance + neutral
-        {
-            "id": 3,
-            "heat": 0.9,
-            "importance": 0.9,
-            "emotional_valence": 0.0,
-            "confidence": 0.9,
-            "last_accessed": "2026-03-22T00:00:00+00:00",
-            "is_protected": False,
-            "store_type": "episodic",
-        },
-        # Low importance + emotional
-        {
-            "id": 4,
-            "heat": 0.9,
-            "importance": 0.3,
-            "emotional_valence": 0.8,
-            "confidence": 0.5,
-            "last_accessed": "2026-03-22T00:00:00+00:00",
-            "is_protected": False,
-            "store_type": "episodic",
-        },
-        # Protected (anchor)  # noqa: ERA001 -- fixture row label, not code
-        {
-            "id": 5,
-            "heat": 0.9,
-            "importance": 0.5,
-            "emotional_valence": 0.0,
-            "confidence": 0.5,
-            "last_accessed": "2026-03-22T00:00:00+00:00",
-            "is_protected": True,
-            "store_type": "episodic",
-        },
-    ]
-
-    updates = compute_decay_updates(memories, now)
-    update_map = {uid: new_heat for uid, new_heat in updates}
-
-    labels = [
-        "important+emotional",
-        "unimportant+neutral",
-        "important+neutral",
-        "unimportant+emotional",
-        "protected",
-    ]
-
-    results = {}
-    for i, mem in enumerate(memories):
-        new_heat = update_map.get(mem["id"], mem["heat"])
-        results[labels[i]] = {
-            "initial_heat": mem["heat"],
-            "heat_after_36h": round(new_heat, 4),
-            "heat_retained_pct": round(new_heat / max(mem["heat"], 0.001) * 100, 1),
-            "importance": mem["importance"],
-            "emotional_valence": mem["emotional_valence"],
-        }
-
-    return results
-
-
 def benchmark_pattern_separation() -> dict[str, dict[str, float]]:
     """Benchmark pattern separation: does orthogonalization reduce interference?
 
@@ -1363,46 +1269,8 @@ def run_all_benchmarks() -> str:
     sections.append(_table(["Metric", "Value"], rows))
     sections.append(f"\n*Benchmark duration: {dur:.1f}ms*\n")
 
-    # ── 7. Heat Decay with Emotional Resistance ──────────────────────────
-    sections.append("## 7. Decay Resistance (Emotional × Importance Interaction)")
-    sections.append("")
-    sections.append(
-        "**Question**: Do important/emotional memories resist heat decay?\n"
-    )
-
-    t0 = time.monotonic()
-    dr = benchmark_decay_with_emotional_resistance()
-    dur = (time.monotonic() - t0) * 1000
-
-    rows = []
-    for label, metrics in dr.items():
-        rows.append(
-            [
-                label,
-                f"{metrics['initial_heat']:.2f}",
-                f"{metrics['heat_after_36h']:.4f}",
-                f"{metrics['heat_retained_pct']:.1f}%",
-                f"{metrics['importance']:.1f}",
-                f"{metrics['emotional_valence']:.1f}",
-            ]
-        )
-    sections.append(
-        _table(
-            [
-                "Memory Type",
-                "Initial",
-                "After 36h",
-                "Retained%",
-                "Importance",
-                "Emotion",
-            ],
-            rows,
-        )
-    )
-    sections.append(f"\n*Benchmark duration: {dur:.1f}ms*\n")
-
     # ── 8. Pattern Separation ────────────────────────────────────────────
-    sections.append("## 8. Pattern Separation (DG Orthogonalization)")
+    sections.append("## 7. Pattern Separation (DG Orthogonalization)")
     sections.append("")
     sections.append("**Question**: Does orthogonalization reduce interference between")
     sections.append("similar memories while preserving semantic content?\n")
@@ -1435,7 +1303,7 @@ def run_all_benchmarks() -> str:
     )
 
     # ── 9. Consolidation Cascade ─────────────────────────────────────────
-    sections.append("## 9. Consolidation Cascade (Stage Progression)")
+    sections.append("## 8. Consolidation Cascade (Stage Progression)")
     sections.append("")
     sections.append(
         "**Question**: Do memories advance through stages with proper gating?"
@@ -1493,7 +1361,7 @@ def run_all_benchmarks() -> str:
     sections.append(f"\n*Benchmark duration: {dur:.1f}ms*\n")
 
     # ── 10. Homeostatic Plasticity ───────────────────────────────────────
-    sections.append("## 10. Homeostatic Plasticity (Synaptic Scaling)")
+    sections.append("## 9. Homeostatic Plasticity (Synaptic Scaling)")
     sections.append("")
     sections.append(
         "**Question**: Does the system self-correct when heat is too high or too low?\n"
