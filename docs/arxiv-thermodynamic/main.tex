@@ -201,7 +201,7 @@ mode that \citet{Liu2023} anticipated.  We report on all three in
 This paper describes the memory engine of a four-component
 ecosystem: \emph{cortex-beam-abstain} \citep{Deust2026a} is a
 learned retrieval-abstention model that complements decay on
-residual collapse; \emph{automatised-pipeline} \citep{Deust2026b} is
+residual collapse; \emph{ai-architect-mcp-codebase} \citep{Deust2026b} is
 a Rust tree-sitter / LadybugDB property-graph backend that anchors
 memories to code symbols; \emph{prd-spec-generator}
 \citep{Deust2026c} is the read-heavy downstream consumer that
@@ -1379,10 +1379,10 @@ decay: Cortex addresses the \emph{frequency} of collapse,
 cortex-beam-abstain addresses the \emph{residual}.  Both mechanisms
 are required; neither suffices alone.
 
-\paragraph{automatised-pipeline---the code-structural anchor.}
+\paragraph{ai-architect-mcp-codebase---the code-structural anchor.}
 Cortex memories are not anonymous text snippets; downstream
 consumers expect them to refer to specific functions, types, and
-call paths.  automatised-pipeline \citep{Deust2026b} is a Rust MCP
+call paths.  ai-architect-mcp-codebase \citep{Deust2026b} is a Rust MCP
 server that indexes Rust / Python / TypeScript codebases via
 tree-sitter into a LadybugDB property graph (16 node labels, 36+
 relationship tables; 220 tests passing) and exposes 23 MCP tools
