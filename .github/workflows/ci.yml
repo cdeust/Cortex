@@ -17,8 +17,19 @@ concurrency:
 jobs:
   # Shared with release.yml's `test` job via the reusable workflow (issue
   # #336) — see .github/workflows/test-suite.yml for the step-level
-  # rationale. This job's identity ("Test (Python X.Y)" per matrix leg) is
-  # unchanged; only the step list moved.
+  # rationale.
+  #
+  # CHECK NAME CHANGES HERE. A job that delegates via `uses:` reports as
+  # "<caller job name> / <called job name>", so each matrix leg now
+  # publishes "Test (Python X.Y) / Test (Python X.Y)" instead of the bare
+  # "Test (Python X.Y)". There is no way to keep the bare name while
+  # delegating — GitHub always composes the two. The four required status
+  # checks on `main` must therefore be renamed to match, or the branch
+  # protection waits forever on contexts nobody reports.
+  # source: this PR's own check list (run 31250898534) — all legs green,
+  # PR still BLOCKED on the four bare contexts.
+  # The other legs below (SQLite, Windows) keep their steps inline and
+  # keep their bare names.
   test:
     name: Test (Python ${{ matrix.python-version }})
     strategy:
