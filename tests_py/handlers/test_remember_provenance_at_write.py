@@ -150,6 +150,115 @@ class TestProvenanceNeverHitsNetwork:
         assert result["provenance"]["grade"] == "verifiable"
 
 
+class TestProvenanceDeadRefHint:
+    """Issue #345: the write-time hint must never claim "no checkable
+    reference found" when `checkable_refs` in the SAME response is
+    non-zero -- and must name which reference(s) failed and against what
+    root, not just repeat the grade."""
+
+    def test_acceptance_one_real_one_dead_path_names_the_dead_one(self, tmp_path):
+        """Issue #345 acceptance criterion, verbatim: a `remember` call
+        whose content cites one existing and one non-existent path returns
+        a `provenance` block that names the non-existent path and does not
+        claim that no reference was found."""
+        real = tmp_path / "real_module.py"
+        real.write_text("x = 1")
+        dead_rel = "src/definitely_missing_module.py"
+        result = asyncio.run(
+            handler(
+                {
+                    "content": (
+                        f"Root cause traced to {real} — see also "
+                        f"{dead_rel} for the caller."
+                    ),
+                    "force": True,
+                    "directory": str(tmp_path),
+                }
+            )
+        )
+        assert result["stored"] is True
+        prov = result["provenance"]
+        assert prov["grade"] == "unverifiable"
+        assert prov["checkable_refs"]["file"] == 2
+        assert "No checkable reference found" not in prov["hint"]
+        assert dead_rel in prov["hint"]
+
+    def test_dead_refs_and_reason_surfaced_on_response(self, tmp_path):
+        dead_rel = "src/another_missing_file.py"
+        result = asyncio.run(
+            handler(
+                {
+                    "content": f"See {dead_rel} for context.",
+                    "force": True,
+                    "directory": str(tmp_path),
+                }
+            )
+        )
+        prov = result["provenance"]
+        assert dead_rel in prov["dead_refs"]
+        assert prov["reason"].startswith("dead_refs:")
+        assert dead_rel in prov["reason"]
+
+    def test_implicit_directory_names_root_and_says_directory_not_passed(
+        self, tmp_path, monkeypatch
+    ):
+        """Live repro (memory 4341427, 2026-08-08): omit `directory` —
+        resolution silently uses the process cwd, which need not be the
+        writer's project root. The hint must name that root and say so,
+        never conflate this with a genuinely-dead path."""
+        monkeypatch.chdir(tmp_path)
+        dead_rel = "src/yet_another_missing_file.py"
+        result = asyncio.run(
+            handler(
+                {
+                    "content": f"See {dead_rel} for context.",
+                    "force": True,
+                    # directory omitted on purpose
+                }
+            )
+        )
+        prov = result["provenance"]
+        assert prov["grade"] == "unverifiable"
+        assert str(tmp_path) in prov["hint"]
+        assert "no `directory` was passed" in prov["hint"]
+
+    def test_nonexistent_directory_root_names_root_as_missing(self, tmp_path):
+        """State 2a: an explicitly-passed `directory` that is itself not a
+        real directory on disk — the hint must blame the root, not the
+        individually-named references (they were never even checkable)."""
+        missing_root = str(tmp_path / "does_not_exist_at_all")
+        result = asyncio.run(
+            handler(
+                {
+                    "content": "See src/some_file.py for context.",
+                    "force": True,
+                    "directory": missing_root,
+                }
+            )
+        )
+        prov = result["provenance"]
+        assert missing_root in prov["hint"]
+        assert "not a directory on disk" in prov["hint"]
+
+    def test_explicit_directory_gets_dead_ref_wording_not_implicit_wording(
+        self, tmp_path
+    ):
+        dead_rel = "src/explicit_root_missing_file.py"
+        result = asyncio.run(
+            handler(
+                {
+                    "content": f"See {dead_rel} for context.",
+                    "force": True,
+                    "directory": str(tmp_path),
+                }
+            )
+        )
+        prov = result["provenance"]
+        assert str(tmp_path) in prov["hint"]
+        assert "no `directory` was passed" not in prov["hint"]
+        assert dead_rel in prov["hint"]
+
+
 class TestProvenanceGradingIsAfterGateDecision:
     """The prov: tag must never influence the gate's novelty/bypass
     decision -- it is appended strictly after evaluate_gate() runs

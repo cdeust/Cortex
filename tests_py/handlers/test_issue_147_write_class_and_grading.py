@@ -154,16 +154,19 @@ class TestGradingNeverBlocksTheWrite:
         with patch(
             "os.getcwd", side_effect=FileNotFoundError(2, "No such file or directory")
         ):
-            report, error = _grade_content_best_effort("plain content", directory="")
-        assert report.grade == "unverifiable"
-        assert error == "FileNotFoundError"
+            ctx = _grade_content_best_effort("plain content", directory="")
+        assert ctx.report.grade == "unverifiable"
+        assert ctx.grading_error == "FileNotFoundError"
 
     def test_grade_content_best_effort_passes_through_on_success(self, tmp_path):
-        report, error = _grade_content_best_effort(
+        ctx = _grade_content_best_effort(
             "plain content with no refs", directory=str(tmp_path)
         )
-        assert error is None
-        assert report.grade == "unverifiable"
+        assert ctx.grading_error is None
+        assert ctx.report.grade == "unverifiable"
+        assert ctx.resolution_root == str(tmp_path)
+        assert ctx.resolution_root_explicit is True
+        assert ctx.resolution_root_exists is True
 
     def test_force_write_survives_missing_cwd(self):
         """End-to-end (issue repro): a force=True write must still insert

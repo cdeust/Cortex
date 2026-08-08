@@ -400,6 +400,14 @@
       "kind": "equivalent-by-construction",
       "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
       "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_write_time_hint__mutmut_1",
+      "removed": "write_class: str = \"\",",
+      "added": "write_class: str = \"XXXX\",",
+      "kind": "equivalent-by-construction",
+      "rationale": "write_class's default value is read exactly once in the function body, in `write_class == \"deliberate\"` -- neither \"\" nor \"XXXX\" equals \"deliberate\", so no caller that omits the argument can ever observe which default was compiled in. Killing this would require asserting on a value the function provably never surfaces.",
+      "issue": "#345"
     }
   ]
 }

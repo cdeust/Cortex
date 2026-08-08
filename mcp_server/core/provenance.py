@@ -289,20 +289,136 @@ _DELIBERATE_UNVERIFIABLE_SUFFIX = (
 )
 
 
-def write_time_hint(report: ProvenanceReport, write_class: str = "") -> str:
+def _named_dead_refs(dead_refs: list[str]) -> str:
+    """Up to 3 dead refs, comma-joined, with a "(+N more)" tail."""
+    named = ", ".join(dead_refs[:3])
+    remaining = len(dead_refs) - 3
+    return f"{named} (+{remaining} more)" if remaining > 0 else named
+
+
+def _dead_ref_hint_root_missing(report: ProvenanceReport, root: str) -> str:
+    """State 2a (issue #345): the resolution root itself is not a directory
+    on disk, so every file ref under it was necessarily unresolvable --
+    the dead-refs list says nothing about whether the PATHS are wrong."""
+    return (
+        f"{len(report.dead_refs)} checkable reference(s) could not be "
+        f"resolved because the resolution root '{root}' is not a directory "
+        f"on disk: {_named_dead_refs(report.dead_refs)}. Pass a valid "
+        "`directory`, then supersede this memory."
+    )
+
+
+def _dead_ref_hint_root_implicit(report: ProvenanceReport, root: str) -> str:
+    """State 2b (issue #345): no `directory` argument was given, so
+    resolution silently fell back to the server process's current working
+    directory, which need not be the writer's project root."""
+    total = sum(report.ref_counts.values())
+    return (
+        f"{len(report.dead_refs)} of {total} checkable reference(s) could "
+        f"not be resolved against '{root}' -- no `directory` was passed to "
+        "this write, so resolution defaulted to the process's current "
+        f"working directory: {_named_dead_refs(report.dead_refs)}. Pass "
+        "`directory` explicitly (your project root) and retry, or drop "
+        "the reference if it is genuinely gone."
+    )
+
+
+def _dead_ref_hint_root_explicit(report: ProvenanceReport, root: str) -> str:
+    """State 3 (issue #345): resolved against a real, explicitly-given
+    root, and the reference(s) are genuinely absent there."""
+    total = sum(report.ref_counts.values())
+    return (
+        f"{len(report.dead_refs)} of {total} checkable reference(s) could "
+        f"not be resolved against '{root}': {_named_dead_refs(report.dead_refs)}. "
+        "Fix the path/URL or drop it, then supersede this memory."
+    )
+
+
+def _unverifiable_hint(
+    report: ProvenanceReport,
+    *,
+    resolution_root: str,
+    resolution_root_explicit: bool,
+    resolution_root_exists: bool,
+) -> str:
+    """UNVERIFIABLE-branch hint (issue #345).
+
+    ``grade_provenance`` folds three distinct UNVERIFIABLE causes into one
+    grade -- ``report.dead_refs`` (from ``_build_reason`` above) already
+    separates "no reference at all" from "reference(s) resolved dead", but
+    a caller reproduction (memory 4341427, 2026-08-08) showed a second dead
+    -ref cause the naive fix still mislabels: refs that are perfectly real
+    but were checked against the WRONG resolution root because the caller
+    never passed ``directory`` (``grade_from_content``'s ``base_dir =
+    directory or os.getcwd()`` fallback, ``handlers/remember_helpers.py``).
+    Both a genuinely-dead ref and a wrong-root ref land in ``dead_refs``
+    identically from ``grade_provenance``'s point of view (it only sees
+    pre-resolved existence booleans) -- the distinction is caller-side
+    context (was ``directory`` explicit? does the resolved root even exist
+    on disk?), passed in here as booleans rather than re-derived with I/O
+    (core/ stays zero-I/O; see module docstring).
+
+    precondition: ``report.grade == UNVERIFIABLE``; ``resolution_root`` is
+        the directory refs were resolved against (may be "");
+        ``resolution_root_explicit`` is whether the caller passed
+        ``directory`` (False = implicit ``os.getcwd()`` fallback);
+        ``resolution_root_exists`` is whether that root is a real directory
+        on disk (always True when ``resolution_root_explicit`` is False,
+        since ``os.getcwd()`` cannot fail to exist for a running process).
+    postcondition: when ``report.dead_refs`` is empty, returns the
+        unchanged "no reference at all" wording (state 1). Otherwise names
+        up to 3 dead refs AND the resolution root used, picking exactly one
+        of three mutually exclusive branches: root missing on disk (state
+        2a), root implicit/unstated (state 2b), or root explicit and real
+        (state 3, genuinely dead).
+    """
+    if not report.dead_refs:
+        return _WRITE_TIME_HINTS[UNVERIFIABLE]
+    root = resolution_root or "(unresolved)"
+    if not resolution_root_exists:
+        return _dead_ref_hint_root_missing(report, root)
+    if not resolution_root_explicit:
+        return _dead_ref_hint_root_implicit(report, root)
+    return _dead_ref_hint_root_explicit(report, root)
+
+
+def write_time_hint(
+    report: ProvenanceReport,
+    write_class: str = "",
+    *,
+    resolution_root: str = "",
+    resolution_root_explicit: bool = True,
+    resolution_root_exists: bool = True,
+) -> str:
     """Deterministic, templated feedback for the write-time caller (M-D5).
 
     precondition: ``report`` came from ``grade_from_content``
         (``handlers/validate_memory.py``, write-path) or ``grade_provenance``
         generally; ``write_class`` is the resolved write class of the
         memory being written (M-D2, 7.4), or "" when not applicable.
-    postcondition: returns one of three fixed hint strings keyed only by
-        ``report.grade`` -- a pure lookup, no new inference -- with a
-        stronger call-to-action appended for UNVERIFIABLE writes whose
-        ``write_class == "deliberate"``. Never persisted; callers surface
-        this in the write response only.
+        ``resolution_root``/``resolution_root_explicit``/
+        ``resolution_root_exists`` (issue #345) describe the directory the
+        caller resolved file refs against -- default to the pre-#345
+        behaviour (explicit, existing, unnamed) so a caller that has not
+        been updated to pass them gets the old wording unchanged.
+    postcondition: returns a hint string keyed by ``report.grade``. For
+        VERIFIED/VERIFIABLE this is a pure lookup (no new inference). For
+        UNVERIFIABLE it further branches on ``report.dead_refs`` and the
+        resolution-root booleans (issue #345) so a write whose references
+        were extracted but resolved dead is told WHICH ones and AGAINST
+        WHAT ROOT, instead of being told none was found -- a stronger
+        call-to-action is appended when ``write_class == "deliberate"``.
+        Never persisted; callers surface this in the write response only.
     """
-    hint = _WRITE_TIME_HINTS[report.grade]
+    if report.grade == UNVERIFIABLE:
+        hint = _unverifiable_hint(
+            report,
+            resolution_root=resolution_root,
+            resolution_root_explicit=resolution_root_explicit,
+            resolution_root_exists=resolution_root_exists,
+        )
+    else:
+        hint = _WRITE_TIME_HINTS[report.grade]
     if report.grade == UNVERIFIABLE and write_class == "deliberate":
         hint += _DELIBERATE_UNVERIFIABLE_SUFFIX
     return hint

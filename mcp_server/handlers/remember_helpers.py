@@ -6,6 +6,7 @@ Extracted to keep remember.py under 300 lines with all methods under 40 lines.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import Any
 
 from mcp_server.core import (
@@ -689,9 +690,40 @@ def _run_post_store(
     return tids, tagged, slot
 
 
-def _grade_content_best_effort(
-    content: str, *, directory: str
-) -> tuple[provenance.ProvenanceReport, str | None]:
+@dataclass
+class _GradeContext:
+    """Result of a best-effort write-time provenance grading pass.
+
+    ``resolution_root``/``resolution_root_explicit``/``resolution_root_exists``
+    (issue #345) are the caller-side context ``core/provenance.write_time_hint``
+    needs to distinguish "reference genuinely dead" from "reference resolved
+    against the wrong root" -- core/ stays zero-I/O (module docstring), so
+    the ``os.path.isdir`` check that produces ``resolution_root_exists``
+    happens here, in the handlers layer.
+    """
+
+    report: provenance.ProvenanceReport
+    grading_error: str | None
+    resolution_root: str
+    resolution_root_explicit: bool
+    resolution_root_exists: bool
+
+
+def _fallback_grade_context(
+    *, resolution_root: str, resolution_root_explicit: bool, error_type: str
+) -> _GradeContext:
+    return _GradeContext(
+        report=provenance.ProvenanceReport(
+            memory_id=0, grade=provenance.UNVERIFIABLE, ref_counts={}
+        ),
+        grading_error=error_type,
+        resolution_root=resolution_root,
+        resolution_root_explicit=resolution_root_explicit,
+        resolution_root_exists=bool(resolution_root) and os.path.isdir(resolution_root),
+    )
+
+
+def _grade_content_best_effort(content: str, *, directory: str) -> _GradeContext:
     """Best-effort wrapper around ``validate_memory.grade_from_content``.
 
     Root cause (issue #147): ``grade_from_content``'s ``base_dir`` fallback
@@ -705,36 +737,45 @@ def _grade_content_best_effort(
     the source by matching the established local pattern instead of
     special-casing ``os.getcwd()``.
 
-    Postcondition: NEVER raises. On success returns
-    ``(grade_report, None)``. On any failure returns a fallback
+    Postcondition: NEVER raises. Always returns a ``_GradeContext`` whose
+    ``resolution_root_explicit`` is ``bool(directory)`` -- issue #345:
+    when the caller passed no ``directory``, resolution silently fell back
+    to the server process's cwd, which need not be the writer's project
+    root (reproduced live on memory 4341427, 2026-08-08: 3 real paths in
+    the Cortex repo graded dead because the write's cwd was the repo's
+    *parent* directory). On any failure returns a fallback
     ``ProvenanceReport`` graded ``UNVERIFIABLE`` (the same "we don't know"
     default ``grade_provenance`` uses for zero extractable references) plus
     the failing exception's type name, so the caller can surface it as an
     observable tag instead of a silently absorbed enrichment.
     """
+    root_explicit = bool(directory)
     try:
         base_dir = directory or os.getcwd()
     except OSError as exc:
-        return (
-            provenance.ProvenanceReport(
-                memory_id=0, grade=provenance.UNVERIFIABLE, ref_counts={}
-            ),
-            type(exc).__name__,
+        return _fallback_grade_context(
+            resolution_root="",
+            resolution_root_explicit=root_explicit,
+            error_type=type(exc).__name__,
         )
+    root_exists = os.path.isdir(base_dir)
     try:
-        return (
-            validate_memory.grade_from_content(
-                content, directory_context=directory, base_dir=base_dir
-            ),
-            None,
+        report = validate_memory.grade_from_content(
+            content, directory_context=directory, base_dir=base_dir
         )
     except Exception as exc:  # noqa: BLE001 — grading must never block a write
-        return (
-            provenance.ProvenanceReport(
-                memory_id=0, grade=provenance.UNVERIFIABLE, ref_counts={}
-            ),
-            type(exc).__name__,
+        return _fallback_grade_context(
+            resolution_root=base_dir,
+            resolution_root_explicit=root_explicit,
+            error_type=type(exc).__name__,
         )
+    return _GradeContext(
+        report=report,
+        grading_error=None,
+        resolution_root=base_dir,
+        resolution_root_explicit=root_explicit,
+        resolution_root_exists=root_exists,
+    )
 
 
 def insert_and_post_process(
@@ -796,9 +837,8 @@ def insert_and_post_process(
     # evaluate_gate() (called by remember.py before this function), so the
     # tag can never influence the novelty/gate decision -- bench-neutral by
     # construction, no G-bench required for this increment.
-    grade_report, grading_error = _grade_content_best_effort(
-        content, directory=directory
-    )
+    grade_ctx = _grade_content_best_effort(content, directory=directory)
+    grade_report, grading_error = grade_ctx.report, grade_ctx.grading_error
     tags = [*tags, f"prov:{grade_report.grade}"]
     if grading_error is not None:
         # issue #147: grade_from_content's os.getcwd() fallback can raise
@@ -880,10 +920,28 @@ def insert_and_post_process(
     # comment above) so the writer sees, in the SAME response, whether
     # their claim carries a checkable reference and can complete it by
     # superseding this memory if not.
+    #
+    # issue #345: "hint" used to be a pure `grade` lookup that claimed "no
+    # checkable reference found" even when `checkable_refs` in this SAME
+    # dict counted several -- the diagnosis (`report.reason`/`dead_refs`)
+    # was computed and then discarded. `reason`/`dead_refs` are now also
+    # surfaced directly (capped at 3, matching `_build_reason`'s own cap --
+    # `core/provenance.py`), matching what `validate_memory`'s batch pass
+    # already exposes (`handlers/validate_memory.py:559-561`), and the hint
+    # itself names the dead refs AND the resolution root they were checked
+    # against (`_grade_content_best_effort`'s `_GradeContext`).
     response["provenance"] = {
         "grade": grade_report.grade,
         "checkable_refs": grade_report.ref_counts,
-        "hint": provenance.write_time_hint(grade_report, write_class),
+        "reason": grade_report.reason,
+        "dead_refs": grade_report.dead_refs[:3],
+        "hint": provenance.write_time_hint(
+            grade_report,
+            write_class,
+            resolution_root=grade_ctx.resolution_root,
+            resolution_root_explicit=grade_ctx.resolution_root_explicit,
+            resolution_root_exists=grade_ctx.resolution_root_exists,
+        ),
     }
     # C1 source / reality monitoring: surface the stored epistemic attribution
     # so the caller can see whether this memory was perceived / told / inferred.
