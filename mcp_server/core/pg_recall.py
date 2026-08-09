@@ -23,8 +23,8 @@ from mcp_server.core.reranker import rerank_results
 from mcp_server.core.titans_memory import TitansMemory
 from mcp_server.observability import silent_failure
 from mcp_server.core import goal_maintenance
-import os as _os
-from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.core.capture_origin import trusted_origins_at_read
+from mcp_server.core.retrieval_dispatch import UNTRUSTED_ORIGIN_FACTOR
 from mcp_server.core.recall_pipeline import (
     familiarity_triage,
     attentional_focus_rerank,
@@ -40,12 +40,6 @@ from mcp_server.core.recall_pipeline import (
     spreading_activation_tail_fill,
     value_priority_rerank,
 )
-from mcp_server.core.context_assembly.stage_assembler import (
-    BudgetSplit,
-    StageAwareContextAssembler,
-)
-from mcp_server.core.context_assembly.stage_detector import ExplicitStageDetector
-from mcp_server.core.context_assembly.condensers import condense_assembled_context
 
 # Entity names shorter than this are too generic to match against content.
 # source: pre-existing tuned value, extracted unchanged (#197 family 3);
@@ -160,100 +154,11 @@ def _chronological_rerank(
 
 
 # ── PG weight profiles ──────────────────────────────────────────────────
-# NOTE: These weights are engineering defaults, NOT paper-prescribed values.
-# The TMM normalization framework (Bruch et al., ACM TOIS 2023) defines the
-# fusion formula but does NOT prescribe per-signal weights — those are
-# corpus-specific. See benchmarks/beam/ablation_results.json for empirical
-# justification from the BEAM ablation study.
-
-# Ablation data (benchmarks/beam/ablation_results.json):
-#   BEAM-optimal: fts=0.0, heat=0.7, ngram=0.0 → MRR 0.554
-#   But fts=0.0 regresses LongMemEval -9.2pp R@10, LoCoMo -15.5pp R@10
-# These defaults are balanced across all three benchmarks. Per-signal
-# BEAM ablation data is recorded but not applied as defaults due to
-# cross-benchmark regression. Dynamic corpus adaptation remains an open
-# research problem — see Bruch et al. 2023 §5 on collection-dependent weights.
-_BASE_PG_WEIGHTS: dict[str, float] = {
-    "vector": 1.0,  # Primary signal — always full strength
-    "fts": 0.5,  # Keyword matching: essential for factual/technical queries
-    "heat": 0.3,  # Thermodynamic importance signal
-    "ngram": 0.3,  # Fuzzy matching: helps partial/code token matches
-    "recency": 0.0,  # Disabled by default; enabled for temporal intents
-}
-
-_PG_INTENT_OVERRIDES: dict[str, dict[str, float]] = {
-    QueryIntent.TEMPORAL: {
-        "heat": 0.6,
-        "recency": 0.2,
-    },
-    QueryIntent.KNOWLEDGE_UPDATE: {
-        "recency": 0.5,
-        "heat": 0.5,
-    },
-    QueryIntent.EVENT_ORDER: {
-        "heat": 0.4,
-        "recency": 0.3,
-        "fts": 0.6,
-    },
-    QueryIntent.SUMMARIZATION: {
-        "heat": 0.5,
-        "fts": 0.7,
-    },
-    QueryIntent.PREFERENCE: {
-        "fts": 0.8,
-        "heat": 0.5,
-    },
-}
-
-
-def compute_pg_weights(
-    intent: str, core_weights: dict | None = None
-) -> dict[str, float]:
-    """Compute PG recall_memories() signal weights for a given intent.
-
-    Derives base weights from core_weights (from query_intent) when available,
-    then applies intent-specific PG overrides.
-
-    Verification ablation hooks (Popper C2 — operator-disablable mechanism):
-    - ``CORTEX_DECAY_DISABLED=1``: forces heat weight to 0.0 so the
-      thermodynamic decay signal cannot enter the WRRF fusion. Disabling
-      heat is equivalent to "flat heat" for ranking purposes — Cortex
-      degenerates to vector + FTS + ngram, the flat-importance baseline.
-    - ``CORTEX_HEAT_CONSTANT=<float>``: same effect on the weight (heat
-      cannot discriminate when constant), kept as a separate var so the
-      n_scan harness can force a specific constant heat at write time and
-      confirm the ranker reproduces flat baseline at read time.
-    - ``CORTEX_ABLATE_ADAPTIVE_DECAY=1`` (Mechanism.ADAPTIVE_DECAY):
-      handler-level read-path guard. Forces heat weight to 0.0 in the
-      WRRF fusion so the thermodynamic adaptive-decay signal cannot
-      influence ranking. This is the cleaner approach than trying to
-      inject ablation into PL/pgSQL — same observable effect at the
-      composition root. Source: docs/provenance/verification-protocol.md E1.
-    Source: docs/provenance/verification-protocol.md E2 (N-scan); env vars defined
-    by benchmarks/lib/n_scan_runner.py:_apply_condition.
-    """
-
-    cw = core_weights or {}
-    # Vector is always 1.0 in the PG path — it's the primary discovery signal.
-    # Other signals derived from core_weights (intent system) when available,
-    # falling back to _BASE_PG_WEIGHTS defaults.
-    base = {
-        "vector": 1.0,
-        "fts": cw.get("fts", _BASE_PG_WEIGHTS["fts"]),
-        "heat": cw.get("heat", _BASE_PG_WEIGHTS["heat"]),
-        "ngram": cw.get("fts", _BASE_PG_WEIGHTS["fts"]) * 0.6,
-        "recency": 0.0,
-    }
-    overrides = _PG_INTENT_OVERRIDES.get(intent)
-    if overrides:
-        base.update(overrides)
-    if (
-        _os.environ.get("CORTEX_DECAY_DISABLED") == "1"
-        or _os.environ.get("CORTEX_HEAT_CONSTANT")
-        or is_mechanism_disabled(Mechanism.ADAPTIVE_DECAY)
-    ):
-        base["heat"] = 0.0
-    return base
+# Live in pg_recall_weights.py since the #368 split. Re-exported: callers and
+# tests reach compute_pg_weights through this module.
+from mcp_server.core.pg_recall_weights import (  # noqa: E402 — facade re-export at the seam the split left
+    compute_pg_weights,
+)
 
 
 # ── Recall orchestration ─────────────────────────────────────────────────
@@ -361,6 +266,11 @@ def recall(
         wrrf_k=wrrf_k,
         weights=weights,
         include_globals=include_globals,
+        # issue #368 — the trust policy is read here, in core, and handed to
+        # the store: infrastructure may not import core, so this is the seam
+        # that keeps capture_origin.py the single source of the vocabulary.
+        trusted_origins=trusted_origins_at_read(),
+        untrusted_factor=UNTRUSTED_ORIGIN_FACTOR,
     )
 
     if not candidates:
@@ -574,253 +484,11 @@ def recall(
     return candidates[:top_k]
 
 
-# ── Structured 3-phase context assembly (new path) ─────────────────────
+# ── Structured 3-phase context assembly ─────────────────────────────────
+# Lives in pg_recall_assembly.py since the #368 split (§4.1: this file was
+# 833 lines). Re-exported here because callers and tests reach it as
+# ``pg_recall.assemble_context``; this name is a facade over that module and
+# holds no implementation.
+from mcp_server.core.pg_recall_assembly import assemble_context  # noqa: E402 — facade re-export, placed at the seam the split left rather than hoisted away from its explanatory comment
 
-
-def assemble_context(
-    query: str,
-    store: Any,
-    embeddings: Any,
-    *,
-    current_stage: str,
-    token_budget: int | None = None,
-    domain: str | None = None,
-    stage_field: str = "plan_id",
-    budget_split: tuple[float, float, float] = (0.6, 0.3, 0.1),
-    max_chunks_per_phase: int = 5,
-    diversity_lambda: float = 0.0,
-    stage_detector: Any | None = None,
-) -> dict[str, Any]:
-    """Structured 3-phase context assembly for a single query.
-
-    Returns a `dict` with:
-      - 'assembled_context' (str): the full prompt-ready text
-      - 'own_stage_context' (str), 'adjacent_stage_context' (str),
-        'stage_summaries' (str): the three phases separately
-      - 'metadata' (dict): bookkeeping (token counts, stages covered)
-      - 'selected_memories' (list[dict]): the memory dicts chosen in
-        Phase 1 + Phase 2, with their 'memory_id' preserved so the
-        caller can score retrieval hits against gold.
-
-    This is the new retrieval primitive that replaces flat top-k for
-    long-context scenarios. See `mcp_server/core/context_assembly/` for
-    the full design and paper citations.
-
-    Args:
-        query: raw user query text.
-        store: PgMemoryStore (for entity graph + memory fetch).
-        embeddings: EmbeddingEngine (for query encoding in Phase 1).
-        current_stage: the stage ID the query is "about" (e.g. the
-            conversation ID for BEAM, or the current agent_topic for
-            production).
-        token_budget: target total tokens for the assembled context.
-            Default 6000 matches Swift Stage5PRD.
-        domain: optional domain filter for Phase 1 retrieval.
-        stage_field: memory field used to determine stage. Default
-            "plan_id" for BEAM; use "agent_topic" or similar in prod.
-        budget_split: (own, adjacent, summaries) proportions summing
-            to 1.0. Default (0.6, 0.3, 0.1) matches Swift.
-        max_chunks_per_phase: hard cap on chunks selected per phase.
-        diversity_lambda: MMR diversity weight for Phase 1 submodular
-            selection. Default 0.5.
-    """
-
-    split = BudgetSplit(
-        own_stage=budget_split[0],
-        adjacent=budget_split[1],
-        summaries=budget_split[2],
-    )
-    # Use the caller-provided detector if given, else default to Explicit
-    if stage_detector is not None:
-        detector = stage_detector
-    else:
-        detector = ExplicitStageDetector(field=stage_field)
-
-    # Cache entity graph + entity-id→name lookup once per assemble call
-    # so we don't re-query on every phase.
-    _graph_cache: dict[str, Any] = {}
-
-    def _ensure_graph() -> dict[str, Any]:
-        if _graph_cache:
-            return _graph_cache
-        entities = (
-            store.get_all_entities() if hasattr(store, "get_all_entities") else []
-        )
-        relationships = (
-            store.get_all_relationships()
-            if hasattr(store, "get_all_relationships")
-            else []
-        )
-        _graph_cache["entities"] = entities
-        _graph_cache["relationships"] = relationships
-        _graph_cache["id_to_name"] = {
-            str(e.get("id")): e.get("name", "") for e in entities
-        }
-        _graph_cache["name_to_id"] = {
-            (e.get("name") or "").lower(): str(e.get("id")) for e in entities
-        }
-        return _graph_cache
-
-    # ── Retrieval callback for Phase 1 (own-stage) ────────────────────
-    # Runs intent-adaptive recall, filters to current stage, and tags
-    # each candidate with its entity IDs. Entity lookup uses substring
-    # matching of known entity names against memory content — NOT a
-    # fresh extraction pass. The reason: knowledge_graph.extract_entities
-    # is regex-based for code patterns (imports, def, class) and misses
-    # all entities from prose content. But the graph WAS populated at
-    # ingest time from the union of all memory contents, so every entity
-    # appearing in any memory is present in the graph. Substring
-    # matching from the graph down to each memory gives complete
-    # memory→entity linkage for both code and prose.
-    def _retrieve_fn(q: str, stage_id: str, max_results: int) -> list[dict[str, Any]]:
-        candidates = recall(
-            query=q,
-            store=store,
-            embeddings=embeddings,
-            top_k=max_results * 3,
-            domain=domain,
-            include_globals=False,
-            rerank=True,
-        )
-        graph = _ensure_graph()
-        # Pre-compute (name_lower, eid) pairs once per Phase 1 call
-        entity_pairs: list[tuple[str, str]] = []
-        for e in graph.get("entities", []):
-            name = (e.get("name") or "").strip().lower()
-            eid = str(e.get("id", ""))
-            if len(name) >= _MIN_ENTITY_NAME_LEN and eid:
-                entity_pairs.append((name, eid))
-
-        filtered: list[dict[str, Any]] = []
-        for c in candidates:
-            mem = store.get_memory(c["memory_id"])
-            if not mem:
-                continue
-            if detector.stage_of(mem) != stage_id:
-                continue
-            content_lower = (mem.get("content") or "").lower()
-            entity_ids_for_mem: list[str] = [
-                eid for name, eid in entity_pairs if name in content_lower
-            ]
-            c_out = dict(c)
-            c_out["embedding"] = mem.get("embedding")
-            c_out["entity_ids"] = entity_ids_for_mem
-            filtered.append(c_out)
-            if len(filtered) >= max_results:
-                break
-        return filtered
-
-    # ── Entity graph callback for Phase 2 ─────────────────────────────
-    def _entity_graph_fn() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        graph = _ensure_graph()
-        return graph["entities"], graph["relationships"]
-
-    # ── Memories-by-entity callback for Phase 2 aggregation ───────────
-    # Cortex's store looks up memories by entity NAME via FTS on content
-    # (there is no junction table). We translate PPR top-k entity IDs
-    # back to names and run a content search per name. Each returned
-    # memory is annotated with its full entity_ids list (derived via
-    # substring match against the graph) so score_memories_by_ppr can
-    # compute PPR mass correctly — without this, mass is always 0 and
-    # Phase 2 returns nothing.
-    def _memories_by_entity_fn(
-        entity_ids: list[str],
-    ) -> list[dict[str, Any]]:
-        if not hasattr(store, "get_memories_mentioning_entity"):
-            return []
-        graph = _ensure_graph()
-        id_to_name: dict[str, str] = graph["id_to_name"]
-        # Build (name_lower, eid) pairs once for entity_ids enrichment
-        entity_pairs: list[tuple[str, str]] = []
-        for e in graph.get("entities", []):
-            nm = (e.get("name") or "").strip().lower()
-            eid = str(e.get("id", ""))
-            if len(nm) >= _MIN_ENTITY_NAME_LEN and eid:
-                entity_pairs.append((nm, eid))
-
-        out: list[dict[str, Any]] = []
-        seen_ids: set[int] = set()
-        for eid in entity_ids:
-            name = id_to_name.get(str(eid))
-            if not name:
-                continue
-            # heads_only: Phase 2 serves memory content into the assembled
-            # context — supersession chain heads only.
-            mems = (
-                store.get_memories_mentioning_entity(name, limit=10, heads_only=True)
-                or []
-            )
-            for m in mems:
-                mid = m.get("id") or m.get("memory_id")
-                if mid is None or mid in seen_ids:
-                    continue
-                if domain and m.get("domain") != domain:
-                    continue
-                seen_ids.add(mid)
-                content_lower = (m.get("content") or "").lower()
-                m_entity_ids = [
-                    pid for pname, pid in entity_pairs if pname in content_lower
-                ]
-                m_out = dict(m)
-                m_out["memory_id"] = mid
-                m_out["entity_ids"] = m_entity_ids
-                out.append(m_out)
-        return out
-
-    # ── Stage summary callback for Phase 3 ────────────────────────────
-    # For BEAM we don't have pre-computed summaries yet. Return the
-    # first ~300 chars of the first memory in the stage as a proxy.
-    # Production Cortex will wire this to dual_store_cls.py / schema_engine.
-    def _stage_summary_fn(stage_id: str) -> str:
-        # Minimal implementation: walk memories and return truncated
-        # content of the first non-current-stage hit. Good enough for
-        # the benchmark until we add real summarization.
-        return ""
-
-    assembler = StageAwareContextAssembler(
-        stage_detector=detector,
-        retrieve_fn=_retrieve_fn,
-        entity_graph_fn=_entity_graph_fn,
-        memories_by_entity_fn=_memories_by_entity_fn,
-        stage_summary_fn=_stage_summary_fn,
-    )
-
-    result = assembler.assemble(
-        query=query,
-        current_stage=current_stage,
-        token_budget=token_budget,
-        budget_split=split,
-        max_chunks_per_phase=max_chunks_per_phase,
-        diversity_lambda=diversity_lambda,
-    )
-
-    # Truncation-awareness pass: each phase above enforces its own
-    # sub-budget independently (per-phase submodular selection caps),
-    # so their sum can still exceed the caller's total token_budget —
-    # estimate_tokens is a heuristic and per-phase caps do not
-    # renegotiate against each other. condense_assembled_context is a
-    # no-op (returns the identical header+concatenation) whenever the
-    # three phases already fit; only priority-condenses when they don't.
-    # Skipped when token_budget is None (stage_assembler's own
-    # "no token truncation" mode — nothing to condense against).
-    assembled_context = result.assembled_context
-    if token_budget is not None:
-        assembled_context = condense_assembled_context(
-            result.own_stage_context,
-            result.adjacent_stage_context,
-            result.stage_summaries,
-            current_stage,
-            token_budget,
-        )
-
-    return {
-        "assembled_context": assembled_context,
-        "own_stage_context": result.own_stage_context,
-        "adjacent_stage_context": result.adjacent_stage_context,
-        "stage_summaries": result.stage_summaries,
-        "metadata": result.metadata,
-        # Contains both Phase 1 and Phase 2 selected memories, each
-        # tagged with a `phase` field (1 or 2). Downstream evaluators
-        # read this to score retrieval hits across all phases.
-        "selected_memories": result.selected_memories,
-    }
+__all__ = ["assemble_context", "compute_pg_weights", "recall"]

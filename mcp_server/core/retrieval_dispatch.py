@@ -10,6 +10,7 @@ Pure business logic -- no I/O. Takes signals as data.
 
 from __future__ import annotations
 
+import os
 from typing import Any, Callable
 
 from mcp_server.core.query_decomposition import decompose_query
@@ -18,6 +19,21 @@ from mcp_server.core.reranker import rerank_results
 from mcp_server.observability import silent_failure
 
 # ── Tier Classification ──────────────────────────────────────────────────
+
+# Ranking multiplier applied to a memory whose capture origin is not trusted
+# (issue #368). Mirrors the _DECAY_FACTOR_OVERRIDE pattern in
+# core/thermodynamics.py: a calibration sweep varies it per cell through the
+# environment, and production reads the calibrated default.
+#
+# CURRENT VALUE IS THE IDENTITY (1.0) AND DEMOTES NOTHING. It stays 1.0 until
+# the sweep under docs/provenance/ reports a value: a demotion weight chosen
+# by intuition would be exactly the invented constant §8 forbids, and shipping
+# one would silently re-rank a 21k-memory corpus on no evidence.
+# Source: pending — benchmarks/lib/trust_factor_sweep.py.
+_UNTRUSTED_FACTOR_OVERRIDE = os.environ.get("CORTEX_UNTRUSTED_ORIGIN_FACTOR")
+UNTRUSTED_ORIGIN_FACTOR = (
+    float(_UNTRUSTED_FACTOR_OVERRIDE) if _UNTRUSTED_FACTOR_OVERRIDE else 1.0
+)
 
 SIMPLE_INTENTS = {
     QueryIntent.GENERAL,
