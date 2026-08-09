@@ -141,6 +141,18 @@ def ingest_memory(
                 "is_protected": auto_protect,
                 "agent_context": agent_ctx,
                 "is_global": is_global,
+                # issue #368 gated-arm fix: pass the caller's capture_origin
+                # through like every other metadata field above (source,
+                # tags, heat, ...) instead of dropping it silently. Without
+                # this, every ingest_memory caller — including the LME/
+                # LoCoMo/BEAM benchmark harnesses — fell through to
+                # insert_memory's "unknown" default regardless of what the
+                # caller set, which is why the trust-factor calibration's
+                # gated arm could not discriminate W (docs/provenance/
+                # trust-factor-calibration.md §"What this measurement does
+                # and does not establish"). Default unchanged: a caller that
+                # omits the field still gets "unknown", identical to before.
+                "capture_origin": memory.get("capture_origin", "unknown"),
             }
         )
         ids.append(mid)

@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
+from benchmarks.lib.capture_origin_mix import assign_capture_origins
 from mcp_server.core.memory_ingest import ingest_memories_batch
 from mcp_server.core.pg_recall import (
     assemble_context as pg_assemble_context,
@@ -23,6 +24,23 @@ from mcp_server.core.pg_recall import (
 from mcp_server.core.reranker import ensure_reranker_loaded
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.pg_store import PgMemoryStore
+
+
+def _apply_capture_origin_mix(memories: list[dict[str, Any]]) -> None:
+    """Stamp every memory lacking `capture_origin` with a value drawn from
+    the measured production mixture, in place.
+
+    Extracted as a free function (rather than inlined in `load_memories`) so
+    it is testable without a live PostgreSQL connection — see
+    `tests_py/benchmarks/test_bench_db_capture_origin.py`.
+
+    A memory that already sets `capture_origin` (e.g. the adversarial-corpus
+    montage, which needs specific per-pair values, not the aggregate mix) is
+    left untouched — `setdefault` only fills what's missing.
+    """
+    origins = assign_capture_origins(len(memories))
+    for mem, origin in zip(memories, origins, strict=True):
+        mem.setdefault("capture_origin", origin)
 
 
 class BenchmarkDB:
@@ -165,8 +183,19 @@ class BenchmarkDB:
         """Delegate to mcp_server.core.memory_ingest.ingest_memories_batch().
 
         Returns (ids, source_map) where source_map maps memory_id → source string.
+
+        Assigns a `capture_origin` to every memory that does not already carry
+        one, drawn from the measured production mixture
+        (benchmarks/lib/capture_origin_mix.py) instead of falling through to
+        insert_memory's "unknown" default. Without this every LME/LoCoMo/BEAM
+        row landed in `capture_origin='unknown'`, which
+        core.capture_origin.trust_factor demotes uniformly — a uniform
+        multiplier cannot change WRRF order, so the trust-factor W sweep
+        (docs/provenance/trust-factor-calibration.md) could not discriminate
+        between values of W (issue #368 follow-up).
         """
         assert self._store is not None, "Call open() first"
+        _apply_capture_origin_mix(memories)
         ids, source_map = ingest_memories_batch(
             memories,
             self._store,
