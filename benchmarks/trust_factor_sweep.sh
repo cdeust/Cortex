@@ -23,8 +23,11 @@ cd "$REPO_ROOT" || exit 1
 # 0.8 -> 0.7 transition found by the adversarial pre-sweep. 1.0 is the control.
 GRID=(1.0 0.8 0.7 0.6 0.5)
 
-EXTRA_ARGS=()
-[[ "${1:-}" == "--quick" ]] && EXTRA_ARGS+=(--quick)
+# Empty-array expansion under `set -u` is an "unbound variable" error on the
+# bash 3.2 that ships with macOS, so the flag is carried as a plain string and
+# left unquoted at the call site (word-split on purpose: zero args when empty).
+QUICK_FLAG=""
+[[ "${1:-}" == "--quick" ]] && QUICK_FLAG="--quick"
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_ROOT="benchmarks/results/trust-factor-sweep/${STAMP}"
@@ -47,7 +50,7 @@ for W in "${GRID[@]}"; do
         benchmarks/reproduce.sh \
         --only longmemeval,locomo,beam \
         --no-ablation \
-        "${EXTRA_ARGS[@]}" \
+        $QUICK_FLAG \
         >"${CELL_DIR}/reproduce.log" 2>&1
     rc=$?
 
