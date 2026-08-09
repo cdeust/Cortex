@@ -395,6 +395,17 @@ main() {
     fi
     mkdir -p "$RESULTS_DIR"
 
+    # Machine-load snapshot at cell START, before start_db so it predates
+    # even the container/DB overhead — the counterpart to write_manifest's
+    # end-of-run snapshot (2026-08-10 sweep-contention incident: a crashed
+    # cell was the only visible symptom of contention that also silently
+    # affected cells which merely finished; see write_manifest.py's
+    # machine_load_snapshot docstring). Uses the base interpreter, not
+    # `--extra benchmarks`, deliberately: this must succeed even if the
+    # benchmarks extra install itself is what's under contention.
+    uv run python "$REPO_ROOT/benchmarks/lib/write_manifest.py" \
+        --snapshot "$RESULTS_DIR"
+
     # Only fetch datasets for benchmarks that will actually run.
     if [ "$RUN_BENCHMARKS" = "1" ] && want_bench longmemeval; then fetch_longmemeval; fi
     if [ "$RUN_ABLATION" = "1" ] && [ "$ABLATE_ON" = "longmemeval-s" ]; then fetch_longmemeval; fi

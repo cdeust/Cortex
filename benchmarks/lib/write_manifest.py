@@ -8,6 +8,10 @@ provenance logic can be read, diffed and tested as Python.
 Usage (from reproduce.sh):
     python benchmarks/lib/write_manifest.py \\
         RESULTS_DIR GIT_SHA DATASET_SHA256 PG_IMAGE CONTAINER PG_PORT RUNNER_PID
+
+    # Cell-start snapshot (call BEFORE start_db, so it also predates the
+    # benchmark's own container/DB overhead):
+    python benchmarks/lib/write_manifest.py --snapshot RESULTS_DIR
 """
 
 import json
@@ -15,7 +19,10 @@ import os
 import platform
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+
+_START_SNAPSHOT_NAME = "START_SNAPSHOT.json"
 
 
 def machine_load_snapshot() -> dict:
@@ -33,6 +40,15 @@ def machine_load_snapshot() -> dict:
     contention is exactly such a defect. This snapshot is recorded so that
     rule can be applied by inspection later, instead of by asking whoever
     happened to be watching at the time.
+
+    Taken TWICE per cell (2026-08-10 follow-up, same incident): once at cell
+    START (`write_start_snapshot`, called before `start_db` so it predates
+    the container/DB overhead too) and once at cell END (inside
+    `build_manifest`, the pre-existing call). A crash is the visible failure
+    mode; a cell that merely FINISHES under contention (saturated pool, cold
+    cache, GC pressure) is the invisible one, and a single end-of-run
+    snapshot cannot distinguish "this cell ran under load throughout" from
+    "load spiked right at the end". Two points at least bound the window.
 
     Best-effort: any probe that fails records `None`/`"unresolved"` rather
     than aborting manifest generation, matching this module's other fields.
@@ -77,6 +93,41 @@ def machine_load_snapshot() -> dict:
         "concurrent_pytest_processes": pytest_procs,
         "concurrent_docker_containers": docker_containers,
     }
+
+
+def write_start_snapshot(results_dir: str) -> Path:
+    """Capture + persist the cell-start machine-load snapshot.
+
+    Called from reproduce.sh before `start_db`, so `RESULTS_DIR` already
+    exists (created by `main()`'s `mkdir -p`) but nothing benchmark-specific
+    has run yet. `build_manifest` reads this file back at cell end and folds
+    it into the final MANIFEST.json as `machine_load_at_start`, alongside the
+    end-of-run `machine_load_at_end` — see `machine_load_snapshot`'s
+    docstring for why both points are recorded.
+    """
+    out = Path(results_dir) / _START_SNAPSHOT_NAME
+    payload = {
+        "captured_at_utc": datetime.now(timezone.utc).isoformat(),
+        "machine_load": machine_load_snapshot(),
+    }
+    out.write_text(json.dumps(payload, indent=2))
+    return out
+
+
+def _read_start_snapshot(results_dir: str) -> dict | None:
+    """Read back the cell-start snapshot written by `write_start_snapshot`.
+
+    Returns None (never raises) when absent — e.g. a `reproduce.sh` call
+    that predates this fix, or a caller that skipped the `--snapshot` step.
+    A missing start snapshot must not block the end-of-run manifest from
+    being written; `machine_load_at_start` is simply absent in that case,
+    which is itself an observable fact rather than a silent guess.
+    """
+    path = Path(results_dir) / _START_SNAPSHOT_NAME
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
 
 
 def ver(pkg: str) -> str:
@@ -152,11 +203,17 @@ def build_manifest(
     pg_port: str,
     pid: str,
 ) -> dict:
+    start_snapshot = _read_start_snapshot(results_dir)
     return {
         "git_sha": git_sha,
         # Alongside git_sha, not buried: see machine_load_snapshot's
-        # docstring for why (2026-08-10 sweep-contention incident).
-        "machine_load": machine_load_snapshot(),
+        # docstring for why (2026-08-10 sweep-contention incident). Two
+        # points, not one — `_at_start` is None when reproduce.sh's
+        # `--snapshot` step was never called for this results_dir.
+        "machine_load_at_start": (
+            start_snapshot["machine_load"] if start_snapshot else None
+        ),
+        "machine_load_at_end": machine_load_snapshot(),
         "longmemeval_dataset_sha256": ds_sha,
         "pg_image": pg_image,
         # Per-run container isolation fix (2026-07-11, incident: two concurrent
@@ -181,11 +238,19 @@ def build_manifest(
         },
         "embedding_model_revision": embedding_revision(),
         **reranker_fields(),
-        "results_files": sorted(p.name for p in Path(results_dir).glob("*.json")),
+        "results_files": sorted(
+            p.name
+            for p in Path(results_dir).glob("*.json")
+            if p.name != _START_SNAPSHOT_NAME
+        ),
     }
 
 
 def main(argv: list[str]) -> None:
+    if len(argv) > 1 and argv[1] == "--snapshot":
+        out = write_start_snapshot(argv[2])
+        print(f"==> Wrote {out}")
+        return
     results_dir = argv[1]
     manifest = build_manifest(*argv[1:8])
     out = Path(results_dir) / "MANIFEST.json"
