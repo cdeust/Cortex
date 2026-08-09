@@ -12,7 +12,7 @@ ADD COLUMN write_class ... DEFAULT 'deliberate'``) has already run against
 this database — every row got the sentinel; this script is what actually
 reclassifies the auto/derived/mechanical ones from their ``source`` value
 (the same single choke point every writer classifies through,
-``mcp_server.core.write_class.classify_write_class``).
+``mcp_server.shared.write_class.classify_write_class``).
 
 Usage
 -----

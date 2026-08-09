@@ -73,7 +73,7 @@ class PgHeatMixin(PgStoreHost):
         / ``fetch_member_stats`` / the reheat + dedup probes) ever
         resolves; every other caller of this method (currently only
         ``handlers/consolidation/homeostatic.py``) passes its class
-        explicitly. See ``mcp_server.core.write_class`` for the taxonomy
+        explicitly. See ``mcp_server.shared.write_class`` for the taxonomy
         this parameter is drawn from.
 
         Source: docs/program/phase-3-a3-migration-design.md §5.

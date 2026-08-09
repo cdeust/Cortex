@@ -2376,7 +2376,7 @@ END $$;
 -- was provably 'auto', a single constant), `memories.source` spans the
 -- full M-D2 taxonomy (auto/deliberate/derived/mechanical source
 -- prefixes) and reclassifying it correctly requires the same predicate
--- logic as mcp_server.core.write_class.classify_write_class — DDL is
+-- logic as mcp_server.shared.write_class.classify_write_class — DDL is
 -- infrastructure/, which must not import core/ (Clean Architecture
 -- dependency rule), so duplicating that logic here in raw SQL would be
 -- a second classification path, exactly what the single-choke-point

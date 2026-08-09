@@ -9,7 +9,7 @@ precedent): pure decision in core, I/O in infrastructure, wiring here.
 
 One-shot migration pass, not wired into ``consolidate``: every writer as
 of 7.4 sets ``write_class`` explicitly at insert time
-(``mcp_server.core.write_class`` module docstring — full writer
+(``mcp_server.shared.write_class`` module docstring — full writer
 inventory); this pass drains the pre-existing stock the schema migration
 left at its safe DEFAULT. Invoked by ``scripts/backfill_write_class.py``.
 """
@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from mcp_server.core.write_class import DELIBERATE, classify_write_class
+from mcp_server.shared.write_class import DELIBERATE, classify_write_class
 from mcp_server.infrastructure.pg_store_memory_write_class import (
     bulk_reclassify_source,
     list_source_groups_at_default,

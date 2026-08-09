@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from mcp_server.core.temporal import compute_recency_boost as _compute_recency_boost
+from mcp_server.shared.temporal import compute_recency_boost as _compute_recency_boost
 from mcp_server.handlers.recall import _apply_strategic_ordering
 
 

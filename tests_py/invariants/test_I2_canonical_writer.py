@@ -105,7 +105,11 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # homeostatic_apply.py (§4.1 500-line file cap — stratification by
     # write class grew homeostatic.py past the limit). Same rare
     # amortized fold UPDATE, now scoped to a class's own source values.
-    ("handlers/consolidation/homeostatic_apply.py", 233),
+    # Shifted 233->234 (issue #406): write_class import moved to
+    # `from mcp_server.shared import write_class` (core/ -> shared/ move,
+    # infrastructure/core layer-violation fix), adding one import line
+    # above this site. Same writer, not new.
+    ("handlers/consolidation/homeostatic_apply.py", 234),
     # Anchor pin: heat_base=1.0 + no_decay=TRUE preserves resist-decay.
     ("handlers/anchor.py", 149),
     # Preemptive boost: heat_base += 0.1 on Read/Edit/Write hook.

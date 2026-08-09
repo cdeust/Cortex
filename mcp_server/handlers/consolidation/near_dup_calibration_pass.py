@@ -31,12 +31,12 @@ import logging
 from typing import Any
 
 from mcp_server.core.memory_dedup_exact import DuplicateMember, elect_survivor
-from mcp_server.core.near_dup_calibration import (
+from mcp_server.shared.near_dup_calibration import (
     CandidatePair,
     build_components,
     stratified_sample,
 )
-from mcp_server.core.near_dup_calibration import bucket_by_stratum
+from mcp_server.shared.near_dup_calibration import bucket_by_stratum
 from mcp_server.infrastructure.pg_store_near_dup import (
     fetch_contents,
     list_candidate_pairs,

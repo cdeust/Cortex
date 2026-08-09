@@ -48,7 +48,7 @@ from mcp_server.handlers.consolidation.near_dup_calibration_pass import (  # noq
     run_near_dup_sample,
     run_near_dup_apply_pass,
 )
-from mcp_server.core.near_dup_calibration import (  # noqa: E402
+from mcp_server.shared.near_dup_calibration import (  # noqa: E402
     LabeledPair,
     precision_by_threshold,
     select_threshold,

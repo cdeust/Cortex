@@ -24,7 +24,7 @@ from typing import Any
 
 import numpy as np
 
-from mcp_server.core.temporal_normalize import normalize_date_to_iso
+from mcp_server.shared.temporal_normalize import normalize_date_to_iso
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.infrastructure.sqlite_schema import (
     COLUMN_BACKFILLS,

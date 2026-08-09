@@ -13,7 +13,7 @@ derivation). Split into its own module for the same reason as
 precedent): one focused infrastructure file per campaign pass, under the
 size cap.
 
-Infrastructure — no handler imports. Imports ``mcp_server.core.write_class``
+Infrastructure — no handler imports. Imports ``mcp_server.shared.write_class``
 (pure logic, no I/O) for the deliberate/non-deliberate source taxonomy —
 allowed under the dependency rule (infrastructure -> core + shared +
 stdlib) and required so this module's source filter cannot silently
@@ -30,13 +30,13 @@ if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
 
 
-from mcp_server.core.write_class import (
+from mcp_server.shared.write_class import (
     NON_DELIBERATE_EXACT_SOURCES,
     NON_DELIBERATE_SOURCE_PREFIXES,
 )
 
 # Deliberate = everything that is NOT an auto-capture, derived, or
-# mechanical write path (mcp_server.core.write_class.DELIBERATE — the
+# mechanical write path (mcp_server.shared.write_class.DELIBERATE — the
 # single taxonomy contract, M-D2/M-D3/7.4). INC7.2 root-cause fix: this
 # module used to carry its own hardcoded exact-match tuple
 # ("post_tool_capture", "codebase_analyze", "seed", "ingest", "cls") that

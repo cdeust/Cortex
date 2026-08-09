@@ -48,9 +48,10 @@ from __future__ import annotations
 
 import logging
 
-from mcp_server.core import homeostatic_health, write_class
+from mcp_server.core import homeostatic_health
 from mcp_server.handlers.consolidation import homeostatic_apply
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.shared import write_class
 
 logger = logging.getLogger(__name__)
 

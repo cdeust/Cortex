@@ -17,7 +17,7 @@ from mcp_server.core.scoring import (
     compute_keyword_overlap,
     compute_ngram_score,
 )
-from mcp_server.core.temporal import (
+from mcp_server.shared.temporal import (
     compute_date_distance_score,
     compute_recency_boost,
     compute_temporal_proximity,

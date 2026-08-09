@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
 
 
-from mcp_server.core.near_dup_calibration import SCAN_FLOOR, CandidatePair
+from mcp_server.shared.near_dup_calibration import SCAN_FLOOR, CandidatePair
 
 # Per-anchor approximate-neighbor fan-out. See module docstring for the
 # empirical justification (2026-07-10 EXPLAIN ANALYZE check on this DB).

@@ -11,8 +11,8 @@ from mcp_server.core import capture_origin
 from mcp_server.core import (
     thermodynamics,
     write_gate,
-    write_class as write_class_module,
 )
+from mcp_server.shared import write_class as write_class_module
 from mcp_server.errors import ValidationError
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.core.domain_detector import detect_domain

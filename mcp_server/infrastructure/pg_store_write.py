@@ -19,7 +19,7 @@ from psycopg.rows import DictRow
 
 from mcp_server.infrastructure.pg_store_host import PgStoreHost
 from mcp_server.infrastructure.pg_store_serialize import _now_iso
-from mcp_server.core.temporal_normalize import normalize_date_to_iso
+from mcp_server.shared.temporal_normalize import normalize_date_to_iso
 
 
 class PgWriteMixin(PgStoreHost):
@@ -142,7 +142,7 @@ class PgWriteMixin(PgStoreHost):
             "stimulus_signature": data.get("stimulus_signature", ""),
             "extinction_strength": data.get("extinction_strength", 0.0),
             # M-D2 (7.4): every writer resolves this explicitly BEFORE
-            # calling insert_memory (mcp_server.core.write_class is the
+            # calling insert_memory (mcp_server.shared.write_class is the
             # single classification choke point; infrastructure/ must not
             # import core/, so this layer trusts the caller and relies on
             # the memories.write_class CHECK constraint as the DB-level

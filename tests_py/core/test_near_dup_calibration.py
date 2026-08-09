@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.core.near_dup_calibration import (
+from mcp_server.shared.near_dup_calibration import (
     STRATA,
     THRESHOLD_CANDIDATES,
     CandidatePair,

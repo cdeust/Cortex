@@ -21,8 +21,9 @@ from __future__ import annotations
 import logging
 import math
 
-from mcp_server.core import homeostatic_health, homeostatic_plasticity, write_class
+from mcp_server.core import homeostatic_health, homeostatic_plasticity
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.shared import write_class
 
 logger = logging.getLogger(__name__)
 
@@ -206,7 +207,7 @@ def _apply_fold(store: MemoryStore, domain: str, factor: float, cls: str) -> int
     Writes are bounded by the domain partition AND ``memories.write_class
     = cls`` directly (7.4: the explicit column landed in the same
     migration this predicate switch ships with — no second classification
-    path, per ``mcp_server.core.write_class``'s module doctrine). Pre-7.4
+    path, per ``mcp_server.shared.write_class``'s module doctrine). Pre-7.4
     rows read the column's DEFAULT (``'deliberate'``, the safe default —
     see ``infrastructure/pg_schema.py``'s MIGRATIONS_DDL comment) until
     the one-shot backfill (``handlers/consolidation/write_class_backfill.py``)
