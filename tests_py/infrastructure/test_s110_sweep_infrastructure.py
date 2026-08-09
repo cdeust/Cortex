@@ -404,9 +404,12 @@ class TestPgStoreRecoverySignals:
         monkeypatch.setattr(store, "_create_connection", lambda: fresh)
         # register_vector needs a real psycopg connection; the reconnect
         # contract under test is the close-failure handling, not pgvector.
-        from mcp_server.infrastructure import pg_store as pg_store_mod
+        # _reconnect lives in pg_store_schema.py (split out of pg_store.py,
+        # over the 300-line §4.1 cap) — patch register_vector where it is
+        # actually called from, not the pg_store.py facade.
+        from mcp_server.infrastructure import pg_store_schema as pg_store_schema_mod
 
-        monkeypatch.setattr(pg_store_mod, "register_vector", lambda conn: None)
+        monkeypatch.setattr(pg_store_schema_mod, "register_vector", lambda conn: None)
         with caplog.at_level("DEBUG", logger="mcp_server.infrastructure.pg_store"):
             store._reconnect()
         assert store._conn is fresh
