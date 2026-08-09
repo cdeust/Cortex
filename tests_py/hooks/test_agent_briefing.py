@@ -59,17 +59,17 @@ def test_unreadable_agent_file_returns_none(tmp_path: Path):
 
 
 def test_missing_agents_dir_falls_back_to_builtin_set(tmp_path, monkeypatch):
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(hook, "CLAUDE_DIR", tmp_path)
     assert hook._load_specialist_agents() == hook._FALLBACK_AGENTS
 
 
 def test_agents_dir_names_are_loaded_and_index_skipped(tmp_path, monkeypatch):
-    agents = tmp_path / ".claude" / "agents"
+    agents = tmp_path / "agents"
     (agents / "genius").mkdir(parents=True)
     (agents / "engineer.md").write_text("---\nname: engineer\n---\n")
     (agents / "INDEX.md").write_text("---\nname: not-an-agent\n---\n")
     (agents / "genius" / "euler.md").write_text("---\nname: euler\n---\n")
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(hook, "CLAUDE_DIR", tmp_path)
 
     loaded = hook._load_specialist_agents()
 
@@ -78,11 +78,47 @@ def test_agents_dir_names_are_loaded_and_index_skipped(tmp_path, monkeypatch):
 
 
 def test_agents_dir_with_no_parsable_names_falls_back(tmp_path, monkeypatch):
-    agents = tmp_path / ".claude" / "agents"
+    agents = tmp_path / "agents"
     agents.mkdir(parents=True)
     (agents / "broken.md").write_text("no frontmatter at all")
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(hook, "CLAUDE_DIR", tmp_path)
     assert hook._load_specialist_agents() == hook._FALLBACK_AGENTS
+
+
+def test_agents_dir_with_only_dispatch_falls_back_to_builtin_set(tmp_path, monkeypatch):
+    """Regression for issue #400.
+
+    Under the plugin-only-dispatch architecture, ~/.claude/agents/ holds
+    exactly one file (dispatch.md, a router that "never does the work
+    itself" — see _NON_SPECIALIST_META_AGENTS). Before the fix, only an
+    ABSENT directory triggered the fallback; a present directory containing
+    only dispatch.md yielded a roster of {"dispatch"}, so "engineer" (and
+    every other specialist) was never briefable outside CI.
+    """
+    agents = tmp_path / "agents"
+    agents.mkdir(parents=True)
+    (agents / "dispatch.md").write_text("---\nname: dispatch\n---\n")
+    monkeypatch.setattr(hook, "CLAUDE_DIR", tmp_path)
+
+    loaded = hook._load_specialist_agents()
+
+    assert loaded == hook._FALLBACK_AGENTS
+    assert "engineer" in loaded
+
+
+def test_agents_dir_with_dispatch_and_a_real_specialist_excludes_dispatch(
+    tmp_path, monkeypatch
+):
+    agents = tmp_path / "agents"
+    agents.mkdir(parents=True)
+    (agents / "dispatch.md").write_text("---\nname: dispatch\n---\n")
+    (agents / "engineer.md").write_text("---\nname: engineer\n---\n")
+    monkeypatch.setattr(hook, "CLAUDE_DIR", tmp_path)
+
+    loaded = hook._load_specialist_agents()
+
+    assert loaded == frozenset({"engineer"})
+    assert "dispatch" not in loaded
 
 
 # ── Keyword extraction ────────────────────────────────────────────────

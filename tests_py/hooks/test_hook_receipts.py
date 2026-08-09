@@ -113,9 +113,13 @@ def _receipt(conn, receipt_id: int) -> tuple[dict, list[dict]]:
     return header, items
 
 
-def _run_hook(module: str, event: dict) -> subprocess.CompletedProcess:
+def _run_hook(
+    module: str, event: dict, extra_env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
     env = os.environ.copy()
     env["DATABASE_URL"] = _TEST_DB_URL
+    if extra_env:
+        env.update(extra_env)
     repo_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
@@ -309,6 +313,71 @@ def test_agent_briefing_emits_receipt_with_marker(_db) -> None:
     assert team_id in injected
     assert injected.index(mid) < injected.index(team_id)
     assert "team:architect" in result.stdout
+
+
+def test_agent_briefing_falls_back_when_only_dispatch_agent_is_installed(
+    _db, tmp_path
+) -> None:
+    """Regression for issue #400.
+
+    ``_SPECIALIST_AGENTS`` is computed once, at module import
+    (agent_briefing.py:_load_specialist_agents, called at module scope) —
+    so the only faithful reproduction of the reported bug is a fresh
+    process that imports the hook with ``CORTEX_CLAUDE_DIR`` already
+    pointed at a throwaway tree, the same seam and ordering constraint
+    documented for issue #219 (env var must be set before the first
+    import; conftest.py's ``_redirect_real_data_roots`` uses the identical
+    pattern).
+
+    The throwaway tree here holds exactly ``agents/dispatch.md`` — the
+    real shape of ``~/.claude/agents/`` under the plugin-only-dispatch
+    architecture (dispatch.md's own frontmatter: "it never does the work
+    itself"). Before the fix, only an ABSENT agents directory triggered
+    ``_FALLBACK_AGENTS``; a present directory containing only the
+    dispatcher yielded a roster of ``{"dispatch"}``, so "engineer" was
+    never a known specialist and the briefing silently never fired.
+    """
+    mid = _seed(
+        _db,
+        "HOOKRCPT_TEST corvidae plangent isotherm dossier archive",
+        agent="engineer",
+    )
+
+    agents_dir = tmp_path / "agents"
+    agents_dir.mkdir()
+    (agents_dir / "dispatch.md").write_text(
+        "---\nname: dispatch\n---\ndispatcher only\n"
+    )
+
+    result = _run_hook(
+        "mcp_server.hooks.agent_briefing",
+        {
+            "agent_name": "engineer",
+            "agent_type": "custom",
+            "prompt": "corvidae plangent isotherm dossier archive review",
+            "cwd": "/tmp",
+            "transcript_path": _TRANSCRIPT,
+            "session_id": _DIVERGENT_EVENT_SESSION,
+        },
+        extra_env={"CORTEX_CLAUDE_DIR": str(tmp_path)},
+    )
+
+    assert result.returncode == 0
+    assert "corvidae" in result.stdout.lower(), (
+        "engineer must fall back to _FALLBACK_AGENTS when the discovered "
+        f"roster is only {{'dispatch'}}; stdout={result.stdout!r} "
+        f"stderr={result.stderr!r}"
+    )
+
+    row = _db.execute(
+        "SELECT id FROM injection_receipts "
+        "WHERE channel = 'agent_briefing' AND session_id = %s "
+        "ORDER BY id DESC LIMIT 1",
+        (_EXPECTED_SESSION,),
+    ).fetchone()
+    assert row is not None, "agent_briefing receipt was not persisted"
+    _, items = _receipt(_db, row["id"])
+    assert mid in [r["memory_id"] for r in items]
 
 
 # ── channel enum on live PG (decision 4255039 correction 3) ──────────────

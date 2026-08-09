@@ -38,7 +38,7 @@ Strategy:
   matching memories as a context prefix.
 
   Gated by:
-    - Agent type must be a known specialist (engineer, tester, etc.)
+    - Agent type must be a known, usable specialist (engineer, tester, etc.)
     - Task description must be non-empty
     - At least 1 relevant memory found
     - Max 3 memories injected (keep context compact)
@@ -88,13 +88,15 @@ from mcp_server.handlers.injection_receipts import (
     receipt_marker,
     session_id_from_transcript,
 )
+from mcp_server.infrastructure.config import CLAUDE_DIR
 
 _LOG_PREFIX = "[cortex-agent-briefing]"
 _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
 _MAX_MEMORIES = 3
 _MIN_HEAT = 0.2
 
-# Fallback set used when ~/.claude/agents/ is missing (e.g., CI without install).
+# Fallback set used when the discovered roster is unusable — see
+# _load_specialist_agents for what "unusable" means.
 _FALLBACK_AGENTS: frozenset[str] = frozenset(
     {
         "engineer",
@@ -109,6 +111,17 @@ _FALLBACK_AGENTS: frozenset[str] = frozenset(
         "ux",
     }
 )
+
+# source: ~/.claude/agents/dispatch.md frontmatter, this repo, verified
+# 2026-08-09 — "Sole user-scope agent... It matches the problem against
+# the routing table and delegates; it never does the work itself" / body:
+# "You never implement, review, or research yourself." Under the
+# plugin-only-dispatch architecture (agents live in the zetetic-team-subagents
+# plugin, not under ~/.claude/agents/) this is the ONLY file ever present
+# in ~/.claude/agents/, so a discovered roster of exactly {"dispatch"} is
+# not a specialist set a briefing can scope memories to — it is
+# structurally equivalent to an empty roster.
+_NON_SPECIALIST_META_AGENTS: frozenset[str] = frozenset({"dispatch"})
 
 # Matches `name: <slug>` or `name: "<slug>"` in agent-file YAML frontmatter.
 _YAML_NAME_RE = re.compile(r"^name:\s*['\"]?([A-Za-z0-9_.-]+)['\"]?\s*$", re.MULTILINE)
@@ -133,28 +146,39 @@ def _load_specialist_agents() -> frozenset[str]:
     """Dynamically load agent slugs from ~/.claude/agents/ at module import.
 
     Scans ~/.claude/agents/*.md and ~/.claude/agents/genius/*.md, parses the
-    `name:` frontmatter field of each, and returns the frozen set. Falls back
-    to _FALLBACK_AGENTS if the directory is absent. Result is cached for the
-    process lifetime — agents added after import are not picked up until
-    restart (acceptable for a hook process).
+    `name:` frontmatter field of each, drops known non-specialist meta-agents
+    (_NON_SPECIALIST_META_AGENTS), and returns the frozen set. Falls back to
+    _FALLBACK_AGENTS whenever the resulting roster is empty — whether because
+    the directory is absent (e.g., CI without install) or because it exists
+    but contains no usable specialist (e.g., the plugin-only-dispatch
+    architecture, where it holds only dispatch.md). An absent directory and
+    a degenerate one are the same failure mode for a briefing consumer: no
+    specialist to scope memories to. Result is cached for the process
+    lifetime — agents added after import are not picked up until restart
+    (acceptable for a hook process).
+
+    The root is CLAUDE_DIR (default ~/.claude, overridable via
+    CORTEX_CLAUDE_DIR — mcp_server/infrastructure/config.py), the same seam
+    every other real-data path in this project uses for test isolation
+    (issue #219).
 
     Each zetetic agent declares `memory_scope:` in frontmatter; that scope
     equals the name used as `agent_context` in Cortex memory rows. When the
     /session:memory-sync drainer sets `agent_topic=<scope>`, the briefing
     hook can filter by `agent_context = %s` and inject the right memories.
     """
-    root = Path.home() / ".claude" / "agents"
-    if not root.is_dir():
-        return _FALLBACK_AGENTS
+    root = CLAUDE_DIR / "agents"
     names: set[str] = set()
-    for pattern in ("*.md", "genius/*.md"):
-        for md in root.glob(pattern):
-            if md.name == "INDEX.md":
-                continue
-            name = _parse_frontmatter_name(md)
-            if name:
-                names.add(name)
-    return frozenset(names) if names else _FALLBACK_AGENTS
+    if root.is_dir():
+        for pattern in ("*.md", "genius/*.md"):
+            for md in root.glob(pattern):
+                if md.name == "INDEX.md":
+                    continue
+                name = _parse_frontmatter_name(md)
+                if name:
+                    names.add(name)
+    usable = names - _NON_SPECIALIST_META_AGENTS
+    return frozenset(usable) if usable else _FALLBACK_AGENTS
 
 
 # Known specialist agents that benefit from briefing — dynamic load from
