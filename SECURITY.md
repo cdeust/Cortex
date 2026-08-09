@@ -102,6 +102,28 @@ a downloaded checksum. The container image built in CI is a bare-container
 *smoke test* (`ci.yml`, `docker-smoke`) — it is never pushed to a registry,
 so there is no published image to attest.
 
+### Dismissed CodeQL alerts
+
+An alert is dismissed here only when the dismissal is *checkable* — the
+paragraph must state which value CodeQL believed was sensitive and where that
+value is defined, so a reader can refute the dismissal without rerunning the
+scanner. Anything else stays open.
+
+- **#143 — `py/clear-text-storage-sensitive-data`, high severity**
+  (`benchmarks/lib/trust_factor_sweep.py:179`, PR #399). Dismissed as a false
+  positive. The alert names its own two sources: the frozenset at
+  `mcp_server/core/capture_origin.py:131-133` and the `trusted_origins_at_read()`
+  call at `benchmarks/lib/trust_factor_sweep.py:174`. Their value is the triple
+  of public string literals `("deliberate", "legacy", "local_action")`, defined
+  at `capture_origin.py:66-70` — the read-time trust allowlist of issue #368,
+  not a credential. It is written to a benchmark artefact that records which
+  origin policy the sweep ran under, which is provenance, not disclosure. The
+  classification is driven by the identifiers carrying the word *trusted*, and
+  CodeQL itself classifies the alert as `test`. Nothing was renamed to satisfy
+  the scanner: tuning production identifiers to a name heuristic would trade a
+  real signal for silence. Re-open trigger: any change that makes a
+  `trusted_origins*` value non-constant or reader-supplied.
+
 ## Reporting a Vulnerability
 
 If you discover a security issue in this project, **do not** open a public
