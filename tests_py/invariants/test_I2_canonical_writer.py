@@ -90,14 +90,21 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Shifted 389->440->447->493->529->530 (M-D3, then #169 added _fts_augment /
     # _migrate_fts_code_tokenize / unconditional embedding_model stamp above it;
     # then #206 added _register_json_codec above the class, +36 lines).
-    ("infrastructure/sqlite_store.py", 549),
+    # All three sqlite_store pins shifted +8 (549/579/643 -> 557/587/651) by
+    # #368's capture-origin backfill: _run_column_migrations gained the
+    # COLUMN_BACKFILLS import and turned its `except OperationalError: pass`
+    # into `continue` + a conditional backfill execute (net +8 lines, all
+    # above line 166). Same three writers, byte-identical SQL — verified by
+    # diffing each site against origin/main; the test was the oracle, as on
+    # every prior re-pin.
+    ("infrastructure/sqlite_store.py", 557),
     # SQLite parity: canonical bump_heat_raw / update_memories_heat_batch.
     # Shifted 419->470->477->523->559->562, 463->534->541->587->623->626 for
     # the same
     # reasons (#169's _stamp_embedding_model / select_fallback_embeddings /
     # reembed_memory, then #206's _register_json_codec).
-    ("infrastructure/sqlite_store.py", 579),
-    ("infrastructure/sqlite_store.py", 643),
+    ("infrastructure/sqlite_store.py", 587),
+    ("infrastructure/sqlite_store.py", 651),
     # Homeostatic fold (amortized ~once/month per (domain, write_class)).
     # M-D3 (7.1, 2026-07-10): split out of homeostatic.py into
     # homeostatic_apply.py (§4.1 500-line file cap — stratification by
