@@ -88,4 +88,91 @@ the table below is an invented constant and blocks review (§8).
 
 ## Results
 
-_Pending — cells run after this pre-registration was committed._
+### Adversarial arm — how many scenarios each W defends
+
+Re-measured, not carried over from §Grid: the table in that section was
+prose with no committed artefact behind it, so half the decision rule rested
+on a number nobody could reproduce. `benchmarks/lib/trust_factor_sweep.py`
+now measures it over the same points (SQLite, in-memory, seconds per point;
+same corpus and montage as `tests_py/infrastructure/test_sqlite_trust_ranking.py`).
+A scenario counts as defended only when **both** memories are retrieved and
+the legitimate one outranks the adversarial one — a demotion, not a filter.
+
+| W | scenarios defended |
+|---|---|
+| 1.0 | 0/4 |
+| 0.95 · 0.90 · 0.85 · 0.80 · 0.75 | 2/4 |
+| 0.70 · 0.60 · 0.50 · 0.40 · 0.30 · 0.20 | 4/4 |
+
+Data: `benchmarks/results/trust-factor-sweep/adversarial/adversarial-sweep.json`.
+This **confirms** the §Grid table exactly, including the 0.80 → 0.70
+transition the expensive grid was built to bracket. The largest W defending
+4/4 is **0.70**.
+
+### Gated arm — do the floors hold
+
+One `reproduce.sh` per cell, sequential, own ephemeral pgvector container.
+Sweep `benchmarks/results/trust-factor-sweep/20260809T085409Z/`, five cells,
+all `rc=0`. Every cell reports `git_sha 66d2628f`, the same dataset sha256,
+the same embedding-model revision, and `reranker_active: true` — one
+provenance for the whole grid.
+
+| W | LME R@10 (≥0.977) | LME MRR (≥0.909) | LoCoMo R@10 (≥0.910) | LoCoMo MRR (≥0.800) | 4 floors | BEAM MRR / R@10 (ungated) |
+|---|---|---|---|---|---|---|
+| 1.0 (control) | 0.9820 | 0.9178 | 0.9279 | 0.8158 | 4/4 PASS | 0.5156 / 0.7222 |
+| 0.8 | 0.9820 | 0.9168 | 0.9374 | 0.8226 | 4/4 PASS | 0.5264 / 0.7175 |
+| **0.7** | **0.9820** | **0.9178** | **0.9329** | **0.8181** | **4/4 PASS** | 0.5199 / 0.7100 |
+| 0.6 | 0.9820 | 0.9178 | 0.9329 | 0.8175 | 4/4 PASS | 0.5342 / 0.7278 |
+| 0.5 | 0.9820 | 0.9178 | 0.9369 | 0.8202 | 4/4 PASS | 0.5246 / 0.7094 |
+
+Thresholds shown are `floor − FLOOR_TOLERANCE`; the applied test is
+`got − floor >= −tol` (`reproduce.sh:376`). 20 floor checks, 20 PASS. The
+control arm reproduces the published numbers exactly (LME R@10 0.9820,
+delta +0.0000), so the comparison is valid rather than drifting.
+
+### Decision
+
+Both members of the rule are satisfied, so it applies without amendment:
+
+- largest W defending 4/4 → **0.70** (0.75 and above defend only 2/4);
+- at W = 0.70 all four gated floors hold, with margins +0.0000 / +0.0038 /
+  +0.0179 / +0.0131.
+
+**W = 0.7.** No floor was relaxed and no gate was reinterpreted to get there.
+
+### What this measurement does and does not establish
+
+The gated arm demonstrates **non-regression**, not the absence of a
+relevance cost, and the reason is structural: the benchmark harnesses never
+set `capture_origin`, so every LME/LoCoMo/BEAM memory takes the column
+default `'unknown'` (`pg_store.py:567`, `pg_schema.py:51`), which is
+untrusted. The factor therefore multiplies *every* candidate by the same W,
+and a uniform rescale leaves the WRRF order invariant — visibly so in the
+LME column, identical to four decimals across W ∈ {1.0, 0.7, 0.6, 0.5}. The
+residual movement in LoCoMo (spread 0.0095 R@10, 0.0068 MRR) and BEAM is
+non-monotone in W and of the same order as LoCoMo's own same-commit noise
+(stdev 0.0022 MRR over 3 reps, `reproduce.sh:339`); this sweep does not
+identify its mechanism and should not be read as a W effect.
+
+Consequence: the cost of demotion **under mixed origins** — the production
+condition — is not measured by this grid. What is established is that
+wiring W = 0.7 cannot regress the published floors, and that 0.7 is the
+weakest demotion defending all four attack families. A per-origin relevance
+cost would need a corpus whose memories carry mixed `capture_origin` values;
+that is a separate measurement, not a gap in this one.
+
+Two provenance notes, stated rather than smoothed over:
+
+- Cells ran at `66d2628f`; the branch head is now `6a52fad6`. The only delta
+  is `tests_py/invariants/test_I2_canonical_writer.py` (re-pinned line
+  numbers), which no retrieval path imports.
+- Every cell logs `consolidation: OFF`, and `reproduce.sh` indeed never
+  passes `--with-consolidation` (no occurrence in the script). §Protocol
+  above asserted the opposite. Its ≈0% claim holds for a *direct*
+  `run_benchmark.py` invocation (CLAUDE.md § Iteration benchmarks) but not
+  for `reproduce.sh`, which reproduces the published floors with
+  consolidation off — the ≈0% collapse was transposed to the wrong harness.
+  §Protocol is left as written, being the pre-registration; this note is the
+  correction. What the gate requires still holds: one shared condition
+  across all five cells, and a control arm that reproduces the published
+  numbers exactly.

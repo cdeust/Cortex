@@ -25,14 +25,20 @@ from mcp_server.observability import silent_failure
 # core/thermodynamics.py: a calibration sweep varies it per cell through the
 # environment, and production reads the calibrated default.
 #
-# CURRENT VALUE IS THE IDENTITY (1.0) AND DEMOTES NOTHING. It stays 1.0 until
-# the sweep under docs/provenance/ reports a value: a demotion weight chosen
-# by intuition would be exactly the invented constant §8 forbids, and shipping
-# one would silently re-rank a 21k-memory corpus on no evidence.
-# Source: pending — benchmarks/lib/trust_factor_sweep.py.
+# source: docs/provenance/trust-factor-calibration.md §Results — the largest
+# W defending 4/4 adversarial scenarios while all four gated floors hold.
+# Both arms of the pre-registered rule, measured before this value was picked:
+#   adversarial (benchmarks/lib/trust_factor_sweep.py, artefact
+#     benchmarks/results/trust-factor-sweep/adversarial/adversarial-sweep.json):
+#     1.0 -> 0/4, 0.75-0.95 -> 2/4, 0.20-0.70 -> 4/4
+#   floors (5 reproduce.sh cells, benchmarks/results/trust-factor-sweep/
+#     20260809T085409Z/, git_sha 66d2628f): at W=0.7, LME 0.9820/0.9178 and
+#     LoCoMo 0.9329/0.8181 — 4/4 PASS, margins +0.0000/+0.0038/+0.0179/+0.0131
+# 0.75 and above defend only 2/4; anything below 0.7 buys no extra defence and
+# costs more ranking distortion, which is why the rule asks for the largest.
 _UNTRUSTED_FACTOR_OVERRIDE = os.environ.get("CORTEX_UNTRUSTED_ORIGIN_FACTOR")
 UNTRUSTED_ORIGIN_FACTOR = (
-    float(_UNTRUSTED_FACTOR_OVERRIDE) if _UNTRUSTED_FACTOR_OVERRIDE else 1.0
+    float(_UNTRUSTED_FACTOR_OVERRIDE) if _UNTRUSTED_FACTOR_OVERRIDE else 0.7
 )
 
 SIMPLE_INTENTS = {

@@ -1,0 +1,401 @@
+{
+  "generated_utc": "2026-08-09T17:14:31.642660+00:00",
+  "git_sha": "6a52fad6a5d45025f76fa7e553f8db6231aec92a",
+  "python": "3.13.7",
+  "numpy": "2.5.1",
+  "backend": "sqlite (in-memory)",
+  "corpus": "benchmarks/lib/adversarial_corpus.py",
+  "trusted_origins": [
+    "deliberate",
+    "legacy",
+    "local_action"
+  ],
+  "grid": [
+    1.0,
+    0.95,
+    0.9,
+    0.85,
+    0.8,
+    0.75,
+    0.7,
+    0.6,
+    0.5,
+    0.4,
+    0.3,
+    0.2
+  ],
+  "results": [
+    {
+      "W": 1.0,
+      "defended": 0,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        }
+      ]
+    },
+    {
+      "W": 0.95,
+      "defended": 2,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        }
+      ]
+    },
+    {
+      "W": 0.9,
+      "defended": 2,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        }
+      ]
+    },
+    {
+      "W": 0.85,
+      "defended": 2,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        }
+      ]
+    },
+    {
+      "W": 0.8,
+      "defended": 2,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        }
+      ]
+    },
+    {
+      "W": 0.75,
+      "defended": 2,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": false
+        }
+      ]
+    },
+    {
+      "W": 0.7,
+      "defended": 4,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        }
+      ]
+    },
+    {
+      "W": 0.6,
+      "defended": 4,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        }
+      ]
+    },
+    {
+      "W": 0.5,
+      "defended": 4,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        }
+      ]
+    },
+    {
+      "W": 0.4,
+      "defended": 4,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        }
+      ]
+    },
+    {
+      "W": 0.3,
+      "defended": 4,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        }
+      ]
+    },
+    {
+      "W": 0.2,
+      "defended": 4,
+      "total": 4,
+      "scenarios": [
+        {
+          "scenario": "query_term_saturation",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "provenance_mimicry",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "instruction_override",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        },
+        {
+          "scenario": "heat_farming",
+          "retrieved_legitimate": true,
+          "retrieved_adversarial": true,
+          "defended": true
+        }
+      ]
+    }
+  ]
+}
