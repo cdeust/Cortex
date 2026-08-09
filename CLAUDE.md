@@ -1,3 +1,6 @@
+@~/.claude/rules/model-behavior.md
+@~/.claude/rules/coding-standards.md
+
 # Cortex — Persistent Memory MCP Server
 
 Persistent memory and cognitive profiling MCP server for Claude Code.
