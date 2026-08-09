@@ -34,12 +34,15 @@ zetetic source rule:
 #   #407: pg_store_auxiliary.py, 397 lines, split into 6 modules and
 #   deleted, net +5; pg_store_queries.py, 401 lines, split into 3
 #   modules, net +2; pg_store_stats.py, 406 lines, split into 3 modules,
-#   net +2 -- infrastructure/ net +24 from the pre-split baseline of 93;
-#   the core/ and handlers/ deltas beyond the #406 move are unrelated
-#   drift accumulated upstream, not attributable to either change)
+#   net +2; pg_store_search.py, pushed to 301 lines by the #399
+#   trust-term port (review-caught, PR #409 round 2), split into 2
+#   modules, net +1 -- infrastructure/ net +25 from the pre-split
+#   baseline of 93; the core/ and handlers/ deltas beyond the #406
+#   move are unrelated drift accumulated upstream, not attributable to
+#   either change)
 shared/           31 files   (15 documented below — curated subset)
 core/            228 files   (~87 documented below — curated subset, incl. core/streaming, core/context_assembly)
-infrastructure/  117 files   (48 documented below — curated subset)
+infrastructure/  118 files   (49 documented below — curated subset)
 handlers/        138 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
 ```
 
@@ -250,7 +253,11 @@ Run the measurement command in the header to get a current file listing.
 - `pg_store_supersede.py` — Atomic reconsolidation-supersession (chain-head CAS + anchor transfer)
 - `pg_store_heat.py` — A3 canonical `heat_base` writers + homeostatic factor
 - `pg_store_memory_meta.py` — Single-row memory metadata writers (importance/access/value/mood/protection/compression)
-- `pg_store_search.py` — `recall_memories`/FTS/vector KNN/spreading-activation + server-side signals
+- `pg_store_search.py` — `recall_memories`/FTS/vector KNN (issue: the
+  #399 trust/provenance-term port pushed this file to 301 lines, one
+  over the 300-line §4.1 cap — downstream signal consumers split out
+  into the module below)
+- `pg_store_signals.py` — Spreading activation, Hopfield/HDC embedding fetches, temporal co-access graph feed
 - `pg_store_entities.py` — Entity storage and retrieval
 - `pg_store_relationships.py` — Relationship storage, co-activation strengthening
 - `pg_store_queries.py` — Filtered/time-window memory read queries (issue

@@ -157,6 +157,41 @@ class PgQueryMixin(PgStoreHost):
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
+    def _search_by_tag_vector_ranked(
+        self, emb: Any, tag: str, domain: str | None, min_heat: float, limit: int
+    ) -> list[dict[str, Any]]:
+        """Vector-ranked branch of ``search_by_tag_vector`` (embedding present).
+
+        current_memories: typed pool hits are inserted at rank 0 by the
+        caller — a superseded instruction/preference served here would
+        outrank its own correction, so exclusion at the source is the
+        only safe placement.
+        """
+        rows = self._execute(
+            "SELECT *, (1.0 - (embedding <=> %s))::REAL AS score "
+            "FROM current_memories "
+            "WHERE tags @> %s::jsonb AND heat_base >= %s AND NOT is_stale "
+            "AND embedding IS NOT NULL "
+            "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
+            "ORDER BY embedding <=> %s LIMIT %s",
+            (emb, json.dumps([tag]), min_heat, domain, domain, emb, limit),
+        ).fetchall()
+        return [self._normalize_memory_row(r) for r in rows]
+
+    def _search_by_tag_vector_unranked(
+        self, tag: str, domain: str | None, min_heat: float, limit: int
+    ) -> list[dict[str, Any]]:
+        """Heat-ranked branch of ``search_by_tag_vector`` (no embedding)."""
+        rows = self._execute(
+            "SELECT *, heat_base::REAL AS score "
+            "FROM current_memories "
+            "WHERE tags @> %s::jsonb AND heat_base >= %s AND NOT is_stale "
+            "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
+            "ORDER BY heat_base DESC LIMIT %s",
+            (json.dumps([tag]), min_heat, domain, domain, limit),
+        ).fetchall()
+        return [self._normalize_memory_row(r) for r in rows]
+
     def search_by_tag_vector(
         self,
         query_embedding: bytes | None,
@@ -169,37 +204,18 @@ class PgQueryMixin(PgStoreHost):
 
         ENGRAM (arxiv 2511.12960): per-type retrieval pools guarantee
         typed memories (preference, instruction) are not drowned out.
+        Delegates to ``_search_by_tag_vector_ranked`` /
+        ``_search_by_tag_vector_unranked`` depending on whether an
+        embedding was supplied.
         """
-
         emb = (
             np.frombuffer(query_embedding, dtype=np.float32)
             if query_embedding
             else None
         )
-        # current_memories (both branches): typed pool hits are inserted at
-        # rank 0 by the caller — a superseded instruction/preference served
-        # here would outrank its own correction, so exclusion at the source
-        # is the only safe placement.
         if emb is not None:
-            rows = self._execute(
-                "SELECT *, (1.0 - (embedding <=> %s))::REAL AS score "
-                "FROM current_memories "
-                "WHERE tags @> %s::jsonb AND heat_base >= %s AND NOT is_stale "
-                "AND embedding IS NOT NULL "
-                "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
-                "ORDER BY embedding <=> %s LIMIT %s",
-                (emb, json.dumps([tag]), min_heat, domain, domain, emb, limit),
-            ).fetchall()
-        else:
-            rows = self._execute(
-                "SELECT *, heat_base::REAL AS score "
-                "FROM current_memories "
-                "WHERE tags @> %s::jsonb AND heat_base >= %s AND NOT is_stale "
-                "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
-                "ORDER BY heat_base DESC LIMIT %s",
-                (json.dumps([tag]), min_heat, domain, domain, limit),
-            ).fetchall()
-        return [self._normalize_memory_row(r) for r in rows]
+            return self._search_by_tag_vector_ranked(emb, tag, domain, min_heat, limit)
+        return self._search_by_tag_vector_unranked(tag, domain, min_heat, limit)
 
     def delete_memories_by_tag(self, tag: str, domain: str | None = None) -> int:
         """Delete memories with the given tag, optionally scoped to a domain.

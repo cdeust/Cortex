@@ -48,6 +48,7 @@ from mcp_server.infrastructure.pg_store_supersede import PgSupersedeMixin
 from mcp_server.infrastructure.pg_store_heat import PgHeatMixin
 from mcp_server.infrastructure.pg_store_memory_meta import PgMemoryMetaMixin
 from mcp_server.infrastructure.pg_store_search import PgSearchMixin
+from mcp_server.infrastructure.pg_store_signals import PgSignalsMixin
 from mcp_server.infrastructure.pg_store_checkpoint import PgCheckpointMixin
 from mcp_server.infrastructure.pg_store_prospective import PgProspectiveMixin
 from mcp_server.infrastructure.pg_store_procedural import PgProceduralMixin
@@ -89,6 +90,7 @@ class PgMemoryStore(
     PgHeatMixin,
     PgMemoryMetaMixin,
     PgSearchMixin,
+    PgSignalsMixin,
     PgEntityMixin,
     PgEntityMergeMixin,
     PgRelationshipMixin,
