@@ -58,10 +58,10 @@ def machine_load_snapshot() -> dict:
     except OSError:  # not available on this platform (e.g. Windows)
         load1 = load5 = load15 = None
 
-    def _run(cmd: list[str]) -> str | None:
+    def _run(cmd: list[str], *, env: dict[str, str] | None = None) -> str | None:
         try:
             return subprocess.run(
-                cmd, capture_output=True, text=True, timeout=10, check=False
+                cmd, capture_output=True, text=True, timeout=10, check=False, env=env
             ).stdout
         except (OSError, subprocess.SubprocessError):
             return None
@@ -69,7 +69,18 @@ def machine_load_snapshot() -> dict:
     # Filtered in Python, not via a shell `grep -c "[p]ytest"` idiom: a
     # subprocess.run argv has no shell to bracket-escape a self-match, so the
     # filter runs here instead, over the same process list that idiom reads.
-    ps_out = _run(["ps", "aux"])
+    #
+    # The `COLUMNS` override below fixes a real undercount, not just a test
+    # flake (caught by
+    # tests_py/benchmarks/test_write_manifest_machine_load.py's own
+    # self-referential assertion failing on GitHub's Linux CI runner,
+    # 2026-08-10): both BSD ps (macOS) and GNU procps (Linux) truncate the
+    # COMMAND column to `$COLUMNS` when stdout is not a terminal and COLUMNS
+    # is unset, and `ps aux`'s fixed-width USER/PID/... columns alone can
+    # exceed a default 80-column budget before COMMAND even starts — cutting
+    # off the "pytest" substring entirely on a long interpreter path. A wide
+    # COLUMNS override is the standard fix for both implementations.
+    ps_out = _run(["ps", "aux"], env={**os.environ, "COLUMNS": "1000"})
     pytest_procs = (
         None
         if ps_out is None
