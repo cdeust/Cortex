@@ -7,13 +7,23 @@ production mixture, and a memory that already sets its own origin (e.g. the
 adversarial corpus) is left alone.
 
 Requires no live PostgreSQL: the assignment logic is a pure list mutation,
-extracted specifically so it is testable without BenchmarkDB.open().
+extracted specifically so it is testable without BenchmarkDB.open(). It DOES
+require the `psycopg` driver to be installed, because `benchmarks/lib/
+bench_db.py` hard-imports `PgMemoryStore` at module level (established
+convention — see `tests_py/benchmarks/test_lib_init_no_psycopg.py`); this
+module therefore importorskips exactly like `tests_py/integration/
+test_recall_trust_ranking.py` does, so it skips cleanly on the SQLite-only
+CI lane instead of failing collection.
 """
 
 from __future__ import annotations
 
-from benchmarks.lib.bench_db import _apply_capture_origin_mix
-from mcp_server.core.capture_origin import ALL_ORIGINS
+import pytest
+
+pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+
+from benchmarks.lib.bench_db import _apply_capture_origin_mix  # noqa: E402
+from mcp_server.core.capture_origin import ALL_ORIGINS  # noqa: E402
 
 
 class TestApplyCaptureOriginMix:
