@@ -43,6 +43,12 @@ Strategy:
     - At least 1 relevant memory found
     - Max 3 memories injected (keep context compact)
 
+Module split (issue #401, 300-line cap): keyword extraction lives in
+``agent_briefing_keywords.py``, the PG connect + query in
+``agent_briefing_query.py`` (both re-exported via ``__all__``). Event
+gating and the specialist-roster loader stay here — the latter reads the
+``CLAUDE_DIR`` attribute the test suite monkeypatches on this module.
+
 Installation
 ------------
 Add to ``~/.claude/settings.json`` under hooks::
@@ -77,7 +83,6 @@ Invariants
 from __future__ import annotations
 
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -88,12 +93,26 @@ from mcp_server.handlers.injection_receipts import (
     receipt_marker,
     session_id_from_transcript,
 )
+from mcp_server.hooks.agent_briefing_keywords import _extract_task_keywords
+from mcp_server.hooks.agent_briefing_log import _log
+from mcp_server.hooks.agent_briefing_query import (
+    _DATABASE_URL,
+    _MAX_MEMORIES,
+    _MIN_HEAT,
+    _connect,
+    _fetch_agent_context,
+)
 from mcp_server.infrastructure.config import CLAUDE_DIR
 
-_LOG_PREFIX = "[cortex-agent-briefing]"
-_DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
-_MAX_MEMORIES = 3
-_MIN_HEAT = 0.2
+__all__ = [
+    "_DATABASE_URL",
+    "_MAX_MEMORIES",
+    "_MIN_HEAT",
+    "_connect",
+    "_fetch_agent_context",
+    "_extract_task_keywords",
+    "_log",
+]
 
 # Fallback set used when the discovered roster is unusable — see
 # _load_specialist_agents for what "unusable" means.
@@ -112,15 +131,18 @@ _FALLBACK_AGENTS: frozenset[str] = frozenset(
     }
 )
 
-# source: ~/.claude/agents/dispatch.md frontmatter, this repo, verified
-# 2026-08-09 — "Sole user-scope agent... It matches the problem against
-# the routing table and delegates; it never does the work itself" / body:
-# "You never implement, review, or research yourself." Under the
-# plugin-only-dispatch architecture (agents live in the zetetic-team-subagents
-# plugin, not under ~/.claude/agents/) this is the ONLY file ever present
-# in ~/.claude/agents/, so a discovered roster of exactly {"dispatch"} is
-# not a specialist set a briefing can scope memories to — it is
-# structurally equivalent to an empty roster.
+# Reserved meta-agent names: agents whose declared job is to ROUTE work to
+# other agents rather than perform it, so a roster reduced to only them is
+# not a specialist set a briefing can scope memories to (treated as empty).
+#
+# A convention of the *consumer* environment, not a fact about this repo —
+# `dispatch.md` lives under the reader's own ~/.claude/agents/, not in this
+# repository, so no path/commit/digest here would be independently
+# verifiable. What IS verifiable and pinned by tests: agent_briefing falls
+# back when the discovered roster reduces to a router (see
+# test_agents_dir_with_only_dispatch_falls_back_to_builtin_set and the
+# end-to-end reproduction in test_hook_receipts.py). A reader without that
+# setup loses nothing — the name is filtered only when present, and logged.
 _NON_SPECIALIST_META_AGENTS: frozenset[str] = frozenset({"dispatch"})
 
 # Matches `name: <slug>` or `name: "<slug>"` in agent-file YAML frontmatter.
@@ -148,24 +170,17 @@ def _load_specialist_agents() -> frozenset[str]:
     Scans ~/.claude/agents/*.md and ~/.claude/agents/genius/*.md, parses the
     `name:` frontmatter field of each, drops known non-specialist meta-agents
     (_NON_SPECIALIST_META_AGENTS), and returns the frozen set. Falls back to
-    _FALLBACK_AGENTS whenever the resulting roster is empty — whether because
-    the directory is absent (e.g., CI without install) or because it exists
-    but contains no usable specialist (e.g., the plugin-only-dispatch
-    architecture, where it holds only dispatch.md). An absent directory and
-    a degenerate one are the same failure mode for a briefing consumer: no
-    specialist to scope memories to. Result is cached for the process
-    lifetime — agents added after import are not picked up until restart
-    (acceptable for a hook process).
+    _FALLBACK_AGENTS whenever the resulting roster is empty — directory
+    absent (e.g., CI without install) and directory-present-but-degenerate
+    (e.g., plugin-only-dispatch, holding only dispatch.md) are the same
+    failure mode: no specialist to scope memories to. Cached for the process
+    lifetime — agents added after import need a restart to be picked up.
 
-    The root is CLAUDE_DIR (default ~/.claude, overridable via
-    CORTEX_CLAUDE_DIR — mcp_server/infrastructure/config.py), the same seam
-    every other real-data path in this project uses for test isolation
-    (issue #219).
-
-    Each zetetic agent declares `memory_scope:` in frontmatter; that scope
-    equals the name used as `agent_context` in Cortex memory rows. When the
-    /session:memory-sync drainer sets `agent_topic=<scope>`, the briefing
-    hook can filter by `agent_context = %s` and inject the right memories.
+    Root is CLAUDE_DIR (default ~/.claude, overridable via CORTEX_CLAUDE_DIR
+    — mcp_server/infrastructure/config.py), the project's test-isolation
+    seam (issue #219). Each zetetic agent declares `memory_scope:` in
+    frontmatter, equal to the `agent_context` used in Cortex memory rows —
+    the briefing hook filters recall by it once agent_topic is set.
     """
     root = CLAUDE_DIR / "agents"
     names: set[str] = set()
@@ -178,209 +193,15 @@ def _load_specialist_agents() -> frozenset[str]:
                 if name:
                     names.add(name)
     usable = names - _NON_SPECIALIST_META_AGENTS
+    dropped = names & _NON_SPECIALIST_META_AGENTS
+    if dropped:
+        _log(f"reserved meta-agent name(s) not briefed: {sorted(dropped)}")
     return frozenset(usable) if usable else _FALLBACK_AGENTS
 
 
 # Known specialist agents that benefit from briefing — dynamic load from
 # ~/.claude/agents/ (116+ zetetic agents when installed).
 _SPECIALIST_AGENTS = _load_specialist_agents()
-
-
-def _log(msg: str) -> None:
-    print(f"{_LOG_PREFIX} {msg}", file=sys.stderr)
-
-
-# source: "words longer than 3 chars" per _extract_task_keywords docstring
-_MIN_KEYWORD_CHARS = 3
-
-
-def _extract_task_keywords(prompt: str) -> list[str]:
-    """Extract key terms from the agent prompt for FTS query.
-
-    Takes the first 500 chars of the prompt and extracts words
-    longer than 3 chars, excluding common stop words.
-    """
-    stops = {
-        "the",
-        "and",
-        "for",
-        "that",
-        "this",
-        "with",
-        "from",
-        "your",
-        "have",
-        "will",
-        "been",
-        "they",
-        "what",
-        "when",
-        "where",
-        "which",
-        "there",
-        "their",
-        "about",
-        "would",
-        "could",
-        "should",
-        "into",
-        "more",
-        "some",
-        "than",
-        "them",
-        "then",
-        "these",
-        "those",
-        "each",
-        "make",
-        "like",
-        "just",
-        "over",
-        "such",
-        "take",
-        "also",
-        "back",
-        "after",
-        "only",
-        "come",
-        "made",
-        "find",
-        "here",
-        "thing",
-        "many",
-        "well",
-        "work",
-        "need",
-        "using",
-        "used",
-        "code",
-        "file",
-        "please",
-        "ensure",
-    }
-    words = prompt[:500].lower().split()
-    keywords = [
-        w.strip(".,;:!?\"'()[]{}")
-        for w in words
-        if len(w) > _MIN_KEYWORD_CHARS
-        and w.lower().strip(".,;:!?\"'()[]{}") not in stops
-    ]
-    # Return unique keywords, max 8
-    seen = set()
-    unique = []
-    for k in keywords:
-        if k not in seen and k:
-            seen.add(k)
-            unique.append(k)
-    return unique[:8]
-
-
-def _connect():
-    """Open the briefing's PG connection; None when PG is unreachable."""
-    try:
-        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-        from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-    except ImportError:
-        return None
-    try:
-        return psycopg.Connection[DictRow].connect(
-            _DATABASE_URL, row_factory=dict_row, autocommit=True
-        )
-    except psycopg.Error:
-        return None
-
-
-def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dict]:
-    """Fetch relevant memories for agent briefing.
-
-    Two-pass query:
-    1. Agent-scoped memories (agent_context matches) — prior work by this specialist
-    2. Team decisions (is_protected + is_global) — cross-agent knowledge (TMS directory)
-
-    Uses FTS plainto_tsquery for speed (no embedding model needed).
-    Each result keeps the memory ``id`` — the injection receipt (T2)
-    records exactly which memories entered the agent's context.
-    """
-    results = []
-
-    # Pass 1: Agent-scoped memories matching keywords
-    if keywords:
-        try:
-            rows = conn.execute(
-                """
-                -- memories.heat is not a stored column; use
-                -- effective_heat(m, NOW()) for lazy A3 decay (matches
-                -- production recall_memories semantics).
-                -- Source: pg_schema.py EFFECTIVE_HEAT_FN.
-                SELECT m.id, m.content,
-                       effective_heat(m, NOW()) AS heat,
-                       m.agent_context
-                -- JOIN current_memories: briefing content — chain heads
-                -- only; join keeps m table-typed for effective_heat().
-                FROM memories m
-                     JOIN current_memories cm ON cm.id = m.id
-                WHERE m.agent_context = %s
-                  AND effective_heat(m, NOW()) >= %s
-                  AND NOT m.is_benchmark
-                  -- Never brief an agent with a corrected (superseded)
-                  -- fact — decision 4255039 correction 8.
-                  AND m.superseded_by_id IS NULL
-                  AND m.content_tsv @@ plainto_tsquery('english', %s)
-                ORDER BY effective_heat(m, NOW()) DESC
-                LIMIT %s
-                """,
-                (agent_name, _MIN_HEAT, " ".join(keywords[:5]), _MAX_MEMORIES),
-            ).fetchall()
-            for r in rows:
-                results.append(
-                    {
-                        "id": r["id"],
-                        "content": r.get("content", "")[:300],
-                        "heat": r.get("heat", 0),
-                        "source": "agent-prior",
-                    }
-                )
-        except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
-            _log(f"agent-scoped query failed: {exc}")
-
-    # Pass 2: Team decisions (protected + global)
-    remaining = _MAX_MEMORIES - len(results)
-    if remaining > 0:
-        try:
-            rows = conn.execute(
-                """
-                SELECT m.id, m.content,
-                       effective_heat(m, NOW()) AS heat,
-                       m.agent_context
-                -- JOIN current_memories: same pattern as pass 1.
-                FROM memories m
-                     JOIN current_memories cm ON cm.id = m.id
-                WHERE m.is_protected = TRUE
-                  AND m.is_global = TRUE
-                  AND m.agent_context != %s
-                  AND NOT m.is_benchmark
-                  -- Superseded decisions are corrected facts — never
-                  -- re-inject (decision 4255039 correction 8).
-                  AND m.superseded_by_id IS NULL
-                ORDER BY effective_heat(m, NOW()) DESC
-                LIMIT %s
-                """,
-                (agent_name, remaining),
-            ).fetchall()
-            for r in rows:
-                results.append(
-                    {
-                        "id": r["id"],
-                        "content": r.get("content", "")[:300],
-                        "heat": r.get("heat", 0),
-                        "source": f"team:{r.get('agent_context', '')}",
-                    }
-                )
-        except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
-            _log(f"team decisions query failed: {exc}")
-
-    return results
-
 
 # source: pre-existing tuned value, extracted unchanged (#197 family 3);
 # provenance not recorded at introduction
