@@ -11,9 +11,72 @@ Usage (from reproduce.sh):
 """
 
 import json
+import os
 import platform
+import subprocess
 import sys
 from pathlib import Path
+
+
+def machine_load_snapshot() -> dict:
+    """Load average + concurrent pytest/container counts, as this run saw them.
+
+    2026-08-10 incident: a 5-cell trust-factor sweep ran while three other
+    agents' full pytest suites were active on the same machine (load average
+    ~11-14 on a 10-core box); one cell crashed on a native fatal error, and
+    the crash was the ONLY visible signal — cells that merely finished under
+    the same contention could have returned degraded numbers (saturated
+    connection pool, cold cache, GC pressure) with nothing in the artifact to
+    show it. The whole grid was discarded and re-run rather than salvaged,
+    per this project's own rule: a measurement from a harness with a known
+    defect is invalid and is redone, not patched after the fact — and
+    contention is exactly such a defect. This snapshot is recorded so that
+    rule can be applied by inspection later, instead of by asking whoever
+    happened to be watching at the time.
+
+    Best-effort: any probe that fails records `None`/`"unresolved"` rather
+    than aborting manifest generation, matching this module's other fields.
+    """
+    try:
+        load1, load5, load15 = os.getloadavg()
+    except OSError:  # not available on this platform (e.g. Windows)
+        load1 = load5 = load15 = None
+
+    def _run(cmd: list[str]) -> str | None:
+        try:
+            return subprocess.run(
+                cmd, capture_output=True, text=True, timeout=10, check=False
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    # Filtered in Python, not via a shell `grep -c "[p]ytest"` idiom: a
+    # subprocess.run argv has no shell to bracket-escape a self-match, so the
+    # filter runs here instead, over the same process list that idiom reads.
+    ps_out = _run(["ps", "aux"])
+    pytest_procs = (
+        None
+        if ps_out is None
+        else sum(
+            1 for line in ps_out.splitlines() if "pytest" in line and "grep" not in line
+        )
+    )
+
+    docker_out = _run(["docker", "ps", "-q"])
+    docker_containers = (
+        None
+        if docker_out is None
+        else len([line for line in docker_out.splitlines() if line.strip()])
+    )
+
+    return {
+        "load_average_1m": load1,
+        "load_average_5m": load5,
+        "load_average_15m": load15,
+        "cpu_count": os.cpu_count(),
+        "concurrent_pytest_processes": pytest_procs,
+        "concurrent_docker_containers": docker_containers,
+    }
 
 
 def ver(pkg: str) -> str:
@@ -91,6 +154,9 @@ def build_manifest(
 ) -> dict:
     return {
         "git_sha": git_sha,
+        # Alongside git_sha, not buried: see machine_load_snapshot's
+        # docstring for why (2026-08-10 sweep-contention incident).
+        "machine_load": machine_load_snapshot(),
         "longmemeval_dataset_sha256": ds_sha,
         "pg_image": pg_image,
         # Per-run container isolation fix (2026-07-11, incident: two concurrent
