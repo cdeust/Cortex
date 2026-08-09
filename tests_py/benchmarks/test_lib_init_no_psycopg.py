@@ -85,6 +85,27 @@ def test_benchmark_db_resolves_with_psycopg_present():
     postgresql extra") -- there psycopg's absence is the environment, not
     a regression, and `test_benchmark_db_still_reachable_lazily_and_fails_
     loudly_without_psycopg` above already pins that exact behavior.
+
+    No local `timeout=` on the subprocess call below (issue #402 follow-
+    up). A prior `timeout=30` was an unsourced constant (coding-
+    standards.md §8): on a quiet machine this snippet's own cost is
+    ~0.5-0.9s (`.venv/bin/python3 -c` timed 5x, 2026-08-10, this repo),
+    a >30x margin -- but the one observed failure (2026-08-09) was traced
+    to a run made while three other agent sessions shared this host (load
+    average 14 on 10 cores), which a fixed wall-clock bound cannot
+    absorb no matter how generously sized: any constant picked for a
+    quiet machine can be exceeded by an arbitrarily busy one, so sizing it
+    "generously" only moves the flake threshold, it does not remove it.
+    Ruled out as an ordering/state-leak bug first: `subprocess.run(
+    [sys.executable, ...])` starts a fresh interpreter, so nothing in the
+    parent's `sys.modules`/env can leak in, and every `sys.modules`/
+    `os.environ` mutation site in `tests_py/` was audited and restores
+    cleanly (issue #402 investigation notes). A genuine hang is still
+    caught by pytest's own per-test watchdog (`pyproject.toml`
+    `[tool.pytest.ini_options] timeout = 300`, itself sourced to the
+    2026-05-25 CI stall incident) -- reusing that already-sourced,
+    already-relied-upon backstop instead of inventing a second, narrower,
+    unsourced one here.
     """
     pytest.importorskip("psycopg")
     result = subprocess.run(
@@ -98,7 +119,6 @@ def test_benchmark_db_resolves_with_psycopg_present():
         ],
         capture_output=True,
         text=True,
-        timeout=30,
     )
     assert result.returncode == 0, result.stderr
     assert "OK" in result.stdout
