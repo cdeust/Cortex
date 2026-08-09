@@ -37,7 +37,7 @@ schema = {
         "properties": {
             "action": {"type": "string", "enum": ["save", "restore"]},
             "checkpoint_id": {
-                # source: MemoryStore.insert_checkpoint (pg_store_auxiliary.py,
+                # source: MemoryStore.insert_checkpoint (pg_store_checkpoint.py,
                 # sqlite_store_auxiliary.py) both declare `-> int` and return
                 # the serial primary key via `RETURNING id` — never a UUID.
                 # Same drift family as #99 (declared schema didn't match the

@@ -48,14 +48,25 @@ from mcp_server.infrastructure.pg_store_supersede import PgSupersedeMixin
 from mcp_server.infrastructure.pg_store_heat import PgHeatMixin
 from mcp_server.infrastructure.pg_store_memory_meta import PgMemoryMetaMixin
 from mcp_server.infrastructure.pg_store_search import PgSearchMixin
-from mcp_server.infrastructure.pg_store_auxiliary import PgAuxiliaryMixin
+from mcp_server.infrastructure.pg_store_checkpoint import PgCheckpointMixin
+from mcp_server.infrastructure.pg_store_prospective import PgProspectiveMixin
+from mcp_server.infrastructure.pg_store_procedural import PgProceduralMixin
+from mcp_server.infrastructure.pg_store_archive import PgArchiveMixin
+from mcp_server.infrastructure.pg_store_engram import PgEngramMixin
+from mcp_server.infrastructure.pg_store_cortical_schema import PgCorticalSchemaMixin
 from mcp_server.infrastructure.pg_store_entities import PgEntityMixin
 from mcp_server.infrastructure.pg_store_entity_merge import PgEntityMergeMixin
 from mcp_server.infrastructure.pg_store_queries import PgQueryMixin
+from mcp_server.infrastructure.pg_store_query_stream import PgQueryStreamMixin
+from mcp_server.infrastructure.pg_store_co_access import PgCoAccessMixin
 from mcp_server.infrastructure.pg_store_receipts import PgReceiptsMixin
 from mcp_server.infrastructure.pg_store_relationships import PgRelationshipMixin
 from mcp_server.infrastructure.pg_store_rules import PgRuleMixin
 from mcp_server.infrastructure.pg_store_stats import PgStatsMixin
+from mcp_server.infrastructure.pg_store_consolidation_stage import (
+    PgConsolidationStageMixin,
+)
+from mcp_server.infrastructure.pg_store_cls import PgClsMixin
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +93,19 @@ class PgMemoryStore(
     PgEntityMergeMixin,
     PgRelationshipMixin,
     PgQueryMixin,
+    PgQueryStreamMixin,
+    PgCoAccessMixin,
     PgReceiptsMixin,
     PgRuleMixin,
     PgStatsMixin,
-    PgAuxiliaryMixin,
+    PgConsolidationStageMixin,
+    PgClsMixin,
+    PgCheckpointMixin,
+    PgProspectiveMixin,
+    PgProceduralMixin,
+    PgArchiveMixin,
+    PgEngramMixin,
+    PgCorticalSchemaMixin,
 ):
     """PostgreSQL + pgvector storage engine for Cortex memory system."""
 

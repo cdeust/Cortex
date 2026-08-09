@@ -24,10 +24,23 @@ zetetic source rule:
 #   active_retrieval.py deleted — no call site in production or benchmark
 #   code, none in git history, none in any unmerged branch; net file
 #   count -1)
-shared/           26 files   (10 documented below — curated subset)
-core/            229 files   (~90 documented below — curated subset, incl. core/streaming, core/context_assembly)
-infrastructure/   95 files   (25 documented below — curated subset)
-handlers/        135 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
+# shared/+core/+infrastructure/+handlers/ all re-measured 2026-08-10
+#   (issue #406: temporal.py/temporal_normalize.py/temporal_timezones.py/
+#   near_dup_calibration.py/write_class.py moved core/ -> shared/, all
+#   five stdlib-only with infrastructure/ call sites that could not
+#   legally import core/ -- shared/ +5, core/ -5)
+# infrastructure/ re-measured 2026-08-10 (issue: pg_store.py, 1384 lines,
+#   split into 16 Pg*Mixin modules behind a thin facade, net +15; issue
+#   #407: pg_store_auxiliary.py, 397 lines, split into 6 modules and
+#   deleted, net +5; pg_store_queries.py, 401 lines, split into 3
+#   modules, net +2; pg_store_stats.py, 406 lines, split into 3 modules,
+#   net +2 -- infrastructure/ net +24 from the pre-split baseline of 93;
+#   the core/ and handlers/ deltas beyond the #406 move are unrelated
+#   drift accumulated upstream, not attributable to either change)
+shared/           31 files   (15 documented below — curated subset)
+core/            228 files   (~87 documented below — curated subset, incl. core/streaming, core/context_assembly)
+infrastructure/  117 files   (48 documented below — curated subset)
+handlers/        138 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
 ```
 
 The prior CLAUDE.md text asserted "108 modules" for `core/` and similar
@@ -63,6 +76,11 @@ Treat gaps as "undocumented," not "does not exist."
 - `types_profiles.py` — Profile-specific Pydantic models
 - `linear_algebra.py` — Dense vector math via numpy (dot, norm, cosine, project, clamp)
 - `sparse.py` — Sparse vector operations (dict-based, topK, conversions)
+- `temporal.py` — Date parsing, distance decay, recency boost (reference; PG does this server-side). Moved from `core/` (issue #406): stdlib-only (`math`/`re`/`datetime`), no dependency on core's business rules — `infrastructure/` (`pg_store_write.py`, `sqlite_store.py`) needed it directly and could not import `core/` per the dependency table above
+- `temporal_normalize.py` — Free-form date → ISO 8601 for storage: honours a stated timezone or refuses the value (issue #252); separate from `temporal.py`, whose scoring may drop precision that storage may not. Moved from `core/` alongside `temporal.py`/`temporal_timezones.py` (issue #406) — same stdlib-only rationale
+- `temporal_timezones.py` — Timezone policy for `temporal_normalize.normalize_date_to_iso`: a `tzinfos` resolver over the RFC 5322 §4.3 obs-zone table, refusing (never defaulting) an abbreviation it cannot resolve, so a stated zone is honoured or the date is rejected (issue #252). Moved from `core/` (issue #406)
+- `near_dup_calibration.py` — Near-duplicate similarity threshold calibration (I6-D2, INC6.4) + connected-component grouping. Moved from `core/` (issue #406): `NamedTuple`-only, stdlib, `infrastructure/pg_store_near_dup.py` needed it directly
+- `write_class.py` — Write-class classification (M-D2/M-D3/7.4 single choke point: `classify_write_class`). Moved from `core/` (issue #406): stdlib-only (`collections.abc`/`typing`), `infrastructure/pg_store_write.py`/`pg_store_memory_reheat.py` needed it directly
 
 ## core/ — Pure business logic, zero I/O
 
@@ -167,9 +185,6 @@ Treat gaps as "undocumented," not "does not exist."
 - `reranker_model.py` — FlashRank model identity, durable cache_dir, offline-fetch gate, `RerankerStatus`, weights sha256
 - `reranker_scoring.py` — Pure score-blending math: confidence gate, adaptive alpha, WRRF/CE blend
 - `scoring.py` — BM25, n-gram, keyword scoring (reference; PG does this server-side)
-- `temporal.py` — Date parsing, distance decay, recency boost (reference; PG does this server-side)
-- `temporal_normalize.py` — Free-form date → ISO 8601 for storage: honours a stated timezone or refuses the value (issue #252); separate from `temporal.py`, whose scoring may drop precision that storage may not
-- `temporal_timezones.py` — Timezone policy for `temporal_normalize.normalize_date_to_iso`: a `tzinfos` resolver over the RFC 5322 §4.3 obs-zone table, refusing (never defaulting) an abbreviation it cannot resolve, so a stated zone is honoured or the date is rejected (issue #252)
 - `spreading_activation.py` — Collins & Loftus 1975 semantic priming over entity graph
 - `hdc_encoder.py` — 1024D bipolar HDC (bind/bundle/permute/similarity)
 - `cognitive_map.py` — Successor Representation co-access graph + 2D projection
@@ -222,13 +237,39 @@ Run the measurement command in the header to get a current file listing.
 - `scanner_parse.py` — JSONL conversation parsing
 - `mcp_client.py` — Async MCP client over stdio (JSON-RPC 2.0, version negotiation)
 - `mcp_client_pool.py` — Singleton connection pool (lazy connect, reuse, idle timeout)
-- `pg_store.py` — PostgreSQL + pgvector persistence
+- `pg_store.py` — PostgreSQL + pgvector persistence: thin composition-root
+  facade over the `Pg*Mixin` family below (issue: was a single 1384-line
+  file over the 300-line §4.1 cap) — owns only `__init__`/`close` + the
+  DDL-helper re-exports `mcp_server.migrate` imports from this path
+- `pg_store_host.py` — `PgStoreHost` typed cross-mixin contract (DIP §5.1:
+  mixins declare what they need from the composed class) + `MaterializedCursor`
+- `pg_store_schema.py` — Connection creation + Phase 5 pool lifecycle
+- `pg_store_ddl.py` — Pooled query execution (`_execute`) + DDL/schema migration
+- `pg_store_serialize.py` — Embedding↔bytes, datetime normalization, row shaping
+- `pg_store_write.py` — Memory INSERT path (SQL constant, param building, commit)
+- `pg_store_supersede.py` — Atomic reconsolidation-supersession (chain-head CAS + anchor transfer)
+- `pg_store_heat.py` — A3 canonical `heat_base` writers + homeostatic factor
+- `pg_store_memory_meta.py` — Single-row memory metadata writers (importance/access/value/mood/protection/compression)
+- `pg_store_search.py` — `recall_memories`/FTS/vector KNN/spreading-activation + server-side signals
 - `pg_store_entities.py` — Entity storage and retrieval
 - `pg_store_relationships.py` — Relationship storage, co-activation strengthening
-- `pg_store_queries.py` — Query execution helpers
-- `pg_store_auxiliary.py` — Auxiliary storage operations
+- `pg_store_queries.py` — Filtered/time-window memory read queries (issue
+  #407: was 401 lines over cap — streaming reads and co-access JOINs split
+  into the two modules below)
+- `pg_store_query_stream.py` — Keyset-paginated / server-side-cursor streaming memory reads
+- `pg_store_co_access.py` — Entity co-access / shared-entity JOIN queries
+- `pg_store_checkpoint.py` — Ingest-run + session checkpoint persistence
+- `pg_store_prospective.py` — Prospective (trigger-based) memory CRUD
+- `pg_store_procedural.py` — Procedural skill/habit CRUD (B1)
+- `pg_store_archive.py` — Schema-mismatch memory archive
+- `pg_store_engram.py` — Engram slot allocation (Josselyn & Tonegawa 2020)
+- `pg_store_cortical_schema.py` — Cortical knowledge-structure ("schema", Tse 2007) CRUD — named to avoid colliding with `pg_store_ddl.py`'s unrelated database-DDL "schema" vocabulary
 - `pg_store_rules.py` — Rule storage and retrieval
-- `pg_store_stats.py` — Statistics and diagnostics queries
+- `pg_store_stats.py` — Diagnostics/dashboard reads + grooming staleness (issue
+  #407: was 406 lines over cap — cascade stage transitions and CLS/
+  oscillatory/interference queries split into the two modules below)
+- `pg_store_consolidation_stage.py` — Cascade consolidation-stage writers/readers (Kandel 2001)
+- `pg_store_cls.py` — CLS queries (McClelland 1995) + oscillatory-clock state + interference detection
 - `pg_schema.py` — DDL, extensions, PL/pgSQL stored procedures, migrations
 - `memory_config.py` — Runtime configuration (DATABASE_URL, env vars with CORTEX_MEMORY_ prefix)
 - `backend_marker.py` — Persisted plugin backend selection: reads `~/.claude/methodology/backend.json` (written by `scripts/install-plugin.sh`) and resolves it into `CORTEX_MEMORY_STORE_BACKEND` for the launcher, hooks, and doctor
