@@ -88,9 +88,23 @@ start_db() {
         -p "${PG_PORT}:5432" \
         "$PG_IMAGE" >/dev/null
     started_container=1
-    echo "==> Waiting for PostgreSQL to accept connections..."
-    until docker exec "$CONTAINER" pg_isready -U postgres -d cortex_bench \
-        >/dev/null 2>&1; do
+    echo "==> Waiting for PostgreSQL to accept a real connection from the host..."
+    # Real host connection, not pg_isready — same defect and same reasoning as
+    # reproduce.sh::start_db(); see the comment there for the entrypoint evidence,
+    # the measured optimism of both pg_isready variants, and the 2026-08-09 sweep
+    # failures the socket probe caused.
+    until DATABASE_URL="$BENCH_DB_URL" uv run --extra benchmarks python -c "
+import os, sys, psycopg
+try:
+    psycopg.connect(os.environ['DATABASE_URL'], connect_timeout=2).close()
+except Exception:
+    sys.exit(1)
+" >/dev/null 2>&1; do
+        if [ -z "$(docker ps -q --filter "name=^${CONTAINER}$")" ]; then
+            echo "error: container ${CONTAINER} exited before PostgreSQL became ready." >&2
+            docker logs --tail 30 "$CONTAINER" >&2 2>/dev/null || true
+            exit 1
+        fi
         sleep 1
     done
 }

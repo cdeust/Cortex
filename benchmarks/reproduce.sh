@@ -186,85 +186,12 @@ fetch_longmemeval() {
     echo "==> LongMemEval checksum OK."
 }
 
-# Best-effort sweep of orphaned `cortex-bench-pg-*` containers whose owning
-# PID is dead — same pattern as tests_py/conftest.py::_drop_dead_orphaned_databases.
-# A run killed by SIGKILL (OOM, `docker kill` on the wrong target, machine
-# sleep) never reaches the teardown EXIT trap, so its container leaks; this
-# reclaims it on the NEXT run instead of requiring manual `docker rm`.
-# Non-fatal and conservative: a name that doesn't parse as <pid>-<hex>, or a
-# PID that's still alive (even if reused by an unrelated process — the
-# window is the container's own lifetime, seconds to low hours, so PID reuse
-# racing this exact check is not a realistic concern here), is left alone.
-sweep_orphaned_containers() {
-    local names name rest pid
-    names="$(docker ps -a --format '{{.Names}}' | grep '^cortex-bench-pg-' || true)"
-    [ -z "$names" ] && return
-    while IFS= read -r name; do
-        rest="${name#cortex-bench-pg-}"
-        pid="${rest%%-*}"
-        case "$pid" in
-            ''|*[!0-9]*) continue ;;  # doesn't parse as <pid>-<hex> — leave it
-        esac
-        if kill -0 "$pid" 2>/dev/null; then
-            continue  # owning process still alive — not an orphan
-        fi
-        echo "==> Reclaiming orphaned container ${name} (owning pid ${pid} is dead)."
-        docker rm -f -v "$name" >/dev/null 2>&1 || true
-    done <<< "$names"
-}
-
-# Discover the kernel-assigned host port docker bound for the container's
-# 5432/tcp. `docker port` output is "0.0.0.0:PORT" (one line per binding);
-# take the numeric suffix of the last line. Preferred over scanning for a
-# free port ourselves: asking the kernel for port 0 and reading back what it
-# bound is atomic — a manual scan-then-bind has a TOCTOU race another
-# process (or another concurrent reproduce.sh run) can win in between.
-discover_assigned_port() {
-    docker port "$CONTAINER" 5432/tcp | tail -1 | awk -F: '{print $NF}'
-}
-
-start_db() {
-    sweep_orphaned_containers
-    local publish
-    if [ -n "${CORTEX_BENCH_PORT:-}" ]; then
-        # Explicit override: caller takes responsibility for the port being
-        # free and for any cross-run collision it may cause (mirrors
-        # conftest.py's CORTEX_TEST_DATABASE_URL override — respected verbatim).
-        PG_PORT="$CORTEX_BENCH_PORT"
-        publish="${PG_PORT}:5432"
-    else
-        # Kernel-assigned free port — the default, and the fix for the
-        # cross-worktree contamination this file documents above.
-        publish="0:5432"
-    fi
-    echo "==> Starting ephemeral PostgreSQL (${PG_IMAGE}), container '${CONTAINER}'..."
-    # --shm-size=1g: Docker's default 64MB /dev/shm starves PostgreSQL's
-    # parallel HNSW index builds (each parallel worker needs shared
-    # memory for its build buffer); source: pgvector README §"Indexing",
-    # https://github.com/pgvector/pgvector (L.1176 as of the vendored
-    # copy consulted 2026-07-11) — required to avoid the REINDEX
-    # DiskFull failure mode observed the night of 2026-07-10/11.
-    docker run -d --name "$CONTAINER" \
-        -e POSTGRES_PASSWORD=cortex_bench \
-        -e POSTGRES_DB=cortex_bench \
-        -p "${publish}" \
-        --shm-size=1g \
-        "$PG_IMAGE" >/dev/null
-    started_container=1
-    if [ -z "${CORTEX_BENCH_PORT:-}" ]; then
-        PG_PORT="$(discover_assigned_port)"
-        if [ -z "$PG_PORT" ]; then
-            echo "error: could not discover the port docker assigned to ${CONTAINER}." >&2
-            exit 1
-        fi
-    fi
-    BENCH_DB_URL="postgresql://postgres:cortex_bench@localhost:${PG_PORT}/cortex_bench"
-    echo "==> Run container: ${CONTAINER}   port: ${PG_PORT}   (isolated per-run — see MANIFEST.json)"
-    echo "==> Waiting for PostgreSQL to accept connections..."
-    until docker exec "$CONTAINER" pg_isready -U postgres -d cortex_bench >/dev/null 2>&1; do
-        sleep 1
-    done
-}
+# Ephemeral container lifecycle (start_db/wait_for_db/remove_container and the
+# orphan sweep). Sourced, not inlined, so this driver stays within the size
+# limits of coding-standards.md §4; see that file for the readiness-probe
+# provenance.
+# shellcheck source=benchmarks/lib/bench_container.sh
+. "$REPO_ROOT/benchmarks/lib/bench_container.sh"
 
 # Intra-worktree guard only: two reproduce.sh invocations from the SAME
 # checkout still share RESULTS_DIR's parent and DATASET_PATH, so a second
@@ -295,13 +222,7 @@ acquire_lock() {
 }
 
 teardown() {
-    if [ "$started_container" = "1" ] && [ "$KEEP_DB" != "1" ]; then
-        echo "==> Removing ephemeral container ${CONTAINER} (--keep-db to keep)."
-        # -v: also remove the anonymous PGDATA volume — without it every run
-        # leaks one volume (measured 2026-07-11: 46 orphans / 31.5 GB filled
-        # the Docker VM until postgres could no longer init a datadir).
-        docker rm -f -v "$CONTAINER" >/dev/null 2>&1 || true
-    fi
+    remove_container
     rm -rf "$LOCK_DIR"
 }
 
@@ -355,78 +276,9 @@ run_ablation_sweep() {
 
 write_manifest() {
     local git_sha; git_sha="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
-    DATABASE_URL="$BENCH_DB_URL" uv run --extra benchmarks python - \
-        "$RESULTS_DIR" "$git_sha" "$DATASET_SHA256" "$PG_IMAGE" "$CONTAINER" "$PG_PORT" "$$" <<'PY'
-import json, sys, platform, subprocess
-from pathlib import Path
-results_dir, git_sha, ds_sha, pg_image, container, pg_port, pid = sys.argv[1:8]
-def ver(pkg):
-    try:
-        import importlib.metadata as m
-        return m.version(pkg)
-    except Exception:
-        return "absent"
-# i7d3 reproducibility-gap fix (2026-07-11): uv.lock pins the Python
-# package version but NOT the HF model weights an unpinned model name
-# resolves against (refs/main can move independently of any pyproject/
-# uv.lock change, with zero signal in this manifest before this fix).
-# Record the exact revision this run's EmbeddingEngine loaded, and torch
-# (previously absent from "packages" entirely, so a torch upgrade
-# affecting CPU/MPS float32 parity had no manifest signal either). See
-# mcp_server/infrastructure/embedding_engine.py's "Model revision pin"
-# docstring for the incident this closes.
-def embedding_revision():
-    try:
-        from mcp_server.infrastructure.embedding_engine import get_embedding_engine
-        return get_embedding_engine().revision
-    except Exception:
-        return "unresolved"
-# Reranker cache-durability fix (2026-07-11, incident: silent reranker
-# skip). Same shape of gap as embedding_revision above: a bare-except
-# swallow in mcp_server.core.reranker let 6 LongMemEval runs execute with
-# CE reranking silently disabled (MRR 0.9163 -> 0.8636), with nothing in
-# the manifest to show it. Record the exact load state + weights sha256
-# reproduce.sh's own run observed, not just whether the library is
-# importable.
-def reranker_fields():
-    try:
-        from mcp_server.core.reranker import ensure_reranker_loaded, model_sha256
-        status = ensure_reranker_loaded()
-        return {
-            "reranker_active": status.state == "loaded",
-            "reranker_state": status.state,
-            "reranker_model_sha256": model_sha256(),
-        }
-    except Exception:
-        return {
-            "reranker_active": False,
-            "reranker_state": "unresolved",
-            "reranker_model_sha256": None,
-        }
-manifest = {
-    "git_sha": git_sha,
-    "longmemeval_dataset_sha256": ds_sha,
-    "pg_image": pg_image,
-    # Per-run container isolation fix (2026-07-11, incident: two concurrent
-    # runs from different worktrees shared one fixed container/port and
-    # silently cross-contaminated scores — 0.9163 isolated vs. 0.78-0.86
-    # under concurrency). Recorded so a future diagnostic can always match a
-    # result set to the exact container/port/PID that produced it instead
-    # of guessing.
-    "bench_container_name": container,
-    "bench_container_port": int(pg_port),
-    "bench_runner_pid": int(pid),
-    "python": platform.python_version(),
-    "packages": {p: ver(p) for p in
-                 ("datasets", "sentence-transformers", "torch", "psycopg", "psycopg-pool")},
-    "embedding_model_revision": embedding_revision(),
-    **reranker_fields(),
-    "results_files": sorted(p.name for p in Path(results_dir).glob("*.json")),
-}
-out = Path(results_dir) / "MANIFEST.json"
-out.write_text(json.dumps(manifest, indent=2))
-print(f"==> Wrote {out}")
-PY
+    DATABASE_URL="$BENCH_DB_URL" uv run --extra benchmarks python \
+        "$REPO_ROOT/benchmarks/lib/write_manifest.py" \
+        "$RESULTS_DIR" "$git_sha" "$DATASET_SHA256" "$PG_IMAGE" "$CONTAINER" "$PG_PORT" "$$"
 }
 
 print_summary() {
