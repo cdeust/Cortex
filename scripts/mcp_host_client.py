@@ -36,6 +36,7 @@ exactly as if the server had answered nothing.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 import json
 import os
@@ -173,19 +174,31 @@ def absorb(line: str, responses: dict[int, dict[str, object]]) -> None:
         responses[request_id] = message
 
 
-def _exchange(
-    stdin: IO[str], stdout: IO[str], client_name: str
+def drain_exchange(
+    stdin: IO[str],
+    stdout: IO[str],
+    frame_text: str,
+    expected_ids: Iterable[int],
 ) -> dict[int, dict[str, object]]:
-    """Send the batch, read until every expected id is answered, then and
-    only then close stdin -- the protocol's shutdown signal.
+    """Write ``frame_text``, read until every id in ``expected_ids`` is
+    answered, then and only then close stdin -- the protocol's shutdown
+    signal.
+
+    This is the generic primitive `_exchange` below specializes to the
+    fixed six-message contract batch: any caller driving an MCP stdio
+    server with its own batch (see `scripts/docker_smoke_client.py`, whose
+    batch is the three-message `initialize` / `notifications/initialized`
+    / `tools/list` docker_smoke.sh sends) gets the same ordering guarantee
+    -- read every expected response first, close stdin second -- without
+    re-deriving it.
 
     Terminates on either event: the last awaited id arriving, or stdout
-    reaching EOF (the server exited or the watchdog killed it). Neither is
+    reaching EOF (the server exited or a watchdog killed it). Neither is
     a clock.
     """
-    outstanding = set(expected_request_ids())
+    outstanding = set(expected_ids)
     responses: dict[int, dict[str, object]] = {}
-    stdin.write(frames(client_name))
+    stdin.write(frame_text)
     stdin.flush()
     while outstanding:
         line = stdout.readline()
@@ -197,6 +210,14 @@ def _exchange(
     for line in stdout.read().splitlines():
         absorb(line, responses)
     return responses
+
+
+def _exchange(
+    stdin: IO[str], stdout: IO[str], client_name: str
+) -> dict[int, dict[str, object]]:
+    """Send the fixed six-message contract batch and drain it (see
+    `drain_exchange`)."""
+    return drain_exchange(stdin, stdout, frames(client_name), expected_request_ids())
 
 
 def run_client(case: ContractCase) -> dict[int, dict[str, object]]:
