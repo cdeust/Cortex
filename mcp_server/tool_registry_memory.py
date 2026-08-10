@@ -5,7 +5,9 @@ Registers remember, recall, checkpoint, consolidation, and diagnostics tools.
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from typing import Any
+
+from mcp.server.mcpserver import MCPServer
 
 from mcp_server.handlers import (
     checkpoint,
@@ -40,8 +42,8 @@ SCHEMAS: dict[str, dict] = {
 }
 
 
-def register(mcp: FastMCP) -> None:
-    """Register Tier 1 memory read/write tools on the FastMCP instance."""
+def register(mcp: MCPServer) -> None:
+    """Register Tier 1 memory read/write tools on the MCPServer instance."""
     _register_remember(mcp)
     _register_recall(mcp)
     _register_memory_stats(mcp)
@@ -54,10 +56,10 @@ def register(mcp: FastMCP) -> None:
     _register_get_grooming_health(mcp)
 
 
-def _register_remember(mcp: FastMCP) -> None:
+def _register_remember(mcp: MCPServer) -> None:
     # Connection-rooted scoping: when CORTEX_ROOT_AGENT_TOPIC is set the
     # agent_topic parameter is omitted from the registered signature
-    # (FastMCP derives the input schema from the signature), so the model
+    # (MCPServer derives the input schema from the signature), so the model
     # never sees it. The handler forces the root topic server-side.
     if root_agent_topic() is not None:
 
@@ -72,7 +74,7 @@ def _register_remember(mcp: FastMCP) -> None:
             supersedes_id: int | None = None,
             write_class: str | None = None,
             origin_tool: str | None = None,
-        ) -> dict:
+        ) -> dict[str, Any]:
             """Store a memory through the predictive coding write gate."""
             return await safe_handler(
                 remember.handler,
@@ -107,7 +109,7 @@ def _register_remember(mcp: FastMCP) -> None:
         supersedes_id: int | None = None,
         write_class: str | None = None,
         origin_tool: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Store a memory through the predictive coding write gate."""
         return await safe_handler(
             remember.handler,
@@ -127,7 +129,7 @@ def _register_remember(mcp: FastMCP) -> None:
         )
 
 
-def _register_recall(mcp: FastMCP) -> None:
+def _register_recall(mcp: MCPServer) -> None:
     # Connection-rooted scoping (see _register_remember): omit agent_topic
     # from the schema when rooted; the handler forces the root scope.
     if root_agent_topic() is not None:
@@ -141,7 +143,7 @@ def _register_recall(mcp: FastMCP) -> None:
             min_heat: float = 0.05,
             include_related: bool = False,
             format: str = "json",
-        ) -> dict:
+        ) -> dict[str, Any]:
             """Retrieve memories using multi-signal fusion."""
             return await safe_handler(
                 recall.handler,
@@ -172,7 +174,7 @@ def _register_recall(mcp: FastMCP) -> None:
         agent_topic: str | None = None,
         include_related: bool = False,
         format: str = "json",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Retrieve memories using multi-signal fusion."""
         return await safe_handler(
             recall.handler,
@@ -190,17 +192,17 @@ def _register_recall(mcp: FastMCP) -> None:
         )
 
 
-def _register_memory_stats(mcp: FastMCP) -> None:
+def _register_memory_stats(mcp: MCPServer) -> None:
     @mcp.tool(
         name="memory_stats",
         **tool_kwargs(memory_stats.schema),
     )
-    async def tool_memory_stats() -> dict:
+    async def tool_memory_stats() -> dict[str, Any]:
         """Memory system diagnostics."""
         return await safe_handler(memory_stats.handler, {}, tool_name="memory_stats")
 
 
-def _register_checkpoint(mcp: FastMCP) -> None:
+def _register_checkpoint(mcp: MCPServer) -> None:
     @mcp.tool(
         name="checkpoint",
         **tool_kwargs(checkpoint.schema),
@@ -216,7 +218,7 @@ def _register_checkpoint(mcp: FastMCP) -> None:
         active_errors: list[str] | None = None,
         custom_context: str | None = None,
         session_id: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Save or restore working state for hippocampal replay."""
         return await safe_handler(
             checkpoint.handler,
@@ -236,7 +238,7 @@ def _register_checkpoint(mcp: FastMCP) -> None:
         )
 
 
-def _register_narrative(mcp: FastMCP) -> None:
+def _register_narrative(mcp: MCPServer) -> None:
     @mcp.tool(
         name="narrative",
         **tool_kwargs(narrative.schema),
@@ -245,7 +247,7 @@ def _register_narrative(mcp: FastMCP) -> None:
         directory: str | None = None,
         domain: str | None = None,
         brief: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Generate project narrative from stored memories."""
         return await safe_handler(
             narrative.handler,
@@ -258,7 +260,7 @@ def _register_narrative(mcp: FastMCP) -> None:
         )
 
 
-def _register_consolidate(mcp: FastMCP) -> None:
+def _register_consolidate(mcp: MCPServer) -> None:
     @mcp.tool(
         name="consolidate",
         **tool_kwargs(consolidate.schema),
@@ -269,7 +271,7 @@ def _register_consolidate(mcp: FastMCP) -> None:
         cls: bool = True,
         memify: bool = True,
         deep: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Run memory maintenance: decay, compression, CLS, memify."""
         return await safe_handler(
             consolidate.handler,
@@ -284,7 +286,7 @@ def _register_consolidate(mcp: FastMCP) -> None:
         )
 
 
-def _register_import_sessions(mcp: FastMCP) -> None:
+def _register_import_sessions(mcp: MCPServer) -> None:
     @mcp.tool(
         name="import_sessions",
         **tool_kwargs(import_sessions.schema),
@@ -295,7 +297,7 @@ def _register_import_sessions(mcp: FastMCP) -> None:
         min_importance: float = 0.4,
         max_sessions: int = 0,
         dry_run: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Import conversation history into the memory store.
 
         Always streams JSONL files via head+tail (ADR-0045 R2). The legacy
@@ -315,29 +317,29 @@ def _register_import_sessions(mcp: FastMCP) -> None:
         )
 
 
-def _register_get_telemetry(mcp: FastMCP) -> None:
+def _register_get_telemetry(mcp: MCPServer) -> None:
     @mcp.tool(
         name="get_telemetry",
         **tool_kwargs(get_telemetry.schema),
     )
-    async def tool_get_telemetry() -> dict:
+    async def tool_get_telemetry() -> dict[str, Any]:
         """Return per-op counters + read/write ratio (Popper C6)."""
         return await safe_handler(get_telemetry.handler, {}, tool_name="get_telemetry")
 
 
-def _register_get_grooming_health(mcp: FastMCP) -> None:
+def _register_get_grooming_health(mcp: MCPServer) -> None:
     @mcp.tool(
         name="get_grooming_health",
         **tool_kwargs(get_grooming_health.schema),
     )
-    async def tool_get_grooming_health() -> dict:
+    async def tool_get_grooming_health() -> dict[str, Any]:
         """Backlog + staleness for wiki/distillation/promotion grooming."""
         return await safe_handler(
             get_grooming_health.handler, {}, tool_name="get_grooming_health"
         )
 
 
-def _register_unified_search(mcp: FastMCP) -> None:
+def _register_unified_search(mcp: MCPServer) -> None:
     @mcp.tool(
         name="unified_search",
         **tool_kwargs(unified_search.schema),
@@ -347,7 +349,7 @@ def _register_unified_search(mcp: FastMCP) -> None:
         domain: str | None = None,
         max_results: int = 10,
         k: int = 60,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """RRF-fuse Cortex memory recall with AP code search (ADR-0046 P3)."""
         return await safe_handler(
             unified_search.handler,

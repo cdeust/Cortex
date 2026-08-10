@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from fastmcp import Client, FastMCP
-from mcp.shared.exceptions import McpError
+from exceptiongroup import BaseExceptionGroup, ExceptionGroup
+from mcp import Client
+from mcp.server.mcpserver import MCPServer
+from mcp.shared.exceptions import MCPError
 
 from mcp_server import mcp_prompts, tool_profiles
 from mcp_server.__main__ import merged_schemas, register_all
@@ -14,22 +16,45 @@ from mcp_server.tool_profile_middleware import ToolProfileMiddleware
 from mcp_server.tool_profiles import ToolProfile
 
 
-def _build(profile: ToolProfile) -> FastMCP:
-    server = FastMCP(
-        name="t", version="0", instructions=tool_profiles.instructions(profile)
+def _build(profile: ToolProfile) -> MCPServer:
+    # ToolProfileMiddleware must be passed at construction (mcp 2.0.0's
+    # `middleware` list is constructor-only — no post-construction
+    # `add_middleware`, unlike FastMCP; see tool_profile_middleware.py's
+    # module docstring and mcp_server/__main__.py's Server Instance
+    # section for the same pattern in the composition root).
+    server = MCPServer(
+        name="t",
+        version="0",
+        instructions=tool_profiles.instructions(profile),
+        middleware=[ToolProfileMiddleware(profile)],
     )
     register_all(server, codebase=False, prd=False)
     mcp_prompts.register_prompts(server, merged_schemas())
-    server.add_middleware(ToolProfileMiddleware(profile))
     return server
 
 
-def _run(server: FastMCP, coro_fn):
+def _run(server: MCPServer, coro_fn):
     async def go():
         async with Client(server) as client:
             return await coro_fn(client)
 
     return asyncio.run(go())
+
+
+def _unwrap(exc: BaseException) -> BaseException:
+    """Descend through nested ``ExceptionGroup``s to the real cause.
+
+    mcp 2.0.0's in-process ``Client`` transport is anyio-task-group-based
+    (was a direct call under FastMCP), so a server-raised error now
+    surfaces wrapped in one or more ``ExceptionGroup``s from task-group
+    teardown rather than as the bare exception. Single-exception groups
+    only (Cortex's client helpers here never fan out concurrent calls);
+    a genuinely multi-exception group would mean this helper is being
+    used somewhere it should not be.
+    """
+    while isinstance(exc, ExceptionGroup) and len(exc.exceptions) == 1:
+        exc = exc.exceptions[0]
+    return exc
 
 
 # ── source of truth (criterion 3) ───────────────────────────────────────────
@@ -56,20 +81,20 @@ def test_tool_summary_comes_from_schema_description():
 
 def test_full_lists_all_three_prompts():
     server = _build(ToolProfile.FULL)
-    names = {p.name for p in _run(server, lambda c: c.list_prompts())}
+    names = {p.name for p in _run(server, lambda c: c.list_prompts()).prompts}
     assert names == {"session_recall", "promote_memories", "curate_wiki"}
 
 
 def test_lean_lists_only_session_recall():
     # promote_memories and curate_wiki drive full-only tools, so lean hides them.
     server = _build(ToolProfile.LEAN)
-    names = {p.name for p in _run(server, lambda c: c.list_prompts())}
+    names = {p.name for p in _run(server, lambda c: c.list_prompts()).prompts}
     assert names == {"session_recall"}
 
 
 def test_every_argument_has_name_description_required():
     server = _build(ToolProfile.FULL)
-    prompts = _run(server, lambda c: c.list_prompts())
+    prompts = _run(server, lambda c: c.list_prompts()).prompts
     for prompt in prompts:
         for arg in prompt.arguments:
             assert arg.name
@@ -116,8 +141,9 @@ def test_unknown_prompt_name_errors():
     async def call(c):
         return await c.get_prompt("no_such_prompt", {})
 
-    with pytest.raises(McpError):
+    with pytest.raises(BaseExceptionGroup) as exc:
         _run(server, call)
+    assert isinstance(_unwrap(exc.value), MCPError)
 
 
 def test_missing_required_argument_errors():
@@ -126,8 +152,9 @@ def test_missing_required_argument_errors():
     async def call(c):
         return await c.get_prompt("session_recall", {})  # 'project' required
 
-    with pytest.raises(McpError):
+    with pytest.raises(BaseExceptionGroup) as exc:
         _run(server, call)
+    assert isinstance(_unwrap(exc.value), (MCPError, ValueError))
 
 
 def test_full_only_prompt_rejected_under_lean():
@@ -136,12 +163,10 @@ def test_full_only_prompt_rejected_under_lean():
     async def call(c):
         return await c.get_prompt("promote_memories", {})
 
-    with pytest.raises(Exception) as exc:
+    with pytest.raises(BaseExceptionGroup) as exc:
         _run(server, call)
-    assert (
-        "profile" in str(exc.value).lower()
-        or "unknown prompt" in str(exc.value).lower()
-    )
+    message = str(_unwrap(exc.value)).lower()
+    assert "profile" in message or "unknown prompt" in message
 
 
 def test_is_available_matches_profile_membership():

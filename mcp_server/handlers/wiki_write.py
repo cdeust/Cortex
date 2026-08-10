@@ -295,7 +295,7 @@ async def write_governed_page(
     opens a frontmatter fence it never closes — the one shape that is
     structurally inexploitable. The interactive tool call (``handler``,
     below, registered via ``safe_handler``) turns this into a
-    ``fastmcp.exceptions.ToolError`` automatically (the repo's standing
+    ``mcp.server.mcpserver.exceptions.ToolError`` automatically (the repo's standing
     idiom — see commits c7dfc243/49f29e98); ``consolidation/page_io.py``'s
     non-tool callers catch it explicitly and degrade to their existing
     failure contract.

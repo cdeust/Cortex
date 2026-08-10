@@ -7,7 +7,9 @@ Tier 3 advanced tools are in tool_registry_advanced.py.
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from typing import Any
+
+from mcp.server.mcpserver import MCPServer
 
 from mcp_server.handlers import (
     detect_gaps,
@@ -35,7 +37,7 @@ SCHEMAS: dict[str, dict] = {
 }
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     """Register Tier 2 navigation tools."""
     _register_recall_hierarchical(mcp)
     _register_drill_down(mcp)
@@ -46,7 +48,7 @@ def register(mcp: FastMCP) -> None:
     _register_why(mcp)
 
 
-def _register_recall_hierarchical(mcp: FastMCP) -> None:
+def _register_recall_hierarchical(mcp: MCPServer) -> None:
     @mcp.tool(
         name="recall_hierarchical",
         **tool_kwargs(recall_hierarchical.schema),
@@ -57,7 +59,7 @@ def _register_recall_hierarchical(mcp: FastMCP) -> None:
         max_results: int = 10,
         min_heat: float = 0.05,
         cluster_threshold: float = 0.6,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Retrieve memories using fractal hierarchy."""
         return await safe_handler(
             recall_hierarchical.handler,
@@ -72,7 +74,7 @@ def _register_recall_hierarchical(mcp: FastMCP) -> None:
         )
 
 
-def _register_drill_down(mcp: FastMCP) -> None:
+def _register_drill_down(mcp: MCPServer) -> None:
     @mcp.tool(
         name="drill_down",
         **tool_kwargs(drill_down.schema),
@@ -81,7 +83,7 @@ def _register_drill_down(mcp: FastMCP) -> None:
         cluster_id: str,
         domain: str | None = None,
         min_heat: float = 0.05,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Navigate into a fractal memory cluster."""
         return await safe_handler(
             drill_down.handler,
@@ -94,7 +96,7 @@ def _register_drill_down(mcp: FastMCP) -> None:
         )
 
 
-def _register_navigate_memory(mcp: FastMCP) -> None:
+def _register_navigate_memory(mcp: MCPServer) -> None:
     @mcp.tool(
         name="navigate_memory",
         **tool_kwargs(navigate_memory.schema),
@@ -104,7 +106,7 @@ def _register_navigate_memory(mcp: FastMCP) -> None:
         max_depth: int = 2,
         include_2d_map: bool = False,
         window_hours: float = 2.0,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Navigate memory space using Successor Representation."""
         return await safe_handler(
             navigate_memory.handler,
@@ -118,7 +120,7 @@ def _register_navigate_memory(mcp: FastMCP) -> None:
         )
 
 
-def _register_get_causal_chain(mcp: FastMCP) -> None:
+def _register_get_causal_chain(mcp: MCPServer) -> None:
     @mcp.tool(
         name="get_causal_chain",
         **tool_kwargs(get_causal_chain.schema),
@@ -129,7 +131,7 @@ def _register_get_causal_chain(mcp: FastMCP) -> None:
         relationship_types: list[str] | None = None,
         max_depth: int = 3,
         direction: str = "both",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Trace entity relationships through the knowledge graph."""
         return await safe_handler(
             get_causal_chain.handler,
@@ -144,7 +146,7 @@ def _register_get_causal_chain(mcp: FastMCP) -> None:
         )
 
 
-def _register_detect_gaps(mcp: FastMCP) -> None:
+def _register_detect_gaps(mcp: MCPServer) -> None:
     @mcp.tool(
         name="detect_gaps",
         **tool_kwargs(detect_gaps.schema),
@@ -155,7 +157,7 @@ def _register_detect_gaps(mcp: FastMCP) -> None:
         include_domain_gaps: bool = True,
         include_temporal_gaps: bool = True,
         stale_threshold_days: int = 30,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Identify knowledge gaps in the memory store."""
         return await safe_handler(
             detect_gaps.handler,
@@ -170,7 +172,7 @@ def _register_detect_gaps(mcp: FastMCP) -> None:
         )
 
 
-def _register_recall_skills(mcp: FastMCP) -> None:
+def _register_recall_skills(mcp: MCPServer) -> None:
     @mcp.tool(
         name="recall_skills",
         **tool_kwargs(recall_skills.schema),
@@ -181,7 +183,7 @@ def _register_recall_skills(mcp: FastMCP) -> None:
         recent_tools: list[str] | None = None,
         top_k: int = 5,
         min_proficiency: float = 0.5,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Retrieve procedural skills for the current situation."""
         return await safe_handler(
             recall_skills.handler,
@@ -196,12 +198,12 @@ def _register_recall_skills(mcp: FastMCP) -> None:
         )
 
 
-def _register_why(mcp: FastMCP) -> None:
+def _register_why(mcp: MCPServer) -> None:
     @mcp.tool(
         name="why",
         **tool_kwargs(why.schema),
     )
-    async def tool_why(receipt_ids: list[int]) -> dict:
+    async def tool_why(receipt_ids: list[int]) -> dict[str, Any]:
         """Resolve ⟦rcpt:id⟧ injection receipts into presence-in-context evidence."""
         return await safe_handler(
             why.handler,

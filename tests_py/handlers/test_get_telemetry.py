@@ -1,7 +1,7 @@
 """Tests for mcp_server.handlers.get_telemetry — Popper C6 telemetry.
 
-Issue #17 (PSGSupport): pin the handler-return-shape contract. FastMCP
-2.x enforces ``output_schema`` and rejects strings. The handler — and
+Issue #17 (PSGSupport): pin the handler-return-shape contract. The MCP
+SDK enforces ``output_schema`` and rejects strings. The handler — and
 ``safe_handler`` around it — must return a dict.
 """
 

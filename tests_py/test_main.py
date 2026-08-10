@@ -5,15 +5,13 @@ import signal
 from unittest.mock import patch
 
 import pytest
-from fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from mcp_server.__main__ import (
-    fastmcp,
     main,
     _shutdown,
     mcp,
     register_all,
-    run_stdio_drained,
 )
 
 
@@ -28,7 +26,7 @@ def _tool_names(*, codebase: bool, prd: bool) -> set[str]:
     Deterministic — independent of whether ai-architect-mcp-codebase / prd-spec-gen
     happen to be installed on the machine running the test.
     """
-    server = FastMCP(name="test", version="0.0.0")
+    server = MCPServer(name="test", version="0.0.0")
     register_all(server, codebase=codebase, prd=prd)
     return {t.name for t in asyncio.run(server.list_tools())}
 
@@ -38,17 +36,15 @@ class TestMain:
         assert callable(main)
 
     def test_main_registers_signal_handlers_and_runs(self):
-        # Not mcp.run(transport="stdio"): main() drives stdio via
-        # run_stdio_drained
-        # (mcp_server/infrastructure/stdio_transport.py) instead, so that
-        # a request dispatched from the last line of a
-        # batch is drained before shutdown rather than losing its response
-        # to stdin-EOF (see that module's docstring). anyio.run is what
-        # main() calls now; assert THAT call, with the drained driver.
+        # main() drives stdio via mcp.run_stdio_async directly now (was
+        # mcp_server.infrastructure.stdio_transport.run_stdio_drained, a
+        # workaround for a FastMCP-only defect that mcp 2.0.0's own
+        # dispatcher no longer has -- see __main__.py's main() docstring
+        # comment for the empirical verification). anyio.run is what
+        # main() calls; assert THAT call, with the SDK-native driver.
         with (
             patch("mcp_server.__main__.signal.signal") as mock_signal,
             patch("mcp_server.__main__.anyio.run") as mock_anyio_run,
-            patch.object(fastmcp.settings, "check_for_updates", "stable"),
         ):
             main()
 
@@ -58,12 +54,9 @@ class TestMain:
             assert signal.SIGTERM in sig_nums
             assert signal.SIGINT in sig_nums
 
-            # Should drive stdio via the drain-safe wrapper, not
-            # mcp.run(transport="stdio") directly.
-            mock_anyio_run.assert_called_once_with(run_stdio_drained, mcp)
-            # Preserve the banner path while disabling only its pre-handshake
-            # PyPI lookup, regardless of FastMCP's ambient default.
-            assert fastmcp.settings.check_for_updates == "off"
+            # Should drive stdio via the SDK's own run_stdio_async, not a
+            # Cortex-side wrapper.
+            mock_anyio_run.assert_called_once_with(mcp.run_stdio_async)
 
     def test_standalone_baseline_is_52_tools(self):
         """With no upstream available, exactly the 52 standalone tools register.
