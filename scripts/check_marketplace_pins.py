@@ -119,6 +119,7 @@ from marketplace_pins_manifests import check_root_manifests  # noqa: E402
 from marketplace_pins_registry import (  # noqa: E402
     check_registry_surface,
     check_registry_version,
+    check_server_json_schema,
 )
 from marketplace_pins_self import FROZEN_PINS, check_self_pin  # noqa: E402
 from marketplace_pins_semver import (  # noqa: E402
@@ -135,6 +136,7 @@ __all__ = [
     "check_root_manifests",
     "check_registry_surface",
     "check_registry_version",
+    "check_server_json_schema",
     "check_self_pin",
     "latest_local_tag",
     "main",
