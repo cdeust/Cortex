@@ -87,21 +87,41 @@ updates:
       # pydantic-core is transitive, not declared: hypermnesia-mcp ->
       # pydantic -> pydantic-core. Unlike a version *range*, pydantic pins
       # its Rust extension EXACTLY per release (ABI lockstep, not a
-      # compatibility range) — pydantic 2.13.4 (latest stable, no newer
-      # stable exists) declares `pydantic-core==2.46.4`. No pydantic
-      # release, stable or pre-release, accepts pydantic-core 2.47.0: the
-      # only releases past 2.13.4 are pre-releases 2.14.0a1/2.14.0b1, and
-      # both already require `pydantic-core==2.48.0` — 2.47.0 sits in a gap
-      # between the two pydantic pin generations with no compatible
-      # pydantic release at any maturity. The bump is unresolvable rather
-      # than merely unresynced: PR #333 failed every job, not just Lint,
-      # and was closed for this reason.
+      # compatibility range) — pydantic 2.13.4 (latest STABLE, no newer
+      # stable exists) declares `pydantic-core==2.46.4`. This repo resolves
+      # the latest stable pydantic by default (no pre-release opt-in), so
+      # pydantic-core must match 2.13.4's exact pin, not some other
+      # pydantic release's.
+      #
+      # CORRECTION (2026-08-10 review): an earlier version of this comment
+      # claimed no pydantic release at any maturity accepts pydantic-core
+      # 2.47.0. That was checked against only one of the two pre-releases
+      # past 2.13.4 (2.14.0b1, which does require `pydantic-core==2.48.0`)
+      # and wrongly generalized to the other. The full picture, from
+      # PyPI's own metadata:
+      #   pydantic 2.13.4  (stable) -> pydantic-core==2.46.4
+      #   pydantic 2.14.0a1 (alpha) -> pydantic-core==2.47.0
+      #   pydantic 2.14.0b1 (beta)  -> pydantic-core==2.48.0
+      # pydantic-core 2.47.0 DOES have a matching pydantic release — the
+      # 2.14.0a1 alpha — this repo simply does not (and should not) track
+      # a pydantic alpha. The bump is still correctly rejected, for the
+      # narrower, accurate reason above, not because no match exists.
+      # PR #333 failed every job, not just Lint, and was closed for this
+      # reason.
+      #
       # No advisory affects pydantic-core
       # (`gh api "/advisories?ecosystem=pip&affects=pydantic-core"`
       # returned none on 2026-08-10), so 2.46.4 is not a security hold.
-      # Remove this entry once pydantic's stable release line moves past
-      # 2.13.x and pins a newer pydantic-core.
+      #
+      # Bounded, not open-ended: only the 2.47.x line is excluded (the
+      # alpha-only version this PR's history is about). 2.48.0, matching
+      # the 2.14.0 BETA, is left reachable — once pydantic's stable line
+      # advances to (or past) 2.14.0, a dependabot bump to 2.48.0 should
+      # go through on its own rather than being silently blocked by an
+      # open `>2.46.4` range. Remove this entry entirely once pydantic's
+      # stable release line moves past 2.13.x.
       # source: PyPI JSON API https://pypi.org/pypi/pydantic/json +
+      #         https://pypi.org/pypi/pydantic/2.14.0a1/json +
       #         https://pypi.org/pypi/pydantic/2.14.0b1/json, read 2026-08-10.
       - dependency-name: "pydantic-core"
-        versions: [">2.46.4"]
+        versions: [">2.46.4,<2.48.0"]
