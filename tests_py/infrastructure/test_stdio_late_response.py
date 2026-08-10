@@ -50,6 +50,8 @@ before changing the assertion or reaching for a Cortex-side stdio wrapper.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import anyio
 import mcp.types as types
 import pytest
@@ -146,50 +148,89 @@ async def _collect_responses(write_stream_reader: object) -> dict[int, SessionMe
     return responses
 
 
+@dataclass
+class _RaceFixtures:
+    """Everything one race run needs — grouped so building it is one call."""
+
+    mcp: MCPServer
+    handler_started: anyio.Event
+    handler_may_finish: anyio.Event
+    write_stream_closed: anyio.Event
+    read_stream_writer: object
+    read_stream: object
+    write_stream_reader: object
+    observed_write_stream: _CloseObservingWriteStream
+    init_options: object
+
+
+def _build_race_fixtures() -> _RaceFixtures:
+    handler_started = anyio.Event()
+    handler_may_finish = anyio.Event()
+    write_stream_closed = anyio.Event()
+    mcp = _make_slow_tool_server(
+        handler_started=handler_started, handler_may_finish=handler_may_finish
+    )
+    read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
+    write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
+    observed_write_stream = _CloseObservingWriteStream(
+        write_stream, write_stream_closed
+    )
+    return _RaceFixtures(
+        mcp=mcp,
+        handler_started=handler_started,
+        handler_may_finish=handler_may_finish,
+        write_stream_closed=write_stream_closed,
+        read_stream_writer=read_stream_writer,
+        read_stream=read_stream,
+        write_stream_reader=write_stream_reader,
+        observed_write_stream=observed_write_stream,
+        init_options=mcp._lowlevel_server.create_initialization_options(),
+    )
+
+
+async def _drive_late_request_scenario() -> dict[int, SessionMessage]:
+    """Run the deterministic EOF-vs-in-flight-handler race once; return
+    whatever responses the dispatcher wrote back for request ids 1/2.
+
+    Extracted from the test method itself (Fowler 2018 Ch. 6, Extract
+    Function) to keep it under this repo's 40-line/method convention
+    (CLAUDE.md) without shortening the setup this scenario needs.
+    """
+    f = _build_race_fixtures()
+    responses: dict[int, SessionMessage] = {}
+
+    async def _collect() -> None:
+        nonlocal responses
+        responses = await _collect_responses(f.write_stream_reader)
+
+    async def _drive_and_release() -> None:
+        await _feed_batch_then_simulate_eof(f.read_stream_writer, f.handler_started)
+        # The dispatcher cancels the in-flight handler as part of its own
+        # EOF/shutdown sequence (see module docstring) — it never waits
+        # for handler_may_finish, so releasing it is only to let the task
+        # settle (a cancelled await returns immediately either way) and
+        # keep this harness deterministic rather than relying on
+        # cancellation timing.
+        await f.write_stream_closed.wait()
+        f.handler_may_finish.set()
+
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(_collect)
+        tg.start_soon(_drive_and_release)
+        await f.mcp._lowlevel_server.run(
+            f.read_stream, f.observed_write_stream, f.init_options
+        )
+
+    return responses
+
+
 class TestStdioLateResponseNeverSilentlyDrops:
     """Pin: mcp 2.0.0's bare dispatch, no Cortex wrapper, ALWAYS answers a
     request in flight at EOF — with a shutdown error, never dead silence."""
 
     @pytest.mark.asyncio
     async def test_bare_lowlevel_run_answers_the_late_request(self) -> None:
-        handler_started = anyio.Event()
-        handler_may_finish = anyio.Event()
-        write_stream_closed = anyio.Event()
-        mcp = _make_slow_tool_server(
-            handler_started=handler_started, handler_may_finish=handler_may_finish
-        )
-
-        read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
-        write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
-        observed_write_stream = _CloseObservingWriteStream(
-            write_stream, write_stream_closed
-        )
-
-        init_options = mcp._lowlevel_server.create_initialization_options()
-
-        responses: dict[int, SessionMessage] = {}
-
-        async def _collect() -> None:
-            nonlocal responses
-            responses = await _collect_responses(write_stream_reader)
-
-        async def _drive_and_release() -> None:
-            await _feed_batch_then_simulate_eof(read_stream_writer, handler_started)
-            # The dispatcher cancels the in-flight handler as part of its
-            # own EOF/shutdown sequence (see module docstring) — it never
-            # waits for handler_may_finish, so releasing it is only to let
-            # the task settle (a cancelled await returns immediately either
-            # way) and keep this harness deterministic rather than relying
-            # on cancellation timing.
-            await write_stream_closed.wait()
-            handler_may_finish.set()
-
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(_collect)
-            tg.start_soon(_drive_and_release)
-            await mcp._lowlevel_server.run(
-                read_stream, observed_write_stream, init_options
-            )
+        responses = await _drive_late_request_scenario()
 
         assert 1 in responses, (
             "initialize is handled inline; never subject to this race"
