@@ -1,9 +1,12 @@
 # E1 v3 — LoCoMo Ablation Results (n=1986, 14 rows)
 
+> [!WARNING]
+> **Superseded for current figures.** This sweep ran on code SHA `ef178da7418a05bcf7aeb3e66f5b3179fdad2c4d`, before the plasticity result-shape fix `5f737fe`. Use the [post-fix re-run](e1-v3-locomo-results-post-fix.md) (code SHA `2f45bcb39dbe15fa0ef857cc8c8c3783175d05db`) for every current LoCoMo value and per-mechanism delta. This document is retained as historical pre-fix evidence only.
+
 ## Headline
 
 - **Cortex BASELINE_NO_CONSOLIDATION (longitudinal-read-path anchor): MRR = 0.8278, R@10 = 0.942** on LoCoMo (n = 1986).
-- vs. CLAUDE.md established LoCoMo baseline (MRR = 0.794, R@10 = 0.926): **+4.3% MRR, +1.6% R@10**.
+- vs. the historical April 2026 clean-DB Cortex comparator (MRR = 0.794, R@10 = 0.926; n=1982; provenance and limitations in the [post-fix re-run](e1-v3-locomo-results-post-fix.md#historical-comparator-provenance)): **+4.3% MRR, +1.6% R@10**.
 - **BASELINE_WITH_CONSOLIDATION (consolidation-cadence anchor): MRR = 0.8264, R@10 = 0.940.** ΔvsNO = +0.0014, within the per-row noise floor. This is the **n=1986 validation that the cadence fix (commit `6c51bce`) holds**: pre-fix smoke had MRR_with_cons collapse to 0.222 because of a wall-clock vs event-time confusion; the post-fix anchor sits indistinguishable from NO_CONSOLIDATION at full scale.
 - The 14-row two-baseline ablation **empirically resolves the architectural-mismatch hypothesis from the LME-S §6.3 writeup**: longitudinal mechanisms (RECONSOLIDATION, CO_ACTIVATION, ADAPTIVE_DECAY) that were at the noise floor on isolated-haystack LME-S **do show measurable effect on the longitudinal benchmark whose mechanism-of-action they target**.
 

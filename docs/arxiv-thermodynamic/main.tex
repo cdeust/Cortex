@@ -48,7 +48,7 @@ compress episodic into semantic memory
 (WSF) retrieval with heat as a tie-breaker.  On three independent
 long-term-memory
 benchmarks, Cortex reaches LongMemEval R@10\,$=$\,98.4\% and
-LoCoMo R@10\,$=$\,94.2\% (retrieval recall, directly comparable to
+LoCoMo R@10\,$=$\,94.35\% (retrieval recall, directly comparable to
 the published retrieval baselines), and a retrieval-proxy MRR of
 0.591 on BEAM-100K.  We report the BEAM number as a retrieval-proxy
 (does the gold memory appear in the retrieved set), which is
@@ -106,7 +106,7 @@ R@10\,$=$\,98.4\% versus 78.4\% paper-best; on BEAM
 \citep{Tavakoli2026}, a retrieval-proxy MRR of 0.591 on BEAM-100K
 (not comparable to BEAM's end-to-end metric; see
 \S\ref{sec:beam-proxy}); on
-LoCoMo \citep{Maharana2024}, R@10\,$=$\,94.2\%.  All numbers are
+LoCoMo \citep{Maharana2024}, R@10\,$=$\,94.35\%.  All numbers are
 produced by the production PL/pgSQL retrieval code path,
 single-process, on a clean database seeded only with each
 benchmark's data.
@@ -132,7 +132,7 @@ benchmark's data.
         (WSF tie-breaking), and curation-by-attrition.
   \item Empirical results on three long-term-memory benchmarks
         (\S\ref{sec:empirical}): R@10\,$=$\,98.4\% on LongMemEval
-        ($+20.0$\,pp over paper-best), R@10\,$=$\,94.2\% on LoCoMo,
+        ($+20.0$\,pp over paper-best), R@10\,$=$\,94.35\% on LoCoMo,
         and a retrieval-proxy MRR of 0.591 on BEAM-100K.
 \end{enumerate}
 
@@ -571,8 +571,8 @@ Benchmark & Venue & Metric & Cortex & Paper-best \\
 \midrule
 LongMemEval & ICLR 2025 & R@10    & \textbf{98.4\%} & 78.4\% \\
 LongMemEval & ICLR 2025 & MRR     & \textbf{0.9124} & ---    \\
-LoCoMo      & ACL 2024  & R@10    & \textbf{94.2\%} & ---    \\
-LoCoMo      & ACL 2024  & MRR     & \textbf{0.8278} & ---    \\
+LoCoMo      & ACL 2024  & R@10    & \textbf{94.35\%} & ---    \\
+LoCoMo      & ACL 2024  & MRR     & \textbf{0.8279} & ---    \\
 BEAM-100K   & ICLR 2026 & MRR (retrieval-proxy)$^\dagger$ & \textbf{0.591}  & ---    \\
 \bottomrule
 \end{tabular}
@@ -975,16 +975,21 @@ group's mechanism-of-action.  Sign convention is unchanged from
 \text{ablated}$.
 
 \paragraph{Headline.}  \texttt{BASELINE\_NO\_CONSOLIDATION} reaches
-MRR $= 0.8278$, R@10 $= 0.942$ on LoCoMo ($n = 1986$).  Against the
-established LoCoMo baseline (MRR $= 0.794$, R@10 $= 0.926$) this is
-$+4.3\%$ MRR, $+1.6\%$ R@10.
-\texttt{BASELINE\_WITH\_CONSOLIDATION} reaches MRR $= 0.8264$,
-R@10 $= 0.940$ ($\Delta$ vs.\ NO $= +0.0014$, within the per-row
+MRR $= 0.8279$, R@10 $= 0.9435$ on LoCoMo ($n = 1986$).  Against the
+historical April 2026 clean-DB Cortex comparator (MRR $= 0.794$,
+R@10 $= 0.926$, $n = 1982$) this is $+4.3\%$ MRR and $+1.75$
+percentage points R@10.\footnote{The historical pair was first
+published in repository commit \texttt{b4057a}; its original
+per-query artefact was not committed, so it is retained only as a
+historical comparator, not as the current baseline.}
+\texttt{BASELINE\_WITH\_CONSOLIDATION} reaches MRR $= 0.8265$,
+R@10 $= 0.9410$ ($\Delta$ vs.\ NO $= +0.0014$, within the per-row
 noise floor).  The two anchors agreeing at full $n$ confirms that the
 consolidation cadence fix described in \S\ref{sec:cadence-fix} holds
-on the full benchmark, not only on smoke.  Artefacts at
-\texttt{benchmarks/results/ablation/locomo\_v3/}; manifest code SHA
-\texttt{ef178da}, dirty=false, finished 2026-05-03.
+on the full benchmark, not only on smoke.  The authoritative run
+record is \texttt{docs/benchmarks/e1-v3-locomo-results-post-fix.md};
+launch code SHA \texttt{2f45bcb39dbe15fa0ef857cc8c8c3783175d05db},
+dirty=false, finished 2026-05-04.
 
 \begin{center}
 \small
@@ -992,20 +997,20 @@ on the full benchmark, not only on smoke.  Artefacts at
 \toprule
 Mechanism                       & MRR (abl.) & R@10 (abl.) & $\Delta$MRR & $\Delta$R@10 & Anchor \\
 \midrule
-BASELINE\_NO\_CONSOLIDATION     & 0.8278 & 0.942 & 0          & 0          & self \\
-RECONSOLIDATION                 & 0.8202 & 0.931 & \textbf{$+$0.0076}  & $+$0.011   & NO   \\
-\emph{CO\_ACTIVATION}                  & 0.8268 & 0.940 & $\approx 0$  & $+$0.001   & NO   \\
-ADAPTIVE\_DECAY                 & 0.8441 & 0.962 & \textbf{$-$0.0163}  & $-$0.020   & NO   \\
-BASELINE\_WITH\_CONSOLIDATION   & 0.8264 & 0.940 & 0          & 0          & self \\
-\emph{CASCADE}                         & 0.8272 & 0.941 & $\approx 0$  & $-$0.001   & WITH \\
-\emph{INTERFERENCE}                    & 0.8260 & 0.939 & $\approx 0$  & $+$0.001   & WITH \\
-HOMEOSTATIC\_PLASTICITY         & 0.8289 & 0.945 & \textbf{$-$0.0025}  & $-$0.005   & WITH \\
-\emph{SYNAPTIC\_PLASTICITY}            & 0.8264 & 0.940 & $\approx 0$ & 0 & WITH \\
-\emph{MICROGLIAL\_PRUNING}             & 0.8253 & 0.939 & $\approx 0$  & $+$0.001   & WITH \\
-\emph{TWO\_STAGE\_MODEL}               & 0.8276 & 0.941 & $\approx 0$  & $-$0.001   & WITH \\
-\emph{EMOTIONAL\_DECAY}                & 0.8249 & 0.940 & $\approx 0$ & $\phantom{-}0.000$ & WITH \\
-\emph{TRIPARTITE\_SYNAPSE}             & 0.8268 & 0.941 & $\approx 0$  & $-$0.001   & WITH \\
-\emph{SCHEMA\_ENGINE}                  & 0.8268 & 0.941 & $\approx 0$  & $-$0.001   & WITH \\
+BASELINE\_NO\_CONSOLIDATION     & 0.8279 & 0.9435 & 0          & 0          & self \\
+RECONSOLIDATION                 & 0.8188 & 0.9289 & \textbf{$+$0.0091} & $+$0.0146 & NO   \\
+\emph{CO\_ACTIVATION}          & 0.8264 & 0.9400 & $+$0.0015 & $+$0.0035 & NO   \\
+ADAPTIVE\_DECAY                 & 0.8442 & 0.9622 & \textbf{$-$0.0163} & $-$0.0187 & NO   \\
+BASELINE\_WITH\_CONSOLIDATION   & 0.8265 & 0.9410 & 0          & 0          & self \\
+\emph{CASCADE}                  & 0.8268 & 0.9425 & $-$0.0002 & $-$0.0015 & WITH \\
+\emph{INTERFERENCE}             & 0.8271 & 0.9410 & $-$0.0005 & $\phantom{-}0.0000$ & WITH \\
+\emph{HOMEOSTATIC\_PLASTICITY}  & 0.8248 & 0.9390 & $+$0.0017 & $+$0.0020 & WITH \\
+\emph{SYNAPTIC\_PLASTICITY}     & 0.8269 & 0.9405 & $-$0.0003 & $+$0.0005 & WITH \\
+\emph{MICROGLIAL\_PRUNING}      & 0.8269 & 0.9420 & $-$0.0004 & $-$0.0010 & WITH \\
+\emph{TWO\_STAGE\_MODEL}        & 0.8267 & 0.9395 & $-$0.0002 & $+$0.0015 & WITH \\
+\emph{EMOTIONAL\_DECAY}         & 0.8263 & 0.9415 & $+$0.0002 & $-$0.0005 & WITH \\
+\emph{TRIPARTITE\_SYNAPSE}      & 0.8266 & 0.9415 & $-$0.0001 & $-$0.0005 & WITH \\
+\emph{SCHEMA\_ENGINE}           & 0.8249 & 0.9395 & $+$0.0017 & $+$0.0015 & WITH \\
 \bottomrule
 \end{tabular}\\[2pt]
 {\footnotesize Bold $=$ above noise floor ($|\Delta\text{MRR}| >
@@ -1023,8 +1028,8 @@ exercise show up on LoCoMo with consistent signs and magnitudes:
 \toprule
 Mechanism        & LME-S $\Delta$MRR & LoCoMo $\Delta$MRR & Resolution \\
 \midrule
-RECONSOLIDATION  & $+$0.0000 & $+$0.0076 & Confirmed: fires on multi-session recall \\
-CO\_ACTIVATION   & $+$0.0000 & $+$0.0010 & Confirmed; smaller magnitude \\
+RECONSOLIDATION  & $+$0.0000 & $+$0.0091 & Confirmed: fires on multi-session recall \\
+CO\_ACTIVATION   & $+$0.0000 & $+$0.0015 & Confirmed; smaller magnitude \\
 ADAPTIVE\_DECAY  & $-$0.0014 & $-$0.0163 & Same sign, amplified $\sim 11\times$ \\
 \bottomrule
 \end{tabular}
@@ -1040,13 +1045,13 @@ in the deltas.
 \paragraph{Top contributors per anchor group.}  In the
 longitudinal-read-path group, ADAPTIVE\_DECAY ($|\Delta\text{MRR}| =
 0.0163$, counterproductive) and RECONSOLIDATION ($\Delta\text{MRR} =
-+0.0076$, positive) dominate; CO\_ACTIVATION ($+0.0010$) is
++0.0091$, positive) dominate; CO\_ACTIVATION ($+0.0015$) is
 consistent-sign but at the per-row noise floor.  In the
-consolidation-only group, all nine deltas sit within the per-row
-noise floor ($\approx \pm 0.002$ MRR at $n = 1986$ single-seed);
-HOMEOSTATIC\_PLASTICITY ($-0.0025$) is the largest absolute,
-EMOTIONAL\_DECAY ($+0.0015$) and TWO\_STAGE\_MODEL ($-0.0012$)
-follow.  The honest reading of the consolidation-only group is that
+consolidation-only group, every delta is within the per-row noise
+floor ($\approx \pm 0.002$ MRR at $n = 1986$ single-seed);
+HOMEOSTATIC\_PLASTICITY and SCHEMA\_ENGINE (both $+0.0017$) have the
+largest absolute magnitudes but remain at the noise boundary.  The
+honest reading of the consolidation-only group is that
 the consolidation pipeline as a whole contributes (the cadence fix
 narrative in \S\ref{sec:cadence-fix} is not undone by these deltas),
 but no single consolidation-time mechanism dominates at LoCoMo's
@@ -1054,18 +1059,13 @@ scale---the same calibrated-stack property
 \S\ref{sec:per-mechanism} already documented for LME-S.
 
 \paragraph{Limitations of the LoCoMo run.}  Single-seed at
-$n = 1986$; per-row noise floor $\approx \pm 0.002$ MRR.  The
-plasticity result-shape contract bug fixed in commit \texttt{5f737fe}
-(\S\ref{sec:plasticity-fix} below) was discovered \emph{during} the
-LoCoMo sweep and the run was launched on bytes pre-fix; the
-\texttt{BASELINE\_WITH} and the nine consolidation-only rows
-therefore ran with a logged-WARNING (not a crash) that may have
-muted some consolidation deltas.  The three longitudinal-read-path
-rows ran with consolidation off, are not affected by the plasticity
-bug, and constitute the empirical resolution finding above.  The
-follow-up re-run of the consolidation-only group on
-post-\texttt{5f737fe} bytes is reported in
-\S\ref{sec:locomo-postfix}.
+$n = 1986$; per-row noise floor $\approx \pm 0.002$ MRR.  The run is
+on bytes that include both the cadence fix \texttt{6c51bce} and the
+plasticity result-shape fix \texttt{5f737fe}.  Magnitudes below the
+noise floor are not interpreted causally.  The predecessor sweep on
+pre-\texttt{5f737fe} bytes is retained only for the transparent
+pre-vs-post comparison in \S\ref{sec:locomo-postfix}; it is not the
+source of the current headline or table.
 
 \subsubsection{Calibration rigor: Phase~A and Phase~B}
 \label{sec:calibration}
@@ -2103,7 +2103,7 @@ C6 read/write 100:1             & low      & UNTESTED         & One week of prod
 
 No claim in the paper is currently CONFIRMED in the strict
 Popperian sense (survived a severe test designed to refute it).
-The 98.4\% / 94.2\% / 0.591 numbers are corroborations of the
+The 98.4\% / 94.35\% / 0.591 numbers are corroborations of the
 system as configured, not corroborations of the causal claims
 (C1--C6) about \emph{why} it performs.
 
@@ -2256,8 +2256,8 @@ timestamps.
 
 The fix was validated on smoke first; the \S\ref{sec:locomo-evidence}
 LoCoMo run is the $n = 1986$ validation.  At full scale,
-\texttt{BASELINE\_WITH\_CONSOLIDATION} reaches MRR $= 0.8264$
-against \texttt{BASELINE\_NO\_CONSOLIDATION} at MRR $= 0.8278$
+\texttt{BASELINE\_WITH\_CONSOLIDATION} reaches MRR $= 0.8265$
+against \texttt{BASELINE\_NO\_CONSOLIDATION} at MRR $= 0.8279$
 ($\Delta$ vs.\ NO $= +0.0014$, within the per-row noise floor of
 $\approx \pm 0.002$ MRR).  The two anchors agree at full $n$; the
 cadence fix holds, and the \S\ref{sec:locomo-evidence}
@@ -2289,8 +2289,8 @@ result-shaped dicts with \texttt{action="none"}, restoring contract
 compliance for the disabled path.  Regression tests lock the
 result-shape invariant.
 
-The \S\ref{sec:locomo-evidence} LoCoMo run was launched on bytes
-\emph{before} commit \texttt{5f737fe}, which means the
+The predecessor to the \S\ref{sec:locomo-evidence} LoCoMo run was
+launched on bytes \emph{before} commit \texttt{5f737fe}, which means the
 consolidation-only ablation rows (CASCADE, INTERFERENCE,
 HOMEOSTATIC\_PLASTICITY, MICROGLIAL\_PRUNING, TWO\_STAGE\_MODEL,
 EMOTIONAL\_DECAY, TRIPARTITE\_SYNAPSE, SCHEMA\_ENGINE) may have a
@@ -2310,9 +2310,9 @@ rows on post-\texttt{5f737fe} bytes is reported in
 does not change as a result: the architectural-mismatch resolution
 holds (RECONSOLIDATION $\Delta$MRR $= +0.0091$, ADAPTIVE\_DECAY
 $\Delta$MRR $= -0.0163$ on clean bytes); two consolidation-only rows
-(HOMEOSTATIC\_PLASTICITY, SCHEMA\_ENGINE) move from noise/negative to
-positive-out-of-noise, recovering the contribution the contract bug
-had silently muted; the cadence-fix anchor agreement
+(HOMEOSTATIC\_PLASTICITY, SCHEMA\_ENGINE) move from negative/noise to
+positive direction while remaining inside the post-fix MRR noise
+floor; the cadence-fix anchor agreement
 (\S\ref{sec:cadence-fix}) is re-validated identically
 ($\Delta$ vs.\ NO $= +0.0014$).  We declare both the bug and the
 re-run rather than amend silently because the verification campaign's
@@ -2331,9 +2331,8 @@ plasticity result-shape) that are now fixed.
 The \S\ref{sec:plasticity-fix} plasticity result-shape contract bug
 was fixed in commit \texttt{5f737fe}; the same 14-row two-baseline
 sweep was re-run at full $n = 1986$ on a descendant SHA
-(\texttt{2f45bcb}, dirty=false, finished 2026-05-04).  Artefacts at
-\texttt{benchmarks/results/ablation/locomo\_v3\_post\_plasticity\_fix/};
-detailed writeup at
+(\texttt{2f45bcb}, dirty=false, finished 2026-05-04).  The committed
+run record and detailed writeup are at
 \texttt{docs/benchmarks/e1-v3-locomo-results-post-fix.md}.
 
 \paragraph{Headline.} \texttt{BASELINE\_NO\_CONSOLIDATION} reaches
@@ -2348,8 +2347,8 @@ runs, as expected: those rows ran with consolidation off, so the
 plasticity bug had no opportunity to exercise.
 
 \paragraph{Pre-vs-post-fix comparison.}  The consolidation-only group
-has three sign-flips relative to the pre-fix sweep, two of them
-moving out of noise:
+has three sign-flips relative to the pre-fix sweep; all post-fix
+consolidation-only deltas remain inside the $\pm 0.002$ MRR floor:
 
 \begin{center}
 \small
@@ -2368,29 +2367,25 @@ Other 6 cons.\ rows      & within noise & within noise & All deltas $\le \pm 0.0
 \end{tabular}
 \end{center}
 
-Two rows (HOMEOSTATIC\_PLASTICITY at $+0.0042$,
-SCHEMA\_ENGINE at $+0.0021$) move from negative-or-noise pre-fix to
-positive-out-of-noise post-fix; this is the magnitude of contribution
-that was muted by the contract bug.  Six other consolidation-only
-rows remain at the per-row noise floor in both runs.  The
+HOMEOSTATIC\_PLASTICITY and SCHEMA\_ENGINE move by $+0.0042$ and
+$+0.0021$ respectively between runs and end at positive-direction
+$\Delta$MRR $= +0.0017$, still within the post-fix noise floor.  Six
+other consolidation-only rows remain at the per-row noise floor in
+both runs.  The
 architectural-mismatch resolution (RECONSOLIDATION
 $\Delta$MRR $= +0.0091$, ADAPTIVE\_DECAY $\Delta$MRR $= -0.0163$) is
-\textbf{strengthened} on clean bytes---the dominant longitudinal
-contributions are intact and slightly larger in magnitude, as
-predicted in \S\ref{sec:locomo-evidence} (the longitudinal rows were
-never affected by the plasticity bug, so any movement is attributable
-to single-seed run-to-run variance at the noise floor; the magnitudes
-here move with that variance, not against the hypothesis).
+\textbf{re-confirmed} on clean bytes---the dominant longitudinal
+contributions are intact; their small between-run movement is
+single-seed variation.
 
 \paragraph{The verification self-correcting.}
 \S\ref{sec:plasticity-fix} declared the plasticity-shape bug as a
 possible source of mute on the consolidation-only group and committed
-to a follow-up re-run.  This subsection is that re-run.  Two
-consolidation-only rows (HOMEOSTATIC\_PLASTICITY, SCHEMA\_ENGINE)
-recover positive contributions that were silently masked; the
-cadence-fix anchor agreement is re-confirmed; the load-bearing
-architectural-mismatch finding is re-confirmed and slightly
-strengthened.  The verification campaign now comprises three
+to a follow-up re-run.  This subsection is that re-run.
+HOMEOSTATIC\_PLASTICITY and SCHEMA\_ENGINE recover positive-direction
+deltas at the noise boundary; the cadence-fix anchor agreement and
+the load-bearing architectural-mismatch finding are re-confirmed.
+The verification campaign now comprises three
 artefact sets at full $n$ (LME-S 17 rows + LoCoMo 14 rows pre-fix +
 LoCoMo 14 rows post-fix $=$ 45 per-mechanism evidence rows on the
 appropriate benchmark for each mechanism's mechanism-of-action),

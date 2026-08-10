@@ -3,7 +3,7 @@
 ## Headline
 
 - **Cortex BASELINE_NO_CONSOLIDATION (longitudinal-read-path anchor): MRR = 0.8279, R@10 = 0.9435** on LoCoMo (n = 1986).
-- vs. CLAUDE.md established LoCoMo baseline (MRR = 0.794, R@10 = 0.926): **+4.3% MRR, +1.7% R@10** — within rounding identical to the pre-fix sweep, as expected (the longitudinal-read-path rows ran with consolidation off in both sweeps and the plasticity bug cannot exercise there).
+- vs. the historical April 2026 clean-DB Cortex comparator (MRR = 0.794, R@10 = 0.926; n=1982; provenance below): **+4.3% MRR, +1.75 percentage points R@10** — directionally identical to the pre-fix sweep, as expected (the longitudinal-read-path rows ran with consolidation off in both sweeps and the plasticity bug cannot exercise there).
 - **BASELINE_WITH_CONSOLIDATION (consolidation-cadence anchor): MRR = 0.8265, R@10 = 0.941.** ΔvsNO = +0.0014, **identical to the pre-fix value**, within the per-row noise floor. The cadence fix (commit `6c51bce`) re-validated at full n = 1986 a second time on post-`5f737fe` bytes.
 - The 14-row two-baseline ablation **re-confirms** the architectural-mismatch resolution from the pre-fix writeup (`docs/benchmarks/e1-v3-locomo-results.md`): RECONSOLIDATION ΔMRR = +0.0091, ADAPTIVE_DECAY ΔMRR = -0.0163. The longitudinal-read-path group is unchanged; the consolidation-only group has small sign flips on three rows (HOMEOSTATIC_PLASTICITY, SCHEMA_ENGINE, SYNAPTIC_PLASTICITY) — see "Pre-vs-post-fix comparison" below.
 
@@ -43,13 +43,13 @@ Positive Δ ⇒ mechanism contributes positively (ablating it hurts). Negative �
 | BASELINE_WITH_CONSOLIDATION | 0.8265        | 0.9410         |     0   |     0   | self   | Reference (consolidation-cadence anchor); ΔvsNO = +0.0014, within noise — cadence fix `6c51bce` re-validated |
 | CASCADE                     | 0.8268        | 0.9425         | -0.0002 | -0.0015 | WITH   | Within noise floor |
 | INTERFERENCE                | 0.8271        | 0.9410         | -0.0005 |  0.0000 | WITH   | Within noise floor |
-| HOMEOSTATIC_PLASTICITY      | 0.8248        | 0.9390         | +0.0017 | +0.0020 | WITH   | **Sign flipped** vs pre-fix (-0.0025 → +0.0017); positive contribution unmasked once plasticity ran cleanly |
+| HOMEOSTATIC_PLASTICITY      | 0.8248        | 0.9390         | +0.0017 | +0.0020 | WITH   | **Sign flipped** vs pre-fix (-0.0025 → +0.0017); positive direction, within the MRR noise floor |
 | SYNAPTIC_PLASTICITY         | 0.8269        | 0.9405         | -0.0003 | +0.0005 | WITH   | Null contribution (clean: ablation explicitly disables plasticity) |
 | MICROGLIAL_PRUNING          | 0.8269        | 0.9420         | -0.0004 | -0.0010 | WITH   | Within noise floor (sign flipped from +0.0011 but |Δ| at noise floor) |
 | TWO_STAGE_MODEL             | 0.8267        | 0.9395         | -0.0002 | +0.0015 | WITH   | Within noise floor |
 | EMOTIONAL_DECAY             | 0.8263        | 0.9415         | +0.0002 | -0.0005 | WITH   | Within noise floor |
 | TRIPARTITE_SYNAPSE          | 0.8266        | 0.9415         | -0.0001 | -0.0005 | WITH   | Within noise floor |
-| SCHEMA_ENGINE               | 0.8249        | 0.9395         | +0.0017 | +0.0015 | WITH   | **Sign flipped** vs pre-fix (-0.0004 → +0.0017); positive contribution unmasked |
+| SCHEMA_ENGINE               | 0.8249        | 0.9395         | +0.0017 | +0.0015 | WITH   | **Sign flipped** vs pre-fix (-0.0004 → +0.0017); positive direction, within the MRR noise floor |
 
 (Exact 6-decimal values at `benchmarks/results/ablation/locomo_v3_post_plasticity_fix/<MECH>.json::overall_mrr` and `manifest.rows`.)
 
@@ -66,15 +66,15 @@ The plasticity result-shape contract bug (commit `5f737fe`) silently dropped pla
 | BASELINE_WITH_CONSOLIDATION | 0 (anchor)   | 0 (anchor)    | —        | ΔvsNO = +0.0014 in both runs — cadence fix re-confirmed |
 | CASCADE                     | -0.0008      | -0.0002       | +0.0006  | Within noise; closer to zero |
 | INTERFERENCE                | +0.0004      | -0.0005       | -0.0009  | Within noise; sign flipped at noise floor |
-| **HOMEOSTATIC_PLASTICITY**  | **-0.0025**  | **+0.0017**   | **+0.0042** | **Sign flipped** — plasticity-bug-muted negative reading was an artefact; with clean plasticity, this row contributes positively |
+| **HOMEOSTATIC_PLASTICITY**  | **-0.0025**  | **+0.0017**   | **+0.0042** | **Sign flipped** — the between-run movement exceeds the floor, but the post-fix delta remains within the ±0.002 MRR floor |
 | SYNAPTIC_PLASTICITY         |  0.0000      | -0.0003       | -0.0003  | Within noise; explicitly clean ablation |
 | MICROGLIAL_PRUNING          | +0.0011      | -0.0004       | -0.0015  | Within noise; sign flipped at noise floor |
 | TWO_STAGE_MODEL             | -0.0012      | -0.0002       | +0.0010  | Within noise; closer to zero |
 | EMOTIONAL_DECAY             | +0.0015      | +0.0002       | -0.0013  | Within noise; closer to zero |
 | TRIPARTITE_SYNAPSE          | -0.0004      | -0.0001       | +0.0003  | Within noise; near-identical |
-| **SCHEMA_ENGINE**           | **-0.0004**  | **+0.0017**   | **+0.0021** | **Sign flipped** — small but consistent-direction unmasking, mirrors HOMEOSTATIC_PLASTICITY |
+| **SCHEMA_ENGINE**           | **-0.0004**  | **+0.0017**   | **+0.0021** | **Sign flipped** — positive direction after the fix, still within the post-fix MRR noise floor |
 
-**Reading.** Three sign-flips (HOMEOSTATIC_PLASTICITY, SCHEMA_ENGINE, SYNAPTIC_PLASTICITY) of which two (HOMEOSTATIC_PLASTICITY at +0.0042, SCHEMA_ENGINE at +0.0021) move out of noise and toward positive contribution. The longitudinal-read-path group (RECONSOLIDATION, CO_ACTIVATION, ADAPTIVE_DECAY) is essentially identical between runs because those rows ran with consolidation off and the plasticity bug had no opportunity to exercise — exactly as documented in the pre-fix limitations note. The cadence-fix anchor agreement (ΔvsNO = +0.0014) is identical to 4 decimals in both runs.
+**Reading.** Three rows change sign (HOMEOSTATIC_PLASTICITY, SCHEMA_ENGINE, SYNAPTIC_PLASTICITY). HOMEOSTATIC_PLASTICITY and SCHEMA_ENGINE move by +0.0042 and +0.0021 between runs, ending at positive-direction ΔMRR = +0.0017; because |+0.0017| < 0.002, both post-fix row effects remain inside the stated MRR noise floor. The longitudinal-read-path group (RECONSOLIDATION, CO_ACTIVATION, ADAPTIVE_DECAY) is essentially identical between runs because those rows ran with consolidation off and the plasticity bug had no opportunity to exercise. The cadence-fix anchor agreement (ΔvsNO = +0.0014) is identical to 4 decimals in both runs.
 
 ## Architectural-mismatch hypothesis: re-confirmed on clean bytes
 
@@ -96,11 +96,11 @@ The architectural-mismatch hypothesis (longitudinal mechanisms are foreclosed on
 
 **Consolidation-only (anchor: BASELINE_WITH_CONSOLIDATION)**
 
-1. **HOMEOSTATIC_PLASTICITY: ΔMRR = +0.0017** (largest absolute; sign-flipped from pre-fix; positive contribution unmasked).
+1. **HOMEOSTATIC_PLASTICITY: ΔMRR = +0.0017** (largest absolute; sign-flipped from pre-fix; positive direction within noise).
 2. **SCHEMA_ENGINE: ΔMRR = +0.0017** (tied largest absolute; sign-flipped from pre-fix).
 3. **INTERFERENCE: ΔMRR = -0.0005** (within noise floor; reported for completeness).
 
-The consolidation-only group's deltas all sit at or just outside the per-row noise floor (≈ ±0.002 MRR at n = 1986 single-seed). The two newly-unmasked positive contributions (HOMEOSTATIC_PLASTICITY, SCHEMA_ENGINE) sit at the boundary of noise and effect; they are reportable as positive-direction contributions but no single consolidation-time mechanism dominates at LoCoMo's scale, the same calibrated-stack property documented for LME-S and the pre-fix LoCoMo run.
+The consolidation-only group's deltas all sit inside the per-row noise floor (≈ ±0.002 MRR at n = 1986 single-seed). HOMEOSTATIC_PLASTICITY and SCHEMA_ENGINE are positive-direction observations, not causal contributions at this precision; no single consolidation-time mechanism dominates at LoCoMo's scale.
 
 ## Limitations and honest framing
 
@@ -123,6 +123,10 @@ The consolidation-only group's deltas all sit at or just outside the per-row noi
 - **Run manifest:** `manifest.json` (code hash, dirty flag, design, rows_spec, rows[14], started_at, finished_at).
 - **Summary CSV:** `summary.csv` (14 rows, anchor assignments, per-row delta_mrr_vs_anchor / delta_r10_vs_anchor).
 - **Total artefacts:** 14 row JSONs + 1 manifest + 1 summary = 16.
+
+## Historical comparator provenance
+
+The MRR = 0.794 / R@10 = 0.926 pair is **not the current baseline** and is no longer sourced from `CLAUDE.md`. It is the historical clean-database, per-conversation-isolated LoCoMo result (n=1982) first published in commit [`b4057a`](https://github.com/cdeust/Cortex/commit/b4057a532da9c0eecd63ba72ad4174f5e54dab1c). The original per-query run artefact was not committed, so the pair is retained only as a transparent historical comparator; the post-fix run above is authoritative for current Cortex figures.
 
 ## Sources
 

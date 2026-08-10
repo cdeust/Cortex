@@ -407,10 +407,10 @@ LoCoMo (Maharana et al., ACL 2024): 1,986 questions across 10 conversations — 
 
 | | Cortex | What it means |
 |---|---|---|
-| Recall@10 | **91.5%** | Right memory in top 10 over 9 times out of 10 |
-| MRR | **0.805** | The correct *memory* is typically ranked first — retrieval rank only, no LLM reader |
+| Recall@10 | **94.35%** | Right memory in top 10 over 9 times out of 10 |
+| MRR | **0.8279** | The correct *memory* is typically ranked first — retrieval rank only, no LLM reader |
 
-<sub>n=1986, BASELINE_NO_CONSOLIDATION, post-plasticity-fix — `docs/benchmarks/e1-v3-locomo-results-post-fix.md`.</sub>
+<sub>n=1986, BASELINE_NO_CONSOLIDATION, post-plasticity-fix run at code SHA `2f45bcb39dbe15fa0ef857cc8c8c3783175d05db` — `docs/benchmarks/e1-v3-locomo-results-post-fix.md`.</sub>
 
 | Category | MRR | R@10 |
 |---|---|---|
