@@ -61,4 +61,7 @@ craftsmanship_imports = _load_once(
 craftsmanship_constants = _load_once(
     "scripts.craftsmanship_constants", "craftsmanship_constants.py"
 )
+craftsmanship_layer_table = _load_once(
+    "scripts.craftsmanship_layer_table", "craftsmanship_layer_table.py"
+)
 baseline_mod = _load_once("scripts.craftsmanship_baseline", "craftsmanship_baseline.py")

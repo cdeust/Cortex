@@ -1,9 +1,15 @@
 """Tests for scripts/craftsmanship_baseline.py — the ratchet.
 
-Pins the two failure directions the task requires: a violation absent from
-the baseline is NEW (blocks), and a baseline entry whose violation no
-longer reproduces is STALE (also blocks, forcing the baseline to be
-pruned rather than silently drifting from reality).
+Pins the three failure directions the ratchet enforces: a violation
+absent from the base-ref baseline is NEW (blocks); a baseline entry whose
+violation no longer reproduces is STALE (also blocks, forcing the
+baseline to be pruned rather than silently drifting from reality); and a
+baseline-file entry present in the working tree but absent from the base
+ref's committed baseline is ADDED (blocks — the file may only shrink
+within a PR, see ``added_entries``). The end-to-end exploit this last
+check closes — a working-tree-only baseline can be self-regenerated to
+launder a new violation — is reproduced against a real throwaway git repo
+in ``test_check_craftsmanship.py::SneakyLimitExploitTests``.
 """
 
 from __future__ import annotations
@@ -63,6 +69,47 @@ class DiffTests(unittest.TestCase):
         # to nothing — every entry for it is stale.
         stale = baseline_mod.stale_entries({V1}, {})
         self.assertEqual(stale, [V1])
+
+
+class AddedEntriesTests(unittest.TestCase):
+    """The ratchet-file check: the baseline file may only shrink."""
+
+    def test_entry_added_beyond_base_is_reported(self) -> None:
+        working = {V1, V2}
+        base = {V1}
+        self.assertEqual(baseline_mod.added_entries(working, base), [V2])
+
+    def test_pure_shrink_reports_nothing(self) -> None:
+        working = {V1}
+        base = {V1, V2}
+        self.assertEqual(baseline_mod.added_entries(working, base), [])
+
+    def test_identical_baseline_reports_nothing(self) -> None:
+        self.assertEqual(baseline_mod.added_entries({V1, V2}, {V1, V2}), [])
+
+
+class CountByKindTests(unittest.TestCase):
+    def test_counts_grouped_and_sorted_by_kind(self) -> None:
+        v3 = rules.Violation("c.py", "file-size", "exceeds 300-line cap")
+        counts = baseline_mod.count_by_kind({V1, V2, v3})
+        self.assertEqual(counts, {"file-size": 2, "method-size": 1})
+
+    def test_empty_input_gives_empty_dict(self) -> None:
+        self.assertEqual(baseline_mod.count_by_kind(set()), {})
+
+
+class ParseBaselineJsonTests(unittest.TestCase):
+    def test_parses_violations_array(self) -> None:
+        text = json.dumps(
+            {"violations": [{"file": "a.py", "kind": "file-size", "detail": "d"}]}
+        )
+        self.assertEqual(
+            baseline_mod.parse_baseline_json(text),
+            {rules.Violation("a.py", "file-size", "d")},
+        )
+
+    def test_missing_violations_key_gives_empty_set(self) -> None:
+        self.assertEqual(baseline_mod.parse_baseline_json("{}"), set())
 
 
 if __name__ == "__main__":

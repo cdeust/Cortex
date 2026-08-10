@@ -1,8 +1,16 @@
-"""Craftsmanship rule 3 — layer-boundary imports.
+"""Craftsmanship rule 3 — layer-boundary imports, a TRUE whitelist.
 
-Split out of ``craftsmanship_rules.py`` (issue: that file crossed the
-300-line cap this very gate enforces — a gate that exempted itself would
-not be credible, so it is split like anything else over the limit).
+Rewritten after review found the prior version was a blacklist wearing a
+whitelist's name: it denied a short hardcoded list of specific imports
+(``os``, ``pathlib``, a few ``mcp_server.<layer>`` prefixes) and silently
+ALLOWED everything else — so `import numpy`, `import requests`, and
+`import scripts.legacy_bridge` inside `core/` all passed uncaught. The
+fix is structural, not a bigger blacklist: every import is now checked
+against what a layer is explicitly PERMITTED to reference (derived from
+``craftsmanship_layer_table.py``, itself parsed from
+``docs/module-inventory.md`` § Dependency Rules — never a second
+hardcoded copy of that table); anything not on the permitted list is a
+violation, covering all eight documented layers, not four.
 """
 
 from __future__ import annotations
@@ -11,30 +19,13 @@ import ast
 import sys
 from pathlib import Path
 
-# Sibling-module import, same idiom as check_doc_claims.py: resolves
-# identically whether this runs as a script or is loaded via
-# importlib.util.spec_from_file_location from a test.
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
+from craftsmanship_layer_table import LayerRule, is_stdlib, load_layer_rules  # noqa: E402
 from craftsmanship_rules import Violation  # noqa: E402
 
-# source: docs/module-inventory.md § Dependency Rules — "core/ | shared/
-# only | infrastructure, handlers, server, os/pathlib" — os/pathlib are
-# banned even though they are stdlib, because core/ is "pure business
-# logic, zero I/O" (module-inventory.md's own layer description).
-_CORE_BANNED_STDLIB = frozenset({"os", "pathlib"})
-
-# source: docs/module-inventory.md § Dependency Rules "Must NOT Import"
-# column, restricted to the four layers this gate covers per the task
-# instruction (shared/core/infrastructure/server).
-FORBIDDEN_SECOND_COMPONENT = {
-    "core": frozenset({"infrastructure", "handlers", "server"}),
-    "infrastructure": frozenset({"core", "handlers", "server"}),
-    "server": frozenset({"core", "infrastructure"}),
-}
-
-CHECKED_LAYERS = frozenset({"shared", "core", "infrastructure", "server"})
+CHECKED_LAYERS = frozenset(load_layer_rules())
 
 
 def layer_of(rel_posix_path: str) -> str | None:
@@ -87,22 +78,29 @@ class _ImportCollector(ast.NodeVisitor):
             self.modules.append(node.module)
 
 
-def _is_stdlib(top_level: str) -> bool:
-    return top_level in sys.stdlib_module_names
+def _import_violates_layer(rule: LayerRule, module: str) -> bool:
+    """True if ``module`` (dotted, absolute) breaks ``rule``'s whitelist.
 
-
-def _import_violates_layer(file_layer: str, module: str) -> bool:
-    """True if ``module`` (dotted, absolute) breaks ``file_layer``'s rule."""
+    Every branch is a permission CHECK, not a denial check: an import that
+    matches none of them falls through to the final ``return True`` — the
+    fix for the review finding that a permitted set with an implicit
+    "everything else is fine" default is not a whitelist.
+    """
     parts = module.split(".")
     top, second = parts[0], (parts[1] if len(parts) > 1 else None)
-    if top == "mcp_server" and second == file_layer:
+    if top == "mcp_server" and second == rule.name:
         return False  # sibling import inside the same layer
-    if file_layer == "shared":
-        return not _is_stdlib(top)
-    if file_layer == "core" and top in _CORE_BANNED_STDLIB:
-        return True
-    forbidden = FORBIDDEN_SECOND_COMPONENT.get(file_layer)
-    return bool(forbidden) and top == "mcp_server" and second in forbidden
+    if top == "mcp_server":
+        return second not in rule.allowed_layers
+    if is_stdlib(top):
+        if top in rule.stdlib_denied:
+            return True
+        return not rule.stdlib_allowed
+    # Third-party (neither `mcp_server.*` nor stdlib): permitted only for a
+    # "boundary" layer (infrastructure/validation/handlers/server/hooks) —
+    # Clean Architecture's adapter layers, where frameworks belong. A
+    # "pure" layer (shared/, core/, errors/) forbids it outright.
+    return rule.is_pure
 
 
 def check_layer_violation(
@@ -114,12 +112,13 @@ def check_layer_violation(
     different imports never collide, and the same import surviving an
     otherwise-edited file still matches its baseline entry.
     """
-    if file_layer not in CHECKED_LAYERS:
+    rule = load_layer_rules().get(file_layer) if file_layer else None
+    if rule is None:
         return []
     collector = _ImportCollector()
     collector.visit(tree)
     return [
         Violation(rel_path, "layer-violation", module)
         for module in collector.modules
-        if _import_violates_layer(file_layer, module)
+        if _import_violates_layer(rule, module)
     ]

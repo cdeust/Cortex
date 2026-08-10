@@ -7,6 +7,21 @@ NEW (absent from the baseline) or a baseline entry that has silently gone
 STALE (its violation no longer exists in the code, meaning someone fixed it
 without pruning the baseline — see this module's docstring in
 check_craftsmanship.py for why that also fails the gate).
+
+**A working-tree baseline is not, by itself, a trustworthy comparison
+source** — flagged in review, reproduced live: add
+``SNEAKY_LIMIT = 12345`` to a tracked file, the gate blocks it; run
+``--write-baseline`` in the same working tree, the gate now passes on the
+identical violation, because ``load_baseline`` just re-read whatever the
+PR itself had just written. The ``$comment`` warning above is a social
+contract, not a mechanism. ``check_craftsmanship.py`` closes this by
+comparing new violations against the baseline **as committed at the PR's
+base ref** (``git show <ref>:<path>``, immutable to the PR's own commits)
+and separately enforcing that the working-tree file is a SUBSET of that
+base-ref baseline — an addition with no matching fix is refused outright;
+see ``added_entries`` below. This module supplies the parsing both paths
+share (``parse_baseline_json``); the git plumbing lives in
+``check_craftsmanship.py``, which already owns ``_run_git``.
 """
 
 from __future__ import annotations
@@ -14,6 +29,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
@@ -22,15 +38,26 @@ if _SCRIPTS_DIR not in sys.path:
 from craftsmanship_rules import Violation  # noqa: E402
 
 
-def load_baseline(path: Path) -> set[Violation]:
-    """Return the baselined violations, or an empty set if none exists yet."""
-    if not path.exists():
-        return set()
-    data = json.loads(path.read_text(encoding="utf-8"))
+def parse_baseline_json(text: str) -> set[Violation]:
+    """Parse a baseline JSON document's ``violations`` array.
+
+    Shared by ``load_baseline`` (working tree) and
+    ``check_craftsmanship.load_baseline_from_ref`` (``git show`` output) —
+    the two loaders differ only in how they obtain ``text``, never in how
+    they interpret it.
+    """
+    data = json.loads(text)
     return {
         Violation(entry["file"], entry["kind"], entry["detail"])
         for entry in data.get("violations", [])
     }
+
+
+def load_baseline(path: Path) -> set[Violation]:
+    """Return the baselined violations, or an empty set if none exists yet."""
+    if not path.exists():
+        return set()
+    return parse_baseline_json(path.read_text(encoding="utf-8"))
 
 
 def save_baseline(path: Path, violations: set[Violation]) -> None:
@@ -74,3 +101,27 @@ def stale_entries(
         entry for entry in baseline if entry not in rescanned.get(entry.file, set())
     ]
     return sorted(stale, key=lambda v: (v.file, v.kind, v.detail))
+
+
+def added_entries(
+    working_baseline: set[Violation], base_baseline: set[Violation]
+) -> list[Violation]:
+    """Entries present in this PR's baseline file but absent from the base
+    ref's — the ratchet-file check. The baseline file may only SHRINK
+    within a PR (a violation genuinely fixed, then pruned); an addition,
+    with or without a matching removal elsewhere, is refused. Debt
+    discovered mid-PR gets fixed at the source, not grandfathered — this
+    is what makes ``.craftsmanship-baseline.json`` a ratchet and not a
+    second, self-service allowlist.
+    """
+    return sorted(
+        working_baseline - base_baseline, key=lambda v: (v.file, v.kind, v.detail)
+    )
+
+
+def count_by_kind(violations: set[Violation] | list[Violation]) -> dict[str, int]:
+    """Debt breakdown by rule family — printed on ``--write-baseline`` so a
+    1000+-entry baseline is a visible number per rule, not an opaque wall
+    of JSON no reviewer will actually read end to end.
+    """
+    return dict(sorted(Counter(v.kind for v in violations).items()))

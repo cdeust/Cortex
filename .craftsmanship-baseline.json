@@ -690,6 +690,11 @@
     {
       "file": "mcp_server/core/abstention_gate.py",
       "kind": "layer-violation",
+      "detail": "cortex_beam_abstain"
+    },
+    {
+      "file": "mcp_server/core/abstention_gate.py",
+      "kind": "layer-violation",
       "detail": "pathlib"
     },
     {
@@ -736,6 +741,11 @@
       "file": "mcp_server/core/ast_extractors_extra.py",
       "kind": "method-size",
       "detail": "extract_go_definitions"
+    },
+    {
+      "file": "mcp_server/core/ast_parser.py",
+      "kind": "layer-violation",
+      "detail": "tree_sitter_language_pack"
     },
     {
       "file": "mcp_server/core/attentional_control.py",
@@ -938,6 +948,21 @@
       "detail": "resolve"
     },
     {
+      "file": "mcp_server/core/codebase_communities.py",
+      "kind": "layer-violation",
+      "detail": "igraph"
+    },
+    {
+      "file": "mcp_server/core/codebase_communities.py",
+      "kind": "layer-violation",
+      "detail": "leidenalg"
+    },
+    {
+      "file": "mcp_server/core/codebase_communities.py",
+      "kind": "layer-violation",
+      "detail": "networkx"
+    },
+    {
       "file": "mcp_server/core/codebase_graph.py",
       "kind": "layer-violation",
       "detail": "pathlib"
@@ -956,6 +981,11 @@
       "file": "mcp_server/core/cognitive_map.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/core/cognitive_map.py",
+      "kind": "layer-violation",
+      "detail": "numpy"
     },
     {
       "file": "mcp_server/core/cognitive_map.py",
@@ -1101,6 +1131,11 @@
       "file": "mcp_server/core/consolidation_engine.py",
       "kind": "unsourced-constant",
       "detail": "_MIN_RELATED_SEMANTICS"
+    },
+    {
+      "file": "mcp_server/core/context_assembly/coverage.py",
+      "kind": "layer-violation",
+      "detail": "numpy"
     },
     {
       "file": "mcp_server/core/context_assembly/coverage.py",
@@ -1569,6 +1604,11 @@
     },
     {
       "file": "mcp_server/core/hdc_encoder.py",
+      "kind": "layer-violation",
+      "detail": "numpy"
+    },
+    {
+      "file": "mcp_server/core/hdc_encoder.py",
       "kind": "unsourced-constant",
       "detail": "_SEED"
     },
@@ -1641,6 +1681,11 @@
       "file": "mcp_server/core/homeostatic_plasticity.py",
       "kind": "unsourced-constant",
       "detail": "_TARGET_HEAT"
+    },
+    {
+      "file": "mcp_server/core/hopfield.py",
+      "kind": "layer-violation",
+      "detail": "numpy"
     },
     {
       "file": "mcp_server/core/interference.py",
@@ -1724,6 +1769,11 @@
     },
     {
       "file": "mcp_server/core/memory_ingest.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/core/memory_ingest.py",
       "kind": "method-size",
       "detail": "ingest_memory"
     },
@@ -1796,6 +1846,11 @@
       "file": "mcp_server/core/microglial_pruning.py",
       "kind": "unsourced-constant",
       "detail": "_TEMPORAL_HALF_LIFE_HOURS"
+    },
+    {
+      "file": "mcp_server/core/mmr_diversity.py",
+      "kind": "layer-violation",
+      "detail": "numpy"
     },
     {
       "file": "mcp_server/core/mmr_diversity.py",
@@ -1938,6 +1993,11 @@
       "detail": "assemble_context._retrieve_fn"
     },
     {
+      "file": "mcp_server/core/pg_recall_signals.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
       "file": "mcp_server/core/pg_recall_weights.py",
       "kind": "layer-violation",
       "detail": "os"
@@ -2061,6 +2121,11 @@
       "file": "mcp_server/core/recall_pipeline.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/core/recall_pipeline.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/core/recall_pipeline.py",
@@ -2209,6 +2274,16 @@
     },
     {
       "file": "mcp_server/core/reranker.py",
+      "kind": "layer-violation",
+      "detail": "flashrank"
+    },
+    {
+      "file": "mcp_server/core/reranker.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/core/reranker.py",
       "kind": "method-size",
       "detail": "_ensure_reranker"
     },
@@ -2250,12 +2325,22 @@
     {
       "file": "mcp_server/core/retrieval_dispatch.py",
       "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/core/retrieval_dispatch.py",
+      "kind": "layer-violation",
       "detail": "os"
     },
     {
       "file": "mcp_server/core/retrieval_dispatch.py",
       "kind": "method-size",
       "detail": "dispatch_retrieval"
+    },
+    {
+      "file": "mcp_server/core/retrieval_signals.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/core/retrieval_signals.py",
@@ -2738,6 +2823,11 @@
       "detail": "record"
     },
     {
+      "file": "mcp_server/core/temporal_normalize.py",
+      "kind": "layer-violation",
+      "detail": "dateutil"
+    },
+    {
       "file": "mcp_server/core/thermodynamics.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -2756,6 +2846,16 @@
       "file": "mcp_server/core/thermodynamics.py",
       "kind": "method-size",
       "detail": "compute_importance"
+    },
+    {
+      "file": "mcp_server/core/titans_memory.py",
+      "kind": "layer-violation",
+      "detail": "numpy"
+    },
+    {
+      "file": "mcp_server/core/titans_memory.py",
+      "kind": "layer-violation",
+      "detail": "torch"
     },
     {
       "file": "mcp_server/core/titans_memory.py",
@@ -2944,6 +3044,11 @@
     },
     {
       "file": "mcp_server/core/wiki_classifier.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/core/wiki_classifier.py",
       "kind": "method-size",
       "detail": "_classify_to_legacy_kind"
     },
@@ -3011,6 +3116,11 @@
       "file": "mcp_server/core/wiki_coverage_dashboard.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/core/wiki_coverage_dashboard.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/core/wiki_coverage_dashboard.py",
@@ -3269,6 +3379,11 @@
     },
     {
       "file": "mcp_server/core/write_gate.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/core/write_gate.py",
       "kind": "method-size",
       "detail": "apply_goal_maintenance"
     },
@@ -3326,6 +3441,11 @@
       "file": "mcp_server/core/write_post_store.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/core/write_post_store.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/core/write_post_store.py",
@@ -3388,6 +3508,11 @@
       "detail": "_print_human"
     },
     {
+      "file": "mcp_server/errors/__init__.py",
+      "kind": "layer-violation",
+      "detail": "__future__"
+    },
+    {
       "file": "mcp_server/handlers/anchor.py",
       "kind": "method-size",
       "detail": "handler"
@@ -3396,6 +3521,11 @@
       "file": "mcp_server/handlers/assess_coverage.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/handlers/assess_coverage.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/assess_coverage.py",
@@ -3409,6 +3539,11 @@
     },
     {
       "file": "mcp_server/handlers/auto_task_record_writer.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/auto_task_record_writer.py",
       "kind": "method-size",
       "detail": "_git_commits_in_window"
     },
@@ -3418,9 +3553,19 @@
       "detail": "maybe_write_task_record"
     },
     {
+      "file": "mcp_server/handlers/backfill_helpers.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
       "file": "mcp_server/handlers/backfill_memories.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/handlers/backfill_memories.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/backfill_memories.py",
@@ -3431,6 +3576,11 @@
       "file": "mcp_server/handlers/backfill_memories.py",
       "kind": "method-size",
       "detail": "handler"
+    },
+    {
+      "file": "mcp_server/handlers/change_impact.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/change_impact.py",
@@ -3446,6 +3596,11 @@
       "file": "mcp_server/handlers/change_impact.py",
       "kind": "unsourced-constant",
       "detail": "_MAX_HEAT_BUMPS"
+    },
+    {
+      "file": "mcp_server/handlers/check_setup.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.doctor"
     },
     {
       "file": "mcp_server/handlers/checkpoint.py",
@@ -3464,6 +3619,11 @@
     },
     {
       "file": "mcp_server/handlers/codebase_analyze.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/codebase_analyze.py",
       "kind": "method-size",
       "detail": "_process_files"
     },
@@ -3479,6 +3639,11 @@
     },
     {
       "file": "mcp_server/handlers/codebase_analyze_helpers.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/codebase_analyze_helpers.py",
       "kind": "unsourced-constant",
       "detail": "CANDIDATE_MULTIPLIER"
     },
@@ -3486,6 +3651,11 @@
       "file": "mcp_server/handlers/consolidate.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/handlers/consolidate.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.hooks.consolidate_background"
     },
     {
       "file": "mcp_server/handlers/consolidate.py",
@@ -3504,6 +3674,11 @@
     },
     {
       "file": "mcp_server/handlers/consolidation/authoring_prompts.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/consolidation/authoring_prompts.py",
       "kind": "method-size",
       "detail": "_build_page_prompt"
     },
@@ -3511,6 +3686,16 @@
       "file": "mcp_server/handlers/consolidation/authoring_prompts.py",
       "kind": "method-size",
       "detail": "_build_section_prompt"
+    },
+    {
+      "file": "mcp_server/handlers/consolidation/candidate_scan.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/consolidation/cascade.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/consolidation/cascade.py",
@@ -3531,6 +3716,11 @@
       "file": "mcp_server/handlers/consolidation/cls.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/handlers/consolidation/cls.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/consolidation/cls.py",
@@ -3586,6 +3776,11 @@
       "file": "mcp_server/handlers/consolidation/distill_drain.py",
       "kind": "method-size",
       "detail": "run_distill_drain_cycle"
+    },
+    {
+      "file": "mcp_server/handlers/consolidation/drain_operations.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/consolidation/forgetting.py",
@@ -3654,6 +3849,11 @@
     },
     {
       "file": "mcp_server/handlers/consolidation/memify.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/consolidation/memify.py",
       "kind": "method-size",
       "detail": "_classify_memify_reason"
     },
@@ -3676,6 +3876,11 @@
       "file": "mcp_server/handlers/consolidation/memify.py",
       "kind": "unsourced-constant",
       "detail": "_STRENGTHEN_MIN_CONFIDENCE"
+    },
+    {
+      "file": "mcp_server/handlers/consolidation/memify_derive.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/consolidation/memify_derive.py",
@@ -3764,6 +3969,11 @@
     },
     {
       "file": "mcp_server/handlers/consolidation/page_io.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/consolidation/page_io.py",
       "kind": "method-size",
       "detail": "_compute_rewritten_page"
     },
@@ -3806,6 +4016,11 @@
       "file": "mcp_server/handlers/consolidation/sleep.py",
       "kind": "method-size",
       "detail": "run_deep_sleep"
+    },
+    {
+      "file": "mcp_server/handlers/consolidation/wiki_backlog_pass.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/consolidation/wiki_backlog_pass.py",
@@ -3869,6 +4084,11 @@
     },
     {
       "file": "mcp_server/handlers/curate_distill.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/curate_distill.py",
       "kind": "method-size",
       "detail": "handler"
     },
@@ -3906,6 +4126,16 @@
       "file": "mcp_server/handlers/curate_wiki_serialize.py",
       "kind": "method-size",
       "detail": "instructions_for_llm"
+    },
+    {
+      "file": "mcp_server/handlers/curate_wiki_uncited.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/detect_gaps.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/explore_features.py",
@@ -4024,6 +4254,11 @@
     },
     {
       "file": "mcp_server/handlers/ingest_docs_content_writers.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/ingest_docs_content_writers.py",
       "kind": "method-size",
       "detail": "write_doc_memory"
     },
@@ -4031,6 +4266,11 @@
       "file": "mcp_server/handlers/ingest_document.py",
       "kind": "method-size",
       "detail": "_persist"
+    },
+    {
+      "file": "mcp_server/handlers/ingest_document_writers.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/ingest_document_writers.py",
@@ -4043,9 +4283,19 @@
       "detail": "handler"
     },
     {
+      "file": "mcp_server/handlers/ingest_findings_resolve.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
       "file": "mcp_server/handlers/ingest_findings_writers.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/handlers/ingest_findings_writers.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/ingest_findings_writers.py",
@@ -4069,6 +4319,11 @@
     },
     {
       "file": "mcp_server/handlers/ingest_helpers.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/ingest_helpers.py",
       "kind": "method-size",
       "detail": "find_cached_graph"
     },
@@ -4081,6 +4336,11 @@
       "file": "mcp_server/handlers/ingest_prd.py",
       "kind": "method-size",
       "detail": "handler"
+    },
+    {
+      "file": "mcp_server/handlers/lesson_promotion.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/lesson_promotion.py",
@@ -4109,13 +4369,28 @@
     },
     {
       "file": "mcp_server/handlers/rate_memory.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/rate_memory.py",
       "kind": "method-size",
       "detail": "_handler_impl"
+    },
+    {
+      "file": "mcp_server/handlers/rebuild_profiles.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/recall.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/handlers/recall.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/recall.py",
@@ -4126,6 +4401,11 @@
       "file": "mcp_server/handlers/recall_helpers.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/handlers/recall_helpers.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/recall_helpers.py",
@@ -4171,6 +4451,11 @@
       "file": "mcp_server/handlers/remember_helpers.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/handlers/remember_helpers.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/remember_helpers.py",
@@ -4296,6 +4581,11 @@
       "file": "mcp_server/handlers/why.py",
       "kind": "unsourced-constant",
       "detail": "_MAX_RECEIPT_IDS"
+    },
+    {
+      "file": "mcp_server/handlers/wiki_adr.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/handlers/wiki_adr.py",
@@ -4439,6 +4729,11 @@
     },
     {
       "file": "mcp_server/handlers/wiki_write.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/handlers/wiki_write.py",
       "kind": "method-size",
       "detail": "_sync_page_and_cite"
     },
@@ -4446,6 +4741,11 @@
       "file": "mcp_server/handlers/wiki_write.py",
       "kind": "method-size",
       "detail": "write_governed_page"
+    },
+    {
+      "file": "mcp_server/hooks/agent_briefing.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.injection_receipts"
     },
     {
       "file": "mcp_server/hooks/agent_briefing.py",
@@ -4471,6 +4771,11 @@
       "file": "mcp_server/hooks/auto_recall.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/hooks/auto_recall.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.injection_receipts"
     },
     {
       "file": "mcp_server/hooks/auto_recall.py",
@@ -4509,8 +4814,28 @@
     },
     {
       "file": "mcp_server/hooks/compaction_checkpoint.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.checkpoint"
+    },
+    {
+      "file": "mcp_server/hooks/compaction_checkpoint.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.consolidation.cascade"
+    },
+    {
+      "file": "mcp_server/hooks/compaction_checkpoint.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.injection_receipts"
+    },
+    {
+      "file": "mcp_server/hooks/compaction_checkpoint.py",
       "kind": "method-size",
       "detail": "process_event"
+    },
+    {
+      "file": "mcp_server/hooks/consolidate_background.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.consolidate"
     },
     {
       "file": "mcp_server/hooks/consolidate_background.py",
@@ -4519,8 +4844,18 @@
     },
     {
       "file": "mcp_server/hooks/ingest_codebase_background.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.ingest_codebase"
+    },
+    {
+      "file": "mcp_server/hooks/ingest_codebase_background.py",
       "kind": "method-size",
       "detail": "main"
+    },
+    {
+      "file": "mcp_server/hooks/pipeline_impact_bump.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.ingest_helpers"
     },
     {
       "file": "mcp_server/hooks/pipeline_impact_bump.py",
@@ -4551,6 +4886,16 @@
       "file": "mcp_server/hooks/post_tool_capture.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/hooks/post_tool_capture.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.consolidation.cascade"
+    },
+    {
+      "file": "mcp_server/hooks/post_tool_capture.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.remember"
     },
     {
       "file": "mcp_server/hooks/post_tool_capture.py",
@@ -4589,6 +4934,16 @@
     },
     {
       "file": "mcp_server/hooks/session_lifecycle.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.consolidate"
+    },
+    {
+      "file": "mcp_server/hooks/session_lifecycle.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.injection_receipts"
+    },
+    {
+      "file": "mcp_server/hooks/session_lifecycle.py",
       "kind": "method-size",
       "detail": "_run_consolidation"
     },
@@ -4601,6 +4956,21 @@
       "file": "mcp_server/hooks/session_start.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/hooks/session_start.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.backfill_memories"
+    },
+    {
+      "file": "mcp_server/hooks/session_start.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.ingest_helpers"
+    },
+    {
+      "file": "mcp_server/hooks/session_start.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.injection_receipts"
     },
     {
       "file": "mcp_server/hooks/session_start.py",
@@ -4664,6 +5034,16 @@
     },
     {
       "file": "mcp_server/infrastructure/ap_bridge.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.errors"
+    },
+    {
+      "file": "mcp_server/infrastructure/ap_bridge.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/infrastructure/ap_bridge.py",
       "kind": "method-size",
       "detail": "APBridge.connect"
     },
@@ -4671,6 +5051,11 @@
       "file": "mcp_server/infrastructure/ap_bridge.py",
       "kind": "method-size",
       "detail": "_resolve_command"
+    },
+    {
+      "file": "mcp_server/infrastructure/ap_sync_loop.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.errors"
     },
     {
       "file": "mcp_server/infrastructure/artifact_gc.py",
@@ -4688,6 +5073,11 @@
       "detail": "exceeds 300-line cap"
     },
     {
+      "file": "mcp_server/infrastructure/groomer_coordinator.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
       "file": "mcp_server/infrastructure/mcp_call_timeout.py",
       "kind": "unsourced-constant",
       "detail": "_DEFAULT_CALL_TIMEOUT_S"
@@ -4696,6 +5086,11 @@
       "file": "mcp_server/infrastructure/mcp_client.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/infrastructure/mcp_client.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.errors"
     },
     {
       "file": "mcp_server/infrastructure/mcp_client.py",
@@ -4711,6 +5106,11 @@
       "file": "mcp_server/infrastructure/mcp_client.py",
       "kind": "method-size",
       "detail": "MCPClient._spawn_process"
+    },
+    {
+      "file": "mcp_server/infrastructure/mcp_client_pool.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.errors"
     },
     {
       "file": "mcp_server/infrastructure/memory_store.py",
@@ -4736,6 +5136,11 @@
       "file": "mcp_server/infrastructure/pg_store.py",
       "kind": "layer-violation",
       "detail": "mcp_server.core.temporal_normalize"
+    },
+    {
+      "file": "mcp_server/infrastructure/pg_store.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/infrastructure/pg_store.py",
@@ -4984,6 +5389,11 @@
     },
     {
       "file": "mcp_server/infrastructure/sqlite_store.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/infrastructure/sqlite_store.py",
       "kind": "method-size",
       "detail": "SqliteMemoryStore._insert_memory_rows"
     },
@@ -5039,6 +5449,11 @@
     },
     {
       "file": "mcp_server/infrastructure/sqlite_store_queries.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
+      "file": "mcp_server/infrastructure/sqlite_store_queries.py",
       "kind": "method-size",
       "detail": "SqliteQueryMixin.delete_memories_by_tag"
     },
@@ -5051,6 +5466,11 @@
       "file": "mcp_server/infrastructure/sqlite_store_search.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "mcp_server/infrastructure/sqlite_store_search.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/infrastructure/sqlite_store_search.py",
@@ -5098,6 +5518,11 @@
       "detail": "mcp_server.core.wiki_schema_loader"
     },
     {
+      "file": "mcp_server/infrastructure/wiki_schema_reader.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
       "file": "mcp_server/infrastructure/wiki_store.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -5126,6 +5551,11 @@
       "file": "mcp_server/infrastructure/wiki_store.py",
       "kind": "layer-violation",
       "detail": "mcp_server.core.wiki_sync"
+    },
+    {
+      "file": "mcp_server/infrastructure/wiki_store.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/infrastructure/wiki_store.py",
@@ -5623,6 +6053,11 @@
       "detail": "exceeds 300-line cap"
     },
     {
+      "file": "tests_py/benchmarks/test_lib_init_no_psycopg.py",
+      "kind": "method-size",
+      "detail": "test_benchmark_db_resolves_with_psycopg_present"
+    },
+    {
       "file": "tests_py/benchmarks/test_spell_alteration.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -5779,6 +6214,11 @@
     },
     {
       "file": "tests_py/core/test_write_gate.py",
+      "kind": "file-size",
+      "detail": "exceeds 300-line cap"
+    },
+    {
+      "file": "tests_py/handlers/consolidation/test_import_cycle_237.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
     },

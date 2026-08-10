@@ -4,6 +4,26 @@
 Split out of ``craftsmanship_rules.py`` for the same reason
 ``craftsmanship_imports.py`` was (file-size self-application, see that
 module's docstring).
+
+**Known, documented detection gaps** (flagged in review; each is pinned by
+a test in ``tests_py/scripts/test_craftsmanship_constants.py`` asserting
+the CURRENT non-detecting behavior, so silently "fixing" one is a reviewed
+diff, not an accidental drift):
+
+1. **Computed expressions** — ``TIMEOUT = 60 * 60`` is an ``ast.BinOp``,
+   not the bare ``ast.Constant``/negated-constant this rule's
+   ``_numeric_literal`` matches, so it is never flagged.
+2. **Class-scope constants** — ``_module_level_numeric_assignments`` only
+   walks ``tree.body`` (the module's own top-level statements); a class
+   attribute (``class C: TIMEOUT = 3600``) sits one level deeper and is
+   never visited.
+3. **Default-argument values** — ``def f(timeout: int = 3600):`` is a
+   value inside a ``FunctionDef.args.defaults`` list, a different AST
+   surface this rule never inspects.
+
+None of these are exotic — they are exactly the forms most likely to
+carry an accidental magic number. Extending detection to them is future
+work, not silently promised by this module's name.
 """
 
 from __future__ import annotations
@@ -22,11 +42,18 @@ from craftsmanship_rules import Violation  # noqa: E402
 
 SOURCE_COMMENT_MARKER = "# source:"
 
-# source: task instruction (constants-without-source rule) — the literal
-# exemption list: "0, 1, -1, 2, 100, 1000 et les puissances de deux
-# usuelles"; "usuelles" bounded at 2**16 (65536), the largest power of two
-# that appears as a plain magic number (buffer/timeout sizes) rather than a
-# capacity a real source comment would explain anyway.
+# NOT a "# source:"-backed constant (flagged in review: citing "task
+# instruction" as a §8 source is not one — §8 wants a paper, a committed
+# benchmark, or a dated measurement, none of which apply to an exemption
+# list). This is a documented implementer DECISION, not a measurement:
+# the exact values a human reviewer accepts without asking "where does
+# that number come from" — 0/1/-1/2/100/1000 are load-bearing in every
+# language's arithmetic idiom (empty/singleton/negation/pair/percent/
+# per-mille), and a power of two up to 2**16 (65536) is legible on sight
+# as a bit-width or buffer size, not a business threshold that needs
+# citing. Pinned by
+# tests_py/scripts/test_craftsmanship_constants.py so a change to this
+# list is a reviewed diff, not silent drift.
 _POWERS_OF_TWO_USUELLES = frozenset(2**exp for exp in range(1, 17))
 TRIVIAL_LITERALS = frozenset({0, 1, -1, 2, 100, 1000}) | _POWERS_OF_TWO_USUELLES
 

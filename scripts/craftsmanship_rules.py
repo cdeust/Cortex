@@ -35,11 +35,6 @@ FILE_LINE_LIMIT = 300
 METHOD_LINE_LIMIT = 40
 
 AUTO_GENERATED_MARKER = "auto-generated"
-# How many leading lines carry the auto-generated marker comment, if present.
-# source: CLAUDE.md § Code Style exception wording ("mark with
-# `// auto-generated`") gives no line count; 5 covers a shebang + encoding
-# + license header + the marker itself with one line to spare.
-AUTO_GENERATED_SCAN_LINES = 5
 
 
 @dataclass(frozen=True)
@@ -56,11 +51,29 @@ class Violation:
     detail: str
 
 
+def _leading_header_block(lines: list[str]) -> str:
+    """The file's leading run of comment/blank lines, joined.
+
+    No fixed line count (a prior version hardcoded "scan the first 5
+    lines", an arbitrary constant flagged in review): a header is
+    naturally delimited by the first line that is neither blank nor a
+    comment, so this handles a one-line marker or a multi-line license
+    block identically, with nothing to source or justify.
+    """
+    header_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "" or stripped.startswith("#"):
+            header_lines.append(line)
+            continue
+        break
+    return "\n".join(header_lines)
+
+
 def check_file_size(rel_path: str, source: str) -> list[Violation]:
     """Rule 1 — file exceeds FILE_LINE_LIMIT lines. Exempt: auto-generated."""
     lines = source.splitlines()
-    header = "\n".join(lines[:AUTO_GENERATED_SCAN_LINES]).lower()
-    if AUTO_GENERATED_MARKER in header:
+    if AUTO_GENERATED_MARKER in _leading_header_block(lines).lower():
         return []
     if len(lines) <= FILE_LINE_LIMIT:
         return []

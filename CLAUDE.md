@@ -78,30 +78,44 @@ separate **cortex-viz** MCP (reads this same store read-only).
 - 300 lines max per file; 40 lines max per method — a local tightening of
   coding-standards.md §4.1/§4.2 (≤500/≤50; CONTRIBUTING.md § Code Style
   cites the same 300/40 numbers).
-- Import rule: `shared/` imports only the stdlib; `core/` imports only
-  `shared/` (plus the stdlib, except `os`/`pathlib`, banned even though
-  they are stdlib — `core/` is pure business logic, zero I/O);
-  `infrastructure/` never imports `core/`/`handlers/`/`server/`; `server/`
-  never imports `core/`/`infrastructure/` directly. Full table:
-  `docs/module-inventory.md` § Dependency Rules.
+- Import rule: a TRUE whitelist per layer, all eight rows of
+  `docs/module-inventory.md` § Dependency Rules — `shared/` and `core/`
+  are pure (no third-party imports at all; `core/` additionally bans
+  `os`/`pathlib` even though they are stdlib, since it is zero-I/O
+  business logic); `infrastructure/`, `validation/`, `handlers/`,
+  `server/`, `hooks/` are boundary/adapter layers where third-party
+  imports are the point, but their `mcp_server.<layer>` cross-references
+  are still checked against the table's named whitelist, not a blacklist
+  of a few forbidden ones.
 - No invented constants: every hardcoded number carries a `# source:`
   comment (paper, committed benchmark, or dated measurement naming the
   environment and conditions).
 - **Enforced by `scripts/check_craftsmanship.py`**, run in CI on every push
   and PR (`.github/workflows/ci.yml`, `craftsmanship` job) and locally via
   `python scripts/check_craftsmanship.py`. It checks the four rules above,
-  by AST, on the files a diff touches — never the whole repository — and
-  fails the diff on any violation absent from `.craftsmanship-baseline.json`
-  (pre-existing debt, grandfathered) or any baseline entry whose violation
-  no longer reproduces (fixed but not pruned — see that script's module
-  docstring for why that also fails). Regenerate the baseline with
-  `python scripts/check_craftsmanship.py --write-baseline` only after
-  confirming every new entry is pre-existing debt, never to silence a
-  violation this PR just introduced. Previously "enforced by code review
-  today; no automated pre-commit hook checks this yet" (issue #276
-  corrected an earlier, false claim of a "craftsmanship-checker" hook) —
-  that gap is what this gate closes. Historical import-rule violations
-  once tracked ad hoc in this section (`wiki_axis_registry.py`,
+  by AST, on the files a diff touches — never the whole repository. The
+  layer whitelist is *parsed* from `docs/module-inventory.md`'s own table
+  at run time (`scripts/craftsmanship_layer_table.py`), never a second
+  hardcoded copy that could silently diverge from it.
+  The comparison baseline is read via `git show <base-ref>:.craftsmanship-baseline.json`
+  — the PR's BASE ref, immutable to the PR's own commits — never the
+  working tree: a working-tree-only baseline is self-service (add a
+  violation, run `--write-baseline` in the same tree, the gate would pass
+  on it — this exact exploit is reproduced and closed in
+  `tests_py/scripts/test_check_craftsmanship.py::SneakyLimitExploitTests`).
+  The gate fails the diff on: any violation absent from that base-ref
+  baseline (new debt); any base-ref-baselined entry whose violation no
+  longer reproduces (fixed but not pruned); or any entry present in the
+  working-tree `.craftsmanship-baseline.json` but absent from the base
+  ref's (the file may only SHRINK within a PR — an addition is refused
+  outright, matched or not, because debt discovered mid-PR gets fixed at
+  the source, not grandfathered). Regenerate with
+  `python scripts/check_craftsmanship.py --write-baseline` only to prune
+  entries whose violations you actually fixed. Previously "enforced by
+  code review today; no automated pre-commit hook checks this yet" (issue
+  #276 corrected an earlier, false claim of a "craftsmanship-checker"
+  hook) — that gap is what this gate closes. Historical import-rule
+  violations once tracked ad hoc in this section (`wiki_axis_registry.py`,
   `wiki_classifier.py`, `wiki_schema_loader.py`, found 2026-07-14 during
   #114) now live in the baseline like any other pre-existing debt, not as
   separate prose here.
