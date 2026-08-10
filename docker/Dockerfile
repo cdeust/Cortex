@@ -19,10 +19,10 @@
 # ── Builder ───────────────────────────────────────────────────────────────
 
 # Base image pinned by digest so a rebuild cannot silently pick up a
-# different python:3.12-slim-bookworm. Digest resolved from the multi-arch manifest
+# different python:3.14-slim-bookworm. Digest resolved from the multi-arch manifest
 # list, so it stays correct on both amd64 and arm64.
-#   source: registry-1.docker.io/v2/library/python/manifests/3.12-slim-bookworm,
-#           docker-content-digest header, fetched 2026-07-27.
+#   source: registry-1.docker.io/v2/library/python/manifests/3.14-slim-bookworm,
+#           docker-content-digest header, fetched 2026-08-10.
 # Refresh: Dependabot's `docker` ecosystem (.github/dependabot.yml) opens a
 # PR when the tag moves; do not hand-edit without re-fetching the header.
 FROM python:3.14-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52 AS builder
