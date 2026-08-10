@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 
@@ -109,15 +110,27 @@ def test_claude_marketplace_publishes_pinned_canonical_viz_identity() -> None:
 
     # "3.0.0"/1c1940e... was the dangling pin from the #179-style incident:
     # cortex-viz never tagged a v3.0.0 (the rename landed straight on main
-    # without a release); the first real tagged release carrying it was
-    # v3.1.0 (cdeust/cortex-viz#130), which is what this pin now targets.
-    assert canonical["version"] == "3.1.0"
-    assert canonical["source"] == {
-        "source": "github",
-        "repo": "cdeust/cortex-viz",
-        "ref": "v3.1.0",
-        "sha": "052e4a40d3e6bddaeb1cec6662e23b451575c481",
-    }
+    # without a release), so the entry carried a sha and NO `ref` — a commit
+    # nobody had released, advertised as a version.
+    #
+    # This asserts the invariant that defect broke, not the literal triple it
+    # was fixed to. A frozen version/ref/sha has to be hand-edited on every
+    # legitimate pin move, which makes it a change detector rather than a
+    # guard: it adds no detection the manifest's own diff does not already
+    # give, and adds a second place to get wrong. Whether the tag actually
+    # exists upstream is a network question, answered by
+    # scripts/check_marketplace_pins.py on every manifest PR and weekly cron.
+    source = canonical["source"]
+    assert source["source"] == "github"
+    assert source["repo"] == "cdeust/cortex-viz"
+    assert source["ref"] == f"v{canonical['version']}", (
+        "a release pin names its tag; a sha with no ref, or a ref that "
+        "disagrees with the advertised version, is the #179 defect"
+    )
+    assert re.fullmatch(r"[0-9a-f]{40}", source["sha"]), (
+        "pin the full commit sha — an abbreviated or symbolic value silently "
+        "re-resolves when the branch moves"
+    )
     assert "standalone Hypermnesia MCP Viz server" in canonical["description"]
 
 
