@@ -331,6 +331,13 @@ if __name__ == "__main__":
     from mcp_server.hooks._headless_guard import (
         exit_if_headless_authoring_child,
     )
+    from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
-    main()
+    # issue #398: closes the store (and its psycopg pools' non-daemon
+    # threads) on the way out — process_event() never raises past this
+    # point, but the store _run_consolidation() constructs via the
+    # consolidate handler would otherwise stay open for the rest of this
+    # one-shot process.
+    with close_shared_store_on_exit():
+        main()

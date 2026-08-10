@@ -127,6 +127,11 @@ if __name__ == "__main__":
     from mcp_server.hooks._headless_guard import (
         exit_if_headless_authoring_child,
     )
+    from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
-    main()
+    # issue #398: main() calls sys.exit() on every path; wrapping the whole
+    # call in this context manager guarantees the store (and its psycopg
+    # pools' non-daemon threads) is closed before the process actually ends.
+    with close_shared_store_on_exit():
+        main()
