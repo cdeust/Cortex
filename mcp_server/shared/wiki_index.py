@@ -12,49 +12,78 @@ from mcp_server.shared.wiki_layout import PAGE_KINDS
 _FLAT_PATH_PARTS = 2
 _DOMAIN_SCOPED_PATH_PARTS = 3
 
+_KIND_LABELS = {
+    "adr": "Architecture Decisions",
+    "specs": "Specifications",
+    "guides": "Guides & How-To",
+    "reference": "Reference",
+    "conventions": "Conventions",
+    "lessons": "Lessons Learned",
+    "notes": "Notes",
+    "journal": "Journal",
+    "files": "File Documentation",
+}
 
-def build_index(page_paths: list[str]) -> str:
-    """Build a structured INDEX.md grouped by domain then kind.
 
-    Each path is relative to the wiki root. Supports both flat
-    (``notes/foo.md``) and domain-scoped (``notes/cortex/foo.md``) paths.
-    Pure function — no I/O.
+def _parse_page_entries(page_paths: list[str]) -> list[tuple[str, str, str, str]]:
+    """Parse wiki-relative paths into ``(kind, domain, filename, full_path)``.
+
+    Supports both flat (``notes/foo.md``) and domain-scoped
+    (``notes/cortex/foo.md``) paths; non-matching paths are dropped.
     """
-
-    # Parse paths into (kind, domain, filename, full_path)
     entries: list[tuple[str, str, str, str]] = []
     for p in page_paths:
         parts = p.split("/")
         if len(parts) >= _FLAT_PATH_PARTS and parts[0] in PAGE_KINDS:
             kind = parts[0]
-            if len(parts) >= _DOMAIN_SCOPED_PATH_PARTS:
-                domain = parts[1]
-                filename = parts[-1].removesuffix(".md")
-            else:
-                domain = "_general"
-                filename = parts[-1].removesuffix(".md")
+            filename = parts[-1].removesuffix(".md")
+            domain = parts[1] if len(parts) >= _DOMAIN_SCOPED_PATH_PARTS else "_general"
             entries.append((kind, domain, filename, p))
+    return entries
 
-    total = len(entries)
-    domains = sorted({e[1] for e in entries})
-    domain_count = len([d for d in domains if d != "_general"])
 
-    # Group by domain → kind → pages
+def _group_by_domain_kind(
+    entries: list[tuple[str, str, str, str]],
+) -> dict[str, dict[str, list[tuple[str, str]]]]:
+    """Group parsed entries into ``{domain: {kind: [(filename, path), ...]}}``."""
     tree: dict[str, dict[str, list[tuple[str, str]]]] = {}
     for kind, domain, filename, path in entries:
         tree.setdefault(domain, {}).setdefault(kind, []).append((filename, path))
+    return tree
 
-    _kind_labels = {
-        "adr": "Architecture Decisions",
-        "specs": "Specifications",
-        "guides": "Guides & How-To",
-        "reference": "Reference",
-        "conventions": "Conventions",
-        "lessons": "Lessons Learned",
-        "notes": "Notes",
-        "journal": "Journal",
-        "files": "File Documentation",
-    }
+
+def _render_domain_section(
+    domain: str, kinds: dict[str, list[tuple[str, str]]]
+) -> list[str]:
+    """Render one domain's ``## <label> (N pages)`` section, grouped by kind."""
+    page_count = sum(len(pages) for pages in kinds.values())
+    label = "Global" if domain == "_general" else domain.replace("-", " ").title()
+    lines = [f"## {label} ({page_count} pages)", ""]
+    for kind in PAGE_KINDS:
+        pages = kinds.get(kind, [])
+        if not pages:
+            continue
+        kind_label = _KIND_LABELS.get(kind, kind.title())
+        lines.append(f"### {kind_label}")
+        lines.append("")
+        for filename, path in sorted(pages):
+            lines.append(f"- [{filename}]({path})")
+        lines.append("")
+    return lines
+
+
+def build_index(page_paths: list[str]) -> str:
+    """Build a structured INDEX.md grouped by domain then kind.
+
+    Each path is relative to the wiki root. Pure function — no I/O. See
+    ``_parse_page_entries``/``_group_by_domain_kind``/``_render_domain_section``
+    for the three-step pipeline this composes.
+    """
+    entries = _parse_page_entries(page_paths)
+    total = len(entries)
+    domains = sorted({e[1] for e in entries})
+    domain_count = len([d for d in domains if d != "_general"])
+    tree = _group_by_domain_kind(entries)
 
     lines = [
         "# Cortex Knowledge Base",
@@ -62,24 +91,6 @@ def build_index(page_paths: list[str]) -> str:
         f"**{total} pages** across {domain_count} domains",
         "",
     ]
-
-    # Render each domain
     for domain in sorted(tree.keys(), key=lambda d: "zzz" if d == "_general" else d):
-        kinds = tree[domain]
-        page_count = sum(len(pages) for pages in kinds.values())
-        label = "Global" if domain == "_general" else domain.replace("-", " ").title()
-        lines.append(f"## {label} ({page_count} pages)")
-        lines.append("")
-
-        for kind in PAGE_KINDS:
-            pages = kinds.get(kind, [])
-            if not pages:
-                continue
-            kind_label = _kind_labels.get(kind, kind.title())
-            lines.append(f"### {kind_label}")
-            lines.append("")
-            for filename, path in sorted(pages):
-                lines.append(f"- [{filename}]({path})")
-            lines.append("")
-
+        lines.extend(_render_domain_section(domain, tree[domain]))
     return "\n".join(lines)

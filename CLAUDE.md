@@ -79,11 +79,18 @@ separate **cortex-viz** MCP (reads this same store read-only).
   prior claim of a "craftsmanship-checker" hook — none exists in
   `.git/hooks/` or a `.pre-commit-config.yaml`).
 - Import rule: `core/` imports only `shared/` + stdlib; `infrastructure/`
-  never imports core/handlers. Verify: `grep -rn "from mcp_server.infrastructure" mcp_server/core/`
-  should return nothing for new code — 3 pre-existing violations in
-  `wiki_axis_registry.py`, `wiki_classifier.py`, `wiki_schema_loader.py`
-  are tracked as a follow-up (found 2026-07-14 during #114), not a
-  standard to add to.
+  never imports core/handlers. Verify both directions before every PR —
+  `grep -rn "from mcp_server.infrastructure" mcp_server/core/` and
+  `grep -rn "from mcp_server\.core\." mcp_server/infrastructure/*.py` —
+  both currently return nothing (re-verified 2026-08-10 while fixing
+  issue: `wiki_store.py`/`wiki_schema_reader.py` importing `core/`,
+  PR #409 round 3). The three violations this line used to name
+  (`wiki_axis_registry.py`, `wiki_classifier.py`, `wiki_schema_loader.py`,
+  found 2026-07-14 during #114) no longer exist: `wiki_schema_loader.py`
+  moved `core/` → `shared/` in the same fix, and the other two do not
+  import `infrastructure/` as of this measurement. Treat a future zero
+  as the standard, not as evidence the check is unnecessary — re-run the
+  greps, don't assume they still pass.
 - No invented constants: every hardcoded number carries a `# source:`
   comment (paper, committed benchmark, or dated measurement naming the
   environment and conditions). A number without one blocks the diff in review.
