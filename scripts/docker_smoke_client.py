@@ -61,6 +61,9 @@ from scripts.mcp_host_client import ContractError, drain_exchange  # noqa: E402
 # (Glama et al.) sends: `initialize`, `notifications/initialized` (a
 # notification -- carries no "id", JSON-RPC 2.0 SS4.1), then `tools/list`.
 PROTOCOL_VERSION = "2024-11-05"
+# source: same docker_smoke.sh REQUESTS heredoc as PROTOCOL_VERSION above --
+# `tools/list` was request id=3 in that batch (id=1 is `initialize`;
+# `notifications/initialized` is a notification and carries no id at all).
 TOOLS_LIST_ID = 3
 
 
@@ -200,7 +203,7 @@ def _fail(message: str, stderr_text: str | None = None) -> int:
     return 1
 
 
-def main(argv: list[str] | None = None) -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True, help="image tag to run")
     parser.add_argument(
@@ -212,18 +215,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--timeout", type=int, default=60, help="watchdog deadline in seconds"
     )
-    args = parser.parse_args(argv)
+    return parser
 
-    print(
-        f"docker_smoke: running {args.image} with zero env vars, sending "
-        "initialize + tools/list over stdio ...",
-        file=sys.stderr,
-    )
-    try:
-        responses, stderr_text = run(args.image, args.timeout)
-    except ContractError as error:
-        return _fail(str(error))
 
+def _evaluate(
+    responses: dict[int, dict[str, object]], stderr_text: str, min_tools: int
+) -> int:
+    """Apply docker_smoke.sh's original pass/fail conditions, in order:
+    protocol errors first, then the tools/list contract, then the count
+    floor."""
     if errors := protocol_errors(responses):
         return _fail(
             "the container returned JSON-RPC error frames:\n" + "\n".join(errors),
@@ -235,20 +235,36 @@ def main(argv: list[str] | None = None) -> int:
     except SmokeFailureError as error:
         return _fail(str(error), stderr_text)
 
-    if count < args.min_tools:
+    if count < min_tools:
         return _fail(
             f"bare-container tools/list returned {count} tools, expected >= "
-            f"{args.min_tools}. This is the exact regression fixed in commit "
+            f"{min_tools}. This is the exact regression fixed in commit "
             "5d71069c (fix/bare-container-contract).",
             stderr_text,
         )
 
     print(
         f"docker_smoke: PASS — bare-container tools/list returned {count} "
-        f"tools (>= {args.min_tools}).",
+        f"tools (>= {min_tools}).",
         file=sys.stderr,
     )
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
+
+    print(
+        f"docker_smoke: running {args.image} with zero env vars, sending "
+        "initialize + tools/list over stdio ...",
+        file=sys.stderr,
+    )
+    try:
+        responses, stderr_text = run(args.image, args.timeout)
+    except ContractError as error:
+        return _fail(str(error))
+
+    return _evaluate(responses, stderr_text, args.min_tools)
 
 
 if __name__ == "__main__":
