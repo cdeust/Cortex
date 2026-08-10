@@ -1029,6 +1029,15 @@ arXiv-ready.
   `benchmarks/results/ablation/locomo_v3_post_plasticity_fix/`.
   Writeup: `docs/benchmarks/e1-v3-locomo-results-post-fix.md`. The pre-fix sweep is
   preserved at `docs/benchmarks/e1-v3-locomo-results.md`.
+  **Correction (2026-08-10, issue #347):** the `2f45bcb`/`0.8279`/`94.3%`
+  figures above have no committed per-query artifact anywhere in this
+  repository — `benchmarks/results/ablation/locomo_v3_post_plasticity_fix/`
+  was never added on any branch (`git log --all --diff-filter=A` confirms
+  this). Current publication-facing documents (README, both arXiv papers)
+  use the artifact-backed pair instead: `MRR = 0.8278`, `R@10 = 94.2%`,
+  code SHA `ef178da7` — which is **before**, not after, the plasticity fix.
+  This historical entry is left as originally written (it records what
+  shipped in v3.15.0); do not treat it as a current figure.
 - **Phase A + B blend-weight calibration.** Central composite design + 5×5
   grid search; all six post-WRRF rerank constants confirmed near-optimum at
   the engineering defaults shipped today. `docs/provenance/blend-weight-calibration.md`.

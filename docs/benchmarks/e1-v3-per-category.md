@@ -1,23 +1,42 @@
 # E1 v3 LME-S per-category delta analysis
 
 > [!WARNING]
-> **BASELINE per-category numbers below are a stale, unreproducible snapshot —
-> not the current per-category figures.** The BASELINE row (`Temporal reasoning`
-> MRR 0.9256/R@10 98.5%, `Single-session (preference)` MRR 0.6678/R@10 93.3%)
-> came from `benchmarks/results/ablation/longmemeval-s_v3/BASELINE.json`, a
-> single May 2026 run with `manifest.repro = null` — no code SHA was captured,
-> so it cannot be pinned to a commit or reproduced. Every dated, git-SHA-tracked
-> `benchmarks/results/repro/*/longmemeval-s.json` run from 2026-07-08 through
-> 2026-08-09 (30+ runs across dozens of commits, `with_consolidation=false` in
-> every case, same `--variant s` harness) agrees instead on `Temporal reasoning`
-> R@10 = 97.7% (MRR 0.917-0.919) and `Single-session (preference)` R@10 = 90.0%
-> (MRR 0.685-0.694) — flat across a month of active development, i.e. these are
-> the stable current values, not a regression from the BASELINE row above. See
-> `docs/benchmarks/arxiv-figure-audit-2026-08-02.md` § Per-category provenance
-> for the full evidence. Use `README.md`'s LongMemEval per-category table for
-> current figures; this document's mechanism-specialization deltas (§ Per-mechanism,
-> per-category Δ MRR below) remain a valid historical read-path finding computed
-> against the BASELINE row's own per-mechanism ablation set, not a current baseline.
+> **BASELINE per-category numbers below establish a real, confirmed
+> regression on two categories — root-cause commit not yet localized
+> (corrected 2026-08-10, issue #347 review round 3; an earlier version of
+> this banner said "no code SHA was captured" for the BASELINE row, and a
+> later version said the regression question was unresolvable — both were
+> wrong and are retracted below).** The BASELINE row (`Temporal reasoning`
+> MRR 0.9256/R@10 98.5%, `Single-session (preference)` MRR 0.6678/R@10
+> 93.3%) came from `benchmarks/results/ablation/longmemeval-s_v3/BASELINE.json`,
+> code-anchored via the sibling `benchmarks/results/ablation/longmemeval-s_v3/manifest.json`:
+> `code_hash: 0e858e8db0f8a5dae0879fa0134113d101be19f8`, `dirty: false`,
+> `started_at: 2026-05-02T22:39:22Z`. Compared field-by-field against
+> `benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json`
+> (code SHA `28145f0b`, dirty=false, 2026-07-14) — identical harness
+> (`--variant s`), identical `n=500`, identical `with_consolidation=false`,
+> both clean-tree — the later run reports `Temporal reasoning` R@10 =
+> 97.7% (down from 98.5%) and `Single-session (preference)` R@10 = 90.0%
+> (down from 93.3%). **Same protocol, two commits, a measured gap: this is
+> the definition of a regression**, confirmed further by 31 additional
+> git-SHA-tracked runs from 2026-07-03 through 2026-08-09 all reporting
+> the same low values. What is NOT yet established is which commit in the
+> 269-commit window between `0e858e8` and the first later-tracked run
+> caused it (one plausible candidate by commit message:
+> `8a5f31f3 Module #6 — DA active forgetting + decay-path correctness`,
+> touching `ADAPTIVE_DECAY`, the mechanism this document's own
+> per-mechanism analysis below already names as counterproductive on
+> `Single-session (preference)`); closing that requires bisection
+> (re-running LongMemEval-S at intermediate commits), not done here. See
+> `docs/benchmarks/arxiv-figure-audit-2026-08-02.md` § Per-category
+> provenance for the full evidence. Per the "a regression is fixed before
+> it is published as reference" rule, `README.md` withholds these two
+> categories from its LongMemEval per-category table rather than
+> presenting the low values as current — it does not have replacement
+> figures for them either. This document's mechanism-specialization
+> deltas (§ Per-mechanism, per-category Δ MRR below) remain a valid
+> historical read-path finding computed against the BASELINE row's own
+> per-mechanism ablation set, not a current baseline.
 
 Re-analysis of existing 17-row E1 v3 LME-S dataset (no re-run); category_mrr fields
 are present in every result JSON. Reveals mechanism specialization that is hidden in

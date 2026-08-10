@@ -395,11 +395,11 @@ LongMemEval (Wu et al., ICLR 2025): 500 human-curated questions embedded in ~40 
 | Single-session (assistant) | 1.000 | 100.0% |
 | Multi-session reasoning | 0.964 | 100.0% |
 | Knowledge updates | 0.932 | 100.0% |
-| Temporal reasoning | 0.917 | 97.7% |
 | Single-session (user) | 0.841 | 95.7% |
-| Single-session (preference) | 0.685 | 90.0% |
 
 Knowledge updates score near-perfect because the retrieval stack's recency signal and update-intent routing push the newest version of a fact above older ones.
+
+Two categories — Temporal reasoning and Single-session (preference) — are withheld from this table. A confirmed same-protocol degradation exists between two committed, clean-tree runs (code SHA `0e858e8`, 2026-05-02, and this table's own `28145f0b`, 2026-07-14; identical `n=500`, `with_consolidation=false`, `--variant s` harness), and the responsible commit has not yet been isolated within the 269-commit window between them. Publishing the lower figure as the reference before the cause is found and fixed would misrepresent an open regression as a settled result. See `docs/benchmarks/arxiv-figure-audit-2026-08-02.md` § Per-category provenance for the full evidence and `docs/benchmarks/e1-v3-per-category.md` for both endpoints.
 
 ### LoCoMo — trick questions and multi-hop reasoning
 
@@ -410,15 +410,15 @@ LoCoMo (Maharana et al., ACL 2024): 1,986 questions across 10 conversations — 
 | Recall@10 | **94.2%** | Right memory in top 10 over 9 times out of 10 |
 | MRR | **0.8278** | The correct *memory* is typically ranked first — retrieval rank only, no LLM reader |
 
-<sub>n=1986, BASELINE_NO_CONSOLIDATION, post-plasticity-fix run at code SHA `ef178da7418a05bcf7aeb3e66f5b3179fdad2c4d` — `docs/benchmarks/e1-v3-locomo-results-post-fix.md`.</sub>
+<sub>n=1986, BASELINE_NO_CONSOLIDATION, code SHA `ef178da7418a05bcf7aeb3e66f5b3179fdad2c4d` (before the plasticity fix `5f737fe`) — `docs/benchmarks/e1-v3-locomo-results.md`, backed by the committed artifact at `benchmarks/results/ablation/locomo_v3/`.</sub>
 
 | Category | MRR | R@10 |
 |---|---|---|
-| Adversarial | 0.881 | 96.0% |
-| Open-domain | 0.875 | 96.9% |
-| Multi-hop | 0.779 | 90.3% |
-| Single-hop | 0.741 | 94.0% |
-| Temporal | 0.577 | 78.3% |
+| Adversarial | 0.879 | 95.7% |
+| Open-domain | 0.874 | 96.9% |
+| Multi-hop | 0.781 | 89.4% |
+| Single-hop | 0.743 | 94.3% |
+| Temporal | 0.583 | 78.3% |
 
 No LLM at query time. Five signals fused — vector similarity, full-text search, trigram matching, thermodynamic heat, recency — then reranked by a cross-encoder. On PostgreSQL the fusion runs server-side in PL/pgSQL; on SQLite the same five signals are fused in-process.
 

@@ -28,9 +28,9 @@ dateable, and commit-anchored — the earlier claim was wrong, and the
 conclusion it supported ("provenance defect, not a regression") does not
 follow from it. Corrected below.
 
-The README's LongMemEval per-category table (`Temporal reasoning` MRR
-0.917/R@10 97.7%, `Single-session (preference)` MRR 0.685/R@10 90.0%) is
-lower on two of six categories than the BASELINE row at `0e858e8`
+The current committed LongMemEval-S run (`28145f0b`, `Temporal reasoning`
+MRR 0.917/R@10 97.7%, `Single-session (preference)` MRR 0.685/R@10 90.0%)
+is lower on two of six categories than the BASELINE row at `0e858e8`
 (2026-05-02/03; MRR 0.9256/R@10 98.5% and MRR 0.6678/R@10 93.3%
 respectively). A lower published figure is a regression only if the SAME
 protocol produced the higher number before a code change and the lower
@@ -46,33 +46,48 @@ Checked against every committed, git-SHA-tracked run of the same
 | 2026-07-03 | `benchmarks/results/harness_repro/longmemeval_full_20260703.json`, code SHA `1501428524`, dirty=**true** | 97.7% | 90.0% |
 | 2026-07-08 → 2026-08-09 | 30 runs, distinct code SHAs, all `benchmarks/results/repro/*/longmemeval-s.json` | 97.7% (every run) | 90.0% (every run) |
 
-**What this establishes:** the low pair is already present by 2026-07-03 and
-stays flat across every one of the 31 runs from there through 2026-08-09 (38
-days, 31 distinct commits) — strong evidence the low pair is not itself a
-recent regression relative to that window. **What this does NOT establish:**
-whether the drop from the 0.9256/98.5% and 0.6678/93.3% pair happened at a
-specific commit between `0e858e8` (2026-05-02) and the first later
-git-SHA-tracked run I could find (`1501428524`, 2026-07-03, and itself
-`dirty=true` — not a clean-tree run). That window contains **269 commits**
-(`git log --oneline 0e858e8..1501428524 | wc -l`), including at least one
-plausible candidate by commit message alone — `8a5f31f3 Module #6 — DA
-active forgetting + decay-path correctness, with honest falsification (#69)`
-— touching exactly the mechanism (`ADAPTIVE_DECAY`) the pre-existing
-per-category analysis in `docs/benchmarks/e1-v3-per-category.md` already
-names as counterproductive on `Single-session (preference)`. No committed
-artifact inside that window resolves this; closing it requires re-running
-LongMemEval-S at one or more intermediate commits, which is a benchmark
-execution out of scope for this PR.
+**The test for "regression" is satisfied, not just approximated.** A
+regression is two measurements of the *same protocol*, at two commits, with
+a gap between them. That is exactly what the two endpoints are: both
+manifests were opened and compared field by field —
 
-**Conclusion: cannot be established from committed artifacts alone. Not
-resolved as either provenance or regression.** The README's low pair is left
-in place because it is what every git-SHA-tracked run from 2026-07-03 onward
-(31 runs, 38 days) reports, but this is descriptive ("this is the value
-every recent run gives"), not a certified non-regression claim — a
-regression introduced anywhere in the unexamined 05-02→07-03 window and
-never fixed would look identical to the evidence above.
-`docs/benchmarks/e1-v3-per-category.md` is labelled accordingly (see its
-own warning banner) rather than declared superseded.
+| Field | `0e858e8` (high) | `28145f0b` (low, README's own current run) |
+|---|---|---|
+| Harness | `--variant s` (17-row driver calls `benchmarks/longmemeval/run_benchmark.py --variant s`) | same script, `n_questions=500` |
+| `n` | 500 | 500 |
+| `with_consolidation` | `false` | `false` |
+| `dirty` | `false` | `false` |
+| Date | 2026-05-02 | 2026-07-14 |
+
+Identical protocol, both clean-tree, both git-SHA-anchored. **This is an
+established degradation** on two of six LongMemEval-S categories —
+`Temporal reasoning` (MRR 0.9256→0.917 down, R@10 98.5%→97.7% down) and
+`Single-session (preference)` (R@10 93.3%→90.0% down; MRR moved the other
+way, 0.6678→0.685, so this category's regression is on R@10, not MRR) —
+not an open question about whether one exists.
+
+**What remains open is which commit caused it**, not whether a regression
+exists. The window between the two endpoints (`0e858e8` → `28145f0b`, or
+more precisely the first later git-SHA-tracked run at `1501428524`,
+2026-07-03) is **269 commits**
+(`git log --oneline 0e858e8..1501428524 | wc -l`); no committed artifact
+exists inside it. One plausible candidate by commit message alone:
+`8a5f31f3 Module #6 — DA active forgetting + decay-path correctness, with
+honest falsification (#69)` — touching exactly the mechanism
+(`ADAPTIVE_DECAY`) that `docs/benchmarks/e1-v3-per-category.md`'s
+pre-existing per-mechanism analysis already names as counterproductive on
+`Single-session (preference)`. Closing the window requires re-running
+LongMemEval-S at one or more intermediate commits (bisection), which is
+benchmark execution out of scope for this PR — the machine is carrying a
+separate multi-hour measurement.
+
+**Conclusion and consequence: this is a regression, awaiting a root-cause
+commit, not a coin flip between "regression" and "provenance."** A
+regression is fixed in code before it is published as a reference value —
+the low pair is **not** presented in `README.md` as the current LongMemEval
+per-category figure for these two categories; the two rows are withheld
+there with a pointer to this section. `docs/benchmarks/e1-v3-per-category.md`
+carries both endpoints with the same framing.
 
 ## Findings and resolution
 
@@ -91,11 +106,17 @@ The source-level figure audit passes when:
 2. the two LaTeX sources compile without undefined references or citations;
 3. `git diff --check` passes.
 
-**Result (superseded by review round 2, 2026-08-10):** the 2026-08-02 PASS
-verdict rested on a LoCoMo pair (0.8279/94.35%, `2f45bcb`) with no committed
-artifact; review round 2 caught this and the pair is retracted throughout
-this repository in favor of the artifact-backed pre-fix pair (0.8278/94.2%,
-`ef178da7`, `benchmarks/results/ablation/locomo_v3/`). PDFs regenerated
-after the correction; `git diff --check` passes; the LongMemEval per-category
-question (see § Per-category provenance above) is explicitly left
-unresolved rather than re-declared PASS.
+**Result (superseded twice, most recently by review round 3, 2026-08-10):**
+the 2026-08-02 PASS verdict rested on a LoCoMo pair (0.8279/94.35%,
+`2f45bcb`) with no committed artifact; review round 2 caught this and the
+pair is retracted throughout this repository in favor of the artifact-backed
+pre-fix pair (0.8278/94.2%, `ef178da7`, `benchmarks/results/ablation/locomo_v3/`).
+Review round 2 also mis-framed the LongMemEval per-category finding as
+"cannot be established from committed artifacts alone" — review round 3
+corrected this: two committed, clean-tree, same-protocol runs (`0e858e8`
+and `28145f0b`) establish a real degradation on `Temporal reasoning` and
+`Single-session (preference)`; only the responsible commit (somewhere in
+the 269-commit window between them) is unlocalized. `README.md` withholds
+those two category rows rather than publishing the low values as reference
+figures. PDFs regenerated after the LoCoMo correction; `git diff --check`
+passes.
