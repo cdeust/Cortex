@@ -90,10 +90,18 @@ jobs:
       # Measured 2026-07-28 locally: 8 skips from tree-sitter, 1 from leidenalg.
       - name: Install dependencies (no postgresql extra)
         # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
-        # --no-deps on the project install because the file above IS the
-        # complete dependency graph; re-resolving here would be unpinned.
+        # --no-deps on BOTH installs: the file is the complete, uv-resolved
+        # dependency graph, so pip must not re-derive it. Without --no-deps
+        # here, pip re-validates every listed package's declared metadata
+        # dependencies against the rest of the file — which breaks the
+        # moment pyproject.toml's [tool.uv] override-dependencies steers a
+        # package (mpmath) past a bound another package's metadata still
+        # declares (sympy's `mpmath<1.4`): uv's resolver honours the
+        # override, but the exported requirements.txt format cannot carry
+        # it, so pip's own re-derivation sees only the unresolved conflict
+        # (issue: PR #332, `ResolutionImpossible` on every install job).
         run: |
-          pip install --require-hashes -r requirements/ci-sqlite.txt
+          pip install --no-deps --require-hashes -r requirements/ci-sqlite.txt
           pip install --no-deps -e .
 
       # Retry-with-backoff, fail-loudly: see the `test` job's pre-download step
@@ -288,10 +296,11 @@ jobs:
 
       - name: Install dependencies (no postgresql extra)
         # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
-        # --no-deps on the project install because the file above IS the
-        # complete dependency graph; re-resolving here would be unpinned.
+        # --no-deps on BOTH installs — see the "Install dependencies (no
+        # postgresql extra)" step above (SQLite job) for why the
+        # requirements-file install needs it too, not just the local -e .
         run: |
-          pip install --require-hashes -r requirements/ci-sqlite-min.txt
+          pip install --no-deps --require-hashes -r requirements/ci-sqlite-min.txt
           pip install --no-deps -e .
 
       # Import smoke: the modules that previously crashed at load on Windows
@@ -399,8 +408,11 @@ jobs:
           key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
 
       - name: Install the release dependency set (hash-pinned)
+        # --no-deps on BOTH installs — see the SQLite job's "Install
+        # dependencies" step above for why the requirements-file install
+        # needs it too, not just the local -e .
         run: |
-          pip install --require-hashes -r requirements/release.txt
+          pip install --no-deps --require-hashes -r requirements/release.txt
           pip install --no-deps -e .
 
       # Retry-with-backoff, fail-loudly: see the `test` job's pre-download
@@ -437,7 +449,10 @@ jobs:
         # Pinned: ruff's formatter output changes across minor versions
         # (0.15.6 vs 0.15.20 divergence broke Lint on PR #83). The repo is
         # formatted with 0.15.20; bump this pin and reformat together.
-        run: pip install --require-hashes -r requirements/lint.txt
+        # --no-deps: the file is the complete, uv-resolved dependency graph
+        # (see the SQLite job's "Install dependencies" step above) — pip
+        # must install it as-is rather than re-deriving it from metadata.
+        run: pip install --no-deps --require-hashes -r requirements/lint.txt
 
       - name: Check formatting
         run: ruff format --check .
@@ -612,13 +627,17 @@ jobs:
       # flashrank (core reranker) + sqlite-vec live outside dev/postgresql/
       # codebase; [otel] resolves the opentelemetry exporter imports.
       - name: Create .venv with the full type-check environment
+        # --no-deps on every requirements-file install here — see the
+        # SQLite job's "Install dependencies" step above for why: each
+        # file is the complete, uv-resolved dependency graph, and pip must
+        # not re-derive it from metadata.
         run: |
           python -m venv .venv
-          .venv/bin/pip install --require-hashes -r requirements/ci-typecheck.txt
+          .venv/bin/pip install --no-deps --require-hashes -r requirements/ci-typecheck.txt
           .venv/bin/pip install --no-deps -e .
           # Pin pyright — diagnostic output drifts between releases, so a
           # zero-diagnostic tree is only comparable against the pinned version.
-          .venv/bin/pip install --require-hashes -r requirements/typecheck-tool.txt
+          .venv/bin/pip install --no-deps --require-hashes -r requirements/typecheck-tool.txt
 
       # The gate's verdict is a property of THIS environment, so the log has to
       # name it. Issue #253: a contributor and CI read two different
@@ -656,7 +675,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: pip install --require-hashes -r requirements/packaging.txt
+        # --no-deps: the file is the complete, uv-resolved dependency graph
+        # (see the SQLite job's "Install dependencies" step above) — pip
+        # must install it as-is rather than re-deriving it from metadata.
+        run: pip install --no-deps --require-hashes -r requirements/packaging.txt
 
       - name: Build sdist and wheel
         run: python -m build

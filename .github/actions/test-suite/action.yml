@@ -157,13 +157,22 @@ runs:
     - name: Install dependencies
       shell: bash
       # Hash-pinned from uv.lock (scripts/generate_pip_constraints.py).
-      # --no-deps on the project install because the file above IS the
-      # complete dependency graph; re-resolving here would be unpinned.
+      # --no-deps on BOTH installs: the file is the complete, uv-resolved
+      # dependency graph, so pip must not re-derive it. Without --no-deps
+      # on the requirements-file install too, pip re-validates every listed
+      # package's declared metadata dependencies against the rest of the
+      # file — which breaks the moment pyproject.toml's [tool.uv]
+      # override-dependencies steers a package (mpmath) past a bound
+      # another package's metadata still declares (sympy's `mpmath<1.4`):
+      # uv's resolver honours the override, but the exported
+      # requirements.txt format cannot carry it, so pip's own
+      # re-derivation sees only the unresolved conflict (issue: PR #332,
+      # `ResolutionImpossible` on every install job).
       # requirements/ci-postgresql.txt inline: this action's sole caller
       # (ci.yml's `test` matrix) always installs it — issue #392 removed the
       # only other caller, which installed requirements/release.txt instead.
       run: |
-        pip install --require-hashes -r requirements/ci-postgresql.txt
+        pip install --no-deps --require-hashes -r requirements/ci-postgresql.txt
         pip install --no-deps -e .
 
     # Populate the HuggingFace cache before the (offline) test run. A transient

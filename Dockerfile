@@ -71,8 +71,14 @@ COPY tests_py ./tests_py
 # `--upgrade pip build` is gone: it was itself an unpinned install, and
 # `build` was never invoked in this file. The base image is digest-pinned,
 # so its pip is a known quantity.
+# --no-deps on both requirements-file installs below: each file is the
+# complete, uv-resolved dependency graph — pip must install it as-is
+# rather than re-deriving it from metadata, which breaks the moment
+# pyproject.toml's [tool.uv] override-dependencies steers a package past
+# a bound another package's metadata still declares (issue: PR #332,
+# mpmath 1.4.1 vs sympy's `mpmath<1.4`).
 COPY requirements/runtime-postgresql.txt requirements/packaging.txt /tmp/
-RUN pip install --no-cache-dir --require-hashes -r /tmp/runtime-postgresql.txt
+RUN pip install --no-cache-dir --no-deps --require-hashes -r /tmp/runtime-postgresql.txt
 
 # The project itself, as a built wheel installed with --no-deps.
 #
@@ -84,7 +90,7 @@ RUN pip install --no-cache-dir --require-hashes -r /tmp/runtime-postgresql.txt
 #
 # --no-isolation so the build backend is the hashed hatchling from
 # packaging.txt rather than one fetched from PyPI mid-build.
-RUN pip install --no-cache-dir --require-hashes -r /tmp/packaging.txt && \
+RUN pip install --no-cache-dir --no-deps --require-hashes -r /tmp/packaging.txt && \
     python -m build --wheel --no-isolation --outdir /tmp/dist . && \
     pip install --no-cache-dir --no-deps /tmp/dist/*.whl
 

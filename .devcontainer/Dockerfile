@@ -57,8 +57,13 @@ COPY mcp_server ./mcp_server
 # index serves for it. The CPU-only torch build is carried by the file (see
 # [[tool.uv.index]] in pyproject.toml) rather than by an --index-url flag
 # here; the rationale for CPU-only is unchanged and lives in ../Dockerfile.
+# --no-deps: the file is the complete, uv-resolved dependency graph — pip
+# must install it as-is rather than re-deriving it from metadata, which
+# breaks the moment pyproject.toml's [tool.uv] override-dependencies
+# steers a package past a bound another package's metadata still declares
+# (issue: PR #332, mpmath 1.4.1 vs sympy's `mpmath<1.4`).
 COPY requirements/devcontainer.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt
+RUN pip install --no-cache-dir --no-deps --require-hashes -r /tmp/requirements.txt
 
 # The project itself, editable so a contributor's edits take effect without
 # a rebuild. --no-deps because the hashed file above is the complete
