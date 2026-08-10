@@ -27,7 +27,7 @@ resolution-markers = [
 
 [manifest]
 constraints = [{ name = "onnxruntime", marker = "python_full_version < '3.11'", specifier = "<1.24" }]
-overrides = [{ name = "mpmath", specifier = ">=1.4.1" }]
+overrides = [{ name = "mpmath", specifier = ">=1.4.1,<1.5" }]
 
 [[package]]
 name = "aiohappyeyeballs"

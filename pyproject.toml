@@ -212,26 +212,46 @@ constraint-dependencies = [
     "onnxruntime<1.24 ; python_full_version < '3.11'",
 ]
 
-# ── mpmath — precautionary upstream bound, not a real incompatibility ────
+# ── mpmath — real, named upstream incompatibility with a known ceiling ───
 #
 # sympy 1.14.0 (latest, no newer release exists) declares
 # `mpmath<1.4,>=1.1.0`. Dependabot's mpmath 1.3.0 -> 1.4.1 bump therefore
 # fails uv's default resolution: sympy pins the lock back to 1.3.0.
 #
-# That bound is precautionary rather than a known incompatibility — mpmath
-# 1.4.1 imports under sympy 1.14.0 and evaluates correctly
-# (`sympy.sqrt(8).evalf()` -> 2.82842712474619, verified 2026-08-01 in a
-# clean venv; nothing in this repo imports sympy or mpmath directly, both
-# arrive transitively through torch). `override-dependencies` lets the
-# package reach its latest published release instead of staying frozen
-# behind an upstream bound that no longer reflects reality. Remove this
-# once sympy widens its declared range.
+# CORRECTION (2026-08-10 review): this bound is NOT merely precautionary.
+# sympy's maintainer documents a real, active dependency on a deprecated
+# mpmath 1.4.x API (`mpf_log`, replaced by `mpf_ln`) — sympy 1.14.0 still
+# calls it, and an mpmath 1.4.0 ALPHA once broke `import sympy` outright
+# before that was fixed. `sympy.sqrt(8).evalf()` importing and evaluating
+# correctly under mpmath 1.4.1 (verified 2026-08-01) is a sample of one
+# code path, not proof the two are compatible in general — it does not
+# cover whatever else in sympy's ~large surface still calls deprecated
+# mpmath internals. Nothing in this repo imports sympy or mpmath
+# directly (both arrive transitively through torch), which is exactly
+# why this override is acceptable at all: the deprecated-API surface
+# sympy still touches is not exercised by anything this repo runs.
+#
+# Bounded, not open-ended: sympy's maintainer states the NEXT sympy
+# release (1.15) will cap at `mpmath<1.5`, precisely because an mpmath
+# 1.4.0 alpha broke sympy import once already and they do not want a
+# repeat with a hypothetical mpmath 1.5. This override matches that
+# stated ceiling rather than leaving the door open for
+# `uv lock --upgrade` (routine, not `--upgrade-package mpmath`) to pull
+# a version sympy's own maintainer has already said may not work.
+# Remove this override once sympy ships a release with mpf_log removed
+# and widens its own declared range past 1.4.
+# source: sympy/sympy#29231 (github.com/sympy/sympy/issues/29231),
+#         read 2026-08-10 — maintainer (oscarbenjamin) comments:
+#         "sympy 1.14.0 uses API that is deprecated in mpmath 1.4.0"
+#         (mpf_log); "mpmath 1.4.0 alpha 0 completely broke sympy to the
+#         extent that `import sympy` failed"; "I would say that the new
+#         [sympy 1.15] release should cap `mpmath < 1.5`".
 # source: PyPI JSON API https://pypi.org/pypi/sympy/json, read 2026-08-10
 #         (latest 1.14.0, requires_dist still `mpmath<1.4,>=1.1.0`)
 # source: uv settings reference, "override-dependencies" —
 #         https://docs.astral.sh/uv/reference/settings/#override-dependencies
 override-dependencies = [
-    "mpmath>=1.4.1",
+    "mpmath>=1.4.1,<1.5",
 ]
 
 # ── CPU-only torch, resolved through the lock ────────────────────────────
