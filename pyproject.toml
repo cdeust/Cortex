@@ -118,7 +118,7 @@ codebase = [
     # of builtins.Parser" — except the pin it annotated said `<1.14`, so the
     # broken window was admitted rather than excluded. The window is real and
     # now excluded; the version numbers are measured rather than recalled.
-    "tree-sitter-language-pack>=1.12.5,<1.14",
+    "tree-sitter-language-pack>=1.12.5,<1.15",
     "networkx>=3.0",
     # Leiden community detection (Traag et al. 2019) — strict improvement
     # over Louvain. igraph supplies the graph backend leidenalg runs on.

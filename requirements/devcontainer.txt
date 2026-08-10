@@ -1894,14 +1894,14 @@ tree-sitter==0.26.0 \
     # via
     #   hypermnesia-mcp
     #   tree-sitter-language-pack
-tree-sitter-language-pack==1.13.5 \
-    --hash=sha256:148931c6e19abd1b676b624f6599ec95726f4871e72dd9b8908f500eb6f065b1 \
-    --hash=sha256:1de57aa0f876b7535ee5cef0549ed3860402ea912eefef38b68527fa1f0bd4f3 \
-    --hash=sha256:46a3ab8f48e8e5d3c6ce0e2904c4b7faa9b2dbfcf6dad4bd76ddfaa69e78b7bf \
-    --hash=sha256:7c4553c61453111138857cacefa563a35efb33bdab3f902bd62a35c44dda96de \
-    --hash=sha256:dcb9640d8b6d89341c2707c77fbdc091c3ba7148d564980d238b1b5be25d34bb \
-    --hash=sha256:eae20d7fe006ef8fcbfdaf37ebaa647750a4f885d90ca4c2bad1c1844bf9053a \
-    --hash=sha256:fb864927710e092a7201cc4bcd0647d6578655cd6951a3485fa9b0df043715c0
+tree-sitter-language-pack==1.14.3 \
+    --hash=sha256:3ae067d4114d8b1b1c80fdafe7479f6ebbdee76002e0b357e16c6ace897ba66d \
+    --hash=sha256:3b56028bba472b774cdd00eedd2744a1e663a003c522c18071642f2501016212 \
+    --hash=sha256:4b0874abbc577e6f81c08a81457fdbea7bb10f50d62ebf33aab54f3fef7d6105 \
+    --hash=sha256:5f55908261f4ce53cfaea26f3d70f40197733dd06e885a6327cc6e406e269da4 \
+    --hash=sha256:7aa7786929058d948179e99d1ad16a67d105a3d0bdeca2a11ed2b098edeb0a03 \
+    --hash=sha256:b13726ed2c402035ed1b601080a3597a3346dd49764f4b92d09c6f5a1d7d1214 \
+    --hash=sha256:c9df8545df48ee11744f9fbd1dcc972a270df9ea485321ce29e352dd64cb1a4c
     # via hypermnesia-mcp
 truststore==0.10.4 ; sys_platform != 'emscripten' \
     --hash=sha256:9d91bd436463ad5e4ee4aba766628dd6cd7010cf3e2461756b3303710eebc301 \
