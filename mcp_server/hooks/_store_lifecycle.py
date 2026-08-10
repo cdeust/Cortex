@@ -7,14 +7,41 @@ constructed stores in a module-global dict (``_shared_stores``) so the
 handler calls — but a one-shot hook process never comes back to reuse that
 cache; it constructs exactly one store, uses it once, and should exit.
 
-``PgMemoryStore`` owns two psycopg ``ConnectionPool`` instances, each with a
-non-daemon worker thread (issue #398). Left open, ``sys.exit()`` cannot end
-the process: the interpreter waits for the non-daemon thread, and on Python
-3.14 ``ConnectionPool.__del__`` racing finalization raises
-``PythonFinalizationError`` instead of joining cleanly — the process spins
-forever instead of exiting. ``PgMemoryStore.close()`` (pg_store.py) already
-closes both pools correctly; the missing piece was ever calling it from a
-one-shot hook process.
+``PgMemoryStore`` owns two psycopg ``ConnectionPool`` instances (issue
+#398). What is established, verified against the exact ``psycopg-pool``
+version this project pins (3.3.1, ``uv.lock``, wheel sha256
+``2af5b432941c4c9ad5c87b3fa410aec910ec8f7c122855897983a06c45f2e4b5``,
+downloaded and read directly): every pool worker/scheduler thread is
+created with ``daemon=True`` (``psycopg_pool/_acompat.py::spawn``) —
+*not* non-daemon, correcting an earlier (wrong) draft of this note.
+``ConnectionPool.__del__`` (``pool.py:118-126``) calls ``gather()``,
+which calls ``thread.join(timeout=5.0)`` on those daemon threads,
+whenever the pool is garbage-collected without ``close()`` ever having
+run. On Python 3.14, joining a thread this late during interpreter
+finalization raises ``PythonFinalizationError: cannot join thread at
+interpreter shutdown`` — the exact traceback issue #398 reports.
+
+What is **not** established: why this correlates with the reported
+~9-hour, ~98%-CPU-spin observation. Daemon threads cannot, by
+definition, block ordinary process exit, and CPython treats an
+exception raised inside ``__del__`` during shutdown as "ignored"
+(printed to stderr, non-fatal) rather than blocking. The mechanism
+connecting the logged ``PythonFinalizationError`` to the extended spin
+was not reproduced live under Python 3.14 for this fix and is not
+claimed here.
+
+What the fix does regardless of that open question: ``close()``
+(``pool.py:427-442``) sets ``self._closed = True`` *before* it runs the
+same ``gather()``/``join()`` — but while the interpreter is still fully
+alive, not during finalization. Once ``_closed`` is ``True``,
+``__del__``'s own early-return guard
+(``if getattr(self, "_closed", True): return``, ``pool.py:120-121``)
+fires immediately and the fragile finalization-time join never runs at
+all. Calling ``PgMemoryStore.close()`` (pg_store.py, which already
+closes both pools correctly) from a one-shot hook process closes the
+exact code path the issue's traceback shows firing — independent of
+whatever the full causal chain to the reported CPU spin turns out to
+be.
 
 Use as::
 

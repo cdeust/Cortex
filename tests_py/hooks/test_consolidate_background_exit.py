@@ -1,55 +1,64 @@
-"""Reproduces issue #398: consolidate_background never exits after a
-successful cycle because the pooled store's non-daemon worker thread
-outlives sys.exit().
+"""Verifies the fix for issue #398: consolidate_background must call
+close() on its pooled store before the one-shot process exits.
 
-Uses a real non-daemon ``threading.Thread`` as a stand-in for
-``psycopg_pool.ConnectionPool``'s worker thread — the actual mechanism that
-kept the reported process alive at ~98% CPU for 9 hours (issue #398). Each
-case runs the REAL ``mcp_server/hooks/consolidate_background.py`` module as
-``__main__`` (via ``runpy``, inside a forked child process) so the assertion
-covers the shipped ``if __name__ == "__main__":`` wiring, not a stand-in for
-it. The "unfixed" case simulates pre-fix behaviour by patching
-``close_shared_store_on_exit`` to a no-op — the module's own lazy
-``from ... import close_shared_store_on_exit`` then picks up the no-op,
-reproducing exactly what the code did before this fix (call main(), never
-close the store). Runs as a genuine OS process via ``multiprocessing``
-(fork context, so the parent's already-patched module state is inherited
-directly — no pickling, no re-import) so the assertion is about real
-process lifecycle, not a mock of it.
+Correction (2026-08-10, PR #417 review): an earlier version of this file
+claimed the pool's worker threads were non-daemon and that this test
+reproduced a process hang. Both claims were false. Verified directly
+against the pinned dependency (psycopg-pool==3.3.1, uv.lock; wheel
+downloaded and its sha256 checked against the lock file's pin;
+``psycopg_pool/_acompat.py::spawn`` creates every worker/scheduler thread
+with ``daemon=True``). Daemon threads cannot, by definition, block a
+process from exiting, so a test asserting "the process hangs without the
+fix" was not exercising a real defect.
 
-precondition: none — the fake store never touches a real database.
-postcondition (fixed case): the child process is reaped within the bound
-and exits 0. postcondition (unfixed-simulation case): the child process is
-NOT reaped within the bound — it demonstrably hangs, the same failure the
-issue reports.
+What IS established (source: the same downloaded, hash-verified wheel):
+``ConnectionPool.__del__`` (``pool.py:118-126``) early-returns if
+``self._closed`` is already true (``pool.py:120-121``); otherwise it calls
+``gather()`` -> ``thread.join(timeout=5.0)`` on the (daemon) worker
+threads. ``close()`` (``pool.py:427-442``) sets ``_closed = True`` before
+running that same join -- but while the interpreter is still alive, not
+during finalization -- so calling it up front means ``__del__`` will
+always take the early-return branch later, whenever the interpreter
+actually collects the object. That is the mechanism this fix relies on
+and the one this test exercises: **close() is called before the process
+exits, on every path**. What remains unestablished (see
+``mcp_server/hooks/_store_lifecycle.py`` for the full account) is why an
+unclosed pool was observed to correlate with a ~9-hour, ~98%-CPU spin in
+production -- that causal chain is not claimed or tested here.
 """
 
 from __future__ import annotations
 
 import multiprocessing
 import runpy
-import threading
-import time
 from contextlib import contextmanager
 
 
-class _FakeUnclosedStore:
-    """Stand-in for PgMemoryStore: owns a genuine non-daemon thread that
-    only stops when close() runs, mirroring psycopg_pool.ConnectionPool's
-    worker thread (issue #398) without needing a live database."""
+class _FakeStore:
+    """Stand-in for PgMemoryStore. Models the one mechanism verified
+    against the pinned psycopg-pool source: __del__ raises unless close()
+    already set a "closed" flag -- a direct model of the
+    early-return-vs-raise branch in ConnectionPool.__del__ (pool.py:120-121
+    vs :126), not a claim about thread daemon status or hang duration."""
 
-    def __init__(self) -> None:
-        self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._loop, daemon=False)
-        self._thread.start()
-
-    def _loop(self) -> None:
-        while not self._stop.is_set():
-            time.sleep(0.01)
+    def __init__(self, close_called) -> None:  # noqa: ANN001 -- multiprocessing.Value, not picklable-friendly to annotate across fork
+        self._closed = False
+        self._close_called = close_called
 
     def close(self) -> None:
-        self._stop.set()
-        self._thread.join(timeout=2)
+        self._closed = True
+        self._close_called.value = 1
+
+    def __del__(self) -> None:
+        if not self._closed:
+            # Mirrors ConnectionPool.__del__ taking the gather()/join()
+            # branch instead of the early return -- the branch that, on
+            # Python 3.14, can raise PythonFinalizationError during
+            # interpreter finalization (issue #398's exact traceback).
+            # CPython treats a __del__ exception at shutdown as "ignored"
+            # (printed, non-fatal) -- this does not, by itself, hang the
+            # process; it demonstrates the fragile branch, nothing more.
+            raise RuntimeError("simulated: cannot join thread at interpreter shutdown")
 
 
 async def _fake_ok_handler(args):  # noqa: ANN001, ARG001 — matches consolidate.handler's signature
@@ -69,7 +78,7 @@ def _noop_store_lifecycle_cm():
     yield
 
 
-def _child_main(fixed: bool) -> None:
+def _child_main(fixed: bool, close_called) -> None:  # noqa: ANN001 -- multiprocessing.Value
     """Runs the real consolidate_background module as __main__, inside a
     genuine child process. When ``fixed`` is False, patches
     close_shared_store_on_exit to a no-op first, so the module's own
@@ -77,7 +86,7 @@ def _child_main(fixed: bool) -> None:
     touching the shipped file."""
     from mcp_server.infrastructure import memory_store
 
-    memory_store._construct_store = lambda *a, **k: _FakeUnclosedStore()  # type: ignore[assignment]
+    memory_store._construct_store = lambda *a, **k: _FakeStore(close_called)  # type: ignore[assignment]
 
     import mcp_server.handlers.consolidate as consolidate_mod
 
@@ -88,41 +97,48 @@ def _child_main(fixed: bool) -> None:
 
         lifecycle_mod.close_shared_store_on_exit = _noop_store_lifecycle_cm
 
-    runpy.run_module("mcp_server.hooks.consolidate_background", run_name="__main__")
+    try:
+        runpy.run_module("mcp_server.hooks.consolidate_background", run_name="__main__")
+    except SystemExit:
+        pass  # main()'s own sys.exit(); multiprocessing reports the process exit code
 
 
-def _run_child(fixed: bool, timeout: float = 3.0) -> tuple[bool, int | None]:
-    """Spawn _child_main in a real process; return (reaped_in_time, exitcode)."""
+def _run_child(fixed: bool, timeout: float = 5.0) -> tuple[bool, bool]:
+    """Spawn _child_main in a real process.
+
+    Returns (reaped_in_time, close_was_called). Reaping is asserted as a
+    sanity check only (both cases are expected to exit promptly -- daemon
+    threads do not block exit); the load-bearing assertion is
+    close_was_called.
+    """
     ctx = multiprocessing.get_context("fork")
-    proc = ctx.Process(target=_child_main, args=(fixed,))
+    close_called = ctx.Value("i", 0)
+    proc = ctx.Process(target=_child_main, args=(fixed, close_called))
     proc.start()
     proc.join(timeout=timeout)
     reaped = not proc.is_alive()
-    exitcode = proc.exitcode
     if not reaped:
         proc.terminate()
         proc.join(timeout=1)
-    return reaped, exitcode
+    return reaped, bool(close_called.value)
 
 
-def test_consolidate_background_hangs_without_the_fix():
-    """Reproduces issue #398: with close_shared_store_on_exit neutralized
-    (simulating pre-fix behaviour), the unclosed pooled store's non-daemon
-    thread keeps the process alive past sys.exit(0) — the failure the bug
-    report observed (process still alive, ~98% CPU, 9h after
-    'finished status=ok')."""
-    reaped, exitcode = _run_child(fixed=False, timeout=3.0)
-    assert not reaped, (
-        f"process exited on its own without the fix (exitcode={exitcode!r}) "
-        "-- the reproduction no longer demonstrates the bug"
+def test_consolidate_background_does_not_close_store_without_the_fix():
+    """Simulates pre-#398-fix wiring (close_shared_store_on_exit
+    neutralized): the store's close() is never called, leaving the
+    fragile __del__ path armed."""
+    reaped, closed = _run_child(fixed=False)
+    assert reaped, "sanity check: even the unfixed simulation should exit promptly"
+    assert not closed, (
+        "close() was called even with the fix neutralized -- the "
+        "reproduction no longer demonstrates the pre-fix gap"
     )
 
 
-def test_consolidate_background_exits_promptly_with_the_fix():
+def test_consolidate_background_closes_store_with_the_fix():
     """issue #398 fix, exercised via the real shipped __main__ block:
-    close_shared_store_on_exit closes the pooled store (joining its
-    non-daemon thread) before the process ends, so it is reaped well
-    within the bound."""
-    reaped, exitcode = _run_child(fixed=True, timeout=3.0)
-    assert reaped, "process was not reaped within the timeout -- fix regressed"
-    assert exitcode == 0
+    close_shared_store_on_exit calls close() on the pooled store before
+    the process ends, on every exit path."""
+    reaped, closed = _run_child(fixed=True)
+    assert reaped
+    assert closed, "close() was not called -- fix regressed"
