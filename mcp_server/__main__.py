@@ -216,16 +216,28 @@ def main() -> None:
     # .run override dropped the base SDK's own `finally:
     # tg.cancel_scope.cancel()`, so on stdin EOF the write stream could
     # close before an in-flight request's handler (dispatched from the same
-    # input batch) had a chance to respond. mcp 2.0.0 removed FastMCP as a
-    # wrapping layer and rewrote the dispatcher
-    # (mcp.shared.jsonrpc_dispatcher.JSONRPCDispatcher.run) with the
-    # join-before-close invariant built in and explicitly documented ("the
-    # write stream closes only after the task-group join, so teardown
-    # writes still land") -- confirmed by direct reproduction of
-    # stdio_transport.py's own characterization scenario (deterministic
-    # handler_started/handler_may_finish/write_stream_closed anyio.Events,
-    # no sleeps) against bare mcp==2.0.0 in an isolated venv, 2026-08-10:
-    # the late response was delivered. mcp.run_stdio_async() also enters
+    # input batch) had a chance to respond.
+    #
+    # That workaround is NOT restored here, and the reason is a protocol
+    # reading rather than a claim that mcp 2.0.0 fixed the race -- it did
+    # not. Closing stdin IS the MCP shutdown signal (2025-06-18 §Lifecycle
+    # > Shutdown > stdio: the client "SHOULD initiate shutdown by ... first,
+    # closing the input stream to the child process"), and the protocol
+    # defines no drain phase, so a request accepted moments before EOF is
+    # owed nothing. mcp 2.0.0 duly drops some of them in silence: with the
+    # handler already returned, `_handle_request` has set
+    # `answer_write_started` before awaiting the response write, so a cancel
+    # landing on that write suppresses the shutdown-error frame too
+    # (reproduced against a BARE mcp 2.0.0 server, no Cortex code, 2026-08-10;
+    # forced deterministically in tests_py/infrastructure/
+    # test_stdio_eof_drain.py). Restoring the drain here would mean holding
+    # the read stream open past real EOF until every accepted id is answered
+    # -- and then a wedged handler holds shutdown hostage. Real hosts do not
+    # need it: they close stdin only when tearing the server down. The one
+    # caller that did need it was our own smoke harness, now fixed where the
+    # wrong assumption lived (scripts/mcp_host_client.py).
+    #
+    # mcp.run_stdio_async() also enters
     # the server lifespan internally now (Server.run()'s own
     # `async with self.lifespan(self)`), so no separate manual lifespan
     # entry is needed either. There is also no more banner/PyPI-update-check

@@ -5743,11 +5743,6 @@
       "detail": "main"
     },
     {
-      "file": "scripts/verify_mcp_hosts.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
       "file": "scripts/wiki_backfill_ids.py",
       "kind": "method-size",
       "detail": "main"

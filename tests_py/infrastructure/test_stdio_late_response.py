@@ -1,7 +1,7 @@
-"""Regression pin: mcp 2.0.0's own stdio dispatch never SILENTLY DROPS a
-response to a request still in flight when read-EOF lands. It answers with
-an explicit shutdown error instead — a materially different, narrower
-guarantee than the workaround this replaces used to provide; read on.
+"""Regression pin, NARROW: a handler still *running inside* ``on_request``
+when read-EOF lands is answered with an explicit shutdown error rather than
+dropped. That is the only case this file covers, and the scope matters —
+see the correction at the bottom of this docstring.
 
 Historical context (removed 2026-08-10, PR #331's mcp 1.29.0 -> 2.0.0
 migration): ``mcp_server/infrastructure/stdio_transport.py`` was a
@@ -32,20 +32,24 @@ So: the write stream really does stay open long enough for every in-flight
 request to get *some* answer — but the answer is a shutdown error, not the
 handler's real result, because the handler was cancelled, not drained.
 
-Net effect versus the original bug: the silent-drop defect (dead air, no
-frame at all) IS fixed — every request gets an explicit, loud response.
-The stronger property Cortex's own workaround provided (in-flight work
-completes and its real result reaches the client even after EOF) is NOT
-reproduced, and cannot be restored without patching the dispatcher's own
-cancel-on-EOF ``finally`` — an invasive construct coding-standards.md §7
-refuses by default for a narrower win than the original defect. This test
-pins the WEAKER, upstream-native guarantee actually verified: no silent
-drop, ever — not "in-flight work survives EOF".
+CORRECTION (2026-08-10, third and final round on this question). An earlier
+revision of this docstring generalised the above into "the silent-drop
+defect IS fixed — every request gets an explicit, loud response". **That
+generalisation is false, and this scenario cannot see why.** It holds the
+handler *inside* ``on_request`` when the cancel arrives, which is the one
+state where ``answer_write_started`` is still False and the shutdown-error
+arm therefore speaks. Move the handler one statement further — let it
+return, so ``_handle_request`` sets ``answer_write_started = True`` on the
+line *before* awaiting the response write — and a cancel landing on that
+write is answered with nothing at all: the flag makes the shutdown arm
+stand down ("prefer possibly-zero answers over possibly-two"), and the
+write itself never delivered. Reproduced against a bare mcp 2.0.0 server
+with zero Cortex code; forced deterministically in
+``test_stdio_eof_drain.py``, which is the file to read for the full model.
 
-If this test starts FAILING (a request goes unanswered — dead silence,
-not even a shutdown error), that is the ORIGINAL silent-drop defect back;
-re-read this docstring and ``mcp_server/__main__.py``'s ``main()`` comment
-before changing the assertion or reaching for a Cortex-side stdio wrapper.
+So: this test's green is evidence about ONE interleaving, never about
+"stdio is safe". Do not re-derive a general claim from it — that inference
+has now been made and retracted twice.
 """
 
 from __future__ import annotations
@@ -225,8 +229,10 @@ async def _drive_late_request_scenario() -> dict[int, SessionMessage]:
 
 
 class TestStdioLateResponseNeverSilentlyDrops:
-    """Pin: mcp 2.0.0's bare dispatch, no Cortex wrapper, ALWAYS answers a
-    request in flight at EOF — with a shutdown error, never dead silence."""
+    """Pin: a request whose handler is still SUSPENDED INSIDE ``on_request``
+    at EOF is answered with a shutdown error. Narrow by construction — a
+    handler that already returned is a different case, and a losing one
+    (``test_stdio_eof_drain.py``)."""
 
     @pytest.mark.asyncio
     async def test_bare_lowlevel_run_answers_the_late_request(self) -> None:

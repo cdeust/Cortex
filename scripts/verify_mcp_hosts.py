@@ -7,34 +7,34 @@ MCP lifecycle batch, and verifies discovery plus one real SQLite-backed tool
 call. Client names are deliberately varied: Cortex must not branch on
 Claude-specific host identity, environment, or hooks.
 
-Environment isolation: ci.yml's "Validate MCP host configurations" job runs
-this script itself with PYTHONPATH=$GITHUB_WORKSPACE (so it can import
-repo-root helpers). `_environment()` strips that before handing the env to
-the spawned MCP server subprocess -- inherited via `os.environ.copy()`
-otherwise, a leaked PYTHONPATH makes the subprocess's `mcp_server` import
-resolve from the CHECKOUT rather than from whatever was actually installed
-into its own venv, silently testing a Frankenstein combination (checkout
-source + venv dependencies) neither this harness nor any real install ever
-runs. A real end user bootstrapping via `uvx --from hypermnesia-mcp[...]`
-never has PYTHONPATH set this way. Surfaced 2026-08-10, PR #331: the
-checkout's `mcp_server/__main__.py` imported `mcp.server.mcpserver`
-(mcp>=2.0.0's API) while the cold uvx venv had actually installed
-fastmcp/mcp<2.0 (still-unreleased-with-this-change PyPI package) --
-ModuleNotFoundError, masquerading as a real bootstrap failure.
+Behaving *as a host* is load-bearing, not decorative: the exchange itself
+lives in `mcp_host_client.py`, which keeps stdin open until every expected
+response has arrived and closes it only then. Closing stdin is the MCP
+shutdown signal (2025-06-18 §Lifecycle › Shutdown › stdio), so the previous
+`subprocess.run(input=...)` shape signalled shutdown before reading a single
+response and then demanded answers the protocol never owed it -- see that
+module's docstring for the mcp 2.0.0 interleaving where the demand is
+actually refused, in silence.
+
+Environment isolation (PYTHONPATH stripping, the SOCKS regression fixture,
+storage selection) also lives there, in `environment()`.
 """
 
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
-import json
-import os
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
 import time
 from typing import Literal
+
+from mcp_host_client import (
+    PROTOCOL_VERSION,
+    ContractCase,
+    ContractError,
+    run_client,
+)
 
 from mcp_server.tool_profiles import LEAN_TOOL_NAMES
 
@@ -42,117 +42,10 @@ from mcp_server.tool_profiles import LEAN_TOOL_NAMES
 CLIENTS = ("claude-code", "gemini-cli", "codex-cli")
 PROFILES: tuple[Literal["full", "lean"], ...] = ("full", "lean")
 STORAGE_SELECTIONS: tuple[Literal["sqlite", "auto"], ...] = ("sqlite", "auto")
-# source: MCP protocol revision this harness's handshake declares -- mcp
-# 2.0.0 accepts it on the "legacy" (pre-2026-07-28-envelope) handshake path.
-PROTOCOL_VERSION = "2025-06-18"
 # source: tests_py/test_main.py standalone baseline plus its three documented
 # optional upstream integrations (ingest_codebase, change_impact, ingest_prd).
 MIN_FULL_TOOL_COUNT = 52
 MAX_FULL_TOOL_COUNT = MIN_FULL_TOOL_COUNT + 3
-
-
-class ContractError(RuntimeError):
-    """A child completed without satisfying the MCP host contract."""
-
-
-@dataclass(frozen=True)
-class ContractCase:
-    """One host identity/profile combination and its isolated runtime."""
-
-    client_name: str
-    profile: Literal["full", "lean"]
-    command: tuple[str, ...]
-    data_root: Path
-    timeout: int
-    socks_proxy_regression: bool
-    storage_selection: Literal["sqlite", "auto"]
-
-    @property
-    def label(self) -> str:
-        return f"{self.client_name}/{self.profile}"
-
-
-def _frames(client_name: str) -> str:
-    messages = [
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": PROTOCOL_VERSION,
-                "capabilities": {},
-                "clientInfo": {"name": client_name, "version": "contract-test"},
-            },
-        },
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
-        {"jsonrpc": "2.0", "id": 3, "method": "resources/list", "params": {}},
-        {"jsonrpc": "2.0", "id": 4, "method": "prompts/list", "params": {}},
-        {
-            "jsonrpc": "2.0",
-            "id": 5,
-            "method": "tools/call",
-            "params": {"name": "memory_stats", "arguments": {}},
-        },
-    ]
-    return "".join(
-        json.dumps(message, separators=(",", ":")) + "\n" for message in messages
-    )
-
-
-def _environment(
-    data_root: Path,
-    *,
-    socks_proxy_regression: bool,
-    storage_selection: Literal["sqlite", "auto"] = "sqlite",
-) -> dict[str, str]:
-    env = os.environ.copy()
-    # Strip a PYTHONPATH inherited from this harness's own invocation (see
-    # the module docstring's "Environment isolation" section for why a
-    # leaked PYTHONPATH corrupts the spawned MCP server's import resolution).
-    env.pop("PYTHONPATH", None)
-    env.update(
-        {
-            "CORTEX_CLAUDE_DIR": str(data_root),
-            "CORTEX_MEMORY_AP_ENABLED": "0",
-        }
-    )
-    if storage_selection == "sqlite":
-        env["CORTEX_MEMORY_STORE_BACKEND"] = "sqlite"
-    else:
-        # Exercise production auto-selection. In particular, do not inherit a
-        # repository- or runner-level SQLite override that would make a
-        # PostgreSQL-first smoke pass without ever attempting PostgreSQL.
-        env.pop("CORTEX_MEMORY_STORE_BACKEND", None)
-        env.pop("CORTEX_ALLOW_SQLITE_FALLBACK", None)
-    if socks_proxy_regression:
-        # Regression environment: FastMCP's banner-time update check used to
-        # import SOCKS support and abort before initialize. The MCP runtime
-        # must not make that non-essential network request. Cold uvx bootstrap
-        # explicitly disables this fixture because it must reach PyPI.
-        env["ALL_PROXY"] = "socks5://127.0.0.1:9"
-        env["all_proxy"] = "socks5://127.0.0.1:9"
-    env.pop("FASTMCP_SHOW_SERVER_BANNER", None)
-    env.pop("FASTMCP_CHECK_FOR_UPDATES", None)
-    env.pop("CORTEX_MCP_PROFILE", None)
-    return env
-
-
-def _responses(stdout: str) -> dict[int, dict[str, object]]:
-    responses: dict[int, dict[str, object]] = {}
-    for line in stdout.splitlines():
-        try:
-            message = json.loads(line)
-        except json.JSONDecodeError as error:
-            raise ContractError(
-                f"malformed JSON-RPC frame on server stdout: {line!r}"
-            ) from error
-        if not isinstance(message, dict):
-            raise ContractError(f"non-object JSON-RPC frame on stdout: {message!r}")
-        request_id = message.get("id")
-        if isinstance(request_id, int) and not isinstance(request_id, bool):
-            responses[request_id] = message
-    return responses
 
 
 def _result(
@@ -167,27 +60,6 @@ def _result(
     if not isinstance(result, dict):
         raise ContractError(f"request id={request_id} returned no object result")
     return result
-
-
-def _run_client(case: ContractCase) -> dict[int, dict[str, object]]:
-    process = subprocess.run(
-        case.command,
-        input=_frames(case.client_name),
-        text=True,
-        capture_output=True,
-        env=_environment(
-            case.data_root / case.client_name / case.profile,
-            socks_proxy_regression=case.socks_proxy_regression,
-            storage_selection=case.storage_selection,
-        ),
-        timeout=case.timeout,
-        check=False,
-    )
-    if process.returncode != 0:
-        raise ContractError(
-            f"{case.label}: server exited {process.returncode}\n{process.stderr}"
-        )
-    return _responses(process.stdout)
 
 
 def _verify_initialize(
@@ -267,7 +139,7 @@ def _verify_memory_call(
 
 def _verify(case: ContractCase) -> tuple[int, float]:
     started_at = time.monotonic()
-    responses = _run_client(case)
+    responses = run_client(case)
     _verify_initialize(case, responses)
     count = _verify_tool_surface(case, responses)
     _verify_auxiliary_discovery(case, responses)
