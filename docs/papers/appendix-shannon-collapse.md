@@ -97,10 +97,10 @@ Decay is what generates and *maintains* the heavy tail: without it, repeated wri
 
 ## 5. Concrete numbers (LongMemEval R@10)
 
-Cortex measured (clean DB, April 2026):
-- LongMemEval R@10: **97.8%**
+Cortex measured in the current clean-DB run (`benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json`, code SHA `28145f0`, dirty=false):
+- LongMemEval R@10: **98.2%**
 - Best flat-RAG baseline (paper-best): **78.4%**
-- Gap: **19.4 pp**.
+- Gap: **19.8 pp**.
 
 LongMemEval has $N \approx 10^4$ (S variant: 500 questions, ~30 turns/session, ~10k candidate spans). Plugging into §3 with $\eta = 0.05$, $f_S \approx 4$:
 
@@ -108,7 +108,7 @@ $$
 N^\star \;=\; \frac{1}{0.05 \cdot 4} \;=\; 5{,}000.
 $$
 
-Test set size $10^4$ is $2 N^\star$. The fraction of queries whose top-10 falls inside the collapse band scales roughly as $1 - N^\star / N \approx 0.5$, but only items in the *boundary band* (between rank 10 and rank 50, where score gap is below $\eta$) are mis-ranked. Empirically that band holds $\sim 20$–$25\%$ of items. Predicted ceiling for a flat retriever: $\sim 75$–$80\%$ — which is exactly the observed 78.4% paper-best. The 19.4 pp gap is the discriminability that decay+heat preserves and uniform priors throw away.
+Test set size $10^4$ is $2 N^\star$. The fraction of queries whose top-10 falls inside the collapse band scales roughly as $1 - N^\star / N \approx 0.5$, but only items in the *boundary band* (between rank 10 and rank 50, where score gap is below $\eta$) are mis-ranked. Empirically that band holds $\sim 20$–$25\%$ of items. Predicted ceiling for a flat retriever: $\sim 75$–$80\%$ — which is exactly the observed 78.4% paper-best. The 19.8 pp gap is the discriminability that the integrated stack preserves and uniform priors throw away.
 
 This is a back-of-envelope, not a tight bound. It survives because the order-of-magnitude $N^\star$ matches the test set, not because the constants are precisely calibrated.
 

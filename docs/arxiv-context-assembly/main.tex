@@ -356,9 +356,10 @@ procedure (\texttt{recall\_memories()}), returning pre-fused results.
 Client-side, FlashRank (ONNX cross-encoder) reranks the top-$3k$
 candidates to produce the final ranking.
 
-This pipeline is strong at moderate scale: 98.4\% R@10 on
-LongMemEval, 94.35\% R@10 on LoCoMo (E1 v3 post-fix run, May 2026;
-code SHA \texttt{2f45bcb}).  The five-signal fusion
+This pipeline is strong at moderate scale: 98.2\% R@10 on
+LongMemEval (clean run, July 2026; code SHA \texttt{28145f0}) and
+94.35\% R@10 on LoCoMo (E1 v3 post-fix run, May 2026; code SHA
+\texttt{2f45bcb}).  The five-signal fusion
 mitigates any single signal's weakness (\eg, vector similarity
 misses lexical matches that trigram catches; FTS misses paraphrases
 that vectors catch).  But at BEAM-10M scale, all five signals suffer
@@ -1292,9 +1293,11 @@ management---the regime where our architecture is designed to help.
 \paragraph{WRRF baseline.}
 Cortex's production pipeline without the assembler: 5-signal
 server-side fusion + FlashRank client-side reranking.  This is a
-strong baseline: 98.4\% R@10 on LongMemEval, 94.35\% R@10 on LoCoMo
-(E1 v3 post-fix run, May 2026; code SHA \texttt{2f45bcb}), and 0.591
-MRR on BEAM-100K.
+strong baseline: 98.2\% R@10 on LongMemEval (clean run, July 2026;
+code SHA \texttt{28145f0}), 94.35\% R@10 on LoCoMo (E1 v3 post-fix
+run, May 2026; code SHA \texttt{2f45bcb}), and 0.591 MRR on
+BEAM-100K (five-conversation protocol, $n{=}100$; code SHA
+\texttt{a071d89}).
 
 \paragraph{LIGHT} \citep{Tavakoli2026}.
 The strongest published system on BEAM, achieving 0.266 overall on

@@ -311,8 +311,9 @@ values (committed at protocol freeze, hashed), LoCoMo MRR is within 0.08 of its
 protocol-frozen historical standalone-tuned MRR (0.794, superseded for current
 reporting). I.e., MRR(LoCoMo, frozen-config) ≥ 0.714.
 
-**Falsification.** MRR(LoCoMo, frozen) < 0.714 → C5 refuted. The 97.8% LongMemEval is
-a calibration artefact, not a generalizable result.
+**Falsification.** MRR(LoCoMo, frozen) < 0.714 → C5 refuted. The current
+LongMemEval result (R@10 98.2%, MRR 0.9167; clean run at SHA `28145f0`)
+would then be a calibration artefact, not a generalizable result.
 
 **Design.**
 - Factor: configuration source ∈ {LongMemEval-tuned (frozen)}. No tuning loop on LoCoMo.

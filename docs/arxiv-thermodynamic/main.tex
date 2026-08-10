@@ -47,7 +47,7 @@ compress episodic into semantic memory
 \citep{Kandel2001,McClelland1995}, and (iv)~weighted score-fusion
 (WSF) retrieval with heat as a tie-breaker.  On three independent
 long-term-memory
-benchmarks, Cortex reaches LongMemEval R@10\,$=$\,98.4\% and
+benchmarks, Cortex reaches LongMemEval R@10\,$=$\,98.2\% and
 LoCoMo R@10\,$=$\,94.35\% (retrieval recall, directly comparable to
 the published retrieval baselines), and a retrieval-proxy MRR of
 0.591 on BEAM-100K.  We report the BEAM number as a retrieval-proxy
@@ -102,7 +102,7 @@ characterises the flat-importance failure mode, describes Cortex's
 thermodynamic architecture, and reports empirical results on three
 published long-term-memory benchmarks.  The headline numbers preview
 the argument: on LongMemEval \citep{Wu2025}, Cortex reaches
-R@10\,$=$\,98.4\% versus 78.4\% paper-best; on BEAM
+R@10\,$=$\,98.2\% versus 78.4\% paper-best; on BEAM
 \citep{Tavakoli2026}, a retrieval-proxy MRR of 0.591 on BEAM-100K
 (not comparable to BEAM's end-to-end metric; see
 \S\ref{sec:beam-proxy}); on
@@ -131,8 +131,8 @@ benchmark's data.
         decay prevents collapse: information-theoretic, operational
         (WSF tie-breaking), and curation-by-attrition.
   \item Empirical results on three long-term-memory benchmarks
-        (\S\ref{sec:empirical}): R@10\,$=$\,98.4\% on LongMemEval
-        ($+20.0$\,pp over paper-best), R@10\,$=$\,94.35\% on LoCoMo,
+        (\S\ref{sec:empirical}): R@10\,$=$\,98.2\% on LongMemEval
+        ($+19.8$\,pp over paper-best), R@10\,$=$\,94.35\% on LoCoMo,
         and a retrieval-proxy MRR of 0.591 on BEAM-100K.
 \end{enumerate}
 
@@ -563,14 +563,15 @@ benchmark's data.
 \begin{table}[t]
 \centering
 \caption{Cortex vs.\ paper-best on three long-term-memory benchmarks.
-Cortex numbers: clean DB, single process, April 2026.}
+Cortex numbers: clean DB, single process, protocol-specific runs;
+sources and code SHAs are enumerated in the accompanying figure audit.}
 \label{tab:benchmarks}
 \begin{tabular}{llrrr}
 \toprule
 Benchmark & Venue & Metric & Cortex & Paper-best \\
 \midrule
-LongMemEval & ICLR 2025 & R@10    & \textbf{98.4\%} & 78.4\% \\
-LongMemEval & ICLR 2025 & MRR     & \textbf{0.9124} & ---    \\
+LongMemEval & ICLR 2025 & R@10    & \textbf{98.2\%} & 78.4\% \\
+LongMemEval & ICLR 2025 & MRR     & \textbf{0.9167} & ---    \\
 LoCoMo      & ACL 2024  & R@10    & \textbf{94.35\%} & ---    \\
 LoCoMo      & ACL 2024  & MRR     & \textbf{0.8279} & ---    \\
 BEAM-100K   & ICLR 2026 & MRR (retrieval-proxy)$^\dagger$ & \textbf{0.591}  & ---    \\
@@ -586,7 +587,7 @@ are retrieval recall, directly comparable to their published
 retrieval baselines.}
 \end{table}
 
-The $+20.0$\,pp absolute gain on LongMemEval R@10 is the headline
+The $+19.8$\,pp absolute gain on LongMemEval R@10 is the headline
 result against a published baseline; the BEAM-100K retrieval-proxy
 MRR of 0.591 is reported only for within-system comparison
 (\S\ref{sec:beam-proxy}), not against BEAM's incommensurable
@@ -745,9 +746,10 @@ that none of our current benchmarks can answer
 \subsection{Per-mechanism evidence (LongMemEval-S, $n{=}500$)}
 \label{sec:per-mechanism}
 
-The \S\ref{sec:empirical} table reports the integrated stack against
-published baselines.  This subsection decomposes the integrated number
-into per-mechanism contributions on two benchmarks---LongMemEval-S
+The \S\ref{sec:empirical} table reports the current integrated stack against
+published baselines.  This subsection reports a separate, earlier clean
+E1~v3 ablation snapshot and decomposes that snapshot into per-mechanism
+contributions on two benchmarks---LongMemEval-S
 at $n{=}500$, single seed (\S\S\ref{sec:per-mech-table}--\ref{sec:per-mech-architectural})
 and LoCoMo at $n{=}1986$, single seed (\S\ref{sec:locomo-evidence})---at
 the calibrated equilibrium described in \S\ref{sec:calibration} below.
@@ -763,12 +765,13 @@ such as $\pm0.0001$ should be read as $\approx 0$ (within noise).
 Question-level bootstrap CIs for the headline rows are deferred to
 the camera-ready.
 
-\paragraph{Headline against the established Cortex baseline.}  At
+\paragraph{Historical E1 v3 ablation snapshot.}  At
 $n{=}500$ the calibrated integrated stack reaches
 \textbf{MRR $= 0.9124$} and \textbf{R@10 $= 0.984$}
 (artefact: \texttt{benchmarks/results/ablation/longmemeval-s\_v3/BASELINE.json};
 manifest: \texttt{manifest.json}, code SHA \texttt{0e858e8}, dirty=false,
-finished 2026-05-03).  Against the previously established CLAUDE.md
+finished 2026-05-03).  These values belong to this named ablation
+snapshot, not to the current headline run.  Against the previously established CLAUDE.md
 reference (MRR $= 0.882$, R@10 $= 0.978$) this is \textbf{+3.0\% MRR
 and +0.6\% R@10}.  The single-seed limitation of \S\ref{sec:empirical}
 applies; the per-row noise floor on $n{=}500$ is empirically
@@ -1618,11 +1621,12 @@ without it, repeated writes regress $w_i$ toward uniform.
 \subsection{Concrete Numbers (LongMemEval R@10)}
 \label{app:shannon-numbers}
 
-Cortex measured (clean DB, April 2026):
+Cortex measured in the current clean-DB run (2026-07-14; code SHA
+\texttt{28145f0}; dirty=false):
 \begin{itemize}
-  \item LongMemEval R@10: \textbf{98.4\%}
+  \item LongMemEval R@10: \textbf{98.2\%}
   \item Best flat-RAG baseline (paper-best): \textbf{78.4\%}
-  \item Gap: \textbf{20.0\,pp}.
+  \item Gap: \textbf{19.8\,pp}.
 \end{itemize}
 
 LongMemEval-S has a \emph{per-query} candidate haystack of
@@ -1849,7 +1853,8 @@ at least a constant fraction of queries.  The paper's reported
 best $R@10 = 78.4\%$ matches: roughly $1 - 10^4/10^5 = 0.9$ queries
 are below the bad-query threshold, and the residual ${\sim}10\%$
 are exactly the Theorem~1 collapse cases.  Cortex measures
-$R@10 = 98.4\%$.  The 20.0-point gap is the predicted Zipf rescue.
+$R@10 = 98.2\%$ in the clean run named above.  The 19.8-point gap is
+the predicted Zipf rescue.
 
 \subsection{Existence of an Optimal Decay Exponent}
 \label{app:erdos-thm3}
@@ -1919,7 +1924,7 @@ memory).  We caution that this prediction is not corroborated by
 our measurements: the clean-store dose--response and Zipf controls
 (\S\ref{sec:decay-dose}, \S\ref{sec:regime}) find no crossover up
 to $N = 10^5$ under single-instant benchmark ingestion, and the
-observed $78.4\% \to 98.4\%$ LongMemEval improvement is carried by
+observed $78.4\% \to 98.2\%$ LongMemEval improvement is carried by
 the integrated stack (fusion, gating, consolidation), not by decay
 (per-mechanism ablation, \S\ref{sec:per-mechanism}).  The theorem's
 premises---a store with genuinely differential access history
@@ -2039,10 +2044,10 @@ contributes no ranking signal at all.  The claim could survive only
 in a store with genuinely differential live access history, which
 no current benchmark instantiates.
 
-\subsection{C5 --- 98.4\% LongMemEval R@10 Generalizes Beyond the Benchmark (severity: high)}
+\subsection{C5 --- 98.2\% LongMemEval R@10 Generalizes Beyond the Benchmark (severity: high)}
 \label{app:popper-c5}
 
-\textbf{The claim.} ``98.4\% LongMemEval R@10 generalizes beyond
+\textbf{The claim.} ``98.2\% LongMemEval R@10 generalizes beyond
 the benchmark---the system is not overfit.''
 
 \textbf{Riskiest prediction.}  Calibration parameters tuned on
@@ -2050,10 +2055,14 @@ LongMemEval (WSF weights, intent classifier thresholds, FlashRank
 reranker depth) transfer to LoCoMo without retuning, retaining
 $\ge 90\%$ of LongMemEval's R@10 (i.e., LoCoMo R@10 $\ge 0.88$).
 
-\textbf{Current evidence.} \textbf{PARTIALLY TESTED.}  Each
-benchmark is currently scored independently with whatever defaults
-exist at the time, but the calibration history is not version-pinned
-to a single benchmark.
+\textbf{Current evidence.} \textbf{PARTIALLY TESTED.}  The current
+protocol-specific scores are LongMemEval R@10 $=98.2\%$ (MRR $=0.9167$,
+$n{=}500$, clean run at SHA \texttt{28145f0}), LoCoMo R@10 $=94.35\%$
+(MRR $=0.8279$, $n{=}1986$, clean post-fix run at SHA
+\texttt{2f45bcb}), and BEAM-100K retrieval-proxy MRR $=0.591$
+($n{=}100$, five-conversation run at SHA \texttt{a071d89}).  They were
+scored independently, so they are consistent with generalization but
+do not constitute the frozen-config cross-evaluation required by this claim.
 
 \subsection{C4 --- WSF Fusion of 5 Signals Decorrelates Noise Sources (severity: medium)}
 \label{app:popper-c4}
@@ -2103,7 +2112,7 @@ C6 read/write 100:1             & low      & UNTESTED         & One week of prod
 
 No claim in the paper is currently CONFIRMED in the strict
 Popperian sense (survived a severe test designed to refute it).
-The 98.4\% / 94.35\% / 0.591 numbers are corroborations of the
+The 98.2\% / 94.35\% / 0.591 numbers are corroborations of the
 system as configured, not corroborations of the causal claims
 (C1--C6) about \emph{why} it performs.
 

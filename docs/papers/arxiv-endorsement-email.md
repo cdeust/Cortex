@@ -35,7 +35,7 @@ github.com/cdeust/Cortex (★52, growing — Perplexity surfaces it on
 **Paper 2 — Thermodynamic Memory vs. Flat-Importance Stores** (cs.IR or cs.CL)
 - 34 pages, ready to submit
 - 45 row per-mechanism ablation campaign on LongMemEval (n=500) and LoCoMo (n=1986)
-- LongMemEval R@10 98.4% (vs 78.4% paper best), LoCoMo R@10 94.35% (post-fix run, code SHA `2f45bcb`)
+- LongMemEval R@10 98.2% / MRR 0.9167 (clean run, code SHA `28145f0`), LoCoMo R@10 94.35% (post-fix run, code SHA `2f45bcb`)
 - Verification surfaced two real production bugs that were fixed and disclosed in the paper itself — the verification campaign improved the system, not just measured it
 
 Both PDFs:
