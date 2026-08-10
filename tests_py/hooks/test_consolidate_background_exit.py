@@ -103,13 +103,12 @@ def _child_main(fixed: bool, close_called) -> None:  # noqa: ANN001 -- multiproc
         pass  # main()'s own sys.exit(); multiprocessing reports the process exit code
 
 
-def _run_child(fixed: bool, timeout: float = 5.0) -> tuple[bool, bool]:
-    """Spawn _child_main in a real process.
+def _run_child(fixed: bool, timeout: float = 5.0) -> tuple[bool, int | None, bool]:
+    """Spawn _child_main in a real process (acceptance criterion 2: spawn
+    the hook against a temporary store, assert it is reaped within a
+    bounded wait and that its exit status is the expected one).
 
-    Returns (reaped_in_time, close_was_called). Reaping is asserted as a
-    sanity check only (both cases are expected to exit promptly -- daemon
-    threads do not block exit); the load-bearing assertion is
-    close_was_called.
+    Returns (reaped_in_time, exitcode, close_was_called).
     """
     ctx = multiprocessing.get_context("fork")
     close_called = ctx.Value("i", 0)
@@ -120,15 +119,18 @@ def _run_child(fixed: bool, timeout: float = 5.0) -> tuple[bool, bool]:
     if not reaped:
         proc.terminate()
         proc.join(timeout=1)
-    return reaped, bool(close_called.value)
+    return reaped, proc.exitcode, bool(close_called.value)
 
 
 def test_consolidate_background_does_not_close_store_without_the_fix():
     """Simulates pre-#398-fix wiring (close_shared_store_on_exit
     neutralized): the store's close() is never called, leaving the
-    fragile __del__ path armed."""
-    reaped, closed = _run_child(fixed=False)
+    fragile __del__ path armed. The process still exits promptly and
+    successfully (daemon threads do not block exit) -- the pre-fix gap is
+    the missing close() call, not a hang; see the module docstring."""
+    reaped, exitcode, closed = _run_child(fixed=False)
     assert reaped, "sanity check: even the unfixed simulation should exit promptly"
+    assert exitcode == 0, f"unexpected exit status {exitcode!r}"
     assert not closed, (
         "close() was called even with the fix neutralized -- the "
         "reproduction no longer demonstrates the pre-fix gap"
@@ -138,7 +140,9 @@ def test_consolidate_background_does_not_close_store_without_the_fix():
 def test_consolidate_background_closes_store_with_the_fix():
     """issue #398 fix, exercised via the real shipped __main__ block:
     close_shared_store_on_exit calls close() on the pooled store before
-    the process ends, on every exit path."""
-    reaped, closed = _run_child(fixed=True)
-    assert reaped
+    the process ends, on every exit path, and the process exits with the
+    expected status (acceptance criterion 2)."""
+    reaped, exitcode, closed = _run_child(fixed=True)
+    assert reaped, "process was not reaped within the timeout"
+    assert exitcode == 0, f"unexpected exit status {exitcode!r}"
     assert closed, "close() was not called -- fix regressed"

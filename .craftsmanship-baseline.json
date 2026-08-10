@@ -4783,11 +4783,6 @@
       "detail": "mcp_server.handlers.consolidate"
     },
     {
-      "file": "mcp_server/hooks/consolidate_background.py",
-      "kind": "method-size",
-      "detail": "main"
-    },
-    {
       "file": "mcp_server/hooks/ingest_codebase_background.py",
       "kind": "layer-violation",
       "detail": "mcp_server.handlers.ingest_codebase"
