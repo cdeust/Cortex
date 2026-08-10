@@ -91,6 +91,24 @@ def _environment(
     storage_selection: Literal["sqlite", "auto"] = "sqlite",
 ) -> dict[str, str]:
     env = os.environ.copy()
+    # This harness's own `python scripts/verify_mcp_hosts.py` invocation may
+    # run with PYTHONPATH=$GITHUB_WORKSPACE (ci.yml's "Validate MCP host
+    # configurations" job sets it so this script can import repo-root
+    # helpers) — inherited via os.environ.copy() above, that would leak
+    # into the spawned MCP server subprocess too and make its import
+    # resolve mcp_server/ from the CHECKOUT rather than from whatever was
+    # actually pip-installed into the cold uvx venv. A real end user
+    # bootstrapping via `uvx --from hypermnesia-mcp[...]` never has this
+    # set; a leaked PYTHONPATH silently tests a Frankenstein environment
+    # (checkout source + venv dependencies) neither this harness nor any
+    # real install ever runs, and can mask a genuine dependency-version
+    # mismatch as a false pass or manufacture a false failure depending on
+    # which side of the split each name resolves from (surfaced 2026-08-10,
+    # PR #331: mcp_server/__main__.py imported from the checkout, satisfied
+    # by mcp 2.0.0's API, while fastmcp/mcp<2.0 were what the cold venv
+    # actually installed from the still-unreleased-with-this-change PyPI
+    # package — ModuleNotFoundError on mcp.server.mcpserver).
+    env.pop("PYTHONPATH", None)
     env.update(
         {
             "CORTEX_CLAUDE_DIR": str(data_root),
@@ -255,7 +273,7 @@ def _verify(case: ContractCase) -> tuple[int, float]:
     return count, time.monotonic() - started_at
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=int, default=2 * 60)
     parser.add_argument(
@@ -298,37 +316,77 @@ def main() -> int:
         nargs=argparse.REMAINDER,
         help="base server command after --; profile flags are added by the test",
     )
-    args = parser.parse_args()
-    command = args.command or [sys.executable, "-m", "mcp_server"]
+    return parser
+
+
+def _resolved_command(
+    parser: argparse.ArgumentParser, raw_command: list[str]
+) -> tuple[str, ...]:
+    command = raw_command or [sys.executable, "-m", "mcp_server"]
     if command and command[0] == "--":
         command = command[1:]
     if not command:
         parser.error("server command after -- cannot be empty")
-    if args.command_includes_profile and len(args.profiles) != 1:
-        parser.error("--command-includes-profile requires exactly one --profiles value")
+    return tuple(command)
 
+
+def _case_command(
+    base_command: tuple[str, ...], *, profile: str, command_includes_profile: bool
+) -> tuple[str, ...]:
+    if command_includes_profile:
+        return base_command
+    return (*base_command, "--profile", profile)
+
+
+def _run_one_case(
+    args: argparse.Namespace,
+    base_command: tuple[str, ...],
+    *,
+    client_name: str,
+    profile: str,
+    temp_dir: str,
+) -> None:
+    case = ContractCase(
+        client_name=client_name,
+        profile=profile,
+        command=_case_command(
+            base_command,
+            profile=profile,
+            command_includes_profile=args.command_includes_profile,
+        ),
+        data_root=Path(temp_dir),
+        timeout=args.timeout,
+        socks_proxy_regression=not args.allow_bootstrap_network,
+        storage_selection=args.storage_selection,
+    )
+    count, elapsed_seconds = _verify(case)
+    print(
+        f"PASS {case.label}: initialize + discovery + "
+        f"memory_stats ({count} tools, {elapsed_seconds:.2f}s)"
+    )
+
+
+def _run_all_cases(args: argparse.Namespace, base_command: tuple[str, ...]) -> None:
     with tempfile.TemporaryDirectory(prefix="cortex_mcp_hosts_") as temp_dir:
         for client_name in args.clients:
             for profile in args.profiles:
-                server_command = (
-                    tuple(command)
-                    if args.command_includes_profile
-                    else (*command, "--profile", profile)
-                )
-                case = ContractCase(
+                _run_one_case(
+                    args,
+                    base_command,
                     client_name=client_name,
                     profile=profile,
-                    command=server_command,
-                    data_root=Path(temp_dir),
-                    timeout=args.timeout,
-                    socks_proxy_regression=not args.allow_bootstrap_network,
-                    storage_selection=args.storage_selection,
+                    temp_dir=temp_dir,
                 )
-                count, elapsed_seconds = _verify(case)
-                print(
-                    f"PASS {case.label}: initialize + discovery + "
-                    f"memory_stats ({count} tools, {elapsed_seconds:.2f}s)"
-                )
+
+
+def main() -> int:
+    parser = _build_parser()
+    args = parser.parse_args()
+    base_command = _resolved_command(parser, args.command)
+    if args.command_includes_profile and len(args.profiles) != 1:
+        parser.error("--command-includes-profile requires exactly one --profiles value")
+
+    _run_all_cases(args, base_command)
     return 0
 
 
