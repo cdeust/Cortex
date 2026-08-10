@@ -146,17 +146,69 @@ def check_registry_version(
     )
 
 
+# source: https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json
+# definitions.ServerDetail.properties.description.{minLength,maxLength} —
+# fetched and read directly 2026-08-10, not copied from a report of it.
+# Real incident: ai-architect-mcp-codebase attempted to publish v0.9.1 with a
+# 144-char description and got a live 422 from the registry — the tag that
+# carries the violation can never be published; only a NEW tag with a
+# shortened description is a way out (the fix existed on `main` but not in
+# the tagged tree, so it published nothing). This offline check exists to
+# catch the same defect before a tag is ever cut, not after.
+SERVER_JSON_DESCRIPTION_MIN_LENGTH = 1
+SERVER_JSON_DESCRIPTION_MAX_LENGTH = 100
+
+
+def check_server_json_schema(root: Path) -> list[str]:
+    """Offline, schema-derived validity checks on server.json's own fields
+    — distinct from check_registry_version's cross-repo VERSION check.
+    Catches the class of defect that produces a 422 at publish time (schema
+    violation), which a version-only comparison cannot see: a server.json
+    can have the exactly-correct version and still be unpublishable.
+
+    Reads whatever server.json is on disk for the ref this gate is running
+    against (the PR branch, or `main` on push/cron) — the tree a FUTURE tag
+    will be cut from, which is the only tree this offline check can affect.
+    An already-tagged historical commit is immutable; this cannot and does
+    not claim to fix one, only to stop the next one from repeating it.
+    """
+    server_json = root / "server.json"
+    if not server_json.is_file():
+        return []
+    description = json.loads(server_json.read_text()).get("description", "")
+    length = len(description)
+    if length > SERVER_JSON_DESCRIPTION_MAX_LENGTH:
+        return [
+            f"SERVER_JSON_DESCRIPTION_TOO_LONG: server.json description is "
+            f"{length} chars; the MCP registry schema caps it at "
+            f"{SERVER_JSON_DESCRIPTION_MAX_LENGTH} — a tag cut from this "
+            f"tree cannot be published (422) and there is no way to publish "
+            f"an already-tagged violation after the fact, only a new tag"
+        ]
+    if length < SERVER_JSON_DESCRIPTION_MIN_LENGTH:
+        return [
+            f"SERVER_JSON_DESCRIPTION_TOO_SHORT: server.json description is "
+            f"empty; the MCP registry schema requires at least "
+            f"{SERVER_JSON_DESCRIPTION_MIN_LENGTH} char"
+        ]
+    return []
+
+
 def check_registry_surface(root: Path, primary_pin: str):
     """Cross-check server.json's own registry `name` against what the
-    public MCP registry actually serves. Returns (failures, notices).
-    Absent server.json or a missing `name` field is not a failure — not
-    every repo on this marketplace publishes to the MCP registry.
+    public MCP registry actually serves, AND server.json's own schema
+    validity (description length). Returns (failures, notices). Absent
+    server.json or a missing `name` field skips the version check — not
+    every repo on this marketplace publishes to the MCP registry — but the
+    schema check still runs whenever server.json exists, name or not.
     """
     server_json = root / "server.json"
     if not server_json.is_file():
         return [], []
+    schema_failures = check_server_json_schema(root)
     registry_name = json.loads(server_json.read_text()).get("name", "")
     if not registry_name:
-        return [], []
+        return schema_failures, []
     failure, notice = check_registry_version(registry_name, primary_pin)
-    return ([failure] if failure else []), ([notice] if notice else [])
+    version_failures = [failure] if failure else []
+    return schema_failures + version_failures, ([notice] if notice else [])
