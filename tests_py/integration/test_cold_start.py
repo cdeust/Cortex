@@ -309,7 +309,17 @@ class TestSetupScript:
 
     def test_setup_reports_ready_or_needs_install(self):
         """Setup script reports 'ready' when PG is available, 'needs_install'
-        when not."""
+        when not.
+
+        No local `timeout=` on the subprocess call below (issue #402): a
+        fixed wall-clock bound makes the verdict depend on machine load,
+        not on the setup script's contract. A genuine hang is still
+        caught by pytest's own global watchdog (`pyproject.toml`
+        `timeout = 300`) -- process-wide (`os._exit(1)` on expiry, not a
+        clean per-test failure; see `tests_py/benchmarks/
+        test_lib_init_no_psycopg.py`'s module docstring for the full
+        mechanism and its source).
+        """
         script = os.path.join(
             os.path.dirname(__file__), "..", "..", "scripts", "setup_db.py"
         )
@@ -334,7 +344,6 @@ class TestSetupScript:
             [sys.executable, script],
             capture_output=True,
             text=True,
-            timeout=15,
             env=env,
         )
 

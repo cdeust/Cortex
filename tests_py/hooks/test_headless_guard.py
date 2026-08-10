@@ -56,7 +56,16 @@ def test_exit_if_child_noops_outside_child(
 
 
 def _run_hook(flag: str | None) -> subprocess.CompletedProcess[str]:
-    """Run session_lifecycle as ``python -m`` with empty stdin."""
+    """Run session_lifecycle as ``python -m`` with empty stdin.
+
+    No local `timeout=` (issue #402): a fixed wall-clock bound makes the
+    verdict depend on machine load, not on the guard's contract. A
+    genuine hang is still caught by pytest's own global watchdog
+    (`pyproject.toml` `timeout = 300`) -- process-wide (`os._exit(1)` on
+    expiry, not a clean per-test failure; see `tests_py/benchmarks/
+    test_lib_init_no_psycopg.py`'s module docstring for the full
+    mechanism and its source).
+    """
     env = dict(os.environ)
     if flag is None:
         env.pop("CORTEX_HEADLESS_AUTHORING_CHILD", None)
@@ -68,7 +77,6 @@ def _run_hook(flag: str | None) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         env=env,
-        timeout=60,
     )
 
 

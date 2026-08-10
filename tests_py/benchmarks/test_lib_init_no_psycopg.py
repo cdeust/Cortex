@@ -23,6 +23,34 @@ This test spawns a real subprocess with `psycopg`/`psycopg_pool`/
 `pgvector` poisoned in `sys.modules` (`None`, the standard way to force
 `ImportError` on a specific module) — a real subprocess so poisoning
 sys.modules cannot leak into the shared pytest session.
+
+None of the subprocess calls below carry a local `timeout=` (issue #402
+follow-up). A fixed wall-clock bound makes a test's pass/fail verdict a
+function of whatever else is running on the machine, not of the contract
+under test — the one observed failure in this module (2026-08-09) traced
+to a run sharing the host with three other agent sessions (load average
+14 on 10 cores), not to any code defect. Enlarging the constant only
+raises the load threshold at which that stays true; it does not remove
+the dependency.
+
+A genuine hang is still caught by pytest's own global watchdog
+(`pyproject.toml` `[tool.pytest.ini_options] timeout = 300`, sourced to
+the 2026-05-25 CI stall incident) — but that backstop is coarser than a
+per-test timeout, and worth stating precisely rather than implying more
+than it delivers: with `timeout_method = "thread"` (the only method
+compatible with `pytest-asyncio`, per that same pyproject.toml comment),
+expiry dumps every thread's stack and then calls `os._exit(1)`
+(`pytest_timeout.py::timeout_timer`, pytest-timeout 2.4.0, the version
+pinned in `uv.lock`) — the WHOLE interpreter terminates immediately, not
+just the timed-out test; there is no clean per-test failure, and any
+subprocess still blocked at that moment is orphaned (`os._exit` skips
+atexit handlers and does not reap children). That is the tradeoff this
+file accepts in exchange for a verdict that no longer depends on machine
+load: a genuine hang is still loud and diagnosable (the dumped stacks
+name exactly what was stuck), on the same terms every other hang-capable
+test in this suite already relies on — nothing here newly weakens that
+contract, and removing this file's own narrower, unsourced 30s bound
+does not weaken it further.
 """
 
 from __future__ import annotations
@@ -46,7 +74,6 @@ def _run(snippet: str) -> subprocess.CompletedProcess[str]:
         [sys.executable, "-c", _POISON + snippet],
         capture_output=True,
         text=True,
-        timeout=30,
     )
 
 
@@ -85,23 +112,38 @@ def test_benchmark_db_resolves_with_psycopg_present():
     postgresql extra") -- there psycopg's absence is the environment, not
     a regression, and `test_benchmark_db_still_reachable_lazily_and_fails_
     loudly_without_psycopg` above already pins that exact behavior.
+
+    Runs IN-PROCESS, not in a subprocess (issue #402 follow-up). The
+    other three tests in this module poison `sys.modules['psycopg']` etc.
+    and MUST use a subprocess -- that poisoning must not leak into the
+    shared pytest session. This test does none of that: it only checks
+    that the PEP 562 `__getattr__` in `benchmarks/lib/__init__.py`
+    resolves `BenchmarkDB` to the exact same class object
+    `benchmarks.lib.bench_db.BenchmarkDB` names directly, which is true
+    regardless of whether this is the first import of that module in the
+    process or a cache hit -- Python's module cache guarantees identity
+    either way, so no isolation is needed for this assertion to be
+    meaningful.
+
+    A prior version spawned `subprocess.run([sys.executable, "-c", ...],
+    timeout=30)` for this test too. That made the verdict depend on wall
+    clock, and therefore on whatever else was running on the machine at
+    the time: the one observed failure (2026-08-09, issue #402) traced to
+    a run made while three other agent sessions shared the host (load
+    average 14 on 10 cores), not to any ordering or state-leak defect
+    (ruled out: a subprocess.run(sys.executable, ...) child starts a
+    fresh interpreter, so nothing in the parent's sys.modules/env can
+    leak in, and every sys.modules/os.environ mutation site in
+    tests_py/ was audited and restores cleanly). Enlarging the timeout
+    would only have raised the load threshold at which the test still
+    flakes, not removed the dependency -- the fix is to not measure wall
+    clock for a question that has nothing to do with time.
     """
     pytest.importorskip("psycopg")
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import benchmarks.lib as lib; "
-            "from benchmarks.lib.bench_db import BenchmarkDB; "
-            "assert lib.BenchmarkDB is BenchmarkDB; "
-            "print('OK')",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert result.returncode == 0, result.stderr
-    assert "OK" in result.stdout
+    import benchmarks.lib as lib
+    from benchmarks.lib.bench_db import BenchmarkDB
+
+    assert lib.BenchmarkDB is BenchmarkDB
 
 
 def test_unknown_attribute_still_raises_attribute_error():

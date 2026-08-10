@@ -111,6 +111,28 @@ delegating steps costs nothing.
 `scripts/check_ci_gate_complete.py` (run by `lint`) fails the build
 otherwise — an ungated job could fail without blocking a merge.
 
+### Issue ownership
+
+**Only the repository owner opens issues on this repo.** If you (human or
+agent contributor) find a defect while working — including one outside the
+blast radius of your current change — you do not file a ticket for it.
+
+This is not a license to ignore it. The rule closes the exit, it does not
+open one: a defect you can fix in the material you are already touching
+gets fixed in the same PR (see the boy-scout discipline under Testing/What
+NOT to do below); a defect outside that blast radius gets described plainly
+in the PR description instead of being silently dropped or waved through
+with a "pre-existing" / "unrelated" / "out of scope" label — those labels
+are not a substitute for either fixing it or naming it where a reviewer can
+see it. **A violation you declare in a commit message or a PR description
+is still a violation** — enumerating it does not authorize leaving it in
+place; it is triage information for the owner, who decides whether it
+becomes its own issue, its own PR, or gets folded into the current one.
+
+Concretely: don't invoke "no issues" as a reason to decline fixing or
+reporting something you found. It is a rule about *who opens tickets*, not
+about *what gets addressed*.
+
 ---
 
 ## Adding a biological mechanism
