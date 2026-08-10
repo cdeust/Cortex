@@ -21,7 +21,7 @@
 #           docker-content-digest header, fetched 2026-07-27.
 # Refresh: Dependabot's `docker` ecosystem (.github/dependabot.yml) opens a
 # PR when the tag moves; do not hand-edit without re-fetching the header.
-FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6
+FROM python:3.14-slim@sha256:a7fb1e634c4a578f9e0bd6327f11a3cde11b7a9395f48e24360c0988bcc5c2bc
 
 LABEL org.opencontainers.image.source="https://github.com/cdeust/Cortex"
 LABEL org.opencontainers.image.description="Cortex development container (issue #118)"
