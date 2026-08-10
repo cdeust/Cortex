@@ -204,7 +204,11 @@ class SneakyLimitExploitTests(unittest.TestCase):
         (repo / "docs" / "module-inventory.md").write_text(
             (_SCRIPTS.parent / "docs" / "module-inventory.md").read_text()
         )
-        self._git(repo, "init", "-q")
+        # `-b main` pins the initial branch name explicitly: this repo's
+        # own default is "main" locally, but git's `init.defaultBranch`
+        # is a per-installation config (CI runners are not guaranteed to
+        # match), and this test hardcodes "main" as the base ref below.
+        self._git(repo, "init", "-q", "-b", "main")
         self._git(repo, "config", "user.email", "demo@example.com")
         self._git(repo, "config", "user.name", "demo")
 
