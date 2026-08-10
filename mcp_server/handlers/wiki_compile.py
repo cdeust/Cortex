@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.core.draft_compiler import compile_draft
-from mcp_server.core.wiki_layout import slugify
+from mcp_server.shared.wiki_layout import slugify
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store

@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.core.wiki_frontmatter_validation import (
+from mcp_server.shared.wiki_frontmatter_validation import (
     UnclosedFrontmatterError,
     normalize_frontmatter,
 )
-from mcp_server.core.wiki_pages import parse_page
+from mcp_server.shared.wiki_pages import parse_page
 
 
 def test_duplicated_key_label_is_normalized_to_canonical_form() -> None:
@@ -43,7 +43,7 @@ def test_healthy_page_round_trips_unchanged() -> None:
     """Idempotence: a page already in canonical form (as any build_*
     template already emits) must be persisted byte-identical.
     """
-    from mcp_server.core.wiki_pages import build_note
+    from mcp_server.shared.wiki_pages import build_note
 
     healthy = build_note(title="A clean note", body="Nothing to fix here.")
 

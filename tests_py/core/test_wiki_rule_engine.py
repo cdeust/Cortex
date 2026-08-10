@@ -11,7 +11,7 @@ including the invalid-regex failure path (its observable effect is
 from __future__ import annotations
 
 from mcp_server.core.wiki_rule_engine import apply_rules
-from mcp_server.core.wiki_schema_loader import ClassifierRule
+from mcp_server.shared.wiki_schema_loader import ClassifierRule
 
 
 def _rule(

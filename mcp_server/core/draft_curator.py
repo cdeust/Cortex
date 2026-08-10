@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from mcp_server.core.wiki_schema_loader import KindDefinition
+from mcp_server.shared.wiki_schema_loader import KindDefinition
 
 CurationVerdict = Literal["approved", "rejected", "hold"]
 

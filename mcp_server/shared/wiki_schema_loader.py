@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from mcp_server.core.wiki_pages import parse_page
+from mcp_server.shared.wiki_pages import parse_page
 
 
 # ── Registry dataclasses ──────────────────────────────────────────────
@@ -146,47 +146,53 @@ _TABLE_ROW_RE = re.compile(r"^\|(.+)\|$", re.MULTILINE)
 _MIN_TABLE_ROWS = 2
 
 
+def _parse_rule_row(header_cells: list[str], row: str) -> ClassifierRule | None:
+    """Parse one table row into a ``ClassifierRule``, or None to skip it
+    (cell-count mismatch, or a missing required ``pattern``/``kind``).
+    """
+    cells = [c.strip() for c in row.split("|")]
+    if len(cells) != len(header_cells):
+        return None
+    # strict=True: the length check immediately above already guarantees
+    # equal lengths here. Documented equivalent mutant
+    # (coding-standards.md §12.1): the `continue` on the preceding line
+    # makes a mismatch unreachable at this point, so strict=True vs
+    # strict=False/None is not observable.
+    r = dict(zip(header_cells, cells, strict=True))
+    if not r.get("pattern") or not r.get("kind"):
+        return None
+    target = r.get("target") or None
+    if target in ("reject", "-", ""):
+        target = None
+    try:
+        weight = float(r.get("weight", "1.0"))
+    except ValueError:
+        weight = 1.0
+    return ClassifierRule(
+        pattern=r["pattern"],
+        pattern_kind=r["kind"],
+        target_kind=target,
+        weight=weight,
+        note=r.get("note", ""),
+    )
+
+
 def parse_rules_table(body: str) -> list[ClassifierRule]:
     """Extract rules from a markdown table.
 
     Expected columns (case-insensitive, order-flexible):
         pattern | kind | target | weight | note
+
+    See ``_parse_rule_row`` for the per-row parsing contract.
     """
     rows = _TABLE_ROW_RE.findall(body)
     if len(rows) < _MIN_TABLE_ROWS:
         return []
-    # First row is header
     header_cells = [c.strip().lower() for c in rows[0].split("|")]
-    rules: list[ClassifierRule] = []
-    for row in rows[2:]:  # skip header + separator
-        cells = [c.strip() for c in row.split("|")]
-        if len(cells) != len(header_cells):
-            continue
-        # strict=True: the length check immediately above already guarantees
-        # equal lengths here. Documented equivalent mutant
-        # (coding-standards.md §12.1): the `continue` on the preceding line
-        # makes a mismatch unreachable at this point, so strict=True vs
-        # strict=False/None is not observable.
-        r = dict(zip(header_cells, cells, strict=True))
-        if not r.get("pattern") or not r.get("kind"):
-            continue
-        target = r.get("target") or None
-        if target == "reject" or target == "-" or target == "":
-            target = None
-        try:
-            weight = float(r.get("weight", "1.0"))
-        except ValueError:
-            weight = 1.0
-        rules.append(
-            ClassifierRule(
-                pattern=r["pattern"],
-                pattern_kind=r["kind"],
-                target_kind=target,
-                weight=weight,
-                note=r.get("note", ""),
-            )
-        )
-    return rules
+    parsed = (
+        _parse_rule_row(header_cells, row) for row in rows[2:]
+    )  # skip header + separator
+    return [rule for rule in parsed if rule is not None]
 
 
 _QUERY_BLOCK_RE = re.compile(r"```cortex-query\n(.*?)\n```", re.DOTALL)

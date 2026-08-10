@@ -166,39 +166,39 @@ class TestWikiStoreReadmeGuard:
         """Regression (this PR): an unreadable README used to fall through
         with should_write=True and get overwritten — data loss for a
         hand-written README the marker check could not inspect."""
-        from mcp_server.infrastructure.wiki_store import _try_reindex
+        from mcp_server.infrastructure.wiki_reindex_io import try_reindex
 
         readme = tmp_path / "README.md"
         garbage = b"\xff\xfe\x00 hand-written, not valid utf-8"
         readme.write_bytes(garbage)
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            _try_reindex(tmp_path)
+            try_reindex(tmp_path)
         assert readme.read_bytes() == garbage
         assert any("wiki_store.readme_read" in r.message for r in caplog.records)
         _assert_noted("wiki_store.readme_read", "utf-8")
 
     def test_auto_generated_readme_is_still_refreshed(self, tmp_path):
-        from mcp_server.infrastructure.wiki_store import _try_reindex
+        from mcp_server.infrastructure.wiki_reindex_io import try_reindex
 
         marker = "<!-- cortex-wiki-readme: auto-generated -->"
         readme = tmp_path / "README.md"
         readme.write_text(f"old body\n{marker}\n")
-        _try_reindex(tmp_path)
+        try_reindex(tmp_path)
         refreshed = readme.read_text()
         assert marker in refreshed
         assert "old body" not in refreshed
 
     def test_reindex_failure_is_logged(self, caplog, tmp_path, monkeypatch):
-        from mcp_server.infrastructure import wiki_store
-        from mcp_server.infrastructure.wiki_store import _try_reindex
+        from mcp_server.infrastructure import wiki_reindex_io
+        from mcp_server.infrastructure.wiki_reindex_io import try_reindex
 
         def broken(paths):
             raise RuntimeError("index builder broke")
 
         # Patch the consumer's own binding (top-level import, #197 family 4).
-        monkeypatch.setattr(wiki_store, "build_index", broken)
+        monkeypatch.setattr(wiki_reindex_io, "build_index", broken)
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            _try_reindex(tmp_path)
+            try_reindex(tmp_path)
         assert any("wiki_store.reindex" in r.message for r in caplog.records)
         _assert_noted("wiki_store.reindex", "index builder broke")
 
@@ -404,9 +404,12 @@ class TestPgStoreRecoverySignals:
         monkeypatch.setattr(store, "_create_connection", lambda: fresh)
         # register_vector needs a real psycopg connection; the reconnect
         # contract under test is the close-failure handling, not pgvector.
-        from mcp_server.infrastructure import pg_store as pg_store_mod
+        # _reconnect lives in pg_store_schema.py (split out of pg_store.py,
+        # over the 300-line §4.1 cap) — patch register_vector where it is
+        # actually called from, not the pg_store.py facade.
+        from mcp_server.infrastructure import pg_store_schema as pg_store_schema_mod
 
-        monkeypatch.setattr(pg_store_mod, "register_vector", lambda conn: None)
+        monkeypatch.setattr(pg_store_schema_mod, "register_vector", lambda conn: None)
         with caplog.at_level("DEBUG", logger="mcp_server.infrastructure.pg_store"):
             store._reconnect()
         assert store._conn is fresh

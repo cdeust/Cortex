@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.core.write_class import DELIBERATE, classify_write_class
+from mcp_server.shared.write_class import DELIBERATE, classify_write_class
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
 

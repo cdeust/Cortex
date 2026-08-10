@@ -90,17 +90,21 @@ class TestWikiSchemaReaderParsing:
 
 class TestWikiStoreTolerantSync:
     def test_strict_failure_degrades_to_none_and_is_logged(self, monkeypatch, tmp_path):
-        from mcp_server.infrastructure import wiki_store
+        # sync_memory/sync_memory_strict moved to the composition root
+        # (mcp_server.handlers.wiki_memory_sync) — infrastructure/wiki_store
+        # must not import core/ (core.wiki_sync.build_from_memory runs the
+        # v2 classifier, real domain judgment).
+        from mcp_server.handlers import wiki_memory_sync
 
         def broken(root, **kwargs):
             raise RuntimeError("sync broke")
 
-        monkeypatch.setattr(wiki_store, "sync_memory_strict", broken)
-        out = wiki_store.sync_memory(
+        monkeypatch.setattr(wiki_memory_sync, "sync_memory_strict", broken)
+        out = wiki_memory_sync.sync_memory(
             tmp_path, memory_id=1, content="c", tags=[], domain="d"
         )
         assert out is None
-        _assert_noted("wiki_store.sync_memory", "sync broke")
+        _assert_noted("wiki_memory_sync.sync_memory", "sync broke")
 
 
 class TestPipelineDiscoveryProbe:

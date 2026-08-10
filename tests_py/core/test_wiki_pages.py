@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.core.wiki_pages import (
+from mcp_server.shared.wiki_pages import (
     PageDocument,
     build_adr,
     build_file_doc,

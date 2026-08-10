@@ -28,7 +28,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
-from mcp_server.core.wiki_layout import PAGE_KINDS
+from mcp_server.shared.wiki_layout import PAGE_KINDS
 
 # Non-tech label + one-line description per kind. The description is
 # what a first-time reader needs to know to decide "do I click here?".
@@ -110,6 +110,94 @@ def _count_by_domain(page_paths: list[str]) -> dict[str, int]:
     return dict(counts)
 
 
+def _render_readme_header(
+    project_name: str,
+    total: int,
+    kind_counts: dict[str, int],
+    domain_counts: dict[str, int],
+    generated_at: datetime,
+) -> list[str]:
+    """Title + one-paragraph orientation + page/category/domain counts."""
+    return [
+        f"# {project_name} Wiki",
+        "",
+        "This is your project's **living knowledge base** — "
+        "decisions, plans, how-tos, and lessons, kept tidy automatically "
+        "as the work happens.",
+        "",
+        f"There are currently **{total} page{'s' if total != 1 else ''}** "
+        f"across **{len(kind_counts)} categories**"
+        + (f" and **{len(domain_counts)} domains**." if domain_counts else "."),
+        "",
+        f"_Last groomed: {generated_at.strftime('%Y-%m-%d %H:%M UTC')}._",
+        "",
+    ]
+
+
+def _render_whats_here(kind_counts: dict[str, int]) -> list[str]:
+    """``## What's here`` — one subsection per non-empty page kind."""
+    lines = ["## What's here", ""]
+    for kind in PAGE_KINDS:
+        if kind_counts.get(kind, 0) == 0:
+            continue
+        label, description = _KIND_PLAIN[kind]
+        count = kind_counts[kind]
+        lines.append(f"### {label} ({count} page{'s' if count != 1 else ''})")
+        lines.append("")
+        lines.append(description)
+        lines.append("")
+        lines.append(f"→ Folder: [`{kind}/`](./{kind}/)")
+        lines.append("")
+    return lines
+
+
+def _render_domains(domain_counts: dict[str, int]) -> list[str]:
+    """``## Covered domains`` — omitted entirely when there are none."""
+    if not domain_counts:
+        return []
+    lines = [
+        "## Covered domains",
+        "",
+        "Each domain is a distinct area of the project. Pages are "
+        "filed under `<category>/<domain>/<page>.md`.",
+        "",
+    ]
+    for domain, count in sorted(domain_counts.items(), key=lambda x: (-x[1], x[0])):
+        lines.append(f"- **{domain}** — {count} page{'s' if count != 1 else ''}")
+    lines.append("")
+    return lines
+
+
+def _render_navigation_and_contributors() -> list[str]:
+    """``## Go deeper`` + ``## For contributors`` — static boilerplate,
+    no input dependency (unlike the other three sections)."""
+    return [
+        "## Go deeper",
+        "",
+        "The full table of contents (grouped by domain and category) "
+        "lives at [`.generated/INDEX.md`](./.generated/INDEX.md). "
+        "It's rebuilt automatically on every wiki write.",
+        "",
+        "Every page follows a consistent template per category — see "
+        "the [conventions folder](./conventions/) (if present) for the rules.",
+        "",
+        "## For contributors",
+        "",
+        "Pages are groomed by `cortex-wiki-groomer` (runs asynchronously "
+        "during `cortex:consolidate`). The groomer:",
+        "",
+        "- Preserves every paragraph you wrote (no information loss).",
+        "- Fills missing front-matter from context (or marks `unknown`).",
+        "- Enforces naming conventions (kebab-slugs, 4-digit ADR IDs).",
+        "- Skips any page whose front-matter declares `grooming: manual`.",
+        "",
+        "To opt a page out of grooming, add `grooming: manual` to its "
+        "front-matter. Nothing you write by hand will ever be rewritten "
+        "without your consent.",
+        "",
+    ]
+
+
 def build_plain_readme(
     page_paths: list[str],
     *,
@@ -122,8 +210,10 @@ def build_plain_readme(
     Markdown. Caller writes to ``<wiki_root>/README.md``.
 
     The output is stable (same input → same output, modulo the
-    ``generated_at`` timestamp) so it's safe to write on every
-    reindex without churning the git log.
+    ``generated_at`` timestamp) so it's safe to write on every reindex
+    without churning the git log. Composed from four section builders:
+    ``_render_readme_header``, ``_render_whats_here``, ``_render_domains``,
+    ``_render_navigation_and_contributors``.
     """
     if generated_at is None:
         generated_at = datetime.now(timezone.utc)
@@ -133,84 +223,12 @@ def build_plain_readme(
     domain_counts = _count_by_domain(page_paths)
 
     lines: list[str] = []
-    lines.append(f"# {project_name} Wiki")
-    lines.append("")
-    lines.append(
-        "This is your project's **living knowledge base** — "
-        "decisions, plans, how-tos, and lessons, kept tidy automatically "
-        "as the work happens."
-    )
-    lines.append("")
-    lines.append(
-        f"There are currently **{total} page{'s' if total != 1 else ''}** "
-        f"across **{len(kind_counts)} categories**"
-        + (f" and **{len(domain_counts)} domains**." if domain_counts else ".")
-    )
-    lines.append("")
-    lines.append(f"_Last groomed: {generated_at.strftime('%Y-%m-%d %H:%M UTC')}._")
-    lines.append("")
-
-    # --- What's here, by category ---
-    lines.append("## What's here")
-    lines.append("")
-    for kind in PAGE_KINDS:
-        if kind_counts.get(kind, 0) == 0:
-            continue
-        label, description = _KIND_PLAIN[kind]
-        count = kind_counts[kind]
-        lines.append(f"### {label} ({count} page{'s' if count != 1 else ''})")
-        lines.append("")
-        lines.append(description)
-        lines.append("")
-        lines.append(f"→ Folder: [`{kind}/`](./{kind}/)")
-        lines.append("")
-
-    # --- Domains ---
-    if domain_counts:
-        lines.append("## Covered domains")
-        lines.append("")
-        lines.append(
-            "Each domain is a distinct area of the project. Pages are "
-            "filed under `<category>/<domain>/<page>.md`."
+    lines.extend(
+        _render_readme_header(
+            project_name, total, kind_counts, domain_counts, generated_at
         )
-        lines.append("")
-        for domain, count in sorted(domain_counts.items(), key=lambda x: (-x[1], x[0])):
-            lines.append(f"- **{domain}** — {count} page{'s' if count != 1 else ''}")
-        lines.append("")
-
-    # --- Navigation ---
-    lines.append("## Go deeper")
-    lines.append("")
-    lines.append(
-        "The full table of contents (grouped by domain and category) "
-        "lives at [`.generated/INDEX.md`](./.generated/INDEX.md). "
-        "It's rebuilt automatically on every wiki write."
     )
-    lines.append("")
-    lines.append(
-        "Every page follows a consistent template per category — see "
-        "the [conventions folder](./conventions/) (if present) for the rules."
-    )
-    lines.append("")
-
-    # --- For tech readers ---
-    lines.append("## For contributors")
-    lines.append("")
-    lines.append(
-        "Pages are groomed by `cortex-wiki-groomer` (runs asynchronously "
-        "during `cortex:consolidate`). The groomer:"
-    )
-    lines.append("")
-    lines.append("- Preserves every paragraph you wrote (no information loss).")
-    lines.append("- Fills missing front-matter from context (or marks `unknown`).")
-    lines.append("- Enforces naming conventions (kebab-slugs, 4-digit ADR IDs).")
-    lines.append("- Skips any page whose front-matter declares `grooming: manual`.")
-    lines.append("")
-    lines.append(
-        "To opt a page out of grooming, add `grooming: manual` to its "
-        "front-matter. Nothing you write by hand will ever be rewritten "
-        "without your consent."
-    )
-    lines.append("")
-
+    lines.extend(_render_whats_here(kind_counts))
+    lines.extend(_render_domains(domain_counts))
+    lines.extend(_render_navigation_and_contributors())
     return "\n".join(lines) + "\n"

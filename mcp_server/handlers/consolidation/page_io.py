@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from mcp_server.core.wiki_frontmatter_validation import UnclosedFrontmatterError
+from mcp_server.shared.wiki_frontmatter_validation import UnclosedFrontmatterError
 from mcp_server.handlers.wiki_write import write_governed_page
 from mcp_server.observability import silent_failure
 

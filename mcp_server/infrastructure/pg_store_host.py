@@ -1,11 +1,13 @@
 """Typed host contract + materialized cursor for the PostgreSQL store mixins.
 
-``PgMemoryStore`` is assembled from eight persistence mixins, each of which
-calls back into shared machinery the composed class provides (``_execute``,
-``_conn``, ``batch_pool``). Before this module existed that contract was
-implicit — every mixin accessed ``self._execute`` with no declaration, so the
-type checker could not verify a single call against the real signature, and a
-wrong call (or a renamed host method) surfaced at runtime instead of in CI.
+``PgMemoryStore`` is assembled from a family of persistence mixins (issue:
+split from a 1384-line pg_store.py over the 300-line §4.1 cap), each of
+which calls back into shared machinery the composed class provides
+(``_execute``, ``_conn``, ``batch_pool``, ``interactive_pool``, ...).
+Before this module existed that contract was implicit — every mixin
+accessed ``self._execute`` with no declaration, so the type checker could
+not verify a single call against the real signature, and a wrong call (or
+a renamed host method) surfaced at runtime instead of in CI.
 
 ``PgStoreHost`` makes the contract explicit: mixins inherit it, the
 declarations live under ``TYPE_CHECKING`` so the class is empty at runtime
@@ -47,6 +49,8 @@ except ModuleNotFoundError:  # SQLite-default install — no psycopg present.
 
 
 if TYPE_CHECKING:
+    from contextlib import AbstractContextManager
+
     import psycopg
     from psycopg import sql
     from psycopg.rows import DictRow
@@ -122,9 +126,19 @@ class PgStoreHost:
 
     if TYPE_CHECKING:
         _conn: psycopg.Connection[DictRow]
+        _url: str
+        _interactive_pool: ConnectionPool[psycopg.Connection[DictRow]] | None
+        _batch_pool: ConnectionPool[psycopg.Connection[DictRow]] | None
 
         @property
         def batch_pool(self) -> ConnectionPool[psycopg.Connection[DictRow]]: ...
+
+        @property
+        def interactive_pool(self) -> ConnectionPool[psycopg.Connection[DictRow]]: ...
+
+        def acquire_interactive(
+            self,
+        ) -> AbstractContextManager[psycopg.Connection[DictRow]]: ...
 
         def _execute(
             self,
@@ -134,3 +148,18 @@ class PgStoreHost:
         ) -> MaterializedCursor: ...
 
         def _normalize_memory_row(self, row: dict[str, Any]) -> dict[str, Any]: ...
+
+        @staticmethod
+        def _isoformat_datetime_fields(d: dict[str, Any]) -> dict[str, Any]: ...
+
+        @staticmethod
+        def _bytes_to_vector(emb: bytes | None) -> Any: ...
+
+        @staticmethod
+        def _vector_to_bytes(vec: Any) -> bytes | None: ...
+
+        def _insert_memory_on(
+            self, conn: psycopg.Connection[DictRow], data: dict[str, Any]
+        ) -> int: ...
+
+        def get_all_memories_for_decay(self) -> list[dict[str, Any]]: ...

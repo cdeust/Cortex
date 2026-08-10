@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from mcp_server.core.wiki_schema_loader import KindDefinition
+from mcp_server.shared.wiki_schema_loader import KindDefinition
 from mcp_server.shared.wiki_ir import DraftPage, Provenance, Section
 
 

@@ -1,4 +1,4 @@
-"""Tests for mcp_server.core.temporal_timezones — the RFC 5322 zone policy.
+"""Tests for mcp_server.shared.temporal_timezones — the RFC 5322 zone policy.
 
 Every row of the cited table is asserted here rather than through
 `normalize_date_to_iso`, because dateutil short-circuits some of them
@@ -9,7 +9,7 @@ independently of which parser consumes it.
 
 import pytest
 
-from mcp_server.core.temporal_timezones import (
+from mcp_server.shared.temporal_timezones import (
     RFC5322_ZONE_NAMES,
     RFC5322ZoneResolver,
 )

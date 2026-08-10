@@ -24,10 +24,44 @@ zetetic source rule:
 #   active_retrieval.py deleted — no call site in production or benchmark
 #   code, none in git history, none in any unmerged branch; net file
 #   count -1)
-shared/           26 files   (10 documented below — curated subset)
-core/            229 files   (~90 documented below — curated subset, incl. core/streaming, core/context_assembly)
-infrastructure/   95 files   (25 documented below — curated subset)
-handlers/        135 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
+# shared/+core/+infrastructure/+handlers/ all re-measured 2026-08-10
+#   (issue #406: temporal.py/temporal_normalize.py/temporal_timezones.py/
+#   near_dup_calibration.py/write_class.py moved core/ -> shared/, all
+#   five stdlib-only with infrastructure/ call sites that could not
+#   legally import core/ -- shared/ +5, core/ -5)
+# infrastructure/ re-measured 2026-08-10 (issue: pg_store.py, 1384 lines,
+#   split into 16 Pg*Mixin modules behind a thin facade, net +15; issue
+#   #407: pg_store_auxiliary.py, 397 lines, split into 6 modules and
+#   deleted, net +5; pg_store_queries.py, 401 lines, split into 3
+#   modules, net +2; pg_store_stats.py, 406 lines, split into 3 modules,
+#   net +2; pg_store_search.py, pushed to 301 lines by the #399
+#   trust-term port (review-caught, PR #409 round 2), split into 2
+#   modules, net +1 -- infrastructure/ net +25 from the pre-split
+#   baseline of 93; the core/ and handlers/ deltas beyond the #406
+#   move are unrelated drift accumulated upstream, not attributable to
+#   either change)
+# shared/+core/+infrastructure/ re-measured 2026-08-10 (issue: PR #409
+#   review round 3 rejected "declared violation" as an acceptance
+#   criterion for infrastructure/wiki_store.py + wiki_schema_reader.py
+#   importing core/ — the real defect was wiki-generation domain logic
+#   mixed with storage access, not a misdirected import. Fix: the
+#   8-module pure wiki_pages/wiki_frontmatter/wiki_layout/wiki_readme/
+#   wiki_index/wiki_page_builders/wiki_frontmatter_validation/
+#   wiki_schema_loader cluster moved core/ -> shared/ (stdlib-only,
+#   zero I/O, same #406 rationale); the one non-pure dependency
+#   (core.wiki_sync.build_from_memory, real classifier judgment) is now
+#   called from a new composition root, handlers/wiki_memory_sync.py,
+#   which wires it to wiki_store.py's write primitives — infrastructure/
+#   no longer imports core/ anywhere. wiki_store.py (439 lines,
+#   pre-existing debt surfaced by this fix) also split under the
+#   300-line cap into wiki_pages_listing.py + wiki_reindex_io.py.
+#   shared/ +8, core/ -8, infrastructure/ +2 (wiki_pages_listing.py,
+#   wiki_reindex_io.py), handlers/ +1 (wiki_memory_sync.py, a
+#   composition-root helper, not a registered tool)
+shared/           39 files   (23 documented below — curated subset)
+core/            220 files   (~87 documented below — curated subset, incl. core/streaming, core/context_assembly)
+infrastructure/  120 files   (52 documented below — curated subset)
+handlers/        139 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
 ```
 
 The prior CLAUDE.md text asserted "108 modules" for `core/` and similar
@@ -63,6 +97,19 @@ Treat gaps as "undocumented," not "does not exist."
 - `types_profiles.py` — Profile-specific Pydantic models
 - `linear_algebra.py` — Dense vector math via numpy (dot, norm, cosine, project, clamp)
 - `sparse.py` — Sparse vector operations (dict-based, topK, conversions)
+- `temporal.py` — Date parsing, distance decay, recency boost (reference; PG does this server-side). Moved from `core/` (issue #406): stdlib-only (`math`/`re`/`datetime`), no dependency on core's business rules — `infrastructure/` (`pg_store_write.py`, `sqlite_store.py`) needed it directly and could not import `core/` per the dependency table above
+- `temporal_normalize.py` — Free-form date → ISO 8601 for storage: honours a stated timezone or refuses the value (issue #252); separate from `temporal.py`, whose scoring may drop precision that storage may not. Moved from `core/` alongside `temporal.py`/`temporal_timezones.py` (issue #406) — same stdlib-only rationale
+- `temporal_timezones.py` — Timezone policy for `temporal_normalize.normalize_date_to_iso`: a `tzinfos` resolver over the RFC 5322 §4.3 obs-zone table, refusing (never defaulting) an abbreviation it cannot resolve, so a stated zone is honoured or the date is rejected (issue #252). Moved from `core/` (issue #406)
+- `near_dup_calibration.py` — Near-duplicate similarity threshold calibration (I6-D2, INC6.4) + connected-component grouping. Moved from `core/` (issue #406): `NamedTuple`-only, stdlib, `infrastructure/pg_store_near_dup.py` needed it directly
+- `write_class.py` — Write-class classification (M-D2/M-D3/7.4 single choke point: `classify_write_class`). Moved from `core/` (issue #406): stdlib-only (`collections.abc`/`typing`), `infrastructure/pg_store_write.py`/`pg_store_memory_reheat.py` needed it directly
+- `wiki_frontmatter.py` — `PageDocument`, `parse_page`, `render_page` (YAML-ish frontmatter parsing/rendering). Moved from `core/` (issue: `infrastructure/wiki_store.py`+`wiki_schema_reader.py` needed the whole `wiki_pages` cluster directly and could not import `core/`): dataclasses/datetime only, zero I/O
+- `wiki_page_builders.py` — `build_adr`/`build_spec`/`build_note`/etc. + shared maturity/sources helpers. Moved from `core/` alongside `wiki_frontmatter.py` — same rationale
+- `wiki_index.py` — `build_index` (INDEX.md generation). Moved from `core/` alongside `wiki_frontmatter.py`
+- `wiki_pages.py` — Composed public entry point re-exporting `wiki_frontmatter`/`wiki_page_builders`/`wiki_index`. Moved from `core/` alongside its three collaborators
+- `wiki_layout.py` — `PAGE_KINDS`, `slugify`, page-path helpers. Moved from `core/`: `re`/`pathlib.PurePosixPath` only (no filesystem I/O — `PurePosixPath` is pure string manipulation)
+- `wiki_readme.py` — `build_plain_readme` (non-technical top-level README generation). Moved from `core/` alongside `wiki_layout.py`
+- `wiki_frontmatter_validation.py` — `normalize_frontmatter`, the write-time choke point `infrastructure/wiki_store.py::write_page` runs on every full-page write (issue #107/#110). Moved from `core/` alongside `wiki_pages.py`
+- `wiki_schema_loader.py` — Self-hosting wiki schema data model (`KindDefinition`/`ClassifierRule`/`ViewDefinition`/`TriggerDefinition`/`WikiRegistry`) + pure `str -> dataclass` parsers; the adapter (`infrastructure/wiki_schema_reader.py`) walks the filesystem and feeds file content through these (issue #126 port-and-adapter split). Moved from `core/` (issue: same infra→core violation as the rest of this cluster) — `re`/`dataclasses`/`pathlib.Path.stem` only, zero I/O of its own
 
 ## core/ — Pure business logic, zero I/O
 
@@ -167,9 +214,6 @@ Treat gaps as "undocumented," not "does not exist."
 - `reranker_model.py` — FlashRank model identity, durable cache_dir, offline-fetch gate, `RerankerStatus`, weights sha256
 - `reranker_scoring.py` — Pure score-blending math: confidence gate, adaptive alpha, WRRF/CE blend
 - `scoring.py` — BM25, n-gram, keyword scoring (reference; PG does this server-side)
-- `temporal.py` — Date parsing, distance decay, recency boost (reference; PG does this server-side)
-- `temporal_normalize.py` — Free-form date → ISO 8601 for storage: honours a stated timezone or refuses the value (issue #252); separate from `temporal.py`, whose scoring may drop precision that storage may not
-- `temporal_timezones.py` — Timezone policy for `temporal_normalize.normalize_date_to_iso`: a `tzinfos` resolver over the RFC 5322 §4.3 obs-zone table, refusing (never defaulting) an abbreviation it cannot resolve, so a stated zone is honoured or the date is rejected (issue #252)
 - `spreading_activation.py` — Collins & Loftus 1975 semantic priming over entity graph
 - `hdc_encoder.py` — 1024D bipolar HDC (bind/bundle/permute/similarity)
 - `cognitive_map.py` — Successor Representation co-access graph + 2D projection
@@ -222,13 +266,43 @@ Run the measurement command in the header to get a current file listing.
 - `scanner_parse.py` — JSONL conversation parsing
 - `mcp_client.py` — Async MCP client over stdio (JSON-RPC 2.0, version negotiation)
 - `mcp_client_pool.py` — Singleton connection pool (lazy connect, reuse, idle timeout)
-- `pg_store.py` — PostgreSQL + pgvector persistence
+- `pg_store.py` — PostgreSQL + pgvector persistence: thin composition-root
+  facade over the `Pg*Mixin` family below (issue: was a single 1384-line
+  file over the 300-line §4.1 cap) — owns only `__init__`/`close` + the
+  DDL-helper re-exports `mcp_server.migrate` imports from this path
+- `pg_store_host.py` — `PgStoreHost` typed cross-mixin contract (DIP §5.1:
+  mixins declare what they need from the composed class) + `MaterializedCursor`
+- `pg_store_schema.py` — Connection creation + Phase 5 pool lifecycle
+- `pg_store_ddl.py` — Pooled query execution (`_execute`) + DDL/schema migration
+- `pg_store_serialize.py` — Embedding↔bytes, datetime normalization, row shaping
+- `pg_store_write.py` — Memory INSERT path (SQL constant, param building, commit)
+- `pg_store_supersede.py` — Atomic reconsolidation-supersession (chain-head CAS + anchor transfer)
+- `pg_store_heat.py` — A3 canonical `heat_base` writers + homeostatic factor
+- `pg_store_memory_meta.py` — Single-row memory metadata writers (importance/access/value/mood/protection/compression)
+- `pg_store_search.py` — `recall_memories`/FTS/vector KNN (issue: the
+  #399 trust/provenance-term port pushed this file to 301 lines, one
+  over the 300-line §4.1 cap — downstream signal consumers split out
+  into the module below)
+- `pg_store_signals.py` — Spreading activation, Hopfield/HDC embedding fetches, temporal co-access graph feed
 - `pg_store_entities.py` — Entity storage and retrieval
 - `pg_store_relationships.py` — Relationship storage, co-activation strengthening
-- `pg_store_queries.py` — Query execution helpers
-- `pg_store_auxiliary.py` — Auxiliary storage operations
+- `pg_store_queries.py` — Filtered/time-window memory read queries (issue
+  #407: was 401 lines over cap — streaming reads and co-access JOINs split
+  into the two modules below)
+- `pg_store_query_stream.py` — Keyset-paginated / server-side-cursor streaming memory reads
+- `pg_store_co_access.py` — Entity co-access / shared-entity JOIN queries
+- `pg_store_checkpoint.py` — Ingest-run + session checkpoint persistence
+- `pg_store_prospective.py` — Prospective (trigger-based) memory CRUD
+- `pg_store_procedural.py` — Procedural skill/habit CRUD (B1)
+- `pg_store_archive.py` — Schema-mismatch memory archive
+- `pg_store_engram.py` — Engram slot allocation (Josselyn & Tonegawa 2020)
+- `pg_store_cortical_schema.py` — Cortical knowledge-structure ("schema", Tse 2007) CRUD — named to avoid colliding with `pg_store_ddl.py`'s unrelated database-DDL "schema" vocabulary
 - `pg_store_rules.py` — Rule storage and retrieval
-- `pg_store_stats.py` — Statistics and diagnostics queries
+- `pg_store_stats.py` — Diagnostics/dashboard reads + grooming staleness (issue
+  #407: was 406 lines over cap — cascade stage transitions and CLS/
+  oscillatory/interference queries split into the two modules below)
+- `pg_store_consolidation_stage.py` — Cascade consolidation-stage writers/readers (Kandel 2001)
+- `pg_store_cls.py` — CLS queries (McClelland 1995) + oscillatory-clock state + interference detection
 - `pg_schema.py` — DDL, extensions, PL/pgSQL stored procedures, migrations
 - `memory_config.py` — Runtime configuration (DATABASE_URL, env vars with CORTEX_MEMORY_ prefix)
 - `backend_marker.py` — Persisted plugin backend selection: reads `~/.claude/methodology/backend.json` (written by `scripts/install-plugin.sh`) and resolves it into `CORTEX_MEMORY_STORE_BACKEND` for the launcher, hooks, and doctor
@@ -236,7 +310,10 @@ Run the measurement command in the header to get a current file listing.
 - `embedding_engine.py` — Vector embeddings (384-dim, sentence-transformers)
 - `artifact_store.py` — Content-addressed raw-output artifacts (`~/.claude/methodology/artifacts/<yyyy-mm>/<sha256[:16]>.md`) backing gist+pointer memories
 - `agent_config.py` — Agent configuration and topic scoping
-- `wiki_schema_reader.py` — Filesystem adapter for `core/wiki_schema_loader.py`'s data model/parsers; walks `wiki/_kinds|_rules|_views|_triggers/` and builds a `WikiRegistry` (issue #126 port-and-adapter split)
+- `wiki_schema_reader.py` — Filesystem adapter for `shared/wiki_schema_loader.py`'s data model/parsers; walks `wiki/_kinds|_rules|_views|_triggers/` and builds a `WikiRegistry` (issue #126 port-and-adapter split)
+- `wiki_store.py` — Wiki filesystem read/write primitives (`read_page`/`write_page`); listing/append (`wiki_pages_listing.py`) and reindex (`wiki_reindex_io.py`) split out (issue: 439 lines over the 300-line §4.1 cap, pre-existing, surfaced while fixing infra→core layer violations in this subsystem — see `mcp_server.handlers.wiki_memory_sync`)
+- `wiki_pages_listing.py` — `append_section`/`list_pages`/`next_adr_number`
+- `wiki_reindex_io.py` — Best-effort `.generated/INDEX.md`/`README.md` rebuild + superseded-page cleanup after a wiki write
 - `document_reader.py` — Reads a .docx (unzips `word/document.xml`) or a Confluence XHTML export off disk into the string its pure parser consumes; raises `DocumentReadError` on a bad container/decoding (issue #192)
 - `workflow_graph_source_ast.py` — `WorkflowGraphASTSource`, the AST-layer workflow-graph loader (ADR-0046); composition point over the three modules below (issue #275 split — was one 1029-line file)
 - `ap_sync_loop.py` — `_SyncLoop`, the cross-loop sync/drain primitive pinning one event loop across an `APBridge` caller's lifetime (issue #258: drains cancelled tasks before stopping the loop, closing the "Task was destroyed but it is pending!" GC-warning race)

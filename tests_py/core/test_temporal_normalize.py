@@ -1,4 +1,4 @@
-"""Tests for mcp_server.core.temporal_normalize — storage normalization.
+"""Tests for mcp_server.shared.temporal_normalize — storage normalization.
 
 Issue #252: a stated timezone is honoured or the value is refused, never
 dropped — a dropped zone reads as UTC in PostgreSQL's `timestamptz` cast and
@@ -12,8 +12,8 @@ import sys
 import warnings
 from datetime import datetime, timezone
 
-from mcp_server.core import temporal_normalize, temporal_timezones
-from mcp_server.core.temporal_normalize import normalize_date_to_iso
+from mcp_server.shared import temporal_normalize, temporal_timezones
+from mcp_server.shared.temporal_normalize import normalize_date_to_iso
 
 
 class TestNormalizeDateToIso:
@@ -94,7 +94,7 @@ class TestNormalizeDateToIsoTimezoneAbbreviations:
 
     def test_unresolvable_abbreviation_is_refused(self, caplog):
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             assert normalize_date_to_iso("8 May 2023 13:56 XYZ") is None
         assert len(caplog.records) == 1
@@ -105,7 +105,7 @@ class TestNormalizeDateToIsoTimezoneAbbreviations:
         the consequence avoided and the fix. Asserted whole: every fragment
         of an operator-facing message is part of its contract."""
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             normalize_date_to_iso("8 May 2023 13:56 IST")
         assert caplog.records[0].getMessage() == (
@@ -118,7 +118,7 @@ class TestNormalizeDateToIsoTimezoneAbbreviations:
 
     def test_resolvable_abbreviation_is_quiet(self, caplog):
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             normalize_date_to_iso("8 May 2023 13:56 EST")
         assert caplog.records == []
@@ -155,7 +155,7 @@ class TestNormalizeDateToIsoTimezoneAbbreviations:
 class TestNormalizeDateToIsoDegradedModes:
     def test_unparseable_time_of_day_salvages_the_date_and_says_so(self, caplog):
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             assert normalize_date_to_iso("8 May 2023 25:99") == "2023-05-08T00:00:00"
         assert caplog.records[0].getMessage() == (
@@ -169,7 +169,7 @@ class TestNormalizeDateToIsoDegradedModes:
         through the salvage path, which would report a loss that never
         happened."""
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             assert normalize_date_to_iso("Created on 2024-06-01 at noon") == (
                 "2024-06-01T00:00:00"
@@ -178,7 +178,7 @@ class TestNormalizeDateToIsoDegradedModes:
 
     def test_nothing_salvageable_returns_none_quietly(self, caplog):
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             assert normalize_date_to_iso("half past forever") is None
         assert caplog.records == []
@@ -189,7 +189,7 @@ class TestNormalizeDateToIsoDegradedModes:
 
         monkeypatch.setattr("dateutil.parser.parse", _raise)
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             assert normalize_date_to_iso("8 May 2023 13:56") == "2023-05-08T00:00:00"
         assert "its time is lost" in caplog.text
@@ -197,7 +197,7 @@ class TestNormalizeDateToIsoDegradedModes:
     def test_missing_dateutil_is_reported_not_swallowed(self, monkeypatch, caplog):
         monkeypatch.setitem(sys.modules, "dateutil", None)
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             assert normalize_date_to_iso("1:56 pm on 8 May, 2023") is None
         assert caplog.records[0].getMessage() == (
@@ -210,7 +210,7 @@ class TestNormalizeDateToIsoDegradedModes:
     def test_missing_dateutil_still_salvages_a_date(self, monkeypatch, caplog):
         monkeypatch.setitem(sys.modules, "dateutil", None)
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             assert normalize_date_to_iso("8 May 2023 13:56") == "2023-05-08T00:00:00"
         assert "python-dateutil is not installed" in caplog.text
@@ -233,7 +233,7 @@ class TestNormalizeDateToIsoWithoutDateutil:
     def test_zone_bearing_date_is_refused_not_flattened(self, monkeypatch, caplog):
         self._without_dateutil(monkeypatch)
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             assert normalize_date_to_iso("8 May 2023 13:56 EST") is None
         assert caplog.records[-1].getMessage() == (
@@ -250,7 +250,7 @@ class TestNormalizeDateToIsoWithoutDateutil:
     def test_date_only_input_is_unaffected(self, monkeypatch, caplog):
         self._without_dateutil(monkeypatch)
         with caplog.at_level(
-            logging.WARNING, logger="mcp_server.core.temporal_normalize"
+            logging.WARNING, logger="mcp_server.shared.temporal_normalize"
         ):
             assert normalize_date_to_iso("8 May 2023") == "2023-05-08T00:00:00"
         assert caplog.records == []

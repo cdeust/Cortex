@@ -1,7 +1,8 @@
 """Wiki sync — decide whether a stored memory should be promoted to an
 authored wiki page, and build the page payload.
 
-Pure logic, no I/O. The caller (infrastructure/wiki_store.py::sync_memory)
+Pure logic, no I/O. The caller (handlers/wiki_memory_sync.py::sync_memory —
+the composition root wiring this classifier to infrastructure/wiki_store.py)
 is responsible for writing the returned markdown to disk.
 
 Design intent
@@ -25,8 +26,8 @@ from datetime import datetime, timezone
 
 from mcp_server.core.wiki_classifier import classify_memory, derive_title
 from mcp_server.core.wiki_identity import generate_page_id
-from mcp_server.core.wiki_layout import slugify
-from mcp_server.core.wiki_pages import build_note
+from mcp_server.shared.wiki_layout import slugify
+from mcp_server.shared.wiki_pages import build_note
 from mcp_server.shared.wiki_classification import classification_to_frontmatter
 import hashlib
 

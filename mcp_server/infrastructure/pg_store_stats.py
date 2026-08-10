@@ -1,19 +1,21 @@
-"""Stats, diagnostics, consolidation, oscillatory state mixin for PgMemoryStore."""
+"""Diagnostics/dashboard/grooming-staleness mixin for PgMemoryStore.
+
+Cascade stage transitions live in the sibling ``pg_store_consolidation_stage``
+module and CLS/oscillatory/interference queries in ``pg_store_cls`` (both
+split out by issue #407: this file was 406 lines over the 300-line §4.1 cap).
+"""
 
 from __future__ import annotations
 
-from mcp_server.infrastructure.pg_store_host import PgStoreHost
-
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import psycopg
 
-if TYPE_CHECKING:
-    import psycopg
+from mcp_server.infrastructure.pg_store_host import PgStoreHost
 
 
 class PgStatsMixin(PgStoreHost):
-    """Diagnostics, consolidation stages, CLS queries on PostgreSQL."""
+    """Diagnostics, dashboard reads, and grooming staleness on PostgreSQL."""
 
     # ── Counts ────────────────────────────────────────────────────────
 
@@ -94,6 +96,12 @@ class PgStatsMixin(PgStoreHost):
         ).fetchall()
         return {r["d"]: r["c"] for r in rows}
 
+    def count_active_triggers(self) -> int:
+        row = self._execute(
+            "SELECT COUNT(*) AS c FROM prospective_memories WHERE is_active"
+        ).fetchone()
+        return row["c"] if row else 0
+
     # ── Dashboard ─────────────────────────────────────────────────────
 
     def get_recent_memories(self, limit: int = 20) -> list[dict[str, Any]]:
@@ -119,231 +127,28 @@ class PgStatsMixin(PgStoreHost):
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
-    # ── Consolidation ─────────────────────────────────────────────────
-
-    def update_memory_consolidation(
-        self,
-        memory_id: int,
-        stage: str,
-        hours_in_stage: float,
-        replay_count: int,
-        hippocampal_dependency: float,
-    ) -> None:
-        self._execute(
-            "UPDATE memories SET consolidation_stage = %s, "
-            "hours_in_stage = %s, replay_count = %s, "
-            "hippocampal_dependency = %s WHERE id = %s",
-            (stage, hours_in_stage, replay_count, hippocampal_dependency, memory_id),
-        )
-        self._conn.commit()
-
-    def insert_stage_transitions_batch(self, rows: list[dict]) -> int:
-        """Batch-insert cascade stage-transition rows in a single statement.
-
-        Source: issue #13 — was per-row INSERT + per-row commit inside the
-        cascade loop (503 fsyncs on darval's run).
-        """
-        if not rows:
-            return 0
-        memory_ids = [int(r["memory_id"]) for r in rows]
-        from_stages = [str(r["from_stage"]) for r in rows]
-        to_stages = [str(r["to_stage"]) for r in rows]
-        hours = [float(r["hours_in_prev"]) for r in rows]
-        triggers = [str(r.get("trigger", "cascade")) for r in rows]
-        self._execute(
-            "INSERT INTO stage_transitions "
-            "(memory_id, from_stage, to_stage, hours_in_prev_stage, trigger) "
-            "SELECT * FROM UNNEST("
-            "  %s::int[], %s::text[], %s::text[], %s::real[], %s::text[]"
-            ")",
-            (memory_ids, from_stages, to_stages, hours, triggers),
-        )
-        self._conn.commit()
-        return len(rows)
-
-    def get_memories_by_stage(
-        self, stage: str, limit: int = 100
-    ) -> list[dict[str, Any]]:
-        rows = self._execute(
-            "SELECT * FROM memories WHERE consolidation_stage = %s "
-            "ORDER BY hours_in_stage DESC LIMIT %s",
-            (stage, limit),
-        ).fetchall()
-        return [self._normalize_memory_row(r) for r in rows]
-
-    def get_stage_counts(self) -> dict[str, int]:
-        rows = self._execute(
-            "SELECT consolidation_stage, COUNT(*) AS c FROM memories "
-            "GROUP BY consolidation_stage"
-        ).fetchall()
-        return {r["consolidation_stage"]: r["c"] for r in rows}
-
-    def increment_replay_count(self, memory_id: int) -> dict[str, Any] | None:
-        """Increment replay_count and return the post-increment CLS-B inputs.
-
-        Returns ``{"replay_count", "hippocampal_dependency", "schema_match_score",
-        "importance"}`` read back atomically via ``RETURNING`` (single round
-        trip — the caller needs the just-incremented count, not a stale one),
-        or ``None`` if the memory no longer exists. Pure persistence: the
-        caller (handler layer) decides what, if anything, to do with these
-        values.
-        """
-        row = self._execute(
-            "UPDATE memories SET replay_count = replay_count + 1 WHERE id = %s "
-            "RETURNING replay_count, hippocampal_dependency, "
-            "schema_match_score, importance",
-            (memory_id,),
-        ).fetchone()
-        self._conn.commit()
-        return dict(row) if row else None
-
-    def update_memory_hippocampal_dependency(
-        self, memory_id: int, dependency: float
-    ) -> None:
-        """Persist a new hippocampal_dependency value. No policy — pure write."""
-        self._execute(
-            "UPDATE memories SET hippocampal_dependency = %s WHERE id = %s",
-            (dependency, memory_id),
-        )
-        self._conn.commit()
-
-    # ── Oscillatory State ─────────────────────────────────────────────
-
-    def save_oscillatory_state(self, state_json: str) -> None:
-        self._execute(
-            "INSERT INTO oscillatory_state (id, state_json) VALUES (1, %s) "
-            "ON CONFLICT (id) DO UPDATE SET state_json = EXCLUDED.state_json",
-            (state_json,),
-        )
-        self._conn.commit()
-
-    def load_oscillatory_state(self) -> str | None:
-        row = self._execute(
-            "SELECT state_json FROM oscillatory_state WHERE id = 1"
-        ).fetchone()
-        return row["state_json"] if row else None
-
-    # ── Interference ──────────────────────────────────────────────────
-
-    def get_similar_memories_for_interference(
-        self, domain: str, limit: int = 50
-    ) -> list[dict[str, Any]]:
-        rows = self._execute(
-            "SELECT id, embedding, heat, importance, "
-            "consolidation_stage, directory_context, interference_score "
-            "FROM memories WHERE domain = %s AND embedding IS NOT NULL "
-            "AND NOT is_stale ORDER BY heat DESC LIMIT %s",
-            (domain, limit),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-    def update_memory_interference(
-        self,
-        memory_id: int,
-        interference_score: float,
-        separation_index: float | None = None,
-    ) -> None:
-        if separation_index is not None:
-            self._execute(
-                "UPDATE memories SET interference_score = %s, "
-                "separation_index = %s WHERE id = %s",
-                (interference_score, separation_index, memory_id),
-            )
-        else:
-            self._execute(
-                "UPDATE memories SET interference_score = %s WHERE id = %s",
-                (interference_score, memory_id),
-            )
-        self._conn.commit()
-
-    # ── CLS Queries ───────────────────────────────────────────────────
-
-    def get_episodic_memories(
-        self, domain: str = "", directory: str = "", limit: int = 500
-    ) -> list[dict[str, Any]]:
-        """CLS input. Reads current_memories: the CLS clusters EVERY returned
-        row (NOT is_stale does not cover supersession), so a superseded
-        episodic version would be crystallized into a durable semantic fact.
-        Chain heads carry the correction — consolidating heads only is the
-        contract.
-        """
-        conditions = ["store_type = 'episodic'", "NOT is_stale"]
-        params: list = []
-        if domain:
-            conditions.append("domain = %s")
-            params.append(domain)
-        if directory:
-            conditions.append("directory_context = %s")
-            params.append(directory)
-        params.append(limit)
-        where = " AND ".join(conditions)
-        rows = self._execute(
-            f"SELECT * FROM current_memories WHERE {where} "  # noqa: S608 — WHERE built from in-code literal fragments; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            "ORDER BY created_at DESC LIMIT %s",
-            params,
-        ).fetchall()
-        return [self._normalize_memory_row(r) for r in rows]
-
-    def get_semantic_memories(
-        self, domain: str = "", limit: int = 500
-    ) -> list[dict[str, Any]]:
-        """CLS dedup input. Reads current_memories: a superseded semantic row
-        matching >0.85 cosine would otherwise suppress the creation of the
-        corrected abstraction.
-        """
-        if domain:
-            rows = self._execute(
-                "SELECT * FROM current_memories WHERE store_type = 'semantic' "
-                "AND domain = %s AND NOT is_stale "
-                "ORDER BY created_at DESC LIMIT %s",
-                (domain, limit),
-            ).fetchall()
-        else:
-            rows = self._execute(
-                "SELECT * FROM current_memories WHERE store_type = 'semantic' "
-                "AND NOT is_stale ORDER BY created_at DESC LIMIT %s",
-                (limit,),
-            ).fetchall()
-        return [self._normalize_memory_row(r) for r in rows]
-
-    def update_memory_store_type(self, memory_id: int, store_type: str) -> None:
-        self._execute(
-            "UPDATE memories SET store_type = %s WHERE id = %s",
-            (store_type, memory_id),
-        )
-        self._conn.commit()
-
-    # ── Consolidation Log ─────────────────────────────────────────────
-
-    def log_consolidation(self, data: dict[str, Any]) -> int:
-        row = self._execute(
-            "INSERT INTO consolidation_log "
-            "(memories_added, memories_updated, memories_archived, duration_ms) "
-            "VALUES (%s, %s, %s, %s) RETURNING id",
-            (
-                data.get("memories_added", 0),
-                data.get("memories_updated", 0),
-                data.get("memories_archived", 0),
-                data.get("duration_ms", 0),
-            ),
-        ).one()
-        self._conn.commit()
-        return row["id"]
-
-    def get_last_consolidation(self) -> str | None:
-        row = self._execute(
-            "SELECT timestamp FROM consolidation_log ORDER BY timestamp DESC LIMIT 1"
-        ).fetchone()
-        return row["timestamp"].isoformat() if row else None
-
-    def count_active_triggers(self) -> int:
-        row = self._execute(
-            "SELECT COUNT(*) AS c FROM prospective_memories WHERE is_active"
-        ).fetchone()
-        return row["c"] if row else 0
-
     # ── Grooming staleness (judgment-level curation, not the mechanical
     # consolidate pass -- see core.grooming_health module docstring) ────
+
+    def _grooming_tag_prefix_age(self, prefix: str) -> str | None:
+        """MAX(created_at) among 'lesson'-tagged memories whose tags also
+        carry a ``prefix``-prefixed entry (e.g. 'distill-of:', 'promoted:').
+
+        The 'lesson' prefilter is semantically required (curate_distill.py
+        and lesson_promotion.py both only ever tag their output 'lesson',
+        so it cannot exclude a true positive) and index-backed
+        (idx_memories_tags_gin); measured 18-23ms worst case (zero
+        matching rows -- the only state observed so far, 2026-07-11),
+        collapsing to sub-ms once any row matches.
+        """
+        row = self._execute(
+            "SELECT MAX(created_at) AS last_ts FROM memories m "
+            "WHERE m.tags @> '[\"lesson\"]'::jsonb "
+            "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
+            "WHERE tg LIKE %s)",
+            (f"{prefix}%",),
+        ).fetchone()
+        return row["last_ts"].isoformat() if row and row["last_ts"] else None
 
     def get_grooming_ages(self) -> dict[str, str | None]:
         """Last-executed timestamp for each judgment-level grooming kind.
@@ -352,19 +157,10 @@ class PgStatsMixin(PgStoreHost):
         Postcondition: returns {"wiki", "distillation", "promotion"} ->
         ISO-8601 timestamp of the most recent judgment-level action of
         that kind, or None if that kind has never executed in this
-        store. Read-only, three bounded aggregate queries:
-          - wiki: MAX(wiki.pages.tended) -- ~0.4ms at 154 rows (EXPLAIN
-            ANALYZE, 2026-07-11; no dedicated index needed at this
-            table size, sequential scan).
-          - distillation / promotion: filtered by the 'lesson' tag
-            (semantically required -- curate_distill.py and
-            lesson_promotion.py both only ever tag their output
-            'lesson', so this prefilter cannot exclude a true positive)
-            then a tag-prefix scan for 'distill-of:'/'promoted:'.
-            idx_memories_tags_gin makes the 'lesson' prefilter an index
-            scan; measured 18-23ms worst case (zero matching rows --
-            the only state observed so far, 2026-07-11), collapsing to
-            sub-ms once any row matches.
+        store. Read-only. wiki: MAX(wiki.pages.tended) -- ~0.4ms at 154
+        rows (EXPLAIN ANALYZE, 2026-07-11; no dedicated index needed at
+        this table size, sequential scan). distillation/promotion: see
+        ``_grooming_tag_prefix_age``.
         """
         wiki_row = self._execute(
             "SELECT MAX(tended) AS last_ts FROM wiki.pages"
@@ -374,33 +170,8 @@ class PgStatsMixin(PgStoreHost):
             if wiki_row and wiki_row["last_ts"]
             else None
         )
-
-        distill_row = self._execute(
-            "SELECT MAX(created_at) AS last_ts FROM memories m "
-            "WHERE m.tags @> '[\"lesson\"]'::jsonb "
-            "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
-            "WHERE tg LIKE 'distill-of:%')"
-        ).fetchone()
-        distill_last = (
-            distill_row["last_ts"].isoformat()
-            if distill_row and distill_row["last_ts"]
-            else None
-        )
-
-        promo_row = self._execute(
-            "SELECT MAX(created_at) AS last_ts FROM memories m "
-            "WHERE m.tags @> '[\"lesson\"]'::jsonb "
-            "AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
-            "WHERE tg LIKE 'promoted:%')"
-        ).fetchone()
-        promo_last = (
-            promo_row["last_ts"].isoformat()
-            if promo_row and promo_row["last_ts"]
-            else None
-        )
-
         return {
             "wiki": wiki_last,
-            "distillation": distill_last,
-            "promotion": promo_last,
+            "distillation": self._grooming_tag_prefix_age("distill-of:"),
+            "promotion": self._grooming_tag_prefix_age("promoted:"),
         }

@@ -17,8 +17,8 @@ import logging
 import re
 from datetime import datetime
 
-from mcp_server.core.temporal import parse_date
-from mcp_server.core.temporal_timezones import (
+from mcp_server.shared.temporal import parse_date
+from mcp_server.shared.temporal_timezones import (
     RFC5322_ZONE_NAMES,
     RFC5322ZoneResolver,
 )

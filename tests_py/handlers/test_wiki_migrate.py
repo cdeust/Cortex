@@ -15,7 +15,7 @@ Covers:
      reported in the task output; this module is the CI-safe unit tier.
 
 The `_`-prefixed kind dirs and root README.md are outside PAGE_KINDS'
-scan entirely (verified against mcp_server.core.wiki_layout.PAGE_KINDS),
+scan entirely (verified against mcp_server.shared.wiki_layout.PAGE_KINDS),
 so they never appear as candidates in either the upsert or the purge
 phase — no dedicated exclusion-list test is needed; ``list_pages`` (used
 by both phases) already enforces it structurally.

@@ -98,29 +98,38 @@ def _clean_scalar_value(key: str, raw_stripped: str) -> str:
     return value
 
 
-def parse_page(text: str) -> PageDocument:
-    """Parse a page's frontmatter + body. Tolerant of missing frontmatter.
+def _collect_block_list(lines: list[str], start: int) -> tuple[list[str], int]:
+    """Peek ahead from ``start`` for indented ``  - item`` lines.
 
-    Handles two YAML list forms:
-
-      * Inline:  ``tags: [a, b, c]``
-      * Block:   ``tags:\\n  - a\\n  - b``
-
-    Block-style is required for ``curation_gaps`` and other multi-value
-    metadata the file-doc skeletons emit.
+    Returns ``(items, next_idx)`` — ``next_idx`` is the first line past the
+    collected block (unchanged from ``start`` when no items were found, so
+    the caller can distinguish "block list" from "empty scalar").
     """
-    if not text.startswith("---\n") and not text.startswith("---\r\n"):
-        return PageDocument(body=text)
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return PageDocument(body=text)
+    items: list[str] = []
+    j = start
+    while j < len(lines):
+        peek = lines[j]
+        if peek.strip() == "---":
+            break
+        stripped = peek.lstrip()
+        if peek.startswith((" ", "\t")) and stripped.startswith("- "):
+            items.append(stripped[2:].strip().strip("\"'"))
+            j += 1
+            continue
+        break
+    return items, j
+
+
+def _parse_frontmatter_body(lines: list[str]) -> tuple[dict[str, object], int]:
+    """Parse the frontmatter key/value lines starting at ``lines[1]``
+    (``lines[0]`` is the opening ``---`` fence, already checked by the
+    caller). Returns ``(frontmatter, body_start_index)``.
+    """
     fm: dict[str, object] = {}
-    body_start = len(lines)
     idx = 1
     while idx < len(lines):
         if lines[idx].strip() == "---":
-            body_start = idx + 1
-            break
+            return fm, idx + 1
         line = lines[idx]
         if ":" not in line:
             idx += 1
@@ -131,25 +140,12 @@ def parse_page(text: str) -> PageDocument:
         key = key_part.strip()
         raw_stripped = raw.strip()
         if raw_stripped == "":
-            # Possibly a block list. Peek ahead.
-            items: list[str] = []
-            j = idx + 1
-            while j < len(lines):
-                peek = lines[j]
-                if peek.strip() == "---":
-                    break
-                stripped = peek.lstrip()
-                if peek.startswith((" ", "\t")) and stripped.startswith("- "):
-                    items.append(stripped[2:].strip().strip("\"'"))
-                    j += 1
-                    continue
-                break
+            items, j = _collect_block_list(lines, idx + 1)
             if items:
                 fm[key] = items
                 idx = j
                 continue
-            # Empty value, no list — keep as empty string.
-            fm[key] = ""
+            fm[key] = ""  # Empty value, no list — keep as empty string.
             idx += 1
             continue
         if raw_stripped.startswith("[") and raw_stripped.endswith("]"):
@@ -157,6 +153,28 @@ def parse_page(text: str) -> PageDocument:
         else:
             fm[key] = _clean_scalar_value(key, raw_stripped)
         idx += 1
+    return fm, len(lines)
+
+
+def parse_page(text: str) -> PageDocument:
+    """Parse a page's frontmatter + body. Tolerant of missing frontmatter.
+
+    Handles two YAML list forms:
+
+      * Inline:  ``tags: [a, b, c]``
+      * Block:   ``tags:\\n  - a\\n  - b``
+
+    Block-style is required for ``curation_gaps`` and other multi-value
+    metadata the file-doc skeletons emit. See ``_parse_frontmatter_body``
+    for the key/value parsing loop and ``_collect_block_list`` for the
+    block-list lookahead.
+    """
+    if not text.startswith("---\n") and not text.startswith("---\r\n"):
+        return PageDocument(body=text)
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return PageDocument(body=text)
+    fm, body_start = _parse_frontmatter_body(lines)
     body_lines = lines[body_start:]
     while body_lines and body_lines[0] == "":
         body_lines.pop(0)

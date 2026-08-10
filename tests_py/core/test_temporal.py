@@ -1,11 +1,11 @@
-"""Tests for mcp_server.core.temporal — date parsing, distance, recency."""
+"""Tests for mcp_server.shared.temporal — date parsing, distance, recency."""
 
 import math
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from mcp_server.core.temporal import (
+from mcp_server.shared.temporal import (
     parse_date,
     compute_date_distance_score,
     compute_temporal_proximity,

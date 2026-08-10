@@ -70,22 +70,17 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # "8 May 2023 13:56 EST") and gained the comment explaining why; the
     # sqlite site also hoisted its function-level import. Same writers, no
     # new ones — this test was the oracle, as on every prior re-pin.
-    ("infrastructure/pg_store.py", 703),
+    #
+    # pg_store.py (1384 lines, over the 300-line §4.1 cap) split into
+    # concern-scoped Pg*Mixin modules (pg_store_heat.py, pg_store_supersede.py,
+    # ...) behind the pg_store.py facade. Same three writers, relocated —
+    # no new ones. _transfer_anchor_on's docstring (pg_store_supersede.py)
+    # still explains why it cannot route through bump_heat_raw.
+    ("infrastructure/pg_store_supersede.py", 169),
     # Canonical single-row writer (all callers route through this).
-    # bump_heat_raw — the one canonical single-row site (re-pinned after
-    # rebasing the read-path PR onto blame-path injection-receipts).
-    # Shifted 727->728 by the same import-line addition above.
-    # Shifted 737->766 by the module-level hash helpers extraction (same
-    # net +29 cause as the entry above).
-    ("infrastructure/pg_store.py", 745),
+    ("infrastructure/pg_store_heat.py", 56),
     # A3 batched writer (homeostatic cohort branch + any other batch consumer).
-    # update_memories_heat_batch. Shifted 787->825 when M-D3 (7.1) added
-    # get_homeostatic_factor/set_homeostatic_factor's write_class parameter
-    # and the new log_homeostatic_fold method above it; 825->826 by the same
-    # silent-except-sweep import-line addition.
-    # Shifted 835->864 by the module-level hash helpers extraction (same
-    # net +29 cause as the two entries above).
-    ("infrastructure/pg_store.py", 843),
+    ("infrastructure/pg_store_heat.py", 154),
     # SQLite parity of the anchor transfer (same transactional rationale).
     # Shifted 389->440->447->493->529->530 (M-D3, then #169 added _fts_augment /
     # _migrate_fts_code_tokenize / unconditional embedding_model stamp above it;
@@ -110,7 +105,11 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # homeostatic_apply.py (§4.1 500-line file cap — stratification by
     # write class grew homeostatic.py past the limit). Same rare
     # amortized fold UPDATE, now scoped to a class's own source values.
-    ("handlers/consolidation/homeostatic_apply.py", 233),
+    # Shifted 233->234 (issue #406): write_class import moved to
+    # `from mcp_server.shared import write_class` (core/ -> shared/ move,
+    # infrastructure/core layer-violation fix), adding one import line
+    # above this site. Same writer, not new.
+    ("handlers/consolidation/homeostatic_apply.py", 234),
     # Anchor pin: heat_base=1.0 + no_decay=TRUE preserves resist-decay.
     ("handlers/anchor.py", 149),
     # Preemptive boost: heat_base += 0.1 on Read/Edit/Write hook.

@@ -7,7 +7,7 @@ body is whatever the caller passes in.
 
 from __future__ import annotations
 
-from mcp_server.core.wiki_frontmatter import PageDocument, _now_iso, render_page
+from mcp_server.shared.wiki_frontmatter import PageDocument, _now_iso, render_page
 
 ADR_STATUSES = ("proposed", "accepted", "rejected", "superseded", "deprecated")
 

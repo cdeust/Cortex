@@ -1,6 +1,6 @@
 """Tests for the infrastructure-side wiki schema reader (issue #126 split).
 
-``mcp_server.core.wiki_schema_loader`` declares the pure data model and
+``mcp_server.shared.wiki_schema_loader`` declares the pure data model and
 parsers; ``mcp_server.infrastructure.wiki_schema_reader`` is the I/O
 adapter that walks a wiki root on disk and builds a ``WikiRegistry`` from
 it. These tests exercise the adapter end-to-end against a temp directory,

@@ -470,7 +470,7 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     # migration loop cannot express a CHECK constraint (ALTER TABLE ...
     # ADD COLUMN in SQLite does not support inline CHECK on some
     # versions); the enum is enforced at the write-time contract instead
-    # (mcp_server.core.write_class.validate_write_class, called by every
+    # (mcp_server.shared.write_class.validate_write_class, called by every
     # writer before insert) — SQLite is the testing-only fallback
     # (CLAUDE.md: "No SQLite" is the production direction), so a
     # DB-level backstop here is not load-bearing.

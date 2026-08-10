@@ -7,7 +7,7 @@ table from ``scratchpad/memoire-qui-comprend-design.md`` §M-D2.
 
 from __future__ import annotations
 
-from mcp_server.core.write_class import (
+from mcp_server.shared.write_class import (
     ALL_WRITE_CLASSES,
     AUTO,
     DELIBERATE,

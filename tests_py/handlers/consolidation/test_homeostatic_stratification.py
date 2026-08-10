@@ -19,7 +19,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from mcp_server.core.homeostatic_health import compute_distribution_health
-from mcp_server.core.write_class import AUTO, DELIBERATE
+from mcp_server.shared.write_class import AUTO, DELIBERATE
 from mcp_server.handlers.consolidation.homeostatic import run_homeostatic_cycle
 
 

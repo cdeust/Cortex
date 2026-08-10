@@ -805,7 +805,7 @@ def insert_and_post_process(
 
     ``write_class`` (M-D2, 7.4): already resolved and validated by the
     caller (``handlers/remember.py``, the single choke point —
-    ``mcp_server.core.write_class.validate_write_class`` +
+    ``mcp_server.shared.write_class.validate_write_class`` +
     ``classify_write_class``) — this function trusts it and threads it
     straight into the insert record.
     """

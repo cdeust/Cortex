@@ -59,7 +59,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from mcp_server.core.wiki_identity import extract_page_id  # noqa: E402
-from mcp_server.core.wiki_layout import slugify  # noqa: E402
+from mcp_server.shared.wiki_layout import slugify  # noqa: E402
 from mcp_server.core.wiki_redirect import (  # noqa: E402
     build_redirect_stub,
     is_redirect,

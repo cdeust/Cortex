@@ -86,7 +86,12 @@ separate **cortex-viz** MCP (reads this same store read-only).
   `server/`, `hooks/` are boundary/adapter layers where third-party
   imports are the point, but their `mcp_server.<layer>` cross-references
   are still checked against the table's named whitelist, not a blacklist
-  of a few forbidden ones.
+  of a few forbidden ones. This replaces the former manual-grep
+  verification step (`grep -rn "from mcp_server.infrastructure"
+  mcp_server/core/`, etc.) — the craftsmanship gate below runs it, in
+  both directions, across all eight layers, on every push and PR, so
+  "re-run the greps before every PR" is no longer the standard: the gate
+  is.
 - No invented constants: every hardcoded number carries a `# source:`
   comment (paper, committed benchmark, or dated measurement naming the
   environment and conditions).

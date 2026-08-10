@@ -107,7 +107,8 @@ def test_append_section_unchanged_by_normalization(tmp_path: Path) -> None:
     helper), so it is out of scope for issue #110's normalization gate —
     confirm behavior is unchanged: no frontmatter round-trip, fragment
     appended verbatim under the target heading."""
-    from mcp_server.infrastructure.wiki_store import append_section, write_page
+    from mcp_server.infrastructure.wiki_pages_listing import append_section
+    from mcp_server.infrastructure.wiki_store import write_page
 
     write_page(
         tmp_path,
