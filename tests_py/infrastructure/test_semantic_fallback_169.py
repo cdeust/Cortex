@@ -356,12 +356,20 @@ _CHILD = textwrap.dedent(
 
 def test_real_sentence_transformers_absence_subprocess(monkeypatch):
     # Empty HF_HOME + genuine ImportError: zero network, pure fallback.
+    #
+    # No local `timeout=` on the subprocess call below (issue #402): a
+    # fixed wall-clock bound makes the verdict depend on machine load,
+    # not on the fallback contract under test. A genuine hang is still
+    # caught by pytest's own global watchdog (`pyproject.toml`
+    # `timeout = 300`) -- process-wide (`os._exit(1)` on expiry, not a
+    # clean per-test failure; see tests_py/benchmarks/
+    # test_lib_init_no_psycopg.py's module docstring for the full
+    # mechanism and its source).
     monkeypatch.setenv("CORTEX_EMBEDDING_ZERO_DOWNLOAD", "1")
     proc = subprocess.run(
         [sys.executable, "-c", _CHILD],
         capture_output=True,
         text=True,
-        timeout=120,
     )
     assert proc.returncode == 0, (
         f"child failed:\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"

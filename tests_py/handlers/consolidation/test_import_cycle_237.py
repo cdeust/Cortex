@@ -50,12 +50,19 @@ def test_submodule_imports_standalone_in_fresh_interpreter(module_name: str) -> 
     Regression for issue #237: pre-fix, this subprocess call exits non-zero
     with the partially-initialized-module ImportError quoted in the module
     docstring above.
+
+    No local `timeout=` (issue #402): a fixed wall-clock bound makes the
+    verdict depend on machine load, not on the import-cycle contract
+    under test. A genuine hang is still caught by pytest's own global
+    watchdog (`pyproject.toml` `timeout = 300`) -- process-wide
+    (`os._exit(1)` on expiry, not a clean per-test failure; see
+    `tests_py/benchmarks/test_lib_init_no_psycopg.py`'s module docstring
+    for the full mechanism and its source).
     """
     result = subprocess.run(
         [sys.executable, "-c", f"import {module_name}"],
         capture_output=True,
         text=True,
-        timeout=30,
     )
     assert result.returncode == 0, (
         f"import {module_name} failed in a fresh interpreter:\n{result.stderr}"

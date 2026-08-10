@@ -101,7 +101,16 @@ def _seeded_db():
 
 
 def _run_hook(prompt: str, db_url: str) -> subprocess.CompletedProcess:
-    """Pipe a prompt JSON to the hook subprocess and capture output."""
+    """Pipe a prompt JSON to the hook subprocess and capture output.
+
+    No local `timeout=` (issue #402): a fixed wall-clock bound makes the
+    verdict depend on machine load, not on the hook's contract. A
+    genuine hang is still caught by pytest's own global watchdog
+    (`pyproject.toml` `timeout = 300`) -- process-wide (`os._exit(1)` on
+    expiry, not a clean per-test failure; see `tests_py/benchmarks/
+    test_lib_init_no_psycopg.py`'s module docstring for the full
+    mechanism and its source).
+    """
     env = os.environ.copy()
     env["DATABASE_URL"] = db_url
     payload = json.dumps({"prompt": prompt})
@@ -115,7 +124,6 @@ def _run_hook(prompt: str, db_url: str) -> subprocess.CompletedProcess:
         text=True,
         env=env,
         cwd=repo_root,
-        timeout=10,
     )
 
 

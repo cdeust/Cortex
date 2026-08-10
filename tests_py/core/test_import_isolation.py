@@ -39,13 +39,29 @@ CYCLE_PRONE_MODULES = [
 
 @pytest.mark.parametrize("module_name", CYCLE_PRONE_MODULES)
 def test_module_imports_first_in_a_fresh_interpreter(module_name: str) -> None:
-    """Importing the module as the very first project import must succeed."""
+    """Importing the module as the very first project import must succeed.
+
+    No local `timeout=` (issue #402): a fixed wall-clock bound makes this
+    test's pass/fail verdict a function of whatever else the shared
+    machine is doing, not of the import-cycle contract under test -- the
+    one confirmed instance of this class of flake traced to a run sharing
+    the host with three other concurrent agent sessions, not to a code
+    defect. A genuine hang is still caught by pytest's own global
+    watchdog (`pyproject.toml` `timeout = 300`) -- reusing that
+    already-relied-upon backstop instead of a second, unsourced,
+    narrower one here. That backstop is process-wide, not a clean
+    per-test failure: `timeout_method = "thread"` dumps every thread's
+    stack and then calls `os._exit(1)`, terminating the whole
+    interpreter immediately (source: pytest-timeout 2.4.0's
+    `timeout_timer`, the version pinned in `uv.lock`) -- so a real hang
+    here is exactly as loud and diagnosable as a hang anywhere else in
+    the suite already depending on that same mechanism, not a silent one.
+    """
     result = subprocess.run(
         [sys.executable, "-c", f"import {module_name}"],
         cwd=_REPO_ROOT,
         capture_output=True,
         text=True,
-        timeout=120,
     )
 
     assert result.returncode == 0, (
