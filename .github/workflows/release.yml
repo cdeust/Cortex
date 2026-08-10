@@ -452,7 +452,18 @@ jobs:
   # unlike the PAT or DNS auth alternatives the docs also describe.
   publish-mcp-registry:
     name: Publish to the MCP registry (best-effort compatibility)
-    needs: build
+    # `needs: publish-pypi`, NOT `build` — the registry's package-ownership
+    # verification (see server.json's `packages[].registryType: pypi`)
+    # resolves the version this job's `server.json` declares against what
+    # PyPI actually serves. `build` only builds the sdist/wheel; the PyPI
+    # publish itself happens in `publish-pypi`, a job that runs in
+    # parallel with this one when both only `need: build` — so a fast
+    # registry publish could name a version PyPI had not yet received,
+    # the exact "dangling pin, in reverse" shape this PR's own
+    # REGISTRY_VERSION_STALE check exists to catch (cortex-viz's own
+    # Release.yaml gates its registry job on `needs: [test, release]` for
+    # the identical reason — verified against that workflow, not assumed).
+    needs: publish-pypi
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
