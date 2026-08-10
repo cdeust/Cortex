@@ -107,6 +107,18 @@ def _filter_named_list(
     return result
 
 
+def _requested_name(ctx: "ServerRequestContext[Any, Any]") -> str:
+    """The ``params.name`` a gated request asks for, as a string.
+
+    ``params`` is untyped off the wire, so a missing or non-string ``name``
+    is a malformed request. It collapses to ``""``, which no profile lists
+    and every gate below therefore refuses -- the same outcome an unknown
+    name already got, now with a type the predicates accept.
+    """
+    name = (ctx.params or {}).get("name")
+    return name if isinstance(name, str) else ""
+
+
 class ToolProfileMiddleware:
     """Enforces ``profile`` over the tool and prompt surfaces.
 
@@ -148,7 +160,7 @@ class ToolProfileMiddleware:
     async def _gate_tool_call(
         self, ctx: "ServerRequestContext[Any, Any]", call_next: "CallNext"
     ) -> Any:
-        name = (ctx.params or {}).get("name")
+        name = _requested_name(ctx)
         if tool_profiles.allows(self.profile, name):
             return await call_next(ctx)
         # Excluded tools look exactly like unregistered ones — the profile
@@ -173,7 +185,7 @@ class ToolProfileMiddleware:
     async def _gate_prompt_get(
         self, ctx: "ServerRequestContext[Any, Any]", call_next: "CallNext"
     ) -> Any:
-        name = (ctx.params or {}).get("name")
+        name = _requested_name(ctx)
         if mcp_prompts.is_available(name, self.profile):
             return await call_next(ctx)
         raise MCPError(

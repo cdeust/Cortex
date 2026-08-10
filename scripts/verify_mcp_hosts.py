@@ -29,14 +29,26 @@ import tempfile
 import time
 from typing import Literal
 
-from mcp_host_client import (
+# Run as a script (`python scripts/verify_mcp_hosts.py`) sys.path[0] is
+# scripts/, not the repo root, so the sibling below would not resolve under
+# its package name. Importing it as `scripts.mcp_host_client` -- one
+# canonical name whether this module is executed or imported by a test --
+# keeps a single module identity, so a `ContractError` raised here is the
+# same class a test catches (the dual-identity trap
+# `tests_py/scripts/_craftsmanship_support.py` documents for its own
+# siblings).
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from scripts.mcp_host_client import (  # noqa: E402
     PROTOCOL_VERSION,
     ContractCase,
     ContractError,
     run_client,
 )
 
-from mcp_server.tool_profiles import LEAN_TOOL_NAMES
+from mcp_server.tool_profiles import LEAN_TOOL_NAMES  # noqa: E402
 
 
 CLIENTS = ("claude-code", "gemini-cli", "codex-cli")

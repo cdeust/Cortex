@@ -13,26 +13,9 @@ those reads.
 
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
-import sys
-
 import pytest
 
-_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
-
-
-def _load(dotted_name: str, filename: str):
-    if dotted_name in sys.modules:
-        return sys.modules[dotted_name]
-    spec = importlib.util.spec_from_file_location(dotted_name, _SCRIPTS / filename)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[dotted_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-host_client = _load("scripts.mcp_host_client", "mcp_host_client.py")
+from scripts import mcp_host_client as host_client
 
 
 class _RecordingStdin:
