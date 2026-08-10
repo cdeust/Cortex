@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from mcp_server.core.wiki_pages import parse_page
+from mcp_server.shared.wiki_pages import parse_page
 
 
 # ── Registry dataclasses ──────────────────────────────────────────────

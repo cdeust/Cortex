@@ -28,7 +28,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
-from mcp_server.core.wiki_layout import PAGE_KINDS
+from mcp_server.shared.wiki_layout import PAGE_KINDS
 
 # Non-tech label + one-line description per kind. The description is
 # what a first-time reader needs to know to decide "do I click here?".

@@ -19,13 +19,13 @@ from here — this is the module's public contract, not a compat shim.
 
 from __future__ import annotations
 
-from mcp_server.core.wiki_frontmatter import (
+from mcp_server.shared.wiki_frontmatter import (
     PageDocument,
     parse_page,
     render_page,
 )
-from mcp_server.core.wiki_index import build_index
-from mcp_server.core.wiki_page_builders import (
+from mcp_server.shared.wiki_index import build_index
+from mcp_server.shared.wiki_page_builders import (
     ADR_STATUSES,
     build_adr,
     build_convention,

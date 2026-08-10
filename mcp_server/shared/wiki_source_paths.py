@@ -18,7 +18,7 @@ project-source-root-relative. Pure string processing — no filesystem
 access, no project-source-root resolution — hence shared/ (stdlib only).
 
 Pre-condition:  raw frontmatter values are strings (scalar) or lists of
-                strings, as parsed by ``mcp_server.core.wiki_pages.parse_page``.
+                strings, as parsed by ``mcp_server.shared.wiki_pages.parse_page``.
 Post-condition: every path returned by ``extract_document_paths`` is
                 non-empty, forward-slash separated, and has no leading
                 ``./`` or ``/``. Duplicates are removed, order preserved.

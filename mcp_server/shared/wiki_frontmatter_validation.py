@@ -31,7 +31,7 @@ is detected and rejected here.
 
 from __future__ import annotations
 
-from mcp_server.core.wiki_pages import parse_page, render_page
+from mcp_server.shared.wiki_pages import parse_page, render_page
 
 
 class UnclosedFrontmatterError(ValueError):

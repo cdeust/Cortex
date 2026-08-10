@@ -4,7 +4,7 @@ Groups wiki pages by domain then kind into a structured markdown index.
 """
 
 from __future__ import annotations
-from mcp_server.core.wiki_layout import PAGE_KINDS
+from mcp_server.shared.wiki_layout import PAGE_KINDS
 
 
 # source: structural — a wiki path is kind/filename (2 parts) or
