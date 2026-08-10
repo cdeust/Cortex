@@ -81,10 +81,15 @@ RUN cd /opt/claude-code && npm ci --omit=dev --ignore-scripts
 # copies one directory and no COPY names the Python version. See the root
 # Dockerfile for the incident that rule comes from: a literal
 # .../python3.13/site-packages path broke on every base-image bump.
+# --no-deps: the file is the complete, uv-resolved dependency graph — pip
+# must install it as-is rather than re-deriving it from metadata, which
+# breaks the moment pyproject.toml's [tool.uv] override-dependencies
+# steers a package past a bound another package's metadata still declares
+# (issue: PR #332, mpmath 1.4.1 vs sympy's `mpmath<1.4`).
 COPY requirements/docker-runtime.txt /tmp/requirements.txt
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements.txt
+RUN pip install --no-cache-dir --no-deps --require-hashes -r /tmp/requirements.txt
 
 # Cortex itself: --no-deps because every dependency was just installed from
 # the hashed file above, and re-resolving here would reintroduce unpinned

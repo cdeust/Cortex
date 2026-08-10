@@ -147,7 +147,12 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: pip install --require-hashes -r requirements/packaging.txt
+        # --no-deps: the file is the complete, uv-resolved dependency graph
+        # — pip must install it as-is rather than re-deriving it from
+        # metadata (see ci.yml's "Install dependencies" steps for why:
+        # pyproject.toml's [tool.uv] override-dependencies is a uv-only
+        # mechanism the exported requirements.txt format cannot carry).
+        run: pip install --no-deps --require-hashes -r requirements/packaging.txt
 
       - name: Build sdist and wheel
         run: python -m build
