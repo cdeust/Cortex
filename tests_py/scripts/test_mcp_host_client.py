@@ -107,3 +107,31 @@ class TestExchangeDrainsBeforeShutdown:
     def test_a_non_mcp_stdout_line_is_a_contract_error(self) -> None:
         with pytest.raises(host_client.ContractError):
             _scripted_exchange(["not json at all\n"])
+
+
+class TestDegenerateExchanges:
+    """The corners the drain rule still has to terminate on."""
+
+    def test_a_server_that_says_nothing_still_terminates(self) -> None:
+        """EOF before any response: report nothing, never block."""
+        responses, stdin, stdout = _scripted_exchange([])
+        assert responses == {}
+        assert stdin.closed
+        assert stdout.reads_served == 0
+
+    def test_an_extra_frame_after_the_last_awaited_id_is_still_absorbed(self) -> None:
+        """The trailing `stdout.read()` exists so a frame that arrives after
+        the loop stops (a late notification, a duplicate) is parsed and
+        contract-checked rather than silently discarded."""
+        expected = sorted(host_client.expected_request_ids())
+        lines = [_response_line(i) for i in expected] + [_response_line(99)]
+        responses, _, _ = _scripted_exchange(lines)
+        assert 99 in responses, "a frame arriving after the drain was dropped"
+
+    def test_responses_arriving_out_of_order_all_count(self) -> None:
+        """Ids are awaited as a set: nothing here assumes the server answers
+        in request order, and mcp 2.0.0 does not (handlers run concurrently)."""
+        expected = sorted(host_client.expected_request_ids(), reverse=True)
+        responses, stdin, _ = _scripted_exchange([_response_line(i) for i in expected])
+        assert set(responses) == set(expected)
+        assert stdin.closed
