@@ -15,6 +15,34 @@ This audit records the pre-submission check requested in issue #347. It covers t
 | BEAM-10M reproduction, oracle / temporal | MRR 0.496 / 0.523, n=196 | `benchmarks/results/beam10m_paired/RESULTS.md` | later paired code revision; compare within this pair only |
 | BEAM-500K / 1M crossover | flat 0.500 / 0.466; assembler 0.570 / 0.535 | `benchmarks/results/beam_crossover/RESULTS.md` | clean DB, 35 conversations per split |
 
+## Per-category provenance (added 2026-08-10, PR review follow-up on #347)
+
+The README's LongMemEval per-category table (`Temporal reasoning` MRR
+0.917/R@10 97.7%, `Single-session (preference)` MRR 0.685/R@10 90.0%) is lower
+on two of six categories than `docs/benchmarks/e1-v3-per-category.md`'s
+BASELINE row (MRR 0.9256/R@10 98.5% and MRR 0.6678/R@10 93.3% respectively).
+A lower published figure is a regression only if the same protocol produced a
+higher number before a code change and a lower number after it. Checked
+against every committed, git-SHA-tracked `benchmarks/results/repro/*/longmemeval-s.json`
+run (`--variant s` harness, `with_consolidation=false` in every case, matching
+the BASELINE row's own condition):
+
+| Date range | Runs | Temporal reasoning R@10 | Single-session (pref) R@10 |
+|---|---:|---:|---:|
+| 2026-07-08 → 2026-08-09 (30 runs, distinct code SHAs) | 30 | 97.7% (every run) | 90.0% (every run) |
+| `benchmarks/results/ablation/longmemeval-s_v3/BASELINE.json` (single run, `manifest.repro = null`) | 1 | 98.5% | 93.3% |
+
+The lower pair has been the value at **every** tracked commit for a full
+month of active development — there is no commit boundary where it drops
+from the higher pair, so there is no fix to root-cause. The higher pair
+comes from exactly one run, with no code SHA captured (`manifest.repro`
+is `null`), the same defect class as the already-corrected LongMemEval
+headline (E1 v3 ablation baseline mis-promoted to current) and the
+already-labelled historical LoCoMo 0.794/0.926 comparator. Conclusion:
+**provenance defect, not a regression** — the low figures are current and
+correct; the high figures are an unreproducible one-off now labelled
+historical in `docs/benchmarks/e1-v3-per-category.md`.
+
 ## Findings and resolution
 
 - **LongMemEval:** Opus 5's review found that the first audit had incorrectly promoted the May E1 v3 ablation baseline (MRR 0.9124, R@10 98.4%) to the current headline while `README.md` carried 98.2%. The current headline is now the latest committed clean run with an explicit clean flag: MRR 0.9167, R@10 98.2%, n=500, code SHA `28145f0`. The E1 v3 values remain only inside their named historical ablation snapshot and its per-row analysis.

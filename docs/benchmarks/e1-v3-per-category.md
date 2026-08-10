@@ -1,5 +1,24 @@
 # E1 v3 LME-S per-category delta analysis
 
+> [!WARNING]
+> **BASELINE per-category numbers below are a stale, unreproducible snapshot —
+> not the current per-category figures.** The BASELINE row (`Temporal reasoning`
+> MRR 0.9256/R@10 98.5%, `Single-session (preference)` MRR 0.6678/R@10 93.3%)
+> came from `benchmarks/results/ablation/longmemeval-s_v3/BASELINE.json`, a
+> single May 2026 run with `manifest.repro = null` — no code SHA was captured,
+> so it cannot be pinned to a commit or reproduced. Every dated, git-SHA-tracked
+> `benchmarks/results/repro/*/longmemeval-s.json` run from 2026-07-08 through
+> 2026-08-09 (30+ runs across dozens of commits, `with_consolidation=false` in
+> every case, same `--variant s` harness) agrees instead on `Temporal reasoning`
+> R@10 = 97.7% (MRR 0.917-0.919) and `Single-session (preference)` R@10 = 90.0%
+> (MRR 0.685-0.694) — flat across a month of active development, i.e. these are
+> the stable current values, not a regression from the BASELINE row above. See
+> `docs/benchmarks/arxiv-figure-audit-2026-08-02.md` § Per-category provenance
+> for the full evidence. Use `README.md`'s LongMemEval per-category table for
+> current figures; this document's mechanism-specialization deltas (§ Per-mechanism,
+> per-category Δ MRR below) remain a valid historical read-path finding computed
+> against the BASELINE row's own per-mechanism ablation set, not a current baseline.
+
 Re-analysis of existing 17-row E1 v3 LME-S dataset (no re-run); category_mrr fields
 are present in every result JSON. Reveals mechanism specialization that is hidden in
 the overall MRR average because category effects cancel.
