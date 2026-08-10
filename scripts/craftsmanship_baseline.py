@@ -19,8 +19,20 @@ comparing new violations against the baseline **as committed at the PR's
 base ref** (``git show <ref>:<path>``, immutable to the PR's own commits)
 and separately enforcing that the working-tree file is a SUBSET of that
 base-ref baseline — an addition with no matching fix is refused outright;
-see ``added_entries`` below. This module supplies the parsing both paths
-share (``parse_baseline_json``); the git plumbing lives in
+see ``added_entries`` below.
+
+That first fix only closed the ADDITION side. A second review round
+reproduced the mirror image: hand-delete a baseline entry's JSON line
+without touching the source file it describes, and the gate answered OK —
+``added_entries`` only looks at what was added, and ``new_violations``
+only rescans the PR's diffed files (the baseline file itself isn't a
+``.py`` file, so a PR touching nothing else scans zero files). Closed by
+``falsified_removals``: every entry present at the base ref but absent
+from the working tree gets its file rescanned, and a removal whose
+violation still reproduces is refused exactly like an addition is.
+
+This module supplies the parsing both paths share
+(``parse_baseline_json``); the git plumbing lives in
 ``check_craftsmanship.py``, which already owns ``_run_git``.
 """
 
@@ -117,6 +129,34 @@ def added_entries(
     return sorted(
         working_baseline - base_baseline, key=lambda v: (v.file, v.kind, v.detail)
     )
+
+
+def falsified_removals(
+    base_baseline: set[Violation],
+    working_baseline: set[Violation],
+    rescanned: dict[str, set[Violation]],
+) -> list[Violation]:
+    """The mirror image of ``added_entries``, flagged in review: closing
+    "add a violation, then run --write-baseline in the same tree" without
+    also closing "delete the JSON line by hand, leave the violation in
+    place" left the ratchet open on the removal side — any of the ~1400
+    grandfathered entries could be hand-deleted from
+    ``.craftsmanship-baseline.json`` for free, since neither
+    ``added_entries`` (only looks at additions) nor ``new_violations``
+    (only rescans this PR's diffed files, not every baselined file) would
+    ever see it.
+
+    An entry present in ``base_baseline`` but absent from
+    ``working_baseline`` is a REMOVAL. Legitimate ("I fixed it, then
+    pruned") stays silent here — ``rescanned`` (a fresh scan of exactly
+    the files those removed entries reference) simply will not reproduce
+    it. Illegitimate ("I deleted the JSON line, the code is untouched")
+    is caught: the violation still reproduces despite the entry being
+    gone, so the removal is refused.
+    """
+    removed = base_baseline - working_baseline
+    falsified = [v for v in removed if v in rescanned.get(v.file, set())]
+    return sorted(falsified, key=lambda v: (v.file, v.kind, v.detail))
 
 
 def count_by_kind(violations: set[Violation] | list[Violation]) -> dict[str, int]:

@@ -89,6 +89,41 @@ class ParseLayerRulesTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             lt.parse_layer_rules(broken)
 
+    def test_malformed_row_in_the_middle_raises_not_truncates(self) -> None:
+        # Reproduces the review-round finding exactly: a broken row after
+        # validation/ used to silently drop errors/, handlers/, server/,
+        # and hooks/ (the `if match is None: break` treated it as "table
+        # ended") — four of eight layers, zero signal. It must now raise.
+        broken = _TABLE.replace(
+            "| **errors/** | nothing | everything |",
+            "| this row is not shaped like a table row at all |",
+        )
+        with self.assertRaises(ValueError) as ctx:
+            lt.parse_layer_rules(broken)
+        self.assertIn("does not match", str(ctx.exception))
+
+    def test_malformed_row_error_names_the_offending_line(self) -> None:
+        broken = _TABLE.replace(
+            "| **errors/** | nothing | everything |",
+            "| this row is not shaped like a table row at all |",
+        )
+        with self.assertRaises(ValueError) as ctx:
+            lt.parse_layer_rules(broken)
+        self.assertIn(
+            "this row is not shaped like a table row at all", str(ctx.exception)
+        )
+
+    def test_duplicate_layer_name_raises_via_row_count_mismatch(self) -> None:
+        # Two "core/" rows: the dict silently collapses to one entry
+        # (7 rules from 8 row lines) — caught by the row-count invariant,
+        # independent of the row-shape check above.
+        marker = "| **core/** | shared/ only |"
+        core_row = next(line for line in _TABLE.splitlines() if line.startswith(marker))
+        duplicated = _TABLE.replace(core_row, f"{core_row}\n{core_row}")
+        with self.assertRaises(ValueError) as ctx:
+            lt.parse_layer_rules(duplicated)
+        self.assertIn("duplicate layer name", str(ctx.exception))
+
     def test_the_real_repository_table_parses(self) -> None:
         # Live integration check: the actual docs/module-inventory.md must
         # parse without error — a malformed table must fail LOUDLY (an

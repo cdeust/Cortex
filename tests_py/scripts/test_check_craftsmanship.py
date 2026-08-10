@@ -1,10 +1,15 @@
 """Tests for scripts/check_craftsmanship.py — the CLI orchestrator.
 
-Git interaction is mocked throughout (``gate._run_git``) so these tests
-never depend on the real repository's history or network access; the
-detectors themselves are covered by the sibling ``test_craftsmanship_*``
-modules and are exercised here only through the plumbing (file scanning,
-base-ref resolution, exit codes).
+Git interaction is mocked throughout (``gate.craftsmanship_git._run_git``)
+so these tests never depend on the real repository's history or network
+access; the detectors themselves are covered by the sibling
+``test_craftsmanship_*`` modules and are exercised here only through the
+plumbing (file scanning, base-ref resolution, exit codes). The two
+end-to-end exploit reproductions
+(``test_check_craftsmanship_exploits.py::SneakyLimitExploitTests``,
+``FalsifiedRemovalExploitTests``) live in their own file — real `git`
+against a throwaway repo, no mocking, split out to stay under this
+module's own 300-line cap.
 """
 
 from __future__ import annotations
@@ -12,7 +17,6 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,29 +39,48 @@ _spec.loader.exec_module(gate)
 
 class ResolveBaseRefTests(unittest.TestCase):
     def test_explicit_ref_wins_when_it_exists(self) -> None:
-        with mock.patch.object(gate, "_run_git", return_value="ok"):
-            self.assertEqual(gate.resolve_base_ref("mybranch"), "mybranch")
+        with mock.patch.object(gate.craftsmanship_git, "_run_git", return_value="ok"):
+            self.assertEqual(
+                gate.craftsmanship_git.resolve_base_ref(gate.REPO_ROOT, "mybranch"),
+                "mybranch",
+            )
 
     def test_falls_back_to_origin_main(self) -> None:
-        def fake(args: list[str]):
+        def fake(repo_root: Path, args: list[str]):
             return "ok" if args == ["rev-parse", "--verify", "origin/main"] else None
 
-        with mock.patch.object(gate, "_run_git", side_effect=fake):
-            self.assertEqual(gate.resolve_base_ref(None), "origin/main")
+        with mock.patch.object(gate.craftsmanship_git, "_run_git", side_effect=fake):
+            self.assertEqual(
+                gate.craftsmanship_git.resolve_base_ref(gate.REPO_ROOT, None),
+                "origin/main",
+            )
 
     def test_none_when_nothing_resolves(self) -> None:
-        with mock.patch.object(gate, "_run_git", return_value=None):
-            self.assertIsNone(gate.resolve_base_ref(None))
+        with mock.patch.object(gate.craftsmanship_git, "_run_git", return_value=None):
+            self.assertIsNone(
+                gate.craftsmanship_git.resolve_base_ref(gate.REPO_ROOT, None)
+            )
 
 
 class ChangedPythonFilesTests(unittest.TestCase):
     def test_filters_blank_lines_and_sorts(self) -> None:
-        with mock.patch.object(gate, "_run_git", return_value="b.py\n\na.py\n"):
-            self.assertEqual(gate.changed_python_files("origin/main"), ["a.py", "b.py"])
+        with mock.patch.object(
+            gate.craftsmanship_git, "_run_git", return_value="b.py\n\na.py\n"
+        ):
+            self.assertEqual(
+                gate.craftsmanship_git.changed_python_files(
+                    gate.REPO_ROOT, "origin/main"
+                ),
+                ["a.py", "b.py"],
+            )
 
     def test_none_when_git_diff_fails(self) -> None:
-        with mock.patch.object(gate, "_run_git", return_value=None):
-            self.assertIsNone(gate.changed_python_files("origin/main"))
+        with mock.patch.object(gate.craftsmanship_git, "_run_git", return_value=None):
+            self.assertIsNone(
+                gate.craftsmanship_git.changed_python_files(
+                    gate.REPO_ROOT, "origin/main"
+                )
+            )
 
 
 class ScanFilesTests(unittest.TestCase):
@@ -116,7 +139,9 @@ class MainExitCodeTests(unittest.TestCase):
             self.assertIn("OK", out)
 
     def test_no_base_ref_and_no_files_exits_two(self) -> None:
-        with mock.patch.object(gate, "resolve_base_ref", return_value=None):
+        with mock.patch.object(
+            gate.craftsmanship_git, "resolve_base_ref", return_value=None
+        ):
             code, out = self._run([])
             self.assertEqual(code, 2)
 
@@ -125,7 +150,9 @@ class MainExitCodeTests(unittest.TestCase):
             baseline_path = Path(tmp) / "baseline.json"
             with (
                 mock.patch.object(gate, "REPO_ROOT", Path(tmp)),
-                mock.patch.object(gate, "all_tracked_python_files", return_value=[]),
+                mock.patch.object(
+                    gate.craftsmanship_git, "all_tracked_python_files", return_value=[]
+                ),
             ):
                 code, out = self._run(
                     ["--write-baseline", "--baseline", str(baseline_path)]
@@ -134,152 +161,100 @@ class MainExitCodeTests(unittest.TestCase):
             self.assertTrue(baseline_path.exists())
 
 
+class GitPathExistsAtRefTests(unittest.TestCase):
+    """Self-audited third instance of the "ambiguous failure read as a
+    negative" pattern the review round's other two findings shared: a bare
+    ``except: return False`` here would let ANY git failure — not just a
+    genuinely absent path — silently trigger ``load_baseline_from_ref``'s
+    bootstrap fallback to the tamperable working-tree baseline.
+    """
+
+    def test_real_absent_path_returns_false(self) -> None:
+        # Live integration: a path that has never existed at a real,
+        # resolvable ref in THIS repository.
+        result = gate.craftsmanship_git._git_path_exists_at_ref(
+            gate.REPO_ROOT, "HEAD", "this/path/has/never/existed.json"
+        )
+        self.assertFalse(result)
+
+    def test_real_existing_path_returns_true(self) -> None:
+        result = gate.craftsmanship_git._git_path_exists_at_ref(
+            gate.REPO_ROOT, "HEAD", "CLAUDE.md"
+        )
+        self.assertTrue(result)
+
+    def test_invalid_ref_raises_not_returns_false(self) -> None:
+        # A ref that does not resolve at all must never be silently read
+        # as "the path just doesn't exist yet" — resolve_base_ref should
+        # already have filtered this out, but this function must not
+        # compound a caller's bug into a security-relevant fail-open.
+        with self.assertRaises(RuntimeError):
+            gate.craftsmanship_git._git_path_exists_at_ref(
+                gate.REPO_ROOT, "totally-bogus-ref-xyz", "CLAUDE.md"
+            )
+
+    def test_unexpected_git_failure_raises(self) -> None:
+        fake_result = mock.Mock(returncode=128, stderr="fatal: something unexpected")
+        with mock.patch("subprocess.run", return_value=fake_result):
+            with self.assertRaises(RuntimeError):
+                gate.craftsmanship_git._git_path_exists_at_ref(
+                    gate.REPO_ROOT, "main", "x.json"
+                )
+
+
 class LoadBaselineFromRefTests(unittest.TestCase):
     """Unit-level coverage of the git-show-based base-ref loader; the
-    end-to-end exploit reproduction lives in SneakyLimitExploitTests below.
+    end-to-end exploit reproductions live in test_check_craftsmanship_exploits.py.
     """
 
     def test_none_ref_gives_none(self) -> None:
-        self.assertIsNone(gate.load_baseline_from_ref(None, Path("/tmp/x.json")))
+        self.assertIsNone(
+            gate.craftsmanship_git.load_baseline_from_ref(
+                gate.REPO_ROOT, None, Path("/tmp/x.json")
+            )
+        )
 
     def test_path_outside_repo_gives_none(self) -> None:
-        with mock.patch.object(gate, "REPO_ROOT", Path("/repo")):
-            self.assertIsNone(
-                gate.load_baseline_from_ref("main", Path("/elsewhere/x.json"))
-            )
+        result = gate.craftsmanship_git.load_baseline_from_ref(
+            Path("/repo"), "main", Path("/elsewhere/x.json")
+        )
+        self.assertIsNone(result)
 
     def test_path_absent_at_ref_gives_none_bootstrap(self) -> None:
-        with mock.patch.object(gate, "_git_path_exists_at_ref", return_value=False):
-            result = gate.load_baseline_from_ref("main", gate.REPO_ROOT / "x.json")
+        with mock.patch.object(
+            gate.craftsmanship_git, "_git_path_exists_at_ref", return_value=False
+        ):
+            result = gate.craftsmanship_git.load_baseline_from_ref(
+                gate.REPO_ROOT, "main", gate.REPO_ROOT / "x.json"
+            )
         self.assertIsNone(result)
 
     def test_show_failure_after_confirmed_existence_raises(self) -> None:
         with (
-            mock.patch.object(gate, "_git_path_exists_at_ref", return_value=True),
-            mock.patch.object(gate, "_run_git", return_value=None),
+            mock.patch.object(
+                gate.craftsmanship_git, "_git_path_exists_at_ref", return_value=True
+            ),
+            mock.patch.object(gate.craftsmanship_git, "_run_git", return_value=None),
         ):
             with self.assertRaises(RuntimeError):
-                gate.load_baseline_from_ref("main", gate.REPO_ROOT / "x.json")
+                gate.craftsmanship_git.load_baseline_from_ref(
+                    gate.REPO_ROOT, "main", gate.REPO_ROOT / "x.json"
+                )
 
     def test_parses_show_output(self) -> None:
         payload = (
             '{"violations": [{"file": "a.py", "kind": "file-size", "detail": "d"}]}'
         )
         with (
-            mock.patch.object(gate, "_git_path_exists_at_ref", return_value=True),
-            mock.patch.object(gate, "_run_git", return_value=payload),
+            mock.patch.object(
+                gate.craftsmanship_git, "_git_path_exists_at_ref", return_value=True
+            ),
+            mock.patch.object(gate.craftsmanship_git, "_run_git", return_value=payload),
         ):
-            result = gate.load_baseline_from_ref("main", gate.REPO_ROOT / "x.json")
-        self.assertEqual(result, {gate.rules.Violation("a.py", "file-size", "d")})
-
-
-class SneakyLimitExploitTests(unittest.TestCase):
-    """Reproduces, against a real throwaway git repository, the exact
-    review-round exploit and its close: a working-tree-only baseline can
-    be self-regenerated (``--write-baseline`` in the same tree) to launder
-    a violation the gate had just refused. Runs `git` for real — no
-    mocking — because the exploit IS about what a real `git show` against
-    an immutable base ref sees versus what the mutable working tree says.
-    """
-
-    def _git(self, repo: Path, *args: str) -> None:
-        subprocess.run(
-            ["git", *args], cwd=repo, check=True, capture_output=True, text=True
-        )
-
-    def _init_repo(self, repo: Path) -> None:
-        repo.mkdir(parents=True, exist_ok=True)
-        (repo / "scripts").mkdir()
-        (repo / "docs").mkdir()
-        (repo / "mcp_server" / "core").mkdir(parents=True)
-        for name in (
-            "craftsmanship_rules.py",
-            "craftsmanship_imports.py",
-            "craftsmanship_constants.py",
-            "craftsmanship_baseline.py",
-            "craftsmanship_layer_table.py",
-            "check_craftsmanship.py",
-        ):
-            (repo / "scripts" / name).write_text((_SCRIPTS / name).read_text())
-        (repo / "docs" / "module-inventory.md").write_text(
-            (_SCRIPTS.parent / "docs" / "module-inventory.md").read_text()
-        )
-        # `-b main` pins the initial branch name explicitly: this repo's
-        # own default is "main" locally, but git's `init.defaultBranch`
-        # is a per-installation config (CI runners are not guaranteed to
-        # match), and this test hardcodes "main" as the base ref below.
-        self._git(repo, "init", "-q", "-b", "main")
-        self._git(repo, "config", "user.email", "demo@example.com")
-        self._git(repo, "config", "user.name", "demo")
-
-    def _run_gate_in(self, repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["python3", str(repo / "scripts" / "check_craftsmanship.py"), *args],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-        )
-
-    def test_exploit_is_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp) / "repo"
-            self._init_repo(repo)
-            (repo / "mcp_server" / "core" / "sample.py").write_text("SAFE = 1\n")
-            self._git(repo, "add", "-A")
-            self._git(repo, "commit", "-q", "-m", "main v1")
-            self._run_gate_in(repo, "--write-baseline")
-            self._git(repo, "add", ".craftsmanship-baseline.json")
-            self._git(repo, "commit", "-q", "-m", "main v2: baseline committed")
-
-            self._git(repo, "checkout", "-q", "-b", "feature")
-            sample = repo / "mcp_server" / "core" / "sample.py"
-            sample.write_text(sample.read_text() + "SNEAKY_LIMIT = 12345\n")
-            self._git(repo, "add", "-A")
-            self._git(repo, "commit", "-q", "-m", "feature: sneaky const")
-
-            # Step 1: the gate blocks the new violation.
-            blocked = self._run_gate_in(repo, "--base", "main")
-            self.assertEqual(blocked.returncode, 1, blocked.stdout + blocked.stderr)
-            self.assertIn("SNEAKY_LIMIT", blocked.stdout + blocked.stderr)
-
-            # Step 2: the attack — launder it via a same-tree regenerate.
-            self._run_gate_in(repo, "--write-baseline")
-
-            # Step 3: must STILL block — this is the exploit's close.
-            after_attack = self._run_gate_in(repo, "--base", "main")
-            self.assertEqual(
-                after_attack.returncode, 1, after_attack.stdout + after_attack.stderr
+            result = gate.craftsmanship_git.load_baseline_from_ref(
+                gate.REPO_ROOT, "main", gate.REPO_ROOT / "x.json"
             )
-            self.assertIn("SNEAKY_LIMIT", after_attack.stdout + after_attack.stderr)
-            self.assertIn("ADDED", after_attack.stdout + after_attack.stderr)
-
-    def test_legitimate_shrink_only_baseline_update_passes(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            repo = Path(tmp) / "repo"
-            self._init_repo(repo)
-            stale_file = repo / "mcp_server" / "core" / "todelete.py"
-            stale_file.write_text("STALE_ONE = 999999\n")
-            self._git(repo, "add", "-A")
-            self._git(repo, "commit", "-q", "-m", "main v1: has a violation")
-            self._run_gate_in(repo, "--write-baseline")
-            self._git(repo, "add", ".craftsmanship-baseline.json")
-            self._git(repo, "commit", "-q", "-m", "main v2: baseline committed")
-
-            self._git(repo, "checkout", "-q", "-b", "fixer")
-            stale_file.unlink()
-            self._git(repo, "add", "-A")
-
-            # Fixed the code but forgot to prune -> STALE, still blocks.
-            forgot_prune = self._run_gate_in(repo, "--base", "main")
-            self.assertEqual(forgot_prune.returncode, 1)
-            self.assertIn("STALE", forgot_prune.stdout + forgot_prune.stderr)
-
-            # Regenerating is a pure shrink (one entry removed, none
-            # added) -> passes.
-            self._run_gate_in(repo, "--write-baseline")
-            self._git(repo, "add", "-A")
-            clean = self._run_gate_in(repo, "--base", "main")
-            self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
+        self.assertEqual(result, {gate.rules.Violation("a.py", "file-size", "d")})
 
 
 if __name__ == "__main__":

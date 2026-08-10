@@ -133,36 +133,76 @@ def _parse_row(match: re.Match[str]) -> LayerRule:
     )
 
 
-def parse_layer_rules(markdown: str) -> dict[str, LayerRule]:
-    """Parse the § Dependency Rules table into layer name -> LayerRule.
-
-    Raises ValueError if the table header is missing or a row's layer name
-    cannot be parsed — failing loudly here matters exactly as much as the
-    rule itself: a silently-unparsed table would silently under-enforce.
-    """
+def _check_header_present(markdown: str) -> None:
     if _TABLE_HEADER not in markdown:
         raise ValueError(
             f"{MODULE_INVENTORY}: '§ Dependency Rules' table header not found "
             f"— expected {_TABLE_HEADER!r}"
         )
-    rules: dict[str, LayerRule] = {}
+
+
+def _extract_row_lines(markdown: str) -> list[str]:
+    """Return the table's raw data-row lines (header separator excluded).
+
+    Only a line that ISN'T EVEN TRYING to be a table row (doesn't start
+    with ``|``) ends the table — the fix for the review finding that a
+    prior version treated ANY unmatched line, including a malformed row in
+    the MIDDLE of the table, as "the table ended", silently dropping that
+    row and every row after it (reproduced: one broken row after
+    ``validation/`` silently removed ``errors/``, ``handlers/``,
+    ``server/`` and ``hooks/`` from enforcement — four of eight layers,
+    zero signal, no error).
+    """
+    rows: list[str] = []
     in_table = False
     for line in markdown.splitlines():
-        if line.strip() == _TABLE_HEADER:
+        stripped = line.strip()
+        if stripped == _TABLE_HEADER:
             in_table = True
             continue
         if not in_table:
             continue
-        if line.startswith("|---"):
-            continue
+        if not stripped.startswith("|"):
+            break  # genuine end of table: not even attempting to be a row
+        if stripped.startswith("|---"):
+            continue  # header separator row
+        rows.append(line)
+    return rows
+
+
+def parse_layer_rules(markdown: str) -> dict[str, LayerRule]:
+    """Parse the § Dependency Rules table into layer name -> LayerRule.
+
+    Fails loudly and completely, never partially — see
+    ``_extract_row_lines`` for why a malformed row raises instead of
+    silently truncating the table, and the row-count check below (a
+    structural self-check independent of that one) for why a duplicate
+    layer name silently overwriting an earlier dict entry also raises.
+    Also raises if the table header itself is missing (section renamed or
+    removed) or matched but produced zero rows.
+    """
+    _check_header_present(markdown)
+    row_lines = _extract_row_lines(markdown)
+    rules: dict[str, LayerRule] = {}
+    for line in row_lines:
         match = _ROW_RE.match(line)
         if match is None:
-            break  # table ended (first non-row line after the header)
+            raise ValueError(
+                f"{MODULE_INVENTORY}: table row does not match the expected "
+                f"'| **layer/** | ... | ... |' shape: {line!r} — refusing to "
+                f"silently drop this row and every row after it"
+            )
         rule = _parse_row(match)
         rules[rule.name] = rule
     if not rules:
         raise ValueError(
             f"{MODULE_INVENTORY}: matched the table header but parsed no rows"
+        )
+    if len(rules) != len(row_lines):
+        raise ValueError(
+            f"{MODULE_INVENTORY}: parsed {len(rules)} layer rule(s) from "
+            f"{len(row_lines)} table row line(s) — a duplicate layer name "
+            f"silently overwrote an earlier row"
         )
     return rules
 
