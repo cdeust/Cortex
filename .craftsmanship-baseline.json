@@ -1863,16 +1863,6 @@
       "detail": "exceeds 300-line cap"
     },
     {
-      "file": "mcp_server/core/near_dup_calibration.py",
-      "kind": "method-size",
-      "detail": "build_components"
-    },
-    {
-      "file": "mcp_server/core/near_dup_calibration.py",
-      "kind": "unsourced-constant",
-      "detail": "SCAN_FLOOR"
-    },
-    {
       "file": "mcp_server/core/neuromodulation_channels.py",
       "kind": "method-size",
       "detail": "compute_dopamine_rpe"
@@ -2823,11 +2813,6 @@
       "detail": "record"
     },
     {
-      "file": "mcp_server/core/temporal_normalize.py",
-      "kind": "layer-violation",
-      "detail": "dateutil"
-    },
-    {
       "file": "mcp_server/core/thermodynamics.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -3178,11 +3163,6 @@
       "detail": "build_file_doc"
     },
     {
-      "file": "mcp_server/core/wiki_frontmatter.py",
-      "kind": "method-size",
-      "detail": "parse_page"
-    },
-    {
       "file": "mcp_server/core/wiki_groomer.py",
       "kind": "layer-violation",
       "detail": "pathlib"
@@ -3191,36 +3171,6 @@
       "file": "mcp_server/core/wiki_groomer.py",
       "kind": "method-size",
       "detail": "audit_page"
-    },
-    {
-      "file": "mcp_server/core/wiki_index.py",
-      "kind": "method-size",
-      "detail": "build_index"
-    },
-    {
-      "file": "mcp_server/core/wiki_index.py",
-      "kind": "unsourced-constant",
-      "detail": "_DOMAIN_SCOPED_PATH_PARTS"
-    },
-    {
-      "file": "mcp_server/core/wiki_layout.py",
-      "kind": "layer-violation",
-      "detail": "pathlib"
-    },
-    {
-      "file": "mcp_server/core/wiki_layout.py",
-      "kind": "unsourced-constant",
-      "detail": "_MAX_SLUG_LEN"
-    },
-    {
-      "file": "mcp_server/core/wiki_readme.py",
-      "kind": "layer-violation",
-      "detail": "pathlib"
-    },
-    {
-      "file": "mcp_server/core/wiki_readme.py",
-      "kind": "method-size",
-      "detail": "build_plain_readme"
     },
     {
       "file": "mcp_server/core/wiki_redirect.py",
@@ -3251,11 +3201,6 @@
       "file": "mcp_server/core/wiki_rule_engine.py",
       "kind": "method-size",
       "detail": "apply_rules"
-    },
-    {
-      "file": "mcp_server/core/wiki_schema_loader.py",
-      "kind": "layer-violation",
-      "detail": "pathlib"
     },
     {
       "file": "mcp_server/core/wiki_staleness.py",
@@ -3366,11 +3311,6 @@
       "file": "mcp_server/core/wiki_view_executor.py",
       "kind": "unsourced-constant",
       "detail": "_MAX_LINE_LEN"
-    },
-    {
-      "file": "mcp_server/core/write_class.py",
-      "kind": "method-size",
-      "detail": "classify_write_class"
     },
     {
       "file": "mcp_server/core/write_gate.py",
@@ -4633,6 +4573,11 @@
       "detail": "handler"
     },
     {
+      "file": "mcp_server/handlers/wiki_memory_sync.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.observability"
+    },
+    {
       "file": "mcp_server/handlers/wiki_migrate.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -5128,56 +5073,6 @@
       "detail": "get_all_ddl"
     },
     {
-      "file": "mcp_server/infrastructure/pg_store.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.core.temporal_normalize"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.observability"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store.py",
-      "kind": "method-size",
-      "detail": "PgMemoryStore._build_insert_params"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store.py",
-      "kind": "method-size",
-      "detail": "PgMemoryStore._init_schema"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store.py",
-      "kind": "method-size",
-      "detail": "PgMemoryStore.recall_memories"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store.py",
-      "kind": "method-size",
-      "detail": "PgMemoryStore.supersede_atomic"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store.py",
-      "kind": "unsourced-constant",
-      "detail": "_CHAIN_HEAD_MAX_DEPTH"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store.py",
-      "kind": "unsourced-constant",
-      "detail": "_SUPERSEDE_REBASE_ATTEMPTS"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store_auxiliary.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
       "file": "mcp_server/infrastructure/pg_store_entities.py",
       "kind": "method-size",
       "detail": "PgEntityMixin.insert_entity"
@@ -5203,9 +5098,9 @@
       "detail": "list_domainless_memories"
     },
     {
-      "file": "mcp_server/infrastructure/pg_store_memory_reheat.py",
+      "file": "mcp_server/infrastructure/pg_store_memory_meta.py",
       "kind": "layer-violation",
-      "detail": "mcp_server.core.write_class"
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/infrastructure/pg_store_memory_reheat.py",
@@ -5221,11 +5116,6 @@
       "file": "mcp_server/infrastructure/pg_store_memory_reheat.py",
       "kind": "unsourced-constant",
       "detail": "DEFAULT_REHEAT_SCAN_LIMIT"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store_near_dup.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.core.near_dup_calibration"
     },
     {
       "file": "mcp_server/infrastructure/pg_store_near_dup.py",
@@ -5248,39 +5138,19 @@
       "detail": "DEFAULT_TOP_K"
     },
     {
-      "file": "mcp_server/infrastructure/pg_store_queries.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store_queries.py",
-      "kind": "method-size",
-      "detail": "PgQueryMixin.iter_hot_memories_chunked"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store_queries.py",
-      "kind": "method-size",
-      "detail": "PgQueryMixin.iter_memories_for_decay"
-    },
-    {
-      "file": "mcp_server/infrastructure/pg_store_queries.py",
-      "kind": "method-size",
-      "detail": "PgQueryMixin.search_by_tag_vector"
-    },
-    {
       "file": "mcp_server/infrastructure/pg_store_relationships.py",
       "kind": "method-size",
       "detail": "PgRelationshipMixin.reinforce_or_create_relationship"
     },
     {
-      "file": "mcp_server/infrastructure/pg_store_stats.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
+      "file": "mcp_server/infrastructure/pg_store_supersede.py",
+      "kind": "unsourced-constant",
+      "detail": "_CHAIN_HEAD_MAX_DEPTH"
     },
     {
-      "file": "mcp_server/infrastructure/pg_store_stats.py",
-      "kind": "method-size",
-      "detail": "PgStatsMixin.get_grooming_ages"
+      "file": "mcp_server/infrastructure/pg_store_supersede.py",
+      "kind": "unsourced-constant",
+      "detail": "_SUPERSEDE_REBASE_ATTEMPTS"
     },
     {
       "file": "mcp_server/infrastructure/pg_store_wiki_citation_seed.py",
@@ -5381,11 +5251,6 @@
       "file": "mcp_server/infrastructure/sqlite_store.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/infrastructure/sqlite_store.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.core.temporal_normalize"
     },
     {
       "file": "mcp_server/infrastructure/sqlite_store.py",
@@ -5508,64 +5373,14 @@
       "detail": "_TIMEOUT_S"
     },
     {
-      "file": "mcp_server/infrastructure/wiki_schema_reader.py",
+      "file": "mcp_server/infrastructure/wiki_reindex_io.py",
       "kind": "layer-violation",
-      "detail": "mcp_server.core.wiki_pages"
-    },
-    {
-      "file": "mcp_server/infrastructure/wiki_schema_reader.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.core.wiki_schema_loader"
+      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/infrastructure/wiki_schema_reader.py",
       "kind": "layer-violation",
       "detail": "mcp_server.observability"
-    },
-    {
-      "file": "mcp_server/infrastructure/wiki_store.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/infrastructure/wiki_store.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.core.wiki_frontmatter_validation"
-    },
-    {
-      "file": "mcp_server/infrastructure/wiki_store.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.core.wiki_layout"
-    },
-    {
-      "file": "mcp_server/infrastructure/wiki_store.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.core.wiki_pages"
-    },
-    {
-      "file": "mcp_server/infrastructure/wiki_store.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.core.wiki_readme"
-    },
-    {
-      "file": "mcp_server/infrastructure/wiki_store.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.core.wiki_sync"
-    },
-    {
-      "file": "mcp_server/infrastructure/wiki_store.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.observability"
-    },
-    {
-      "file": "mcp_server/infrastructure/wiki_store.py",
-      "kind": "method-size",
-      "detail": "_try_reindex"
-    },
-    {
-      "file": "mcp_server/infrastructure/wiki_store.py",
-      "kind": "method-size",
-      "detail": "write_page"
     },
     {
       "file": "mcp_server/migrate.py",
@@ -5628,6 +5443,16 @@
       "detail": "numpy"
     },
     {
+      "file": "mcp_server/shared/near_dup_calibration.py",
+      "kind": "method-size",
+      "detail": "build_components"
+    },
+    {
+      "file": "mcp_server/shared/near_dup_calibration.py",
+      "kind": "unsourced-constant",
+      "detail": "SCAN_FLOOR"
+    },
+    {
       "file": "mcp_server/shared/redaction.py",
       "kind": "method-size",
       "detail": "redact_url"
@@ -5636,6 +5461,11 @@
       "file": "mcp_server/shared/subprocess_safe.py",
       "kind": "method-size",
       "detail": "run_with_hard_timeout"
+    },
+    {
+      "file": "mcp_server/shared/temporal_normalize.py",
+      "kind": "layer-violation",
+      "detail": "dateutil"
     },
     {
       "file": "mcp_server/shared/types_features.py",
@@ -5668,9 +5498,19 @@
       "detail": "mcp_server.core.wiki_axis_registry"
     },
     {
+      "file": "mcp_server/shared/wiki_index.py",
+      "kind": "unsourced-constant",
+      "detail": "_DOMAIN_SCOPED_PATH_PARTS"
+    },
+    {
       "file": "mcp_server/shared/wiki_ir.py",
       "kind": "layer-violation",
       "detail": "pydantic"
+    },
+    {
+      "file": "mcp_server/shared/wiki_layout.py",
+      "kind": "unsourced-constant",
+      "detail": "_MAX_SLUG_LEN"
     },
     {
       "file": "mcp_server/shared/wiki_source_paths.py",
@@ -5681,6 +5521,11 @@
       "file": "mcp_server/shared/wiki_source_paths.py",
       "kind": "method-size",
       "detail": "normalize_source_path"
+    },
+    {
+      "file": "mcp_server/shared/write_class.py",
+      "kind": "method-size",
+      "detail": "classify_write_class"
     },
     {
       "file": "mcp_server/tool_error_handler.py",
