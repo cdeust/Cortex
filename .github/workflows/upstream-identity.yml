@@ -34,7 +34,7 @@ jobs:
     env:
       CONTRACT_URL: https://raw.githubusercontent.com/cdeust/ai-architect-mcp-codebase/37728cc5747cebe39ea9d4011b7424de90f0a57b/mcp-contract.json
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
