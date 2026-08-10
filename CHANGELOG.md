@@ -100,13 +100,19 @@ adheres to [Semantic Versioning](https://semver.org/).
   visualization-plugin migration described below.
 - **Breaking visualization-plugin publication rename, with migration shim.**
   The canonical Claude Code publication is
-  `hypermnesia-mcp-viz@cortex-plugins` 3.0.0, sourced from the unchanged
-  `cdeust/cortex-viz` repository at exact commit
-  `1c1940e278979f35cdecea6146d7fb5f749907e9`. Existing installs must uninstall
-  `cortex-viz@cortex-plugins`, refresh `cortex-plugins`, and install
-  `hypermnesia-mcp-viz@cortex-plugins`. The former identity remains as a
-  frozen 2.8.0 migration shim that only prints those instructions; it
-  registers no MCP server or tools. Claude's composed tool names also change:
+  `hypermnesia-mcp-viz@cortex-plugins` 3.1.0, sourced from the unchanged
+  `cdeust/cortex-viz` repository at tag `v3.1.0` (commit
+  `052e4a40d3e6bddaeb1cec6662e23b451575c481`, cdeust/cortex-viz#130).
+  (Corrected: the rename commit itself, `1c1940e2789...`, was originally
+  pinned here at a claimed "3.0.0" — cortex-viz never actually tagged a
+  v3.0.0, so that pin was dangling for six days, detected and fixed by
+  `scripts/check_marketplace_pins.py`'s new `PIN_VERSION_UNPUBLISHED`
+  check; see that script's module docstring for the incident.) Existing
+  installs must uninstall `cortex-viz@cortex-plugins`, refresh
+  `cortex-plugins`, and install `hypermnesia-mcp-viz@cortex-plugins`. The
+  former identity remains as a frozen 2.8.0 migration shim that only
+  prints those instructions; it registers no MCP server or tools. Claude's
+  composed tool names also change:
   `mcp__plugin_cortex-viz_cortex-viz__open_visualization` becomes
   `mcp__plugin_hypermnesia-mcp-viz_hypermnesia-mcp-viz__open_visualization`,
   and `mcp__plugin_cortex-viz_cortex-viz__get_methodology_graph` becomes

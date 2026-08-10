@@ -63,7 +63,7 @@ claude plugin install hypermnesia-mcp
 ```
 > **Upgrading from the `cortex` plugin?** The plugin was renamed `hypermnesia-mcp` in v4.15.0 (a community-directory name collision with an unrelated `cortex` plugin): `claude plugin uninstall cortex && claude plugin install hypermnesia-mcp` — your memories and configuration are untouched, storage paths do not change.
 >
-> **Upgrading from `cortex-viz@cortex-plugins`?** Its Claude Code marketplace identity was renamed in v3.0.0. Run `claude plugin uninstall cortex-viz@cortex-plugins`, then `claude plugin marketplace update cortex-plugins`, then `claude plugin install hypermnesia-mcp-viz@cortex-plugins`. The retained `cortex-viz@cortex-plugins` item is a frozen, nonfunctional migration shim: it only prints this notice and exposes no MCP server or tools. The repository remains `cdeust/cortex-viz`; only its marketplace plugin identity changed.
+> **Upgrading from `cortex-viz@cortex-plugins`?** Its Claude Code marketplace identity was renamed to `hypermnesia-mcp-viz`, first published in cortex-viz v3.1.0 (the rename commit itself was never tagged as v3.0.0 — that version number was pinned here for six days without a matching release; see cortex-viz's CHANGELOG). Run `claude plugin uninstall cortex-viz@cortex-plugins`, then `claude plugin marketplace update cortex-plugins`, then `claude plugin install hypermnesia-mcp-viz@cortex-plugins`. The retained `cortex-viz@cortex-plugins` item is a frozen, nonfunctional migration shim: it only prints this notice and exposes no MCP server or tools. The repository remains `cdeust/cortex-viz`; only its marketplace plugin identity changed.
 >
 > Claude tool allowlists, hooks, skills, and agents must migrate both composed names: `mcp__plugin_cortex-viz_cortex-viz__open_visualization` becomes `mcp__plugin_hypermnesia-mcp-viz_hypermnesia-mcp-viz__open_visualization`, and `mcp__plugin_cortex-viz_cortex-viz__get_methodology_graph` becomes `mcp__plugin_hypermnesia-mcp-viz_hypermnesia-mcp-viz__get_methodology_graph`.
 
@@ -167,8 +167,8 @@ Or add it to `~/.gemini/settings.json` directly:
 repository now carries an isolated Codex marketplace and an exact 10-tool
 lean MCP surface. Claude Code remains the primary integration and retains its
 automatic hooks, custom agent, and full tool profile. Its shared marketplace
-catalog changes only for the pinned `hypermnesia-mcp-viz` 3.0.0 publication
-and the frozen `cortex-viz` migration shim.
+catalog changes only for the pinned `hypermnesia-mcp-viz` publication and
+the frozen `cortex-viz` migration shim.
 Pre-install the same published package once so the plugin's first `uvx`
 handshake can reuse the local uv cache instead of spending its startup budget
 downloading the Python environment. The bundled server also declares a

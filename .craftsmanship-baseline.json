@@ -5588,16 +5588,6 @@
       "detail": "_SIDE_PADDING"
     },
     {
-      "file": "scripts/check_marketplace_pins.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "scripts/check_marketplace_pins.py",
-      "kind": "method-size",
-      "detail": "main"
-    },
-    {
       "file": "scripts/groomer.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
