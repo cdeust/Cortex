@@ -1923,16 +1923,6 @@
       "detail": "TRANSITION_WIDTH"
     },
     {
-      "file": "mcp_server/core/pg_recall.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/core/pg_recall.py",
-      "kind": "method-size",
-      "detail": "recall"
-    },
-    {
       "file": "mcp_server/core/pg_recall_assembly.py",
       "kind": "method-size",
       "detail": "assemble_context"
