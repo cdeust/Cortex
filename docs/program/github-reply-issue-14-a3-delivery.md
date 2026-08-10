@@ -58,7 +58,7 @@ from the README.
 | BEAM-100K MRR (100 Q) | **0.591** | 0.591 | 0.000 | PASS (exact) |
 | BEAM-100K R@10 | **79.0%** | 79.0% | 0.0 pp | PASS (exact) |
 
-These are the historical v3.11 regression floors used by this A3 run. The LoCoMo 0.794 / 92.6% comparator (n=1982) is superseded for current reporting by the post-fix E1 v3 run (`2f45bcb`, n=1986); it remains here to preserve the original gate evaluation.
+These are the historical v3.11 regression floors used by this A3 run. The LoCoMo 0.794 / 92.6% comparator (n=1982) is superseded for current reporting by the current E1 v3 run (`ef178da7`, the only one with a committed artifact, n=1986); it remains here to preserve the original gate evaluation.
 
 All deltas are within the 0.5pp measurement-noise tolerance set in the
 design doc §8. BEAM-10M runs overnight; adding that result in a follow-up.

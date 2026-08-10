@@ -1,5 +1,23 @@
 # E1 v3 — LoCoMo Ablation Results, Post-Plasticity-Fix Re-Run (n=1986, 14 rows)
 
+> [!WARNING]
+> **Unverified — no committed artifact backs this document (found during
+> issue #347 review round 2, 2026-08-10).** The "Output directory" this
+> document names below, `benchmarks/results/ablation/locomo_v3_post_plasticity_fix/`,
+> does not exist at any commit on any branch of this repository
+> (`git log --all --diff-filter=A -- 'benchmarks/results/ablation/locomo_v3_post_plasticity_fix/*'`
+> returns nothing). Every number below is therefore asserted prose, not a
+> figure a reader can re-derive from a committed per-query result file — the
+> same defect this document's own historical-comparator section (below)
+> correctly flags for the April 2026 0.794/0.926 pair. No publication-facing
+> document in this repository currently cites these post-fix numbers as
+> current; they use the artifact-backed pre-fix run instead
+> (`docs/benchmarks/e1-v3-locomo-results.md`, code SHA `ef178da7`,
+> `benchmarks/results/ablation/locomo_v3/`, verified present). This document
+> is retained because its narrative (the plasticity fix `5f737fe` and its
+> expected effect) may well be correct — it is marked unverified, not
+> deleted, pending a re-run whose output directory is actually committed.
+
 ## Headline
 
 - **Cortex BASELINE_NO_CONSOLIDATION (longitudinal-read-path anchor): MRR = 0.8279, R@10 = 0.9435** on LoCoMo (n = 1986).

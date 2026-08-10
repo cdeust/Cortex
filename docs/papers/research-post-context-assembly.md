@@ -295,8 +295,8 @@ Client-side, FlashRank (ONNX cross-encoder) reranks the top-3k
 candidates to produce the final ranking.
 
 This pipeline is strong at moderate scale: 98.2% R@10 on LongMemEval
-(clean run, July 2026; code SHA `28145f0`) and 94.35% R@10 on LoCoMo
-(E1 v3 post-fix run, May 2026; code SHA `2f45bcb`).  The five-signal
+(clean run, July 2026; code SHA `28145f0`) and 94.2% R@10 on LoCoMo
+(E1 v3 run, May 2026, before the later plasticity fix; code SHA `ef178da7`).  The five-signal
 fusion mitigates any single
 signal's weakness (e.g., vector similarity misses lexical matches that
 trigram catches; FTS misses paraphrases that vectors catch).  But at
@@ -1131,8 +1131,8 @@ management -- the regime where our architecture is designed to help.
 **WRRF baseline.**  Cortex's production pipeline without the
 assembler: 5-signal server-side fusion + FlashRank client-side
 reranking.  This is a strong baseline: 98.2% R@10 on LongMemEval
-(clean run, July 2026; code SHA `28145f0`), 94.35% R@10 on LoCoMo
-(E1 v3 post-fix run, May 2026; code SHA `2f45bcb`), and 0.591 MRR on
+(clean run, July 2026; code SHA `28145f0`), 94.2% R@10 on LoCoMo
+(E1 v3 run, May 2026, before the later plasticity fix; code SHA `ef178da7`), and 0.591 MRR on
 BEAM-100K (five-conversation protocol, n=100; code SHA `a071d89`).  It represents the
 state of the art for multi-signal hybrid retrieval without structural
 organization.

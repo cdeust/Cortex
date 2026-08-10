@@ -1,7 +1,18 @@
 # E1 v3 — LoCoMo Ablation Results (n=1986, 14 rows)
 
-> [!WARNING]
-> **Superseded for current figures.** This sweep ran on code SHA `ef178da7418a05bcf7aeb3e66f5b3179fdad2c4d`, before the plasticity result-shape fix `5f737fe`. Use the [post-fix re-run](e1-v3-locomo-results-post-fix.md) (code SHA `2f45bcb39dbe15fa0ef857cc8c8c3783175d05db`) for every current LoCoMo value and per-mechanism delta. This document is retained as historical pre-fix evidence only.
+> [!NOTE]
+> **Currently authoritative (corrected 2026-08-10, issue #347 review round
+> 2).** This sweep ran on code SHA `ef178da7418a05bcf7aeb3e66f5b3179fdad2c4d`,
+> before the plasticity result-shape fix `5f737fe`. A ["post-fix"
+> re-run](e1-v3-locomo-results-post-fix.md) narrative also exists, but its
+> output directory was never committed to this repository (verified: no
+> commit on any branch adds `benchmarks/results/ablation/locomo_v3_post_plasticity_fix/`),
+> so it cannot be treated as current. This document's artifact
+> (`benchmarks/results/ablation/locomo_v3/`) is committed and present — it
+> is the only LoCoMo E1 v3 ablation run a reader can currently re-derive
+> figures from, and every publication-facing document in this repository
+> now cites it. Treat as superseded again only once a post-fix re-run's
+> output directory is actually committed.
 
 ## Headline
 

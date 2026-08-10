@@ -57,7 +57,7 @@ are the consensus.
 | Clustering | Per-domain cognitive profile + cross-domain bridges | Louvain + Traag C2 repair (Blondel 2008, Traag 2019 — cited) |
 | Scale | see docs/module-inventory.md for module counts (single source, per #127) · 47 MCP tools · 2500+ tests | 12 046 LOC, 23 MCP tools, 220 tests |
 | Scientific grounding | Every mechanism cites papers: cascade (Kandel 2001), homeostatic (Turrigiano 2008), neuromodulation (Doya 2002), synaptic tagging (Frey & Morris 1997), microglial pruning (Wang 2020), predictive coding (Friston 2010), … | Every stage cites papers: Louvain (Blondel 2008), Traag (2019), RRF K=60 (Cormack et al 2009), Tarjan SCC, tree-sitter … |
-| Benchmarks | **LongMemEval R@10 98.2%** (paper SOTA 78.4%; clean run SHA `28145f0`); **LoCoMo 94.35%** (post-fix SHA `2f45bcb`); **BEAM retrieval-proxy MRR 0.591** (five-conversation protocol, SHA `a071d89`) | 220 unit tests; no external benchmark yet |
+| Benchmarks | **LongMemEval R@10 98.2%** (paper SOTA 78.4%; clean run SHA `28145f0`); **LoCoMo 94.2%** (SHA `ef178da7`, the only LoCoMo E1 v3 ablation run with a committed artifact); **BEAM retrieval-proxy MRR 0.591** (five-conversation protocol, SHA `a071d89`) | 220 unit tests; no external benchmark yet |
 | Unique features | persistent cross-session memory, thermodynamic decay, cascade consolidation, neuromodulation, synaptic tagging, cognitive profile per domain, predictive-coding write gate, hippocampal replay | PRD validator (symbol hallucination check), security gates (auth-critical/unsafe/public API), Tarjan-SCC semantic diff, 5-layer resolver with LSP, macro expansion, stdlib indexing |
 | License | MIT | MIT-equivalent |
 

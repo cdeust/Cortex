@@ -67,7 +67,7 @@ A claim with no falsification condition is unscientific in Popper's sense and mu
 - Metrics: R@10 on LoCoMo and retrieval-proxy MRR on BEAM-100K.
 - Threshold: if frozen LongMemEval calibration yields LoCoMo R@10 < 0.83 or BEAM-100K retrieval-proxy MRR < 0.45, the cross-benchmark generalization claim is refuted.
 
-**Current evidence.** **PARTIALLY TESTED.** Each benchmark is currently scored independently, so the numbers are protocol-specific rather than a frozen-config cross-evaluation: LongMemEval R@10 98.2% / MRR 0.9167 (n=500, clean run `benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json`, code SHA `28145f0`, dirty=false); LoCoMo R@10 94.35% / MRR 0.8279 (n=1,986, clean post-fix run, code SHA `2f45bcb`); and BEAM-100K retrieval-proxy MRR 0.591 (n=100, five-conversation run, code SHA `a071d89`). These results are *consistent with* generalization but do not prove it: per-benchmark drift in defaults could be hiding overfitting. A frozen-config cross-eval has not been run.
+**Current evidence.** **PARTIALLY TESTED.** Each benchmark is currently scored independently, so the numbers are protocol-specific rather than a frozen-config cross-evaluation: LongMemEval R@10 98.2% / MRR 0.9167 (n=500, clean run `benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json`, code SHA `28145f0`, dirty=false); LoCoMo R@10 94.2% / MRR 0.8278 (n=1,986, committed run, code SHA `ef178da7` (the only LoCoMo E1 v3 ablation run with a per-query artifact)); and BEAM-100K retrieval-proxy MRR 0.591 (n=100, five-conversation run, code SHA `a071d89`). These results are *consistent with* generalization but do not prove it: per-benchmark drift in defaults could be hiding overfitting. A frozen-config cross-eval has not been run.
 
 ---
 
@@ -113,7 +113,7 @@ A claim with no falsification condition is unscientific in Popper's sense and mu
 | C4 WRRF decorrelates | medium | PARTIALLY TESTED | Correlation matrix + 6 ablations |
 | C6 read/write 100:1 | low | UNTESTED | One week of production counters |
 
-No claim in the paper is currently CONFIRMED in the strict Popperian sense (survived a severe test designed to refute it). The protocol-specific 98.2% / 94.35% / 0.591 numbers are corroborations of the system as configured, not corroborations of the causal claims (C1–C6) about *why* it performs.
+No claim in the paper is currently CONFIRMED in the strict Popperian sense (survived a severe test designed to refute it). The protocol-specific 98.2% / 94.2% / 0.591 numbers are corroborations of the system as configured, not corroborations of the causal claims (C1–C6) about *why* it performs.
 
 ---
 
