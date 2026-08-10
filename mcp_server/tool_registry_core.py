@@ -7,7 +7,9 @@ standalone cortex-viz MCP.
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from typing import Any
+
+from mcp.server.mcpserver import MCPServer
 
 from mcp_server.handlers import (
     detect_domain as detect_domain_handler,
@@ -35,8 +37,8 @@ SCHEMAS: dict[str, dict] = {
 }
 
 
-def register(mcp: FastMCP) -> None:
-    """Register all Tier 1 core profiling tools on the FastMCP instance."""
+def register(mcp: MCPServer) -> None:
+    """Register all Tier 1 core profiling tools on the MCPServer instance."""
     _register_query_methodology(mcp)
     _register_detect_domain(mcp)
     _register_rebuild_profiles(mcp)
@@ -45,7 +47,7 @@ def register(mcp: FastMCP) -> None:
     _register_explore_features(mcp)
 
 
-def _register_query_methodology(mcp: FastMCP) -> None:
+def _register_query_methodology(mcp: MCPServer) -> None:
     @mcp.tool(
         name="query_methodology",
         **tool_kwargs(query_methodology.schema),
@@ -54,7 +56,7 @@ def _register_query_methodology(mcp: FastMCP) -> None:
         cwd: str | None = None,
         project: str | None = None,
         first_message: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Returns cognitive profile for the current domain."""
         return await safe_handler(
             query_methodology.handler,
@@ -67,7 +69,7 @@ def _register_query_methodology(mcp: FastMCP) -> None:
         )
 
 
-def _register_detect_domain(mcp: FastMCP) -> None:
+def _register_detect_domain(mcp: MCPServer) -> None:
     @mcp.tool(
         name="detect_domain",
         **tool_kwargs(detect_domain_handler.schema),
@@ -76,7 +78,7 @@ def _register_detect_domain(mcp: FastMCP) -> None:
         cwd: str | None = None,
         project: str | None = None,
         first_message: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Lightweight domain classification."""
         return await safe_handler(
             detect_domain_handler.handler,
@@ -89,7 +91,7 @@ def _register_detect_domain(mcp: FastMCP) -> None:
         )
 
 
-def _register_rebuild_profiles(mcp: FastMCP) -> None:
+def _register_rebuild_profiles(mcp: MCPServer) -> None:
     @mcp.tool(
         name="rebuild_profiles",
         **tool_kwargs(rebuild_profiles.schema),
@@ -97,7 +99,7 @@ def _register_rebuild_profiles(mcp: FastMCP) -> None:
     async def tool_rebuild_profiles(
         domain: str | None = None,
         force: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Full rescan of all session data to rebuild methodology profiles."""
         return await safe_handler(
             rebuild_profiles.handler,
@@ -109,17 +111,17 @@ def _register_rebuild_profiles(mcp: FastMCP) -> None:
         )
 
 
-def _register_list_domains(mcp: FastMCP) -> None:
+def _register_list_domains(mcp: MCPServer) -> None:
     @mcp.tool(
         name="list_domains",
         **tool_kwargs(list_domains.schema),
     )
-    async def tool_list_domains() -> dict:
+    async def tool_list_domains() -> dict[str, Any]:
         """Overview of all detected cognitive domains."""
         return await safe_handler(list_domains.handler, {}, tool_name="list_domains")
 
 
-def _register_record_session_end(mcp: FastMCP) -> None:
+def _register_record_session_end(mcp: MCPServer) -> None:
     @mcp.tool(
         name="record_session_end",
         **tool_kwargs(record_session_end.schema),
@@ -133,7 +135,7 @@ def _register_record_session_end(mcp: FastMCP) -> None:
         keywords: list[str] | None = None,
         cwd: str | None = None,
         project: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Incremental profile update after a session ends."""
         return await safe_handler(
             record_session_end.handler,
@@ -151,7 +153,7 @@ def _register_record_session_end(mcp: FastMCP) -> None:
         )
 
 
-def _register_explore_features(mcp: FastMCP) -> None:
+def _register_explore_features(mcp: MCPServer) -> None:
     @mcp.tool(
         name="explore_features",
         **tool_kwargs(explore_features.schema),
@@ -160,7 +162,7 @@ def _register_explore_features(mcp: FastMCP) -> None:
         mode: str,
         domain: str | None = None,
         compare_domain: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Explore interpretability features."""
         return await safe_handler(
             explore_features.handler,

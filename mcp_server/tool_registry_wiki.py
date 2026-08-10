@@ -11,7 +11,9 @@ exposed here so parity can be re-run and inspected without a shell.
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from typing import Any
+
+from mcp.server.mcpserver import MCPServer
 
 from mcp_server.handlers import (
     wiki_adr,
@@ -45,7 +47,7 @@ SCHEMAS: dict[str, dict] = {
 }
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     """Register wiki authoring tools."""
     _register_wiki_write(mcp)
     _register_wiki_read(mcp)
@@ -59,7 +61,7 @@ def register(mcp: FastMCP) -> None:
     _register_wiki_migrate(mcp)
 
 
-def _register_wiki_write(mcp: FastMCP) -> None:
+def _register_wiki_write(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_write", **tool_kwargs(wiki_write.schema))
     async def tool_wiki_write(
         path: str,
@@ -67,7 +69,7 @@ def _register_wiki_write(mcp: FastMCP) -> None:
         mode: str = "create",
         tags: list[str] | None = None,
         memory_ids: list[int] | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Author a wiki page (create/append/replace) with the provided markdown."""
         return await safe_handler(
             wiki_write.handler,
@@ -82,9 +84,11 @@ def _register_wiki_write(mcp: FastMCP) -> None:
         )
 
 
-def _register_wiki_read(mcp: FastMCP) -> None:
+def _register_wiki_read(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_read", **tool_kwargs(wiki_read.schema))
-    async def tool_wiki_read(path: str, follow_redirects: bool = True) -> dict:
+    async def tool_wiki_read(
+        path: str, follow_redirects: bool = True
+    ) -> dict[str, Any]:
         """Read the raw markdown of a wiki page by relative path.
 
         Phase 3.2 of ADR-2244: redirect stubs are followed transparently
@@ -97,13 +101,13 @@ def _register_wiki_read(mcp: FastMCP) -> None:
         )
 
 
-def _register_wiki_list(mcp: FastMCP) -> None:
+def _register_wiki_list(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_list", **tool_kwargs(wiki_list.schema))
     async def tool_wiki_list(
         kind: str | None = None,
         include_redirects: bool = False,
         include_auto_generated: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """List authored wiki pages, optionally filtered by kind.
 
         Phase 3.2: redirect stubs excluded by default.
@@ -122,9 +126,11 @@ def _register_wiki_list(mcp: FastMCP) -> None:
         )
 
 
-def _register_wiki_link(mcp: FastMCP) -> None:
+def _register_wiki_link(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_link", **tool_kwargs(wiki_link.schema))
-    async def tool_wiki_link(from_path: str, to_path: str, relation: str) -> dict:
+    async def tool_wiki_link(
+        from_path: str, to_path: str, relation: str
+    ) -> dict[str, Any]:
         """Add a bidirectional link between two wiki pages (Related section)."""
         return await safe_handler(
             wiki_link.handler,
@@ -133,7 +139,7 @@ def _register_wiki_link(mcp: FastMCP) -> None:
         )
 
 
-def _register_wiki_adr(mcp: FastMCP) -> None:
+def _register_wiki_adr(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_adr", **tool_kwargs(wiki_adr.schema))
     async def tool_wiki_adr(
         title: str,
@@ -142,7 +148,7 @@ def _register_wiki_adr(mcp: FastMCP) -> None:
         consequences: str,
         status: str = "accepted",
         tags: list[str] | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Create a numbered ADR with auto-incremented sequence."""
         return await safe_handler(
             wiki_adr.handler,
@@ -158,19 +164,19 @@ def _register_wiki_adr(mcp: FastMCP) -> None:
         )
 
 
-def _register_wiki_reindex(mcp: FastMCP) -> None:
+def _register_wiki_reindex(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_reindex", **tool_kwargs(wiki_reindex.schema))
-    async def tool_wiki_reindex() -> dict:
+    async def tool_wiki_reindex() -> dict[str, Any]:
         """Regenerate the wiki table of contents at .generated/INDEX.md."""
         return await safe_handler(wiki_reindex.handler, {}, tool_name="wiki_reindex")
 
 
-def _register_wiki_purge(mcp: FastMCP) -> None:
+def _register_wiki_purge(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_purge", **tool_kwargs(wiki_purge.schema))
     async def tool_wiki_purge(
         apply: bool = False,
         kind: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Re-evaluate and purge wiki pages that fail the current classifier."""
         return await safe_handler(
             wiki_purge.handler,
@@ -179,9 +185,9 @@ def _register_wiki_purge(mcp: FastMCP) -> None:
         )
 
 
-def _register_wiki_verify(mcp: FastMCP) -> None:
+def _register_wiki_verify(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_verify", **tool_kwargs(wiki_verify.schema))
-    async def tool_wiki_verify(path: str | None = None) -> dict:
+    async def tool_wiki_verify(path: str | None = None) -> dict[str, Any]:
         """Verify wiki-page symbol citations against AP's code graph
         (ADR-0046 Phase 2)."""
         return await safe_handler(
@@ -191,9 +197,9 @@ def _register_wiki_verify(mcp: FastMCP) -> None:
         )
 
 
-def _register_wiki_migrate(mcp: FastMCP) -> None:
+def _register_wiki_migrate(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_migrate", **tool_kwargs(wiki_migrate.schema))
-    async def tool_wiki_migrate(dry_run: bool = True) -> dict:
+    async def tool_wiki_migrate(dry_run: bool = True) -> dict[str, Any]:
         """Sync the filesystem wiki into PG and reconcile FS-deleted ghosts.
 
         Defaults to dry_run=true (report ghost rel_paths without
@@ -206,14 +212,14 @@ def _register_wiki_migrate(mcp: FastMCP) -> None:
         )
 
 
-def _register_wiki_rename(mcp: FastMCP) -> None:
+def _register_wiki_rename(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_rename", **tool_kwargs(wiki_rename.schema))
     async def tool_wiki_rename(
         from_path: str,
         to_path: str,
         reason: str = "",
         overwrite_dest: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Move a page and leave a redirect stub at the old path.
 
         Phase 3.2 of ADR-2244 — the building block for Phase 4 bulk renames.

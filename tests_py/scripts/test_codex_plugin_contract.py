@@ -107,11 +107,16 @@ def test_claude_marketplace_publishes_pinned_canonical_viz_identity() -> None:
     entries = {entry["name"]: entry for entry in marketplace["plugins"]}
     canonical = entries["hypermnesia-mcp-viz"]
 
-    assert canonical["version"] == "3.0.0"
+    # "3.0.0"/1c1940e... was the dangling pin from the #179-style incident:
+    # cortex-viz never tagged a v3.0.0 (the rename landed straight on main
+    # without a release); the first real tagged release carrying it was
+    # v3.1.0 (cdeust/cortex-viz#130), which is what this pin now targets.
+    assert canonical["version"] == "3.1.0"
     assert canonical["source"] == {
         "source": "github",
         "repo": "cdeust/cortex-viz",
-        "sha": "1c1940e278979f35cdecea6146d7fb5f749907e9",
+        "ref": "v3.1.0",
+        "sha": "052e4a40d3e6bddaeb1cec6662e23b451575c481",
     }
     assert "standalone Hypermnesia MCP Viz server" in canonical["description"]
 

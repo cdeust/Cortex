@@ -331,6 +331,13 @@ if __name__ == "__main__":
     from mcp_server.hooks._headless_guard import (
         exit_if_headless_authoring_child,
     )
+    from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
-    main()
+    # issue #398: closes the store before this one-shot process exits
+    # (see _store_lifecycle.py for the verified mechanism -- psycopg pool
+    # threads are daemon threads; the fragile path is __del__'s
+    # finalization-time join, which close() pre-empts by setting
+    # _closed=True while the interpreter is still alive).
+    with close_shared_store_on_exit():
+        main()

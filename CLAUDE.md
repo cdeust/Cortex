@@ -55,6 +55,16 @@ ENDS with: bump the marketplace pin(s) and `server.json`, and confirm
 the 2026-07-25 incident where six zetetic-team-subagents releases and two
 cortex-viz releases shipped to zero installs (#179).
 
+The public MCP registry (`io.github.cdeust/hypermnesia-mcp`) is a third
+version surface alongside the marketplace pin and PyPI — auto-published on
+every `v*` tag by `release.yml`'s `publish-mcp-registry` job (GitHub OIDC,
+no stored secret) and cross-checked by `check_marketplace_pins.py` against
+`server.json`'s own declared version (`REGISTRY_VERSION_STALE`). Source:
+2026-08-10, `io.github.cdeust/hypermnesia-mcp` sat published at 4.17.1
+while the tag/server.json/PyPI were already at 4.17.2 — the publish step
+had lived only in prose, with nothing committed to run it or verify it
+happened.
+
 ## Architecture
 
 Clean Architecture, concentric layers: `server → handlers → core ← shared`,

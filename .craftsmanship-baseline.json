@@ -4783,11 +4783,6 @@
       "detail": "mcp_server.handlers.consolidate"
     },
     {
-      "file": "mcp_server/hooks/consolidate_background.py",
-      "kind": "method-size",
-      "detail": "main"
-    },
-    {
       "file": "mcp_server/hooks/ingest_codebase_background.py",
       "kind": "layer-violation",
       "detail": "mcp_server.handlers.ingest_codebase"
@@ -5593,16 +5588,6 @@
       "detail": "_SIDE_PADDING"
     },
     {
-      "file": "scripts/check_marketplace_pins.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "scripts/check_marketplace_pins.py",
-      "kind": "method-size",
-      "detail": "main"
-    },
-    {
       "file": "scripts/groomer.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -5744,16 +5729,6 @@
     },
     {
       "file": "scripts/setup_db.py",
-      "kind": "method-size",
-      "detail": "main"
-    },
-    {
-      "file": "scripts/verify_mcp_hosts.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "scripts/verify_mcp_hosts.py",
       "kind": "method-size",
       "detail": "main"
     },
@@ -6531,21 +6506,6 @@
       "file": "tests_py/infrastructure/test_staging_resolve_sink.py",
       "kind": "method-size",
       "detail": "test_entity_dedup_is_domain_scoped"
-    },
-    {
-      "file": "tests_py/infrastructure/test_stdio_transport.py",
-      "kind": "method-size",
-      "detail": "TestGuardedRunDeliversLateResponse.test_guarded_run_delivers_the_late_response"
-    },
-    {
-      "file": "tests_py/infrastructure/test_stdio_transport.py",
-      "kind": "method-size",
-      "detail": "TestUnguardedRaceCharacterization.test_unguarded_low_level_run_drops_the_late_response"
-    },
-    {
-      "file": "tests_py/infrastructure/test_stdio_transport_wiring.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
     },
     {
       "file": "tests_py/infrastructure/test_supersession_read_path.py",

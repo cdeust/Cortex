@@ -26,13 +26,15 @@ remember requires "stored"/"action" -- mcp/server/lowlevel/server.py's
 discards our classified message and replaces it with its own generic
 ``Output validation error: '<field>' is a required property``). Every
 one of the ~50 tools registered through ``safe_handler`` was affected.
-Fix: raise ``fastmcp.exceptions.ToolError`` instead of returning the
-error dict. FastMCP's own ``call_tool`` (fastmcp/server/server.py)
-re-raises a ``FastMCPError`` subclass unchanged (no re-wrapping), and
-the low-level MCP server's ``call_tool`` handler builds the
-``isError=True`` result from ``str(exc)`` directly -- BEFORE any
-outputSchema check, which only runs on the non-error branch. Raising
-therefore reaches the client with the classified message intact.
+Fix: raise ``mcp.server.mcpserver.exceptions.ToolError`` instead of
+returning the error dict (was ``fastmcp.exceptions.ToolError`` before
+the mcp 2.0.0 migration -- same name, same family, mcp 2.0.0 folded
+FastMCP's tool-call machinery into the SDK itself). The MCPServer
+``call_tool`` dispatch re-raises a ``ToolError`` unchanged (no
+re-wrapping), and the low-level MCP server's ``call_tool`` handler
+builds the ``isError=True`` result from ``str(exc)`` directly -- BEFORE
+any outputSchema check, which only runs on the non-error branch.
+Raising therefore reaches the client with the classified message intact.
 
 Usage in tool registries:
     from mcp_server.tool_error_handler import safe_handler
@@ -48,7 +50,7 @@ import asyncio
 import logging
 from typing import Any, Awaitable, Callable
 
-from fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 from mcp_server.shared.json_native import to_json_native
 from mcp_server.handlers.admission import admit
@@ -173,16 +175,21 @@ async def safe_handler(
     Contract (issue #17 — Liskov enforcement across all MCP handlers):
       precondition: ``handler_fn`` is an async callable returning a dict.
       postcondition: returns a ``dict[str, Any]``. Never a JSON string.
-                     FastMCP 2.x validates structured content against
+                     The MCP SDK validates structured content against
                      the declared ``output_schema`` and rejects strings.
+                     Under mcp 2.0.0 the tool-registration function's own
+                     return annotation must be ``dict[str, Any]`` (not
+                     bare ``dict``) for structured content to populate at
+                     all — see ``mcp_server/handlers/_tool_meta.py::
+                     apply_output_schemas``'s docstring.
 
     On success: returns the handler's dict verbatim.
     On any exception: logs the exception (type + full traceback) then
-    raises ``fastmcp.exceptions.ToolError`` carrying the classified,
+    raises ``mcp.server.mcpserver.exceptions.ToolError`` carrying the classified,
     user-friendly message (DB errors get the setup guide; everything
     else gets ``<ExceptionType>: <message>``, no traceback). Never
     returns an error dict -- see the module docstring for why a dict
-    return on this path silently fails FastMCP's outputSchema check.
+    return on this path silently fails the MCP SDK's outputSchema check.
     """
     try:
         if tool_name:
@@ -202,13 +209,13 @@ async def safe_handler(
             result = await handler_fn(args)
         # Defensive: every handler must already return a dict per its
         # ``output_schema``. If a handler regresses to None we surface
-        # an empty dict so FastMCP's structured-content validator does
-        # not reject the response.
+        # an empty dict so the MCP SDK's structured-content validator
+        # does not reject the response.
         if result is None:
             return {}
         # Single wire format across backends. The PG store returns
         # ``datetime``/``numpy`` scalars where the SQLite store returns
-        # ``str``/``float``; FastMCP can only build ``structuredContent``
+        # ``str``/``float``; the MCP SDK can only build ``structuredContent``
         # from JSON-native values, so a non-native field silently drops
         # structuredContent and the client rejects the call ("outputSchema
         # defined but no structured output returned"). Normalizing here —

@@ -10,11 +10,13 @@ information (the fallback was refused on purpose; unset DATABASE_URL or opt
 in via CORTEX_ALLOW_SQLITE_FALLBACK=1).
 
 ``TestSafeHandlerErrorPath`` covers the 2026-07-14 fix: safe_handler must
-RAISE fastmcp.exceptions.ToolError carrying the classified message (not
-return an {"error", "message", "hint"} dict, which fails every tool's
-outputSchema validation and is replaced client-side by a generic
-"'<field>' is a required property" message), and must log the exception
-with its traceback before classifying it away.
+RAISE mcp.server.mcpserver.exceptions.ToolError carrying the classified
+message (was fastmcp.exceptions.ToolError before the mcp 2.0.0 migration,
+PR #331 — same name, same family) (not return an {"error", "message",
+"hint"} dict, which fails every tool's outputSchema validation and is
+replaced client-side by a generic "'<field>' is a required property"
+message), and must log the exception with its traceback before
+classifying it away.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ import asyncio
 import logging
 
 import pytest
-from fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 from mcp_server.tool_error_handler import _classify_error, safe_handler
 

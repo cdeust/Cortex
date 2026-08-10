@@ -62,7 +62,7 @@ env CORTEX_RUNTIME=cowork \
 policy; it does not install or invoke the Cowork plugin. Claude Code remains
 the primary integration, and its primary plugin manifest, hooks, agents, and
 full tool profile are unchanged. The shared Claude marketplace catalog changes
-only to publish `hypermnesia-mcp-viz` 3.0.0 and retain `cortex-viz` as a frozen,
+only to publish `hypermnesia-mcp-viz` and retain `cortex-viz` as a frozen,
 nonfunctional migration shim.
 
 This is a local plugin. It does not make Cortex available to ChatGPT web and

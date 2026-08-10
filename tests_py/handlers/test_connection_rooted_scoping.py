@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from mcp_server import tool_registry_memory
 from mcp_server.handlers import recall, remember
@@ -29,19 +29,19 @@ _ENV = "CORTEX_ROOT_AGENT_TOPIC"
 
 
 def _recall_param_props() -> dict:
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     tool_registry_memory.register(mcp)
     tools = asyncio.run(mcp.list_tools())
     tool = next(t for t in tools if t.name == "recall")
-    return (tool.parameters or {}).get("properties", {})
+    return (tool.input_schema or {}).get("properties", {})
 
 
 def _remember_param_props() -> dict:
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     tool_registry_memory.register(mcp)
     tools = asyncio.run(mcp.list_tools())
     tool = next(t for t in tools if t.name == "remember")
-    return (tool.parameters or {}).get("properties", {})
+    return (tool.input_schema or {}).get("properties", {})
 
 
 def test_unrooted_exposes_agent_topic(monkeypatch):

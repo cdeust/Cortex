@@ -21,18 +21,17 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "fastmcp>=2.0.0",
-    # mcp_server/infrastructure/stdio_transport.py imports directly from the
-    # `mcp` SDK (mcp.server.lowlevel.server, mcp.server.stdio,
-    # mcp.shared.message) and from `anyio` (its stream ABCs) to work around
-    # an upstream stdio-transport race (see that module's docstring) —
-    # reaching one layer below fastmcp's own abstraction, which fastmcp
-    # itself depends on (`mcp>=...`, `anyio>=4.5`) but Cortex never declared
-    # directly. Same "transitive luck" failure mode python-dateutil below
-    # already documents: undeclared-but-relied-upon versions can drift
-    # freely since nothing pins them for OUR use. mcp>=1.29.0/anyio>=4.5
-    # match the uv.lock-pinned versions this was written and tested against.
-    "mcp>=1.29.0",
+    # mcp 2.0.0 folded FastMCP's decorator API into the SDK itself
+    # (mcp.server.mcpserver.MCPServer, the documented successor to
+    # fastmcp.FastMCP) and fastmcp-slim (latest, 3.4.5) still declares
+    # `mcp<2.0`, so the two cannot coexist in one lock — keeping fastmcp
+    # would freeze this repo below mcp 2.0.0 forever. mcp_server/ now
+    # imports mcp.server.mcpserver directly; anyio is still used
+    # directly by mcp_server/tool_profile_middleware.py (no longer only
+    # a fastmcp transitive dependency), so it stays declared.
+    # source: PyPI JSON API https://pypi.org/pypi/fastmcp-slim/json,
+    #         read 2026-08-01 (3.4.5 requires_dist: "mcp<2.0,>=1.24.0").
+    "mcp>=2.0.0",
     "anyio>=4.5",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
@@ -119,7 +118,7 @@ codebase = [
     # of builtins.Parser" — except the pin it annotated said `<1.14`, so the
     # broken window was admitted rather than excluded. The window is real and
     # now excluded; the version numbers are measured rather than recalled.
-    "tree-sitter-language-pack>=1.12.5,<1.14",
+    "tree-sitter-language-pack>=1.12.5,<1.15",
     "networkx>=3.0",
     # Leiden community detection (Traag et al. 2019) — strict improvement
     # over Louvain. igraph supplies the graph backend leidenalg runs on.
@@ -170,6 +169,16 @@ dev = [
     "pytest-timeout>=2.3.0",
     "sentence-transformers>=3.0.0",
     "networkx>=3.0",
+    # tests_py/test_mcp_prompts.py catches ExceptionGroup/BaseExceptionGroup
+    # (mcp.Client's in-process transport wraps server-raised errors in one
+    # via anyio task-group teardown, mcp 2.0.0 migration PR #331). Both
+    # names are 3.11+ builtins; Cortex supports 3.10 (requires-python
+    # above), so the test imports the backport explicitly rather than
+    # relying on anyio's own transitive pin of it (same "transitive luck"
+    # anti-pattern python-dateutil/mcp/anyio above already document).
+    # source: exceptiongroup PyPI page — re-exports the 3.11+ builtins
+    # unchanged on 3.11+, provides the backport on 3.10.
+    "exceptiongroup>=1.2.0",
 ]
 
 [tool.hatch.build.targets.wheel]

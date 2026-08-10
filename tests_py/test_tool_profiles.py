@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from fastmcp import Client, FastMCP
+from mcp import Client
+from mcp.server.mcpserver import MCPServer
 
 from mcp_server import mcp_prompts, tool_profiles
 from mcp_server.__main__ import merged_schemas, register_all
@@ -18,17 +19,24 @@ from mcp_server.tool_profiles import ToolProfile
 _DESTRUCTIVE = {"forget", "wiki_purge", "wiki_migrate"}
 
 
-def _build(profile: ToolProfile) -> FastMCP:
-    server = FastMCP(
-        name="t", version="0", instructions=tool_profiles.instructions(profile)
+def _build(profile: ToolProfile) -> MCPServer:
+    # ToolProfileMiddleware must be passed at construction (mcp 2.0.0's
+    # `middleware` list is constructor-only — no post-construction
+    # `add_middleware`, unlike FastMCP; see tool_profile_middleware.py's
+    # module docstring and mcp_server/__main__.py's Server Instance
+    # section for the same pattern in the composition root).
+    server = MCPServer(
+        name="t",
+        version="0",
+        instructions=tool_profiles.instructions(profile),
+        middleware=[ToolProfileMiddleware(profile)],
     )
     register_all(server, codebase=False, prd=False)
     mcp_prompts.register_prompts(server, merged_schemas())
-    server.add_middleware(ToolProfileMiddleware(profile))
     return server
 
 
-def _run(server: FastMCP, coro_fn):
+def _run(server: MCPServer, coro_fn):
     async def go():
         async with Client(server) as client:
             return await coro_fn(client)
@@ -99,32 +107,40 @@ class TestAllows:
 class TestSurface:
     def test_full_lists_all_52_tools(self):
         server = _build(ToolProfile.FULL)
-        names = _run(server, lambda c: c.list_tools())
+        names = _run(server, lambda c: c.list_tools()).tools
         assert len({t.name for t in names}) == 52
 
     def test_lean_lists_exactly_the_lean_set(self):
         server = _build(ToolProfile.LEAN)
-        names = {t.name for t in _run(server, lambda c: c.list_tools())}
+        names = {t.name for t in _run(server, lambda c: c.list_tools()).tools}
         assert names == set(tool_profiles.LEAN_TOOL_NAMES)
 
     def test_lean_hides_and_rejects_destructive_calls(self):
         # criterion 5: gated, not merely hidden.
+        #
+        # NOT pytest.raises(Exception): mcp.Client.call_tool() does not
+        # raise on isError=True (unlike fastmcp.Client, which did) — it
+        # returns a CallToolResult the caller inspects. That is the
+        # deliberate wire shape ToolProfileMiddleware produces for a
+        # rejected tools/call (see its module docstring point 2): a
+        # graceful, model-visible tool error, not a protocol-level
+        # exception — mirroring how the tool's own handler failures are
+        # reported (tool_error_handler.py's whole design), so a rejected
+        # call looks like any other tool error to the client.
         server = _build(ToolProfile.LEAN)
-        names = {t.name for t in _run(server, lambda c: c.list_tools())}
+        names = {t.name for t in _run(server, lambda c: c.list_tools()).tools}
         for tool in _DESTRUCTIVE:
             assert tool not in names, f"{tool} should be hidden under lean"
 
             async def call(c, _tool=tool):
                 return await c.call_tool(_tool, {})
 
-            with pytest.raises(Exception) as exc:
-                _run(server, call)
-            assert (
-                "profile" in str(exc.value).lower()
-                or "unknown tool" in str(exc.value).lower()
-            )
+            result = _run(server, call)
+            assert result.is_error, f"{tool} should be rejected under lean"
+            message = result.content[0].text.lower()
+            assert "profile" in message or "unknown tool" in message
 
     def test_full_does_not_reject_or_hide(self):
         server = _build(ToolProfile.FULL)
-        names = {t.name for t in _run(server, lambda c: c.list_tools())}
+        names = {t.name for t in _run(server, lambda c: c.list_tools()).tools}
         assert _DESTRUCTIVE <= names

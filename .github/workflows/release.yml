@@ -168,7 +168,7 @@ jobs:
       # this workflow, commit and runner. Verify with
       #   gh attestation verify <file> --repo cdeust/Cortex
       - name: Attest build provenance (wheel + sdist)
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             dist/*.whl
@@ -250,7 +250,7 @@ jobs:
           ls -la hypermnesia-mcp.cdx.json*
 
       - name: Attest build provenance (SBOM)
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: hypermnesia-mcp.cdx.json
 
@@ -368,7 +368,7 @@ jobs:
       # and SBOM jobs: the attestation binds the digest a user verifies with
       #   gh attestation verify <bundle> --repo cdeust/Cortex
       - name: Attest build provenance (MCPB bundle)
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ steps.pack.outputs.bundle }}
 
@@ -430,3 +430,83 @@ jobs:
           # is a no-op instead of a hard failure — this was the exact
           # failure mode that motivated removing PyPI in a2dc7e3.
           skip-existing: true
+
+  # Public MCP registry (registry.modelcontextprotocol.io) compatibility
+  # channel — a THIRD version surface alongside the marketplace pin and
+  # PyPI, previously updated by hand and, like the other two, drifting
+  # silently: `io.github.cdeust/hypermnesia-mcp` sat published at 4.17.1
+  # while this repo's tag, server.json, and PyPI were already at 4.17.2 —
+  # one release short, invisible until queried directly (no CI gate read
+  # this surface until scripts/check_marketplace_pins.py's
+  # REGISTRY_VERSION_STALE check, added alongside this job). Same failure
+  # shape as issue #179 (marketplace pin) and the cortex-viz CHANGELOG
+  # incident: a mandatory per-release step that lived only in prose.
+  #
+  # Auth: GitHub OIDC (`mcp-publisher login github-oidc`), NOT a
+  # PyPI-Trusted-Publishing equivalent — a distinct mechanism documented at
+  # modelcontextprotocol/registry docs/reference/cli/commands.md and
+  # docs/modelcontextprotocol-io/github-actions.mdx (checked 2026-08-10,
+  # not assumed). `io.github.cdeust/*` namespace authentication comes free
+  # from the workflow's own OIDC token (bound to this repo + workflow +
+  # ref by Sigstore) once `id-token: write` is granted — no stored secret,
+  # unlike the PAT or DNS auth alternatives the docs also describe.
+  publish-mcp-registry:
+    name: Publish to the MCP registry (best-effort compatibility)
+    # `needs: publish-pypi`, NOT `build` — the registry's package-ownership
+    # verification (see server.json's `packages[].registryType: pypi`)
+    # resolves the version this job's `server.json` declares against what
+    # PyPI actually serves. `build` only builds the sdist/wheel; the PyPI
+    # publish itself happens in `publish-pypi`, a job that runs in
+    # parallel with this one when both only `need: build` — so a fast
+    # registry publish could name a version PyPI had not yet received,
+    # the exact "dangling pin, in reverse" shape this PR's own
+    # REGISTRY_VERSION_STALE check exists to catch (cortex-viz's own
+    # Release.yaml gates its registry job on `needs: [test, release]` for
+    # the identical reason — verified against that workflow, not assumed).
+    needs: publish-pypi
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # OIDC — mcp-publisher login github-oidc
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify server.json matches the tag (same guard as mcpb-bundle)
+        run: |
+          set -euxo pipefail
+          VERSION="$(python3 -c "import json;print(json.load(open('server.json'))['version'])")"
+          if [ "v${VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "server.json version ${VERSION} does not match tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+      # Checksum-verified, not just version-pinned (issue #178 supply-chain
+      # posture applied to a third-party tool this workflow now trusts).
+      # source: sha256 measured 2026-08-10 by downloading this exact asset
+      # from https://github.com/modelcontextprotocol/registry/releases/tag/v1.8.1
+      - name: Install mcp-publisher (pinned release, checksum-verified)
+        run: |
+          set -euxo pipefail
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.1
+          MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+
+      - name: Authenticate to the MCP registry (OIDC)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json to the MCP registry (best-effort — must not fail primary release)
+        # Same rationale as publish-pypi: this is a secondary compatibility
+        # channel (ADR-0050 names the marketplace primary) — a registry
+        # outage or a stricter future validation rule must not red-X the
+        # GitHub Release / marketplace propagation this workflow exists to
+        # ship. A silenced failure is exactly what let this surface drift
+        # in the first place, so it is not swallowed: the step still shows
+        # red in the Actions UI, `continue-on-error` only stops it from
+        # failing the *job*/workflow.
+        continue-on-error: true
+        run: ./mcp-publisher publish

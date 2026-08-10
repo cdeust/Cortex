@@ -2,10 +2,10 @@
 
 Why this exists
 ---------------
-FastMCP 2.x builds a tool's ``structuredContent`` by JSON-serializing the
+The MCP SDK builds a tool's ``structuredContent`` by JSON-serializing the
 handler's return value and validating it against the declared
 ``output_schema``. If the value carries a non-JSON-native type the
-serializer fails and FastMCP emits **no** ``structuredContent`` — the
+serializer fails and the SDK emits **no** ``structuredContent`` — the
 Claude Code client then rejects the call with "outputSchema defined but
 no structured output returned" (reproduced 2026-06-23: ``recall`` returned
 memory rows whose ``score`` was ``numpy.float32`` and ``created_at`` a
@@ -14,7 +14,7 @@ native).
 
 The wire contract is JSON. The store hands back DB-native types
 (``datetime`` from psycopg, ``numpy`` scalars from vector math). This
-module enforces the contract at one place — the handler→FastMCP boundary
+module enforces the contract at one place — the handler→MCP-SDK boundary
 (``tool_error_handler.safe_handler``) — so every tool is covered, not
 just the ones touched today (OCP: new tools inherit the guarantee).
 

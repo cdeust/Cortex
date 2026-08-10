@@ -62,7 +62,7 @@ $$
 
 LongMemEval-S (Wu et al. 2025, ICLR) has effective corpus size `N ≈ 10^5` across the test set (500 sessions × ~200 atomic events). Since `N_cross ≈ 10^4 < 10^5`, Theorem 1 predicts that any flat-importance retriever should suffer the `k/N` collapse on at least a constant fraction of queries. The paper's reported best `R@10 = 78.4%` matches: roughly `1 - 10^4/10^5 = 0.9` queries are below the bad-query threshold, and the residual `~10%` are exactly the Theorem 1 collapse cases.
 
-Cortex measures `R@10 = 97.8%` (Apr 2026, clean DB, single process). The `19.4`-point gap is the predicted Zipf rescue. (proved by random argument for the upper bound; by direct measurement for the Cortex value.)
+Cortex measures `R@10 = 98.2%` (clean run `benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json`, code SHA `28145f0`, dirty=false). The `19.8`-point gap is the predicted Zipf rescue. (proved by random argument for the upper bound; by direct measurement for the Cortex value.)
 
 ---
 
@@ -84,7 +84,7 @@ Cortex measures `R@10 = 97.8%` (Apr 2026, clean DB, single process). The `19.4`-
 | Zipf `w`, `γ > 1` | `≥ 1 - k^{1-γ}` (constant) | direct computation (Thm 2) |
 | Optimal decay `λ*` | maximal, unique | random argument (Thm 3) |
 
-The crossover `N_cross ≈ 10^4` (k=10, γ=1.2, σ=0.05) demarcates the regime in which decay is optional (small corpora) from the regime in which it is necessary (production-scale memory). LongMemEval at `N ≈ 10^5` is firmly in the latter, predicting the observed 78.4% → 97.8% improvement.
+The crossover `N_cross ≈ 10^4` (k=10, γ=1.2, σ=0.05) demarcates the regime in which decay is optional (small corpora) from the regime in which it is necessary (production-scale memory). LongMemEval at `N ≈ 10^5` is firmly in the latter, predicting the observed 78.4% → 98.2% improvement.
 
 ---
 

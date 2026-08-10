@@ -217,7 +217,7 @@ def install_deps() -> None:
     os.makedirs(DEPS_DIR, exist_ok=True)
 
     packages = [
-        "fastmcp>=2.0.0",
+        "mcp>=2.0.0",
         "pydantic>=2.0.0",
         "pydantic-settings>=2.0.0",
         "numpy>=1.24.0",

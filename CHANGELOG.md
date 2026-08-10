@@ -100,13 +100,19 @@ adheres to [Semantic Versioning](https://semver.org/).
   visualization-plugin migration described below.
 - **Breaking visualization-plugin publication rename, with migration shim.**
   The canonical Claude Code publication is
-  `hypermnesia-mcp-viz@cortex-plugins` 3.0.0, sourced from the unchanged
-  `cdeust/cortex-viz` repository at exact commit
-  `1c1940e278979f35cdecea6146d7fb5f749907e9`. Existing installs must uninstall
-  `cortex-viz@cortex-plugins`, refresh `cortex-plugins`, and install
-  `hypermnesia-mcp-viz@cortex-plugins`. The former identity remains as a
-  frozen 2.8.0 migration shim that only prints those instructions; it
-  registers no MCP server or tools. Claude's composed tool names also change:
+  `hypermnesia-mcp-viz@cortex-plugins` 3.1.0, sourced from the unchanged
+  `cdeust/cortex-viz` repository at tag `v3.1.0` (commit
+  `052e4a40d3e6bddaeb1cec6662e23b451575c481`, cdeust/cortex-viz#130).
+  (Corrected: the rename commit itself, `1c1940e2789...`, was originally
+  pinned here at a claimed "3.0.0" — cortex-viz never actually tagged a
+  v3.0.0, so that pin was dangling for six days, detected and fixed by
+  `scripts/check_marketplace_pins.py`'s new `PIN_VERSION_UNPUBLISHED`
+  check; see that script's module docstring for the incident.) Existing
+  installs must uninstall `cortex-viz@cortex-plugins`, refresh
+  `cortex-plugins`, and install `hypermnesia-mcp-viz@cortex-plugins`. The
+  former identity remains as a frozen 2.8.0 migration shim that only
+  prints those instructions; it registers no MCP server or tools. Claude's
+  composed tool names also change:
   `mcp__plugin_cortex-viz_cortex-viz__open_visualization` becomes
   `mcp__plugin_hypermnesia-mcp-viz_hypermnesia-mcp-viz__open_visualization`,
   and `mcp__plugin_cortex-viz_cortex-viz__get_methodology_graph` becomes
@@ -1029,6 +1035,15 @@ arXiv-ready.
   `benchmarks/results/ablation/locomo_v3_post_plasticity_fix/`.
   Writeup: `docs/benchmarks/e1-v3-locomo-results-post-fix.md`. The pre-fix sweep is
   preserved at `docs/benchmarks/e1-v3-locomo-results.md`.
+  **Correction (2026-08-10, issue #347):** the `2f45bcb`/`0.8279`/`94.3%`
+  figures above have no committed per-query artifact anywhere in this
+  repository — `benchmarks/results/ablation/locomo_v3_post_plasticity_fix/`
+  was never added on any branch (`git log --all --diff-filter=A` confirms
+  this). Current publication-facing documents (README, both arXiv papers)
+  use the artifact-backed pair instead: `MRR = 0.8278`, `R@10 = 94.2%`,
+  code SHA `ef178da7` — which is **before**, not after, the plasticity fix.
+  This historical entry is left as originally written (it records what
+  shipped in v3.15.0); do not treat it as a current figure.
 - **Phase A + B blend-weight calibration.** Central composite design + 5×5
   grid search; all six post-WRRF rerank constants confirmed near-optimum at
   the engineering defaults shipped today. `docs/provenance/blend-weight-calibration.md`.

@@ -6,7 +6,9 @@ analyze, and check_setup tools.
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from typing import Any
+
+from mcp.server.mcpserver import MCPServer
 
 from mcp_server.handlers import (
     anchor,
@@ -36,8 +38,8 @@ SCHEMAS: dict[str, dict] = {
 }
 
 
-def register(mcp: FastMCP) -> None:
-    """Register Tier 1 memory management tools on the FastMCP instance."""
+def register(mcp: MCPServer) -> None:
+    """Register Tier 1 memory management tools on the MCPServer instance."""
     _register_forget(mcp)
     _register_validate_memory(mcp)
     _register_rate_memory(mcp)
@@ -48,7 +50,7 @@ def register(mcp: FastMCP) -> None:
     _register_check_setup(mcp)
 
 
-def _register_forget(mcp: FastMCP) -> None:
+def _register_forget(mcp: MCPServer) -> None:
     @mcp.tool(
         name="forget",
         **tool_kwargs(forget.schema),
@@ -57,7 +59,7 @@ def _register_forget(mcp: FastMCP) -> None:
         memory_id: int,
         soft: bool = False,
         force: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Delete or soft-delete a memory by ID."""
         return await safe_handler(
             forget.handler,
@@ -70,7 +72,7 @@ def _register_forget(mcp: FastMCP) -> None:
         )
 
 
-def _register_validate_memory(mcp: FastMCP) -> None:
+def _register_validate_memory(mcp: MCPServer) -> None:
     @mcp.tool(
         name="validate_memory",
         **tool_kwargs(validate_memory.schema),
@@ -82,7 +84,7 @@ def _register_validate_memory(mcp: FastMCP) -> None:
         base_dir: str | None = None,
         staleness_threshold: float = 0.5,
         dry_run: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Validate memories against current filesystem state."""
         return await safe_handler(
             validate_memory.handler,
@@ -98,7 +100,7 @@ def _register_validate_memory(mcp: FastMCP) -> None:
         )
 
 
-def _register_rate_memory(mcp: FastMCP) -> None:
+def _register_rate_memory(mcp: MCPServer) -> None:
     @mcp.tool(
         name="rate_memory",
         **tool_kwargs(rate_memory.schema),
@@ -106,7 +108,7 @@ def _register_rate_memory(mcp: FastMCP) -> None:
     async def tool_rate_memory(
         memory_id: int,
         useful: bool,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Rate a memory as useful or not to update metamemory confidence."""
         return await safe_handler(
             rate_memory.handler,
@@ -118,7 +120,7 @@ def _register_rate_memory(mcp: FastMCP) -> None:
         )
 
 
-def _register_seed_project(mcp: FastMCP) -> None:
+def _register_seed_project(mcp: MCPServer) -> None:
     @mcp.tool(
         name="seed_project",
         **tool_kwargs(seed_project.schema),
@@ -128,7 +130,7 @@ def _register_seed_project(mcp: FastMCP) -> None:
         domain: str | None = None,
         max_file_size_kb: int = 64,
         dry_run: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Bootstrap memory from an existing codebase."""
         return await safe_handler(
             seed_project.handler,
@@ -142,7 +144,7 @@ def _register_seed_project(mcp: FastMCP) -> None:
         )
 
 
-def _register_anchor(mcp: FastMCP) -> None:
+def _register_anchor(mcp: MCPServer) -> None:
     @mcp.tool(
         name="anchor",
         **tool_kwargs(anchor.schema),
@@ -150,7 +152,7 @@ def _register_anchor(mcp: FastMCP) -> None:
     async def tool_anchor(
         memory_id: int,
         reason: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Mark a memory as compaction-resistant (heat=1.0)."""
         return await safe_handler(
             anchor.handler,
@@ -162,7 +164,7 @@ def _register_anchor(mcp: FastMCP) -> None:
         )
 
 
-def _register_backfill_memories(mcp: FastMCP) -> None:
+def _register_backfill_memories(mcp: MCPServer) -> None:
     @mcp.tool(
         name="backfill_memories",
         **tool_kwargs(backfill_memories.schema),
@@ -173,7 +175,7 @@ def _register_backfill_memories(mcp: FastMCP) -> None:
         min_importance: float = 0.35,
         dry_run: bool = False,
         force_reprocess: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Auto-import prior Claude Code conversations into memory."""
         return await safe_handler(
             backfill_memories.handler,
@@ -188,7 +190,7 @@ def _register_backfill_memories(mcp: FastMCP) -> None:
         )
 
 
-def _register_codebase_analyze(mcp: FastMCP) -> None:
+def _register_codebase_analyze(mcp: MCPServer) -> None:
     @mcp.tool(
         name="codebase_analyze",
         **tool_kwargs(codebase_analyze.schema),
@@ -201,7 +203,7 @@ def _register_codebase_analyze(mcp: FastMCP) -> None:
         incremental: bool = True,
         dry_run: bool = False,
         domain: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Analyze codebase and store structure as memories."""
         return await safe_handler(
             codebase_analyze.handler,
@@ -218,12 +220,12 @@ def _register_codebase_analyze(mcp: FastMCP) -> None:
         )
 
 
-def _register_check_setup(mcp: FastMCP) -> None:
+def _register_check_setup(mcp: MCPServer) -> None:
     @mcp.tool(
         name="check_setup",
         **tool_kwargs(check_setup.schema),
     )
-    async def tool_check_setup() -> dict:
+    async def tool_check_setup() -> dict[str, Any]:
         """Verify the local install: Python, PG driver, DB, extensions, FS."""
         return await safe_handler(
             check_setup.handler,

@@ -1,138 +1,63 @@
 #!/usr/bin/env python3
 """Exercise Cortex's hook-free stdio contract as common MCP hosts.
 
-This is a protocol smoke test, not a mocked FastMCP unit test. Each case starts
-the production entry point as a child process, sends a complete MCP lifecycle
-batch, and verifies discovery plus one real SQLite-backed tool call. Client
-names are deliberately varied: Cortex must not branch on Claude-specific host
-identity, environment, or hooks.
+This is a protocol smoke test, not a mocked FastMCP/MCP-SDK unit test. Each
+case starts the production entry point as a child process, sends a complete
+MCP lifecycle batch, and verifies discovery plus one real SQLite-backed tool
+call. Client names are deliberately varied: Cortex must not branch on
+Claude-specific host identity, environment, or hooks.
+
+Behaving *as a host* is load-bearing, not decorative: the exchange itself
+lives in `mcp_host_client.py`, which keeps stdin open until every expected
+response has arrived and closes it only then. Closing stdin is the MCP
+shutdown signal (2025-06-18 §Lifecycle › Shutdown › stdio), so the previous
+`subprocess.run(input=...)` shape signalled shutdown before reading a single
+response and then demanded answers the protocol never owed it -- see that
+module's docstring for the mcp 2.0.0 interleaving where the demand is
+actually refused, in silence.
+
+Environment isolation (PYTHONPATH stripping, the SOCKS regression fixture,
+storage selection) also lives there, in `environment()`.
 """
 
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
-import json
-import os
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
 import time
 from typing import Literal
 
-from mcp_server.tool_profiles import LEAN_TOOL_NAMES
+# Run as a script (`python scripts/verify_mcp_hosts.py`) sys.path[0] is
+# scripts/, not the repo root, so the sibling below would not resolve under
+# its package name. Importing it as `scripts.mcp_host_client` -- one
+# canonical name whether this module is executed or imported by a test --
+# keeps a single module identity, so a `ContractError` raised here is the
+# same class a test catches (the dual-identity trap
+# `tests_py/scripts/_craftsmanship_support.py` documents for its own
+# siblings).
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from scripts.mcp_host_client import (  # noqa: E402
+    PROTOCOL_VERSION,
+    ContractCase,
+    ContractError,
+    run_client,
+)
+
+from mcp_server.tool_profiles import LEAN_TOOL_NAMES  # noqa: E402
 
 
 CLIENTS = ("claude-code", "gemini-cli", "codex-cli")
 PROFILES: tuple[Literal["full", "lean"], ...] = ("full", "lean")
 STORAGE_SELECTIONS: tuple[Literal["sqlite", "auto"], ...] = ("sqlite", "auto")
-# source: MCP protocol revision implemented by fastmcp==3.4.5.
-PROTOCOL_VERSION = "2025-06-18"
 # source: tests_py/test_main.py standalone baseline plus its three documented
 # optional upstream integrations (ingest_codebase, change_impact, ingest_prd).
 MIN_FULL_TOOL_COUNT = 52
 MAX_FULL_TOOL_COUNT = MIN_FULL_TOOL_COUNT + 3
-
-
-class ContractError(RuntimeError):
-    """A child completed without satisfying the MCP host contract."""
-
-
-@dataclass(frozen=True)
-class ContractCase:
-    """One host identity/profile combination and its isolated runtime."""
-
-    client_name: str
-    profile: Literal["full", "lean"]
-    command: tuple[str, ...]
-    data_root: Path
-    timeout: int
-    socks_proxy_regression: bool
-    storage_selection: Literal["sqlite", "auto"]
-
-    @property
-    def label(self) -> str:
-        return f"{self.client_name}/{self.profile}"
-
-
-def _frames(client_name: str) -> str:
-    messages = [
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": PROTOCOL_VERSION,
-                "capabilities": {},
-                "clientInfo": {"name": client_name, "version": "contract-test"},
-            },
-        },
-        {"jsonrpc": "2.0", "method": "notifications/initialized"},
-        {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
-        {"jsonrpc": "2.0", "id": 3, "method": "resources/list", "params": {}},
-        {"jsonrpc": "2.0", "id": 4, "method": "prompts/list", "params": {}},
-        {
-            "jsonrpc": "2.0",
-            "id": 5,
-            "method": "tools/call",
-            "params": {"name": "memory_stats", "arguments": {}},
-        },
-    ]
-    return "".join(
-        json.dumps(message, separators=(",", ":")) + "\n" for message in messages
-    )
-
-
-def _environment(
-    data_root: Path,
-    *,
-    socks_proxy_regression: bool,
-    storage_selection: Literal["sqlite", "auto"] = "sqlite",
-) -> dict[str, str]:
-    env = os.environ.copy()
-    env.update(
-        {
-            "CORTEX_CLAUDE_DIR": str(data_root),
-            "CORTEX_MEMORY_AP_ENABLED": "0",
-        }
-    )
-    if storage_selection == "sqlite":
-        env["CORTEX_MEMORY_STORE_BACKEND"] = "sqlite"
-    else:
-        # Exercise production auto-selection. In particular, do not inherit a
-        # repository- or runner-level SQLite override that would make a
-        # PostgreSQL-first smoke pass without ever attempting PostgreSQL.
-        env.pop("CORTEX_MEMORY_STORE_BACKEND", None)
-        env.pop("CORTEX_ALLOW_SQLITE_FALLBACK", None)
-    if socks_proxy_regression:
-        # Regression environment: FastMCP's banner-time update check used to
-        # import SOCKS support and abort before initialize. The MCP runtime
-        # must not make that non-essential network request. Cold uvx bootstrap
-        # explicitly disables this fixture because it must reach PyPI.
-        env["ALL_PROXY"] = "socks5://127.0.0.1:9"
-        env["all_proxy"] = "socks5://127.0.0.1:9"
-    env.pop("FASTMCP_SHOW_SERVER_BANNER", None)
-    env.pop("FASTMCP_CHECK_FOR_UPDATES", None)
-    env.pop("CORTEX_MCP_PROFILE", None)
-    return env
-
-
-def _responses(stdout: str) -> dict[int, dict[str, object]]:
-    responses: dict[int, dict[str, object]] = {}
-    for line in stdout.splitlines():
-        try:
-            message = json.loads(line)
-        except json.JSONDecodeError as error:
-            raise ContractError(
-                f"malformed JSON-RPC frame on server stdout: {line!r}"
-            ) from error
-        if not isinstance(message, dict):
-            raise ContractError(f"non-object JSON-RPC frame on stdout: {message!r}")
-        request_id = message.get("id")
-        if isinstance(request_id, int) and not isinstance(request_id, bool):
-            responses[request_id] = message
-    return responses
 
 
 def _result(
@@ -147,27 +72,6 @@ def _result(
     if not isinstance(result, dict):
         raise ContractError(f"request id={request_id} returned no object result")
     return result
-
-
-def _run_client(case: ContractCase) -> dict[int, dict[str, object]]:
-    process = subprocess.run(
-        case.command,
-        input=_frames(case.client_name),
-        text=True,
-        capture_output=True,
-        env=_environment(
-            case.data_root / case.client_name / case.profile,
-            socks_proxy_regression=case.socks_proxy_regression,
-            storage_selection=case.storage_selection,
-        ),
-        timeout=case.timeout,
-        check=False,
-    )
-    if process.returncode != 0:
-        raise ContractError(
-            f"{case.label}: server exited {process.returncode}\n{process.stderr}"
-        )
-    return _responses(process.stdout)
 
 
 def _verify_initialize(
@@ -247,7 +151,7 @@ def _verify_memory_call(
 
 def _verify(case: ContractCase) -> tuple[int, float]:
     started_at = time.monotonic()
-    responses = _run_client(case)
+    responses = run_client(case)
     _verify_initialize(case, responses)
     count = _verify_tool_surface(case, responses)
     _verify_auxiliary_discovery(case, responses)
@@ -255,9 +159,8 @@ def _verify(case: ContractCase) -> tuple[int, float]:
     return count, time.monotonic() - started_at
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--timeout", type=int, default=2 * 60)
+def _add_selection_arguments(parser: argparse.ArgumentParser) -> None:
+    """Which host identities and profiles a run exercises."""
     parser.add_argument(
         "--clients",
         nargs="+",
@@ -279,6 +182,11 @@ def main() -> int:
             "run the supplied command unchanged; requires exactly one --profiles value"
         ),
     )
+
+
+def _add_runtime_arguments(parser: argparse.ArgumentParser) -> None:
+    """How each exercised case is actually driven."""
+    parser.add_argument("--timeout", type=int, default=2 * 60)
     parser.add_argument(
         "--allow-bootstrap-network",
         action="store_true",
@@ -298,37 +206,83 @@ def main() -> int:
         nargs=argparse.REMAINDER,
         help="base server command after --; profile flags are added by the test",
     )
-    args = parser.parse_args()
-    command = args.command or [sys.executable, "-m", "mcp_server"]
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    _add_selection_arguments(parser)
+    _add_runtime_arguments(parser)
+    return parser
+
+
+def _resolved_command(
+    parser: argparse.ArgumentParser, raw_command: list[str]
+) -> tuple[str, ...]:
+    command = raw_command or [sys.executable, "-m", "mcp_server"]
     if command and command[0] == "--":
         command = command[1:]
     if not command:
         parser.error("server command after -- cannot be empty")
-    if args.command_includes_profile and len(args.profiles) != 1:
-        parser.error("--command-includes-profile requires exactly one --profiles value")
+    return tuple(command)
 
+
+def _case_command(
+    base_command: tuple[str, ...], *, profile: str, command_includes_profile: bool
+) -> tuple[str, ...]:
+    if command_includes_profile:
+        return base_command
+    return (*base_command, "--profile", profile)
+
+
+def _run_one_case(
+    args: argparse.Namespace,
+    base_command: tuple[str, ...],
+    *,
+    client_name: str,
+    profile: str,
+    temp_dir: str,
+) -> None:
+    case = ContractCase(
+        client_name=client_name,
+        profile=profile,
+        command=_case_command(
+            base_command,
+            profile=profile,
+            command_includes_profile=args.command_includes_profile,
+        ),
+        data_root=Path(temp_dir),
+        timeout=args.timeout,
+        socks_proxy_regression=not args.allow_bootstrap_network,
+        storage_selection=args.storage_selection,
+    )
+    count, elapsed_seconds = _verify(case)
+    print(
+        f"PASS {case.label}: initialize + discovery + "
+        f"memory_stats ({count} tools, {elapsed_seconds:.2f}s)"
+    )
+
+
+def _run_all_cases(args: argparse.Namespace, base_command: tuple[str, ...]) -> None:
     with tempfile.TemporaryDirectory(prefix="cortex_mcp_hosts_") as temp_dir:
         for client_name in args.clients:
             for profile in args.profiles:
-                server_command = (
-                    tuple(command)
-                    if args.command_includes_profile
-                    else (*command, "--profile", profile)
-                )
-                case = ContractCase(
+                _run_one_case(
+                    args,
+                    base_command,
                     client_name=client_name,
                     profile=profile,
-                    command=server_command,
-                    data_root=Path(temp_dir),
-                    timeout=args.timeout,
-                    socks_proxy_regression=not args.allow_bootstrap_network,
-                    storage_selection=args.storage_selection,
+                    temp_dir=temp_dir,
                 )
-                count, elapsed_seconds = _verify(case)
-                print(
-                    f"PASS {case.label}: initialize + discovery + "
-                    f"memory_stats ({count} tools, {elapsed_seconds:.2f}s)"
-                )
+
+
+def main() -> int:
+    parser = _build_parser()
+    args = parser.parse_args()
+    base_command = _resolved_command(parser, args.command)
+    if args.command_includes_profile and len(args.profiles) != 1:
+        parser.error("--command-includes-profile requires exactly one --profiles value")
+
+    _run_all_cases(args, base_command)
     return 0
 
 

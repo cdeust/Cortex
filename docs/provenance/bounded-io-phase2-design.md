@@ -133,6 +133,8 @@ New `core/gist_extraction.py` (pure logic) + `infrastructure/artifact_store.py`
    (fails before F2, passes after); (b) garbage keyword trigger + query
    containing a partial-word match ⇒ no injection after F1.
 2. Full suite: `.venv/bin/pytest tests_py -q` (3,173+ passing baseline).
-3. Benchmarks: LongMemEval s, LoCoMo, BEAM on clean DB vs recorded baselines
-   (R@10 98.4 / 94.2, BEAM 0.591). No regression accepted.
+3. Benchmarks: LongMemEval s, LoCoMo, BEAM on clean DB vs the then-recorded
+   protocol-specific baselines (R@10 98.4 / 94.2 post-fix, BEAM 0.591).
+   These are historical regression gates, not current publication headlines.
+   No regression accepted.
 4. open_visualization + commit per repo; PUSH NOTHING.

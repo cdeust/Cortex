@@ -1,42 +1,97 @@
 #!/usr/bin/env python3
 """Marketplace pin-staleness gate. CANONICAL COPY: cdeust/Cortex.
 
-A byte-identical copy lives in cdeust/ai-architect-mcp-codebase (its CI diffs
-against this file weekly and fails on drift), so the gate is ONE artifact
-guarding both repos — never two copies that diverge into a no-op.
+A byte-identical copy of this file AND its five sibling modules
+(marketplace_pins_http.py, marketplace_pins_semver.py,
+marketplace_pins_github.py, marketplace_pins_self.py,
+marketplace_pins_manifests.py, marketplace_pins_registry.py) lives in
+cdeust/ai-architect-mcp-codebase (its CI diffs against these files weekly
+and fails on drift), so the gate is ONE artifact guarding both repos —
+never two copies that diverge into a no-op. This file used to be the
+whole gate in one file; it was split (issue: crossed the 300-line §4.1
+cap once REGISTRY_VERSION_STALE was added) into a thin composition root
+(this file: CLI entry point + per-plugin dispatch) over five single-
+purpose modules — AP's mirror needs the same split or its weekly diff
+will show it, which is the intended signal, not a regression.
 
 Releasing does not ship: delivery is gated by pins in
 ``.claude-plugin/marketplace.json``. Six zetetic-team-subagents releases and
 two cortex-viz releases were withheld silently (Cortex #179); AP's own
 manifests sat a three-way split with its tag (AP #67). Failure classes:
 
-  PIN_BEHIND_TAG       local-source pin < this repo's latest semver git tag.
-                       Offline, reads git only — detects the #67 incident
-                       even when every manifest agrees (they were BOTH stale).
-  PIN_BEHIND_RELEASE   github-source pin < that repo's latest release.
-  SELF_PIN_MISMATCH    local-source pin != the plugin's own plugin.json.
-  SERVER_JSON_SPLIT    root server.json version != the primary local pin
-                       (the unguarded third leg of AP's three-way split).
-  PIN_SHA_UNREACHABLE  github-source pin names a `sha` that is not reachable
-                       from that repo's default branch. Cortex #351 pinned
-                       cortex-viz twice at an unmerged PR head (ee0d41db, then
-                       7e297ebc); both were `ahead` of main, so a squash-merge
-                       would have left the marketplace serving an orphaned
-                       commit. Version checks cannot see this: the pin read
-                       3.0.0 and was current on every run.
-  MANIFEST_JSON_SPLIT  root manifest.json version != the primary local pin.
-                       AP shipped manifest.json stuck at 0.8.0 for TWO releases
-                       while every other pin read 0.8.2 and this gate exited 0,
-                       because it only ever read server.json (AP #172). The
-                       file is copied verbatim into the .mcpb bundle, so the
-                       wrong version shipped to every install.
+- PIN_BEHIND_TAG: local-source pin < this repo's latest semver git tag.
+  Offline, reads git only — detects the #67 incident even when every
+  manifest agrees (they were BOTH stale).
+- PIN_BEHIND_RELEASE: github-source pin < that repo's latest release, but
+  a release matching the pin DOES exist.
+- PIN_VERSION_UNPUBLISHED: the pinned version has no matching tag/release
+  in the target repo AT ALL — not "behind", genuinely never cut.
+  `PIN_BEHIND_*` only ever compared the pin to the *latest* known tag, so
+  a pin sitting AHEAD of every real release (a version nobody ever
+  tagged) read as "current" and passed silently. Incident: Cortex's own
+  marketplace.json pinned `hypermnesia-mcp-viz` at cortex-viz version
+  "3.0.0" for six days; cortex-viz's own tag history never contained a
+  v3.0.0 — v2.8.0 was, and remained, the latest real tag. `3.0.0 < 2.8.0`
+  is false, so the old `PIN_BEHIND_RELEASE` check never fired: a pin
+  ahead of the truth is invisible to a "behind" comparison. Diagnostic
+  method: put the declared versions and the actually-tagged versions
+  side by side; the gap is only visible in the join, never in either
+  list read alone, and never in the manifest file by itself — the
+  manifest doesn't know what wasn't tagged.
+- SELF_PIN_MISMATCH: local-source pin != the plugin's own plugin.json.
+- SERVER_JSON_SPLIT: root server.json version != the primary local pin
+  (the unguarded third leg of AP's three-way split).
+- PIN_SHA_UNREACHABLE: github-source pin names a `sha` that is not
+  reachable from that repo's default branch. Cortex #351 pinned
+  cortex-viz twice at an unmerged PR head (ee0d41db, then 7e297ebc);
+  both were `ahead` of main, so a squash-merge would have left the
+  marketplace serving an orphaned commit. Version checks cannot see
+  this: the pin read 3.0.0 and was current on every run.
+- MANIFEST_JSON_SPLIT: root manifest.json version != the primary local
+  pin. AP shipped manifest.json stuck at 0.8.0 for TWO releases while
+  every other pin read 0.8.2 and this gate exited 0, because it only
+  ever read server.json (AP #172). The file is copied verbatim into
+  the .mcpb bundle, so the wrong version shipped to every install.
+- REGISTRY_VERSION_STALE: the public MCP registry
+  (registry.modelcontextprotocol.io) serves a version != this repo's
+  authoritative one for server.json's own `name`. A THIRD version
+  surface, independent of the marketplace pin and PyPI: measured
+  2026-08-10, io.github.cdeust/hypermnesia-mcp was published at 4.17.1
+  while the tag/server.json/PyPI were already at 4.17.2 — the registry
+  publish step lived only in prose (no committed workflow ran it), same
+  failure shape as #179 and PIN_VERSION_UNPUBLISHED above. Equality,
+  not "behind": a registry entry ahead of the repo (a republish of an
+  untagged version) is exactly as false as one that lags.
+- UNVERIFIED_SOURCE_TYPE: a plugin's `source.source` is a schema-legal
+  type (npm/url/git-subdir) this gate has no checker for. Never silent
+  — a dispatcher recognizing only some schema-legal shapes and passing
+  the rest through unflagged is the same defect class as the above.
+- UNRECOGNIZED_SOURCE: a plugin's `source` matches no schema shape at
+  all (wrong type, unknown `source` key) — same non-silence principle.
 
 Network failures DEGRADE TO SILENCE (NOTICE + exit 0): a gate that reddens
 every PR during a GitHub outage gets disabled, and then the six-release gap
 recurs with the gate nominally in place. The offline path is tested.
 
 Frozen pins: deliberately never-advancing pins (deprecation shims) are
-listed in FROZEN_PINS with a reason — audited allowlist, not silence.
+listed in FROZEN_PINS (marketplace_pins_self.py) with a reason — audited
+allowlist, not silence.
+
+Pending pins: a pin correctly flagged PIN_VERSION_UNPUBLISHED because the
+release that will cut its tag is genuinely in flight (tracked by an already
+-open upstream PR, not a promise) is listed in PENDING_PINS
+(marketplace_pins_github.py) with that PR's URL — printed every run as a
+NOTICE, never swallowed, and dead code the moment the tag lands and the pin
+is bumped to point at it (source: schema verified against
+https://json.schemastore.org/claude-code-marketplace.json 2026-08-10 — the
+github-source `source` object accepts an optional `ref` field, "Git branch
+or tag to use", so a tag-based pin is schema-legal; a prior report claiming
+the schema accepts only a raw `sha` was not checked against the schema and
+was wrong. `sha` remains additionally used here for immutability — a tag
+ref alone can be force-moved after the fact — and this gate verifies `sha`
+reachability independently via PIN_SHA_UNREACHABLE). PENDING_REGISTRY
+(marketplace_pins_registry.py) is the same mechanism for
+REGISTRY_VERSION_STALE.
 
 Exit codes: 0 current (or degraded, with NOTICE), 1 stale pin(s), 2 error.
 """
@@ -44,268 +99,151 @@ Exit codes: 0 current (or degraded, with NOTICE), 1 stale pin(s), 2 error.
 from __future__ import annotations
 
 import json
-import os
-import re
-import subprocess
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
+
+# Bare sibling imports: see marketplace_pins_semver.py's bootstrap comment
+# for why this file inserts its own directory onto sys.path before them —
+# both direct execution (`python3 scripts/check_marketplace_pins.py`) and
+# the test suite's `importlib.util.spec_from_file_location` load need it.
+_scripts_dir = str(Path(__file__).resolve().parent)
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+
+from marketplace_pins_github import (  # noqa: E402
+    PENDING_PINS,
+    check_github_pin,
+    check_pin_sha,
+)
+from marketplace_pins_manifests import check_root_manifests  # noqa: E402
+from marketplace_pins_registry import (  # noqa: E402
+    check_registry_surface,
+    check_registry_version,
+    check_server_json_schema,
+)
+from marketplace_pins_self import FROZEN_PINS, check_self_pin  # noqa: E402
+from marketplace_pins_semver import (  # noqa: E402
+    latest_local_tag,
+    parse_semver,
+    tags_between,
+)
+
+__all__ = [
+    "FROZEN_PINS",
+    "PENDING_PINS",
+    "check_github_pin",
+    "check_pin_sha",
+    "check_root_manifests",
+    "check_registry_surface",
+    "check_registry_version",
+    "check_server_json_schema",
+    "check_self_pin",
+    "latest_local_tag",
+    "main",
+    "parse_semver",
+    "tags_between",
+]
 
 MARKETPLACE = (
     Path(__file__).resolve().parent.parent / ".claude-plugin" / "marketplace.json"
 )
-API_TIMEOUT_S = 15  # source: GitHub API p99 well below; matches prior gate rev
-# source: audited 2026-07-25 (Cortex PR #182 review clause 5) and 2026-08-04
-# (Cortex PR #351 Opus review) — each legacy identity is a notice-only shim
-# frozen at its rename release; advancing one would hide the migration boundary.
-FROZEN_PINS = {
-    "cortex": "deprecation shim, frozen at the 4.15.0 rename release",
-    "cortex-viz": "deprecation shim, frozen at the 2.8.0 pre-rename release",
-}
 
 
-def parse_semver(tag: str) -> tuple[int, ...] | None:
-    """'v2.34.0' / '2.34.0' -> (2, 34, 0); None when not semver."""
-    m = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", tag.strip())
-    return tuple(int(g) for g in m.groups()) if m else None
+# Every `source` shape the marketplace schema defines (verified live against
+# https://json.schemastore.org/claude-code-marketplace.json 2026-08-10: the
+# schema's `plugins[].source` is an anyOf of exactly these five — a bare
+# local-path string, plus four typed objects keyed by `source`). This gate
+# has a checker for "github" (check_github_pin/check_pin_sha) and for the
+# bare-string local form (check_self_pin). It does NOT verify npm/url/
+# git-subdir pins — no marketplace entry uses them today (source: read
+# every `plugins[].source` in .claude-plugin/marketplace.json, 2026-08-10),
+# so this is not an active incident, but a dispatcher that silently returns
+# (no failure, no notice) for a shape it does not recognize is exactly the
+# defect class this gate exists to close. UNVERIFIED_SOURCE_TYPE below
+# fails loudly instead: a real npm/url/git-subdir pin must not pass through
+# an unimplemented checker as if it were current.
+KNOWN_TYPED_SOURCES = frozenset({"npm", "url", "git-subdir"})
 
 
-def latest_local_tag(root: Path, run=subprocess.run) -> str | None:
-    """Highest semver tag in this repo, or None (no tags / not a repo)."""
-    proc = run(
-        ["git", "-C", str(root), "tag", "--list"],
-        capture_output=True,
-        text=True,
-        timeout=API_TIMEOUT_S,
-    )
-    if proc.returncode != 0:
-        return None
-    parsed = [(v, t) for t in proc.stdout.split() if (v := parse_semver(t))]
-    return max(parsed)[1] if parsed else None
-
-
-def tags_between(root: Path, pin: tuple, latest: tuple, run=subprocess.run) -> int:
-    proc = run(
-        ["git", "-C", str(root), "tag", "--list"],
-        capture_output=True,
-        text=True,
-        timeout=API_TIMEOUT_S,
-    )
-    if proc.returncode != 0:
-        return 0
-    return sum(
-        1 for t in proc.stdout.split() if (v := parse_semver(t)) and pin < v <= latest
-    )
-
-
-def _headers() -> dict[str, str]:
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "pin-gate"}
-    if token := os.environ.get("GITHUB_TOKEN", ""):
-        headers["Authorization"] = f"Bearer {token}"
-    return headers
-
-
-# source: RFC 9110 §15.5.5 — HTTP 404 Not Found
-_HTTP_NOT_FOUND = 404
-
-
-def latest_release_tag(repo: str) -> str | None:
-    """Latest release tag; None when the repo has no releases (404)."""
-    req = urllib.request.Request(
-        f"https://api.github.com/repos/{repo}/releases/latest", headers=_headers()
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:
-            return json.load(resp).get("tag_name")
-    except urllib.error.HTTPError as e:
-        if e.code == _HTTP_NOT_FOUND:
-            return None
-        raise
-
-
-def releases_between(repo: str, pin: tuple, latest: tuple) -> int | None:
-    """Count releases with pin < tag <= latest; None when not determinable."""
-    req = urllib.request.Request(
-        f"https://api.github.com/repos/{repo}/releases?per_page=100", headers=_headers()
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:
-            releases = json.load(resp)
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
-        return None
-    return sum(
-        1
-        for r in releases
-        if (v := parse_semver(r.get("tag_name", ""))) and pin < v <= latest
-    )
-
-
-# source: GitHub REST "Compare two commits" — `status` is exactly one of
-# ahead / behind / identical / diverged.
-# https://docs.github.com/rest/commits/commits#compare-two-commits
-#
-# compare/BASE...HEAD describes HEAD relative to BASE. With BASE = the default
-# branch, `identical` means the pin IS the branch tip and `behind` means it is
-# an ancestor of it — both reachable. `ahead` and `diverged` mean the pin
-# carries commits the branch does not: an unmerged PR head, which stops being
-# reachable the moment that PR is squash-merged.
-REACHABLE_FROM_DEFAULT = frozenset({"identical", "behind"})
-SHA_DISPLAY_LEN = 12  # source: git's default core.abbrev floor for readable logs
-
-
-def default_branch(repo: str) -> str | None:
-    """Repo's default branch; None when the repo does not resolve (404)."""
-    req = urllib.request.Request(
-        f"https://api.github.com/repos/{repo}", headers=_headers()
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:
-            return json.load(resp).get("default_branch")
-    except urllib.error.HTTPError as e:
-        if e.code == _HTTP_NOT_FOUND:
-            return None
-        raise
-
-
-def compare_status(repo: str, base: str, head: str) -> str | None:
-    """Comparison status of head vs base; None when head does not resolve."""
-    req = urllib.request.Request(
-        f"https://api.github.com/repos/{repo}/compare/{base}...{head}",
-        headers=_headers(),
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=API_TIMEOUT_S) as resp:
-            return json.load(resp).get("status")
-    except urllib.error.HTTPError as e:
-        if e.code == _HTTP_NOT_FOUND:
-            return None
-        raise
-
-
-def check_pin_sha(
-    name: str, repo: str, sha: str, branch=default_branch, compare=compare_status
-):
-    """Returns (failure, notice) — exactly one is non-None, or both are None."""
-    try:
-        base = branch(repo)
-        if base is None:
-            return (
-                None,
-                f"NOTICE: {name}: {repo} does not resolve; "
-                f"pinned sha not verified this run",
-            )
-        status = compare(repo, base, sha)
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
-        return (
-            None,
-            f"NOTICE: {name}: network degraded ({e.__class__.__name__}); "
-            f"pinned sha not verified this run",
-        )
-    short = sha[:SHA_DISPLAY_LEN]
-    if status is None:
-        return (
-            f"PIN_SHA_UNREACHABLE: {name}: {repo} does not resolve commit {short} "
-            f"(absent from the repository)",
-            None,
-        )
-    if status not in REACHABLE_FROM_DEFAULT:
-        return (
-            f"PIN_SHA_UNREACHABLE: {name}: {repo}@{short} is '{status}' of "
-            f"{base} — the pin targets a commit outside the default branch "
-            f"(an unmerged PR head stops resolving once that PR is squashed)",
-            None,
-        )
-    return None, None
-
-
-def check_github_pin(
-    name: str, repo: str, pin: str, fetch=latest_release_tag, count=releases_between
-):
-    """Returns (failure, notice) — exactly one is non-None or both None."""
-    try:
-        tag = fetch(repo)
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        return (
-            None,
-            f"NOTICE: {name}: network degraded ({e.__class__.__name__}); "
-            f"pin not verified this run",
-        )
-    if tag is None:
-        return (
-            None,
-            f"NOTICE: {name}: {repo} has no published releases; pin not comparable",
-        )
-    latest, pinned = parse_semver(tag), parse_semver(pin)
-    if latest is None or pinned is None:
-        return f"UNPARSEABLE: {name}: pin={pin!r} latest={tag!r}", None
-    if pinned < latest:
-        n = count(repo, pinned, latest)
-        behind = f"{n} release(s)" if n is not None else "release(s)"
-        return (
-            f"PIN_BEHIND_RELEASE: {name}: pins {pin}, {repo} latest is {tag} "
-            f"({behind} never delivered)",
-            None,
-        )
-    return None, None
-
-
-def check_self_pin(name: str, source: str, pin: str, root: Path) -> list[str]:
-    failures: list[str] = []
-    plugin_json = root / source / ".claude-plugin" / "plugin.json"
-    if not plugin_json.is_file():
-        plugin_json = root / source / "plugin.json"
-    if plugin_json.is_file():
-        actual = json.loads(plugin_json.read_text()).get("version", "")
-        if actual and actual != pin:
-            failures.append(
-                f"SELF_PIN_MISMATCH: {name}: pins {pin} "
-                f"but {plugin_json.relative_to(root)} says {actual}"
-            )
-    if name in FROZEN_PINS:
-        # frozen: manifest coherence still checked, tag advance is by-design
-        return failures
-    tag = latest_local_tag(root)
-    pinned = parse_semver(pin)
-    if tag and pinned and (latest := parse_semver(tag)) and pinned < latest:
-        n = tags_between(root, pinned, latest)
-        failures.append(
-            f"PIN_BEHIND_TAG: {name}: pins {pin} but this repo's latest tag is {tag} "
-            f"({n} release(s) never delivered to installs)"
-        )
-    return failures
-
-
-# Root manifests that carry a version which must agree with the primary
-# marketplace pin. One row per file: adding a manifest never adds a branch to
-# the check below, which is what let manifest.json go unguarded for two
-# releases when the check was hardcoded to server.json alone (AP #172).
-ROOT_VERSION_MANIFESTS: tuple[tuple[str, str, str], ...] = (
-    ("server.json", "version", "SERVER_JSON_SPLIT"),
-    ("manifest.json", "version", "MANIFEST_JSON_SPLIT"),
-)
-
-
-def check_root_manifests(root: Path, primary_pin: str) -> list[str]:
-    """Flag every root manifest whose version disagrees with the primary pin.
-
-    An absent file is not a failure and neither is a missing version key: the
-    canonical repo has no manifest.json, ai-architect-mcp-codebase has both, and a
-    gate that demanded every row exist everywhere would be a false positive in
-    one repo or the other rather than a guard in both.
+def _check_github_source_pin(name: str, pin: str, source: dict):
+    """The `source.get("source") == "github"` branch of `_check_plugin_pin`,
+    split out to keep the caller under the §4.2 method-size cap.
     """
     failures: list[str] = []
-    for filename, key, failure_class in ROOT_VERSION_MANIFESTS:
-        path = root / filename
-        if not path.is_file():
-            continue
-        version = json.loads(path.read_text()).get(key, "")
-        if version and version != primary_pin:
+    notices: list[str] = []
+    failure, notice = check_github_pin(name, source["repo"], pin)
+    if failure:
+        failures.append(failure)
+    if notice:
+        notices.append(notice)
+    # A pin may name an exact commit as well as a version. Both are
+    # delivery-gating and they fail independently: #351's sha was
+    # unreachable while its version was perfectly current.
+    if sha := source.get("sha"):
+        failure, notice = check_pin_sha(name, source["repo"], sha)
+        if failure:
+            failures.append(failure)
+        if notice:
+            notices.append(notice)
+    return failures, notices
+
+
+def _check_plugin_pin(name: str, pin: str, source, root: Path):
+    """One marketplace entry -> (failures, notices, primary_pin_or_None).
+
+    `primary_pin` is non-None only for the entry whose local source is the
+    repo root itself ("./") — the one whose version the root manifests
+    (server.json/manifest.json) and the public registry are checked against.
+    """
+    failures: list[str] = []
+    notices: list[str] = []
+    if isinstance(source, str):
+        failures.extend(check_self_pin(name, source, pin, root))
+        primary = pin if source.strip("/") in ("", ".") else None
+        return failures, notices, primary
+    if isinstance(source, dict):
+        source_type = source.get("source")
+        if source_type == "github":
+            gh_failures, gh_notices = _check_github_source_pin(name, pin, source)
+            return failures + gh_failures, notices + gh_notices, None
+        if source_type in KNOWN_TYPED_SOURCES:
             failures.append(
-                f"{failure_class}: {filename} says {version} "
-                f"but the primary marketplace pin is {primary_pin}"
+                f"UNVERIFIED_SOURCE_TYPE: {name}: source type {source_type!r} "
+                f"is schema-legal but this gate has no checker for it — add "
+                f"one (see marketplace_pins_github.py for the github-source "
+                f"pattern) before relying on this pin's currency"
             )
-    return failures
+            return failures, notices, None
+        failures.append(
+            f"UNRECOGNIZED_SOURCE: {name}: source {source!r} does not match "
+            f"any known marketplace source shape (github/npm/url/git-subdir/"
+            f"local-path)"
+        )
+        return failures, notices, None
+    failures.append(
+        f"UNRECOGNIZED_SOURCE: {name}: source {source!r} is neither a local-"
+        f"path string nor a source object"
+    )
+    return failures, notices, None
+
+
+def _report(failures: list[str], notices: list[str]) -> int:
+    for line in notices:
+        print(line)
+    for line in failures:
+        print(line)
+    if failures:
+        print(
+            f"\n{len(failures)} stale pin(s). A release is not shipped until "
+            f"its pin moves — bump .claude-plugin/marketplace.json "
+            f"(and server.json / manifest.json)."
+        )
+        return 1
+    print(
+        "All marketplace pins current."
+        + (" (network-degraded checks noticed above)" if notices else "")
+    )
+    return 0
 
 
 def main() -> int:
@@ -325,43 +263,17 @@ def main() -> int:
         )
         if not pin:
             continue
-        if isinstance(source, dict) and source.get("source") == "github":
-            failure, notice = check_github_pin(name, source["repo"], pin)
-            if failure:
-                failures.append(failure)
-            if notice:
-                notices.append(notice)
-            # A pin may name an exact commit as well as a version. Both are
-            # delivery-gating and they fail independently: #351's sha was
-            # unreachable while its version was perfectly current.
-            if sha := source.get("sha"):
-                failure, notice = check_pin_sha(name, source["repo"], sha)
-                if failure:
-                    failures.append(failure)
-                if notice:
-                    notices.append(notice)
-        elif isinstance(source, str):
-            failures.extend(check_self_pin(name, source, pin, root))
-            if source.strip("/") in ("", "."):
-                primary_pin = pin
+        f, n, primary = _check_plugin_pin(name, pin, source, root)
+        failures.extend(f)
+        notices.extend(n)
+        if primary:
+            primary_pin = primary
     if primary_pin:
         failures.extend(check_root_manifests(root, primary_pin))
-    for line in notices:
-        print(line)
-    for line in failures:
-        print(line)
-    if failures:
-        print(
-            f"\n{len(failures)} stale pin(s). A release is not shipped until "
-            f"its pin moves — bump .claude-plugin/marketplace.json "
-            f"(and server.json / manifest.json)."
-        )
-        return 1
-    print(
-        "All marketplace pins current."
-        + (" (network-degraded checks noticed above)" if notices else "")
-    )
-    return 0
+        reg_failures, reg_notices = check_registry_surface(root, primary_pin)
+        failures.extend(reg_failures)
+        notices.extend(reg_notices)
+    return _report(failures, notices)
 
 
 if __name__ == "__main__":

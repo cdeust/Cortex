@@ -1,6 +1,6 @@
-"""Infrastructure adapter: MCP progress reporting via FastMCP Context.
+"""Infrastructure adapter: MCP progress reporting via MCP Context.
 
-Lives outside shared/ because it imports fastmcp and asyncio — both
+Lives outside shared/ because it imports mcp and asyncio — both
 outer-layer concerns. Wired by tool_registry_ingest.py (the composition root).
 
 Thread-bridging contract (CRITICAL):
@@ -19,14 +19,14 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from fastmcp import Context
+    from mcp.server.mcpserver import Context
 
 
 class McpProgress:
-    """ProgressReporter that forwards to FastMCP Context from any thread.
+    """ProgressReporter that forwards to MCP Context from any thread.
 
     Precondition (constructor):
-      ctx  is a live FastMCP Context bound to the main event loop.
+      ctx  is a live MCP Context bound to the main event loop.
       loop is the main asyncio event loop (get_running_loop() from the
            tool registration coroutine, before asyncio.to_thread hands off).
 

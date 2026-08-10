@@ -82,7 +82,7 @@ def numpy_version(version_info: tuple[int, int]) -> str:
 # module load): (import_name, pip_spec).
 # source: requirements/setup.txt (every version below).
 BASE_PACKAGES: list[tuple[str, str]] = [
-    ("fastmcp", "fastmcp==3.4.5"),
+    ("mcp", "mcp==2.0.0"),
     ("pydantic", "pydantic==2.13.4"),
     ("pydantic_settings", "pydantic-settings==2.14.2"),
     ("numpy", f"numpy=={numpy_version(sys.version_info[:2])}"),

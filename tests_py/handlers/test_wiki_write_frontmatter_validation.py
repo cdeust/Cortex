@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 from mcp_server.handlers import wiki_write
 

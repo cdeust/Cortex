@@ -57,7 +57,7 @@ are the consensus.
 | Clustering | Per-domain cognitive profile + cross-domain bridges | Louvain + Traag C2 repair (Blondel 2008, Traag 2019 — cited) |
 | Scale | see docs/module-inventory.md for module counts (single source, per #127) · 47 MCP tools · 2500+ tests | 12 046 LOC, 23 MCP tools, 220 tests |
 | Scientific grounding | Every mechanism cites papers: cascade (Kandel 2001), homeostatic (Turrigiano 2008), neuromodulation (Doya 2002), synaptic tagging (Frey & Morris 1997), microglial pruning (Wang 2020), predictive coding (Friston 2010), … | Every stage cites papers: Louvain (Blondel 2008), Traag (2019), RRF K=60 (Cormack et al 2009), Tarjan SCC, tree-sitter … |
-| Benchmarks | **LongMemEval R@10 97.8%** (paper SOTA 78.4%); **LoCoMo 92.6%**; **BEAM 0.543** (paper SOTA 0.329) — all on clean DB, reproducible | 220 unit tests; no external benchmark yet |
+| Benchmarks | **LongMemEval R@10 98.2%** (paper SOTA 78.4%; clean run SHA `28145f0`); **LoCoMo 94.2%** (SHA `ef178da7`, the only LoCoMo E1 v3 ablation run with a committed artifact); **BEAM retrieval-proxy MRR 0.591** (five-conversation protocol, SHA `a071d89`) | 220 unit tests; no external benchmark yet |
 | Unique features | persistent cross-session memory, thermodynamic decay, cascade consolidation, neuromodulation, synaptic tagging, cognitive profile per domain, predictive-coding write gate, hippocampal replay | PRD validator (symbol hallucination check), security gates (auth-critical/unsafe/public API), Tarjan-SCC semantic diff, 5-layer resolver with LSP, macro expansion, stdlib indexing |
 | License | MIT | MIT-equivalent |
 
@@ -87,7 +87,7 @@ The structural asymmetry.
 |---|---|---|---|
 | **C1** | Persistent memory across sessions | Full thermodynamic store (`core/thermodynamics.py`) + decay (`core/decay_cycle.py`) + reconsolidation (`core/reconsolidation.py`) — GitNexus is stateless-per-query code intelligence | The headline moat — see §6 |
 | **C2** | Paper-cited mechanisms | 100+ citations across `core/*.py`; GitNexus cites zero papers | Every challenge to our implementation has a paper retreat; every challenge to theirs has nothing |
-| **C3** | Reproducible benchmarks that beat published SOTA | LongMemEval 97.8% vs paper's 78.4%; BEAM 0.543 vs 0.329 | Concrete track record; GitNexus has none |
+| **C3** | Reproducible benchmarks that beat published SOTA | LongMemEval R@10 98.2% vs paper's 78.4%; BEAM retrieval-proxy MRR 0.591 on the named five-conversation protocol | Concrete track record; GitNexus has none |
 | **C4** | Cognitive profile per domain (Felder-Silverman style) | `core/style_classifier.py` + `core/domain_detector.py` + behavioural persona vector | Tailors retrieval to the agent's actual reasoning pattern |
 | **C5** | Predictive-coding write gate (Friston 2010) | 4-signal novelty filter prevents contaminated memory | Their re-index-on-change model has no write gate — garbage accumulates |
 | **C6** | Security gates + PRD validator + Tarjan-SCC semantic diff (via AP) | AP `prd_validator.rs`, `security_gates.rs`, `semantic_diff.rs` | Structural-truth layer shields PRDs from symbol hallucination |
@@ -101,7 +101,7 @@ The structural asymmetry.
 
 Paper citations prevent one specific failure mode: **silent constant drift under benchmark pressure**.
 
-When a benchmark goes from 94% → 97.8%, the temptation is to tune one more constant to get 98.3%. Without a paper anchor, the constant becomes corpus-fitted — a form of overfitting invisible until the next distribution shift (new corpus, new user, new language). With a paper anchor, moving the constant requires either (a) a new paper or (b) a public benchmark measurement — both leave an audit trail. GitNexus has no anchors. Their BM25+RRF fusion has no cited weights; their Leiden resolution parameter is unstated. They can tune freely, overfit invisibly, and collapse silently on the first independent evaluation.
+When a benchmark moves from one measured score to another, the temptation is to tune one more constant for a headline gain. Without a paper anchor, the constant becomes corpus-fitted — a form of overfitting invisible until the next distribution shift (new corpus, new user, new language). With a paper anchor, moving the constant requires either (a) a new paper or (b) a public benchmark measurement — both leave an audit trail. GitNexus has no anchors. Their BM25+RRF fusion has no cited weights; their Leiden resolution parameter is unstated. They can tune freely, overfit invisibly, and collapse silently on the first independent evaluation.
 
 The moat is **provenance forces honesty**. It's the same moat peer-reviewed science has over blog-driven opinion.
 

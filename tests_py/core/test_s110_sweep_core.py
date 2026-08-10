@@ -186,7 +186,7 @@ class TestToolErrorHandlerGuards:
         """Regression (this PR): the inner metrics guard used to rebind
         ``exc``, unbinding the outer exception before ``raise ... from exc``
         — the ToolError below would have become an UnboundLocalError."""
-        from fastmcp.exceptions import ToolError
+        from mcp.server.mcpserver.exceptions import ToolError
 
         from mcp_server import tool_error_handler
         from mcp_server.observability import metrics

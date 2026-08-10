@@ -8,7 +8,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo '[cortex-viz@cortex-plugins] DEPRECATED: the Claude Code plugin was renamed in v3.0.0. Run: claude plugin uninstall cortex-viz@cortex-plugins; claude plugin marketplace update cortex-plugins; claude plugin install hypermnesia-mcp-viz@cortex-plugins. The repository remains cdeust/cortex-viz; only the marketplace plugin identity changed.'",
+            "command": "echo '[cortex-viz@cortex-plugins] DEPRECATED: the Claude Code plugin was renamed to hypermnesia-mcp-viz. Run: claude plugin uninstall cortex-viz@cortex-plugins; claude plugin marketplace update cortex-plugins; claude plugin install hypermnesia-mcp-viz@cortex-plugins. The repository remains cdeust/cortex-viz; only the marketplace plugin identity changed.'",
             "timeout": 5
           }
         ]

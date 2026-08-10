@@ -15,14 +15,14 @@ Checks performed (in order):
   * `DATABASE_URL` presence + URL parse
   * PostgreSQL reachable — `SELECT 1` against the configured DSN
   * PostgreSQL extensions — enumerate `vector`, `pg_trgm` via pg_extension
-  * Critical Python deps importable (psycopg, pgvector, fastmcp, pydantic,
+  * Critical Python deps importable (psycopg, pgvector, mcp, pydantic,
     sentence_transformers)
 
 What we explicitly do NOT check (Feynman discipline — say "I don't know"
 when a probe is unreliable):
   * MCP stdio handshake. Spawning the actual server, sending an
     `initialize` JSON-RPC frame, and reading the response is a moving
-    target (FastMCP version, transport buffering, race against the
+    target (MCP SDK version, transport buffering, race against the
     server's own dependency-install step in launcher.py). A flaky check
     is worse than no check — it sends users chasing phantom failures.
     Status: not implemented; reported as "I don't know" in --json so the
@@ -560,7 +560,7 @@ def _check_pg_extensions() -> McpCheck:
 # is heavy (downloads ML weights) but session_start hook needs it; we check
 # it as warn rather than fail because a non-session-start MCP startup will
 # still work without it.
-_HARD_DEPS = ("fastmcp", "pydantic", "psycopg", "pgvector")
+_HARD_DEPS = ("mcp", "pydantic", "psycopg", "pgvector")
 _SOFT_DEPS = ("sentence_transformers",)
 
 
@@ -586,7 +586,7 @@ def _check_critical_imports() -> McpCheck:
             error="\n".join(errs),
             fix="The launcher auto-installs deps on first run; if this "
             "check still fails, run by hand: "
-            "`pip install fastmcp pydantic psycopg[binary] pgvector`",
+            "`pip install mcp pydantic psycopg[binary] pgvector`",
         )
     return McpCheck(
         name="critical Python deps",
@@ -644,7 +644,7 @@ def _skipped_stdio_handshake() -> dict:
     return {
         "name": "MCP stdio handshake (initialize → response)",
         "skipped": True,
-        "reason": "Spawning the FastMCP server, sending initialize, and "
+        "reason": "Spawning the MCP server, sending initialize, and "
         "reading the response is a flaky probe across versions and racy "
         "with the launcher's own dep-install step. Reporting 'I don't "
         "know' rather than a false signal.",
