@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 
-from mcp_server.core.wiki_readme import (
+from mcp_server.shared.wiki_readme import (
     _count_by_domain,
     _count_pages,
     build_plain_readme,

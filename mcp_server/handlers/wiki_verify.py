@@ -26,7 +26,8 @@ from mcp_server.core.wiki_symbol_verify import (
 )
 from mcp_server.infrastructure.ap_bridge import is_enabled
 from mcp_server.infrastructure.config import WIKI_ROOT
-from mcp_server.infrastructure.wiki_store import list_pages, read_page
+from mcp_server.infrastructure.wiki_pages_listing import list_pages
+from mcp_server.infrastructure.wiki_store import read_page
 from mcp_server.infrastructure.workflow_graph_source_ast import (
     WorkflowGraphASTSource,
 )

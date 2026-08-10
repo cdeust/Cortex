@@ -6,12 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from mcp_server.infrastructure.wiki_store import (
-    WikiExistsError,
-    WikiMissingError,
+from mcp_server.infrastructure.wiki_pages_listing import (
     append_section,
     list_pages,
     next_adr_number,
+)
+from mcp_server.infrastructure.wiki_store import (
+    WikiExistsError,
+    WikiMissingError,
     read_page,
     write_page,
 )

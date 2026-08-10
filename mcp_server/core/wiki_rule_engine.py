@@ -25,7 +25,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from mcp_server.core.wiki_schema_loader import ClassifierRule
+from mcp_server.shared.wiki_schema_loader import ClassifierRule
 
 REJECT_TARGETS = {"reject", "-", "", None, "none"}
 

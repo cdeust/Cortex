@@ -40,10 +40,28 @@ zetetic source rule:
 #   baseline of 93; the core/ and handlers/ deltas beyond the #406
 #   move are unrelated drift accumulated upstream, not attributable to
 #   either change)
-shared/           31 files   (15 documented below — curated subset)
-core/            228 files   (~87 documented below — curated subset, incl. core/streaming, core/context_assembly)
-infrastructure/  118 files   (49 documented below — curated subset)
-handlers/        138 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
+# shared/+core/+infrastructure/ re-measured 2026-08-10 (issue: PR #409
+#   review round 3 rejected "declared violation" as an acceptance
+#   criterion for infrastructure/wiki_store.py + wiki_schema_reader.py
+#   importing core/ — the real defect was wiki-generation domain logic
+#   mixed with storage access, not a misdirected import. Fix: the
+#   8-module pure wiki_pages/wiki_frontmatter/wiki_layout/wiki_readme/
+#   wiki_index/wiki_page_builders/wiki_frontmatter_validation/
+#   wiki_schema_loader cluster moved core/ -> shared/ (stdlib-only,
+#   zero I/O, same #406 rationale); the one non-pure dependency
+#   (core.wiki_sync.build_from_memory, real classifier judgment) is now
+#   called from a new composition root, handlers/wiki_memory_sync.py,
+#   which wires it to wiki_store.py's write primitives — infrastructure/
+#   no longer imports core/ anywhere. wiki_store.py (439 lines,
+#   pre-existing debt surfaced by this fix) also split under the
+#   300-line cap into wiki_pages_listing.py + wiki_reindex_io.py.
+#   shared/ +8, core/ -8, infrastructure/ +2 (wiki_pages_listing.py,
+#   wiki_reindex_io.py), handlers/ +1 (wiki_memory_sync.py, a
+#   composition-root helper, not a registered tool)
+shared/           39 files   (23 documented below — curated subset)
+core/            220 files   (~87 documented below — curated subset, incl. core/streaming, core/context_assembly)
+infrastructure/  120 files   (52 documented below — curated subset)
+handlers/        139 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
 ```
 
 The prior CLAUDE.md text asserted "108 modules" for `core/` and similar
@@ -84,6 +102,14 @@ Treat gaps as "undocumented," not "does not exist."
 - `temporal_timezones.py` — Timezone policy for `temporal_normalize.normalize_date_to_iso`: a `tzinfos` resolver over the RFC 5322 §4.3 obs-zone table, refusing (never defaulting) an abbreviation it cannot resolve, so a stated zone is honoured or the date is rejected (issue #252). Moved from `core/` (issue #406)
 - `near_dup_calibration.py` — Near-duplicate similarity threshold calibration (I6-D2, INC6.4) + connected-component grouping. Moved from `core/` (issue #406): `NamedTuple`-only, stdlib, `infrastructure/pg_store_near_dup.py` needed it directly
 - `write_class.py` — Write-class classification (M-D2/M-D3/7.4 single choke point: `classify_write_class`). Moved from `core/` (issue #406): stdlib-only (`collections.abc`/`typing`), `infrastructure/pg_store_write.py`/`pg_store_memory_reheat.py` needed it directly
+- `wiki_frontmatter.py` — `PageDocument`, `parse_page`, `render_page` (YAML-ish frontmatter parsing/rendering). Moved from `core/` (issue: `infrastructure/wiki_store.py`+`wiki_schema_reader.py` needed the whole `wiki_pages` cluster directly and could not import `core/`): dataclasses/datetime only, zero I/O
+- `wiki_page_builders.py` — `build_adr`/`build_spec`/`build_note`/etc. + shared maturity/sources helpers. Moved from `core/` alongside `wiki_frontmatter.py` — same rationale
+- `wiki_index.py` — `build_index` (INDEX.md generation). Moved from `core/` alongside `wiki_frontmatter.py`
+- `wiki_pages.py` — Composed public entry point re-exporting `wiki_frontmatter`/`wiki_page_builders`/`wiki_index`. Moved from `core/` alongside its three collaborators
+- `wiki_layout.py` — `PAGE_KINDS`, `slugify`, page-path helpers. Moved from `core/`: `re`/`pathlib.PurePosixPath` only (no filesystem I/O — `PurePosixPath` is pure string manipulation)
+- `wiki_readme.py` — `build_plain_readme` (non-technical top-level README generation). Moved from `core/` alongside `wiki_layout.py`
+- `wiki_frontmatter_validation.py` — `normalize_frontmatter`, the write-time choke point `infrastructure/wiki_store.py::write_page` runs on every full-page write (issue #107/#110). Moved from `core/` alongside `wiki_pages.py`
+- `wiki_schema_loader.py` — Self-hosting wiki schema data model (`KindDefinition`/`ClassifierRule`/`ViewDefinition`/`TriggerDefinition`/`WikiRegistry`) + pure `str -> dataclass` parsers; the adapter (`infrastructure/wiki_schema_reader.py`) walks the filesystem and feeds file content through these (issue #126 port-and-adapter split). Moved from `core/` (issue: same infra→core violation as the rest of this cluster) — `re`/`dataclasses`/`pathlib.Path.stem` only, zero I/O of its own
 
 ## core/ — Pure business logic, zero I/O
 
@@ -284,7 +310,10 @@ Run the measurement command in the header to get a current file listing.
 - `embedding_engine.py` — Vector embeddings (384-dim, sentence-transformers)
 - `artifact_store.py` — Content-addressed raw-output artifacts (`~/.claude/methodology/artifacts/<yyyy-mm>/<sha256[:16]>.md`) backing gist+pointer memories
 - `agent_config.py` — Agent configuration and topic scoping
-- `wiki_schema_reader.py` — Filesystem adapter for `core/wiki_schema_loader.py`'s data model/parsers; walks `wiki/_kinds|_rules|_views|_triggers/` and builds a `WikiRegistry` (issue #126 port-and-adapter split)
+- `wiki_schema_reader.py` — Filesystem adapter for `shared/wiki_schema_loader.py`'s data model/parsers; walks `wiki/_kinds|_rules|_views|_triggers/` and builds a `WikiRegistry` (issue #126 port-and-adapter split)
+- `wiki_store.py` — Wiki filesystem read/write primitives (`read_page`/`write_page`); listing/append (`wiki_pages_listing.py`) and reindex (`wiki_reindex_io.py`) split out (issue: 439 lines over the 300-line §4.1 cap, pre-existing, surfaced while fixing infra→core layer violations in this subsystem — see `mcp_server.handlers.wiki_memory_sync`)
+- `wiki_pages_listing.py` — `append_section`/`list_pages`/`next_adr_number`
+- `wiki_reindex_io.py` — Best-effort `.generated/INDEX.md`/`README.md` rebuild + superseded-page cleanup after a wiki write
 - `document_reader.py` — Reads a .docx (unzips `word/document.xml`) or a Confluence XHTML export off disk into the string its pure parser consumes; raises `DocumentReadError` on a bad container/decoding (issue #192)
 - `workflow_graph_source_ast.py` — `WorkflowGraphASTSource`, the AST-layer workflow-graph loader (ADR-0046); composition point over the three modules below (issue #275 split — was one 1029-line file)
 - `ap_sync_loop.py` — `_SyncLoop`, the cross-loop sync/drain primitive pinning one event loop across an `APBridge` caller's lifetime (issue #258: drains cancelled tasks before stopping the loop, closing the "Task was destroyed but it is pending!" GC-warning race)

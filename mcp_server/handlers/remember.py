@@ -28,7 +28,7 @@ from mcp_server.handlers.remember_helpers import (
 )
 from mcp_server.handlers.remember_response import build_merge_response
 from mcp_server.handlers.remember_schema import schema
-from mcp_server.infrastructure import wiki_store
+from mcp_server.handlers import wiki_memory_sync
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.embedding_engine import get_embedding_engine
 from mcp_server.infrastructure.memory_config import (
@@ -354,7 +354,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     # partial-failure, not a total one. Documented in the schema.
     if result.get("stored") and result.get("memory_id") is not None:
         try:
-            wiki_path = wiki_store.sync_memory_strict(
+            wiki_path = wiki_memory_sync.sync_memory_strict(
                 WIKI_ROOT,
                 memory_id=result["memory_id"],
                 content=content,

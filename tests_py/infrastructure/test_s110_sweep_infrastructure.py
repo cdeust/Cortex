@@ -166,39 +166,39 @@ class TestWikiStoreReadmeGuard:
         """Regression (this PR): an unreadable README used to fall through
         with should_write=True and get overwritten — data loss for a
         hand-written README the marker check could not inspect."""
-        from mcp_server.infrastructure.wiki_store import _try_reindex
+        from mcp_server.infrastructure.wiki_reindex_io import try_reindex
 
         readme = tmp_path / "README.md"
         garbage = b"\xff\xfe\x00 hand-written, not valid utf-8"
         readme.write_bytes(garbage)
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            _try_reindex(tmp_path)
+            try_reindex(tmp_path)
         assert readme.read_bytes() == garbage
         assert any("wiki_store.readme_read" in r.message for r in caplog.records)
         _assert_noted("wiki_store.readme_read", "utf-8")
 
     def test_auto_generated_readme_is_still_refreshed(self, tmp_path):
-        from mcp_server.infrastructure.wiki_store import _try_reindex
+        from mcp_server.infrastructure.wiki_reindex_io import try_reindex
 
         marker = "<!-- cortex-wiki-readme: auto-generated -->"
         readme = tmp_path / "README.md"
         readme.write_text(f"old body\n{marker}\n")
-        _try_reindex(tmp_path)
+        try_reindex(tmp_path)
         refreshed = readme.read_text()
         assert marker in refreshed
         assert "old body" not in refreshed
 
     def test_reindex_failure_is_logged(self, caplog, tmp_path, monkeypatch):
-        from mcp_server.infrastructure import wiki_store
-        from mcp_server.infrastructure.wiki_store import _try_reindex
+        from mcp_server.infrastructure import wiki_reindex_io
+        from mcp_server.infrastructure.wiki_reindex_io import try_reindex
 
         def broken(paths):
             raise RuntimeError("index builder broke")
 
         # Patch the consumer's own binding (top-level import, #197 family 4).
-        monkeypatch.setattr(wiki_store, "build_index", broken)
+        monkeypatch.setattr(wiki_reindex_io, "build_index", broken)
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            _try_reindex(tmp_path)
+            try_reindex(tmp_path)
         assert any("wiki_store.reindex" in r.message for r in caplog.records)
         _assert_noted("wiki_store.reindex", "index builder broke")
 

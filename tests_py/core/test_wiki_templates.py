@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from mcp_server.core.wiki_layout import PAGE_KINDS
+from mcp_server.shared.wiki_layout import PAGE_KINDS
 from mcp_server.core.wiki_templates import (
     REQUIRED_FRONTMATTER,
     TEMPLATES,

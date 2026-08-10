@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any
 
-from mcp_server.core.wiki_layout import PAGE_KINDS
+from mcp_server.shared.wiki_layout import PAGE_KINDS
 from mcp_server.core.wiki_templates import (
     naming_convention,
     required_fields,

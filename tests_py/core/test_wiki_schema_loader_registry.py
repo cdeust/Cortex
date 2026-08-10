@@ -10,7 +10,7 @@ module for `wiki_schema_loader.py`'s parsers existed prior to this file.
 
 from __future__ import annotations
 
-from mcp_server.core.wiki_schema_loader import (
+from mcp_server.shared.wiki_schema_loader import (
     KindDefinition,
     WikiRegistry,
     wiki_registry_known_kind_names,

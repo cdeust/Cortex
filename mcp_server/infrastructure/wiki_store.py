@@ -1,33 +1,39 @@
-"""Wiki filesystem store — authoring primitives, never destructive.
+"""Wiki filesystem store — read/write primitives, never destructive.
 
 Operations:
     read_page       return the raw markdown or None if missing
     write_page      atomic write in create/append/replace modes
-    append_section  append text under a named ``## Section``
-    list_pages      enumerate pages, optionally filtered by kind
-    next_adr_number find the next free ADR sequence number
 
-Never deletes pages. Never regenerates content. The only file that may
-be overwritten by regeneration is ``.generated/INDEX.md`` (owned by the
-wiki_reindex handler, not this module).
+Never deletes pages. Never regenerates content. Page listing/append
+(``append_section``/``list_pages``/``next_adr_number``) lives in the
+sibling ``wiki_pages_listing`` module and reindex (``.generated/
+INDEX.md``/``README.md`` rebuild + superseded-page cleanup) in
+``wiki_reindex_io`` — both split out (issue: 439 lines over the
+300-line §4.1 cap, pre-existing before the layer-violation fix that
+also touched this file).
 
 Issue #110: ``write_page`` is the true choke point for every wiki-tree
 byte, not ``wiki_write.write_governed_page`` (that function's docstring
-claimed otherwise pre-fix; corrected there). At least 7 handlers plus
-this module's own ``sync_memory_strict`` call ``write_page`` directly,
-bypassing ``write_governed_page``'s governance side effects (pointer
-memory, citations) — deliberately, in most cases (e.g. redirect stubs,
-generated reference pages) where that bookkeeping does not apply. What
-those callers must NOT be able to bypass is write-time frontmatter
-normalization (issue #107/PR #109): ``write_page`` itself now runs
-``normalize_frontmatter`` on any full-page write (``create``/``replace``;
-``append``'s content is a fragment, never normalized — same exclusion
-``write_governed_page`` already documented), so no caller, present or
-future, can persist a non-canonical frontmatter shape. This module
-already imports ``core.wiki_layout``/``core.wiki_sync`` for the same
-wiki-specific pure-function reasons (an established exception to the
-general infrastructure→core dependency rule, scoped to this subsystem);
-``wiki_frontmatter_validation`` is the same kind of dependency.
+claimed otherwise pre-fix; corrected there). At least 7 handlers call
+``write_page`` directly, bypassing ``write_governed_page``'s governance
+side effects (pointer memory, citations) — deliberately, in most cases
+(e.g. redirect stubs, generated reference pages) where that bookkeeping
+does not apply. What those callers must NOT be able to bypass is
+write-time frontmatter normalization (issue #107/PR #109): ``write_page``
+itself now runs ``normalize_frontmatter`` on any full-page write
+(``create``/``replace``; ``append``'s content is a fragment, never
+normalized — same exclusion ``write_governed_page`` already documented),
+so no caller, present or future, can persist a non-canonical frontmatter
+shape.
+
+Layer note: this module's page-write dependency (``normalize_frontmatter``)
+is pure, zero-I/O and lives in ``shared/`` (moved from ``core/``, issue:
+infra may not import core). Promoting a memory to a wiki page DOES need
+real domain judgment (the v2 classifier, ``core.wiki_sync.build_from_memory``)
+— that call is made by the composition root,
+``mcp_server.handlers.wiki_memory_sync``, which wires this module's
+``write_page`` (pure I/O) to core's classification decision. This
+module itself never imports ``core/``.
 """
 
 from __future__ import annotations
@@ -35,15 +41,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from mcp_server.core.wiki_frontmatter_validation import normalize_frontmatter
-from mcp_server.core.wiki_layout import PAGE_KINDS
-from mcp_server.observability import silent_failure
-from mcp_server.core.wiki_sync import build_from_memory
-from mcp_server.infrastructure.file_io import ensure_dir
+from mcp_server.shared.wiki_frontmatter_validation import normalize_frontmatter
 import os
-from mcp_server.core.wiki_pages import build_index
-from mcp_server.core.wiki_readme import build_plain_readme
-import re as _re
 
 WriteMode = str  # "create" | "append" | "replace"
 
@@ -64,7 +63,7 @@ class WikiMissingError(Exception):
     """Raised when ``append`` mode targets a missing file."""
 
 
-def _safe_join(root: Path, rel_path: str) -> Path:
+def safe_join(root: Path, rel_path: str) -> Path:
     """Resolve ``rel_path`` against ``root`` with inline CWE-22 sanitization.
 
     Four layers, applied in order at every call site (no cross-function
@@ -77,7 +76,8 @@ def _safe_join(root: Path, rel_path: str) -> Path:
          sanitizer for path-injection (``py/path-injection``).
 
     Returns the validated absolute target path. Raises ValueError on
-    any failure.
+    any failure. Public (not ``_``-prefixed): called from the sibling
+    ``wiki_pages_listing`` module in addition to this one.
     """
 
     if not rel_path or "\x00" in rel_path:
@@ -99,10 +99,6 @@ def _safe_join(root: Path, rel_path: str) -> Path:
     if common != root_resolved:
         raise ValueError(f"path escapes wiki root: {rel_path!r}")
     return Path(candidate)
-
-
-# Backwards-compatible alias — older call sites still use _abs.
-_abs = _safe_join
 
 
 def read_page(root: Path | str, rel_path: str) -> str | None:
@@ -129,15 +125,6 @@ def read_page(root: Path | str, rel_path: str) -> str | None:
         return None
     with open(fullpath, encoding="utf-8") as f:
         return f.read()
-
-
-def _atomic_write_bytes(target: Path, content: str) -> int:
-    ensure_dir(target.parent)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    data = content.encode("utf-8")
-    tmp.write_bytes(data)
-    tmp.replace(target)
-    return len(data)
 
 
 def write_page(
@@ -170,9 +157,22 @@ def write_page(
     propagated uncaught) for ``create``/``replace`` when ``content`` opens
     a frontmatter fence it never closes.
     """
+    fullpath = _resolve_write_target(root, rel_path)
+    if mode != "append":
+        content = normalize_frontmatter(content)
+    # fullpath is sanitized — use it directly at every sink.
+    existed = os.path.exists(fullpath)
+    written = _write_by_mode(fullpath, rel_path, content, mode, existed)
+    return WriteResult(
+        path=rel_path, mode=mode, created=not existed, bytes_written=written
+    )
 
-    # CWE-22 sanitization matching CodeQL's py/path-injection example
-    # VERBATIM (see read_page for references).
+
+def _resolve_write_target(root: Path | str, rel_path: str) -> str:
+    """CWE-22 sanitization matching CodeQL's py/path-injection example
+    VERBATIM (see ``read_page`` for references). Returns the sanitized
+    absolute path string for ``write_page`` to use at every sink.
+    """
     if not rel_path or "\x00" in rel_path:
         raise ValueError("invalid wiki path: empty or contains null byte")
     if os.path.isabs(rel_path):
@@ -184,20 +184,24 @@ def write_page(
     # Defence-in-depth against prefix-aliasing.
     if fullpath != base_path and not fullpath[len(base_path) :].startswith(os.sep):
         raise ValueError(f"path escapes wiki root: {rel_path!r}")
+    return fullpath
 
-    if mode != "append":
-        content = normalize_frontmatter(content)
 
-    # fullpath is sanitized — use it directly at every sink.
-    existed = os.path.exists(fullpath)
+def _write_by_mode(
+    fullpath: str, rel_path: str, content: str, mode: WriteMode, existed: bool
+) -> int:
+    """Perform the create/replace/append write ``write_page`` decided on.
 
+    ``fullpath`` is already sanitized by ``_resolve_write_target``.
+    Returns the number of bytes written.
+    """
     if mode == "create":
         if existed:
             raise WikiExistsError(rel_path)
-        written = _atomic_write_bytes_str(fullpath, content)
-    elif mode == "replace":
-        written = _atomic_write_bytes_str(fullpath, content)
-    elif mode == "append":
+        return _atomic_write_bytes_str(fullpath, content)
+    if mode == "replace":
+        return _atomic_write_bytes_str(fullpath, content)
+    if mode == "append":
         if not existed:
             raise WikiMissingError(rel_path)
         with open(fullpath, encoding="utf-8") as f:
@@ -207,13 +211,8 @@ def write_page(
         merged = current + "\n" + content
         if not merged.endswith("\n"):
             merged += "\n"
-        written = _atomic_write_bytes_str(fullpath, merged)
-    else:
-        raise ValueError(f"unknown write mode: {mode}")
-
-    return WriteResult(
-        path=rel_path, mode=mode, created=not existed, bytes_written=written
-    )
+        return _atomic_write_bytes_str(fullpath, merged)
+    raise ValueError(f"unknown write mode: {mode}")
 
 
 def _atomic_write_bytes_str(safe_path: str, content: str) -> int:
@@ -233,207 +232,3 @@ def _atomic_write_bytes_str(safe_path: str, content: str) -> int:
         f.write(data)
     os.replace(tmp, safe_path)
     return len(data)
-
-
-def append_section(
-    root: Path | str,
-    rel_path: str,
-    heading: str,
-    content: str,
-) -> WriteResult:
-    """Append text under a ``## heading`` section, creating it if missing."""
-    target = _abs(Path(root), rel_path)
-    if not target.exists():
-        raise WikiMissingError(rel_path)
-    current = target.read_text(encoding="utf-8")
-    heading_line = f"## {heading}"
-    if heading_line in current:
-        # Append at the end of the file — simplest semantics; the heading is
-        # reused, not duplicated, but the new content goes after whatever is
-        # already there.
-        if not current.endswith("\n"):
-            current += "\n"
-        merged = f"{current}\n{content}\n"
-    else:
-        if current and not current.endswith("\n"):
-            current += "\n"
-        merged = f"{current}\n{heading_line}\n\n{content}\n"
-    written = _atomic_write_bytes(target, merged)
-    return WriteResult(
-        path=rel_path, mode="append-section", created=False, bytes_written=written
-    )
-
-
-def list_pages(root: Path | str, *, kind: str | None = None) -> list[str]:
-    """Enumerate authored pages relative to the wiki root.
-
-    Skips ``.generated/``. If ``kind`` is supplied, only returns pages
-    under ``<root>/<kind>/``. Output is sorted for determinism.
-    """
-    root_path = Path(root)
-    if not root_path.exists():
-        return []
-    kinds = (kind,) if kind else PAGE_KINDS
-    results: list[str] = []
-    for k in kinds:
-        if k not in PAGE_KINDS:
-            continue
-        kind_dir = root_path / k
-        if not kind_dir.exists():
-            continue
-        for p in sorted(kind_dir.rglob("*.md")):
-            results.append(str(p.relative_to(root_path)).replace("\\", "/"))
-    return results
-
-
-def _try_reindex(root: Path) -> None:
-    """Best-effort index rebuild after wiki write.
-
-    Produces three artefacts:
-      * ``<root>/.generated/INDEX.md`` — structured TOC grouped by
-        domain then kind (for tech readers).
-      * ``<root>/README.md``           — plain-language top-level
-        entry point (for non-tech readers). Only created if no
-        hand-written README exists at the root.
-    """
-    try:
-        page_paths = list_pages(root)
-        index_md = build_index(page_paths)
-        gen_dir = root / ".generated"
-        gen_dir.mkdir(exist_ok=True)
-        (gen_dir / "INDEX.md").write_text(index_md)
-
-        # README: only overwrite if it doesn't exist OR it's
-        # auto-generated (marker line in the body). Never clobber a
-        # hand-written README.
-        readme_path = root / "README.md"
-        auto_marker = "<!-- cortex-wiki-readme: auto-generated -->"
-        should_write = True
-        if readme_path.exists():
-            try:
-                existing = readme_path.read_text()
-                if auto_marker not in existing:
-                    should_write = False  # hand-written, don't touch
-            except (OSError, UnicodeDecodeError) as exc:
-                # Bug fix (issue #197 sweep): an unreadable README used to
-                # fall through with should_write=True and get OVERWRITTEN —
-                # the opposite of "never clobber a hand-written README".
-                # If we cannot read it, we must not replace it.
-                should_write = False
-                silent_failure.note("wiki_store.readme_read", exc)
-        if should_write:
-            readme_md = build_plain_readme(page_paths)
-            readme_md += f"\n{auto_marker}\n"
-            readme_path.write_text(readme_md)
-
-        cleanup_id_prefixed_pages(root)
-    except Exception as exc:  # noqa: BLE001 — index rebuild is best-effort after a write
-        silent_failure.note("wiki_store.reindex", exc)
-
-
-def sync_memory_strict(
-    root: Path | str,
-    *,
-    memory_id: int | str,
-    content: str,
-    tags: list[str] | None,
-    domain: str = "",
-) -> str | None:
-    """Strict variant of ``sync_memory`` — surfaces errors to the caller.
-
-    Preconditions:
-        - ``content`` is a non-empty string.
-        - ``memory_id`` has already been committed to the store.
-
-    Postconditions:
-        - On success: returns the relative path of the written wiki page.
-        - On classifier rejection: returns None (not an error — the memory
-          did not qualify for a wiki page).
-        - On I/O or classifier failure: raises the underlying exception.
-          The caller must decide whether the memory write + wiki failure
-          constitutes a partial failure.
-
-    This is the E8 fix path: the wiki sync is a post-write side effect and
-    must not destroy observability. Callers on the ``remember`` hot path
-    wrap this in a narrow try/except that surfaces the failure as a
-    ``warnings`` field in the response, rather than silently swallowing it.
-
-    Does NOT swallow the reindex failure either — reindex is best-effort
-    by design (see ``_try_reindex``), but the page write itself must
-    succeed or be reported.
-    """
-    built = build_from_memory(
-        memory_id=memory_id, content=content, tags=tags, domain=domain
-    )
-    if built is None:
-        return None
-    rel_path, markdown = built
-    write_page(root, rel_path, markdown, mode="replace")
-    _try_reindex(Path(root))
-    return rel_path
-
-
-def sync_memory(
-    root: Path | str,
-    *,
-    memory_id: int | str,
-    content: str,
-    tags: list[str] | None,
-    domain: str = "",
-) -> str | None:
-    """Promote a stored memory to a wiki page if it passes the classifier.
-
-    Backwards-compatible wrapper: swallows exceptions and returns None on
-    error, for callers that cannot handle wiki-sync failure. New code
-    should prefer ``sync_memory_strict`` and surface failures explicitly
-    (see ADR-0045 / Taleb fragility audit: silent failure is worst-of-both).
-
-    Returns the relative path of the written page, or None when the
-    memory is rejected or on error.
-    """
-    try:
-        return sync_memory_strict(
-            root,
-            memory_id=memory_id,
-            content=content,
-            tags=tags,
-            domain=domain,
-        )
-    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
-        silent_failure.note("wiki_store.sync_memory", exc)
-        return None
-
-
-def cleanup_id_prefixed_pages(root: Path | str) -> int:
-    """Remove old {id}-{slug}.md files that have a {slug}.md counterpart."""
-
-    notes_dir = Path(root) / "notes"
-    if not notes_dir.exists():
-        return 0
-    removed = 0
-    slug_files = {
-        f.name for f in notes_dir.glob("*.md") if not _re.match(r"^\d+-", f.name)
-    }
-    for f in list(notes_dir.glob("*.md")):
-        m = _re.match(r"^(\d+)-(.+)$", f.name)
-        if m and m.group(2) in slug_files:
-            f.unlink()
-            removed += 1
-    return removed
-
-
-def next_adr_number(root: Path | str) -> int:
-    """Return the next free ADR sequence number (1-based)."""
-    pages = list_pages(root, kind="adr")
-    max_seen = 0
-    for rel in pages:
-        name = rel.rsplit("/", 1)[-1]
-        # NNNN-slug.md
-        head = name.split("-", 1)[0]
-        try:
-            num = int(head)
-        except ValueError:
-            continue
-        if num > max_seen:
-            max_seen = num
-    return max_seen + 1

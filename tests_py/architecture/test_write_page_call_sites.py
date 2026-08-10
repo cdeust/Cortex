@@ -49,6 +49,13 @@ _EXPECTED_CALL_COUNTS = {
     "handlers/wiki_link.py": 1,  # in-place frontmatter link rewrite
     "handlers/wiki_write.py": 1,  # write_governed_page's own delegation call
     "handlers/wiki_compile.py": 1,  # publishing an already-curated draft
+    "handlers/wiki_memory_sync.py": 1,  # memory->wiki promotion write (the
+    # page IS the citable content; no separate pointer-memory needed for
+    # itself). Moved from infrastructure/wiki_store.py (previously excluded
+    # as the definition module) to this composition root — layer fix:
+    # infrastructure/ must not import core/ (core.wiki_sync.build_from_memory
+    # runs the v2 classifier), so the call that decides-and-writes moved to
+    # handlers/, which is legally allowed to import both.
 }
 
 

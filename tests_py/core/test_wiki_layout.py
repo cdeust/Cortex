@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.core.wiki_layout import (
+from mcp_server.shared.wiki_layout import (
     PAGE_KINDS,
     adr_filename,
     file_path_slug,
@@ -99,7 +99,7 @@ def test_page_kinds_modern_plus_legacy() -> None:
     ``page_path`` / ``domain_page_path`` so existing pages under
     notes/specs/conventions/lessons/guides/files stay readable.
     """
-    from mcp_server.core.wiki_layout import LEGACY_PAGE_KINDS, MODERN_PAGE_KINDS
+    from mcp_server.shared.wiki_layout import LEGACY_PAGE_KINDS, MODERN_PAGE_KINDS
 
     assert MODERN_PAGE_KINDS == (
         "tutorial",

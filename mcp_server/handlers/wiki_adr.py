@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core.wiki_layout import adr_filename, page_path, slugify
-from mcp_server.core.wiki_pages import ADR_STATUSES, build_adr
+from mcp_server.shared.wiki_layout import adr_filename, page_path, slugify
+from mcp_server.shared.wiki_pages import ADR_STATUSES, build_adr
 from mcp_server.infrastructure.config import WIKI_ROOT
+from mcp_server.infrastructure.wiki_pages_listing import next_adr_number
 from mcp_server.infrastructure.wiki_store import (
     WikiExistsError,
-    next_adr_number,
     write_page,
 )
 

@@ -27,7 +27,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
-from mcp_server.core.wiki_layout import slugify
+from mcp_server.shared.wiki_layout import slugify
 
 _FRONTMATTER_KEYS_ORDER = (
     "title",

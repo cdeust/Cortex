@@ -1,6 +1,6 @@
 """E8 — wiki sync errors must be surfaced, not silently swallowed.
 
-Prior behaviour (pre-Phase-1): ``wiki_store.sync_memory`` swallowed every
+Prior behaviour (pre-Phase-1): ``sync_memory`` swallowed every
 exception and returned None. A failing disk, a path-traversal exception,
 or a classifier bug all looked identical to "classifier rejected the
 memory" — the worst-of-both silent failure Taleb flags.
@@ -11,6 +11,11 @@ New behaviour:
   - The ``remember`` handler calls ``sync_memory_strict`` and, on failure,
     emits a ``warnings`` entry in the response instead of silently
     dropping the signal.
+
+Both functions live in ``mcp_server.handlers.wiki_memory_sync`` (the
+composition root that wires core's classifier to infrastructure's
+filesystem writer — moved out of ``infrastructure.wiki_store``, which
+must not import ``core/``).
 
 Two scenarios covered:
   1. Direct test of ``sync_memory_strict`` — it raises on underlying error.
@@ -25,8 +30,8 @@ from unittest.mock import patch
 
 import pytest
 
+from mcp_server.handlers import wiki_memory_sync
 from mcp_server.handlers.remember import handler as remember_handler
-from mcp_server.infrastructure import wiki_store
 
 
 class TestSyncMemoryStrict:
@@ -36,7 +41,7 @@ class TestSyncMemoryStrict:
         """An I/O failure in write_page propagates out of sync_memory_strict."""
         # Force build_from_memory to return a result that triggers a write.
         with patch(
-            "mcp_server.infrastructure.wiki_store.build_from_memory",
+            "mcp_server.handlers.wiki_memory_sync.build_from_memory",
             return_value=("notes/test.md", "# Test\nBody."),
         ):
             with patch(
@@ -44,7 +49,7 @@ class TestSyncMemoryStrict:
                 side_effect=OSError("disk full"),
             ):
                 with pytest.raises(OSError, match="disk full"):
-                    wiki_store.sync_memory_strict(
+                    wiki_memory_sync.sync_memory_strict(
                         tmp_path,
                         memory_id=1,
                         content="some decision",
@@ -55,10 +60,10 @@ class TestSyncMemoryStrict:
     def test_returns_none_on_classifier_rejection(self, tmp_path):
         """build_from_memory returning None is not an error, not a raise."""
         with patch(
-            "mcp_server.infrastructure.wiki_store.build_from_memory",
+            "mcp_server.handlers.wiki_memory_sync.build_from_memory",
             return_value=None,
         ):
-            result = wiki_store.sync_memory_strict(
+            result = wiki_memory_sync.sync_memory_strict(
                 tmp_path,
                 memory_id=1,
                 content="noise",
@@ -70,10 +75,10 @@ class TestSyncMemoryStrict:
     def test_returns_path_on_success(self, tmp_path):
         """Successful write returns the relative path."""
         with patch(
-            "mcp_server.infrastructure.wiki_store.build_from_memory",
+            "mcp_server.handlers.wiki_memory_sync.build_from_memory",
             return_value=("notes/ok.md", "# OK\nBody."),
         ):
-            result = wiki_store.sync_memory_strict(
+            result = wiki_memory_sync.sync_memory_strict(
                 tmp_path,
                 memory_id=1,
                 content="decision",
@@ -89,7 +94,7 @@ class TestSyncMemoryLegacyWrapper:
 
     def test_returns_none_on_error(self, tmp_path):
         with patch(
-            "mcp_server.infrastructure.wiki_store.build_from_memory",
+            "mcp_server.handlers.wiki_memory_sync.build_from_memory",
             return_value=("notes/x.md", "# X\nB."),
         ):
             with patch(
@@ -97,7 +102,7 @@ class TestSyncMemoryLegacyWrapper:
                 side_effect=OSError("disk full"),
             ):
                 # Legacy wrapper swallows → None.
-                result = wiki_store.sync_memory(
+                result = wiki_memory_sync.sync_memory(
                     tmp_path,
                     memory_id=1,
                     content="some decision",
@@ -118,7 +123,7 @@ class TestRememberHandlerSurfacesWikiErrors:
         the error signal.
         """
         with patch(
-            "mcp_server.handlers.remember.wiki_store.sync_memory_strict",
+            "mcp_server.handlers.remember.wiki_memory_sync.sync_memory_strict",
             side_effect=RuntimeError("wiki write failed"),
         ):
             result = asyncio.run(
@@ -146,7 +151,7 @@ class TestRememberHandlerSurfacesWikiErrors:
     def test_no_warning_when_wiki_rejects_or_succeeds(self):
         """Classifier rejection (None return) must NOT produce a warning."""
         with patch(
-            "mcp_server.handlers.remember.wiki_store.sync_memory_strict",
+            "mcp_server.handlers.remember.wiki_memory_sync.sync_memory_strict",
             return_value=None,
         ):
             result = asyncio.run(

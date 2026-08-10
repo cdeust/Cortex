@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core.wiki_layout import slugify
+from mcp_server.shared.wiki_layout import slugify
 from mcp_server.handlers.ingest_findings_artifacts import FindingRecord
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_store import MemoryStore

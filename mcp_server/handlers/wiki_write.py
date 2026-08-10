@@ -33,9 +33,9 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.core.prose_redaction import scan_prose, summarize_findings
-from mcp_server.core.wiki_frontmatter_validation import UnclosedFrontmatterError
-from mcp_server.core.wiki_layout import page_path
-from mcp_server.core.wiki_pages import (
+from mcp_server.shared.wiki_frontmatter_validation import UnclosedFrontmatterError
+from mcp_server.shared.wiki_layout import page_path
+from mcp_server.shared.wiki_pages import (
     build_adr,
     build_file_doc,
     build_note,

@@ -16,11 +16,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core.wiki_layout import PAGE_KINDS
+from mcp_server.shared.wiki_layout import PAGE_KINDS
 from mcp_server.core.wiki_redirect import is_redirect, parse_frontmatter
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.infrastructure.config import WIKI_ROOT
-from mcp_server.infrastructure.wiki_store import list_pages, read_page
+from mcp_server.infrastructure.wiki_pages_listing import list_pages
+from mcp_server.infrastructure.wiki_store import read_page
 
 schema = {
     "title": "Wiki — list pages",

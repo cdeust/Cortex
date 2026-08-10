@@ -36,7 +36,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from mcp_server.core.wiki_pages import parse_page
+from mcp_server.shared.wiki_pages import parse_page
 from mcp_server.core.wiki_templates import STATUS_VALUES
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
 from mcp_server.infrastructure.pg_store_wiki import (
@@ -48,7 +48,8 @@ from mcp_server.infrastructure.pg_store_wiki import (
     upsert_link,
     upsert_page,
 )
-from mcp_server.infrastructure.wiki_store import list_pages, read_page
+from mcp_server.infrastructure.wiki_pages_listing import list_pages
+from mcp_server.infrastructure.wiki_store import read_page
 from mcp_server.shared.wiki_source_paths import extract_document_paths
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings

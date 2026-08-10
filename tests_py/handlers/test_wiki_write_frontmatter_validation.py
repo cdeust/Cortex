@@ -65,7 +65,7 @@ def test_duplicated_label_frontmatter_persisted_canonically(tmp_wiki) -> None:
 
 
 def test_healthy_page_persisted_unchanged(tmp_wiki) -> None:
-    from mcp_server.core.wiki_pages import build_note
+    from mcp_server.shared.wiki_pages import build_note
 
     healthy_content = build_note(title="Clean note", body="Nothing to repair.")
 
@@ -89,7 +89,7 @@ def test_unclosed_frontmatter_fence_raises_tool_error(tmp_wiki) -> None:
     handler raises becomes a ToolError at the tool-registration boundary,
     verified here the same way test_remember.py pins the dict contract.
     """
-    from mcp_server.core.wiki_frontmatter_validation import UnclosedFrontmatterError
+    from mcp_server.shared.wiki_frontmatter_validation import UnclosedFrontmatterError
     from mcp_server.tool_error_handler import safe_handler
 
     unclosed_content = (

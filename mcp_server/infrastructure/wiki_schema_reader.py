@@ -1,11 +1,18 @@
 """Self-hosting wiki schema reader — I/O half of the schema loader.
 
-Port-and-adapter split (issue #126): ``mcp_server.core.wiki_schema_loader``
+Port-and-adapter split (issue #126): ``mcp_server.shared.wiki_schema_loader``
 declares the pure data model (``KindDefinition``, ``ClassifierRule``,
 ``ViewDefinition``, ``TriggerDefinition``, ``WikiRegistry``) and the pure
 string-to-dataclass parsers. This module is the adapter — it walks the
 wiki root on disk (``Path.rglob`` + ``read_text``) and feeds file content
-through those core parsers to build a ``WikiRegistry``.
+through those parsers to build a ``WikiRegistry``.
+
+``wiki_schema_loader``/``wiki_pages`` moved ``core/`` -> ``shared/``
+(layer fix: infrastructure/ must not import core/, and these parsers are
+stdlib-only pure functions with no dependency on core's business rules —
+same rationale as the #406 move). This module's own I/O
+(``Path.rglob``/``read_text``) still lives here, never in ``core/`` or
+``shared/``.
 
 Composition roots (``mcp_server/__main__.py``, and the wiki_curate /
 wiki_synthesize / wiki_refine / wiki_view handlers) call ``load_registry``
@@ -17,8 +24,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mcp_server.core.wiki_pages import parse_page
-from mcp_server.core.wiki_schema_loader import (
+from mcp_server.shared.wiki_pages import parse_page
+from mcp_server.shared.wiki_schema_loader import (
     ClassifierRule,
     WikiRegistry,
     parse_kind,
@@ -34,7 +41,7 @@ def _load_folder_direct(root: Path, folder: str, parser):
 
     Used for reserved folders (``_kinds``, ``_rules``, ``_views``,
     ``_triggers``) that are not part of ``PAGE_KINDS``, so they are walked
-    directly via ``rglob`` rather than through ``wiki_store.list_pages``.
+    directly via ``rglob`` rather than through ``wiki_pages_listing.list_pages``.
     Never raises; a folder that doesn't exist yields an empty dict, and a
     file that fails to parse is skipped.
     """
