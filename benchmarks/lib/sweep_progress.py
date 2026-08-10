@@ -59,9 +59,7 @@ def read_progress(sweep_dir: str) -> dict:
 
 def completed_w_values(sweep_dir: str) -> set[float]:
     progress = read_progress(sweep_dir)
-    return {
-        c["w"] for c in progress.get("cells", []) if c.get("status") == "complete"
-    }
+    return {c["w"] for c in progress.get("cells", []) if c.get("status") == "complete"}
 
 
 def next_pending_w(grid: list[float], sweep_dir: str) -> float | None:
