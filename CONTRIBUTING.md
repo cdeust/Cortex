@@ -16,7 +16,7 @@ pgvector when configured. Implements rate-distortion forgetting,
 predictive-coding write gating, retrieval-induced reconsolidation, pattern
 separation, sleep-cycle consolidation, emotional-valence weighting, and
 more. See [README](README.md) for the full architecture and benchmark
-results (LongMemEval Recall@10 = 98.4%, LoCoMo Recall@10 = 94.2%, BEAM-10M
+results (LongMemEval Recall@10 = 98.2%, LoCoMo Recall@10 = 94.2%, BEAM-10M
 +33.4% over the published baseline).
 
 ---
