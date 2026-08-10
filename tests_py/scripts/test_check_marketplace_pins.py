@@ -18,6 +18,11 @@ import unittest
 import urllib.error
 from tempfile import TemporaryDirectory
 
+from tests_py.scripts._marketplace_pins_legacy_replay import (
+    LegacyGithubFetchers,
+    pre_fix_check_github_pin,
+    pre_fix_check_self_pin,
+)
 from tests_py.scripts._marketplace_pins_test_loader import gate, git_repo_with_tags
 
 
@@ -74,16 +79,22 @@ class TestPinBehindTag(unittest.TestCase):
             self.assertEqual(gate.check_self_pin("p", "./", "1.0.0", root), [])
 
     def test_pin_ahead_of_every_tag_is_unpublished_not_silently_current(self):
-        """The generic form of the cortex-viz 3.0.0 incident, on a self-pin.
-
-        A pin newer than the latest tag used to read as "current" (the old
-        check only ever asked "is pin < latest?"). It never asked "does a
-        tag matching pin exist at all?" — so a version nobody ever tagged
-        passed silently. This is the exact defect PIN_VERSION_UNPUBLISHED
-        closes, replayed against check_self_pin instead of check_github_pin.
+        """The generic form of the cortex-viz 3.0.0 incident, on a self-pin —
+        replayed through BOTH the frozen pre-fix `check_self_pin` and the
+        current one on identical inputs, not just asserted in prose.
         """
         with TemporaryDirectory() as d:
             root = git_repo_with_tags(d, ["v2.8.0", "v2.7.1", "v2.7.0"])
+
+            # BEFORE: a pin newer than the latest tag read as "current" (the
+            # old check only ever asked "is pin < latest?"; it never asked
+            # "does a tag matching pin exist at all?").
+            pre_fix_failures = pre_fix_check_self_pin("p", "./", "3.0.0", root)
+            self.assertEqual(
+                pre_fix_failures, [], "the historical defect: silently current"
+            )
+
+            # AFTER: this is the exact defect PIN_VERSION_UNPUBLISHED closes.
             failures = gate.check_self_pin("p", "./", "3.0.0", root)
             joined = "\n".join(failures)
             self.assertIn("PIN_VERSION_UNPUBLISHED", joined)
@@ -135,12 +146,30 @@ class TestGithubPin(unittest.TestCase):
         )
 
     def test_incident_replay_pin_ahead_of_every_release_is_unpublished(self):
-        """The exact cortex-viz incident: pin "3.0.0", repo's real tags top
-        out at v2.8.0. `3.0.0 < 2.8.0` is false, so the pre-fix check (which
-        only ever asked "is pin behind latest?") read this as current and
-        returned (None, None) — six days of a dangling pin, zero red runs.
+        """The exact cortex-viz incident, replayed through BOTH the frozen
+        pre-fix logic and the current one on the identical historical
+        inputs — not just asserted in prose. Pin "3.0.0", repo's real tags
+        top out at v2.8.0.
         """
         tags = ["v2.8.0", "v2.7.1", "v2.7.0", "v2.6.3"]
+
+        # BEFORE: `3.0.0 < 2.8.0` is false, so the pre-fix check (which only
+        # ever asked "is pin behind latest?") read this as current — silent
+        # pass, six days of a dangling pin, zero red runs.
+        pre_fix_result = pre_fix_check_github_pin(
+            "hypermnesia-mcp-viz",
+            "cdeust/cortex-viz",
+            "3.0.0",
+            LegacyGithubFetchers(fetch=lambda r: "v2.8.0", count=lambda *a: 0),
+        )
+        self.assertEqual(
+            pre_fix_result,
+            (None, None),
+            "the historical defect: silently current, not a red run",
+        )
+
+        # AFTER: the same inputs (repo's tags list rather than a single
+        # "latest" fetch — the new signature) through the current check.
         failure, notice = gate.check_github_pin(
             "hypermnesia-mcp-viz",
             "cdeust/cortex-viz",
