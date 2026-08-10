@@ -1,11 +1,26 @@
 #!/usr/bin/env python3
 """Exercise Cortex's hook-free stdio contract as common MCP hosts.
 
-This is a protocol smoke test, not a mocked FastMCP unit test. Each case starts
-the production entry point as a child process, sends a complete MCP lifecycle
-batch, and verifies discovery plus one real SQLite-backed tool call. Client
-names are deliberately varied: Cortex must not branch on Claude-specific host
-identity, environment, or hooks.
+This is a protocol smoke test, not a mocked FastMCP/MCP-SDK unit test. Each
+case starts the production entry point as a child process, sends a complete
+MCP lifecycle batch, and verifies discovery plus one real SQLite-backed tool
+call. Client names are deliberately varied: Cortex must not branch on
+Claude-specific host identity, environment, or hooks.
+
+Environment isolation: ci.yml's "Validate MCP host configurations" job runs
+this script itself with PYTHONPATH=$GITHUB_WORKSPACE (so it can import
+repo-root helpers). `_environment()` strips that before handing the env to
+the spawned MCP server subprocess -- inherited via `os.environ.copy()`
+otherwise, a leaked PYTHONPATH makes the subprocess's `mcp_server` import
+resolve from the CHECKOUT rather than from whatever was actually installed
+into its own venv, silently testing a Frankenstein combination (checkout
+source + venv dependencies) neither this harness nor any real install ever
+runs. A real end user bootstrapping via `uvx --from hypermnesia-mcp[...]`
+never has PYTHONPATH set this way. Surfaced 2026-08-10, PR #331: the
+checkout's `mcp_server/__main__.py` imported `mcp.server.mcpserver`
+(mcp>=2.0.0's API) while the cold uvx venv had actually installed
+fastmcp/mcp<2.0 (still-unreleased-with-this-change PyPI package) --
+ModuleNotFoundError, masquerading as a real bootstrap failure.
 """
 
 from __future__ import annotations
@@ -27,7 +42,8 @@ from mcp_server.tool_profiles import LEAN_TOOL_NAMES
 CLIENTS = ("claude-code", "gemini-cli", "codex-cli")
 PROFILES: tuple[Literal["full", "lean"], ...] = ("full", "lean")
 STORAGE_SELECTIONS: tuple[Literal["sqlite", "auto"], ...] = ("sqlite", "auto")
-# source: MCP protocol revision implemented by fastmcp==3.4.5.
+# source: MCP protocol revision this harness's handshake declares -- mcp
+# 2.0.0 accepts it on the "legacy" (pre-2026-07-28-envelope) handshake path.
 PROTOCOL_VERSION = "2025-06-18"
 # source: tests_py/test_main.py standalone baseline plus its three documented
 # optional upstream integrations (ingest_codebase, change_impact, ingest_prd).
@@ -91,23 +107,9 @@ def _environment(
     storage_selection: Literal["sqlite", "auto"] = "sqlite",
 ) -> dict[str, str]:
     env = os.environ.copy()
-    # This harness's own `python scripts/verify_mcp_hosts.py` invocation may
-    # run with PYTHONPATH=$GITHUB_WORKSPACE (ci.yml's "Validate MCP host
-    # configurations" job sets it so this script can import repo-root
-    # helpers) — inherited via os.environ.copy() above, that would leak
-    # into the spawned MCP server subprocess too and make its import
-    # resolve mcp_server/ from the CHECKOUT rather than from whatever was
-    # actually pip-installed into the cold uvx venv. A real end user
-    # bootstrapping via `uvx --from hypermnesia-mcp[...]` never has this
-    # set; a leaked PYTHONPATH silently tests a Frankenstein environment
-    # (checkout source + venv dependencies) neither this harness nor any
-    # real install ever runs, and can mask a genuine dependency-version
-    # mismatch as a false pass or manufacture a false failure depending on
-    # which side of the split each name resolves from (surfaced 2026-08-10,
-    # PR #331: mcp_server/__main__.py imported from the checkout, satisfied
-    # by mcp 2.0.0's API, while fastmcp/mcp<2.0 were what the cold venv
-    # actually installed from the still-unreleased-with-this-change PyPI
-    # package — ModuleNotFoundError on mcp.server.mcpserver).
+    # Strip a PYTHONPATH inherited from this harness's own invocation (see
+    # the module docstring's "Environment isolation" section for why a
+    # leaked PYTHONPATH corrupts the spawned MCP server's import resolution).
     env.pop("PYTHONPATH", None)
     env.update(
         {
@@ -273,9 +275,8 @@ def _verify(case: ContractCase) -> tuple[int, float]:
     return count, time.monotonic() - started_at
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--timeout", type=int, default=2 * 60)
+def _add_selection_arguments(parser: argparse.ArgumentParser) -> None:
+    """Which host identities and profiles a run exercises."""
     parser.add_argument(
         "--clients",
         nargs="+",
@@ -297,6 +298,11 @@ def _build_parser() -> argparse.ArgumentParser:
             "run the supplied command unchanged; requires exactly one --profiles value"
         ),
     )
+
+
+def _add_runtime_arguments(parser: argparse.ArgumentParser) -> None:
+    """How each exercised case is actually driven."""
+    parser.add_argument("--timeout", type=int, default=2 * 60)
     parser.add_argument(
         "--allow-bootstrap-network",
         action="store_true",
@@ -316,6 +322,12 @@ def _build_parser() -> argparse.ArgumentParser:
         nargs=argparse.REMAINDER,
         help="base server command after --; profile flags are added by the test",
     )
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    _add_selection_arguments(parser)
+    _add_runtime_arguments(parser)
     return parser
 
 
