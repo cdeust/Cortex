@@ -83,3 +83,25 @@ updates:
       # source: PyPI JSON API, verified 2026-08-01.
       - dependency-name: "caio"
         versions: [">=0.10.0"]
+
+      # pydantic-core is transitive, not declared: hypermnesia-mcp ->
+      # pydantic -> pydantic-core. Unlike a version *range*, pydantic pins
+      # its Rust extension EXACTLY per release (ABI lockstep, not a
+      # compatibility range) — pydantic 2.13.4 (latest stable, no newer
+      # stable exists) declares `pydantic-core==2.46.4`. No pydantic
+      # release, stable or pre-release, accepts pydantic-core 2.47.0: the
+      # only releases past 2.13.4 are pre-releases 2.14.0a1/2.14.0b1, and
+      # both already require `pydantic-core==2.48.0` — 2.47.0 sits in a gap
+      # between the two pydantic pin generations with no compatible
+      # pydantic release at any maturity. The bump is unresolvable rather
+      # than merely unresynced: PR #333 failed every job, not just Lint,
+      # and was closed for this reason.
+      # No advisory affects pydantic-core
+      # (`gh api "/advisories?ecosystem=pip&affects=pydantic-core"`
+      # returned none on 2026-08-10), so 2.46.4 is not a security hold.
+      # Remove this entry once pydantic's stable release line moves past
+      # 2.13.x and pins a newer pydantic-core.
+      # source: PyPI JSON API https://pypi.org/pypi/pydantic/json +
+      #         https://pypi.org/pypi/pydantic/2.14.0b1/json, read 2026-08-10.
+      - dependency-name: "pydantic-core"
+        versions: [">2.46.4"]
