@@ -77,19 +77,34 @@ separate **cortex-viz** MCP (reads this same store read-only).
 
 - 300 lines max per file; 40 lines max per method — a local tightening of
   coding-standards.md §4.1/§4.2 (≤500/≤50; CONTRIBUTING.md § Code Style
-  cites the same 300/40 numbers). Enforced by code review today; no
-  automated pre-commit hook checks this yet (issue #276 corrected the
-  prior claim of a "craftsmanship-checker" hook — none exists in
-  `.git/hooks/` or a `.pre-commit-config.yaml`).
-- Import rule: `core/` imports only `shared/` + stdlib; `infrastructure/`
-  never imports core/handlers. Verify: `grep -rn "from mcp_server.infrastructure" mcp_server/core/`
-  should return nothing for new code — 3 pre-existing violations in
-  `wiki_axis_registry.py`, `wiki_classifier.py`, `wiki_schema_loader.py`
-  are tracked as a follow-up (found 2026-07-14 during #114), not a
-  standard to add to.
+  cites the same 300/40 numbers).
+- Import rule: `shared/` imports only the stdlib; `core/` imports only
+  `shared/` (plus the stdlib, except `os`/`pathlib`, banned even though
+  they are stdlib — `core/` is pure business logic, zero I/O);
+  `infrastructure/` never imports `core/`/`handlers/`/`server/`; `server/`
+  never imports `core/`/`infrastructure/` directly. Full table:
+  `docs/module-inventory.md` § Dependency Rules.
 - No invented constants: every hardcoded number carries a `# source:`
   comment (paper, committed benchmark, or dated measurement naming the
-  environment and conditions). A number without one blocks the diff in review.
+  environment and conditions).
+- **Enforced by `scripts/check_craftsmanship.py`**, run in CI on every push
+  and PR (`.github/workflows/ci.yml`, `craftsmanship` job) and locally via
+  `python scripts/check_craftsmanship.py`. It checks the four rules above,
+  by AST, on the files a diff touches — never the whole repository — and
+  fails the diff on any violation absent from `.craftsmanship-baseline.json`
+  (pre-existing debt, grandfathered) or any baseline entry whose violation
+  no longer reproduces (fixed but not pruned — see that script's module
+  docstring for why that also fails). Regenerate the baseline with
+  `python scripts/check_craftsmanship.py --write-baseline` only after
+  confirming every new entry is pre-existing debt, never to silence a
+  violation this PR just introduced. Previously "enforced by code review
+  today; no automated pre-commit hook checks this yet" (issue #276
+  corrected an earlier, false claim of a "craftsmanship-checker" hook) —
+  that gap is what this gate closes. Historical import-rule violations
+  once tracked ad hoc in this section (`wiki_axis_registry.py`,
+  `wiki_classifier.py`, `wiki_schema_loader.py`, found 2026-07-14 during
+  #114) now live in the baseline like any other pre-existing debt, not as
+  separate prose here.
 
 ## What NOT to do
 

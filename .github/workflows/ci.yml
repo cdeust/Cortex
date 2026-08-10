@@ -558,6 +558,40 @@ jobs:
       - name: Check workflow files (actionlint + shellcheck)
         run: actionlint -color
 
+  # Deterministic enforcement of CLAUDE.md § Code Style — file size, method
+  # size, layer-boundary imports, and unsourced magic numbers — which that
+  # section admitted was "enforced by code review today; no automated
+  # pre-commit hook checks this yet" until this job. Measured on a single
+  # PR the night before this job was added: a 301-line file reported as
+  # 280, three of four over-40-line methods unseen, one layer violation
+  # justified by a fabricated citation — each caught only by a human or
+  # agent re-reading the diff, never by a machine. See
+  # scripts/check_craftsmanship.py's module docstring for the rules and
+  # scripts/craftsmanship_baseline.py for why pre-existing debt (recorded
+  # in .craftsmanship-baseline.json) does not retroactively block.
+  craftsmanship:
+    name: Craftsmanship Gate
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 so `origin/main` — the diff base the gate compares
+      # the PR's changed files against — is resolvable locally, not just
+      # the single commit a shallow checkout would leave.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # Standard library only (scripts/check_craftsmanship.py's module
+      # docstring) — no dependency install needed, matching the
+      # doc-claim/version-surface/ci-gate-completeness gates in `lint`
+      # below, which are static for the same reason.
+      - name: Run the craftsmanship gate on this PR's changed files
+        run: python scripts/check_craftsmanship.py
+
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
@@ -767,6 +801,7 @@ jobs:
       - mcp-host-config
       - test-windows
       - release-deps
+      - craftsmanship
       - lint
       - typecheck
       - build

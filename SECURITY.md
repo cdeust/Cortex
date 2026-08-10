@@ -66,6 +66,15 @@ As of issue #178, every Cortex release ships with verifiable provenance
   `Docker Smoke`, `Test` on Python 3.10–3.13, `Test (SQLite backend)`, and
   `Test (Windows, SQLite backend)`). Force-pushes and branch deletion are
   blocked, and conversation resolution is required.
+  `ci.yml`'s own aggregate gate (`CI Green`, the single context branch
+  protection actually names — see `scripts/check_ci_gate_complete.py`)
+  additionally runs a `Craftsmanship Gate` job as of the PR that added
+  `scripts/check_craftsmanship.py`; this number becomes twelve once a
+  repository admin adds it to the required-checks list in GitHub's branch
+  protection settings (Settings → Branches) — an action this document
+  cannot perform and the PR that introduced the job does not perform
+  either, so the two may legitimately disagree until that setting is
+  updated by hand.
 
 ### Why Scorecard's Code-Review check will not go green here
 
