@@ -1,0 +1,194 @@
+{
+  "cells": [
+    {
+      "w": 1.0,
+      "status": "complete",
+      "git_sha": "f87bf6e3fb594e3cc8cc653f0ae2c8511af28d74",
+      "repro_dir": "benchmarks/results/repro/20260810T140209Z/",
+      "machine_load_at_start": {
+        "load_average_1m": 6.4130859375,
+        "load_average_5m": 8.67041015625,
+        "load_average_15m": 8.5556640625,
+        "cpu_count": 10,
+        "concurrent_pytest_processes": 0,
+        "concurrent_docker_containers": 0
+      },
+      "disk_space_at_start": {
+        "repo_root": {
+          "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+          "free_bytes": 21274468352,
+          "total_bytes": 494384795648
+        },
+        "docker_root": null
+      },
+      "machine_load_at_end": {
+        "load_average_1m": 8.98193359375,
+        "load_average_5m": 8.95947265625,
+        "load_average_15m": 8.74658203125,
+        "cpu_count": 10,
+        "concurrent_pytest_processes": 0,
+        "concurrent_docker_containers": 0
+      },
+      "disk_space_at_end": {
+        "repo_root": {
+          "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+          "free_bytes": 20997554176,
+          "total_bytes": 494384795648
+        },
+        "docker_root": null
+      }
+    },
+    {
+      "w": 0.8,
+      "status": "complete",
+      "git_sha": "f87bf6e3fb594e3cc8cc653f0ae2c8511af28d74",
+      "repro_dir": "benchmarks/results/repro/20260810T141001Z/",
+      "machine_load_at_start": {
+        "load_average_1m": 8.24169921875,
+        "load_average_5m": 8.7109375,
+        "load_average_15m": 8.66064453125,
+        "cpu_count": 10,
+        "concurrent_pytest_processes": 0,
+        "concurrent_docker_containers": 0
+      },
+      "disk_space_at_start": {
+        "repo_root": {
+          "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+          "free_bytes": 26131615744,
+          "total_bytes": 494384795648
+        },
+        "docker_root": null
+      },
+      "machine_load_at_end": {
+        "load_average_1m": 11.3310546875,
+        "load_average_5m": 12.310546875,
+        "load_average_15m": 10.646484375,
+        "cpu_count": 10,
+        "concurrent_pytest_processes": 0,
+        "concurrent_docker_containers": 0
+      },
+      "disk_space_at_end": {
+        "repo_root": {
+          "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+          "free_bytes": 25266053120,
+          "total_bytes": 494384795648
+        },
+        "docker_root": null
+      }
+    },
+    {
+      "w": 0.7,
+      "status": "complete",
+      "git_sha": "f87bf6e3fb594e3cc8cc653f0ae2c8511af28d74",
+      "repro_dir": "benchmarks/results/repro/20260810T141800Z/",
+      "machine_load_at_start": {
+        "load_average_1m": 9.16650390625,
+        "load_average_5m": 11.61572265625,
+        "load_average_15m": 10.46630859375,
+        "cpu_count": 10,
+        "concurrent_pytest_processes": 0,
+        "concurrent_docker_containers": 0
+      },
+      "disk_space_at_start": {
+        "repo_root": {
+          "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+          "free_bytes": 25579483136,
+          "total_bytes": 494384795648
+        },
+        "docker_root": null
+      },
+      "machine_load_at_end": {
+        "load_average_1m": 8.37255859375,
+        "load_average_5m": 10.7001953125,
+        "load_average_15m": 10.56396484375,
+        "cpu_count": 10,
+        "concurrent_pytest_processes": 0,
+        "concurrent_docker_containers": 0
+      },
+      "disk_space_at_end": {
+        "repo_root": {
+          "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+          "free_bytes": 24989110272,
+          "total_bytes": 494384795648
+        },
+        "docker_root": null
+      }
+    },
+    {
+      "w": 0.6,
+      "status": "complete",
+      "git_sha": "f87bf6e3fb594e3cc8cc653f0ae2c8511af28d74",
+      "repro_dir": "benchmarks/results/repro/20260810T142503Z/",
+      "machine_load_at_start": {
+        "load_average_1m": 8.240234375,
+        "load_average_5m": 10.55224609375,
+        "load_average_15m": 10.5126953125,
+        "cpu_count": 10,
+        "concurrent_pytest_processes": 0,
+        "concurrent_docker_containers": 0
+      },
+      "disk_space_at_start": {
+        "repo_root": {
+          "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+          "free_bytes": 25810317312,
+          "total_bytes": 494384795648
+        },
+        "docker_root": null
+      },
+      "machine_load_at_end": {
+        "load_average_1m": 13.11865234375,
+        "load_average_5m": 11.8583984375,
+        "load_average_15m": 11.14990234375,
+        "cpu_count": 10,
+        "concurrent_pytest_processes": 0,
+        "concurrent_docker_containers": 0
+      },
+      "disk_space_at_end": {
+        "repo_root": {
+          "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+          "free_bytes": 20088893440,
+          "total_bytes": 494384795648
+        },
+        "docker_root": null
+      }
+    },
+    {
+      "w": 0.5,
+      "status": "complete",
+      "git_sha": "f87bf6e3fb594e3cc8cc653f0ae2c8511af28d74",
+      "repro_dir": "benchmarks/results/repro/20260810T144349Z/",
+      "machine_load_at_start": {
+        "load_average_1m": 6.16064453125,
+        "load_average_5m": 6.9130859375,
+        "load_average_15m": 8.44287109375,
+        "cpu_count": 10,
+        "concurrent_pytest_processes": 0,
+        "concurrent_docker_containers": 0
+      },
+      "disk_space_at_start": {
+        "repo_root": {
+          "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+          "free_bytes": 22296936448,
+          "total_bytes": 494384795648
+        },
+        "docker_root": null
+      },
+      "machine_load_at_end": {
+        "load_average_1m": 10.4541015625,
+        "load_average_5m": 9.6796875,
+        "load_average_15m": 9.3203125,
+        "cpu_count": 10,
+        "concurrent_pytest_processes": 0,
+        "concurrent_docker_containers": 0
+      },
+      "disk_space_at_end": {
+        "repo_root": {
+          "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+          "free_bytes": 21858013184,
+          "total_bytes": 494384795648
+        },
+        "docker_root": null
+      }
+    }
+  ]
+}

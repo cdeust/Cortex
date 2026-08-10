@@ -176,3 +176,100 @@ Two provenance notes, stated rather than smoothed over:
   correction. What the gate requires still holds: one shared condition
   across all five cells, and a control arm that reproduces the published
   numbers exactly.
+
+## Re-measurement after the capture_origin fix (PR #410, issue #368)
+
+The paragraph above diagnosed a defect, not a residual unknown: the gated arm
+could not discriminate W because `core.memory_ingest.ingest_memory` accepted
+a caller-supplied `capture_origin` but never forwarded it to
+`store.insert_memory` — every LME/LoCoMo/BEAM memory landed on the column
+default `'unknown'`, `core.capture_origin.trust_factor` demoted all of them
+by the same uniform multiplier, and a uniform rescale cannot change WRRF
+order. **PR #410** (`b280fd25`, merged to `main` 2026-08-10) fixed the
+forwarding and added `benchmarks/lib/capture_origin_mix.py` — a deterministic
+sampler that assigns benchmark memories a realistic `capture_origin` mixture
+(`local_action` .966 / `network` .025 / `deliberate` .009, measured over this
+machine's own 886 Claude Code session transcripts) instead of leaving every
+memory at `'unknown'`. Wired into `benchmarks/lib/bench_db.py` via
+`_apply_capture_origin_mix`, this is the first harness run in which W can
+discriminate anything on these three benchmarks.
+
+### What was re-run
+
+Five cells, `W ∈ {1.0, 0.8, 0.7, 0.6, 0.5}` — the same grid as the original
+sweep, on the branch that carries PR #410. Each cell is one
+`benchmarks/trust_factor_sweep.sh` invocation in `--quick` mode (per-cell
+`--limit`: 10 LongMemEval questions, 1 LoCoMo conversation, 2 BEAM windows —
+`reproduce.sh:421`), sequential, own ephemeral pgvector container, at
+`git_sha f87bf6e3`. Machine load and free disk space were snapshotted at the
+start and end of every cell (`benchmarks/lib/machine_load_snapshot.py`,
+`benchmarks/lib/disk_space_snapshot.py`) and are recorded alongside each
+result — load ran 6.2–13.1 (1m avg) across the run, consistent with a shared,
+busy machine rather than an isolated benchmark host; nothing in the deltas
+below correlates with the load swing.
+
+| W | LME MRR | LME R@10 | LoCoMo MRR | LoCoMo R@10 | BEAM MRR | Artifacts |
+|---|---|---|---|---|---|---|
+| 1.0 (control) | 0.8500 | 1.0000 | 0.8209 | 0.9594 | 0.6579 | `benchmarks/results/repro/20260810T140209Z/` |
+| 0.8 | 0.8500 | 1.0000 | 0.8043 | 0.9391 | 0.6575 | `benchmarks/results/repro/20260810T141001Z/` |
+| **0.7** | **0.8500** | **1.0000** | **0.8044** | **0.9340** | **0.6575** | `benchmarks/results/repro/20260810T141800Z/` |
+| 0.6 | 0.8500 | 1.0000 | 0.8044 | 0.9340 | 0.6575 | `benchmarks/results/repro/20260810T142503Z/` |
+| 0.5 | 0.8500 | 1.0000 | 0.7892 | 0.9188 | 0.6575 | `benchmarks/results/repro/20260810T144349Z/` |
+
+Per-cell load/disk snapshots and the exact `--limit`-derived sample sizes
+(LME `n_questions=10`, LoCoMo `n_conversations=1`/`n_questions=197`) are in
+`benchmarks/results/trust-factor-sweep/active/PROGRESS.json` and each cell's
+`reproduce.log`; the raw per-benchmark JSON (with full `MANIFEST.json`
+provenance — git sha, package versions, reranker sha256) is under the
+`Artifacts` paths above.
+
+### What this establishes
+
+Relative to each other — same harness, same `--quick` mode, same corpus,
+five consecutive cells, one shared provenance — **the trust factor costs
+relevance on LoCoMo, monotonically in W**. W = 1.0 (disabled) gives the best
+scores; at the shipped production value, W = 0.7, LoCoMo loses 0.0165 MRR
+(0.8209 → 0.8044) and 2.54 points of Recall@10 (0.9594 → 0.9340) relative to
+the disabled control. LongMemEval is flat across the whole grid (0.8500 /
+1.0000 identically at every W) and BEAM MRR moves 0.0004 (0.6579 → 0.6575) —
+neither is large enough, at this sample size, to call a W effect.
+
+### What this does NOT establish
+
+Two gaps, stated as such rather than folded into the table above:
+
+1. **Conformance to the published floors.** `reproduce.sh:94-95` states
+   explicitly that `--quick`/`--limit` runs skip the floor gate — "partial
+   runs are not comparable to n=500 / n=1986 figures" — and every cell above
+   ran `--quick` (LME n=10, LoCoMo n=1 conversation / 197 questions, vs the
+   published n=500/n=1986). Comparing these numbers to
+   `FLOOR_LME_R10`/`FLOOR_LME_MRR`/`FLOOR_LOCOMO_R10`/`FLOOR_LOCOMO_MRR`
+   would be exactly the protocol-mismatch error PR #414 spent four review
+   rounds correcting — different sample size, different protocol, not a
+   comparable number. A full-mode re-run against the floors is the open
+   item; it would tell us whether the LoCoMo cost measured here still holds
+   (or is smaller/larger) at the published sample size.
+2. **Whether the adversarial defense justifies the cost.** The adversarial
+   arm (§ above) shows 4/4 scenarios defended at W ≤ 0.70, but that corpus
+   (`benchmarks/lib/adversarial_corpus.py`) is constructed specifically to
+   exercise the attack families — it says nothing about whether that
+   defense buys anything on LME/LoCoMo/BEAM's real question distributions.
+   No measurement in this document links the adversarial-arm defense rate to
+   a benefit on the real benchmarks; the relevance cost above and the
+   security benefit in § Adversarial arm are two separate, unlinked
+   measurements. Closing this gap needs a single corpus or evaluation that
+   scores both relevance and adversarial robustness together.
+
+### Decision (owner call, not derived from this measurement alone)
+
+**W stays at 0.7.** The relevance cost measured above is real and is
+published, with both reserves above stated rather than buried: this
+re-measurement does not confirm floor conformance (quick mode only) and does
+not establish that the adversarial defense is worth the cost (no linking
+measurement exists). Publishing the honest number now — rather than
+withholding it until a full-mode run and a linking measurement both exist —
+is the position consistent with § Scientific Implementation Standard: report
+what was measured and the uncertainty that remains, rather than delay or
+omit. Superseded by a full-mode re-run against the floors, or a measurement
+linking adversarial defense to real-benchmark relevance, whichever lands
+first.

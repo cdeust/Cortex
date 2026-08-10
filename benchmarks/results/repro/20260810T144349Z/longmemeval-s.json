@@ -1,0 +1,44 @@
+{
+  "overall_mrr": 0.85,
+  "overall_recall10": 1.0,
+  "category_mrr": {
+    "Single-session (user)": 0.85
+  },
+  "category_recall10": {
+    "Single-session (user)": 1.0
+  },
+  "elapsed_s": 43.89209308300633,
+  "consolidation_total_wall_s": 0.0,
+  "consolidation_call_count": 0,
+  "manifest": {
+    "with_consolidation": false,
+    "with_consolidation_note": "Scores collected with consolidation=False do NOT reflect production behaviour.  Consolidation-only mechanisms (CASCADE, INTERFERENCE, HOMEOSTATIC_PLASTICITY, SYNAPTIC_PLASTICITY, MICROGLIAL_PRUNING, TWO_STAGE_MODEL, EMOTIONAL_DECAY, TRIPARTITE_SYNAPSE, SCHEMA_ENGINE) are exercised only when with_consolidation=True.  Delta between the two conditions is unmeasured in this run.",
+    "ablate_mechanism": null,
+    "ablate_env_var": null,
+    "n_questions": 10,
+    "n_runs": 1,
+    "consolidation_call_count": 0,
+    "consolidation_total_wall_s": 0.0,
+    "repro": {
+      "git_commit": "f87bf6e3fb594e3cc8cc653f0ae2c8511af28d74",
+      "git_dirty": true,
+      "python_version": "3.12.11 (main, Sep 18 2025, 19:41:45) [Clang 20.1.4 ]",
+      "platform_system": "Darwin",
+      "platform_machine": "arm64",
+      "platform_node": "mac-1.home",
+      "timestamp_utc": "2026-08-10T14:43:53.015314+00:00",
+      "lib_versions": {
+        "sentence-transformers": "5.6.1",
+        "torch": "2.13.0",
+        "numpy": "2.5.1",
+        "psycopg": "3.3.4",
+        "pgvector": "0.5.0",
+        "flashrank": "0.2.10"
+      },
+      "reranker_active": true,
+      "reranker_state": "loaded",
+      "reranker_model_path": "/Users/cdeust/.cache/flashrank/ms-marco-MiniLM-L-12-v2/flashrank-MiniLM-L-12-v2_Q.onnx",
+      "reranker_model_sha256": "d3dd7b09fcf06b0c070081d6819b5effbb40b667bcad78b2d7543400271141d1"
+    }
+  }
+}

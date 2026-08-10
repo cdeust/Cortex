@@ -1,0 +1,19 @@
+{
+  "captured_at_utc": "2026-08-10T14:18:01.140247+00:00",
+  "machine_load": {
+    "load_average_1m": 9.16650390625,
+    "load_average_5m": 11.61572265625,
+    "load_average_15m": 10.46630859375,
+    "cpu_count": 10,
+    "concurrent_pytest_processes": 0,
+    "concurrent_docker_containers": 0
+  },
+  "disk_space": {
+    "repo_root": {
+      "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+      "free_bytes": 25579466752,
+      "total_bytes": 494384795648
+    },
+    "docker_root": null
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "git_sha": "f87bf6e3fb594e3cc8cc653f0ae2c8511af28d74",
+  "machine_load_at_start": {
+    "load_average_1m": 6.4130859375,
+    "load_average_5m": 8.67041015625,
+    "load_average_15m": 8.5556640625,
+    "cpu_count": 10,
+    "concurrent_pytest_processes": 0,
+    "concurrent_docker_containers": 0
+  },
+  "disk_space_at_start": {
+    "repo_root": {
+      "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+      "free_bytes": 21348298752,
+      "total_bytes": 494384795648
+    },
+    "docker_root": null
+  },
+  "machine_load_at_end": {
+    "load_average_1m": 8.98193359375,
+    "load_average_5m": 8.95947265625,
+    "load_average_15m": 8.74658203125,
+    "cpu_count": 10,
+    "concurrent_pytest_processes": 0,
+    "concurrent_docker_containers": 1
+  },
+  "disk_space_at_end": {
+    "repo_root": {
+      "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/agent-a7efdb78f6e038811",
+      "free_bytes": 20997742592,
+      "total_bytes": 494384795648
+    },
+    "docker_root": null
+  },
+  "longmemeval_dataset_sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+  "pg_image": "pgvector/pgvector:pg16",
+  "bench_container_name": "cortex-bench-pg-31717-e2c30003",
+  "bench_container_port": 32793,
+  "bench_runner_pid": 31717,
+  "python": "3.12.11",
+  "packages": {
+    "datasets": "5.0.1",
+    "sentence-transformers": "5.6.1",
+    "torch": "2.13.0",
+    "psycopg": "3.3.4",
+    "psycopg-pool": "3.3.1"
+  },
+  "embedding_model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "reranker_active": true,
+  "reranker_state": "loaded",
+  "reranker_model_sha256": "d3dd7b09fcf06b0c070081d6819b5effbb40b667bcad78b2d7543400271141d1",
+  "results_files": [
+    "beam-100K.json",
+    "locomo.json",
+    "longmemeval-s.json"
+  ]
+}
