@@ -12,156 +12,41 @@ Two top-level functions are exposed:
     with truncation awareness. See `mcp_server/core/context_assembly/`.
 
 Pure business logic — takes a store + embeddings, returns results.
+
+`recall()` is a thin public-API wrapper: the request-scoped context and
+WRRF fetch/triage live in `pg_recall_context.py`; the post-WRRF
+recollection/rerank/typed-pool/final stages plus the pipeline driver
+(`run_recall_pipeline`) live in `pg_recall_stages.py`; the store-duck-typed
+mood/goal/Titans signal readers live in `pg_recall_signals.py`. All are
+re-exported here (alongside the pre-existing `pg_recall_weights.py` /
+`pg_recall_assembly.py` seams cut at #368) so no caller or test has to
+move — this file stays under the local 300-line/40-line caps (CLAUDE.md
+§ Code Style; a tightening of coding-standards.md §4.1/§4.2).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from mcp_server.core.query_intent import QueryIntent, classify_query_intent
-from mcp_server.core.reranker import rerank_results
-from mcp_server.core.titans_memory import TitansMemory
-from mcp_server.observability import silent_failure
-from mcp_server.core import goal_maintenance
-from mcp_server.core.capture_origin import trusted_origins_at_read
-from mcp_server.core.retrieval_dispatch import UNTRUSTED_ORIGIN_FACTOR
-from mcp_server.core.recall_pipeline import (
-    familiarity_triage,
-    attentional_focus_rerank,
-    conflict_monitor_rerank,
-    dendritic_modulate,
-    emotional_retrieval_rerank,
-    goal_maintenance_rerank,
-    hdc_rerank,
-    hopfield_complete,
-    mood_congruent_rerank,
-    reconsolidation_apply,
-    spreading_activation_expand,
-    spreading_activation_tail_fill,
-    value_priority_rerank,
+# Re-exported for backward compatibility: tests and callers reach these
+# names as ``pg_recall.<name>`` (see pg_recall_signals.py / pg_recall_
+# context.py / pg_recall_stages.py docstrings for why they moved).
+from mcp_server.core.pg_recall_signals import (  # noqa: F401 — re-export
+    _get_active_goal,
+    _get_titans,
+    _get_user_mood,
+)
+from mcp_server.core.pg_recall_context import RecallContext
+from mcp_server.core.pg_recall_stages import (
+    _chronological_rerank,  # noqa: F401 — re-export
+    run_recall_pipeline,
 )
 
-# Entity names shorter than this are too generic to match against content.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
-_MIN_ENTITY_NAME_LEN = 3
-
-# Singleton Titans memory module (persists across recalls within a session)
-_titans: TitansMemory | None = None
-
-
-def _get_titans() -> TitansMemory:
-    global _titans
-    if _titans is None:
-        _titans = TitansMemory()
-    return _titans
-
-
-def _get_active_goal(store: Any) -> Any:
-    """Promote the store's active prospective triggers into a sustained goal (A3).
-
-    Defensive reader mirroring ``_get_user_mood``: looks for
-    ``get_active_prospective_memories()`` on the store (the same method
-    query_methodology uses to fire triggers) and promotes the returned trigger
-    dicts into a ``goal_maintenance.GoalVector`` — the held task-set that biases
-    this recall toward goal-relevant memories (Miller & Cohen 2001).
-
-    Returns ``goal_maintenance.EMPTY_GOAL`` (inactive → identity re-weight) when
-    the store is None, lacks the reader, has no active triggers, or the read
-    fails. Per the source-discipline rule we never fabricate a goal signal.
-    """
-
-    if store is None or not hasattr(store, "get_active_prospective_memories"):
-        return goal_maintenance.EMPTY_GOAL
-    try:
-        triggers = store.get_active_prospective_memories()
-        return goal_maintenance.build_goal_from_triggers(triggers)
-    except Exception as exc:  # noqa: BLE001 — non-load-bearing; absence is fine
-        silent_failure.note("pg_recall.active_goal", exc)
-        return goal_maintenance.EMPTY_GOAL
-
-
-def _get_user_mood(store: Any) -> float | None:
-    """Return the user's session-level mood in [-1, +1], or None if absent.
-
-    Looks for an explicit ``get_user_mood()`` method on the store. There is
-    no such method in the current ``PgMemoryStore`` (April 2026), so this
-    helper returns ``None`` and the MOOD_CONGRUENT_RERANK stage no-ops —
-    per the zetetic source-discipline rule we do NOT fabricate a mood signal.
-    When an upstream emotion classifier or manual checkpoint annotation
-    populates a mood store, expose ``get_user_mood()`` and this helper
-    will start returning real values without further wiring changes.
-    """
-    if store is None:
-        return None
-    if not hasattr(store, "get_user_mood"):
-        return None
-    try:
-        v = store.get_user_mood()
-    except Exception as exc:  # noqa: BLE001 — non-load-bearing; absence is fine
-        silent_failure.note("pg_recall.user_mood", exc)
-        return None
-    if v is None:
-        return None
-    try:
-        return max(-1.0, min(1.0, float(v)))
-    except (TypeError, ValueError):
-        return None
-
-
-# ── Chronological reranking ─────────────────────────────────────────────
-# ChronoRAG (Chen et al., arxiv 2508.18748, 2025): for event ordering
-# queries, blend relevance rank with chronological rank via Reciprocal
-# Rank Fusion (Cormack et al., SIGIR 2009).
-
-
-def _chronological_rerank(
-    candidates: list[dict], beta: float = 0.5, k: int = 60
-) -> list[dict]:
-    """Blend relevance ranking with chronological ordering.
-
-    For event ordering queries, the chronological position of memories
-    matters as much as semantic relevance. This function assigns each
-    candidate a blended score from its relevance rank and its
-    chronological rank (by created_at timestamp).
-
-    Args:
-        candidates: Results ordered by relevance score.
-        beta: Weight for chronological rank (0=pure relevance, 1=pure chrono).
-        k: RRF constant (Cormack et al., 2009). Default 60.
-
-    Returns:
-        Reranked candidates with updated scores.
-    """
-    # Assign relevance rank
-    for i, c in enumerate(candidates):
-        c["_rel_rank"] = i
-
-    # Sort by timestamp for chronological rank
-    chrono = sorted(candidates, key=lambda c: c.get("created_at", ""))
-    for i, c in enumerate(chrono):
-        c["_chr_rank"] = i
-
-    # RRF blend: score = (1-beta)/(k+rel_rank) + beta/(k+chr_rank)
-    for c in candidates:
-        c["score"] = float(
-            (1 - beta) / (k + c["_rel_rank"]) + beta / (k + c["_chr_rank"])
-        )
-        del c["_rel_rank"]
-        del c["_chr_rank"]
-
-    return sorted(candidates, key=lambda c: c["score"], reverse=True)
-
-
-# ── PG weight profiles ──────────────────────────────────────────────────
 # Live in pg_recall_weights.py since the #368 split. Re-exported: callers and
 # tests reach compute_pg_weights through this module.
 from mcp_server.core.pg_recall_weights import (  # noqa: E402 — facade re-export at the seam the split left
     compute_pg_weights,
 )
-
-
-# ── Recall orchestration ─────────────────────────────────────────────────
 
 
 def recall(
@@ -183,305 +68,26 @@ def recall(
     cross_domain: bool = False,
     sa_mode: str = "tail",
 ) -> list[dict[str, Any]]:
-    """Full PG-path retrieval: intent → weights → recall_memories → rerank.
-
-    Args:
-        query: Search query text.
-        store: PgMemoryStore instance with recall_memories() method.
-        embeddings: EmbeddingEngine instance with encode() method.
-        top_k: Max results to return.
-        domain: Optional domain filter.
-        directory: Optional directory filter.
-        agent_topic: Optional agent context filter (e.g., "engineer", "researcher").
-        min_heat: Minimum heat threshold.
-        rerank: Whether to apply FlashRank reranking.
-        rerank_alpha: Blend weight for cross-encoder scores (0.70 from BEAM ablation).
-        wrrf_k: WRRF fusion constant.
-        momentum_state: Mutable dict with 'momentum' key for Titans surprise.
-        cross_domain: ADR-0054 opt-out for the SPREADING_ACTIVATION stage
-            only (the WRRF stage above stays scoped to ``domain``
-            regardless). When True, the entity-graph BFS search is not
-            restricted to ``domain`` — same "explicit opt-in, safe
-            default" shape as ``include_globals``. Defaults to False:
-            measured 52.8% cross-domain injection rate when this stage
-            runs unscoped (scratchpad/spread-activation-scoping-design.md
-            §2.3). Orthogonal to ``sa_mode``.
-        sa_mode: ADR-0054 addendum (2026-07-11, garde x3 bench incident).
-            One of ``"tail"`` (default), ``"augment"``, ``"off"``.
-            ``"tail"`` calls ``spreading_activation_tail_fill`` LAST, after
-            every reranking stage — it only appends SA-reachable memories
-            when the pipeline returned fewer than ``top_k`` candidates,
-            never reordering or rescoring an existing one. Benchmark-
-            neutral by construction: a corpus dense enough to already
-            fill ``top_k`` (LongMemEval, LoCoMo, BEAM) triggers zero store
-            calls. ``"augment"`` runs the PRE-fusion
-            ``spreading_activation_expand`` at its original position
-            (between HDC and DENDRITIC_CLUSTERS) — this was the default
-            when the channel first went live and the garde x3 bench's
-            first live measurement showed it moves already-correct
-            top-ranked documents even with domain scoping applied
-            (LongMemEval MRR 0.9166->0.9009, floor 0.914 breach, against
-            +0.002 R@10) because LongMemEval's own ingestion creates
-            entities inside the query's domain. Kept available for a
-            future dedicated tuning campaign (e.g. unified_search), never
-            the default. ``"off"`` disables the channel entirely.
-        familiarity_shortcut: C2 dual-process opt-in. When True, an
-            overwhelmingly-familiar query (a single dominant candidate whose
-            query↔candidate cosine similarity clears the familiarity threshold)
-            may SKIP the expensive post-WRRF recollection chain and return the
-            WRRF-ranked candidates directly — a latency win for near-exact
-            repeat queries. Defaults to False: the early triage then only
-            ANNOTATES each candidate with its ``familiarity`` and the full
-            recollection chain always runs, so default recall output is
-            unchanged (parity by default). Governed by Mechanism.DUAL_PROCESS —
-            CORTEX_ABLATE_DUAL_PROCESS=1 disables the triage entirely.
-
-    Returns:
-        List of result dicts with memory_id, content, score, heat, etc.
-    """
-    # 1. Intent classification
-    intent_info = classify_query_intent(query)
-    intent = intent_info["intent"]
-
-    # 2. Intent-adaptive PG weights
-    weights = compute_pg_weights(intent, intent_info.get("weights", {}))
-
-    # 3. Encode query. No char truncation: the embedding model enforces
-    # its own token limit internally (e.g. 256 for MiniLM, 512 for bge-*,
-    # 8192 for bge-m3/jina-v3). Any caller-side slice would throw away
-    # information the model could still consume.
-    q_emb = embeddings.encode(query) if embeddings else None
-
-    # 4. PG recall_memories (server-side WRRF fusion)
-    pg_max = top_k
-    candidates = store.recall_memories(
-        query_text=query,
-        query_embedding=q_emb,
-        intent=str(intent.value) if hasattr(intent, "value") else str(intent),
+    """Thin recall() wrapper; see pg_recall_context.py for tuning-knob citations."""
+    ctx = RecallContext(
+        query=query,
+        store=store,
+        embeddings=embeddings,
         domain=domain,
         directory=directory,
         agent_topic=agent_topic,
         min_heat=min_heat,
-        max_results=pg_max,
         wrrf_k=wrrf_k,
-        weights=weights,
         include_globals=include_globals,
-        # issue #368 — the trust policy is read here, in core, and handed to
-        # the store: infrastructure may not import core, so this is the seam
-        # that keeps capture_origin.py the single source of the vocabulary.
-        trusted_origins=trusted_origins_at_read(),
-        untrusted_factor=UNTRUSTED_ORIGIN_FACTOR,
+        cross_domain=cross_domain,
+        sa_mode=sa_mode,
+        rerank=rerank,
+        rerank_alpha=rerank_alpha,
+        familiarity_shortcut=familiarity_shortcut,
+        top_k=top_k,
+        momentum_state=momentum_state,
     )
-
-    if not candidates:
-        return []
-
-    # 4·C2. FAMILIARITY_TRIAGE (dual-process retrieval) — Yonelinas 2002;
-    # Diana, Yonelinas & Ranganath 2007. A fast a-contextual familiarity read
-    # (MAX query↔candidate cosine similarity, NO context assembly) taken BEFORE
-    # the expensive recollection chain below. Behaviour-preserving by default:
-    # it annotates each candidate with its `familiarity` and leaves order and
-    # membership untouched; only when the caller passes familiarity_shortcut=True
-    # AND the query is overwhelmingly, unambiguously familiar does it short-
-    # circuit — returning the WRRF-ranked candidates directly (a latency win)
-    # instead of running Hopfield/HDC/spreading/dendritic/emotional/mood/
-    # reconsolidation/FlashRank/value/conflict. Ablation-guarded
-    # (CORTEX_ABLATE_DUAL_PROCESS=1 → identity). Non-fatal.
-
-    triage = familiarity_triage(
-        candidates, q_emb, store, allow_shortcut=familiarity_shortcut
-    )
-    candidates = triage.candidates  # annotated only; order/membership preserved
-    if triage.shortcut:
-        # Overwhelming familiarity + caller opt-in: skip the expensive
-        # recollection reconstruction and return the WRRF ranking directly.
-        return candidates[:top_k]
-
-    # 4a-4d. Post-WRRF paper-mechanism pipeline. Each stage is gated by
-    # ``CORTEX_ABLATE_<MECH>=1`` (returns input unchanged when ablated).
-    # Order: HOPFIELD (Ramsauer 2021 attention), HDC (Kanerva 2009 bipolar
-    # algebra), SPREADING_ACTIVATION (Collins & Loftus 1975 BFS over the
-    # entity graph — may inject NEW candidates absent from WRRF top-K),
-    # DENDRITIC_CLUSTERS (Poirazi 2003 multiplicative modulation).
-    # See mcp_server/core/recall_pipeline.py for the per-stage RRF blend
-    # constants and citations.
-
-    candidates = hopfield_complete(
-        candidates,
-        q_emb,
-        store,
-        embedding_dim=embeddings.dimensions if embeddings else 0,
-    )
-    candidates = hdc_rerank(candidates, query)
-    # AUGMENT mode only (opt-in, ADR-0054 addendum) — the pre-fusion
-    # injection that can reorder/outrank existing candidates. Default
-    # sa_mode="tail" skips this entirely; see spreading_activation_tail_fill
-    # below, which runs LAST instead.
-    if sa_mode == "augment":
-        candidates = spreading_activation_expand(
-            candidates,
-            query,
-            store,
-            domain=domain,
-            include_globals=include_globals,
-            cross_domain=cross_domain,
-        )
-    candidates = dendritic_modulate(candidates, query, store)
-
-    # 4e. EMOTIONAL_RETRIEVAL — Bower 1981 mood-congruent recall using
-    # the QUERY's inferred valence (VADER) against each candidate's stored
-    # emotional_valence. No-ops on neutral queries.
-    candidates = emotional_retrieval_rerank(candidates, query)
-
-    # 4f. MOOD_CONGRUENT_RERANK — Bower 1981 mood-state-dependent recall
-    # using the USER's session-level mood. Returns identity when no mood
-    # signal exists; we do not fabricate one.
-    candidates = mood_congruent_rerank(candidates, _get_user_mood(store))
-
-    # 4g. RECONSOLIDATION — Nader, Schafe & LeDoux (2000), Nature 406(6797).
-    # Retrieval renders memories labile; the act of reading re-stores them
-    # with modifications (heat bump, last_accessed refresh, optional Bower-
-    # style valence shift). MUST be the final post-WRRF stage so the
-    # mutation reflects the FINAL ranking the user will see, not the raw
-    # WRRF output. Ablation-guarded inside the stage.
-    candidates = reconsolidation_apply(candidates, query=query, store=store)
-
-    # 5. Client-side FlashRank reranking
-    if rerank and len(candidates) > 1:
-        ranked_pairs = [(c["memory_id"], c.get("score", 0.0)) for c in candidates]
-        content_map = {c["memory_id"]: c["content"] for c in candidates}
-        reranked = rerank_results(query, ranked_pairs, content_map, alpha=rerank_alpha)
-        cand_map = {c["memory_id"]: c for c in candidates}
-        candidates = []
-        for mid, score in reranked:
-            if mid in cand_map:
-                c = dict(cand_map[mid])
-                c["score"] = score
-                candidates.append(c)
-
-    # 5b. VALUE_PRIORITY (B2) — nudge the final content-relevance ranking by
-    # each candidate's learned RL value. Runs after FlashRank so it refines the
-    # relevance-ordered list; a small weight (0.15) means value never overrides
-    # a strong content match. No-op on stores that have not accrued value.
-    candidates = value_priority_rerank(candidates)
-
-    # 5c. CONFLICT_MONITOR (A2) — Botvinick 2001; Miller & Cohen 2001. Compute a
-    # conflict scalar (softmax-entropy of the scores × lexical contradiction)
-    # over the retrieved set; when the set disagrees, demote the losing memory
-    # of the most-contradictory pair and route the pair to the existing
-    # claim_resolver. Runs after VALUE_PRIORITY so it sees the final content-
-    # relevance scores. No-op on <2 candidates or low conflict; ablation-guarded.
-    candidates = conflict_monitor_rerank(candidates, store)
-
-    # 5d. GOAL_MAINTENANCE (A3) — Miller & Cohen 2001. While a goal/task-set is
-    # active (promoted from the store's active prospective triggers), scale each
-    # candidate's content-relevance score by a small multiplicative gain for its
-    # goal relevance so goal-relevant memories surface slightly ahead of equally-
-    # relevant off-task ones. A multiplicative nudge like VALUE_PRIORITY (NOT an
-    # RRF blend). No active goal / off-task => gain 1.0 => order unchanged.
-    # DESIGN INFERENCE — a keyword/entity goal-match, not a learned PFC controller.
-    candidates = goal_maintenance_rerank(candidates, _get_active_goal(store))
-
-    # 5e. ATTENTIONAL_CONTROL (A1 read-side) — Baddeley 2003 central executive;
-    # Posner & Petersen 1990; Cowan 2001. Run A1's pure allocate_attention pass
-    # over the FULL candidate set with the recall query as the top-down cue
-    # (plus bottom-up salience from importance/|valence|), then scale each
-    # candidate's score by a small multiplicative gain 1 + weight·(attn − 1/n).
-    # A soft re-weight, NOT an RRF blend and NOT a truncation to FOCUS_CAPACITY:
-    # the Cowan ceiling bounds the working-set spotlight, not recall size, so
-    # every candidate stays in the returned set. Uniform/no-signal attention =>
-    # every factor 1.0 => order unchanged. Runs after the other multiplicative
-    # nudges (VALUE_PRIORITY, GOAL_MAINTENANCE), consistent with their ordering.
-    # Reuses allocate_attention (no softmax reimplementation); ablation-guarded.
-    candidates = attentional_focus_rerank(candidates, query)
-
-    # 6. Per-type pool guarantee for instruction/preference queries.
-    # ENGRAM (arxiv 2511.12960): typed memory pools prevent instruction/
-    # preference memories from being drowned out by episodic memories.
-    # Reserves 2 slots for tag-matched memories when intent matches.
-    # Validated approach (BEAM 0.546 overall — see README ablation log).
-    _type_intents = {
-        QueryIntent.INSTRUCTION: "instruction",
-        QueryIntent.PREFERENCE: "preference",
-    }
-    tag_for_intent = _type_intents.get(intent)
-    if tag_for_intent and store and q_emb and hasattr(store, "search_by_tag_vector"):
-        existing_ids = {c["memory_id"] for c in candidates}
-        typed = store.search_by_tag_vector(
-            q_emb, tag_for_intent, domain=domain, limit=2
-        )
-        for t in typed:
-            mid = t.get("id") or t.get("memory_id")
-            if mid and mid not in existing_ids:
-                t["memory_id"] = mid
-                candidates.insert(0, t)  # Front of list = high rank
-                existing_ids.add(mid)
-
-    # 7. Abstention gate (cortex-beam-abstain) — DISABLED.
-    # v0.1 model regresses BEAM by -0.191 MRR on every category despite
-    # F1=0.733 on its own held-out validation. The model overfits to
-    # training pairs but doesn't generalize to BEAM evaluation queries —
-    # 32% of real relevant passages get filtered as irrelevant.
-    # Critically: it does NOT improve abstention category (still 0.100).
-    # Re-enable when v0.2 ships with cross-validated training data (the
-    # abstention_gate module and its tests stay in the tree for that;
-    # see mcp_server/core/abstention_gate.py — ERA001 (issue #239):
-    # a disabled call site is not the same as dead code, but the call
-    # is not currently wired, so no commented-out invocation is kept
-    # here — re-enabling means writing the real call, not uncommenting.
-
-    # 8. MMR diversity reranking — DISABLED after ablation (see above).
-    # Carbonell & Goldstein (SIGIR 1998) MMR trades precision for coverage.
-    # BEAM uses MRR (first-hit position), so any diversity reranking hurts:
-    #   lambda=0.5: summarization 0.391→0.367 (-0.024)
-    #   lambda=0.7: summarization 0.391→0.381 (-0.010)
-    # MMR would help with nugget-based QA scoring (coverage matters) but
-    # our retrieval-only MRR evaluation penalizes it. Keeping the module
-    # (mmr_diversity.py) for future use when full QA evaluation is added.
-
-    # 9. Chronological reranking for event ordering queries.
-    # ChronoRAG (Chen et al., 2025): blend relevance rank with
-    # chronological rank via RRF (Cormack et al., 2009).
-    # Only activates when intent is EVENT_ORDER.
-    if intent == QueryIntent.EVENT_ORDER and len(candidates) > 1:
-        candidates = _chronological_rerank(candidates, beta=0.5, k=60)
-
-    # 10. Titans test-time learning (Behrouz et al., NeurIPS 2025)
-    # Update the neural associative memory M and surprise momentum S
-    # using the exact equations from the paper:
-    #   S_t = eta * S_{t-1} - theta * grad_l(M_{t-1}; x_t)
-    #   M_t = M_{t-1} - S_t
-    if momentum_state is not None:
-        titans = _get_titans()
-        result_embs = []
-        for r in candidates[:10]:
-            mem = store.get_memory(r["memory_id"])
-            if mem and mem.get("embedding"):
-                result_embs.append(mem["embedding"])
-        surprise = titans.update(q_emb, result_embs)
-        momentum_state["momentum"] = surprise  # Track for diagnostics
-
-    # 11. TAIL mode SA fill (default, ADR-0054 addendum) — MUST be the
-    # final stage, after every reranking step above (FlashRank,
-    # VALUE_PRIORITY, CONFLICT_MONITOR, GOAL_MAINTENANCE,
-    # ATTENTIONAL_CONTROL, the EVENT_ORDER chronological rerank, and
-    # Titans) so an appended candidate can never be picked up and moved
-    # by a later stage. Only runs when the pipeline returned fewer than
-    # top_k candidates -- see spreading_activation_tail_fill's docstring
-    # for the benchmark-neutrality argument (zero store calls once
-    # len(candidates) >= top_k).
-    if sa_mode == "tail":
-        candidates = spreading_activation_tail_fill(
-            candidates,
-            query,
-            store,
-            top_k,
-            domain=domain,
-            include_globals=include_globals,
-            cross_domain=cross_domain,
-        )
-
-    return candidates[:top_k]
+    return run_recall_pipeline(ctx)
 
 
 # ── Structured 3-phase context assembly ─────────────────────────────────
